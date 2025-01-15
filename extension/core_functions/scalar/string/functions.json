@@ -90,7 +90,7 @@
                 "parameters": [
                     {"name": "blob", "type": "BLOB"}
                 ],
-                "description": "Converts blob to VARCHAR using hexadecimal encoding.",
+                "description": "Converts `blob` to `VARCHAR` using hexadecimal encoding.",
                 "example": "hex('\\xAA\\xBB'::BLOB)",
                 "categories": ["blob"]
             },
@@ -138,14 +138,14 @@
     {
         "name": "left",
         "parameters": "string,count",
-        "description": "Extract the left-most count characters",
+        "description": "Extracts the left-most count characters",
         "example": "left('Hello\uD83E\uDD86', 2)",
         "type": "scalar_function"
     },
     {
         "name": "left_grapheme",
         "parameters": "string,count",
-        "description": "Extract the left-most count grapheme clusters",
+        "description": "Extracts the left-most count grapheme clusters",
         "example": "left_grapheme('\uD83E\uDD26\uD83C\uDFFC\u200D♂️\uD83E\uDD26\uD83C\uDFFD\u200D♀️', 1)",
         "type": "scalar_function"
     },
@@ -241,7 +241,7 @@
     {
         "name": "right_grapheme",
         "parameters": "string,count",
-        "description": "Extract the right-most count grapheme clusters",
+        "description": "Extracts the right-most count grapheme clusters",
         "example": "right_grapheme('\uD83E\uDD26\uD83C\uDFFC\u200D♂️\uD83E\uDD26\uD83C\uDFFD\u200D♀️', 1)",
         "type": "scalar_function"
     },

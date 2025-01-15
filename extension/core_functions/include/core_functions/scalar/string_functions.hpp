@@ -142,7 +142,7 @@ struct MismatchesFun {
 struct HexFun {
 	static constexpr const char *Name = "hex";
 	static constexpr const char *Parameters = "string::VARCHAR\1blob::BLOB\1value::ANY";
-	static constexpr const char *Description = "Converts the string to hexadecimal representation.\1Converts blob to VARCHAR using hexadecimal encoding.\1Converts the value to hexadecimal representation.";
+	static constexpr const char *Description = "Converts the string to hexadecimal representation.\1Converts `blob` to `VARCHAR` using hexadecimal encoding.\1Converts the value to hexadecimal representation.";
 	static constexpr const char *Example = "hex('Hello')\1hex('\\xAA\\xBB'::BLOB)\1hex(42)";
 	static constexpr const char *Categories = "string\1blob\1numeric";
 
@@ -210,7 +210,7 @@ struct JaroWinklerSimilarityFun {
 struct LeftFun {
 	static constexpr const char *Name = "left";
 	static constexpr const char *Parameters = "string,count";
-	static constexpr const char *Description = "Extract the left-most count characters";
+	static constexpr const char *Description = "Extracts the left-most count characters";
 	static constexpr const char *Example = "left('Hello🦆', 2)";
 	static constexpr const char *Categories = "";
 
@@ -220,7 +220,7 @@ struct LeftFun {
 struct LeftGraphemeFun {
 	static constexpr const char *Name = "left_grapheme";
 	static constexpr const char *Parameters = "string,count";
-	static constexpr const char *Description = "Extract the left-most count grapheme clusters";
+	static constexpr const char *Description = "Extracts the left-most count grapheme clusters";
 	static constexpr const char *Example = "left_grapheme('🤦🏼‍♂️🤦🏽‍♀️', 1)";
 	static constexpr const char *Categories = "";
 
@@ -356,7 +356,7 @@ struct RightFun {
 struct RightGraphemeFun {
 	static constexpr const char *Name = "right_grapheme";
 	static constexpr const char *Parameters = "string,count";
-	static constexpr const char *Description = "Extract the right-most count grapheme clusters";
+	static constexpr const char *Description = "Extracts the right-most count grapheme clusters";
 	static constexpr const char *Example = "right_grapheme('🤦🏼‍♂️🤦🏽‍♀️', 1)";
 	static constexpr const char *Categories = "";
 

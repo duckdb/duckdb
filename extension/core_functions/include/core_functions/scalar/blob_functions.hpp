@@ -18,7 +18,7 @@ namespace duckdb {
 struct DecodeFun {
 	static constexpr const char *Name = "decode";
 	static constexpr const char *Parameters = "blob";
-	static constexpr const char *Description = "Convert blob to varchar. Fails if blob is not valid utf-8.";
+	static constexpr const char *Description = "Converts `blob` to `VARCHAR`. Fails if `blob` is not valid UTF-8.";
 	static constexpr const char *Example = "decode('\\xC3\\xBC'::BLOB)";
 	static constexpr const char *Categories = "blob";
 
@@ -28,7 +28,7 @@ struct DecodeFun {
 struct EncodeFun {
 	static constexpr const char *Name = "encode";
 	static constexpr const char *Parameters = "string";
-	static constexpr const char *Description = "Convert varchar to blob. Converts utf-8 characters into literal encoding.";
+	static constexpr const char *Description = "Converts the `string` to `BLOB`. Converts UTF-8 characters into literal encoding.";
 	static constexpr const char *Example = "encode('my_string_with_ü')";
 	static constexpr const char *Categories = "blob";
 
@@ -38,7 +38,7 @@ struct EncodeFun {
 struct FromBase64Fun {
 	static constexpr const char *Name = "from_base64";
 	static constexpr const char *Parameters = "string";
-	static constexpr const char *Description = "Convert a base64 encoded string to a character string (blob).";
+	static constexpr const char *Description = "Converts a base64 encoded `string` to a character string (`BLOB`).";
 	static constexpr const char *Example = "from_base64('QQ==')";
 	static constexpr const char *Categories = "string,blob";
 
@@ -48,8 +48,8 @@ struct FromBase64Fun {
 struct ToBase64Fun {
 	static constexpr const char *Name = "to_base64";
 	static constexpr const char *Parameters = "blob";
-	static constexpr const char *Description = "Convert a blob to a base64 encoded string.";
-	static constexpr const char *Example = "base64('A'::blob)";
+	static constexpr const char *Description = "Converts a `blob` to a base64 encoded `string`.";
+	static constexpr const char *Example = "base64('A'::BLOB)";
 	static constexpr const char *Categories = "string,blob";
 
 	static ScalarFunction GetFunction();

@@ -2,7 +2,7 @@
     {
         "name": "upper",
         "parameters": "string",
-        "description": "Convert string to upper case.",
+        "description": "Converts `string` to upper case.",
         "example": "upper('Hello')",
         "type": "scalar_function",
         "struct": "UpperFun",
@@ -11,7 +11,7 @@
     {
         "name": "lower",
         "parameters": "string",
-        "description": "Convert string to lower case",
+        "description": "Converts `string` to lower case",
         "example": "lower('Hello')",
         "type": "scalar_function",
         "struct": "LowerFun",
@@ -20,14 +20,14 @@
     {
         "name": "concat_ws",
         "parameters": "separator,string,...",
-        "description": "Concatenate strings together separated by the specified separator.",
+        "description": "Concatenates strings together separated by the specified separator.",
         "example": "concat_ws(', ', 'Banana', 'Apple', 'Melon')",
         "type": "scalar_function"
     },
     {
         "name": "concat",
         "parameters": "string,...",
-        "description": "Concatenate many strings together.",
+        "description": "Concatenates many strings together.",
         "example": "concat('Hello', ' ', 'World')",
         "type": "scalar_function"
     },
@@ -71,7 +71,7 @@
                     {"name": "string", "type": "VARCHAR"},
                     {"name": "search_string", "type": "VARCHAR"}
                 ],
-                "description": "Returns true if search_string is found within string.",
+                "description": "Returns true if `search_string` is found within `string`.",
                 "example": "contains('abc', 'a')"
             },
             {
@@ -79,7 +79,7 @@
                     {"name": "list", "type": "ANY[]"},
                     {"name": "element", "type": "ANY"}
                 ],
-                "description": "Returns true if the list contains the element.",
+                "description": "Returns true if the `list` contains the `element`.",
                 "example": "contains([1, 2, NULL], 1)"
             },
             {
@@ -87,7 +87,7 @@
                     {"name": "map", "type": "MAP(ANY,ANY)"},
                     {"name": "key", "type": "ANY"}
                 ],
-                "description": "Checks if a map contains a given key.",
+                "description": "Checks if a `map` contains a given `key`.",
                 "example": "contains(MAP {'key1': 10, 'key2': 20, 'key3': 30}, 'key2')"
             }
         ],
@@ -96,14 +96,14 @@
     {
         "name": "strip_accents",
         "parameters": "string",
-        "description": "Strips accents from string.",
+        "description": "Strips accents from `string`.",
         "example": "strip_accents('mühleisen')",
         "type": "scalar_function"
     },
     {
         "name": "nfc_normalize",
         "parameters": "string",
-        "description": "Convert string to Unicode NFC normalized string. Useful for comparisons and ordering if text data is mixed between NFC normalized and not.",
+        "description": "Converts `string` to Unicode NFC normalized string. Useful for comparisons and ordering if text data is mixed between NFC normalized and not.",
         "example": "nfc_normalize('ardèch')",
         "type": "scalar_function",
         "struct": "NFCNormalizeFun"
@@ -111,7 +111,7 @@
     {
         "name": "length",
         "parameters": "string",
-        "description": "Number of characters in string.",
+        "description": "Number of characters in `string`.",
         "example": "length('Hello🦆')",
         "type": "scalar_function_set",
         "aliases": ["len"]
@@ -119,7 +119,7 @@
     {
         "name": "strlen",
         "parameters": "string",
-        "description": "Number of bytes in string.",
+        "description": "Number of bytes in `string`.",
         "example": "strlen('🦆')",
         "type": "scalar_function"
     },
@@ -137,7 +137,7 @@
                 "parameters": [
                     {"name": "blob", "type": "BLOB"}
                 ],
-                "description": "Number of bytes in blob.",
+                "description": "Number of bytes in `blob`.",
                 "example": "octet_length('\\xAA\\xBB'::BLOB)",
                 "categories": ["blob"]
             },
@@ -145,7 +145,7 @@
                 "parameters": [
                     {"name": "bitstring", "type": "BIT"}
                 ],
-                "description": "Returns the number of bytes in the bitstring.",
+                "description": "Returns the number of bytes in the `bitstring`.",
                 "example": "octet_length('1101011'::BITSTRING)",
                 "categories": ["bitstring"]
             }
@@ -155,21 +155,21 @@
     {
         "name": "length_grapheme",
         "parameters": "string",
-        "description": "Number of grapheme clusters in string.",
+        "description": "Number of grapheme clusters in `string`.",
         "example": "length_grapheme('🤦🏼‍♂️🤦🏽‍♀️')",
         "type": "scalar_function_set"
     },
     {
         "name": "array_length",
         "parameters": "list",
-        "description": "Returns the length of the list.",
+        "description": "Returns the length of the `list`.",
         "example": "array_length([1,2,3])",
         "type": "scalar_function_set"
     },
     {
         "name": "substring",
         "parameters": "string,start,length",
-        "description": "Extract substring of length characters starting from character start. Note that a start value of 1 refers to the first character of the string.",
+        "description": "Extract substring of `length` characters starting from character `start`. Note that a start value of 1 refers to the first character of the `string`.",
         "example": "substring('Hello', 2, 2)",
         "type": "scalar_function_set",
         "aliases": ["substr"]
@@ -177,30 +177,30 @@
     {
         "name": "substring_grapheme",
         "parameters": "string,start,length",
-        "description": "Extract substring of length grapheme clusters starting from character start. Note that a start value of 1 refers to the first character of the string.",
+        "description": "Extract substring of `length` grapheme clusters starting from character `start`. Note that a start value of 1 refers to the first character of the `string`.",
         "example": "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)",
         "type": "scalar_function_set"
     },
     {
         "name": "string_split",
         "parameters": "string,separator",
-        "description": "Splits the string along the separator",
+        "description": "Splits the `string` along the `separator`",
         "example": "string_split('hello-world', '-')",
         "type": "scalar_function",
         "aliases": ["str_split", "string_to_array", "split"]
     },
     {
         "name": "string_split_regex",
-        "parameters": "string,separator",
-        "description": "Splits the string along the regex",
-        "example": "string_split_regex('hello␣world; 42', ';?␣')",
+        "parameters": "string,regex",
+        "description": "Splits the `string` along the `regex`",
+        "example": "string_split_regex('hello world; 42', ';? ')",
         "type": "scalar_function_set",
         "aliases": ["str_split_regex", "regexp_split_to_array"]
     },
     {
         "name": "regexp_full_match",
         "parameters": "string,regex[,options]",
-        "description": "Returns true if the entire string matches the regex. A set of optional options can be set.",
+        "description": "Returns true if the entire `string` matches the `regex`. A set of optional `options` can be set.",
         "example": "regexp_full_match('anabanana', '(an)*')",
         "type": "scalar_function_set",
         "struct": "RegexpFun"
@@ -208,35 +208,35 @@
     {
         "name": "regexp_matches",
         "parameters": "string,pattern[,options]",
-        "description": "Returns true if string contains the regexp pattern, false otherwise. A set of optional options can be set.",
+        "description": "Returns true if `string` contains the regexp `pattern`, false otherwise. A set of optional `options` can be set.",
         "example": "regexp_matches('anabanana', '(an)*')",
         "type": "scalar_function_set"
     },
     {
         "name": "regexp_replace",
         "parameters": "string,pattern,replacement[,options]",
-        "description": "If string contains the regexp pattern, replaces the matching part with replacement. A set of optional options can be set.",
+        "description": "If `string` contains the regexp `pattern`, replaces the matching part with `replacement`. A set of optional `options` can be set.",
         "example": "regexp_replace('hello', '[lo]', '-')",
         "type": "scalar_function_set"
     },
     {
         "name": "regexp_extract",
         "parameters": "string,pattern[,group = 0][,options]",
-        "description": "If string contains the regexp pattern, returns the capturing group specified by optional parameter group. The group must be a constant value. If no group is given, it defaults to 0. A set of optional options can be set.",
+        "description": "If `string` contains the regexp `pattern`, returns the capturing group specified by optional parameter `group`. The group must be a constant value. If no group is given, it defaults to 0. A set of optional `options` can be set.",
         "example": "regexp_extract('abc', '([a-z])(b)', 1)",
         "type": "scalar_function_set"
     },
     {
         "name": "regexp_extract_all",
         "parameters": "string, regex[, group = 0][, options]",
-        "description": "Split the string along the regex and extract all occurrences of group. A set of optional options can be set.",
+        "description": "Splits the `string` along the `regex` and extract all occurrences of `group`. A set of optional `options` can be set.",
         "example": "regexp_extract_all('hello_world', '([a-z ]+)_?', 1)",
         "type": "scalar_function_set"
     },
     {
         "name": "regexp_escape",
         "parameters": "string",
-        "description": "Escapes all potentially meaningful regexp characters in the input string",
+        "description": "Escapes special patterns to turn string into a regular expression similarly to Python's re.escape function.",
         "example": "regexp_escape('https://duckdb.org')",
         "type": "scalar_function",
         "struct": "RegexpEscapeFun"
@@ -284,35 +284,35 @@
     {
         "name": "like_escape",
         "parameters": "string,like_specifier,escape_character",
-        "description": "Returns true if the string matches the like_specifier (see Pattern Matching) using case-sensitive matching. escape_character is used to search for wildcard characters in the string.",
+        "description": "Returns true if the `string` matches the `like_specifier` (see Pattern Matching) using case-sensitive matching. `escape_character` is used to search for wildcard characters in the `string`.",
         "example": "like_escape('a%c', 'a$%c', '$')",
         "type": "scalar_function"
     },
     {
         "name": "not_like_escape",
         "parameters": "string,like_specifier,escape_character",
-        "description": "Returns false if the string matches the like_specifier (see Pattern Matching) using case-sensitive matching. escape_character is used to search for wildcard characters in the string.",
+        "description": "Returns false if the `string` matches the `like_specifier` (see Pattern Matching) using case-sensitive matching. `escape_character` is used to search for wildcard characters in the `string`.",
         "example": "not_like_escape('a%c', 'a$%c', '$')",
         "type": "scalar_function"
     },
     {
         "name": "ilike_escape",
         "parameters": "string,like_specifier,escape_character",
-        "description": "Returns true if the string matches the like_specifier (see Pattern Matching) using case-insensitive matching. escape_character is used to search for wildcard characters in the string.",
+        "description": "Returns true if the `string` matches the `like_specifier` (see Pattern Matching) using case-insensitive matching. `escape_character` is used to search for wildcard characters in the `string`.",
         "example": "ilike_escape('A%c', 'a$%C', '$')",
         "type": "scalar_function"
     },
     {
         "name": "not_ilike_escape",
         "parameters": "string,like_specifier,escape_character",
-        "description": "Returns false if the string matches the like_specifier (see Pattern Matching) using case-insensitive matching. escape_character is used to search for wildcard characters in the string.",
+        "description": "Returns false if the `string` matches the `like_specifier` (see Pattern Matching) using case-insensitive matching. `escape_character` is used to search for wildcard characters in the `string`.",
         "example": "not_ilike_escape('A%c', 'a$%C', '$')",
         "type": "scalar_function"
     },
     {
         "name": "md5",
         "parameters": "value",
-        "description": "Returns the MD5 hash of the value as a string",
+        "description": "Returns the MD5 hash of the `value` as a string",
         "example": "md5('123')",
         "type": "scalar_function_set",
         "struct": "MD5Fun"
@@ -320,7 +320,7 @@
     {
         "name": "md5_number",
         "parameters": "value",
-        "description": "Returns the MD5 hash of the value as an INT128",
+        "description": "Returns the MD5 hash of the `value` as an INT128",
         "example": "md5_number('123')",
         "type": "scalar_function_set",
         "struct": "MD5NumberFun"
@@ -328,7 +328,7 @@
     {
         "name": "sha1",
         "parameters": "value",
-        "description": "Returns the SHA1 hash of the value",
+        "description": "Returns the SHA1 hash of the `value`",
         "example": "sha1('hello')",
         "type": "scalar_function_set",
         "struct": "SHA1Fun"
@@ -336,7 +336,7 @@
     {
         "name": "sha256",
         "parameters": "value",
-        "description": "Returns the SHA256 hash of the value",
+        "description": "Returns the SHA256 hash of the `value`",
         "example": "sha256('hello')",
         "type": "scalar_function_set",
         "struct": "SHA256Fun"
