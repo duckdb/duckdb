@@ -135,7 +135,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	// finally add the row id column to the projection list
 	auto &column_ids = get->GetColumnIds();
 	proj->expressions.push_back(
-	    make_uniq<BoundColumnRefExpression>(LogicalType::ROW_TYPE, ColumnBinding(get->table_index, column_ids.size())));
+	    make_uniq<BoundColumnRefExpression>(table.GetRowIdType(), ColumnBinding(get->table_index, column_ids.size())));
 	get->AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result

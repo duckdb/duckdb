@@ -28,6 +28,8 @@
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
+#include "duckdb/logging/logger.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 
@@ -611,6 +613,110 @@ bool EnableExternalAccessSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &
 }
 
 //===----------------------------------------------------------------------===//
+// Enable Logging
+//===----------------------------------------------------------------------===//
+Value EnableLogging::GetSetting(const ClientContext &context) {
+	return context.db->GetLogManager().GetConfig().enabled;
+}
+void EnableLogging::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	db->GetLogManager().SetEnableLogging(parameter.GetValue<bool>());
+}
+
+void EnableLogging::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	db->GetLogManager().SetEnableLogging(false);
+}
+
+//===----------------------------------------------------------------------===//
+// Logging Mode
+//===----------------------------------------------------------------------===//
+Value LoggingMode::GetSetting(const ClientContext &context) {
+	return EnumUtil::ToString(context.db->GetLogManager().GetConfig().mode);
+}
+void LoggingMode::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	db->GetLogManager().SetLogMode(EnumUtil::FromString<LogMode>(parameter.GetValue<string>()));
+}
+
+void LoggingMode::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	db->GetLogManager().SetLogMode(LogMode::LEVEL_ONLY);
+}
+
+//===----------------------------------------------------------------------===//
+// Logging Level
+//===----------------------------------------------------------------------===//
+Value LoggingLevel::GetSetting(const ClientContext &context) {
+	return EnumUtil::ToString(context.db->GetLogManager().GetConfig().level);
+}
+void LoggingLevel::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	db->GetLogManager().SetLogLevel(EnumUtil::FromString<LogLevel>(parameter.GetValue<string>()));
+}
+
+void LoggingLevel::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	db->GetLogManager().SetLogLevel(LogConfig::DEFAULT_LOG_LEVEL);
+}
+
+//===----------------------------------------------------------------------===//
+// Logging Storage
+//===----------------------------------------------------------------------===//
+Value LoggingStorage::GetSetting(const ClientContext &context) {
+	return context.db->GetLogManager().GetConfig().storage;
+}
+void LoggingStorage::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	db->GetLogManager().SetLogStorage(*db, parameter.GetValue<string>());
+}
+
+void LoggingStorage::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	db->GetLogManager().SetLogStorage(*db, LogConfig::DEFAULT_LOG_STORAGE);
+}
+
+//===----------------------------------------------------------------------===//
+// Enabled Loggers
+//===----------------------------------------------------------------------===//
+Value EnabledLogTypes::GetSetting(const ClientContext &context) {
+	vector<string> loggers;
+	for (const auto &item : context.db->GetLogManager().GetConfig().enabled_log_types) {
+		loggers.push_back(item);
+	}
+	return StringUtil::Join(loggers, ",");
+}
+void EnabledLogTypes::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	auto values = StringUtil::Split(parameter.GetValue<string>(), ",");
+	unordered_set<string> set;
+	for (const auto &value : values) {
+		set.insert(value);
+	}
+	db->GetLogManager().SetEnabledLogTypes(set);
+}
+
+void EnabledLogTypes::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	unordered_set<string> set;
+	db->GetLogManager().SetEnabledLogTypes(set);
+}
+
+//===----------------------------------------------------------------------===//
+// Disabled Loggers
+//===----------------------------------------------------------------------===//
+Value DisabledLogTypes::GetSetting(const ClientContext &context) {
+	vector<string> loggers;
+	for (const auto &item : context.db->GetLogManager().GetConfig().disabled_log_types) {
+		loggers.push_back(item);
+	}
+	return StringUtil::Join(loggers, ",");
+}
+void DisabledLogTypes::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter) {
+	auto values = StringUtil::Split(parameter.GetValue<string>(), ",");
+	unordered_set<string> set;
+	for (const auto &value : values) {
+		set.insert(value);
+	}
+	db->GetLogManager().SetDisabledLogTypes(set);
+}
+
+void DisabledLogTypes::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	unordered_set<string> set;
+	db->GetLogManager().SetDisabledLogTypes(set);
+}
+
+//===----------------------------------------------------------------------===//
 // Enable Object Cache
 //===----------------------------------------------------------------------===//
 void EnableObjectCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
@@ -895,6 +1001,10 @@ Value MaxMemorySetting::GetSetting(const ClientContext &context) {
 // Max Temp Directory Size
 //===----------------------------------------------------------------------===//
 void MaxTempDirectorySizeSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	if (input == "90% of available disk space") {
+		ResetGlobal(db, config);
+		return;
+	}
 	auto maximum_swap_space = DBConfig::ParseMemoryLimit(input.ToString());
 	if (maximum_swap_space == DConstants::INVALID_INDEX) {
 		// We use INVALID_INDEX to indicate that the value is not set by the user

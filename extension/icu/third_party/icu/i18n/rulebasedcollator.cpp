@@ -239,7 +239,7 @@ RuleBasedCollator &RuleBasedCollator::operator=(const RuleBasedCollator &other) 
 
 UOBJECT_DEFINE_RTTI_IMPLEMENTATION(RuleBasedCollator)
 
-UBool
+bool
 RuleBasedCollator::operator==(const Collator& other) const {
     if(this == &other) { return TRUE; }
     if(!Collator::operator==(other)) { return FALSE; }

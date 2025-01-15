@@ -14,7 +14,7 @@ statement error
 SELECT *
 FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map{})
 ----
-Binder Error: Parquet schema cannot be empty
+Invalid Input Error: 'schema' expects a STRUCT as the value type of the map
 
 # can't combine with union_by_name
 statement error
@@ -246,15 +246,45 @@ GROUP BY my_cool_group
 2	125000
 
 # also test multi-file reading with different field ids
+# field id -> value:
+# 1 -> 5
+# 2 -> 4 (unused)
+# 3 -> 3
+# 4 -> - (missing)
+# 5 -> 1
 statement ok
 COPY (
-    SELECT 1 i1, 3 i3, 4 i4, 5 i5
-) TO '__TEST_DIR__/multifile1.parquet' (FIELD_IDS {i1: 5, i3: 3, i4: 2, i5: 1})
+    SELECT
+		1 i1,
+		3 i3,
+		4 i4,
+		5 i5
+) TO '__TEST_DIR__/multifile1.parquet' (FIELD_IDS {
+	i1: 5,
+	i3: 3,
+	i4: 2,
+	i5: 1
+})
 
+# field_id -> value:
+# 1 -> 1
+# 2 -> 3 (unused)
+# 3 -> 4
+# 4 -> 5
+# 5 -> - (missing)
 statement ok
 COPY (
-    SELECT 1 j1, 3 j3, 4 j4, 5 j5
-) TO '__TEST_DIR__/multifile2.parquet' (FIELD_IDS {j1: 1, j3: 2, j4: 3, j5: 4})
+    SELECT
+		1 j1,
+		3 j3,
+		4 j4,
+		5 j5
+) TO '__TEST_DIR__/multifile2.parquet' (FIELD_IDS {
+	j1: 1,
+	j3: 2,
+	j4: 3,
+	j5: 4
+})
 
 query IIIII
 SELECT i1, i3, i4, i5, filename[-18:]
@@ -268,3 +298,28 @@ ORDER BY filename
 ----
 5	3	2	1	multifile1.parquet
 1	4	5	NULL	multifile2.parquet
+
+statement error
+select * FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+	True: {name: 'my_cool_group', type: 'UINTEGER', default_value: NULL},
+	False: {name: 'my_cool_value', type: 'UINTEGER', default_value: NULL}
+});
+----
+Invalid Input Error: 'schema' expects the value type of the map to be either INTEGER or VARCHAR, not BOOLEAN
+
+query II
+SELECT alias(COLUMNS(*)) FROM read_parquet('__TEST_DIR__/integers.parquet', schema=map {
+                    'i': {name: 'renamed_i', type: 'BIGINT', default_value: NULL},
+                    'j': {name: 'new_column', type: 'UTINYINT', default_value: 43}
+                  }) limit 1;
+----
+renamed_i	new_column
+
+# issue 15504
+statement ok
+COPY (select 1 as id, list_value('a', 'b', 'c') as arr, { key: 1, v1: 'a', v2: 'b' } as s) TO '__TEST_DIR__/15504.parquet' (field_ids { 'id': 0, 'arr': 1, 's': 2 });
+
+query III
+SELECT * FROM read_parquet('__TEST_DIR__/15504.parquet', schema=map { 0: { name: 'id', type: 'int32', default_value: NULL }, 1: { name: 'arr', type: 'varchar[]', default_value: NULL }, 2: { name: 's', type: 'STRUCT(key INT, v1 TEXT, v2 TEXT)', default_value: NULL } });
+----
+1	[a, b, c]	{'key': 1, 'v1': a, 'v2': b}

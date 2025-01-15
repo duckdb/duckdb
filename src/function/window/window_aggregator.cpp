@@ -12,18 +12,17 @@ namespace duckdb {
 WindowAggregatorState::WindowAggregatorState() : allocator(Allocator::DefaultAllocator()) {
 }
 
-WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p)
+WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr)
     : wexpr(wexpr), aggr(wexpr), result_type(wexpr.return_type), state_size(aggr.function.state_size(aggr.function)),
-      exclude_mode(exclude_mode_p) {
+      exclude_mode(wexpr.exclude_clause) {
 
 	for (auto &child : wexpr.children) {
 		arg_types.emplace_back(child->return_type);
 	}
 }
 
-WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode_p,
-                                   WindowSharedExpressions &shared)
-    : WindowAggregator(wexpr, exclude_mode_p) {
+WindowAggregator::WindowAggregator(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+    : WindowAggregator(wexpr) {
 	for (auto &child : wexpr.children) {
 		child_idx.emplace_back(shared.RegisterCollection(child, false));
 	}

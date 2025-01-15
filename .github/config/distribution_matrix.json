@@ -15,6 +15,11 @@
         "duckdb_arch": "linux_arm64",
         "container": "ubuntu:18.04",
         "vcpkg_triplet": "arm64-linux"
+      },
+      {
+        "duckdb_arch": "linux_amd64_musl",
+        "container": "alpine:3",
+        "vcpkg_triplet": "x64-linux"
       }
     ]
   },

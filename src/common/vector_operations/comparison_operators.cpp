@@ -223,7 +223,8 @@ private:
 public:
 	template <class OP>
 	static inline void Execute(Vector &left, Vector &right, Vector &result, idx_t count) {
-		D_ASSERT(left.GetType() == right.GetType() && result.GetType() == LogicalType::BOOLEAN);
+		D_ASSERT(left.GetType().InternalType() == right.GetType().InternalType() &&
+		         result.GetType() == LogicalType::BOOLEAN);
 		// the inplace loops take the result as the last parameter
 		switch (left.GetType().InternalType()) {
 		case PhysicalType::BOOL:

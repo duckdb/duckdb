@@ -1,0 +1,33 @@
+diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
+index e6b28e5..5847eb4 100644
+--- a/extension/httpfs/httpfs.cpp
++++ b/extension/httpfs/httpfs.cpp
+@@ -772,16 +772,18 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 		FullDownload(hfs, should_write_cache);
+ 	}
+ 	if (!res->headers["Last-Modified"].empty()) {
+-		auto result = StrpTimeFormat::Parse("%a, %d %h %Y %T %Z", res->headers["Last-Modified"]);
+-		struct tm tm {};
+-		tm.tm_year = result.data[0] - 1900;
+-		tm.tm_mon = result.data[1] - 1;
+-		tm.tm_mday = result.data[2];
+-		tm.tm_hour = result.data[3];
+-		tm.tm_min = result.data[4];
+-		tm.tm_sec = result.data[5];
+-		tm.tm_isdst = 0;
+-		last_modified = mktime(&tm);
++		StrpTimeFormat::ParseResult result;
++		if (StrpTimeFormat::TryParse("%a, %d %h %Y %T %Z", res->headers["Last-Modified"], result)) {
++			struct tm tm {};
++			tm.tm_year = result.data[0] - 1900;
++			tm.tm_mon = result.data[1] - 1;
++			tm.tm_mday = result.data[2];
++			tm.tm_hour = result.data[3];
++			tm.tm_min = result.data[4];
++			tm.tm_sec = result.data[5];
++			tm.tm_isdst = 0;
++			last_modified = mktime(&tm);
++		}
+ 	}
+ 
+ 	if (should_write_cache) {

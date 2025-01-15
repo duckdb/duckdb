@@ -2022,8 +2022,11 @@ py::dict DuckDBPyConnection::FetchTF() {
 }
 
 PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t rows_per_batch) {
-	auto arrow = FetchArrow(rows_per_batch);
-	return py::cast<PolarsDataFrame>(py::module::import("polars").attr("DataFrame")(arrow));
+	if (!con.HasResult()) {
+		throw InvalidInputException("No open result set");
+	}
+	auto &result = con.GetResult();
+	return result.ToPolars(rows_per_batch);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t rows_per_batch) {

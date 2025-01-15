@@ -301,51 +301,86 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 	WindowBoundsSet result;
 	switch (wexpr.GetExpressionType()) {
 	case ExpressionType::WINDOW_ROW_NUMBER:
-		result.insert(PARTITION_BEGIN);
-		if (!wexpr.arg_orders.empty()) {
-			// Secondary orders need to know how wide the partition is
-			result.insert(PARTITION_END);
-		}
-		break;
-	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_RANK:
-		result.insert(PARTITION_BEGIN);
 		if (wexpr.arg_orders.empty()) {
-			result.insert(PEER_BEGIN);
+			result.insert(PARTITION_BEGIN);
 		} else {
-			// Secondary orders need to know how wide the partition is
-			result.insert(PARTITION_END);
-		}
-		break;
-	case ExpressionType::WINDOW_PERCENT_RANK:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
-		if (wexpr.arg_orders.empty()) {
-			// Secondary orders need to know where the first peer is
-			result.insert(PEER_BEGIN);
-		}
-		break;
-	case ExpressionType::WINDOW_CUME_DIST:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
-		if (wexpr.arg_orders.empty()) {
-			result.insert(PEER_END);
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
 		}
 		break;
 	case ExpressionType::WINDOW_NTILE:
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
+		break;
+	case ExpressionType::WINDOW_RANK:
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PEER_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
+		break;
+	case ExpressionType::WINDOW_RANK_DENSE:
+		result.insert(PARTITION_BEGIN);
+		result.insert(PEER_BEGIN);
+		break;
+	case ExpressionType::WINDOW_PERCENT_RANK:
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+			result.insert(PEER_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
+		break;
+	case ExpressionType::WINDOW_CUME_DIST:
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+			result.insert(PEER_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
+		break;
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
 		break;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_NTH_VALUE:
 	case ExpressionType::WINDOW_AGGREGATE:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
 		result.insert(FRAME_BEGIN);
 		result.insert(FRAME_END);
+		break;
+	default:
+		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
+	}
+
+	//	Internal dependencies
+	if (result.count(FRAME_BEGIN) || result.count(FRAME_END)) {
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
 
 		// if we have EXCLUDE GROUP / TIES, we also need peer boundaries
 		if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
@@ -389,12 +424,8 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 		default:
 			break;
 		}
-		break;
-	default:
-		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
 	}
 
-	//	Internal dependencies
 	if (result.count(VALID_END)) {
 		result.insert(PARTITION_END);
 		if (HasFollowingRange(wexpr)) {

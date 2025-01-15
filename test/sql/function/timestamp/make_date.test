@@ -224,6 +224,11 @@ SELECT make_timestamp(0), make_timestamp(1684509234845000);
 ----
 1970-01-01 00:00:00	2023-05-19 15:13:54.845
 
+statement error
+SELECT make_timestamp(9223372036854775807); -- Infinity
+----
+Conversion Error: Timestamp microseconds out of range
+
 # From nanoseconds
 query II
 SELECT make_timestamp_ns(0), make_timestamp_ns(1684509234845000123);
@@ -231,10 +236,15 @@ SELECT make_timestamp_ns(0), make_timestamp_ns(1684509234845000123);
 1970-01-01 00:00:00	2023-05-19 15:13:54.845000123
 
 # Maximum value for make_timestamp_ns().
-query II
-SELECT make_timestamp_ns(9223372036854775806), make_timestamp_ns(9223372036854775807);
+query I
+SELECT make_timestamp_ns(9223372036854775806);
 ----
-2262-04-11 23:47:16.854775806	infinity
+2262-04-11 23:47:16.854775806
+
+statement error
+SELECT make_timestamp_ns(9223372036854775807); -- Infinity
+----
+Conversion Error: Timestamp microseconds out of range
 
 #
 # Times
@@ -297,3 +307,9 @@ SELECT
 ;
 ----
 12:41:46.123456	NULL	NULL	NULL
+
+# Overflow
+statement error
+SELECT make_timestamp(294247, 1, 10, 4, 0, 54.775807);
+----
+Conversion Error: Date and time not in timestamp range

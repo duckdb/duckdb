@@ -162,7 +162,7 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 		idx_t pos;
 		bool special;
 		date_t dummy_value;
-		return Date::TryConvertDate(value_ptr, value_size, pos, dummy_value, special, true);
+		return Date::TryConvertDate(value_ptr, value_size, pos, dummy_value, special, true) == DateCastResult::SUCCESS;
 	}
 	case LogicalTypeId::TIMESTAMP: {
 		timestamp_t dummy_value;
@@ -425,19 +425,9 @@ void CSVSniffer::DetectTypes() {
 		SetUserDefinedDateTimeFormat(*candidate->state_machine);
 		// Parse chunk and read csv with info candidate
 		auto &data_chunk = candidate->ParseChunk().ToChunk();
-		if (!candidate->error_handler->errors.empty()) {
-			bool break_loop = false;
-			for (auto &errors : candidate->error_handler->errors) {
-				for (auto &error : errors.second) {
-					if (error.type != CSVErrorType::MAXIMUM_LINE_SIZE) {
-						break_loop = true;
-						break;
-					}
-				}
-			}
-			if (break_loop && !candidate->state_machine->options.ignore_errors.GetValue()) {
-				continue;
-			}
+		if (candidate->error_handler->AnyErrors() && !candidate->error_handler->HasError(MAXIMUM_LINE_SIZE) &&
+		    !candidate->state_machine->options.ignore_errors.GetValue()) {
+			continue;
 		}
 		idx_t start_idx_detection = 0;
 		idx_t chunk_size = data_chunk.size();
@@ -463,11 +453,11 @@ void CSVSniffer::DetectTypes() {
 
 		// it's good if the dialect creates more non-varchar columns, but only if we sacrifice < 30% of
 		// best_num_cols.
-		if (!best_candidate ||
-		    (varchar_cols<min_varchar_cols &&static_cast<double>(info_sql_types_candidates.size())>(
-		         static_cast<double>(max_columns_found) * 0.7) &&
-		     (!options.ignore_errors.GetValue() || candidate->error_handler->errors.size() < min_errors))) {
-			min_errors = candidate->error_handler->errors.size();
+		const idx_t number_of_errors = candidate->error_handler->GetSize();
+		if (!best_candidate || (varchar_cols<min_varchar_cols &&static_cast<double>(info_sql_types_candidates.size())>(
+		                            static_cast<double>(max_columns_found) * 0.7) &&
+		                        (!options.ignore_errors.GetValue() || number_of_errors < min_errors))) {
+			min_errors = number_of_errors;
 			best_header_row.clear();
 			// we have a new best_options candidate
 			best_candidate = std::move(candidate);
@@ -477,6 +467,7 @@ void CSVSniffer::DetectTypes() {
 				best_format_candidates[format_candidate.first] = format_candidate.second.format;
 			}
 			if (chunk_size > 0) {
+				single_row_file = chunk_size == 1;
 				for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
 					auto &cur_vector = data_chunk.data[col_idx];
 					auto vector_data = FlatVector::GetData<string_t>(cur_vector);

@@ -20,7 +20,7 @@ class ClientContext;
 
 class ArrowQueryResult : public QueryResult {
 public:
-	static constexpr const QueryResultType TYPE = QueryResultType::ARROW_RESULT;
+	static constexpr QueryResultType TYPE = QueryResultType::ARROW_RESULT;
 
 public:
 	friend class ClientContext;

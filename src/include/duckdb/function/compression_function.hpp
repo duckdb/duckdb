@@ -19,7 +19,7 @@
 namespace duckdb {
 class DatabaseInstance;
 class ColumnData;
-class ColumnDataCheckpointer;
+struct ColumnDataCheckpointData;
 class ColumnSegment;
 class SegmentStatistics;
 class TableFilter;
@@ -152,7 +152,7 @@ typedef idx_t (*compression_final_analyze_t)(AnalyzeState &state);
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-typedef unique_ptr<CompressionState> (*compression_init_compression_t)(ColumnDataCheckpointer &checkpointer,
+typedef unique_ptr<CompressionState> (*compression_init_compression_t)(ColumnDataCheckpointData &checkpoint_data,
                                                                        unique_ptr<AnalyzeState> state);
 typedef void (*compression_compress_data_t)(CompressionState &state, Vector &scan_vector, idx_t count);
 typedef void (*compression_compress_finalize_t)(CompressionState &state);
@@ -202,6 +202,8 @@ typedef unique_ptr<ColumnSegmentState> (*compression_serialize_state_t)(ColumnSe
 typedef unique_ptr<ColumnSegmentState> (*compression_deserialize_state_t)(Deserializer &deserializer);
 //! Function prototype for cleaning up the segment state when the column data is dropped
 typedef void (*compression_cleanup_state_t)(ColumnSegment &segment);
+
+enum class CompressionValidity : uint8_t { REQUIRES_VALIDITY, NO_VALIDITY_REQUIRED };
 
 class CompressionFunction {
 public:
@@ -297,6 +299,10 @@ public:
 	compression_deserialize_state_t deserialize_state;
 	//! Cleanup the segment state (optional)
 	compression_cleanup_state_t cleanup_state;
+
+	//! Whether the validity mask should be separately compressed
+	//! or this compression function can also be used to decompress the validity
+	CompressionValidity validity = CompressionValidity::REQUIRES_VALIDITY;
 };
 
 //! The set of compression functions

@@ -188,9 +188,9 @@ idx_t RoaringFinalAnalyze(AnalyzeState &state) {
 	return LossyNumericCast<idx_t>((double)roaring_state.total_size * ROARING_COMPRESS_PENALTY);
 }
 
-unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointer &checkpointer,
+unique_ptr<CompressionState> RoaringInitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                     unique_ptr<AnalyzeState> state) {
-	return make_uniq<RoaringCompressState>(checkpointer, std::move(state));
+	return make_uniq<RoaringCompressState>(checkpoint_data, std::move(state));
 }
 
 void RoaringCompress(CompressionState &state_p, Vector &scan_vector, idx_t count) {

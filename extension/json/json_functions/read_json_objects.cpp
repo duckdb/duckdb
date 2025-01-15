@@ -64,8 +64,8 @@ TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JS
 
 TableFunctionSet JSONFunctions::GetReadJSONObjectsFunction() {
 	TableFunctionSet function_set("read_json_objects");
-	auto function_info =
-	    make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::ARRAY, JSONRecordType::RECORDS);
+	auto function_info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::AUTO_DETECT,
+	                                                   JSONRecordType::RECORDS);
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
 	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
 	return function_set;
