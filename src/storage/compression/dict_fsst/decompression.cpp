@@ -10,7 +10,7 @@ CompressedStringScanState::~CompressedStringScanState() {
 }
 
 uint32_t CompressedStringScanState::GetStringLength(sel_t index) {
-	return UnsafeNumericCast<uint32_t>(string_lengths_ptr[index]);
+	return UnsafeNumericCast<uint32_t>(string_lengths[index]);
 }
 
 string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t dict_offset, uint32_t string_len) {
@@ -40,12 +40,15 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	auto string_lengths_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->string_lengths_offset));
 	dict_count = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_count));
 	current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
+	string_lengths_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->string_lengths_width)));
+	string_lengths.resize(AlignValue<uint32_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(dict_count));
+
 	if (segment.GetBlockOffset() + string_lengths_offset + sizeof(uint32_t) * dict_count >
 	    segment.GetBlockManager().GetBlockSize()) {
 		throw IOException(
 		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
 	}
-	string_lengths_ptr = reinterpret_cast<uint32_t *>(baseptr + string_lengths_offset);
+	string_lengths_ptr = baseptr + string_lengths_offset;
 	base_data = data_ptr_cast(baseptr + DictFSSTCompression::DICTIONARY_HEADER_SIZE);
 
 	block_size = segment.GetBlockManager().GetBlockSize();
@@ -62,6 +65,8 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 		auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
 		decompress_buffer.resize(string_block_limit + 1);
 	}
+	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()),
+	                                             data_ptr_cast(string_lengths_ptr), dict_count, string_lengths_width);
 
 	if (!initialize_dictionary) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
@@ -99,10 +104,9 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		sel_vec = make_buffer<SelectionVector>(decompress_count);
 	}
 
-	data_ptr_t src = &base_data[((start - start_offset) * current_width) / 8];
+	data_ptr_t sel_buf_src = &base_data[((start - start_offset) * current_width) / 8];
 	sel_t *sel_vec_ptr = sel_vec->data();
-
-	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), src, decompress_count, current_width);
+	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), sel_buf_src, decompress_count, current_width);
 
 	if (dictionary) {
 		// We have prepared the full dictionary, we can reference these strings directly
@@ -127,11 +131,11 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 
 		int32_t offset = 0;
 		for (idx_t i = 0; i < string_number; i++) {
-			offset += string_lengths_ptr[i];
+			offset += string_lengths[i];
 		}
-		offset += string_lengths_ptr[string_number];
+		offset += string_lengths[string_number];
 
-		auto str_len = string_lengths_ptr[string_number];
+		auto str_len = string_lengths[string_number];
 		result_data[result_offset] = FetchStringFromDict(result, offset, str_len);
 	}
 }
@@ -151,10 +155,10 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	}
 
 	// Scanning 2048 values, emitting a dict vector
-	data_ptr_t dst = data_ptr_cast(sel_vec->data());
-	data_ptr_t src = data_ptr_cast(&base_data[(start * current_width) / 8]);
+	data_ptr_t sel_vec_dst = data_ptr_cast(sel_vec->data());
+	data_ptr_t sel_buf_src = data_ptr_cast(&base_data[(start * current_width) / 8]);
 
-	BitpackingPrimitives::UnPackBuffer<sel_t>(dst, src, scan_count, current_width);
+	BitpackingPrimitives::UnPackBuffer<sel_t>(sel_vec_dst, sel_buf_src, scan_count, current_width);
 
 	result.Dictionary(*(dictionary), dictionary_size, *sel_vec, scan_count);
 	// FIXME: this assumes the type is VectorType::DICTIONARY

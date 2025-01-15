@@ -13,6 +13,7 @@ typedef struct {
 	uint32_t dict_size;
 	uint32_t dict_end;
 	uint32_t string_lengths_offset;
+	uint32_t string_lengths_width;
 	uint32_t dict_count;
 	uint32_t bitpacking_width;
 	bool fsst_encoded;
@@ -31,9 +32,10 @@ public:
 
 public:
 	static bool HasEnoughSpace(idx_t current_count, idx_t index_count, idx_t dict_size,
-	                           bitpacking_width_t packing_width, const idx_t block_size);
+	                           bitpacking_width_t packing_width, bitpacking_width_t string_lengths_width,
+	                           const idx_t block_size);
 	static idx_t RequiredSpace(idx_t current_count, idx_t index_count, idx_t dict_size,
-	                           bitpacking_width_t packing_width);
+	                           bitpacking_width_t packing_width, bitpacking_width_t string_lengths_width);
 
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);

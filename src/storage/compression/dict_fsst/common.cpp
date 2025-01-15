@@ -10,18 +10,18 @@ namespace dict_fsst {
 // Helper Functions
 //===--------------------------------------------------------------------===//
 bool DictFSSTCompression::HasEnoughSpace(idx_t current_count, idx_t dict_count, idx_t dict_size,
-                                         bitpacking_width_t packing_width, const idx_t block_size) {
-	return RequiredSpace(current_count, dict_count, dict_size, packing_width) <= block_size;
+                                         bitpacking_width_t packing_width, bitpacking_width_t string_lengths_width,
+                                         const idx_t block_size) {
+	return RequiredSpace(current_count, dict_count, dict_size, packing_width, string_lengths_width) <= block_size;
 }
 
 idx_t DictFSSTCompression::RequiredSpace(idx_t current_count, idx_t dict_count, idx_t dict_size,
-                                         bitpacking_width_t packing_width) {
+                                         bitpacking_width_t packing_width, bitpacking_width_t string_lengths_width) {
 	idx_t base_space = DICTIONARY_HEADER_SIZE + dict_size;
 	idx_t string_number_space = BitpackingPrimitives::GetRequiredSize(current_count, packing_width);
-	idx_t index_space = dict_count * sizeof(uint32_t);
+	idx_t index_space = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
 
 	idx_t used_space = base_space + index_space + string_number_space;
-
 	return used_space;
 }
 

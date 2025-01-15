@@ -35,6 +35,7 @@ public:
 
 	bitpacking_width_t current_width;
 	buffer_ptr<SelectionVector> sel_vec;
+	vector<uint32_t> string_lengths;
 	idx_t sel_vec_size = 0;
 	bool is_fsst_encoded = false;
 
@@ -42,7 +43,8 @@ public:
 	data_ptr_t baseptr;
 	//! Start of the data (pointing to the start of the selection buffer)
 	data_ptr_t base_data;
-	uint32_t *string_lengths_ptr;
+	data_ptr_t string_lengths_ptr;
+	bitpacking_width_t string_lengths_width;
 	uint32_t dict_count;
 
 	buffer_ptr<Vector> dictionary;

@@ -39,6 +39,9 @@ public:
 	bitpacking_width_t current_width;
 	bitpacking_width_t next_width;
 
+	bitpacking_width_t string_length_bitwidth = NumericLimits<uint8_t>::Maximum();
+	uint32_t max_length = 0;
+
 	idx_t total_space = 0;
 };
 
