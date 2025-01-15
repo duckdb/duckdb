@@ -130,6 +130,8 @@ enum class DeprecatedIndexType : uint8_t;
 
 enum class DestroyBufferUpon : uint8_t;
 
+enum class DictFSSTMode : uint8_t;
+
 enum class DistinctType : uint8_t;
 
 enum class ErrorType : uint16_t;
@@ -535,6 +537,9 @@ const char* EnumUtil::ToChars<DeprecatedIndexType>(DeprecatedIndexType value);
 
 template<>
 const char* EnumUtil::ToChars<DestroyBufferUpon>(DestroyBufferUpon value);
+
+template<>
+const char* EnumUtil::ToChars<DictFSSTMode>(DictFSSTMode value);
 
 template<>
 const char* EnumUtil::ToChars<DistinctType>(DistinctType value);
@@ -1070,6 +1075,9 @@ DeprecatedIndexType EnumUtil::FromString<DeprecatedIndexType>(const char *value)
 
 template<>
 DestroyBufferUpon EnumUtil::FromString<DestroyBufferUpon>(const char *value);
+
+template<>
+DictFSSTMode EnumUtil::FromString<DictFSSTMode>(const char *value);
 
 template<>
 DistinctType EnumUtil::FromString<DistinctType>(const char *value);
