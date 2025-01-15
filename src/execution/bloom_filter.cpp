@@ -10,11 +10,11 @@
 
 namespace duckdb {
 
-BloomFilter::BloomFilter(size_t expected_cardinality, double desired_false_positive_rate, const ClientConfig &config) : num_inserted_rows(0), probing_started(false), config(config) {
+BloomFilter::BloomFilter(size_t expected_cardinality, double desired_false_positive_rate, const ClientConfig &config) : num_inserted_keys(0), num_probed_keys(0), num_filtered_keys(0), probing_started(false), config(config) {
     // Approximate size of the Bloom-filter rounded up to the next 8 byte.
-    size_t approx_size = std::ceil(-double(expected_cardinality) * log(desired_false_positive_rate) / 0.48045);
+    size_t approx_size = static_cast<size_t>(std::ceil(-double(expected_cardinality) * log(desired_false_positive_rate) / 0.48045));
 	bloom_filter_size = approx_size + (64 - approx_size % 64);
-    num_hash_functions = std::ceil(approx_size / expected_cardinality * 0.693147);
+    num_hash_functions = static_cast<size_t>(std::ceil(approx_size / expected_cardinality * 0.693147));
 
     bloom_data_buffer.resize(bloom_filter_size / 64, 0);
     bloom_filter.Initialize(bloom_data_buffer.data(), bloom_filter_size);
@@ -72,7 +72,7 @@ void BloomFilter::BuildWithPrecomputedHashes(Vector &hashes, const SelectionVect
     for (idx_t i = 0; i < num_hash_functions; i++) {
         SetBloomBitsForHashes(i, hashes, rsel, count);
     }
-    num_inserted_rows += count;
+    num_inserted_keys += count;
 }
 
 inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, SelectionVector &current_sel, idx_t current_sel_count) {
@@ -130,41 +130,41 @@ inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, SelectionVe
 }
 
 
-size_t BloomFilter::Probe(DataChunk &keys, const SelectionVector *&current_sel, idx_t count, SelectionVector sel, optional_ptr<Vector> precomputed_hashes) {
+size_t BloomFilter::ProbeWithPrecomputedHashes(const SelectionVector *&current_sel, idx_t count, SelectionVector &sel, Vector &precomputed_hashes) {
     if(!config.hash_join_bloom_filter) {
         return count;
     }
-    // The code currently assumes that we have precomputed hashes.
-    D_ASSERT(precomputed_hashes != nullptr);
-    precomputed_hashes.CheckValid();
-
+    
     probing_started = true;
+    num_probed_keys += count;
 
-    size_t sel_out_count = count;
-
-
-    SelectionVector sel_tmp(count);
     // Copy current selection vector over to temporary selection vector
+    SelectionVector sel_tmp;
+    size_t sel_tmp_count = count;
     for (idx_t i = 0; i < count; i++) {
+        // TODO: ideally, we should only do this if current_sel.IsSet()
         sel_tmp.set_index(i, current_sel->get_index(i));
     }
-    current_sel = FlatVector::IncrementalSelectionVector();
 
-
+    // Perform probing
     for (idx_t i = 0; i < num_hash_functions; i++) {
-        sel_out_count = ProbeInternal(i, *precomputed_hashes, sel_tmp, sel_out_count);
-        if (sel_out_count == 0) {
+        sel_tmp_count = ProbeInternal(i, precomputed_hashes, sel_tmp, sel_tmp_count);
+        if (sel_tmp_count == 0) {
+            num_filtered_keys += count;
             return 0;
         }
     }
 
     // Copy result of temporary selection vector over to helper selection vector and adjust pointers.
-    for (idx_t i = 0; i < sel_out_count; i++) {
+    current_sel = FlatVector::IncrementalSelectionVector();
+    for (idx_t i = 0; i < sel_tmp_count; i++) {
         sel.set_index(i, sel_tmp.get_index(i));
     }
+    // Swap out the given selection vector with the modified one.
     current_sel = &sel;
 
-    return sel_out_count;
+    num_filtered_keys += (count - sel_tmp_count);
+    return sel_tmp_count;
 }
 
 } // namespace duckdb

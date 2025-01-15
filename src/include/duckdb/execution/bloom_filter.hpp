@@ -32,10 +32,18 @@ public:
 	void BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector &rsel, idx_t count);
 
 	//! Probes the Bloom-filter and adjusts the selection vector accordingly.
-	size_t Probe(DataChunk &keys, const SelectionVector *&current_sel, idx_t count, SelectionVector sel, optional_ptr<Vector> precomputed_hashes = nullptr);
+	size_t ProbeWithPrecomputedHashes(const SelectionVector *&current_sel, idx_t count, SelectionVector &sel, Vector &precomputed_hashes);
 
 	size_t GetNumInsertedRows() const {
-		return num_inserted_rows;
+		return num_inserted_keys;
+	}
+
+	size_t GetNumProbedKeys() const {
+		return num_probed_keys;
+	}
+
+	double GetObservedSelectivity() const {
+		return static_cast<double>(num_filtered_keys) / static_cast<double>(num_probed_keys);
 	}
 
 private:
@@ -48,7 +56,9 @@ private:
 
 	size_t num_hash_functions;
 	size_t bloom_filter_size;
-	std::atomic_size_t num_inserted_rows;
+	std::atomic_size_t num_inserted_keys;
+	std::atomic_size_t num_probed_keys;
+	std::atomic_size_t num_filtered_keys;
 	std::atomic_bool probing_started;
 
 	vector<validity_t> bloom_data_buffer;
