@@ -657,45 +657,58 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
 	// collect all indexed columns
-	unordered_set<column_t> indexed_columns;
+	unordered_set<column_t> indexed_column_id_set;
 	indexes.Scan([&](Index &index) {
 		auto set = index.GetColumnIdSet();
-		indexed_columns.insert(set.begin(), set.end());
+		indexed_column_id_set.insert(set.begin(), set.end());
 		return false;
 	});
 
 	// initialize the fetch state with only indexed columns
 	TableScanState state;
+
 	vector<StorageIndex> column_ids;
-	column_ids.reserve(indexed_columns.size());
-	for (auto &col : indexed_columns) {
+	column_ids.reserve(indexed_column_id_set.size());
+	for (auto &col : indexed_column_id_set) {
 		column_ids.emplace_back(col);
 	}
 	sort(column_ids.begin(), column_ids.end());
+
+	vector<LogicalType> column_types;
+	column_types.reserve(indexed_column_id_set.size());
+	for (auto &col : column_ids) {
+		column_types.push_back(types[col.GetPrimaryIndex()]);
+	}
+
 	state.Initialize(std::move(column_ids));
 	state.table_state.max_row = row_start + total_rows;
 
-	// keep track of which columns we fetched
+	// create two chunks:
+	// result: used for scanning data, has only the required columns
+	// rows: used for index removal, has all columns but only initializes indexed ones
+	DataChunk result;
+	result.Initialize(GetAllocator(), column_types);
+
+	DataChunk rows;
 	auto fetched_columns = vector<bool>(types.size(), false);
-	for (auto &col : indexed_columns) {
+	for (auto &col : indexed_column_id_set) {
 		fetched_columns[col] = true;
 	}
-
-	// initialize a chunk with all columns, but only fetch the indexed ones
-	DataChunk result;
-	result.Initialize(GetAllocator(), types, fetched_columns);
+	rows.Initialize(GetAllocator(), types, fetched_columns);
 
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	// now iterate over the row ids
 	for (idx_t r = 0; r < count;) {
 		result.Reset();
+		rows.Reset();
+		
 		// figure out which row_group to fetch from
 		auto row_id = row_ids[r];
 		auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(row_id));
 		auto row_group_vector_idx = (UnsafeNumericCast<idx_t>(row_id) - row_group->start) / STANDARD_VECTOR_SIZE;
 		auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE + row_group->start;
 
-		// fetch the current vector
+		// fetch the current vector into result
 		state.table_state.Initialize(GetTypes());
 		row_group->InitializeScanWithOffset(state.table_state, row_group_vector_idx);
 		row_group->ScanCommitted(state.table_state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
@@ -715,12 +728,24 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 			sel.set_index(sel_count++, row_in_vector);
 		}
 		D_ASSERT(sel_count > 0);
+
+		// copy the required columns from result to rows
+		idx_t i = 0;
+		for (idx_t j = 0; j < types.size(); j++) {
+			if (fetched_columns[j]) {
+				rows.data[j].Reference(result.data[i++]);
+			} else {
+				rows.data[j].Reference(Value(types[j]));
+			}
+		}
+		rows.SetCardinality(result);
+		
 		// slice the vector with all rows that are present in this vector and erase from the index
-		result.Slice(sel, sel_count);
+		rows.Slice(sel, sel_count);
 
 		indexes.Scan([&](Index &index) {
 			if (index.IsBound()) {
-				index.Cast<BoundIndex>().Delete(result, row_identifiers);
+				index.Cast<BoundIndex>().Delete(rows, row_identifiers);
 			} else {
 				throw MissingExtensionException(
 				    "Cannot delete from index '%s', unknown index type '%s'. You need to load the "

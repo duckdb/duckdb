@@ -70,36 +70,60 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
+	auto types = table.GetTypes();
+	auto to_be_fetched = vector<bool>(types.size(), false);
 	vector<StorageIndex> column_ids;
+	vector<LogicalType> column_types;
 	if (return_chunk) {
 		// Fetch all columns.
 		for (idx_t i = 0; i < table.ColumnCount(); i++) {
 			column_ids.emplace_back(i);
+			to_be_fetched[i] = true;
 		};
+		column_types = types;
 	} else if (g_state.has_unique_indexes) {
 		// Fetch only the required columns for updating the delete indexes.
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto storage = local_storage.GetStorage(table);
-		unordered_set<column_t> indexed_columns;
+		unordered_set<column_t> indexed_column_id_set;
 		storage->delete_indexes.Scan([&](Index &index) {
 			if (!index.IsBound() || !index.IsUnique()) {
 				return false;
 			}
 			auto set = index.GetColumnIdSet();
-			indexed_columns.insert(set.begin(), set.end());
+			indexed_column_id_set.insert(set.begin(), set.end());
 			return false;
 		});
-		for (auto &col : indexed_columns) {
+		for (auto &col : indexed_column_id_set) {
 			column_ids.emplace_back(col);
 		}
 		sort(column_ids.begin(), column_ids.end());
+		for (auto &col : column_ids) {
+			auto i = col.GetPrimaryIndex();
+			to_be_fetched[i] = true;
+			column_types.push_back(types[i]);
+		}
 	}
 	auto fetch_state = ColumnFetchState();
 
 	// Fetch the to-be-deleted chunk.
 	l_state.delete_chunk.Reset();
 	row_ids.Flatten(chunk.size());
-	table.Fetch(transaction, l_state.delete_chunk, column_ids, row_ids, chunk.size(), fetch_state);
+
+	DataChunk result;
+	result.Initialize(Allocator::Get(context.client), column_types);
+	table.Fetch(transaction, result, column_ids, row_ids, chunk.size(), fetch_state);
+
+	// Reference the fetched columns to the delete_chunk.
+	idx_t fetch_idx = 0;
+	for (idx_t i = 0; i < table.ColumnCount(); i++) {
+		if (to_be_fetched[i]) {
+			l_state.delete_chunk.data[i].Reference(result.data[fetch_idx++]);
+		} else {
+			l_state.delete_chunk.data[i].Reference(Value(types[i]));
+		}
+	}
+	l_state.delete_chunk.SetCardinality(result);
 
 	// Append the deleted row IDs to the delete indexes.
 	// If we only delete local row IDs, then the delete_chunk is empty.
