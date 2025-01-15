@@ -1258,6 +1258,34 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 	});
 }
 
+// Try to unescape glob patterns to a literal path.
+// Returns true if the path can be unescaped to a literal path, and the literal path is returned in result.
+// Returns false if the path cannot be unescaped to a literal path.
+//
+// Examples:
+// 	"abc" -> true, "abc"
+// 	"a[*]c" -> true, "a*c"
+// 	"a[b*c]d" -> false
+// 	"a*d" -> false
+static bool TryUnescapeGlob(const string &path, string &result) {
+	result.clear();
+	result.reserve(path.size());
+	for (idx_t i = 0; i < path.size(); ) {
+		if (path[i] == '[' && i + 2 < path.size() && path[i + 2] == ']') {
+			// replace [c] -> c
+			result += path[i + 1];
+			i += 3;
+		} else if (path[i] == '*' || path[i] == '?' || path[i] == '[') {
+			// can not be unescaped due to special characters
+			return false;
+		} else {
+			result += path[i];
+			i += 1;
+		}
+	}
+	return true;
+}
+
 vector<string> LocalFileSystem::FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path) {
 	vector<string> result;
 	if (FileExists(path, opener) || IsPipe(path, opener)) {
@@ -1367,10 +1395,11 @@ vector<string> LocalFileSystem::Glob(const string &path, FileOpener *opener) {
 			}
 		}
 	}
-	// Check if the path has a glob at all
-	if (!HasGlob(path)) {
+	// Check if the path has no glob at all or if it can be unescaped to a literal path
+	string literal_path;
+	if (TryUnescapeGlob(path, literal_path)) {
 		// no glob: return only the file (if it exists or is a pipe)
-		return FetchFileWithoutGlob(path, opener, absolute_path);
+		return FetchFileWithoutGlob(literal_path, opener, absolute_path);
 	}
 	vector<string> previous_directories;
 	if (absolute_path) {
