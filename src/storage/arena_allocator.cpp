@@ -130,6 +130,11 @@ void ArenaAllocator::AlignNext() {
 	}
 }
 
+void ArenaAllocator::ShrinkHead(idx_t shrink_size) {
+	D_ASSERT(head && head->current_position >= shrink_size);
+	head->current_position -= shrink_size;
+}
+
 data_ptr_t ArenaAllocator::AllocateAligned(idx_t size) {
 	AlignNext();
 	return Allocate(AlignValue<idx_t>(size));

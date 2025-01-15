@@ -42,6 +42,10 @@ public:
 	//! Increment the internal cursor (if required) so the next allocation is guaranteed to be aligned to 8 bytes
 	DUCKDB_API void AlignNext();
 
+	//! This shrinks the LAST allocation that was made using the allocator
+	//! Note that we can ONLY safely call this method if Allocate has been called previously with a size >= shrink_size
+	DUCKDB_API void ShrinkHead(idx_t shrink_size);
+
 	//! Resets the current head and destroys all previous arena chunks
 	DUCKDB_API void Reset();
 	DUCKDB_API void Destroy();

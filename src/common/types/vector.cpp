@@ -1965,17 +1965,25 @@ string_t StringVector::AddString(Vector &vector, const string &data) {
 	return StringVector::AddString(vector, string_t(data.c_str(), UnsafeNumericCast<uint32_t>(data.size())));
 }
 
+VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
+	if (vector.GetType().InternalType() != PhysicalType::VARCHAR) {
+		throw InternalException("StringVector::GetStringBuffer - vector is not of internal type VARCHAR but of type %s",
+		                        vector.GetType());
+	}
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
+	return vector.auxiliary.get()->Cast<VectorStringBuffer>();
+}
+
 string_t StringVector::AddString(Vector &vector, string_t data) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR || vector.GetType().id() == LogicalTypeId::BIT);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;
 	}
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
+	auto &string_buffer = GetStringBuffer(vector);
 	return string_buffer.AddString(data);
 }
 
@@ -1985,11 +1993,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 		// string will be inlined: no need to store in string heap
 		return data;
 	}
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
+	auto &string_buffer = GetStringBuffer(vector);
 	return string_buffer.AddBlob(data);
 }
 
@@ -1998,30 +2002,18 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	if (len <= string_t::INLINE_LENGTH) {
 		return string_t(UnsafeNumericCast<uint32_t>(len));
 	}
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
+	auto &string_buffer = GetStringBuffer(vector);
 	return string_buffer.EmptyString(len);
 }
 
 void StringVector::AddHandle(Vector &vector, BufferHandle handle) {
-	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
+	auto &string_buffer = GetStringBuffer(vector);
 	string_buffer.AddHeapReference(make_buffer<ManagedVectorBuffer>(std::move(handle)));
 }
 
 void StringVector::AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer) {
-	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(buffer.get() != vector.auxiliary.get());
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
+	auto &string_buffer = GetStringBuffer(vector);
 	string_buffer.AddHeapReference(std::move(buffer));
 }
 
