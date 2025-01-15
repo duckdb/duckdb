@@ -74,6 +74,8 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::TIMESTAMP_TZ;
 	case DUCKDB_TYPE_ANY:
 		return LogicalTypeId::ANY;
+	case DUCKDB_TYPE_VARINT:
+		return LogicalTypeId::VARINT;
 	case DUCKDB_TYPE_SQLNULL:
 		return LogicalTypeId::SQLNULL;
 	default: // LCOV_EXCL_START

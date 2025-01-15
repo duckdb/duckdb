@@ -48,6 +48,23 @@ unique_ptr<BoundIndex> IndexBinder::BindIndex(const UnboundIndex &unbound_index)
 	return index_type->create_instance(input);
 }
 
+void IndexBinder::InitCreateIndexInfo(LogicalGet &get, CreateIndexInfo &info, const string &schema) {
+	auto &column_ids = get.GetColumnIds();
+	for (auto &column_id : column_ids) {
+		if (column_id.IsRowIdColumn()) {
+			throw BinderException("cannot create an index on the rowid");
+		}
+		auto col_id = column_id.GetPrimaryIndex();
+		info.column_ids.push_back(col_id);
+		info.scan_types.push_back(get.returned_types[col_id]);
+	}
+
+	info.scan_types.emplace_back(LogicalType::ROW_TYPE);
+	info.names = get.names;
+	info.schema = schema;
+	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
+}
+
 unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
                                                          unique_ptr<CreateIndexInfo> create_index_info,
                                                          TableCatalogEntry &table_entry,
@@ -70,23 +87,9 @@ unique_ptr<LogicalOperator> IndexBinder::BindCreateIndex(ClientContext &context,
 	}
 
 	auto &get = plan->Cast<LogicalGet>();
-	auto &column_ids = get.GetColumnIds();
-	for (auto &column_id : column_ids) {
-		if (column_id.IsRowIdColumn()) {
-			throw BinderException("cannot create an index on the rowid");
-		}
-		auto col_id = column_id.GetPrimaryIndex();
-		create_index_info->column_ids.push_back(col_id);
-		create_index_info->scan_types.push_back(get.returned_types[col_id]);
-	}
-
-	create_index_info->scan_types.emplace_back(LogicalType::ROW_TYPE);
-	create_index_info->names = get.names;
-	create_index_info->schema = table_entry.schema.name;
-
+	InitCreateIndexInfo(get, *create_index_info, table_entry.schema.name);
 	auto &bind_data = get.bind_data->Cast<TableScanBindData>();
 	bind_data.is_create_index = true;
-	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 
 	auto result = make_uniq<LogicalCreateIndex>(std::move(create_index_info), std::move(expressions), table_entry,
 	                                            std::move(alter_table_info));

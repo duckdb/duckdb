@@ -365,7 +365,7 @@ bool TypeIsInteger(PhysicalType type) {
 	       type == PhysicalType::UINT128;
 }
 
-static string TypeModifierListToString(const vector<Value> &mod_list) {
+static string TypeModifierListToString(const vector<LogicalTypeModifier> &mod_list) {
 	string result;
 	if (mod_list.empty()) {
 		return result;
@@ -499,7 +499,14 @@ string LogicalType::ToString() const {
 		result += KeywordHelper::WriteOptionallyQuoted(type);
 
 		if (!mods.empty()) {
-			result += TypeModifierListToString(mods);
+			result += "(";
+			for (idx_t i = 0; i < mods.size(); i++) {
+				result += mods[i].ToString();
+				if (i < mods.size() - 1) {
+					result += ", ";
+				}
+			}
+			result += ")";
 		}
 
 		return result;

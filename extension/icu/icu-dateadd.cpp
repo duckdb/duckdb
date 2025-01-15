@@ -132,6 +132,9 @@ timestamp_t ICUCalendarSub::Operation(timestamp_t timestamp, interval_t interval
 
 template <>
 interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_date, icu::Calendar *calendar) {
+	if (!Timestamp::IsFinite(end_date) || !Timestamp::IsFinite(start_date)) {
+		throw InvalidInputException("Cannot subtract infinite timestamps");
+	}
 	if (start_date > end_date) {
 		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar);
 		return {-negated.months, -negated.days, -negated.micros};
@@ -156,7 +159,7 @@ interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_dat
 	auto min_diff = SubtractField(calendar, UCAL_MINUTE, end_date);
 	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
 	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
-	auto micros_diff = ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros);
+	auto micros_diff = UnsafeNumericCast<int32_t>(ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros));
 	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
 
 	return result;
@@ -188,7 +191,7 @@ interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_dat
 	auto min_diff = SubtractField(calendar, UCAL_MINUTE, end_date);
 	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
 	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
-	auto micros_diff = ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros);
+	auto micros_diff = UnsafeNumericCast<int32_t>(ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros));
 	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
 
 	return result;

@@ -1,12 +1,30 @@
 [
   {
+    "class": "LogicalTypeModifier",
+    "includes": [ "duckdb/common/extension_type_info.hpp" ],
+    "members": [
+      {
+        "id": 100,
+        "name": "value",
+        "type": "Value"
+      },
+      {
+        "id": 101,
+        "name": "label",
+        "type": "string"
+      }
+    ],
+    "pointer_type": "none",
+    "constructor": ["value"]
+  },
+  {
     "class": "ExtensionTypeInfo",
     "includes": [ "duckdb/common/extension_type_info.hpp" ],
     "members": [
       {
         "id": 100,
         "name": "modifiers",
-        "type": "vector<Value>"
+        "type": "vector<LogicalTypeModifier>"
       },
       {
         "id": 101,
