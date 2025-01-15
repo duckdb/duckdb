@@ -467,6 +467,7 @@ void CSVSniffer::DetectTypes() {
 				best_format_candidates[format_candidate.first] = format_candidate.second.format;
 			}
 			if (chunk_size > 0) {
+				single_row_file = chunk_size == 1;
 				for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
 					auto &cur_vector = data_chunk.data[col_idx];
 					auto vector_data = FlatVector::GetData<string_t>(cur_vector);

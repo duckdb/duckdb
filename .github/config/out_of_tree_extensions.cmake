@@ -80,6 +80,8 @@ else ()
     set(LOAD_ICEBERG_TESTS "")
 endif()
 
+### Boost::filesystem, a vcpkg iceberg dependency, is currently not compatible with linux_arm64 platform
+if (NO)
 if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
     duckdb_extension_load(iceberg
             ${LOAD_ICEBERG_TESTS}
@@ -87,6 +89,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             GIT_TAG d62d91d8a089371c4d1862a88f2e62a97bc2af3a
             APPLY_PATCHES
             )
+endif()
 endif()
 
 ################# INET

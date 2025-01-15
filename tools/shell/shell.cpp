@@ -641,6 +641,33 @@ idx_t ShellState::RenderLength(const string &str) {
 	return RenderLength(str.c_str());
 }
 
+int ShellState::RunInitialCommand(char *sql) {
+	int rc;
+	if (sql[0] == '.') {
+		rc = DoMetaCommand(sql);
+		if (rc && bail_on_error) {
+			return rc == 2 ? false : rc;
+		}
+	} else {
+		char *zErrMsg = nullptr;
+		OpenDB(0);
+		rc = ExecuteSQL(sql, &zErrMsg);
+		if (zErrMsg != 0) {
+			PrintDatabaseError(zErrMsg);
+			sqlite3_free(zErrMsg);
+			if (bail_on_error) {
+				return rc != 0 ? rc : 1;
+			}
+		} else if (rc != 0) {
+			utf8_printf(stderr, "Error: unable to process SQL: \"%s\"\n", sql);
+			if (bail_on_error) {
+				return rc;
+			}
+		}
+	}
+	return 0;
+}
+
 /*
 ** Return true if zFile does not exist or if it is not an ordinary file.
 */
@@ -4106,6 +4133,21 @@ MetadataResult ShowTables(ShellState &state, const char **azArg, idx_t nArg) {
 	return state.DisplayEntries(azArg, nArg, 't');
 }
 
+MetadataResult SetUICommand(ShellState &state, const char **azArg, idx_t nArg) {
+	if (nArg < 1) {
+		return MetadataResult::PRINT_USAGE;
+	}
+	string command;
+	for (idx_t i = 1; i < nArg; i++) {
+		if (i > 1) {
+			command += " ";
+		}
+		command += azArg[i];
+	}
+	state.ui_command = "CALL " + command;
+	return MetadataResult::SUCCESS;
+}
+
 #if defined(_WIN32) || defined(WIN32)
 MetadataResult SetUTF8Mode(ShellState &state, const char **azArg, idx_t nArg) {
 	win_utf8_mode = 1;
@@ -4174,6 +4216,7 @@ static const MetadataCommand metadata_commands[] = {
      "Sets the thousand separator used when rendering numbers. Only for duckbox mode.", 4},
     {"timeout", 0, nullptr, "", "", 5},
     {"timer", 2, ToggleTimer, "on|off", "Turn SQL timer on or off", 0},
+    {"ui_command", 0, SetUICommand, "[command]", "Set the UI command", 0},
     {"version", 1, ShowVersion, "", "Show the version", 0},
     {"width", 0, SetWidths, "NUM1 NUM2 ...", "Set minimum column widths for columnar output", 0},
 #if defined(_WIN32) || defined(WIN32)
@@ -4985,32 +5028,20 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				break;
 			}
 			z = cmdline_option_value(argc, argv, ++i);
-			if (z[0] == '.') {
-				rc = data.DoMetaCommand(z);
-				if (rc && bail_on_error) {
-					free(azCmd);
-					return rc == 2 ? 0 : rc;
-				}
-			} else {
-				data.OpenDB(0);
-				rc = data.ExecuteSQL(z, &zErrMsg);
-				if (zErrMsg != 0) {
-					data.PrintDatabaseError(zErrMsg);
-					sqlite3_free(zErrMsg);
-					if (bail_on_error) {
-						free(azCmd);
-						return rc != 0 ? rc : 1;
-					}
-				} else if (rc != 0) {
-					utf8_printf(stderr, "Error: unable to process SQL \"%s\"\n", z);
-					if (bail_on_error) {
-						free(azCmd);
-						return rc;
-					}
-				}
+			rc = data.RunInitialCommand(z);
+			if (rc != 0) {
+				free(azCmd);
+				return rc;
 			}
 		} else if (strcmp(z, "-safe") == 0) {
 			// safe mode has been set before
+		} else if (strcmp(z, "-ui") == 0) {
+			// run the UI command
+			rc = data.RunInitialCommand((char *)data.ui_command.c_str());
+			if (rc != 0) {
+				free(azCmd);
+				return rc;
+			}
 		} else {
 			utf8_printf(stderr, "%s: Error: unknown option: %s\n", program_name, z);
 			raw_printf(stderr, "Use -help for a list of options.\n");

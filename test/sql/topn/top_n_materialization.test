@@ -129,3 +129,20 @@ SELECT j, k, l, i FROM test WHERE i > 5 ORDER BY j DESC LIMIT 2;
 ----
 10	11	-9	9
 09	10	-8	8
+
+# test late materialization setting
+statement ok
+SET late_materialization_max_rows=0
+
+query II
+explain SELECT * FROM test ORDER BY j DESC LIMIT 2;
+----
+logical_opt	<!REGEX>:.*COMPARISON_JOIN.*
+
+statement ok
+RESET late_materialization_max_rows
+
+query II
+explain SELECT * FROM test ORDER BY j DESC LIMIT 2;
+----
+logical_opt	<REGEX>:.*COMPARISON_JOIN.*

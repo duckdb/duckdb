@@ -239,12 +239,16 @@ void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t f
 	scan_appender.Append(Value::UINTEGER(NumericCast<uint32_t>(options.dialect_options.skip_rows.GetValue())));
 	// 9. Has Header
 	scan_appender.Append(Value::BOOLEAN(options.dialect_options.header.GetValue()));
+
+	auto &types = file.GetTypes();
+	auto &names = file.GetNames();
+
 	// 10. List<Struct<Column-Name:Types>> {'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	std::ostringstream columns;
 	columns << "{";
-	for (idx_t i = 0; i < file.types.size(); i++) {
-		columns << "'" << file.names[i] << "': '" << file.types[i].ToString() << "'";
-		if (i != file.types.size() - 1) {
+	for (idx_t i = 0; i < types.size(); i++) {
+		columns << "'" << names[i] << "': '" << types[i].ToString() << "'";
+		if (i != types.size() - 1) {
 			columns << ",";
 		}
 	}

@@ -11,10 +11,12 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/main/client_config.hpp"
 
 namespace duckdb {
 
 LateMaterialization::LateMaterialization(Optimizer &optimizer) : optimizer(optimizer) {
+	max_row_count = ClientConfig::GetConfig(optimizer.context).late_materialization_max_rows;
 }
 
 idx_t LateMaterialization::GetOrInsertRowId(LogicalGet &get) {
@@ -372,7 +374,7 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 			}
 		}
 		if (TryLateMaterialization(op)) {
-			return std::move(op);
+			return op;
 		}
 		break;
 	}
@@ -383,7 +385,7 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 		}
 		// for the top-n we need to visit the order elements
 		if (TryLateMaterialization(op)) {
-			return std::move(op);
+			return op;
 		}
 		break;
 	}
@@ -396,7 +398,7 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 			break;
 		}
 		if (TryLateMaterialization(op)) {
-			return std::move(op);
+			return op;
 		}
 		break;
 	}

@@ -270,8 +270,8 @@ void CSVError::RemoveNewLine(string &error) {
 	error = StringUtil::Split(error, "\n")[0];
 }
 
-CSVError CSVError::CastError(const CSVReaderOptions &options, string &column_name, string &cast_error, idx_t column_idx,
-                             string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
+CSVError CSVError::CastError(const CSVReaderOptions &options, const string &column_name, string &cast_error,
+                             idx_t column_idx, string &csv_row, LinesPerBoundary error_info, idx_t row_byte_position,
                              optional_idx byte_position, LogicalTypeId type, const string &current_path) {
 	std::ostringstream error;
 	// Which column

@@ -236,6 +236,8 @@ private:
 	                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
 	                     CSVReaderOptions &options, CSVErrorHandler &error_handler);
 	vector<string> names;
+	//! If the file only has a header
+	bool single_row_file = false;
 
 	//! ------------------------------------------------------//
 	//! ------------------ Type Replacement ----------------- //
