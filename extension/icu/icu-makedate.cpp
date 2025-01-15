@@ -94,8 +94,13 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 	template <typename T>
 	static void FromMicros(DataChunk &input, ExpressionState &state, Vector &result) {
-		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(),
-		                                       [&](T micros) { return timestamp_t(micros); });
+		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(), [&](T micros) {
+			const auto result = timestamp_t(micros);
+			if (!Timestamp::IsFinite(result)) {
+				throw ConversionException("Timestamp microseconds out of range: %ld", micros);
+			}
+			return result;
+		});
 	}
 
 	template <typename T>

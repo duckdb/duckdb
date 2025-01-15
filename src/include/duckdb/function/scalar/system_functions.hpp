@@ -35,4 +35,13 @@ struct CombineFun {
 	static ScalarFunction GetFunction();
 };
 
+struct WriteLogFun {
+	static constexpr const char *Name = "write_log";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Writes to the logger";
+	static constexpr const char *Example = "write_log('Hello')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb

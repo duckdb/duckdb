@@ -4,6 +4,7 @@
 #include "json_scan.hpp"
 #include "json_structure.hpp"
 #include "json_transform.hpp"
+#include "duckdb/parallel/task_executor.hpp"
 
 namespace duckdb {
 
@@ -36,20 +37,18 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 	}
 }
 
-void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
-                          vector<string> &names) {
-	// Change scan type during detection
-	bind_data.type = JSONScanType::SAMPLE;
+class JSONSchemaTask : public BaseExecutorTask {
+public:
+	JSONSchemaTask(TaskExecutor &executor, ClientContext &context_p, JSONScanData &bind_data_p,
+	               JSONStructureNode &node_p, const idx_t file_idx_start_p, const idx_t file_idx_end_p)
+	    : BaseExecutorTask(executor), context(context_p), bind_data(bind_data_p), node(node_p),
+	      file_idx_start(file_idx_start_p), file_idx_end(file_idx_end_p), allocator(BufferAllocator::Get(context)),
+	      string_vector(LogicalType::VARCHAR) {
+	}
 
-	// These are used across files (if union_by_name)
-	JSONStructureNode node;
-	ArenaAllocator allocator(BufferAllocator::Get(context));
-	Vector string_vector(LogicalType::VARCHAR);
-
-	// Loop through the files (if union_by_name, else sample up to sample_size rows or maximum_sample_files files)
-	idx_t remaining = bind_data.sample_size;
-	for (idx_t file_idx = 0; file_idx < bind_data.files.size(); file_idx++) {
-		// Create global/local state and place the reader in the right field
+	static idx_t ExecuteInternal(ClientContext &context, JSONScanData &bind_data, JSONStructureNode &node,
+	                             const idx_t file_idx, ArenaAllocator &allocator, Vector &string_vector,
+	                             idx_t remaining) {
 		JSONScanGlobalState gstate(context, bind_data);
 		JSONScanLocalState lstate(context, gstate);
 		if (file_idx == 0) {
@@ -61,12 +60,12 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		// Read and detect schema
 		while (remaining != 0) {
 			allocator.Reset();
-			auto read_count = lstate.ReadNext(gstate);
+			const auto read_count = lstate.ReadNext(gstate);
 			if (read_count == 0) {
 				break;
 			}
 
-			idx_t next = MinValue<idx_t>(read_count, remaining);
+			const auto next = MinValue<idx_t>(read_count, remaining);
 			for (idx_t i = 0; i < next; i++) {
 				const auto &val = lstate.values[i];
 				if (val) {
@@ -85,13 +84,62 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 			bind_data.avg_tuple_size = lstate.total_read_size / lstate.total_tuple_count;
 		}
 
-		// Close the file and stop detection if not union_by_name
-		if (bind_data.options.file_options.union_by_name) {
-			// When union_by_name=true we sample sample_size per file
-			remaining = bind_data.sample_size;
-		} else if (remaining == 0 || file_idx == bind_data.maximum_sample_files - 1) {
-			// When union_by_name=false, we sample sample_size in total (across the first maximum_sample_files files)
-			break;
+		return remaining;
+	}
+
+	void ExecuteTask() override {
+		for (idx_t file_idx = file_idx_start; file_idx < file_idx_end; file_idx++) {
+			ExecuteInternal(context, bind_data, node, file_idx, allocator, string_vector, bind_data.sample_size);
+		}
+	}
+
+private:
+	ClientContext &context;
+	JSONScanData &bind_data;
+	JSONStructureNode &node;
+	const idx_t file_idx_start;
+	const idx_t file_idx_end;
+
+	ArenaAllocator allocator;
+	Vector string_vector;
+};
+
+void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
+                          vector<string> &names) {
+	// Change scan type during detection
+	bind_data.type = JSONScanType::SAMPLE;
+
+	JSONStructureNode node;
+	if (bind_data.options.file_options.union_by_name) {
+		const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		const auto files_per_task = (bind_data.files.size() + num_threads - 1) / num_threads;
+		const auto num_tasks = bind_data.files.size() / files_per_task;
+		vector<JSONStructureNode> task_nodes(num_tasks);
+
+		// Same idea as in union_by_name.hpp
+		TaskExecutor executor(context);
+		for (idx_t task_idx = 0; task_idx < num_tasks; task_idx++) {
+			const auto file_idx_start = task_idx * files_per_task;
+			auto task = make_uniq<JSONSchemaTask>(executor, context, bind_data, task_nodes[task_idx], file_idx_start,
+			                                      file_idx_start + files_per_task);
+			executor.ScheduleTask(std::move(task));
+		}
+		executor.WorkOnTasks();
+
+		// Merge task nodes into one
+		for (auto &task_node : task_nodes) {
+			JSONStructure::MergeNodes(node, task_node);
+		}
+	} else {
+		ArenaAllocator allocator(BufferAllocator::Get(context));
+		Vector string_vector(LogicalType::VARCHAR);
+		idx_t remaining = bind_data.sample_size;
+		for (idx_t file_idx = 0; file_idx < bind_data.files.size(); file_idx++) {
+			remaining = JSONSchemaTask::ExecuteInternal(context, bind_data, node, file_idx, allocator, string_vector,
+			                                            remaining);
+			if (remaining == 0 || file_idx == bind_data.maximum_sample_files - 1) {
+				break; // We sample sample_size in total (across the first maximum_sample_files files)
+			}
 		}
 	}
 
@@ -306,14 +354,14 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
 		// We rename them so we can parse the file anyway. Note that we can't change bind_data->names,
 		// because the JSON reader gets columns by exact name, not position
-		case_insensitive_map_t<idx_t> name_count_map;
-		for (auto &name : names) {
-			auto it = name_count_map.find(name);
-			if (it == name_count_map.end()) {
-				name_count_map[name] = 1;
-			} else {
-				name = StringUtil::Format("%s_%llu", name, it->second++);
+		case_insensitive_map_t<idx_t> name_collision_count;
+		for (auto &col_name : names) {
+			// Taken from CSV header_detection.cpp
+			while (name_collision_count.find(col_name) != name_collision_count.end()) {
+				name_collision_count[col_name] += 1;
+				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
 			}
+			name_collision_count[col_name] = 0;
 		}
 	}
 

@@ -40,7 +40,7 @@ class U_I18N_API LocalizedNumberFormatterAsFormat : public Format {
     /**
      * Equals operator.
      */
-    UBool operator==(const Format& other) const U_OVERRIDE;
+    bool operator==(const Format& other) const U_OVERRIDE;
 
     /**
      * Creates a copy of this object.

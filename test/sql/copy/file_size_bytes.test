@@ -61,9 +61,9 @@ true
 require parquet
 
 # we can trigger early flushes with Parquet by setting a low row group size
-# also, we have to use DOUBLE for Parquet because we compress integers by A LOT which affects the file_size_bytes
+# also, we have to use hash(col)::DOUBLE for Parquet because we compress integers by A LOT which affects the file_size_bytes
 statement ok
-COPY (SELECT col_a::DOUBLE, col_b::DOUBLE FROM bigdata) TO '__TEST_DIR__/file_size_bytes_parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2000, FILE_SIZE_BYTES '1kb');
+COPY (SELECT hash(col_a)::DOUBLE, hash(col_b)::DOUBLE FROM bigdata) TO '__TEST_DIR__/file_size_bytes_parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2000, FILE_SIZE_BYTES '1kb');
 
 query I
 SELECT COUNT(*) FROM read_parquet('__TEST_DIR__/file_size_bytes_parquet/*.parquet')

@@ -9,9 +9,91 @@ using namespace duckdb;
 using namespace std;
 
 static void create_dummy_file(string fname) {
-	ofstream outfile(fname);
+	string normalized_string;
+	if (StringUtil::StartsWith(fname, "file:///")) {
+#ifdef _WIN32
+		normalized_string = fname.substr(8);
+#else
+		normalized_string = fname.substr(7);
+#endif
+
+	} else if (StringUtil::StartsWith(fname, "file://localhost/")) {
+#ifdef _WIN32
+		normalized_string = fname.substr(18);
+#else
+		normalized_string = fname.substr(18);
+#endif
+	} else {
+		normalized_string = fname;
+	}
+
+	ofstream outfile(normalized_string);
 	outfile << "I_AM_A_DUMMY" << endl;
 	outfile.close();
+}
+
+TEST_CASE("Make sure the file:// protocol works as expected", "[file_system]") {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto dname = fs->JoinPath(fs->GetWorkingDirectory(), TestCreatePath("TEST_DIR"));
+	auto dname_converted_slashes = StringUtil::Replace(dname, "\\", "/");
+
+	// handle differences between windows and linux
+	if (StringUtil::StartsWith(dname_converted_slashes, "/")) {
+		dname_converted_slashes = dname_converted_slashes.substr(1);
+	}
+
+	// Path of format file:///bla/bla on 'nix and file:///X:/bla/bla on Windows
+	auto dname_triple_slash = fs->JoinPath("file://", dname_converted_slashes);
+	// Path of format file://localhost/bla/bla on 'nix and file://localhost/X:/bla/bla on Windows
+	auto dname_localhost = fs->JoinPath("file://localhost", dname_converted_slashes);
+	auto dname_no_host = fs->JoinPath("file:", dname_converted_slashes);
+
+	string fname = "TEST_FILE";
+	string fname2 = "TEST_FILE_TWO";
+
+	if (fs->DirectoryExists(dname_triple_slash)) {
+		fs->RemoveDirectory(dname_triple_slash);
+	}
+
+	fs->CreateDirectory(dname_triple_slash);
+	REQUIRE(fs->DirectoryExists(dname_triple_slash));
+	REQUIRE(!fs->FileExists(dname_triple_slash));
+
+	// we can call this again and nothing happens
+	fs->CreateDirectory(dname_triple_slash);
+
+	auto fname_in_dir = fs->JoinPath(dname_triple_slash, fname);
+	auto fname_in_dir2 = fs->JoinPath(dname_localhost, fname2);
+	auto fname_in_dir3 = fs->JoinPath(dname_no_host, fname2);
+
+	create_dummy_file(fname_in_dir);
+	REQUIRE(fs->FileExists(fname_in_dir));
+	REQUIRE(!fs->DirectoryExists(fname_in_dir));
+
+	size_t n_files = 0;
+	REQUIRE(fs->ListFiles(dname_triple_slash, [&n_files](const string &path, bool) { n_files++; }));
+
+	REQUIRE(n_files == 1);
+
+	REQUIRE(fs->FileExists(fname_in_dir));
+	REQUIRE(!fs->FileExists(fname_in_dir2));
+
+	auto file_listing = fs->Glob(fs->JoinPath(dname_triple_slash, "*"));
+	REQUIRE(file_listing[0] == fname_in_dir);
+
+	fs->MoveFile(fname_in_dir, fname_in_dir2);
+
+	REQUIRE(!fs->FileExists(fname_in_dir));
+	REQUIRE(fs->FileExists(fname_in_dir2));
+
+	auto file_listing_after_move = fs->Glob(fs->JoinPath(dname_no_host, "*"));
+	REQUIRE(file_listing_after_move[0] == fname_in_dir3);
+
+	fs->RemoveDirectory(dname_triple_slash);
+
+	REQUIRE(!fs->DirectoryExists(dname_triple_slash));
+	REQUIRE(!fs->FileExists(fname_in_dir));
+	REQUIRE(!fs->FileExists(fname_in_dir2));
 }
 
 TEST_CASE("Make sure file system operators work as advertised", "[file_system]") {

@@ -74,6 +74,7 @@ private:
 	void WritePersistentSegments(ColumnCheckpointState &state);
 	void InitAnalyze();
 	void DropSegments();
+	bool ValidityCoveredByBasedata(vector<CheckpointAnalyzeResult> &result);
 
 private:
 	vector<reference<ColumnCheckpointState>> &checkpoint_states;

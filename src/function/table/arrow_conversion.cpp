@@ -725,6 +725,9 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &a
 	D_ASSERT(vector.GetType() == values_type.GetDuckType());
 
 	auto &scan_state = array_state.state;
+	if (vector.GetBuffer()) {
+		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	}
 
 	D_ASSERT(run_ends_array.length == values_array.length);
 	auto compressed_size = NumericCast<idx_t>(run_ends_array.length);
@@ -765,7 +768,22 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
                                 uint64_t parent_offset) {
 	auto &scan_state = array_state.state;
 	D_ASSERT(!array.dictionary);
+	if (arrow_type.HasExtension()) {
+		if (arrow_type.extension_data->arrow_to_duckdb) {
+			// We allocate with the internal type, and cast to the end result
+			Vector input_data(arrow_type.extension_data->GetInternalType());
+			// FIXME do we need this?
+			auto input_arrow_type = ArrowType(arrow_type.extension_data->GetInternalType());
+			ColumnArrowToDuckDB(input_data, array, array_state, size, input_arrow_type, nested_offset, parent_mask,
+			                    parent_offset);
+			arrow_type.extension_data->arrow_to_duckdb(array_state.context, input_data, vector, size);
+			return;
+		}
+	}
 
+	if (vector.GetBuffer()) {
+		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	}
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
 		vector.Reference(Value());
@@ -1284,6 +1302,9 @@ static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_m
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
                                           idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
                                           const ValidityMask *parent_mask, uint64_t parent_offset) {
+	if (vector.GetBuffer()) {
+		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	}
 	D_ASSERT(arrow_type.HasDictionary());
 	auto &scan_state = array_state.state;
 	const bool has_nulls = CanContainNull(array, parent_mask);
@@ -1384,7 +1405,6 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		if (!array_state.owned_data) {
 			array_state.owned_data = scan_state.chunk;
 		}
-		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 
 		auto array_physical_type = GetArrowArrayPhysicalType(arrow_type);
 

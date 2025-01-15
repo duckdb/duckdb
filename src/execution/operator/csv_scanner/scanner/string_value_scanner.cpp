@@ -77,7 +77,7 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 				logical_types.emplace_back(LogicalType::VARCHAR);
 			}
 		}
-		names = csv_file_scan->names;
+		names = csv_file_scan->GetNames();
 		if (!csv_file_scan->projected_columns.empty()) {
 			projecting_columns = false;
 			projected_columns = make_unsafe_uniq_array<bool>(number_of_columns);
@@ -334,8 +334,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		} else {
 			idx_t pos;
 			bool special;
-			success = Date::TryConvertDate(
-			    value_ptr, size, pos, static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], special, false);
+			success = Date::TryConvertDate(value_ptr, size, pos,
+			                               static_cast<date_t *>(vector_ptr[chunk_col_id])[number_of_rows], special,
+			                               false) == DateCastResult::SUCCESS;
 		}
 		break;
 	}
@@ -1000,6 +1001,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	// We keep track of the borked lines, in case we are ignoring errors
 	D_ASSERT(csv_file_scan);
 
+	auto &names = csv_file_scan->GetNames();
 	auto &reader_data = csv_file_scan->reader_data;
 	// Now Do the cast-aroo
 	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
@@ -1058,8 +1060,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					string error_msg = error.str();
 					SanitizeError(error_msg);
 					auto csv_error = CSVError::CastError(
-					    state_machine->options, csv_file_scan->names[col_idx], error_msg, col_idx, borked_line,
-					    lines_per_batch,
+					    state_machine->options, names[col_idx], error_msg, col_idx, borked_line, lines_per_batch,
 					    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
 					    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 					error_handler->Error(csv_error);
@@ -1088,12 +1089,11 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						      << LogicalTypeIdToString(type.id()) << "\'";
 						string error_msg = error.str();
 						SanitizeError(error_msg);
-						auto csv_error =
-						    CSVError::CastError(state_machine->options, csv_file_scan->names[col_idx], error_msg,
-						                        col_idx, borked_line, lines_per_batch,
-						                        result.line_positions_per_row[line_error].begin.GetGlobalPosition(
-						                            result.result_size, first_nl),
-						                        optional_idx::Invalid(), result_vector.GetType().id(), result.path);
+						auto csv_error = CSVError::CastError(
+						    state_machine->options, names[col_idx], error_msg, col_idx, borked_line, lines_per_batch,
+						    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size,
+						                                                                      first_nl),
+						    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 						error_handler->Error(csv_error);
 					}
 				}
