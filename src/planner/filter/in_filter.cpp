@@ -3,7 +3,6 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
 
 namespace duckdb {
 
@@ -21,15 +20,6 @@ InFilter::InFilter(vector<Value> values_p) : TableFilter(TableFilterType::IN_FIL
 	if (values.empty()) {
 		throw InternalException("InFilter constants cannot be empty");
 	}
-}
-
-optional_ptr<InFilter> InFilter::ExtractFromOptional(TableFilter &filter) {
-	auto &optional_filter = filter.Cast<OptionalFilter>();
-	auto &child = optional_filter.child_filter;
-	if (!child || child->filter_type != TableFilterType::IN_FILTER) {
-		return nullptr;
-	}
-	return child->Cast<InFilter>();
 }
 
 FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) {

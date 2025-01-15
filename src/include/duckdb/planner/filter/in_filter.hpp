@@ -23,7 +23,6 @@ public:
 	vector<Value> values;
 
 public:
-	static optional_ptr<InFilter> ExtractFromOptional(TableFilter &filter);
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
 	string ToString(const string &column_name) override;
 	bool Equals(const TableFilter &other) const override;

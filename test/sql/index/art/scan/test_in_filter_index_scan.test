@@ -77,3 +77,15 @@ SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i > 42 AND i >= 42 ORDER 
 ----
 100
 101
+
+# Test with multiple IN filters.
+
+query II
+EXPLAIN ANALYZE SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i > 42 AND i IN (56, 200, 2, 100);
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
+query I
+SELECT i FROM tbl WHERE i IN (2, 42, 100, 42, 101) AND i > 42 AND i IN (56, 200, 2, 100) ORDER BY i;
+----
+100
