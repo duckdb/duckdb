@@ -24277,7 +24277,7 @@ yyreduce:
 
   case 364: /* CostDefault: %empty  */
 #line 573 "third_party/libpg_query/grammar/statements/pgq.y"
-                                                        { (yyval.ival) = NULL; }
+                                                        { (yyval.ival) = 0; }
 #line 24282 "third_party/libpg_query/grammar/grammar_out.cpp"
     break;
 

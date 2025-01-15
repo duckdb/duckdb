@@ -570,7 +570,7 @@ CostNum:
 CostDefault:
 		DEFAULT CostNum				{ $$ = $2; }
 	|
-		/* EMPTY */ 				{ $$ = NULL; }
+		/* EMPTY */ 				{ $$ = 0; }
 		;
 
 CostOptional:
