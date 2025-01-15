@@ -54,11 +54,15 @@ void DictFSSTCompressionCompressState::Verify() {
 	                                             info.GetBlockSize()));
 
 #ifdef DEBUG
-	if (append_state != DictionaryAppendState::ENCODED) {
+	if (!IsEncoded()) {
 		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 	}
 #endif
-	D_ASSERT(dictionary_string_lengths.size() == current_string_map.size() + 1); // +1 is for null value
+	if (append_state != DictionaryAppendState::ENCODED_ALL_UNIQUE) {
+		//! This is not true for ENCODED_ALL_UNIQUE (FSST_ONLY mode) because we will store duplicates in the dictionary
+		//! as well
+		D_ASSERT(dictionary_string_lengths.size() == current_string_map.size() + 1); // +1 is for null value
+	}
 }
 
 optional_idx DictFSSTCompressionCompressState::LookupString(const string_t &str) {
@@ -93,10 +97,11 @@ void DictFSSTCompressionCompressState::AddNewString(const StringData &string_dat
 	memcpy(dict_pos, str.GetData(), str.GetSize());
 	current_dictionary.Verify(info.GetBlockSize());
 #ifdef DEBUG
-	if (append_state != DictionaryAppendState::ENCODED) {
+	if (!IsEncoded()) {
 		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 	}
 #endif
+	DictFSSTCompression::SetDictionary(*current_segment, current_handle, current_dictionary);
 
 	// Update buffers and map
 	auto str_len = UnsafeNumericCast<uint32_t>(str.GetSize());
@@ -107,16 +112,17 @@ void DictFSSTCompressionCompressState::AddNewString(const StringData &string_dat
 	}
 
 	selection_buffer.push_back(UnsafeNumericCast<uint32_t>(dictionary_string_lengths.size() - 1));
-	if (str.IsInlined()) {
-		current_string_map.insert({str, dictionary_string_lengths.size() - 1});
-	} else {
-		string_t dictionary_string((const char *)dict_pos, UnsafeNumericCast<uint32_t>(str_len)); // NOLINT
-		D_ASSERT(!dictionary_string.IsInlined());
-		current_string_map.insert({dictionary_string, dictionary_string_lengths.size() - 1});
-	}
-	DictFSSTCompression::SetDictionary(*current_segment, current_handle, current_dictionary);
+	if (append_state != DictionaryAppendState::ENCODED_ALL_UNIQUE) {
+		if (str.IsInlined()) {
+			current_string_map.insert({str, dictionary_string_lengths.size() - 1});
+		} else {
+			string_t dictionary_string((const char *)dict_pos, UnsafeNumericCast<uint32_t>(str_len)); // NOLINT
+			D_ASSERT(!dictionary_string.IsInlined());
+			current_string_map.insert({dictionary_string, dictionary_string_lengths.size() - 1});
+		}
 
-	current_width = next_width;
+		current_width = next_width;
+	}
 	current_segment->count++;
 }
 
@@ -143,6 +149,9 @@ idx_t DictFSSTCompressionCompressState::RequiredSpace(bool new_string, idx_t str
 		                                       current_width, string_length_bitwidth);
 	} else {
 		next_width = BitpackingPrimitives::MinimumBitWidth(dict_count - 1 + new_string);
+		if (append_state == DictionaryAppendState::ENCODED_ALL_UNIQUE) {
+			next_width = 0;
+		}
 		required_space += DictFSSTCompression::RequiredSpace(current_segment->count.load() + 1, dict_count + 1,
 		                                                     current_dictionary.size + string_size, next_width,
 		                                                     string_length_bitwidth);
@@ -273,7 +282,14 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 		return false;
 	}
 
-	append_state = DictionaryAppendState::ENCODED;
+	if (all_unique) {
+		append_state = DictionaryAppendState::ENCODED_ALL_UNIQUE;
+		//! We omit the selection buffer in this mode, setting the width to 0 makes the RequiredSpace result not include
+		//! the selection buffer space.
+		current_width = 0;
+	} else {
+		append_state = DictionaryAppendState::ENCODED;
+	}
 
 	// Write the exported symbol table to the end of the segment
 	unsigned char fsst_serialized_symbol_table[sizeof(duckdb_fsst_decoder_t)];
@@ -334,7 +350,7 @@ idx_t DictFSSTCompressionCompressState::Finalize() {
 	auto handle = buffer_manager.Pin(current_segment->block);
 
 #ifdef DEBUG
-	if (append_state != DictionaryAppendState::ENCODED) {
+	if (!IsEncoded()) {
 		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 	}
 #endif
@@ -364,11 +380,6 @@ idx_t DictFSSTCompressionCompressState::Finalize() {
 	                                               current_width);
 	BitpackingPrimitives::PackBuffer<uint32_t, false>(
 	    base_ptr + string_lengths_offset, dictionary_string_lengths.data(), dict_count, string_length_bitwidth);
-	////#ifdef DEBUG
-	// vector<uint32_t> string_lengths;
-	// string_lengths.resize(AlignValue<idx_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(dict_count));
-	// BitpackingPrimitives::UnPackBuffer()
-	////#endif
 
 	// Store sizes and offsets in segment header
 	Store<uint32_t>(NumericCast<uint32_t>(string_lengths_offset), data_ptr_cast(&header_ptr->string_lengths_offset));
@@ -376,7 +387,9 @@ idx_t DictFSSTCompressionCompressState::Finalize() {
 	Store<uint32_t>((uint32_t)current_width, data_ptr_cast(&header_ptr->bitpacking_width));
 	Store<uint32_t>((uint32_t)string_length_bitwidth, data_ptr_cast(&header_ptr->string_lengths_width));
 
-	D_ASSERT(current_width == BitpackingPrimitives::MinimumBitWidth(dict_count - 1));
+	if (append_state != DictionaryAppendState::ENCODED_ALL_UNIQUE) {
+		D_ASSERT(current_width == BitpackingPrimitives::MinimumBitWidth(dict_count - 1));
+	}
 	D_ASSERT(DictFSSTCompression::HasEnoughSpace(current_segment->count, dict_count, current_dictionary.size,
 	                                             current_width, string_length_bitwidth, info.GetBlockSize()));
 	D_ASSERT((uint64_t)*max_element(std::begin(selection_buffer), std::end(selection_buffer)) == dict_count - 1);

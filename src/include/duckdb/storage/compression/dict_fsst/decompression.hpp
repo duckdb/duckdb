@@ -24,6 +24,7 @@ public:
 	void ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count);
 	void ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset, idx_t start,
 	                            idx_t scan_count);
+	const SelectionVector &GetSelVec(idx_t start, idx_t scan_count);
 
 private:
 	string_t FetchStringFromDict(Vector &result, int32_t dict_offset, uint32_t string_len);

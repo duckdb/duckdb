@@ -25,6 +25,7 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t 
 
 	auto str_ptr = char_ptr_cast(dict_pos);
 	switch (mode) {
+	case DictFSSTMode::FSST_ONLY:
 	case DictFSSTMode::DICT_FSST:
 		return FSSTPrimitives::DecompressValue(decoder, result, str_ptr, string_len, decompress_buffer);
 	default:
@@ -57,6 +58,7 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	dict = DictFSSTCompression::GetDictionary(segment, *handle);
 	mode = header_ptr->mode;
 	switch (mode) {
+	case DictFSSTMode::FSST_ONLY:
 	case DictFSSTMode::DICT_FSST: {
 		decoder = new duckdb_fsst_decoder_t;
 		auto symbol_table_location = baseptr + dict.end;
@@ -94,32 +96,54 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	}
 }
 
+const SelectionVector &CompressedStringScanState::GetSelVec(idx_t start, idx_t scan_count) {
+	switch (mode) {
+	case DictFSSTMode::FSST_ONLY: {
+		return *FlatVector::IncrementalSelectionVector();
+	}
+	default: {
+		// Handling non-bitpacking-group-aligned start values;
+		idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+
+		// We will scan in blocks of BITPACKING_ALGORITHM_GROUP_SIZE, so we may scan some extra values.
+		idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
+
+		if (!sel_vec || sel_vec_size < decompress_count) {
+			sel_vec_size = decompress_count;
+			sel_vec = make_buffer<SelectionVector>(decompress_count);
+		}
+
+		data_ptr_t sel_buf_src = &base_data[((start - start_offset) * current_width) / 8];
+		sel_t *sel_vec_ptr = sel_vec->data();
+		BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), sel_buf_src, decompress_count,
+		                                          current_width);
+		return *sel_vec;
+	}
+	}
+}
+
 void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto &validity = FlatVector::Validity(result);
 
-	// Handling non-bitpacking-group-aligned start values;
-	idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
-
-	// We will scan in blocks of BITPACKING_ALGORITHM_GROUP_SIZE, so we may scan some extra values.
-	idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count + start_offset);
-
 	// Create a decompression buffer of sufficient size if we don't already have one.
-	if (!sel_vec || sel_vec_size < decompress_count) {
-		sel_vec_size = decompress_count;
-		sel_vec = make_buffer<SelectionVector>(decompress_count);
-	}
+	auto &selvec = GetSelVec(start, scan_count);
 
-	data_ptr_t sel_buf_src = &base_data[((start - start_offset) * current_width) / 8];
-	sel_t *sel_vec_ptr = sel_vec->data();
-	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), sel_buf_src, decompress_count, current_width);
+	idx_t start_offset = start;
+	if (mode != DictFSSTMode::FSST_ONLY) {
+		// Handling non-bitpacking-group-aligned start values;
+		start_offset %= BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+	} else {
+		//! (index 0 is reserved for NULL, which we don't have in this mode)
+		start_offset++;
+	}
 
 	if (dictionary) {
 		// We have prepared the full dictionary, we can reference these strings directly
 		auto dictionary_values = FlatVector::GetData<string_t>(*dictionary);
 		for (idx_t i = 0; i < scan_count; i++) {
 			// Lookup dict offset in index buffer
-			auto string_number = sel_vec->get_index(i + start_offset);
+			auto string_number = selvec.get_index(i + start_offset);
 			if (string_number == 0) {
 				validity.SetInvalid(result_offset + i);
 			}
@@ -130,7 +154,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		D_ASSERT(scan_count == 1);
 
 		// Lookup dict offset in index buffer
-		auto string_number = sel_vec->get_index(start_offset);
+		auto string_number = selvec.get_index(start_offset);
 		if (string_number == 0) {
 			validity.SetInvalid(result_offset);
 		}
@@ -144,6 +168,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		auto str_len = string_lengths[string_number];
 		result_data[result_offset] = FetchStringFromDict(result, offset, str_len);
 	}
+	result.Verify(result_offset + scan_count);
 }
 
 void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, Vector &result, idx_t result_offset,
@@ -152,24 +177,10 @@ void CompressedStringScanState::ScanToDictionaryVector(ColumnSegment &segment, V
 	D_ASSERT(scan_count == STANDARD_VECTOR_SIZE);
 	D_ASSERT(result_offset == 0);
 
-	idx_t decompress_count = BitpackingPrimitives::RoundUpToAlgorithmGroupSize(scan_count);
-
-	// Create a selection vector of sufficient size if we don't already have one.
-	if (!sel_vec || sel_vec_size < decompress_count) {
-		sel_vec_size = decompress_count;
-		sel_vec = make_buffer<SelectionVector>(decompress_count);
-	}
-
-	// Scanning 2048 values, emitting a dict vector
-	data_ptr_t sel_vec_dst = data_ptr_cast(sel_vec->data());
-	data_ptr_t sel_buf_src = data_ptr_cast(&base_data[(start * current_width) / 8]);
-
-	BitpackingPrimitives::UnPackBuffer<sel_t>(sel_vec_dst, sel_buf_src, scan_count, current_width);
-
-	result.Dictionary(*(dictionary), dictionary_size, *sel_vec, scan_count);
-	// FIXME: this assumes the type is VectorType::DICTIONARY
-	// this could fail if the result is a ConstantVector instead.
+	auto &selvec = GetSelVec(start, scan_count);
+	result.Dictionary(*(dictionary), dictionary_size, selvec, scan_count);
 	DictionaryVector::SetDictionaryId(result, to_string(CastPointerToValue(&segment)));
+	result.Verify(result_offset + scan_count);
 }
 
 } // namespace dict_fsst
