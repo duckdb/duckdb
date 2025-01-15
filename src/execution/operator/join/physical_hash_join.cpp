@@ -27,7 +27,6 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
-#include <iostream>
 
 namespace duckdb {
 
@@ -463,7 +462,7 @@ public:
 		const auto chunk_count = ht.GetDataCollection().ChunkCount();
 		const auto num_threads = NumericCast<idx_t>(sink.num_threads);
 
-		sink.bloom_filter = make_uniq<BloomFilter>(row_count, 0.01);
+		sink.bloom_filter = make_uniq<BloomFilter>(row_count, 0.01, context.config);
 
 		// If the data is very skewed (many of the exact same key), our finalize will become slow,
 		// due to completely slamming the same atomic using compare-and-swaps.

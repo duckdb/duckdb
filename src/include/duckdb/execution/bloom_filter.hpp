@@ -25,7 +25,7 @@ namespace duckdb {
 
 class BloomFilter {
 public:
-	BloomFilter(size_t expected_cardinality, double desired_false_positive_rate);
+	BloomFilter(size_t expected_cardinality, double desired_false_positive_rate, const ClientConfig &config);
 	~BloomFilter();
 
 	//! Builds the Bloom-filter with pre-computed key-hashes.
@@ -53,6 +53,8 @@ private:
 
 	vector<validity_t> bloom_data_buffer;
 	ValidityMask bloom_filter;
+
+	const ClientConfig& config;
 };
 
 } // namespace duckdb

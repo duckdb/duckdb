@@ -10,7 +10,7 @@
 
 namespace duckdb {
 
-BloomFilter::BloomFilter(size_t expected_cardinality, double desired_false_positive_rate) : num_inserted_rows(0), probing_started(false) {
+BloomFilter::BloomFilter(size_t expected_cardinality, double desired_false_positive_rate, const ClientConfig &config) : num_inserted_rows(0), probing_started(false), config(config) {
     // Approximate size of the Bloom-filter rounded up to the next 8 byte.
     size_t approx_size = std::ceil(-double(expected_cardinality) * log(desired_false_positive_rate) / 0.48045);
 	bloom_filter_size = approx_size + (64 - approx_size % 64);
@@ -28,6 +28,10 @@ inline size_t HashToIndex(hash_t hash, size_t bloom_filter_size, size_t i) {
 }
 
 inline void BloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const SelectionVector &rsel, idx_t count) {
+    if(!config.hash_join_bloom_filter) {
+        return;
+    }
+
     D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
     D_ASSERT(probing_started == false);
 
@@ -127,6 +131,9 @@ inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, SelectionVe
 
 
 size_t BloomFilter::Probe(DataChunk &keys, const SelectionVector *&current_sel, idx_t count, SelectionVector sel, optional_ptr<Vector> precomputed_hashes) {
+    if(!config.hash_join_bloom_filter) {
+        return count;
+    }
     // The code currently assumes that we have precomputed hashes.
     D_ASSERT(precomputed_hashes != nullptr);
     precomputed_hashes.CheckValid();

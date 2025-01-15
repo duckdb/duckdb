@@ -119,6 +119,9 @@ struct ClientConfig {
 
 	//! The maximum amount of OR filters we generate dynamically from a hash join
 	idx_t dynamic_or_filter_threshold = 50;
+		
+	//! Whether a Bloom-filter should be used to filter the probe side of hash joins.
+	bool hash_join_bloom_filter = true;
 
 	//! The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization
 	idx_t late_materialization_max_rows = 50;
