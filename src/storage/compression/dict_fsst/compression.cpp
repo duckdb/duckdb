@@ -62,12 +62,18 @@ void DictFSSTCompressionCompressState::Verify() {
 }
 
 optional_idx DictFSSTCompressionCompressState::LookupString(const string_t &str) {
+	if (append_state == DictionaryAppendState::ENCODED_ALL_UNIQUE) {
+		//! In this mode we omit the selection buffer, storing (possible) duplicates in the dictionary
+		return optional_idx();
+	}
+
 	auto search = current_string_map.find(str);
 	auto has_result = search != current_string_map.end();
 
 	if (!has_result) {
 		return optional_idx();
 	}
+	all_unique = false;
 	return search->second;
 }
 
@@ -75,7 +81,7 @@ void DictFSSTCompressionCompressState::AddNewString(const StringData &string_dat
 	//! Update the stats using the uncompressed string always!
 	UncompressedStringStorage::UpdateStringStats(current_segment->stats, string_data.string);
 
-	auto &str = append_state == DictionaryAppendState::ENCODED ? *string_data.encoded_string : string_data.string;
+	auto &str = IsEncoded() ? *string_data.encoded_string : string_data.string;
 	// Copy string to dict
 	// New entries are added to the start (growing backwards)
 	// [............xxxxooooooooo]
@@ -126,7 +132,7 @@ void DictFSSTCompressionCompressState::AddLookup(uint32_t lookup_result) {
 
 idx_t DictFSSTCompressionCompressState::RequiredSpace(bool new_string, idx_t string_size) {
 	idx_t required_space = 0;
-	if (append_state == DictionaryAppendState::ENCODED) {
+	if (IsEncoded()) {
 		required_space += symbol_table_size;
 	}
 
@@ -149,6 +155,7 @@ void DictFSSTCompressionCompressState::Flush(bool final) {
 
 	auto segment_size = Finalize();
 	append_state = DictionaryAppendState::REGULAR;
+	all_unique = true;
 	encoded_input.Reset();
 	if (encoder) {
 		auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
@@ -168,7 +175,7 @@ void DictFSSTCompressionCompressState::Flush(bool final) {
 }
 
 void DictFSSTCompressionCompressState::EncodeInputStrings(UnifiedVectorFormat &input, idx_t count) {
-	D_ASSERT(append_state == DictionaryAppendState::ENCODED);
+	D_ASSERT(IsEncoded());
 
 	encoded_input.Reset();
 	D_ASSERT(encoder);
@@ -316,7 +323,7 @@ static DictFSSTMode ConvertToMode(DictionaryAppendState &state) {
 
 StringData DictFSSTCompressionCompressState::GetString(const string_t *strings, idx_t index, idx_t raw_index) {
 	StringData result(strings[index]);
-	if (append_state == DictionaryAppendState::ENCODED) {
+	if (IsEncoded()) {
 		result.encoded_string = encoded_input.input_data[raw_index];
 	}
 	return result;
@@ -331,7 +338,7 @@ idx_t DictFSSTCompressionCompressState::Finalize() {
 		D_ASSERT(current_dictionary.end == info.GetBlockSize());
 	}
 #endif
-	const bool is_fsst_encoded = append_state == DictionaryAppendState::ENCODED;
+	const bool is_fsst_encoded = IsEncoded();
 
 	// calculate sizes
 	auto compressed_selection_buffer_size =

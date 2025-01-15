@@ -97,6 +97,11 @@ protected:
 	// Retrieve the string given the indices
 	virtual StringData GetString(const string_t *strings, idx_t index, idx_t raw_index) = 0;
 
+	bool IsEncoded() const {
+		return append_state == DictionaryAppendState::ENCODED ||
+		       append_state == DictionaryAppendState::ENCODED_ALL_UNIQUE;
+	}
+
 private:
 	bool DryAppendToCurrentSegment(bool is_new, UnifiedVectorFormat &vdata, idx_t count, idx_t index, idx_t raw_index);
 
@@ -105,6 +110,7 @@ public:
 	DictionaryAppendState append_state = DictionaryAppendState::REGULAR;
 	void *encoder = nullptr;
 	idx_t symbol_table_size = DConstants::INVALID_INDEX;
+	bool all_unique = true;
 };
 
 } // namespace dict_fsst

@@ -17,6 +17,10 @@ DictFSSTAnalyzeState::~DictFSSTAnalyzeState() {
 }
 
 optional_idx DictFSSTAnalyzeState::LookupString(const string_t &str) {
+	if (append_state == DictionaryAppendState::ENCODED_ALL_UNIQUE) {
+		//! In this mode we omit the selection buffer, storing (possible) duplicates in the dictionary
+		return optional_idx();
+	}
 	return current_string_map.count(str) ? 1 : optional_idx();
 }
 
@@ -29,7 +33,7 @@ void DictFSSTAnalyzeState::AddNewString(const StringData &string_data) {
 	current_dict_size += str.GetSize();
 
 	uint32_t string_length = UnsafeNumericCast<uint32_t>(string_data.string.GetSize());
-	if (append_state == DictionaryAppendState::ENCODED) {
+	if (IsEncoded()) {
 		//! Optimistic assumption about the compressed length;
 		string_length /= 2;
 	}
@@ -129,7 +133,7 @@ StringData DictFSSTAnalyzeState::GetString(const string_t *strings, idx_t index,
 
 idx_t DictFSSTAnalyzeState::RequiredSpace(bool new_string, idx_t string_size) {
 	idx_t required_space = 0;
-	if (append_state == DictionaryAppendState::ENCODED) {
+	if (IsEncoded()) {
 		required_space += symbol_table_size;
 	}
 
@@ -153,7 +157,7 @@ void DictFSSTAnalyzeState::Flush(bool final) {
 		return;
 	}
 	idx_t required_space = 0;
-	if (append_state == DictionaryAppendState::ENCODED) {
+	if (IsEncoded()) {
 		required_space += symbol_table_size;
 	}
 	auto width = BitpackingPrimitives::MinimumBitWidth(current_unique_count + 1);
@@ -169,13 +173,14 @@ void DictFSSTAnalyzeState::Flush(bool final) {
 	current_string_map.clear();
 	max_length = 0;
 
-	if (append_state == DictionaryAppendState::ENCODED) {
+	if (IsEncoded()) {
 		auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
 		duckdb_fsst_destroy(fsst_encoder);
 		encoder = nullptr;
 		symbol_table_size = DConstants::INVALID_INDEX;
 	}
 	append_state = DictionaryAppendState::REGULAR;
+	all_unique = true;
 
 	heap.Destroy();
 }

@@ -94,7 +94,7 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 	auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
 	Verify();
 
-	if (append_state == DictionaryAppendState::ENCODED) {
+	if (IsEncoded()) {
 		// The dictionary has been encoded
 		// to look up a string in the dictionary, the input needs to be encoded as well
 		EncodeInputStrings(vdata, count);
