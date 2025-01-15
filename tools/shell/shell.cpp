@@ -651,7 +651,9 @@ int ShellState::RunInitialCommand(char *sql) {
 	} else {
 		char *zErrMsg = nullptr;
 		OpenDB(0);
+		BEGIN_TIMER;
 		rc = ExecuteSQL(sql, &zErrMsg);
+		END_TIMER;
 		if (zErrMsg != 0) {
 			PrintDatabaseError(zErrMsg);
 			sqlite3_free(zErrMsg);
