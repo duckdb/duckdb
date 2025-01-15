@@ -11,3 +11,22 @@ select '2021-05-25 04:55:03.382494 UTC'::timestamp as ts, '2021-05-25 04:55:03.3
 ) to '__TEST_DIR__/timestamps.csv' ( timestampformat '%A');
 ----
 No function matches the given name and argument types
+
+# If we set to timestamptz it works
+query II
+FROM read_csv('data/csv/timestamp_timezone.csv', columns = {'time':'timestamptz', 'description':'varchar'})
+----
+2020-01-01 00:00:00+00	midnight local
+2020-01-01 08:00:00+00	midnight in San Francisco
+2020-01-01 00:00:00+00	midnight UTC +00
+2020-01-01 00:00:00+00	midnight UTC Z
+2019-12-31 16:00:00+00	midnight in Taipei
+
+query II
+FROM read_csv('data/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEAN', 'BIGINT', 'DOUBLE', 'TIME', 'DATE', 'TIMESTAMP','TIMESTAMPTZ', 'VARCHAR'])
+----
+2020-01-01 00:00:00+00	midnight local
+2020-01-01 08:00:00+00	midnight in San Francisco
+2020-01-01 00:00:00+00	midnight UTC +00
+2020-01-01 00:00:00+00	midnight UTC Z
+2019-12-31 16:00:00+00	midnight in Taipei

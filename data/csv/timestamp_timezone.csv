@@ -1,0 +1,6 @@
+time,description
+2020-01-01T00:00:00,midnight local
+2020-01-01T00:00:00-08,midnight in San Francisco
+2020-01-01T00:00:00+00,midnight UTC +00
+2020-01-01T00:00:00Z,midnight UTC Z
+2020-01-01T00:00:00+08:00,midnight in Taipei
