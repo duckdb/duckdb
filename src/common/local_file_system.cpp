@@ -1271,7 +1271,7 @@ static void GlobFilesInternal(FileSystem &fs, const string &path, const string &
 static bool TryUnescapeGlob(const string &path, string &result) {
 	result.clear();
 	result.reserve(path.size());
-	for (idx_t i = 0; i < path.size(); ) {
+	for (idx_t i = 0; i < path.size();) {
 		if (path[i] == '[' && i + 2 < path.size() && path[i + 2] == ']') {
 			// Replace [c] -> c
 			result += path[i + 1];
