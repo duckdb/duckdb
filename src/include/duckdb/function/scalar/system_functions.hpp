@@ -40,6 +40,7 @@ struct WriteLogFun {
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Writes to the logger";
 	static constexpr const char *Example = "write_log('Hello')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
