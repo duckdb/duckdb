@@ -701,7 +701,7 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 	for (idx_t r = 0; r < count;) {
 		result.Reset();
 		rows.Reset();
-		
+
 		// figure out which row_group to fetch from
 		auto row_id = row_ids[r];
 		auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(row_id));
@@ -739,7 +739,7 @@ void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_
 			}
 		}
 		rows.SetCardinality(result);
-		
+
 		// slice the vector with all rows that are present in this vector and erase from the index
 		rows.Slice(sel, sel_count);
 
