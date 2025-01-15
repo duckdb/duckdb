@@ -11,5 +11,7 @@ CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')
 query I
 FROM read_csv('data/csv/enum_type.csv', types=[mood])
 ----
-
+sad
+happy
+angry
 
