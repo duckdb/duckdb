@@ -119,6 +119,8 @@ public:
 	char thousand_separator = '\0';
 	//! When to use formatting of large numbers (in DuckBox mode)
 	LargeNumberRendering large_number_rendering = LargeNumberRendering::DEFAULT;
+	//! The command to execute when `-ui` is passed in
+	string ui_command = "CALL start_ui()";
 
 public:
 	void PushOutputMode();
@@ -172,6 +174,7 @@ public:
 
 	void PrintDatabaseError(const char *zErr);
 	int ShellDatabaseError(sqlite3 *db);
+	int RunInitialCommand(char *sql);
 
 	int RenderRow(RowRenderer &renderer, RowResult &result);
 
@@ -199,7 +202,9 @@ public:
 	int DoMetaCommand(char *zLine);
 
 	int RunOneSqlLine(char *zSql);
-	void ProcessDuckDBRC(const char *sqliterc_override);
+	string GetDefaultDuckDBRC();
+	void ProcessDuckDBRC(const char *file);
+	void ProcessFile(const string &file, bool is_duckdb_rc = false);
 	int ProcessInput();
 };
 

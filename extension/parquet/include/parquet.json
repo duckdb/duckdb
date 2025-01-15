@@ -24,6 +24,12 @@
         "id": 104,
         "name": "default_value",
         "type": "Value"
+      },
+      {
+        "id": 105,
+        "name": "identifier",
+        "type": "Value",
+        "default": "Value()"
       }
     ],
     "pointer_type": "none"
@@ -46,7 +52,9 @@
       }
     ],
     "pointer_type": "shared_ptr",
-    "constructor": ["$ClientContext"]
+    "constructor": [
+      "$ClientContext"
+    ]
   },
   {
     "class": "ParquetOptions",

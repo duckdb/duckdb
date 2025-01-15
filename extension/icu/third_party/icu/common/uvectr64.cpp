@@ -80,7 +80,7 @@ void UVector64::assign(const UVector64& other, UErrorCode &ec) {
 }
 
 
-UBool UVector64::operator==(const UVector64& other) {
+bool UVector64::operator==(const UVector64& other) {
     int32_t i;
     if (count != other.count) return FALSE;
     for (i=0; i<count; ++i) {

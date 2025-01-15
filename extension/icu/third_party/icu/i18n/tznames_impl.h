@@ -173,7 +173,7 @@ public:
 
     virtual ~TimeZoneNamesImpl();
 
-    virtual UBool operator==(const TimeZoneNames& other) const;
+    virtual bool operator==(const TimeZoneNames& other) const;
     virtual TimeZoneNamesImpl* clone() const;
 
     StringEnumeration* getAvailableMetaZoneIDs(UErrorCode& status) const;
@@ -235,7 +235,7 @@ public:
     TZDBTimeZoneNames(const Locale& locale);
     virtual ~TZDBTimeZoneNames();
 
-    virtual UBool operator==(const TimeZoneNames& other) const;
+    virtual bool operator==(const TimeZoneNames& other) const;
     virtual TZDBTimeZoneNames* clone() const;
 
     StringEnumeration* getAvailableMetaZoneIDs(UErrorCode& status) const;

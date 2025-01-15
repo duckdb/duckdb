@@ -445,7 +445,7 @@ public:
      *              otherwise.
      * @stable ICU 2.0
      */
-    virtual UBool operator==(const TimeZone& that) const;
+    virtual bool operator==(const TimeZone& that) const;
 
     /**
      * Returns true if the two TimeZones are NOT equal; that is, if operator==() returns
@@ -456,7 +456,7 @@ public:
      *              otherwise.
      * @stable ICU 2.0
      */
-    UBool operator!=(const TimeZone& that) const {return !operator==(that);}
+    bool operator!=(const TimeZone& that) const {return !operator==(that);}
 
     /**
      * Returns the TimeZone's adjusted GMT offset (i.e., the number of milliseconds to add
