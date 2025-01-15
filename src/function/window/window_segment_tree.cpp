@@ -79,17 +79,17 @@ public:
 
 	void Combine(WindowSegmentTreePart &other, idx_t count);
 
-	void Evaluate(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends, Vector &result,
-	              idx_t count, idx_t row_idx, FramePart frame_part);
+	void Evaluate(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends, const idx_t *bounds,
+	              Vector &result, idx_t count, idx_t row_idx, FramePart frame_part);
 
 protected:
 	//! Initialises the accumulation state vector (statef)
 	void Initialize(idx_t count);
 	//! Accumulate upper tree levels
 	void EvaluateUpperLevels(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends,
-	                         idx_t count, idx_t row_idx, FramePart frame_part);
-	void EvaluateLeaves(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends, idx_t count,
-	                    idx_t row_idx, FramePart frame_part, FramePart leaf_part);
+	                         const idx_t *bounds, idx_t count, idx_t row_idx, FramePart frame_part);
+	void EvaluateLeaves(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends,
+	                    const idx_t *bounds, idx_t count, idx_t row_idx, FramePart frame_part, FramePart leaf_part);
 
 public:
 	//! Allocator for aggregates
@@ -400,8 +400,12 @@ void WindowSegmentTreeState::Evaluate(const WindowSegmentTreeGlobalState &gtstat
 	}
 
 	if (gtstate.aggregator.exclude_mode != WindowExcludeMode::NO_OTHER) {
+		// If we exclude the current row, then both left and right need to contain it.
+		const bool exclude_current = gtstate.aggregator.exclude_mode == WindowExcludeMode::CURRENT_ROW;
+
 		// 1. evaluate the tree left of the excluded part
-		part->Evaluate(gtstate, window_begin, peer_begin, result, count, row_idx, WindowSegmentTreePart::LEFT);
+		auto middle = exclude_current ? peer_end : peer_begin;
+		part->Evaluate(gtstate, window_begin, middle, window_end, result, count, row_idx, WindowSegmentTreePart::LEFT);
 
 		// 2. set up a second state for the right of the excluded part
 		if (!right_part) {
@@ -409,32 +413,35 @@ void WindowSegmentTreeState::Evaluate(const WindowSegmentTreeGlobalState &gtstat
 		}
 
 		// 3. evaluate the tree right of the excluded part
-		right_part->Evaluate(gtstate, peer_end, window_end, result, count, row_idx, WindowSegmentTreePart::RIGHT);
+		middle = exclude_current ? peer_begin : peer_end;
+		right_part->Evaluate(gtstate, middle, window_end, window_begin, result, count, row_idx,
+		                     WindowSegmentTreePart::RIGHT);
 
 		// 4. combine the buffer state into the Segment Tree State
 		part->Combine(*right_part, count);
 	} else {
-		part->Evaluate(gtstate, window_begin, window_end, result, count, row_idx, WindowSegmentTreePart::FULL);
+		part->Evaluate(gtstate, window_begin, window_end, nullptr, result, count, row_idx, WindowSegmentTreePart::FULL);
 	}
 
 	part->Finalize(result, count);
 }
 
 void WindowSegmentTreePart::Evaluate(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends,
-                                     Vector &result, idx_t count, idx_t row_idx, FramePart frame_part) {
+                                     const idx_t *bounds, Vector &result, idx_t count, idx_t row_idx,
+                                     FramePart frame_part) {
 	Initialize(count);
 
 	if (order_insensitive) {
 		//	First pass: aggregate the segment tree nodes with sharing
-		EvaluateUpperLevels(tree, begins, ends, count, row_idx, frame_part);
+		EvaluateUpperLevels(tree, begins, ends, bounds, count, row_idx, frame_part);
 
 		//	Second pass: aggregate the ragged leaves
-		EvaluateLeaves(tree, begins, ends, count, row_idx, frame_part, FramePart::FULL);
+		EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, FramePart::FULL);
 	} else {
 		//	Evaluate leaves in order
-		EvaluateLeaves(tree, begins, ends, count, row_idx, frame_part, FramePart::LEFT);
-		EvaluateUpperLevels(tree, begins, ends, count, row_idx, frame_part);
-		EvaluateLeaves(tree, begins, ends, count, row_idx, frame_part, FramePart::RIGHT);
+		EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, FramePart::LEFT);
+		EvaluateUpperLevels(tree, begins, ends, bounds, count, row_idx, frame_part);
+		EvaluateLeaves(tree, begins, ends, bounds, count, row_idx, frame_part, FramePart::RIGHT);
 	}
 }
 
@@ -447,12 +454,17 @@ void WindowSegmentTreePart::Initialize(idx_t count) {
 }
 
 void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTreeGlobalState &tree, const idx_t *begins,
-                                                const idx_t *ends, idx_t count, idx_t row_idx, FramePart frame_part) {
+                                                const idx_t *ends, const idx_t *bounds, idx_t count, idx_t row_idx,
+                                                FramePart frame_part) {
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 
 	const auto exclude_mode = tree.tree.exclude_mode;
 	const bool begin_on_curr_row = frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
+
+	// We need the full range of the frame to clamp
+	auto frame_begins = frame_part == FramePart::RIGHT ? bounds : begins;
+	auto frame_ends = frame_part == FramePart::LEFT ? bounds : ends;
 
 	const auto max_level = tree.levels_flat_start.size() + 1;
 	right_stack.resize(max_level, {0, 0});
@@ -467,8 +479,8 @@ void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTreeGlobalSta
 	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
 		auto state_ptr = fdata[rid];
 
-		auto begin = begin_on_curr_row ? cur_row + 1 : begins[rid];
-		auto end = end_on_curr_row ? cur_row : ends[rid];
+		auto begin = MaxValue(begin_on_curr_row ? cur_row + 1 : begins[rid], frame_begins[rid]);
+		auto end = MinValue(end_on_curr_row ? cur_row : ends[rid], frame_ends[rid]);
 		if (begin >= end) {
 			continue;
 		}
@@ -541,8 +553,8 @@ void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTreeGlobalSta
 }
 
 void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTreeGlobalState &tree, const idx_t *begins,
-                                           const idx_t *ends, idx_t count, idx_t row_idx, FramePart frame_part,
-                                           FramePart leaf_part) {
+                                           const idx_t *ends, const idx_t *bounds, idx_t count, idx_t row_idx,
+                                           FramePart frame_part, FramePart leaf_part) {
 
 	auto fdata = FlatVector::GetData<data_ptr_t>(statef);
 
@@ -558,12 +570,19 @@ void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTreeGlobalState &t
 	// current row
 	const bool add_curr_row = compute_left && frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::TIES;
 
+	// We need the full range of the frame to clamp
+	auto frame_begins = frame_part == FramePart::RIGHT ? bounds : begins;
+	auto frame_ends = frame_part == FramePart::LEFT ? bounds : ends;
+
 	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
 		auto state_ptr = fdata[rid];
 
-		const auto begin = begin_on_curr_row ? cur_row + 1 : begins[rid];
-		const auto end = end_on_curr_row ? cur_row : ends[rid];
-		if (add_curr_row) {
+		const auto frame_begin = frame_begins[rid];
+		auto begin = MaxValue(begin_on_curr_row ? cur_row + 1 : begins[rid], frame_begin);
+
+		const auto frame_end = frame_ends[rid];
+		auto end = MinValue(end_on_curr_row ? cur_row : ends[rid], frame_end);
+		if (add_curr_row && frame_begin <= cur_row && cur_row < frame_end) {
 			WindowSegmentValue(tree, 0, cur_row, cur_row + 1, state_ptr);
 		}
 		if (begin >= end) {
