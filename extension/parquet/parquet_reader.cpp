@@ -776,6 +776,10 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 			auto &filter = *filter_entry->second;
 
 			FilterPropagateResult prune_result;
+			if (column_reader.FileIdx() >= group.columns.size()) {
+				// generated column (e.g. file_row_number) - skip
+				return;
+			}
 			// TODO we might not have stats but STILL a bloom filter so move this up
 			// check the bloom filter if present
 			if (!column_reader.Type().IsNested() &&
