@@ -44,7 +44,7 @@ private:
 
 	void SetBloomBitsForHashes(size_t shift, Vector &hashes, const SelectionVector &rsel, idx_t count);
 
-	size_t ProbeInternal(size_t shift, Vector &hashes, const SelectionVector *&current_sel, idx_t current_sel_count, SelectionVector &sel);
+	size_t ProbeInternal(size_t shift, Vector &hashes, SelectionVector &current_sel, idx_t current_sel_count);
 
 	size_t num_hash_functions;
 	size_t bloom_filter_size;

@@ -71,11 +71,9 @@ void BloomFilter::BuildWithPrecomputedHashes(Vector &hashes, const SelectionVect
     num_inserted_rows += count;
 }
 
-inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, const SelectionVector *&current_sel, idx_t current_sel_count, SelectionVector &sel) {
+inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, SelectionVector &current_sel, idx_t current_sel_count) {
     D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
     D_ASSERT(current_sel_count > 0); // Should be handled before
-
-    current_sel = FlatVector::IncrementalSelectionVector();
 
     if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
         auto hash = ConstantVector::GetData<hash_t>(hashes);
@@ -96,7 +94,7 @@ inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, const Selec
             size_t sel_out_idx = 0;
             for (idx_t i = 0; i < current_sel_count; i++) {
                 // TODO: We can skip this row if it was already removed by a previous iteration
-                auto key_idx = current_sel->get_index(i);
+                auto key_idx = current_sel.get_index(i);
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 if (u_hashes.validity.RowIsValid(hash_idx)) {
                     auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
@@ -104,26 +102,24 @@ inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, const Selec
                     auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
                     if (bloom_filter.RowIsValid(bloom_idx)) {
                         // Bit is set in Bloom-filter. We keep the entry for now.
-                        sel.set_index(sel_out_idx++, key_idx);
+                        current_sel.set_index(sel_out_idx++, key_idx);
                     }
                 }
             }
-            current_sel = &sel;
             return sel_out_idx;
         } else {
             size_t sel_out_idx = 0;
             for (idx_t i = 0; i < current_sel_count; i++) {
-                auto key_idx = current_sel->get_index(i);
+                auto key_idx = current_sel.get_index(i);
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
                 auto hash = hashes[hash_idx];
                 auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
                 if (bloom_filter.RowIsValid(bloom_idx)) {
                     // Bit is set in Bloom-filter. We keep the entry for now.
-                    sel.set_index(sel_out_idx++, key_idx);
+                    current_sel.set_index(sel_out_idx++, key_idx);
                 }
             }
-            current_sel = &sel;
             return sel_out_idx;
         }
     }
@@ -139,12 +135,28 @@ size_t BloomFilter::Probe(DataChunk &keys, const SelectionVector *&current_sel, 
 
     size_t sel_out_count = count;
 
+
+    SelectionVector sel_tmp(count);
+    // Copy current selection vector over to temporary selection vector
+    for (idx_t i = 0; i < count; i++) {
+        sel_tmp.set_index(i, current_sel->get_index(i));
+    }
+    current_sel = FlatVector::IncrementalSelectionVector();
+
+
     for (idx_t i = 0; i < num_hash_functions; i++) {
-        sel_out_count = ProbeInternal(i, *precomputed_hashes, current_sel, sel_out_count, sel);
+        sel_out_count = ProbeInternal(i, *precomputed_hashes, sel_tmp, sel_out_count);
         if (sel_out_count == 0) {
             return 0;
         }
     }
+
+    // Copy result of temporary selection vector over to helper selection vector and adjust pointers.
+    for (idx_t i = 0; i < sel_out_count; i++) {
+        sel.set_index(i, sel_tmp.get_index(i));
+    }
+    current_sel = &sel;
+
     return sel_out_count;
 }
 
