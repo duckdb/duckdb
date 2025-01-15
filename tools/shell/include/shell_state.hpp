@@ -202,7 +202,9 @@ public:
 	int DoMetaCommand(char *zLine);
 
 	int RunOneSqlLine(char *zSql);
-	void ProcessDuckDBRC(const char *sqliterc_override);
+	string GetDefaultDuckDBRC();
+	void ProcessDuckDBRC(const char *file);
+	void ProcessFile(const string &file, bool is_duckdb_rc = false);
 	int ProcessInput();
 };
 
