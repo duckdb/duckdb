@@ -24,9 +24,10 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t 
 	auto dict_pos = dict_end - dict_offset;
 
 	auto str_ptr = char_ptr_cast(dict_pos);
-	if (is_fsst_encoded) {
+	switch (mode) {
+	case DictFSSTMode::DICT_FSST:
 		return FSSTPrimitives::DecompressValue(decoder, result, str_ptr, string_len, decompress_buffer);
-	} else {
+	default:
 		// FIXME: the Vector doesn't seem to take ownership of the non-inlined string data???
 		return string_t(str_ptr, string_len);
 	}
@@ -54,8 +55,9 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	block_size = segment.GetBlockManager().GetBlockSize();
 
 	dict = DictFSSTCompression::GetDictionary(segment, *handle);
-	is_fsst_encoded = header_ptr->fsst_encoded;
-	if (is_fsst_encoded) {
+	mode = header_ptr->mode;
+	switch (mode) {
+	case DictFSSTMode::DICT_FSST: {
 		decoder = new duckdb_fsst_decoder_t;
 		auto symbol_table_location = baseptr + dict.end;
 		auto ret = duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(decoder), symbol_table_location);
@@ -64,6 +66,10 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 
 		auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
 		decompress_buffer.resize(string_block_limit + 1);
+		break;
+	}
+	default:
+		break;
 	}
 	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()),
 	                                             data_ptr_cast(string_lengths_ptr), dict_count, string_lengths_width);

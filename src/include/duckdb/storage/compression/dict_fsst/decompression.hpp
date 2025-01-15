@@ -37,7 +37,7 @@ public:
 	buffer_ptr<SelectionVector> sel_vec;
 	vector<uint32_t> string_lengths;
 	idx_t sel_vec_size = 0;
-	bool is_fsst_encoded = false;
+	DictFSSTMode mode;
 
 	//! Start of the block (pointing to the dictionary_header)
 	data_ptr_t baseptr;

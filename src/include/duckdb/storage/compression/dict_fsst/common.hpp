@@ -9,6 +9,8 @@ namespace duckdb {
 
 namespace dict_fsst {
 
+enum class DictFSSTMode : uint8_t { DICTIONARY = 0, DICT_FSST = 1, FSST_ONLY = 2 };
+
 typedef struct {
 	uint32_t dict_size;
 	uint32_t dict_end;
@@ -16,13 +18,14 @@ typedef struct {
 	uint32_t string_lengths_width;
 	uint32_t dict_count;
 	uint32_t bitpacking_width;
-	bool fsst_encoded;
+	DictFSSTMode mode;
 } dict_fsst_compression_header_t;
 
 enum class DictionaryAppendState : uint8_t {
-	REGULAR,    //! Symbol table threshold not reached yet
-	ENCODED,    //! Reached the threshold, decided to encode the dictionary
-	NOT_ENCODED //! Reached the threshold, decided not to encode the dictionary
+	REGULAR,           //! Symbol table threshold not reached yet
+	ENCODED,           //! Reached the threshold, decided to encode the dictionary
+	NOT_ENCODED,       //! Reached the threshold, decided not to encode the dictionary
+	ENCODED_ALL_UNIQUE //! Reached the threshold, decided to encode the dictionary, and all entries so far are unique
 };
 
 struct DictFSSTCompression {

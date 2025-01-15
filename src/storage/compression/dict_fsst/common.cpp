@@ -81,6 +81,9 @@ bool DictFSSTCompressionState::DryAppendToCurrentSegment(bool is_new, UnifiedVec
 	case DictionaryAppendState::NOT_ENCODED: {
 		return required_space <= block_size;
 	}
+	case DictionaryAppendState::ENCODED_ALL_UNIQUE: {
+		throw NotImplementedException("TODO");
+	}
 	};
 	throw InternalException("Unhandled DictionaryAppendState");
 }

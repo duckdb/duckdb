@@ -302,6 +302,18 @@ bool DictFSSTCompressionCompressState::EncodeDictionary() {
 	return true;
 }
 
+static DictFSSTMode ConvertToMode(DictionaryAppendState &state) {
+	switch (state) {
+	case DictionaryAppendState::ENCODED:
+		return DictFSSTMode::DICT_FSST;
+	case DictionaryAppendState::REGULAR:
+	case DictionaryAppendState::NOT_ENCODED:
+		return DictFSSTMode::DICTIONARY;
+	case DictionaryAppendState::ENCODED_ALL_UNIQUE:
+		return DictFSSTMode::FSST_ONLY;
+	}
+}
+
 StringData DictFSSTCompressionCompressState::GetString(const string_t *strings, idx_t index, idx_t raw_index) {
 	StringData result(strings[index]);
 	if (append_state == DictionaryAppendState::ENCODED) {
@@ -337,7 +349,7 @@ idx_t DictFSSTCompressionCompressState::Finalize() {
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(base_ptr);
 	auto compressed_selection_buffer_offset = DictFSSTCompression::DICTIONARY_HEADER_SIZE;
 	auto string_lengths_offset = compressed_selection_buffer_offset + compressed_selection_buffer_size;
-	header_ptr->fsst_encoded = is_fsst_encoded;
+	header_ptr->mode = ConvertToMode(append_state);
 
 	// Write compressed selection buffer
 	BitpackingPrimitives::PackBuffer<sel_t, false>(base_ptr + compressed_selection_buffer_offset,
