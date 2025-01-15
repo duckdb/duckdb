@@ -73,12 +73,12 @@ static bool StartsWithNumericDate(string &separator, const string_t &value) {
 
 string GenerateDateFormat(const string &separator, const char *format_template) {
 	string format_specifier = format_template;
-	auto amount_of_dashes = NumericCast<idx_t>(std::count(format_specifier.begin(), format_specifier.end(), '-'));
+	const auto amount_of_dashes = NumericCast<idx_t>(std::count(format_specifier.begin(), format_specifier.end(), '-'));
 	// All our date formats must have at least one -
 	D_ASSERT(amount_of_dashes);
 	string result;
 	result.reserve(format_specifier.size() - amount_of_dashes + (amount_of_dashes * separator.size()));
-	for (auto &character : format_specifier) {
+	for (const auto &character : format_specifier) {
 		if (character == '-') {
 			result += separator;
 		} else {
@@ -172,7 +172,8 @@ bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, cons
 			    ->second.GetValue()
 			    .TryParseTimestamp(value, dummy_value, error_message);
 		}
-		return Timestamp::TryConvertTimestamp(value_ptr, value_size, dummy_value) == TimestampCastResult::SUCCESS;
+		return Timestamp::TryConvertTimestamp(value_ptr, value_size, dummy_value, nullptr, true) ==
+		       TimestampCastResult::SUCCESS;
 	}
 	case LogicalTypeId::TIME: {
 		idx_t pos;

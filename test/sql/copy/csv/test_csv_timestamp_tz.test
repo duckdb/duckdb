@@ -30,3 +30,17 @@ FROM read_csv('data/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEA
 2020-01-01 00:00:00+00	midnight UTC +00
 2020-01-01 00:00:00+00	midnight UTC Z
 2019-12-31 16:00:00+00	midnight in Taipei
+
+query I
+SELECT columns FROM sniff_csv('data/csv/timestamp_timezone.csv')
+----
+[{'name': time, 'type': TIMESTAMP WITH TIME ZONE}, {'name': description, 'type': VARCHAR}]
+
+query II
+FROM 'data/csv/timestamp_timezone.csv'
+----
+2020-01-01 00:00:00+00	midnight local
+2020-01-01 08:00:00+00	midnight in San Francisco
+2020-01-01 00:00:00+00	midnight UTC +00
+2020-01-01 00:00:00+00	midnight UTC Z
+2019-12-31 16:00:00+00	midnight in Taipei
