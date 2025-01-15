@@ -203,6 +203,9 @@ struct ParquetWriteBindData : public TableFunctionData {
 	ChildFieldIDs field_ids;
 	//! The compression level, higher value is more
 	int64_t compression_level = ZStdFileSystem::DefaultCompressionLevel();
+
+	//! Which encodings to include when writing
+	ParquetVersion parquet_version = ParquetVersion::V1;
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
@@ -371,6 +374,7 @@ public:
 		table_function.named_parameters["explicit_cardinality"] = LogicalType::UBIGINT;
 		table_function.named_parameters["schema"] = LogicalTypeId::ANY;
 		table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
+		table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
 		table_function.get_partition_data = ParquetScanGetPartitionData;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
@@ -1289,6 +1293,15 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 			}
 			bind_data->compression_level = val;
 			compression_level_set = true;
+		} else if (loption == "parquet_version") {
+			const auto roption = StringUtil::Upper(option.second[0].ToString());
+			if (roption == "V1") {
+				bind_data->parquet_version = ParquetVersion::V1;
+			} else if (roption == "V2") {
+				bind_data->parquet_version = ParquetVersion::V2;
+			} else {
+				throw BinderException("Expected parquet_version 'V1' or 'V2'");
+			}
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -1319,7 +1332,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
 	    parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
 	    parquet_bind.dictionary_size_limit, parquet_bind.bloom_filter_false_positive_ratio,
-	    parquet_bind.compression_level, parquet_bind.debug_use_openssl);
+	    parquet_bind.compression_level, parquet_bind.debug_use_openssl, parquet_bind.parquet_version);
 	return std::move(global_state);
 }
 
@@ -1424,6 +1437,29 @@ duckdb_parquet::CompressionCodec::type EnumUtil::FromString<duckdb_parquet::Comp
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
+template <>
+const char *EnumUtil::ToChars<ParquetVersion>(ParquetVersion value) {
+	switch (value) {
+	case ParquetVersion::V1:
+		return "V1";
+	case ParquetVersion::V2:
+		return "V2";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+ParquetVersion EnumUtil::FromString<ParquetVersion>(const char *value) {
+	if (StringUtil::Equals(value, "V1")) {
+		return ParquetVersion::V1;
+	}
+	if (StringUtil::Equals(value, "V2")) {
+		return ParquetVersion::V2;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
 static optional_idx SerializeCompressionLevel(const int64_t compression_level) {
 	return compression_level < 0 ? NumericLimits<idx_t>::Maximum() - NumericCast<idx_t>(AbsValue(compression_level))
 	                             : NumericCast<idx_t>(compression_level);
@@ -1455,13 +1491,24 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                                                         bind_data.encryption_config, nullptr);
 
 	// 108 was dictionary_compression_ratio_threshold, but was deleted
+
+	// To avoid doubly defining the default values in both ParquetWriteBindData and here,
+	// and possibly making a mistake, we just get the values from ParquetWriteBindData.
+	// We have to std::move them, otherwise MSVC will complain that it's not a "const T &&"
 	const auto compression_level = SerializeCompressionLevel(bind_data.compression_level);
 	D_ASSERT(DeserializeCompressionLevel(compression_level) == bind_data.compression_level);
-	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
-	serializer.WriteProperty(110, "row_groups_per_file", bind_data.row_groups_per_file);
-	serializer.WriteProperty(111, "debug_use_openssl", bind_data.debug_use_openssl);
-	serializer.WriteProperty(112, "dictionary_size_limit", bind_data.dictionary_size_limit);
-	serializer.WriteProperty(113, "bloom_filter_false_positive_ratio", bind_data.bloom_filter_false_positive_ratio);
+	serializer.WritePropertyWithDefault(109, "compression_level", compression_level);
+	serializer.WritePropertyWithDefault(110, "row_groups_per_file", bind_data.row_groups_per_file,
+	                                    std::move(ParquetWriteBindData().row_groups_per_file));
+	serializer.WritePropertyWithDefault(111, "debug_use_openssl", bind_data.debug_use_openssl,
+	                                    std::move(ParquetWriteBindData().debug_use_openssl));
+	serializer.WritePropertyWithDefault(112, "dictionary_size_limit", bind_data.dictionary_size_limit,
+	                                    std::move(ParquetWriteBindData().dictionary_size_limit));
+	serializer.WritePropertyWithDefault(113, "bloom_filter_false_positive_ratio",
+	                                    bind_data.bloom_filter_false_positive_ratio,
+	                                    std::move(ParquetWriteBindData().bloom_filter_false_positive_ratio));
+	serializer.WritePropertyWithDefault(114, "parquet_version", bind_data.parquet_version,
+	                                    std::move(ParquetWriteBindData().parquet_version));
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1473,21 +1520,24 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->row_group_size_bytes = deserializer.ReadProperty<idx_t>(104, "row_group_size_bytes");
 	data->kv_metadata = deserializer.ReadProperty<vector<pair<string, string>>>(105, "kv_metadata");
 	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(106, "field_ids");
-	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
-	                                                                                  data->encryption_config, nullptr);
+	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(
+	    107, "encryption_config", data->encryption_config, std::move(ParquetWriteBindData().encryption_config));
 	deserializer.ReadDeletedProperty<double>(108, "dictionary_compression_ratio_threshold");
 
 	optional_idx compression_level;
 	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
 	data->compression_level = DeserializeCompressionLevel(compression_level);
 	D_ASSERT(SerializeCompressionLevel(data->compression_level) == compression_level);
-	data->row_groups_per_file =
-	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
-	data->debug_use_openssl = deserializer.ReadPropertyWithExplicitDefault<bool>(111, "debug_use_openssl", true);
-	data->dictionary_size_limit =
-	    deserializer.ReadPropertyWithExplicitDefault<idx_t>(112, "dictionary_size_limit", data->row_group_size / 10);
-	data->bloom_filter_false_positive_ratio =
-	    deserializer.ReadPropertyWithExplicitDefault<double>(113, "bloom_filter_false_positive_ratio", 0.01);
+	data->row_groups_per_file = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(
+	    110, "row_groups_per_file", std::move(ParquetWriteBindData().row_groups_per_file));
+	data->debug_use_openssl = deserializer.ReadPropertyWithExplicitDefault<bool>(
+	    111, "debug_use_openssl", std::move(ParquetWriteBindData().debug_use_openssl));
+	data->dictionary_size_limit = deserializer.ReadPropertyWithExplicitDefault<idx_t>(
+	    112, "dictionary_size_limit", std::move(ParquetWriteBindData().dictionary_size_limit));
+	data->bloom_filter_false_positive_ratio = deserializer.ReadPropertyWithExplicitDefault<double>(
+	    113, "bloom_filter_false_positive_ratio", std::move(ParquetWriteBindData().bloom_filter_false_positive_ratio));
+	data->parquet_version = deserializer.ReadPropertyWithExplicitDefault(
+	    114, "parquet_version", std::move(ParquetWriteBindData().parquet_version));
 
 	return std::move(data);
 }
