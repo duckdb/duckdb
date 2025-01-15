@@ -462,6 +462,8 @@ public:
 		const auto chunk_count = ht.GetDataCollection().ChunkCount();
 		const auto num_threads = NumericCast<idx_t>(sink.num_threads);
 
+		// ISSUE 1: row_count is not consistent between invocations and we seem to hit this line usually twice with slightly different row_counts even.
+		// ISSUE 2: even if we fix the row_count to a given value, the number of bits in the bloom-filter is different between invocations, hinting at different rows being inserted.
 		sink.bloom_filter = make_uniq<BloomFilter>(row_count, 0.01);
 
 		// If the data is very skewed (many of the exact same key), our finalize will become slow,

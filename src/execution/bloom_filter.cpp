@@ -67,7 +67,6 @@ void BloomFilter::BuildWithPrecomputedHashes(Vector &hashes, const SelectionVect
     // With this trick, keys have to be hashed only once.
     for (idx_t i = 0; i < num_hash_functions; i++) {
         SetBloomBitsForHashes(i, hashes, rsel, count);
-        std::cout << "Bloom-filter after inserting " << count << " rows in round " << i << " of " << num_hash_functions << ": " << Bit::ToString(bloom_filter) << std::endl;
     }
     num_inserted_rows += count;
 }
@@ -136,17 +135,16 @@ size_t BloomFilter::Probe(DataChunk &keys, const SelectionVector *&current_sel, 
     D_ASSERT(precomputed_hashes != nullptr);
     precomputed_hashes.CheckValid();
 
+    probing_started = true;
+
     size_t sel_out_count = count;
 
     for (idx_t i = 0; i < num_hash_functions; i++) {
         sel_out_count = ProbeInternal(i, *precomputed_hashes, current_sel, sel_out_count, sel);
-        std::cout << "Probing " << count << " rows against the bloom-filter; round " << i << " of " << num_hash_functions << " removed " << (count - sel_out_count) << " rows" << std::endl;
         if (sel_out_count == 0) {
-            std::cout << "Pruned all rows with bloom-filter" << std::endl;
             return 0;
         }
     }
-    std::cout << "Pruned " << (count - sel_out_count) << " rows with Bloom-filter" << std::endl;
     return sel_out_count;
 }
 
