@@ -9,7 +9,13 @@ namespace duckdb {
 
 namespace dict_fsst {
 
-enum class DictFSSTMode : uint8_t { DICTIONARY = 0, DICT_FSST = 1, FSST_ONLY = 2 };
+//! This enum holds the available compression modes, this can be expanded later by adding to the end (before COUNT)
+enum class DictFSSTMode : uint8_t {
+	DICTIONARY = 0,
+	DICT_FSST = 1,
+	FSST_ONLY = 2,
+	COUNT //! Always the last member of the enum
+};
 
 typedef struct {
 	uint32_t dict_size;

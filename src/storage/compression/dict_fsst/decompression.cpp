@@ -58,6 +58,12 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 
 	dict = DictFSSTCompression::GetDictionary(segment, *handle);
 	mode = header_ptr->mode;
+	if (mode >= DictFSSTMode::COUNT) {
+		throw FatalException("This block was written with a mode that is not recognized by this version, highest "
+		                     "available mode %d, found mode: %d",
+		                     static_cast<uint8_t>(DictFSSTMode::COUNT), static_cast<uint8_t>(mode));
+	}
+
 	switch (mode) {
 	case DictFSSTMode::FSST_ONLY:
 	case DictFSSTMode::DICT_FSST: {
