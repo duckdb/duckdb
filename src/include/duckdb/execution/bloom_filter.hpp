@@ -19,6 +19,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include <atomic>
 
 namespace duckdb {
 
@@ -30,12 +31,12 @@ public:
 	//! Builds the Bloom-filter with pre-computed key-hashes.
 	void BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector &rsel, idx_t count);
 
-	//! Merges two Bloom-filters using binary OR.
-	//! Both Bloom-filters need to have the same number of bits.
-	void Merge(BloomFilter &other);
-
 	//! Probes the Bloom-filter and adjusts the selection vector accordingly.
 	size_t Probe(DataChunk &keys, const SelectionVector *&current_sel, idx_t count, SelectionVector sel, optional_ptr<Vector> precomputed_hashes = nullptr);
+
+	size_t GetNumInsertedRows() const {
+		return num_inserted_rows;
+	}
 
 private:
 	// Perform the exact same has function as the hash table, so we can re-use the hash values for probing the HT.
@@ -45,9 +46,13 @@ private:
 
 	size_t ProbeInternal(size_t shift, Vector &hashes, const SelectionVector *&current_sel, idx_t current_sel_count, SelectionVector &sel);
 
-	int num_hash_functions;
-	std::vector<char> data_buffer;
-	bitstring_t bloom_filter;
+	size_t num_hash_functions;
+	size_t bloom_filter_size;
+	std::atomic_size_t num_inserted_rows;
+	std::atomic_bool probing_started;
+
+	vector<validity_t> bloom_data_buffer;
+	ValidityMask bloom_filter;
 };
 
 } // namespace duckdb

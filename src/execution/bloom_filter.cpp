@@ -10,17 +10,14 @@
 
 namespace duckdb {
 
-BloomFilter::BloomFilter(size_t expected_cardinality, double desired_false_positive_rate) {
+BloomFilter::BloomFilter(size_t expected_cardinality, double desired_false_positive_rate) : num_inserted_rows(0), probing_started(false) {
     // Approximate size of the Bloom-filter rounded up to the next 8 byte.
     size_t approx_size = std::ceil(-double(expected_cardinality) * log(desired_false_positive_rate) / 0.48045);
-	size_t approx_size_64 = approx_size + (64 - approx_size % 64);
+	bloom_filter_size = approx_size + (64 - approx_size % 64);
     num_hash_functions = std::ceil(approx_size / expected_cardinality * 0.693147);
 
-    data_buffer.resize(approx_size_64 / 8);
-    // TODO: using a duckdb bitstring allows us to inline small bloom-filters into a stack variable.
-    // BUT: we might not want to construct small bloom-filters because we have the IN-list optimization, so we just get an unnecessary branch because of that?
-    bloom_filter = std::move(duckdb::string_t(data_buffer.data(), data_buffer.size()));
-    Bit::SetEmptyBitString(bloom_filter, approx_size_64);  // This is probably not necessary.
+    bloom_data_buffer.resize(bloom_filter_size / 64, 0);
+    bloom_filter.Initialize(bloom_data_buffer.data(), bloom_filter_size);
 }
 
 BloomFilter::~BloomFilter() {
@@ -32,13 +29,12 @@ inline size_t HashToIndex(hash_t hash, size_t bloom_filter_size, size_t i) {
 
 inline void BloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const SelectionVector &rsel, idx_t count) {
     D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
-
-    const size_t bloom_filter_size = Bit::BitLength(bloom_filter);
+    D_ASSERT(probing_started == false);
 
     if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
         auto hash = ConstantVector::GetData<hash_t>(hashes);
 		auto bloom_idx = HashToIndex(*hash, bloom_filter_size, fni);
-        Bit::SetBit(bloom_filter, bloom_idx, 0x1);
+        bloom_filter.SetValid(bloom_idx);
     } else {
         UnifiedVectorFormat u_hashes;
 		hashes.ToUnifiedFormat(count, u_hashes);
@@ -50,7 +46,7 @@ inline void BloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const
                 if (u_hashes.validity.RowIsValid(hash_idx)) {
                     auto hash = UnifiedVectorFormat::GetData<hash_t>(u_hashes)[hash_idx];
                     auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
-                    Bit::SetBit(bloom_filter, bloom_idx, true);
+                    bloom_filter.SetValid(bloom_idx);
                 }
             }
         } else {
@@ -59,9 +55,8 @@ inline void BloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
                 auto hash = hashes[hash_idx];
-                std::cout << "Hash: " << hash << std::endl;
                 auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
-                Bit::SetBit(bloom_filter, bloom_idx, true);
+                bloom_filter.SetValid(bloom_idx);
             }
         }
     }
@@ -74,14 +69,8 @@ void BloomFilter::BuildWithPrecomputedHashes(Vector &hashes, const SelectionVect
         SetBloomBitsForHashes(i, hashes, rsel, count);
         std::cout << "Bloom-filter after inserting " << count << " rows in round " << i << " of " << num_hash_functions << ": " << Bit::ToString(bloom_filter) << std::endl;
     }
-    std::cout << "-----" << std::endl;
+    num_inserted_rows += count;
 }
-
-void BloomFilter::Merge(BloomFilter &other) {
-    D_ASSERT(Bit::BitLength(bloom_filter) == Bit::BitLength(other.bloom_filter));
-    Bit::BitwiseOr(bloom_filter, other.bloom_filter, bloom_filter);
-}
-
 
 inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, const SelectionVector *&current_sel, idx_t current_sel_count, SelectionVector &sel) {
     D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
@@ -89,13 +78,11 @@ inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, const Selec
 
     current_sel = FlatVector::IncrementalSelectionVector();
 
-    const size_t bloom_filter_size = Bit::BitLength(bloom_filter);
-
     if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
         auto hash = ConstantVector::GetData<hash_t>(hashes);
 		auto bloom_idx = HashToIndex(*hash, bloom_filter_size, fni);
 
-        if (Bit::GetBit(bloom_filter, bloom_idx)) {
+        if (bloom_filter.RowIsValid(bloom_idx)) {
             // All constant elements match. No need to modify the selection vector.
             return current_sel_count;
         } else {
@@ -116,7 +103,7 @@ inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, const Selec
                     auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
                     auto hash = hashes[hash_idx];
                     auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
-                    if (Bit::GetBit(bloom_filter, bloom_idx)) {
+                    if (bloom_filter.RowIsValid(bloom_idx)) {
                         // Bit is set in Bloom-filter. We keep the entry for now.
                         sel.set_index(sel_out_idx++, key_idx);
                     }
@@ -131,9 +118,8 @@ inline size_t BloomFilter::ProbeInternal(size_t fni, Vector &hashes, const Selec
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
                 auto hash = hashes[hash_idx];
-                std::cout << "Hash: " << hash << std::endl;
                 auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
-                if (Bit::GetBit(bloom_filter, bloom_idx)) {
+                if (bloom_filter.RowIsValid(bloom_idx)) {
                     // Bit is set in Bloom-filter. We keep the entry for now.
                     sel.set_index(sel_out_idx++, key_idx);
                 }
