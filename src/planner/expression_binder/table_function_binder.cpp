@@ -45,7 +45,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 		}
 	}
 
-	auto value_function = ExpressionBinder::GetSQLValueFunction(column_names.back());
+	auto value_function = ExpressionBinder::GetSQLValueFunction(col_ref);
 	if (value_function) {
 		return BindExpression(value_function, depth, root_expression);
 	}
