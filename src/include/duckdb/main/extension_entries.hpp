@@ -645,6 +645,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_zmax", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_zmflag", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_zmin", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"start_ui", "motherduck", CatalogType::TABLE_FUNCTION_ENTRY},
     {"starts_with", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"stats", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"stddev", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},

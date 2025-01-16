@@ -335,6 +335,13 @@ void CSVSniffer::DetectHeader() {
 	auto &sniffer_state_machine = best_candidate->GetStateMachine();
 	names = DetectHeaderInternal(buffer_manager->context, best_header_row, sniffer_state_machine, set_columns,
 	                             best_sql_types_candidates_per_column_idx, options, *error_handler);
+	if (single_row_file && sniffer_state_machine.dialect_options.header.GetValue()) {
+		// This file only contains a header, lets default to the lowest type of all.
+		detected_types.clear();
+		for (idx_t i = 0; i < names.size(); i++) {
+			detected_types.push_back(LogicalType::BOOLEAN);
+		}
+	}
 	for (idx_t i = max_columns_found; i < names.size(); i++) {
 		detected_types.push_back(LogicalType::VARCHAR);
 	}

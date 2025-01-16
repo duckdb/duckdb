@@ -68,7 +68,9 @@ DatabaseInstance::DatabaseInstance() {
 
 DatabaseInstance::~DatabaseInstance() {
 	// destroy all attached databases
-	GetDatabaseManager().ResetDatabases(scheduler);
+	if (db_manager) {
+		db_manager->ResetDatabases(scheduler);
+	}
 	// destroy child elements
 	connection_manager.reset();
 	object_cache.reset();
@@ -86,7 +88,7 @@ DatabaseInstance::~DatabaseInstance() {
 	}
 	Allocator::SetBackgroundThreads(false);
 	// after all destruction is complete clear the cache entry
-	db_cache_entry.reset();
+	config.db_cache_entry.reset();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
@@ -107,10 +109,6 @@ DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
 
 const DatabaseInstance &DatabaseInstance::GetDatabase(const ClientContext &context) {
 	return *context.db;
-}
-
-void DatabaseInstance::SetDatabaseCacheEntry(shared_ptr<DatabaseCacheEntry> entry) {
-	db_cache_entry = std::move(entry);
 }
 
 DatabaseManager &DatabaseInstance::GetDatabaseManager() {
@@ -464,6 +462,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		                                                 config.options.buffer_manager_track_eviction_timestamps,
 		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}
+	config.db_cache_entry = new_config.db_cache_entry;
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {

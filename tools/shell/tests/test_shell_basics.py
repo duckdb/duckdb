@@ -304,6 +304,13 @@ def test_execute_file(shell, generated_file):
     result = test.run()
     result.check_stdout("42")
 
+def test_execute_non_existent_file(shell):
+    test = (
+        ShellTest(shell, ['-f', '____this_file_does_not_exist'])
+    )
+    result = test.run()
+    result.check_stderr("____this_file_does_not_exist")
+
 @pytest.mark.parametrize('generated_file', ["insert into tbl values (42)"], indirect=True)
 def test_execute_files(shell, generated_file):
     test = (
