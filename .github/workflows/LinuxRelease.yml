@@ -54,8 +54,8 @@ jobs:
     # Builds binaries for linux_amd64_gcc4
     name: Linux (x64)
     runs-on: ubuntu-latest
-    #needs: linux-extensions-64
-    #if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
+    needs: linux-extensions-64
+    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
 
     steps:
     - uses: actions/checkout@v3
@@ -134,8 +134,8 @@ jobs:
    # Builds binaries for linux_arm64
    name: Linux (aarch64)
    runs-on: ubuntu-latest
-   #needs: linux-extensions-64
-   #if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
+   needs: linux-extensions-64
+   if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
 
    steps:
      - uses: actions/checkout@v3
