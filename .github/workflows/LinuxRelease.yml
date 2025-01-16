@@ -79,16 +79,16 @@ jobs:
       run: |
         docker run \
         -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
-        -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE
-        -e EXTENSION_CONFIGS='${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
-        -e ENABLE_EXTENSION_AUTOLOADING=1
-        -e ENABLE_EXTENSION_AUTOINSTALL=1
-        -e BUILD_BENCHMARK=1
-        -e FORCE_WARN_UNUSED=1
-        -e DUCKDB_RUN_PARALLEL_CSV_TESTS=1
+        -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE \
+        -e EXTENSION_CONFIGS='/duckdb/.github/config/bundled_extensions.cmake' \
+        -e ENABLE_EXTENSION_AUTOLOADING=1 \
+        -e ENABLE_EXTENSION_AUTOINSTALL=1 \
+        -e BUILD_BENCHMARK=1 \
+        -e FORCE_WARN_UNUSED=1 \
+        -e DUCKDB_RUN_PARALLEL_CSV_TESTS=1 \
         -v.:/duckdb \
         quay.io/pypa/manylinux2014_x86_64 \
-        make -C /duckdb
+        bash -c "yum install -y perl-IPC-Cmd && make -C /duckdb"
 
     - name: Print platform
       shell: bash
@@ -135,13 +135,14 @@ jobs:
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
 
+
  linux-release-aarch64:
    # Builds binaries for linux_arm64
    name: Linux (aarch64)
    runs-on: ubuntu-latest
-   needs: linux-extensions-64
+   #needs: linux-extensions-64
    container: ubuntu:18.04
-   if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
+   #if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
    env:
      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
      ENABLE_EXTENSION_AUTOLOADING: 1
