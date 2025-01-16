@@ -78,6 +78,8 @@ struct SecretType {
 	secret_deserializer_t deserializer;
 	//! Provider to use when non is specified
 	string default_provider;
+	//! The extension that registered this secret type
+	string extension;
 };
 
 enum class SecretSerializationType : uint8_t {
