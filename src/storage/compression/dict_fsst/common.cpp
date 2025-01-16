@@ -98,7 +98,6 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 		EncodeInputStrings(vdata, count);
 	}
 
-	static constexpr idx_t STRING_SIZE_LIMIT = 16384;
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = vdata.sel->get_index(i);
 		idx_t string_size = 0;
@@ -110,12 +109,12 @@ bool DictFSSTCompressionState::UpdateState(Vector &scan_vector, idx_t count) {
 			auto &str = string_data.Get();
 			string_size = str.GetSize();
 			if (!string_data.encoded_string) {
-				if (string_size >= STRING_SIZE_LIMIT / 2) {
+				if (string_size >= DictFSSTCompression::STRING_SIZE_LIMIT / 2) {
 					// This string could potentially expand by 2x when encoded by FSST
 					return false;
 				}
 			} else {
-				if (string_size >= STRING_SIZE_LIMIT) {
+				if (string_size >= DictFSSTCompression::STRING_SIZE_LIMIT) {
 					throw FatalException("Encoded string expanded by more than 2x somehow!?");
 				}
 			}

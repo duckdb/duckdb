@@ -38,6 +38,7 @@ struct DictFSSTCompression {
 public:
 	//! Dictionary header size at the beginning of the string segment (offset + length)
 	static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(dict_fsst_compression_header_t);
+	static constexpr idx_t STRING_SIZE_LIMIT = 16384;
 
 public:
 	static bool HasEnoughSpace(idx_t current_count, idx_t index_count, idx_t dict_size,

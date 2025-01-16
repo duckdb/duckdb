@@ -70,20 +70,17 @@ struct DictFSSTCompressionStorage {
 //===--------------------------------------------------------------------===//
 unique_ptr<AnalyzeState> DictFSSTCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
-	return make_uniq<DictFSSTCompressionAnalyzeState>(info);
+	return make_uniq<DictFSSTAnalyzeState>(info);
 }
 
 bool DictFSSTCompressionStorage::StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count) {
-	auto &state = state_p.Cast<DictFSSTCompressionAnalyzeState>();
-	return state.analyze_state->UpdateState(input, count);
+	auto &analyze_state = state_p.Cast<DictFSSTAnalyzeState>();
+	return analyze_state.Analyze(input, count);
 }
 
 idx_t DictFSSTCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
-	auto &analyze_state = state_p.Cast<DictFSSTCompressionAnalyzeState>();
-	auto &state = *analyze_state.analyze_state;
-	state.Flush();
-
-	return state.total_space;
+	auto &analyze_state = state_p.Cast<DictFSSTAnalyzeState>();
+	return analyze_state.FinalAnalyze();
 }
 
 //===--------------------------------------------------------------------===//
@@ -91,7 +88,8 @@ idx_t DictFSSTCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<CompressionState> DictFSSTCompressionStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                                          unique_ptr<AnalyzeState> state) {
-	return make_uniq<DictFSSTCompressionCompressState>(checkpoint_data, state->info);
+	return make_uniq<DictFSSTCompressionCompressState>(
+	    checkpoint_data, unique_ptr_cast<AnalyzeState, DictFSSTAnalyzeState>(std::move(state)));
 }
 
 void DictFSSTCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
