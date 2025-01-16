@@ -56,6 +56,23 @@ SELECT AVG(i) FROM integers WHERE i > 100
 ----
 NULL
 
+# Intervals
+statement ok
+CREATE TABLE intervals(itvl INTERVAL)
+
+statement ok
+INSERT INTO intervals VALUES 
+	('1 day'), 
+	('30 days'), 
+	('30 days'), 
+	('30 days'), 
+	('30 days')
+
+query II
+SELECT AVG(itvl), AVG(DISTINCT itvl) FROM intervals
+----
+24 days 04:48:00	15 days 12:00:00
+
 # invalid use of average
 statement error
 SELECT AVG()
