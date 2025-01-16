@@ -656,103 +656,101 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
-	// collect all indexed columns
+	// Collect all indexed columns.
 	unordered_set<column_t> indexed_column_id_set;
 	indexes.Scan([&](Index &index) {
-		auto set = index.GetColumnIdSet();
+		D_ASSERT(index.IsBound());
+		auto &set = index.GetColumnIdSet();
 		indexed_column_id_set.insert(set.begin(), set.end());
 		return false;
 	});
-
-	// initialize the fetch state with only indexed columns
-	TableScanState state;
-
 	vector<StorageIndex> column_ids;
-	column_ids.reserve(indexed_column_id_set.size());
 	for (auto &col : indexed_column_id_set) {
 		column_ids.emplace_back(col);
 	}
 	sort(column_ids.begin(), column_ids.end());
 
 	vector<LogicalType> column_types;
-	column_types.reserve(indexed_column_id_set.size());
 	for (auto &col : column_ids) {
 		column_types.push_back(types[col.GetPrimaryIndex()]);
 	}
 
+	// Initialize the fetch state. Only use indexed columns.
+	TableScanState state;
 	state.Initialize(std::move(column_ids));
 	state.table_state.max_row = row_start + total_rows;
 
-	// create two chunks:
-	// result: used for scanning data, has only the required columns
-	// rows: used for index removal, has all columns but only initializes indexed ones
-	DataChunk result;
-	result.Initialize(GetAllocator(), column_types);
+	// Used for scanning data. Only contains the indexed columns.
+	DataChunk fetch_chunk;
+	fetch_chunk.Initialize(GetAllocator(), column_types);
 
-	DataChunk rows;
+	// Used for index value removal.
+	// Contains all columns but only initializes indexed ones.
+	DataChunk result_chunk;
 	auto fetched_columns = vector<bool>(types.size(), false);
+	result_chunk.Initialize(GetAllocator(), types, fetched_columns);
+
+	// Now set all to-be-fetched columns.
 	for (auto &col : indexed_column_id_set) {
 		fetched_columns[col] = true;
 	}
-	rows.Initialize(GetAllocator(), types, fetched_columns);
 
+	// Iterate over the row ids.
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	// now iterate over the row ids
 	for (idx_t r = 0; r < count;) {
-		result.Reset();
-		rows.Reset();
+		fetch_chunk.Reset();
+		result_chunk.Reset();
 
-		// figure out which row_group to fetch from
+		// Figure out which row_group to fetch from.
 		auto row_id = row_ids[r];
 		auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(row_id));
 		auto row_group_vector_idx = (UnsafeNumericCast<idx_t>(row_id) - row_group->start) / STANDARD_VECTOR_SIZE;
 		auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE + row_group->start;
 
-		// fetch the current vector into result
+		// Fetch the current vector into fetch_chunk.
 		state.table_state.Initialize(GetTypes());
 		row_group->InitializeScanWithOffset(state.table_state, row_group_vector_idx);
-		row_group->ScanCommitted(state.table_state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
-		result.Verify();
+		row_group->ScanCommitted(state.table_state, fetch_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		fetch_chunk.Verify();
 
-		// check for any remaining row ids if they also fall into this vector
-		// we try to fetch handle as many rows as possible at the same time
+		// Check for any remaining row ids, if they also fall into this vector.
+		// We try to fetch as many rows as possible at the same time.
 		idx_t sel_count = 0;
 		for (; r < count; r++) {
 			idx_t current_row = idx_t(row_ids[r]);
-			if (current_row < base_row_id || current_row >= base_row_id + result.size()) {
-				// this row-id does not fall into the current chunk - break
+			if (current_row < base_row_id || current_row >= base_row_id + fetch_chunk.size()) {
+				// This row id does not fall into the current chunk.
 				break;
 			}
 			auto row_in_vector = current_row - base_row_id;
-			D_ASSERT(row_in_vector < result.size());
+			D_ASSERT(row_in_vector < fetch_chunk.size());
 			sel.set_index(sel_count++, row_in_vector);
 		}
 		D_ASSERT(sel_count > 0);
 
-		// copy the required columns from result to rows
-		idx_t i = 0;
+		// Reference the necessary columns of the fetch_chunk.
+		idx_t fetch_idx = 0;
 		for (idx_t j = 0; j < types.size(); j++) {
 			if (fetched_columns[j]) {
-				rows.data[j].Reference(result.data[i++]);
-			} else {
-				rows.data[j].Reference(Value(types[j]));
+				result_chunk.data[j].Reference(fetch_chunk.data[fetch_idx++]);
+				continue;
 			}
+			result_chunk.data[j].Reference(Value(types[j]));
 		}
-		rows.SetCardinality(result);
+		result_chunk.SetCardinality(fetch_chunk);
 
-		// slice the vector with all rows that are present in this vector and erase from the index
-		rows.Slice(sel, sel_count);
-
+		// Slice the vector with all rows that are present in this vector.
+		// Then, erase all values from the indexes.
+		result_chunk.Slice(sel, sel_count);
 		indexes.Scan([&](Index &index) {
 			if (index.IsBound()) {
-				index.Cast<BoundIndex>().Delete(rows, row_identifiers);
-			} else {
-				throw MissingExtensionException(
-				    "Cannot delete from index '%s', unknown index type '%s'. You need to load the "
-				    "extension that provides this index type before table '%s' can be modified.",
-				    index.GetIndexName(), index.GetIndexType(), info->GetTableName());
+				index.Cast<BoundIndex>().Delete(result_chunk, row_identifiers);
+				return false;
 			}
-			return false;
+			throw MissingExtensionException(
+			    "Cannot delete from index '%s', unknown index type '%s'. You need to load the "
+			    "extension that provides this index type before table '%s' can be modified.",
+			    index.GetIndexName(), index.GetIndexType(), info->GetTableName());
 		});
 	}
 }

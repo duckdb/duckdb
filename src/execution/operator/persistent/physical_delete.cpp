@@ -47,7 +47,10 @@ class DeleteLocalState : public LocalSinkState {
 public:
 	DeleteLocalState(ClientContext &context, TableCatalogEntry &table,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-		delete_chunk.Initialize(Allocator::Get(context), table.GetTypes());
+		const auto &types = table.GetTypes();
+		auto initialize = vector<bool>(types.size(), false);
+		delete_chunk.Initialize(Allocator::Get(context), types, initialize);
+
 		auto &storage = table.GetStorage();
 		delete_state = storage.InitializeDelete(table, context, bound_constraints);
 	}
@@ -71,17 +74,17 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 	}
 
 	auto types = table.GetTypes();
-	auto to_be_fetched = vector<bool>(types.size(), false);
+	auto to_be_fetched = vector<bool>(types.size(), return_chunk);
 	vector<StorageIndex> column_ids;
 	vector<LogicalType> column_types;
 	if (return_chunk) {
 		// Fetch all columns.
+		column_types = types;
 		for (idx_t i = 0; i < table.ColumnCount(); i++) {
 			column_ids.emplace_back(i);
-			to_be_fetched[i] = true;
-		};
-		column_types = types;
-	} else if (g_state.has_unique_indexes) {
+		}
+
+	} else {
 		// Fetch only the required columns for updating the delete indexes.
 		auto &local_storage = LocalStorage::Get(context.client, table.db);
 		auto storage = local_storage.GetStorage(table);
@@ -90,7 +93,7 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 			if (!index.IsBound() || !index.IsUnique()) {
 				return false;
 			}
-			auto set = index.GetColumnIdSet();
+			auto &set = index.GetColumnIdSet();
 			indexed_column_id_set.insert(set.begin(), set.end());
 			return false;
 		});
@@ -104,26 +107,26 @@ SinkResultType PhysicalDelete::Sink(ExecutionContext &context, DataChunk &chunk,
 			column_types.push_back(types[i]);
 		}
 	}
-	auto fetch_state = ColumnFetchState();
 
-	// Fetch the to-be-deleted chunk.
 	l_state.delete_chunk.Reset();
 	row_ids.Flatten(chunk.size());
 
-	DataChunk result;
-	result.Initialize(Allocator::Get(context.client), column_types);
-	table.Fetch(transaction, result, column_ids, row_ids, chunk.size(), fetch_state);
+	// Fetch the to-be-deleted chunk.
+	DataChunk fetch_chunk;
+	fetch_chunk.Initialize(Allocator::Get(context.client), column_types, chunk.size());
+	auto fetch_state = ColumnFetchState();
+	table.Fetch(transaction, fetch_chunk, column_ids, row_ids, chunk.size(), fetch_state);
 
-	// Reference the fetched columns to the delete_chunk.
+	// Reference the necessary columns of the fetch_chunk.
 	idx_t fetch_idx = 0;
 	for (idx_t i = 0; i < table.ColumnCount(); i++) {
 		if (to_be_fetched[i]) {
-			l_state.delete_chunk.data[i].Reference(result.data[fetch_idx++]);
-		} else {
-			l_state.delete_chunk.data[i].Reference(Value(types[i]));
+			l_state.delete_chunk.data[i].Reference(fetch_chunk.data[fetch_idx++]);
+			continue;
 		}
+		l_state.delete_chunk.data[i].Reference(Value(types[i]));
 	}
-	l_state.delete_chunk.SetCardinality(result);
+	l_state.delete_chunk.SetCardinality(fetch_chunk);
 
 	// Append the deleted row IDs to the delete indexes.
 	// If we only delete local row IDs, then the delete_chunk is empty.
