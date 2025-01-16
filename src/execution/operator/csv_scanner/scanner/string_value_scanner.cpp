@@ -1289,10 +1289,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 		if (states.NewRow() || states.NewValue()) {
 			break;
-		} else {
-			if (!result.comment) {
-				over_buffer_string += previous_buffer[i];
-			}
+		} else if (!result.comment) {
+			over_buffer_string += previous_buffer[i];
 		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
@@ -1323,16 +1321,13 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.EmptyLine()) {
 			if (state_machine->dialect_options.num_cols == 1) {
 				break;
-			} else {
-				continue;
 			}
+			continue;
 		}
 		if (states.NewRow() || states.NewValue()) {
 			break;
-		} else {
-			if (!result.comment && !states.IsComment()) {
-				over_buffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
-			}
+		} else if (!result.comment && !states.IsComment()) {
+			over_buffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
 		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
@@ -1357,7 +1352,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 	}
 	if (!skip_value) {
 		string_t value;
-		if (result.quoted) {
+		if (result.quoted && !result.comment) {
 			value = string_t(over_buffer_string.c_str() + result.quoted_position,
 			                 UnsafeNumericCast<uint32_t>(over_buffer_string.size() - 1 - result.quoted_position));
 			if (result.escaped) {
