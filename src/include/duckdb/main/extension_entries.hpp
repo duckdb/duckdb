@@ -979,7 +979,8 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"s3_url_style", "httpfs"},
     {"s3_use_ssl", "httpfs"},
     {"sqlite_all_varchar", "sqlite_scanner"},
-    {"timezone", "icu"},
+    {"timezone", "iceberg"},
+    {"unsafe_enable_version_guessing", "icu"},
 }; // END_OF_EXTENSION_SETTINGS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
