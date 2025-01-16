@@ -54,18 +54,8 @@ jobs:
     # Builds binaries for linux_amd64_gcc4
     name: Linux (x64)
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64
-    needs: linux-extensions-64
+    #needs: linux-extensions-64
     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-    env:
-      EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
-      ENABLE_EXTENSION_AUTOLOADING: 1
-      ENABLE_EXTENSION_AUTOINSTALL: 1
-      GEN: ninja
-      BUILD_BENCHMARK: 1
-      FORCE_WARN_UNUSED: 1
-      DUCKDB_RUN_PARALLEL_CSV_TESTS: 1
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
     steps:
     - uses: actions/checkout@v3
@@ -86,7 +76,19 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make
+      run: |
+        docker run \
+        -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
+        -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE
+        -e EXTENSION_CONFIGS='${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
+        -e ENABLE_EXTENSION_AUTOLOADING=1
+        -e ENABLE_EXTENSION_AUTOINSTALL=1
+        -e BUILD_BENCHMARK=1
+        -e FORCE_WARN_UNUSED=1
+        -e DUCKDB_RUN_PARALLEL_CSV_TESTS=1
+        -v.:/duckdb \
+        quay.io/pypa/manylinux2014_x86_64 \
+        make -C /duckdb
 
     - name: Print platform
       shell: bash
