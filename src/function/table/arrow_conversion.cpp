@@ -768,6 +768,18 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
                                 uint64_t parent_offset) {
 	auto &scan_state = array_state.state;
 	D_ASSERT(!array.dictionary);
+	if (arrow_type.HasExtension()) {
+		if (arrow_type.extension_data->arrow_to_duckdb) {
+			// We allocate with the internal type, and cast to the end result
+			Vector input_data(arrow_type.extension_data->GetInternalType());
+			// FIXME do we need this?
+			auto input_arrow_type = ArrowType(arrow_type.extension_data->GetInternalType());
+			ColumnArrowToDuckDB(input_data, array, array_state, size, input_arrow_type, nested_offset, parent_mask,
+			                    parent_offset);
+			arrow_type.extension_data->arrow_to_duckdb(array_state.context, input_data, vector, size);
+			return;
+		}
+	}
 
 	if (vector.GetBuffer()) {
 		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));

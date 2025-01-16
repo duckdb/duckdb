@@ -301,6 +301,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		throw NotImplementedException("Unsupported compression type for default file system");
 	}
 
+	if (opener) {
+		Logger::Info("duckdb.FileSystem.LocalFileSystem.OpenFile", *opener, path_p);
+	}
+
 	flags.Verify();
 
 	int open_flags = 0;
@@ -837,6 +841,10 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 	flags.Verify();
 
+	if (opener) {
+		Logger::Info("duckdb.FileSystem.LocalFileSystem.OpenFile", *opener, path_p);
+	}
+
 	DWORD desired_access;
 	DWORD share_mode;
 	DWORD creation_disposition = OPEN_EXISTING;
@@ -845,16 +853,27 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	bool open_write = flags.OpenForWriting();
 	if (open_read && open_write) {
 		desired_access = GENERIC_READ | GENERIC_WRITE;
-		share_mode = 0;
 	} else if (open_read) {
 		desired_access = GENERIC_READ;
-		share_mode = FILE_SHARE_READ;
 	} else if (open_write) {
 		desired_access = GENERIC_WRITE;
-		share_mode = 0;
 	} else {
 		throw InternalException("READ, WRITE or both should be specified when opening a file");
 	}
+	switch (flags.Lock()) {
+	case FileLockType::NO_LOCK:
+		share_mode = FILE_SHARE_READ | FILE_SHARE_WRITE;
+		break;
+	case FileLockType::READ_LOCK:
+		share_mode = FILE_SHARE_READ;
+		break;
+	case FileLockType::WRITE_LOCK:
+		share_mode = 0;
+		break;
+	default:
+		throw InternalException("Unknown FileLockType");
+	}
+
 	if (open_write) {
 		if (flags.CreateFileIfNotExists()) {
 			creation_disposition = OPEN_ALWAYS;

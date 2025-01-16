@@ -19,8 +19,10 @@ public:
 
 public:
 	explicit InFilter(vector<Value> values);
+	InFilter(vector<Value> values, bool origin_is_hash_join);
 
 	vector<Value> values;
+	bool origin_is_hash_join;
 
 public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;

@@ -16,7 +16,9 @@ class WindowConstantAggregator : public WindowAggregator {
 public:
 	static bool CanAggregate(const BoundWindowExpression &wexpr);
 
-	WindowConstantAggregator(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared);
+	static BoundWindowExpression &RebindAggregate(ClientContext &context, BoundWindowExpression &wexpr);
+
+	WindowConstantAggregator(BoundWindowExpression &wexpr, WindowSharedExpressions &shared, ClientContext &context);
 	~WindowConstantAggregator() override {
 	}
 

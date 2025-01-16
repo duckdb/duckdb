@@ -11,6 +11,7 @@
 #include "duckdb/main/query_result.hpp"
 #include "duckdb/common/arrow/arrow_wrapper.hpp"
 #include "duckdb/main/chunk_scan_state.hpp"
+#include "duckdb/common/arrow/arrow_type_extension.hpp"
 
 namespace duckdb {
 class ArrowSchemaMetadata {
@@ -27,20 +28,18 @@ public:
 	unsafe_unique_array<char> SerializeMetadata() const;
 	//! If the arrow extension is set
 	bool HasExtension() const;
-	//! If this extension type is an 'arrow.opaque', and the internal type and vendors match.
-	bool IsNonCanonicalType(const string &type, const string &vendor = "DuckDB") const;
+
+	ArrowExtensionMetadata GetExtensionInfo(string format);
 	//! Get the extension name if set, otherwise returns empty
 	string GetExtensionName() const;
 	//! Key for encode of the extension type name
 	static constexpr const char *ARROW_EXTENSION_NAME = "ARROW:extension:name";
 	//! Key for encode of the metadata key
 	static constexpr const char *ARROW_METADATA_KEY = "ARROW:extension:metadata";
-	//! Arrow Extension for non-canonical types.
-	static constexpr const char *ARROW_EXTENSION_NON_CANONICAL = "arrow.opaque";
 	//! Creates the metadata based on an extension name
 	static ArrowSchemaMetadata ArrowCanonicalType(const string &extension_name);
 	//! Creates the metadata based on an extension name
-	static ArrowSchemaMetadata DuckDBInternalType(const string &type_name);
+	static ArrowSchemaMetadata NonCanonicalType(const string &type_name, const string &vendor_name);
 
 private:
 	//! The unordered map that holds the metadata
