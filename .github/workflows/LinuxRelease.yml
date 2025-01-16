@@ -63,13 +63,6 @@ jobs:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
-    - uses: ./.github/actions/manylinux_2014_setup
-      with:
-        ninja-build: 1
-        ccache: 0
-        python_alias: 1
-        aws-cli: 1
-
     - name: Install pytest
       run: |
         python3 -m pip install pytest
@@ -77,17 +70,17 @@ jobs:
     - name: Build
       shell: bash
       run: |
-        docker run \
-        -e CMAKE_BUILD_PARALLEL_LEVEL=2 \
-        -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE \
+        docker run                                                             \
+        -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
+        -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
         -e EXTENSION_CONFIGS='/duckdb/.github/config/bundled_extensions.cmake' \
-        -e ENABLE_EXTENSION_AUTOLOADING=1 \
-        -e ENABLE_EXTENSION_AUTOINSTALL=1 \
-        -e BUILD_BENCHMARK=1 \
-        -e FORCE_WARN_UNUSED=1 \
-        -e DUCKDB_RUN_PARALLEL_CSV_TESTS=1 \
-        -v.:/duckdb \
-        quay.io/pypa/manylinux2014_x86_64 \
+        -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
+        -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
+        -e BUILD_BENCHMARK=1                                                   \
+        -e FORCE_WARN_UNUSED=1                                                 \
+        -e DUCKDB_RUN_PARALLEL_CSV_TESTS=1                                     \
+        -v.:/duckdb                                                            \
+        quay.io/pypa/manylinux2014_x86_64                                      \
         bash -c "yum install -y perl-IPC-Cmd && make -C /duckdb"
 
     - name: Print platform
