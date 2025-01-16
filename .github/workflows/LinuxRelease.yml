@@ -417,32 +417,3 @@ jobs:
       run:  |
           python scripts/amalgamation.py --extended
           clang++ -std=c++17 -Isrc/amalgamation src/amalgamation/duckdb.cpp -emit-llvm -S -O0
-
- linux-release-32:
-    name: Linux (32 Bit)
-    runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-    needs: linux-extensions-64
-    env:
-      CC: /usr/bin/gcc
-      CXX: /usr/bin/g++
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - uses: ./.github/actions/manylinux_2014_setup
-        with:
-          ninja-build: 1
-          ccache: 1
-          glibc32: 1
-          gcc_4_8: 1 # Note: we run this job on the older gcc 4.8 toolchain
-
-      - name: Build
-        shell: bash
-        run: |
-          mkdir -p build/release
-          (cd build/release && cmake -G "Ninja" -DSTATIC_LIBCPP=1 -DCORE_EXTENSIONS='icu;parquet;fts;json' -DFORCE_32_BIT=1 -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build .)
