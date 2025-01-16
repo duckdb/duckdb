@@ -21,7 +21,7 @@ on:
       - "**"
       - "!main"
       - "!feature"
-      - '!v?.?-*'
+      - '!v*.*-*'
     paths-ignore:
       - "**"
       - "!.github/workflows/Pyodide.yml"

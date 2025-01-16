@@ -10,7 +10,7 @@ on:
       - '**'
       - '!main'
       - '!feature'
-      - '!v?.?-*'
+      - '!v*.*-*'
     paths-ignore:
       - '**.md'
       - '.github/patches/duckdb-wasm/**'

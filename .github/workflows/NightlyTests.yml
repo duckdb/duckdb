@@ -7,7 +7,7 @@ on:
       - '**'
       - '!main'
       - '!feature'
-      - '!v?.?-*'
+      - '!v*.*-*'
     paths-ignore:
       - '**'
       - '!.github/workflows/NightlyTests.yml'

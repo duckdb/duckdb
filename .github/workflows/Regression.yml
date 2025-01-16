@@ -14,7 +14,7 @@ on:
       - '**'
       - '!main'
       - '!feature'
-      - '!v?.?-*'
+      - '!v*.*-*'
     paths-ignore:
       - '**.md'
       - 'tools/**'
