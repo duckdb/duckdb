@@ -265,6 +265,10 @@ endif
 ifdef DEBUG_STACKTRACE
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_STACKTRACE=1
 endif
+ifeq (${NATIVE_ARCH}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DNATIVE_ARCH=1
+endif
+
 
 # Optional overrides
 ifneq (${STANDARD_VECTOR_SIZE}, )

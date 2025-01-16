@@ -778,12 +778,13 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 			FilterPropagateResult prune_result;
 			// TODO we might not have stats but STILL a bloom filter so move this up
 			// check the bloom filter if present
-			if (!column_reader.Type().IsNested() &&
+			bool is_generated_column = column_reader.FileIdx() >= group.columns.size();
+			if (!column_reader.Type().IsNested() && !is_generated_column &&
 			    ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
 			    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[column_reader.FileIdx()].meta_data,
 			                                                *state.thrift_file_proto, allocator)) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR &&
+			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column &&
 			           group.columns[column_reader.FileIdx()].meta_data.statistics.__isset.min_value &&
 			           group.columns[column_reader.FileIdx()].meta_data.statistics.__isset.max_value) {
 
