@@ -71,6 +71,7 @@ jobs:
       shell: bash
       run: |
         docker run                                                             \
+        -v.:/duckdb                                                            \
         -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
         -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
         -e EXTENSION_CONFIGS='/duckdb/.github/config/bundled_extensions.cmake' \
@@ -79,7 +80,6 @@ jobs:
         -e BUILD_BENCHMARK=1                                                   \
         -e FORCE_WARN_UNUSED=1                                                 \
         -e DUCKDB_RUN_PARALLEL_CSV_TESTS=1                                     \
-        -v.:/duckdb                                                            \
         quay.io/pypa/manylinux2014_x86_64                                      \
         bash -c "yum install -y perl-IPC-Cmd && make -C /duckdb"
 
@@ -134,18 +134,7 @@ jobs:
    name: Linux (aarch64)
    runs-on: ubuntu-latest
    #needs: linux-extensions-64
-   container: ubuntu:18.04
    #if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-   env:
-     EXTENSION_CONFIGS: '${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake'
-     ENABLE_EXTENSION_AUTOLOADING: 1
-     ENABLE_EXTENSION_AUTOINSTALL: 1
-     GEN: ninja
-     BUILD_BENCHMARK: 1
-     TREAT_WARNINGS_AS_ERRORS: 1
-     FORCE_WARN_UNUSED: 1
-     DUCKDB_PLATFORM: linux_arm64
-     ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
    steps:
      - uses: actions/checkout@v3
@@ -153,15 +142,22 @@ jobs:
          fetch-depth: 0
          ref: ${{ inputs.git_ref }}
 
-     - uses: ./.github/actions/ubuntu_18_setup
-       with:
-        ccache: 1
-        aarch64_cross_compile: 1
-        git_ref: ${{ inputs.git_ref }}
-
      - name: Build
        shell: bash
-       run: CC=aarch64-linux-gnu-gcc CXX=aarch64-linux-gnu-g++ make
+       run: |
+         docker run                                                             \
+         -v.:/duckdb                                                            \
+         -e CC=aarch64-linux-gnu-gcc                                            \
+         -e CXX=aarch64-linux-gnu-g++                                           \
+         -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
+         -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
+         -e EXTENSION_CONFIGS='/duckdb/.github/config/bundled_extensions.cmake' \
+         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
+         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
+         -e FORCE_WARN_UNUSED=1                                                 \
+         -e DUCKDB_PLATFORM=linux_arm64                                         \
+         ubuntu:18.04                                                           \
+         bash -c "apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu && make -C /duckdb"
 
      - name: Deploy
        shell: bash
