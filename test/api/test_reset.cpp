@@ -51,7 +51,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"default_collation", {"nocase"}},
 	    {"default_order", {"desc"}},
 	    {"default_null_order", {"nulls_first"}},
-	    {"disabled_compression_methods", {"rle"}},
+	    {"disabled_compression_methods", {"RLE"}},
 	    {"disabled_optimizers", {"extension"}},
 	    {"debug_force_external", {Value(true)}},
 	    {"old_implicit_casting", {Value(true)}},
