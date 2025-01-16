@@ -157,7 +157,7 @@ jobs:
          -e FORCE_WARN_UNUSED=1                                                 \
          -e DUCKDB_PLATFORM=linux_arm64                                         \
          ubuntu:18.04                                                           \
-         bash -c "apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu && make -C /duckdb"
+         bash -c "apt-get update && apt-get install -y -qq gcc-aarch64-linux-gnu g++-aarch64-linux-gnu && make -C /duckdb"
 
      - name: Deploy
        shell: bash
