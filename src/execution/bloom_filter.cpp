@@ -150,8 +150,8 @@ size_t BloomFilter::ProbeWithPrecomputedHashes(const SelectionVector *&current_s
     for (idx_t i = 0; i < num_hash_functions; i++) {
         sel_tmp_count = ProbeInternal(i, precomputed_hashes, sel_tmp, sel_tmp_count);
         if (sel_tmp_count == 0) {
-            num_filtered_keys += count;
-            return 0;
+            // All keys have been removed. No need to continue with further rounds.
+            break;
         }
     }
 
