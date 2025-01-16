@@ -159,34 +159,8 @@ jobs:
           -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
           -e FORCE_WARN_UNUSED=1                                                 \
           -e DUCKDB_PLATFORM=linux_arm64                                         \
-          quay.io/pypa/manylinux2014_x86_64                                      \
-          bash -c "yum install -y perl-IPC-Cmd && make -C /duckdb"
-
-      - name: Print platform
-        shell: bash
-        run: ./build/release/duckdb -c "PRAGMA platform;"
-
-      - name: Test
-        shell: bash
-        if: ${{ inputs.skip_tests != 'true' }}
-        run: |
-          make
-          python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
-
-      - name: Tools Tests
-        shell: bash
-        if: ${{ inputs.skip_tests != 'true' }}
-        run: |
-          python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
-
-      - name: Examples
-        shell: bash
-        if: ${{ inputs.skip_tests != 'true' }}
-        run: |
-          (cd examples/embedded-c; make)
-          (cd examples/embedded-c++; make)
-          build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
-          build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
+          quay.io/pypa/manylinux2014_aarch64                                     \
+          make -C /duckdb
 
       - name: Deploy
         shell: bash
