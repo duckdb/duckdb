@@ -17,11 +17,10 @@ on:
       skip_tests:
         type: string
   push:
-    branches:
-      - "**"
-      - "!main"
-      - "!feature"
-      - '!v*.*-*'
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
     paths-ignore:
       - "**"
       - "!.github/workflows/Pyodide.yml"

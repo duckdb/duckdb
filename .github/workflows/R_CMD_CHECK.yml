@@ -3,11 +3,10 @@ on:
   workflow_dispatch:
   repository_dispatch:
   push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
-      - '!v*.*-*'
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
     paths-ignore:
       - '**.md'
       - 'examples/**'

@@ -18,11 +18,10 @@ on:
         type: string
   repository_dispatch:
   push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
-      - '!v*.*-*'
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
     paths-ignore:
       - '**'
       - '!.github/workflows/R.yml'
