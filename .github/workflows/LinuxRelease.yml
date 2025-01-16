@@ -72,6 +72,7 @@ jobs:
       run: |
         docker run                                                             \
         -v.:/duckdb                                                            \
+        -e DUCKDB_PLATFORM=linux_amd64                                         \
         -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
         -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
         -e EXTENSION_CONFIGS='/duckdb/.github/config/bundled_extensions.cmake' \
@@ -81,7 +82,7 @@ jobs:
         -e FORCE_WARN_UNUSED=1                                                 \
         -e DUCKDB_RUN_PARALLEL_CSV_TESTS=1                                     \
         quay.io/pypa/manylinux2014_x86_64                                      \
-        bash -c "yum install -y perl-IPC-Cmd && make -C /duckdb"
+        bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory /duckdb && make -C /duckdb"
 
     - name: Print platform
       shell: bash
@@ -156,7 +157,7 @@ jobs:
          -e FORCE_WARN_UNUSED=1                                                 \
          -e DUCKDB_PLATFORM=linux_arm64                                         \
          ubuntu:18.04                                                           \
-         bash -c "/duckdb/scripts/setup_ubuntu1804.sh && make -C /duckdb"
+         bash -c "/duckdb/scripts/setup_ubuntu1804.sh && git config --global --add safe.directory /duckdb && make -C /duckdb"
 
      - name: Deploy
        shell: bash

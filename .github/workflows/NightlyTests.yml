@@ -201,7 +201,8 @@ jobs:
           quay.io/pypa/manylinux2014_x86_64                                    \
           bash -c "yum install -y gcc-c++ && make -C /duckdb unit"
 
-  linux-release-32:
+
+  linux-compile-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2028_x86_64
