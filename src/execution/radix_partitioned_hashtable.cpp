@@ -281,12 +281,12 @@ idx_t RadixHTConfig::GetRadixBits() const {
 }
 
 void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external) {
-	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
+	if (sink_radix_bits > radix_bits_p || sink.any_combined) {
 		return;
 	}
 
 	auto guard = sink.Lock();
-	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
+	if (sink_radix_bits > radix_bits_p || sink.any_combined) {
 		return;
 	}
 

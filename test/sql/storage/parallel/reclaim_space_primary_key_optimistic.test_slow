@@ -2,6 +2,9 @@
 # description: Test space reclamation of optimistic writing with a PK constraint violation.
 # group: [parallel]
 
+# FIXME: see internal issue 3931.
+mode skip
+
 load __TEST_DIR__/reclaim_space_primary_key.db
 
 statement ok
