@@ -91,7 +91,6 @@ jobs:
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
       run: |
-        make
         python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
 
     - name: Tools Tests
