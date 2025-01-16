@@ -638,7 +638,6 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 
 	// generate the OR filter
 	auto in_filter = make_uniq<InFilter>(std::move(in_list));
-	in_filter->origin_is_hash_join = true;
 
 	// we push the OR filter as an OptionalFilter so that we can use it for zonemap pruning only
 	// the IN-list is expensive to execute otherwise
