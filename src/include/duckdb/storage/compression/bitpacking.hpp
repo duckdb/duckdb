@@ -18,17 +18,4 @@ enum class BitpackingMode : uint8_t { INVALID, AUTO, CONSTANT, CONSTANT_DELTA, D
 BitpackingMode BitpackingModeFromString(const string &str);
 string BitpackingModeToString(const BitpackingMode &mode);
 
-class Serializer;
-
-struct SerializedBitpackingSegmentState : public ColumnSegmentState {
-public:
-	SerializedBitpackingSegmentState();
-	explicit SerializedBitpackingSegmentState(map<BitpackingMode, idx_t> counts_p);
-
-public:
-	void Serialize(Serializer &serializer) const override;
-
-	map<BitpackingMode, idx_t> counts;
-};
-
 } // namespace duckdb
