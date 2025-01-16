@@ -47,9 +47,7 @@ class DeleteLocalState : public LocalSinkState {
 public:
 	DeleteLocalState(ClientContext &context, TableCatalogEntry &table,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
-		const auto &types = table.GetTypes();
-		auto initialize = vector<bool>(types.size(), false);
-		delete_chunk.Initialize(Allocator::Get(context), types, initialize);
+		delete_chunk.Initialize(Allocator::Get(context), table.GetTypes());
 		auto &storage = table.GetStorage();
 		delete_state = storage.InitializeDelete(table, context, bound_constraints);
 	}
