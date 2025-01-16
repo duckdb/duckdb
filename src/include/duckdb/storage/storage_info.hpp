@@ -54,8 +54,10 @@ struct Storage {
 	static void VerifyBlockAllocSize(const idx_t block_alloc_size);
 };
 
-//! The version number of the database storage format
+//! The version number default, lower and upper bounds of the database storage format
 extern const uint64_t VERSION_NUMBER;
+extern const uint64_t VERSION_NUMBER_LOWER;
+extern const uint64_t VERSION_NUMBER_UPPER;
 string GetDuckDBVersion(idx_t version_number);
 optional_idx GetStorageVersion(const char *version_string);
 optional_idx GetSerializationVersion(const char *version_string);
