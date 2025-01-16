@@ -1146,12 +1146,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			for (auto &kv : dtype_dict) {
 				shared_ptr<DuckDBPyType> sql_type;
 				if (!py::try_cast(kv.second, sql_type)) {
-					connection.context->RunFunctionInTransaction([&]() {
-						sql_type = make_shared_ptr<DuckDBPyType>(
-						    TransformStringToLogicalType(py::str(kv.second), *connection.context));
-					});
+					struct_fields.emplace_back(py::str(kv.first), py::str(kv.second));
+				} else {
+					struct_fields.emplace_back(py::str(kv.first), Value(sql_type->ToString()));
 				}
-				struct_fields.emplace_back(py::str(kv.first), Value(sql_type->ToString()));
 			}
 			auto dtype_struct = Value::STRUCT(std::move(struct_fields));
 			bind_parameters["dtypes"] = std::move(dtype_struct);
@@ -1161,12 +1159,10 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			for (auto &child : dtype_list) {
 				shared_ptr<DuckDBPyType> sql_type;
 				if (!py::try_cast(child, sql_type)) {
-					connection.context->RunFunctionInTransaction([&]() {
-						sql_type = make_shared_ptr<DuckDBPyType>(
-						    TransformStringToLogicalType(py::str(child), *connection.context));
-					});
+					list_values.push_back(Value(py::str(child)));
+				} else {
+					list_values.push_back(sql_type->ToString());
 				}
-				list_values.push_back(sql_type->ToString());
 			}
 			bind_parameters["dtypes"] = Value::LIST(LogicalType::VARCHAR, std::move(list_values));
 		} else {
