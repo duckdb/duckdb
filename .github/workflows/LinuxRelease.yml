@@ -76,7 +76,7 @@ jobs:
         -e DUCKDB_PLATFORM=linux_amd64                                         \
         -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
         -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
-        -e EXTENSION_CONFIGS='$PWD/.github/config/bundled_extensions.cmake'    \
+        -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
         -e BUILD_BENCHMARK=1                                                   \
