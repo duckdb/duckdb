@@ -372,7 +372,7 @@ void CSVSniffer::SniffTypes(DataChunk &data_chunk, CSVStateMachine &state_machin
 				                 !null_mask.RowIsValid(row_idx), state_machine.options.decimal_separator[0])) {
 					break;
 				}
-
+				D_ASSERT(cur_top_candidate.id() == LogicalTypeId::VARCHAR || col_type_candidates.size() > 1);
 				if (row_idx != start_idx_detection &&
 				    (cur_top_candidate == LogicalType::BOOLEAN || cur_top_candidate == LogicalType::DATE ||
 				     cur_top_candidate == LogicalType::TIME ||

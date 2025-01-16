@@ -5,12 +5,20 @@
 statement ok
 pragma enable_verification
 
+
 statement error
 copy (
 select '2021-05-25 04:55:03.382494 UTC'::timestamp as ts, '2021-05-25 04:55:03.382494 UTC'::timestamptz as tstz
 ) to '__TEST_DIR__/timestamps.csv' ( timestampformat '%A');
 ----
 No function matches the given name and argument types
+
+require icu
+
+require no_extension_autoloading "FIXME: In CSV value conversion we don't autoload ICU"
+
+statement ok
+SET TimeZone='UTC'
 
 # If we set to timestamptz it works
 query II
@@ -21,6 +29,9 @@ FROM read_csv('data/csv/timestamp_timezone.csv', columns = {'time':'timestamptz'
 2020-01-01 00:00:00+00	midnight UTC +00
 2020-01-01 00:00:00+00	midnight UTC Z
 2019-12-31 16:00:00+00	midnight in Taipei
+2019-12-31 18:30:00+00	Asia/Kolkata
+2019-12-31 10:15:00+00	Pacific/Chatham
+2020-01-01 03:30:00+00	Canada/Newfoundland
 
 query II
 FROM read_csv('data/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEAN', 'BIGINT', 'DOUBLE', 'TIME', 'DATE', 'TIMESTAMP','TIMESTAMPTZ', 'VARCHAR'])
@@ -30,6 +41,10 @@ FROM read_csv('data/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEA
 2020-01-01 00:00:00+00	midnight UTC +00
 2020-01-01 00:00:00+00	midnight UTC Z
 2019-12-31 16:00:00+00	midnight in Taipei
+2019-12-31 18:30:00+00	Asia/Kolkata
+2019-12-31 10:15:00+00	Pacific/Chatham
+2020-01-01 03:30:00+00	Canada/Newfoundland
+
 
 query II
 FROM read_csv('data/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEAN', 'BIGINT', 'DOUBLE', 'TIME', 'DATE', 'TIMESTAMPTZ', 'VARCHAR'])
@@ -39,6 +54,9 @@ FROM read_csv('data/csv/timestamp_timezone.csv', auto_type_candidates = ['BOOLEA
 2020-01-01 00:00:00+00	midnight UTC +00
 2020-01-01 00:00:00+00	midnight UTC Z
 2019-12-31 16:00:00+00	midnight in Taipei
+2019-12-31 18:30:00+00	Asia/Kolkata
+2019-12-31 10:15:00+00	Pacific/Chatham
+2020-01-01 03:30:00+00	Canada/Newfoundland
 
 query I
 SELECT columns FROM sniff_csv('data/csv/timestamp_timezone.csv')
@@ -53,13 +71,10 @@ FROM 'data/csv/timestamp_timezone.csv'
 2020-01-01 00:00:00+00	midnight UTC +00
 2020-01-01 00:00:00+00	midnight UTC Z
 2019-12-31 16:00:00+00	midnight in Taipei
+2019-12-31 18:30:00+00	Asia/Kolkata
+2019-12-31 10:15:00+00	Pacific/Chatham
+2020-01-01 03:30:00+00	Canada/Newfoundland
 
-require icu
-
-require no_extension_autoloading "FIXME: In CSV value conversion we don't autoload ICU"
-
-statement ok
-SET TimeZone='UTC'
 
 query I
 SELECT columns FROM sniff_csv('data/csv/timestamp_with_tz.csv')
