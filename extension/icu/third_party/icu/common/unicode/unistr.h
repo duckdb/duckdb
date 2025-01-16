@@ -324,7 +324,7 @@ public:
    * FALSE otherwise.
    * @stable ICU 2.0
    */
-  inline UBool operator== (const UnicodeString& text) const;
+  inline bool operator== (const UnicodeString& text) const;
 
   /**
    * Inequality operator. Performs only bitwise comparison.
@@ -333,7 +333,7 @@ public:
    * TRUE otherwise.
    * @stable ICU 2.0
    */
-  inline UBool operator!= (const UnicodeString& text) const;
+  inline bool operator!= (const UnicodeString& text) const;
 
   /**
    * Greater than operator. Performs only bitwise comparison.
@@ -342,7 +342,7 @@ public:
    * greater than the characters in `text`, FALSE otherwise
    * @stable ICU 2.0
    */
-  inline UBool operator> (const UnicodeString& text) const;
+  inline bool operator> (const UnicodeString& text) const;
 
   /**
    * Less than operator. Performs only bitwise comparison.
@@ -351,7 +351,7 @@ public:
    * less than the characters in `text`, FALSE otherwise
    * @stable ICU 2.0
    */
-  inline UBool operator< (const UnicodeString& text) const;
+  inline bool operator< (const UnicodeString& text) const;
 
   /**
    * Greater than or equal operator. Performs only bitwise comparison.
@@ -360,7 +360,7 @@ public:
    * greater than or equal to the characters in `text`, FALSE otherwise
    * @stable ICU 2.0
    */
-  inline UBool operator>= (const UnicodeString& text) const;
+  inline bool operator>= (const UnicodeString& text) const;
 
   /**
    * Less than or equal operator. Performs only bitwise comparison.
@@ -369,7 +369,7 @@ public:
    * less than or equal to the characters in `text`, FALSE otherwise
    * @stable ICU 2.0
    */
-  inline UBool operator<= (const UnicodeString& text) const;
+  inline bool operator<= (const UnicodeString& text) const;
 
   /**
    * Compare the characters bitwise in this UnicodeString to
@@ -3946,7 +3946,7 @@ UnicodeString::doCompare(int32_t start,
   }
 }
 
-inline UBool
+inline bool
 UnicodeString::operator== (const UnicodeString& text) const
 {
   if(isBogus()) {
@@ -3957,23 +3957,23 @@ UnicodeString::operator== (const UnicodeString& text) const
   }
 }
 
-inline UBool
+inline bool
 UnicodeString::operator!= (const UnicodeString& text) const
 { return (! operator==(text)); }
 
-inline UBool
+inline bool
 UnicodeString::operator> (const UnicodeString& text) const
 { return doCompare(0, length(), text, 0, text.length()) == 1; }
 
-inline UBool
+inline bool
 UnicodeString::operator< (const UnicodeString& text) const
 { return doCompare(0, length(), text, 0, text.length()) == -1; }
 
-inline UBool
+inline bool
 UnicodeString::operator>= (const UnicodeString& text) const
 { return doCompare(0, length(), text, 0, text.length()) != -1; }
 
-inline UBool
+inline bool
 UnicodeString::operator<= (const UnicodeString& text) const
 { return doCompare(0, length(), text, 0, text.length()) != 1; }
 

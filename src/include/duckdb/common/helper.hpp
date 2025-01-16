@@ -195,6 +195,12 @@ static inline T AlignValue(T n) {
 	return ((n + (val - 1)) / val) * val;
 }
 
+template<uintptr_t alignment>
+inline data_ptr_t AlignValue(data_ptr_t addr) {
+	static_assert((alignment & (alignment - 1)) == 0, "'alignment' has to be a power of 2");
+	return reinterpret_cast<data_ptr_t>((reinterpret_cast<uintptr_t>(addr) + alignment - 1) & ~(alignment - 1));
+}
+
 template<class T, T val=8>
 constexpr inline T AlignValueFloor(T n) {
 	return (n / val) * val;
