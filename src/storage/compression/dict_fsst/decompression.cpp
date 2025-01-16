@@ -41,7 +41,7 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(baseptr);
 	auto string_lengths_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->string_lengths_offset));
 	dict_count = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_count));
-	current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->bitpacking_width)));
+	current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->dictionary_indices_width)));
 	string_lengths_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->string_lengths_width)));
 	string_lengths.resize(AlignValue<uint32_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(dict_count));
 	auto string_lengths_size = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
@@ -52,7 +52,7 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
 	}
 	string_lengths_ptr = baseptr + string_lengths_offset;
-	base_data = data_ptr_cast(baseptr + DictFSSTCompression::DICTIONARY_HEADER_SIZE);
+	base_data = data_ptr_cast(baseptr + sizeof(dict_fsst_compression_header_t));
 
 	block_size = segment.GetBlockManager().GetBlockSize();
 

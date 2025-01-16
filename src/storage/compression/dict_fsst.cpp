@@ -88,19 +88,17 @@ idx_t DictFSSTCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<CompressionState> DictFSSTCompressionStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                                          unique_ptr<AnalyzeState> state) {
-	return make_uniq<DictFSSTCompressionCompressState>(
-	    checkpoint_data, unique_ptr_cast<AnalyzeState, DictFSSTAnalyzeState>(std::move(state)));
+	return make_uniq<DictFSSTCompressionState>(checkpoint_data,
+	                                           unique_ptr_cast<AnalyzeState, DictFSSTAnalyzeState>(std::move(state)));
 }
 
 void DictFSSTCompressionStorage::Compress(CompressionState &state_p, Vector &scan_vector, idx_t count) {
-	auto &state = state_p.Cast<DictFSSTCompressionCompressState>();
-	auto res = state.UpdateState(scan_vector, count);
-	(void)(res);
-	D_ASSERT(res);
+	auto &state = state_p.Cast<DictFSSTCompressionState>();
+	state.Compress(scan_vector, count);
 }
 
 void DictFSSTCompressionStorage::FinalizeCompress(CompressionState &state_p) {
-	auto &state = state_p.Cast<DictFSSTCompressionCompressState>();
+	auto &state = state_p.Cast<DictFSSTCompressionState>();
 	state.Flush(true);
 }
 

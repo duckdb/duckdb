@@ -20,22 +20,34 @@ namespace dict_fsst {
 // scanning the whole dictionary at once and then scanning the selection buffer for each emitted vector. Secondly, it
 // allows for efficient bitpacking compression as the selection values should remain relatively small.
 
+struct EncodedInput {
+	//! The index at which we started encoding the input
+	//  in case we switch to FSST_ONLY in the middle, we can avoid encoding the previous input strings
+	idx_t offset;
+	//! If the append_mode is FSST_ONLY we will encode all input
+	//  this memory is owned by a reusable buffer stored in the state
+	vector<string_t> data;
+};
+
 //===--------------------------------------------------------------------===//
 // Compress
 //===--------------------------------------------------------------------===//
-struct DictFSSTCompressionCompressState : public CompressionState {
+struct DictFSSTCompressionState : public CompressionState {
 public:
-	DictFSSTCompressionCompressState(ColumnDataCheckpointData &checkpoint_data_p,
-	                                 unique_ptr<DictFSSTAnalyzeState> &&state);
-	~DictFSSTCompressionCompressState() override;
+	DictFSSTCompressionState(ColumnDataCheckpointData &checkpoint_data_p, unique_ptr<DictFSSTAnalyzeState> &&state);
+	~DictFSSTCompressionState() override;
 
 public:
 	void CreateEmptySegment(idx_t row_start);
 	idx_t Finalize();
 
+	void FlushEncodingBuffer();
+	DictionaryAppendState SwitchAppendState();
+
+	bool CompressInternal(UnifiedVectorFormat &vector_format, EncodedInput &encoded_input, idx_t i, idx_t count);
 	void Compress(Vector &scan_vector, idx_t count);
 	void FinalizeCompress();
-	void Flush();
+	void Flush(bool final);
 
 public:
 	ColumnDataCheckpointData &checkpoint_data;
@@ -47,8 +59,7 @@ public:
 	//! Offset at which to write the next dictionary string
 	idx_t dictionary_offset = 0;
 
-public:
-	idx_t string_lengths_space;
+	idx_t string_lengths_space = 0;
 	vector<uint32_t> string_lengths;
 	idx_t dict_count = 0;
 	bitpacking_width_t string_lengths_width = 0;
@@ -58,7 +69,7 @@ public:
 	bitpacking_width_t real_string_lengths_width = 0;
 	uint32_t max_string_length = 0;
 
-	idx_t dictionary_indices_space;
+	idx_t dictionary_indices_space = 0;
 	vector<uint32_t> dictionary_indices;
 	bitpacking_width_t dictionary_indices_width = 0;
 	//! uint32_t max_dictionary_index; (this is 'dict_count')
@@ -67,6 +78,7 @@ public:
 	string_map_t<uint32_t> current_string_map;
 	//! strings added to the dictionary waiting to be encoded
 	vector<string_t> dictionary_encoding_buffer;
+	idx_t to_encode_string_sum = 0;
 	//! for DICT_FSST we store uncompressed strings in the 'current_string_map', this owns that memory
 	StringHeap uncompressed_dictionary_copy;
 
@@ -74,15 +86,15 @@ public:
 	unsafe_unique_array<unsigned char> encoding_buffer;
 	idx_t encoding_buffer_size = 0;
 
-public:
-	void *encoder = nullptr;
-	idx_t symbol_table_size = DConstants::INVALID_INDEX;
-	DictionaryAppendState append_state = DictionaryAppendState::REGULAR;
-	bool all_unique = true;
-
-public:
 	idx_t tuple_count = 0;
 	unique_ptr<DictFSSTAnalyzeState> analyze;
+	bool all_unique = true;
+
+private:
+	void *encoder = nullptr;
+	unsafe_unique_array<unsigned char> fsst_serialized_symbol_table;
+	idx_t symbol_table_size = DConstants::INVALID_INDEX;
+	DictionaryAppendState append_state = DictionaryAppendState::REGULAR;
 };
 
 } // namespace dict_fsst
