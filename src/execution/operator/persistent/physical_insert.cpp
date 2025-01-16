@@ -233,6 +233,7 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, Vecto
 	auto &do_update_condition = op.do_update_condition;
 	auto &set_types = op.set_types;
 	auto &set_expressions = op.set_expressions;
+
 	// Check the optional condition for the DO UPDATE clause, to filter which rows will be updated
 	if (do_update_condition) {
 		DataChunk do_update_filter_result;
@@ -259,7 +260,14 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, Vecto
 		}
 	}
 
-	// Execute the SET expressions
+	if (chunk.size() == 0) {
+		auto initialize = vector<bool>(set_types.size(), false);
+		update_chunk.Initialize(context.client, set_types, initialize, chunk.size());
+		update_chunk.SetCardinality(chunk);
+		return;
+	}
+
+	// Execute the SET expressions.
 	update_chunk.Initialize(context.client, set_types, chunk.size());
 	ExpressionExecutor executor(context.client, set_expressions);
 	executor.Execute(chunk, update_chunk);
