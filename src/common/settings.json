@@ -266,6 +266,13 @@
         "custom_implementation": true
     },
     {
+        "name": "disabled_compression_methods",
+        "description": "Disable a specific set of compression methods (comma separated)",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "disabled_filesystems",
         "description": "Disable specific file systems preventing access (e.g. LocalFileSystem)",
         "type": "VARCHAR",
