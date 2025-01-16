@@ -51,10 +51,15 @@ public:
 
 	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options);
 
+public:
 	void SetStart();
+	void SetNamesAndTypes(const vector<string> &names, const vector<LogicalType> &types);
+
+public:
 	const string &GetFileName() const;
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
+	const vector<MultiFileReaderColumnDefinition> &GetColumns();
 	void InitializeProjection();
 	void Finish();
 
@@ -96,8 +101,6 @@ public:
 	//! Whether or not this is an on-disk file
 	bool on_disk_file = true;
 
-	vector<string> names;
-	vector<LogicalType> types;
 	MultiFileReaderData reader_data;
 
 	vector<LogicalType> file_types;
@@ -110,5 +113,10 @@ public:
 	CSVReaderOptions options;
 
 	CSVIterator start_iterator;
+
+private:
+	vector<string> names;
+	vector<LogicalType> types;
+	vector<MultiFileReaderColumnDefinition> columns;
 };
 } // namespace duckdb

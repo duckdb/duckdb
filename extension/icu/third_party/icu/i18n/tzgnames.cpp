@@ -1287,7 +1287,7 @@ TimeZoneGenericNames::createInstance(const Locale& locale, UErrorCode& status) {
     return instance;
 }
 
-UBool
+bool
 TimeZoneGenericNames::operator==(const TimeZoneGenericNames& other) const {
     // Just compare if the other object also use the same
     // ref entry

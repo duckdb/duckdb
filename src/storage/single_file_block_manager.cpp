@@ -4,6 +4,7 @@
 #include "duckdb/common/checksum.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/serializer/memory_stream.hpp"
+#include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -59,27 +60,25 @@ MainHeader MainHeader::Read(ReadStream &source) {
 	}
 	header.version_number = source.Read<uint64_t>();
 	// check the version number
-	if (header.version_number != VERSION_NUMBER) {
+	if (header.version_number < VERSION_NUMBER_LOWER || header.version_number > VERSION_NUMBER_UPPER) {
 		auto version = GetDuckDBVersion(header.version_number);
 		string version_text;
 		if (!version.empty()) {
 			// known version
 			version_text = "DuckDB version " + string(version);
 		} else {
-			version_text = string("an ") + (VERSION_NUMBER > header.version_number ? "older development" : "newer") +
+			version_text = string("an ") +
+			               (VERSION_NUMBER_UPPER > header.version_number ? "older development" : "newer") +
 			               string(" version of DuckDB");
 		}
 		throw IOException(
-		    "Trying to read a database file with version number %lld, but we can only read version %lld.\n"
+		    "Trying to read a database file with version number %lld, but we can only read versions between %lld and "
+		    "%lld.\n"
 		    "The database file was created with %s.\n\n"
-		    "The storage of DuckDB is not yet stable; newer versions of DuckDB cannot read old database files and "
-		    "vice versa.\n"
-		    "The storage will be stabilized when version 1.0 releases.\n\n"
-		    "For now, we recommend that you load the database file in a supported version of DuckDB, and use the "
-		    "EXPORT DATABASE command "
-		    "followed by IMPORT DATABASE on the current version of DuckDB.\n\n"
-		    "See the storage page for more information: https://duckdb.org/internals/storage",
-		    header.version_number, VERSION_NUMBER, version_text);
+		    "Newer DuckDB version might introduce backward incompatible changes (possibly guarded by compatibility "
+		    "settings)"
+		    "See the storage page for migration strategy and more informations: https://duckdb.org/internals/storage",
+		    header.version_number, VERSION_NUMBER_LOWER, VERSION_NUMBER_UPPER, version_text);
 	}
 	// read the flags
 	for (idx_t i = 0; i < FLAG_COUNT; i++) {
@@ -166,6 +165,10 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 	return result;
 }
 
+static void AddStorageVersion(AttachedDatabase &db, const uint64_t version) {
+	db.tags["storage_version"] = std::to_string(version);
+}
+
 void SingleFileBlockManager::CreateNewDatabase() {
 	auto flags = GetFileFlags(true);
 
@@ -180,6 +183,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	MainHeader main_header;
 	main_header.version_number = VERSION_NUMBER;
 	memset(main_header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
+	AddStorageVersion(db, main_header.version_number);
 
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	// now write the header to the file
@@ -235,7 +239,8 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	MainHeader::CheckMagicBytes(*handle);
 	// otherwise, we check the metadata of the file
 	ReadAndChecksum(header_buffer, 0);
-	DeserializeHeaderStructure<MainHeader>(header_buffer.buffer);
+	MainHeader main_header = DeserializeHeaderStructure<MainHeader>(header_buffer.buffer);
+	AddStorageVersion(db, main_header.version_number);
 
 	// read the database headers from disk
 	DatabaseHeader h1;
