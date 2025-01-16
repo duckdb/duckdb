@@ -156,8 +156,8 @@ jobs:
          -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
          -e FORCE_WARN_UNUSED=1                                                 \
          -e DUCKDB_PLATFORM=linux_arm64                                         \
-         ubuntu:18.04                                                           \
-         bash -c "apt-get update -y -qq && apt-get install -y -qq make cmake gcc-aarch64-linux-gnu g++-aarch64-linux-gnu make cmake && make -C /duckdb"
+         ubuntu:20.04                                                           \
+         bash -c "apt-get update -y -qq && apt-get install -y -qq make cmake git gcc-aarch64-linux-gnu g++-aarch64-linux-gnu make cmake && make -C /duckdb"
 
      - name: Deploy
        shell: bash
