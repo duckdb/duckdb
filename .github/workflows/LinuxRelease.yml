@@ -70,6 +70,8 @@ jobs:
     - name: Build
       shell: bash
       run: |
+        echo `pwd`
+        ls -la `pwd`
         docker run                                                             \
         -v`pwd`:`pwd`                                                          \
         -e DUCKDB_PLATFORM=linux_amd64                                         \
