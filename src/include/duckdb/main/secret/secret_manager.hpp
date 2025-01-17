@@ -119,9 +119,9 @@ public:
 	                                                  unique_ptr<const BaseSecret> secret, OnCreateConflict on_conflict,
 	                                                  SecretPersistType persist_type, const string &storage = "");
 	//! Create a secret from a CreateSecretInfo
-	DUCKDB_API unique_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInfo &info);
+	DUCKDB_API unique_ptr<SecretEntry> CreateSecret(ClientContext &context, const CreateSecretInput &info);
 	//! The Bind for create secret is done by the secret manager
-	DUCKDB_API BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretInfo &info);
+	DUCKDB_API BoundStatement BindCreateSecret(CatalogTransaction transaction, CreateSecretInput &info);
 	//! Lookup the best matching secret by matching the secret scopes to the path
 	DUCKDB_API SecretMatch LookupSecret(CatalogTransaction transaction, const string &path, const string &type);
 	//! Get a secret by name, optionally from a specific storage

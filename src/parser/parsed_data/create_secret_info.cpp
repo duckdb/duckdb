@@ -1,5 +1,5 @@
 #include "duckdb/parser/parsed_data/create_secret_info.hpp"
-
+#include "duckdb/parser/parsed_expression.hpp"
 #include "duckdb/parser/parsed_data/create_info.hpp"
 
 namespace duckdb {
@@ -8,6 +8,8 @@ CreateSecretInfo::CreateSecretInfo(OnCreateConflict on_conflict, SecretPersistTy
     : CreateInfo(CatalogType::SECRET_ENTRY), on_conflict(on_conflict), persist_type(persist_type), options() {
 }
 
+CreateSecretInfo::~CreateSecretInfo() {}
+
 unique_ptr<CreateInfo> CreateSecretInfo::Copy() const {
 	auto result = make_uniq<CreateSecretInfo>(on_conflict, persist_type);
 	result->type = type;
@@ -15,7 +17,9 @@ unique_ptr<CreateInfo> CreateSecretInfo::Copy() const {
 	result->provider = provider;
 	result->name = name;
 	result->scope = scope;
-	result->options = options;
+	for (const auto & option : options) {
+		result->options.insert({option.first, option.second->Copy()});
+	}
 	return std::move(result);
 }
 

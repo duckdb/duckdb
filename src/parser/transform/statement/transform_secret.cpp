@@ -6,6 +6,16 @@
 
 namespace duckdb {
 
+static Value GetConstantExpressionValue(ParsedExpression &expr, const string& field) {
+	if (expr.type == ExpressionType::VALUE_CONSTANT) {
+		return expr.Cast<ConstantExpression>().value;
+	}
+	if (expr.type == ExpressionType::COLUMN_REF) {
+		return expr.Cast<ColumnRefExpression>().GetName();
+	}
+	throw InvalidInputException("Unsupported expression passed to field '%s'", field);
+}
+
 void Transformer::TransformCreateSecretOptions(CreateSecretInfo &info,
                                                optional_ptr<duckdb_libpgquery::PGList> options) {
 	if (!options) {
@@ -13,59 +23,35 @@ void Transformer::TransformCreateSecretOptions(CreateSecretInfo &info,
 	}
 
 	duckdb_libpgquery::PGListCell *cell;
+
 	// iterate over each option
 	for_each_cell(cell, options->head) {
 		auto def_elem = PGPointerCast<duckdb_libpgquery::PGDefElem>(cell->data.ptr_value);
 		auto lower_name = StringUtil::Lower(def_elem->defname);
 		if (lower_name == "scope") {
-			// format specifier: interpret this option
-			auto scope_val = PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg);
-			if (!scope_val) {
-				throw ParserException("Unsupported parameter type for SCOPE");
-			} else if (scope_val->type == duckdb_libpgquery::T_PGString) {
-				info.scope.push_back(scope_val->val.str);
-				continue;
-			} else if (scope_val->type != duckdb_libpgquery::T_PGList) {
-				throw ParserException("%s has to be a string, or a list of strings", lower_name);
+			auto scope_expr = TransformExpression(def_elem->arg);
+			auto value = GetConstantExpressionValue(*scope_expr, lower_name);
+			for (const auto &child :ListValue::GetChildren(value)) {
+				info.scope.push_back(child.GetValue<string>());
 			}
-
-			auto list = PGPointerCast<duckdb_libpgquery::PGList>(def_elem->arg);
-			for (auto scope_cell = list->head; scope_cell != nullptr; scope_cell = lnext(scope_cell)) {
-				auto scope_val_entry = PGPointerCast<duckdb_libpgquery::PGValue>(scope_cell->data.ptr_value);
-				info.scope.push_back(scope_val_entry->val.str);
-			}
-			continue;
 		} else if (lower_name == "type") {
-			auto type_val = PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg);
-			if (type_val->type != duckdb_libpgquery::T_PGString) {
-				throw ParserException("%s has to be a string", lower_name);
-			}
-			info.type = StringUtil::Lower(type_val->val.str);
+			auto type_expr = TransformExpression(def_elem->arg);
+			info.type = GetConstantExpressionValue(*type_expr, lower_name).GetValue<string>();
 			continue;
 		} else if (lower_name == "provider") {
-			auto provider_val = PGPointerCast<duckdb_libpgquery::PGValue>(def_elem->arg);
-			if (provider_val->type != duckdb_libpgquery::T_PGString) {
-				throw ParserException("%s has to be a string", lower_name);
-			}
-			info.provider = StringUtil::Lower(provider_val->val.str);
+			auto provider_expression = TransformExpression(def_elem->arg);
+			info.provider = GetConstantExpressionValue(*provider_expression, lower_name).GetValue<string>();
 			continue;
 		}
 
 		// All the other options end up in the generic
-		case_insensitive_map_t<vector<Value>> vector_options;
-		ParseGenericOptionListEntry(vector_options, lower_name, def_elem->arg);
+		case_insensitive_map_t<vector<ParsedExpression>> vector_options;
 
-		for (const auto &entry : vector_options) {
-			if (entry.second.size() != 1) {
-				throw ParserException("Invalid parameter passed to option '%s'", entry.first);
-			}
-
-			if (info.options.find(entry.first) != info.options.end()) {
-				throw BinderException("Duplicate query param found while parsing create secret: '%s'", entry.first);
-			}
-
-			info.options[entry.first] = entry.second.at(0);
+		if (info.options.find(def_elem->defname) != info.options.end()) {
+			throw BinderException("Duplicate query param found while parsing create secret: '%s'", def_elem->defname);
 		}
+
+		info.options[def_elem->defname] = TransformExpression(def_elem->arg);
 	}
 }
 

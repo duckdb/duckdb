@@ -30,6 +30,7 @@
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_create.hpp"
@@ -544,7 +545,22 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SECRET_ENTRY: {
 		CatalogTransaction transaction = CatalogTransaction(Catalog::GetSystemCatalog(context), context);
 		properties.return_type = StatementReturnType::QUERY_RESULT;
-		return SecretManager::Get(context).BindCreateSecret(transaction, stmt.info->Cast<CreateSecretInfo>());
+
+		auto &info = stmt.info->Cast<CreateSecretInfo>();
+
+		case_insensitive_map_t<Value> bound_options;
+		ConstantBinder default_binder(*this, context, "Secret Parameter");
+		for (auto& option : info.options) {
+			auto bound_value = default_binder.Bind(option.second);
+			if (bound_value->HasParameter()) {
+				throw NotImplementedException("SET statements cannot have parameters");
+			}
+			bound_options.insert({option.first, ExpressionExecutor::EvaluateScalar(context, *bound_value, true)});
+		}
+
+		CreateSecretInput create_secret_input {info.type, info.provider, info.storage_type, info.name, info.scope, bound_options, info.on_conflict, info.persist_type};
+
+		return SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 	}
 	default:
 		throw InternalException("Unrecognized type!");

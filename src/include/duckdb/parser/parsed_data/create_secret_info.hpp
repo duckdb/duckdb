@@ -24,6 +24,12 @@ public:
 
 public:
 	explicit CreateSecretInfo(OnCreateConflict on_conflict, SecretPersistType persist_type);
+	~CreateSecretInfo() override;
+
+	// TODO REMOVE
+	CreateSecretInfo (const CreateSecretInfo&) = delete;
+	CreateSecretInfo& operator= (const CreateSecretInfo&) = delete;
+
 	//! How to handle conflict
 	OnCreateConflict on_conflict;
 	//! Whether the secret can be persisted
@@ -39,7 +45,7 @@ public:
 	//! (optionally) the scope of the secret
 	vector<string> scope;
 	//! Named parameter list (if any)
-	case_insensitive_map_t<Value> options;
+	case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
 
 	unique_ptr<CreateInfo> Copy() const override;
 };
