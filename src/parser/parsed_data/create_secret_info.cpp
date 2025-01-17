@@ -8,7 +8,8 @@ CreateSecretInfo::CreateSecretInfo(OnCreateConflict on_conflict, SecretPersistTy
     : CreateInfo(CatalogType::SECRET_ENTRY), on_conflict(on_conflict), persist_type(persist_type), options() {
 }
 
-CreateSecretInfo::~CreateSecretInfo() {}
+CreateSecretInfo::~CreateSecretInfo() {
+}
 
 unique_ptr<CreateInfo> CreateSecretInfo::Copy() const {
 	auto result = make_uniq<CreateSecretInfo>(on_conflict, persist_type);
@@ -26,7 +27,7 @@ unique_ptr<CreateInfo> CreateSecretInfo::Copy() const {
 		result->scope = scope->Copy();
 	}
 
-	for (const auto & option : options) {
+	for (const auto &option : options) {
 		result->options.insert({option.first, option.second->Copy()});
 	}
 

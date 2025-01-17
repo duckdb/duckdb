@@ -559,7 +559,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (bound_provider->HasParameter()) {
 				throw InvalidInputException("Create Secret expressions can not have parameters!");
 			}
-			provider_string = StringUtil::Lower(ExpressionExecutor::EvaluateScalar(context, *bound_provider, true).ToString());
+			provider_string =
+			    StringUtil::Lower(ExpressionExecutor::EvaluateScalar(context, *bound_provider, true).ToString());
 		}
 		if (info.type) {
 			auto bound_type = default_binder.Bind(info.type);
@@ -578,7 +579,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			if (scope.type() == LogicalType::VARCHAR) {
 				scope_strings.push_back(scope.ToString());
 			} else if (scope.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
-				for (const auto &item :ListValue::GetChildren(scope)) {
+				for (const auto &item : ListValue::GetChildren(scope)) {
 					scope_strings.push_back(item.GetValue<string>());
 				}
 			} else {
@@ -588,7 +589,7 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		// Execute all options expressions
 		case_insensitive_map_t<Value> bound_options;
-		for (auto& option : info.options) {
+		for (auto &option : info.options) {
 			auto bound_value = default_binder.Bind(option.second);
 			if (bound_value->HasParameter()) {
 				throw InvalidInputException("Create Secret expressions can not have parameters!");
@@ -596,7 +597,8 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			bound_options.insert({option.first, ExpressionExecutor::EvaluateScalar(context, *bound_value, true)});
 		}
 
-		CreateSecretInput create_secret_input {type_string, provider_string, info.storage_type, info.name, scope_strings, bound_options, info.on_conflict, info.persist_type};
+		CreateSecretInput create_secret_input {type_string,   provider_string, info.storage_type, info.name,
+		                                       scope_strings, bound_options,   info.on_conflict,  info.persist_type};
 
 		return SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 	}

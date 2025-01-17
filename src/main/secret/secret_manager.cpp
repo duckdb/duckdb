@@ -225,7 +225,8 @@ optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const s
 	return nullptr;
 }
 
-// TODO this should take a CreateSecretInput, which we create from the CreateSecretInfo (containing expressions) in the bind
+// TODO this should take a CreateSecretInput, which we create from the CreateSecretInfo (containing expressions) in the
+// bind
 unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, const CreateSecretInput &input) {
 	// Note that a context is required for CreateSecret, as the CreateSecretFunction expects one
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);

@@ -87,7 +87,9 @@ unique_ptr<CreateStatement> Transformer::TransformSecret(duckdb_libpgquery::PGCr
 	if (create_secret_info->name.empty()) {
 		auto value = GetConstantExpressionValue(*create_secret_info->type);
 		if (value.IsNull()) {
-			throw InvalidInputException("Can not combine a non-constant expression for the secret type with a default-named secret. Either provide an explicit secret name or use a constant expression for the secret type.");
+			throw InvalidInputException(
+			    "Can not combine a non-constant expression for the secret type with a default-named secret. Either "
+			    "provide an explicit secret name or use a constant expression for the secret type.");
 		}
 		create_secret_info->name = "__default_" + StringUtil::Lower(value.ToString());
 	}
