@@ -401,6 +401,10 @@ void ValidityScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 }
 
 void ValidityScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	if (result.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		// dictionary encoding handles the validity itself
+		return;
+	}
 	result.Flatten(scan_count);
 
 	auto start = segment.GetRelativeIndex(state.row_index);

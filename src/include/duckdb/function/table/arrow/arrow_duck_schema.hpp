@@ -84,6 +84,7 @@ public:
 	}
 	void ThrowIfInvalid() const;
 
+	static unique_ptr<ArrowType> GetTypeFromFormat(string &format);
 	static unique_ptr<ArrowType> GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format);
 
 	static unique_ptr<ArrowType> GetTypeFromSchema(DBConfig &config, ArrowSchema &schema);

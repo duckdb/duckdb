@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
   repository_dispatch:
   push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
     paths-ignore:
       - '**'
       - '!.github/workflows/NightlyTests.yml'
@@ -184,30 +184,25 @@ jobs:
     name: GCC 4.8
     needs: linux-memory-leaks
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2014_x86_64
     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-    env:
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     steps:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
 
-    - uses: ./.github/actions/manylinux_2014_setup
-      with:
-        ninja-build: 1
-        ccache: 1
-        gcc_4_8: 1
-
     - name: Test
       shell: bash
-      run: make unit
-      env:
-        CC: /usr/bin/gcc
-        CXX: /usr/bin/g++
-        GEN: ninja
+      run: |
+        docker run                                                             \
+          -v.:/duckdb                                                          \
+          -e CC=/usr/bin/gcc                                                   \
+          -e CXX=/usr/bin/g++                                                  \
+          -e CMAKE_BUILD_PARALLEL_LEVEL=2                                      \
+          quay.io/pypa/manylinux2014_x86_64                                    \
+          bash -c "yum install -y gcc-c++ && make -C /duckdb unit"
 
-  linux-release-32:
+
+  linux-compile-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
     container: quay.io/pypa/manylinux2028_x86_64

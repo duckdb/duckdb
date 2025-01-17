@@ -14,6 +14,11 @@ ArrowTypeExtension::ArrowTypeExtension(string extension_name, string arrow_forma
     : extension_metadata(std::move(extension_name), {}, {}, std::move(arrow_format)), type_extension(std::move(type)) {
 }
 
+ArrowTypeExtension::ArrowTypeExtension(ArrowExtensionMetadata &extension_metadata, unique_ptr<ArrowType> type)
+    : extension_metadata(extension_metadata) {
+	type_extension = make_shared_ptr<ArrowTypeExtensionData>(type->GetDuckType());
+}
+
 ArrowExtensionMetadata::ArrowExtensionMetadata(string extension_name, string vendor_name, string type_name,
                                                string arrow_format)
     : extension_name(std::move(extension_name)), vendor_name(std::move(vendor_name)), type_name(std::move(type_name)),
@@ -197,10 +202,12 @@ ArrowTypeExtension GetArrowExtensionInternal(
     unordered_map<ArrowExtensionMetadata, ArrowTypeExtension, HashArrowTypeExtension> &type_extensions,
     ArrowExtensionMetadata info) {
 	if (type_extensions.find(info) == type_extensions.end()) {
+		auto og_info = info;
 		info.SetArrowFormat("");
 		if (type_extensions.find(info) == type_extensions.end()) {
-			throw NotImplementedException("Arrow Extension with configuration:\n%s not yet registered",
-			                              info.ToString());
+			auto format = og_info.GetArrowFormat();
+			auto type = ArrowType::GetTypeFromFormat(format);
+			return ArrowTypeExtension(og_info, std::move(type));
 		}
 	}
 	return type_extensions[info];
