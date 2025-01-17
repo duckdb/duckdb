@@ -19,12 +19,11 @@ enum class DictFSSTMode : uint8_t {
 
 typedef struct {
 	uint32_t dict_size;
-	uint32_t dict_end;
-	uint32_t string_lengths_offset;
-	uint32_t string_lengths_width;
 	uint32_t dict_count;
-	uint32_t dictionary_indices_width;
 	DictFSSTMode mode;
+	uint8_t string_lengths_width;
+	uint8_t dictionary_indices_width;
+	uint32_t symbol_table_size;
 } dict_fsst_compression_header_t;
 
 enum class DictionaryAppendState : uint8_t {

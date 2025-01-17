@@ -14,14 +14,13 @@ uint32_t CompressedStringScanState::GetStringLength(sel_t index) {
 }
 
 string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t dict_offset, uint32_t string_len) {
-	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(block_size));
+	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
 	if (dict_offset == 0) {
 		return string_t(nullptr, 0);
 	}
 
 	// normal string: read string from this block
-	auto dict_end = baseptr + dict.end;
-	auto dict_pos = dict_end - dict_offset;
+	auto dict_pos = dict_ptr + dict_offset;
 
 	auto str_ptr = char_ptr_cast(dict_pos);
 	switch (mode) {
@@ -34,29 +33,11 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t 
 	}
 }
 
-void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initialize_dictionary) {
+void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	baseptr = handle->Ptr() + segment.GetBlockOffset();
 
 	// Load header values
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(baseptr);
-	auto string_lengths_offset = Load<uint32_t>(data_ptr_cast(&header_ptr->string_lengths_offset));
-	dict_count = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_count));
-	current_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->dictionary_indices_width)));
-	string_lengths_width = (bitpacking_width_t)(Load<uint32_t>(data_ptr_cast(&header_ptr->string_lengths_width)));
-	string_lengths.resize(AlignValue<uint32_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(dict_count));
-	auto string_lengths_size = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
-
-	if (segment.GetBlockOffset() + string_lengths_offset + string_lengths_size + header_ptr->dict_size >
-	    segment.GetBlockManager().GetBlockSize()) {
-		throw IOException(
-		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
-	}
-	string_lengths_ptr = baseptr + string_lengths_offset;
-	base_data = data_ptr_cast(baseptr + sizeof(dict_fsst_compression_header_t));
-
-	block_size = segment.GetBlockManager().GetBlockSize();
-
-	dict = DictFSSTCompression::GetDictionary(segment, *handle);
 	mode = header_ptr->mode;
 	if (mode >= DictFSSTMode::COUNT) {
 		throw FatalException("This block was written with a mode that is not recognized by this version, highest "
@@ -64,12 +45,37 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 		                     static_cast<uint8_t>(DictFSSTMode::COUNT), static_cast<uint8_t>(mode));
 	}
 
+	dict_count = header_ptr->dict_count;
+	auto symbol_table_size = header_ptr->symbol_table_size;
+	dict = DictFSSTCompression::GetDictionary(segment, *handle);
+
+	dictionary_indices_width =
+	    (bitpacking_width_t)(Load<uint8_t>(data_ptr_cast(&header_ptr->dictionary_indices_width)));
+	string_lengths_width = (bitpacking_width_t)(Load<uint8_t>(data_ptr_cast(&header_ptr->string_lengths_width)));
+
+	auto string_lengths_space = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
+	auto dictionary_indices_space =
+	    BitpackingPrimitives::GetRequiredSize(segment.count.load(), dictionary_indices_width);
+
+	auto dictionary_dest = AlignValue<idx_t>(DictFSSTCompression::DICTIONARY_HEADER_SIZE);
+	auto symbol_table_dest = AlignValue<idx_t>(dictionary_dest + dict.size);
+	auto string_lengths_dest = AlignValue<idx_t>(symbol_table_dest + symbol_table_size);
+	auto dictionary_indices_dest = AlignValue<idx_t>(string_lengths_dest + string_lengths_space);
+
+	const auto total_space = segment.GetBlockOffset() + dictionary_indices_dest + dictionary_indices_space;
+	if (total_space > segment.GetBlockManager().GetBlockSize()) {
+		throw IOException(
+		    "Failed to scan dictionary string - index was out of range. Database file appears to be corrupted.");
+	}
+	dict_ptr = data_ptr_cast(baseptr + dictionary_dest);
+	dictionary_indices_ptr = data_ptr_cast(baseptr + dictionary_indices_dest);
+	string_lengths_ptr = data_ptr_cast(baseptr + string_lengths_dest);
+
 	switch (mode) {
 	case DictFSSTMode::FSST_ONLY:
 	case DictFSSTMode::DICT_FSST: {
 		decoder = new duckdb_fsst_decoder_t;
-		auto symbol_table_location = baseptr + dict.end;
-		auto ret = duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(decoder), symbol_table_location);
+		auto ret = duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(decoder), baseptr + symbol_table_dest);
 		(void)(ret);
 		D_ASSERT(ret != 0); // FIXME: the old code set the decoder to nullptr instead, why???
 
@@ -80,6 +86,8 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	default:
 		break;
 	}
+
+	string_lengths.resize(AlignValue<uint32_t, BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE>(dict_count));
 	BitpackingPrimitives::UnPackBuffer<uint32_t>(data_ptr_cast(string_lengths.data()),
 	                                             data_ptr_cast(string_lengths_ptr), dict_count, string_lengths_width);
 
@@ -120,10 +128,10 @@ const SelectionVector &CompressedStringScanState::GetSelVec(idx_t start, idx_t s
 			sel_vec = make_buffer<SelectionVector>(decompress_count);
 		}
 
-		data_ptr_t sel_buf_src = &base_data[((start - start_offset) * current_width) / 8];
+		data_ptr_t sel_buf_src = &dictionary_indices_ptr[((start - start_offset) * dictionary_indices_width) / 8];
 		sel_t *sel_vec_ptr = sel_vec->data();
 		BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), sel_buf_src, decompress_count,
-		                                          current_width);
+		                                          dictionary_indices_width);
 		return *sel_vec;
 	}
 	}

@@ -54,38 +54,41 @@ idx_t DictFSSTCompressionState::Finalize() {
 		D_ASSERT(string_lengths_space == this->string_lengths_space);
 	}
 #endif
-	auto total_size = DictFSSTCompression::DICTIONARY_HEADER_SIZE + dictionary_indices_space + string_lengths_space +
-	                  dictionary_offset;
-	if (is_fsst_encoded) {
-		total_size += symbol_table_size;
+
+	if (!is_fsst_encoded) {
+		symbol_table_size = 0;
 	}
+	const auto total_size = DictFSSTCompression::DICTIONARY_HEADER_SIZE + dictionary_indices_space +
+	                        string_lengths_space + dictionary_offset + symbol_table_size;
 
 	// calculate ptr and offsets
 	auto base_ptr = current_handle.Ptr();
 	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(base_ptr);
-	auto offset_to_dictionary = AlignValue<idx_t>(DictFSSTCompression::DICTIONARY_HEADER_SIZE);
-	auto offset_to_dictionary_indices = offset_to_dictionary + dictionary_offset;
+	auto dictionary_dest = AlignValue<idx_t>(DictFSSTCompression::DICTIONARY_HEADER_SIZE);
+	auto symbol_table_dest = AlignValue<idx_t>(dictionary_dest + dictionary_offset);
+	auto string_lengths_dest = AlignValue<idx_t>(symbol_table_dest + symbol_table_size);
+	auto dictionary_indices_dest = AlignValue<idx_t>(string_lengths_dest + string_lengths_space);
+
+	header_ptr->mode = ConvertToMode(append_state);
+	header_ptr->symbol_table_size = symbol_table_size;
+	header_ptr->dict_size = dictionary_offset;
+	header_ptr->dict_count = dict_count;
+	header_ptr->dictionary_indices_width = dictionary_indices_width;
+	header_ptr->string_lengths_width = string_lengths_width;
+
+	// Write the symbol table
 	if (is_fsst_encoded) {
 		D_ASSERT(symbol_table_size != DConstants::INVALID_INDEX);
-		memcpy(base_ptr + offset_to_dictionary_indices, fsst_serialized_symbol_table.get(), symbol_table_size);
-		offset_to_dictionary_indices += symbol_table_size;
+		memcpy(base_ptr + symbol_table_dest, fsst_serialized_symbol_table.get(), symbol_table_size);
 	}
-	offset_to_dictionary_indices = AlignValue<idx_t>(offset_to_dictionary_indices);
-	auto string_lengths_offset = offset_to_dictionary_indices + dictionary_indices_space;
-	header_ptr->mode = ConvertToMode(append_state);
 
-	// Write compressed selection buffer
-	BitpackingPrimitives::PackBuffer<sel_t, false>(base_ptr + offset_to_dictionary_indices,
+	// Write the string lengths of the dictionary
+	BitpackingPrimitives::PackBuffer<uint32_t, false>(base_ptr + string_lengths_dest, string_lengths.data(), dict_count,
+	                                                  string_lengths_width);
+	// Write the dictionary indices (selection vector)
+	BitpackingPrimitives::PackBuffer<sel_t, false>(base_ptr + dictionary_indices_dest,
 	                                               (sel_t *)(dictionary_indices.data()), tuple_count,
 	                                               dictionary_indices_width);
-	BitpackingPrimitives::PackBuffer<uint32_t, false>(base_ptr + string_lengths_offset, string_lengths.data(),
-	                                                  dict_count, string_lengths_width);
-
-	// Store sizes and offsets in segment header
-	Store<uint32_t>(NumericCast<uint32_t>(string_lengths_offset), data_ptr_cast(&header_ptr->string_lengths_offset));
-	Store<uint32_t>(NumericCast<uint32_t>(dict_count), data_ptr_cast(&header_ptr->dict_count));
-	Store<uint32_t>((uint32_t)dictionary_indices_width, data_ptr_cast(&header_ptr->dictionary_indices_width));
-	Store<uint32_t>((uint32_t)string_lengths_width, data_ptr_cast(&header_ptr->string_lengths_width));
 
 	if (append_state != DictionaryAppendState::ENCODED_ALL_UNIQUE) {
 		D_ASSERT(dictionary_indices_width == BitpackingPrimitives::MinimumBitWidth(dict_count - 1));
@@ -107,9 +110,6 @@ idx_t DictFSSTCompressionState::Finalize() {
 	D_ASSERT(info.GetBlockSize() >= required_space);
 #endif
 	D_ASSERT((uint64_t)*max_element(std::begin(dictionary_indices), std::end(dictionary_indices)) == dict_count - 1);
-
-	// Write the new dictionary with the updated "end".
-	DictFSSTCompression::SetDictionary(*current_segment, current_handle, current_dictionary);
 	return total_size;
 }
 
@@ -187,6 +187,10 @@ void DictFSSTCompressionState::CreateEmptySegment(idx_t row_start) {
 void DictFSSTCompressionState::Flush(bool final) {
 	if (final) {
 		FlushEncodingBuffer();
+	}
+
+	if (!tuple_count) {
+		return;
 	}
 
 	current_segment->count = tuple_count;
@@ -391,6 +395,11 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 	idx_t lookup = DConstants::INVALID_INDEX;
 	auto &str = strings[idx];
 
+	//! In GetRequiredSize we will round up to ALGORITHM_GROUP_SIZE anyways
+	//  so we can avoid recalculating for every tuple
+	const bool recalculate_indices_space = ((tuple_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) == 0);
+	// const bool recalculate_indices_space = true;
+
 	switch (append_state) {
 	case DictionaryAppendState::NOT_ENCODED:
 	case DictionaryAppendState::REGULAR: {
@@ -401,8 +410,6 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 			lookup = 0;
 		}
 
-		const bool recalculate_indices_space =
-		    ((tuple_count + 1) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) == 1;
 		if (append_state == DictionaryAppendState::REGULAR) {
 			if (lookup != DConstants::INVALID_INDEX) {
 				return AddLookup<DictionaryAppendState::REGULAR>(*this, lookup, recalculate_indices_space);
@@ -433,8 +440,6 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 			lookup = 0;
 		}
 
-		const bool recalculate_indices_space =
-		    ((tuple_count + 1) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) == 1;
 		bool fits;
 		if (lookup != DConstants::INVALID_INDEX) {
 			fits = AddLookup<DictionaryAppendState::ENCODED>(*this, lookup, recalculate_indices_space);
@@ -486,6 +491,13 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 			}
 
 			// FIXME: can we compress directly to the segment? that would save a copy
+			// I think yes?
+			// We can give the segment as destination, and limit the size
+			// it will tell us when it can't fit everything
+			// worst case we can just check if the rest of the metadata fits when we remove the last string that it was
+			// able to encode I believe 'duckdb_fsst_compress' tells us how many of the input strings it was able to
+			// compress We can work backwards from there to see how many strings actually fit (probably worst case ret-1
+			// ??)
 			auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
 			auto res = duckdb_fsst_compress(fsst_encoder, input_string_lengths.size(), input_string_lengths.data(),
 			                                input_string_ptrs.data(), output_buffer_size, encoding_buffer.get(),
@@ -501,8 +513,6 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 			}
 		}
 
-		const bool recalculate_indices_space =
-		    ((tuple_count + 1) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) == 1;
 		auto &string = encoded_input.data[i - encoded_input.offset];
 		return AddToDictionary<DictionaryAppendState::ENCODED_ALL_UNIQUE>(*this, string, recalculate_indices_space);
 	}
@@ -638,7 +648,7 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 }
 
 void DictFSSTCompressionState::FinalizeCompress() {
-	throw NotImplementedException("TODO");
+	Flush(true);
 }
 
 } // namespace dict_fsst

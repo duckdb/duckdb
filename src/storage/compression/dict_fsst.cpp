@@ -107,8 +107,8 @@ void DictFSSTCompressionStorage::FinalizeCompress(CompressionState &state_p) {
 //===--------------------------------------------------------------------===//
 unique_ptr<SegmentScanState> DictFSSTCompressionStorage::StringInitScan(ColumnSegment &segment) {
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
-	auto state = make_uniq<CompressedStringScanState>(buffer_manager.Pin(segment.block));
-	state->Initialize(segment, true);
+	auto state = make_uniq<CompressedStringScanState>(segment, buffer_manager.Pin(segment.block));
+	state->Initialize(true);
 	return std::move(state);
 }
 
@@ -141,8 +141,8 @@ void DictFSSTCompressionStorage::StringScan(ColumnSegment &segment, ColumnScanSt
 void DictFSSTCompressionStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id,
                                                 Vector &result, idx_t result_idx) {
 	// fetch a single row from the string segment
-	CompressedStringScanState scan_state(state.GetOrInsertHandle(segment));
-	scan_state.Initialize(segment, false);
+	CompressedStringScanState scan_state(segment, state.GetOrInsertHandle(segment));
+	scan_state.Initialize(false);
 	scan_state.ScanToFlatVector(result, result_idx, NumericCast<idx_t>(row_id), 1);
 }
 
