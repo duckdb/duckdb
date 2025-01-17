@@ -70,6 +70,8 @@ typedef shared_ptr<ArrowType> (*get_type_t)(const ArrowSchema &schema, const Arr
 class ArrowTypeExtension {
 public:
 	ArrowTypeExtension() {};
+	//! This type is not registered, so we just use whatever is the format and hope for the best
+	explicit ArrowTypeExtension(ArrowExtensionMetadata &extension_metadata, unique_ptr<ArrowType> type);
 	//! We either have simple extensions where we only return one type
 	ArrowTypeExtension(string extension_name, string arrow_format, shared_ptr<ArrowTypeExtensionData> type);
 	ArrowTypeExtension(string vendor_name, string type_name, string arrow_format,
