@@ -77,8 +77,10 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 		(void)(ret);
 		D_ASSERT(ret != 0); // FIXME: the old code set the decoder to nullptr instead, why???
 
-		auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
-		decompress_buffer.resize(string_block_limit + 1);
+		//! The biggest string_length covered by the 'string_lengths_width'
+		uint32_t max_string_length = (1 << string_lengths_width) - 1;
+		auto buffer_size = (max_string_length * 8) + 1;
+		decompress_buffer.resize(buffer_size);
 		break;
 	}
 	default:
@@ -102,8 +104,10 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 
 	int32_t offset = 0;
 	for (uint32_t i = 0; i < dict_count; i++) {
+		//! We can uncompress during fetching, we need the length of the string inside the dictionary
+		auto string_len = string_lengths[i];
 		dict_child_data[i] = FetchStringFromDict(*dictionary, offset, i);
-		offset += dict_child_data[i].GetSize();
+		offset += string_len;
 	}
 }
 

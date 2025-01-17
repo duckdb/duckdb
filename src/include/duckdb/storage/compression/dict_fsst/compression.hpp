@@ -89,11 +89,11 @@ public:
 	idx_t tuple_count = 0;
 	unique_ptr<DictFSSTAnalyzeState> analyze;
 	bool all_unique = true;
+	idx_t symbol_table_size = DConstants::INVALID_INDEX;
 
 private:
 	void *encoder = nullptr;
 	unsafe_unique_array<unsigned char> fsst_serialized_symbol_table;
-	idx_t symbol_table_size = DConstants::INVALID_INDEX;
 	DictionaryAppendState append_state = DictionaryAppendState::REGULAR;
 };
 

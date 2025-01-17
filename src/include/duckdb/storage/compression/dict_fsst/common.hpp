@@ -38,10 +38,6 @@ public:
 	//! Dictionary header size at the beginning of the string segment (offset + length)
 	static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(dict_fsst_compression_header_t);
 	static constexpr idx_t STRING_SIZE_LIMIT = 16384;
-
-public:
-	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
-	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
 };
 
 } // namespace dict_fsst

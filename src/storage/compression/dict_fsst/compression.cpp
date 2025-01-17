@@ -7,9 +7,10 @@ namespace duckdb {
 namespace dict_fsst {
 
 DictFSSTCompressionState::DictFSSTCompressionState(ColumnDataCheckpointData &checkpoint_data_p,
-                                                   unique_ptr<DictFSSTAnalyzeState> &&analyze)
-    : CompressionState(analyze->info), checkpoint_data(checkpoint_data_p),
-      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICT_FSST)) {
+                                                   unique_ptr<DictFSSTAnalyzeState> &&analyze_p)
+    : CompressionState(analyze_p->info), checkpoint_data(checkpoint_data_p),
+      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_DICT_FSST)),
+      analyze(std::move(analyze_p)) {
 	CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 }
 
@@ -21,7 +22,6 @@ DictFSSTCompressionState::~DictFSSTCompressionState() {
 }
 
 static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(dict_fsst_compression_header_t);
-static constexpr idx_t STRING_SIZE_LIMIT = 16384;
 static constexpr uint16_t FSST_SYMBOL_TABLE_SIZE = sizeof(duckdb_fsst_decoder_t);
 static constexpr idx_t DICTIONARY_ENCODE_THRESHOLD = 4096;
 
@@ -69,6 +69,23 @@ idx_t DictFSSTCompressionState::Finalize() {
 	auto string_lengths_dest = AlignValue<idx_t>(symbol_table_dest + symbol_table_size);
 	auto dictionary_indices_dest = AlignValue<idx_t>(string_lengths_dest + string_lengths_space);
 
+#ifdef DEBUG
+	idx_t required_space = 0;
+	required_space += sizeof(dict_fsst_compression_header_t);
+	required_space = AlignValue<idx_t>(required_space);
+	required_space += dictionary_offset;
+	required_space = AlignValue<idx_t>(required_space);
+	if (is_fsst_encoded) {
+		required_space += symbol_table_size;
+	}
+	required_space = AlignValue<idx_t>(required_space);
+	required_space += string_lengths_space;
+	required_space = AlignValue<idx_t>(required_space);
+	required_space += dictionary_indices_space;
+
+	D_ASSERT(info.GetBlockSize() >= required_space);
+#endif
+
 	header_ptr->mode = ConvertToMode(append_state);
 	header_ptr->symbol_table_size = symbol_table_size;
 	header_ptr->dict_size = dictionary_offset;
@@ -94,22 +111,6 @@ idx_t DictFSSTCompressionState::Finalize() {
 		auto expected_bitwidth = BitpackingPrimitives::MinimumBitWidth(dict_count - 1);
 		D_ASSERT(dictionary_indices_width == expected_bitwidth);
 	}
-
-#ifdef DEBUG
-	idx_t required_space = 0;
-	required_space += sizeof(dict_fsst_compression_header_t);
-	required_space = AlignValue<idx_t>(required_space);
-	required_space += dictionary_offset;
-	if (is_fsst_encoded) {
-		required_space += symbol_table_size;
-	}
-	required_space = AlignValue<idx_t>(required_space);
-	required_space += dictionary_indices_space;
-	required_space = AlignValue<idx_t>(required_space);
-	required_space += string_lengths_space;
-
-	D_ASSERT(info.GetBlockSize() >= required_space);
-#endif
 	D_ASSERT((uint64_t)*max_element(std::begin(dictionary_indices), std::end(dictionary_indices)) == dict_count - 1);
 	return total_size;
 }
@@ -163,7 +164,8 @@ void DictFSSTCompressionState::FlushEncodingBuffer() {
 		string_lengths_width = BitpackingPrimitives::MinimumBitWidth(biggest_strlen);
 	}
 	real_string_lengths_width = string_lengths_width;
-	string_lengths_space = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_space);
+	string_lengths_space = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
+	D_ASSERT(string_lengths_space != 0);
 	to_encode_string_sum = 0;
 	dictionary_encoding_buffer.clear();
 }
@@ -214,10 +216,6 @@ void DictFSSTCompressionState::Flush(bool final) {
 	auto &state = checkpoint_data.GetCheckpointState();
 	state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
-	if (!final) {
-		CreateEmptySegment(next_start);
-	}
-
 	// Reset the state
 	uncompressed_dictionary_copy.Destroy();
 	//! This should already be empty at this point, otherwise that means that strings are not encoded / not added to the
@@ -233,6 +231,10 @@ void DictFSSTCompressionState::Flush(bool final) {
 		duckdb_fsst_destroy(fsst_encoder);
 		encoder = nullptr;
 		symbol_table_size = DConstants::INVALID_INDEX;
+	}
+
+	if (!final) {
+		CreateEmptySegment(next_start);
 	}
 }
 
@@ -261,6 +263,10 @@ static inline bool AddLookup(DictFSSTCompressionState &state, idx_t lookup, cons
 		required_space += state.dictionary_offset;
 	}
 	required_space = AlignValue<idx_t>(required_space);
+	if (IsEncoded(APPEND_STATE)) {
+		required_space += state.symbol_table_size;
+		required_space = AlignValue<idx_t>(required_space);
+	}
 	required_space += new_dictionary_indices_space;
 	required_space = AlignValue<idx_t>(required_space);
 	required_space += state.string_lengths_space;
@@ -332,6 +338,10 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		required_space += state.dictionary_offset + str_len;
 	}
 	required_space = AlignValue<idx_t>(required_space);
+	if (IsEncoded(APPEND_STATE)) {
+		required_space += state.symbol_table_size;
+		required_space = AlignValue<idx_t>(required_space);
+	}
 	required_space += new_dictionary_indices_space;
 	required_space = AlignValue<idx_t>(required_space);
 	required_space += new_string_lengths_space;
@@ -374,6 +384,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 	}
 	if (requires_higher_strlen_bitwidth || recalculate_strlen_space) {
 		state.string_lengths_space = new_string_lengths_space;
+		D_ASSERT(state.string_lengths_space != 0);
 	}
 
 	if (requires_higher_indices_bitwidth) {
