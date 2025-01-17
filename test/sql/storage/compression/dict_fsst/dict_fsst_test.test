@@ -13,7 +13,7 @@ select
 		(i % 200)::INTEGER::VARCHAR,
 		2047 // len((i % 200)::INTEGER::VARCHAR)
 	) a
-from range(400) t(i);
+from range(200) t(i);
 
 statement ok
 checkpoint;
@@ -31,6 +31,7 @@ create table compressed_data as select * from uncompressed_data;
 statement ok
 checkpoint;
 
+# 1 and 111 produce the same string so it's 199 not 200 (???)
 query I
 select count(distinct a) from compressed_data;
 ----

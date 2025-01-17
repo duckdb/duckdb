@@ -58,18 +58,7 @@ idx_t DictFSSTCompressionState::Finalize() {
 	if (!is_fsst_encoded) {
 		symbol_table_size = 0;
 	}
-	const auto total_size = DictFSSTCompression::DICTIONARY_HEADER_SIZE + dictionary_indices_space +
-	                        string_lengths_space + dictionary_offset + symbol_table_size;
 
-	// calculate ptr and offsets
-	auto base_ptr = current_handle.Ptr();
-	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(base_ptr);
-	auto dictionary_dest = AlignValue<idx_t>(DictFSSTCompression::DICTIONARY_HEADER_SIZE);
-	auto symbol_table_dest = AlignValue<idx_t>(dictionary_dest + dictionary_offset);
-	auto string_lengths_dest = AlignValue<idx_t>(symbol_table_dest + symbol_table_size);
-	auto dictionary_indices_dest = AlignValue<idx_t>(string_lengths_dest + string_lengths_space);
-
-#ifdef DEBUG
 	idx_t required_space = 0;
 	required_space += sizeof(dict_fsst_compression_header_t);
 	required_space = AlignValue<idx_t>(required_space);
@@ -84,7 +73,14 @@ idx_t DictFSSTCompressionState::Finalize() {
 	required_space += dictionary_indices_space;
 
 	D_ASSERT(info.GetBlockSize() >= required_space);
-#endif
+
+	// calculate ptr and offsets
+	auto base_ptr = current_handle.Ptr();
+	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(base_ptr);
+	auto dictionary_dest = AlignValue<idx_t>(DictFSSTCompression::DICTIONARY_HEADER_SIZE);
+	auto symbol_table_dest = AlignValue<idx_t>(dictionary_dest + dictionary_offset);
+	auto string_lengths_dest = AlignValue<idx_t>(symbol_table_dest + symbol_table_size);
+	auto dictionary_indices_dest = AlignValue<idx_t>(string_lengths_dest + string_lengths_space);
 
 	header_ptr->mode = ConvertToMode(append_state);
 	header_ptr->symbol_table_size = symbol_table_size;
@@ -111,8 +107,9 @@ idx_t DictFSSTCompressionState::Finalize() {
 		auto expected_bitwidth = BitpackingPrimitives::MinimumBitWidth(dict_count - 1);
 		D_ASSERT(dictionary_indices_width == expected_bitwidth);
 	}
+	D_ASSERT(base_ptr + required_space == base_ptr + dictionary_indices_dest + dictionary_indices_space);
 	D_ASSERT((uint64_t)*max_element(std::begin(dictionary_indices), std::end(dictionary_indices)) == dict_count - 1);
-	return total_size;
+	return required_space;
 }
 
 void DictFSSTCompressionState::FlushEncodingBuffer() {
@@ -409,16 +406,20 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 	//! In GetRequiredSize we will round up to ALGORITHM_GROUP_SIZE anyways
 	//  so we can avoid recalculating for every tuple
 	const bool recalculate_indices_space = ((tuple_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) == 0);
+
+#ifdef DEBUG
+	// TODO: remove this
 	if (recalculate_indices_space) {
 		(void)encoded_input;
 	}
-	// const bool recalculate_indices_space = true;
+#endif
 
 	switch (append_state) {
 	case DictionaryAppendState::NOT_ENCODED:
 	case DictionaryAppendState::REGULAR: {
+		string_map_t<uint32_t>::iterator it;
 		if (is_not_null) {
-			auto it = current_string_map.find(str);
+			it = current_string_map.find(str);
 			lookup = it == current_string_map.end() ? DConstants::INVALID_INDEX : it->second;
 		} else {
 			lookup = 0;
@@ -541,11 +542,11 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 	}
 
 	DictionaryAppendState new_state;
-	if (!analyze->contains_nulls && all_unique) {
-		new_state = DictionaryAppendState::ENCODED_ALL_UNIQUE;
-	} else {
-		new_state = DictionaryAppendState::ENCODED;
-	}
+	// if (!analyze->contains_nulls && all_unique) {
+	//	new_state = DictionaryAppendState::ENCODED_ALL_UNIQUE;
+	//} else {
+	new_state = DictionaryAppendState::ENCODED;
+	//}
 
 	vector<size_t> fsst_string_sizes;
 	vector<unsigned char *> fsst_string_ptrs;
@@ -614,17 +615,38 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 	// Rewrite the dictionary
 	current_string_map.clear();
 	uint32_t max_length = 0;
-	for (idx_t i = 0; i < string_count; i++) {
-		auto &start = compressed_ptrs[i];
-		auto size = UnsafeNumericCast<uint32_t>(compressed_sizes[i]);
-		if (size > max_length) {
-			max_length = size;
+	if (new_state == DictionaryAppendState::ENCODED) {
+		offset = 0;
+		auto uncompressed_dictionary_ptr = dict_copy.GetData();
+		for (idx_t i = 0; i < string_count; i++) {
+			auto size = UnsafeNumericCast<uint32_t>(compressed_sizes[i]);
+			if (size > max_length) {
+				max_length = size;
+			}
+			// Skip index 0, reserved for NULL
+			uint32_t dictionary_index = UnsafeNumericCast<uint32_t>(i + 1);
+			auto uncompressed_str_len = string_lengths[dictionary_index];
+
+			string_t dictionary_string(uncompressed_dictionary_ptr + offset, uncompressed_str_len);
+			current_string_map.insert({dictionary_string, dictionary_index});
+
+			string_lengths[dictionary_index] = size;
+			offset += uncompressed_str_len;
 		}
-		// Skip index 0, reserved for NULL
-		uint32_t dictionary_index = UnsafeNumericCast<uint32_t>(i + 1);
-		string_lengths[dictionary_index] = size;
-		string_t dictionary_string((const char *)start, UnsafeNumericCast<uint32_t>(size)); // NOLINT
-		current_string_map.insert({dictionary_string, dictionary_index});
+	} else {
+		D_ASSERT(new_state == DictionaryAppendState::ENCODED_ALL_UNIQUE);
+		for (idx_t i = 0; i < string_count; i++) {
+			auto &start = compressed_ptrs[i];
+			auto size = UnsafeNumericCast<uint32_t>(compressed_sizes[i]);
+			if (size > max_length) {
+				max_length = size;
+			}
+			// Skip index 0, reserved for NULL
+			uint32_t dictionary_index = UnsafeNumericCast<uint32_t>(i + 1);
+			string_lengths[dictionary_index] = size;
+			string_t dictionary_string((const char *)start, UnsafeNumericCast<uint32_t>(size)); // NOLINT
+			current_string_map.insert({dictionary_string, dictionary_index});
+		}
 	}
 	dictionary_offset = new_size;
 	string_lengths_width = BitpackingPrimitives::MinimumBitWidth(max_length);
