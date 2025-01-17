@@ -1773,9 +1773,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 			} else if (!moved) {
 				ProcessExtraRow();
 			}
-			if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
-				MoveToNextBuffer();
-			}
+			// if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
+			// 	MoveToNextBuffer();
+			// }
 		} else {
 			if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
 				found_error = true;
