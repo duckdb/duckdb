@@ -20,6 +20,7 @@ struct StructExtractFun {
 	static constexpr const char *Parameters = "struct,'entry'";
 	static constexpr const char *Description = "Extract the named entry from the STRUCT.";
 	static constexpr const char *Example = "struct_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -29,6 +30,7 @@ struct StructExtractAtFun {
 	static constexpr const char *Parameters = "struct,'entry'";
 	static constexpr const char *Description = "Extract the entry from the STRUCT by position (starts at 1!).";
 	static constexpr const char *Example = "struct_extract_at({'i': 3, 'v2': 3, 'v3': 0}, 2)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -38,6 +40,7 @@ struct StructPackFun {
 	static constexpr const char *Parameters = "name:=any,...";
 	static constexpr const char *Description = "Create a STRUCT containing the argument values. The entry name will be the bound variable name.";
 	static constexpr const char *Example = "struct_pack(i := 4, s := 'string')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -47,6 +50,7 @@ struct RowFun {
 	static constexpr const char *Parameters = "any,...";
 	static constexpr const char *Description = "Create an unnamed STRUCT (tuple) containing the argument values.";
 	static constexpr const char *Example = "row(i, i % 4, i / 4)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -56,6 +60,7 @@ struct StructConcatFun {
 	static constexpr const char *Parameters = "struct,struct,...";
 	static constexpr const char *Description = "Merge the multiple STRUCTs into a single STRUCT.";
 	static constexpr const char *Example = "struct_concat(struct_pack(i := 4), struct_pack(s := 'string'))";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
