@@ -52,6 +52,10 @@ public:
 		return result.comment == true;
 	}
 
+	inline bool IsStateCurrent(CSVState state) const {
+		return states.states[1] == state;
+	}
+
 	//! Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
 	//! If the current quoted value is unquoted

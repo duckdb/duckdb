@@ -1431,7 +1431,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
 			    states.IsNotSet()) {
-				if (result.cur_col_id == result.number_of_columns) {
+				if (result.cur_col_id == result.number_of_columns && !result.IsStateCurrent(CSVState::INVALID)) {
 					result.number_of_rows++;
 				}
 				result.cur_col_id = 0;
@@ -1773,9 +1773,9 @@ void StringValueScanner::FinalizeChunkProcess() {
 			} else if (!moved) {
 				ProcessExtraRow();
 			}
-			// if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
-			// 	MoveToNextBuffer();
-			// }
+			if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
+				MoveToNextBuffer();
+			}
 		} else {
 			if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
 				found_error = true;
