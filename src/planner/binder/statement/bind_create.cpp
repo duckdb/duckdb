@@ -548,17 +548,55 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 
 		auto &info = stmt.info->Cast<CreateSecretInfo>();
 
-		case_insensitive_map_t<Value> bound_options;
+		// We need to execute all expressions in the CreateSecretInfo to construct a CreateSecretInput
 		ConstantBinder default_binder(*this, context, "Secret Parameter");
+
+		string provider_string, type_string;
+		vector<string> scope_strings;
+
+		if (info.provider) {
+			auto bound_provider = default_binder.Bind(info.provider);
+			if (bound_provider->HasParameter()) {
+				throw InvalidInputException("Create Secret expressions can not have parameters!");
+			}
+			provider_string = StringUtil::Lower(ExpressionExecutor::EvaluateScalar(context, *bound_provider, true).ToString());
+		}
+		if (info.type) {
+			auto bound_type = default_binder.Bind(info.type);
+			if (bound_type->HasParameter()) {
+				throw InvalidInputException("Create Secret expressions can not have parameters!");
+			}
+			type_string = StringUtil::Lower(ExpressionExecutor::EvaluateScalar(context, *bound_type, true).ToString());
+		}
+		if (info.scope) {
+			auto bound_scope = default_binder.Bind(info.scope);
+			if (bound_scope->HasParameter()) {
+				throw InvalidInputException("Create Secret expressions can not have parameters!");
+			}
+			// Execute all scope expressions
+			Value scope = ExpressionExecutor::EvaluateScalar(context, *bound_scope, true);
+			if (scope.type() == LogicalType::VARCHAR) {
+				scope_strings.push_back(scope.ToString());
+			} else if (scope.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
+				for (const auto &item :ListValue::GetChildren(scope)) {
+					scope_strings.push_back(item.GetValue<string>());
+				}
+			} else {
+				throw InvalidInputException("Create Secret scope must be of type VARCHAR or LIST(VARCHAR)");
+			}
+		}
+
+		// Execute all options expressions
+		case_insensitive_map_t<Value> bound_options;
 		for (auto& option : info.options) {
 			auto bound_value = default_binder.Bind(option.second);
 			if (bound_value->HasParameter()) {
-				throw NotImplementedException("SET statements cannot have parameters");
+				throw InvalidInputException("Create Secret expressions can not have parameters!");
 			}
 			bound_options.insert({option.first, ExpressionExecutor::EvaluateScalar(context, *bound_value, true)});
 		}
 
-		CreateSecretInput create_secret_input {info.type, info.provider, info.storage_type, info.name, info.scope, bound_options, info.on_conflict, info.persist_type};
+		CreateSecretInput create_secret_input {type_string, provider_string, info.storage_type, info.name, scope_strings, bound_options, info.on_conflict, info.persist_type};
 
 		return SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 	}

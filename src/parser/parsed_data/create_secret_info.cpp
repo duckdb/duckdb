@@ -12,14 +12,24 @@ CreateSecretInfo::~CreateSecretInfo() {}
 
 unique_ptr<CreateInfo> CreateSecretInfo::Copy() const {
 	auto result = make_uniq<CreateSecretInfo>(on_conflict, persist_type);
-	result->type = type;
+
 	result->storage_type = storage_type;
-	result->provider = provider;
 	result->name = name;
-	result->scope = scope;
+
+	if (type) {
+		result->type = type->Copy();
+	}
+	if (provider) {
+		result->provider = provider->Copy();
+	}
+	if (scope) {
+		result->scope = scope->Copy();
+	}
+
 	for (const auto & option : options) {
 		result->options.insert({option.first, option.second->Copy()});
 	}
+
 	return std::move(result);
 }
 

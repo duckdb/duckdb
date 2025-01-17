@@ -27,27 +27,26 @@ public:
 	~CreateSecretInfo() override;
 
 	// TODO REMOVE
-	CreateSecretInfo (const CreateSecretInfo&) = delete;
-	CreateSecretInfo& operator= (const CreateSecretInfo&) = delete;
+	CreateSecretInfo(const CreateSecretInfo &) = delete;
+	CreateSecretInfo &operator=(const CreateSecretInfo &) = delete;
 
 	//! How to handle conflict
 	OnCreateConflict on_conflict;
 	//! Whether the secret can be persisted
 	SecretPersistType persist_type;
 	//! The type of secret
-	string type;
+	unique_ptr<ParsedExpression> type;
 	//! Which storage to use (empty for default)
 	string storage_type;
 	//! (optionally) the provider of the secret credentials
-	string provider;
+	unique_ptr<ParsedExpression> provider;
 	//! (optionally) the name of the secret
 	string name;
 	//! (optionally) the scope of the secret
-	vector<string> scope;
+	unique_ptr<ParsedExpression> scope;
 	//! Named parameter list (if any)
 	case_insensitive_map_t<unique_ptr<ParsedExpression>> options;
 
 	unique_ptr<CreateInfo> Copy() const override;
 };
-
 } // namespace duckdb
