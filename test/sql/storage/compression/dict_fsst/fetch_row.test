@@ -27,7 +27,7 @@ SELECT
 		WHEN 3 THEN 'this is not an inlined string'
 		WHEN 4 THEN NULL
 	END AS b
-FROM range(10_000) t(x);
+FROM range(80) t(x);
 
 statement ok
 CHECKPOINT
@@ -38,6 +38,15 @@ query I
 SELECT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
 DICT_FSST
+
+query I
+select distinct b from test order by a % 5;
+----
+aaaa
+bbbb
+cccc
+this is not an inlined string
+NULL
 
 statement ok
 pragma verify_fetch_row;

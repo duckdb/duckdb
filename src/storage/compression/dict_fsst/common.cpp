@@ -6,23 +6,6 @@ static constexpr uint16_t FSST_SYMBOL_TABLE_SIZE = sizeof(duckdb_fsst_decoder_t)
 namespace duckdb {
 namespace dict_fsst {
 
-//===--------------------------------------------------------------------===//
-// Helper Functions
-//===--------------------------------------------------------------------===//
-StringDictionaryContainer DictFSSTCompression::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
-	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
-	StringDictionaryContainer container;
-	container.size = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_size));
-	container.end = container.size;
-	return container;
-}
-
-void DictFSSTCompression::SetDictionary(ColumnSegment &segment, BufferHandle &handle,
-                                        StringDictionaryContainer container) {
-	auto header_ptr = reinterpret_cast<dict_fsst_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
-	Store<uint32_t>(container.size, data_ptr_cast(&header_ptr->dict_size));
-}
-
 // bool DictFSSTCompressionState::DryAppendToCurrentSegment(bool is_new, UnifiedVectorFormat &vdata, idx_t count,
 //                                                         idx_t index, idx_t raw_index) {
 //	auto strings = vdata.GetData<string_t>(vdata);

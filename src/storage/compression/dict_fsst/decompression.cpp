@@ -9,15 +9,13 @@ CompressedStringScanState::~CompressedStringScanState() {
 	delete reinterpret_cast<duckdb_fsst_decoder_t *>(decoder);
 }
 
-uint32_t CompressedStringScanState::GetStringLength(sel_t index) {
-	return UnsafeNumericCast<uint32_t>(string_lengths[index]);
-}
-
-string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t dict_offset, uint32_t string_len) {
+string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t dict_offset, idx_t dict_idx) {
 	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
-	if (dict_offset == 0) {
+
+	if (dict_idx == 0) {
 		return string_t(nullptr, 0);
 	}
+	uint32_t string_len = string_lengths[dict_idx];
 
 	// normal string: read string from this block
 	auto dict_pos = dict_ptr + dict_offset;
@@ -47,7 +45,7 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 
 	dict_count = header_ptr->dict_count;
 	auto symbol_table_size = header_ptr->symbol_table_size;
-	dict = DictFSSTCompression::GetDictionary(segment, *handle);
+	dictionary_size = header_ptr->dict_size;
 
 	dictionary_indices_width =
 	    (bitpacking_width_t)(Load<uint8_t>(data_ptr_cast(&header_ptr->dictionary_indices_width)));
@@ -58,7 +56,7 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	    BitpackingPrimitives::GetRequiredSize(segment.count.load(), dictionary_indices_width);
 
 	auto dictionary_dest = AlignValue<idx_t>(DictFSSTCompression::DICTIONARY_HEADER_SIZE);
-	auto symbol_table_dest = AlignValue<idx_t>(dictionary_dest + dict.size);
+	auto symbol_table_dest = AlignValue<idx_t>(dictionary_dest + dictionary_size);
 	auto string_lengths_dest = AlignValue<idx_t>(symbol_table_dest + symbol_table_size);
 	auto dictionary_indices_dest = AlignValue<idx_t>(string_lengths_dest + string_lengths_space);
 
@@ -97,7 +95,6 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	}
 
 	dictionary = make_buffer<Vector>(segment.type, dict_count);
-	dictionary_size = dict_count;
 	auto dict_child_data = FlatVector::GetData<string_t>(*(dictionary));
 	auto &validity = FlatVector::Validity(*dictionary);
 	D_ASSERT(dict_count >= 1);
@@ -105,9 +102,8 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 
 	int32_t offset = 0;
 	for (uint32_t i = 0; i < dict_count; i++) {
-		auto str_len = GetStringLength(i);
-		offset += str_len;
-		dict_child_data[i] = FetchStringFromDict(*dictionary, offset, str_len);
+		dict_child_data[i] = FetchStringFromDict(*dictionary, offset, i);
+		offset += dict_child_data[i].GetSize();
 	}
 }
 
@@ -178,10 +174,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 		for (idx_t i = 0; i < string_number; i++) {
 			offset += string_lengths[i];
 		}
-		offset += string_lengths[string_number];
-
-		auto str_len = string_lengths[string_number];
-		result_data[result_offset] = FetchStringFromDict(result, offset, str_len);
+		result_data[result_offset] = FetchStringFromDict(result, offset, string_number);
 	}
 	result.Verify(result_offset + scan_count);
 }

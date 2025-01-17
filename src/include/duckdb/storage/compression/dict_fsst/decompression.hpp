@@ -28,8 +28,7 @@ public:
 	const SelectionVector &GetSelVec(idx_t start, idx_t scan_count);
 
 private:
-	string_t FetchStringFromDict(Vector &result, int32_t dict_offset, uint32_t string_len);
-	uint32_t GetStringLength(sel_t index);
+	string_t FetchStringFromDict(Vector &result, int32_t dict_offset, idx_t dict_idx);
 
 public:
 	ColumnSegment &segment;
@@ -54,8 +53,6 @@ public:
 	data_ptr_t string_lengths_ptr;
 
 	buffer_ptr<Vector> dictionary;
-	StringDictionaryContainer dict;
-
 	void *decoder = nullptr;
 	vector<unsigned char> decompress_buffer;
 };

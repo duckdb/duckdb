@@ -91,7 +91,8 @@ idx_t DictFSSTCompressionState::Finalize() {
 	                                               dictionary_indices_width);
 
 	if (append_state != DictionaryAppendState::ENCODED_ALL_UNIQUE) {
-		D_ASSERT(dictionary_indices_width == BitpackingPrimitives::MinimumBitWidth(dict_count - 1));
+		auto expected_bitwidth = BitpackingPrimitives::MinimumBitWidth(dict_count - 1);
+		D_ASSERT(dictionary_indices_width == expected_bitwidth);
 	}
 
 #ifdef DEBUG
@@ -179,6 +180,17 @@ void DictFSSTCompressionState::CreateEmptySegment(idx_t row_start) {
 	auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 	current_handle = buffer_manager.Pin(current_segment->block);
 
+	append_state = DictionaryAppendState::REGULAR;
+	string_lengths_width = 0;
+	dictionary_indices_width = 0;
+	string_lengths_space = 0;
+	dictionary_indices_space = 0;
+	all_unique = true;
+	max_string_length = 0;
+	tuple_count = 0;
+	string_lengths.push_back(0);
+	dict_count = 1;
+
 	dictionary_offset = 0;
 	current_dictionary.end = 0;
 	current_dictionary.size = 0;
@@ -196,7 +208,6 @@ void DictFSSTCompressionState::Flush(bool final) {
 	current_segment->count = tuple_count;
 	current_dictionary.size = dictionary_offset;
 	current_dictionary.end = dictionary_offset;
-	DictFSSTCompression::SetDictionary(*current_segment, current_handle, current_dictionary);
 
 	auto next_start = current_segment->start + current_segment->count;
 	auto segment_size = Finalize();
@@ -208,35 +219,21 @@ void DictFSSTCompressionState::Flush(bool final) {
 	}
 
 	// Reset the state
-	append_state = DictionaryAppendState::REGULAR;
-	string_lengths_width = 0;
-	dictionary_indices_width = 0;
-	string_lengths_space = 0;
-	dictionary_indices_space = 0;
 	uncompressed_dictionary_copy.Destroy();
 	//! This should already be empty at this point, otherwise that means that strings are not encoded / not added to the
 	//! dictionary
 	D_ASSERT(dictionary_encoding_buffer.empty());
 	D_ASSERT(to_encode_string_sum == 0);
+
 	current_string_map.clear();
-
 	string_lengths.clear();
-	max_string_length = 0;
 	dictionary_indices.clear();
-
-	all_unique = true;
 	if (encoder) {
 		auto fsst_encoder = reinterpret_cast<duckdb_fsst_encoder_t *>(encoder);
 		duckdb_fsst_destroy(fsst_encoder);
 		encoder = nullptr;
 		symbol_table_size = DConstants::INVALID_INDEX;
 	}
-
-	tuple_count = 0;
-	dict_count = 0;
-
-	string_lengths.push_back(0);
-	dict_count++;
 }
 
 static inline bool RequiresHigherBitWidth(bitpacking_width_t bitwidth, uint32_t other) {
@@ -276,6 +273,9 @@ static inline bool AddLookup(DictFSSTCompressionState &state, idx_t lookup, cons
 		return false;
 	}
 
+	if (recalculate_indices_space) {
+		state.dictionary_indices_space = new_dictionary_indices_space;
+	}
 	state.all_unique = false;
 	// Exists in the dictionary, add it
 	state.dictionary_indices.push_back(lookup);
@@ -295,10 +295,10 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 
 	const bool requires_higher_strlen_bitwidth = RequiresHigherBitWidth(state.string_lengths_width, str_len);
 	const bool requires_higher_indices_bitwidth =
-	    RequiresHigherBitWidth(state.dictionary_indices_width, state.dict_count + 1);
+	    RequiresHigherBitWidth(state.dictionary_indices_width, state.dict_count);
 	// We round the required size up to bitpacking group sizes anyways, so we only have to recalculate every 32 values
 	const bool recalculate_strlen_space =
-	    ((state.dict_count + 1) % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) == 1;
+	    (state.dict_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) == 0;
 
 	//! String Lengths
 	bitpacking_width_t new_string_lengths_width = state.string_lengths_width;
@@ -315,7 +315,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 	bitpacking_width_t new_dictionary_indices_width = state.dictionary_indices_width;
 	idx_t new_dictionary_indices_space = state.dictionary_indices_space;
 	if (requires_higher_indices_bitwidth) {
-		new_dictionary_indices_width = BitpackingPrimitives::MinimumBitWidth(state.dict_count + 1);
+		new_dictionary_indices_width = BitpackingPrimitives::MinimumBitWidth(state.dict_count);
 	}
 	if (requires_higher_indices_bitwidth || recalculate_indices_space) {
 		new_dictionary_indices_space =
@@ -360,8 +360,8 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 		auto baseptr =
 		    AlignPointer<sizeof(data_ptr_t)>(state.current_handle.Ptr() + sizeof(dict_fsst_compression_header_t));
 		memcpy(baseptr + state.dictionary_offset, str.GetData(), str_len);
-		state.dictionary_offset += str_len;
 		string_t dictionary_string((const char *)(baseptr + state.dictionary_offset), str_len); // NOLINT
+		state.dictionary_offset += str_len;
 		state.current_string_map[dictionary_string] = state.dict_count;
 	}
 	state.dict_count++;
@@ -398,6 +398,9 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 	//! In GetRequiredSize we will round up to ALGORITHM_GROUP_SIZE anyways
 	//  so we can avoid recalculating for every tuple
 	const bool recalculate_indices_space = ((tuple_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) == 0);
+	if (recalculate_indices_space) {
+		(void)encoded_input;
+	}
 	// const bool recalculate_indices_space = true;
 
 	switch (append_state) {
@@ -466,7 +469,6 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 		// no lookups are performed, everything is added.
 		if (encoded_input.data.empty()) {
 			encoded_input.offset = i;
-			idx_t required_space = 0;
 			vector<unsigned char *> input_string_ptrs;
 			vector<size_t> input_string_lengths;
 			idx_t total_size = 0;
@@ -613,7 +615,7 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 		string_t dictionary_string((const char *)start, UnsafeNumericCast<uint32_t>(size)); // NOLINT
 		current_string_map.insert({dictionary_string, dictionary_index});
 	}
-
+	dictionary_offset = new_size;
 	string_lengths_width = BitpackingPrimitives::MinimumBitWidth(max_length);
 	real_string_lengths_width = string_lengths_width;
 	return new_state;
@@ -622,11 +624,9 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 	UnifiedVectorFormat vector_format;
 	scan_vector.ToUnifiedFormat(count, vector_format);
-	auto strings = vector_format.GetData<string_t>(vector_format);
 
 	EncodedInput encoded_input;
 	for (idx_t i = 0; i < count; i++) {
-		const auto current_append_state = append_state;
 		bool fits = CompressInternal(vector_format, encoded_input, i, count);
 		if (fits) {
 			continue;
