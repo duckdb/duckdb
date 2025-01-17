@@ -6,7 +6,6 @@
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
 #include "duckdb/common/types/vector.hpp"
-#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
