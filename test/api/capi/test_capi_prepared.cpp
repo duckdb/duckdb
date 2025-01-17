@@ -520,3 +520,63 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 		duckdb_destroy_extracted(&stmts);
 	}
 }
+
+TEST_CASE("Test prepared statement field information in C API", "[capi]") {
+	CAPITester tester;
+	duckdb_prepared_statement stmt = nullptr;
+	
+	// open the database in in-memory mode
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	// Test with a query that has multiple fields of different types
+	REQUIRE(duckdb_prepare(tester.connection, 
+		"SELECT i as int_col, i::VARCHAR as str_col, i::DOUBLE as double_col FROM range(1) as t(i)", &stmt) == DuckDBSuccess);
+
+	// Test number of fields
+	REQUIRE(duckdb_nfields(stmt) == 3);
+	REQUIRE(duckdb_nfields(nullptr) == 0);
+
+	// Test field names
+	REQUIRE(strcmp(duckdb_field_name(stmt, 0), "int_col") == 0);
+	REQUIRE(strcmp(duckdb_field_name(stmt, 1), "str_col") == 0);
+	REQUIRE(strcmp(duckdb_field_name(stmt, 2), "double_col") == 0);
+	REQUIRE(duckdb_field_name(stmt, 3) == nullptr);
+	REQUIRE(duckdb_field_name(nullptr, 0) == nullptr);
+
+	// Test field types
+	REQUIRE(duckdb_field_type(stmt, 0) == DUCKDB_TYPE_BIGINT);
+	REQUIRE(duckdb_field_type(stmt, 1) == DUCKDB_TYPE_VARCHAR);
+	REQUIRE(duckdb_field_type(stmt, 2) == DUCKDB_TYPE_DOUBLE);
+	REQUIRE(duckdb_field_type(stmt, 3) == DUCKDB_TYPE_INVALID);
+	REQUIRE(duckdb_field_type(nullptr, 0) == DUCKDB_TYPE_INVALID);
+
+	// Test logical types
+	duckdb_logical_type type0 = duckdb_field_logical_type(stmt, 0);
+	REQUIRE(type0 != nullptr);
+	REQUIRE(duckdb_get_type_id(type0) == DUCKDB_TYPE_BIGINT);
+	duckdb_destroy_logical_type(&type0);
+
+	duckdb_logical_type type1 = duckdb_field_logical_type(stmt, 1);
+	REQUIRE(type1 != nullptr);
+	REQUIRE(duckdb_get_type_id(type1) == DUCKDB_TYPE_VARCHAR);
+	duckdb_destroy_logical_type(&type1);
+
+	duckdb_logical_type type2 = duckdb_field_logical_type(stmt, 2);
+	REQUIRE(type2 != nullptr);
+	REQUIRE(duckdb_get_type_id(type2) == DUCKDB_TYPE_DOUBLE);
+	duckdb_destroy_logical_type(&type2);
+
+	REQUIRE(duckdb_field_logical_type(stmt, 3) == nullptr);
+	REQUIRE(duckdb_field_logical_type(nullptr, 0) == nullptr);
+
+	// Test with failed prepare
+	duckdb_prepared_statement failed_stmt = nullptr;
+	REQUIRE(duckdb_prepare(tester.connection, "SELECT * FROM nonexistent_table", &failed_stmt) == DuckDBError);
+	REQUIRE(duckdb_nfields(failed_stmt) == 0);
+	REQUIRE(duckdb_field_name(failed_stmt, 0) == nullptr);
+	REQUIRE(duckdb_field_type(failed_stmt, 0) == DUCKDB_TYPE_INVALID);
+	REQUIRE(duckdb_field_logical_type(failed_stmt, 0) == nullptr);
+
+	duckdb_destroy_prepare(&stmt);
+	duckdb_destroy_prepare(&failed_stmt);
+}

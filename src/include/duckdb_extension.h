@@ -127,6 +127,10 @@ typedef struct {
 	duckdb_logical_type (*duckdb_param_logical_type)(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 	duckdb_state (*duckdb_clear_bindings)(duckdb_prepared_statement prepared_statement);
 	duckdb_statement_type (*duckdb_prepared_statement_type)(duckdb_prepared_statement statement);
+	idx_t (*duckdb_nfields)(duckdb_prepared_statement statement);
+	const char *(*duckdb_field_name)(duckdb_prepared_statement statement, idx_t field_idx);
+	duckdb_type (*duckdb_field_type)(duckdb_prepared_statement statement, idx_t field_idx);
+	duckdb_logical_type (*duckdb_field_logical_type)(duckdb_prepared_statement statement, idx_t field_idx);
 	duckdb_state (*duckdb_bind_value)(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_value val);
 	duckdb_state (*duckdb_bind_parameter_index)(duckdb_prepared_statement prepared_statement, idx_t *param_idx_out,
 	                                            const char *name);
@@ -606,6 +610,10 @@ typedef struct {
 #define duckdb_param_logical_type                      duckdb_ext_api.duckdb_param_logical_type
 #define duckdb_clear_bindings                          duckdb_ext_api.duckdb_clear_bindings
 #define duckdb_prepared_statement_type                 duckdb_ext_api.duckdb_prepared_statement_type
+#define duckdb_nfields                                 duckdb_ext_api.duckdb_nfields
+#define duckdb_field_name                              duckdb_ext_api.duckdb_field_name
+#define duckdb_field_type                              duckdb_ext_api.duckdb_field_type
+#define duckdb_field_logical_type                      duckdb_ext_api.duckdb_field_logical_type
 #define duckdb_bind_value                              duckdb_ext_api.duckdb_bind_value
 #define duckdb_bind_parameter_index                    duckdb_ext_api.duckdb_bind_parameter_index
 #define duckdb_bind_boolean                            duckdb_ext_api.duckdb_bind_boolean
