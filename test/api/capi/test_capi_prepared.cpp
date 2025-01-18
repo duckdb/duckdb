@@ -524,13 +524,14 @@ TEST_CASE("Prepared streaming result", "[capi]") {
 TEST_CASE("Test prepared statement field information in C API", "[capi]") {
 	CAPITester tester;
 	duckdb_prepared_statement stmt = nullptr;
-	
+
 	// open the database in in-memory mode
 	REQUIRE(tester.OpenDatabase(nullptr));
 
 	// Test with a query that has multiple fields of different types
-	REQUIRE(duckdb_prepare(tester.connection, 
-		"SELECT i as int_col, i::VARCHAR as str_col, i::DOUBLE as double_col FROM range(1) as t(i)", &stmt) == DuckDBSuccess);
+	REQUIRE(duckdb_prepare(tester.connection,
+	                       "SELECT i as int_col, i::VARCHAR as str_col, i::DOUBLE as double_col FROM range(1) as t(i)",
+	                       &stmt) == DuckDBSuccess);
 
 	// Test number of fields
 	REQUIRE(duckdb_nfields(stmt) == 3);
