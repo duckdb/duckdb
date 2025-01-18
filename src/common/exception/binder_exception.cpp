@@ -23,16 +23,23 @@ BinderException BinderException::ColumnNotFound(const string &name, const vector
 	    StringUtil::Format("Referenced column \"%s\" not found in FROM clause!%s", name, candidate_str), extra_info);
 }
 
-BinderException BinderException::NoMatchingFunction(const string &name, const vector<LogicalType> &arguments,
+BinderException BinderException::NoMatchingFunction(const string &catalog_name, const string &schema_name,
+                                                    const string &name, const vector<LogicalType> &arguments,
                                                     const vector<string> &candidates) {
 	auto extra_info = Exception::InitializeExtraInfo("NO_MATCHING_FUNCTION", optional_idx());
 	// no matching function was found, throw an error
-	string call_str = Function::CallToString(name, arguments);
+	string call_str = Function::CallToString(catalog_name, schema_name, name, arguments);
 	string candidate_str;
 	for (auto &candidate : candidates) {
 		candidate_str += "\t" + candidate + "\n";
 	}
 	extra_info["name"] = name;
+	if (!catalog_name.empty()) {
+		extra_info["catalog"] = catalog_name;
+	}
+	if (!schema_name.empty()) {
+		extra_info["schema"] = schema_name;
+	}
 	extra_info["call"] = call_str;
 	if (!candidates.empty()) {
 		extra_info["candidates"] = StringUtil::Join(candidates, ",");
