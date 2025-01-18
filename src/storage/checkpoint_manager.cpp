@@ -259,11 +259,13 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 void CheckpointReader::LoadCheckpoint(CatalogTransaction transaction, MetadataReader &reader) {
 	BinaryDeserializer deserializer(reader);
+	deserializer.Set<Catalog &>(catalog);
 	deserializer.Begin();
 	deserializer.ReadList(100, "catalog_entries", [&](Deserializer::List &list, idx_t i) {
 		return list.ReadObject([&](Deserializer &obj) { ReadEntry(transaction, obj); });
 	});
 	deserializer.End();
+	deserializer.Unset<Catalog>();
 }
 
 MetadataManager &SingleFileCheckpointReader::GetMetadataManager() {
