@@ -224,3 +224,10 @@ class TestsSparkFunctionsDate(object):
         assert result[0].with_literal == date(2024, 6, 12)
         assert result[0].with_str == date(2024, 7, 12)
         assert result[0].with_col == date(2024, 7, 12)
+
+    def test_try_to_timestamp(self, spark):
+        df = spark.createDataFrame([('1997-02-28 10:30:00',), ('2024-01-01',), ('invalid')], ['t'])
+        res = df.select(F.try_to_timestamp(df.t).alias('dt')).collect()
+        assert res[0].dt == datetime(1997, 2, 28, 10, 30)
+        assert res[1].dt == datetime(2024, 1, 1, 0, 0)
+        assert res[2].dt is None
