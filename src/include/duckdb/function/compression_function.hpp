@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/data_pointer.hpp"
@@ -207,7 +208,7 @@ typedef void (*compression_cleanup_state_t)(ColumnSegment &segment);
 // GetSegmentInfo (optional)
 //===--------------------------------------------------------------------===//
 //! Function prototype for retrieving segment information straight from the column segment
-typedef string (*compression_get_segment_info_t)(ColumnSegment &segment);
+typedef InsertionOrderPreservingMap<string> (*compression_get_segment_info_t)(ColumnSegment &segment);
 
 enum class CompressionValidity : uint8_t { REQUIRES_VALIDITY, NO_VALIDITY_REQUIRED };
 

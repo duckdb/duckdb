@@ -953,7 +953,7 @@ void BitpackingSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_c
 // GetSegmentInfo
 //===--------------------------------------------------------------------===//
 template <class T>
-string BitpackingGetSegmentInfo(ColumnSegment &segment) {
+InsertionOrderPreservingMap<string> BitpackingGetSegmentInfo(ColumnSegment &segment) {
 	map<BitpackingMode, idx_t> counts;
 	auto tuple_count = segment.count.load();
 	BitpackingScanState<T> scan_state(segment);
@@ -964,13 +964,13 @@ string BitpackingGetSegmentInfo(ColumnSegment &segment) {
 		counts[scan_state.current_group.mode]++;
 	}
 
-	vector<string> result;
+	InsertionOrderPreservingMap<string> result;
 	for (auto &it : counts) {
 		auto &mode = it.first;
 		auto &count = it.second;
-		result.push_back(StringUtil::Format("%s: %d", EnumUtil::ToString(mode), count));
+		result[EnumUtil::ToString(mode)] = StringUtil::Format("%d", count);
 	}
-	return StringUtil::Join(result, ", ");
+	return result;
 }
 
 //===--------------------------------------------------------------------===//
