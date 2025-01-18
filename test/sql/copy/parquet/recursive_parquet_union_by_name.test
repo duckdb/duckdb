@@ -30,3 +30,27 @@ SELECT * FROM t ORDER BY it, accum;
 3	212
 3	212
 3	256
+
+statement ok
+create or replace view r AS from read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/*.parquet', hive_partitioning=1, union_by_name=1, cache_union_readers=0)
+
+query II
+WITH RECURSIVE t(it, accum) AS
+(
+	SELECT 1, 0
+	UNION ALL
+	(
+		SELECT it + 1, accum + j
+		FROM t, r
+		WHERE it <= x
+	)
+)
+SELECT * FROM t ORDER BY it, accum;
+----
+1	0
+2	84
+2	84
+2	128
+3	212
+3	212
+3	256

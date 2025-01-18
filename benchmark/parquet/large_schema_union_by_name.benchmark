@@ -1,0 +1,40 @@
+# name: benchmark/parquet/large_schema_union_by_name.benchmark
+# description: Run Parquet scan over many files with large schemas
+# group: [parquet]
+
+name Parquet Read Benchmark over many large schema files (union by name)
+group parquet
+
+load
+CREATE TABLE t1 AS SELECT 
+    i AS id,
+    CAST(i AS BIGINT) as col1,
+    repeat(CAST([[i, i * 2], [i * 3, i * 4]] AS SMALLINT[][]), 100) as col2,
+    {"a": CAST(repeat([i], 100) AS BIGINT[]), "b": TRUE} as col3,
+    CAST(i % 2 AS BOOLEAN) as col4,
+    {"c": 'test', "d": repeat([[-i, -i * 2], [-i * 3, -i * 4]], 100)} as col5
+FROM range(0, 2048) tbl(i);
+COPY t1 TO '${BENCHMARK_DIR}/small_parquet_1.parquet' (FORMAT PARQUET);
+CREATE OR REPLACE TABLE t1 AS SELECT 
+    CAST(i AS SMALLINT) AS id,
+    repeat(CAST([[i, i * 2], [i * 3, i * 4]] AS UINTEGER[][]), 100) as col2,
+    CAST(i AS UINTEGER) as col1,
+    {"c": 5, "d": NULL} as col5,
+    repeat([i % 2], 10) as col6
+FROM range(0, 2048) tbl(i);
+COPY t1 TO '${BENCHMARK_DIR}/small_parquet_2.parquet' (FORMAT PARQUET);
+CREATE OR REPLACE TABLE t1 AS SELECT 
+    CAST(i AS USMALLINT) AS id,
+    CAST(i AS UINTEGER) as col1,
+    {"a": CAST(repeat([i], 100) AS USMALLINT[]), "b": NULL} as col3,
+    CAST(i % 2 AS UTINYINT) as col4,
+    {"c": NULL, "d": CAST(repeat([[i, i * 2], [i * 3, i * 4]], 100) AS UINTEGER[][])} as col5,
+    repeat(CAST([i % 2] AS BOOLEAN[]), 10) as col6,
+    'test 2' as col7
+FROM range(0, 2048) tbl(i);
+COPY t1 TO '${BENCHMARK_DIR}/small_parquet_3.parquet' (FORMAT PARQUET);
+DROP TABLE t1;
+
+run
+SET preserve_insertion_order = FALSE;
+SELECT COUNT(*) FROM read_parquet(repeat(['${BENCHMARK_DIR}/small_parquet_*.parquet'], 100), union_by_name=true, cache_union_readers=false);

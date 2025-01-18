@@ -41,6 +41,12 @@ SELECT * FROM read_parquet(['__TEST_DIR__/union_by_name_pushdown1.parquet', '__T
 NULL	128	33
 
 query III
+SELECT * FROM read_parquet(['__TEST_DIR__/union_by_name_pushdown1.parquet', '__TEST_DIR__/union_by_name_pushdown2.parquet'], union_by_name=True, cache_union_readers=False) WHERE k>0 OR k IS NULL
+----
+42	84	NULL
+NULL	128	33
+
+query III
 SELECT * FROM read_parquet(['__TEST_DIR__/union_by_name_pushdown1.parquet', '__TEST_DIR__/union_by_name_pushdown2.parquet'], union_by_name=True) WHERE i>0
 ----
 42	84	NULL

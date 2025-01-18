@@ -105,6 +105,14 @@ ORDER BY j
 
 query IIIII
 SELECT i, j, k, x, filename.replace('\', '/').split('/')[-2]
+FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1, cache_union_readers=0)
+WHERE filename.replace('\', '/') < 'data/parquet-testing/hive-partitioning/union_by_name/x=2'
+ORDER BY j
+----
+42	84	NULL	1	x=1
+
+query IIIII
+SELECT i, j, k, x, filename.replace('\', '/').split('/')[-2]
 FROM read_parquet('data/parquet-testing/hive-partitioning/union_by_name/*/f2.parquet', hive_partitioning=1, union_by_name=1, filename=1)
 WHERE filename.replace('\', '/') < 'data/parquet-testing/hive-partitioning/union_by_name/x=1'
 ORDER BY j

@@ -26,3 +26,25 @@ SELECT * FROM t ORDER BY i;
 2	42
 3	84
 3	84
+
+statement ok
+create or replace view r AS from read_csv_auto('data/csv/hive-partitioning/mismatching_contents/*/*.csv', UNION_BY_NAME=1, HIVE_PARTITIONING=1, CACHE_UNION_READERS=0)
+
+query II
+WITH RECURSIVE t(i, j) AS
+(
+	SELECT 1, 0
+	UNION ALL
+	(
+		SELECT i + 1, j + a
+		FROM t, r
+		WHERE i <= part
+	)
+)
+SELECT * FROM t ORDER BY i;
+----
+1	0
+2	42
+2	42
+3	84
+3	84
