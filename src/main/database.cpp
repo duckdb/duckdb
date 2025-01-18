@@ -462,7 +462,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		                                                 config.options.buffer_manager_track_eviction_timestamps,
 		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}
-	config.db_cache_entry = new_config.db_cache_entry;
+	config.db_cache_entry = std::move(new_config.db_cache_entry);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
