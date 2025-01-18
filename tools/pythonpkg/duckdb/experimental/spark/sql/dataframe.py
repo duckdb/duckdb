@@ -1402,6 +1402,14 @@ class DataFrame:
 
         rows = [construct_row(x, columns) for x in result]
         return rows
+    
+
+    def cache(self) -> "DataFrame":
+        duck_uuid = self.session.sql("select gen_random_uuid()").head()[0]
+        uuid_str = str(duck_uuid).replace("-", "_")
+        cache_table = f"cache_table_{uuid_str}"
+        self.relation.create(cache_table)
+        return self.session.sql(f"select * from {cache_table}")
 
 
 __all__ = ["DataFrame"]
