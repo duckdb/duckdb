@@ -105,6 +105,34 @@ static const SerializationVersionInfo serialization_version_info[] = {
 static_assert(DEFAULT_SERIALIZATION_VERSION_INFO <= LATEST_SERIALIZATION_VERSION_INFO,
               "Check on SERIALIZATION_VERSION_INFO");
 
+string GetStorageVersionName(idx_t serialization_version) {
+	if (serialization_version < 4) {
+		// special handling for lower serialization versions
+		return "v1.0.0 - v1.1.3";
+	}
+	optional_idx min_idx;
+	optional_idx max_idx;
+	for (idx_t i = 0; serialization_version_info[i].version_name; i++) {
+		if (strcmp(serialization_version_info[i].version_name, "latest") == 0) {
+			continue;
+		}
+		if (serialization_version_info[i].serialization_version != serialization_version) {
+			continue;
+		}
+		if (!min_idx.IsValid()) {
+			min_idx = i;
+		} else {
+			max_idx = i;
+		}
+	}
+	auto min_name = serialization_version_info[min_idx.GetIndex()].version_name;
+	if (!max_idx.IsValid()) {
+		return min_name;
+	}
+	auto max_name = serialization_version_info[max_idx.GetIndex()].version_name;
+	return string(min_name) + " - " + string(max_name);
+}
+
 optional_idx GetStorageVersion(const char *version_string) {
 	for (idx_t i = 0; storage_version_info[i].version_name; i++) {
 		if (!strcmp(storage_version_info[i].version_name, version_string)) {
