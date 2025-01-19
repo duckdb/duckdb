@@ -219,6 +219,12 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 		auto wal_path = GetWALPath();
 		wal = WriteAheadLog::Replay(fs, db, wal_path);
 	}
+	if (row_group_size > 122880ULL && GetStorageVersion() < 4) {
+		throw InvalidInputException("Unsupported row group size %llu - row group sizes >= 122_880 are only supported "
+		                            "with STORAGE_VERSION '1.2.0' or above.\nExplicitly specify a newer storage "
+		                            "version when creating the database to enable larger row groups",
+		                            row_group_size);
+	}
 
 	load_complete = true;
 }
