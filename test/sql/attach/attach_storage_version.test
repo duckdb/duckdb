@@ -134,3 +134,15 @@ statement error
 ATTACH '__TEST_DIR__/default_version.db' (STORAGE_VERSION 'v1.0.0')
 ----
 The storage version of an existing database cannot be lowered
+
+# setting the storage_compatibility_version explicitly changes the default storage compatibility version when attaching
+statement ok
+SET storage_compatibility_version = 'v1.2.0'
+
+statement ok
+ATTACH '__TEST_DIR__/modified_default_setting.db';
+
+query I
+SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='modified_default_setting'
+----
+v1.2.0

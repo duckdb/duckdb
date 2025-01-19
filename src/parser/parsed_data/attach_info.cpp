@@ -3,8 +3,7 @@
 
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/optional_idx.hpp"
-
-#include <duckdb/main/config.hpp>
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 

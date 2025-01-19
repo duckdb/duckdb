@@ -183,6 +183,10 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			// No explicit option provided: use the default option.
 			options.block_alloc_size = config.options.default_block_alloc_size;
 		}
+		if (!options.storage_version.IsValid()) {
+			// when creating a new database we default to the serialization version specified in the config
+			options.storage_version = config.options.serialization_compatibility.serialization_version;
+		}
 
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);

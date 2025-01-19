@@ -206,9 +206,6 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	// first fill in the new header
 	header_buffer.Clear();
 
-	if (!options.storage_version.IsValid()) {
-		options.storage_version = SerializationCompatibility::Default().serialization_version;
-	}
 	options.version_number = GetVersionNumber();
 	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
 	AddStorageVersionTag();
