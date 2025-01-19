@@ -1434,9 +1434,10 @@ class DataFrame:
         """
         duck_uuid = self.session.sql("select gen_random_uuid()").head()[0]
         uuid_str = str(duck_uuid).replace("-", "_")
-        cache_table = f"cache_table_{uuid_str}"
-        self.relation.create(cache_table)
-        return self.session.sql(f"select * from {cache_table}")
+        cache_name = f"cache_table_{uuid_str}"
+        cache_df = self.relation # noqa F841
+        self.session.conn.sql(f"CREATE TEMPORARY TABLE {cache_name} AS SELECT * FROM cache_df;")
+        return self.session.sql(f"select * from {cache_name}")
 
 
 __all__ = ["DataFrame"]
