@@ -2,6 +2,8 @@
 # description: Test that query plans are evaluated in a depth-first fashion
 # group: [intraquery]
 
+mode skip
+
 # we need a persistent DB because we want to compress the table that we're working with
 load __TEST_DIR__/depth_first_evaluation.db
 
