@@ -45,7 +45,7 @@ env:
 jobs:
   regression-test-benchmark-runner:
     name: Regression Tests
-    runs-on: ubuntu-22-arm
+    runs-on: ubuntu-22.04-arm
     env:
       CC: gcc-10
       CXX: g++-10
@@ -181,7 +181,7 @@ jobs:
 
   regression-test-storage:
     name: Storage Size Regression Test
-    runs-on: ubuntu-22-arm
+    runs-on: ubuntu-22.04-arm
     env:
       CC: gcc-10
       CXX: g++-10
@@ -261,7 +261,7 @@ jobs:
 
   regression-test-binary-size:
     name: Regression test binary size
-    runs-on: ubuntu-22-arm
+    runs-on: ubuntu-22.04-arm
     env:
       CC: gcc-10
       CXX: g++-10
@@ -303,7 +303,7 @@ jobs:
 
   regression-test-plan-cost:
     name: Regression Test Join Order Plan Cost
-    runs-on: ubuntu-22-arm
+    runs-on: ubuntu-22.04-arm
     env:
       CC: gcc-10
       CXX: g++-10
