@@ -109,6 +109,9 @@ public:
 	void SetStorageVersion(idx_t version) {
 		storage_version = version;
 	}
+	idx_t GetStorageVersion() const {
+		return storage_version.GetIndex();
+	}
 
 protected:
 	virtual void LoadDatabase(StorageOptions options) = 0;

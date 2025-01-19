@@ -26,6 +26,7 @@ class ColumnSegment;
 class DatabaseInstance;
 class RowGroup;
 class RowGroupWriter;
+class StorageManager;
 class TableDataWriter;
 class TableStorageInfo;
 struct DataTableInfo;
@@ -77,6 +78,7 @@ public:
 	}
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
+	StorageManager &GetStorageManager() const;
 	virtual idx_t GetMaxEntry();
 
 	idx_t GetAllocationSize() const {

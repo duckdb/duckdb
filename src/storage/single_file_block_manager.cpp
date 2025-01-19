@@ -210,6 +210,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 		options.storage_version = SerializationCompatibility::Default().serialization_version;
 	}
 	options.version_number = GetVersionNumber();
+	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
 	AddStorageVersionTag();
 
 	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
@@ -343,7 +344,7 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 		    "by this DuckDB instance. Try opening the file with a newer version of DuckDB.",
 		    path);
 	}
-	db.GetStorageManager().SetStorageVersion(header.serialization_compatibility);
+	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
 
 	if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != header.block_alloc_size) {
 		throw InvalidInputException(
