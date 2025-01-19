@@ -220,6 +220,10 @@ void RoaringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t sc
 }
 
 void RoaringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	if (result.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+		// dictionary encoding handles the validity itself
+		return;
+	}
 	RoaringScanPartial(segment, state, scan_count, result, 0);
 }
 

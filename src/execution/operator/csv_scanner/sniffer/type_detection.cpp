@@ -99,6 +99,10 @@ idx_t CSVSniffer::LinesSniffed() const {
 	return lines_sniffed;
 }
 
+bool CSVSniffer::EmptyOrOnlyHeader() const {
+	return (single_row_file && best_candidate->state_machine->dialect_options.header.GetValue()) || lines_sniffed == 0;
+}
+
 bool CSVSniffer::CanYouCastIt(ClientContext &context, const string_t value, const LogicalType &type,
                               const DialectOptions &dialect_options, const bool is_null, const char decimal_separator) {
 	if (is_null) {

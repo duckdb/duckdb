@@ -1,11 +1,11 @@
-# name: test/sql/index/art/scan/test_in_filter_index_scan.test_slow
-# description: Test using an index scan for IN filter pushdown.
+# name: test/sql/index/art/scan/test_hash_join_in_filter_index_scan.test
+# description: Test using an index scan for IN filter pushdown via hash joins.
 # group: [scan]
 
 require tpch
 
 statement ok
-CALL dbgen(sf=0.1);
+CALL dbgen(sf=0.01);
 
 statement ok
 CREATE TABLE random_orders AS (
