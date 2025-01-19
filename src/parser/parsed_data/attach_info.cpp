@@ -20,8 +20,6 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 		} else if (entry.first == "storage_version") {
 			storage_options.storage_version =
 			    SerializationCompatibility::FromString(entry.second.ToString()).serialization_version;
-		} else {
-			throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 		}
 	}
 	return storage_options;
