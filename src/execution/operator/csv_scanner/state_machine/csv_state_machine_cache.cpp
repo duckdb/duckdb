@@ -77,13 +77,25 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::STANDARD;
 			} else if (!state_machine_options.rfc_4180.GetValue()) {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
-			} else {
-				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
+			}
+			// else {
+			// 	transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
+			// }
+		} else if (new_line_id == NewLineIdentifier::SINGLE_N) {
+			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
+			if (!state_machine_options.rfc_4180.GetValue()) {
+				transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
+			}
+		} else if (new_line_id == NewLineIdentifier::SINGLE_R) {
+			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
+			if (!state_machine_options.rfc_4180.GetValue()) {
+				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
 			}
 		} else {
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::RECORD_SEPARATOR;
 			transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
 		}
+
 		if (comment != '\0') {
 			transition_array[comment][state] = CSVState::COMMENT;
 		}

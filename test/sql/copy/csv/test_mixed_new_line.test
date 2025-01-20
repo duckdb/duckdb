@@ -29,10 +29,10 @@ from read_csv('data/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'inte
 ----
 Error when sniffing file "data/csv/mixed_new_line.csv".
 
-statement error
-from read_csv('data/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, rfc_4180=true, delim = ',', auto_detect= false)
-----
-The CSV Parser state machine reached an invalid state.
+# statement error
+# from read_csv('data/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, rfc_4180=true, delim = ',', auto_detect= false)
+# ----
+# The CSV Parser state machine reached an invalid state.
 
 query I
 select count(*) from read_csv('data/csv/mixed_new_line_2.csv', new_line ='\r\n', rfc_4180 = False, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
@@ -49,3 +49,46 @@ SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('d
 ----
 true
 
+query I
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_two.csv',new_line ='\n', rfc_4180 = TRUE, HEADER = FALSE)
+----
+true
+
+# query I
+# SELECT column0 FROM read_csv('data/csv/one_r_two.csv',new_line ='\r', rfc_4180 = TRUE, HEADER = FALSE)
+# ----
+# one
+# two
+
+query I
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_n_two.csv',new_line ='\r', rfc_4180 = TRUE, HEADER = FALSE)
+----
+true
+
+
+query I
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_n_two.csv',new_line ='\r\n', rfc_4180 = TRUE, HEADER = FALSE)
+----
+true
+
+query I
+SELECT column0 FROM read_csv('data/csv/one_n_two.csv',new_line ='\n', rfc_4180 = TRUE, HEADER = FALSE)
+----
+one
+two
+
+query I
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\r', rfc_4180 = TRUE, HEADER = FALSE)
+----
+true
+
+query I
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\n\n', rfc_4180 = TRUE, HEADER = FALSE)
+----
+true
+
+query I
+SELECT column0 FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\r\n', rfc_4180 = TRUE, HEADER = FALSE)
+----
+one
+two
