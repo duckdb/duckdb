@@ -260,20 +260,18 @@ static inline bool AddLookup(DictFSSTCompressionState &state, idx_t lookup, cons
 	idx_t required_space = 0;
 	required_space += sizeof(dict_fsst_compression_header_t);
 	required_space = AlignValue<idx_t>(required_space);
+	required_space += state.dictionary_offset;
 	if (APPEND_STATE == DictionaryAppendState::ENCODED) {
-		required_space += state.dictionary_offset;
 		required_space += state.to_encode_string_sum;
-	} else {
-		required_space += state.dictionary_offset;
 	}
 	required_space = AlignValue<idx_t>(required_space);
 	if (IsEncoded(APPEND_STATE)) {
 		required_space += state.symbol_table_size;
 		required_space = AlignValue<idx_t>(required_space);
 	}
-	required_space += new_dictionary_indices_space;
-	required_space = AlignValue<idx_t>(required_space);
 	required_space += state.string_lengths_space;
+	required_space = AlignValue<idx_t>(required_space);
+	required_space += new_dictionary_indices_space;
 
 	idx_t available_space = state.info.GetBlockSize();
 	if (APPEND_STATE == DictionaryAppendState::REGULAR) {
@@ -288,7 +286,6 @@ static inline bool AddLookup(DictFSSTCompressionState &state, idx_t lookup, cons
 	}
 	// Exists in the dictionary, add it
 	state.dictionary_indices.push_back(lookup);
-	state.tuple_count++;
 	return true;
 }
 
@@ -334,20 +331,18 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 	idx_t required_space = 0;
 	required_space += sizeof(dict_fsst_compression_header_t);
 	required_space = AlignValue<idx_t>(required_space);
+	required_space += state.dictionary_offset + str_len;
 	if (APPEND_STATE == DictionaryAppendState::ENCODED) {
-		required_space += state.dictionary_offset + str_len;
 		required_space += state.to_encode_string_sum;
-	} else {
-		required_space += state.dictionary_offset + str_len;
 	}
 	required_space = AlignValue<idx_t>(required_space);
 	if (IsEncoded(APPEND_STATE)) {
 		required_space += state.symbol_table_size;
 		required_space = AlignValue<idx_t>(required_space);
 	}
-	required_space += new_dictionary_indices_space;
-	required_space = AlignValue<idx_t>(required_space);
 	required_space += new_string_lengths_space;
+	required_space = AlignValue<idx_t>(required_space);
+	required_space += new_dictionary_indices_space;
 
 	idx_t available_space = state.info.GetBlockSize();
 	if (APPEND_STATE == DictionaryAppendState::REGULAR) {
@@ -394,7 +389,6 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 	if (requires_higher_indices_bitwidth || recalculate_indices_space) {
 		state.dictionary_indices_space = new_dictionary_indices_space;
 	}
-	state.tuple_count++;
 	return true;
 }
 
@@ -626,6 +620,7 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 	bool can_use_encoding = true;
 	idx_t new_size = 0;
 	bitpacking_width_t new_string_lengths_width;
+	idx_t new_string_lengths_space;
 	do {
 		if (res != string_count) {
 			can_use_encoding = false;
@@ -633,9 +628,10 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 		}
 		uint32_t max_length = 0;
 		for (idx_t i = 0; i < string_count; i++) {
-			new_size += compressed_sizes[i];
-			if (new_size > max_length) {
-				max_length = new_size;
+			auto str_len = compressed_sizes[i];
+			new_size += str_len;
+			if (str_len > max_length) {
+				max_length = str_len;
 			}
 		}
 		if (new_size + DICTIONARY_ENCODE_THRESHOLD > dictionary_offset) {
@@ -647,6 +643,25 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 			can_use_encoding = false;
 			break;
 		}
+
+		new_string_lengths_space = BitpackingPrimitives::GetRequiredSize(dict_count, new_string_lengths_width);
+
+		idx_t required_space = 0;
+		required_space += sizeof(dict_fsst_compression_header_t);
+		required_space = AlignValue<idx_t>(required_space);
+		required_space += new_size;
+		required_space = AlignValue<idx_t>(required_space);
+		required_space += FSST_SYMBOL_TABLE_SIZE;
+		required_space = AlignValue<idx_t>(required_space);
+		required_space += new_string_lengths_space;
+		required_space = AlignValue<idx_t>(required_space);
+		required_space += dictionary_indices_space;
+
+		if (required_space > info.GetBlockSize()) {
+			can_use_encoding = false;
+			break;
+		}
+
 	} while (false);
 
 	if (!can_use_encoding) {
@@ -725,7 +740,7 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 	}
 	dictionary_offset = new_size;
 	string_lengths_width = new_string_lengths_width;
-	string_lengths_space = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
+	string_lengths_space = new_string_lengths_space;
 	real_string_lengths_width = string_lengths_width;
 	return new_state;
 }
@@ -736,25 +751,26 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 
 	EncodedInput encoded_input;
 	for (idx_t i = 0; i < count; i++) {
-		bool fits = CompressInternal(vector_format, encoded_input, i, count);
-		if (fits) {
-			continue;
-		}
-		if (append_state == DictionaryAppendState::REGULAR) {
-			append_state = SwitchAppendState();
-			D_ASSERT(append_state != DictionaryAppendState::REGULAR);
-			fits = CompressInternal(vector_format, encoded_input, i, count);
-			if (fits) {
-				continue;
+		do {
+			if (CompressInternal(vector_format, encoded_input, i, count)) {
+				break;
 			}
-		}
-		Flush(false);
-		encoded_input.data.clear();
-		encoded_input.offset = 0;
-		fits = CompressInternal(vector_format, encoded_input, i, count);
-		if (!fits) {
-			throw FatalException("Compressing directly after Flush doesn't fit");
-		}
+
+			if (append_state == DictionaryAppendState::REGULAR) {
+				append_state = SwitchAppendState();
+				D_ASSERT(append_state != DictionaryAppendState::REGULAR);
+				if (CompressInternal(vector_format, encoded_input, i, count)) {
+					break;
+				}
+			}
+			Flush(false);
+			encoded_input.data.clear();
+			encoded_input.offset = 0;
+			if (!CompressInternal(vector_format, encoded_input, i, count)) {
+				throw FatalException("Compressing directly after Flush doesn't fit");
+			}
+		} while (false);
+		tuple_count++;
 	}
 }
 
