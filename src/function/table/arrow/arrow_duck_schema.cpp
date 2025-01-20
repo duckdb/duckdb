@@ -367,13 +367,11 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema
 	// Let's first figure out if this type is an extension type
 	ArrowSchemaMetadata schema_metadata(schema.metadata);
 	auto arrow_type = GetTypeFromFormat(config, schema, format);
-	if (schema_metadata.HasExtension()) {
+	if (schema_metadata.HasExtension() && config.HasArrowExtension(schema_metadata)) {
 		auto extension_info = schema_metadata.GetExtensionInfo(string(format));
-		if (config.HasArrowExtension(config)) {
-			auto extension = config.GetArrowExtension(extension_info);
-			arrow_type = extension.GetType(schema, schema_metadata);
-			arrow_type->extension_data = extension.GetTypeExtension();
-		}
+		auto extension = config.GetArrowExtension(extension_info);
+		arrow_type = extension.GetType(schema, schema_metadata);
+		arrow_type->extension_data = extension.GetTypeExtension();
 	}
 
 	return arrow_type;
