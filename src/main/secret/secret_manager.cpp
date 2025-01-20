@@ -225,17 +225,13 @@ optional_ptr<CreateSecretFunction> SecretManager::LookupFunctionInternal(const s
 	return nullptr;
 }
 
-// TODO this should take a CreateSecretInput, which we create from the CreateSecretInfo (containing expressions) in the
-// bind
 unique_ptr<SecretEntry> SecretManager::CreateSecret(ClientContext &context, const CreateSecretInput &input) {
 	// Note that a context is required for CreateSecret, as the CreateSecretFunction expects one
 	auto transaction = CatalogTransaction::GetSystemCatalogTransaction(context);
 	InitializeSecrets(transaction);
 
-	// TODO remove copy
-	auto function_input = input;
-
 	// Make a copy to set the provider to default if necessary
+	auto function_input = input;
 	if (function_input.provider.empty()) {
 		auto secret_type = LookupTypeInternal(function_input.type);
 		function_input.provider = secret_type.default_provider;

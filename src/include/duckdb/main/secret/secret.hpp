@@ -17,6 +17,7 @@ namespace duckdb {
 class BaseSecret;
 struct SecretEntry;
 struct FileOpenerInfo;
+struct CreateSecretInfo;
 
 //! Whether a secret is persistent or temporary
 enum class SecretPersistType : uint8_t { DEFAULT, TEMPORARY, PERSISTENT };
@@ -35,9 +36,9 @@ struct CreateSecretInput {
 	vector<string> scope;
 	//! (optional) named parameter map, each create secret function has defined it's own set of these
 	case_insensitive_map_t<Value> options;
-
-	// TODO set these
+	//! how to handle conflicts
 	OnCreateConflict on_conflict;
+	//! persistence of secret
 	SecretPersistType persist_type;
 };
 
