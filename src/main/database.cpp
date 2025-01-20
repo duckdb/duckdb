@@ -463,6 +463,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}
 	config.db_cache_entry = new_config.db_cache_entry;
+	new_config.db_cache_entry.reset();
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
