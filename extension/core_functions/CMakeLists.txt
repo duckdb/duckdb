@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.5...3.29)
 project(CoreFunctionsExtension)
 
 include_directories(include)
-
 add_subdirectory(aggregate)
 add_subdirectory(scalar)
 
