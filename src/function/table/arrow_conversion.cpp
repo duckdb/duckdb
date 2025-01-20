@@ -1104,7 +1104,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 				break;
 			case ArrowArrayPhysicalType::DEFAULT:
 				ColumnArrowToDuckDB(child_entry, child_array, child_state, size, child_type, nested_offset,
-				                    &struct_validity_mask, NumericCast<uint64_t>(array.offset), true);
+				                    &struct_validity_mask, NumericCast<uint64_t>(array.offset), false);
 				break;
 			default:
 				throw NotImplementedException("ArrowArrayPhysicalType not recognized");
@@ -1131,14 +1131,14 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 
 			switch (array_physical_type) {
 			case ArrowArrayPhysicalType::DICTIONARY_ENCODED:
-				ColumnArrowToDuckDBDictionary(child, child_array, child_state, size, child_type, true);
+				ColumnArrowToDuckDBDictionary(child, child_array, child_state, size, child_type);
 				break;
 			case ArrowArrayPhysicalType::RUN_END_ENCODED:
-				ColumnArrowToDuckDBRunEndEncoded(child, child_array, child_state, size, child_type, true);
+				ColumnArrowToDuckDBRunEndEncoded(child, child_array, child_state, size, child_type);
 				break;
 			case ArrowArrayPhysicalType::DEFAULT:
 				ColumnArrowToDuckDB(child, child_array, child_state, size, child_type, nested_offset, &validity_mask,
-				                    true);
+				                    false);
 				break;
 			default:
 				throw NotImplementedException("ArrowArrayPhysicalType not recognized");
