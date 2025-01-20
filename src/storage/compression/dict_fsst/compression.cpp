@@ -622,7 +622,34 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 	auto res = duckdb_fsst_compress(fsst_encoder, string_count, fsst_string_sizes.data(), fsst_string_ptrs.data(),
 	                                dictionary_offset, (unsigned char *)dictionary_start, compressed_sizes.data(),
 	                                compressed_ptrs.data());
-	if (res != string_count) {
+
+	bool can_use_encoding = true;
+	idx_t new_size = 0;
+	bitpacking_width_t new_string_lengths_width;
+	do {
+		if (res != string_count) {
+			can_use_encoding = false;
+			break;
+		}
+		uint32_t max_length = 0;
+		for (idx_t i = 0; i < string_count; i++) {
+			new_size += compressed_sizes[i];
+			if (new_size > max_length) {
+				max_length = new_size;
+			}
+		}
+		if (new_size + DICTIONARY_ENCODE_THRESHOLD > dictionary_offset) {
+			can_use_encoding = false;
+			break;
+		}
+		new_string_lengths_width = BitpackingPrimitives::MinimumBitWidth(max_length);
+		if (new_string_lengths_width > string_lengths_width) {
+			can_use_encoding = false;
+			break;
+		}
+	} while (false);
+
+	if (!can_use_encoding) {
 		// The dictionary does not compress well enough to use FSST
 		// continue filling the remaining bytes without encoding
 
@@ -634,11 +661,6 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 		duckdb_fsst_destroy(fsst_encoder);
 		encoder = nullptr;
 		return DictionaryAppendState::NOT_ENCODED;
-	}
-
-	idx_t new_size = 0;
-	for (idx_t i = 0; i < string_count; i++) {
-		new_size += compressed_sizes[i];
 	}
 
 	if (new_state == DictionaryAppendState::ENCODED_ALL_UNIQUE) {
@@ -663,15 +685,11 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 
 	// Rewrite the dictionary
 	current_string_map.clear();
-	uint32_t max_length = 0;
 	if (new_state == DictionaryAppendState::ENCODED) {
 		offset = 0;
 		auto uncompressed_dictionary_ptr = dict_copy.GetData();
 		for (idx_t i = 0; i < string_count; i++) {
 			auto size = UnsafeNumericCast<uint32_t>(compressed_sizes[i]);
-			if (size > max_length) {
-				max_length = size;
-			}
 			// Skip index 0, reserved for NULL
 			uint32_t dictionary_index = UnsafeNumericCast<uint32_t>(i + 1);
 			auto uncompressed_str_len = string_lengths[dictionary_index];
@@ -697,9 +715,6 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 		for (idx_t i = 0; i < string_count; i++) {
 			auto &start = compressed_ptrs[i];
 			auto size = UnsafeNumericCast<uint32_t>(compressed_sizes[i]);
-			if (size > max_length) {
-				max_length = size;
-			}
 			// Skip index 0, reserved for NULL
 			uint32_t dictionary_index = UnsafeNumericCast<uint32_t>(i + 1);
 			string_lengths[dictionary_index] = size;
@@ -709,7 +724,7 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 		}
 	}
 	dictionary_offset = new_size;
-	string_lengths_width = BitpackingPrimitives::MinimumBitWidth(max_length);
+	string_lengths_width = new_string_lengths_width;
 	string_lengths_space = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
 	real_string_lengths_width = string_lengths_width;
 	return new_state;
