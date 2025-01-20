@@ -307,6 +307,11 @@ ifdef DUCKDB_PLATFORM
 	endif
 endif
 
+# Set to reldebug to create a library bundle with debug info.
+ifeq ("${BUNDLE_LIBRARY_BASE}", "")
+    BUNDLE_LIBRARY_BASE:="release"
+endif
+
 clean:
 	rm -rf build
 
@@ -500,7 +505,7 @@ generate-files:
 	$(MAKE) format-main
 
 bundle-setup:
-	cd build/release && \
+	cd build/${BUNDLE_LIBRARY_BASE} && \
 	rm -rf bundle && \
 	mkdir -p bundle && \
 	cp src/libduckdb_static.a bundle/. && \
@@ -511,12 +516,12 @@ bundle-setup:
 	find . -name '*.a' -execdir ${AR} -x {} \;
 
 bundle-library-o: bundle-setup
-	cd build/release/bundle && \
+	cd build/${BUNDLE_LIBRARY_BASE}/bundle && \
 	echo ./*/*.o | xargs ${AR} cr ../libduckdb_bundle.a
 
 bundle-library-obj: bundle-setup
-	cd build/release/bundle && \
+	cd build/${BUNDLE_LIBRARY_BASE}/bundle && \
 	echo ./*/*.obj | xargs ${AR} cr ../libduckdb_bundle.a
 
-bundle-library: release
+bundle-library: ${BUNDLE_LIBRARY_BASE}
 	make bundle-library-o
