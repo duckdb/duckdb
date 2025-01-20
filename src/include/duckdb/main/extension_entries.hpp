@@ -430,6 +430,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"map_concat", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_entries", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_extract", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"map_extract_value", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_from_entries", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_keys", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_values", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},

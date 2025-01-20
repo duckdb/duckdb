@@ -106,8 +106,9 @@ static void MapExtractListFunc(DataChunk &args, ExpressionState &state, Vector &
 
 	if (map_is_null || arg_is_null) {
 		// Short-circuit if either the map or the arg is NULL
+		ListVector::SetListSize(result, 0);
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
+		ConstantVector::GetData<list_entry_t>(result)[0] = {0, 0};
 		result.Verify(count);
 		return;
 	}
