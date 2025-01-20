@@ -239,6 +239,21 @@ bool DBConfig::HasArrowExtension(const LogicalType &type) const {
 	return !arrow_extensions->type_to_info[type_info].empty();
 }
 
+bool DBConfig::HasArrowExtension(ArrowExtensionMetadata info) const {
+	lock_guard<mutex> l(arrow_extensions->lock);
+	if (type_extensions.find(info) != type_extensions.end()) {
+		return true;
+	}
+
+	auto og_info = info;
+	info.SetArrowFormat("");
+	if (type_extensions.find(info) == type_extensions.end()) {
+		return true;
+	}
+
+	return false;
+}
+
 struct ArrowJson {
 	static unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
 		const auto format = string(schema.format);
