@@ -241,6 +241,8 @@ bool DBConfig::HasArrowExtension(const LogicalType &type) const {
 
 bool DBConfig::HasArrowExtension(ArrowExtensionMetadata info) const {
 	lock_guard<mutex> l(arrow_extensions->lock);
+	auto type_extensions = arrow_extensions->type_extensions;
+
 	if (type_extensions.find(info) != type_extensions.end()) {
 		return true;
 	}
