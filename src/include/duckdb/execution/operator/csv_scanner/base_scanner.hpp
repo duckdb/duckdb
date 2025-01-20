@@ -166,6 +166,11 @@ protected:
 	void Process(T &result) {
 		idx_t to_pos;
 		const bool has_escaped_value = state_machine->dialect_options.state_machine_options.escape != '\0';
+		const bool only_rn_newlines =
+		    state_machine->state_machine_options.rfc_4180.GetValue() &&
+		    state_machine->state_machine_options.rfc_4180.IsSetByUser() &&
+		    state_machine->state_machine_options.new_line.GetValue() == NewLineIdentifier::CARRY_ON &&
+		    state_machine->state_machine_options.new_line.IsSetByUser();
 		const idx_t start_pos = iterator.pos.buffer_pos;
 		if (iterator.IsBoundarySet()) {
 			to_pos = iterator.GetEndPos();
@@ -229,7 +234,7 @@ protected:
 							lines_read++;
 							return;
 						}
-					} else {
+					} else if (!only_rn_newlines) {
 						if (T::AddRow(result, iterator.pos.buffer_pos)) {
 							iterator.pos.buffer_pos++;
 							bytes_read = iterator.pos.buffer_pos - start_pos;

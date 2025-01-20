@@ -43,3 +43,9 @@ statement error
 select count(*) from read_csv('data/csv/mixed_new_line_2.csv', new_line ='\r\n', rfc_4180 = False, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
 ----
 Expected Number of Columns: 2 Found: 1
+
+query I
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_two.csv',new_line ='\r\n', rfc_4180 = TRUE, HEADER = FALSE)
+----
+true
+
