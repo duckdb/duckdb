@@ -5,6 +5,7 @@
 #include "cast_column_reader.hpp"
 #include "duckdb.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
+#include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -60,6 +61,7 @@ struct ParquetReadBindData : public TableFunctionData {
 	atomic<idx_t> chunk_count;
 	vector<string> names;
 	vector<LogicalType> types;
+	vector<MultiFileReaderColumnDefinition> columns;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
 
@@ -201,6 +203,9 @@ struct ParquetWriteBindData : public TableFunctionData {
 	ChildFieldIDs field_ids;
 	//! The compression level, higher value is more
 	int64_t compression_level = ZStdFileSystem::DefaultCompressionLevel();
+
+	//! Which encodings to include when writing
+	ParquetVersion parquet_version = ParquetVersion::V1;
 };
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
@@ -263,15 +268,47 @@ static MultiFileReaderBindData BindSchema(ClientContext &context, vector<Logical
 
 	vector<string> schema_col_names;
 	vector<LogicalType> schema_col_types;
+	MultiFileReaderBindData bind_data;
 	schema_col_names.reserve(options.schema.size());
 	schema_col_types.reserve(options.schema.size());
-	for (const auto &column : options.schema) {
+	bool match_by_field_id;
+	if (!options.schema.empty()) {
+		auto &column = options.schema[0];
+		if (column.identifier.type().id() == LogicalTypeId::INTEGER) {
+			match_by_field_id = true;
+		} else {
+			match_by_field_id = false;
+		}
+	} else {
+		match_by_field_id = false;
+	}
+
+	for (idx_t i = 0; i < options.schema.size(); i++) {
+		const auto &column = options.schema[i];
 		schema_col_names.push_back(column.name);
 		schema_col_types.push_back(column.type);
+
+		auto res = MultiFileReaderColumnDefinition(column.name, column.type);
+		res.identifier = column.identifier;
+#ifdef DEBUG
+		if (match_by_field_id) {
+			D_ASSERT(res.identifier.type().id() == LogicalTypeId::INTEGER);
+		} else {
+			D_ASSERT(res.identifier.type().id() == LogicalTypeId::VARCHAR);
+		}
+#endif
+
+		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
+		bind_data.schema.emplace_back(std::move(res));
+	}
+
+	if (match_by_field_id) {
+		bind_data.mapping = MultiFileReaderColumnMappingMode::BY_FIELD_ID;
+	} else {
+		bind_data.mapping = MultiFileReaderColumnMappingMode::BY_NAME;
 	}
 
 	// perform the binding on the obtained set of names + types
-	MultiFileReaderBindData bind_data;
 	result.multi_file_reader->BindOptions(options.file_options, *result.file_list, schema_col_types, schema_col_names,
 	                                      bind_data);
 
@@ -295,79 +332,13 @@ static void InitializeParquetReader(ParquetReader &reader, const ParquetReadBind
 	// Mark the file in the file list we are scanning here
 	reader_data.file_list_idx = file_idx;
 
-	if (bind_data.parquet_options.schema.empty()) {
-		bind_data.multi_file_reader->InitializeReader(
-		    reader, parquet_options.file_options, bind_data.reader_bind, bind_data.types, bind_data.names,
-		    global_column_ids, table_filters, bind_data.file_list->GetFirstFile(), context, reader_state);
-		return;
-	}
-
-	// a fixed schema was supplied, initialize the MultiFileReader settings here so we can read using the schema
-
-	// this deals with hive partitioning and filename=true
-	bind_data.multi_file_reader->FinalizeBind(parquet_options.file_options, bind_data.reader_bind, reader.GetFileName(),
-	                                          reader.GetNames(), bind_data.types, bind_data.names, global_column_ids,
-	                                          reader_data, context, reader_state);
-
-	// create a mapping from field id to column index in file
-	unordered_map<uint32_t, idx_t> field_id_to_column_index;
-	auto &column_readers = reader.root_reader->Cast<StructColumnReader>().child_readers;
-	for (idx_t column_index = 0; column_index < column_readers.size(); column_index++) {
-		auto &column_schema = column_readers[column_index]->Schema();
-		if (column_schema.__isset.field_id) {
-			field_id_to_column_index[column_schema.field_id] = column_index;
-		}
-	}
-
-	// loop through the schema definition
-	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		auto global_column_index = global_column_ids[i].GetPrimaryIndex();
-
-		// check if this is a constant column
-		bool constant = false;
-		for (auto &entry : reader_data.constant_map) {
-			if (entry.column_id == i) {
-				constant = true;
-				break;
-			}
-		}
-		if (constant) {
-			// this column is constant for this file
-			continue;
-		}
-
-		// Handle any generate columns that are not in the schema (currently only file_row_number)
-		if (global_column_index >= parquet_options.schema.size()) {
-			if (bind_data.reader_bind.file_row_number_idx == global_column_index) {
-				reader_data.column_mapping.push_back(i);
-				reader_data.column_ids.push_back(reader.file_row_number_idx);
-			}
-			continue;
-		}
-
-		const auto &column_definition = parquet_options.schema[global_column_index];
-		auto it = field_id_to_column_index.find(column_definition.field_id);
-		if (it == field_id_to_column_index.end()) {
-			// field id not present in file, use default value
-			reader_data.constant_map.emplace_back(i, column_definition.default_value);
-			continue;
-		}
-
-		const auto &local_column_index = it->second;
-		auto &column_reader = column_readers[local_column_index];
-		if (column_reader->Type() != column_definition.type) {
-			// differing types, wrap in a cast column reader
-			reader_data.cast_map[local_column_index] = column_definition.type;
-		}
-
-		reader_data.column_mapping.push_back(i);
-		reader_data.column_ids.push_back(local_column_index);
-	}
-	reader_data.empty_columns = reader_data.column_ids.empty();
-
-	// Finally, initialize the filters
-	bind_data.multi_file_reader->CreateFilterMap(bind_data.types, table_filters, reader_data, reader_state);
-	reader_data.filters = table_filters;
+	// 'reader_bind.schema' could be set explicitly by:
+	// 1. The MultiFileReader::Bind call
+	// 2. The 'schema' parquet option
+	auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
+	bind_data.multi_file_reader->InitializeReader(reader, parquet_options.file_options, bind_data.reader_bind,
+	                                              global_columns, global_column_ids, table_filters,
+	                                              bind_data.file_list->GetFirstFile(), context, reader_state);
 }
 
 static bool GetBooleanArgument(const pair<string, vector<Value>> &option) {
@@ -401,11 +372,9 @@ public:
 		table_function.named_parameters["debug_use_openssl"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 		table_function.named_parameters["explicit_cardinality"] = LogicalType::UBIGINT;
-		table_function.named_parameters["schema"] =
-		    LogicalType::MAP(LogicalType::INTEGER, LogicalType::STRUCT({{{"name", LogicalType::VARCHAR},
-		                                                                 {"type", LogicalType::VARCHAR},
-		                                                                 {"default_value", LogicalType::VARCHAR}}}));
+		table_function.named_parameters["schema"] = LogicalTypeId::ANY;
 		table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
+		table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
 		table_function.get_partition_data = ParquetScanGetPartitionData;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
@@ -509,16 +478,21 @@ public:
 			result->reader_bind = result->multi_file_reader->BindReader<ParquetReader>(
 			    context, result->types, result->names, *result->file_list, *result, parquet_options);
 		}
+
+		// Set the explicit cardinality if requested
 		if (parquet_options.explicit_cardinality) {
 			auto file_count = result->file_list->GetTotalFileCount();
 			result->explicit_cardinality = parquet_options.explicit_cardinality;
 			result->initial_file_cardinality = result->explicit_cardinality / (file_count ? file_count : 1);
 		}
+
 		if (return_types.empty()) {
 			// no expected types - just copy the types
 			return_types = result->types;
 			names = result->names;
 		} else {
+			// We're deserializing from a previously successful bind call
+			// verify that the amount of columns still matches
 			if (return_types.size() != result->types.size()) {
 				auto file_string = bound_on_first_file ? result->file_list->GetFirstFile()
 				                                       : StringUtil::Join(result->file_list->GetPaths(), ",");
@@ -549,7 +523,54 @@ public:
 			result->table_columns = names;
 		}
 		result->parquet_options = parquet_options;
+		result->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 		return std::move(result);
+	}
+
+	static void VerifyParquetSchemaParameter(const Value &schema) {
+		LogicalType::MAP(LogicalType::BLOB, LogicalType::STRUCT({{{"name", LogicalType::VARCHAR},
+		                                                          {"type", LogicalType::VARCHAR},
+		                                                          {"default_value", LogicalType::VARCHAR}}}));
+		auto &map_type = schema.type();
+		if (map_type.id() != LogicalTypeId::MAP) {
+			throw InvalidInputException("'schema' expects a value of type MAP, not %s",
+			                            LogicalTypeIdToString(map_type.id()));
+		}
+		auto &key_type = MapType::KeyType(map_type);
+		auto &value_type = MapType::ValueType(map_type);
+
+		if (value_type.id() != LogicalTypeId::STRUCT) {
+			throw InvalidInputException("'schema' expects a STRUCT as the value type of the map");
+		}
+		auto &children = StructType::GetChildTypes(value_type);
+		if (children.size() < 3) {
+			throw InvalidInputException(
+			    "'schema' expects the STRUCT to have 3 children, 'name', 'type' and 'default_value");
+		}
+		if (!StringUtil::CIEquals(children[0].first, "name")) {
+			throw InvalidInputException("'schema' expects the first field of the struct to be called 'name'");
+		}
+		if (children[0].second.id() != LogicalTypeId::VARCHAR) {
+			throw InvalidInputException("'schema' expects the 'name' field to be of type VARCHAR, not %s",
+			                            LogicalTypeIdToString(children[0].second.id()));
+		}
+		if (!StringUtil::CIEquals(children[1].first, "type")) {
+			throw InvalidInputException("'schema' expects the second field of the struct to be called 'type'");
+		}
+		if (children[1].second.id() != LogicalTypeId::VARCHAR) {
+			throw InvalidInputException("'schema' expects the 'type' field to be of type VARCHAR, not %s",
+			                            LogicalTypeIdToString(children[1].second.id()));
+		}
+		if (!StringUtil::CIEquals(children[2].first, "default_value")) {
+			throw InvalidInputException("'schema' expects the third field of the struct to be called 'default_value'");
+		}
+		//! NOTE: default_value can be any type
+
+		if (key_type.id() != LogicalTypeId::INTEGER && key_type.id() != LogicalTypeId::VARCHAR) {
+			throw InvalidInputException(
+			    "'schema' expects the value type of the map to be either INTEGER or VARCHAR, not %s",
+			    LogicalTypeIdToString(key_type.id()));
+		}
 	}
 
 	static unique_ptr<FunctionData> ParquetScanBind(ClientContext &context, TableFunctionBindInput &input,
@@ -574,6 +595,7 @@ public:
 			} else if (loption == "schema") {
 				// Argument is a map that defines the schema
 				const auto &schema_value = kv.second;
+				VerifyParquetSchemaParameter(schema_value);
 				const auto column_values = ListValue::GetChildren(schema_value);
 				if (column_values.empty()) {
 					throw BinderException("Parquet schema cannot be empty");
@@ -660,9 +682,11 @@ public:
 		auto &file_list = result->file_list;
 		file_list.InitializeScan(result->file_list_scan);
 
+		auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
 		result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
-		    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list, bind_data.types,
-		    bind_data.names, input.column_indexes);
+		    context, bind_data.parquet_options.file_options, bind_data.reader_bind, file_list, global_columns,
+		    input.column_indexes);
+
 		if (file_list.IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
@@ -1269,6 +1293,15 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 			}
 			bind_data->compression_level = val;
 			compression_level_set = true;
+		} else if (loption == "parquet_version") {
+			const auto roption = StringUtil::Upper(option.second[0].ToString());
+			if (roption == "V1") {
+				bind_data->parquet_version = ParquetVersion::V1;
+			} else if (roption == "V2") {
+				bind_data->parquet_version = ParquetVersion::V2;
+			} else {
+				throw BinderException("Expected parquet_version 'V1' or 'V2'");
+			}
 		} else {
 			throw NotImplementedException("Unrecognized option for PARQUET: %s", option.first.c_str());
 		}
@@ -1299,7 +1332,7 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
 	    parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
 	    parquet_bind.dictionary_size_limit, parquet_bind.bloom_filter_false_positive_ratio,
-	    parquet_bind.compression_level, parquet_bind.debug_use_openssl);
+	    parquet_bind.compression_level, parquet_bind.debug_use_openssl, parquet_bind.parquet_version);
 	return std::move(global_state);
 }
 
@@ -1404,6 +1437,29 @@ duckdb_parquet::CompressionCodec::type EnumUtil::FromString<duckdb_parquet::Comp
 	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
 }
 
+template <>
+const char *EnumUtil::ToChars<ParquetVersion>(ParquetVersion value) {
+	switch (value) {
+	case ParquetVersion::V1:
+		return "V1";
+	case ParquetVersion::V2:
+		return "V2";
+	default:
+		throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+	}
+}
+
+template <>
+ParquetVersion EnumUtil::FromString<ParquetVersion>(const char *value) {
+	if (StringUtil::Equals(value, "V1")) {
+		return ParquetVersion::V1;
+	}
+	if (StringUtil::Equals(value, "V2")) {
+		return ParquetVersion::V2;
+	}
+	throw NotImplementedException(StringUtil::Format("Enum value: '%s' not implemented", value));
+}
+
 static optional_idx SerializeCompressionLevel(const int64_t compression_level) {
 	return compression_level < 0 ? NumericLimits<idx_t>::Maximum() - NumericCast<idx_t>(AbsValue(compression_level))
 	                             : NumericCast<idx_t>(compression_level);
@@ -1435,13 +1491,24 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                                                         bind_data.encryption_config, nullptr);
 
 	// 108 was dictionary_compression_ratio_threshold, but was deleted
+
+	// To avoid doubly defining the default values in both ParquetWriteBindData and here,
+	// and possibly making a mistake, we just get the values from ParquetWriteBindData.
+	// We have to std::move them, otherwise MSVC will complain that it's not a "const T &&"
 	const auto compression_level = SerializeCompressionLevel(bind_data.compression_level);
 	D_ASSERT(DeserializeCompressionLevel(compression_level) == bind_data.compression_level);
-	serializer.WritePropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
-	serializer.WriteProperty(110, "row_groups_per_file", bind_data.row_groups_per_file);
-	serializer.WriteProperty(111, "debug_use_openssl", bind_data.debug_use_openssl);
-	serializer.WriteProperty(112, "dictionary_size_limit", bind_data.dictionary_size_limit);
-	serializer.WriteProperty(113, "bloom_filter_false_positive_ratio", bind_data.bloom_filter_false_positive_ratio);
+	serializer.WritePropertyWithDefault(109, "compression_level", compression_level);
+	serializer.WritePropertyWithDefault(110, "row_groups_per_file", bind_data.row_groups_per_file,
+	                                    std::move(ParquetWriteBindData().row_groups_per_file));
+	serializer.WritePropertyWithDefault(111, "debug_use_openssl", bind_data.debug_use_openssl,
+	                                    std::move(ParquetWriteBindData().debug_use_openssl));
+	serializer.WritePropertyWithDefault(112, "dictionary_size_limit", bind_data.dictionary_size_limit,
+	                                    std::move(ParquetWriteBindData().dictionary_size_limit));
+	serializer.WritePropertyWithDefault(113, "bloom_filter_false_positive_ratio",
+	                                    bind_data.bloom_filter_false_positive_ratio,
+	                                    std::move(ParquetWriteBindData().bloom_filter_false_positive_ratio));
+	serializer.WritePropertyWithDefault(114, "parquet_version", bind_data.parquet_version,
+	                                    std::move(ParquetWriteBindData().parquet_version));
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1453,21 +1520,24 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	data->row_group_size_bytes = deserializer.ReadProperty<idx_t>(104, "row_group_size_bytes");
 	data->kv_metadata = deserializer.ReadProperty<vector<pair<string, string>>>(105, "kv_metadata");
 	data->field_ids = deserializer.ReadProperty<ChildFieldIDs>(106, "field_ids");
-	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(107, "encryption_config",
-	                                                                                  data->encryption_config, nullptr);
+	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(
+	    107, "encryption_config", data->encryption_config, std::move(ParquetWriteBindData().encryption_config));
 	deserializer.ReadDeletedProperty<double>(108, "dictionary_compression_ratio_threshold");
 
 	optional_idx compression_level;
 	deserializer.ReadPropertyWithDefault<optional_idx>(109, "compression_level", compression_level);
 	data->compression_level = DeserializeCompressionLevel(compression_level);
 	D_ASSERT(SerializeCompressionLevel(data->compression_level) == compression_level);
-	data->row_groups_per_file =
-	    deserializer.ReadPropertyWithExplicitDefault<optional_idx>(110, "row_groups_per_file", optional_idx::Invalid());
-	data->debug_use_openssl = deserializer.ReadPropertyWithExplicitDefault<bool>(111, "debug_use_openssl", true);
-	data->dictionary_size_limit =
-	    deserializer.ReadPropertyWithExplicitDefault<idx_t>(112, "dictionary_size_limit", data->row_group_size / 10);
-	data->bloom_filter_false_positive_ratio =
-	    deserializer.ReadPropertyWithExplicitDefault<double>(113, "bloom_filter_false_positive_ratio", 0.01);
+	data->row_groups_per_file = deserializer.ReadPropertyWithExplicitDefault<optional_idx>(
+	    110, "row_groups_per_file", std::move(ParquetWriteBindData().row_groups_per_file));
+	data->debug_use_openssl = deserializer.ReadPropertyWithExplicitDefault<bool>(
+	    111, "debug_use_openssl", std::move(ParquetWriteBindData().debug_use_openssl));
+	data->dictionary_size_limit = deserializer.ReadPropertyWithExplicitDefault<idx_t>(
+	    112, "dictionary_size_limit", std::move(ParquetWriteBindData().dictionary_size_limit));
+	data->bloom_filter_false_positive_ratio = deserializer.ReadPropertyWithExplicitDefault<double>(
+	    113, "bloom_filter_false_positive_ratio", std::move(ParquetWriteBindData().bloom_filter_false_positive_ratio));
+	data->parquet_version = deserializer.ReadPropertyWithExplicitDefault(
+	    114, "parquet_version", std::move(ParquetWriteBindData().parquet_version));
 
 	return std::move(data);
 }

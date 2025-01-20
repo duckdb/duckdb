@@ -119,7 +119,7 @@ public:
    * same string and are pointing at the same character.
    * @stable ICU 2.0
    */
-  virtual UBool          operator==(const ForwardCharacterIterator& that) const;
+  virtual bool          operator==(const ForwardCharacterIterator& that) const;
 
   /**
    * Generates a hash code for this iterator.

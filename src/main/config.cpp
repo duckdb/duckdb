@@ -92,7 +92,9 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
     DUCKDB_GLOBAL(DefaultOrderSetting),
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
+    DUCKDB_GLOBAL(DisabledCompressionMethodsSetting),
     DUCKDB_GLOBAL(DisabledFilesystemsSetting),
+    DUCKDB_GLOBAL(DisabledLogTypes),
     DUCKDB_GLOBAL(DisabledOptimizersSetting),
     DUCKDB_GLOBAL(DuckDBAPISetting),
     DUCKDB_LOCAL(DynamicOrFilterThresholdSetting),
@@ -100,12 +102,14 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(EnableFSSTVectorsSetting),
     DUCKDB_LOCAL(EnableHTTPLoggingSetting),
     DUCKDB_GLOBAL(EnableHTTPMetadataCacheSetting),
+    DUCKDB_GLOBAL(EnableLogging),
     DUCKDB_GLOBAL(EnableMacroDependenciesSetting),
     DUCKDB_GLOBAL(EnableObjectCacheSetting),
     DUCKDB_LOCAL(EnableProfilingSetting),
     DUCKDB_LOCAL(EnableProgressBarSetting),
     DUCKDB_LOCAL(EnableProgressBarPrintSetting),
     DUCKDB_GLOBAL(EnableViewDependenciesSetting),
+    DUCKDB_GLOBAL(EnabledLogTypes),
     DUCKDB_LOCAL(ErrorsAsJSONSetting),
     DUCKDB_LOCAL(ExplainOutputSetting),
     DUCKDB_GLOBAL(ExtensionDirectorySetting),
@@ -123,8 +127,12 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(IndexScanMaxCountSetting),
     DUCKDB_GLOBAL(IndexScanPercentageSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),
+    DUCKDB_LOCAL(LateMaterializationMaxRowsSetting),
     DUCKDB_GLOBAL(LockConfigurationSetting),
     DUCKDB_LOCAL(LogQueryPathSetting),
+    DUCKDB_GLOBAL(LoggingLevel),
+    DUCKDB_GLOBAL(LoggingMode),
+    DUCKDB_GLOBAL(LoggingStorage),
     DUCKDB_LOCAL(MaxExpressionDepthSetting),
     DUCKDB_GLOBAL(MaxMemorySetting),
     DUCKDB_GLOBAL_ALIAS("memory_limit", MaxMemorySetting),
@@ -548,8 +556,9 @@ idx_t DBConfig::ParseMemoryLimit(const string &arg) {
 	} else if (unit == "tib") {
 		multiplier = 1024LL * 1024LL * 1024LL * 1024LL;
 	} else {
-		throw ParserException("Unknown unit for memory_limit: %s (expected: KB, MB, GB, TB for 1000^i units or KiB, "
-		                      "MiB, GiB, TiB for 1024^i unites)");
+		throw ParserException("Unknown unit for memory_limit: '%s' (expected: KB, MB, GB, TB for 1000^i units or KiB, "
+		                      "MiB, GiB, TiB for 1024^i units)",
+		                      unit);
 	}
 	return LossyNumericCast<idx_t>(static_cast<double>(multiplier) * limit);
 }

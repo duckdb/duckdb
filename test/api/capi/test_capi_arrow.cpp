@@ -215,7 +215,8 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 			// Create a view with a `value` column containing 4096 values.
 			int num_buffers = 2, size = STANDARD_VECTOR_SIZE * num_buffers;
-			ArrowAppender appender(logical_types, size, options);
+			unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
+			ArrowAppender appender(logical_types, size, options, extension_type_cast);
 			Allocator allocator;
 
 			auto data_chunks = std::vector<DataChunk>(num_buffers);

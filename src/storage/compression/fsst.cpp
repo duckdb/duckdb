@@ -43,7 +43,7 @@ struct FSSTStorage {
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
-	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointer &checkpointer,
+	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> analyze_state_p);
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
@@ -208,10 +208,10 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 class FSSTCompressionState : public CompressionState {
 public:
-	FSSTCompressionState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
-	    : CompressionState(info), checkpointer(checkpointer),
-	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
-		CreateEmptySegment(checkpointer.GetRowGroup().start);
+	FSSTCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
+	    : CompressionState(info), checkpoint_data(checkpoint_data),
+	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
+		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 	}
 
 	~FSSTCompressionState() override {
@@ -234,8 +234,8 @@ public:
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
+		auto &db = checkpoint_data.GetDatabase();
+		auto &type = checkpoint_data.GetType();
 
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockSize());
@@ -318,7 +318,7 @@ public:
 		auto next_start = current_segment->start + current_segment->count;
 
 		auto segment_size = Finalize();
-		auto &state = checkpointer.GetCheckpointState();
+		auto &state = checkpoint_data.GetCheckpointState();
 		state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 		if (!final) {
@@ -382,7 +382,7 @@ public:
 		return total_size;
 	}
 
-	ColumnDataCheckpointer &checkpointer;
+	ColumnDataCheckpointData &checkpoint_data;
 	CompressionFunction &function;
 
 	// State regarding current segment
@@ -403,10 +403,10 @@ public:
 	size_t fsst_serialized_symbol_table_size = sizeof(duckdb_fsst_decoder_t);
 };
 
-unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
+unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                           unique_ptr<AnalyzeState> analyze_state_p) {
 	auto &analyze_state = analyze_state_p->Cast<FSSTAnalyzeState>();
-	auto compression_state = make_uniq<FSSTCompressionState>(checkpointer, analyze_state.info);
+	auto compression_state = make_uniq<FSSTCompressionState>(checkpoint_data, analyze_state.info);
 
 	if (analyze_state.fsst_encoder == nullptr) {
 		throw InternalException("No encoder found during FSST compression");

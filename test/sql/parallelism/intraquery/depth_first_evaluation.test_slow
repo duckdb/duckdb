@@ -69,7 +69,7 @@ FROM (
 statement ok
 DROP TABLE integers
 
-# column i has 0, 100, 200, etc., around 100 unique values spread out over the range 0 to 10 million
+# column i has 0, 100, 200, etc., around 100 unique values spread out across the range 0 to 10 million
 # all other values in column j are equal to range + 0.5
 # column j and k are just ranges from 0 to 10 million
 # we have to do this so our statistics propagation and dynamic join filters don't trivialise the query

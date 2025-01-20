@@ -155,7 +155,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
 	}
 
-	auto name = window.GetName();
+	auto name = window.alias;
 
 	if (inside_window) {
 		throw BinderException(error_context, "window function calls cannot be nested");

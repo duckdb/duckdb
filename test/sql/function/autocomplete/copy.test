@@ -18,3 +18,11 @@ query II
 FROM sql_auto_complete('COPY tbl FROM ''file.csv'' HEAD') LIMIT 1;
 ----
 HEADER 	25
+
+statement ok
+CREATE TABLE my_table(my_column INTEGER);
+
+query II
+FROM sql_auto_complete('COPY my_') LIMIT 1;
+----
+my_table	5

@@ -43,16 +43,16 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 	block_size = segment.GetBlockManager().GetBlockSize();
 
 	dict = DictionaryCompression::GetDictionary(segment, *handle);
-	dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
-	dictionary_size = index_buffer_count;
-
 	if (!initialize_dictionary) {
 		// Used by fetch, as fetch will never produce a DictionaryVector
 		return;
 	}
 
+	dictionary = make_buffer<Vector>(segment.type, index_buffer_count);
+	dictionary_size = index_buffer_count;
 	auto dict_child_data = FlatVector::GetData<string_t>(*(dictionary));
-	for (uint32_t i = 0; i < index_buffer_count; i++) {
+	FlatVector::SetNull(*dictionary, 0, true);
+	for (uint32_t i = 1; i < index_buffer_count; i++) {
 		// NOTE: the passing of dict_child_vector, will not be used, its for big strings
 		uint16_t str_len = GetStringLength(i);
 		dict_child_data[i] = FetchStringFromDict(UnsafeNumericCast<int32_t>(index_buffer_ptr[i]), str_len);

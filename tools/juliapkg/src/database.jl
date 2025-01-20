@@ -5,19 +5,20 @@ mutable struct DuckDBHandle
     file::String
     handle::duckdb_database
     functions::Vector{Any}
+    scalar_functions::Dict{String, Any}
     registered_objects::Dict{Any, Any}
 
     function DuckDBHandle(f::AbstractString, config::Config)
         f = String(isempty(f) ? f : expanduser(f))
         handle = Ref{duckdb_database}()
-        error = Ref{Ptr{UInt8}}()
+        error = Ref{Cstring}()
         if duckdb_open_ext(f, handle, config.handle, error) != DuckDBSuccess
             error_message = unsafe_string(error[])
-            duckdb_free(error[])
+            duckdb_free(pointer(error[]))
             throw(ConnectionException(error_message))
         end
 
-        db = new(f, handle[], Vector(), Dict())
+        db = new(f, handle[], Vector(), Dict(), Dict())
         finalizer(_close_database, db)
         return db
     end
