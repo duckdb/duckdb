@@ -478,7 +478,7 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 		// no lookups are performed, everything is added.
 
 #ifdef DEBUG
-		auto temp_decoder = alloca(sizeof(duckdb_fsst_decoder_t) + sizeof(unsigned long long));
+		auto temp_decoder = alloca(sizeof(duckdb_fsst_decoder_t));
 		duckdb_fsst_import((duckdb_fsst_decoder_t *)temp_decoder, fsst_serialized_symbol_table.get());
 
 		vector<unsigned char> decompress_buffer;
@@ -655,7 +655,7 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 	symbol_table_size = duckdb_fsst_export(fsst_encoder, fsst_serialized_symbol_table.get());
 
 #ifdef DEBUG
-	auto temp_decoder = alloca(sizeof(duckdb_fsst_decoder_t) + sizeof(unsigned long long));
+	auto temp_decoder = alloca(sizeof(duckdb_fsst_decoder_t));
 	duckdb_fsst_import((duckdb_fsst_decoder_t *)temp_decoder, fsst_serialized_symbol_table.get());
 
 	vector<unsigned char> decompress_buffer;
