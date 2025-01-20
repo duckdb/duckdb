@@ -249,7 +249,7 @@ bool DBConfig::HasArrowExtension(ArrowExtensionMetadata info) const {
 
 	auto og_info = info;
 	info.SetArrowFormat("");
-	if (type_extensions.find(info) == type_extensions.end()) {
+	if (type_extensions.find(info) != type_extensions.end()) {
 		return true;
 	}
 
