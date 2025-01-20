@@ -119,7 +119,7 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &a
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset = -1,
                                 ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0,
-								bool ignore_extensions = false);
+                                bool ignore_extensions = false);
 
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
                                           idx_t size, const ArrowType &arrow_type, int64_t nested_offset = -1,

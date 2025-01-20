@@ -243,14 +243,12 @@ struct ArrowJson {
 	static unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
 		const auto format = string(schema.format);
 		if (format == "u") {
-			return make_uniq<ArrowType>(LogicalType::JSON(),
-			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+			return make_uniq<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
 		} else if (format == "U") {
 			return make_uniq<ArrowType>(LogicalType::JSON(),
 			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
 		} else if (format == "vu") {
-			return make_uniq<ArrowType>(LogicalType::JSON(),
-			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
+			return make_uniq<ArrowType>(LogicalType::JSON(), make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
 		}
 		throw InvalidInputException("Arrow extension type \"%s\" not supported for arrow.json", format.c_str());
 	}
@@ -278,8 +276,7 @@ struct ArrowBit {
 	static unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
 		const auto format = string(schema.format);
 		if (format == "z") {
-			return make_uniq<ArrowType>(LogicalType::BIT,
-			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+			return make_uniq<ArrowType>(LogicalType::BIT, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
 		} else if (format == "Z") {
 			return make_uniq<ArrowType>(LogicalType::BIT,
 			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
@@ -306,8 +303,7 @@ struct ArrowVarint {
 	static unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
 		const auto format = string(schema.format);
 		if (format == "z") {
-			return make_uniq<ArrowType>(LogicalType::VARINT,
-			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+			return make_uniq<ArrowType>(LogicalType::VARINT, make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
 		} else if (format == "Z") {
 			return make_uniq<ArrowType>(LogicalType::VARINT,
 			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
