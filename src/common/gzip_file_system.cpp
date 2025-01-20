@@ -207,7 +207,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 	D_ASSERT(sd.out_buff_end + mz_stream_ptr->avail_out == sd.out_buff.get() + sd.out_buf_size);
 
 	// if stream ended, deallocate inflator
-	if (ret == duckdb_miniz::MZ_STREAM_END ) {
+	if (ret == duckdb_miniz::MZ_STREAM_END) {
 		// Concatenated GZIP potentially coming up - refresh input buffer
 		sd.refresh = true;
 	}

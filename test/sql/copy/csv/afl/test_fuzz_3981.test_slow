@@ -1,4 +1,4 @@
-# name: test/sql/copy/csv/afl/test_fuzz_3981.test
+# name: test/sql/copy/csv/afl/test_fuzz_3981.test_slow
 # description: fuzzer generated csv files - should not raise internal exception (by failed assertion).
 # group: [afl]
 

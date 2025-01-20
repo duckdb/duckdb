@@ -39,7 +39,13 @@ idx_t ColumnCountResult::GetMostFrequentColumnCount() const {
 }
 
 bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
+	const LinePosition cur_position(result.cur_buffer_idx, buffer_pos + 1, result.current_buffer_size);
+	if (cur_position - result.last_position > result.state_machine.options.maximum_line_size.GetValue() &&
+	    buffer_pos != NumericLimits<idx_t>::Maximum()) {
+		result.error = true;
+	}
 	result.InternalAddRow();
+	result.last_position = cur_position;
 	if (!result.states.EmptyLastValue()) {
 		idx_t col_count_idx = result.result_position;
 		for (idx_t i = 0; i < result.result_position + 1; i++) {
@@ -99,6 +105,7 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
     : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler), true, nullptr, iterator),
       result(states, *state_machine, result_size_p), column_count(1), result_size(result_size_p) {
 	sniffing = true;
+	result.last_position = {0, 0, cur_buffer_handle->actual_size};
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
@@ -117,6 +124,7 @@ unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner()
 ColumnCountResult &ColumnCountScanner::ParseChunk() {
 	result.result_position = 0;
 	column_count = 1;
+	result.current_buffer_size = cur_buffer_handle->actual_size;
 	ParseChunkInternal(result);
 	return result;
 }
@@ -139,6 +147,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 		if (iterator.pos.buffer_pos == cur_buffer_handle->actual_size) {
 			// Move to next buffer
 			cur_buffer_handle = buffer_manager->GetBuffer(++iterator.pos.buffer_idx);
+
 			if (!cur_buffer_handle) {
 				buffer_handle_ptr = nullptr;
 				if (states.IsQuotedCurrent() && !states.IsUnquoted()) {
@@ -158,6 +167,15 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 					result.AddRow(result, NumericLimits<idx_t>::Maximum());
 				}
 				return;
+			} else {
+				result.cur_buffer_idx = iterator.pos.buffer_idx;
+				result.current_buffer_size = cur_buffer_handle->actual_size;
+				// Do a quick check that the line is still sane
+				const LinePosition cur_position(result.cur_buffer_idx, 0, result.current_buffer_size);
+				if (cur_position - result.last_position > result.state_machine.options.maximum_line_size.GetValue()) {
+					result.error = true;
+					return;
+				}
 			}
 			iterator.pos.buffer_pos = 0;
 			buffer_handle_ptr = cur_buffer_handle->Ptr();
