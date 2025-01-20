@@ -740,6 +740,22 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 	return true;
 }
 
+SerializationOptions::SerializationOptions(AttachedDatabase &db) {
+	serialization_compatibility = SerializationCompatibility::FromDatabase(db);
+}
+
+SerializationCompatibility SerializationCompatibility::FromDatabase(AttachedDatabase &db) {
+	return FromIndex(db.GetStorageManager().GetStorageVersion());
+}
+
+SerializationCompatibility SerializationCompatibility::FromIndex(const idx_t version) {
+	SerializationCompatibility result;
+	result.duckdb_version = "";
+	result.serialization_version = version;
+	result.manually_set = false;
+	return result;
+}
+
 SerializationCompatibility SerializationCompatibility::FromString(const string &input) {
 	if (input.empty()) {
 		throw InvalidInputException("Version string can not be empty");

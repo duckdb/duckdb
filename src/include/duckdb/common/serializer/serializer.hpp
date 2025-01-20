@@ -28,6 +28,9 @@ namespace duckdb {
 
 class SerializationOptions {
 public:
+	SerializationOptions() = default;
+	SerializationOptions(AttachedDatabase &db);
+
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
 	SerializationCompatibility serialization_compatibility = SerializationCompatibility::Default();
@@ -68,6 +71,9 @@ public:
 	};
 
 public:
+	SerializationOptions GetOptions() {
+		return options;
+	}
 	SerializationData &GetSerializationData() {
 		return data;
 	}
