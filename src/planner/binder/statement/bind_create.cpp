@@ -582,6 +582,17 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 				for (const auto &item : ListValue::GetChildren(scope)) {
 					scope_strings.push_back(item.GetValue<string>());
 				}
+			} else if (scope.type().InternalType() == PhysicalType::STRUCT) {
+				// struct expression with empty keys is also allowed for backwards compatibility to when the create
+				// secret statement would be parsed differently: this allows CREATE SECRET (TYPE x, SCOPE ('bla',
+				// 'bloe'))
+				for (const auto &child : StructValue::GetChildren(scope)) {
+					if (child.type() != LogicalType::VARCHAR) {
+						throw InvalidInputException(
+						    "Invalid input to scope parameter of create secret: only struct of VARCHARs is allowed");
+					}
+					scope_strings.push_back(child.GetValue<string>());
+				}
 			} else {
 				throw InvalidInputException("Create Secret scope must be of type VARCHAR or LIST(VARCHAR)");
 			}
