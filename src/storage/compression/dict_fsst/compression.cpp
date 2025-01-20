@@ -2,6 +2,7 @@
 #include "duckdb/storage/segment/uncompressed.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "fsst.h"
+#include "duckdb/common/fsst.hpp"
 
 namespace duckdb {
 namespace dict_fsst {
@@ -59,6 +60,8 @@ idx_t DictFSSTCompressionState::Finalize() {
 		symbol_table_size = 0;
 	}
 
+	D_ASSERT(to_encode_string_sum == 0);
+
 	idx_t required_space = 0;
 	required_space += sizeof(dict_fsst_compression_header_t);
 	required_space = AlignValue<idx_t>(required_space);
@@ -66,8 +69,8 @@ idx_t DictFSSTCompressionState::Finalize() {
 	required_space = AlignValue<idx_t>(required_space);
 	if (is_fsst_encoded) {
 		required_space += symbol_table_size;
+		required_space = AlignValue<idx_t>(required_space);
 	}
-	required_space = AlignValue<idx_t>(required_space);
 	required_space += string_lengths_space;
 	required_space = AlignValue<idx_t>(required_space);
 	required_space += dictionary_indices_space;
@@ -185,7 +188,6 @@ void DictFSSTCompressionState::CreateEmptySegment(idx_t row_start) {
 	string_lengths_space = 0;
 	dictionary_indices_space = 0;
 	all_unique = true;
-	max_string_length = 0;
 	tuple_count = 0;
 	string_lengths.push_back(0);
 	dict_count = 1;
@@ -375,9 +377,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 
 	//! Update the state for serializing the dictionary_indices + string_lengths
 	if (requires_higher_strlen_bitwidth) {
-		D_ASSERT(str_len > state.max_string_length);
 		state.string_lengths_width = new_string_lengths_width;
-		state.max_string_length = str_len;
 	}
 	if (requires_higher_strlen_bitwidth || recalculate_strlen_space) {
 		state.string_lengths_space = new_string_lengths_space;
@@ -556,15 +556,16 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 	    AlignPointer<sizeof(void *)>(current_handle.Ptr() + sizeof(dict_fsst_compression_header_t));
 	D_ASSERT(dictionary_offset > string_t::INLINE_BYTES && dictionary_offset <= string_t::MAX_STRING_SIZE);
 	auto dict_copy = uncompressed_dictionary_copy.EmptyString(dictionary_offset);
+	memcpy((void *)dict_copy.GetData(), (void *)dictionary_start, dictionary_offset);
+	auto uncompressed_start = dict_copy.GetData();
 	// Skip index 0, that's reserved for NULL
 	for (idx_t i = 1; i < string_lengths.size(); i++) {
 		auto length = string_lengths[i];
-		auto start = dictionary_start + offset;
+		auto start = uncompressed_start + offset;
 		fsst_string_sizes.push_back(length);
 		fsst_string_ptrs.push_back((unsigned char *)start); // NOLINT
 		offset += length;
 	}
-	memcpy((void *)dict_copy.GetData(), (void *)dictionary_start, dictionary_offset);
 	D_ASSERT(offset == dictionary_offset);
 
 	// Create the encoder
@@ -612,6 +613,13 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 	}
 	symbol_table_size = duckdb_fsst_export(fsst_encoder, fsst_serialized_symbol_table.get());
 
+#ifdef DEBUG
+	duckdb_fsst_decoder_t decoder;
+	duckdb_fsst_import(&decoder, fsst_serialized_symbol_table.get());
+
+	vector<unsigned char> decompress_buffer;
+#endif
+
 	// Rewrite the dictionary
 	current_string_map.clear();
 	uint32_t max_length = 0;
@@ -629,6 +637,16 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 
 			string_t dictionary_string(uncompressed_dictionary_ptr + offset, uncompressed_str_len);
 			current_string_map.insert({dictionary_string, dictionary_index});
+
+#ifdef DEBUG
+			//! Verify that we can decompress the string
+			decompress_buffer.resize(uncompressed_str_len + 1);
+			FSSTPrimitives::DecompressValue((void *)&decoder, (const char *)compressed_ptrs[i],
+			                                (idx_t)compressed_sizes[i], decompress_buffer);
+
+			string_t decompressed_string((const char *)decompress_buffer.data(), uncompressed_str_len);
+			D_ASSERT(decompressed_string == dictionary_string);
+#endif
 
 			string_lengths[dictionary_index] = size;
 			offset += uncompressed_str_len;
@@ -650,6 +668,7 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 	}
 	dictionary_offset = new_size;
 	string_lengths_width = BitpackingPrimitives::MinimumBitWidth(max_length);
+	string_lengths_space = BitpackingPrimitives::GetRequiredSize(dict_count, string_lengths_width);
 	real_string_lengths_width = string_lengths_width;
 	return new_state;
 }

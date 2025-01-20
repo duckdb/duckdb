@@ -67,7 +67,6 @@ public:
 	//  we have to prepare for strings being exploded in size by max 2x
 	//  so we have to muddy out 'string_lengths_width'
 	bitpacking_width_t real_string_lengths_width = 0;
-	uint32_t max_string_length = 0;
 
 	idx_t dictionary_indices_space = 0;
 	vector<uint32_t> dictionary_indices;
