@@ -125,6 +125,10 @@ string GetStorageVersionName(idx_t serialization_version) {
 			max_idx = i;
 		}
 	}
+	if (!min_idx.IsValid()) {
+		D_ASSERT(0);
+		return "--UNKNOWN--";
+	}
 	auto min_name = serialization_version_info[min_idx.GetIndex()].version_name;
 	if (!max_idx.IsValid()) {
 		return min_name;
