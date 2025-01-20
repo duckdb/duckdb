@@ -26,10 +26,6 @@ public:
 	explicit CreateSecretInfo(OnCreateConflict on_conflict, SecretPersistType persist_type);
 	~CreateSecretInfo() override;
 
-	// TODO REMOVE
-	CreateSecretInfo(const CreateSecretInfo &) = delete;
-	CreateSecretInfo &operator=(const CreateSecretInfo &) = delete;
-
 	//! How to handle conflict
 	OnCreateConflict on_conflict;
 	//! Whether the secret can be persisted
