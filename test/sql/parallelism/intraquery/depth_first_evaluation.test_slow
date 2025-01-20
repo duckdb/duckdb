@@ -9,9 +9,11 @@ load __TEST_DIR__/depth_first_evaluation.db
 statement ok
 SET temp_directory = ''
 
-# 1GiB is pretty tight
+# 2GiB is pretty tight, each single aggregation should take only slightly less
+# in this test, we're testing that we don't have multiple aggregations active simultaneously
+# so this limit should be tight enough
 statement ok
-SET memory_limit = '1GiB'
+SET memory_limit = '2GiB'
 
 statement ok
 SET threads = 4
