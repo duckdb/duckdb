@@ -87,8 +87,12 @@ public:
 
 	idx_t tuple_count = 0;
 	unique_ptr<DictFSSTAnalyzeState> analyze;
+	//! FIXME: do we even need this? It's equivalent to: `string_lengths.size() - 1 == tuple_count`
 	bool all_unique = true;
 	idx_t symbol_table_size = DConstants::INVALID_INDEX;
+
+	//! How many values have we compressed so far?
+	idx_t total_tuple_count = 0;
 
 private:
 	void *encoder = nullptr;

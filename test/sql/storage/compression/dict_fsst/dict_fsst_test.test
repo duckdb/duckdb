@@ -13,7 +13,7 @@ select
 		(i % 200)::INTEGER::VARCHAR,
 		2047 // len((i % 200)::INTEGER::VARCHAR)
 	) a
-from range(200) t(i);
+from range(2000) t(i);
 
 statement ok
 checkpoint;
