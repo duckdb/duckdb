@@ -384,6 +384,7 @@ public:
 	DUCKDB_API ArrowTypeExtension GetArrowExtension(ArrowExtensionMetadata info) const;
 	DUCKDB_API ArrowTypeExtension GetArrowExtension(const LogicalType &type) const;
 	DUCKDB_API bool HasArrowExtension(const LogicalType &type) const;
+	DUCKDB_API bool HasArrowExtension(ArrowExtensionMetadata info) const;
 	DUCKDB_API void RegisterArrowExtension(const ArrowTypeExtension &extension) const;
 
 	bool operator==(const DBConfig &other);
