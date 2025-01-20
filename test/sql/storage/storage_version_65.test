@@ -15,7 +15,7 @@ ATTACH '__TEST_DIR__/storage_versions65.db'
 query I
 SELECT tags FROM duckdb_databases() WHERE database_name = 'storage_versions65';
 ----
-{storage_version=65}
+{storage_version=v1.2.0}
 
 statement ok
 ATTACH '__TEST_DIR__/regular_file.db'
@@ -23,7 +23,7 @@ ATTACH '__TEST_DIR__/regular_file.db'
 query I
 SELECT tags FROM duckdb_databases() WHERE database_name = 'regular_file';
 ----
-{storage_version=64}
+{storage_version=v1.0.0 - v1.1.3}
 
 unzip data/storage/bc_0102.db.gz __TEST_DIR__/bc_0102.db
 
@@ -33,4 +33,4 @@ ATTACH '__TEST_DIR__/bc_0102.db.gz' AS storage_version64;
 query I
 SELECT tags FROM duckdb_databases() WHERE database_name = 'storage_version64';
 ----
-{storage_version=64}
+{storage_version=v1.0.0 - v1.1.3}

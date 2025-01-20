@@ -3,6 +3,7 @@
 
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -15,6 +16,9 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			storage_options.block_alloc_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "row_group_size") {
 			storage_options.row_group_size = entry.second.GetValue<uint64_t>();
+		} else if (entry.first == "storage_version") {
+			storage_options.storage_version =
+			    SerializationCompatibility::FromString(entry.second.ToString()).serialization_version;
 		}
 	}
 	return storage_options;
