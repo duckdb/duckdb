@@ -22,6 +22,7 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
+#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 
@@ -885,7 +886,10 @@ void DuckTableEntry::CommitAlter(string &column_name) {
 			break;
 		}
 	}
-	storage->CommitDropColumn(columns.LogicalToPhysical(LogicalIndex(removed_index.GetIndex())).index);
+
+	auto logical_column_index = LogicalIndex(removed_index.GetIndex());
+	auto column_index = columns.LogicalToPhysical(logical_column_index).index;
+	storage->CommitDropColumn(column_index);
 }
 
 void DuckTableEntry::CommitDrop() {

@@ -102,7 +102,7 @@ public:
 	unique_ptr<RowGroup> RemoveColumn(RowGroupCollection &collection, idx_t removed_column);
 
 	void CommitDrop();
-	void CommitDropColumn(idx_t index);
+	void CommitDropColumn(const idx_t index);
 
 	void InitializeEmpty(const vector<LogicalType> &types);
 

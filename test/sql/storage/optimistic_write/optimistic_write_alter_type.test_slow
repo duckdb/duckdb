@@ -2,10 +2,6 @@
 # description: Test optimistic write with alter type in transaction-local storage
 # group: [optimistic_write]
 
-# FIXME: for smaller block sizes (16KB) the database size does not stabilize in the loop, instead,
-# FIXME: it grows very slowly (only investigated up to 40 iterations)
-require block_size 262144
-
 load __TEST_DIR__/optimistic_write_alter_type.db
 
 statement ok

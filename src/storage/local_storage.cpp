@@ -62,12 +62,17 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 	append_indexes.Move(parent.append_indexes);
 }
 
-LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
-    : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
-      merged_storage(parent.merged_storage) {
-	row_groups = parent.row_groups->RemoveColumn(drop_idx);
+LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent,
+                                     const idx_t drop_column_index)
+    : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows),
+      optimistic_writer(new_data_table, parent.optimistic_writer),
+      optimistic_writers(std::move(parent.optimistic_writers)), merged_storage(parent.merged_storage) {
+
+	// Remove the column from the previous local table storage.
+	row_groups = parent.row_groups->RemoveColumn(drop_column_index);
+	parent.row_groups->CommitDropColumn(drop_column_index);
 	parent.row_groups.reset();
+
 	append_indexes.Move(parent.append_indexes);
 }
 
@@ -82,6 +87,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 }
 
 LocalTableStorage::~LocalTableStorage() {
+	D_ASSERT(1);
 }
 
 void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters) {
@@ -248,6 +254,9 @@ void LocalTableStorage::Rollback() {
 	}
 	optimistic_writers.clear();
 	optimistic_writer.Rollback();
+
+	// Drop any optimistically written local changes.
+	row_groups->CommitDropTable();
 }
 
 //===--------------------------------------------------------------------===//
@@ -547,7 +556,6 @@ void LocalStorage::Rollback() {
 			continue;
 		}
 		storage->Rollback();
-
 		entry.second.reset();
 	}
 }
@@ -598,13 +606,13 @@ void LocalStorage::AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinit
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
-void LocalStorage::DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column) {
+void LocalStorage::DropColumn(DataTable &old_dt, DataTable &new_dt, const idx_t drop_column_index) {
 	// check if there are any pending appends for the old version of the table
 	auto storage = table_manager.MoveEntry(old_dt);
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_shared_ptr<LocalTableStorage>(new_dt, *storage, removed_column);
+	auto new_storage = make_shared_ptr<LocalTableStorage>(new_dt, *storage, drop_column_index);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 

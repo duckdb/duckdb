@@ -1546,8 +1546,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	writer.FinalizeTable(global_stats, info.get(), serializer);
 }
 
-void DataTable::CommitDropColumn(idx_t index) {
-	row_groups->CommitDropColumn(index);
+void DataTable::CommitDropColumn(const idx_t column_index) {
+	row_groups->CommitDropColumn(column_index);
 }
 
 idx_t DataTable::ColumnCount() const {

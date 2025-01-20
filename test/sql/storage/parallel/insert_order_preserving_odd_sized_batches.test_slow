@@ -2,9 +2,6 @@
 # description: Test parallel order-preserving insert
 # group: [parallel]
 
-# FIXME: see internal issue 3931.
-mode skip
-
 # There are different numbers of distinct blocks for smaller block sizes,
 # because the segment size is bound by the block size.
 require block_size 262144
