@@ -1,0 +1,30 @@
+# name: test/sql/prepared/prepare_offset_first.test
+# description: Test OFFSET and LIMIT with prepared statements
+# group: [prepared]
+
+statement ok
+pragma enable_verification
+
+# Prepare a query with OFFSET and LIMIT as parameters with OFFSET written first in the query
+statement ok
+PREPARE q AS SELECT x FROM generate_series(1, 10) t(x) OFFSET ? LIMIT ?;
+
+# Execute the prepared query with OFFSET = 3 and LIMIT = 5
+query I
+EXECUTE q(3, 5);
+----
+4
+5
+6
+7
+8
+
+# Verify the result matches the direct query
+query I
+SELECT x FROM generate_series(1, 10) t(x) OFFSET 3 LIMIT 5;
+----
+4
+5
+6
+7
+8
