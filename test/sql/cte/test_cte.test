@@ -182,7 +182,7 @@ SELECT * FROM t ORDER BY b;
 5
 7
 
-require noalternativeverify
+require no_alternative_verify
 
 # FIXME: this one should work with ALTERNATIVE_VERIFY, but doesn't yet
 # something wrong with binding a CTE inside a recursive CTE
