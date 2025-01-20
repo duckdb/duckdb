@@ -399,6 +399,8 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(YearWeekFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitwiseOrFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitwiseNotFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ExtractUuidVerisonFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ExtractUuidTimestampFun),
 	FINAL_FUNCTION
 };
 

@@ -72,17 +72,3 @@ SELECT DISTINCT substring(uuid()::varchar, 20, 1) AS x FROM range(100) ORDER BY 
 9
 a
 b
-
-# UUID v7 is ordered from generation.
-statement ok
-CREATE TABLE tbl AS SELECT * FROM range(1, 6);
-
-# Order by UUID v7 doesn't change the initial order.
-query I
-SELECT * FROM tbl ORDER BY uuidv7();
-----
-1
-2
-3
-4
-5

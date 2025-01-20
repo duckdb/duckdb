@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include <array>
+
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/string_type.hpp"
 
@@ -53,7 +55,7 @@ protected:
 //! The UUIDv4 class contains static operations for the UUIDv4 type
 class UUID : public BaseUUID {
 public:
-	//! Convert a hugeint object to a uuid v4 style string
+	//! Generate a random UUID v4 value.
 	static hugeint_t GenerateRandomUUID(RandomEngine &engine);
 	static hugeint_t GenerateRandomUUID();
 };
@@ -63,7 +65,7 @@ using UUIDv4 = UUID;
 //! The UUIDv7 class contains static operations for the UUIDv7 type.
 class UUIDv7 : public BaseUUID {
 public:
-	//! Convert a hugeint object to a uuid v7 style string
+	//! Generate a random UUID v7 value.
 	static hugeint_t GenerateRandomUUID(RandomEngine &engine);
 	static hugeint_t GenerateRandomUUID();
 };

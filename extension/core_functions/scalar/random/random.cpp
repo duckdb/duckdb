@@ -5,8 +5,80 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/timestamp.hpp"
 
 namespace duckdb {
+
+struct ExtractVersionStrOperator {
+	template <typename INPUT_TYPE, typename RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+		const idx_t len = input.GetSize();
+		if (len != 36) {
+			throw InvalidInputException("Given string '%s' is invalid UUID.", input.GetString());
+		}
+		// UUIDv4 and UUIDv7 stores version as the 15-th uint8_t.
+		return input.GetPointer()[14] - '0';
+	}
+};
+
+struct ExtractVersionUuidOperator {
+	template <typename INPUT_TYPE, typename RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+		char uuid[36]; // Intentionally no initialize.
+		BaseUUID::ToString(input, uuid);
+		// UUIDv4 and UUIDv7 stores version as the 15-th uint8_t.
+		return uuid[14] - '0';
+	}
+};
+
+struct ExtractTimestampUuidOperator {
+	template <typename INPUT_TYPE, typename RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+		// Validate whether the given UUID is v7.
+		const uint8_t version = ((uint8_t)((input.upper) >> 8) & 0xf0) >> 4;
+		if (version != 7) {
+			throw InvalidInputException("Given UUID is with version %u, not version 7.", version);
+		}
+
+		// UUID v7 begins with a 48 bit big-endian Unix Epoch timestamp with millisecond granularity.
+		const int64_t upper = input.upper;
+		int64_t unix_ts_milli = upper;
+		unix_ts_milli = unix_ts_milli >> 16;
+
+		static constexpr uint64_t kMilliToMicro = 1000;
+		const int64_t unix_ts_ms = unix_ts_milli * kMilliToMicro;
+		return timestamp_t {unix_ts_ms};
+	}
+};
+
+struct ExtractTimestampStrOperator {
+	template <typename INPUT_TYPE, typename RESULT_TYPE>
+	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
+		// Validate whether the give input is a valid UUID.
+		hugeint_t uuid_hugeint;
+		if (!BaseUUID::FromCString(input.GetData(), input.GetSize(), uuid_hugeint)) {
+			throw InvalidInputException("Given string '%s' is invalid UUID.", input.GetString());
+		}
+
+		return ExtractTimestampUuidOperator::Operation<hugeint_t, RESULT_TYPE>(uuid_hugeint, result);
+	}
+};
+
+template <typename INPUT, typename OP>
+static void ExtractVersionFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 1);
+	auto &input = args.data[0];
+	idx_t count = args.size();
+	UnaryExecutor::ExecuteString<INPUT, uint32_t, OP>(input, result, count);
+}
+
+template <typename INPUT, typename OP>
+static void ExtractTimestampFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 1);
+	auto &input = args.data[0];
+	idx_t count = args.size();
+	UnaryExecutor::ExecuteString<INPUT, timestamp_t, OP>(input, result, count);
+}
 
 struct RandomLocalState : public FunctionLocalState {
 	explicit RandomLocalState(uint64_t seed) : random_engine(0) {
@@ -83,6 +155,24 @@ ScalarFunction UUIDv7Fun::GetFunction() {
 	// generate a random uuid v7
 	uuid_v7_function.stability = FunctionStability::VOLATILE;
 	return uuid_v7_function;
+}
+
+ScalarFunctionSet ExtractUuidVerisonFun::GetFunctions() {
+	ScalarFunctionSet version_extraction;
+	version_extraction.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::UINTEGER,
+	                                              ExtractVersionFunction<string_t, ExtractVersionStrOperator>));
+	version_extraction.AddFunction(ScalarFunction({LogicalType::UUID}, LogicalType::UINTEGER,
+	                                              ExtractVersionFunction<hugeint_t, ExtractVersionUuidOperator>));
+	return version_extraction;
+}
+
+ScalarFunctionSet ExtractUuidTimestampFun::GetFunctions() {
+	ScalarFunctionSet timestamp_extraction;
+	timestamp_extraction.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::TIMESTAMP_TZ,
+	                                                ExtractTimestampFunction<string_t, ExtractTimestampStrOperator>));
+	timestamp_extraction.AddFunction(ScalarFunction({LogicalType::UUID}, LogicalType::TIMESTAMP_TZ,
+	                                                ExtractTimestampFunction<hugeint_t, ExtractTimestampUuidOperator>));
+	return timestamp_extraction;
 }
 
 } // namespace duckdb

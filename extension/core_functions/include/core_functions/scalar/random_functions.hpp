@@ -66,4 +66,22 @@ struct UUIDv7Fun {
 	static ScalarFunction GetFunction();
 };
 
+struct ExtractUuidVerisonFun {
+	static constexpr const char *Name = "uuid_extract_version";
+	static constexpr const char *Parameters = "uuid";
+	static constexpr const char *Description = "Extract a version for the given UUID.";
+	static constexpr const char *Example = "uuid_extract_version('019482e4-1441-7aad-8127-eec99573b0a0')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
+struct ExtractUuidTimestampFun {
+	static constexpr const char *Name = "uuid_extract_timestamp";
+	static constexpr const char *Parameters = "uuid";
+	static constexpr const char *Description = "Extract the timestamp for the given UUID v7.";
+	static constexpr const char *Example = "uuid_extract_timestamp('019482e4-1441-7aad-8127-eec99573b0a0')";
+
+	static ScalarFunctionSet GetFunctions();
+};
+
 } // namespace duckdb
