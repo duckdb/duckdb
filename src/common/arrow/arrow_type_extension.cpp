@@ -126,14 +126,14 @@ ArrowExtensionMetadata ArrowTypeExtension::GetInfo() const {
 	return extension_metadata;
 }
 
-shared_ptr<ArrowType> ArrowTypeExtension::GetType(const ArrowSchema &schema,
+unique_ptr<ArrowType> ArrowTypeExtension::GetType(const ArrowSchema &schema,
                                                   const ArrowSchemaMetadata &schema_metadata) const {
 	if (get_type) {
 		return get_type(schema, schema_metadata);
 	}
 	// FIXME: THis is not good
 	auto duckdb_type = type_extension->GetDuckDBType();
-	return make_shared_ptr<ArrowType>(duckdb_type);
+	return make_uniq<ArrowType>(duckdb_type);
 }
 
 shared_ptr<ArrowTypeExtensionData> ArrowTypeExtension::GetTypeExtension() const {
@@ -240,17 +240,17 @@ bool DBConfig::HasArrowExtension(const LogicalType &type) const {
 }
 
 struct ArrowJson {
-	static shared_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
+	static unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
 		const auto format = string(schema.format);
 		if (format == "u") {
-			return make_shared_ptr<ArrowType>(LogicalType::JSON(),
-			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+			return make_uniq<ArrowType>(LogicalType::JSON(),
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
 		} else if (format == "U") {
-			return make_shared_ptr<ArrowType>(LogicalType::JSON(),
-			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+			return make_uniq<ArrowType>(LogicalType::JSON(),
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
 		} else if (format == "vu") {
-			return make_shared_ptr<ArrowType>(LogicalType::JSON(),
-			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+			return make_uniq<ArrowType>(LogicalType::JSON(),
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::VIEW));
 		}
 		throw InvalidInputException("Arrow extension type \"%s\" not supported for arrow.json", format.c_str());
 	}
@@ -275,14 +275,14 @@ struct ArrowJson {
 };
 
 struct ArrowBit {
-	static shared_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
+	static unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
 		const auto format = string(schema.format);
 		if (format == "z") {
-			return make_shared_ptr<ArrowType>(LogicalType::BIT,
-			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+			return make_uniq<ArrowType>(LogicalType::BIT,
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
 		} else if (format == "Z") {
-			return make_shared_ptr<ArrowType>(LogicalType::BIT,
-			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+			return make_uniq<ArrowType>(LogicalType::BIT,
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
 		}
 		throw InvalidInputException("Arrow extension type \"%s\" not supported for BIT type", format.c_str());
 	}
@@ -303,14 +303,14 @@ struct ArrowBit {
 };
 
 struct ArrowVarint {
-	static shared_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
+	static unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) {
 		const auto format = string(schema.format);
 		if (format == "z") {
-			return make_shared_ptr<ArrowType>(LogicalType::VARINT,
-			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
+			return make_uniq<ArrowType>(LogicalType::VARINT,
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::NORMAL));
 		} else if (format == "Z") {
-			return make_shared_ptr<ArrowType>(LogicalType::VARINT,
-			                                  make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
+			return make_uniq<ArrowType>(LogicalType::VARINT,
+			                            make_uniq<ArrowStringInfo>(ArrowVariableSizeType::SUPER_SIZE));
 		}
 		throw InvalidInputException("Arrow extension type \"%s\" not supported for Varint", format.c_str());
 	}
