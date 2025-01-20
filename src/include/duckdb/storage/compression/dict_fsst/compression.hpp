@@ -23,7 +23,7 @@ namespace dict_fsst {
 struct EncodedInput {
 	//! The index at which we started encoding the input
 	//  in case we switch to FSST_ONLY in the middle, we can avoid encoding the previous input strings
-	idx_t offset;
+	idx_t offset = 0;
 	//! If the append_mode is FSST_ONLY we will encode all input
 	//  this memory is owned by a reusable buffer stored in the state
 	vector<string_t> data;
@@ -41,10 +41,11 @@ public:
 	void CreateEmptySegment(idx_t row_start);
 	idx_t Finalize();
 
+	bool AllUnique() const;
 	void FlushEncodingBuffer();
 	DictionaryAppendState SwitchAppendState();
 
-	bool CompressInternal(UnifiedVectorFormat &vector_format, EncodedInput &encoded_input, idx_t i, idx_t count);
+	bool CompressInternal(UnifiedVectorFormat &vector_format, EncodedInput &encoded_input, const idx_t i, idx_t count);
 	void Compress(Vector &scan_vector, idx_t count);
 	void FinalizeCompress();
 	void Flush(bool final);
@@ -82,13 +83,11 @@ public:
 	StringHeap uncompressed_dictionary_copy;
 
 	//! This is used for FSST_ONLY, to store the memory of the encoded input
-	unsafe_unique_array<unsigned char> encoding_buffer;
+	unsafe_unique_array<unsigned char> encoding_buffer = nullptr;
 	idx_t encoding_buffer_size = 0;
 
 	idx_t tuple_count = 0;
 	unique_ptr<DictFSSTAnalyzeState> analyze;
-	//! FIXME: do we even need this? It's equivalent to: `string_lengths.size() - 1 == tuple_count`
-	bool all_unique = true;
 	idx_t symbol_table_size = DConstants::INVALID_INDEX;
 
 	//! How many values have we compressed so far?

@@ -189,7 +189,6 @@ void DictFSSTCompressionState::CreateEmptySegment(idx_t row_start) {
 	string_lengths_space = 0;
 	D_ASSERT(dictionary_indices.empty());
 	dictionary_indices_space = 0;
-	all_unique = true;
 	tuple_count = 0;
 	D_ASSERT(string_lengths.empty());
 	string_lengths.push_back(0);
@@ -287,7 +286,6 @@ static inline bool AddLookup(DictFSSTCompressionState &state, idx_t lookup, cons
 	if (recalculate_indices_space) {
 		state.dictionary_indices_space = new_dictionary_indices_space;
 	}
-	state.all_unique = false;
 	// Exists in the dictionary, add it
 	state.dictionary_indices.push_back(lookup);
 	state.tuple_count++;
@@ -401,7 +399,7 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 }
 
 bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_format, EncodedInput &encoded_input,
-                                                idx_t i, idx_t count) {
+                                                const idx_t i, idx_t count) {
 	auto idx = vector_format.sel->get_index(i);
 	bool is_not_null = vector_format.validity.RowIsValid(idx);
 	auto strings = vector_format.GetData<string_t>(vector_format);
@@ -478,6 +476,14 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 	case DictionaryAppendState::ENCODED_ALL_UNIQUE: {
 		// Encode the input upfront, the 'current_string_map' is also encoded.
 		// no lookups are performed, everything is added.
+
+#ifdef DEBUG
+		auto temp_decoder = alloca(sizeof(duckdb_fsst_decoder_t) + sizeof(unsigned long long));
+		duckdb_fsst_import((duckdb_fsst_decoder_t *)temp_decoder, fsst_serialized_symbol_table.get());
+
+		vector<unsigned char> decompress_buffer;
+#endif
+
 		if (encoded_input.data.empty()) {
 			encoded_input.offset = i;
 			vector<unsigned char *> input_string_ptrs;
@@ -519,18 +525,54 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 				throw FatalException("FSST compression failed to compress all input strings");
 			}
 
-			for (idx_t i = 0; i < input_string_lengths.size(); i++) {
-				uint32_t size = UnsafeNumericCast<uint32_t>(compressed_sizes[i]);
-				string_t encoded_string((const char *)compressed_ptrs[i], size); // NOLINT;
+			for (idx_t j = 0; j < input_string_lengths.size(); j++) {
+				uint32_t size = UnsafeNumericCast<uint32_t>(compressed_sizes[j]);
+				string_t encoded_string((const char *)compressed_ptrs[j], size); // NOLINT;
+
+#ifdef DEBUG
+				//! Verify that we can decompress the string
+				auto &uncompressed_str = strings[encoded_input.offset + j];
+				decompress_buffer.resize(uncompressed_str.GetSize() + 1 + 100);
+				auto decoded_std_string =
+				    FSSTPrimitives::DecompressValue((void *)temp_decoder, (const char *)compressed_ptrs[j],
+				                                    (idx_t)compressed_sizes[j], decompress_buffer);
+
+				D_ASSERT(decoded_std_string.size() == uncompressed_str.GetSize());
+				string_t decompressed_string((const char *)decompress_buffer.data(), uncompressed_str.GetSize());
+				D_ASSERT(decompressed_string == uncompressed_str);
+#endif
+
 				encoded_input.data.push_back(encoded_string);
 			}
 		}
 
+#ifdef DEBUG
+		//! Verify that we can decompress the strings (nothing weird happened to them)
+		for (idx_t j = encoded_input.offset; j < count; j++) {
+			auto &uncompressed_string = strings[j];
+			auto &compressed_string = encoded_input.data[j - encoded_input.offset];
+
+			decompress_buffer.resize(uncompressed_string.GetSize() + 1 + 100);
+			auto decoded_std_string =
+			    FSSTPrimitives::DecompressValue((void *)temp_decoder, (const char *)compressed_string.GetData(),
+			                                    compressed_string.GetSize(), decompress_buffer);
+
+			D_ASSERT(decoded_std_string.size() == uncompressed_string.GetSize());
+			string_t decompressed_string((const char *)decompress_buffer.data(), uncompressed_string.GetSize());
+			D_ASSERT(decompressed_string == uncompressed_string);
+		}
+
+#endif
 		auto &string = encoded_input.data[i - encoded_input.offset];
 		return AddToDictionary<DictionaryAppendState::ENCODED_ALL_UNIQUE>(*this, string, recalculate_indices_space);
 	}
 	};
 	throw InternalException("Unreachable");
+}
+
+bool DictFSSTCompressionState::AllUnique() const {
+	//! 1 is added for NULL always
+	return string_lengths.size() - 1 == tuple_count;
 }
 
 DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
@@ -541,7 +583,7 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 	}
 
 	DictionaryAppendState new_state;
-	if (!analyze->contains_nulls && all_unique) {
+	if (!analyze->contains_nulls && AllUnique()) {
 		new_state = DictionaryAppendState::ENCODED_ALL_UNIQUE;
 	} else {
 		new_state = DictionaryAppendState::ENCODED;
@@ -599,7 +641,7 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 		new_size += compressed_sizes[i];
 	}
 
-	if (!analyze->contains_nulls && all_unique) {
+	if (new_state == DictionaryAppendState::ENCODED_ALL_UNIQUE) {
 		//! We omit the selection buffer in this mode, setting the width to 0 makes the RequiredSpace result not include
 		//! the selection buffer space.
 		dictionary_indices_width = 0;
@@ -662,6 +704,7 @@ DictionaryAppendState DictFSSTCompressionState::SwitchAppendState() {
 			uint32_t dictionary_index = UnsafeNumericCast<uint32_t>(i + 1);
 			string_lengths[dictionary_index] = size;
 			string_t dictionary_string((const char *)start, UnsafeNumericCast<uint32_t>(size)); // NOLINT
+
 			current_string_map.insert({dictionary_string, dictionary_index});
 		}
 	}
@@ -691,6 +734,8 @@ void DictFSSTCompressionState::Compress(Vector &scan_vector, idx_t count) {
 			}
 		}
 		Flush(false);
+		encoded_input.data.clear();
+		encoded_input.offset = 0;
 		fits = CompressInternal(vector_format, encoded_input, i, count);
 		if (!fits) {
 			throw FatalException("Compressing directly after Flush doesn't fit");
