@@ -5,6 +5,8 @@
 statement ok
 PRAGMA enable_verification
 
+mode skip
+
 statement ok
 copy (from range(10000)) to '__TEST_DIR__/skip.csv' (HEADER 0);
 

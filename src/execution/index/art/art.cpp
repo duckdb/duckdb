@@ -1056,9 +1056,12 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 
 	// Get the delete_leaf.
 	// All leaves in the delete ART are inlined.
-	auto deleted_leaf = delete_art->Lookup(delete_art->tree, key, 0);
+	unsafe_optional_ptr<const Node> deleted_leaf;
+	if (delete_art) {
+		deleted_leaf = delete_art->Lookup(delete_art->tree, key, 0);
+	}
 
-	// The leaf is inlined, and the same key does not exist in the delete ART.
+	// The leaf is inlined, and there is no deleted leaf with the same key.
 	if (leaf.GetType() == NType::LEAF_INLINED && !deleted_leaf) {
 		if (manager.AddHit(i, leaf.GetRowId())) {
 			conflict_idx = i;
@@ -1068,6 +1071,7 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 
 	// The leaf is inlined, and the same key exists in the delete ART.
 	if (leaf.GetType() == NType::LEAF_INLINED && deleted_leaf) {
+		D_ASSERT(deleted_leaf->GetType() == NType::LEAF_INLINED);
 		auto deleted_row_id = deleted_leaf->GetRowId();
 		auto this_row_id = leaf.GetRowId();
 
@@ -1084,6 +1088,10 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 		return;
 	}
 
+	// FIXME: proper foreign key + delete ART support.
+	// This implicitly works for foreign keys, as we do not have to consider the actual row IDs.
+	// We only need to know that there are conflicts (for now), as we still perform over-eager constraint checking.
+
 	// Scan the two row IDs in the leaf.
 	Iterator it(*this);
 	it.FindMinimum(leaf);
@@ -1092,14 +1100,13 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 	it.Scan(empty_key, 2, row_ids, false);
 
 	if (!deleted_leaf) {
-		if (manager.AddHit(i, row_ids[0]) || manager.AddHit(i, row_ids[0])) {
+		if (manager.AddHit(i, row_ids[0]) || manager.AddHit(i, row_ids[1])) {
 			conflict_idx = i;
 		}
 		return;
 	}
 
 	auto deleted_row_id = deleted_leaf->GetRowId();
-
 	if (deleted_row_id == row_ids[0] || deleted_row_id == row_ids[1]) {
 		if (manager.AddMiss(i)) {
 			conflict_idx = i;

@@ -38,7 +38,7 @@ SET index_scan_percentage = 0.000001;
 query II
 EXPLAIN ANALYZE SELECT i FROM integers WHERE i = 42;
 ----
-analyzed_plan	<REGEX>:.*Type: Sequence Scan.*
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
 
 # Let's also test more than STANDARD_VECTOR_SIZE values.
 

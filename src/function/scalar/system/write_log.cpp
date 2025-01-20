@@ -114,11 +114,11 @@ static void WriteLogValues(T &LogSource, LogLevel level, const string_t *data, c
                            const string &type) {
 	if (!type.empty()) {
 		for (idx_t i = 0; i < size; i++) {
-			Logger::Log(type.c_str(), LogSource, level, data[sel->get_index(i)]);
+			DUCKDB_LOG(LogSource, type.c_str(), level, data[sel->get_index(i)]);
 		}
 	} else {
 		for (idx_t i = 0; i < size; i++) {
-			Logger::Log(LogSource, level, data[sel->get_index(i)]);
+			DUCKDB_LOG(LogSource, type.c_str(), level, data[sel->get_index(i)]);
 		}
 	}
 }
