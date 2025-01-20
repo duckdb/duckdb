@@ -25,10 +25,10 @@ ROLLBACK
 
 # use gen_random_uuid in some complicated expressions
 statement ok
-CREATE TABLE uuids(u UUID NOT NULL DEFAULT gen_random_uuid(), a INTEGER)
+CREATE TABLE uuids(u UUID NOT NULL DEFAULT gen_random_uuid(), a INTEGER);
 
 statement ok
-INSERT INTO uuids (a) VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10)
+INSERT INTO uuids (a) VALUES (1), (2), (3), (4), (5), (6), (7), (8), (9), (10);
 
 query I
 SELECT COUNT(DISTINCT u) FROM uuids;
@@ -37,17 +37,31 @@ SELECT COUNT(DISTINCT u) FROM uuids;
 
 # we can order by gen_random_uuid
 statement ok
-SELECT * FROM uuids ORDER BY gen_random_uuid()
+SELECT * FROM uuids ORDER BY gen_random_uuid();
 
-# we can select gen_random_uuid
+# we can select gen_random_uuid, uuidv4, uuidv7
 statement ok
-SELECT gen_random_uuid() FROM uuids
+SELECT gen_random_uuid() FROM uuids;
+SELECT uuidv4() FROM uuids;
+SELECT uuidv7() FROM uuids;
+
 
 # UUID v4 follows `XXXXXXXX-XXXX-4XXX-XXXX-XXXXXXXXXXXX` format
 query I
-SELECT DISTINCT substring(uuid()::varchar, 15, 1) FROM range(100)
+SELECT DISTINCT substring(uuid()::varchar, 15, 1) FROM range(100);
 ----
 4
+
+query I
+SELECT DISTINCT substring(uuidv4()::varchar, 15, 1) FROM range(100);
+----
+4
+
+# UUID v7 follows `XXXXXXXX-XXXX-7XXX-XXXX-XXXXXXXXXXXX` format
+query I
+SELECT DISTINCT substring(uuidv7()::varchar, 15, 1) FROM range(100);
+----
+7
 
 # UUID v4 variant 1 follows `XXXXXXXX-XXXX-4XXX-[89ab]XXX-XXXXXXXXXXXX` format
 # the probability for 100 iters not to cover the 4 possible values is (3/4)**100 == 3e-13
@@ -58,3 +72,17 @@ SELECT DISTINCT substring(uuid()::varchar, 20, 1) AS x FROM range(100) ORDER BY 
 9
 a
 b
+
+# UUID v7 is ordered from generation.
+statement ok
+CREATE TABLE tbl AS SELECT * FROM range(1, 6);
+
+# Order by UUID v7 doesn't change the initial order.
+query I
+SELECT * FROM tbl ORDER BY uuidv7();
+----
+1
+2
+3
+4
+5

@@ -12,11 +12,10 @@
 #include "duckdb/common/types/string_type.hpp"
 
 namespace duckdb {
-class ClientContext;
 class RandomEngine;
 
-//! The UUID class contains static operations for the UUID type
-class UUID {
+//! The BaseUUID class contains UUID related common and util functions.
+class BaseUUID {
 public:
 	constexpr static const uint8_t STRING_SIZE = 36;
 	//! Convert a uuid string to a hugeint object
@@ -34,10 +33,6 @@ public:
 	static uhugeint_t ToUHugeint(hugeint_t input);
 
 	//! Convert a hugeint object to a uuid style string
-	static hugeint_t GenerateRandomUUID(RandomEngine &engine);
-	static hugeint_t GenerateRandomUUID();
-
-	//! Convert a hugeint object to a uuid style string
 	static string ToString(hugeint_t input) {
 		char buff[STRING_SIZE];
 		ToString(input, buff);
@@ -49,6 +44,28 @@ public:
 		FromString(str, result);
 		return result;
 	}
+
+protected:
+	//! Util function, which converts uint8_t array to hugeint_t.
+	static hugeint_t Convert(const std::array<uint8_t, 16> &bytes);
+};
+
+//! The UUIDv4 class contains static operations for the UUIDv4 type
+class UUID : public BaseUUID {
+public:
+	//! Convert a hugeint object to a uuid v4 style string
+	static hugeint_t GenerateRandomUUID(RandomEngine &engine);
+	static hugeint_t GenerateRandomUUID();
+};
+
+using UUIDv4 = UUID;
+
+//! The UUIDv7 class contains static operations for the UUIDv7 type.
+class UUIDv7 : public BaseUUID {
+public:
+	//! Convert a hugeint object to a uuid v7 style string
+	static hugeint_t GenerateRandomUUID(RandomEngine &engine);
+	static hugeint_t GenerateRandomUUID();
 };
 
 } // namespace duckdb

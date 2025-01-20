@@ -41,7 +41,7 @@ ScalarFunction RandomFun::GetFunction() {
 	return random;
 }
 
-static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector &result) {
+static void GenerateUUIDv4Function(DataChunk &args, ExpressionState &state, Vector &result) {
 	D_ASSERT(args.ColumnCount() == 0);
 	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RandomLocalState>();
 
@@ -49,16 +49,40 @@ static void GenerateUUIDFunction(DataChunk &args, ExpressionState &state, Vector
 	auto result_data = FlatVector::GetData<hugeint_t>(result);
 
 	for (idx_t i = 0; i < args.size(); i++) {
-		result_data[i] = UUID::GenerateRandomUUID(lstate.random_engine);
+		result_data[i] = UUIDv4::GenerateRandomUUID(lstate.random_engine);
+	}
+}
+
+static void GenerateUUIDv7Function(DataChunk &args, ExpressionState &state, Vector &result) {
+	D_ASSERT(args.ColumnCount() == 0);
+	auto &lstate = ExecuteFunctionState::GetFunctionState(state)->Cast<RandomLocalState>();
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetData<hugeint_t>(result);
+
+	for (idx_t i = 0; i < args.size(); i++) {
+		result_data[i] = UUIDv7::GenerateRandomUUID(lstate.random_engine);
 	}
 }
 
 ScalarFunction UUIDFun::GetFunction() {
-	ScalarFunction uuid_function({}, LogicalType::UUID, GenerateUUIDFunction, nullptr, nullptr, nullptr,
-	                             RandomInitLocalState);
-	// generate a random uuid
-	uuid_function.stability = FunctionStability::VOLATILE;
-	return uuid_function;
+	return UUIDv4Fun::GetFunction();
+}
+
+ScalarFunction UUIDv4Fun::GetFunction() {
+	ScalarFunction uuid_v4_function({}, LogicalType::UUID, GenerateUUIDv4Function, nullptr, nullptr, nullptr,
+	                                RandomInitLocalState);
+	// generate a random uuid v4
+	uuid_v4_function.stability = FunctionStability::VOLATILE;
+	return uuid_v4_function;
+}
+
+ScalarFunction UUIDv7Fun::GetFunction() {
+	ScalarFunction uuid_v7_function({}, LogicalType::UUID, GenerateUUIDv7Function, nullptr, nullptr, nullptr,
+	                                RandomInitLocalState);
+	// generate a random uuid v7
+	uuid_v7_function.stability = FunctionStability::VOLATILE;
+	return uuid_v7_function;
 }
 
 } // namespace duckdb
