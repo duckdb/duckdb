@@ -29,7 +29,7 @@ namespace duckdb {
 class SerializationOptions {
 public:
 	SerializationOptions() = default;
-	SerializationOptions(AttachedDatabase &db);
+	explicit SerializationOptions(AttachedDatabase &db);
 
 	bool serialize_enum_as_string = false;
 	bool serialize_default_values = false;
