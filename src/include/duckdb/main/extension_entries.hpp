@@ -1069,26 +1069,10 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"mysql/config", "mysql_scanner"},
     {"postgres/config", "postgres_scanner"}}; // EXTENSION_SECRET_PROVIDERS
 
-static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {"aws",
-                                                          "azure",
-                                                          "autocomplete",
-                                                          "core_functions",
-                                                          "delta",
-                                                          "excel",
-                                                          "fts",
-                                                          "httpfs",
-                                                          "iceberg",
-                                                          "inet",
-                                                          "icu",
-                                                          "json",
-                                                          "motherduck",
-                                                          "mysql_scanner",
-                                                          "parquet",
-                                                          "sqlite_scanner",
-                                                          "sqlsmith",
-                                                          "postgres_scanner",
-                                                          "tpcds",
-                                                          "tpch",
-                                                          "uc_catalog"}; // END_OF_AUTOLOADABLE_EXTENSIONS
+static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
+    "aws",        "azure",         "autocomplete", "core_functions", "delta",    "excel",
+    "fts",        "httpfs",        "iceberg",      "inet",           "icu",      "json",
+    "motherduck", "mysql_scanner", "parquet",      "sqlite_scanner", "sqlsmith", "postgres_scanner",
+    "tpcds",      "tpch",          "uc_catalog"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb
