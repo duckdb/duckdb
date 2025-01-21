@@ -61,6 +61,13 @@ LogicalDependency::LogicalDependency(CatalogEntry &entry) {
 	}
 }
 
+LogicalDependency::LogicalDependency(optional_ptr<Catalog> catalog_p, CatalogEntryInfo entry_p, string catalog_str)
+    : entry(std::move(entry_p)), catalog(std::move(catalog_str)) {
+	if (catalog_p) {
+		catalog = catalog_p->GetName();
+	}
+}
+
 bool LogicalDependency::operator==(const LogicalDependency &other) const {
 	return other.entry.name == entry.name && other.entry.schema == entry.schema && other.entry.type == entry.type;
 }

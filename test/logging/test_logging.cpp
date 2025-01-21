@@ -11,21 +11,6 @@ using namespace duckdb;
 using namespace std;
 
 template <class SOURCE, typename FUN>
-void LogSimple(SOURCE &src, FUN f) {
-	f(src, "log-a-lot: 'simple'");
-}
-
-template <class SOURCE, typename FUN>
-void LogFormatString(SOURCE &src, FUN f) {
-	f(src, "log-a-lot: '%s'", "format");
-}
-
-template <class SOURCE, typename FUN>
-void LogCallback(SOURCE &src, FUN f) {
-	f(src, []() { return "log-a-lot: 'callback'"; });
-}
-
-template <class SOURCE, typename FUN>
 void LogSimpleCustomType(SOURCE &src, FUN f) {
 	f("custom_type", src, "log-a-lot: 'simple with type'");
 }
@@ -35,20 +20,13 @@ void LogFormatStringCustomType(SOURCE &src, FUN f) {
 	f("custom_type", src, "log-a-lot: '%s'", "format with type");
 }
 
-template <class SOURCE, typename FUN>
-void LogCallbackCustomType(SOURCE &src, FUN f) {
-	f("custom_type", src, []() { return "log-a-lot: 'callback with type'"; });
-}
-
-#define TEST_ALL_LOG_TEMPLATES(FUNCTION, SOURCE, SOURCE_TYPE)                                                          \
-	LogSimple<SOURCE_TYPE, void (*)(SOURCE_TYPE &, const char *)>(SOURCE, &FUNCTION);                                  \
-	LogFormatString<SOURCE_TYPE, void (*)(SOURCE_TYPE &, const char *, const char *)>(SOURCE, &FUNCTION);              \
-	LogCallback<SOURCE_TYPE, void (*)(SOURCE_TYPE &, std::function<string()>)>(SOURCE, &FUNCTION);                     \
-	LogSimpleCustomType<SOURCE_TYPE, void (*)(const char *, SOURCE_TYPE &, const char *)>(SOURCE, &FUNCTION);          \
-	LogFormatStringCustomType<SOURCE_TYPE, void (*)(const char *, SOURCE_TYPE &, const char *, const char *)>(         \
-	    SOURCE, &FUNCTION);                                                                                            \
-	LogCallbackCustomType<SOURCE_TYPE, void (*)(const char *, SOURCE_TYPE &, std::function<string()>)>(SOURCE,         \
-	                                                                                                   &FUNCTION);
+#define TEST_ALL_LOG_MACROS(LOG_LEVEL, SOURCE, LOG_TYPE)                                                               \
+	DUCKDB_LOG(SOURCE, "default", LOG_LEVEL, "log-a-lot: 'simple'")                                                    \
+	DUCKDB_LOG(SOURCE, "default", LOG_LEVEL, "log-a-lot: '%s'", "format")                                              \
+	DUCKDB_LOG(SOURCE, "default", LOG_LEVEL, string("log-a-lot: 'string type'"))                                       \
+	DUCKDB_LOG(SOURCE, "custom_type", LOG_LEVEL, "log-a-lot: 'simple with type'")                                      \
+	DUCKDB_LOG(SOURCE, "custom_type", LOG_LEVEL, "log-a-lot: '%s'", "format with type")                                \
+	DUCKDB_LOG(SOURCE, "custom_type", LOG_LEVEL, string("log-a-lot: 'string type with type'"))
 
 // Tests all Logger function entrypoints at the specified log level with the specified enabled/disabled loggers
 void test_logging(const string &minimum_level, const string &enabled_log_types, const string &disabled_log_types) {
@@ -81,20 +59,20 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 	bool disabled_mode = !disabled_log_types.empty();
 
 	// Log all to global logger
-	TEST_ALL_LOG_TEMPLATES(Logger::Trace, *db.instance, DatabaseInstance);
-	TEST_ALL_LOG_TEMPLATES(Logger::Debug, *db.instance, DatabaseInstance);
-	TEST_ALL_LOG_TEMPLATES(Logger::Info, *db.instance, DatabaseInstance);
-	TEST_ALL_LOG_TEMPLATES(Logger::Warn, *db.instance, DatabaseInstance);
-	TEST_ALL_LOG_TEMPLATES(Logger::Error, *db.instance, DatabaseInstance);
-	TEST_ALL_LOG_TEMPLATES(Logger::Fatal, *db.instance, DatabaseInstance);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_TRACE, *db.instance, DatabaseInstance);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_DEBUG, *db.instance, DatabaseInstance);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_INFO, *db.instance, DatabaseInstance);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARN, *db.instance, DatabaseInstance);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_ERROR, *db.instance, DatabaseInstance);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_FATAL, *db.instance, DatabaseInstance);
 
 	// Log all to client context logger
-	TEST_ALL_LOG_TEMPLATES(Logger::Trace, *con.context, ClientContext);
-	TEST_ALL_LOG_TEMPLATES(Logger::Debug, *con.context, ClientContext);
-	TEST_ALL_LOG_TEMPLATES(Logger::Info, *con.context, ClientContext);
-	TEST_ALL_LOG_TEMPLATES(Logger::Warn, *con.context, ClientContext);
-	TEST_ALL_LOG_TEMPLATES(Logger::Error, *con.context, ClientContext);
-	TEST_ALL_LOG_TEMPLATES(Logger::Fatal, *con.context, ClientContext);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_TRACE, *con.context, ClientContext);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_DEBUG, *con.context, ClientContext);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_INFO, *con.context, ClientContext);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_WARN, *con.context, ClientContext);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_ERROR, *con.context, ClientContext);
+	TEST_ALL_LOG_MACROS(LogLevel::LOG_FATAL, *con.context, ClientContext);
 
 	// Generate expected log messages
 	duckdb::vector<Value> expected_types;
@@ -110,7 +88,7 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 			    (disabled_mode && disabled_log_types.find(default_types[i].ToString()) == enabled_log_types.npos)) {
 				expected_messages.push_back("log-a-lot: 'simple'");
 				expected_messages.push_back("log-a-lot: 'format'");
-				expected_messages.push_back("log-a-lot: 'callback'");
+				expected_messages.push_back("log-a-lot: 'string type'");
 				expected_types.push_back(default_types[i]);
 				expected_types.push_back(default_types[i]);
 				expected_types.push_back(default_types[i]);
@@ -123,7 +101,7 @@ void test_logging(const string &minimum_level, const string &enabled_log_types, 
 			    (disabled_mode && disabled_log_types.find("custom_type") == enabled_log_types.npos)) {
 				expected_messages.push_back("log-a-lot: 'simple with type'");
 				expected_messages.push_back("log-a-lot: 'format with type'");
-				expected_messages.push_back("log-a-lot: 'callback with type'");
+				expected_messages.push_back("log-a-lot: 'string type with type'");
 				expected_types.push_back("custom_type");
 				expected_types.push_back("custom_type");
 				expected_types.push_back("custom_type");
@@ -178,7 +156,7 @@ static duckdb::unique_ptr<FunctionData> TestLoggingBind(ClientContext &context, 
 
 static void TestLoggingFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &local_state = data_p.local_state->Cast<TestLoggingData>();
-	Logger::Warn(local_state.context, "thread_logger");
+	DUCKDB_LOG_INFO(local_state.context, "duckdb.", "thread_logger");
 	output.SetCardinality(0);
 }
 

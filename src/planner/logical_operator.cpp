@@ -216,7 +216,9 @@ vector<idx_t> LogicalOperator::GetTableIndex() const {
 
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
 	MemoryStream stream;
-	BinarySerializer serializer(stream);
+	SerializationOptions options;
+	options.serialization_compatibility = SerializationCompatibility::Latest();
+	BinarySerializer serializer(stream, options);
 	try {
 		serializer.Begin();
 		this->Serialize(serializer);
