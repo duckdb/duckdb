@@ -38,7 +38,7 @@
         "parameters": "uuid",
         "description": "Extract a version for the given UUID.",
         "example": "uuid_extract_version('019482e4-1441-7aad-8127-eec99573b0a0')",
-        "type": "scalar_function",
+        "type": "scalar_function_set",
         "struct": "ExtractUuidVerisonFun"
     },
     {
@@ -46,7 +46,7 @@
         "parameters": "uuid",
         "description": "Extract the timestamp for the given UUID v7.",
         "example": "uuid_extract_timestamp('019482e4-1441-7aad-8127-eec99573b0a0')",
-        "type": "scalar_function",
+        "type": "scalar_function_set",
         "struct": "ExtractUuidTimestampFun"
     }
 ]

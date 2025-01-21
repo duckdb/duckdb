@@ -384,6 +384,8 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION(UrlDecodeFun),
 	DUCKDB_SCALAR_FUNCTION(UrlEncodeFun),
 	DUCKDB_SCALAR_FUNCTION(UUIDFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ExtractUuidTimestampFun),
+	DUCKDB_SCALAR_FUNCTION_SET(ExtractUuidVerisonFun),
 	DUCKDB_SCALAR_FUNCTION(UUIDv4Fun),
 	DUCKDB_SCALAR_FUNCTION(UUIDv7Fun),
 	DUCKDB_AGGREGATE_FUNCTION(VarPopFun),
@@ -399,8 +401,6 @@ static const StaticFunctionDefinition core_functions[] = {
 	DUCKDB_SCALAR_FUNCTION_SET(YearWeekFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitwiseOrFun),
 	DUCKDB_SCALAR_FUNCTION_SET(BitwiseNotFun),
-	DUCKDB_SCALAR_FUNCTION_SET(ExtractUuidVerisonFun),
-	DUCKDB_SCALAR_FUNCTION_SET(ExtractUuidTimestampFun),
 	FINAL_FUNCTION
 };
 
