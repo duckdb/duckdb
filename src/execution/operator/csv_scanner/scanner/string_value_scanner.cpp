@@ -514,7 +514,8 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				return;
 			}
 		}
-		if (result.cur_col_id >= result.number_of_columns && !result.state_machine.state_machine_options.rfc_4180.GetValue()) {
+		if (result.cur_col_id >= result.number_of_columns &&
+		    !result.state_machine.state_machine_options.rfc_4180.GetValue()) {
 			return;
 		}
 		if (!result.HandleTooManyColumnsError(value_ptr, length)) {
