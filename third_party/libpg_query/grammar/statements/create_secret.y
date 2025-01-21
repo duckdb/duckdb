@@ -4,7 +4,7 @@
  *
  *****************************************************************************/
 CreateSecretStmt:
-			CREATE_P opt_persist SECRET opt_secret_name opt_storage_specifier '(' copy_generic_opt_list ')'
+			CREATE_P opt_persist SECRET opt_secret_name opt_storage_specifier '(' create_secret_generic_opt_list ')'
 				{
 					PGCreateSecretStmt *n = makeNode(PGCreateSecretStmt);
 					n->persist_type = $2;
@@ -14,7 +14,7 @@ CreateSecretStmt:
 					n->onconflict = PG_ERROR_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
-			| CREATE_P opt_persist SECRET IF_P NOT EXISTS opt_secret_name opt_storage_specifier '(' copy_generic_opt_list ')'
+			| CREATE_P opt_persist SECRET IF_P NOT EXISTS opt_secret_name opt_storage_specifier '(' create_secret_generic_opt_list ')'
 				{
 					PGCreateSecretStmt *n = makeNode(PGCreateSecretStmt);
 					n->persist_type = $2;
@@ -24,7 +24,7 @@ CreateSecretStmt:
 					n->onconflict = PG_IGNORE_ON_CONFLICT;
 					$$ = (PGNode *)n;
 				}
-			| CREATE_P OR REPLACE opt_persist SECRET opt_secret_name opt_storage_specifier '(' copy_generic_opt_list ')'
+			| CREATE_P OR REPLACE opt_persist SECRET opt_secret_name opt_storage_specifier '(' create_secret_generic_opt_list ')'
 				{
 					PGCreateSecretStmt *n = makeNode(PGCreateSecretStmt);
 					n->persist_type = $4;
@@ -51,3 +51,26 @@ opt_storage_specifier:
         /* empty */                                 { $$ = pstrdup(""); }
         | IN_P IDENT                                { $$ = $2; }
     ;
+
+
+create_secret_generic_opt_arg:
+			a_expr			{ $$ = (PGNode *) $1; }
+		;
+
+create_secret_generic_opt_elem:
+			ColLabel create_secret_generic_opt_arg
+				{
+					$$ = makeDefElem($1, $2, @1);
+				}
+		;
+
+create_secret_generic_opt_list:
+			create_secret_generic_opt_elem
+				{
+					$$ = list_make1($1);
+				}
+			| create_secret_generic_opt_list ',' create_secret_generic_opt_elem
+				{
+					$$ = lappend($1, $3);
+				}
+		;
