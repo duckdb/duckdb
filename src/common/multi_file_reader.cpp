@@ -125,7 +125,7 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 			    "'hive_types' only accepts a STRUCT('name':VARCHAR, ...), but '%s' was provided",
 			    val.type().ToString());
 		}
-		// verify that that all the children of the struct value are VARCHAR
+		// verify that all the children of the struct value are VARCHAR
 		auto &children = StructValue::GetChildren(val);
 		for (idx_t i = 0; i < children.size(); i++) {
 			const Value &child = children[i];
