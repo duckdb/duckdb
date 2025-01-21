@@ -88,6 +88,25 @@ jobs:
       shell: bash
       run: ./build/release/duckdb -c "PRAGMA platform;"
 
+    - name: Deploy
+      shell: bash
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+      run: |
+        python3 scripts/amalgamation.py
+        zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
+        zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip
+
+    - uses: actions/upload-artifact@v4
+      with:
+        name: duckdb-binaries-linux
+        path: |
+          libduckdb-linux-amd64.zip
+          duckdb_cli-linux-amd64.zip
+
     - name: Test
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
@@ -108,26 +127,6 @@ jobs:
         (cd examples/embedded-c++; make)
         build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
-
-    - name: Deploy
-      shell: bash
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-      run: |
-        python3 scripts/amalgamation.py
-        zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
-        zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip
-
-    - uses: actions/upload-artifact@v4
-      with:
-        name: duckdb-binaries-linux
-        path: |
-          libduckdb-linux-amd64.zip
-          duckdb_cli-linux-amd64.zip
-
 
  linux-release-aarch64:
    # Builds binaries for linux_arm64
