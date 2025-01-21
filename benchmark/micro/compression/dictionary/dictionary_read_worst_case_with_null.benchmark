@@ -1,4 +1,4 @@
-# name: benchmark/micro/compression/dictionary/dictionary_read_worst_case.benchmark
+# name: benchmark/micro/compression/dictionary/dictionary_read_worst_case_with_null.benchmark
 # description: Scanning data that is uncompressible with dictionary encoding
 # group: [dictionary]
 
@@ -9,7 +9,7 @@ storage persistent
 load
 DROP TABLE IF EXISTS test;
 PRAGMA force_compression='dict_fsst';
-CREATE TABLE test AS SELECT i::VARCHAR AS i FROM range(0, 200_000_000) tbl(i);
+CREATE TABLE test AS SELECT if((i % 200) = 0, NULL, i::VARCHAR) AS i FROM range(0, 200_000_000) tbl(i);
 checkpoint;
 
 run

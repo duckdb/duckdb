@@ -43,7 +43,8 @@ public:
 
 	bool AllUnique() const;
 	void FlushEncodingBuffer();
-	DictionaryAppendState SwitchAppendState();
+	idx_t CalculateRequiredSpace() const;
+	DictionaryAppendState TryEncode();
 
 	bool CompressInternal(UnifiedVectorFormat &vector_format, EncodedInput &encoded_input, const idx_t i, idx_t count);
 	void Compress(Vector &scan_vector, idx_t count);
@@ -56,7 +57,6 @@ public:
 	// State regarding current segment
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle current_handle;
-	StringDictionaryContainer current_dictionary;
 	//! Offset at which to write the next dictionary string
 	idx_t dictionary_offset = 0;
 
@@ -66,13 +66,12 @@ public:
 	bitpacking_width_t string_lengths_width = 0;
 	//! For DICT_FSST we delay encoding of new entries, which means
 	//  we have to prepare for strings being exploded in size by max 2x
-	//  so we have to muddy out 'string_lengths_width'
+	//  so we have to muddy our 'string_lengths_width'
 	bitpacking_width_t real_string_lengths_width = 0;
 
 	idx_t dictionary_indices_space = 0;
 	vector<uint32_t> dictionary_indices;
 	bitpacking_width_t dictionary_indices_width = 0;
-	//! uint32_t max_dictionary_index; (this is 'dict_count')
 
 	//! string -> dictionary_index (for lookups)
 	string_map_t<uint32_t> current_string_map;
