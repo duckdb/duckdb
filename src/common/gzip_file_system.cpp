@@ -82,7 +82,7 @@ public:
 
 	void Close() override;
 
-	void FlushStream();
+	void FlushStream() const;
 };
 
 MiniZStreamWrapper::~MiniZStreamWrapper() {
@@ -146,7 +146,7 @@ void MiniZStreamWrapper::Initialize(CompressedFile &file, bool write) {
 bool MiniZStreamWrapper::Read(StreamData &sd) {
 	// Handling for the concatenated files
 	if (sd.refresh) {
-		auto available = (uint32_t)(sd.in_buff_end - sd.in_buff_start);
+		auto available = static_cast<uint32_t>(sd.in_buff_end - sd.in_buff_start);
 		if (available <= GZIP_FOOTER_SIZE) {
 			// Only footer is available so we just close and return finished
 			Close();
@@ -173,7 +173,7 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 				c = UnsafeNumericCast<char>(*body_ptr);
 				body_ptr++;
 			} while (c != '\0' && body_ptr < sd.in_buff_end);
-			if ((idx_t)(body_ptr - sd.in_buff_start) >= GZIP_HEADER_MAXSIZE) {
+			if (static_cast<idx_t>(body_ptr - sd.in_buff_start) >= GZIP_HEADER_MAXSIZE) {
 				throw InternalException("Filename resulting in GZIP header larger than defined maximum (%d)",
 				                        GZIP_HEADER_MAXSIZE);
 			}
@@ -193,9 +193,9 @@ bool MiniZStreamWrapper::Read(StreamData &sd) {
 	// actually decompress
 	mz_stream_ptr->next_in = sd.in_buff_start;
 	D_ASSERT(sd.in_buff_end - sd.in_buff_start < NumericLimits<int32_t>::Maximum());
-	mz_stream_ptr->avail_in = (uint32_t)(sd.in_buff_end - sd.in_buff_start);
+	mz_stream_ptr->avail_in = static_cast<uint32_t>(sd.in_buff_end - sd.in_buff_start);
 	mz_stream_ptr->next_out = data_ptr_cast(sd.out_buff_end);
-	mz_stream_ptr->avail_out = (uint32_t)((sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_end);
+	mz_stream_ptr->avail_out = static_cast<uint32_t>((sd.out_buff.get() + sd.out_buf_size) - sd.out_buff_end);
 	auto ret = duckdb_miniz::mz_inflate(mz_stream_ptr.get(), duckdb_miniz::MZ_NO_FLUSH);
 	if (ret != duckdb_miniz::MZ_OK && ret != duckdb_miniz::MZ_STREAM_END) {
 		throw IOException("Failed to decode gzip stream: %s", duckdb_miniz::mz_error(ret));
@@ -248,7 +248,7 @@ void MiniZStreamWrapper::Write(CompressedFile &file, StreamData &sd, data_ptr_t 
 	}
 }
 
-void MiniZStreamWrapper::FlushStream() {
+void MiniZStreamWrapper::FlushStream() const {
 	auto &sd = file->stream_data;
 	mz_stream_ptr->next_in = nullptr;
 	mz_stream_ptr->avail_in = 0;
@@ -371,7 +371,7 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 		do {
 			c = *body_ptr;
 			body_ptr++;
-		} while (c != '\0' && (idx_t)(body_ptr - data) < size);
+		} while (c != '\0' && static_cast<idx_t>(body_ptr - data) < size);
 	}
 
 	// stream is now set to beginning of payload data
@@ -384,10 +384,10 @@ string GZipFileSystem::UncompressGZIPString(const char *data, idx_t size) {
 	mz_stream_ptr->next_in = const_uchar_ptr_cast(body_ptr);
 	mz_stream_ptr->avail_in = NumericCast<unsigned int>(bytes_remaining);
 
-	unsigned char decompress_buffer[BUFSIZ];
 	string decompressed;
 
 	while (status == duckdb_miniz::MZ_OK) {
+		unsigned char decompress_buffer[BUFSIZ];
 		mz_stream_ptr->next_out = decompress_buffer;
 		mz_stream_ptr->avail_out = sizeof(decompress_buffer);
 		status = mz_inflate(mz_stream_ptr.get(), duckdb_miniz::MZ_NO_FLUSH);

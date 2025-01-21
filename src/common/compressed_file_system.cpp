@@ -44,7 +44,7 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 			auto available =
 			    MinValue<idx_t>(UnsafeNumericCast<idx_t>(remaining),
 			                    UnsafeNumericCast<idx_t>(stream_data.out_buff_end - stream_data.out_buff_start));
-			memcpy(data_ptr_t(buffer) + total_read, stream_data.out_buff_start, available);
+			memcpy(static_cast<data_ptr_t>(buffer) + total_read, stream_data.out_buff_start, available);
 
 			// increment the total read variables as required
 			stream_data.out_buff_start += available;
