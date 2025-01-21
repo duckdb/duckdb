@@ -112,6 +112,19 @@ unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deseri
 	auto entry = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
 	auto function_return_type = entry.first.return_type;
+
+	if (entry.first.bind_expression) {
+		// bind the function expression
+		auto &context = deserializer.Get<ClientContext &>();
+		auto bind_input = FunctionBindExpressionInput(context, entry.second, children);
+		// replace the function expression with the bound expression
+		auto bound_expression = entry.first.bind_expression(bind_input);
+		if (bound_expression) {
+			return bound_expression;
+		}
+		// Otherwise, fall thorugh and continue on normally
+	}
+
 	auto result = make_uniq<BoundFunctionExpression>(std::move(function_return_type), std::move(entry.first),
 	                                                 std::move(children), std::move(entry.second));
 	deserializer.ReadProperty(202, "is_operator", result->is_operator);

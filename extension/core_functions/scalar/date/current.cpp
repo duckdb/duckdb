@@ -6,8 +6,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
-
-#include <duckdb/planner/expression/bound_cast_expression.hpp>
+#include "duckdb/planner/expression/bound_cast_expression.hpp"
 
 namespace duckdb {
 
