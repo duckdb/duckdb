@@ -7,10 +7,13 @@ require json
 require tpch
 
 statement ok
+set threads=4
+
+statement ok
 start transaction
 
 statement ok
-call dbgen(sf=1)
+call dbgen(sf=0.1)
 
 # export lineitem as array (ARRAY does not need TRUE to be passed)
 statement ok
@@ -30,21 +33,21 @@ start transaction
 statement ok
 call dbgen(sf=0)
 
-# lineitem json is ~2GB so this test that we can do streaming reads of json arrays
+# sf0.1 lineitem json is ~0.2GB so this tests that we can do streaming reads of json arrays
 statement ok
-set memory_limit='1gb'
+set memory_limit='100mb'
 
 statement ok
 COPY lineitem from '__TEST_DIR__/lineitem.json' (ARRAY)
 
-# 4gb should be enough for the rest
+# 500mb should be enough for the rest
 statement ok
-set memory_limit='4gb'
+set memory_limit='500mb'
 
 query I
 PRAGMA tpch(1)
 ----
-<FILE>:extension/tpch/dbgen/answers/sf1/q01.csv
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q01.csv
 
 statement ok
 rollback
@@ -61,7 +64,7 @@ loop i 1 9
 query I
 PRAGMA tpch(${i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q0${i}.csv
 
 endloop
 
@@ -70,7 +73,7 @@ loop i 10 23
 query I
 PRAGMA tpch(${i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q${i}.csv
 
 endloop
 
@@ -201,7 +204,7 @@ loop i 1 9
 query I
 PRAGMA tpch(${i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q0${i}.csv
 
 endloop
 
@@ -210,6 +213,6 @@ loop i 10 23
 query I
 PRAGMA tpch(${i})
 ----
-<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+<FILE>:extension/tpch/dbgen/answers/sf0.1/q${i}.csv
 
 endloop

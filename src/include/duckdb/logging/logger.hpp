@@ -25,6 +25,34 @@ class FileOpener;
 class LogStorage;
 class ExecutionContext;
 
+//! Logger Macro's are preferred method of calling logger
+#define DUCKDB_LOG(SOURCE, TYPE, LEVEL, ...)                                                                           \
+	{                                                                                                                  \
+		auto &logger = Logger::Get(SOURCE);                                                                            \
+		if (logger.ShouldLog(TYPE, LEVEL)) {                                                                           \
+			logger.WriteLog(TYPE, LEVEL, __VA_ARGS__);                                                                 \
+		}                                                                                                              \
+	}
+
+//! Use below macros to write to logger.
+// Parameters:
+//		SOURCE: the context to fetch the logger from, e.g. the ClientContext, or the DatabaseInstance, see Logger::Get
+//		TYPE  : a string describing the type of this log entry. Preferred format: `<duckdb/extension name>(.<sometype>)
+//				e.g. `duckdb.Extensions.ExtensionAutoloaded`, `my_extension` or `my_extension.some_type`
+//		PARAMS: Either a string-like type such as `const char *`, `string` or `string_t` or a format string plus the
+// 			string parameters
+//
+// Examples:
+//		DUCKDB_LOG_TRACE(client_context, "duckdb", "Something happened");
+//		DUCKDB_LOG_INFO(database_instance, "duckdb", CallFunctionThatReturnsString());
+//
+#define DUCKDB_LOG_TRACE(SOURCE, TYPE, ...) DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_TRACE, __VA_ARGS__)
+#define DUCKDB_LOG_DEBUG(SOURCE, TYPE, ...) DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_DEBUG, __VA_ARGS__)
+#define DUCKDB_LOG_INFO(SOURCE, TYPE, ...)  DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_INFO, __VA_ARGS__)
+#define DUCKDB_LOG_WARN(SOURCE, TYPE, ...)  DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_WARN, __VA_ARGS__)
+#define DUCKDB_LOG_ERROR(SOURCE, TYPE, ...) DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_ERROR, __VA_ARGS__)
+#define DUCKDB_LOG_FATAL(SOURCE, TYPE, ...) DUCKDB_LOG(SOURCE, TYPE, LogLevel::LOG_FATAL, __VA_ARGS__)
+
 //! Main logging interface
 class Logger {
 public:
@@ -33,19 +61,20 @@ public:
 
 	DUCKDB_API virtual ~Logger() = default;
 
-	//! Main logger functions
-	DUCKDB_API void Log(const char *log_type, LogLevel log_level, const char *log_message);
-	DUCKDB_API void Log(LogLevel log_level, const char *log_message);
-	DUCKDB_API void Log(const char *log_type, LogLevel log_level, const string_t &log_message);
-	DUCKDB_API void Log(LogLevel log_level, const string_t &log_message);
-	DUCKDB_API void Log(const char *log_type, LogLevel log_level, std::function<string()> callback);
-	DUCKDB_API void Log(LogLevel log_level, std::function<string()> callback);
-
-	// Main interface for subclasses
+	// Main Logging interface. In most cases the macros above should be used instead of calling these directly
 	DUCKDB_API virtual bool ShouldLog(const char *log_type, LogLevel log_level) = 0;
-	DUCKDB_API virtual bool ShouldLog(LogLevel log_level) = 0;
 	DUCKDB_API virtual void WriteLog(const char *log_type, LogLevel log_level, const char *message) = 0;
-	DUCKDB_API virtual void WriteLog(LogLevel log_level, const char *message) = 0;
+
+	// Some more string types for easy logging
+	DUCKDB_API void WriteLog(const char *log_type, LogLevel log_level, const string &message);
+	DUCKDB_API void WriteLog(const char *log_type, LogLevel log_level, const string_t &message);
+
+	// Syntactic sugar for formatted strings
+	template <typename... ARGS>
+	void WriteLog(const char *log_type, LogLevel log_level, const char *format_string, ARGS... params) {
+		auto formatted_string = StringUtil::Format(format_string, params...);
+		WriteLog(log_type, log_level, formatted_string.c_str());
+	}
 
 	DUCKDB_API virtual void Flush() = 0;
 
@@ -57,104 +86,6 @@ public:
 	DUCKDB_API static Logger &Get(const ClientContext &client_context);
 	DUCKDB_API static Logger &Get(const FileOpener &opener);
 	DUCKDB_API static Logger &Get(const DatabaseInstance &db);
-
-	//! Logger::Log with raw C-String
-	template <class T>
-	static void Log(const char *log_type, T &log_context_source, LogLevel log_level, const char *log_message) {
-		Logger::Get(log_context_source).Log(log_type, log_level, log_message);
-	}
-	template <class T>
-	static void Log(const char *log_type, T &log_context_source, LogLevel log_level, const string &log_message) {
-		Logger::Get(log_context_source).Log(log_type, log_level, log_message.c_str());
-	}
-	template <class T>
-	static void Log(const char *log_type, T &log_context_source, LogLevel log_level, const string_t &log_message) {
-		Logger::Get(log_context_source).Log(log_type, log_level, log_message);
-	}
-	template <class T>
-	static void Log(T &log_context_source, LogLevel log_level, const char *log_message) {
-		Logger::Get(log_context_source).Log(log_level, log_message);
-	}
-	template <class T>
-	static void Log(T &log_context_source, LogLevel log_level, const string &log_message) {
-		Logger::Get(log_context_source).Log(log_level, log_message.c_str());
-	}
-	template <class T>
-	static void Log(T &log_context_source, LogLevel log_level, const string_t &log_message) {
-		Logger::Get(log_context_source).Log(log_level, log_message);
-	}
-
-	//! Logger::Log with callback
-	template <class T>
-	static void Log(const char *log_type, T &log_context_source, LogLevel log_level, std::function<string()> callback) {
-		Logger::Get(log_context_source).Log(log_type, log_level, std::move(callback));
-	}
-	template <class T>
-	static void Log(T &log_context_source, LogLevel log_level, std::function<string()> callback) {
-		Logger::Get(log_context_source).Log(log_level, std::move(callback));
-	}
-	//! Logger::Log with StringUtil::Format
-	template <class T, typename... ARGS>
-	static void Log(const char *log_type, T &log_context_source, LogLevel log_level, const char *format_string,
-	                ARGS... params) {
-		Logger::Get(log_context_source).Log(log_type, log_level, [&]() {
-			return StringUtil::Format(format_string, params...);
-		});
-	}
-	template <class T, typename... ARGS>
-	static void Log(T &log_context_source, LogLevel log_level, const char *format_string, ARGS... params) {
-		Logger::Get(log_context_source).Log(log_level, [&]() { return StringUtil::Format(format_string, params...); });
-	}
-
-	//! Templates wrapping Logging::Log(..., LoggingLevel, ....)
-	template <class T, typename... ARGS>
-	static void Trace(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::LOG_TRACE, params...);
-	}
-	template <class T, typename... ARGS>
-	static void Trace(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::LOG_TRACE, params...);
-	}
-	template <class T, typename... ARGS>
-	static void Debug(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::LOG_DEBUG, params...);
-	}
-	template <class T, typename... ARGS>
-	static void Debug(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::LOG_DEBUG, params...);
-	}
-	template <class T, typename... ARGS>
-	static void Info(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::LOG_INFO, params...);
-	}
-	template <class T, typename... ARGS>
-	static void Info(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::LOG_INFO, params...);
-	}
-	template <class T, typename... ARGS>
-	static void Warn(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::LOG_WARN, params...);
-	}
-	template <class T, typename... ARGS>
-	static void Warn(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::LOG_WARN, params...);
-	}
-	template <class T, typename... ARGS>
-	static void Error(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::LOG_ERROR, params...);
-	}
-	template <class T, typename... ARGS>
-	static void Error(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::LOG_ERROR, params...);
-	}
-	template <class T, typename... ARGS>
-	static void Fatal(T &log_context_source, ARGS... params) {
-		Log(log_context_source, LogLevel::LOG_FATAL, params...);
-	}
-	template <class T, typename... ARGS>
-	static void Fatal(const char *log_type, T &log_context_source, ARGS... params) {
-		Log(log_type, log_context_source, LogLevel::LOG_FATAL, params...);
-	}
 
 	template <class T>
 	static void Flush(T &log_context_source) {
@@ -182,9 +113,7 @@ public:
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;
-	bool ShouldLog(LogLevel log_level) override;
 	void WriteLog(const char *log_type, LogLevel log_level, const char *message) override;
-	void WriteLog(LogLevel log_level, const char *message) override;
 
 	void Flush() override;
 	bool IsThreadSafe() override {
@@ -209,9 +138,7 @@ public:
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;
-	bool ShouldLog(LogLevel log_level) override;
 	void WriteLog(const char *log_type, LogLevel log_level, const char *message) override;
-	void WriteLog(LogLevel log_level, const char *message) override;
 	void Flush() override;
 
 	bool IsThreadSafe() override {
@@ -234,9 +161,7 @@ public:
 
 	// Main Logger API
 	bool ShouldLog(const char *log_type, LogLevel log_level) override;
-	bool ShouldLog(LogLevel log_level) override;
 	void WriteLog(const char *log_type, LogLevel log_level, const char *message) override;
-	void WriteLog(LogLevel log_level, const char *message) override;
 
 	void Flush() override;
 	bool IsThreadSafe() override {
@@ -269,11 +194,7 @@ public:
 	bool ShouldLog(const char *log_type, LogLevel log_level) override {
 		return false;
 	}
-	bool ShouldLog(LogLevel log_level) override {
-		return false;
-	};
 	void WriteLog(const char *log_type, LogLevel log_level, const char *message) override {};
-	void WriteLog(LogLevel log_level, const char *message) override {};
 	void Flush() override {
 	}
 	bool IsThreadSafe() override {

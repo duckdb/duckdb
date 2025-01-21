@@ -721,6 +721,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
     "inet",
     "icu",
     "json",
+    "motherduck",
     "mysql_scanner",
     "parquet",
     "sqlite_scanner",

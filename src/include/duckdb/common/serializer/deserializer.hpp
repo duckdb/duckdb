@@ -159,6 +159,11 @@ public:
 		return data.Get<T>();
 	}
 
+	template <class T>
+	optional_ptr<T> TryGet() {
+		return data.TryGet<T>();
+	}
+
 	//! Unset a serialization property
 	template <class T>
 	void Unset() {

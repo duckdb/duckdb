@@ -34,8 +34,9 @@ public:
 	static ConnectionManager &Get(ClientContext &context);
 
 private:
-	mutable mutex connections_lock;
+	mutex connections_lock;
 	reference_map_t<ClientContext, weak_ptr<ClientContext>> connections;
+	atomic<idx_t> connection_count;
 };
 
 } // namespace duckdb

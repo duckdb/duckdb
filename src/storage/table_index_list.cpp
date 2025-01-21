@@ -128,30 +128,55 @@ void TableIndexList::Move(TableIndexList &other) {
 	indexes = std::move(other.indexes);
 }
 
-Index *TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type) {
-	for (auto &index : indexes) {
-		if (DataTable::IsForeignKeyIndex(fk_keys, *index, fk_type)) {
-			return &(*index);
+bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, ForeignKeyType fk_type) {
+	if (fk_type == ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE ? !index.IsUnique() : !index.IsForeign()) {
+		return false;
+	}
+	if (fk_keys.size() != index.GetColumnIds().size()) {
+		return false;
+	}
+
+	auto &column_ids = index.GetColumnIds();
+	for (auto &fk_key : fk_keys) {
+		bool found = false;
+		for (auto &index_key : column_ids) {
+			if (fk_key.index == index_key) {
+				found = true;
+				break;
+			}
+		}
+		if (!found) {
+			return false;
+		}
+	}
+	return true;
+}
+
+optional_ptr<Index> TableIndexList::FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys,
+                                                        const ForeignKeyType fk_type) {
+	for (auto &index_elem : indexes) {
+		if (IsForeignKeyIndex(fk_keys, *index_elem, fk_type)) {
+			return index_elem;
 		}
 	}
 	return nullptr;
 }
 
-void TableIndexList::VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk,
-                                      ConflictManager &conflict_manager) {
+void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, const vector<PhysicalIndex> &fk_keys,
+                                      DataChunk &chunk, ConflictManager &conflict_manager) {
 	auto fk_type = conflict_manager.LookupType() == VerifyExistenceType::APPEND_FK
 	                   ? ForeignKeyType::FK_TYPE_PRIMARY_KEY_TABLE
 	                   : ForeignKeyType::FK_TYPE_FOREIGN_KEY_TABLE;
 
-	// Check whether the chunk can be inserted or deleted into the referenced table storage.
+	// Check whether the chunk can be inserted in or deleted from the referenced table storage.
 	auto index = FindForeignKeyIndex(fk_keys, fk_type);
-	if (!index) {
-		throw InternalException("Internal Foreign Key error: could not find index to verify...");
+	D_ASSERT(index && index->IsBound());
+	if (storage) {
+		auto delete_index = storage->delete_indexes.Find(index->GetIndexName());
+		index->Cast<BoundIndex>().VerifyConstraint(chunk, delete_index, conflict_manager);
+	} else {
+		index->Cast<BoundIndex>().VerifyConstraint(chunk, nullptr, conflict_manager);
 	}
-	if (!index->IsBound()) {
-		throw InternalException("Internal Foreign Key error: trying to verify an unbound index...");
-	}
-	index->Cast<BoundIndex>().VerifyConstraint(chunk, nullptr, conflict_manager);
 }
 
 unordered_set<column_t> TableIndexList::GetRequiredColumns() {

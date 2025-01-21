@@ -51,6 +51,10 @@ DataTableInfo &ColumnData::GetTableInfo() const {
 	return info;
 }
 
+StorageManager &ColumnData::GetStorageManager() const {
+	return info.GetDB().GetStorageManager();
+}
+
 const LogicalType &ColumnData::RootType() const {
 	if (parent) {
 		return parent->RootType();

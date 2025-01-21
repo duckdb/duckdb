@@ -9,6 +9,14 @@
 
 namespace duckdb {
 
+void Logger::WriteLog(const char *log_type, LogLevel log_level, const string &message) {
+	WriteLog(log_type, log_level, message.c_str());
+}
+void Logger::WriteLog(const char *log_type, LogLevel log_level, const string_t &message) {
+	string copied_string = message.GetString();
+	WriteLog(log_type, log_level, copied_string.c_str());
+}
+
 Logger &Logger::Get(const DatabaseInstance &db) {
 	return db.GetLogManager().GlobalLogger();
 }
@@ -27,46 +35,6 @@ Logger &Logger::Get(const ClientContext &client_context) {
 
 Logger &Logger::Get(const FileOpener &opener) {
 	return opener.GetLogger();
-}
-
-void Logger::Log(const char *log_type, LogLevel log_level, const char *log_message) {
-	if (ShouldLog(log_type, log_level)) {
-		WriteLog(log_type, log_level, log_message);
-	}
-}
-
-void Logger::Log(LogLevel log_level, const char *log_message) {
-	if (ShouldLog(log_level)) {
-		WriteLog(log_level, log_message);
-	}
-}
-
-void Logger::Log(const char *log_type, LogLevel log_level, const string_t &log_message) {
-	if (ShouldLog(log_type, log_level)) {
-		auto string_copy = log_message.GetString();
-		WriteLog(log_type, log_level, string_copy.c_str());
-	}
-}
-
-void Logger::Log(LogLevel log_level, const string_t &log_message) {
-	if (ShouldLog(log_level)) {
-		auto string_copy = log_message.GetString();
-		WriteLog(log_level, string_copy.c_str());
-	}
-}
-
-void Logger::Log(const char *log_type, LogLevel log_level, std::function<string()> callback) { // NOLINT
-	if (ShouldLog(log_type, log_level)) {
-		auto string = callback();
-		WriteLog(log_type, log_level, string.c_str());
-	}
-}
-
-void Logger::Log(LogLevel log_level, std::function<string()> callback) { // NOLINT
-	if (ShouldLog(log_level)) {
-		auto string = callback();
-		WriteLog(log_level, string.c_str());
-	}
 }
 
 ThreadSafeLogger::ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
@@ -95,17 +63,8 @@ bool ThreadSafeLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	return true;
 }
 
-bool ThreadSafeLogger::ShouldLog(LogLevel log_level) {
-	return ShouldLog(context.context.default_log_type, log_level);
-}
-
 void ThreadSafeLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
 	manager.WriteLogEntry(Timestamp::GetCurrentTimestamp(), log_type, log_level, log_message, context);
-}
-
-void ThreadSafeLogger::WriteLog(LogLevel log_level, const char *log_message) {
-	manager.WriteLogEntry(Timestamp::GetCurrentTimestamp(), context.context.default_log_type, log_level, log_message,
-	                      context);
 }
 
 void ThreadSafeLogger::Flush() {
@@ -127,15 +86,7 @@ bool ThreadLocalLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	throw NotImplementedException("ThreadLocalLogger::ShouldLog");
 }
 
-bool ThreadLocalLogger::ShouldLog(LogLevel log_level) {
-	throw NotImplementedException("ThreadLocalLogger::ShouldLog");
-}
-
 void ThreadLocalLogger::WriteLog(const char *log_type, LogLevel log_level, const char *log_message) {
-	throw NotImplementedException("ThreadLocalLogger::WriteLog");
-}
-
-void ThreadLocalLogger::WriteLog(LogLevel log_level, const char *log_message) {
 	throw NotImplementedException("ThreadLocalLogger::WriteLog");
 }
 
@@ -168,11 +119,6 @@ void MutableLogger::WriteLog(const char *log_type, LogLevel log_level, const cha
 	manager.WriteLogEntry(Timestamp::GetCurrentTimestamp(), log_type, log_level, log_message, context);
 }
 
-void MutableLogger::WriteLog(LogLevel log_level, const char *log_message) {
-	manager.WriteLogEntry(Timestamp::GetCurrentTimestamp(), context.context.default_log_type, log_level, log_message,
-	                      context);
-}
-
 bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 	if (!enabled) {
 		return false;
@@ -198,10 +144,6 @@ bool MutableLogger::ShouldLog(const char *log_type, LogLevel log_level) {
 		}
 	}
 	throw InternalException("Should be unreachable (MutableLogger::ShouldLog)");
-}
-
-bool MutableLogger::ShouldLog(LogLevel log_level) {
-	return ShouldLog(context.context.default_log_type, log_level);
 }
 
 void MutableLogger::Flush() {

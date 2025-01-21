@@ -1,11 +1,11 @@
-# name: test/sql/index/art/scan/test_in_filter_index_scan.test_slow
-# description: Test using an index scan for IN filter pushdown.
+# name: test/sql/index/art/scan/test_hash_join_in_filter_index_scan.test
+# description: Test using an index scan for IN filter pushdown via hash joins.
 # group: [scan]
 
 require tpch
 
 statement ok
-CALL dbgen(sf=0.1);
+CALL dbgen(sf=0.01);
 
 statement ok
 CREATE TABLE random_orders AS (
@@ -30,7 +30,7 @@ SELECT o_orderkey FROM orders_shuffled WHERE o_orderkey IN (
 	SELECT UNNEST(LIST(o_orderkey)) FROM random_orders
 ) ORDER BY ALL;
 ----
-analyzed_plan	<REGEX>:.*Type: Sequence Scan.*
+analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
 
 statement ok
 ALTER TABLE orders_shuffled ADD PRIMARY KEY (o_orderkey);

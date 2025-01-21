@@ -419,6 +419,16 @@ struct DefaultSecretStorageSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DisabledCompressionMethodsSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "disabled_compression_methods";
+	static constexpr const char *Description = "Disable a specific set of compression methods (comma separated)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct DisabledFilesystemsSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "disabled_filesystems";

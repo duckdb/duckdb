@@ -145,6 +145,7 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	options.read_only = read_only;
 	options.use_direct_io = config.options.use_direct_io;
 	options.debug_initialize = config.options.debug_initialize;
+	options.storage_version = storage_options.storage_version;
 
 	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
 	if (storage_options.row_group_size.IsValid()) {
@@ -182,6 +183,10 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			// No explicit option provided: use the default option.
 			options.block_alloc_size = config.options.default_block_alloc_size;
 		}
+		if (!options.storage_version.IsValid()) {
+			// when creating a new database we default to the serialization version specified in the config
+			options.storage_version = config.options.serialization_compatibility.serialization_version;
+		}
 
 		// Initialize the block manager before creating a new database.
 		auto sf_block_manager = make_uniq<SingleFileBlockManager>(db, path, options);
@@ -217,6 +222,12 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 
 		auto wal_path = GetWALPath();
 		wal = WriteAheadLog::Replay(fs, db, wal_path);
+	}
+	if (row_group_size > 122880ULL && GetStorageVersion() < 4) {
+		throw InvalidInputException("Unsupported row group size %llu - row group sizes >= 122_880 are only supported "
+		                            "with STORAGE_VERSION '1.2.0' or above.\nExplicitly specify a newer storage "
+		                            "version when creating the database to enable larger row groups",
+		                            row_group_size);
 	}
 
 	load_complete = true;

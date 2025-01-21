@@ -4,6 +4,6 @@ add_subdirectory(holistic)
 add_subdirectory(nested)
 add_subdirectory(regression)
 
-set(ALL_OBJECT_FILES
-    ${ALL_OBJECT_FILES}
+set(CORE_FUNCTION_FILES
+    ${CORE_FUNCTION_FILES}
     PARENT_SCOPE)
