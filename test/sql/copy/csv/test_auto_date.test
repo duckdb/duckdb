@@ -52,7 +52,7 @@ FROM date_tests
 2023-12-20
 
 statement ok
-CREATE OR REPLACE TEMPORARY TABLE stg_device_metadata_with_dates (
+CREATE TABLE stg_device_metadata_with_dates (
     device_id VARCHAR,
     device_name VARCHAR,
     device_type VARCHAR,
