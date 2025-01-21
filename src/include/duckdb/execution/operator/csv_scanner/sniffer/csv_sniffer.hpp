@@ -138,6 +138,8 @@ public:
 
 	idx_t LinesSniffed() const;
 
+	bool EmptyOrOnlyHeader() const;
+
 private:
 	//! CSV State Machine Cache
 	CSVStateMachineCache &state_machine_cache;

@@ -140,6 +140,12 @@ public:
 };
 
 unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
+	// check if the storage version we are writing to supports sztd
+	auto &storage = col_data.GetStorageManager();
+	if (storage.GetStorageVersion() < 4) {
+		// compatibility mode with old versions - disable zstd
+		return nullptr;
+	}
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	auto &data_table_info = col_data.info;
 	auto &attached_db = data_table_info.GetDB();

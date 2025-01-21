@@ -56,7 +56,7 @@ void ArrowType::ThrowIfInvalid() const {
 	}
 }
 
-unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format) {
+unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(string &format) {
 	if (format == "n") {
 		return make_uniq<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {
@@ -178,6 +178,14 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema
 			throw NotImplementedException(" Timestamptz precision of not accepted");
 		}
 		return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
+	}
+	return nullptr;
+}
+
+unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format) {
+	auto type = GetTypeFromFormat(format);
+	if (type) {
+		return type;
 	}
 	if (format == "+l") {
 		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::NORMAL, false);

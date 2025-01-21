@@ -265,6 +265,10 @@ endif
 ifdef DEBUG_STACKTRACE
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_STACKTRACE=1
 endif
+ifeq (${NATIVE_ARCH}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DNATIVE_ARCH=1
+endif
+
 
 # Optional overrides
 ifneq (${STANDARD_VECTOR_SIZE}, )
@@ -495,7 +499,7 @@ generate-files:
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 
-bundle-library-o:
+bundle-setup:
 	cd build/release && \
 	rm -rf bundle && \
 	mkdir -p bundle && \
@@ -504,8 +508,15 @@ bundle-library-o:
 	cp extension/*/lib*_extension.a bundle/. && \
 	cd bundle && \
 	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
-	find . -name '*.a' -execdir ${AR} -x {} \; && \
-	${AR} cr ../libduckdb_bundle.a ./*/*.o
+	find . -name '*.a' -execdir ${AR} -x {} \;
+
+bundle-library-o: bundle-setup
+	cd build/release/bundle && \
+	echo ./*/*.o | xargs ${AR} cr ../libduckdb_bundle.a
+
+bundle-library-obj: bundle-setup
+	cd build/release/bundle && \
+	echo ./*/*.obj | xargs ${AR} cr ../libduckdb_bundle.a
 
 bundle-library: release
 	make bundle-library-o

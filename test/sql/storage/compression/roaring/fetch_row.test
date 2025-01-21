@@ -3,6 +3,9 @@
 
 require block_size 262144
 
+statement ok
+SET storage_compatibility_version='v1.2.0'
+
 # load the DB from disk
 load __TEST_DIR__/test_roaring_compression_fetch_row.db
 

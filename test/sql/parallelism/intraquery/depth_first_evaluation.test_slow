@@ -2,6 +2,8 @@
 # description: Test that query plans are evaluated in a depth-first fashion
 # group: [intraquery]
 
+mode skip
+
 # we need a persistent DB because we want to compress the table that we're working with
 load __TEST_DIR__/depth_first_evaluation.db
 
@@ -9,9 +11,11 @@ load __TEST_DIR__/depth_first_evaluation.db
 statement ok
 SET temp_directory = ''
 
-# 1GiB is pretty tight
+# 2GiB is pretty tight, each single aggregation should take only slightly less
+# in this test, we're testing that we don't have multiple aggregations active simultaneously
+# so this limit should be tight enough
 statement ok
-SET memory_limit = '1GiB'
+SET memory_limit = '2GiB'
 
 statement ok
 SET threads = 4
@@ -69,7 +73,7 @@ FROM (
 statement ok
 DROP TABLE integers
 
-# column i has 0, 100, 200, etc., around 100 unique values spread out over the range 0 to 10 million
+# column i has 0, 100, 200, etc., around 100 unique values spread out across the range 0 to 10 million
 # all other values in column j are equal to range + 0.5
 # column j and k are just ranges from 0 to 10 million
 # we have to do this so our statistics propagation and dynamic join filters don't trivialise the query

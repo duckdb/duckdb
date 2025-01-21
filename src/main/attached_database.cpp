@@ -99,9 +99,11 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 		if (StringUtil::CIEquals(entry.first, "row_group_size")) {
 			continue;
 		}
+		if (StringUtil::CIEquals(entry.first, "storage_version")) {
+			continue;
+		}
 		throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 	}
-
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
 	auto read_only = options.access_mode == AccessMode::READ_ONLY;

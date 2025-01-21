@@ -2,6 +2,8 @@
 # description: Test views with changing schema
 # group: [view]
 
+require skip_reload
+
 statement ok
 set storage_compatibility_version='v1.0.0'
 

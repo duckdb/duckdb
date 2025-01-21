@@ -54,10 +54,13 @@ struct Storage {
 	static void VerifyBlockAllocSize(const idx_t block_alloc_size);
 };
 
-//! The version number of the database storage format
+//! The version number default, lower and upper bounds of the database storage format
 extern const uint64_t VERSION_NUMBER;
+extern const uint64_t VERSION_NUMBER_LOWER;
+extern const uint64_t VERSION_NUMBER_UPPER;
 string GetDuckDBVersion(idx_t version_number);
 optional_idx GetStorageVersion(const char *version_string);
+string GetStorageVersionName(idx_t serialization_version);
 optional_idx GetSerializationVersion(const char *version_string);
 vector<string> GetSerializationCandidates();
 
@@ -109,9 +112,11 @@ struct DatabaseHeader {
 	idx_t block_alloc_size;
 	//! The vector size of the database file
 	idx_t vector_size;
+	//! The serialization compatibility version
+	idx_t serialization_compatibility;
 
 	void Write(WriteStream &ser);
-	static DatabaseHeader Read(ReadStream &source);
+	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);
 };
 
 //! Detect mismatching constant values when compiling

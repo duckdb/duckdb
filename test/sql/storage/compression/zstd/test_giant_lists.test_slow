@@ -7,6 +7,9 @@ statement ok
 SET default_block_size = '16384';
 
 statement ok
+SET storage_compatibility_version='v1.2.0'
+
+statement ok
 attach '__TEST_DIR__/giant_list.db' as db2
 
 statement ok

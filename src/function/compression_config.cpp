@@ -67,6 +67,10 @@ static optional_ptr<CompressionFunction> LoadCompressionFunction(CompressionFunc
 
 static void TryLoadCompression(DBConfig &config, vector<reference<CompressionFunction>> &result, CompressionType type,
                                const PhysicalType physical_type) {
+	if (config.options.disabled_compression_methods.find(type) != config.options.disabled_compression_methods.end()) {
+		// explicitly disabled
+		return;
+	}
 	auto function = config.GetCompressionFunction(type, physical_type);
 	if (!function) {
 		return;
