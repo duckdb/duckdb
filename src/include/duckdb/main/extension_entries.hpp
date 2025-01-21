@@ -1088,7 +1088,7 @@ static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {"aws",
                                                           "sqlsmith",
                                                           "postgres_scanner",
                                                           "tpcds",
-                                                          "tpch"
+                                                          "tpch",
                                                           "uc_catalog"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb
