@@ -2,8 +2,6 @@
 # description: Test space reclamation of optimistic writing with a PK constraint violation.
 # group: [parallel]
 
-mode skip
-
 load __TEST_DIR__/reclaim_space_primary_key.db
 
 statement ok
@@ -23,8 +21,20 @@ INSERT INTO integers2 SELECT * FROM integers;
 ----
 <REGEX>:Constraint Error.*violates primary key constraint.*
 
+# For smaller block sizes (16KB) the total blocks increase (to twice the original amount) in the first
+# iteration, and then stay constant.
+
 statement ok
-CREATE TABLE block_count (count INT);
+CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
+
+statement ok
+CREATE TYPE test_result AS UNION (
+	ok BOOL,
+	err STRUCT(
+		old BIGINT,
+		allowed_max DECIMAL(21,1),
+		actual BIGINT)
+);
 
 loop i 0 10
 
@@ -58,19 +68,34 @@ INSERT INTO integers2 VALUES (10000000 + ${i});
 statement ok
 CHECKPOINT;
 
-statement ok
-INSERT INTO block_count SELECT total_blocks FROM pragma_database_size();
-
 query I
 SELECT COUNT(*) - ${i} FROM integers2;
 ----
 2
 
-# Ensure there is only a small difference between the MIN and MAX block counts.
+# Ensure that the total blocks don't exceed the total blocks after the first iteration by more than 1.2.
 
 query I
-SELECT (MAX(count) - MIN(count)) < 20 FROM block_count;
+SELECT
+	CASE WHEN ${i} = 0 THEN True::test_result
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.4 THEN True::test_result
+	ELSE {
+		'old': total_blocks_tbl.total_blocks,
+		'allowed_max': total_blocks_tbl.total_blocks * 1.4,
+		'actual': current.total_blocks
+	}::test_result
+	END
+FROM pragma_database_size() AS current, total_blocks_tbl;
 ----
 true
+
+# Adjust the total_blocks_tbl once to the count after the first iteration.
+
+statement ok
+UPDATE total_blocks_tbl SET total_blocks = (
+	SELECT
+		CASE WHEN ${i} = 0 THEN (SELECT current.total_blocks FROM pragma_database_size() AS current)
+		ELSE (total_blocks)END
+	);
 
 endloop

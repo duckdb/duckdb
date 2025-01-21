@@ -46,6 +46,7 @@ PartialBlockManager::PartialBlockManager(BlockManager &block_manager, PartialBlo
 	// Use the default maximum partial block size with a ratio of 20% free and 80% utilization.
 	max_partial_block_size = NumericCast<uint32_t>(block_manager.GetBlockSize() / 5 * 4);
 }
+
 PartialBlockManager::~PartialBlockManager() {
 }
 
@@ -186,6 +187,7 @@ void PartialBlockManager::ClearBlocks() {
 void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
 		e.second->Flush(e.first);
+		written_blocks.insert(e.second->state.block_id);
 	}
 	partially_filled_blocks.clear();
 }
@@ -194,8 +196,13 @@ BlockManager &PartialBlockManager::GetBlockManager() const {
 	return block_manager;
 }
 
-void PartialBlockManager::Rollback() {
+void PartialBlockManager::Rollback(const bool mark_modified) {
 	ClearBlocks();
+	if (mark_modified) {
+		for (auto &block_id : written_blocks) {
+			block_manager.MarkBlockAsFree(block_id);
+		}
+	}
 }
 
 } // namespace duckdb

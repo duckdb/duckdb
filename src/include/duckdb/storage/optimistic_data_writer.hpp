@@ -30,7 +30,7 @@ public:
 	//! Merge the partially written blocks from one optimistic writer into another
 	void Merge(OptimisticDataWriter &other);
 	//! Rollback
-	void Rollback();
+	void Rollback(const bool mark_modified);
 
 private:
 	//! Prepare a write to disk

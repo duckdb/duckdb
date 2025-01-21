@@ -253,12 +253,13 @@ void LocalTableStorage::FinalizeOptimisticWriter(OptimisticDataWriter &writer) {
 
 void LocalTableStorage::Rollback() {
 	for (auto &writer : optimistic_writers) {
-		writer->Rollback();
+		writer->Rollback(true);
 	}
-	optimistic_writers.clear();
-	optimistic_writer.Rollback();
 
 	// Drop any optimistically written local changes.
+	// The top-level writer writes to the row groups.
+	optimistic_writers.clear();
+	optimistic_writer.Rollback(false);
 	row_groups->CommitDropTable();
 }
 
