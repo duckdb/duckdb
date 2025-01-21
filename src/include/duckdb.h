@@ -1596,6 +1596,47 @@ Returns the statement type of the statement to be executed
 */
 DUCKDB_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement);
 
+/*!
+Returns the number of fields in the result of the prepared statement.
+
+* @param statement The prepared statement.
+*/
+DUCKDB_API idx_t duckdb_nfields(duckdb_prepared_statement statement);
+
+/*!
+Returns the name of the result field at the specified index.
+
+Returns `nullptr` if the index is out of range.
+
+* @param statement The prepared statement.
+* @param field_idx The field index.
+*/
+DUCKDB_API const char *duckdb_field_name(duckdb_prepared_statement statement, idx_t field_idx);
+
+/*!
+Returns the type of the result field at the specified index.
+
+Returns `DUCKDB_TYPE_INVALID` if the index is out of range.
+
+* @param statement The prepared statement.
+* @param field_idx The field index.
+* @return The field type.
+*/
+DUCKDB_API duckdb_type duckdb_field_type(duckdb_prepared_statement statement, idx_t field_idx);
+
+/*!
+Returns the logical type of the result field at the specified index.
+
+Returns `nullptr` if the index is out of range.
+
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+* @param statement The prepared statement.
+* @param field_idx The field index.
+* @return The logical type of the result field.
+*/
+DUCKDB_API duckdb_logical_type duckdb_field_logical_type(duckdb_prepared_statement statement, idx_t field_idx);
+
 //===--------------------------------------------------------------------===//
 // Bind Values To Prepared Statements
 //===--------------------------------------------------------------------===//
