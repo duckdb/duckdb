@@ -514,6 +514,9 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				return;
 			}
 		}
+		if (result.cur_col_id >= result.number_of_columns && !result.state_machine.state_machine_options.rfc_4180.GetValue()) {
+			return;
+		}
 		if (!result.HandleTooManyColumnsError(value_ptr, length)) {
 			// If it's an escaped value we have to remove all the escapes, this is not really great
 			// If we are going to escape, this vector must be a varchar vector
