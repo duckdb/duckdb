@@ -29,11 +29,12 @@ class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
 	// Create a new LocalTableStorage
 	explicit LocalTableStorage(ClientContext &context, DataTable &table);
-	// Create a LocalTableStorage from an ALTER TYPE
-	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
-	                  const LogicalType &target_type, const vector<StorageIndex> &bound_columns, Expression &cast_expr);
-	// Create a LocalTableStorage from a DROP COLUMN
-	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
+	//! Create a LocalTableStorage from an ALTER TYPE.
+	LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
+	                  const idx_t alter_column_index, const LogicalType &target_type,
+	                  const vector<StorageIndex> &bound_columns, Expression &cast_expr);
+	//! Create a LocalTableStorage from a DROP COLUMN.
+	LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent, const idx_t drop_column_index);
 	// Create a LocalTableStorage from an ADD COLUMN
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
 	                  ExpressionExecutor &default_executor);
@@ -153,7 +154,7 @@ public:
 
 	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
 	               ExpressionExecutor &default_executor);
-	void DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column);
+	void DropColumn(DataTable &old_dt, DataTable &new_dt, const idx_t drop_column_index);
 	void ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 

@@ -80,13 +80,12 @@ void OptimisticDataWriter::Merge(OptimisticDataWriter &other) {
 void OptimisticDataWriter::FinalFlush() {
 	if (partial_manager) {
 		partial_manager->FlushPartialBlocks();
-		partial_manager.reset();
 	}
 }
 
-void OptimisticDataWriter::Rollback() {
+void OptimisticDataWriter::Rollback(const bool mark_modified) {
 	if (partial_manager) {
-		partial_manager->Rollback();
+		partial_manager->Rollback(mark_modified);
 		partial_manager.reset();
 	}
 }

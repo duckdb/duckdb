@@ -51,23 +51,32 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	});
 }
 
-LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
-                                     idx_t changed_idx, const LogicalType &target_type,
+LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
+                                     const idx_t alter_column_index, const LogicalType &target_type,
                                      const vector<StorageIndex> &bound_columns, Expression &cast_expr)
-    : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
-      merged_storage(parent.merged_storage) {
-	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
+    : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows),
+      optimistic_writer(new_data_table, parent.optimistic_writer),
+      optimistic_writers(std::move(parent.optimistic_writers)), merged_storage(parent.merged_storage) {
+
+	// Alter the column type.
+	row_groups = parent.row_groups->AlterType(context, alter_column_index, target_type, bound_columns, cast_expr);
+	parent.row_groups->CommitDropColumn(alter_column_index);
 	parent.row_groups.reset();
+
 	append_indexes.Move(parent.append_indexes);
 }
 
-LocalTableStorage::LocalTableStorage(DataTable &new_dt, LocalTableStorage &parent, idx_t drop_idx)
-    : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
-      merged_storage(parent.merged_storage) {
-	row_groups = parent.row_groups->RemoveColumn(drop_idx);
+LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent,
+                                     const idx_t drop_column_index)
+    : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows),
+      optimistic_writer(new_data_table, parent.optimistic_writer),
+      optimistic_writers(std::move(parent.optimistic_writers)), merged_storage(parent.merged_storage) {
+
+	// Remove the column from the previous table storage.
+	row_groups = parent.row_groups->RemoveColumn(drop_column_index);
+	parent.row_groups->CommitDropColumn(drop_column_index);
 	parent.row_groups.reset();
+
 	append_indexes.Move(parent.append_indexes);
 }
 
@@ -244,10 +253,14 @@ void LocalTableStorage::FinalizeOptimisticWriter(OptimisticDataWriter &writer) {
 
 void LocalTableStorage::Rollback() {
 	for (auto &writer : optimistic_writers) {
-		writer->Rollback();
+		writer->Rollback(true);
 	}
+
+	// Drop any optimistically written local changes.
+	// The top-level writer writes to the row groups.
 	optimistic_writers.clear();
-	optimistic_writer.Rollback();
+	optimistic_writer.Rollback(false);
+	row_groups->CommitDropTable();
 }
 
 //===--------------------------------------------------------------------===//
@@ -547,7 +560,6 @@ void LocalStorage::Rollback() {
 			continue;
 		}
 		storage->Rollback();
-
 		entry.second.reset();
 	}
 }
@@ -598,13 +610,13 @@ void LocalStorage::AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinit
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 
-void LocalStorage::DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column) {
+void LocalStorage::DropColumn(DataTable &old_dt, DataTable &new_dt, const idx_t drop_column_index) {
 	// check if there are any pending appends for the old version of the table
 	auto storage = table_manager.MoveEntry(old_dt);
 	if (!storage) {
 		return;
 	}
-	auto new_storage = make_shared_ptr<LocalTableStorage>(new_dt, *storage, removed_column);
+	auto new_storage = make_shared_ptr<LocalTableStorage>(new_dt, *storage, drop_column_index);
 	table_manager.InsertEntry(new_dt, std::move(new_storage));
 }
 

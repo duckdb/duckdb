@@ -114,7 +114,7 @@ public:
 	void ClearBlocks();
 
 	//! Rollback all data written by this partial block manager
-	void Rollback();
+	void Rollback(const bool mark_modified);
 
 	//! Merge this block manager into another one
 	void Merge(PartialBlockManager &other);
