@@ -148,7 +148,7 @@ inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const i
 }
 
 bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const idx_t size) {
-	if (cur_col_id >= number_of_columns) {
+	if (cur_col_id >= number_of_columns && state_machine.state_machine_options.rfc_4180.GetValue()) {
 		bool error = true;
 		if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 			// we make an exception if the first over-value is null
@@ -220,6 +220,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		return;
 	}
 	if (cur_col_id >= number_of_columns) {
+		if (!state_machine.state_machine_options.rfc_4180.GetValue()) {
+			return;
+		}
 		bool error = true;
 		if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 			// we make an exception if the first over-value is null
@@ -806,7 +809,7 @@ bool StringValueResult::AddRowInternal() {
 	quoted_new_line = false;
 	// We need to check if we are getting the correct number of columns here.
 	// If columns are correct, we add it, and that's it.
-	if (cur_col_id != number_of_columns) {
+	if (cur_col_id < number_of_columns) {
 		// We have too few columns:
 		if (null_padding) {
 			while (cur_col_id < number_of_columns) {
