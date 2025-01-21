@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query II
-FROM 'data/csv/14512.csv';
+FROM read_csv('data/csv/14512.csv', RFC_4180=TRUE);
 ----
 onions 	,
 
