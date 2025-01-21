@@ -1,0 +1,13 @@
+# name: test/sql/copy/csv/pollock/test_quotation_char.test
+# description: Test quotation from Pollock
+# group: [pollock]
+
+statement ok
+PRAGMA enable_verification
+
+query IIIIIIIII
+FROM read_csv('data/csv/pollock/file_quotation_char_0x27.csv', delim = ',', escape = '"', quote='''',
+columns = {'Date':'VARCHAR','TIME':'VARCHAR','Qty':'VARCHAR','PRODUCTID':'VARCHAR','Price':'VARCHAR'
+,'ProductType':'VARCHAR','ProductDescription':'VARCHAR','URL':'VARCHAR','Comments':'VARCHAR'}, auto_detect = false, RFC_4180=FALSE, null_padding = true)
+----
+31/05/2018	15:30	3	HK-9973	$39.49	Women's Ventilated Hiking Shoes	This lightweight, ventilated version of the best-selling trail hiker features less volume in the forefoot for a more athletic fit. It's also equipped with a grippier outsole that excels in both wet and dry conditions.','https://www.example.com/product/HK_9973.html',	NULL	NULL

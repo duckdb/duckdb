@@ -527,7 +527,6 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 					// We have to write the cast error message.
 					std::ostringstream error;
 					// Casting Error Message
-
 					error << "Could not convert string \"" << std::string(value_ptr, length) << "\" to \'"
 					      << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id) << "\'";
 					auto error_string = error.str();
@@ -540,6 +539,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				auto value = StringValueScanner::RemoveEscape(
 				    value_ptr, length, result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
 				    result.state_machine.dialect_options.state_machine_options.quote.GetValue(),
+				    result.state_machine.dialect_options.state_machine_options.rfc_4180.GetValue(),
 				    result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
@@ -1238,7 +1238,8 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
-string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, Vector &vector) {
+string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool rfc_4180,
+                                          Vector &vector) {
 	// Figure out the exact size
 	idx_t str_pos = 0;
 	bool just_escaped = false;
@@ -1246,7 +1247,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 		if (str_ptr[cur_pos] == escape && !just_escaped) {
 			just_escaped = true;
 		} else if (str_ptr[cur_pos] == quote) {
-			if (just_escaped) {
+			if (just_escaped || !rfc_4180) {
 				str_pos++;
 			}
 			just_escaped = false;
@@ -1266,7 +1267,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 		if (c == escape && !just_escaped) {
 			just_escaped = true;
 		} else if (str_ptr[cur_pos] == quote) {
-			if (just_escaped) {
+			if (just_escaped || !rfc_4180) {
 				removed_escapes_ptr[str_pos++] = c;
 			}
 			just_escaped = false;
@@ -1373,6 +1374,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 					value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
 					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
 					                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					                     result.state_machine.dialect_options.state_machine_options.rfc_4180.GetValue(),
 					                     result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
@@ -1383,6 +1385,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 					value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
 					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
 					                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					                     result.state_machine.dialect_options.state_machine_options.rfc_4180.GetValue(),
 					                     result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
