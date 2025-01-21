@@ -1,0 +1,12 @@
+# name: test/sql/catalog/test_extension_suggestion.test
+# description: The error messages that suggests extension to be installed
+# group: [catalog]
+
+require skip_reload
+
+require no_extension_autoloading "EXPECTED: This tests what happens when extension is not there"
+
+statement error
+SELECT from_json('data/json/array_of_empty_arrays.json');
+----
+Catalog Error: Scalar Function with name "from_json" is not in the catalog, but it exists in the json extension.
