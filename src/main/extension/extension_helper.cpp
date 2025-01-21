@@ -140,7 +140,7 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
 static const char *const auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner",
-                                           nullptr};
+                                           "delta",      "iceberg",          "uc_catalog",    nullptr};
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
