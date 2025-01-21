@@ -28,7 +28,7 @@ public:
 	const SelectionVector &GetSelVec(idx_t start, idx_t scan_count);
 
 private:
-	string_t FetchStringFromDict(Vector &result, int32_t dict_offset, idx_t dict_idx);
+	string_t FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx);
 
 public:
 	ColumnSegment &segment;

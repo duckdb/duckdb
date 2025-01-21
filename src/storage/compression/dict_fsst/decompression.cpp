@@ -9,8 +9,8 @@ CompressedStringScanState::~CompressedStringScanState() {
 	delete reinterpret_cast<duckdb_fsst_decoder_t *>(decoder);
 }
 
-string_t CompressedStringScanState::FetchStringFromDict(Vector &result, int32_t dict_offset, idx_t dict_idx) {
-	D_ASSERT(dict_offset >= 0 && dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
+string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx) {
+	D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
 
 	if (dict_idx == 0) {
 		return string_t(nullptr, 0);
@@ -102,7 +102,7 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 	D_ASSERT(dict_count >= 1);
 	validity.SetInvalid(0);
 
-	int32_t offset = 0;
+	uint32_t offset = 0;
 	for (uint32_t i = 0; i < dict_count; i++) {
 		//! We can uncompress during fetching, we need the length of the string inside the dictionary
 		auto string_len = string_lengths[i];
@@ -174,7 +174,7 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 			validity.SetInvalid(result_offset);
 		}
 
-		int32_t offset = 0;
+		uint32_t offset = 0;
 		for (idx_t i = 0; i < string_number; i++) {
 			offset += string_lengths[i];
 		}

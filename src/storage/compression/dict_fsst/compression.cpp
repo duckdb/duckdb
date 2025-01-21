@@ -65,6 +65,7 @@ idx_t DictFSSTCompressionState::Finalize() {
 	}
 
 	D_ASSERT(to_encode_string_sum == 0);
+	D_ASSERT(symbol_table_size != DConstants::INVALID_INDEX);
 
 	idx_t required_space = 0;
 	required_space += sizeof(dict_fsst_compression_header_t);
@@ -90,9 +91,9 @@ idx_t DictFSSTCompressionState::Finalize() {
 	auto dictionary_indices_dest = AlignValue<idx_t>(string_lengths_dest + string_lengths_space);
 
 	header_ptr->mode = ConvertToMode(append_state);
-	header_ptr->symbol_table_size = symbol_table_size;
-	header_ptr->dict_size = dictionary_offset;
-	header_ptr->dict_count = dict_count;
+	header_ptr->symbol_table_size = NumericCast<uint32_t>(symbol_table_size);
+	header_ptr->dict_size = NumericCast<uint32_t>(dictionary_offset);
+	header_ptr->dict_count = NumericCast<uint32_t>(dict_count);
 	header_ptr->dictionary_indices_width = dictionary_indices_width;
 	header_ptr->string_lengths_width = string_lengths_width;
 
@@ -337,14 +338,14 @@ static inline bool AddLookup(DictFSSTCompressionState &state, idx_t lookup, cons
 		state.dictionary_indices_space = new_dictionary_indices_space;
 	}
 	// Exists in the dictionary, add it
-	state.dictionary_indices.push_back(lookup);
+	state.dictionary_indices.push_back(UnsafeNumericCast<uint32_t>(lookup));
 	return true;
 }
 
 template <DictionaryAppendState APPEND_STATE>
 static inline bool AddToDictionary(DictFSSTCompressionState &state, const string_t &str,
                                    const bool recalculate_indices_space) {
-	auto str_len = str.GetSize();
+	uint32_t str_len = UnsafeNumericCast<uint32_t>(str.GetSize());
 	if (APPEND_STATE == DictionaryAppendState::ENCODED) {
 		//! We delay encoding of new entries.
 		//  Encoding can increase the size of the string by 2x max, so we prepare for this worst case scenario.
@@ -587,7 +588,8 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 				                                    (idx_t)compressed_sizes[j], decompress_buffer);
 
 				D_ASSERT(decoded_std_string.size() == uncompressed_str.GetSize());
-				string_t decompressed_string((const char *)decompress_buffer.data(), uncompressed_str.GetSize());
+				string_t decompressed_string((const char *)decompress_buffer.data(),
+				                             UnsafeNumericCast<uint32_t>(uncompressed_str.GetSize()));
 				D_ASSERT(decompressed_string == uncompressed_str);
 #endif
 
@@ -607,7 +609,8 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 			                                    compressed_string.GetSize(), decompress_buffer);
 
 			D_ASSERT(decoded_std_string.size() == uncompressed_string.GetSize());
-			string_t decompressed_string((const char *)decompress_buffer.data(), uncompressed_string.GetSize());
+			string_t decompressed_string((const char *)decompress_buffer.data(),
+			                             UnsafeNumericCast<uint32_t>(uncompressed_string.GetSize()));
 			D_ASSERT(decompressed_string == uncompressed_string);
 		}
 
@@ -684,7 +687,7 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 		}
 		uint32_t max_length = 0;
 		for (idx_t i = 0; i < string_count; i++) {
-			auto str_len = compressed_sizes[i];
+			auto str_len = UnsafeNumericCast<uint32_t>(compressed_sizes[i]);
 			new_size += str_len;
 			if (str_len > max_length) {
 				max_length = str_len;

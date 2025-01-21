@@ -62,7 +62,7 @@ public:
 
 	idx_t string_lengths_space = 0;
 	vector<uint32_t> string_lengths;
-	idx_t dict_count = 0;
+	uint32_t dict_count = 0;
 	bitpacking_width_t string_lengths_width = 0;
 	//! For DICT_FSST we delay encoding of new entries, which means
 	//  we have to prepare for strings being exploded in size by max 2x
