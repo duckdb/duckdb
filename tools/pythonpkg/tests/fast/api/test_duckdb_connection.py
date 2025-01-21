@@ -270,15 +270,6 @@ class TestDuckDBConnection(object):
     def test_from_query(self):
         assert None != duckdb.from_query
 
-    def test_from_substrait(self):
-        assert None != duckdb.from_substrait
-
-    def test_get_substrait(self):
-        assert None != duckdb.get_substrait
-
-    def test_get_substrait_json(self):
-        assert None != duckdb.get_substrait_json
-
     def test_get_table_names(self):
         assert None != duckdb.get_table_names
 

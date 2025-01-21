@@ -166,14 +166,6 @@ public:
 	DUCKDB_API shared_ptr<Relation> RelationFromQuery(unique_ptr<SelectStatement> select_stmt,
 	                                                  const string &alias = "queryrelation", const string &query = "");
 
-	//! Returns a substrait BLOB from a valid query
-	DUCKDB_API string GetSubstrait(const string &query);
-	//! Returns a Query Result from a substrait blob
-	DUCKDB_API unique_ptr<QueryResult> FromSubstrait(const string &proto);
-	//! Returns a substrait BLOB from a valid query
-	DUCKDB_API string GetSubstraitJSON(const string &query);
-	//! Returns a Query Result from a substrait JSON
-	DUCKDB_API unique_ptr<QueryResult> FromSubstraitJSON(const string &json);
 	DUCKDB_API void BeginTransaction();
 	DUCKDB_API void Commit();
 	DUCKDB_API void Rollback();
