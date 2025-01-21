@@ -313,9 +313,6 @@ void SingleFileBlockManager::LoadFreeList() {
 	free_list.clear();
 	for (idx_t i = 0; i < free_list_count; i++) {
 		auto block = reader.Read<block_id_t>();
-		if (block == 1) {
-			D_ASSERT(1);
-		}
 		free_list.insert(block);
 		newly_freed_list.insert(block);
 	}
@@ -366,9 +363,6 @@ void SingleFileBlockManager::MarkBlockAsFree(block_id_t block_id) {
 		throw InternalException("MarkBlockAsFree called but block %llu was already freed!", block_id);
 	}
 	multi_use_blocks.erase(block_id);
-	if (block_id == 1) {
-		D_ASSERT(1);
-	}
 	free_list.insert(block_id);
 	newly_freed_list.insert(block_id);
 }
@@ -383,9 +377,6 @@ void SingleFileBlockManager::MarkBlockAsUsed(block_id_t block_id) {
 		// i.e. if max_block = 0, and block_id = 3, we need to add blocks 1 and 2 to the free list
 		while (max_block < block_id) {
 			free_list.insert(max_block);
-			if (max_block == 1) {
-				D_ASSERT(1);
-			}
 			max_block++;
 		}
 		max_block++;
@@ -419,9 +410,6 @@ void SingleFileBlockManager::MarkBlockAsModified(block_id_t block_id) {
 	// Check for multi-free
 	// TODO: Fix the bug that causes this assert to fire, then uncomment it.
 	// D_ASSERT(modified_blocks.find(block_id) == modified_blocks.end());
-	if (block_id == 1) {
-		D_ASSERT(1);
-	}
 	D_ASSERT(free_list.find(block_id) == free_list.end());
 	modified_blocks.insert(block_id);
 }
@@ -652,9 +640,6 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 
 	for (auto &block : modified_blocks) {
 		free_list.insert(block);
-		if (block == 1) {
-			D_ASSERT(1);
-		}
 		newly_freed_list.insert(block);
 	}
 	modified_blocks.clear();

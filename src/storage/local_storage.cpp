@@ -51,14 +51,18 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 	});
 }
 
-LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
-                                     idx_t changed_idx, const LogicalType &target_type,
+LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
+                                     const idx_t alter_column_index, const LogicalType &target_type,
                                      const vector<StorageIndex> &bound_columns, Expression &cast_expr)
-    : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
-      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
-      merged_storage(parent.merged_storage) {
-	row_groups = parent.row_groups->AlterType(context, changed_idx, target_type, bound_columns, cast_expr);
+    : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows),
+      optimistic_writer(new_data_table, parent.optimistic_writer),
+      optimistic_writers(std::move(parent.optimistic_writers)), merged_storage(parent.merged_storage) {
+
+	// Alter the column type.
+	row_groups = parent.row_groups->AlterType(context, alter_column_index, target_type, bound_columns, cast_expr);
+	parent.row_groups->CommitDropColumn(alter_column_index);
 	parent.row_groups.reset();
+
 	append_indexes.Move(parent.append_indexes);
 }
 
@@ -68,7 +72,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
       optimistic_writer(new_data_table, parent.optimistic_writer),
       optimistic_writers(std::move(parent.optimistic_writers)), merged_storage(parent.merged_storage) {
 
-	// Remove the column from the previous local table storage.
+	// Remove the column from the previous table storage.
 	row_groups = parent.row_groups->RemoveColumn(drop_column_index);
 	parent.row_groups->CommitDropColumn(drop_column_index);
 	parent.row_groups.reset();
@@ -87,7 +91,6 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
 }
 
 LocalTableStorage::~LocalTableStorage() {
-	D_ASSERT(1);
 }
 
 void LocalTableStorage::InitializeScan(CollectionScanState &state, optional_ptr<TableFilterSet> table_filters) {

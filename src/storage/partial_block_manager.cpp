@@ -196,9 +196,6 @@ BlockManager &PartialBlockManager::GetBlockManager() const {
 
 void PartialBlockManager::Rollback() {
 	ClearBlocks();
-	//	for (auto &block_id : written_blocks) {
-	//		block_manager.MarkBlockAsFree(block_id);
-	//	}
 }
 
 } // namespace duckdb

@@ -29,9 +29,10 @@ class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
 	// Create a new LocalTableStorage
 	explicit LocalTableStorage(ClientContext &context, DataTable &table);
-	// Create a LocalTableStorage from an ALTER TYPE
-	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
-	                  const LogicalType &target_type, const vector<StorageIndex> &bound_columns, Expression &cast_expr);
+	//! Create a LocalTableStorage from an ALTER TYPE.
+	LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
+	                  const idx_t alter_column_index, const LogicalType &target_type,
+	                  const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 	//! Create a LocalTableStorage from a DROP COLUMN.
 	LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent, const idx_t drop_column_index);
 	// Create a LocalTableStorage from an ADD COLUMN

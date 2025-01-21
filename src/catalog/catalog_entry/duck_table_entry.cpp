@@ -22,7 +22,6 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
-#include "duckdb/transaction/duck_transaction.hpp"
 
 namespace duckdb {
 

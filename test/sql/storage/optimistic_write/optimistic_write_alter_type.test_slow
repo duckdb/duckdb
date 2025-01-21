@@ -14,7 +14,7 @@ statement ok
 INSERT INTO test SELECT i FROM range(1000000) tbl(i)
 
 statement ok
-ALTER TABLE test ALTER a SET TYPE BIGINT USING a+1
+ALTER TABLE test ALTER a SET TYPE BIGINT USING a + 1
 
 statement ok
 COMMIT
@@ -48,12 +48,12 @@ SELECT SUM(a) FROM test
 ----
 500000500000
 
+# Ensure that we reclaim space correctly.
+
 require skip_reload
 
-# ensure the alter type does not result in leaking blocks
-
-# for smaller block sizes (16KB) the total blocks alternate between a few values in the loop,
-# therefore, we need to compare to a range of total block counts
+# For smaller block sizes (16KB) the total blocks alternate between a few values in the loop.
+# Therefore, we compare to a range of total block counts.
 statement ok
 CREATE TABLE total_blocks_tbl AS SELECT total_blocks FROM pragma_database_size();
 
@@ -72,7 +72,7 @@ statement ok
 INSERT INTO test SELECT i FROM range(1000000) tbl(i)
 
 statement ok
-ALTER TABLE test ALTER a SET TYPE BIGINT USING a+1
+ALTER TABLE test ALTER a SET TYPE BIGINT USING a + 1
 
 statement ok
 COMMIT
@@ -82,8 +82,8 @@ SELECT SUM(a) FROM test
 ----
 500000500000
 
-# ensure that the total blocks don't exceed the total blocks after the first iteration
-# by more than 1.2
+# Ensure that the total blocks don't exceed the total blocks after the first iteration
+# by more than 1.2.
 
 query I
 SELECT CASE WHEN ${i} = 0 THEN True
@@ -93,7 +93,7 @@ FROM pragma_database_size() AS current, total_blocks_tbl;
 ----
 1
 
-# adjust total_blocks_tbl once to the count after the first iteration
+# Adjust total_blocks_tbl once to the count after the first iteration.
 
 statement ok
 UPDATE total_blocks_tbl SET total_blocks = (

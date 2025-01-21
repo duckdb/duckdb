@@ -385,8 +385,8 @@ void RowGroup::CommitDrop() {
 	}
 }
 
-void RowGroup::CommitDropColumn(const idx_t column_idx) {
-	auto &column = GetColumn(column_idx);
+void RowGroup::CommitDropColumn(const idx_t column_index) {
+	auto &column = GetColumn(column_index);
 	column.CommitDropColumn();
 }
 
