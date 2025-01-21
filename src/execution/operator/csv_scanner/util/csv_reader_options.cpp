@@ -210,15 +210,18 @@ string CSVReaderOptions::GetMultiByteDelimiter() const {
 
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
-	if (read_format) {
-		StrpTimeFormat strpformat;
-		error = StrTimeFormat::ParseFormatSpecifier(format, strpformat);
-		dialect_options.date_format[type].Set(strpformat);
-	} else {
-		write_date_format[type] = Value(format);
-	}
-	if (!error.empty()) {
-		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+	const string auto_format = StringUtil::Lower(format);
+	if (auto_format != "auto") {
+		if (read_format) {
+			StrpTimeFormat strpformat;
+			error = StrTimeFormat::ParseFormatSpecifier(format, strpformat);
+			dialect_options.date_format[type].Set(strpformat);
+		} else {
+			write_date_format[type] = Value(format);
+		}
+		if (!error.empty()) {
+			throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+		}
 	}
 }
 
