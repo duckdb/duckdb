@@ -137,4 +137,11 @@ bool VersioningUtils::ParseSemver(string &semver, idx_t &major_out, idx_t &minor
 	return true;
 }
 
+const char *Extension::DefaultVersion() {
+	if (ExtensionHelper::IsRelease(DuckDB::LibraryVersion())) {
+		return DuckDB::LibraryVersion();
+	}
+	return DuckDB::SourceID();
+}
+
 } // namespace duckdb
