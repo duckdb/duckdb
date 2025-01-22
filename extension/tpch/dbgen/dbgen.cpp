@@ -659,15 +659,23 @@ void DBGenWrapper::LoadTPCHData(ClientContext &context, double flt_scale, string
 				threads.emplace_back(ParallelTPCHAppend, &new_appenders[thr_idx], child_count, step);
 				step++;
 			}
-			// flush the previous batch of appenders while waiting (if any are there)
-			// now flush the appenders in-order
-			for(auto &appender : finished_appenders) {
-				appender.Flush();
+			ErrorData error;
+			try {
+				// flush the previous batch of appenders while waiting (if any are there)
+				// now flush the appenders in-order
+				for(auto &appender : finished_appenders) {
+					appender.Flush();
+				}
+			} catch(std::exception &ex) {
+				error = ErrorData(ex);
 			}
 			finished_appenders.clear();
 			// wait for all threads to finish
 			for(auto &thread : threads) {
 				thread.join();
+			}
+			if (error.HasError()) {
+				error.Throw();
 			}
 			finished_appenders = std::move(new_appenders);
 		}
