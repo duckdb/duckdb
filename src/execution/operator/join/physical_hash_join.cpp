@@ -157,14 +157,14 @@ public:
 		probe_types = op.children[0]->types;
 		probe_types.emplace_back(LogicalType::HASH);
 
-		std::cout << "if (op.filter_pushdown) {" << std::endl;
+		//std::cout << "if (op.filter_pushdown) {" << std::endl;
 		if (op.filter_pushdown) {
 			if (op.filter_pushdown->probe_info.empty() && use_perfect_hash) {
 				// Only computing min/max to check for perfect HJ, but we already can
-				std::cout << "skip_filter_pushdown = true;" << std::endl;
+				//std::cout << "skip_filter_pushdown = true;" << std::endl;
 				//skip_filter_pushdown = true;
 			}
-			std::cout << "global_filter_state = op.filter_pushdown->GetGlobalState(context, op);" << std::endl;
+			//std::cout << "global_filter_state = op.filter_pushdown->GetGlobalState(context, op);" << std::endl;
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
 	}

@@ -665,10 +665,10 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 							result.SetCardinality(approved_tuple_count);  // in the original code, we do this very much at the end of the function. is it safe to do it here?
 							result.Hash(bf->GetColumnIds(), sel, approved_tuple_count, hashes);
 
-							std::cout << "approved_tuple_count before: " <<approved_tuple_count<<std::endl;
+							//std::cout << "approved_tuple_count before: " <<approved_tuple_count<<std::endl;
 							approved_tuple_count = bf->ProbeWithPrecomputedHashes(sel, approved_tuple_count, hashes);
-							std::cout << "approved_tuple_count after: " <<approved_tuple_count<<std::endl;
-							std::cout << "probed rows: " << bf->GetNumProbedKeys() << " selectivity: " << bf->GetObservedSelectivity() << std::endl;
+							//std::cout << "approved_tuple_count after: " <<approved_tuple_count<<std::endl;
+							//std::cout << "probed rows: " << bf->GetNumProbedKeys() << " selectivity: " << bf->GetObservedSelectivity() << std::endl;
 						}
 					}
 				}

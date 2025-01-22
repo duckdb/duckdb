@@ -19,7 +19,7 @@ TableScanState::~TableScanState() {
 void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<TableFilterSet> table_filters, optional_ptr<vector<unique_ptr<JoinBloomFilter>>> bloom_filters,
                                 optional_ptr<SampleOptions> table_sampling) {
 	this->column_ids = std::move(column_ids_p);
-	if (table_filters) {
+	if (table_filters && bloom_filters) {
 		filters.Initialize(*table_filters, column_ids, *bloom_filters);
 	}
 	if (table_sampling) {
