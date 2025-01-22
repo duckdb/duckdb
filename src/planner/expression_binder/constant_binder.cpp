@@ -13,7 +13,7 @@ BindResult ConstantBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr
 	case ExpressionClass::COLUMN_REF: {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		if (!colref.IsQualified()) {
-			auto value_function = GetSQLValueFunction(colref.GetColumnName());
+			auto value_function = GetSQLValueFunction(colref);
 			if (value_function) {
 				expr_ptr = std::move(value_function);
 				return BindExpression(expr_ptr, depth, root_expression);
