@@ -16,6 +16,7 @@
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/execution/join_bloom_filter.hpp"
 
 namespace duckdb {
 class BaseStatistics;
@@ -32,8 +33,7 @@ enum class TableFilterType : uint8_t {
 	STRUCT_EXTRACT = 5,      // filter applies to child-column of struct
 	OPTIONAL_FILTER = 6,     // executing filter is not required for query correctness
 	IN_FILTER = 7,           // col IN (C1, C2, C3, ...)
-	DYNAMIC_FILTER = 8,      // dynamic filters can be updated at run-time
-	BLOOM_FILTER = 9         // Bloom-filter for sideways-information-passing in joins
+	DYNAMIC_FILTER = 8        // dynamic filters can be updated at run-time
 };
 
 //! TableFilter represents a filter pushed down into the table scan.
@@ -118,14 +118,20 @@ class DynamicTableFilterSet {
 public:
 	void ClearFilters(const PhysicalOperator &op);
 	void PushFilter(const PhysicalOperator &op, idx_t column_index, unique_ptr<TableFilter> filter);
+	void PushBloomFilter(const PhysicalOperator &op, unique_ptr<JoinBloomFilter> bloom_filter);
 
 	bool HasFilters() const;
+	bool HasBloomFilters() const;
+
 	unique_ptr<TableFilterSet> GetFinalTableFilters(const PhysicalTableScan &scan,
 	                                                optional_ptr<TableFilterSet> existing_filters) const;
+	
+	unique_ptr<vector<unique_ptr<JoinBloomFilter>>> GetBloomFilters() const;
 
 private:
 	mutable mutex lock;
 	reference_map_t<const PhysicalOperator, unique_ptr<TableFilterSet>> filters;
+	reference_map_t<const PhysicalOperator, vector<unique_ptr<JoinBloomFilter>>> bloom_filters;
 };
 
 } // namespace duckdb

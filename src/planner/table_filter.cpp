@@ -50,9 +50,23 @@ void DynamicTableFilterSet::PushFilter(const PhysicalOperator &op, idx_t column_
 	filter_ptr->PushFilter(ColumnIndex(column_index), std::move(filter));
 }
 
+void DynamicTableFilterSet::PushBloomFilter(const PhysicalOperator &op, unique_ptr<JoinBloomFilter> bloom_filter) {
+	lock_guard<mutex> l(lock);
+	auto entry = bloom_filters.find(op);
+	if (entry == bloom_filters.end()) {
+		bloom_filters[op] = {};
+	}
+	bloom_filters[op].push_back(std::move(bloom_filter));
+}
+
 bool DynamicTableFilterSet::HasFilters() const {
 	lock_guard<mutex> l(lock);
 	return !filters.empty();
+}
+
+bool DynamicTableFilterSet::HasBloomFilters() const {
+	lock_guard<mutex> l(lock);
+	return !bloom_filters.empty();
 }
 
 unique_ptr<TableFilterSet>
@@ -72,6 +86,17 @@ DynamicTableFilterSet::GetFinalTableFilters(const PhysicalTableScan &scan,
 	}
 	if (result->filters.empty()) {
 		return nullptr;
+	}
+	return result;
+}
+
+unique_ptr<vector<unique_ptr<JoinBloomFilter>>> DynamicTableFilterSet::GetBloomFilters() const {
+	D_ASSERT(HasBloomFilters());
+	auto result = make_uniq<vector<unique_ptr<JoinBloomFilter>>>();
+	for (auto &entry : bloom_filters) {
+		for (auto &filter : entry.second) {
+			result->push_back(make_uniq<JoinBloomFilter>(filter->Copy()));
+		}
 	}
 	return result;
 }

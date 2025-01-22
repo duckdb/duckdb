@@ -16,11 +16,11 @@ TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 TableScanState::~TableScanState() {
 }
 
-void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<TableFilterSet> table_filters,
+void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<TableFilterSet> table_filters, optional_ptr<vector<unique_ptr<JoinBloomFilter>>> bloom_filters,
                                 optional_ptr<SampleOptions> table_sampling) {
 	this->column_ids = std::move(column_ids_p);
 	if (table_filters) {
-		filters.Initialize(*table_filters, column_ids);
+		filters.Initialize(*table_filters, column_ids, *bloom_filters);
 	}
 	if (table_sampling) {
 		sampling_info.do_system_sample = table_sampling->method == SampleMethod::SYSTEM_SAMPLE;
@@ -49,7 +49,7 @@ ScanFilter::ScanFilter(idx_t index, const vector<StorageIndex> &column_ids, Tabl
       always_true(false) {
 }
 
-void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<StorageIndex> &column_ids) {
+void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<StorageIndex> &column_ids, vector<unique_ptr<JoinBloomFilter>> &bloom_filters) {
 	D_ASSERT(!filters.filters.empty());
 	table_filters = &filters;
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
@@ -63,6 +63,11 @@ void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<StorageInd
 		column_has_filter.push_back(has_filter);
 	}
 	base_column_has_filter = column_has_filter;
+
+	bloom_filter_list.reserve(bloom_filters.size());
+	for (auto &entry : bloom_filters) {
+		bloom_filter_list.push_back(make_uniq<JoinBloomFilter>(entry->Copy()));
+	}
 }
 
 bool ScanFilterInfo::ColumnHasFilters(idx_t column_idx) {

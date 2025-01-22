@@ -10,12 +10,18 @@
 
 namespace duckdb {
 
-JoinBloomFilter::JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate) : num_inserted_keys(0), num_probed_keys(0), num_filtered_keys(0), probing_started(false) {
+JoinBloomFilter::JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids) 
+: column_ids(std::move(column_ids)) {
     // Approximate size of the Bloom-filter rounded up to the next 8 byte.
     size_t approx_size = static_cast<size_t>(std::ceil(-double(expected_cardinality) * log(desired_false_positive_rate) / 0.48045));
 	bloom_filter_size = approx_size + (64 - approx_size % 64);
     num_hash_functions = static_cast<size_t>(std::ceil(approx_size / expected_cardinality * 0.693147));
 
+    bloom_data_buffer.resize(bloom_filter_size / 64, 0);
+    bloom_filter_bits.Initialize(bloom_data_buffer.data(), bloom_filter_size);
+}
+
+JoinBloomFilter::JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_functions, size_t bloom_filter_size) : num_hash_functions(num_hash_functions), bloom_filter_size(bloom_filter_size), column_ids(std::move(column_ids))  {
     bloom_data_buffer.resize(bloom_filter_size / 64, 0);
     bloom_filter_bits.Initialize(bloom_data_buffer.data(), bloom_filter_size);
 }

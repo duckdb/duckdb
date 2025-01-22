@@ -27,10 +27,13 @@ public:
 		if (op.dynamic_filters && op.dynamic_filters->HasFilters()) {
 			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
 		}
+		if (op.dynamic_filters && op.dynamic_filters->HasBloomFilters()) {
+			bloom_filters = op.dynamic_filters->GetBloomFilters();
+		}
 
 		if (op.function.init_global) {
 			auto filters = table_filters ? *table_filters : GetTableFilters(op);
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters, bloom_filters,
 			                             op.extra_info.sample_options);
 
 			global_state = op.function.init_global(context, input);
@@ -61,9 +64,16 @@ public:
 	//! Combined table filters, if we have dynamic filters
 	unique_ptr<TableFilterSet> table_filters;
 
+	unique_ptr<vector<unique_ptr<JoinBloomFilter>>> bloom_filters;
+
 	optional_ptr<TableFilterSet> GetTableFilters(const PhysicalTableScan &op) const {
 		return table_filters ? table_filters.get() : op.table_filters.get();
 	}
+
+	optional_ptr<vector<unique_ptr<JoinBloomFilter>>> GetBloomFilters() const {
+		return bloom_filters;
+	}
+
 	idx_t MaxThreads() override {
 		return max_threads;
 	}
@@ -75,7 +85,7 @@ public:
 	                          const PhysicalTableScan &op) {
 		if (op.function.init_local) {
 			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids,
-			                             gstate.GetTableFilters(op), op.extra_info.sample_options);
+			                             gstate.GetTableFilters(op), gstate.GetBloomFilters(), op.extra_info.sample_options);
 			local_state = op.function.init_local(context, input, gstate.global_state.get());
 		}
 	}

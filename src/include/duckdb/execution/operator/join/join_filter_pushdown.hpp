@@ -78,7 +78,7 @@ private:
 	                  idx_t filter_idx, idx_t filter_col_idx) const;
 	
 	void BuildAndPushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht, const PhysicalOperator &op,
-	                  			 idx_t filter_idx, idx_t filter_col_idx, ClientContext &client_context) const;
+	                  			 vector<column_t> column_ids) const;
 };
 
 } // namespace duckdb

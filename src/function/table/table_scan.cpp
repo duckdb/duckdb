@@ -217,7 +217,7 @@ public:
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
 
-		l_state->scan_state.Initialize(std::move(storage_ids), input.filters.get(), input.sample_options.get());
+		l_state->scan_state.Initialize(std::move(storage_ids), input.filters.get(), std::move(input.bloom_filters), input.sample_options.get());
 
 		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 		auto &storage = duck_table.GetStorage();

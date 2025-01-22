@@ -1,7 +1,6 @@
 add_library_unity(
   duckdb_planner_filter
   OBJECT
-  bloom_filter.cpp
   conjunction_filter.cpp
   constant_filter.cpp
   dynamic_filter.cpp

@@ -8,23 +8,14 @@
 
 #pragma once
 
-#include "duckdb/common/types/bit.hpp"
-#include "duckdb/common/types/column/column_data_consumer.hpp"
-#include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/common/types/null_value.hpp"
-#include "duckdb/common/types/row/partitioned_tuple_data.hpp"
-#include "duckdb/common/types/row/tuple_data_iterator.hpp"
-#include "duckdb/common/types/row/tuple_data_layout.hpp"
-#include "duckdb/common/types/vector.hpp"
-#include "duckdb/execution/aggregate_hashtable.hpp"
-#include "duckdb/execution/ht_entry.hpp"
 
 namespace duckdb {
 
 class JoinBloomFilter {
 public:
-	JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate);
+	explicit JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids);
+	JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_functions, size_t bloom_filter_size);
 	~JoinBloomFilter();
 
 	//! Pre-compute hashes for the given keys.
@@ -48,8 +39,15 @@ public:
 		return static_cast<double>(num_filtered_keys) / static_cast<double>(num_probed_keys);
 	}
 
-	std::string ToString() const {
-		return bloom_filter_bits.ToString();
+	const vector<column_t> &GetColumnIds() const {
+		return column_ids;
+	}
+
+	JoinBloomFilter Copy() const {
+		JoinBloomFilter bf(column_ids, num_hash_functions, bloom_filter_size);
+		bf.bloom_filter_bits = bloom_filter_bits;
+		bf.bloom_data_buffer = bloom_data_buffer;
+		return bf;
 	}
 
 private:
@@ -59,11 +57,12 @@ private:
 
 	size_t num_hash_functions;
 	size_t bloom_filter_size;
-	size_t num_inserted_keys;
-	mutable size_t num_probed_keys;
-	mutable size_t num_filtered_keys;
-	bool probing_started;
+	size_t num_inserted_keys = 0;
+	mutable size_t num_probed_keys = 0;
+	mutable size_t num_filtered_keys = 0;
+	bool probing_started = false;
 
+	vector<column_t> column_ids;
 	vector<validity_t> bloom_data_buffer;
 	ValidityMask bloom_filter_bits;
 };

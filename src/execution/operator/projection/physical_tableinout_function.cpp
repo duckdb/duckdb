@@ -34,7 +34,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 	auto &gstate = op_state->Cast<TableInOutGlobalState>();
 	auto result = make_uniq<TableInOutLocalState>();
 	if (function.init_local) {
-		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
+		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr, nullptr);
 		result->local_state = function.init_local(context, input, gstate.global_state.get());
 	}
 	if (!projected_input.empty()) {
@@ -55,7 +55,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 unique_ptr<GlobalOperatorState> PhysicalTableInOutFunction::GetGlobalOperatorState(ClientContext &context) const {
 	auto result = make_uniq<TableInOutGlobalState>();
 	if (function.init_global) {
-		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr);
+		TableFunctionInitInput input(bind_data.get(), column_ids, vector<idx_t>(), nullptr, nullptr);
 		result->global_state = function.init_global(context, input);
 	}
 	return std::move(result);

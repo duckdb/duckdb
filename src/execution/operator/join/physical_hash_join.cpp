@@ -18,7 +18,6 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
@@ -653,17 +652,12 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 }
 
 void JoinFilterPushdownInfo::BuildAndPushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
-                                          const PhysicalOperator &op, idx_t filter_idx, idx_t filter_col_idx, ClientContext &client_context) const {
-	std::cout << "build bloom filter as part of JoinFilterPushdownInfo" << std::endl;
+                                          const PhysicalOperator &op, vector<column_t> column_ids) const {
+	auto bf = make_uniq<JoinBloomFilter>(ht.Count(), 0.01, std::move(column_ids));
+	//auto bf = make_shared_ptr<JoinBloomFilter>(std::move(column_ids), ht.CurrentPartitionCount(), 0.01);  // TODO: maybe??
 
-	//JoinBloomFilter bf(ht.Count(), 0.001);
-	auto bf = make_shared_ptr<JoinBloomFilter>(ht.Count(), 0.01);
-	//JoinBloomFilter bf(ht.CurrentPartitionCount(), 0.01); // TODO: MAYBE??
-
-	// FIXME: this code is duplicated from PerfectHashJoinExecutor::FullScanHashTable
+	// FIXME: this code is duplicated from building the hash table.
 	auto &data_collection = ht.GetDataCollection();
-
-
 
 	Vector hashes(LogicalType::HASH);
 	auto hash_data = FlatVector::GetData<hash_t>(hashes);
@@ -677,19 +671,12 @@ void JoinFilterPushdownInfo::BuildAndPushBloomFilter(const JoinFilterPushdownFil
 		for (idx_t i = 0; i < count; i++) {
 			hash_data[i] = Load<hash_t>(row_locations[i] + ht.pointer_offset);
 		}
-		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
 		const SelectionVector sel;  // Default selection, because we collected from the data collection.
 		bf->BuildWithPrecomputedHashes(hashes, sel, count);	
 	} while (iterator.Next());
 
-	// generate the Bloom-filter
-	std::cout << "pushing bloom filter" << std::endl;
-	auto& hj = op.Cast<PhysicalHashJoin>();
-	// TODO: maybe wrap into optional filter? what implications does that have?
-	const vector<column_t> column_ids{filter_col_idx};
-	auto bloom_filter = make_uniq<BloomFilter>(std::move(bf), std::move(column_ids), hj, client_context);
-	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bloom_filter));
+	info.dynamic_filters->PushBloomFilter(op, std::move(bf));
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable &ht,
@@ -730,11 +717,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 				PushInFilter(info, ht, op, filter_idx, filter_col_idx);
 			}
 
-			// TODO: we have to move this out because currently we generate a bloom filter for each column that is part of the join condition, which would prevent us from re-using the HT hashes.
-			if (true/*ht.Count() > dynamic_or_filter_threshold*/) {
-				BuildAndPushBloomFilter(info, ht, op, filter_idx, filter_col_idx, context);
-			}
-
 			if (Value::NotDistinctFrom(min_val, max_val)) {
 				// min = max - generate an equality filter
 				auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, std::move(min_val));
@@ -748,6 +730,16 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
 				info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(less_equals));
 			}
+		}
+	}
+
+	// Build Bloom-filters for sideways-information-passing
+	if (true/*ht.Count() > dynamic_or_filter_threshold*/) {
+		for (auto &info : probe_info) {
+			vector<column_t> column_ids;
+			std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(column_ids), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
+
+			BuildAndPushBloomFilter(info, ht, op, column_ids);
 		}
 	}
 
