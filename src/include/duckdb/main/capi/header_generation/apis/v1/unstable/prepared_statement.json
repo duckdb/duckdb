@@ -2,9 +2,9 @@
     "version": "unstable_prepared_statement_functions",
     "description": "New prepared statement functions that expose more information about the prepared statement",
     "entries": [
-        "duckdb_nfields",
-        "duckdb_field_name",
-        "duckdb_field_type",
-        "duckdb_field_logical_type"
+        "duckdb_prepared_column_count",
+        "duckdb_prepared_column_name",
+        "duckdb_prepared_column_type",
+        "duckdb_prepared_column_logical_type"
     ]
 }

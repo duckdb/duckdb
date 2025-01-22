@@ -174,7 +174,7 @@
             }
         },
         {
-            "name": "duckdb_nfields",
+            "name": "duckdb_prepared_column_count",
             "return_type": "idx_t",
             "params": [
                 {
@@ -183,14 +183,14 @@
                 }
             ],
             "comment": {
-                "description": "Returns the number of fields in the result of the prepared statement.\n\n",
+                "description": "Returns the number of columns in the result of the prepared statement.\n\n",
                 "param_comments": {
                     "statement": "The prepared statement."
                 }
             }
         },
         {
-            "name": "duckdb_field_name",
+            "name": "duckdb_prepared_column_name",
             "return_type": "const char *",
             "params": [
                 {
@@ -203,7 +203,7 @@
                 }
             ],
             "comment": {
-                "description": "Returns the name of the result field at the specified index.\n\nReturns `nullptr` if the index is out of range.\n\n",
+                "description": "Returns the name of the column at the specified index.\n\nReturns `nullptr` if the index is out of range.\n\n",
                 "param_comments": {
                     "statement": "The prepared statement.",
                     "field_idx": "The field index."
@@ -211,7 +211,7 @@
             }
         },
         {
-            "name": "duckdb_field_type",
+            "name": "duckdb_prepared_column_type",
             "return_type": "duckdb_type",
             "params": [
                 {
@@ -224,16 +224,16 @@
                 }
             ],
             "comment": {
-                "description": "Returns the type of the result field at the specified index.\n\nReturns `DUCKDB_TYPE_INVALID` if the index is out of range.\n\n",
+                "description": "Returns the type of the column at the specified index.\n\nReturns `DUCKDB_TYPE_INVALID` if the index is out of range.\n\n",
                 "param_comments": {
                     "statement": "The prepared statement.",
                     "field_idx": "The field index."
                 },
-                "return_value": "The field type."
+                "return_value": "The column type."
             }
         },
         {
-            "name": "duckdb_field_logical_type",
+            "name": "duckdb_prepared_column_logical_type",
             "return_type": "duckdb_logical_type",
             "params": [
                 {
@@ -246,12 +246,12 @@
                 }
             ],
             "comment": {
-                "description": "Returns the logical type of the result field at the specified index.\n\nReturns `nullptr` if the index is out of range.\n\nThe return type of this call should be destroyed with `duckdb_destroy_logical_type`.\n\n",
+                "description": "Returns the logical type of the column at the specified index.\n\nReturns `nullptr` if the index is out of range.\n\nThe return type of this call should be destroyed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
                     "statement": "The prepared statement.",
                     "field_idx": "The field index."
                 },
-                "return_value": "The logical type of the result field."
+                "return_value": "The logical type of the column."
             }
         }
     ]

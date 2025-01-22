@@ -159,7 +159,7 @@ duckdb_logical_type duckdb_param_logical_type(duckdb_prepared_statement prepared
 	return nullptr;
 }
 
-idx_t duckdb_nfields(duckdb_prepared_statement statement) {
+idx_t duckdb_prepared_column_count(duckdb_prepared_statement statement) {
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(statement);
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return 0;
@@ -167,7 +167,7 @@ idx_t duckdb_nfields(duckdb_prepared_statement statement) {
 	return wrapper->statement->ColumnCount();
 }
 
-const char *duckdb_field_name(duckdb_prepared_statement statement, idx_t field_idx) {
+const char *duckdb_prepared_column_name(duckdb_prepared_statement statement, idx_t field_idx) {
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(statement);
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return nullptr;
@@ -178,8 +178,8 @@ const char *duckdb_field_name(duckdb_prepared_statement statement, idx_t field_i
 	return wrapper->statement->GetNames()[field_idx].c_str();
 }
 
-duckdb_type duckdb_field_type(duckdb_prepared_statement statement, idx_t field_idx) {
-	auto logical_type = duckdb_field_logical_type(statement, field_idx);
+duckdb_type duckdb_prepared_column_type(duckdb_prepared_statement statement, idx_t field_idx) {
+	auto logical_type = duckdb_prepared_column_logical_type(statement, field_idx);
 	if (!logical_type) {
 		return DUCKDB_TYPE_INVALID;
 	}
@@ -191,7 +191,7 @@ duckdb_type duckdb_field_type(duckdb_prepared_statement statement, idx_t field_i
 	return type;
 }
 
-duckdb_logical_type duckdb_field_logical_type(duckdb_prepared_statement statement, idx_t field_idx) {
+duckdb_logical_type duckdb_prepared_column_logical_type(duckdb_prepared_statement statement, idx_t field_idx) {
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(statement);
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return nullptr;
