@@ -271,14 +271,6 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
 
-	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
-
-	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, bool enable_optimizer = true);
-
-	unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query, bool enable_optimizer = true);
-
-	unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json);
-
 	unordered_set<string> GetTableNames(const string &query);
 
 	shared_ptr<DuckDBPyConnection> UnregisterPythonObject(const string &name);

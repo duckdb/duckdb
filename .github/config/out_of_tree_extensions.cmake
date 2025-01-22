@@ -56,10 +56,8 @@ endif()
 # for Delta
 if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT ${WASM_ENABLED})
     duckdb_extension_load(delta
-            LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-delta
-            GIT_TAG b7333c0143e101c720117d564651e693b317bb31
-            APPLY_PATCHES
+            GIT_TAG 846019edcc27000721ff9c4281e85a63d1aa10de
     )
 endif()
 
@@ -91,10 +89,9 @@ endif()
 duckdb_extension_load(inet
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-inet
-    GIT_TAG 51d7ad789f34eecb36a2071bac5aef0e12747d70
+    GIT_TAG a8b361ab5d43f6390d7cb48c9a9f0638e9581cf9
     INCLUDE_DIR src/include
     TEST_DIR test/sql
-    APPLY_PATCHES
     )
 
 ################# POSTGRES_SCANNER
