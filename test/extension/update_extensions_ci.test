@@ -202,13 +202,13 @@ statement error
 FORCE INSTALL '${DIRECT_INSTALL_DIR}/json_incorrect_version.duckdb_extension';
 ----
 Failed to install './build/extension_metadata_test_data/direct_install/json_incorrect_version.duckdb_extension'
-The file was built for DuckDB version 'v1337', but we can only load extensions built for DuckDB version
+The file was built specifically for DuckDB version 'v1337' and can only be loaded with that version of DuckDB. (this version of DuckDB is
 
 statement error
 FORCE INSTALL json_incorrect_version FROM '${LOCAL_EXTENSION_REPO_INCORRECT_DUCKDB_VERSION}';
 ----
 Failed to install 'json_incorrect_version'
-The file was built for DuckDB version 'v1337', but we can only load extensions built for DuckDB version
+The file was built specifically for DuckDB version 'v1337' and can only be loaded with that version of DuckDB. (this version of DuckDB is
 
 # These should print both errors
 statement error
@@ -235,7 +235,7 @@ The file was built for the platform 'test_platform', but we can only load extens
 statement error
 LOAD '${DIRECT_INSTALL_DIR}/json_incorrect_version.duckdb_extension';
 ----
-The file was built for DuckDB version 'v1337', but we can only load extensions built for DuckDB version
+The file was built specifically for DuckDB version 'v1337' and can only be loaded with that version of DuckDB. (this version of DuckDB is
 
 # Note that this is the json extension with incorrect platform and version
 statement error
