@@ -38,6 +38,9 @@ public:
 	//! Initialize HT for this operator
 	unique_ptr<JoinHashTable> InitializeHashTable(ClientContext &context) const;
 
+	//! Danger-zone. Externally prepare the keys and hashes for probing.
+	void PrepareKeysAndHashesExternal(DataChunk &input, DataChunk &keys, ClientContext &client_context) const;
+
 	//! The types of the join keys
 	vector<LogicalType> condition_types;
 

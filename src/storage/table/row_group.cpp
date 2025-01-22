@@ -23,6 +23,7 @@
 #include "duckdb/planner/filter/struct_filter.hpp"
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 
 namespace duckdb {
 
@@ -649,6 +650,38 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						                sel, approved_tuple_count, filter.filter);
 					}
 				}
+
+				// Execute Bloom-filter after all other filters have been executed.
+				// Afaik we might also need GetColumn() calls for all key columns?? (yes, otherwise `result` only contains the columns we fetched for other filters.)
+				// TODO: here, we might be able to apply the bloom filter because we have access to all columns of the data chunk.
+				// TODO: this code is hack-level 9000
+
+				if (approved_tuple_count > 0) {
+					auto& and_filter = filter_list[0].filter.Cast<ConjunctionAndFilter>();
+					for (auto &table_filter : and_filter.child_filters) {
+						if (table_filter->filter_type == TableFilterType::BLOOM_FILTER) {
+							std::cout << "we found a bloom filter" <<std::endl;
+							auto &bloom_filter = table_filter->Cast<BloomFilter>();
+							auto &bf = bloom_filter.bf;
+
+							if (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.9) {
+								Vector hashes(LogicalType::HASH);
+								// TODO: we do not want to mess with the hash join state this ugly...
+								// I wouldn't be surprised if this blows up.
+								//DataChunk keys;
+								result.SetCardinality(approved_tuple_count);  // in the original code, we do this very much at the end of the function. is it safe to do it here?
+								result.Hash(bloom_filter.column_ids, sel, approved_tuple_count, hashes);
+								//bloom_filter.hj.PrepareKeysAndHashesExternal(result, keys, bloom_filter.client_context);
+								//JoinBloomFilter::Hash(keys, sel, approved_tuple_count, hashes);
+								std::cout << "approved_tuple_count before: " <<approved_tuple_count<<std::endl;
+								approved_tuple_count = bf->ProbeWithPrecomputedHashes(sel, approved_tuple_count, hashes);
+								std::cout << "approved_tuple_count after: " <<approved_tuple_count<<std::endl;
+								std::cout << "probed rows: " << bf->GetNumProbedKeys() << " selectivity: " << bf->GetObservedSelectivity() << std::endl;
+							}
+						}
+					}
+				}
+
 				for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {
 						continue;

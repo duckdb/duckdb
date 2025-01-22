@@ -342,7 +342,7 @@ void DataChunk::Hash(Vector &result) {
 	}
 }
 
-void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
+void DataChunk::Hash(const vector<idx_t> &column_ids, Vector &result) {
 	D_ASSERT(result.GetType().id() == LogicalType::HASH);
 	D_ASSERT(!column_ids.empty());
 
@@ -351,6 +351,17 @@ void DataChunk::Hash(vector<idx_t> &column_ids, Vector &result) {
 		VectorOperations::CombineHash(result, data[column_ids[i]], size());
 	}
 }
+
+void DataChunk::Hash(const vector<idx_t> &column_ids, const SelectionVector &sel, idx_t count, Vector &result) {
+	D_ASSERT(result.GetType().id() == LogicalType::HASH);
+	D_ASSERT(!column_ids.empty());
+
+	VectorOperations::Hash(data[column_ids[0]], result, sel, count);
+	for (idx_t i = 1; i < column_ids.size(); i++) {
+		VectorOperations::CombineHash(result, data[column_ids[i]], sel, count);
+	}
+}
+
 
 void DataChunk::Verify() {
 #ifdef DEBUG

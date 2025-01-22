@@ -2,7 +2,7 @@
 
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/value_map.hpp"
-#include "duckdb/execution/bloom_filter.hpp"
+#include "duckdb/execution/join_bloom_filter.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
@@ -18,6 +18,7 @@
 #include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/in_filter.hpp"
@@ -27,6 +28,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -156,11 +158,14 @@ public:
 		probe_types = op.children[0]->types;
 		probe_types.emplace_back(LogicalType::HASH);
 
+		std::cout << "if (op.filter_pushdown) {" << std::endl;
 		if (op.filter_pushdown) {
 			if (op.filter_pushdown->probe_info.empty() && use_perfect_hash) {
 				// Only computing min/max to check for perfect HJ, but we already can
-				skip_filter_pushdown = true;
+				std::cout << "skip_filter_pushdown = true;" << std::endl;
+				//skip_filter_pushdown = true;
 			}
+			std::cout << "global_filter_state = op.filter_pushdown->GetGlobalState(context, op);" << std::endl;
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
 		}
 	}
@@ -204,10 +209,6 @@ public:
 
 	bool skip_filter_pushdown = false;
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
-
-	//! Bloom-filter pushing key-summary to the probe side.
-	bool skip_bloom_filter = false;
-	unique_ptr<BloomFilter> bloom_filter;
 };
 
 unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {
@@ -432,7 +433,7 @@ public:
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel, *sink.bloom_filter);
+		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -458,11 +459,8 @@ public:
 
 		vector<shared_ptr<Task>> finalize_tasks;
 		auto &ht = *sink.hash_table;
-		const auto row_count = ht.GetDataCollection().Count();
 		const auto chunk_count = ht.GetDataCollection().ChunkCount();
 		const auto num_threads = NumericCast<idx_t>(sink.num_threads);
-
-		sink.bloom_filter = make_uniq<BloomFilter>(row_count, 0.01, context.config);
 
 		// If the data is very skewed (many of the exact same key), our finalize will become slow,
 		// due to completely slamming the same atomic using compare-and-swaps.
@@ -641,7 +639,7 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	// not dense and that the range does not contain NULL
 	// i.e. if we have the values [0, 1, 2, 3, 4] - the min/max is fully equivalent to the OR filter
 	if (FilterCombiner::ContainsNull(in_list) || FilterCombiner::IsDenseRange(in_list)) {
-		return;
+	//	return;
 	}
 
 	// generate the OR filter
@@ -652,6 +650,46 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	auto filter = make_uniq<OptionalFilter>(std::move(in_filter));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
 	return;
+}
+
+void JoinFilterPushdownInfo::BuildAndPushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
+                                          const PhysicalOperator &op, idx_t filter_idx, idx_t filter_col_idx, ClientContext &client_context) const {
+	std::cout << "build bloom filter as part of JoinFilterPushdownInfo" << std::endl;
+
+	//JoinBloomFilter bf(ht.Count(), 0.001);
+	auto bf = make_shared_ptr<JoinBloomFilter>(ht.Count(), 0.01);
+	//JoinBloomFilter bf(ht.CurrentPartitionCount(), 0.01); // TODO: MAYBE??
+
+	// FIXME: this code is duplicated from PerfectHashJoinExecutor::FullScanHashTable
+	auto &data_collection = ht.GetDataCollection();
+
+
+
+	Vector hashes(LogicalType::HASH);
+	auto hash_data = FlatVector::GetData<hash_t>(hashes);
+
+	TupleDataChunkIterator iterator(data_collection, TupleDataPinProperties::KEEP_EVERYTHING_PINNED, 0,
+	                                data_collection.ChunkCount(), false);
+	const auto row_locations = iterator.GetRowLocations();
+
+	do {
+		const auto count = iterator.GetCurrentChunkCount();
+		for (idx_t i = 0; i < count; i++) {
+			hash_data[i] = Load<hash_t>(row_locations[i] + ht.pointer_offset);
+		}
+		TupleDataChunkState &chunk_state = iterator.GetChunkState();
+
+		const SelectionVector sel;  // Default selection, because we collected from the data collection.
+		bf->BuildWithPrecomputedHashes(hashes, sel, count);	
+	} while (iterator.Next());
+
+	// generate the Bloom-filter
+	std::cout << "pushing bloom filter" << std::endl;
+	auto& hj = op.Cast<PhysicalHashJoin>();
+	// TODO: maybe wrap into optional filter? what implications does that have?
+	const vector<column_t> column_ids{filter_col_idx};
+	auto bloom_filter = make_uniq<BloomFilter>(std::move(bf), std::move(column_ids), hj, client_context);
+	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(bloom_filter));
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable &ht,
@@ -668,7 +706,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 	gstate.global_aggregate_state->Finalize(*final_min_max);
 
 	if (probe_info.empty()) {
-		return final_min_max; // There are not table souces in which we can push down filters
+		return final_min_max; // There are no table souces in which we can push down filters
 	}
 
 	auto dynamic_or_filter_threshold = ClientConfig::GetSetting<DynamicOrFilterThresholdSetting>(context);
@@ -690,6 +728,11 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 			// if the HT is small we can generate a complete "OR" filter
 			if (ht.Count() > 1 && ht.Count() <= dynamic_or_filter_threshold) {
 				PushInFilter(info, ht, op, filter_idx, filter_col_idx);
+			}
+
+			// TODO: we have to move this out because currently we generate a bloom filter for each column that is part of the join condition, which would prevent us from re-using the HT hashes.
+			if (true/*ht.Count() > dynamic_or_filter_threshold*/) {
+				BuildAndPushBloomFilter(info, ht, op, filter_idx, filter_col_idx, context);
 			}
 
 			if (Value::NotDistinctFrom(min_val, max_val)) {
@@ -887,10 +930,12 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 				Vector hashes(LogicalType::HASH);
 				sink.hash_table->Hash(state.lhs_join_keys, *current_sel, state.scan_structure.count, hashes);
 
+				/*
 				if (sink.bloom_filter->GetNumProbedKeys() < 10000 || sink.bloom_filter->GetObservedSelectivity() >= 0.9) {
 					size_t sel_count_after_bloom = sink.bloom_filter->ProbeWithPrecomputedHashes(current_sel, state.scan_structure.count, state.scan_structure.sel_vector, hashes);
 					state.scan_structure.count = sel_count_after_bloom;
 				}
+				*/
 
 				if (state.scan_structure.count != 0) {
 					sink.hash_table->Probe(state.scan_structure, state.lhs_join_keys, state.join_key_state, state.probe_state, current_sel, hashes);
@@ -907,6 +952,25 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	return OperatorResultType::HAVE_MORE_OUTPUT;
+}
+
+void PhysicalHashJoin::PrepareKeysAndHashesExternal(DataChunk &input, DataChunk &keys, ClientContext &client_context) const {
+	//auto& state = op_state.Cast<HashJoinOperatorState>();
+	// probe the HT, start by resolving the join keys for the left chunk
+	//	state.lhs_join_keys.Reset();
+	//	state.probe_executor.Execute(input, state.lhs_join_keys);
+	//return state.lhs_join_keys;
+
+	ExpressionExecutor probe_executor(client_context);
+	auto &allocator = BufferAllocator::Get(client_context);
+	keys.Initialize(allocator, condition_types);
+	
+	for (auto &cond : conditions) {
+		probe_executor.AddExpression(*cond.left);
+	}
+
+	keys.Reset();
+	probe_executor.Execute(input, keys);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1249,7 +1313,7 @@ void HashJoinLocalSourceState::ExternalBuild(HashJoinGlobalSinkState &sink, Hash
 	D_ASSERT(local_stage == HashJoinSourceStage::BUILD);
 
 	auto &ht = *sink.hash_table;
-	ht.Finalize(build_chunk_idx_from, build_chunk_idx_to, true, *sink.bloom_filter);
+	ht.Finalize(build_chunk_idx_from, build_chunk_idx_to, true);
 
 	auto guard = gstate.Lock();
 	gstate.build_chunk_done += build_chunk_idx_to - build_chunk_idx_from;

@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/execution/bloom_filter.hpp"
 #include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -183,8 +182,7 @@ public:
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
-	//! Optionally builds a Bloom-filter with the hash-keys.
-	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel, optional_ptr<BloomFilter> bloom_filter);
+	void Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel);
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             const SelectionVector *&current_sel);
 	//! Pre-compute hashes for the given keys.

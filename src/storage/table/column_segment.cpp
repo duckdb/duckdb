@@ -549,8 +549,12 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		return FilterSelection(sel, *child_vec, child_data, *struct_filter.child_filter, scan_count,
 		                       approved_tuple_count);
 	}
+	case TableFilterType::BLOOM_FILTER: {
+		// Can't evalaute on single column.
+		return scan_count;
+	}
 	default:
-		throw InternalException("FIXME: unsupported type for filter selection");
+		throw InternalException("FIXME: unsupported type for filter selection. Got " + EnumUtil::ToString(filter.filter_type));
 	}
 }
 

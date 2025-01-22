@@ -1,0 +1,46 @@
+require tpch
+
+statement ok
+CALL dbgen(sf=0.1);
+
+statement ok
+SET threads TO 1;
+
+query I
+SELECT l_orderkey from lineitem WHERE l_orderkey IN (SELECT * FROM range(1000) using sample reservoir(50 ROWS) REPEATABLE (42)) ORDER BY ALL
+----
+580
+580
+580
+710
+710
+710
+710
+710
+710
+710
+770
+770
+871
+871
+871
+871
+871
+871
+871
+903
+903
+903
+903
+903
+903
+995
+995
+995
+995
+995
+998
+998
+998
+998
+998

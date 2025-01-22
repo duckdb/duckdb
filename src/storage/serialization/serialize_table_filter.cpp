@@ -7,6 +7,7 @@
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/planner/filter/null_filter.hpp"
+#include "duckdb/planner/filter/bloom_filter.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "duckdb/planner/filter/conjunction_filter.hpp"
 #include "duckdb/planner/filter/struct_filter.hpp"
@@ -51,8 +52,11 @@ unique_ptr<TableFilter> TableFilter::Deserialize(Deserializer &deserializer) {
 	case TableFilterType::STRUCT_EXTRACT:
 		result = StructFilter::Deserialize(deserializer);
 		break;
+	case TableFilterType::BLOOM_FILTER:
+		result = BloomFilter::Deserialize(deserializer);
+		break;
 	default:
-		throw SerializationException("Unsupported type for deserialization of TableFilter!");
+		throw SerializationException("Unsupported type for deserialization of TableFilter! Got " + EnumUtil::ToString(filter_type));
 	}
 	return result;
 }
@@ -109,6 +113,18 @@ void InFilter::Serialize(Serializer &serializer) const {
 unique_ptr<TableFilter> InFilter::Deserialize(Deserializer &deserializer) {
 	auto values = deserializer.ReadPropertyWithDefault<vector<Value>>(200, "values");
 	auto result = duckdb::unique_ptr<InFilter>(new InFilter(std::move(values)));
+	return std::move(result);
+}
+
+void BloomFilter::Serialize(Serializer &serializer) const {
+	TableFilter::Serialize(serializer);
+	// TODO
+}
+
+unique_ptr<TableFilter> BloomFilter::Deserialize(Deserializer &deserializer) {
+	vector<Value> values(12,3);
+	auto result = duckdb::unique_ptr<InFilter>(new InFilter(std::move(values)));
+	// TODO
 	return std::move(result);
 }
 

@@ -705,7 +705,7 @@ void JoinHashTable::InitializePointerTable() {
 	bitmask = capacity - 1;
 }
 
-void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel, optional_ptr<BloomFilter> bloom_filter) {
+void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel) {
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.get());
 
@@ -723,9 +723,6 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 			hash_data[i] = Load<hash_t>(row_locations[i] + pointer_offset);
 		}
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
-
-		const SelectionVector sel;  // Default selection vector because we read from a continuous data sink.
-		bloom_filter->BuildWithPrecomputedHashes(hashes, sel, count);
 
 		// InsertHashes also truncates the hashes with a bit mask, so we want to do this AFTER the bloom filter.
 		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
