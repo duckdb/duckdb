@@ -64,10 +64,6 @@ typedef struct {
 	duckdb_logical_type (*duckdb_param_logical_type)(duckdb_prepared_statement prepared_statement, idx_t param_idx);
 	duckdb_state (*duckdb_clear_bindings)(duckdb_prepared_statement prepared_statement);
 	duckdb_statement_type (*duckdb_prepared_statement_type)(duckdb_prepared_statement statement);
-	idx_t (*duckdb_nfields)(duckdb_prepared_statement statement);
-	const char *(*duckdb_field_name)(duckdb_prepared_statement statement, idx_t field_idx);
-	duckdb_type (*duckdb_field_type)(duckdb_prepared_statement statement, idx_t field_idx);
-	duckdb_logical_type (*duckdb_field_logical_type)(duckdb_prepared_statement statement, idx_t field_idx);
 	duckdb_state (*duckdb_bind_value)(duckdb_prepared_statement prepared_statement, idx_t param_idx, duckdb_value val);
 	duckdb_state (*duckdb_bind_parameter_index)(duckdb_prepared_statement prepared_statement, idx_t *param_idx_out,
 	                                            const char *name);
@@ -475,6 +471,12 @@ typedef struct {
 
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
+	// New prepared statement functions that expose more information about the prepared statement
+
+	idx_t (*duckdb_nfields)(duckdb_prepared_statement statement);
+	const char *(*duckdb_field_name)(duckdb_prepared_statement statement, idx_t field_idx);
+	duckdb_type (*duckdb_field_type)(duckdb_prepared_statement statement, idx_t field_idx);
+	duckdb_logical_type (*duckdb_field_logical_type)(duckdb_prepared_statement statement, idx_t field_idx);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -537,10 +539,6 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_param_logical_type = duckdb_param_logical_type;
 	result.duckdb_clear_bindings = duckdb_clear_bindings;
 	result.duckdb_prepared_statement_type = duckdb_prepared_statement_type;
-	result.duckdb_nfields = duckdb_nfields;
-	result.duckdb_field_name = duckdb_field_name;
-	result.duckdb_field_type = duckdb_field_type;
-	result.duckdb_field_logical_type = duckdb_field_logical_type;
 	result.duckdb_bind_value = duckdb_bind_value;
 	result.duckdb_bind_parameter_index = duckdb_bind_parameter_index;
 	result.duckdb_bind_boolean = duckdb_bind_boolean;
@@ -894,6 +892,10 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_get_or_create_from_cache = duckdb_get_or_create_from_cache;
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
+	result.duckdb_nfields = duckdb_nfields;
+	result.duckdb_field_name = duckdb_field_name;
+	result.duckdb_field_type = duckdb_field_type;
+	result.duckdb_field_logical_type = duckdb_field_logical_type;
 	return result;
 }
 
