@@ -16,21 +16,21 @@ SELECT column1, column2, column3, filename.replace('\', '/') FROM read_csv('data
 3	3	100	data/csv/filename_filter/d.csv
 
 query IIII
-SELECT column1, column2, column3, filename.replace('\', '/') FROM read_csv(['data/csv/filename_filter/a.csv','data/csv/filename_filter/b.csv','data/csv/filename_filter/c.csv','data/csv/filename_filter/d.csv'], filename=true) WHERE filename = 'data/csv/filename_filter/d.csv';
+SELECT column1, column2, column3, filename.replace('\', '/') FROM read_csv(['data/csv/filename_filter/a.csv','data/csv/filename_filter/b.csv','data/csv/filename_filter/c.csv','data/csv/filename_filter/d.csv'], filename=true) WHERE filename like '%d.csv';
 ----
 1	1	3	data/csv/filename_filter/d.csv
 2	NULL	2	data/csv/filename_filter/d.csv
 3	3	100	data/csv/filename_filter/d.csv
 
 query IIII
-SELECT column1, column2, column3, filename.replace('\', '/') FROM read_csv(['data/csv/filename_filter/a.csv','data/csv/filename_filter/b.csv','data/csv/filename_filter/c.csv','data/csv/filename_filter/d.csv'], filename=true, union_by_name=true) WHERE filename = 'data/csv/filename_filter/d.csv';
+SELECT column1, column2, column3, filename.replace('\', '/') FROM read_csv(['data/csv/filename_filter/a.csv','data/csv/filename_filter/b.csv','data/csv/filename_filter/c.csv','data/csv/filename_filter/d.csv'], filename=true, union_by_name=true) WHERE filename like '%d.csv';
 ----
 1	1	3	data/csv/filename_filter/d.csv
 2	NULL	2	data/csv/filename_filter/d.csv
 3	3	100	data/csv/filename_filter/d.csv
 
 query IIII
-SELECT column1, column2, column3, filename.replace('\', '/') FROM read_csv('data/csv/filename_filter/*.csv', filename=true, union_by_name=true) WHERE filename = 'data/csv/filename_filter/d.csv';
+SELECT column1, column2, column3, filename.replace('\', '/') FROM read_csv('data/csv/filename_filter/*.csv', filename=true, union_by_name=true) WHERE filename like '%d.csv';
 ----
 1	1	3	data/csv/filename_filter/d.csv
 2	NULL	2	data/csv/filename_filter/d.csv
