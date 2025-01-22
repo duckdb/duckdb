@@ -91,6 +91,15 @@ protected:
 	void EvaluateLeaves(const WindowSegmentTreeGlobalState &tree, const idx_t *begins, const idx_t *ends,
 	                    const idx_t *bounds, idx_t count, idx_t row_idx, FramePart frame_part, FramePart leaf_part);
 
+	static inline const idx_t *FrameBegins(const idx_t *begins, const idx_t *ends, const idx_t *bounds,
+	                                       FramePart frame_part) {
+		return frame_part == FramePart::RIGHT ? bounds : begins;
+	}
+	static inline const idx_t *FrameEnds(const idx_t *begins, const idx_t *ends, const idx_t *bounds,
+	                                     FramePart frame_part) {
+		return frame_part == FramePart::LEFT ? bounds : ends;
+	}
+
 public:
 	//! Allocator for aggregates
 	ArenaAllocator &allocator;
@@ -463,8 +472,8 @@ void WindowSegmentTreePart::EvaluateUpperLevels(const WindowSegmentTreeGlobalSta
 	const bool end_on_curr_row = frame_part == FramePart::LEFT && exclude_mode == WindowExcludeMode::CURRENT_ROW;
 
 	// We need the full range of the frame to clamp
-	auto frame_begins = frame_part == FramePart::RIGHT ? bounds : begins;
-	auto frame_ends = frame_part == FramePart::LEFT ? bounds : ends;
+	auto frame_begins = FrameBegins(begins, ends, bounds, frame_part);
+	auto frame_ends = FrameEnds(begins, ends, bounds, frame_part);
 
 	const auto max_level = tree.levels_flat_start.size() + 1;
 	right_stack.resize(max_level, {0, 0});
@@ -571,8 +580,8 @@ void WindowSegmentTreePart::EvaluateLeaves(const WindowSegmentTreeGlobalState &t
 	const bool add_curr_row = compute_left && frame_part == FramePart::RIGHT && exclude_mode == WindowExcludeMode::TIES;
 
 	// We need the full range of the frame to clamp
-	auto frame_begins = frame_part == FramePart::RIGHT ? bounds : begins;
-	auto frame_ends = frame_part == FramePart::LEFT ? bounds : ends;
+	auto frame_begins = FrameBegins(begins, ends, bounds, frame_part);
+	auto frame_ends = FrameEnds(begins, ends, bounds, frame_part);
 
 	for (idx_t rid = 0, cur_row = row_idx; rid < count; ++rid, ++cur_row) {
 		auto state_ptr = fdata[rid];

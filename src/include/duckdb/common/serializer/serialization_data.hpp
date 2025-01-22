@@ -30,6 +30,7 @@ struct SerializationData {
 
 	stack<reference<ClientContext>> contexts;
 	stack<reference<DatabaseInstance>> databases;
+	stack<reference<Catalog>> catalogs;
 	stack<idx_t> enums;
 	stack<reference<bound_parameter_map_t>> parameter_data;
 	stack<const_reference<LogicalType>> types;
@@ -41,6 +42,9 @@ struct SerializationData {
 
 	template <class T>
 	T Get() = delete;
+
+	template <class T>
+	optional_ptr<T> TryGet() = delete;
 
 	template <class T>
 	void Unset() = delete;
@@ -163,6 +167,27 @@ inline void SerializationData::Unset<ClientContext>() {
 	contexts.pop();
 }
 
+template <>
+inline void SerializationData::Set(Catalog &catalog) {
+	catalogs.emplace(catalog);
+}
+
+template <>
+inline Catalog &SerializationData::Get() {
+	AssertNotEmpty(catalogs);
+	return catalogs.top();
+}
+
+template <>
+inline optional_ptr<Catalog> SerializationData::TryGet() {
+	return catalogs.empty() ? nullptr : &catalogs.top().get();
+}
+
+template <>
+inline void SerializationData::Unset<Catalog>() {
+	AssertNotEmpty(catalogs);
+	catalogs.pop();
+}
 template <>
 inline void SerializationData::Set(DatabaseInstance &db) {
 	databases.emplace(db);
