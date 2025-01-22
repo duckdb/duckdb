@@ -133,7 +133,6 @@ void PartialBlockManager::RegisterPartialBlock(PartialBlockAllocation allocation
 	// Flush any block that we're not going to reuse.
 	if (block_to_free) {
 		block_to_free->Flush(free_space);
-		AddWrittenBlock(block_to_free->state.block_id);
 	}
 }
 
@@ -162,19 +161,7 @@ void PartialBlockManager::Merge(PartialBlockManager &other) {
 			partially_filled_blocks.insert(make_pair(e.first, std::move(e.second)));
 		}
 	}
-	// copy over the written blocks
-	for (auto &block_id : other.written_blocks) {
-		AddWrittenBlock(block_id);
-	}
-	other.written_blocks.clear();
 	other.partially_filled_blocks.clear();
-}
-
-void PartialBlockManager::AddWrittenBlock(block_id_t block) {
-	auto entry = written_blocks.insert(block);
-	if (!entry.second) {
-		throw InternalException("Written block already exists");
-	}
 }
 
 void PartialBlockManager::ClearBlocks() {
@@ -187,7 +174,6 @@ void PartialBlockManager::ClearBlocks() {
 void PartialBlockManager::FlushPartialBlocks() {
 	for (auto &e : partially_filled_blocks) {
 		e.second->Flush(e.first);
-		written_blocks.insert(e.second->state.block_id);
 	}
 	partially_filled_blocks.clear();
 }
@@ -196,13 +182,8 @@ BlockManager &PartialBlockManager::GetBlockManager() const {
 	return block_manager;
 }
 
-void PartialBlockManager::Rollback(const bool mark_modified) {
+void PartialBlockManager::Rollback() {
 	ClearBlocks();
-	if (mark_modified) {
-		for (auto &block_id : written_blocks) {
-			block_manager.MarkBlockAsFree(block_id);
-		}
-	}
 }
 
 } // namespace duckdb

@@ -43,7 +43,7 @@ public:
 	reference<DataTable> table_ref;
 
 	Allocator &allocator;
-	//! The main chunk collection holding the data
+	//! The main row group collection.
 	shared_ptr<RowGroupCollection> row_groups;
 	//! The set of unique append indexes.
 	TableIndexList append_indexes;
@@ -51,10 +51,14 @@ public:
 	TableIndexList delete_indexes;
 	//! The number of deleted rows
 	idx_t deleted_rows;
-	//! The main optimistic data writer
+
+	//! The optimistic row group collections associated with this table.
+	vector<unique_ptr<RowGroupCollection>> optimistic_row_groups;
+	//! The main optimistic data writer associated with this table.
 	OptimisticDataWriter optimistic_writer;
-	//! The set of all optimistic data writers associated with this table
+	//! The optimistic data writers associated with this table.
 	vector<unique_ptr<OptimisticDataWriter>> optimistic_writers;
+
 	//! Whether or not storage was merged
 	bool merged_storage = false;
 	//! Whether or not the storage was dropped
@@ -73,7 +77,9 @@ public:
 	                          const vector<LogicalType> &table_types, row_t &start_row);
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
 
-	//! Creates an optimistic writer for this table
+	//! Create an optimistic row group collection for this table.
+	RowGroupCollection &CreateOptimisticRowGroups(unique_ptr<RowGroupCollection> collection);
+	//! Create an optimistic writer for this table.
 	OptimisticDataWriter &CreateOptimisticWriter();
 	void FinalizeOptimisticWriter(OptimisticDataWriter &writer);
 };
@@ -129,7 +135,9 @@ public:
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(DataTable &table, RowGroupCollection &collection);
-	//! Create an optimistic writer for the specified table
+	//! Create an optimistic row group collection for this table.
+	RowGroupCollection &CreateOptimisticRowGroups(DataTable &table, unique_ptr<RowGroupCollection> collection);
+	//! Create an optimistic writer for this table.
 	OptimisticDataWriter &CreateOptimisticWriter(DataTable &table);
 	void FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer);
 

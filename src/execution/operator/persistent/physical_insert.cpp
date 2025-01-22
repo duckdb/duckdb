@@ -685,14 +685,20 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		D_ASSERT(!return_chunk);
 		// parallel append
 		if (!lstate.local_collection) {
-			lock_guard<mutex> l(gstate.lock);
 			auto table_info = storage.GetDataTableInfo();
 			auto &io_manager = TableIOManager::Get(table.GetStorage());
-			lstate.local_collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types,
-			                                                        NumericCast<idx_t>(MAX_ROW_ID));
-			lstate.local_collection->InitializeEmpty();
-			lstate.local_collection->InitializeAppend(lstate.local_append_state);
-			lstate.writer = &gstate.table.GetStorage().CreateOptimisticWriter(context.client);
+
+			// Create the local row group collection.
+			auto max_row_id = NumericCast<idx_t>(MAX_ROW_ID);
+			auto collection =
+			    make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types, max_row_id);
+			collection->InitializeEmpty();
+			collection->InitializeAppend(lstate.local_append_state);
+
+			lock_guard<mutex> l(gstate.lock);
+			auto &data_table = gstate.table.GetStorage();
+			lstate.writer = data_table.CreateOptimisticWriter(context.client);
+			lstate.local_collection = data_table.CreateOptimisticRowGroups(context.client, std::move(collection));
 		}
 		OnConflictHandling(table, context, lstate);
 		D_ASSERT(action_type != OnConflictAction::UPDATE);

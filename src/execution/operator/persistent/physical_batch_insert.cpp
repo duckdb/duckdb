@@ -188,6 +188,19 @@ public:
 	optional_ptr<OptimisticDataWriter> writer;
 	unique_ptr<ConstraintState> constraint_state;
 
+	//	void CreateNewCollection(ClientContext &context, BatchInsertGlobalState &g_state, const vector<LogicalType>
+	//&insert_types) { 		auto &data_table = g_state.table; 		auto table_info = data_table.GetStorage().GetDataTableInfo();
+	//		auto &io_manager = TableIOManager::Get(data_table.GetStorage());
+	//
+	//		// Create the local row group collection.
+	//		auto max_row_id = NumericCast<idx_t>(MAX_ROW_ID);
+	//		auto collection = make_uniq<RowGroupCollection>(std::move(table_info), io_manager, insert_types,
+	//max_row_id); 		collection->InitializeEmpty(); 		collection->InitializeAppend(current_append_state);
+	//
+	//			lock_guard<mutex> l(g_state.lock);
+	//			auto &local_table_storage = data_table.GetStorage();
+	//			current_collection = data_table.CreateOptimisticRowGroups(context, std::move(collection));
+	//	}
 	void CreateNewCollection(DuckTableEntry &table, const vector<LogicalType> &insert_types) {
 		auto table_info = table.GetStorage().GetDataTableInfo();
 		auto &io_manager = TableIOManager::Get(table.GetStorage());

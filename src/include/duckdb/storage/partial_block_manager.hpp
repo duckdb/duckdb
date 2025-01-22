@@ -114,7 +114,7 @@ public:
 	void ClearBlocks();
 
 	//! Rollback all data written by this partial block manager
-	void Rollback(const bool mark_modified);
+	void Rollback();
 
 	//! Merge this block manager into another one
 	void Merge(PartialBlockManager &other);
@@ -129,9 +129,6 @@ public:
 	//! Returns a reference to the underlying block manager.
 	BlockManager &GetBlockManager() const;
 
-	//! Registers a block as "written" by this partial block manager
-	void AddWrittenBlock(block_id_t block);
-
 protected:
 	BlockManager &block_manager;
 	PartialBlockType partial_block_type;
@@ -140,8 +137,6 @@ protected:
 	//! This is a multimap because there might be outstanding partial blocks with
 	//! the same amount of left-over space
 	multimap<idx_t, unique_ptr<PartialBlock>> partially_filled_blocks;
-	//! The set of written blocks
-	unordered_set<block_id_t> written_blocks;
 
 	//! The maximum size (in bytes) at which a partial block will be considered a partial block
 	uint32_t max_partial_block_size;

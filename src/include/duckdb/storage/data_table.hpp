@@ -115,7 +115,9 @@ public:
 	                 optional_ptr<const vector<LogicalIndex>> column_ids);
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
-	//! Creates an optimistic writer for this table - used for optimistically writing parallel appends
+	//! Create an optimistic row group collection for this table. Used for optimistically writing parallel appends.
+	RowGroupCollection &CreateOptimisticRowGroups(ClientContext &context, unique_ptr<RowGroupCollection> collection);
+	//! Create an optimistic writer for this table. Used for optimistically writing parallel appends.
 	OptimisticDataWriter &CreateOptimisticWriter(ClientContext &context);
 	void FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer);
 

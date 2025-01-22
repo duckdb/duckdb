@@ -848,6 +848,12 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 	LocalStorage::FinalizeAppend(state);
 }
 
+RowGroupCollection &DataTable::CreateOptimisticRowGroups(ClientContext &context,
+                                                         unique_ptr<RowGroupCollection> collection) {
+	auto &local_storage = LocalStorage::Get(context, db);
+	return local_storage.CreateOptimisticRowGroups(*this, std::move(collection));
+}
+
 OptimisticDataWriter &DataTable::CreateOptimisticWriter(ClientContext &context) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	return local_storage.CreateOptimisticWriter(*this);
