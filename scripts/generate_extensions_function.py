@@ -363,16 +363,10 @@ class ExtensionData:
         self.extensions: Dict[str, str] = get_extension_path_map()
 
         self.stored_functions: Dict[str, List[Function]] = {
-            'substrait': [
-                Function("from_substrait", CatalogType.TABLE),
-                Function("get_substrait", CatalogType.TABLE),
-                Function("get_substrait_json", CatalogType.TABLE),
-                Function("from_substrait_json", CatalogType.TABLE),
-            ],
             'arrow': [Function("scan_arrow_ipc", CatalogType.TABLE), Function("to_arrow_ipc", CatalogType.TABLE)],
             'spatial': [],
         }
-        self.stored_settings: Dict[str, List[str]] = {'substrait': [], 'arrow': [], 'spatial': []}
+        self.stored_settings: Dict[str, List[str]] = {'arrow': [], 'spatial': []}
 
     def set_base(self):
         (functions, function_overloads) = get_functions()

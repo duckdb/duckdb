@@ -114,7 +114,6 @@ static const DefaultExtension internal_extensions[] = {
     {"postgres_scanner", "Adds support for connecting to a Postgres database", false},
     {"inet", "Adds support for IP-related data types and functions", false},
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
-    {"substrait", "Adds support for the Substrait integration", false},
     {"aws", "Provides features that depend on the AWS SDK", false},
     {"arrow", "A zero-copy data integration between Apache Arrow and DuckDB", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
