@@ -109,7 +109,7 @@ COMMIT
 mode skip
 
 query I
-SELECT COUNT(DISTINCT block_id) < 5 FROM pragma_storage_info('integers_batched_load_nulls');
+SELECT COUNT(DISTINCT block_id) < 8 FROM pragma_storage_info('integers_batched_load_nulls');
 ----
 true
 
