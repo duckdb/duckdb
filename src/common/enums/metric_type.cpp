@@ -66,6 +66,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_FILTER_PUSHDOWN;
         case OptimizerType::EMPTY_RESULT_PULLUP:
             return MetricsType::OPTIMIZER_EMPTY_RESULT_PULLUP;
+		case OptimizerType::REMOVE_USELESS_PROJECTIONS:
+			return MetricsType::OPTIMIZER_REMOVE_USELESS_PROJECTIONS;
         case OptimizerType::CTE_FILTER_PUSHER:
             return MetricsType::OPTIMIZER_CTE_FILTER_PUSHER;
         case OptimizerType::REGEX_RANGE:
@@ -153,6 +155,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::BUILD_SIDE_PROBE_SIDE;
         case MetricsType::OPTIMIZER_LIMIT_PUSHDOWN:
             return OptimizerType::LIMIT_PUSHDOWN;
+		case MetricsType::OPTIMIZER_REMOVE_USELESS_PROJECTIONS:
+			return OptimizerType::REMOVE_USELESS_PROJECTIONS;
         case MetricsType::OPTIMIZER_TOP_N:
             return OptimizerType::TOP_N;
         case MetricsType::OPTIMIZER_COMPRESSED_MATERIALIZATION:
@@ -170,9 +174,9 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
             return OptimizerType::MATERIALIZED_CTE;
         case MetricsType::OPTIMIZER_SUM_REWRITER:
-            return OptimizerType::SUM_REWRITER;
+			return OptimizerType::SUM_REWRITER;
         case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
-            return OptimizerType::LATE_MATERIALIZATION;
+			return OptimizerType::LATE_MATERIALIZATION;
     default:
             return OptimizerType::INVALID;
     };
@@ -206,6 +210,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_EXTENSION:
         case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
         case MetricsType::OPTIMIZER_SUM_REWRITER:
+		case MetricsType::OPTIMIZER_REMOVE_USELESS_PROJECTIONS:
         case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
             return true;
         default:
