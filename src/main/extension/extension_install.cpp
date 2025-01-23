@@ -90,6 +90,12 @@ string ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSyst
 	extension_directory = fs.ConvertSeparators(extension_directory);
 	// expand ~ in extension directory
 	extension_directory = fs.ExpandPath(extension_directory);
+
+	auto path_components = PathComponents();
+	for (auto &path_ele : path_components) {
+		extension_directory = fs.JoinPath(extension_directory, path_ele);
+	}
+
 	return extension_directory;
 }
 
@@ -117,13 +123,6 @@ string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs)
 	}
 	D_ASSERT(fs.DirectoryExists(extension_directory));
 
-	auto path_components = PathComponents();
-	for (auto &path_ele : path_components) {
-		extension_directory = fs.JoinPath(extension_directory, path_ele);
-		if (!fs.DirectoryExists(extension_directory)) {
-			fs.CreateDirectory(extension_directory);
-		}
-	}
 	return extension_directory;
 }
 
