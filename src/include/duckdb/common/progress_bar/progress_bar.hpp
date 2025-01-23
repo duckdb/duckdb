@@ -51,6 +51,9 @@ public:
 	void Start();
 	//! Updates the progress bar and prints it to the screen
 	void Update(bool final);
+	//! Pass extra information to the ProgressBarDisplay (if any)
+	void AddTextualInfo(const string &tag, const string &info);
+	void AddNumericInfo(const string &tag, double info);
 	QueryProgress GetDetailedQueryProgress();
 	void PrintProgress(int percentage);
 	void FinishProgressBarPrint();

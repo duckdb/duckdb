@@ -524,6 +524,7 @@ ClientContext::PendingPreparedStatementInternal(ClientContextLock &lock, shared_
 		}
 		active_query->progress_bar =
 		    make_uniq<ProgressBar>(executor, NumericCast<idx_t>(config.wait_time), display_create_func);
+		active_query->progress_bar->AddTextualInfo("query", active_query->query);
 		active_query->progress_bar->Start();
 		query_progress.Restart();
 	}
