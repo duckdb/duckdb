@@ -1,0 +1,855 @@
+name	run	timing
+benchmark/imdb/01a.benchmark	1	0.040613
+benchmark/imdb/01a.benchmark	2	0.040491
+benchmark/imdb/01a.benchmark	3	0.040632
+benchmark/imdb/01a.benchmark	4	0.040888
+benchmark/imdb/01a.benchmark	5	0.040875
+benchmark/imdb/01b.benchmark	1	0.023203
+benchmark/imdb/01b.benchmark	2	0.023043
+benchmark/imdb/01b.benchmark	3	0.022789
+benchmark/imdb/01b.benchmark	4	0.022617
+benchmark/imdb/01b.benchmark	5	0.023005
+benchmark/imdb/01c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "(co-production)" but got value "NULL"
+Obtained result:
+production_note	movie_title	movie_year	
+VARCHAR	VARCHAR	DOUBLE	
+[ Rows: 1]
+NULL	NULL	NULL
+
+
+benchmark/imdb/01d.benchmark	1	0.027160
+benchmark/imdb/01d.benchmark	2	0.026627
+benchmark/imdb/01d.benchmark	3	0.026508
+benchmark/imdb/01d.benchmark	4	0.026423
+benchmark/imdb/01d.benchmark	5	0.026411
+benchmark/imdb/02a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "'Doc'" but got value "1 1/2 Ritter - Auf der Suche nach der hinreißenden Herzelinde"
+Obtained result:
+movie_title	
+VARCHAR	
+[ Rows: 1]
+1 1/2 Ritter - Auf der Suche nach der hinreißenden Herzelinde
+
+
+benchmark/imdb/02b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "'Doc'" but got value "(500) Days of Summer"
+Obtained result:
+movie_title	
+VARCHAR	
+[ Rows: 1]
+(500) Days of Summer
+
+
+benchmark/imdb/02c.benchmark	1	0.044266
+benchmark/imdb/02c.benchmark	2	0.044070
+benchmark/imdb/02c.benchmark	3	0.043875
+benchmark/imdb/02c.benchmark	4	0.044239
+benchmark/imdb/02c.benchmark	5	0.044265
+benchmark/imdb/02d.benchmark	1	0.123907
+benchmark/imdb/02d.benchmark	2	0.125003
+benchmark/imdb/02d.benchmark	3	0.123991
+benchmark/imdb/02d.benchmark	4	0.124442
+benchmark/imdb/02d.benchmark	5	0.123931
+benchmark/imdb/03a.benchmark	1	0.289838
+benchmark/imdb/03a.benchmark	2	0.286315
+benchmark/imdb/03a.benchmark	3	0.285227
+benchmark/imdb/03a.benchmark	4	0.286322
+benchmark/imdb/03a.benchmark	5	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "2 Days in New York" but got value "Alone in the Dark II"
+Obtained result:
+movie_title	
+VARCHAR	
+[ Rows: 1]
+Alone in the Dark II
+
+
+benchmark/imdb/03b.benchmark	1	0.180428
+benchmark/imdb/03b.benchmark	2	0.179571
+benchmark/imdb/03b.benchmark	3	0.178664
+benchmark/imdb/03b.benchmark	4	0.178609
+benchmark/imdb/03b.benchmark	5	0.177801
+benchmark/imdb/03c.benchmark	1	0.382083
+benchmark/imdb/03c.benchmark	2	0.374891
+benchmark/imdb/03c.benchmark	3	0.377289
+benchmark/imdb/03c.benchmark	4	0.379057
+benchmark/imdb/03c.benchmark	5	0.376988
+benchmark/imdb/04a.benchmark	1	0.110759
+benchmark/imdb/04a.benchmark	2	0.109949
+benchmark/imdb/04a.benchmark	3	0.110461
+benchmark/imdb/04a.benchmark	4	0.113058
+benchmark/imdb/04a.benchmark	5	0.110888
+benchmark/imdb/04b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "9.1" but got value "NULL"
+Obtained result:
+rating	movie_title	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL
+
+
+benchmark/imdb/04c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "& Teller 2" but got value "00 Schneider - Jagd auf Nihil Baxter"
+Obtained result:
+rating	movie_title	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+2.1	00 Schneider - Jagd auf Nihil Baxter
+
+
+benchmark/imdb/05a.benchmark	1	0.096211
+benchmark/imdb/05a.benchmark	2	0.099401
+benchmark/imdb/05a.benchmark	3	0.098366
+benchmark/imdb/05a.benchmark	4	0.097300
+benchmark/imdb/05a.benchmark	5	0.098017
+benchmark/imdb/05b.benchmark	1	0.089683
+benchmark/imdb/05b.benchmark	2	0.091696
+benchmark/imdb/05b.benchmark	3	0.089849
+benchmark/imdb/05b.benchmark	4	0.089659
+benchmark/imdb/05b.benchmark	5	0.090388
+benchmark/imdb/05c.benchmark	1	0.291973
+benchmark/imdb/05c.benchmark	2	0.335658
+benchmark/imdb/05c.benchmark	3	0.341138
+benchmark/imdb/05c.benchmark	4	0.353418
+benchmark/imdb/05c.benchmark	5	0.352754
+benchmark/imdb/06a.benchmark	1	0.341998
+benchmark/imdb/06a.benchmark	2	0.339651
+benchmark/imdb/06a.benchmark	3	0.346333
+benchmark/imdb/06a.benchmark	4	0.341264
+benchmark/imdb/06a.benchmark	5	0.340605
+benchmark/imdb/06b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "based-on-comic" but got value "NULL"
+Obtained result:
+movie_keyword	actor_name	hero_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL	NULL
+
+
+benchmark/imdb/06c.benchmark	1	0.176661
+benchmark/imdb/06c.benchmark	2	0.174445
+benchmark/imdb/06c.benchmark	3	0.174746
+benchmark/imdb/06c.benchmark	4	0.173307
+benchmark/imdb/06c.benchmark	5	0.173215
+benchmark/imdb/06d.benchmark	1	0.284496
+benchmark/imdb/06d.benchmark	2	0.283663
+benchmark/imdb/06d.benchmark	3	0.285368
+benchmark/imdb/06d.benchmark	4	0.307951
+benchmark/imdb/06d.benchmark	5	0.285909
+benchmark/imdb/06e.benchmark	1	0.350250
+benchmark/imdb/06e.benchmark	2	0.359513
+benchmark/imdb/06e.benchmark	3	0.356931
+benchmark/imdb/06e.benchmark	4	0.358777
+benchmark/imdb/06e.benchmark	5	0.354929
+benchmark/imdb/06f.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 3: expected value "& Teller 2" but got value "'Dad's Army': Missing Presumed Wiped"
+Obtained result:
+movie_keyword	actor_name	hero_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+based-on-comic	"Steff", Stefanie Oxmann Mcgaha	'Dad's Army': Missing Presumed Wiped
+
+
+benchmark/imdb/07a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "Dressed to Kill" but got value "The 67th Annual Academy Awards"
+Obtained result:
+of_person	biography_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+Antonioni, Michelangelo	The 67th Annual Academy Awards
+
+
+benchmark/imdb/07b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "De Palma, Brian" but got value "NULL"
+Obtained result:
+of_person	biography_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL
+
+
+benchmark/imdb/07c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "50 Cent" but got value "Abate, Thommy"
+Obtained result:
+cast_member_name	cast_member_info	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+Abate, Thommy	"Boo" Arnold was born Earl Arnold in Hattiesburg, Mississippi in 1966. His father gave him the nickname 'Boo' early in life and it stuck through grade school, high school, and college. He is still known as "Boo" to family and friends.  Raised in central Texas, Arnold played baseball at Texas Tech University where he graduated with a BA in Advertising and Marketing. While at Texas Tech he was also a member of the Texas Epsilon chapter of Phi Delta Theta fraternity. After college he worked with Young Life, an outreach to high school students, in San Antonio, Texas.  While with Young Life Arnold began taking extension courses through Fuller Theological Seminary and ultimately went full-time to Gordon-Conwell Theological Seminary in Boston, Massachusetts. At Gordon-Conwell he completed a Master's Degree in Divinity studying Theology, Philosophy, Church History, Biblical Languages (Hebrew & Greek), and Exegetical Methods. Following seminary he was involved with reconciliation efforts in the former Yugoslavia shortly after the war ended there in1995.  Arnold started acting in his early thirties in Texas. After an encouraging visit to Los Angeles where he spent time with childhood friend George Eads (of CSI Las Vegas) he decided to move to Los Angeles in 2001 to pursue acting full-time. While in Los Angeles he has studied acting with Judith Weston at Judith Weston Studio for Actors and Directors.  Arnold's acting career has been one of steady development, booking co-star and guest-star roles in nighttime television. He guest-starred opposite of Jane Seymour on the night time television drama Justice. He played the lead, Michael Hollister, in the film The Seer, written and directed by Patrick Masset (Friday Night Lights).  He was nominated Best Actor in the168 Film Festival for the role of Phil Stevens in the short-film Useless. In Useless he played a US Marshal who must choose between mercy and justice as he confronts the man who murdered his father. Arnold's performance in Useless confirmed his ability to carry lead roles, and he continues to work toward solidifying himself as a male lead in film and television.  Arnold married fellow Texan Stacy Rudd of San Antonio in 2003 and they are now raising their three children in the Los Angeles area.
+
+
+benchmark/imdb/08a.benchmark	1	0.227137
+benchmark/imdb/08a.benchmark	2	0.226987
+benchmark/imdb/08a.benchmark	3	0.229256
+benchmark/imdb/08a.benchmark	4	0.227985
+benchmark/imdb/08a.benchmark	5	0.227814
+benchmark/imdb/08b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Chambers, Linda" but got value "NULL"
+Obtained result:
+acress_pseudonym	japanese_anime_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL
+
+
+benchmark/imdb/08c.benchmark	1	0.536858
+benchmark/imdb/08c.benchmark	2	0.536296
+benchmark/imdb/08c.benchmark	3	0.535393
+benchmark/imdb/08c.benchmark	4	0.540740
+benchmark/imdb/08c.benchmark	5	0.539258
+benchmark/imdb/08d.benchmark	1	0.186565
+benchmark/imdb/08d.benchmark	2	0.189552
+benchmark/imdb/08d.benchmark	3	0.189389
+benchmark/imdb/08d.benchmark	4	0.190699
+benchmark/imdb/08d.benchmark	5	0.186053
+benchmark/imdb/09a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "AJ" but got value "Ange"
+Obtained result:
+alternative_name	character_name	movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Ange	Ashlee Fridenberg	Who's There?
+
+
+benchmark/imdb/09b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "Airport Announcer" but got value "Tigress"
+Obtained result:
+alternative_name	voiced_character	voicing_actress	american_movie	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+AJ	Tigress	Jolie, Angelina	Kung Fu Panda
+
+
+benchmark/imdb/09c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "'Annette'" but got value "Ange"
+Obtained result:
+alternative_name	voiced_character_name	voicing_actress	american_movie	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Ange	Additional Voices	Taylor, Ann	(2012-05-04)
+
+
+benchmark/imdb/09d.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "!!!, Toy" but got value ""Miss Body" of 1960."
+Obtained result:
+alternative_name	voiced_char_name	voicing_actress	american_movie	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+"Miss Body" of 1960.	'Our Friends' Narrator	Swanson, Hannah	$9.99
+
+
+benchmark/imdb/10a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Actor" but got value "Himself"
+Obtained result:
+uncredited_voiced_character	russian_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+Himself	Blindness
+
+
+benchmark/imdb/10b.benchmark	1	0.289982
+benchmark/imdb/10b.benchmark	2	0.288492
+benchmark/imdb/10b.benchmark	3	0.288631
+benchmark/imdb/10b.benchmark	4	0.287631
+benchmark/imdb/10b.benchmark	5	0.287417
+benchmark/imdb/10c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "Evil Eyes: Behind the Scenes" but got value "Intermedio: Behind the Scenes"
+Obtained result:
+character	movie_with_american_producer	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+Himself	Intermedio: Behind the Scenes
+
+
+benchmark/imdb/11a.benchmark	1	0.016831
+benchmark/imdb/11a.benchmark	2	0.015400
+benchmark/imdb/11a.benchmark	3	0.016943
+benchmark/imdb/11a.benchmark	4	0.016773
+benchmark/imdb/11a.benchmark	5	0.016722
+benchmark/imdb/11b.benchmark	1	0.031330
+benchmark/imdb/11b.benchmark	2	0.030073
+benchmark/imdb/11b.benchmark	3	0.029344
+benchmark/imdb/11b.benchmark	4	0.029642
+benchmark/imdb/11b.benchmark	5	0.029263
+benchmark/imdb/11c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "(1997-2002) (worldwide) (all media)" but got value "(2001-) (worldwide) (all media) (sales)"
+Obtained result:
+from_company	production_note	movie_based_on_book	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+20th Century Fox Home Entertainment	(2001-) (worldwide) (all media) (sales)	24
+
+
+benchmark/imdb/11d.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "13th Street" but got value "A&E Television Networks"
+Obtained result:
+from_company	production_note	movie_based_on_book	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+A&E Television Networks	(1978) (UK) (TV)	Baantjer
+
+
+benchmark/imdb/12a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "10th Grade Reunion Films" but got value "ABC Studios"
+Obtained result:
+movie_company	rating	drama_horror_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+ABC Studios	8.1	Bleak House
+
+
+benchmark/imdb/12b.benchmark	1	0.104867
+benchmark/imdb/12b.benchmark	2	0.104428
+benchmark/imdb/12b.benchmark	3	0.104473
+benchmark/imdb/12b.benchmark	4	0.104373
+benchmark/imdb/12b.benchmark	5	0.104448
+benchmark/imdb/12c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value ""Oh That Gus!"" but got value "10 Gallon Films"
+Obtained result:
+movie_company	rating	mainstream_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+10 Gallon Films	7.1	.hack//SIGN
+
+
+benchmark/imdb/13a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Afghanistan:24 June 2012" but got value "Albania:2008"
+Obtained result:
+release_date	rating	german_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Albania:2008	1.3	13 Semester
+
+
+benchmark/imdb/13b.benchmark	1	0.146025
+benchmark/imdb/13b.benchmark	2	0.144957
+benchmark/imdb/13b.benchmark	3	0.149755
+benchmark/imdb/13b.benchmark	4	0.148037
+benchmark/imdb/13b.benchmark	5	0.146734
+benchmark/imdb/13c.benchmark	1	0.124797
+benchmark/imdb/13c.benchmark	2	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "DL Sites" but got value "NULL"
+Obtained result:
+producing_company	rating	movie_about_winning	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL	NULL
+
+
+benchmark/imdb/13d.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value ""O" Films" but got value ""Smart & Sexy!" - Films"
+Obtained result:
+producing_company	rating	movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+"Smart & Sexy!" - Films	1.0	'F'
+
+
+benchmark/imdb/14a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "$lowdown" but got value "51"
+Obtained result:
+rating	northern_dark_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+1.0	51
+
+
+benchmark/imdb/14b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "6.4" but got value "NULL"
+Obtained result:
+rating	western_dark_production	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL
+
+
+benchmark/imdb/14c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "$lowdown" but got value "10,000 BC"
+Obtained result:
+rating	north_european_dark_production	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+1.0	10,000 BC
+
+
+benchmark/imdb/15a.benchmark	1	0.235617
+benchmark/imdb/15a.benchmark	2	0.244360
+benchmark/imdb/15a.benchmark	3	0.239853
+benchmark/imdb/15a.benchmark	4	0.235985
+benchmark/imdb/15a.benchmark	5	0.235604
+benchmark/imdb/15b.benchmark	1	0.244549
+benchmark/imdb/15b.benchmark	2	0.243818
+benchmark/imdb/15b.benchmark	3	0.248319
+benchmark/imdb/15b.benchmark	4	0.243087
+benchmark/imdb/15b.benchmark	5	0.240100
+benchmark/imdb/15c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "USA:1 April 2003" but got value "USA:2 May 2008"
+Obtained result:
+release_date	modern_american_internet_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+USA:2 May 2008	24: Day Six - Debrief
+
+
+benchmark/imdb/15d.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "(Not So) Instant Photo" but got value "24 - Einsatzbesprechung für Tag 6"
+Obtained result:
+aka_title	internet_movie_title	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+24 - Einsatzbesprechung für Tag 6	24: Day Six - Debrief
+
+
+benchmark/imdb/16a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Adams, Stan" but got value "Du Froid, Madame"
+Obtained result:
+cool_actor_pseudonym	series_named_after_char	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+Du Froid, Madame	Johnny Pickup
+
+
+benchmark/imdb/16b.benchmark	1	0.973335
+benchmark/imdb/16b.benchmark	2	0.974492
+benchmark/imdb/16b.benchmark	3	0.985000
+benchmark/imdb/16b.benchmark	4	0.989138
+benchmark/imdb/16b.benchmark	5	0.978120
+benchmark/imdb/16c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value ""Brooklyn" Tony Danza" but got value ""El Indio""
+Obtained result:
+cool_actor_pseudonym	series_named_after_char	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+"El Indio"	35 Rue Du Marche
+
+
+benchmark/imdb/16d.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value ""Brooklyn" Tony Danza" but got value ""Frankie""
+Obtained result:
+cool_actor_pseudonym	series_named_after_char	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+"Frankie"	36! 24! 36! Dick!: Part 1
+
+
+benchmark/imdb/17a.benchmark	1	0.622662
+benchmark/imdb/17a.benchmark	2	0.631440
+benchmark/imdb/17a.benchmark	3	0.623988
+benchmark/imdb/17a.benchmark	4	0.630439
+benchmark/imdb/17a.benchmark	5	0.630120
+benchmark/imdb/17b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Z'Dar, Robert" but got value "Z., Beate"
+Obtained result:
+member_in_charnamed_movie	a1	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+Z., Beate	Z., Beate
+
+
+benchmark/imdb/17c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "X'Volaitis, John" but got value "X, Eugene"
+Obtained result:
+member_in_charnamed_movie	a1	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+X, Eugene	X, Eugene
+
+
+benchmark/imdb/17d.benchmark	1	0.831892
+benchmark/imdb/17d.benchmark	2	0.835705
+benchmark/imdb/17d.benchmark	3	0.834645
+benchmark/imdb/17d.benchmark	4	0.829608
+benchmark/imdb/17d.benchmark	5	0.856848
+benchmark/imdb/17e.benchmark	1	0.740894
+benchmark/imdb/17e.benchmark	2	0.739787
+benchmark/imdb/17e.benchmark	3	0.745090
+benchmark/imdb/17e.benchmark	4	0.739559
+benchmark/imdb/17e.benchmark	5	0.743626
+benchmark/imdb/17f.benchmark	1	0.914091
+benchmark/imdb/17f.benchmark	2	0.909915
+benchmark/imdb/17f.benchmark	3	0.910660
+benchmark/imdb/17f.benchmark	4	0.905101
+benchmark/imdb/17f.benchmark	5	0.906676
+benchmark/imdb/18a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "$1,000" but got value "$1,250"
+Obtained result:
+movie_budget	movie_votes	movie_title	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+$1,250	10575	9
+
+
+benchmark/imdb/18b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "8.1" but got value "8.2"
+Obtained result:
+movie_budget	movie_votes	movie_title	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Horror	8.2	The Things You Lose
+
+
+benchmark/imdb/18c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 3: expected value "#PostModem" but got value "$windle"
+Obtained result:
+movie_budget	movie_votes	movie_title	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Action	10	$windle
+
+
+benchmark/imdb/19a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Angeline, Moriah" but got value "NULL"
+Obtained result:
+voicing_actress	voiced_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL
+
+
+benchmark/imdb/19b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Jolie, Angelina" but got value "NULL"
+Obtained result:
+voicing_actress	kung_fu_panda	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL
+
+
+benchmark/imdb/19c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Alborg, Ana Esther" but got value "Taylor, Ann"
+Obtained result:
+voicing_actress	jap_engl_voiced_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+Taylor, Ann	Janguru wa itsumo hare nochi Guu
+
+
+benchmark/imdb/19d.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Aaron, Caroline" but got value "Swift, Taylor"
+Obtained result:
+voicing_actress	jap_engl_voiced_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+Swift, Taylor	$9.99
+
+
+benchmark/imdb/20a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Disaster Movie" but got value "NULL"
+Obtained result:
+complete_downey_ironman_movie	
+VARCHAR	
+[ Rows: 1]
+NULL
+
+
+benchmark/imdb/20b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Iron Man" but got value "NULL"
+Obtained result:
+complete_downey_ironman_movie	
+VARCHAR	
+[ Rows: 1]
+NULL
+
+
+benchmark/imdb/20c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Abell, Alistair" but got value "Alperin, Harvey J."
+Obtained result:
+cast_member	complete_dynamic_hero_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+Alperin, Harvey J.	12 Rounds
+
+
+benchmark/imdb/21a.benchmark	1	0.024418
+benchmark/imdb/21a.benchmark	2	0.024201
+benchmark/imdb/21a.benchmark	3	0.024147
+benchmark/imdb/21a.benchmark	4	0.024190
+benchmark/imdb/21a.benchmark	5	0.023555
+benchmark/imdb/21b.benchmark	1	0.022857
+benchmark/imdb/21b.benchmark	2	0.022359
+benchmark/imdb/21b.benchmark	3	0.022156
+benchmark/imdb/21b.benchmark	4	0.022995
+benchmark/imdb/21b.benchmark	5	0.022622
+benchmark/imdb/21c.benchmark	1	0.023660
+benchmark/imdb/21c.benchmark	2	0.023306
+benchmark/imdb/21c.benchmark	3	0.027123
+benchmark/imdb/21c.benchmark	4	0.026438
+benchmark/imdb/21c.benchmark	5	0.026199
+benchmark/imdb/22a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "2.1" but got value "4.0"
+Obtained result:
+movie_company	rating	western_violent_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+01 Distribution	4.0	12 Rounds
+
+
+benchmark/imdb/22b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "3.0" but got value "3.2"
+Obtained result:
+movie_company	rating	western_violent_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Boll Kino Beteiligungs GmbH & Co. KG	3.2	A Small Act
+
+
+benchmark/imdb/22c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "1.9" but got value "2.1"
+Obtained result:
+movie_company	rating	western_violent_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+01 Distribution	2.1	10,000 BC
+
+
+benchmark/imdb/22d.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "01 Distribution" but got value "111 Pictures"
+Obtained result:
+movie_company	rating	western_violent_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+111 Pictures	1.9	10,000 BC
+
+
+benchmark/imdb/23a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "movie" but got value "NULL"
+Obtained result:
+movie_kind	complete_us_internet_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL
+
+
+benchmark/imdb/23b.benchmark	1	0.150785
+benchmark/imdb/23b.benchmark	2	0.150194
+benchmark/imdb/23b.benchmark	3	0.150272
+benchmark/imdb/23b.benchmark	4	0.150466
+benchmark/imdb/23b.benchmark	5	0.153535
+benchmark/imdb/23c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "movie" but got value "NULL"
+Obtained result:
+movie_kind	complete_us_internet_movie	
+VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL
+
+
+benchmark/imdb/24a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Additional Voices" but got value "NULL"
+Obtained result:
+voiced_char_name	voicing_actress_name	voiced_action_movie_jap_eng	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL	NULL
+
+
+benchmark/imdb/24b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Tigress" but got value "NULL"
+Obtained result:
+voiced_char_name	voicing_actress_name	kung_fu_panda	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL	NULL
+
+
+benchmark/imdb/25a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 4: expected value "-- And Now the Screaming Starts!" but got value "8ight Limbs"
+Obtained result:
+movie_budget	movie_votes	male_writer	violent_movie_title	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Horror	10	Abdallah, Damon	8ight Limbs
+
+
+benchmark/imdb/25b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "138" but got value "88"
+Obtained result:
+movie_budget	movie_votes	male_writer	violent_movie_title	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Horror	88	Vincent, John	Vampireland (AKA The 6th Extinction)
+
+
+benchmark/imdb/25c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 4: expected value "$" but got value "$windle"
+Obtained result:
+movie_budget	movie_votes	male_writer	violent_movie_title	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Action	10	Aakeson, Kim Fupz	$windle
+
+
+benchmark/imdb/26a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "'Agua' Man" but got value "Cameraman"
+Obtained result:
+character_name	rating	playing_actor	complete_hero_movie	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Cameraman	7.2	Ashmore, Shawn	Hotel Rwanda
+
+
+benchmark/imdb/26b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Bank Manager" but got value "NULL"
+Obtained result:
+character_name	rating	complete_hero_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL	NULL
+
+
+benchmark/imdb/26c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "'Agua' Man" but got value "60's Record Player Man"
+Obtained result:
+character_name	rating	complete_hero_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+60's Record Player Man	2.0	12 Rounds
+
+
+benchmark/imdb/27a.benchmark	1	0.026209
+benchmark/imdb/27a.benchmark	2	0.021909
+benchmark/imdb/27a.benchmark	3	0.021800
+benchmark/imdb/27a.benchmark	4	0.021707
+benchmark/imdb/27a.benchmark	5	0.026769
+benchmark/imdb/27b.benchmark	1	0.021984
+benchmark/imdb/27b.benchmark	2	0.021351
+benchmark/imdb/27b.benchmark	3	0.021202
+benchmark/imdb/27b.benchmark	4	0.021362
+benchmark/imdb/27b.benchmark	5	0.021261
+benchmark/imdb/27c.benchmark	1	0.022744
+benchmark/imdb/27c.benchmark	2	0.022480
+benchmark/imdb/27c.benchmark	3	0.025871
+benchmark/imdb/27c.benchmark	4	0.024882
+benchmark/imdb/27c.benchmark	5	0.025655
+benchmark/imdb/28a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "01 Distribuzione" but got value "20th Century Fox"
+Obtained result:
+movie_company	rating	complete_euro_dark_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+20th Century Fox	5.3	Lantana
+
+
+benchmark/imdb/28b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "20th Century Fox" but got value "NULL"
+Obtained result:
+movie_company	rating	complete_euro_dark_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL	NULL
+
+
+benchmark/imdb/28c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "01 Distribuzione" but got value "20th Century Fox"
+Obtained result:
+movie_company	rating	complete_euro_dark_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+20th Century Fox	3.9	12 Rounds
+
+
+benchmark/imdb/29a.benchmark	1	0.223631
+benchmark/imdb/29a.benchmark	2	0.226262
+benchmark/imdb/29a.benchmark	3	0.227030
+benchmark/imdb/29a.benchmark	4	0.224401
+benchmark/imdb/29a.benchmark	5	0.224422
+benchmark/imdb/29b.benchmark	1	0.344633
+benchmark/imdb/29b.benchmark	2	0.339711
+benchmark/imdb/29b.benchmark	3	0.352789
+benchmark/imdb/29b.benchmark	4	0.348569
+benchmark/imdb/29b.benchmark	5	0.344040
+benchmark/imdb/29c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Lola" but got value "NULL"
+Obtained result:
+voiced_char	voicing_actress	voiced_animation	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL	NULL
+
+
+benchmark/imdb/30a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "100356" but got value "757"
+Obtained result:
+movie_budget	movie_votes	writer	complete_violent_movie	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Horror	757	Comisky, Chuck	Beneath Loch Ness
+
+
+benchmark/imdb/30b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Horror" but got value "NULL"
+Obtained result:
+movie_budget	movie_votes	writer	complete_gore_movie	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL	NULL	NULL
+
+
+benchmark/imdb/30c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "100356" but got value "10401"
+Obtained result:
+movie_budget	movie_votes	writer	complete_violent_movie	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Action	10401	Abrahams, Jim	21 Grams
+
+
+benchmark/imdb/31a.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "1040" but got value "3073"
+Obtained result:
+movie_budget	movie_votes	writer	violent_liongate_movie	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Horror	3073	Agnew, Jim	Babysitter Wanted
+
+
+benchmark/imdb/31b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "Horror" but got value "NULL"
+Obtained result:
+movie_budget	movie_votes	writer	violent_liongate_movie	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+NULL	NULL	NULL	NULL
+
+
+benchmark/imdb/31c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 2: expected value "1008" but got value "108588"
+Obtained result:
+movie_budget	movie_votes	writer	violent_liongate_movie	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Action	108588	Abraham, Brad	976-Evil II
+
+
+benchmark/imdb/32a.benchmark	1	0.005523
+benchmark/imdb/32a.benchmark	2	0.005008
+benchmark/imdb/32a.benchmark	3	0.005856
+benchmark/imdb/32a.benchmark	4	0.005620
+benchmark/imdb/32a.benchmark	5	0.005422
+benchmark/imdb/32b.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "alternate language version of" but got value "edited into"
+Obtained result:
+link_type	first_movie	second_movie	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+edited into	12 oz. Mouse	'Weird Al' Yankovic: The Ultimate Video Collection
+
+
+benchmark/imdb/33a.benchmark	1	0.036043
+benchmark/imdb/33a.benchmark	2	0.034629
+benchmark/imdb/33a.benchmark	3	0.038953
+benchmark/imdb/33a.benchmark	4	0.037242
+benchmark/imdb/33a.benchmark	5	0.037620
+benchmark/imdb/33b.benchmark	1	0.056665
+benchmark/imdb/33b.benchmark	2	0.056704
+benchmark/imdb/33b.benchmark	3	0.058176
+benchmark/imdb/33b.benchmark	4	0.057318
+benchmark/imdb/33b.benchmark	5	0.058275
+benchmark/imdb/33c.benchmark	1	INCORRECT
+INCORRECT RESULT: Error in result on row 1 column 1: expected value "2BE" but got value "Arbeitsgemeinschaft der öffentlich-rechtlichen Rundfunkanstalten der Bundesrepublik Deutschland (ARD)"
+Obtained result:
+first_company	second_company	first_rating	second_rating	first_movie	second_movie	
+VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 1]
+Arbeitsgemeinschaft der öffentlich-rechtlichen Rundfunkanstalten der Bundesrepublik Deutschland (ARD)	495 Productions	1.3	1.3	A Double Shot at Love	A Double Shot at Love
+
+

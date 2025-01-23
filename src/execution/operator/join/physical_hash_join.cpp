@@ -738,13 +738,19 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 	if (hash_join_bloom_filter) {
 		if (ht.Count() > dynamic_or_filter_threshold) {
 			for (auto &info : probe_info) {
+				Profiler p;
+				p.Start();
+
 				vector<column_t> column_ids;
 				std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(column_ids), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
 
 				BuildAndPushBloomFilter(info, ht, op, column_ids);
+
+				p.End();
+				Logger::Info(context, "Building the Bloom-filter took %f s", p.Elapsed());
 			}
 		} else {
-			std::cout << "not building a bloom-filter because the number of rows on the build side is too low" std::endl;
+			Logger::Info(context, "Not building a Bloom-filter because the number of rows on the build side %u is smaller than the threshold %u", ht.Count(), dynamic_or_filter_threshold);
 		}
 	}
 
