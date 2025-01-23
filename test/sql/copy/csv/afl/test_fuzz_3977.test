@@ -2,8 +2,7 @@
 # description: fuzzer generated csv files - should not raise internal exception (by failed assertion).
 # group: [afl]
 
-statement ok
-PRAGMA enable_verification
+loop i 0 2
 
 query I
 select count(file) from glob('./data/csv/afl/3977/*');
@@ -361,3 +360,8 @@ FROM read_csv('data/csv/afl/3977/case_87.csv', auto_detect=false, buffer_size=42
 statement maybe
 FROM read_csv('data/csv/afl/3977/case_88.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', rejects_table='"', rfc_4180=true);
 ----
+
+statement ok
+PRAGMA enable_verification
+
+endloop
