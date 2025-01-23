@@ -474,9 +474,9 @@ typedef struct {
 	// New prepared statement functions that expose more information about the prepared statement
 
 	idx_t (*duckdb_prepared_column_count)(duckdb_prepared_statement statement);
-	const char *(*duckdb_prepared_column_name)(duckdb_prepared_statement statement, idx_t field_idx);
-	duckdb_type (*duckdb_prepared_column_type)(duckdb_prepared_statement statement, idx_t field_idx);
-	duckdb_logical_type (*duckdb_prepared_column_logical_type)(duckdb_prepared_statement statement, idx_t field_idx);
+	const char *(*duckdb_prepared_column_name)(duckdb_prepared_statement statement, idx_t column_idx);
+	duckdb_type (*duckdb_prepared_column_type)(duckdb_prepared_statement statement, idx_t column_idx);
+	duckdb_logical_type (*duckdb_prepared_column_logical_type)(duckdb_prepared_statement statement, idx_t column_idx);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//

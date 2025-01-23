@@ -167,19 +167,19 @@ idx_t duckdb_prepared_column_count(duckdb_prepared_statement statement) {
 	return wrapper->statement->ColumnCount();
 }
 
-const char *duckdb_prepared_column_name(duckdb_prepared_statement statement, idx_t field_idx) {
+const char *duckdb_prepared_column_name(duckdb_prepared_statement statement, idx_t column_idx) {
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(statement);
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return nullptr;
 	}
-	if (field_idx >= wrapper->statement->ColumnCount()) {
+	if (column_idx >= wrapper->statement->ColumnCount()) {
 		return nullptr;
 	}
-	return wrapper->statement->GetNames()[field_idx].c_str();
+	return wrapper->statement->GetNames()[column_idx].c_str();
 }
 
-duckdb_type duckdb_prepared_column_type(duckdb_prepared_statement statement, idx_t field_idx) {
-	auto logical_type = duckdb_prepared_column_logical_type(statement, field_idx);
+duckdb_type duckdb_prepared_column_type(duckdb_prepared_statement statement, idx_t column_idx) {
+	auto logical_type = duckdb_prepared_column_logical_type(statement, column_idx);
 	if (!logical_type) {
 		return DUCKDB_TYPE_INVALID;
 	}
@@ -191,15 +191,15 @@ duckdb_type duckdb_prepared_column_type(duckdb_prepared_statement statement, idx
 	return type;
 }
 
-duckdb_logical_type duckdb_prepared_column_logical_type(duckdb_prepared_statement statement, idx_t field_idx) {
+duckdb_logical_type duckdb_prepared_column_logical_type(duckdb_prepared_statement statement, idx_t column_idx) {
 	auto wrapper = reinterpret_cast<PreparedStatementWrapper *>(statement);
 	if (!wrapper || !wrapper->statement || wrapper->statement->HasError()) {
 		return nullptr;
 	}
-	if (field_idx >= wrapper->statement->ColumnCount()) {
+	if (column_idx >= wrapper->statement->ColumnCount()) {
 		return nullptr;
 	}
-	return reinterpret_cast<duckdb_logical_type>(new LogicalType(wrapper->statement->GetTypes()[field_idx]));
+	return reinterpret_cast<duckdb_logical_type>(new LogicalType(wrapper->statement->GetTypes()[column_idx]));
 }
 
 duckdb_state duckdb_clear_bindings(duckdb_prepared_statement prepared_statement) {

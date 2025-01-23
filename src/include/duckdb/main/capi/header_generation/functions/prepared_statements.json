@@ -199,14 +199,14 @@
                 },
                 {
                     "type": "idx_t",
-                    "name": "field_idx"
+                    "name": "column_idx"
                 }
             ],
             "comment": {
                 "description": "Returns the name of the column at the specified index.\n\nReturns `nullptr` if the index is out of range.\n\n",
                 "param_comments": {
                     "statement": "The prepared statement.",
-                    "field_idx": "The field index."
+                    "column_idx": "The column index."
                 }
             }
         },
@@ -220,14 +220,14 @@
                 },
                 {
                     "type": "idx_t",
-                    "name": "field_idx"
+                    "name": "column_idx"
                 }
             ],
             "comment": {
                 "description": "Returns the type of the column at the specified index.\n\nReturns `DUCKDB_TYPE_INVALID` if the index is out of range.\n\n",
                 "param_comments": {
                     "statement": "The prepared statement.",
-                    "field_idx": "The field index."
+                    "column_idx": "The column index."
                 },
                 "return_value": "The column type."
             }
@@ -242,14 +242,14 @@
                 },
                 {
                     "type": "idx_t",
-                    "name": "field_idx"
+                    "name": "column_idx"
                 }
             ],
             "comment": {
                 "description": "Returns the logical type of the column at the specified index.\n\nReturns `nullptr` if the index is out of range.\n\nThe return type of this call should be destroyed with `duckdb_destroy_logical_type`.\n\n",
                 "param_comments": {
                     "statement": "The prepared statement.",
-                    "field_idx": "The field index."
+                    "column_idx": "The column index."
                 },
                 "return_value": "The logical type of the column."
             }
