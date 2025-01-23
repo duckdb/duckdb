@@ -26,8 +26,6 @@ from random
 statement ok
 set disabled_optimizers to 'compressed_materialization'
 
-mode skip
-
 statement ok
 pragma memory_limit='1.5GB'
 
