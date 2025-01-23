@@ -88,8 +88,8 @@ SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('d
 ----
 Enable scanning files that are not RFC 4180 compliant (rfc_4180=false).
 
-# query I
-# SELECT column0 FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\r\n', rfc_4180 = TRUE, HEADER = FALSE)
-# ----
-# one
-# two
+query I
+SELECT column0 FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\r\n', rfc_4180 = TRUE, HEADER = FALSE)
+----
+one
+two

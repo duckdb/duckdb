@@ -6,21 +6,21 @@ statement ok
 PRAGMA enable_verification
 
 statement error
-FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r')
+FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r', rfc_4180=false)
 ----
 new_line = \r (Set By User)
 
 statement error
-FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n')
+FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n', rfc_4180=false)
 ----
 new_line = \n (Set By User)
 
 statement error
-FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r\n', auto_detect = false)
+FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r\n', auto_detect = false, rfc_4180=false)
 ----
 new_line = \r\n (Set By User)
 
 statement error
-FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n\r')
+FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n\r', rfc_4180=false)
 ----
 This is not accepted as a newline: \n\r
