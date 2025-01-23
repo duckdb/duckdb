@@ -59,7 +59,7 @@ loadable_extension_demo	(empty)	NOT_A_REPOSITORY	default-version	default-version
 
 # Doublecheck duckdb_extensions()
 query IIII rowsort
-SELECT extension_name, extension_version, install_mode, installed_from from duckdb_extensions() where installed
+SELECT extension_name, extension_version, install_mode, installed_from from duckdb_extensions() where install_mode IS NOT NULL
 ----
 json	<REGEX>:.*	REPOSITORY	<REGEX>:.*
 loadable_extension_demo	default-version	CUSTOM_PATH	<REGEX>:.*loadable\_extension\_demo\.duckdb_extension
