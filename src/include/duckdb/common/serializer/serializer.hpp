@@ -105,7 +105,7 @@ public:
 	}
 
 	template <class T>
-	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value, const T &&default_value) {
+	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const T &value, const T &default_value) {
 		// If current value is default, don't write it
 		if (!options.serialize_default_values && (value == default_value)) {
 			OnOptionalPropertyBegin(field_id, tag, false);
@@ -120,7 +120,7 @@ public:
 	// Specialization for Value (default Value comparison throws when comparing nulls)
 	template <class T>
 	void WritePropertyWithDefault(const field_id_t field_id, const char *tag, const CSVOption<T> &value,
-	                              const T &&default_value) {
+	                              const T &default_value) {
 		// If current value is default, don't write it
 		if (!options.serialize_default_values && (value == default_value)) {
 			OnOptionalPropertyBegin(field_id, tag, false);
@@ -383,7 +383,7 @@ void Serializer::WriteValue(const vector<bool> &vec);
 // Specialization for Value (default Value comparison throws when comparing nulls)
 template <>
 void Serializer::WritePropertyWithDefault<Value>(const field_id_t field_id, const char *tag, const Value &value,
-                                                 const Value &&default_value);
+                                                 const Value &default_value);
 
 // List Impl
 template <class FUNC>
