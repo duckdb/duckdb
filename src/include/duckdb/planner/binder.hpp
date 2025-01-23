@@ -419,6 +419,8 @@ private:
 	const string BindCatalog(string &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
+	LogicalType BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog, const string &schema);
+
 	unique_ptr<BoundQueryNode> BindSelectNode(SelectNode &statement, unique_ptr<BoundTableRef> from_table);
 
 	unique_ptr<LogicalOperator> BindCopyDatabaseSchema(Catalog &source_catalog, const string &target_database_name);
