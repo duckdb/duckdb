@@ -15,7 +15,7 @@ namespace duckdb {
 //! The RemoveUselessProjections Optimizer traverses the logical operator tree and removes all projections that just
 class RemoveUselessProjections : LogicalOperatorVisitor {
 public:
-	RemoveUselessProjections() {
+	RemoveUselessProjections() : first_projection(true) {
 	}
 	unique_ptr<LogicalOperator> RemoveProjections(unique_ptr<LogicalOperator> plan);
 	unique_ptr<LogicalOperator> RemoveProjectionsChildren(unique_ptr<LogicalOperator> plan);
