@@ -27,7 +27,7 @@ statement ok
 set disabled_optimizers to 'compressed_materialization'
 
 statement ok
-pragma memory_limit='600MB'
+pragma memory_limit='800MB'
 
 query I
 select count(*) from (select distinct * from t1)

@@ -24,6 +24,7 @@ public:
 	DUCKDB_API virtual std::string Version() const {
 		return "";
 	}
+	DUCKDB_API static const char *DefaultVersion();
 };
 
 enum class ExtensionABIType : uint8_t {

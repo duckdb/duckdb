@@ -436,11 +436,13 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 			if (found_alias) {
 				return alias_result;
 			}
-
-			// column was not found - check if it is a SQL value function
-			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
-			if (value_function) {
-				return BindExpression(value_function, depth);
+			found_alias = QualifyColumnAlias(col_ref_p);
+			if (!found_alias) {
+				// column was not found - check if it is a SQL value function
+				auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
+				if (value_function) {
+					return BindExpression(value_function, depth);
+				}
 			}
 		}
 		error.AddQueryLocation(col_ref_p);
