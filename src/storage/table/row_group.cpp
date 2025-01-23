@@ -656,7 +656,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				// TODO: this code is hack-level 9000
 
 				// Evaluate Bloom-filters after all other filters have been evaluated.
-				if (false && approved_tuple_count > 0) {
+				if (approved_tuple_count > 0) {
 					for (auto &bf : filter_info.GetBloomFilterList()) {
 						if (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.9) {
 							Vector hashes(LogicalType::HASH);
@@ -668,9 +668,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 							//std::cout << "approved_tuple_count before: " <<approved_tuple_count<<std::endl;
 							approved_tuple_count = bf->ProbeWithPrecomputedHashes(sel, approved_tuple_count, hashes);
 							//std::cout << "approved_tuple_count after: " <<approved_tuple_count<<std::endl;
-							std::cout << "probed rows: " << bf->GetNumProbedKeys() << " selectivity: " << bf->GetObservedSelectivity() << std::endl;
+							//std::cout << "probed rows: " << bf->GetNumProbedKeys() << " selectivity: " << bf->GetObservedSelectivity() << std::endl;
 						}
-						break;
 					}
 				}
 

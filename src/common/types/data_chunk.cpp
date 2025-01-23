@@ -362,7 +362,6 @@ void DataChunk::Hash(const vector<idx_t> &column_ids, const SelectionVector &sel
 	}
 }
 
-
 void DataChunk::Verify() {
 #ifdef DEBUG
 	D_ASSERT(size() <= capacity);
