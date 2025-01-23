@@ -186,9 +186,9 @@ public:
 	void InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
 	                             const SelectionVector *&current_sel);
 	//! Pre-compute hashes for the given keys.
-	static void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
+	void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
 	//! Probe the HT with the given input chunk, resulting in the given result
-	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state, const SelectionVector *current_sel,
+	void Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state, ProbeState &probe_state,
 	           optional_ptr<Vector> precomputed_hashes = nullptr);
 	//! Scan the HT to construct the full outer join result
 	void ScanFullOuter(JoinHTScanState &state, Vector &addresses, DataChunk &result) const;

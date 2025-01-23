@@ -162,7 +162,7 @@ public:
 			if (op.filter_pushdown->probe_info.empty() && use_perfect_hash) {
 				// Only computing min/max to check for perfect HJ, but we already can
 				//std::cout << "skip_filter_pushdown = true;" << std::endl;
-				//skip_filter_pushdown = true;
+				skip_filter_pushdown = true;
 			}
 			//std::cout << "global_filter_state = op.filter_pushdown->GetGlobalState(context, op);" << std::endl;
 			global_filter_state = op.filter_pushdown->GetGlobalState(context, op);
@@ -638,7 +638,7 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	// not dense and that the range does not contain NULL
 	// i.e. if we have the values [0, 1, 2, 3, 4] - the min/max is fully equivalent to the OR filter
 	if (FilterCombiner::ContainsNull(in_list) || FilterCombiner::IsDenseRange(in_list)) {
-	//	return;
+		return;
 	}
 
 	// generate the OR filter
@@ -911,28 +911,11 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 
 		// perform the actual probe
 		if (sink.external) {
-			//sink.bloom_filter->Probe();
 			sink.hash_table->ProbeAndSpill(state.scan_structure, state.lhs_join_keys, state.join_key_state,
 			                               state.probe_state, input, *sink.probe_spill, state.spill_state,
 			                               state.spill_chunk);
 		} else {
-			const SelectionVector *current_sel;
-			sink.hash_table->InitializeScanStructure(state.scan_structure, state.lhs_join_keys, state.join_key_state, current_sel);
-			if (state.scan_structure.count != 0) {
-				Vector hashes(LogicalType::HASH);
-				sink.hash_table->Hash(state.lhs_join_keys, *current_sel, state.scan_structure.count, hashes);
-
-				/*
-				if (sink.bloom_filter->GetNumProbedKeys() < 10000 || sink.bloom_filter->GetObservedSelectivity() >= 0.9) {
-					size_t sel_count_after_bloom = sink.bloom_filter->ProbeWithPrecomputedHashes(current_sel, state.scan_structure.count, state.scan_structure.sel_vector, hashes);
-					state.scan_structure.count = sel_count_after_bloom;
-				}
-				*/
-
-				if (state.scan_structure.count != 0) {
-					sink.hash_table->Probe(state.scan_structure, state.lhs_join_keys, state.join_key_state, state.probe_state, current_sel, hashes);
-				}
-			}
+			sink.hash_table->Probe(state.scan_structure, state.lhs_join_keys, state.join_key_state, state.probe_state);
 		}
 	}
 
@@ -944,25 +927,6 @@ OperatorResultType PhysicalHashJoin::ExecuteInternal(ExecutionContext &context, 
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 	return OperatorResultType::HAVE_MORE_OUTPUT;
-}
-
-void PhysicalHashJoin::PrepareKeysAndHashesExternal(DataChunk &input, DataChunk &keys, ClientContext &client_context) const {
-	//auto& state = op_state.Cast<HashJoinOperatorState>();
-	// probe the HT, start by resolving the join keys for the left chunk
-	//	state.lhs_join_keys.Reset();
-	//	state.probe_executor.Execute(input, state.lhs_join_keys);
-	//return state.lhs_join_keys;
-
-	ExpressionExecutor probe_executor(client_context);
-	auto &allocator = BufferAllocator::Get(client_context);
-	keys.Initialize(allocator, condition_types);
-	
-	for (auto &cond : conditions) {
-		probe_executor.AddExpression(*cond.left);
-	}
-
-	keys.Reset();
-	probe_executor.Execute(input, keys);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1348,13 +1312,8 @@ void HashJoinLocalSourceState::ExternalProbe(HashJoinGlobalSinkState &sink, Hash
 	}
 
 	// Perform the probe
-	auto precomputed_hashes = &lhs_probe_chunk.data.back();  // TODO here we have the precomputed hashes.
-	//sink.bloom_filter->Probe(precomputed_hashes);
-	const SelectionVector *current_sel;
-	sink.hash_table->InitializeScanStructure(scan_structure, lhs_join_keys, join_key_state, current_sel);
-	if (scan_structure.count != 0) {
-		sink.hash_table->Probe(scan_structure, lhs_join_keys, join_key_state, probe_state, current_sel, precomputed_hashes);
-	}
+	auto precomputed_hashes = &lhs_probe_chunk.data.back();
+	sink.hash_table->Probe(scan_structure, lhs_join_keys, join_key_state, probe_state, precomputed_hashes);
 	scan_structure.Next(lhs_join_keys, lhs_output, chunk);
 }
 

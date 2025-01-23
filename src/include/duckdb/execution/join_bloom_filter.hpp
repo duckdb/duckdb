@@ -18,9 +18,6 @@ public:
 	JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_functions, size_t bloom_filter_size);
 	~JoinBloomFilter();
 
-	//! Pre-compute hashes for the given keys.
-	static void Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes);
-
 	//! Builds the Bloom-filter with pre-computed key-hashes.
 	void BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector &rsel, idx_t count);
 

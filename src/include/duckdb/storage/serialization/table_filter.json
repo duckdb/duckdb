@@ -144,20 +144,5 @@
     "enum": "DYNAMIC_FILTER",
     "members": [
     ]
-  },
-  {
-    "class": "BloomFilter",
-    "base": "TableFilter",
-    "includes": [
-      "duckdb/planner/filter/bloom_filter.hpp"
-    ],
-    "enum": "BLOOM_FILTER",
-    "members": [
-      {
-        "id": 200,
-        "name": "bf",
-        "type": "int"
-      }
-    ]
   }
 ]

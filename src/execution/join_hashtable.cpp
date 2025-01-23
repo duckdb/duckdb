@@ -312,13 +312,13 @@ void JoinHashTable::Hash(DataChunk &keys, const SelectionVector &sel, idx_t coun
 	if (count == keys.size()) {
 		// no null values are filtered: use regular hash functions
 		VectorOperations::Hash(keys.data[0], hashes, keys.size());
-		for (idx_t i = 1; i < keys.ColumnCount(); i++) {
+		for (idx_t i = 1; i < equality_types.size(); i++) {
 			VectorOperations::CombineHash(hashes, keys.data[i], keys.size());
 		}
 	} else {
 		// null values were filtered: use selection vector
 		VectorOperations::Hash(keys.data[0], hashes, sel, count);
-		for (idx_t i = 1; i < keys.ColumnCount(); i++) {
+		for (idx_t i = 1; i < equality_types.size(); i++) {
 			VectorOperations::CombineHash(hashes, keys.data[i], sel, count);
 		}
 	}
@@ -724,7 +724,6 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 		}
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
-		// InsertHashes also truncates the hashes with a bit mask, so we want to do this AFTER the bloom filter.
 		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
 	} while (iterator.Next());
 }
@@ -747,7 +746,9 @@ void JoinHashTable::InitializeScanStructure(ScanStructure &scan_structure, DataC
 }
 
 void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
-                          ProbeState &probe_state, const SelectionVector *current_sel, optional_ptr<Vector> precomputed_hashes) {
+                          ProbeState &probe_state, optional_ptr<Vector> precomputed_hashes) {
+	const SelectionVector *current_sel;
+	InitializeScanStructure(scan_structure, keys, key_state, current_sel);
 	if (scan_structure.count == 0) {
 		return;
 	}

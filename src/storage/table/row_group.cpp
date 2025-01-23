@@ -656,20 +656,21 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				// TODO: this code is hack-level 9000
 
 				// Evaluate Bloom-filters after all other filters have been evaluated.
-				if (approved_tuple_count > 0) {
+				if (false && approved_tuple_count > 0) {
 					for (auto &bf : filter_info.GetBloomFilterList()) {
 						if (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.9) {
 							Vector hashes(LogicalType::HASH);
 							// TODO: we do not want to mess with the hash join state this ugly...
 							// I wouldn't be surprised if this blows up.
-							result.SetCardinality(approved_tuple_count);  // in the original code, we do this very much at the end of the function. is it safe to do it here?
+							//result.SetCardinality(approved_tuple_count);  // in the original code, we do this very much at the end of the function. is it safe to do it here?
 							result.Hash(bf->GetColumnIds(), sel, approved_tuple_count, hashes);
 
 							//std::cout << "approved_tuple_count before: " <<approved_tuple_count<<std::endl;
 							approved_tuple_count = bf->ProbeWithPrecomputedHashes(sel, approved_tuple_count, hashes);
 							//std::cout << "approved_tuple_count after: " <<approved_tuple_count<<std::endl;
-							//std::cout << "probed rows: " << bf->GetNumProbedKeys() << " selectivity: " << bf->GetObservedSelectivity() << std::endl;
+							std::cout << "probed rows: " << bf->GetNumProbedKeys() << " selectivity: " << bf->GetObservedSelectivity() << std::endl;
 						}
+						break;
 					}
 				}
 

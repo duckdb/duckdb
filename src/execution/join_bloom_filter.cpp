@@ -29,11 +29,6 @@ JoinBloomFilter::JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_fu
 JoinBloomFilter::~JoinBloomFilter() {
 }
 
-void JoinBloomFilter::Hash(DataChunk &keys, const SelectionVector &sel, idx_t count, Vector &hashes) {
-		// Use the same has function as JoinHashTable so we can re-use hashes.
-	JoinHashTable::Hash(keys, sel, count, hashes);
-}
-
 inline size_t HashToIndex(hash_t hash, size_t bloom_filter_size, size_t i) {
     return (hash >> (i * 1)) % bloom_filter_size;  // TODO: rotation would be a bit nicer because it allows us to generate more values. But C++20 in stdlib.
 }

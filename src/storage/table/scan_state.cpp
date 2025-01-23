@@ -21,6 +21,9 @@ void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<
 	this->column_ids = std::move(column_ids_p);
 	if (table_filters && bloom_filters) {
 		filters.Initialize(*table_filters, column_ids, *bloom_filters);
+	} else if (table_filters) {
+		vector<unique_ptr<JoinBloomFilter>> bfs;
+		filters.Initialize(*table_filters, column_ids, bfs);
 	}
 	if (table_sampling) {
 		sampling_info.do_system_sample = table_sampling->method == SampleMethod::SYSTEM_SAMPLE;
