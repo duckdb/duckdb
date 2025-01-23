@@ -488,11 +488,15 @@ void StringValueResult::Reset() {
 		cur_buffer = buffer_handles[iterator.GetBufferIdx()];
 	}
 	buffer_handles.clear();
+	idx_t actual_size = 0;
 	if (cur_buffer) {
 		buffer_handles[cur_buffer->buffer_idx] = cur_buffer;
+		actual_size = cur_buffer->actual_size;
 	}
 	current_errors.Reset();
 	borked_rows.clear();
+	current_line_position.begin = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, actual_size};
+	current_line_position.end = current_line_position.begin;
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {

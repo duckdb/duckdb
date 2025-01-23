@@ -194,11 +194,18 @@ void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const 
 				errors_appender.Append(Value());
 				break;
 			case CSVErrorType::TOO_FEW_COLUMNS:
-				D_ASSERT(bind_data.return_names.size() > col_idx + 1);
-				errors_appender.Append(string_t(bind_data.return_names[col_idx + 1]));
+				if (col_idx + 1 < bind_data.return_names.size()) {
+					errors_appender.Append(string_t(bind_data.return_names[col_idx + 1]));
+				} else {
+					errors_appender.Append(Value());
+				}
 				break;
 			default:
-				errors_appender.Append(string_t(bind_data.return_names[col_idx]));
+				if (col_idx < bind_data.return_names.size()) {
+					errors_appender.Append(string_t(bind_data.return_names[col_idx]));
+				} else {
+					errors_appender.Append(Value());
+				}
 			}
 			// 8. Error Type
 			errors_appender.Append(string_t(CSVErrorTypeToEnum(error.type)));
