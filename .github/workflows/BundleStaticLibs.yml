@@ -96,8 +96,61 @@ jobs:
           python scripts/amalgamation.py
           zip -j static-lib-osx-${{ matrix.architecture }}.zip src/include/duckdb.h build/release/libduckdb_bundle.a
           ./scripts/upload-assets-to-staging.sh github_release static-lib-osx-${{ matrix.architecture }}.zip
+
       - uses: actions/upload-artifact@v4
         with:
           name: duckdb-static-lib-osx-${{ matrix.architecture }}
           path: |
             static-lib-osx-${{ matrix.architecture }}.zip
+
+  bundle-mingw-static-lib:
+    name: Windows MingW static libs
+    runs-on: windows-2019
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: 'devel'
+          update-rtools: true
+          rtools-version: '42' # linker bug in 43 ^^
+
+      - uses: ./.github/actions/build_extensions
+        with:
+          deploy_as: windows_amd64_mingw
+          duckdb_arch: windows_amd64_mingw
+          vcpkg_target_triplet: x64-mingw-static
+          treat_warn_as_error: 0
+          override_cc: gcc
+          override_cxx: g++
+          vcpkg_build: 1
+          no_static_linking: 1
+          run_tests: 0
+          run_autoload_tests: 0
+
+      - name: Bundle static library
+        shell: bash
+        run: |
+          make bundle-library-obj
+
+      - name: Deploy
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+        run: |
+          zip -j static-lib-windows-mingw.zip src/include/duckdb.h build/release/libduckdb_bundle.a
+          ./scripts/upload-assets-to-staging.sh github_release static-lib-windows-mingw.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duckdb-static-lib-windows-mingw
+          path: |
+            static-lib-windows-mingw.zip

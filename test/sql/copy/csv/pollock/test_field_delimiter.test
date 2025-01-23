@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/pollock/test_field_delimiter.test
+# description: Test field delimiter from Pollock
+# group: [pollock]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+FROM read_csv('data/csv/pollock/file_field_delimiter_0x20.csv', delim = ' ', escape = '"', quote='"', header = false, skip=1,
+columns = {'Date':'VARCHAR','TIME':'VARCHAR','Qty':'VARCHAR','PRODUCTID':'VARCHAR','Price':'VARCHAR'
+,'ProductType':'VARCHAR','ProductDescription':'VARCHAR','URL':'VARCHAR','Comments':'VARCHAR'}, auto_detect = false, RFC_4180=FALSE, null_padding = true)

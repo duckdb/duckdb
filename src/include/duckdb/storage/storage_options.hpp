@@ -18,6 +18,8 @@ struct StorageOptions {
 	optional_idx block_alloc_size;
 	//! The row group size for this attached database (if any)
 	optional_idx row_group_size;
+	//! Target storage version (if any)
+	optional_idx storage_version;
 };
 
 } // namespace duckdb

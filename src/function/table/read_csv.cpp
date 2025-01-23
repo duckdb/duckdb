@@ -124,7 +124,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		names = best_schema.GetNames();
 		return_types = best_schema.GetTypes();
 	}
-	if (only_header_or_empty_files == current_file) {
+	if (only_header_or_empty_files == current_file && !options.columns_set) {
 		for (auto &type : return_types) {
 			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
 			// we default to varchar if all files are empty or only have a header after all the sniffing

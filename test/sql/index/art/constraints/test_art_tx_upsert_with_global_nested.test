@@ -37,13 +37,13 @@ COMMIT;
 statement ok con2
 BEGIN
 
-statement error con2
-INSERT OR REPLACE INTO tbl VALUES (1, ['con2 payload']);
-----
-<REGEX>:TransactionContext Error.*Conflict on tuple deletion.*
-
 statement ok con2
-ROLLBACK;
+INSERT OR REPLACE INTO tbl VALUES (1, ['con2 payload']);
+
+statement error con2
+COMMIT;
+----
+<REGEX>:TransactionContext Error.*write-write conflict on key.*
 
 statement ok old
 COMMIT;

@@ -249,6 +249,16 @@ FROM query_table('SELECT 4 + 2');
 ----
 Catalog Error: Table with name SELECT 4 + 2 does not exist!
 
+query I
+SELECT f.* FROM query_table('tbl_int') as f;
+----
+42
+
+query I
+SELECT f.x FROM query_table('tbl_int') as f(x);
+----
+42
+
 # test by_name argument
 query I
 FROM query_table(['tbl_int', 'tbl_varchar', 'tbl_empty', 'tbl2_varchar'], false);

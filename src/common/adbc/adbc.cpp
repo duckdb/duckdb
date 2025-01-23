@@ -53,7 +53,6 @@ AdbcStatusCode duckdb_adbc_init(int version, void *driver, struct AdbcError *err
 	adbc_driver->ConnectionGetInfo = duckdb_adbc::ConnectionGetInfo;
 	adbc_driver->StatementGetParameterSchema = duckdb_adbc::StatementGetParameterSchema;
 	adbc_driver->ConnectionGetTableSchema = duckdb_adbc::ConnectionGetTableSchema;
-	adbc_driver->StatementSetSubstraitPlan = duckdb_adbc::StatementSetSubstraitPlan;
 	return ADBC_STATUS_OK;
 }
 
@@ -70,7 +69,6 @@ struct DuckDBAdbcStatementWrapper {
 	ArrowArrayStream ingestion_stream;
 	IngestionMode ingestion_mode = IngestionMode::CREATE;
 	bool temporary_table = false;
-	uint8_t *substrait_plan;
 	uint64_t plan_length;
 };
 
@@ -155,36 +153,6 @@ AdbcStatusCode DatabaseNew(struct AdbcDatabase *database, struct AdbcError *erro
 	database->private_data = wrapper;
 	auto res = duckdb_create_config(&wrapper->config);
 	return CheckResult(res, error, "Failed to allocate");
-}
-
-AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *statement, const uint8_t *plan, size_t length,
-                                         struct AdbcError *error) {
-	if (!statement) {
-		SetError(error, "Statement is not set");
-		return ADBC_STATUS_INVALID_ARGUMENT;
-	}
-	if (!plan) {
-		SetError(error, "Substrait Plan is not set");
-		return ADBC_STATUS_INVALID_ARGUMENT;
-	}
-	if (length == 0) {
-		SetError(error, "Can't execute plan with size = 0");
-		return ADBC_STATUS_INVALID_ARGUMENT;
-	}
-	auto wrapper = static_cast<DuckDBAdbcStatementWrapper *>(statement->private_data);
-	if (wrapper->ingestion_stream.release) {
-		// Release any resources currently held by the ingestion stream before we overwrite it
-		wrapper->ingestion_stream.release(&wrapper->ingestion_stream);
-		wrapper->ingestion_stream.release = nullptr;
-	}
-	if (wrapper->statement) {
-		duckdb_destroy_prepare(&wrapper->statement);
-		wrapper->statement = nullptr;
-	}
-	wrapper->substrait_plan = static_cast<uint8_t *>(malloc(sizeof(uint8_t) * length));
-	wrapper->plan_length = length;
-	memcpy(wrapper->substrait_plan, plan, length);
-	return ADBC_STATUS_OK;
 }
 
 AdbcStatusCode DatabaseSetOption(struct AdbcDatabase *database, const char *key, const char *value,
@@ -677,7 +645,6 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	statement_wrapper->ingestion_stream.release = nullptr;
 	statement_wrapper->ingestion_table_name = nullptr;
 	statement_wrapper->db_schema = nullptr;
-	statement_wrapper->substrait_plan = nullptr;
 	statement_wrapper->temporary_table = false;
 
 	statement_wrapper->ingestion_mode = IngestionMode::CREATE;
@@ -708,10 +675,6 @@ AdbcStatusCode StatementRelease(struct AdbcStatement *statement, struct AdbcErro
 	if (wrapper->db_schema) {
 		free(wrapper->db_schema);
 		wrapper->db_schema = nullptr;
-	}
-	if (wrapper->substrait_plan) {
-		free(wrapper->substrait_plan);
-		wrapper->substrait_plan = nullptr;
 	}
 	free(statement->private_data);
 	statement->private_data = nullptr;
@@ -805,25 +768,7 @@ AdbcStatusCode StatementExecuteQuery(struct AdbcStatement *statement, struct Arr
 	if (has_stream && to_table) {
 		return IngestToTableFromBoundStream(wrapper, error);
 	}
-	if (wrapper->substrait_plan != nullptr) {
-		auto plan_str = std::string(reinterpret_cast<const char *>(wrapper->substrait_plan), wrapper->plan_length);
-		duckdb::vector<duckdb::Value> params;
-		params.emplace_back(duckdb::Value::BLOB_RAW(plan_str));
-		duckdb::unique_ptr<duckdb::QueryResult> query_result;
-		try {
-			query_result = reinterpret_cast<duckdb::Connection *>(wrapper->connection)
-			                   ->TableFunction("from_substrait", params)
-			                   ->Execute();
-		} catch (duckdb::Exception &e) {
-			std::string error_msg = "It was not possible to execute substrait query. " + std::string(e.what());
-			SetError(error, error_msg);
-			return ADBC_STATUS_INVALID_ARGUMENT;
-		}
-		auto arrow_wrapper = new duckdb::ArrowResultWrapper();
-		arrow_wrapper->result =
-		    duckdb::unique_ptr_cast<duckdb::QueryResult, duckdb::MaterializedQueryResult>(std::move(query_result));
-		wrapper->result = reinterpret_cast<duckdb_arrow>(arrow_wrapper);
-	} else if (has_stream) {
+	if (has_stream) {
 		// A stream was bound to the statement, use that to bind parameters
 		duckdb::unique_ptr<duckdb::QueryResult> result;
 		ArrowArrayStream stream = wrapper->ingestion_stream;
