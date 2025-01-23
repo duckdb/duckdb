@@ -10,6 +10,11 @@ require-env LOCAL_EXTENSION_REPO
 statement ok
 set extension_directory='__TEST_DIR__/autoloading_base'
 
+query I
+SELECT (count(*) > 0) FROM duckdb_extensions() WHERE install_path ILIKE '%duckdb_extension'
+----
+false
+
 ### No autoloading nor installing: throw error with installation hint
 statement ok
 set autoload_known_extensions=false
@@ -87,3 +92,8 @@ SET s3_region='eu-west-1';
 
 statement ok
 select * from read_json_auto('data/json/example_n.ndjson');
+
+query I
+SELECT (count(*) > 0) FROM duckdb_extensions() WHERE install_path ILIKE '%duckdb_extension';
+----
+true
