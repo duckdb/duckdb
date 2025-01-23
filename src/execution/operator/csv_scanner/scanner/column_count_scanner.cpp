@@ -105,7 +105,11 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
     : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler), true, nullptr, iterator),
       result(states, *state_machine, result_size_p), column_count(1), result_size(result_size_p) {
 	sniffing = true;
-	result.last_position = {0, 0, cur_buffer_handle->actual_size};
+	idx_t actual_size = 0;
+	if (cur_buffer_handle) {
+		actual_size = cur_buffer_handle->actual_size;
+	}
+	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, actual_size};
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
@@ -124,7 +128,9 @@ unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner()
 ColumnCountResult &ColumnCountScanner::ParseChunk() {
 	result.result_position = 0;
 	column_count = 1;
-	result.current_buffer_size = cur_buffer_handle->actual_size;
+	if (cur_buffer_handle) {
+		result.current_buffer_size = cur_buffer_handle->actual_size;
+	}
 	ParseChunkInternal(result);
 	return result;
 }
