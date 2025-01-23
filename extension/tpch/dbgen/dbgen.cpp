@@ -263,7 +263,7 @@ static void gen_tbl(ClientContext &context, int tnum, DSS_HUGE count, tpch_appen
 
 	for (DSS_HUGE i = offset + 1; count; count--, i++) {
 		if (count % 1000 == 0 && context.interrupted) {
-			throw InterruptException();
+			return;
 		}
 		row_start(tnum, dbgen_ctx);
 		switch (tnum) {
@@ -521,6 +521,9 @@ public:
 					rowcnt = dbgen_ctx.tdefs[i].base * dbgen_ctx.scale_factor;
 				} else {
 					rowcnt = dbgen_ctx.tdefs[i].base;
+				}
+				if (context.interrupted) {
+					return;
 				}
 				if (children > 1 && current_step != -1) {
 					size_t part_size = std::ceil((double)rowcnt / (double)children);

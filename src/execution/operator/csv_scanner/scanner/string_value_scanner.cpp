@@ -488,11 +488,15 @@ void StringValueResult::Reset() {
 		cur_buffer = buffer_handles[iterator.GetBufferIdx()];
 	}
 	buffer_handles.clear();
+	idx_t actual_size = 0;
 	if (cur_buffer) {
 		buffer_handles[cur_buffer->buffer_idx] = cur_buffer;
+		actual_size = cur_buffer->actual_size;
 	}
 	current_errors.Reset();
 	borked_rows.clear();
+	current_line_position.begin = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, actual_size};
+	current_line_position.end = current_line_position.begin;
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
@@ -1524,8 +1528,8 @@ bool StringValueScanner::FirstValueEndsOnQuote(CSVIterator iterator) const {
 	const idx_t to_pos = iterator.GetEndPos();
 	while (iterator.pos.buffer_pos < to_pos) {
 		state_machine->Transition(current_state, buffer_handle_ptr[iterator.pos.buffer_pos++]);
-		if ((current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
-		     current_state.IsState(CSVState::RECORD_SEPARATOR))) {
+		if (current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
+		    current_state.IsState(CSVState::RECORD_SEPARATOR)) {
 			return buffer_handle_ptr[iterator.pos.buffer_pos - 2] ==
 			       state_machine->dialect_options.state_machine_options.quote.GetValue();
 		}
@@ -1702,6 +1706,9 @@ void StringValueScanner::SetStart() {
 			best_row = quoted_row;
 		}
 		if (!best_row.is_valid && !quoted_row.is_valid && best_row.start_pos < quoted_row.start_pos) {
+			best_row = quoted_row;
+		}
+		if (quoted_row.is_valid && quoted_row.start_pos < best_row.start_pos) {
 			best_row = quoted_row;
 		}
 	}
