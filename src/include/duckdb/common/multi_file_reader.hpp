@@ -47,7 +47,6 @@ public:
 	      identifier(other.identifier) {
 	}
 
-	MultiFileReaderColumnDefinition(MultiFileReaderColumnDefinition &&other) noexcept = default;
 	MultiFileReaderColumnDefinition &operator=(const MultiFileReaderColumnDefinition &other) {
 		if (this != &other) {
 			name = other.name;
@@ -58,7 +57,6 @@ public:
 		}
 		return *this;
 	}
-	MultiFileReaderColumnDefinition &operator=(MultiFileReaderColumnDefinition &&other) noexcept = default;
 
 public:
 	static vector<MultiFileReaderColumnDefinition> ColumnsFromNamesAndTypes(const vector<string> &names,
