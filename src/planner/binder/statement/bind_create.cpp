@@ -262,7 +262,7 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 		switch (type.id()) {
 		case LogicalTypeId::LIST: {
 			auto child_type = BindLogicalTypeInternal(ListType::GetChildType(type), catalog, schema);
-			result = LogicalType::LIST(std::move(child_type));
+			result = LogicalType::LIST(child_type);
 			break;
 		}
 		case LogicalTypeId::MAP: {
