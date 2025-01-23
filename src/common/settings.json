@@ -453,6 +453,12 @@
         "custom_implementation": true
     },
     {
+        "name": "hash_join_bloom_filter",
+        "description": "Build a Bloom-filter to performs sideways-information-passing for hash joins",
+        "type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
         "name": "home_directory",
         "description": "Sets the home directory used by the system",
         "type": "VARCHAR",

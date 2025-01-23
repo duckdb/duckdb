@@ -609,6 +609,23 @@ Value ExternalThreadsSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Hash Join Bloom Filter
+//===----------------------------------------------------------------------===//
+void HashJoinBloomFilterSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.hash_join_bloom_filter = input.GetValue<bool>();
+}
+
+void HashJoinBloomFilterSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).hash_join_bloom_filter = ClientConfig().hash_join_bloom_filter;
+}
+
+Value HashJoinBloomFilterSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::BOOLEAN(config.hash_join_bloom_filter);
+}
+
+//===----------------------------------------------------------------------===//
 // Home Directory
 //===----------------------------------------------------------------------===//
 void HomeDirectorySetting::ResetLocal(ClientContext &context) {
@@ -932,8 +949,7 @@ void PartitionedWriteFlushThresholdSetting::SetLocal(ClientContext &context, con
 }
 
 void PartitionedWriteFlushThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).partitioned_write_flush_threshold =
-	    ClientConfig().partitioned_write_flush_threshold;
+	ClientConfig::GetConfig(context).partitioned_write_flush_threshold = ClientConfig().partitioned_write_flush_threshold;
 }
 
 Value PartitionedWriteFlushThresholdSetting::GetSetting(const ClientContext &context) {
@@ -1074,8 +1090,7 @@ void ScalarSubqueryErrorOnMultipleRowsSetting::SetLocal(ClientContext &context, 
 }
 
 void ScalarSubqueryErrorOnMultipleRowsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows =
-	    ClientConfig().scalar_subquery_error_on_multiple_rows;
+	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows = ClientConfig().scalar_subquery_error_on_multiple_rows;
 }
 
 Value ScalarSubqueryErrorOnMultipleRowsSetting::GetSetting(const ClientContext &context) {

@@ -684,6 +684,16 @@ struct ForceCompressionSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct HashJoinBloomFilterSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "hash_join_bloom_filter";
+	static constexpr const char *Description = "Build a Bloom-filter to performs sideways-information-passing for hash joins";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct HomeDirectorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "home_directory";

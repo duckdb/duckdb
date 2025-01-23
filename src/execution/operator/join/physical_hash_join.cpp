@@ -734,12 +734,17 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 	}
 
 	// Build Bloom-filters for sideways-information-passing
-	if (true/*ht.Count() > dynamic_or_filter_threshold*/) {
-		for (auto &info : probe_info) {
-			vector<column_t> column_ids;
-			std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(column_ids), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
+	auto hash_join_bloom_filter = ClientConfig::GetSetting<HashJoinBloomFilterSetting>(context);
+	if (hash_join_bloom_filter) {
+		if (ht.Count() > dynamic_or_filter_threshold) {
+			for (auto &info : probe_info) {
+				vector<column_t> column_ids;
+				std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(column_ids), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
 
-			BuildAndPushBloomFilter(info, ht, op, column_ids);
+				BuildAndPushBloomFilter(info, ht, op, column_ids);
+			}
+		} else {
+			std::cout << "not building a bloom-filter because the number of rows on the build side is too low" std::endl;
 		}
 	}
 

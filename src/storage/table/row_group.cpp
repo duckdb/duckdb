@@ -650,25 +650,15 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					}
 				}
 
-				// Execute Bloom-filter after all other filters have been executed.
-				// Afaik we might also need GetColumn() calls for all key columns?? (yes, otherwise `result` only contains the columns we fetched for other filters.)
-				// TODO: here, we might be able to apply the bloom filter because we have access to all columns of the data chunk.
-				// TODO: this code is hack-level 9000
-
 				// Evaluate Bloom-filters after all other filters have been evaluated.
+				// Afaik we might also need GetColumn() calls for all key columns?? (yes, otherwise `result` only contains the columns we fetched for other filters.)
 				if (approved_tuple_count > 0) {
 					for (auto &bf : filter_info.GetBloomFilterList()) {
-						if (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.9) {
+						if (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.8) {
 							Vector hashes(LogicalType::HASH);
-							// TODO: we do not want to mess with the hash join state this ugly...
-							// I wouldn't be surprised if this blows up.
-							//result.SetCardinality(approved_tuple_count);  // in the original code, we do this very much at the end of the function. is it safe to do it here?
+							// TODO: Can we directly put the keys and hashes into the hash join's state so that we don't have to perform hashing twice?
 							result.Hash(bf->GetColumnIds(), sel, approved_tuple_count, hashes);
-
-							//std::cout << "approved_tuple_count before: " <<approved_tuple_count<<std::endl;
 							approved_tuple_count = bf->ProbeWithPrecomputedHashes(sel, approved_tuple_count, hashes);
-							//std::cout << "approved_tuple_count after: " <<approved_tuple_count<<std::endl;
-							//std::cout << "probed rows: " << bf->GetNumProbedKeys() << " selectivity: " << bf->GetObservedSelectivity() << std::endl;
 						}
 					}
 				}
