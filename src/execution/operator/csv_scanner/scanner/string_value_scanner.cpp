@@ -1528,8 +1528,8 @@ bool StringValueScanner::FirstValueEndsOnQuote(CSVIterator iterator) const {
 	const idx_t to_pos = iterator.GetEndPos();
 	while (iterator.pos.buffer_pos < to_pos) {
 		state_machine->Transition(current_state, buffer_handle_ptr[iterator.pos.buffer_pos++]);
-		if ((current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
-		     current_state.IsState(CSVState::RECORD_SEPARATOR))) {
+		if (current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
+		    current_state.IsState(CSVState::RECORD_SEPARATOR)) {
 			return buffer_handle_ptr[iterator.pos.buffer_pos - 2] ==
 			       state_machine->dialect_options.state_machine_options.quote.GetValue();
 		}
@@ -1686,7 +1686,7 @@ void StringValueScanner::SetStart() {
 		auto state_options = state_machine->state_machine_options;
 		// To set the state machine to be strict we ensure that rfc_4180 is set to true
 		if (!state_options.rfc_4180.IsSetByUser()) {
-			state_options.rfc_4180 = true;
+			state_options.rfc_4180 = false;
 		}
 		state_machine_strict =
 		    make_shared_ptr<CSVStateMachine>(state_machine_cache.Get(state_options), state_machine->options);
@@ -1706,6 +1706,9 @@ void StringValueScanner::SetStart() {
 			best_row = quoted_row;
 		}
 		if (!best_row.is_valid && !quoted_row.is_valid && best_row.start_pos < quoted_row.start_pos) {
+			best_row = quoted_row;
+		}
+		if (quoted_row.is_valid && quoted_row.start_pos < best_row.start_pos) {
 			best_row = quoted_row;
 		}
 	}
