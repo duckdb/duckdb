@@ -487,14 +487,14 @@ public:
      * @return <tt>true</tt> if the specified set is equal to this set.
      * @stable ICU 2.0
      */
-    virtual UBool operator==(const UnicodeSet& o) const;
+    virtual bool operator==(const UnicodeSet& o) const;
 
     /**
      * Compares the specified object with this set for equality.  Returns
      * <tt>true</tt> if the specified set is not equal to this set.
      * @stable ICU 2.0
      */
-    inline UBool operator!=(const UnicodeSet& o) const;
+    inline bool operator!=(const UnicodeSet& o) const;
 
     /**
      * Returns a copy of this object.  All UnicodeFunctor objects have
@@ -1677,7 +1677,7 @@ private:
 
 
 
-inline UBool UnicodeSet::operator!=(const UnicodeSet& o) const {
+inline bool UnicodeSet::operator!=(const UnicodeSet& o) const {
     return !operator==(o);
 }
 

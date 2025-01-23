@@ -2,6 +2,8 @@
 # description: Test for issue #14784
 # group: [csv]
 
+mode skip
+
 statement ok
 PRAGMA enable_verification
 

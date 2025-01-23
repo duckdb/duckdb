@@ -20,8 +20,7 @@ public:
 	static constexpr const QueryNodeType TYPE = QueryNodeType::SET_OPERATION_NODE;
 
 public:
-	SetOperationNode() : QueryNode(QueryNodeType::SET_OPERATION_NODE) {
-	}
+	SetOperationNode();
 
 	//! The type of set operation
 	SetOperationType setop_type = SetOperationType::NONE;
@@ -49,6 +48,13 @@ public:
 
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<QueryNode> Deserialize(Deserializer &source);
+
+public:
+	// these methods exist for forwards/backwards compatibility of (de)serialization
+	SetOperationNode(SetOperationType setop_type, unique_ptr<QueryNode> left, unique_ptr<QueryNode> right,
+	                 vector<unique_ptr<QueryNode>> children, bool setop_all);
+
+	vector<unique_ptr<QueryNode>> SerializeChildNodes() const;
 };
 
 } // namespace duckdb

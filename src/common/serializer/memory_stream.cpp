@@ -21,6 +21,42 @@ MemoryStream::~MemoryStream() {
 	}
 }
 
+MemoryStream::MemoryStream(MemoryStream &&other) noexcept {
+	// Move the data from the other stream into this stream
+	data = other.data;
+	position = other.position;
+	capacity = other.capacity;
+	owns_data = other.owns_data;
+
+	// Reset the other stream
+	other.data = nullptr;
+	other.position = 0;
+	other.capacity = 0;
+	other.owns_data = false;
+}
+
+MemoryStream &MemoryStream::operator=(MemoryStream &&other) noexcept {
+	if (this != &other) {
+		// Free the current data
+		if (owns_data) {
+			free(data);
+		}
+
+		// Move the data from the other stream into this stream
+		data = other.data;
+		position = other.position;
+		capacity = other.capacity;
+		owns_data = other.owns_data;
+
+		// Reset the other stream
+		other.data = nullptr;
+		other.position = 0;
+		other.capacity = 0;
+		other.owns_data = false;
+	}
+	return *this;
+}
+
 void MemoryStream::WriteData(const_data_ptr_t source, idx_t write_size) {
 	while (position + write_size > capacity) {
 		if (owns_data) {

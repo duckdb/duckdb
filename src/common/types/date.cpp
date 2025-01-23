@@ -205,11 +205,12 @@ bool Date::TryConvertDateSpecial(const char *buf, idx_t len, idx_t &pos, const c
 	return true;
 }
 
-bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool &special, bool strict) {
+DateCastResult Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result, bool &special,
+                                    bool strict) {
 	special = false;
 	pos = 0;
 	if (len == 0) {
-		return false;
+		return DateCastResult::ERROR_INCORRECT_FORMAT;
 	}
 
 	int32_t day = 0;
@@ -224,13 +225,13 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	}
 
 	if (pos >= len) {
-		return false;
+		return DateCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	if (buf[pos] == '-') {
 		yearneg = true;
 		pos++;
 		if (pos >= len) {
-			return false;
+			return DateCastResult::ERROR_INCORRECT_FORMAT;
 		}
 	}
 	if (!StringUtil::CharacterIsDigit(buf[pos])) {
@@ -240,62 +241,62 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		} else if (TryConvertDateSpecial(buf, len, pos, EPOCH)) {
 			result = date_t::epoch();
 		} else {
-			return false;
+			return DateCastResult::ERROR_INCORRECT_FORMAT;
 		}
 		// skip trailing spaces - parsing must be strict here
 		while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 			pos++;
 		}
 		special = true;
-		return pos == len;
+		return (pos == len) ? DateCastResult::SUCCESS : DateCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	// first parse the year
 	idx_t year_length = 0;
 	for (; pos < len && StringUtil::CharacterIsDigit(buf[pos]); pos++) {
 		if (year >= 100000000) {
-			return false;
+			return DateCastResult::ERROR_RANGE;
 		}
 		year = (buf[pos] - '0') + year * 10;
 		year_length++;
 	}
 	if (year_length < 2 && strict) {
-		return false;
+		return DateCastResult::ERROR_INCORRECT_FORMAT;
 	}
 	if (yearneg) {
 		year = -year;
 	}
 
 	if (pos >= len) {
-		return false;
+		return DateCastResult::ERROR_INCORRECT_FORMAT;
 	}
 
 	// fetch the separator
 	sep = buf[pos++];
 	if (sep != ' ' && sep != '-' && sep != '/' && sep != '\\') {
 		// invalid separator
-		return false;
+		return DateCastResult::ERROR_INCORRECT_FORMAT;
 	}
 
 	// parse the month
 	if (!Date::ParseDoubleDigit(buf, len, pos, month)) {
-		return false;
+		return DateCastResult::ERROR_INCORRECT_FORMAT;
 	}
 
 	if (pos >= len) {
-		return false;
+		return DateCastResult::ERROR_INCORRECT_FORMAT;
 	}
 
 	if (buf[pos++] != sep) {
-		return false;
+		return DateCastResult::ERROR_INCORRECT_FORMAT;
 	}
 
 	if (pos >= len) {
-		return false;
+		return DateCastResult::ERROR_INCORRECT_FORMAT;
 	}
 
 	// now parse the day
 	if (!Date::ParseDoubleDigit(buf, len, pos, day)) {
-		return false;
+		return DateCastResult::ERROR_INCORRECT_FORMAT;
 	}
 
 	// check for an optional trailing " (BC)""
@@ -303,7 +304,7 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 	    StringUtil::CharacterToLower(buf[pos + 2]) == 'b' && StringUtil::CharacterToLower(buf[pos + 3]) == 'c' &&
 	    buf[pos + 4] == ')') {
 		if (yearneg || year == 0) {
-			return false;
+			return DateCastResult::ERROR_INCORRECT_FORMAT;
 		}
 		year = -year + 1;
 		pos += 5;
@@ -317,34 +318,47 @@ bool Date::TryConvertDate(const char *buf, idx_t len, idx_t &pos, date_t &result
 		}
 		// check position. if end was not reached, non-space chars remaining
 		if (pos < len) {
-			return false;
+			return DateCastResult::ERROR_INCORRECT_FORMAT;
 		}
 	} else {
 		// in non-strict mode, check for any direct trailing digits
 		if (pos < len && StringUtil::CharacterIsDigit(buf[pos])) {
-			return false;
+			return DateCastResult::ERROR_INCORRECT_FORMAT;
 		}
 	}
 
-	return Date::TryFromDate(year, month, day, result);
+	return Date::TryFromDate(year, month, day, result) ? DateCastResult::SUCCESS : DateCastResult::ERROR_RANGE;
 }
 
-string Date::ConversionError(const string &str) {
-	return StringUtil::Format("date field value out of range: \"%s\", "
+string Date::FormatError(const string &str) {
+	return StringUtil::Format("invalid date field format: \"%s\", "
 	                          "expected format is (YYYY-MM-DD)",
 	                          str);
 }
 
-string Date::ConversionError(string_t str) {
-	return ConversionError(str.GetString());
+string Date::RangeError(const string &str) {
+	return StringUtil::Format("date field value out of range: \"%s\"", str);
+}
+
+string Date::RangeError(string_t str) {
+	return RangeError(str.GetString());
+}
+
+string Date::FormatError(string_t str) {
+	return FormatError(str.GetString());
 }
 
 date_t Date::FromCString(const char *buf, idx_t len, bool strict) {
 	date_t result;
 	idx_t pos;
 	bool special = false;
-	if (!TryConvertDate(buf, len, pos, result, special, strict)) {
-		throw ConversionException(ConversionError(string(buf, len)));
+	switch (TryConvertDate(buf, len, pos, result, special, strict)) {
+	case DateCastResult::ERROR_INCORRECT_FORMAT:
+		throw ConversionException(FormatError(string(buf, len)));
+	case DateCastResult::ERROR_RANGE:
+		throw ConversionException(RangeError(string(buf, len)));
+	case DateCastResult::SUCCESS:
+		break;
 	}
 	return result;
 }

@@ -674,7 +674,7 @@
       },
       {"id": 105,
         "name": "maximum_line_size",
-        "type": "idx_t"
+        "type": "CSVOption<idx_t>"
       },
       {"id": 106,
         "name": "normalize_names",
@@ -710,7 +710,8 @@
       },
       {"id": 114,
         "name": "buffer_size",
-        "type": "idx_t"
+        "type": "idx_t",
+        "deleted": true
       },
       {"id": 115,
         "name": "file_options",
@@ -842,6 +843,10 @@
       {"id": 142,
         "name": "multi_file_reader",
         "type": "bool"
+      },
+      {"id": 143,
+        "name": "buffer_size_option",
+        "type": "CSVOption<idx_t>"
       }
     ],
     "constructor": ["delimiter", "multi_byte_delimiter"],

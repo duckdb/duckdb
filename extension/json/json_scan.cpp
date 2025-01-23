@@ -206,11 +206,15 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 		gstate.json_readers.emplace_back(reader.get());
 	}
 
-	vector<LogicalType> dummy_types(input.column_ids.size(), LogicalType::ANY);
+	vector<LogicalType> dummy_global_types(bind_data.names.size(), LogicalType::ANY);
+	vector<LogicalType> dummy_local_types(gstate.names.size(), LogicalType::ANY);
+	auto local_columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(gstate.names, dummy_local_types);
+	auto global_columns =
+	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, dummy_global_types);
 	for (auto &reader : gstate.json_readers) {
 		MultiFileReader().FinalizeBind(reader->GetOptions().file_options, gstate.bind_data.reader_bind,
-		                               reader->GetFileName(), gstate.names, dummy_types, bind_data.names,
-		                               input.column_indexes, reader->reader_data, context, nullptr);
+		                               reader->GetFileName(), local_columns, global_columns, input.column_indexes,
+		                               reader->reader_data, context, nullptr);
 	}
 
 	return std::move(result);
@@ -249,7 +253,7 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
 	auto result = make_uniq<JSONLocalTableFunctionState>(context.client, gstate.state);
 
 	// Copy the transform options / date format map because we need to do thread-local stuff
-	result->state.date_format_map = gstate.state.bind_data.date_format_map;
+	result->state.date_format_map = gstate.state.bind_data.date_format_map.Copy();
 	result->state.transform_options = gstate.state.transform_options;
 	result->state.transform_options.date_format_map = &result->state.date_format_map;
 

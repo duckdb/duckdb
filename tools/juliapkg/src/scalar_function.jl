@@ -69,7 +69,7 @@ mutable struct ScalarFunction
             wrapper_id
         )
         finalizer(_destroy_scalar_function, result)
-        duckdb_scalar_function_set_extra_info(handle, pointer_from_objref(result))
+        duckdb_scalar_function_set_extra_info(handle, pointer_from_objref(result), C_NULL)
 
         return result
     end
