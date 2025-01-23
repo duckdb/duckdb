@@ -110,6 +110,8 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
 		actual_size = cur_buffer_handle->actual_size;
 	}
 	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, actual_size};
+	result.current_buffer_size = actual_size;
+	result.cur_buffer_idx = iterator.pos.buffer_idx;
 }
 
 unique_ptr<StringValueScanner> ColumnCountScanner::UpgradeToStringValueScanner() {
