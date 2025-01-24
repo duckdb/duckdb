@@ -92,6 +92,9 @@ statement ok
 INSERT INTO default_version.tbl VALUES ('abcd'), ('efgh'), ('hello'), ('world'), (NULL);
 
 statement ok
+CHECKPOINT default_version
+
+statement ok
 DETACH default_version
 
 # we can attach the database again (without specifying the default)
