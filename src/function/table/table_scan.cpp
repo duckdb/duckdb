@@ -42,6 +42,8 @@ struct IndexScanLocalState : public LocalTableFunctionState {
 	//! The DataChunk containing all read columns.
 	//! This includes filter columns, which are immediately removed.
 	DataChunk all_columns;
+	//! Fetch state
+	ColumnFetchState fetch_state;
 };
 
 static StorageIndex TransformStorageIndex(const ColumnIndex &column_id) {
@@ -116,7 +118,6 @@ public:
 	//! Synchronize changes to the global index scan state.
 	mutex index_scan_lock;
 
-	ColumnFetchState fetch_state;
 	TableScanState table_scan_state;
 
 public:
@@ -160,10 +161,10 @@ public:
 
 			if (CanRemoveFilterColumns()) {
 				l_state.all_columns.Reset();
-				storage.Fetch(tx, l_state.all_columns, column_ids, local_vector, scan_count, fetch_state);
+				storage.Fetch(tx, l_state.all_columns, column_ids, local_vector, scan_count, l_state.fetch_state);
 				output.ReferenceColumns(l_state.all_columns, projection_ids);
 			} else {
-				storage.Fetch(tx, output, column_ids, local_vector, scan_count, fetch_state);
+				storage.Fetch(tx, output, column_ids, local_vector, scan_count, l_state.fetch_state);
 			}
 		}
 
@@ -670,7 +671,7 @@ InsertionOrderPreservingMap<string> TableScanToString(TableFunctionToStringInput
 	InsertionOrderPreservingMap<string> result;
 	auto &bind_data = input.bind_data->Cast<TableScanBindData>();
 	result["Table"] = bind_data.table.name;
-	result["Type"] = bind_data.is_index_scan ? "Index Scan" : "Sequence Scan";
+	result["Type"] = bind_data.is_index_scan ? "Index Scan" : "Sequential Scan";
 	return result;
 }
 

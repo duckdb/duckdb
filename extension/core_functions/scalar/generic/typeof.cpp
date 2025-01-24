@@ -10,7 +10,7 @@ static void TypeOfFunction(DataChunk &args, ExpressionState &state, Vector &resu
 }
 
 unique_ptr<Expression> BindTypeOfFunctionExpression(FunctionBindExpressionInput &input) {
-	auto &return_type = input.function.children[0]->return_type;
+	auto &return_type = input.children[0]->return_type;
 	if (return_type.id() == LogicalTypeId::UNKNOWN || return_type.id() == LogicalTypeId::SQLNULL) {
 		// parameter - unknown return type
 		return nullptr;

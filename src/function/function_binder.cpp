@@ -457,7 +457,7 @@ unique_ptr<Expression> FunctionBinder::BindScalarFunction(ScalarFunction bound_f
 	                                                      std::move(children), std::move(bind_info), is_operator);
 	if (result_func->function.bind_expression) {
 		// if a bind_expression callback is registered - call it and emit the resulting expression
-		FunctionBindExpressionInput input(context, result_func->bind_info.get(), *result_func);
+		FunctionBindExpressionInput input(context, result_func->bind_info.get(), result_func->children);
 		result = result_func->function.bind_expression(input);
 	}
 	if (!result) {

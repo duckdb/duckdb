@@ -148,7 +148,7 @@ inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const i
 }
 
 bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const idx_t size) {
-	if (cur_col_id >= number_of_columns) {
+	if (cur_col_id >= number_of_columns && state_machine.state_machine_options.rfc_4180.GetValue()) {
 		bool error = true;
 		if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 			// we make an exception if the first over-value is null
@@ -220,6 +220,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		return;
 	}
 	if (cur_col_id >= number_of_columns) {
+		if (!state_machine.state_machine_options.rfc_4180.GetValue()) {
+			return;
+		}
 		bool error = true;
 		if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 			// we make an exception if the first over-value is null
@@ -485,11 +488,15 @@ void StringValueResult::Reset() {
 		cur_buffer = buffer_handles[iterator.GetBufferIdx()];
 	}
 	buffer_handles.clear();
+	idx_t actual_size = 0;
 	if (cur_buffer) {
 		buffer_handles[cur_buffer->buffer_idx] = cur_buffer;
+		actual_size = cur_buffer->actual_size;
 	}
 	current_errors.Reset();
 	borked_rows.clear();
+	current_line_position.begin = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, actual_size};
+	current_line_position.end = current_line_position.begin;
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
@@ -511,6 +518,10 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				return;
 			}
 		}
+		if (result.cur_col_id >= result.number_of_columns &&
+		    !result.state_machine.state_machine_options.rfc_4180.GetValue()) {
+			return;
+		}
 		if (!result.HandleTooManyColumnsError(value_ptr, length)) {
 			// If it's an escaped value we have to remove all the escapes, this is not really great
 			// If we are going to escape, this vector must be a varchar vector
@@ -520,7 +531,6 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 					// We have to write the cast error message.
 					std::ostringstream error;
 					// Casting Error Message
-
 					error << "Could not convert string \"" << std::string(value_ptr, length) << "\" to \'"
 					      << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id) << "\'";
 					auto error_string = error.str();
@@ -533,6 +543,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				auto value = StringValueScanner::RemoveEscape(
 				    value_ptr, length, result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
 				    result.state_machine.dialect_options.state_machine_options.quote.GetValue(),
+				    result.state_machine.dialect_options.state_machine_options.rfc_4180.GetValue(),
 				    result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
@@ -806,7 +817,7 @@ bool StringValueResult::AddRowInternal() {
 	quoted_new_line = false;
 	// We need to check if we are getting the correct number of columns here.
 	// If columns are correct, we add it, and that's it.
-	if (cur_col_id != number_of_columns) {
+	if (cur_col_id < number_of_columns) {
 		// We have too few columns:
 		if (null_padding) {
 			while (cur_col_id < number_of_columns) {
@@ -1231,7 +1242,8 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
-string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, Vector &vector) {
+string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool rfc_4180,
+                                          Vector &vector) {
 	// Figure out the exact size
 	idx_t str_pos = 0;
 	bool just_escaped = false;
@@ -1239,7 +1251,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 		if (str_ptr[cur_pos] == escape && !just_escaped) {
 			just_escaped = true;
 		} else if (str_ptr[cur_pos] == quote) {
-			if (just_escaped) {
+			if (just_escaped || !rfc_4180) {
 				str_pos++;
 			}
 			just_escaped = false;
@@ -1259,7 +1271,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 		if (c == escape && !just_escaped) {
 			just_escaped = true;
 		} else if (str_ptr[cur_pos] == quote) {
-			if (just_escaped) {
+			if (just_escaped || !rfc_4180) {
 				removed_escapes_ptr[str_pos++] = c;
 			}
 			just_escaped = false;
@@ -1289,10 +1301,8 @@ void StringValueScanner::ProcessOverBufferValue() {
 		}
 		if (states.NewRow() || states.NewValue()) {
 			break;
-		} else {
-			if (!result.comment) {
-				over_buffer_string += previous_buffer[i];
-			}
+		} else if (!result.comment) {
+			over_buffer_string += previous_buffer[i];
 		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
@@ -1323,16 +1333,13 @@ void StringValueScanner::ProcessOverBufferValue() {
 		if (states.EmptyLine()) {
 			if (state_machine->dialect_options.num_cols == 1) {
 				break;
-			} else {
-				continue;
 			}
+			continue;
 		}
 		if (states.NewRow() || states.NewValue()) {
 			break;
-		} else {
-			if (!result.comment && !states.IsComment()) {
-				over_buffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
-			}
+		} else if (!result.comment && !states.IsComment()) {
+			over_buffer_string += buffer_handle_ptr[iterator.pos.buffer_pos];
 		}
 		if (states.IsQuoted()) {
 			result.SetQuoted(result, j);
@@ -1357,7 +1364,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 	}
 	if (!skip_value) {
 		string_t value;
-		if (result.quoted) {
+		if (result.quoted && !result.comment) {
 			value = string_t(over_buffer_string.c_str() + result.quoted_position,
 			                 UnsafeNumericCast<uint32_t>(over_buffer_string.size() - 1 - result.quoted_position));
 			if (result.escaped) {
@@ -1366,6 +1373,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 					value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
 					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
 					                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					                     result.state_machine.dialect_options.state_machine_options.rfc_4180.GetValue(),
 					                     result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
@@ -1376,6 +1384,7 @@ void StringValueScanner::ProcessOverBufferValue() {
 					value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
 					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
 					                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					                     result.state_machine.dialect_options.state_machine_options.rfc_4180.GetValue(),
 					                     result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
@@ -1436,7 +1445,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 			// This means we reached the end of the file, we must add a last line if there is any to be added
 			if (states.EmptyLine() || states.NewRow() || result.added_last_line || states.IsCurrentNewRow() ||
 			    states.IsNotSet()) {
-				if (result.cur_col_id == result.number_of_columns) {
+				if (result.cur_col_id == result.number_of_columns && !result.IsStateCurrent(CSVState::INVALID)) {
 					result.number_of_rows++;
 				}
 				result.cur_col_id = 0;
@@ -1519,8 +1528,8 @@ bool StringValueScanner::FirstValueEndsOnQuote(CSVIterator iterator) const {
 	const idx_t to_pos = iterator.GetEndPos();
 	while (iterator.pos.buffer_pos < to_pos) {
 		state_machine->Transition(current_state, buffer_handle_ptr[iterator.pos.buffer_pos++]);
-		if ((current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
-		     current_state.IsState(CSVState::RECORD_SEPARATOR))) {
+		if (current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
+		    current_state.IsState(CSVState::RECORD_SEPARATOR)) {
 			return buffer_handle_ptr[iterator.pos.buffer_pos - 2] ==
 			       state_machine->dialect_options.state_machine_options.quote.GetValue();
 		}
@@ -1697,6 +1706,9 @@ void StringValueScanner::SetStart() {
 			best_row = quoted_row;
 		}
 		if (!best_row.is_valid && !quoted_row.is_valid && best_row.start_pos < quoted_row.start_pos) {
+			best_row = quoted_row;
+		}
+		if (quoted_row.is_valid && quoted_row.start_pos < best_row.start_pos) {
 			best_row = quoted_row;
 		}
 	}

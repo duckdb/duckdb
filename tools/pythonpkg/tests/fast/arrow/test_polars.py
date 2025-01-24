@@ -81,3 +81,9 @@ class TestPolars(object):
         string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
         res = duckdb_cursor.read_json(string).pl()
         assert duckdb_cursor.execute("FROM res").fetchall() == [([{'content': {'ManagedSystem': {'test': None}}}],)]
+
+    def test_polars_from_json_error(self, duckdb_cursor):
+        conn = duckdb.connect()
+        my_table = conn.query("select 'x' my_str").pl()
+        my_res = duckdb.query("select my_str from my_table where my_str != 'y'")
+        assert my_res.fetchall() == [('x',)]

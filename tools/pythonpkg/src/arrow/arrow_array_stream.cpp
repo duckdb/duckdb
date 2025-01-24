@@ -305,21 +305,18 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		auto constant_field = field(py::tuple(py::cast(column_ref)));
 		auto constant_value = GetScalar(constant_filter.constant, timezone_config, type);
 		switch (constant_filter.comparison_type) {
-		case ExpressionType::COMPARE_EQUAL: {
+		case ExpressionType::COMPARE_EQUAL:
 			return constant_field.attr("__eq__")(constant_value);
-		}
-		case ExpressionType::COMPARE_LESSTHAN: {
+		case ExpressionType::COMPARE_LESSTHAN:
 			return constant_field.attr("__lt__")(constant_value);
-		}
-		case ExpressionType::COMPARE_GREATERTHAN: {
+		case ExpressionType::COMPARE_GREATERTHAN:
 			return constant_field.attr("__gt__")(constant_value);
-		}
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			return constant_field.attr("__le__")(constant_value);
-		}
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			return constant_field.attr("__ge__")(constant_value);
-		}
+		case ExpressionType::COMPARE_NOTEQUAL:
+			return constant_field.attr("__ne__")(constant_value);
 		default:
 			throw NotImplementedException("Comparison Type can't be an Arrow Scan Pushdown Filter");
 		}
