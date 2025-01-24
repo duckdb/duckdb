@@ -16,7 +16,7 @@ namespace duckdb {
 
 static void CreateArrowScan(const string &name, py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties,
-                            PyArrowObjectType type, DBConfig &config) {
+                            PyArrowObjectType type, DBConfig &config, bool disable_pushdown = false) {
 
 	if (type == PyArrowObjectType::PyCapsuleInterface) {
 		entry = entry.attr("__arrow_c_stream__")();
@@ -31,7 +31,7 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_produce))));
 	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_get_schema))));
 
-	if (type == PyArrowObjectType::PyCapsule) {
+	if (type == PyArrowObjectType::PyCapsule || disable_pushdown) {
 		// Disable projection+filter pushdown
 		table_function.function = make_uniq<FunctionExpression>("arrow_scan_dumb", std::move(children));
 	} else {
@@ -109,12 +109,12 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 	} else if (PolarsDataFrame::IsDataFrame(entry)) {
 		auto arrow_dataset = entry.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
-		                DBConfig::GetConfig(context));
+		                DBConfig::GetConfig(context), true);
 	} else if (PolarsDataFrame::IsLazyFrame(entry)) {
 		auto materialized = entry.attr("collect")();
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
-		                DBConfig::GetConfig(context));
+		                DBConfig::GetConfig(context), true);
 	} else if ((arrow_type = DuckDBPyConnection::GetArrowType(entry)) != PyArrowObjectType::Invalid) {
 		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type,
 		                DBConfig::GetConfig(context));
