@@ -848,10 +848,14 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 	LocalStorage::FinalizeAppend(state);
 }
 
-RowGroupCollection &DataTable::CreateOptimisticRowGroups(ClientContext &context,
-                                                         unique_ptr<RowGroupCollection> collection) {
+PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context, unique_ptr<RowGroupCollection> collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
-	return local_storage.CreateOptimisticRowGroups(*this, std::move(collection));
+	return local_storage.CreateOptimisticCollection(*this, std::move(collection));
+}
+
+RowGroupCollection &DataTable::GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index) {
+	auto &local_storage = LocalStorage::Get(context, db);
+	return local_storage.GetOptimisticCollection(*this, collection_index);
 }
 
 OptimisticDataWriter &DataTable::CreateOptimisticWriter(ClientContext &context) {

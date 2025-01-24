@@ -116,7 +116,10 @@ public:
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
 	//! Create an optimistic row group collection for this table. Used for optimistically writing parallel appends.
-	RowGroupCollection &CreateOptimisticRowGroups(ClientContext &context, unique_ptr<RowGroupCollection> collection);
+	//! Returns the index into the optimistic_collections vector for newly created collection.
+	PhysicalIndex CreateOptimisticCollection(ClientContext &context, unique_ptr<RowGroupCollection> collection);
+	//! Returns the optimistic row group collection corresponding to the index.
+	RowGroupCollection &GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index);
 	//! Create an optimistic writer for this table. Used for optimistically writing parallel appends.
 	OptimisticDataWriter &CreateOptimisticWriter(ClientContext &context);
 	void FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer);

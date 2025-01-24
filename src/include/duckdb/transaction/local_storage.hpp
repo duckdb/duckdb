@@ -53,7 +53,7 @@ public:
 	idx_t deleted_rows;
 
 	//! The optimistic row group collections associated with this table.
-	vector<unique_ptr<RowGroupCollection>> optimistic_row_groups;
+	vector<unique_ptr<RowGroupCollection>> optimistic_collections;
 	//! The main optimistic data writer associated with this table.
 	OptimisticDataWriter optimistic_writer;
 	//! The optimistic data writers associated with this table.
@@ -78,10 +78,16 @@ public:
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
 
 	//! Create an optimistic row group collection for this table.
-	RowGroupCollection &CreateOptimisticRowGroups(unique_ptr<RowGroupCollection> collection);
+	//! Returns the index into the optimistic_collections vector for newly created collection.
+	PhysicalIndex CreateOptimisticCollection(unique_ptr<RowGroupCollection> collection);
+	//! Returns the optimistic row group collection corresponding to the index.
+	RowGroupCollection &GetOptimisticCollection(const PhysicalIndex collection_index);
 	//! Create an optimistic writer for this table.
 	OptimisticDataWriter &CreateOptimisticWriter();
 	void FinalizeOptimisticWriter(OptimisticDataWriter &writer);
+
+private:
+	mutex collections_lock;
 };
 
 class LocalTableManager {
@@ -136,7 +142,10 @@ public:
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(DataTable &table, RowGroupCollection &collection);
 	//! Create an optimistic row group collection for this table.
-	RowGroupCollection &CreateOptimisticRowGroups(DataTable &table, unique_ptr<RowGroupCollection> collection);
+	//! Returns the index into the optimistic_collections vector for newly created collection.
+	PhysicalIndex CreateOptimisticCollection(DataTable &table, unique_ptr<RowGroupCollection> collection);
+	//! Returns the optimistic row group collection corresponding to the index.
+	RowGroupCollection &GetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
 	//! Create an optimistic writer for this table.
 	OptimisticDataWriter &CreateOptimisticWriter(DataTable &table);
 	void FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer);
@@ -179,6 +188,7 @@ private:
 	DuckTransaction &transaction;
 	LocalTableManager table_manager;
 
+private:
 	void Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state);
 };
 

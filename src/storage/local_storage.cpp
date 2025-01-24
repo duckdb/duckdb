@@ -55,7 +55,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
                                      const idx_t alter_column_index, const LogicalType &target_type,
                                      const vector<StorageIndex> &bound_columns, Expression &cast_expr)
     : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows),
-      optimistic_row_groups(std::move(parent.optimistic_row_groups)),
+      optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_data_table, parent.optimistic_writer),
       optimistic_writers(std::move(parent.optimistic_writers)), merged_storage(parent.merged_storage) {
 
@@ -70,7 +70,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
 LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent,
                                      const idx_t drop_column_index)
     : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows),
-      optimistic_row_groups(std::move(parent.optimistic_row_groups)),
+      optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_data_table, parent.optimistic_writer),
       optimistic_writers(std::move(parent.optimistic_writers)), merged_storage(parent.merged_storage) {
 
@@ -85,7 +85,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
 LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, LocalTableStorage &parent,
                                      ColumnDefinition &new_column, ExpressionExecutor &default_executor)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
-      optimistic_row_groups(std::move(parent.optimistic_row_groups)),
+      optimistic_collections(std::move(parent.optimistic_collections)),
       optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
       merged_storage(parent.merged_storage) {
 
@@ -233,9 +233,15 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 	}
 }
 
-RowGroupCollection &LocalTableStorage::CreateOptimisticRowGroups(unique_ptr<RowGroupCollection> collection) {
-	optimistic_row_groups.push_back(std::move(collection));
-	return *optimistic_row_groups.back();
+PhysicalIndex LocalTableStorage::CreateOptimisticCollection(unique_ptr<RowGroupCollection> collection) {
+	lock_guard<mutex> l(collections_lock);
+	optimistic_collections.push_back(std::move(collection));
+	return PhysicalIndex(optimistic_collections.size() - 1);
+}
+
+RowGroupCollection &LocalTableStorage::GetOptimisticCollection(const PhysicalIndex collection_index) {
+	lock_guard<mutex> l(collections_lock);
+	return *optimistic_collections[collection_index.index];
 }
 
 OptimisticDataWriter &LocalTableStorage::CreateOptimisticWriter() {
@@ -261,10 +267,17 @@ void LocalTableStorage::FinalizeOptimisticWriter(OptimisticDataWriter &writer) {
 }
 
 void LocalTableStorage::Rollback() {
-	for (auto &collection : optimistic_row_groups) {
+	for (auto &writer : optimistic_writers) {
+		writer->Rollback();
+	}
+	optimistic_writer.Rollback();
+	for (auto &collection : optimistic_collections) {
+		if (!collection) {
+			continue;
+		}
 		collection->CommitDropTable();
 	}
-	optimistic_row_groups.clear();
+	optimistic_collections.clear();
 	row_groups->CommitDropTable();
 }
 
@@ -452,10 +465,14 @@ void LocalStorage::LocalMerge(DataTable &table, RowGroupCollection &collection) 
 	storage.merged_storage = true;
 }
 
-RowGroupCollection &LocalStorage::CreateOptimisticRowGroups(DataTable &table,
-                                                            unique_ptr<RowGroupCollection> collection) {
+PhysicalIndex LocalStorage::CreateOptimisticCollection(DataTable &table, unique_ptr<RowGroupCollection> collection) {
 	auto &storage = table_manager.GetOrCreateStorage(context, table);
-	return storage.CreateOptimisticRowGroups(std::move(collection));
+	return storage.CreateOptimisticCollection(std::move(collection));
+}
+
+RowGroupCollection &LocalStorage::GetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index) {
+	auto &storage = table_manager.GetOrCreateStorage(context, table);
+	return storage.GetOptimisticCollection(collection_index);
 }
 
 OptimisticDataWriter &LocalStorage::CreateOptimisticWriter(DataTable &table) {
