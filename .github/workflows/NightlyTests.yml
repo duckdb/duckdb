@@ -205,7 +205,7 @@ jobs:
   linux-compile-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2028_x86_64
+    container: quay.io/pypa/manylinux2_28_x86_64
     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     needs: linux-memory-leaks
     env:
