@@ -95,7 +95,7 @@ bool ErrorData::operator==(const ErrorData &other) const {
 }
 
 void ErrorData::ConvertErrorToJSON() {
-	if (raw_message.empty() || raw_message[0] == '{') {
+	if (!raw_message.empty() && raw_message[0] == '{') {
 		// empty or already JSON
 		return;
 	}
