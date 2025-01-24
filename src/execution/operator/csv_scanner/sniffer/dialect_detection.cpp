@@ -156,10 +156,10 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	} else {
 		new_line_id = DetectNewLineDelimiter(*buffer_manager);
 	}
-	// We only sniff RFC 4180 rules, unless manually set by user.
-	bool rfc_4180 = true;
-	if (options.dialect_options.state_machine_options.rfc_4180.IsSetByUser()) {
-		rfc_4180 = options.dialect_options.state_machine_options.rfc_4180.GetValue();
+	// We only sniff strict mode rules, unless manually set by user.
+	bool strict_mode = true;
+	if (options.dialect_options.state_machine_options.strict_mode.IsSetByUser()) {
+		strict_mode = options.dialect_options.state_machine_options.strict_mode.GetValue();
 	}
 	CSVIterator first_iterator;
 	bool iterator_set = false;
@@ -173,7 +173,7 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 					for (const auto &comment : dialect_candidates.comment_candidates) {
 						D_ASSERT(buffer_manager);
 						CSVStateMachineOptions state_machine_options(delimiter, quote, escape, comment, new_line_id,
-						                                             rfc_4180);
+						                                             strict_mode);
 						auto sniffing_state_machine =
 						    make_shared_ptr<CSVStateMachine>(options, state_machine_options, state_machine_cache);
 						if (options.dialect_options.skip_rows.IsSetByUser()) {

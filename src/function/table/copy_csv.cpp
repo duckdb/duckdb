@@ -97,7 +97,7 @@ void BaseCSVData::Finalize() {
 			const char escape = options.dialect_options.state_machine_options.escape.GetValue();
 			// Allow nullstr to be escape character + some non-special character, e.g., "\N" (MySQL default).
 			// In this case, only unquoted occurrences of the nullstr will be recognized as null values.
-			if (options.dialect_options.state_machine_options.rfc_4180 == false && null_str.size() == 2 &&
+			if (options.dialect_options.state_machine_options.strict_mode == false && null_str.size() == 2 &&
 			    null_str[0] == escape && null_str[1] != '\0') {
 				continue;
 			}

@@ -331,7 +331,7 @@ CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t current_c
 
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible fixes:" << '\n';
-	how_to_fix_it << "* Enable scanning files that are not RFC 4180 compliant (rfc_4180=false)." << '\n';
+	how_to_fix_it << "* Enable scanning files that are not RFC 4180 compliant (strict_mode=false)." << '\n';
 
 	return CSVError(error.str(), INVALID_STATE, current_column, csv_row, error_info, row_byte_position, byte_position,
 	                options, how_to_fix_it.str(), current_path);
@@ -448,9 +448,9 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	         "max_line_size=10000000)"
 	      << "\n";
 
-	if (options.dialect_options.state_machine_options.rfc_4180.GetValue() != false ||
-	    !options.dialect_options.state_machine_options.rfc_4180.IsSetByUser()) {
-		error << "* Enable scanning files that are not RFC 4180 compliant (rfc_4180=false). " << '\n';
+	if (options.dialect_options.state_machine_options.strict_mode.GetValue() != false ||
+	    !options.dialect_options.state_machine_options.strict_mode.IsSetByUser()) {
+		error << "* Enable scanning files that are not RFC 4180 compliant (strict_mode=false). " << '\n';
 	}
 	return CSVError(error.str(), SNIFFING, {});
 }
