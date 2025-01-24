@@ -30,8 +30,8 @@ struct CSVStateMachineOptions {
 	CSVOption<char> comment = '\0';
 	//! New Line separator
 	CSVOption<NewLineIdentifier> new_line = NewLineIdentifier::NOT_SET;
-	//! RFC 4180 conformance
-	CSVOption<bool> strict_mode = false;
+	//! How Strict the parser should be
+	CSVOption<bool> strict_mode = true;
 
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape &&
