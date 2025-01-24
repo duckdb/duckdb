@@ -197,14 +197,29 @@ public:
 	    : WindowValueGlobalState(executor, payload_count, partition_mask, order_mask) {
 
 		if (value_tree) {
-			//	"The ROW_NUMBER function can be computed by disambiguating duplicate elements based on their position in
-			//	the input data, such that two elements never compare as equal."
-			// 	Note: If the user specifies an partial secondary sort, the disambiguation will use the
-			//	partition's row numbers, not the secondary sort's row numbers.
-			row_tree = make_uniq<WindowTokenTree>(executor.context, executor.wexpr.arg_orders, executor.arg_order_idx,
-			                                      payload_count, true);
+			use_framing = true;
+
+			//	If the argument order is prefix of the partition ordering,
+			//	then we can just use the partition ordering.
+			auto &wexpr = executor.wexpr;
+			auto &arg_orders = executor.wexpr.arg_orders;
+			const auto optimize = ClientConfig::GetConfig(executor.context).enable_optimizer;
+			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
+				//	"The ROW_NUMBER function can be computed by disambiguating duplicate elements based on their
+				//	position in the input data, such that two elements never compare as equal."
+				// 	Note: If the user specifies an partial secondary sort, the disambiguation will use the
+				//	partition's row numbers, not the secondary sort's row numbers.
+				row_tree = make_uniq<WindowTokenTree>(executor.context, arg_orders, executor.arg_order_idx,
+				                                      payload_count, true);
+			} else {
+				// The value_tree is cheap to construct, so we just get rid of it if we now discover we don't need it.
+				value_tree.reset();
+			}
 		}
 	}
+
+	//! Flag that we are using framing, even if we don't need the trees
+	bool use_framing = false;
 
 	//! Merge sort tree to map partition offset to row number (algorithm from Section 4.5)
 	unique_ptr<WindowTokenTree> row_tree;
@@ -283,10 +298,11 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 	WindowInputExpression leadlag_offset(eval_chunk, offset_idx);
 	WindowInputExpression leadlag_default(eval_chunk, default_idx);
 
+	auto frame_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_BEGIN]);
+	auto frame_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_END]);
+
 	if (glstate.row_tree) {
-		auto frame_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_BEGIN]);
-		auto frame_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[FRAME_END]);
-		// TODO: Handle subframes.
+		// TODO: Handle subframes (SelectNth can handle it but Rank can't)
 		auto &frames = llstate.frames;
 		frames.resize(1);
 		auto &frame = frames[0];
@@ -324,8 +340,16 @@ void WindowLeadLagExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, 
 	auto partition_begin = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(llstate.bounds.data[PARTITION_END]);
 
+	// Only shift within the frame if we are using a shared ordering clause.
+	if (glstate.use_framing) {
+		partition_begin = frame_begin;
+		partition_end = frame_end;
+	}
+
+	// We can't shift if we are ignoring NULLs (the rows may not be contiguous)
+	// or if we are using framing (the frame may change on each row)
 	auto &ignore_nulls = glstate.ignore_nulls;
-	bool can_shift = ignore_nulls->AllValid();
+	bool can_shift = ignore_nulls->AllValid() && !glstate.use_framing;
 	if (wexpr.offset_expr) {
 		can_shift = can_shift && wexpr.offset_expr->IsFoldable();
 	}

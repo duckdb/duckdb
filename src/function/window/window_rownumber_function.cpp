@@ -21,7 +21,8 @@ public:
 			//	then we can just use the partition ordering.
 			auto &wexpr = executor.wexpr;
 			auto &arg_orders = executor.wexpr.arg_orders;
-			if (BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
+			const auto optimize = ClientConfig::GetConfig(executor.context).enable_optimizer;
+			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
 				//	"The ROW_NUMBER function can be computed by disambiguating duplicate elements based on their
 				//	position in the input data, such that two elements never compare as equal."
 				token_tree = make_uniq<WindowTokenTree>(executor.context, executor.wexpr.arg_orders,
