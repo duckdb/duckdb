@@ -16,11 +16,12 @@ public:
 		if (!executor.arg_order_idx.empty()) {
 			use_framing = true;
 
-			//	If the argument order is prefix of the partition ordering,
-			//	then we can just use the partition ordering.
+			//	If the argument order is a prefix of the partition ordering
+			//	(and the optimizer is enabled), then we can just use the partition ordering.
 			auto &wexpr = executor.wexpr;
 			auto &arg_orders = executor.wexpr.arg_orders;
-			if (BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
+			const auto optimize = ClientConfig::GetConfig(executor.context).enable_optimizer;
+			if (!optimize || BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) != arg_orders.size()) {
 				token_tree =
 				    make_uniq<WindowTokenTree>(executor.context, arg_orders, executor.arg_order_idx, payload_count);
 			}
@@ -142,15 +143,11 @@ void WindowRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, Win
 				rdata[i] = gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
 			}
 		} else {
-			//	Clamp peer to the frame
 			auto peer_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PEER_BEGIN]);
-			auto frame_peer_begin = MaxValue(peer_begin[0], frame_begin[0]);
-			lpeer.rank = (frame_peer_begin - frame_begin[0]) + 1;
-			lpeer.rank_equal = (row_idx - frame_peer_begin);
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				frame_peer_begin = MaxValue(peer_begin[i], frame_begin[i]);
-				lpeer.NextRank(frame_begin[i], frame_peer_begin, row_idx);
-				rdata[i] = lpeer.rank;
+				//	Clamp peer to the frame
+				const auto frame_peer_begin = MaxValue(frame_begin[i], peer_begin[i]);
+				rdata[i] = (frame_peer_begin - frame_begin[i]) + 1;
 			}
 		}
 		return;
@@ -262,13 +259,10 @@ void WindowPercentRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gsta
 		} else {
 			//	Clamp peer to the frame
 			auto peer_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PEER_BEGIN]);
-			auto frame_peer_begin = MaxValue(frame_begin[0], peer_begin[0]);
-			lpeer.rank = (frame_peer_begin - frame_begin[0]) + 1;
-			lpeer.rank_equal = (row_idx - frame_peer_begin);
 			for (idx_t i = 0; i < count; ++i, ++row_idx) {
-				frame_peer_begin = MaxValue(frame_begin[i], peer_begin[i]);
-				lpeer.NextRank(frame_begin[i], frame_peer_begin, row_idx);
-				rdata[i] = PercentRank(frame_begin[i], frame_peer_begin, lpeer.rank);
+				const auto frame_peer_begin = MaxValue(frame_begin[i], peer_begin[i]);
+				lpeer.rank = (frame_peer_begin - frame_begin[i]) + 1;
+				rdata[i] = PercentRank(frame_begin[i], frame_end[i], lpeer.rank);
 			}
 		}
 		return;
