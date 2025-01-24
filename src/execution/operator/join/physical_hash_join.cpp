@@ -747,7 +747,8 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 				BuildAndPushBloomFilter(info, ht, op, column_ids);
 
 				p.End();
-				Logger::Info(context, "Building the Bloom-filter took %f s", p.Elapsed());
+				//Logger::Info(context, "Building the Bloom-filter took %f s", p.Elapsed());
+				//std::cerr << "Building the Bloom-filter took " << p.Elapsed() << std::endl;
 			}
 		} else {
 			Logger::Info(context, "Not building a Bloom-filter because the number of rows on the build side %u is smaller than the threshold %u", ht.Count(), dynamic_or_filter_threshold);

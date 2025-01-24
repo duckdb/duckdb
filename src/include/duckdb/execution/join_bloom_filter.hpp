@@ -44,6 +44,8 @@ public:
 		JoinBloomFilter bf(column_ids, num_hash_functions, bloom_filter_size);
 		bf.bloom_filter_bits = bloom_filter_bits;
 		bf.bloom_data_buffer = bloom_data_buffer;
+		bf.num_inserted_keys = num_inserted_keys;
+		bf.num_probed_keys = num_probed_keys;
 		return bf;
 	}
 

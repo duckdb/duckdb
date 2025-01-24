@@ -652,13 +652,43 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 				// Evaluate Bloom-filters after all other filters have been evaluated.
 				// Afaik we might also need GetColumn() calls for all key columns?? (yes, otherwise `result` only contains the columns we fetched for other filters.)
-				if (approved_tuple_count > 0) {
-					for (auto &bf : filter_info.GetBloomFilterList()) {
-						if (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.8) {
+				for (auto &bf : filter_info.GetBloomFilterList()) {
+					if (false&&approved_tuple_count > 0) {
+						// Load necessary columns for Bloom-filter
+						// TODO: factor this out into own function
+						// TODO2: make sure that we don't load the same columns again further down.
+						for (auto &bf_col : bf->GetColumnIds()) {
+							if (filter_info.ColumnHasFilters(bf_col)) {
+								// Column has already been scanned as part of another filter. Skip.
+								continue;
+							}
+							auto &column = column_ids[bf_col];
+							if (column.IsRowIdColumn()) {
+								D_ASSERT(result.data[bf_col].GetType().InternalType() == ROW_TYPE);
+								result.data[bf_col].SetVectorType(VectorType::FLAT_VECTOR);
+								auto result_data = FlatVector::GetData<int64_t>(result.data[bf_col]);
+								for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
+									result_data[sel_idx] =
+										UnsafeNumericCast<int64_t>(this->start + current_row + sel.get_index(sel_idx));
+								}
+							} else {
+								auto &col_data = GetColumn(column);
+								if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
+									col_data.Select(transaction, state.vector_index, state.column_scans[bf_col], result.data[bf_col], sel,
+													approved_tuple_count);
+								} else {
+									col_data.SelectCommitted(state.vector_index, state.column_scans[bf_col], result.data[bf_col], sel,
+															approved_tuple_count, ALLOW_UPDATES);
+								}
+							}
+						}
+
+						if (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.1) {
 							Vector hashes(LogicalType::HASH);
 							// TODO: Can we directly put the keys and hashes into the hash join's state so that we don't have to perform hashing twice?
 							result.Hash(bf->GetColumnIds(), sel, approved_tuple_count, hashes);
 							approved_tuple_count = bf->ProbeWithPrecomputedHashes(sel, approved_tuple_count, hashes);
+							//std::cerr << "selectivity: " << bf->GetObservedSelectivity() << std::endl;
 						}
 					}
 				}
@@ -668,7 +698,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						continue;
 					}
 					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
-				}
+				
 			}
 			if (approved_tuple_count == 0) {
 				// all rows were filtered out by the table filters
