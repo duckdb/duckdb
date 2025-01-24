@@ -81,4 +81,3 @@ class TestPolars(object):
         string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
         res = duckdb_cursor.read_json(string).pl()
         assert duckdb_cursor.execute("FROM res").fetchall() == [([{'content': {'ManagedSystem': {'test': None}}}],)]
-
