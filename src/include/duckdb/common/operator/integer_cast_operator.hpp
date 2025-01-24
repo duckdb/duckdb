@@ -279,7 +279,7 @@ static bool IntegerCastLoop(const char *buf, idx_t len, T &result, bool strict) 
 						return false;
 					}
 					using ExponentData = IntegerCastData<int16_t>;
-					ExponentData exponent {};
+					ExponentData exponent;
 					int negative = buf[pos] == '-';
 					if (negative) {
 						if (!IntegerCastLoop<ExponentData, true, false, IntegerCastOperation, decimal_separator>(
