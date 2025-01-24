@@ -653,10 +653,10 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				// Evaluate Bloom-filters after all other filters have been evaluated.
 				// Afaik we might also need GetColumn() calls for all key columns?? (yes, otherwise `result` only contains the columns we fetched for other filters.)
 				for (auto &bf : filter_info.GetBloomFilterList()) {
-					if (false&&approved_tuple_count > 0) {
+					if (approved_tuple_count > 0) {
 						// Load necessary columns for Bloom-filter
 						// TODO: factor this out into own function
-						// TODO2: make sure that we don't load the same columns again further down.
+						// TODO2: make sure that we don't load the same columns again further
 						for (auto &bf_col : bf->GetColumnIds()) {
 							if (filter_info.ColumnHasFilters(bf_col)) {
 								// Column has already been scanned as part of another filter. Skip.
@@ -674,11 +674,9 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 							} else {
 								auto &col_data = GetColumn(column);
 								if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-									col_data.Select(transaction, state.vector_index, state.column_scans[bf_col], result.data[bf_col], sel,
-													approved_tuple_count);
+									col_data.Scan(transaction, state.vector_index, state.column_scans[bf_col], result.data[bf_col]);
 								} else {
-									col_data.SelectCommitted(state.vector_index, state.column_scans[bf_col], result.data[bf_col], sel,
-															approved_tuple_count, ALLOW_UPDATES);
+									col_data.ScanCommitted(state.vector_index, state.column_scans[bf_col], result.data[bf_col], ALLOW_UPDATES);
 								}
 							}
 						}
@@ -686,6 +684,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						if (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.1) {
 							Vector hashes(LogicalType::HASH);
 							// TODO: Can we directly put the keys and hashes into the hash join's state so that we don't have to perform hashing twice?
+
 							result.Hash(bf->GetColumnIds(), sel, approved_tuple_count, hashes);
 							approved_tuple_count = bf->ProbeWithPrecomputedHashes(sel, approved_tuple_count, hashes);
 							//std::cerr << "selectivity: " << bf->GetObservedSelectivity() << std::endl;
@@ -698,6 +697,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						continue;
 					}
 					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
+				}
+
 				
 			}
 			if (approved_tuple_count == 0) {
@@ -745,6 +746,19 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					}
 				}
 			}
+
+			if (filter_info.GetBloomFilterList().size() > 0){
+					// The following are the title.id values that should make it through the join.
+				std::unordered_set<std::string> matching_title_ids{"1836438", "1988118", "1938931", "2001774", "2073984", "2377221", "2360588", "2345914", "2377950", "2346436", "2401589", "2488243"};
+				result.SetCardinality(approved_tuple_count);
+				auto col_vals = result.data[filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]].ToString(approved_tuple_count);
+				for (auto& id : matching_title_ids) {
+					if (col_vals.find(id) !=std::string::npos) {
+						std::cout << id << " does appear in this data chunk" << std::endl;
+					}
+				}
+			}
+
 			filter_info.EndFilter(filter_state);
 
 			D_ASSERT(approved_tuple_count > 0);
