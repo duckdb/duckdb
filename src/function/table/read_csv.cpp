@@ -350,7 +350,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
 	table_function.named_parameters["encoding"] = LogicalType::VARCHAR;
-	table_function.named_parameters["rfc_4180"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["strict_mode"] = LogicalType::BOOLEAN;
 
 	MultiFileReader::AddParameters(table_function);
 }

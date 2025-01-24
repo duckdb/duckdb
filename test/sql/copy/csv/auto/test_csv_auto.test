@@ -20,7 +20,7 @@ FROM read_csv('data/csv/repromarket.csv',
    skip=0,
    null_padding=true,
    ignore_errors=true,
-   RFC_4180=true
+   strict_mode=true
 );
 ----
 nemanja.krpovic@gmail.com	krlleta
@@ -55,7 +55,7 @@ select columns FROM sniff_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_
 
 query IIIII
 FROM read_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_errors = true,
-   RFC_4180=true)
+   strict_mode=true)
 ----
 1	James	30	M	AL
 2	Jill	32	F	CO
@@ -67,7 +67,7 @@ FROM read_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_errors = true,
 
 statement error
 select * from read_csv_auto('data/csv/dates.csv', auto_detect=false, delim=',', quote='"', columns={'a': 'VARCHAR'},
-   RFC_4180=true)
+   strict_mode=true)
 ----
 Expected Number of Columns: 1 Found: 2
 

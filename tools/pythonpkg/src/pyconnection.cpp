@@ -2198,15 +2198,6 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	return py::isinstance(object, import_cache_py.pandas.DataFrame());
 }
 
-bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
-	if (!ModuleIsLoaded<PolarsCacheItem>()) {
-		return false;
-	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache_py.polars.DataFrame()) ||
-	       py::isinstance(object, import_cache_py.polars.LazyFrame());
-}
-
 bool IsValidNumpyDimensions(const py::handle &object, int &dim) {
 	// check the dimensions of numpy arrays
 	// should only be called by IsAcceptedNumpyObject
