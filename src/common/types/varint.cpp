@@ -36,7 +36,7 @@ void Varint::Verify(const string_t &input) {
 	//  No bytes between 4 and end can be 0, unless total size == 4
 	if (varint_bytes > 4) {
 		if (is_negative) {
-			if (~static_cast<data_t>(varint_ptr[3]) == 0) {
+			if (static_cast<data_t>(~varint_ptr[3]) == 0) {
 				throw InternalException("Invalid top data bytes set to 0 for VARINT values");
 			}
 		} else {
