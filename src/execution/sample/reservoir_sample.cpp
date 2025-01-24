@@ -50,7 +50,7 @@ ReservoirSample::ReservoirSample(idx_t sample_count, unique_ptr<ReservoirChunk> 
 	if (reservoir_chunk) {
 		this->reservoir_chunk = std::move(reservoir_chunk);
 		sel_size = this->reservoir_chunk->chunk.size();
-		sel = SelectionVector( FIXED_SAMPLE_SIZE);
+		sel = SelectionVector(FIXED_SAMPLE_SIZE);
 		for (idx_t i = 0; i < sel_size; i++) {
 			sel.set_index(i, i);
 		}
