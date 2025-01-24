@@ -638,6 +638,9 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 			}
 			auto &children = ListValue::GetChildren(kv.second);
 			for (auto &child : children) {
+				if (child.IsNull()) {
+					throw BinderException("read_csv %s parameter cannot have a NULL value", kv.first);
+				}
 				name_list.push_back(StringValue::Get(child));
 			}
 			for (auto &name : name_list) {
