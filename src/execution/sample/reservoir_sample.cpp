@@ -50,7 +50,7 @@ ReservoirSample::ReservoirSample(idx_t sample_count, unique_ptr<ReservoirChunk> 
 	if (reservoir_chunk) {
 		this->reservoir_chunk = std::move(reservoir_chunk);
 		sel_size = this->reservoir_chunk->chunk.size();
-		sel = SelectionVector(0, sel_size);
+		sel = SelectionVector(0, FIXED_SAMPLE_SIZE);
 		ExpandSerializedSample();
 	}
 	stats_sample = true;
@@ -301,6 +301,7 @@ void ReservoirSample::SimpleMerge(ReservoirSample &other) {
 	auto offset = reservoir_chunk->chunk.size();
 	for (idx_t i = keep_from_this; i < size_after_merge; i++) {
 		if (i >= GetActiveSampleCount()) {
+			D_ASSERT(sel_size >= GetActiveSampleCount());
 			sel.set_index(GetActiveSampleCount(), offset);
 			sel_size += 1;
 		} else {
