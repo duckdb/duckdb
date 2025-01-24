@@ -79,5 +79,6 @@ class TestPolars(object):
 
         duckdb_cursor.sql("set arrow_lossless_conversion=true")
         string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
-        with pytest.raises(pl.exceptions.PanicException):
-            res = duckdb_cursor.read_json(string).pl()
+        res = duckdb_cursor.read_json(string).pl()
+        assert duckdb_cursor.execute("FROM res").fetchall() == [([{'content': {'ManagedSystem': {'test': None}}}],)]
+
