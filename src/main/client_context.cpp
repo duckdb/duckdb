@@ -1049,7 +1049,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 
 		return PendingQueryInternal(*lock, std::move(statements[0]), params, true);
 	} catch (std::exception &ex) {
-		return make_uniq<PendingQueryResult>(ErrorData(ex));
+		ErrorData error(ex);
+		ProcessError(error, query);
+		return make_uniq<PendingQueryResult>(std::move(error));
 	}
 }
 
