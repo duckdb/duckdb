@@ -1819,7 +1819,7 @@ struct HugeIntegerCastOperation {
 
 template <>
 bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
-	HugeIntCastData<hugeint_t, Hugeint, int64_t> state;
+	HugeIntCastData<hugeint_t, Hugeint, int64_t> state {};
 	if (!TryIntegerCast<HugeIntCastData<hugeint_t, Hugeint, int64_t>, true, true, HugeIntegerCastOperation>(
 	        input.GetData(), input.GetSize(), state, strict)) {
 		return false;
@@ -1830,7 +1830,7 @@ bool TryCast::Operation(string_t input, hugeint_t &result, bool strict) {
 
 template <>
 bool TryCast::Operation(string_t input, uhugeint_t &result, bool strict) {
-	HugeIntCastData<uhugeint_t, Uhugeint, uint64_t> state;
+	HugeIntCastData<uhugeint_t, Uhugeint, uint64_t> state {};
 	if (!TryIntegerCast<HugeIntCastData<uhugeint_t, Uhugeint, uint64_t>, false, true, HugeIntegerCastOperation>(
 	        input.GetData(), input.GetSize(), state, strict)) {
 		return false;
