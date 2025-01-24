@@ -10,7 +10,7 @@ pragma enable_verification;
 statement error
 from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/202204-clean-sane-header.csv'
 ----
-Enable scanning files that are not RFC 4180 compliant (strict_mode=false).
+* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 query I
 select count(*) from read_csv('https://github.com/duckdb/duckdb-data/releases/download/v1.0/202204-clean-sane-header.csv', strict_mode=false)
