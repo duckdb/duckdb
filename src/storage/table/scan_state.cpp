@@ -60,17 +60,25 @@ void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<StorageInd
 	for (auto &entry : filters.filters) {
 		filter_list.emplace_back(entry.first, column_ids, *entry.second);
 	}
-	column_has_filter.reserve(column_ids.size());
-	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		bool has_filter = table_filters->filters.find(col_idx) != table_filters->filters.end();
-		column_has_filter.push_back(has_filter);
-	}
-	base_column_has_filter = column_has_filter;
-
 	bloom_filter_list.reserve(bloom_filters.size());
 	for (auto &entry : bloom_filters) {
 		bloom_filter_list.push_back(make_uniq<JoinBloomFilter>(entry->Copy()));
 	}
+	column_has_filter.reserve(column_ids.size());
+	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		// The column is used in a normal table filter
+		bool has_filter = table_filters->filters.find(col_idx) != table_filters->filters.end();
+		// The column is used in a Bloom-filter
+		for (auto &bf : bloom_filters) {
+			for (auto bf_col_idx : bf->GetColumnIds()) {
+				if (bf_col_idx == col_idx) {
+					//has_filter = true;
+				}
+			}
+		}
+		column_has_filter.push_back(has_filter);
+	}
+	base_column_has_filter = column_has_filter;
 }
 
 bool ScanFilterInfo::ColumnHasFilters(idx_t column_idx) {

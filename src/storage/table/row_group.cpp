@@ -644,10 +644,19 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						                               approved_tuple_count);
 
 					} else {
-						auto &col_data = GetColumn(filter.table_column_index);
+						auto &col_data = GetColumn(column_idx);
 						col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector,
 						                sel, approved_tuple_count, filter.filter);
 					}
+				}
+
+				if (false) {
+
+				for (auto &table_filter : filter_list) {
+					if (table_filter.IsAlwaysTrue()) {
+						continue;
+					}
+					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
 				}
 
 				// Evaluate Bloom-filters after all other filters have been evaluated.
@@ -658,12 +667,15 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						// TODO: factor this out into own function
 						// TODO2: make sure that we don't load the same columns again further
 						for (auto &bf_col : bf->GetColumnIds()) {
-							if (filter_info.ColumnHasFilters(bf_col)) {
-								// Column has already been scanned as part of another filter. Skip.
+							if (has_filters && filter_info.ColumnHasFilters(bf_col)) {
+								// column has already been scanned as part of the filtering process
 								continue;
 							}
+				
 							auto &column = column_ids[bf_col];
+							
 							if (column.IsRowIdColumn()) {
+								std::cout << "got a rowid column" << std::endl;
 								D_ASSERT(result.data[bf_col].GetType().InternalType() == ROW_TYPE);
 								result.data[bf_col].SetVectorType(VectorType::FLAT_VECTOR);
 								auto result_data = FlatVector::GetData<int64_t>(result.data[bf_col]);
@@ -672,25 +684,44 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 										UnsafeNumericCast<int64_t>(this->start + current_row + sel.get_index(sel_idx));
 								}
 							} else {
+								std::cout << "ladonig column " << bf_col << std::endl;
 								auto &col_data = GetColumn(column);
 								if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-									col_data.Scan(transaction, state.vector_index, state.column_scans[bf_col], result.data[bf_col]);
+									col_data.Select(transaction, state.vector_index, state.column_scans[bf_col], result.data[bf_col], sel,
+													approved_tuple_count);
 								} else {
-									col_data.ScanCommitted(state.vector_index, state.column_scans[bf_col], result.data[bf_col], ALLOW_UPDATES);
+									col_data.SelectCommitted(state.vector_index, state.column_scans[bf_col], result.data[bf_col], sel,
+															approved_tuple_count, ALLOW_UPDATES);
 								}
 							}
 						}
 
-						if (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.1) {
+						if (false && (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.1)) {
 							Vector hashes(LogicalType::HASH);
 							// TODO: Can we directly put the keys and hashes into the hash join's state so that we don't have to perform hashing twice?
 
 							result.Hash(bf->GetColumnIds(), sel, approved_tuple_count, hashes);
 							approved_tuple_count = bf->ProbeWithPrecomputedHashes(sel, approved_tuple_count, hashes);
 							//std::cerr << "selectivity: " << bf->GetObservedSelectivity() << std::endl;
+							std::cout << "pruned with bloom filter" << std::endl;
 						}
 					}
 				}
+				} // if(false)
+
+				// Attempting to find good values for JOB 01c after loading columns for bloom filter pruning.
+				if (filter_info.GetBloomFilterList().size() > 0){
+					// The following are the title.id values that should make it through the join.
+					std::unordered_set<std::string> matching_title_ids{"1836438", "1988118", "1938931", "2001774", "2073984", "2377221", "2360588", "2345914", "2377950", "2346436", "2401589", "2488243"};
+					result.SetCardinality(count);
+					auto col_vals = result.data[filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]].ToString(approved_tuple_count);
+					for (auto& id : matching_title_ids) {
+						if (col_vals.find(id) !=std::string::npos) {
+							std::cout << id << " does appear in this data chunk (after bloom)" << std::endl;
+						}
+					}
+				}
+
 
 				for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {
@@ -754,7 +785,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				auto col_vals = result.data[filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]].ToString(approved_tuple_count);
 				for (auto& id : matching_title_ids) {
 					if (col_vals.find(id) !=std::string::npos) {
-						std::cout << id << " does appear in this data chunk" << std::endl;
+						std::cout << id << " does appear in this data chunk (final)" << std::endl;
 					}
 				}
 			}
