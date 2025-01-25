@@ -72,13 +72,13 @@ public:
 		}
 
 		auto result_collection_index = collection_indexes[0];
-		auto result_collection = data_table.GetOptimisticCollection(context, result_collection_index);
-		D_ASSERT(result_collection);
+		auto &result_collection = data_table.GetOptimisticCollection(context, result_collection_index);
+
 		if (collection_indexes.size() > 1) {
 			// Merge all collections into one result collection.
-			auto &types = result_collection->GetTypes();
+			auto &types = result_collection.GetTypes();
 			TableAppendState append_state;
-			result_collection->InitializeAppend(append_state);
+			result_collection.InitializeAppend(append_state);
 
 			DataChunk scan_chunk;
 			scan_chunk.Initialize(context, types);
@@ -88,13 +88,10 @@ public:
 				column_ids.emplace_back(i);
 			}
 			for (idx_t i = 1; i < collection_indexes.size(); i++) {
-				auto collection = data_table.GetOptimisticCollection(context, collection_indexes[i]);
-				if (!collection) {
-					continue;
-				}
+				auto &collection = data_table.GetOptimisticCollection(context, collection_indexes[i]);
 				TableScanState scan_state;
 				scan_state.Initialize(column_ids);
-				collection->InitializeScan(scan_state.local_state, column_ids, nullptr);
+				collection.InitializeScan(scan_state.local_state, column_ids, nullptr);
 
 				while (true) {
 					scan_chunk.Reset();
@@ -102,17 +99,17 @@ public:
 					if (scan_chunk.size() == 0) {
 						break;
 					}
-					auto new_row_group = result_collection->Append(scan_chunk, append_state);
+					auto new_row_group = result_collection.Append(scan_chunk, append_state);
 					if (new_row_group) {
-						writer.WriteNewRowGroup(*result_collection);
+						writer.WriteNewRowGroup(result_collection);
 					}
 				}
 				data_table.ResetOptimisticCollection(context, collection_indexes[i]);
 			}
-			result_collection->FinalizeAppend(TransactionData(0, 0), append_state);
-			writer.WriteLastRowGroup(*result_collection);
+			result_collection.FinalizeAppend(TransactionData(0, 0), append_state);
+			writer.WriteLastRowGroup(result_collection);
 		} else if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
-			writer.WriteLastRowGroup(*result_collection);
+			writer.WriteLastRowGroup(result_collection);
 		}
 
 		collection_indexes.clear();
@@ -234,12 +231,12 @@ public:
 
 		// Merge the collections.
 		D_ASSERT(l_state.writer);
-		auto collection_index = g_state.MergeCollections(context, std::move(merge_collections), *l_state.writer);
+		auto collection_index = g_state.MergeCollections(context, merge_collections, *l_state.writer);
 
 		// Add the result collection to the set of batch indexes.
 		lock_guard<mutex> l(g_state.lock);
-		auto result_collection = g_state.table.GetStorage().GetOptimisticCollection(context, collection_index);
-		RowGroupBatchEntry new_entry(*result_collection, merged_batch_index, collection_index,
+		auto &result_collection = g_state.table.GetStorage().GetOptimisticCollection(context, collection_index);
+		RowGroupBatchEntry new_entry(result_collection, merged_batch_index, collection_index,
 		                             RowGroupBatchType::FLUSHED);
 		auto it = std::lower_bound(
 		    g_state.collections.begin(), g_state.collections.end(), new_entry,
@@ -328,15 +325,15 @@ void BatchInsertGlobalState::ScheduleMergeTasks(ClientContext &context, const id
 	for (auto &scheduled_task : to_be_scheduled_tasks) {
 		D_ASSERT(scheduled_task.total_count > 0);
 		D_ASSERT(current_idx > scheduled_task.start_index);
-		idx_t merged_batch_index = collections[scheduled_task.start_index].batch_idx;
+		auto merged_batch_index = collections[scheduled_task.start_index].batch_idx;
 		vector<RowGroupBatchEntry> merge_collections;
 		for (idx_t idx = scheduled_task.start_index; idx < scheduled_task.end_index; idx++) {
 			auto &entry = collections[idx];
 			if (!entry.collection_index.IsValid() || entry.type == RowGroupBatchType::FLUSHED) {
 				throw InternalException("Adding a row group collection that should not be flushed");
 			}
-			auto collection = table.GetStorage().GetOptimisticCollection(context, entry.collection_index);
-			RowGroupBatchEntry added_entry(*collection, collections[scheduled_task.start_index].batch_idx,
+			auto &collection = table.GetStorage().GetOptimisticCollection(context, entry.collection_index);
+			RowGroupBatchEntry added_entry(collection, collections[scheduled_task.start_index].batch_idx,
 			                               entry.collection_index, RowGroupBatchType::FLUSHED);
 			added_entry.unflushed_memory = entry.unflushed_memory;
 			merge_collections.push_back(added_entry);
@@ -378,16 +375,16 @@ void BatchInsertGlobalState::AddCollection(ClientContext &context, const idx_t b
 		throw InternalException("Batch index of the added collection (%llu) is smaller than the min batch index (%llu)",
 		                        batch_index, min_batch_index);
 	}
-	auto collection = table.GetStorage().GetOptimisticCollection(context, collection_index);
-	auto new_count = collection->GetTotalRows();
+	auto &collection = table.GetStorage().GetOptimisticCollection(context, collection_index);
+	auto new_count = collection.GetTotalRows();
 	auto batch_type = new_count < row_group_size ? RowGroupBatchType::NOT_FLUSHED : RowGroupBatchType::FLUSHED;
 	if (batch_type == RowGroupBatchType::FLUSHED && writer) {
-		writer->WriteLastRowGroup(*collection);
+		writer->WriteLastRowGroup(collection);
 	}
 	lock_guard<mutex> l(lock);
 	insert_count += new_count;
 	// add the collection to the batch index
-	RowGroupBatchEntry new_entry(*collection, batch_index, collection_index, batch_type);
+	RowGroupBatchEntry new_entry(collection, batch_index, collection_index, batch_type);
 	if (batch_type == RowGroupBatchType::NOT_FLUSHED) {
 		memory_manager.IncreaseUnflushedMemory(new_entry.unflushed_memory);
 	}
@@ -469,8 +466,8 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 		}
 		// batch index has changed: move the old collection to the global state and create a new collection
 		TransactionData tdata(0, 0);
-		auto collection = gstate.table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
-		collection->FinalizeAppend(tdata, lstate.current_append_state);
+		auto &collection = gstate.table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
+		collection.FinalizeAppend(tdata, lstate.current_append_state);
 		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
 		                     lstate.collection_index, lstate.writer);
 
@@ -543,11 +540,11 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	auto &storage = table.GetStorage();
 	storage.VerifyAppendConstraints(*lstate.constraint_state, context.client, lstate.insert_chunk, nullptr, nullptr);
 
-	auto collection = table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
-	auto new_row_group = collection->Append(lstate.insert_chunk, lstate.current_append_state);
+	auto &collection = table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
+	auto new_row_group = collection.Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
 		// we have already written to disk - flush the next row group as well
-		lstate.writer->WriteNewRowGroup(*collection);
+		lstate.writer->WriteNewRowGroup(collection);
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -567,9 +564,9 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 
 	if (lstate.collection_index.IsValid()) {
 		TransactionData tdata(0, 0);
-		auto collection = gstate.table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
-		collection->FinalizeAppend(tdata, lstate.current_append_state);
-		if (collection->GetTotalRows() > 0) {
+		auto &collection = gstate.table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
+		collection.FinalizeAppend(tdata, lstate.current_append_state);
+		if (collection.GetTotalRows() > 0) {
 			gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
 			                     lstate.collection_index);
 		}
@@ -637,8 +634,8 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 
 		// finally, merge the row groups into the local storage
 		for (const auto collection_index : final_collections) {
-			auto collection = data_table.GetOptimisticCollection(context, collection_index);
-			storage.LocalMerge(context, *collection);
+			auto &collection = data_table.GetOptimisticCollection(context, collection_index);
+			storage.LocalMerge(context, collection);
 			data_table.ResetOptimisticCollection(context, collection_index);
 		}
 		storage.FinalizeOptimisticWriter(context, writer);
@@ -656,8 +653,8 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 			}
 
 			memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
-			auto collection = data_table.GetOptimisticCollection(context, entry.collection_index);
-			collection->Scan(transaction, [&](DataChunk &insert_chunk) {
+			auto &collection = data_table.GetOptimisticCollection(context, entry.collection_index);
+			collection.Scan(transaction, [&](DataChunk &insert_chunk) {
 				storage.LocalAppend(append_state, context, insert_chunk, false);
 				return true;
 			});

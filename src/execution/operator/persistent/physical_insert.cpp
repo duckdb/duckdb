@@ -685,7 +685,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	// parallel append
+	// Parallel append.
 	D_ASSERT(!return_chunk);
 	auto &data_table = gstate.table.GetStorage();
 	if (!lstate.collection_index.IsValid()) {
@@ -706,10 +706,10 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 	OnConflictHandling(table, context, lstate);
 	D_ASSERT(action_type != OnConflictAction::UPDATE);
 
-	auto collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
-	auto new_row_group = collection->Append(lstate.insert_chunk, lstate.local_append_state);
+	auto &collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
+	auto new_row_group = collection.Append(lstate.insert_chunk, lstate.local_append_state);
 	if (new_row_group) {
-		lstate.writer->WriteNewRowGroup(*collection);
+		lstate.writer->WriteNewRowGroup(collection);
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -732,10 +732,10 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 	// parallel append: finalize the append
 	TransactionData tdata(0, 0);
 	auto &data_table = gstate.table.GetStorage();
-	auto collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
-	collection->FinalizeAppend(tdata, lstate.local_append_state);
+	auto &collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
+	collection.FinalizeAppend(tdata, lstate.local_append_state);
 
-	auto append_count = collection->GetTotalRows();
+	auto append_count = collection.GetTotalRows();
 
 	lock_guard<mutex> lock(gstate.lock);
 	gstate.insert_count += append_count;
@@ -743,16 +743,16 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		// we have few rows - append to the local storage directly
 		storage.InitializeLocalAppend(gstate.append_state, table, context.client, bound_constraints);
 		auto &transaction = DuckTransaction::Get(context.client, table.catalog);
-		collection->Scan(transaction, [&](DataChunk &insert_chunk) {
+		collection.Scan(transaction, [&](DataChunk &insert_chunk) {
 			storage.LocalAppend(gstate.append_state, context.client, insert_chunk, false);
 			return true;
 		});
 		storage.FinalizeLocalAppend(gstate.append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		lstate.writer->WriteLastRowGroup(*collection);
+		lstate.writer->WriteLastRowGroup(collection);
 		lstate.writer->FinalFlush();
-		gstate.table.GetStorage().LocalMerge(context.client, *collection);
+		gstate.table.GetStorage().LocalMerge(context.client, collection);
 		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
 	}
 

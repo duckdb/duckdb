@@ -853,8 +853,7 @@ PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context, uniq
 	return local_storage.CreateOptimisticCollection(*this, std::move(collection));
 }
 
-optional_ptr<RowGroupCollection> DataTable::GetOptimisticCollection(ClientContext &context,
-                                                                    const PhysicalIndex collection_index) {
+RowGroupCollection &DataTable::GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index) {
 	auto &local_storage = LocalStorage::Get(context, db);
 	return local_storage.GetOptimisticCollection(*this, collection_index);
 }

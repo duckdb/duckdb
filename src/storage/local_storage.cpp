@@ -239,12 +239,9 @@ PhysicalIndex LocalTableStorage::CreateOptimisticCollection(unique_ptr<RowGroupC
 	return PhysicalIndex(optimistic_collections.size() - 1);
 }
 
-optional_ptr<RowGroupCollection> LocalTableStorage::GetOptimisticCollection(const PhysicalIndex collection_index) {
+RowGroupCollection &LocalTableStorage::GetOptimisticCollection(const PhysicalIndex collection_index) {
 	lock_guard<mutex> l(collections_lock);
 	auto &collection = optimistic_collections[collection_index.index];
-	if (collection == nullptr) {
-		return nullptr;
-	}
 	return *collection;
 }
 
@@ -479,8 +476,7 @@ PhysicalIndex LocalStorage::CreateOptimisticCollection(DataTable &table, unique_
 	return storage.CreateOptimisticCollection(std::move(collection));
 }
 
-optional_ptr<RowGroupCollection> LocalStorage::GetOptimisticCollection(DataTable &table,
-                                                                       const PhysicalIndex collection_index) {
+RowGroupCollection &LocalStorage::GetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index) {
 	auto &storage = table_manager.GetOrCreateStorage(context, table);
 	return storage.GetOptimisticCollection(collection_index);
 }
