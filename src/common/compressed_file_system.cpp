@@ -11,10 +11,6 @@ CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> 
 }
 
 CompressedFile::~CompressedFile() {
-	// avoid closing if destroyed during stack unwinding
-	if (Exception::UncaughtException()) {
-		return;
-	}
 	try {
 		// stream_wrapper->Close() might throw
 		CompressedFile::Close();
