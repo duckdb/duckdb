@@ -239,9 +239,18 @@ PhysicalIndex LocalTableStorage::CreateOptimisticCollection(unique_ptr<RowGroupC
 	return PhysicalIndex(optimistic_collections.size() - 1);
 }
 
-RowGroupCollection &LocalTableStorage::GetOptimisticCollection(const PhysicalIndex collection_index) {
+optional_ptr<RowGroupCollection> LocalTableStorage::GetOptimisticCollection(const PhysicalIndex collection_index) {
 	lock_guard<mutex> l(collections_lock);
-	return *optimistic_collections[collection_index.index];
+	auto &collection = optimistic_collections[collection_index.index];
+	if (collection == nullptr) {
+		return nullptr;
+	}
+	return *collection;
+}
+
+void LocalTableStorage::ResetOptimisticCollection(const PhysicalIndex collection_index) {
+	lock_guard<mutex> l(collections_lock);
+	optimistic_collections[collection_index.index].reset();
 }
 
 OptimisticDataWriter &LocalTableStorage::CreateOptimisticWriter() {
@@ -470,9 +479,15 @@ PhysicalIndex LocalStorage::CreateOptimisticCollection(DataTable &table, unique_
 	return storage.CreateOptimisticCollection(std::move(collection));
 }
 
-RowGroupCollection &LocalStorage::GetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index) {
+optional_ptr<RowGroupCollection> LocalStorage::GetOptimisticCollection(DataTable &table,
+                                                                       const PhysicalIndex collection_index) {
 	auto &storage = table_manager.GetOrCreateStorage(context, table);
 	return storage.GetOptimisticCollection(collection_index);
+}
+
+void LocalStorage::ResetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index) {
+	auto &storage = table_manager.GetOrCreateStorage(context, table);
+	storage.ResetOptimisticCollection(collection_index);
 }
 
 OptimisticDataWriter &LocalStorage::CreateOptimisticWriter(DataTable &table) {

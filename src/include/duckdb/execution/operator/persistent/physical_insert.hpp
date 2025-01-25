@@ -57,6 +57,7 @@ public:
 	DataChunk update_chunk;
 	ExpressionExecutor default_executor;
 	TableAppendState local_append_state;
+	//! An index to the optimistic row group collection vector of the local table storage for this transaction.
 	PhysicalIndex collection_index;
 	optional_ptr<OptimisticDataWriter> writer;
 	// Rows that have been updated by a DO UPDATE conflict

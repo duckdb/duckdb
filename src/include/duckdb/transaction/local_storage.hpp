@@ -81,7 +81,9 @@ public:
 	//! Returns the index into the optimistic_collections vector for newly created collection.
 	PhysicalIndex CreateOptimisticCollection(unique_ptr<RowGroupCollection> collection);
 	//! Returns the optimistic row group collection corresponding to the index.
-	RowGroupCollection &GetOptimisticCollection(const PhysicalIndex collection_index);
+	optional_ptr<RowGroupCollection> GetOptimisticCollection(const PhysicalIndex collection_index);
+	//! Resets the optimistic row group collection corresponding to the index.
+	void ResetOptimisticCollection(const PhysicalIndex collection_index);
 	//! Create an optimistic writer for this table.
 	OptimisticDataWriter &CreateOptimisticWriter();
 	void FinalizeOptimisticWriter(OptimisticDataWriter &writer);
@@ -145,7 +147,9 @@ public:
 	//! Returns the index into the optimistic_collections vector for newly created collection.
 	PhysicalIndex CreateOptimisticCollection(DataTable &table, unique_ptr<RowGroupCollection> collection);
 	//! Returns the optimistic row group collection corresponding to the index.
-	RowGroupCollection &GetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
+	optional_ptr<RowGroupCollection> GetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
+	//! Resets the optimistic row group collection corresponding to the index.
+	void ResetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
 	//! Create an optimistic writer for this table.
 	OptimisticDataWriter &CreateOptimisticWriter(DataTable &table);
 	void FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer);
