@@ -374,7 +374,8 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, info, filters);
 	if (filtered_list) {
 		data.files = filtered_list->GetAllFiles();
-		MultiFileReader::PruneReaders(data, file_list);
+		SimpleMultiFileList simple_filtered_list(data.files);
+		MultiFileReader::PruneReaders(data, simple_filtered_list);
 	} else {
 		data.files = file_list.GetAllFiles();
 	}

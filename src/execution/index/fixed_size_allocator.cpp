@@ -227,8 +227,7 @@ void FixedSizeAllocator::FinalizeVacuum() {
 
 	for (auto &buffer_id : vacuum_buffers) {
 		D_ASSERT(buffers.find(buffer_id) != buffers.end());
-		auto &buffer = buffers.find(buffer_id)->second;
-		D_ASSERT(buffer->InMemory());
+		D_ASSERT(buffers.find(buffer_id)->second->InMemory());
 		buffers.erase(buffer_id);
 	}
 	vacuum_buffers.clear();
