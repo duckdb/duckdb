@@ -11,7 +11,11 @@ CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> 
 }
 
 CompressedFile::~CompressedFile() {
-	CompressedFile::Close();
+	try {
+		// stream_wrapper->Close() might throw
+		CompressedFile::Close();
+	} catch (...) { // NOLINT - cannot throw in exception
+	}
 }
 
 void CompressedFile::Initialize(bool write) {
