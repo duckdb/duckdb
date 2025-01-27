@@ -25,7 +25,7 @@ const string tbl_zst = "tbl.zst";
 
 const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
-const char *run = std::getenv("DUCKDB_RUN_PARALLEL_CSV_TESTS");
+const char *run = "bla";
 
 bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
                        ColumnDataCollection *ground_truth = nullptr, const string &add_parameters = "") {
