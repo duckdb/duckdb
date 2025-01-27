@@ -4,11 +4,7 @@ namespace duckdb {
 
 MemoryStream::MemoryStream(idx_t capacity) : position(0), capacity(capacity), owns_data(true) {
 	D_ASSERT(capacity != 0 && IsPowerOfTwo(capacity));
-	auto data_malloc_result = malloc(capacity);
-	if (!data_malloc_result) {
-		throw std::bad_alloc();
-	}
-	data = static_cast<data_ptr_t>(data_malloc_result);
+	data = Allocator::DefaultAllocatorReference()->AllocateData(capacity);
 }
 
 MemoryStream::MemoryStream(data_ptr_t buffer, idx_t capacity)
@@ -17,7 +13,7 @@ MemoryStream::MemoryStream(data_ptr_t buffer, idx_t capacity)
 
 MemoryStream::~MemoryStream() {
 	if (owns_data) {
-		free(data);
+		Allocator::DefaultAllocatorReference()->FreeData(data, capacity);
 	}
 }
 
@@ -39,7 +35,7 @@ MemoryStream &MemoryStream::operator=(MemoryStream &&other) noexcept {
 	if (this != &other) {
 		// Free the current data
 		if (owns_data) {
-			free(data);
+			Allocator::DefaultAllocatorReference()->FreeData(data, capacity);
 		}
 
 		// Move the data from the other stream into this stream
@@ -58,13 +54,16 @@ MemoryStream &MemoryStream::operator=(MemoryStream &&other) noexcept {
 }
 
 void MemoryStream::WriteData(const_data_ptr_t source, idx_t write_size) {
+	const auto old_capacity = capacity;
 	while (position + write_size > capacity) {
 		if (owns_data) {
 			capacity *= 2;
-			data = static_cast<data_ptr_t>(realloc(data, capacity));
 		} else {
 			throw SerializationException("Failed to serialize: not enough space in buffer to fulfill write request");
 		}
+	}
+	if (capacity != old_capacity) {
+		data = Allocator::DefaultAllocatorReference()->ReallocateData(data, old_capacity, capacity);
 	}
 	memcpy(data + position, source, write_size);
 	position += write_size;
