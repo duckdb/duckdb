@@ -508,11 +508,12 @@ void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t bu
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
 	// remove potential empty values
-	idx_t length = buffer_pos - result.quoted_position - 2;
+	idx_t length = buffer_pos - result.quoted_position - 1;
 	while (length > 0 && result.ignore_empty_values &&
 	       result.buffer_ptr[result.quoted_position + 1 + length - 1] == ' ') {
 		length--;
 	}
+	length--;
 	AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.quoted_position + 1, length,
 	                        buffer_pos < result.last_position.buffer_pos + 2);
 	result.quoted = false;
