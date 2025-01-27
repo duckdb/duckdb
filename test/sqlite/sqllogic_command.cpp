@@ -527,6 +527,10 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 		runner.config->options.use_temporary_directory = true;
 		runner.config->options.access_mode = AccessMode::AUTOMATIC;
 	}
+	if (runner.db) {
+		runner.config->options.serialization_compatibility =
+		    runner.db->instance->config.options.serialization_compatibility;
+	}
 	// now create the database file
 	runner.LoadDatabase(resolved_path, true);
 }

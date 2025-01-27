@@ -119,7 +119,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			auto error_type = error.Type();
-			if (error_type != ExceptionType::INVALID_INPUT && error_type != ExceptionType::CONVERSION) {
+			if (!Exception::IsExecutionError(error_type)) {
 				throw;
 			}
 		}
@@ -134,7 +134,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			} catch (std::exception &ex) {
 				ErrorData error(ex);
 				auto error_type = error.Type();
-				if (error_type != ExceptionType::INVALID_INPUT && error_type != ExceptionType::CONVERSION) {
+				if (!Exception::IsExecutionError(error_type)) {
 					throw;
 				}
 			}

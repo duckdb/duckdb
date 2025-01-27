@@ -50,11 +50,13 @@ public:
 	WriteAheadLogDeserializer(ReplayState &state_p, BufferedFileReader &stream_p, bool deserialize_only = false)
 	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(nullptr),
 	      stream(nullptr, 0), deserializer(stream_p), deserialize_only(deserialize_only) {
+		deserializer.Set<Catalog &>(catalog);
 	}
 	WriteAheadLogDeserializer(ReplayState &state_p, unique_ptr<data_t[]> data_p, idx_t size,
 	                          bool deserialize_only = false)
 	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(std::move(data_p)),
 	      stream(data.get(), size), deserializer(stream), deserialize_only(deserialize_only) {
+		deserializer.Set<Catalog &>(catalog);
 	}
 
 	static WriteAheadLogDeserializer Open(ReplayState &state_p, BufferedFileReader &stream,

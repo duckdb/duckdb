@@ -365,7 +365,7 @@ bool TypeIsInteger(PhysicalType type) {
 	       type == PhysicalType::UINT128;
 }
 
-static string TypeModifierListToString(const vector<Value> &mod_list) {
+static string TypeModifierListToString(const vector<LogicalTypeModifier> &mod_list) {
 	string result;
 	if (mod_list.empty()) {
 		return result;
@@ -499,7 +499,14 @@ string LogicalType::ToString() const {
 		result += KeywordHelper::WriteOptionallyQuoted(type);
 
 		if (!mods.empty()) {
-			result += TypeModifierListToString(mods);
+			result += "(";
+			for (idx_t i = 0; i < mods.size(); i++) {
+				result += mods[i].ToString();
+				if (i < mods.size() - 1) {
+					result += ", ";
+				}
+			}
+			result += ")";
 		}
 
 		return result;
@@ -1307,7 +1314,7 @@ void LogicalType::Verify() const {
 	switch (id_) {
 	case LogicalTypeId::DECIMAL:
 		D_ASSERT(DecimalType::GetWidth(*this) >= 1 && DecimalType::GetWidth(*this) <= Decimal::MAX_WIDTH_DECIMAL);
-		D_ASSERT(DecimalType::GetScale(*this) >= 0 && DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
+		D_ASSERT(DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
 		break;
 	case LogicalTypeId::STRUCT: {
 		// verify child types

@@ -60,7 +60,7 @@ WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, C
 		// see https://dl.acm.org/doi/pdf/10.1145/3514221.3526184
 		aggregator = make_uniq<WindowDistinctAggregator>(wexpr, shared, context);
 	} else if (WindowConstantAggregator::CanAggregate(wexpr)) {
-		aggregator = make_uniq<WindowConstantAggregator>(wexpr, shared);
+		aggregator = make_uniq<WindowConstantAggregator>(wexpr, shared, context);
 	} else if (WindowCustomAggregator::CanAggregate(wexpr, mode)) {
 		aggregator = make_uniq<WindowCustomAggregator>(wexpr, shared);
 	} else if (WindowSegmentTree::CanAggregate(wexpr)) {
@@ -194,7 +194,12 @@ static void ApplyWindowStats(const WindowBoundary &boundary, FrameDelta &delta, 
 	case WindowBoundary::EXPR_PRECEDING_RANGE:
 	case WindowBoundary::EXPR_FOLLOWING_RANGE:
 		return;
-	default:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+	case WindowBoundary::EXPR_PRECEDING_GROUPS:
+	case WindowBoundary::EXPR_FOLLOWING_GROUPS:
+		return;
+	case WindowBoundary::INVALID:
+		throw InternalException(is_start ? "Unknown window start boundary" : "Unknown window end boundary");
 		break;
 	}
 

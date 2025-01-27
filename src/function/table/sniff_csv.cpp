@@ -152,6 +152,13 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 	CSVSniffer sniffer(sniffer_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(data.force_match);
+	if (sniffer.EmptyOrOnlyHeader()) {
+		for (auto &type : sniffer_result.return_types) {
+			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
+			// we default to varchar if all files are empty or only have a header after all the sniffing
+			type = LogicalType::VARCHAR;
+		}
+	}
 	string str_opt;
 	string separator = ", ";
 	// Set output

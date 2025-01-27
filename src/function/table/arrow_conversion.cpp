@@ -118,7 +118,8 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &a
 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset = -1,
-                                ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
+                                ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0,
+                                bool ignore_extensions = false);
 
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
                                           idx_t size, const ArrowType &arrow_type, int64_t nested_offset = -1,
@@ -765,9 +766,19 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &a
 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
-                                uint64_t parent_offset) {
+                                uint64_t parent_offset, bool ignore_extensions) {
 	auto &scan_state = array_state.state;
 	D_ASSERT(!array.dictionary);
+	if (!ignore_extensions && arrow_type.HasExtension()) {
+		if (arrow_type.extension_data->arrow_to_duckdb) {
+			// Convert the storage and then call the cast function
+			Vector input_data(arrow_type.extension_data->GetInternalType());
+			ColumnArrowToDuckDB(input_data, array, array_state, size, arrow_type, nested_offset, parent_mask,
+			                    parent_offset, /*ignore_extensions*/ true);
+			arrow_type.extension_data->arrow_to_duckdb(array_state.context, input_data, vector, size);
+			return;
+		}
+	}
 
 	if (vector.GetBuffer()) {
 		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
@@ -1093,7 +1104,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 				break;
 			case ArrowArrayPhysicalType::DEFAULT:
 				ColumnArrowToDuckDB(child_entry, child_array, child_state, size, child_type, nested_offset,
-				                    &struct_validity_mask, NumericCast<uint64_t>(array.offset));
+				                    &struct_validity_mask, NumericCast<uint64_t>(array.offset), false);
 				break;
 			default:
 				throw NotImplementedException("ArrowArrayPhysicalType not recognized");
@@ -1126,7 +1137,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 				ColumnArrowToDuckDBRunEndEncoded(child, child_array, child_state, size, child_type);
 				break;
 			case ArrowArrayPhysicalType::DEFAULT:
-				ColumnArrowToDuckDB(child, child_array, child_state, size, child_type, nested_offset, &validity_mask);
+				ColumnArrowToDuckDB(child, child_array, child_state, size, child_type, nested_offset, &validity_mask,
+				                    false);
 				break;
 			default:
 				throw NotImplementedException("ArrowArrayPhysicalType not recognized");

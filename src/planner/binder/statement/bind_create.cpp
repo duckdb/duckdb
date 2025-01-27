@@ -41,6 +41,7 @@
 #include "duckdb/planner/tableref/bound_basetableref.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/common/extension_type_info.hpp"
+#include "duckdb/common/type_visitor.hpp"
 
 namespace duckdb {
 
@@ -253,54 +254,56 @@ static bool IsValidUserType(optional_ptr<CatalogEntry> entry) {
 	return entry->Cast<TypeCatalogEntry>().user_type.id() != LogicalTypeId::INVALID;
 }
 
-void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
+LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_ptr<Catalog> catalog,
+                                            const string &schema) {
 	if (type.id() != LogicalTypeId::USER) {
-		// Recursive types, make sure to bind any nested user types recursively
-		auto alias = type.GetAlias();
-		auto ext_info = type.HasExtensionInfo() ? make_uniq<ExtensionTypeInfo>(*type.GetExtensionInfo()) : nullptr;
-
+		// Nested type, make sure to bind any nested user types recursively
+		LogicalType result;
 		switch (type.id()) {
 		case LogicalTypeId::LIST: {
-			auto child_type = ListType::GetChildType(type);
-			BindLogicalType(child_type, catalog, schema);
-			type = LogicalType::LIST(child_type);
-		} break;
+			auto child_type = BindLogicalTypeInternal(ListType::GetChildType(type), catalog, schema);
+			result = LogicalType::LIST(child_type);
+			break;
+		}
 		case LogicalTypeId::MAP: {
-			auto key_type = MapType::KeyType(type);
-			BindLogicalType(key_type, catalog, schema);
-			auto value_type = MapType::ValueType(type);
-			BindLogicalType(value_type, catalog, schema);
-			type = LogicalType::MAP(key_type, value_type);
-		} break;
+			auto key_type = BindLogicalTypeInternal(MapType::KeyType(type), catalog, schema);
+			auto value_type = BindLogicalTypeInternal(MapType::ValueType(type), catalog, schema);
+			result = LogicalType::MAP(std::move(key_type), std::move(value_type));
+			break;
+		}
 		case LogicalTypeId::ARRAY: {
-			auto child_type = ArrayType::GetChildType(type);
+			auto child_type = BindLogicalTypeInternal(ArrayType::GetChildType(type), catalog, schema);
 			auto array_size = ArrayType::GetSize(type);
-			BindLogicalType(child_type, catalog, schema);
-			type = LogicalType::ARRAY(child_type, array_size);
-		} break;
+			result = LogicalType::ARRAY(child_type, array_size);
+			break;
+		}
 		case LogicalTypeId::STRUCT: {
 			auto child_types = StructType::GetChildTypes(type);
-			for (auto &child_type : child_types) {
-				BindLogicalType(child_type.second, catalog, schema);
+			child_list_t<LogicalType> new_child_types;
+			for (auto &entry : child_types) {
+				new_child_types.emplace_back(entry.first, BindLogicalTypeInternal(entry.second, catalog, schema));
 			}
-			type = LogicalType::STRUCT(child_types);
-		} break;
-		case LogicalTypeId::UNION: {
-			auto member_types = UnionType::CopyMemberTypes(type);
-			for (auto &member_type : member_types) {
-				BindLogicalType(member_type.second, catalog, schema);
-			}
-			type = LogicalType::UNION(member_types);
-		} break;
-		default:
+			result = LogicalType::STRUCT(std::move(new_child_types));
 			break;
+		}
+		case LogicalTypeId::UNION: {
+			child_list_t<LogicalType> member_types;
+			for (idx_t i = 0; i < UnionType::GetMemberCount(type); i++) {
+				auto child_type = BindLogicalTypeInternal(UnionType::GetMemberType(type, i), catalog, schema);
+				member_types.emplace_back(UnionType::GetMemberName(type, i), std::move(child_type));
+			}
+			result = LogicalType::UNION(std::move(member_types));
+			break;
+		}
+		default:
+			return type;
 		}
 
 		// Set the alias and extension info back
-		type.SetAlias(alias);
-		type.SetExtensionInfo(std::move(ext_info));
-
-		return;
+		result.SetAlias(type.GetAlias());
+		auto ext_info = type.HasExtensionInfo() ? make_uniq<ExtensionTypeInfo>(*type.GetExtensionInfo()) : nullptr;
+		result.SetExtensionInfo(std::move(ext_info));
+		return result;
 	}
 
 	// User type, bind the user type
@@ -308,8 +311,9 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 	auto user_type_schema = UserType::GetSchema(type);
 	auto user_type_mods = UserType::GetTypeModifiers(type);
 
-	bind_type_modifiers_function_t user_bind_modifiers_func = nullptr;
+	bind_logical_type_function_t user_bind_modifiers_func = nullptr;
 
+	LogicalType result;
 	if (catalog) {
 		// The search order is:
 		// 1) In the explicitly set schema (my_schema.my_type)
@@ -335,8 +339,8 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 			                                 OnEntryNotFound::THROW_EXCEPTION);
 		}
 		auto &type_entry = entry->Cast<TypeCatalogEntry>();
-		type = type_entry.user_type;
-		user_bind_modifiers_func = type_entry.bind_modifiers;
+		result = type_entry.user_type;
+		user_bind_modifiers_func = type_entry.bind_function;
 	} else {
 		string type_catalog = UserType::GetCatalog(type);
 		string type_schema = UserType::GetSchema(type);
@@ -344,56 +348,33 @@ void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, c
 		BindSchemaOrCatalog(context, type_catalog, type_schema);
 		auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, type_catalog, type_schema, user_type_name);
 		auto &type_entry = entry->Cast<TypeCatalogEntry>();
-		type = type_entry.user_type;
-		user_bind_modifiers_func = type_entry.bind_modifiers;
+		result = type_entry.user_type;
+		user_bind_modifiers_func = type_entry.bind_function;
 	}
 
 	// Now we bind the inner user type
-	BindLogicalType(type, catalog, schema);
+	BindLogicalType(result, catalog, schema);
 
 	// Apply the type modifiers (if any)
 	if (user_bind_modifiers_func) {
 		// If an explicit bind_modifiers function was provided, use that to construct the type
-		BindTypeModifiersInput input {context, type, user_type_mods};
-		type = user_bind_modifiers_func(input);
-	} else if (type.HasExtensionInfo()) {
-		auto &ext_info = *type.GetExtensionInfo();
 
-		// If the type already has modifiers, try to replace them with the user-provided ones if they are compatible
-		// This enables registering custom types with "default" type modifiers that can be overridden, without
-		// having to provide a custom bind_modifiers function
-		auto type_mods_size = ext_info.modifiers.size();
-
-		// Are we trying to pass more type modifiers than the type has?
-		if (user_type_mods.size() > type_mods_size) {
-			throw BinderException(
-			    "Cannot apply '%d' type modifier(s) to type '%s' taking at most '%d' type modifier(s)",
-			    user_type_mods.size(), user_type_name, type_mods_size);
+		BindLogicalTypeInput input {context, result, user_type_mods};
+		result = user_bind_modifiers_func(input);
+	} else {
+		if (!user_type_mods.empty()) {
+			throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
 		}
-
-		// Deep copy the type so that we can replace the type modifiers
-		type = type.DeepCopy();
-
-		// Re-fetch the type modifiers now that we've deduplicated the ExtraTypeInfo
-		auto &type_mods = type.GetExtensionInfo()->modifiers;
-
-		// Replace them in order, casting if necessary
-		for (idx_t i = 0; i < MinValue(type_mods.size(), user_type_mods.size()); i++) {
-			auto &type_mod = type_mods[i];
-			auto user_type_mod = user_type_mods[i];
-			if (type_mod.type() == user_type_mod.type()) {
-				type_mod = std::move(user_type_mod);
-			} else if (user_type_mod.DefaultTryCastAs(type_mod.type())) {
-				type_mod = std::move(user_type_mod);
-			} else {
-				throw BinderException("Cannot apply type modifier '%s' to type '%s', expected value of type '%s'",
-				                      user_type_mod.ToString(), user_type_name, type_mod.type().ToString());
-			}
-		}
-	} else if (!user_type_mods.empty()) {
-		// We're trying to pass type modifiers to a type that doesnt have any
-		throw BinderException("Type '%s' does not take any type modifiers", user_type_name);
 	}
+	return result;
+}
+
+void Binder::BindLogicalType(LogicalType &type, optional_ptr<Catalog> catalog, const string &schema) {
+	// check if we need to bind this type at all
+	if (!TypeVisitor::Contains(type, LogicalTypeId::USER)) {
+		return;
+	}
+	type = BindLogicalTypeInternal(type, catalog, schema);
 }
 
 unique_ptr<LogicalOperator> DuckCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,

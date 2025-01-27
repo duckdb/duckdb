@@ -117,9 +117,7 @@ static void ReplaceNames(vector<string> &detected_names, CSVStateMachine &state_
 					detected_names.push_back(GenerateColumnName(options.name_list.size(), col++));
 					best_sql_types_candidates_per_column_idx[i] = {LogicalType::VARCHAR};
 				}
-
 				dialect_options.num_cols = options.name_list.size();
-
 			} else {
 				// we throw an error
 				const auto error = CSVError::HeaderSniffingError(
@@ -128,8 +126,16 @@ static void ReplaceNames(vector<string> &detected_names, CSVStateMachine &state_
 				error_handler.Error(error);
 			}
 		}
-		for (idx_t i = 0; i < options.name_list.size(); i++) {
-			detected_names[i] = options.name_list[i];
+		if (options.name_list.size() > detected_names.size()) {
+			// we throw an error
+			const auto error =
+			    CSVError::HeaderSniffingError(options, best_header_row, options.name_list.size(),
+			                                  state_machine.dialect_options.state_machine_options.delimiter.GetValue());
+			error_handler.Error(error);
+		} else {
+			for (idx_t i = 0; i < options.name_list.size(); i++) {
+				detected_names[i] = options.name_list[i];
+			}
 		}
 	}
 }
@@ -335,6 +341,13 @@ void CSVSniffer::DetectHeader() {
 	auto &sniffer_state_machine = best_candidate->GetStateMachine();
 	names = DetectHeaderInternal(buffer_manager->context, best_header_row, sniffer_state_machine, set_columns,
 	                             best_sql_types_candidates_per_column_idx, options, *error_handler);
+	if (EmptyOrOnlyHeader()) {
+		// This file only contains a header, lets default to the lowest type of all.
+		detected_types.clear();
+		for (idx_t i = 0; i < names.size(); i++) {
+			detected_types.push_back(LogicalType::BOOLEAN);
+		}
+	}
 	for (idx_t i = max_columns_found; i < names.size(); i++) {
 		detected_types.push_back(LogicalType::VARCHAR);
 	}

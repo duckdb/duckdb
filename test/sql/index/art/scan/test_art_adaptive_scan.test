@@ -20,17 +20,12 @@ SET index_scan_percentage = 1.0;
 statement ok
 SET index_scan_max_count = 0;
 
+query II
+EXPLAIN ANALYZE SELECT COUNT(i) FROM integers WHERE i = 42;
+----
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
+
 query I
 SELECT COUNT(i) FROM integers WHERE i = 42;
 ----
 2050
-
-statement ok
-PRAGMA explain_output='optimized_only'
-
-# Verify that the plan contains an index scan.
-
-query II
-EXPLAIN SELECT COUNT(i) FROM integers WHERE i = 42;
-----
-logical_opt	<REGEX>:.*INDEX_SCAN.*

@@ -270,7 +270,7 @@ class TestFetchNested(object):
             'a': [
                 {
                     '1':10,
-                    '2':9,
+                    # '2':9,  # This value will be overwritten by '2':11 below.
                     '3':8,
                     '4':7,
                     '2':11,

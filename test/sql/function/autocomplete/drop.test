@@ -28,3 +28,27 @@ query II
 FROM sql_auto_complete('DROP TABLE tbl CAS') LIMIT 1;
 ----
 CASCADE 	15
+
+statement ok
+CREATE TABLE my_table(my_column INTEGER);
+
+query II
+FROM sql_auto_complete('DROP TABLE my_') LIMIT 1;
+----
+my_table	11
+
+statement ok
+CREATE SCHEMA my_schema;
+
+statement ok
+CREATE TABLE my_schema.table_in_schema(my_column INTEGER)
+
+query II
+FROM sql_auto_complete('DROP TABLE my_s') LIMIT 1;
+----
+my_schema.	11
+
+query II
+FROM sql_auto_complete('DROP TABLE my_schema.t') LIMIT 1;
+----
+table_in_schema	21

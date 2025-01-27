@@ -204,6 +204,12 @@ enum class LimitNodeType : uint8_t;
 
 enum class LoadType : uint8_t;
 
+enum class LogContextScope : uint8_t;
+
+enum class LogLevel : uint8_t;
+
+enum class LogMode : uint8_t;
+
 enum class LogicalOperatorType : uint8_t;
 
 enum class LogicalTypeId : uint8_t;
@@ -219,6 +225,8 @@ enum class MemoryTag : uint8_t;
 enum class MetaPipelineType : uint8_t;
 
 enum class MetricsType : uint8_t;
+
+enum class MultiFileReaderColumnMappingMode : uint8_t;
 
 enum class NType : uint8_t;
 
@@ -642,6 +650,15 @@ template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
 
 template<>
+const char* EnumUtil::ToChars<LogContextScope>(LogContextScope value);
+
+template<>
+const char* EnumUtil::ToChars<LogLevel>(LogLevel value);
+
+template<>
+const char* EnumUtil::ToChars<LogMode>(LogMode value);
+
+template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
 
 template<>
@@ -664,6 +681,9 @@ const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
+
+template<>
+const char* EnumUtil::ToChars<MultiFileReaderColumnMappingMode>(MultiFileReaderColumnMappingMode value);
 
 template<>
 const char* EnumUtil::ToChars<NType>(NType value);
@@ -1168,6 +1188,15 @@ template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
 
 template<>
+LogContextScope EnumUtil::FromString<LogContextScope>(const char *value);
+
+template<>
+LogLevel EnumUtil::FromString<LogLevel>(const char *value);
+
+template<>
+LogMode EnumUtil::FromString<LogMode>(const char *value);
+
+template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);
 
 template<>
@@ -1190,6 +1219,9 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value);
+
+template<>
+MultiFileReaderColumnMappingMode EnumUtil::FromString<MultiFileReaderColumnMappingMode>(const char *value);
 
 template<>
 NType EnumUtil::FromString<NType>(const char *value);

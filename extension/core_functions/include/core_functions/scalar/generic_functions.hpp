@@ -168,13 +168,4 @@ struct IsHistogramOtherBinFun {
 	static ScalarFunction GetFunction();
 };
 
-struct TryFun {
-	static constexpr const char *Name = "try";
-	static constexpr const char *Parameters = "expr";
-	static constexpr const char *Description = "Performs the expr expression, returning the result or NULL if the expression would error";
-	static constexpr const char *Example = "try(cast(definitely_integers as INTEGER))";
-
-	static ScalarFunction GetFunction();
-};
-
 } // namespace duckdb

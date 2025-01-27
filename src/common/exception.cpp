@@ -36,7 +36,12 @@ string Exception::ToJSON(ExceptionType type, const string &message, const unorde
 #endif
 	{
 		auto extended_extra_info = extra_info;
-		extended_extra_info["stack_trace_pointers"] = StackTrace::GetStacktracePointers();
+		// We only want to add the stack trace pointers if they are not already present, otherwise the original
+		// stack traces are lost
+		if (extended_extra_info.find("stack_trace_pointers") == extended_extra_info.end() &&
+		    extended_extra_info.find("stack_trace") == extended_extra_info.end()) {
+			extended_extra_info["stack_trace_pointers"] = StackTrace::GetStacktracePointers();
+		}
 		return StringUtil::ExceptionToJSONMap(type, message, extended_extra_info);
 	}
 	return StringUtil::ExceptionToJSONMap(type, message, extra_info);
@@ -187,6 +192,17 @@ unordered_map<string, string> Exception::InitializeExtraInfo(optional_idx error_
 	unordered_map<string, string> result;
 	SetQueryLocation(error_location, result);
 	return result;
+}
+
+bool Exception::IsExecutionError(ExceptionType type) {
+	switch (type) {
+	case ExceptionType::INVALID_INPUT:
+	case ExceptionType::OUT_OF_RANGE:
+	case ExceptionType::CONVERSION:
+		return true;
+	default:
+		return false;
+	}
 }
 
 unordered_map<string, string> Exception::InitializeExtraInfo(const string &subtype, optional_idx error_location) {
