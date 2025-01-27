@@ -1,5 +1,7 @@
 #include "duckdb/common/serializer/memory_stream.hpp"
 
+#include "duckdb/common/allocator.hpp"
+
 namespace duckdb {
 
 MemoryStream::MemoryStream(idx_t capacity) : position(0), capacity(capacity), owns_data(true) {
