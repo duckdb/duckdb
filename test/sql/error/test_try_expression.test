@@ -1,6 +1,72 @@
 # name: test/sql/error/test_try_expression.test
 # group: [error]
 
+statement ok
+pragma enable_verification;
+
+# --- OPERATOR_CAST ---
+
+query I
+select TRY('abc'::INTEGER)
+----
+NULL
+
+# --- OPERATOR_NOT ---
+
+## FIXME: this should error?
+#query I
+#select ~error('test')
+#----
+#NULL
+
+query I
+select TRY(~error('test'))
+----
+NULL
+
+# --- OPERATOR_IS_NULL ---
+
+query I
+select TRY(error('test') IS NULL);
+----
+NULL
+
+
+# --- OPERATOR_IS_NOT_NULL ---
+
+query I
+select TRY(error('test') IS NOT NULL);
+----
+NULL
+
+# --- COMPARE_EQUAL ---
+
+query I
+select TRY(error('test') == 'abc')
+----
+NULL
+
+# --- COMPARE_EQUAL ---
+
+query I
+select TRY(error('test') == 'abc')
+----
+NULL
+
+# --- COMPARE_NOTEQUAL ---
+
+query I
+select TRY(error('test') != 'abc')
+----
+NULL
+
+# --- Functions ---
+
+query I
+select TRY(ln(0));
+----
+NULL
+
 query I
 with cte as (
 	select * from (VALUES
