@@ -686,7 +686,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 									auto vector_idx = vdata.sel->get_index(idx);
 									auto val = UnifiedVectorFormat::GetData<int32_t>(vdata)[vector_idx];
 									if (matching_title_ids_int.find(val) != matching_title_ids_int.end()) {
-										std::cout << val << " does appear in the SELECTED data chunk the new loading code!!!!!!!!" <<std::endl;
+										//std::cout << val << " does appear in the SELECTED data chunk the new loading code!!!!!!!!" <<std::endl;
 									}
 								}
 							}
@@ -695,7 +695,13 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 					// Evaluate Bloom-filters
 					for (auto &bf : bloom_filter_list) {
-						// TODO
+						if (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.1) {
+							Vector hashes(LogicalType::HASH);
+							// TODO: Can we directly put the keys and hashes into the hash join's state so that we don't have to perform hashing twice?
+							result.Hash(bf->GetColumnIds(), sel, approved_tuple_count, hashes);
+							approved_tuple_count = bf->ProbeWithPrecomputedHashes(sel, approved_tuple_count, hashes);
+							//std::cerr << "selectivity: " << bf->GetObservedSelectivity() << std::endl;
+						}
 
 						if (approved_tuple_count == 0) {
 							break; // Filtered everything. No need to evaluate more Bloom-filters.
@@ -832,6 +838,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					}
 					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
 				}*/
+
+				// Compact vectors that have already been loaded
 				for (idx_t i = 0; i < column_ids.size(); i++) {
 					if (filter_info.ColumnHasBloomFilters(i) || filter_info.ColumnHasFilters(i)) {
 						result.data[i].Slice(sel, approved_tuple_count);
