@@ -8,9 +8,11 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
-#include "duckdb/common/types.hpp"
-#include "duckdb/common/types/vector.hpp"
+#include "duckdb/common/types/hugeint.hpp"
+#include "duckdb/common/operator/add.hpp"
+#include "duckdb/common/operator/multiply.hpp"
+#include "duckdb/function/aggregate_state.hpp"
+#include "duckdb/common/operator/cast_operators.hpp"
 
 namespace duckdb {
 
@@ -74,6 +76,20 @@ struct HugeintAdd {
 	template <class STATE, class T>
 	static void AddConstant(STATE &state, T input, idx_t count) {
 		AddNumber(state, Hugeint::Multiply(input, UnsafeNumericCast<int64_t>(count)));
+	}
+};
+
+struct IntervalAdd {
+	template <class STATE, class T>
+	static void AddNumber(STATE &state, T input) {
+		state.value = AddOperator::Operation<interval_t, interval_t, interval_t>(state.value, input);
+	}
+
+	template <class STATE, class T>
+	static void AddConstant(STATE &state, T input, idx_t count) {
+		const auto count64 = Cast::Operation<idx_t, int64_t>(count);
+		input = MultiplyOperator::Operation<interval_t, int64_t, interval_t>(input, count64);
+		state.value = AddOperator::Operation<interval_t, interval_t, interval_t>(state.value, input);
 	}
 };
 
