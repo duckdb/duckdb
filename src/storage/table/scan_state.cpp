@@ -64,26 +64,41 @@ void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<StorageInd
 	for (auto &entry : bloom_filters) {
 		bloom_filter_list.push_back(make_uniq<JoinBloomFilter>(entry->Copy()));
 	}
+
+	// Collect if a column is used in any filter.
 	column_has_filter.reserve(column_ids.size());
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
-		// The column is used in a normal table filter
 		bool has_filter = table_filters->filters.find(col_idx) != table_filters->filters.end();
-		// The column is used in a Bloom-filter
-		for (auto &bf : bloom_filters) {
-			for (auto bf_col_idx : bf->GetColumnIds()) {
-				if (bf_col_idx == col_idx) {
-					//has_filter = true;
-				}
-			}
-		}
+		
 		column_has_filter.push_back(has_filter);
 	}
 	base_column_has_filter = column_has_filter;
+
+	// Collect if a column is used in any Bloom-filter.
+	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {
+		bool has_bloom_filter = false;
+		for (auto &bf : bloom_filters) {
+			for (auto bf_col_idx : bf->GetColumnIds()) {
+				if (bf_col_idx == col_idx) {
+					has_bloom_filter = true;
+				}
+			}
+		}
+		column_has_bloom_filter.push_back(has_bloom_filter);
+	}
 }
 
-bool ScanFilterInfo::ColumnHasFilters(idx_t column_idx) {
+bool ScanFilterInfo::ColumnHasFilters(idx_t column_idx) const {
 	if (column_idx < column_has_filter.size()) {
 		return column_has_filter[column_idx];
+	} else {
+		return false;
+	}
+}
+
+bool ScanFilterInfo::ColumnHasBloomFilters(idx_t column_idx) const {
+	if (column_idx < column_has_bloom_filter.size()) {
+		return column_has_bloom_filter[column_idx];
 	} else {
 		return false;
 	}
@@ -96,6 +111,10 @@ bool ScanFilterInfo::HasFilters() const {
 	}
 	// if we have filters - check if we need to check any of them
 	return always_true_filters < filter_list.size();
+}
+
+bool ScanFilterInfo::HasBloomFilters() const {
+	return !bloom_filter_list.empty();
 }
 
 void ScanFilterInfo::CheckAllFilters() {

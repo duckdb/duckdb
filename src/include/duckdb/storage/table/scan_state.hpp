@@ -156,8 +156,13 @@ public:
 	//! Whether or not there is any filter we need to execute
 	bool HasFilters() const;
 
+	//! Whether there are any Bloom-filters
+	bool HasBloomFilters() const;
+
 	//! Whether or not there is a filter we need to execute for this column currently
-	bool ColumnHasFilters(idx_t col_idx);
+	bool ColumnHasFilters(idx_t col_idx) const;
+
+	bool ColumnHasBloomFilters(idx_t col_idx) const;
 
 	//! Resets any SetFilterAlwaysTrue flags
 	void CheckAllFilters();
@@ -178,6 +183,8 @@ private:
 	unsafe_vector<bool> column_has_filter;
 	//! Whether or not the column has a filter active at all
 	unsafe_vector<bool> base_column_has_filter;
+	//! Wether or not the column has a Bloom filter active right now
+	unsafe_vector<bool> column_has_bloom_filter;
 	//! The amount of filters that are always true currently
 	idx_t always_true_filters = 0;
 };

@@ -510,6 +510,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			return;
 		}
 		idx_t current_row = state.vector_index * STANDARD_VECTOR_SIZE;
+		//! The maximum possible number of rows that is scanned in this iteration. Up to STANDARD_VECTOR_SIZE.
 		auto max_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.max_row_group_row - current_row);
 
 		// check the sampling info if we have to sample this chunk
@@ -564,7 +565,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			buffer_manager.Prefetch(prefetch_state.blocks);
 		}
 
-		bool has_filters = filter_info.HasFilters();
+		bool has_filters = filter_info.HasFilters() || filter_info.HasBloomFilters();
 		if (count == max_count && !has_filters) {
 			// scan all vectors completely: full scan without deletions or table filters
 			for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -598,6 +599,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			auto filter_state = filter_info.BeginFilter();
 			if (has_filters) {
 				D_ASSERT(ALLOW_UPDATES);
+
+				// Evaluate table filters before Bloom-filters.
 				auto &filter_list = filter_info.GetFilterList();
 				for (idx_t i = 0; i < filter_list.size(); i++) {
 					auto filter_idx = adaptive_filter->permutation[i];
@@ -650,14 +653,81 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					}
 				}
 
-				if (false) {
 
+
+				// Evaluate Bloom-filters after table filters.
+				auto &bloom_filter_list = filter_info.GetBloomFilterList();
+				if (approved_tuple_count > 0 && bloom_filter_list.size() > 0) {
+					// Load columns if they are used by a Bloom-filter and have not been loaded as part of table filters yet.
+					for (idx_t i = 0; i < column_ids.size(); i++) {
+						if (filter_info.ColumnHasBloomFilters(i) && !filter_info.ColumnHasFilters(i)) {
+							auto &column = column_ids[i];
+							if (column.IsRowIdColumn()) {
+								D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
+								result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
+								auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
+								for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
+									result_data[sel_idx] =
+										UnsafeNumericCast<int64_t>(this->start + current_row + sel.get_index(sel_idx));
+								}
+							} else {
+								auto &col_data = GetColumn(column);
+								idx_t scan_count = col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
+								
+
+
+								// Investigate
+								std::unordered_set<int32_t> matching_title_ids_int{1836438, 1988118, 1938931, 2001774, 2073984, 2377221, 2360588, 2345914, 2377950, 2346436, 2401589, 2488243};
+								UnifiedVectorFormat vdata;
+								auto &result_vec = result.data[i];
+								result_vec.ToUnifiedFormat(scan_count, vdata);
+								for (int u = 0; u < approved_tuple_count; u++) {
+									auto idx = sel.get_index(u);
+									auto vector_idx = vdata.sel->get_index(idx);
+									auto val = UnifiedVectorFormat::GetData<int32_t>(vdata)[vector_idx];
+									if (matching_title_ids_int.find(val) != matching_title_ids_int.end()) {
+										std::cout << val << " does appear in the SELECTED data chunk the new loading code!!!!!!!!" <<std::endl;
+									}
+								}
+							}
+						}
+					}
+
+					// Evaluate Bloom-filters
+					for (auto &bf : bloom_filter_list) {
+						// TODO
+
+						if (approved_tuple_count == 0) {
+							break; // Filtered everything. No need to evaluate more Bloom-filters.
+						}
+					}
+				}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+				if (false) { // loading bloom filter columns
+
+				if (false) { // slicing
 				for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {
 						continue;
 					}
 					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
 				}
+				} // if (false) // slicing
 
 				// Evaluate Bloom-filters after all other filters have been evaluated.
 				// Afaik we might also need GetColumn() calls for all key columns?? (yes, otherwise `result` only contains the columns we fetched for other filters.)
@@ -684,14 +754,11 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 										UnsafeNumericCast<int64_t>(this->start + current_row + sel.get_index(sel_idx));
 								}
 							} else {
-								std::cout << "ladonig column " << bf_col << std::endl;
 								auto &col_data = GetColumn(column);
 								if (TYPE == TableScanType::TABLE_SCAN_REGULAR) {
-									col_data.Select(transaction, state.vector_index, state.column_scans[bf_col], result.data[bf_col], sel,
-													approved_tuple_count);
+									col_data.Scan(transaction, state.vector_index, state.column_scans[bf_col], result.data[bf_col]);
 								} else {
-									col_data.SelectCommitted(state.vector_index, state.column_scans[bf_col], result.data[bf_col], sel,
-															approved_tuple_count, ALLOW_UPDATES);
+									col_data.ScanCommitted(state.vector_index, state.column_scans[bf_col], result.data[bf_col], ALLOW_UPDATES);
 								}
 							}
 						}
@@ -707,33 +774,113 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						}
 					}
 				}
-				} // if(false)
+				} // if(false) // loading bloom filter columns
 
 				// Attempting to find good values for JOB 01c after loading columns for bloom filter pruning.
+				// Currently, the "after bloom" prints all required values even though we don't do loading or prunin with bloom-filter.
+				// this means that further down, the explanation of "not loaded columns" can't hold true.
+				// However, going through the selection vector doesn't give us good results even though we don't do any bloom filter pruning.
+				// This might indicate the we are reading the selection vector wrong?
+
 				if (filter_info.GetBloomFilterList().size() > 0){
 					// The following are the title.id values that should make it through the join.
+					// The final result should be with ID=1988118
+					
+					bool is_loaded = filter_info.ColumnHasFilters(filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]);
+					
+					bool block_contains_match = false;
 					std::unordered_set<std::string> matching_title_ids{"1836438", "1988118", "1938931", "2001774", "2073984", "2377221", "2360588", "2345914", "2377950", "2346436", "2401589", "2488243"};
 					result.SetCardinality(count);
-					auto col_vals = result.data[filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]].ToString(approved_tuple_count);
+					auto col_vals = result.data[filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]].ToString(count);
 					for (auto& id : matching_title_ids) {
 						if (col_vals.find(id) !=std::string::npos) {
-							std::cout << id << " does appear in this data chunk (after bloom)" << std::endl;
+							std::cout << id << " does appear in this data chunk (after bloom) " << "is loaded: " << is_loaded << std::endl;
+							block_contains_match |= (id=="1988118");
 						}
 					}
+
+					if (block_contains_match) {
+						std::cout << "block contains match!! " << col_vals << " plus the ones from the selection vector: ";
+					}
+
+					// Now let's only investigate selected rows
+					std::unordered_set<int32_t> matching_title_ids_int{1836438, 1988118, 1938931, 2001774, 2073984, 2377221, 2360588, 2345914, 2377950, 2346436, 2401589, 2488243};
+					UnifiedVectorFormat u_vec;
+					auto &result_vec = result.data[filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]];
+					//D_ASSERT(result_vec.GetVectorType() == VectorType::FLAT_VECTOR);
+					result_vec.ToUnifiedFormat(approved_tuple_count, u_vec);
+					for (int i = 0; i < approved_tuple_count; i++) {
+						auto idx = sel.get_index(i);
+						auto idx2 = u_vec.sel->get_index(idx);
+						auto val = UnifiedVectorFormat::GetData<uint32_t>(u_vec)[idx2];
+						if (block_contains_match) {
+							//std::cout << "idx=" <<idx2<< ",val="<< val << " ";
+						}
+						if (matching_title_ids_int.find(val) != matching_title_ids_int.end()) {
+							std::cout << val << " does appear in the SELECTED data chunk after bloom" <<std::endl;
+						}
+					}
+					if (block_contains_match) {
+						std::cout << std::endl;
+					}
 				}
+*/
 
-
-				for (auto &table_filter : filter_list) {
+				/*for (auto &table_filter : filter_list) {
 					if (table_filter.IsAlwaysTrue()) {
 						continue;
 					}
 					result.data[table_filter.scan_column_index].Slice(sel, approved_tuple_count);
+				}*/
+				for (idx_t i = 0; i < column_ids.size(); i++) {
+					if (filter_info.ColumnHasBloomFilters(i) || filter_info.ColumnHasFilters(i)) {
+						result.data[i].Slice(sel, approved_tuple_count);
+					}
 				}
+
+
+/*
+
+				// Attempting to find good values for JOB 01c after loading columns for bloom filter pruning.
+				if (filter_info.GetBloomFilterList().size() > 0){
+					// The following are the title.id values that should make it through the join.
+
+					// TODO: it's unconclusive if we have a dense block here.
+					// if printing only approved_tuple_count, we don't see all qualifying ids, but this might be because the columns has not yet been loaded?
+					// if we print `count` tuples, we get a SEGFAULT
+					// going through the selection vector gives us a similar result, but with different IDs. how can we interpret this?
+					// conclusion: likely, the necessary vectors have not yet been loaded?
+					// has filter is someimtes true/false for the bloom filter column...
+					//std::cout << "has filter " << filter_info.ColumnHasFilters(filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]) << std::endl;
+					std::unordered_set<std::string> matching_title_ids{"1836438", "1988118", "1938931", "2001774", "2073984", "2377221", "2360588", "2345914", "2377950", "2346436", "2401589", "2488243"};
+					result.SetCardinality(approved_tuple_count);
+					auto col_vals = result.data[filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]].ToString(approved_tuple_count);
+					for (auto& id : matching_title_ids) {
+						if (col_vals.find(id) !=std::string::npos) {
+							std::cout << id << " does appear in this data chunk (after slicing after bloom)" << std::endl;
+						}
+					}
+
+					// Now let's only investigate selected rows
+					UnifiedVectorFormat u_vec;
+					result.data[filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]].ToUnifiedFormat(approved_tuple_count, u_vec);
+					for (int i=0;i<approved_tuple_count;i++) {
+						auto idx = sel.get_index(i);
+						auto val = UnifiedVectorFormat::GetData<int32_t>(u_vec)[idx];
+						for (auto& id : matching_title_ids) {
+							if (id == std::to_string(val)) {
+								std::cout << id << " does appear in the SELECTED data chunk after bloom and after slicing" <<std::endl;
+							}
+						}
+					}
+				}
+*/
+
 
 				
 			}
 			if (approved_tuple_count == 0) {
-				// all rows were filtered out by the table filters
+				// All rows were filtered out by the table filters. Load more data for this batch.
 				D_ASSERT(has_filters);
 				result.Reset();
 				// skip this vector in all the scans that were not scanned yet
@@ -753,7 +900,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 			}
 			//! Now we use the selection vector to fetch data for the other columns.
 			for (idx_t i = 0; i < column_ids.size(); i++) {
-				if (has_filters && filter_info.ColumnHasFilters(i)) {
+				if (has_filters && (filter_info.ColumnHasFilters(i) || filter_info.ColumnHasBloomFilters(i))) {
 					// column has already been scanned as part of the filtering process
 					continue;
 				}
@@ -778,18 +925,6 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 				}
 			}
 
-			if (filter_info.GetBloomFilterList().size() > 0){
-					// The following are the title.id values that should make it through the join.
-				std::unordered_set<std::string> matching_title_ids{"1836438", "1988118", "1938931", "2001774", "2073984", "2377221", "2360588", "2345914", "2377950", "2346436", "2401589", "2488243"};
-				result.SetCardinality(approved_tuple_count);
-				auto col_vals = result.data[filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]].ToString(approved_tuple_count);
-				for (auto& id : matching_title_ids) {
-					if (col_vals.find(id) !=std::string::npos) {
-						std::cout << id << " does appear in this data chunk (final)" << std::endl;
-					}
-				}
-			}
-
 			filter_info.EndFilter(filter_state);
 
 			D_ASSERT(approved_tuple_count > 0);
@@ -797,6 +932,22 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 		}
 		result.SetCardinality(count);
 		state.vector_index++;
+
+/*
+		// If we don't do any data loading or pruning with bloom-filters, we see that we have a DENSE representation of blocks containing all 12 qualfiying rows spread across these dense blocks.
+		if (filter_info.GetBloomFilterList().size() > 0){
+					// The following are the title.id values that should make it through the join.
+				std::unordered_set<std::string> matching_title_ids{"1836438", "1988118", "1938931", "2001774", "2073984", "2377221", "2360588", "2345914", "2377950", "2346436", "2401589", "2488243"};
+				result.SetCardinality(count);
+				auto col_vals = result.data[filter_info.GetBloomFilterList()[0]->GetColumnIds()[0]].ToString(count);
+				for (auto& id : matching_title_ids) {
+					if (col_vals.find(id) !=std::string::npos) {
+						std::cout << id << " does appear in this data chunk (final)" << std::endl;
+					}
+				}
+				
+			}
+*/
 		break;
 	}
 }
