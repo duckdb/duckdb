@@ -49,7 +49,7 @@ public:
 	//! The set of delete indexes.
 	TableIndexList delete_indexes;
 	//! True, if we're skipping constraint checking during a WAL replay.
-	bool is_wal_replay = false;
+	bool wal_replay = false;
 	//! The number of deleted rows
 	idx_t deleted_rows;
 	//! The main optimistic data writer

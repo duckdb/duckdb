@@ -870,7 +870,7 @@ void DataTable::LocalWALAppend(TableCatalogEntry &table, ClientContext &context,
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 
 	storage.LocalAppend(append_state, context, chunk, true);
-	append_state.storage->is_wal_replay = true;
+	append_state.storage->wal_replay = true;
 	storage.FinalizeLocalAppend(append_state);
 }
 
@@ -1110,7 +1110,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 // Indexes
 //===--------------------------------------------------------------------===//
 ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-                                     DataChunk &chunk, row_t row_start, const bool is_wal_replay) {
+                                     DataChunk &chunk, row_t row_start, const bool wal_replay) {
 	ErrorData error;
 	if (indexes.Empty()) {
 		return error;
@@ -1138,7 +1138,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		}
 
 		try {
-			error = index.Append(chunk, row_ids, delete_index, is_wal_replay);
+			error = index.Append(chunk, row_ids, delete_index, wal_replay);
 		} catch (std::exception &ex) {
 			error = ErrorData(ex);
 		}
@@ -1162,9 +1162,9 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 }
 
 ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
-                                     const bool is_wal_replay) {
+                                     const bool wal_replay) {
 	D_ASSERT(is_root);
-	return AppendToIndexes(info->indexes, delete_indexes, chunk, row_start, is_wal_replay);
+	return AppendToIndexes(info->indexes, delete_indexes, chunk, row_start, wal_replay);
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {

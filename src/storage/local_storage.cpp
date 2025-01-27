@@ -173,7 +173,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		// appending: need to scan entire
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			error = table.AppendToIndexes(delete_indexes, chunk, append_state.current_row, is_wal_replay);
+			error = table.AppendToIndexes(delete_indexes, chunk, append_state.current_row, wal_replay);
 			if (error.HasError()) {
 				return false;
 			}
