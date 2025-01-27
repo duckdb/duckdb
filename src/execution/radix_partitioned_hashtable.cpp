@@ -97,6 +97,7 @@ public:
 	void SetRadixBits(const idx_t &radix_bits_p);
 	bool SetRadixBitsToExternal();
 	idx_t GetRadixBits() const;
+	idx_t GetExternalRadixBits() const;
 
 private:
 	void SetRadixBitsInternal(idx_t radix_bits_p, bool external);
@@ -210,13 +211,13 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
 	auto tuples_per_block = block_alloc_size / radix_ht.GetLayout().GetRowWidth();
 	idx_t ht_count =
 	    LossyNumericCast<idx_t>(static_cast<double>(config.sink_capacity) / GroupedAggregateHashTable::LOAD_FACTOR);
-	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetRadixBits());
+	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetExternalRadixBits());
 	auto count_per_partition = ht_count / num_partitions;
 	auto blocks_per_partition = (count_per_partition + tuples_per_block) / tuples_per_block + 1;
 	if (!radix_ht.GetLayout().AllConstant()) {
 		blocks_per_partition += 2;
 	}
-	auto ht_size = blocks_per_partition * block_alloc_size + config.sink_capacity * sizeof(ht_entry_t);
+	auto ht_size = num_partitions * blocks_per_partition * block_alloc_size + config.sink_capacity * sizeof(ht_entry_t);
 
 	// This really is the minimum reservation that we can do
 	auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
@@ -280,13 +281,17 @@ idx_t RadixHTConfig::GetRadixBits() const {
 	return sink_radix_bits;
 }
 
+idx_t RadixHTConfig::GetExternalRadixBits() const {
+	return MAXIMUM_FINAL_SINK_RADIX_BITS;
+}
+
 void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external) {
-	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
+	if (sink_radix_bits > radix_bits_p || sink.any_combined) {
 		return;
 	}
 
 	auto guard = sink.Lock();
-	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
+	if (sink_radix_bits > radix_bits_p || sink.any_combined) {
 		return;
 	}
 
@@ -365,7 +370,7 @@ void RadixPartitionedHashTable::PopulateGroupChunk(DataChunk &group_chunk, DataC
 	for (auto &group_idx : grouping_set) {
 		// Retrieve the expression containing the index in the input chunk
 		auto &group = op.groups[group_idx];
-		D_ASSERT(group->type == ExpressionType::BOUND_REF);
+		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref_expr = group->Cast<BoundReferenceExpression>();
 		// Reference from input_chunk[group.index] -> group_chunk[chunk_index]
 		group_chunk.data[chunk_index++].Reference(input_chunk.data[bound_ref_expr.index]);

@@ -13,7 +13,7 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
                                                       vector<unordered_set<string>> &lambda_params) {
 
 	for (auto &child : function.children) {
-		if (child->expression_class != ExpressionClass::LAMBDA) {
+		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			ReplaceMacroParameters(child, lambda_params);
 			continue;
 		}

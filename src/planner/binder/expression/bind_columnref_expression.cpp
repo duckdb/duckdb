@@ -113,7 +113,7 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
                                           const bool within_function_expression) {
 
 	bool next_within_function_expression = false;
-	switch (expr->type) {
+	switch (expr->GetExpressionType()) {
 	case ExpressionType::COLUMN_REF: {
 		auto &col_ref = expr->Cast<ColumnRefExpression>();
 
@@ -126,28 +126,28 @@ void ExpressionBinder::QualifyColumnNames(unique_ptr<ParsedExpression> &expr,
 		auto new_expr = QualifyColumnName(col_ref, error);
 
 		if (new_expr) {
-			if (!expr->alias.empty()) {
+			if (!expr->GetAlias().empty()) {
 				// Pre-existing aliases are added to the qualified column reference
-				new_expr->alias = expr->alias;
+				new_expr->SetAlias(expr->GetAlias());
 			} else if (within_function_expression) {
 				// Qualifying the column reference may add an alias, but this needs to be removed within function
 				// expressions, because the alias here means a named parameter instead of a positional parameter
-				new_expr->alias = "";
+				new_expr->ClearAlias();
 			}
 
 			// replace the expression with the qualified column reference
-			new_expr->query_location = col_ref.query_location;
+			new_expr->SetQueryLocation(col_ref.GetQueryLocation());
 			expr = std::move(new_expr);
 		}
 		return;
 	}
 	case ExpressionType::POSITIONAL_REFERENCE: {
 		auto &ref = expr->Cast<PositionalReferenceExpression>();
-		if (ref.alias.empty()) {
+		if (ref.GetAlias().empty()) {
 			string table_name, column_name;
 			auto error = binder.bind_context.BindColumn(ref, table_name, column_name);
 			if (error.empty()) {
-				ref.alias = column_name;
+				ref.SetAlias(column_name);
 			}
 		}
 		break;
@@ -176,7 +176,7 @@ void ExpressionBinder::QualifyColumnNamesInLambda(FunctionExpression &function,
                                                   vector<unordered_set<string>> &lambda_params) {
 
 	for (auto &child : function.children) {
-		if (child->expression_class != ExpressionClass::LAMBDA) {
+		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			// not a lambda expression
 			QualifyColumnNames(child, lambda_params, true);
 			continue;
@@ -436,27 +436,29 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 			if (found_alias) {
 				return alias_result;
 			}
-
-			// column was not found - check if it is a SQL value function
-			auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
-			if (value_function) {
-				return BindExpression(value_function, depth);
+			found_alias = QualifyColumnAlias(col_ref_p);
+			if (!found_alias) {
+				// column was not found - check if it is a SQL value function
+				auto value_function = GetSQLValueFunction(col_ref_p.GetColumnName());
+				if (value_function) {
+					return BindExpression(value_function, depth);
+				}
 			}
 		}
 		error.AddQueryLocation(col_ref_p);
 		return BindResult(std::move(error));
 	}
 
-	expr->query_location = col_ref_p.query_location;
+	expr->SetQueryLocation(col_ref_p.GetQueryLocation());
 
 	// the above QualifyColumName returns a generated expression for a generated
 	// column, and struct_extract for a struct, or a lambda reference expression,
 	// all of them are not column reference expressions, so we return here
-	if (expr->type != ExpressionType::COLUMN_REF) {
-		auto alias = expr->alias;
+	if (expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
+		auto alias = expr->GetAlias();
 		auto result = BindExpression(expr, depth);
 		if (result.expression) {
-			result.expression->alias = std::move(alias);
+			result.expression->SetAlias(std::move(alias));
 		}
 		return result;
 	}
@@ -483,7 +485,7 @@ BindResult ExpressionBinder::BindExpression(ColumnRefExpression &col_ref_p, idx_
 	// we bound the column reference
 	BoundColumnReferenceInfo ref;
 	ref.name = col_ref.column_names.back();
-	ref.query_location = col_ref.query_location;
+	ref.query_location = col_ref.GetQueryLocation();
 	bound_columns.push_back(std::move(ref));
 	return result;
 }

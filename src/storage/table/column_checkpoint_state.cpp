@@ -171,11 +171,6 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		// Writer will decide whether to reuse this block.
 		partial_block_manager.RegisterPartialBlock(std::move(allocation));
 	} else {
-		// constant block: no need to write anything to disk besides the stats
-		// set up the compression function to constant
-		auto &config = DBConfig::GetConfig(db);
-		segment->function =
-		    *config.GetCompressionFunction(CompressionType::COMPRESSION_CONSTANT, segment->type.InternalType());
 		segment->ConvertToPersistent(nullptr, INVALID_BLOCK);
 	}
 
@@ -189,9 +184,10 @@ void ColumnCheckpointState::FlushSegmentInternal(unique_ptr<ColumnSegment> segme
 		data_pointer.row_start = last_pointer.row_start + last_pointer.tuple_count;
 	}
 	data_pointer.tuple_count = tuple_count;
-	data_pointer.compression_type = segment->function.get().type;
-	if (segment->function.get().serialize_state) {
-		data_pointer.segment_state = segment->function.get().serialize_state(*segment);
+	auto &compression_function = segment->GetCompressionFunction();
+	data_pointer.compression_type = compression_function.type;
+	if (compression_function.serialize_state) {
+		data_pointer.segment_state = compression_function.serialize_state(*segment);
 	}
 
 	// append the segment to the new segment tree

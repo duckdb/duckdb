@@ -1,6 +1,7 @@
 #include "duckdb/optimizer/join_order/relation_manager.hpp"
 
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/enums/logical_operator_type.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/optimizer/join_order/join_order_optimizer.hpp"
 #include "duckdb/optimizer/join_order/relation_statistics_helper.hpp"
@@ -64,6 +65,13 @@ void RelationManager::AddRelation(LogicalOperator &op, optional_ptr<LogicalOpera
 			D_ASSERT(relation_mapping.find(reference) == relation_mapping.end());
 			relation_mapping[reference] = relation_id;
 		}
+	} else if (op.type == LogicalOperatorType::LOGICAL_UNNEST) {
+		// logical unnest has a logical_unnest index, but other bindings can refer to
+		// columns that are not unnested.
+		auto bindings = op.GetColumnBindings();
+		for (auto &binding : bindings) {
+			relation_mapping[binding.table_index] = relation_id;
+		}
 	} else {
 		// Relations should never return more than 1 table index
 		D_ASSERT(table_indexes.size() == 1);
@@ -110,7 +118,7 @@ static bool OperatorIsNonReorderable(LogicalOperatorType op_type) {
 }
 
 bool ExpressionContainsColumnRef(Expression &expression) {
-	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		// Here you have a filter on a single column in a table. Return a binding for the column
 		// being filtered on so the filter estimator knows what HLL count to pull
 #ifdef DEBUG
@@ -319,8 +327,8 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
-		bool can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
 		bool can_reorder_left = ExtractJoinRelations(optimizer, *op->children[0], filter_operators, op);
+		bool can_reorder_right = ExtractJoinRelations(optimizer, *op->children[1], filter_operators, op);
 		return can_reorder_left && can_reorder_right;
 	}
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN: {
@@ -438,12 +446,12 @@ bool RelationManager::ExtractJoinRelations(JoinOrderOptimizer &optimizer, Logica
 }
 
 bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_t> &bindings) {
-	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		D_ASSERT(colref.depth == 0);
 		D_ASSERT(colref.binding.table_index != DConstants::INVALID_INDEX);
 		// map the base table index to the relation index used by the JoinOrderOptimizer
-		if (expression.alias == "SUBQUERY" &&
+		if (expression.GetAlias() == "SUBQUERY" &&
 		    relation_mapping.find(colref.binding.table_index) == relation_mapping.end()) {
 			// most likely a BoundSubqueryExpression that was created from an uncorrelated subquery
 			// Here we return true and don't fill the bindings, the expression can be reordered.
@@ -455,12 +463,12 @@ bool RelationManager::ExtractBindings(Expression &expression, unordered_set<idx_
 			bindings.insert(relation_mapping[colref.binding.table_index]);
 		}
 	}
-	if (expression.type == ExpressionType::BOUND_REF) {
+	if (expression.GetExpressionType() == ExpressionType::BOUND_REF) {
 		// bound expression
 		bindings.clear();
 		return false;
 	}
-	D_ASSERT(expression.type != ExpressionType::SUBQUERY);
+	D_ASSERT(expression.GetExpressionType() != ExpressionType::SUBQUERY);
 	bool can_reorder = true;
 	ExpressionIterator::EnumerateChildren(expression, [&](Expression &expr) {
 		if (!ExtractBindings(expr, bindings)) {

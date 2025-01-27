@@ -141,10 +141,7 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 			Linenoise::Log("\nComplete Character %d\n", (int)c);
 			switch (c) {
 			case TAB: /* tab */
-				i = (i + 1) % (completions.size() + 1);
-				if (i == completions.size()) {
-					Terminal::Beep();
-				}
+				i = (i + 1) % completions.size();
 				break;
 			case ESC: { /* escape */
 				auto escape = Terminal::ReadEscapeSequence(ifd);
@@ -152,16 +149,17 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 				case EscapeSequence::SHIFT_TAB:
 					// shift-tab: move backwards
 					if (i == 0) {
-						Terminal::Beep();
+						// pressing shift-tab at the first completion cancels completion
+						RefreshLine();
+						current_sequence = escape;
+						stop = true;
 					} else {
 						i--;
 					}
 					break;
 				case EscapeSequence::ESCAPE:
 					/* Re-show original buffer */
-					if (i < completions.size()) {
-						RefreshLine();
-					}
+					RefreshLine();
 					current_sequence = escape;
 					stop = true;
 					break;

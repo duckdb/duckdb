@@ -25,7 +25,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 	// creates one group per distinct_target
 	for (idx_t i = 0; i < distinct_targets.size(); i++) {
 		auto &target = distinct_targets[i];
-		if (target->type == ExpressionType::BOUND_REF) {
+		if (target->GetExpressionType() == ExpressionType::BOUND_REF) {
 			auto &bound_ref = target->Cast<BoundReferenceExpression>();
 			group_by_references[bound_ref.index] = i;
 		}
@@ -69,7 +69,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDistinct &
 				auto new_expr = OrderedAggregateOptimizer::Apply(context, *first_aggregate, groups, changes_made);
 				if (new_expr) {
 					D_ASSERT(new_expr->return_type == first_aggregate->return_type);
-					D_ASSERT(new_expr->type == ExpressionType::BOUND_AGGREGATE);
+					D_ASSERT(new_expr->GetExpressionType() == ExpressionType::BOUND_AGGREGATE);
 					first_aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(std::move(new_expr));
 				}
 			}

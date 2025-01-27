@@ -137,7 +137,7 @@ foreach unit TIMESTAMP TIMESTAMP_MS TIMESTAMP_S
 statement error
 select ts as base, base::TIMESTAMPTZ as tstz from ts_${unit}_tbl_2;
 ----
-Conversion Error: Unable to convert ICU date to timestamp
+Conversion Error: ICU date overflows timestamp range
 
 endloop
 

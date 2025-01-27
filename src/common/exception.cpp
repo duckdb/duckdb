@@ -36,7 +36,12 @@ string Exception::ToJSON(ExceptionType type, const string &message, const unorde
 #endif
 	{
 		auto extended_extra_info = extra_info;
-		extended_extra_info["stack_trace_pointers"] = StackTrace::GetStacktracePointers();
+		// We only want to add the stack trace pointers if they are not already present, otherwise the original
+		// stack traces are lost
+		if (extended_extra_info.find("stack_trace_pointers") == extended_extra_info.end() &&
+		    extended_extra_info.find("stack_trace") == extended_extra_info.end()) {
+			extended_extra_info["stack_trace_pointers"] = StackTrace::GetStacktracePointers();
+		}
 		return StringUtil::ExceptionToJSONMap(type, message, extended_extra_info);
 	}
 	return StringUtil::ExceptionToJSONMap(type, message, extra_info);
@@ -66,7 +71,6 @@ bool Exception::InvalidatesTransaction(ExceptionType exception_type) {
 
 bool Exception::InvalidatesDatabase(ExceptionType exception_type) {
 	switch (exception_type) {
-	case ExceptionType::INTERNAL:
 	case ExceptionType::FATAL:
 		return true;
 	default:
@@ -169,11 +173,11 @@ ExceptionType Exception::StringToExceptionType(const string &type) {
 }
 
 unordered_map<string, string> Exception::InitializeExtraInfo(const Expression &expr) {
-	return InitializeExtraInfo(expr.query_location);
+	return InitializeExtraInfo(expr.GetQueryLocation());
 }
 
 unordered_map<string, string> Exception::InitializeExtraInfo(const ParsedExpression &expr) {
-	return InitializeExtraInfo(expr.query_location);
+	return InitializeExtraInfo(expr.GetQueryLocation());
 }
 
 unordered_map<string, string> Exception::InitializeExtraInfo(const QueryErrorContext &error_context) {

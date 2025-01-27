@@ -103,7 +103,7 @@ TEST_CASE("Test external threads", "[api]") {
 
 	res = con.Query("SET external_threads=14");
 	REQUIRE(res->HasError());
-	REQUIRE(res->GetError() == "Syntax Error: Number of threads can't be smaller than number of external threads!");
+	REQUIRE(StringUtil::Contains(res->GetError(), "smaller"));
 
 	con.Query("SET external_threads=5");
 	REQUIRE(config.options.external_threads == 5);

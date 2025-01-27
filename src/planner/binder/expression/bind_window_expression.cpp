@@ -69,7 +69,7 @@ static unique_ptr<Expression> GetExpression(unique_ptr<ParsedExpression> &expr) 
 		return nullptr;
 	}
 	D_ASSERT(expr.get());
-	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 	return std::move(BoundExpression::GetExpression(*expr));
 }
 
@@ -78,7 +78,7 @@ static unique_ptr<Expression> CastWindowExpression(unique_ptr<ParsedExpression> 
 		return nullptr;
 	}
 	D_ASSERT(expr.get());
-	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 
 	auto &bound = BoundExpression::GetExpression(*expr);
 	bound = BoundCastExpression::AddDefaultCastToType(std::move(bound), type);
@@ -113,14 +113,14 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 	vector<unique_ptr<Expression>> children;
 
 	D_ASSERT(order_expr.get());
-	D_ASSERT(order_expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	D_ASSERT(order_expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound_order = BoundExpression::GetExpression(*order_expr);
 	children.emplace_back(bound_order->Copy());
 
 	D_ASSERT(expr.get());
-	D_ASSERT(expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+	D_ASSERT(expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 	auto &bound = BoundExpression::GetExpression(*expr);
-	QueryErrorContext error_context(bound->query_location);
+	QueryErrorContext error_context(bound->GetQueryLocation());
 	if (bound->return_type == LogicalType::SQLNULL) {
 		throw BinderException(error_context, "Window RANGE expressions cannot be NULL");
 	}
@@ -142,11 +142,12 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 }
 
 BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
-	QueryErrorContext error_context(window.query_location);
+	QueryErrorContext error_context(window.GetQueryLocation());
 	//	Check for macros pretending to be aggregates
 	auto entry = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, window.catalog, window.schema,
 	                             window.function_name, OnEntryNotFound::RETURN_NULL, error_context);
-	if (window.type == ExpressionType::WINDOW_AGGREGATE && entry && entry->type == CatalogType::MACRO_ENTRY) {
+	if (window.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE && entry &&
+	    entry->type == CatalogType::MACRO_ENTRY) {
 		auto macro = make_uniq<FunctionExpression>(window.catalog, window.schema, window.function_name,
 		                                           std::move(window.children), std::move(window.filter_expr), nullptr,
 		                                           window.distinct);
@@ -154,7 +155,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 		return BindMacro(*macro, entry->Cast<ScalarMacroCatalogEntry>(), depth, macro_expr);
 	}
 
-	auto name = window.GetName();
+	auto name = window.alias;
 
 	if (inside_window) {
 		throw BinderException(error_context, "window function calls cannot be nested");
@@ -234,11 +235,11 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	vector<unique_ptr<Expression>> children;
 	for (auto &child : window.children) {
 		D_ASSERT(child.get());
-		D_ASSERT(child->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(child->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &bound = BoundExpression::GetExpression(*child);
 		// Add casts for positional arguments
 		const auto argno = children.size();
-		switch (window.type) {
+		switch (window.GetExpressionType()) {
 		case ExpressionType::WINDOW_NTILE:
 			// ntile(bigint)
 			if (argno == 0) {
@@ -261,7 +262,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	LogicalType sql_type;
 	unique_ptr<AggregateFunction> aggregate;
 	unique_ptr<FunctionData> bind_info;
-	if (window.type == ExpressionType::WINDOW_AGGREGATE) {
+	if (window.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE) {
 		//  Look up the aggregate function in the catalog
 		if (!entry || entry->type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			//	Not an aggregate: Look it up to generate error
@@ -291,9 +292,10 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 
 	} else {
 		// fetch the child of the non-aggregate window function (if any)
-		sql_type = ResolveWindowExpressionType(window.type, types);
+		sql_type = ResolveWindowExpressionType(window.GetExpressionType(), types);
 	}
-	auto result = make_uniq<BoundWindowExpression>(window.type, sql_type, std::move(aggregate), std::move(bind_info));
+	auto result = make_uniq<BoundWindowExpression>(window.GetExpressionType(), sql_type, std::move(aggregate),
+	                                               std::move(bind_info));
 	result->children = std::move(children);
 	for (auto &child : window.partitions) {
 		result->partitions.push_back(GetExpression(child));
@@ -341,7 +343,7 @@ BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 
 		auto &order_expr = window.orders[0].expression;
 		D_ASSERT(order_expr.get());
-		D_ASSERT(order_expr->expression_class == ExpressionClass::BOUND_EXPRESSION);
+		D_ASSERT(order_expr->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &bound_order = BoundExpression::GetExpression(*order_expr);
 		auto order_type = bound_order->return_type;
 		if (window.start_expr) {

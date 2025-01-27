@@ -251,11 +251,13 @@ void RadixScatterStructVector(Vector &v, UnifiedVectorFormat &vdata, idx_t vcoun
 		for (idx_t i = 0; i < add_count; i++) {
 			auto idx = sel.get_index(i);
 			auto source_idx = vdata.sel->get_index(idx) + offset;
+
 			// write validity and according value
 			if (validity.RowIsValid(source_idx)) {
 				key_locations[i][0] = valid;
 			} else {
 				key_locations[i][0] = invalid;
+				memset(key_locations[i] + 1, '\0', width - 1);
 			}
 			key_locations[i]++;
 		}

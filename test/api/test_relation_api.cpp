@@ -921,6 +921,25 @@ TEST_CASE("Test table function relations", "[relation_api]") {
 	REQUIRE_THROWS(con.TableFunction("blabla"));
 }
 
+TEST_CASE("Test CSV Relation with union by name", "[relation_api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+	named_parameter_map_t options;
+	options["union_by_name"] = Value(true);
+	duckdb::vector<string> paths {"data/csv/sample-0.csv", "data/csv/sample-0.csv"};
+	auto csv_scan = con.ReadCSV(paths, std::move(options));
+	auto result = csv_scan->Execute();
+	REQUIRE(!result->HasError());
+	REQUIRE(CHECK_COLUMN(result, 0, {Value::DATE(2024, 1, 2), Value::DATE(2024, 1, 2), Value::DATE(2024, 1, 2)}));
+
+	options["union_by_name"] = Value(true);
+	paths = {"data/csv/union-by-name/ubn1.csv", "data/csv/union-by-name/ubn2.csv"};
+	csv_scan = con.ReadCSV(paths, std::move(options));
+	result = csv_scan->Execute();
+	REQUIRE(!result->HasError());
+}
+
 TEST_CASE("Test CSV reading/writing from relations", "[relation_api]") {
 	DuckDB db(nullptr);
 	Connection con(db);

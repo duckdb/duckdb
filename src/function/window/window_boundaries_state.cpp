@@ -299,39 +299,88 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 	const auto order_count = wexpr.orders.size();
 
 	WindowBoundsSet result;
-	switch (wexpr.type) {
+	switch (wexpr.GetExpressionType()) {
 	case ExpressionType::WINDOW_ROW_NUMBER:
-		result.insert(PARTITION_BEGIN);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
+		break;
+	case ExpressionType::WINDOW_NTILE:
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
+		break;
+	case ExpressionType::WINDOW_RANK:
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PEER_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
 		break;
 	case ExpressionType::WINDOW_RANK_DENSE:
-	case ExpressionType::WINDOW_RANK:
 		result.insert(PARTITION_BEGIN);
 		result.insert(PEER_BEGIN);
 		break;
 	case ExpressionType::WINDOW_PERCENT_RANK:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
-		result.insert(PEER_BEGIN);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+			result.insert(PEER_BEGIN);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
 		break;
 	case ExpressionType::WINDOW_CUME_DIST:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
-		result.insert(PEER_END);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+			result.insert(PEER_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
 		break;
-	case ExpressionType::WINDOW_NTILE:
 	case ExpressionType::WINDOW_LEAD:
 	case ExpressionType::WINDOW_LAG:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
+		if (wexpr.arg_orders.empty()) {
+			result.insert(PARTITION_BEGIN);
+			result.insert(PARTITION_END);
+		} else {
+			// Secondary orders need to know where the frame is
+			result.insert(FRAME_BEGIN);
+			result.insert(FRAME_END);
+		}
 		break;
 	case ExpressionType::WINDOW_FIRST_VALUE:
 	case ExpressionType::WINDOW_LAST_VALUE:
 	case ExpressionType::WINDOW_NTH_VALUE:
 	case ExpressionType::WINDOW_AGGREGATE:
-		result.insert(PARTITION_BEGIN);
-		result.insert(PARTITION_END);
 		result.insert(FRAME_BEGIN);
 		result.insert(FRAME_END);
+		break;
+	default:
+		throw InternalException("Window expression type %s", ExpressionTypeToString(wexpr.GetExpressionType()));
+	}
+
+	//	Internal dependencies
+	if (result.count(FRAME_BEGIN) || result.count(FRAME_END)) {
+		result.insert(PARTITION_BEGIN);
+		result.insert(PARTITION_END);
 
 		// if we have EXCLUDE GROUP / TIES, we also need peer boundaries
 		if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
@@ -339,11 +388,12 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 			result.insert(PEER_END);
 		}
 
-		// If the frames are RANGE, then we need peer boundaries
-		// If they are preceding or following, we also need to know
+		// If the frames are RANGE or GROUPS, then we need peer boundaries
+		// If they are preceding or following, RANGE also needs to know
 		// where the valid values begin or end.
 		switch (wexpr.start) {
 		case WindowBoundary::CURRENT_ROW_RANGE:
+		case WindowBoundary::CURRENT_ROW_GROUPS:
 			result.insert(PEER_BEGIN);
 			break;
 		case WindowBoundary::EXPR_PRECEDING_RANGE:
@@ -355,12 +405,24 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 			result.insert(PEER_BEGIN);
 			result.insert(VALID_END);
 			break;
-		default:
+		case WindowBoundary::EXPR_PRECEDING_GROUPS:
+			result.insert(PEER_BEGIN);
+			break;
+		case WindowBoundary::EXPR_FOLLOWING_GROUPS:
+			result.insert(PEER_BEGIN);
+			break;
+		case WindowBoundary::UNBOUNDED_PRECEDING:
+		case WindowBoundary::UNBOUNDED_FOLLOWING:
+		case WindowBoundary::CURRENT_ROW_ROWS:
+		case WindowBoundary::EXPR_PRECEDING_ROWS:
+		case WindowBoundary::EXPR_FOLLOWING_ROWS:
+		case WindowBoundary::INVALID:
 			break;
 		}
 
 		switch (wexpr.end) {
 		case WindowBoundary::CURRENT_ROW_RANGE:
+		case WindowBoundary::CURRENT_ROW_GROUPS:
 			result.insert(PEER_END);
 			break;
 		case WindowBoundary::EXPR_PRECEDING_RANGE:
@@ -372,15 +434,22 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 			result.insert(VALID_BEGIN);
 			result.insert(VALID_END);
 			break;
-		default:
+		case WindowBoundary::EXPR_PRECEDING_GROUPS:
+			result.insert(PEER_END);
+			break;
+		case WindowBoundary::EXPR_FOLLOWING_GROUPS:
+			result.insert(PEER_END);
+			break;
+		case WindowBoundary::UNBOUNDED_PRECEDING:
+		case WindowBoundary::UNBOUNDED_FOLLOWING:
+		case WindowBoundary::CURRENT_ROW_ROWS:
+		case WindowBoundary::EXPR_PRECEDING_ROWS:
+		case WindowBoundary::EXPR_FOLLOWING_ROWS:
+		case WindowBoundary::INVALID:
 			break;
 		}
-		break;
-	default:
-		throw InternalException("Window aggregate type %s", ExpressionTypeToString(wexpr.type));
 	}
 
-	//	Internal dependencies
 	if (result.count(VALID_END)) {
 		result.insert(PARTITION_END);
 		if (HasFollowingRange(wexpr)) {
@@ -405,9 +474,9 @@ WindowBoundsSet WindowBoundariesState::GetWindowBounds(const BoundWindowExpressi
 }
 
 WindowBoundariesState::WindowBoundariesState(const BoundWindowExpression &wexpr, const idx_t input_size)
-    : required(GetWindowBounds(wexpr)), type(wexpr.type), input_size(input_size), start_boundary(wexpr.start),
-      end_boundary(wexpr.end), partition_count(wexpr.partitions.size()), order_count(wexpr.orders.size()),
-      range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
+    : required(GetWindowBounds(wexpr)), type(wexpr.GetExpressionType()), input_size(input_size),
+      start_boundary(wexpr.start), end_boundary(wexpr.end), partition_count(wexpr.partitions.size()),
+      order_count(wexpr.orders.size()), range_sense(wexpr.orders.empty() ? OrderType::INVALID : wexpr.orders[0].type),
       has_preceding_range(HasPrecedingRange(wexpr)), has_following_range(HasFollowingRange(wexpr)) {
 }
 
@@ -438,10 +507,10 @@ void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, optional_pt
 		ValidEnd(bounds, row_idx, count, is_jump, partition_mask, order_mask, range);
 	}
 	if (required.count(FRAME_BEGIN)) {
-		FrameBegin(bounds, row_idx, count, boundary_start, range);
+		FrameBegin(bounds, row_idx, count, boundary_start, order_mask, range);
 	}
 	if (required.count(FRAME_END)) {
-		FrameEnd(bounds, row_idx, count, boundary_end, range);
+		FrameEnd(bounds, row_idx, count, boundary_end, order_mask, range);
 	}
 	next_pos += count;
 
@@ -638,7 +707,8 @@ void WindowBoundariesState::ValidEnd(DataChunk &bounds, idx_t row_idx, const idx
 }
 
 void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const idx_t count,
-                                       WindowInputExpression &boundary_begin, optional_ptr<WindowCursor> range) {
+                                       WindowInputExpression &boundary_begin, const ValidityMask &order_mask,
+                                       optional_ptr<WindowCursor> range) {
 	auto partition_begin_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 	auto peer_begin_data = FlatVector::GetData<idx_t>(bounds.data[PEER_BEGIN]);
@@ -659,6 +729,9 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 		}
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		// in RANGE or GROUPS mode it means that the frame starts or ends with the current row's
+		// first or last peer in the ORDER BY ordering
 		bounds.data[FRAME_BEGIN].Reference(bounds.data[PEER_BEGIN]);
 		frame_begin_data = peer_begin_data;
 		break;
@@ -714,7 +787,53 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 			frame_begin_data[chunk_idx] = window_start;
 		}
 		break;
-	default:
+	case WindowBoundary::EXPR_PRECEDING_GROUPS:
+		// In GROUPS mode, the offset is an integer indicating that the frame starts or ends that many peer groups
+		// before or after the current row's peer group, where a peer group is a group of rows that are equivalent
+		// according to the window's ORDER BY clause.
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			if (boundary_begin.CellIsNull(chunk_idx)) {
+				window_start = peer_begin_data[chunk_idx];
+			} else {
+				//	Count peer groups backwards.
+				const auto peer_begin = peer_begin_data[chunk_idx];
+				const auto partition_begin = partition_begin_data[chunk_idx];
+				const auto boundary = boundary_begin.GetCell<int64_t>(chunk_idx);
+				if (boundary < 0) {
+					throw OutOfRangeException("Invalid GROUPS PRECEDING value");
+				} else if (!boundary) {
+					window_start = peer_begin;
+				} else {
+					auto n = UnsafeNumericCast<idx_t>(boundary);
+					window_start = FindPrevStart(order_mask, partition_begin, peer_begin, n);
+				}
+			}
+			frame_begin_data[chunk_idx] = window_start;
+		}
+		break;
+	case WindowBoundary::EXPR_FOLLOWING_GROUPS:
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			if (boundary_begin.CellIsNull(chunk_idx)) {
+				window_start = peer_begin_data[chunk_idx];
+			} else {
+				//	Count peer groups forward.
+				const auto peer_begin = peer_begin_data[chunk_idx];
+				const auto partition_end = partition_end_data[chunk_idx];
+				const auto boundary = boundary_begin.GetCell<int64_t>(chunk_idx);
+				if (boundary < 0) {
+					throw OutOfRangeException("Invalid GROUPS FOLLOWING value");
+				} else if (!boundary) {
+					window_start = peer_begin;
+				} else {
+					auto n = UnsafeNumericCast<idx_t>(boundary);
+					window_start = FindNextStart(order_mask, peer_begin + 1, partition_end, n);
+				}
+			}
+			frame_begin_data[chunk_idx] = window_start;
+		}
+		break;
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+	case WindowBoundary::INVALID:
 		throw InternalException("Unsupported window start boundary");
 	}
 
@@ -722,7 +841,8 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 }
 
 void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx_t count,
-                                     WindowInputExpression &boundary_end, optional_ptr<WindowCursor> range) {
+                                     WindowInputExpression &boundary_end, const ValidityMask &order_mask,
+                                     optional_ptr<WindowCursor> range) {
 	auto partition_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_BEGIN]);
 	auto partition_end_data = FlatVector::GetData<idx_t>(bounds.data[PARTITION_END]);
 	auto peer_end_data = FlatVector::GetData<idx_t>(bounds.data[PEER_END]);
@@ -739,6 +859,9 @@ void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx
 		}
 		break;
 	case WindowBoundary::CURRENT_ROW_RANGE:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+		// in RANGE or GROUPS mode it means that the frame starts or ends with the current row's
+		// first or last peer in the ORDER BY ordering
 		bounds.data[FRAME_END].Reference(bounds.data[PEER_END]);
 		frame_end_data = peer_end_data;
 		break;
@@ -799,7 +922,53 @@ void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx
 			frame_end_data[chunk_idx] = window_end;
 		}
 		break;
-	default:
+	case WindowBoundary::EXPR_PRECEDING_GROUPS:
+		// In GROUPS mode, the offset is an integer indicating that the frame starts or ends that many peer groups
+		// before or after the current row's peer group, where a peer group is a group of rows that are equivalent
+		// according to the window's ORDER BY clause.
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			if (boundary_end.CellIsNull(chunk_idx)) {
+				window_end = peer_end_data[chunk_idx];
+			} else {
+				//	Count peer groups backwards.
+				const auto peer_end = peer_end_data[chunk_idx];
+				const auto partition_begin = partition_begin_data[chunk_idx];
+				const auto boundary = boundary_end.GetCell<int64_t>(chunk_idx);
+				if (boundary < 0) {
+					throw OutOfRangeException("Invalid GROUPS PRECEDING value");
+				} else if (!boundary) {
+					window_end = peer_end;
+				} else {
+					auto n = UnsafeNumericCast<idx_t>(boundary);
+					window_end = FindPrevStart(order_mask, partition_begin, peer_end, n);
+				}
+			}
+			frame_end_data[chunk_idx] = window_end;
+		}
+		break;
+	case WindowBoundary::EXPR_FOLLOWING_GROUPS:
+		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
+			if (boundary_end.CellIsNull(chunk_idx)) {
+				window_end = peer_end_data[chunk_idx];
+			} else {
+				//	Count peer groups forward.
+				const auto peer_end = peer_end_data[chunk_idx];
+				const auto partition_end = partition_end_data[chunk_idx];
+				const auto boundary = boundary_end.GetCell<int64_t>(chunk_idx);
+				if (boundary < 0) {
+					throw OutOfRangeException("Invalid GROUPS FOLLOWING value");
+				} else if (!boundary) {
+					window_end = peer_end;
+				} else {
+					auto n = UnsafeNumericCast<idx_t>(boundary);
+					window_end = FindNextStart(order_mask, peer_end + 1, partition_end, n);
+				}
+			}
+			frame_end_data[chunk_idx] = window_end;
+		}
+		break;
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+	case WindowBoundary::INVALID:
 		throw InternalException("Unsupported window end boundary");
 	}
 

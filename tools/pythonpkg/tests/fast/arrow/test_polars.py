@@ -30,6 +30,10 @@ class TestPolars(object):
         con_result = con.execute('SELECT * FROM df').pl()
         pl_testing.assert_frame_equal(df, con_result)
 
+    def test_execute_polars(self, duckdb_cursor):
+        res1 = duckdb_cursor.execute("SELECT 1 AS a, 2 AS a").pl()
+        assert res1.columns == ['a', 'a_1']
+
     def test_register_polars(self, duckdb_cursor):
         con = duckdb.connect()
         df = pl.DataFrame(
@@ -75,5 +79,11 @@ class TestPolars(object):
 
         duckdb_cursor.sql("set arrow_lossless_conversion=true")
         string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
-        with pytest.raises(pl.exceptions.PanicException):
-            res = duckdb_cursor.read_json(string).pl()
+        res = duckdb_cursor.read_json(string).pl()
+        assert duckdb_cursor.execute("FROM res").fetchall() == [([{'content': {'ManagedSystem': {'test': None}}}],)]
+
+    def test_polars_from_json_error(self, duckdb_cursor):
+        conn = duckdb.connect()
+        my_table = conn.query("select 'x' my_str").pl()
+        my_res = duckdb.query("select my_str from my_table where my_str != 'y'")
+        assert my_res.fetchall() == [('x',)]

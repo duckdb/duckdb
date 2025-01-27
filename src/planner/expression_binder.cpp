@@ -60,7 +60,7 @@ BindResult ExpressionBinder::BindExpression(unique_ptr<ParsedExpression> &expr, 
 	auto stack_checker = StackCheck(*expr);
 
 	auto &expr_ref = *expr;
-	switch (expr_ref.expression_class) {
+	switch (expr_ref.GetExpressionClass()) {
 	case ExpressionClass::BETWEEN:
 		return BindExpression(expr_ref.Cast<BetweenExpression>(), depth);
 	case ExpressionClass::CASE:
@@ -228,7 +228,7 @@ void ExpressionBinder::BindChild(unique_ptr<ParsedExpression> &expr, idx_t depth
 }
 
 void ExpressionBinder::ExtractCorrelatedExpressions(Binder &binder, Expression &expr) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr.Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth > 0) {
 			binder.AddCorrelatedColumn(CorrelatedColumnInfo(bound_colref));
@@ -354,9 +354,9 @@ unique_ptr<Expression> ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr
 
 ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression) {
 	// bind the node, but only if it has not been bound yet
-	auto query_location = expr->query_location;
+	auto query_location = expr->GetQueryLocation();
 	auto &expression = *expr;
-	auto alias = expression.alias;
+	auto alias = expression.GetAlias();
 	if (expression.GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION) {
 		// already bound, don't bind it again
 		return ErrorData();
@@ -367,12 +367,12 @@ ErrorData ExpressionBinder::Bind(unique_ptr<ParsedExpression> &expr, idx_t depth
 		return std::move(result.error);
 	}
 	// successfully bound: replace the node with a BoundExpression
-	result.expression->query_location = query_location;
+	result.expression->SetQueryLocation(query_location);
 	expr = make_uniq<BoundExpression>(std::move(result.expression));
 	auto &be = expr->Cast<BoundExpression>();
-	be.alias = alias;
+	be.SetAlias(alias);
 	if (!alias.empty()) {
-		be.expr->alias = alias;
+		be.expr->SetAlias(alias);
 	}
 	return ErrorData();
 }

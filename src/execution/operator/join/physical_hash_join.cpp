@@ -137,7 +137,8 @@ public:
 	    : context(context_p), op(op_p),
 	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
 	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), finalized(false),
-	      active_local_states(0), total_size(0), max_partition_size(0), max_partition_count(0), scanned_data(false) {
+	      active_local_states(0), total_size(0), max_partition_size(0), max_partition_count(0),
+	      probe_side_requirement(0), scanned_data(false) {
 		hash_table = op.InitializeHashTable(context);
 
 		// For perfect hash join
@@ -188,6 +189,7 @@ public:
 	idx_t total_size;
 	idx_t max_partition_size;
 	idx_t max_partition_count;
+	idx_t probe_side_requirement;
 
 	//! Hash tables built by each thread
 	vector<unique_ptr<JoinHashTable>> local_hash_tables;
@@ -401,9 +403,16 @@ static idx_t GetPartitioningSpaceRequirement(ClientContext &context, const vecto
 
 void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &global_state) const {
 	auto &gstate = global_state.Cast<HashJoinGlobalSinkState>();
-	auto &ht = *gstate.hash_table;
+	const auto &ht = *gstate.hash_table;
+
 	gstate.total_size =
 	    ht.GetTotalSize(gstate.local_hash_tables, gstate.max_partition_size, gstate.max_partition_count);
+	gstate.probe_side_requirement =
+	    GetPartitioningSpaceRequirement(context, children[0]->types, ht.GetRadixBits(), gstate.num_threads);
+	const auto max_partition_ht_size =
+	    gstate.max_partition_size + JoinHashTable::PointerTableSize(gstate.max_partition_count);
+	gstate.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + gstate.probe_side_requirement);
+
 	bool all_constant;
 	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children[0]->types, all_constant));
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
@@ -446,7 +455,16 @@ public:
 		auto &ht = *sink.hash_table;
 		const auto chunk_count = ht.GetDataCollection().ChunkCount();
 		const auto num_threads = NumericCast<idx_t>(sink.num_threads);
-		if (num_threads == 1 || (ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD && !context.config.verify_parallelism)) {
+
+		// If the data is very skewed (many of the exact same key), our finalize will become slow,
+		// due to completely slamming the same atomic using compare-and-swaps.
+		// We can detect this because we partition the data, and go for a single-threaded finalize instead.
+		const auto max_partition_ht_size =
+		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
+		const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
+
+		if (num_threads == 1 || (ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD && skew > SKEW_SINGLE_THREADED_THRESHOLD &&
+		                         !context.config.verify_parallelism)) {
 			// Single-threaded finalize
 			finalize_tasks.push_back(
 			    make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count, false, sink.op));
@@ -469,6 +487,7 @@ public:
 
 	static constexpr idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
+	static constexpr double SKEW_SINGLE_THREADED_THRESHOLD = 0.33;
 };
 
 void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
@@ -567,15 +586,17 @@ public:
 		vector<idx_t> partition_counts(num_partitions, 0);
 		sink.total_size = sink.hash_table->GetTotalSize(partition_sizes, partition_counts, sink.max_partition_size,
 		                                                sink.max_partition_count);
-		const auto probe_side_requirement =
+		sink.probe_side_requirement =
 		    GetPartitioningSpaceRequirement(sink.context, op.types, sink.hash_table->GetRadixBits(), sink.num_threads);
 
 		sink.temporary_memory_state->SetMinimumReservation(sink.max_partition_size +
 		                                                   JoinHashTable::PointerTableSize(sink.max_partition_count) +
-		                                                   probe_side_requirement);
+		                                                   sink.probe_side_requirement);
 		sink.temporary_memory_state->UpdateReservation(executor.context);
 
-		sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation());
+		D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
+		sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
+		                                         sink.probe_side_requirement);
 		sink.ScheduleFinalize(*pipeline, *this);
 	}
 };
@@ -616,11 +637,13 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	}
 
 	// generate the OR filter
-	auto or_filter = make_uniq<InFilter>(std::move(in_list));
+	auto in_filter = make_uniq<InFilter>(std::move(in_list));
+
 	// we push the OR filter as an OptionalFilter so that we can use it for zonemap pruning only
 	// the IN-list is expensive to execute otherwise
-	auto filter = make_uniq<OptionalFilter>(std::move(or_filter));
+	auto filter = make_uniq<OptionalFilter>(std::move(in_filter));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+	return;
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable &ht,
@@ -695,22 +718,22 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
 		const auto very_very_skewed = // No point in repartitioning if it's this skewed
 		    static_cast<double>(max_partition_ht_size) >= 0.8 * static_cast<double>(sink.total_size);
-		if (!very_very_skewed && max_partition_ht_size > sink.temporary_memory_state->GetReservation()) {
+		if (!very_very_skewed &&
+		    (max_partition_ht_size + sink.probe_side_requirement) > sink.temporary_memory_state->GetReservation()) {
 			// We have to repartition
 			ht.SetRepartitionRadixBits(sink.temporary_memory_state->GetReservation(), sink.max_partition_size,
 			                           sink.max_partition_count);
 			auto new_event = make_shared_ptr<HashJoinRepartitionEvent>(pipeline, *this, sink, sink.local_hash_tables);
 			event.InsertEvent(std::move(new_event));
 		} else {
-			// No repartitioning! We do need some space for partitioning the probe-side, though
-			const auto probe_side_requirement =
-			    GetPartitioningSpaceRequirement(context, children[0]->types, ht.GetRadixBits(), sink.num_threads);
-			sink.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + probe_side_requirement);
+			// No repartitioning!
 			for (auto &local_ht : sink.local_hash_tables) {
 				ht.Merge(*local_ht);
 			}
 			sink.local_hash_tables.clear();
-			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation());
+			D_ASSERT(sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
+			sink.hash_table->PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() -
+			                                         sink.probe_side_requirement);
 			sink.ScheduleFinalize(pipeline, event);
 		}
 		sink.finalized = true;
@@ -1041,10 +1064,13 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	auto &ht = *sink.hash_table;
 
 	// Update remaining size
-	sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(sink.context, ht.GetRemainingSize());
+	sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(sink.context, ht.GetRemainingSize() +
+	                                                                                    sink.probe_side_requirement);
 
 	// Try to put the next partitions in the block collection of the HT
-	if (!sink.external || !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation())) {
+	D_ASSERT(!sink.external || sink.temporary_memory_state->GetReservation() >= sink.probe_side_requirement);
+	if (!sink.external ||
+	    !ht.PrepareExternalFinalize(sink.temporary_memory_state->GetReservation() - sink.probe_side_requirement)) {
 		global_stage = HashJoinSourceStage::DONE;
 		sink.temporary_memory_state->SetZero();
 		return;
@@ -1060,7 +1086,20 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	build_chunk_count = data_collection.ChunkCount();
 	build_chunk_done = 0;
 
-	build_chunks_per_thread = MaxValue<idx_t>((build_chunk_count + sink.num_threads - 1) / sink.num_threads, 1);
+	if (sink.context.config.verify_parallelism) {
+		build_chunks_per_thread = 1;
+	} else {
+		const auto max_partition_ht_size =
+		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
+		const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
+
+		if (skew > HashJoinFinalizeEvent::SKEW_SINGLE_THREADED_THRESHOLD) {
+			build_chunks_per_thread = build_chunk_count; // This forces single-threaded building
+		} else {
+			build_chunks_per_thread = // Same task size as in HashJoinFinalizeEvent
+			    MaxValue<idx_t>(MinValue(build_chunk_count, HashJoinFinalizeEvent::CHUNKS_PER_TASK), 1);
+		}
+	}
 
 	ht.InitializePointerTable();
 
@@ -1308,22 +1347,20 @@ ProgressData PhysicalHashJoin::GetProgress(ClientContext &context, GlobalSourceS
 		return res;
 	}
 
-	auto num_partitions = static_cast<double>(RadixPartitioning::NumberOfPartitions(sink.hash_table->GetRadixBits()));
-	auto partition_start = static_cast<double>(sink.hash_table->GetPartitionStart());
-	// auto partition_end = static_cast<double>(sink.hash_table->GetPartitionEnd());
+	const auto &ht = *sink.hash_table;
+	const auto num_partitions = static_cast<double>(RadixPartitioning::NumberOfPartitions(ht.GetRadixBits()));
 
-	// This many partitions are fully done
-	res.done = partition_start;
+	res.done = static_cast<double>(ht.FinishedPartitionCount());
 	res.total = num_partitions;
 
-	auto probe_chunk_done = static_cast<double>(gstate.probe_chunk_done);
-	auto probe_chunk_count = static_cast<double>(gstate.probe_chunk_count);
+	const auto probe_chunk_done = static_cast<double>(gstate.probe_chunk_done);
+	const auto probe_chunk_count = static_cast<double>(gstate.probe_chunk_count);
 	if (probe_chunk_count != 0) {
-		// Progress of the current round of probing, weighed by the number of partitions
+		// Progress of the current round of probing
 		auto probe_progress = probe_chunk_done / probe_chunk_count;
-		// Add it to the progress, weighed by the number of partitions in the current round
-		// progress += (partition_end - partition_start) / num_partitions * probe_progress;
-		// TODO also also me, fixup using somehow `partition_end - partition_start`
+		// Weighed by the number of partitions
+		probe_progress *= static_cast<double>(ht.CurrentPartitionCount());
+		// Add it to the progress
 		res.done += probe_progress;
 	}
 

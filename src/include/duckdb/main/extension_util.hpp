@@ -69,7 +69,7 @@ public:
 
 	//! Registers a new type
 	DUCKDB_API static void RegisterType(DatabaseInstance &db, string type_name, LogicalType type,
-	                                    bind_type_modifiers_function_t bind_type_modifiers = nullptr);
+	                                    bind_logical_type_function_t bind_function = nullptr);
 
 	//! Registers a new secret type
 	DUCKDB_API static void RegisterSecretType(DatabaseInstance &db, SecretType secret_type);

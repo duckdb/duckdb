@@ -19,7 +19,7 @@ void UnnestRewriterPlanUpdater::VisitOperator(LogicalOperator &op) {
 void UnnestRewriterPlanUpdater::VisitExpression(unique_ptr<Expression> *expression) {
 	auto &expr = *expression;
 
-	if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+	if (expr->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 		auto &bound_column_ref = expr->Cast<BoundColumnRefExpression>();
 		for (idx_t i = 0; i < replace_bindings.size(); i++) {
 			if (bound_column_ref.binding == replace_bindings[i].old_binding) {
@@ -301,7 +301,7 @@ void UnnestRewriter::GetDelimColumns(LogicalOperator &op) {
 	auto &delim_join = op.Cast<LogicalComparisonJoin>();
 	for (idx_t i = 0; i < delim_join.duplicate_eliminated_columns.size(); i++) {
 		auto &expr = *delim_join.duplicate_eliminated_columns[i];
-		D_ASSERT(expr.type == ExpressionType::BOUND_COLUMN_REF);
+		D_ASSERT(expr.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF);
 		auto &bound_colref_expr = expr.Cast<BoundColumnRefExpression>();
 		delim_columns.push_back(bound_colref_expr.binding);
 	}
@@ -326,7 +326,7 @@ void UnnestRewriter::GetLHSExpressions(LogicalOperator &op) {
 		lhs_bindings.emplace_back(col_bindings[i], op.types[i]);
 		if (set_alias) {
 			auto &proj = op.Cast<LogicalProjection>();
-			lhs_bindings.back().alias = proj.expressions[i]->alias;
+			lhs_bindings.back().alias = proj.expressions[i]->GetAlias();
 		}
 	}
 }

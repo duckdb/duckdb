@@ -18,7 +18,7 @@ namespace duckdb {
 namespace pyarrow {
 
 py::object ToArrowTable(const vector<LogicalType> &types, const vector<string> &names, const py::list &batches,
-                        const ClientProperties &options) {
+                        ClientProperties &options) {
 	py::gil_scoped_acquire acquire;
 
 	auto pyarrow_lib_module = py::module::import("pyarrow").attr("lib");

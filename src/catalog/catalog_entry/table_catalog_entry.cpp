@@ -148,7 +148,7 @@ string TableCatalogEntry::ColumnsToSQL(const ColumnList &columns, const vector<u
 			if (column_type.id() != LogicalTypeId::ANY) {
 				// We artificially add a cast if the type is specified, need to strip it
 				auto &expr = generated_expression.get();
-				D_ASSERT(expr.type == ExpressionType::OPERATOR_CAST);
+				D_ASSERT(expr.GetExpressionType() == ExpressionType::OPERATOR_CAST);
 				auto &cast_expr = expr.Cast<CastExpression>();
 				D_ASSERT(cast_expr.cast_type.id() == column_type.id());
 				generated_expression = *cast_expr.child;

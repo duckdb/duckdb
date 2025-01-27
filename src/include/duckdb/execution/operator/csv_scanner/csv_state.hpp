@@ -33,6 +33,7 @@ enum class CSVState : uint8_t {
 	COMMENT = 14,          //! If we are in a comment state, and hence have to skip the whole line
 	STANDARD_NEWLINE = 15, //! State used for figuring out a new line.
 	UNQUOTED_ESCAPE = 16,  //! State when encountering an escape character (e.g., \) in an unquoted field
-	ESCAPED_RETURN = 17 //! State when the carriage return is preceded by an escape character (for '\r\n' newline only)
+	ESCAPED_RETURN = 17, //! State when the carriage return is preceded by an escape character (for '\r\n' newline only)
+	MAYBE_QUOTED = 18    //! We are potentially in a quoted value or the end of an unquoted value
 };
 } // namespace duckdb

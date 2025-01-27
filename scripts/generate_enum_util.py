@@ -39,8 +39,15 @@ overrides = {
     },
     "SampleMethod": {"SYSTEM_SAMPLE": "System", "BERNOULLI_SAMPLE": "Bernoulli", "RESERVOIR_SAMPLE": "Reservoir"},
     "TableReferenceType": {"EMPTY_FROM": "EMPTY"},
+    "LogLevel": {
+        "LOG_TRACE": "TRACE",
+        "LOG_DEBUG": "DEBUG",
+        "LOG_INFO": "INFO",
+        "LOG_WARN": "WARN",
+        "LOG_ERROR": "ERROR",
+        "LOG_FATAL": "FATAL",
+    },
 }
-
 
 # get all the headers
 hpp_files = []

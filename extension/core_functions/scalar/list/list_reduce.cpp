@@ -101,7 +101,7 @@ static bool ExecuteReduce(idx_t loops, ReduceExecuteInfo &execute_info, LambdaFu
 	}
 
 	// create the index vector
-	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops + 1)));
+	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops + 2)));
 
 	// slice the left and right slice
 	execute_info.left_slice->Slice(*execute_info.left_slice, execute_info.left_sel, reduced_row_idx);
@@ -184,7 +184,7 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 
 	// the list column and the bound lambda expression
 	D_ASSERT(arguments.size() == 2);
-	if (arguments[1]->expression_class != ExpressionClass::BOUND_LAMBDA) {
+	if (arguments[1]->GetExpressionClass() != ExpressionClass::BOUND_LAMBDA) {
 		throw BinderException("Invalid lambda expression!");
 	}
 

@@ -47,7 +47,7 @@ private:
 	idx_t ExpressionCost(BoundComparisonExpression &expr);
 	idx_t ExpressionCost(BoundConjunctionExpression &expr);
 	idx_t ExpressionCost(BoundFunctionExpression &expr);
-	idx_t ExpressionCost(BoundOperatorExpression &expr, ExpressionType &expr_type);
+	idx_t ExpressionCost(BoundOperatorExpression &expr, ExpressionType expr_type);
 	idx_t ExpressionCost(PhysicalType return_type, idx_t multiplier);
 };
 } // namespace duckdb

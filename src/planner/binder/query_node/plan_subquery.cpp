@@ -193,7 +193,7 @@ CreateDuplicateEliminatedJoin(const vector<CorrelatedColumnInfo> &correlated_col
 		    make_uniq<BoundWindowExpression>(ExpressionType::WINDOW_ROW_NUMBER, LogicalType::BIGINT, nullptr, nullptr);
 		row_number->start = WindowBoundary::UNBOUNDED_PRECEDING;
 		row_number->end = WindowBoundary::CURRENT_ROW_ROWS;
-		row_number->alias = "delim_index";
+		row_number->SetAlias("delim_index");
 		window->expressions.push_back(std::move(row_number));
 		window->AddChild(std::move(original_plan));
 		original_plan = std::move(window);
@@ -449,7 +449,7 @@ void Binder::PlanSubqueries(unique_ptr<Expression> &expr_ptr, unique_ptr<Logical
 	ExpressionIterator::EnumerateChildren(expr, [&](unique_ptr<Expression> &expr) { PlanSubqueries(expr, root); });
 
 	// check if this is a subquery node
-	if (expr.expression_class == ExpressionClass::BOUND_SUBQUERY) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
 		auto &subquery = expr.Cast<BoundSubqueryExpression>();
 		// subquery node! plan it
 		if (!is_outside_flattened) {

@@ -17,7 +17,7 @@
 
 DuckDB is a high-performance analytical database system. It is designed to be fast, reliable, portable, and easy to use. DuckDB provides a rich SQL dialect, with support far beyond basic SQL. DuckDB supports arbitrary and nested correlated subqueries, window functions, collations, complex types (arrays, structs, maps), and [several extensions designed to make SQL easier to use](https://duckdb.org/docs/guides/sql_features/friendly_sql).
 
-DuckDB is available as a [standalone CLI application](https://duckdb.org/docs/api/cli/overview) and has clients for [Python](https://duckdb.org/docs/api/python/overview), [R](https://duckdb.org/docs/api/r), [Java](https://duckdb.org/docs/api/java), [Wasm](https://duckdb.org/docs/api/wasm/overview), etc., with deep integrations with packages such as [pandas](https://duckdb.org/docs/guides/python/sql_on_pandas) and [dplyr](https://duckdblabs.github.io/duckplyr/).
+DuckDB is available as a [standalone CLI application](https://duckdb.org/docs/api/cli/overview) and has clients for [Python](https://duckdb.org/docs/api/python/overview), [R](https://duckdb.org/docs/api/r), [Java](https://duckdb.org/docs/api/java), [Wasm](https://duckdb.org/docs/api/wasm/overview), etc., with deep integrations with packages such as [pandas](https://duckdb.org/docs/guides/python/sql_on_pandas) and [dplyr](https://duckdb.org/docs/api/r#duckplyr-dplyr-api).
 
 For more information on using DuckDB, please refer to the [DuckDB documentation](https://duckdb.org/docs/).
 
