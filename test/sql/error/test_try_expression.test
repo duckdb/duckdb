@@ -80,3 +80,26 @@ select try(a::INTEGER) from cte
 123
 NULL
 235
+
+# Using TRY('abc'::BIGINT) results in null
+# Making the result of these queries equivalent
+
+query I nosort expected_result
+with cte as (
+	select i % 5 i from range(100_000) t(i)
+),
+cte2 as (
+	select if(i == 0, NULL, i) res from cte
+)
+select count(res) from cte2;
+----
+
+query I nosort expected_result
+with cte as (
+	select i % 5 i from range(100_000) t(i)
+),
+cte2 as (
+	select TRY(if(i == 0, 'abc', i::VARCHAR)::BIGINT) res from cte
+)
+select count(res) from cte2;
+----
