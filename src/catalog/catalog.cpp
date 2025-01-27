@@ -966,17 +966,17 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogEntryRetriever &retri
 		auto catalog = Catalog::GetCatalogEntry(retriever, entries[i].catalog);
 		if (!catalog) {
 			// skip if it is not an attached database
-			if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-				continue;
-			} else {
-				throw CatalogException(error_context, "Catalog with name %s does not exist!", catalog_name);
-			}
+			continue;
 		}
 		const auto on_not_found = i + 1 == entries.size() ? if_not_found : OnEntryNotFound::RETURN_NULL;
 		auto result = catalog->GetSchema(retriever.GetContext(), schema_name, on_not_found, error_context);
 		if (result) {
 			return result;
 		}
+	}
+	// Catalog has not been found.
+	if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+		throw CatalogException(error_context, "Catalog with name %s does not exist!", catalog_name);
 	}
 	return nullptr;
 }
