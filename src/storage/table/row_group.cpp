@@ -672,7 +672,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 								}
 							} else {
 								auto &col_data = GetColumn(column);
-								idx_t scan_count = col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
+								col_data.Scan(transaction, state.vector_index, state.column_scans[i], result.data[i]);
 							}
 						}
 					}
@@ -710,7 +710,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					if (col_idx.IsRowIdColumn()) {
 						continue;
 					}
-					if (has_filters && filter_info.ColumnHasFilters(i)) {
+					if (has_filters && (filter_info.ColumnHasFilters(i) || filter_info.ColumnHasBloomFilters(i))) {
 						continue;
 					}
 					auto &col_data = GetColumn(col_idx);
