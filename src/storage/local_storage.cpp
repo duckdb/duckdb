@@ -276,7 +276,9 @@ void LocalTableStorage::Rollback() {
 	for (auto &writer : optimistic_writers) {
 		writer->Rollback();
 	}
+	optimistic_writers.clear();
 	optimistic_writer.Rollback();
+
 	for (auto &collection : optimistic_collections) {
 		if (!collection) {
 			continue;

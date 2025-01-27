@@ -148,7 +148,7 @@ public:
 
 class BatchInsertGlobalState : public GlobalSinkState {
 public:
-	BatchInsertGlobalState(ClientContext &context, DuckTableEntry &table, idx_t minimum_memory_per_thread)
+	BatchInsertGlobalState(ClientContext &context, DuckTableEntry &table, const idx_t minimum_memory_per_thread)
 	    : memory_manager(context, minimum_memory_per_thread), table(table), insert_count(0),
 	      optimistically_written(false), minimum_memory_per_thread(minimum_memory_per_thread) {
 		row_group_size = table.GetStorage().GetRowGroupSize();
@@ -231,13 +231,15 @@ public:
 
 		// Merge the collections.
 		D_ASSERT(l_state.writer);
-		auto collection_index = g_state.MergeCollections(context, merge_collections, *l_state.writer);
+		auto result_collection_index = g_state.MergeCollections(context, merge_collections, *l_state.writer);
+		merge_collections.clear();
+
+		lock_guard<mutex> l(g_state.lock);
+		auto &result_collection = g_state.table.GetStorage().GetOptimisticCollection(context, result_collection_index);
+		RowGroupBatchEntry new_entry(result_collection, merged_batch_index, result_collection_index,
+		                             RowGroupBatchType::FLUSHED);
 
 		// Add the result collection to the set of batch indexes.
-		lock_guard<mutex> l(g_state.lock);
-		auto &result_collection = g_state.table.GetStorage().GetOptimisticCollection(context, collection_index);
-		RowGroupBatchEntry new_entry(result_collection, merged_batch_index, collection_index,
-		                             RowGroupBatchType::FLUSHED);
 		auto it = std::lower_bound(
 		    g_state.collections.begin(), g_state.collections.end(), new_entry,
 		    [&](const RowGroupBatchEntry &a, const RowGroupBatchEntry &b) { return a.batch_idx < b.batch_idx; });
@@ -339,6 +341,7 @@ void BatchInsertGlobalState::ScheduleMergeTasks(ClientContext &context, const id
 			merge_collections.push_back(added_entry);
 			entry.total_rows = scheduled_task.total_count;
 			entry.type = RowGroupBatchType::FLUSHED;
+			entry.collection_index = PhysicalIndex(DConstants::INVALID_INDEX);
 		}
 		task_manager.AddTask(make_uniq<MergeCollectionTask>(std::move(merge_collections), merged_batch_index));
 	}
@@ -567,8 +570,9 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 		auto &collection = gstate.table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
 		collection.FinalizeAppend(tdata, lstate.current_append_state);
 		if (collection.GetTotalRows() > 0) {
-			gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
-			                     lstate.collection_index);
+			auto batch_index = lstate.partition_info.min_batch_index.GetIndex();
+			gstate.AddCollection(context.client, lstate.current_index, batch_index, lstate.collection_index);
+			lstate.collection_index = PhysicalIndex(DConstants::INVALID_INDEX);
 		}
 	}
 	if (lstate.writer) {
@@ -588,18 +592,18 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 //===--------------------------------------------------------------------===//
 SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                OperatorSinkFinalizeInput &input) const {
-	auto &gstate = input.global_state.Cast<BatchInsertGlobalState>();
-	auto &memory_manager = gstate.memory_manager;
-	auto &data_table = gstate.table.GetStorage();
+	auto &g_state = input.global_state.Cast<BatchInsertGlobalState>();
+	auto &table = g_state.table;
+	auto &data_table = g_state.table.GetStorage();
+	auto &memory_manager = g_state.memory_manager;
 
-	if (gstate.optimistically_written || gstate.insert_count >= gstate.row_group_size) {
+	if (g_state.optimistically_written || g_state.insert_count >= g_state.row_group_size) {
 		// we have written data to disk optimistically or are inserting a large amount of data
 		// perform a final pass over all of the row groups and merge them together
 		vector<unique_ptr<CollectionMerger>> mergers;
 		unique_ptr<CollectionMerger> current_merger;
 
-		auto &storage = gstate.table.GetStorage();
-		for (auto &entry : gstate.collections) {
+		for (auto &entry : g_state.collections) {
 			if (entry.type == RowGroupBatchType::NOT_FLUSHED) {
 				// this collection has not been flushed: add it to the merge set
 				if (!current_merger) {
@@ -607,19 +611,22 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 				}
 				current_merger->AddCollection(entry.collection_index, entry.type);
 				memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
-			} else {
-				// this collection has been flushed: it does not need to be merged
-				// create a separate collection merger only for this entry
-				if (current_merger) {
-					// we have small collections remaining: flush them
-					mergers.push_back(std::move(current_merger));
-					current_merger.reset();
-				}
-				auto larger_merger = make_uniq<CollectionMerger>(context, data_table);
-				larger_merger->AddCollection(entry.collection_index, entry.type);
-				mergers.push_back(std::move(larger_merger));
+				continue;
 			}
+
+			// This collection has been flushed, so it does not need to be merged.
+			// Create a separate collection merger for it.
+			if (current_merger) {
+				// Flush any remaining small allocations.
+				mergers.push_back(std::move(current_merger));
+				current_merger.reset();
+			}
+			auto larger_merger = make_uniq<CollectionMerger>(context, data_table);
+			larger_merger->AddCollection(entry.collection_index, entry.type);
+			mergers.push_back(std::move(larger_merger));
 		}
+
+		g_state.collections.clear();
 		if (current_merger) {
 			mergers.push_back(std::move(current_merger));
 		}
@@ -627,7 +634,7 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		// now that we have created all of the mergers, perform the actual merging
 		vector<PhysicalIndex> final_collections;
 		final_collections.reserve(mergers.size());
-		auto &writer = storage.CreateOptimisticWriter(context);
+		auto &writer = data_table.CreateOptimisticWriter(context);
 		for (auto &merger : mergers) {
 			final_collections.push_back(merger->Flush(writer));
 		}
@@ -635,33 +642,36 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		// finally, merge the row groups into the local storage
 		for (const auto collection_index : final_collections) {
 			auto &collection = data_table.GetOptimisticCollection(context, collection_index);
-			storage.LocalMerge(context, collection);
+			data_table.LocalMerge(context, collection);
 			data_table.ResetOptimisticCollection(context, collection_index);
 		}
-		storage.FinalizeOptimisticWriter(context, writer);
-	} else {
-		// we are writing a small amount of data to disk
-		// append directly to transaction local storage
-		auto &table = gstate.table;
-		auto &storage = table.GetStorage();
-		LocalAppendState append_state;
-		storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
-		auto &transaction = DuckTransaction::Get(context, table.catalog);
-		for (auto &entry : gstate.collections) {
-			if (entry.type != RowGroupBatchType::NOT_FLUSHED) {
-				throw InternalException("Encountered a flushed batch");
-			}
 
-			memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
-			auto &collection = data_table.GetOptimisticCollection(context, entry.collection_index);
-			collection.Scan(transaction, [&](DataChunk &insert_chunk) {
-				storage.LocalAppend(append_state, context, insert_chunk, false);
-				return true;
-			});
-			data_table.ResetOptimisticCollection(context, entry.collection_index);
-		}
-		storage.FinalizeLocalAppend(append_state);
+		data_table.FinalizeOptimisticWriter(context, writer);
+		memory_manager.FinalCheck();
+		return SinkFinalizeType::READY;
 	}
+
+	// We are writing a small amount of data to disk.
+	// Thus, we append directly to the transaction local storage.
+	LocalAppendState append_state;
+	data_table.InitializeLocalAppend(append_state, table, context, bound_constraints);
+	auto &transaction = DuckTransaction::Get(context, table.catalog);
+	for (auto &entry : g_state.collections) {
+		if (entry.type != RowGroupBatchType::NOT_FLUSHED) {
+			throw InternalException("Encountered a flushed batch");
+		}
+
+		memory_manager.ReduceUnflushedMemory(entry.unflushed_memory);
+		auto &collection = data_table.GetOptimisticCollection(context, entry.collection_index);
+		collection.Scan(transaction, [&](DataChunk &insert_chunk) {
+			data_table.LocalAppend(append_state, context, insert_chunk, false);
+			return true;
+		});
+		data_table.ResetOptimisticCollection(context, entry.collection_index);
+	}
+
+	g_state.collections.clear();
+	data_table.FinalizeLocalAppend(append_state);
 	memory_manager.FinalCheck();
 	return SinkFinalizeType::READY;
 }
