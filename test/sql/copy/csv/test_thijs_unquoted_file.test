@@ -14,7 +14,7 @@ from read_csv('data/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"', col
 query III
 from read_csv('data/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"', columns={'a':'varchar', 'b': 'varchar', 'c': 'integer'}, auto_detect=false, strict_mode = False);
 ----
-HYDRONIC GESELLSCHAFT FÜR WASSERTECHNIK MBH                                                     	 	2011
+HYDRONIC GESELLSCHAFT FÜR WASSERTECHNIK MBH	 	2011
 ANTON SONNENSCHUTZSYSTEME GESELLSCHAFT MIT BESCHRÄNKTER HAFTUN	 	2012
 ENERGYS MAINTENANCE S	 	2015
 SYSTEMAT BELGIUM  S	 	2013
@@ -35,4 +35,4 @@ select count(*) from T
 query IIIIIIIIIIIIIIIIIIIIIIIIII
 select * from T limit 1
 ----
-XXX	XXX	XXX	XXX	XXX	XXX	XXX,XXX	XXX,XXX	XXX	XXX.XXX. XXX	NULL	NULL	XXX	XXX	NULL	NULL	NULL	NULL	NULL	 	 	NULL	NULL	NULL	NULL	NULL
+XXX	XXX	XXX	XXX	XXX	XXX	XXX,XXX	XXX,XXX	XXX	XXX.XXX. XXX	NULL	NULL	XXX	XXX	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL
