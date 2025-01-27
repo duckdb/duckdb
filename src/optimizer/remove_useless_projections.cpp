@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/remove_useless_projections.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 
 namespace duckdb {
@@ -11,16 +12,20 @@ unique_ptr<LogicalOperator> RemoveUselessProjections::RemoveProjectionsChildren(
 }
 
 unique_ptr<LogicalOperator> RemoveUselessProjections::RemoveProjections(unique_ptr<LogicalOperator> op) {
-	if (op->type == LogicalOperatorType::LOGICAL_UNION || op->type == LogicalOperatorType::LOGICAL_EXCEPT ||
-	    op->type == LogicalOperatorType::LOGICAL_INTERSECT || op->type == LogicalOperatorType::LOGICAL_RECURSIVE_CTE ||
-	    op->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
-		// guaranteed to find a projection under this that is meant to keep the column order in the presence of
-		// an optimization done by build side probe side.
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 		for (idx_t i = 0; i < op->children.size(); i++) {
 			first_projection = true;
 			op->children[i] = RemoveProjections(std::move(op->children[i]));
 		}
 		return op;
+	}
+	default:
+		break;
 	}
 	if (op->type != LogicalOperatorType::LOGICAL_PROJECTION) {
 		return RemoveProjectionsChildren(std::move(op));
