@@ -98,6 +98,7 @@ inline size_t JoinBloomFilter::ProbeInternal(size_t fni, Vector &hashes, Selecti
 
         if (!u_hashes.validity.AllValid()) {
             size_t sel_out_idx = 0;
+            SelectionVector tmp_sel(current_sel_count);
             for (idx_t i = 0; i < current_sel_count; i++) {
                 // TODO: We can skip this row if it was already removed by a previous iteration
                 auto key_idx = current_sel.get_index(i);
@@ -108,13 +109,15 @@ inline size_t JoinBloomFilter::ProbeInternal(size_t fni, Vector &hashes, Selecti
                     auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
                     if (bloom_filter_bits.RowIsValid(bloom_idx)) {
                         // Bit is set in Bloom-filter. We keep the entry for now.
-                        current_sel.set_index(sel_out_idx++, key_idx);
+                        tmp_sel.set_index(sel_out_idx++, key_idx);
                     }
                 }
             }
+            current_sel.Initialize(tmp_sel);
             return sel_out_idx;
         } else {
             size_t sel_out_idx = 0;
+            SelectionVector tmp_sel(current_sel_count);
             for (idx_t i = 0; i < current_sel_count; i++) {
                 auto key_idx = current_sel.get_index(i);
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
@@ -123,9 +126,10 @@ inline size_t JoinBloomFilter::ProbeInternal(size_t fni, Vector &hashes, Selecti
                 auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
                 if (bloom_filter_bits.RowIsValid(bloom_idx)) {
                     // Bit is set in Bloom-filter. We keep the entry for now.
-                    current_sel.set_index(sel_out_idx++, key_idx);
+                    tmp_sel.set_index(sel_out_idx++, key_idx);
                 }
             }
+            current_sel.Initialize(tmp_sel);
             return sel_out_idx;
         }
     }
