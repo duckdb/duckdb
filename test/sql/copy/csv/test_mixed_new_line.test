@@ -6,7 +6,7 @@ statement ok
 pragma enable_verification;
 
 query III
-from read_csv('data/csv/mixed_new_line.csv', rfc_4180=false)
+from read_csv('data/csv/mixed_new_line.csv', strict_mode=false)
 ----
 1	2	3
 4	5	6
@@ -45,51 +45,47 @@ select count(*) from read_csv('data/csv/mixed_new_line_2.csv', new_line ='\r\n',
 Expected Number of Columns: 2 Found: 1
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_two.csv',new_line ='\r\n', rfc_4180 = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_two.csv',new_line ='\r\n', strict_mode = TRUE, HEADER = FALSE)
 ----
-Enable scanning files that are not RFC 4180 compliant (rfc_4180=false).
+Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_two.csv',new_line ='\n', rfc_4180 = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
 ----
-Enable scanning files that are not RFC 4180 compliant (rfc_4180=false).
+Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 query I
-SELECT column0 FROM read_csv('data/csv/one_r_two.csv',new_line ='\r', rfc_4180 = TRUE, HEADER = FALSE)
+SELECT column0 FROM read_csv('data/csv/one_r_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
 ----
 one
 two
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_n_two.csv',new_line ='\r', rfc_4180 = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_n_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
 ----
-Enable scanning files that are not RFC 4180 compliant (rfc_4180=false).
+Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_n_two.csv',new_line ='\r\n', rfc_4180 = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_n_two.csv',new_line ='\r\n', strict_mode = TRUE, HEADER = FALSE)
 ----
-Enable scanning files that are not RFC 4180 compliant (rfc_4180=false).
+Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 query I
-SELECT column0 FROM read_csv('data/csv/one_n_two.csv',new_line ='\n', rfc_4180 = TRUE, HEADER = FALSE)
+SELECT column0 FROM read_csv('data/csv/one_n_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
 ----
 one
 two
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\r', rfc_4180 = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\r', strict_mode = TRUE, HEADER = FALSE)
 ----
-Enable scanning files that are not RFC 4180 compliant (rfc_4180=false).
+Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 
 statement error
-SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\n', rfc_4180 = TRUE, HEADER = FALSE)
+SELECT column0 like '%one%' and column0 like '%two%' as success FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\n', strict_mode = TRUE, HEADER = FALSE)
 ----
-Enable scanning files that are not RFC 4180 compliant (rfc_4180=false).
+Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
-query I
-SELECT column0 FROM read_csv('data/csv/one_r_n_two.csv',new_line ='\r\n', rfc_4180 = TRUE, HEADER = FALSE)
-----
-one
-two
+
