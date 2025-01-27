@@ -560,15 +560,24 @@ ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) {
 	return Insert(l, expr_chunk, row_ids, nullptr);
 }
 
-ErrorData ART::AppendWithDeleteIndex(IndexLock &l, DataChunk &chunk, Vector &row_ids,
-                                     optional_ptr<BoundIndex> delete_index) {
+ErrorData ART::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index,
+                      const bool wal_replay) {
 	// Execute all column expressions before inserting the data chunk.
 	DataChunk expr_chunk;
 	expr_chunk.Initialize(Allocator::DefaultAllocator(), logical_types);
 	ExecuteExpressions(chunk, expr_chunk);
 
+	// Temporarily adjust the append mode.
+	if (wal_replay && append_mode == ARTAppendMode::DEFAULT) {
+		append_mode = ARTAppendMode::INSERT_DUPLICATES;
+	}
+
 	// Now insert the data chunk.
-	return Insert(l, expr_chunk, row_ids, delete_index);
+	auto error_data = Insert(l, expr_chunk, row_ids, delete_index);
+	if (wal_replay && append_mode == ARTAppendMode::INSERT_DUPLICATES) {
+		append_mode = ARTAppendMode::DEFAULT;
+	}
+	return error_data;
 }
 
 void ART::VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_index, optional_ptr<ConflictManager> manager) {

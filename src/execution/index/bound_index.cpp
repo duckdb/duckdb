@@ -38,16 +38,17 @@ ErrorData BoundIndex::Append(DataChunk &chunk, Vector &row_ids) {
 	return Append(l, chunk, row_ids);
 }
 
-ErrorData BoundIndex::AppendWithDeleteIndex(IndexLock &l, DataChunk &chunk, Vector &row_ids,
-                                            optional_ptr<BoundIndex> delete_index) {
+ErrorData BoundIndex::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index,
+                             const bool wal_replay) {
 	// Fallback to the old Append.
 	return Append(l, chunk, row_ids);
 }
 
-ErrorData BoundIndex::AppendWithDeleteIndex(DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index) {
+ErrorData BoundIndex::Append(DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index,
+                             const bool wal_replay) {
 	IndexLock l;
 	InitializeLock(l);
-	return AppendWithDeleteIndex(l, chunk, row_ids, delete_index);
+	return Append(l, chunk, row_ids, delete_index, wal_replay);
 }
 
 void BoundIndex::VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_index,

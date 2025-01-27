@@ -152,7 +152,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		}
 		mock_chunk.SetCardinality(chunk);
 		// append this chunk to the indexes of the table
-		error = DataTable::AppendToIndexes(index_list, nullptr, mock_chunk, start_row);
+		error = DataTable::AppendToIndexes(index_list, nullptr, mock_chunk, start_row, false);
 		if (error.HasError()) {
 			return false;
 		}
@@ -173,7 +173,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		// appending: need to scan entire
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			error = table.AppendToIndexes(delete_indexes, chunk, append_state.current_row);
+			error = table.AppendToIndexes(delete_indexes, chunk, append_state.current_row, is_wal_replay);
 			if (error.HasError()) {
 				return false;
 			}
@@ -186,6 +186,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		auto &index_list = data_table_info->GetIndexes();
 		error = AppendToIndexes(transaction, *row_groups, index_list, table.GetTypes(), append_state.current_row);
 	}
+
 	if (error.HasError()) {
 		// need to revert all appended row ids
 		row_t current_row = append_state.row_start;
@@ -401,7 +402,7 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	idx_t base_id = offset + state.append_state.total_append_count;
 
 	auto error = DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, chunk,
-	                                        NumericCast<row_t>(base_id));
+	                                        NumericCast<row_t>(base_id), false);
 	if (error.HasError()) {
 		error.Throw();
 	}

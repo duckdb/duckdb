@@ -863,13 +863,14 @@ void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collectio
 	local_storage.LocalMerge(*this, collection);
 }
 
-void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-                            const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+void DataTable::LocalWALAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+                               const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	LocalAppendState append_state;
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 
-	storage.LocalAppend(append_state, context, chunk, false);
+	storage.LocalAppend(append_state, context, chunk, true);
+	append_state.storage->is_wal_replay = true;
 	storage.FinalizeLocalAppend(append_state);
 }
 
@@ -1109,7 +1110,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 // Indexes
 //===--------------------------------------------------------------------===//
 ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-                                     DataChunk &chunk, row_t row_start) {
+                                     DataChunk &chunk, row_t row_start, const bool is_wal_replay) {
 	ErrorData error;
 	if (indexes.Empty()) {
 		return error;
@@ -1137,7 +1138,7 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		}
 
 		try {
-			error = index.AppendWithDeleteIndex(chunk, row_ids, delete_index);
+			error = index.Append(chunk, row_ids, delete_index, is_wal_replay);
 		} catch (std::exception &ex) {
 			error = ErrorData(ex);
 		}
@@ -1160,9 +1161,10 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 	return error;
 }
 
-ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start) {
+ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
+                                     const bool is_wal_replay) {
 	D_ASSERT(is_root);
-	return AppendToIndexes(info->indexes, delete_indexes, chunk, row_start);
+	return AppendToIndexes(info->indexes, delete_indexes, chunk, row_start, is_wal_replay);
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
