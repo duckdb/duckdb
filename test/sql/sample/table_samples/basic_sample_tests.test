@@ -1,6 +1,8 @@
 # name: test/sql/sample/table_samples/basic_sample_tests.test
 # group: [table_samples]
 
+require vector_size 2048
+
 statement ok
 PRAGMA enable_verification
 
