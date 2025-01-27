@@ -21,3 +21,11 @@ query II
 explain select * from (select * from t1, t2 where a = b) t_left, (select * from t3, t4 where c = d) t_right where a = d;
 ----
 physical_plan	<!REGEX>:.*PROJECTION.*PROJECTION.*
+
+statement ok
+pragma explain_output='optimized_only';
+
+query II
+explain select a b from (select b a from (select a b from values (1), (2), (3) t(a)));
+----
+logical_opt	<!REGEX>:.*PROJECTION.*PROJECTION.*PROJECTION.*
