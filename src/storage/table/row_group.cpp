@@ -679,7 +679,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 					// Evaluate Bloom-filters
 					for (auto &bf : bloom_filter_list) {
-						if (bf->GetNumProbedKeys() < 10000 || bf->GetObservedSelectivity() >= 0.1) {
+						if (bf->GetNumProbedKeys() < 1000 || bf->GetObservedSelectivity() >= 0.9) {
 							Vector hashes(LogicalType::HASH);
 							// TODO: Can we directly put the keys and hashes into the hash join's state so that we don't have to perform hashing twice?
 							result.Hash(bf->GetColumnIds(), sel, approved_tuple_count, hashes);
