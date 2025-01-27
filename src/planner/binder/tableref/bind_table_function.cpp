@@ -203,7 +203,9 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		                                  table_function.function_info.get(), this, table_function, ref);
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
-			if (new_plan != nullptr) {
+			if (new_plan) {
+				new_plan->alias = ref.alias;
+				new_plan->column_name_alias = ref.column_name_alias;
 				return CreatePlan(*Bind(*new_plan));
 			} else if (!table_function.bind) {
 				throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",

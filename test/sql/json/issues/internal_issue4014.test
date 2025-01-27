@@ -1,0 +1,8 @@
+# name: test/sql/json/issues/internal_issue4014.test
+# description: Test internal issue 4014 - AFL++ issue: segfault in json reader
+# group: [issues]
+
+require json
+
+statement ok
+FROM read_json('data/json/internal_4014.json', map_inference_threshold=0);

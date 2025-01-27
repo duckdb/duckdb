@@ -31,7 +31,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			InitializeTransitionArray(transition_array, cur_state, CSVState::QUOTED);
 			break;
 		case CSVState::UNQUOTED:
-			if (state_machine_options.rfc_4180.GetValue()) {
+			if (state_machine_options.strict_mode.GetValue()) {
 				// If we have an unquoted state, following rfc 4180, our base state is invalid
 				InitializeTransitionArray(transition_array, cur_state, CSVState::INVALID);
 			} else {
@@ -67,7 +67,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	const bool multi_byte_delimiter = delimiter_value.size() != 1;
 
-	const bool enable_unquoted_escape = state_machine_options.rfc_4180.GetValue() == false &&
+	const bool enable_unquoted_escape = state_machine_options.strict_mode.GetValue() == false &&
 	                                    state_machine_options.quote != state_machine_options.escape &&
 	                                    state_machine_options.escape != '\0';
 	// Now set values depending on configuration
@@ -84,7 +84,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 			transition_array[static_cast<uint8_t>('\r')][state] = CSVState::CARRIAGE_RETURN;
 			if (state == static_cast<uint8_t>(CSVState::STANDARD_NEWLINE)) {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::STANDARD;
-			} else if (!state_machine_options.rfc_4180.GetValue()) {
+			} else if (!state_machine_options.strict_mode.GetValue()) {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::RECORD_SEPARATOR;
 			} else {
 				transition_array[static_cast<uint8_t>('\n')][state] = CSVState::INVALID;
@@ -273,7 +273,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (state_machine_options.quote == state_machine_options.escape) {
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
 	}
-	if (state_machine_options.rfc_4180 == false) {
+	if (state_machine_options.strict_mode == false) {
 		if (escape == '\0') {
 			// If escape is defined, it limits a bit how relaxed quotes can be in a reliable way.
 			transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::MAYBE_QUOTED;
@@ -459,10 +459,10 @@ CSVStateMachineCache::CSVStateMachineCache() {
 				const auto &escape_candidates = default_escape[static_cast<uint8_t>(quote_rule)];
 				for (const auto &escape : escape_candidates) {
 					for (const auto &comment : default_comment) {
-						for (const bool rfc_4180 : {true, false}) {
-							Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_N, rfc_4180});
-							Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_R, rfc_4180});
-							Insert({delimiter, quote, escape, comment, NewLineIdentifier::CARRY_ON, rfc_4180});
+						for (const bool strict_mode : {true, false}) {
+							Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_N, strict_mode});
+							Insert({delimiter, quote, escape, comment, NewLineIdentifier::SINGLE_R, strict_mode});
+							Insert({delimiter, quote, escape, comment, NewLineIdentifier::CARRY_ON, strict_mode});
 						}
 					}
 				}

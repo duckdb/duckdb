@@ -27,3 +27,27 @@ ORDER BY inside DESC, i
 3	10	1	0.8
 0	0	0	1.0
 1	7	0	1.0
+
+# Test moving frame with identical orderings
+query III
+SELECT 
+	i,
+	i // 2 AS inside,
+	cume_dist(ORDER BY i // 2) OVER w AS cd,
+FROM range(10) tbl(i)
+WINDOW w AS (
+	ORDER BY i // 2
+	ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING
+)
+ORDER BY 1;
+----
+0	0	0.5
+1	0	0.4
+2	1	0.6666666666666666
+3	1	0.5714285714285714
+4	2	0.7142857142857143
+5	2	0.5714285714285714
+6	3	0.7142857142857143
+7	3	0.6666666666666666
+8	4	1.0
+9	4	1.0

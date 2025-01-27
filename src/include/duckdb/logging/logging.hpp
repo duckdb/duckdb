@@ -71,8 +71,6 @@ struct LoggingContext {
 	optional_idx thread;
 	optional_idx client_context;
 	optional_idx transaction_id;
-
-	const char *default_log_type = "default";
 };
 
 struct RegisteredLoggingContext {

@@ -68,7 +68,7 @@ statement ok
 DELETE FROM integers;
 
 statement ok
-COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER, IGNORE_ERRORS, SAMPLE_SIZE -1)
+COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER, IGNORE_ERRORS, SAMPLE_SIZE -1, strict_mode TRUE)
 
 statement error
 COPY integers FROM 'data/csv/test/error_too_many.csv' (HEADER)

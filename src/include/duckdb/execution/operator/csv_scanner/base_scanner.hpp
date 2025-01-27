@@ -17,6 +17,35 @@
 namespace duckdb {
 
 class CSVFileScan;
+
+//! Class that keeps track of line starts, used for line size verification
+class LinePosition {
+public:
+	LinePosition() {
+	}
+	LinePosition(idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t buffer_size_p)
+	    : buffer_pos(buffer_pos_p), buffer_size(buffer_size_p), buffer_idx(buffer_idx_p) {
+	}
+
+	idx_t operator-(const LinePosition &other) const {
+		if (other.buffer_idx == buffer_idx) {
+			return buffer_pos - other.buffer_pos;
+		}
+		return other.buffer_size - other.buffer_pos + buffer_pos;
+	}
+
+	bool operator==(const LinePosition &other) const {
+		return buffer_pos == other.buffer_pos && buffer_idx == other.buffer_idx && buffer_size == other.buffer_size;
+	}
+
+	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl = false) const {
+		return requested_buffer_size * buffer_idx + buffer_pos + first_char_nl;
+	}
+	idx_t buffer_pos = 0;
+	idx_t buffer_size = 0;
+	idx_t buffer_idx = 0;
+};
+
 class ScannerResult {
 public:
 	ScannerResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size);
@@ -52,6 +81,10 @@ public:
 		return result.comment == true;
 	}
 
+	inline bool IsStateCurrent(CSVState state) const {
+		return states.states[1] == state;
+	}
+
 	//! Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
 	//! If the current quoted value is unquoted
@@ -61,6 +94,8 @@ public:
 	//! Variable to keep track if we are in a comment row. Hence, won't add it
 	bool comment = false;
 	idx_t quoted_position = 0;
+
+	LinePosition last_position;
 
 	//! Size of the result
 	const idx_t result_size;
@@ -88,7 +123,7 @@ public:
 	//! Returns true if the scanner is finished
 	bool FinishedFile() const;
 
-	//! Parses data into a output_chunk
+	//! Parses data into an output_chunk
 	virtual ScannerResult &ParseChunk();
 
 	//! Returns the result from the last Parse call. Shouts at you if you call it wrong

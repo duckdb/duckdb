@@ -14,7 +14,7 @@ DataFileType MagicBytes::CheckMagicBytes(FileSystem &fs, const string &path) {
 	}
 
 	constexpr const idx_t MAGIC_BYTES_READ_SIZE = 16;
-	char buffer[MAGIC_BYTES_READ_SIZE];
+	char buffer[MAGIC_BYTES_READ_SIZE] = {};
 
 	handle->Read(buffer, MAGIC_BYTES_READ_SIZE);
 	if (memcmp(buffer, "SQLite format 3\0", 16) == 0) {

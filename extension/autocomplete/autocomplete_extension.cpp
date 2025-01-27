@@ -481,11 +481,7 @@ std::string AutocompleteExtension::Name() {
 }
 
 std::string AutocompleteExtension::Version() const {
-#ifdef EXT_VERSION_AUTOCOMPLETE
-	return EXT_VERSION_AUTOCOMPLETE;
-#else
-	return "";
-#endif
+	return DefaultVersion();
 }
 
 } // namespace duckdb
@@ -496,7 +492,7 @@ DUCKDB_EXTENSION_API void autocomplete_init(duckdb::DatabaseInstance &db) {
 }
 
 DUCKDB_EXTENSION_API const char *autocomplete_version() {
-	return duckdb::DuckDB::LibraryVersion();
+	return duckdb::AutocompleteExtension::DefaultVersion();
 }
 }
 

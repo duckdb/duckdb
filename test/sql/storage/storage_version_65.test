@@ -2,6 +2,8 @@
 # description: Test attach storage version 65
 # group: [storage]
 
+require no_alternative_verify
+
 require skip_reload
 
 # The database is written with a vector size of 2048.
@@ -16,6 +18,9 @@ query I
 SELECT tags FROM duckdb_databases() WHERE database_name = 'storage_versions65';
 ----
 {storage_version=v1.2.0}
+
+statement ok
+set storage_compatibility_version='v0.10.2'
 
 statement ok
 ATTACH '__TEST_DIR__/regular_file.db'

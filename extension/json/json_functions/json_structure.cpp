@@ -662,7 +662,9 @@ static double CalculateTypeSimilarity(const LogicalType &merged, const LogicalTy
 		}
 
 		// Only maps and structs can be merged into a map
-		D_ASSERT(type.id() == LogicalTypeId::STRUCT);
+		if (type.id() != LogicalTypeId::STRUCT) {
+			return -1;
+		}
 		return CalculateMapAndStructSimilarity(merged, type, false, max_depth, depth);
 	}
 	case LogicalTypeId::LIST: {
