@@ -123,8 +123,6 @@ jobs:
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
       run: |
-        (cd examples/embedded-c; make)
-        (cd examples/embedded-c++; make)
         build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 

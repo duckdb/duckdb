@@ -207,6 +207,7 @@ public:
 
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer dict);
 	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
+	static uint32_t GetDictionaryEnd(ColumnSegment &segment, BufferHandle &handle);
 	static idx_t RemainingSpace(ColumnSegment &segment, BufferHandle &handle);
 	static void WriteString(ColumnSegment &segment, string_t string, block_id_t &result_block, int32_t &result_offset);
 	static void WriteStringMemory(ColumnSegment &segment, string_t string, block_id_t &result_block,
@@ -217,12 +218,12 @@ public:
 	static void WriteStringMarker(data_ptr_t target, block_id_t block_id, int32_t offset);
 	static void ReadStringMarker(data_ptr_t target, block_id_t &block_id, int32_t &offset);
 
-	inline static string_t FetchStringFromDict(ColumnSegment &segment, StringDictionaryContainer dict, Vector &result,
+	inline static string_t FetchStringFromDict(ColumnSegment &segment, uint32_t dict_end_offset, Vector &result,
 	                                           data_ptr_t base_ptr, int32_t dict_offset, uint32_t string_length) {
 		D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
 		if (DUCKDB_LIKELY(dict_offset >= 0)) {
 			// regular string - fetch from dictionary
-			auto dict_end = base_ptr + dict.end;
+			auto dict_end = base_ptr + dict_end_offset;
 			auto dict_pos = dict_end - dict_offset;
 
 			auto str_ptr = char_ptr_cast(dict_pos);
@@ -231,7 +232,7 @@ public:
 			// read overflow string
 			block_id_t block_id;
 			int32_t offset;
-			ReadStringMarker(base_ptr + dict.end - AbsValue<int32_t>(dict_offset), block_id, offset);
+			ReadStringMarker(base_ptr + dict_end_offset - AbsValue<int32_t>(dict_offset), block_id, offset);
 
 			return ReadOverflowString(segment, result, block_id, offset);
 		}

@@ -8,6 +8,9 @@ load __TEST_DIR__/test_disabled_compression_methods.db
 statement ok
 CREATE TABLE test AS SELECT concat('longprefix', i) FROM range(30000) t(i);
 
+statement ok
+CHECKPOINT
+
 query I
 SELECT BOOL_OR(compression ILIKE '%fsst%') FROM pragma_storage_info('test')
 ----
@@ -22,6 +25,9 @@ SET disabled_compression_methods='fsst'
 # verify FSST is disabled
 statement ok
 CREATE TABLE test AS SELECT concat('longprefix', i) FROM range(30000) t(i);
+
+statement ok
+CHECKPOINT
 
 query I
 SELECT BOOL_OR(compression ILIKE '%fsst%') FROM pragma_storage_info('test')

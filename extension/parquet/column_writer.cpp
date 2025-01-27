@@ -1173,7 +1173,7 @@ void WriteValue(DlbaEncoder &encoder, WriteStream &writer, const string_t &value
 
 // helpers to get size from strings
 template <class SRC>
-static constexpr idx_t GetDlbaStringSize(const SRC &src_value) {
+static idx_t GetDlbaStringSize(const SRC &src_value) {
 	return 0;
 }
 

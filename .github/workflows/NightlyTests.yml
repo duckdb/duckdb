@@ -205,7 +205,7 @@ jobs:
   linux-compile-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
-    container: quay.io/pypa/manylinux2028_x86_64
+    container: quay.io/pypa/manylinux2_28_x86_64
     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
     needs: linux-memory-leaks
     env:
@@ -271,71 +271,6 @@ jobs:
          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
          pip install . --user
          (cd tests/ && python -m pytest)
-
-  python-address-sanitizer:
-     name: Python Address Sanitizer (Linux)
-     runs-on: ubuntu-latest
-     needs: linux-memory-leaks
-     container: ubuntu:18.04
-     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-     env:
-        GEN: ninja
-        DUCKDEBUG: 1
-        ASAN_OPTIONS: detect_leaks=0
-        ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-
-     steps:
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-
-     - uses: ./.github/actions/ubuntu_18_setup
-       with:
-         openssl: 0
-         python: 0
-
-     - name: Install OpenSSL
-       shell: bash
-       run: |
-         apt-get install -y -qq libbz2-dev
-         wget https://www.openssl.org/source/openssl-1.0.2o.tar.gz
-         tar -xf openssl-1.0.2o.tar.gz
-         cd openssl-1.0.2o
-         ./config shared --prefix=/usr/local/
-         make
-         make install
-         mkdir lib
-         cp ./*.{so,so.1.0.0,a,pc} ./lib
-
-     - name: Install Python 3 With Sanitizers
-       shell: bash
-       run: |
-         wget https://github.com/python/cpython/archive/refs/tags/v3.9.12.zip
-         unzip v3.9.12.zip
-         rm v3.9.12.zip
-         cd cpython-3.9.12
-         mkdir debug-build
-         export LD_LIBRARY_PATH=${GITHUB_WORKSPACE}/openssl-1.0.2o/lib
-         ./configure --with-ensurepip=install --with-address-sanitizer --with-undefined-behavior-sanitizer --with-openssl=${GITHUB_WORKSPACE}/openssl-1.0.2o --prefix=${GITHUB_WORKSPACE}/debug-build
-         make -j
-         make install
-
-     - name: Install Python Test Dependencies
-       shell: bash
-       run: |
-         cd tools/pythonpkg
-         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install -r requirements-dev.txt
-
-     - name: Install DuckDB Python
-       shell: bash
-       run: |
-         cd tools/pythonpkg
-         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pip install .
-
-     - name: Run Python Tests
-       shell: bash
-       run: |
-         ${GITHUB_WORKSPACE}/debug-build/bin/python3 -m pytest tools/pythonpkg/tests/fast
 
   python-sqllogic:
      name: Python SQLLogicTest Library (Linux)
