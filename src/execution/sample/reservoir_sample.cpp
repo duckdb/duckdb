@@ -492,13 +492,6 @@ void ReservoirSample::EvictOverBudgetSamples() {
 	// if we over sampled, make sure we only keep the highest percentage samples
 	std::unordered_set<idx_t> selections_to_delete;
 
-	bool shuffle_sample = false;
-	if (GetPriorityQueueSize() == 0) {
-		// means we haven't even ingested FIXED_SAMPLE_SIZE values
-		// shuffle all available values (this is for when STANDARD_VECTOR_SIZE << FIXED_SAMPLE_SIZE);
-		shuffle_sample = true;
-	}
-
 	while (num_samples_to_keep < GetPriorityQueueSize()) {
 		auto top = PopFromWeightQueue();
 		D_ASSERT(top.second < sel_size);
@@ -518,23 +511,15 @@ void ReservoirSample::EvictOverBudgetSamples() {
 	// If we need to save a sample with less rows than that, we need to do the following
 	// 1. Create a new selection vector that doesn't point to the rows we are evicting
 	SelectionVector new_sel(num_samples_to_keep);
-	if (!shuffle_sample) {
-		idx_t offset = 0;
-		for (idx_t i = 0; i < num_samples_to_keep + selections_to_delete.size(); i++) {
-			if (selections_to_delete.find(i) == selections_to_delete.end()) {
-				D_ASSERT(i - offset < num_samples_to_keep);
-				new_sel.set_index(i - offset, sel.get_index(i));
-			} else {
-				offset += 1;
-			}
-		}
-	} else {
-		auto random_vec = GetRandomizedVector(reservoir_chunk->chunk.size(), static_cast<idx_t>(num_samples_to_keep));
-		for (idx_t i = 0; i < num_samples_to_keep; i++) {
-			new_sel.set_index(i, random_vec[i]);
+	idx_t offset = 0;
+	for (idx_t i = 0; i < num_samples_to_keep + selections_to_delete.size(); i++) {
+		if (selections_to_delete.find(i) == selections_to_delete.end()) {
+			D_ASSERT(i - offset < num_samples_to_keep);
+			new_sel.set_index(i - offset, sel.get_index(i));
+		} else {
+			offset += 1;
 		}
 	}
-
 	// 2. Update row_ids in our weights so that they don't store rows ids to
 	//    indexes in the selection vector that have been evicted.
 	if (!selections_to_delete.empty()) {
@@ -728,8 +713,6 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 	if (destroyed || chunk.size() == 0) {
 		return;
 	}
-
-	// Printer::Print("adding " + to_string(chunk.size()) + " samples to reservoir");
 
 	idx_t tuples_consumed = FillReservoir(chunk);
 	base_reservoir_sample->num_entries_seen_total += tuples_consumed;
