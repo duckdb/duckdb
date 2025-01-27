@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/remove_useless_projections.hpp"
+#include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/common/enums/logical_operator_type.hpp"
 
