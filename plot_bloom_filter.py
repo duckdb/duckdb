@@ -91,44 +91,80 @@ def plot_stacked_medians(aligned_medians, save_path=None):
     # Extract query IDs from the 'name' column
     query_ids = extract_query_ids(aligned_medians)
     aligned_medians.index = query_ids  # Update index with query IDs
-    
+
     # Make sure the aligned medians and query_ids have the same length
     aligned_medians = aligned_medians.reindex(query_ids).reset_index()
 
     x = range(len(query_ids))
-    
-    # Set the figure size before plotting
-    plt.figure(figsize=(12, 8))  # Adjust the size of the plot
-    
-    # Handle queries with Bloom filter (using the correct column names after merge)
-    rest_runtime = aligned_medians['time_with_bloom'] - aligned_medians['agg_build_times_with_bloom'] - aligned_medians['agg_hash_times_with_bloom'] - aligned_medians['agg_probe_times_with_bloom']
+
+    # Calculate relative speedup
+    aligned_medians['relative_speedup'] = (
+        (aligned_medians['time_with_bloom'] - aligned_medians['time_without_bloom']) / aligned_medians['time_without_bloom']
+    )
+
+    # Set the figure size and create a grid for two subplots
+    fig, axes = plt.subplots(
+        nrows=2, ncols=1, figsize=(12, 8), gridspec_kw={"height_ratios": [1, 1]}
+    )
+
+    # Top plot: Stacked bar plot for execution times
+    ax1 = axes[0]
+    rest_runtime = (
+        aligned_medians['time_with_bloom']
+        - aligned_medians['agg_build_times_with_bloom']
+        - aligned_medians['agg_hash_times_with_bloom']
+        - aligned_medians['agg_probe_times_with_bloom']
+    )
     build_time = aligned_medians['agg_build_times_with_bloom']
     hash_time = aligned_medians['agg_hash_times_with_bloom']
     probe_time = aligned_medians['agg_probe_times_with_bloom']
-    
-    plt.bar(x, rest_runtime, width=0.4, label='Query Execution Time (without Bloom Filter)', align='center', color='green')
-    plt.bar(x, build_time, width=0.4, bottom=rest_runtime, label='BF Build', align='center', color='red')
-    plt.bar(x, hash_time, width=0.4, bottom=rest_runtime + build_time, label='BF Hash (probe side)', align='center', color='orange')
-    plt.bar(x, probe_time, width=0.4, bottom=rest_runtime + build_time + hash_time, label='BF Probe', align='center', color='blue')
+
+    ax1.bar(x, rest_runtime, width=0.4, label='Query Execution Time (without Bloom Filter)', align='center', color='green')
+    ax1.bar(x, build_time, width=0.4, bottom=rest_runtime, label='BF Build', align='center', color='red')
+    ax1.bar(x, hash_time, width=0.4, bottom=rest_runtime + build_time, label='BF Hash (probe side)', align='center', color='orange')
+    ax1.bar(x, probe_time, width=0.4, bottom=rest_runtime + build_time + hash_time, label='BF Probe', align='center', color='blue')
 
     # Handle queries without Bloom filter (just show the query execution time)
     aligned_medians_without_bloom = aligned_medians['time_without_bloom']
-    plt.bar([xi + 0.4 for xi in x], aligned_medians_without_bloom, width=0.4, label='Without Bloom Filter', align='center', color='black')
+    ax1.bar([xi + 0.4 for xi in x], aligned_medians_without_bloom, width=0.4, label='Without Bloom Filter', align='center', color='black')
 
-    # Customize the ticks and labels
-    plt.xticks([xi + 0.2 for xi in x], query_ids, rotation=45, ha='right')
-    plt.ylabel('Median Query Execution Time (seconds)')
-    plt.xlabel('Query ID')
-    plt.title('Median Query Execution Times with and without Bloom Filters (Stacked)')
-    plt.legend()
+    # Customize the top plot
+    ax1.set_xticks([xi + 0.2 for xi in x])
+    ax1.set_xticklabels(query_ids, rotation=45, ha='right')
+    ax1.set_ylabel('Median Query Execution Time (seconds)')
+    ax1.set_title('Median Query Execution Times with and without Bloom Filters (Stacked)')
+    ax1.legend()
+    ax1.grid(True, axis='y', linestyle='--', alpha=0.7)
+
+    # Bottom plot: Relative speedup bar plot
+    ax2 = axes[1]
+    ax2.bar(x, aligned_medians['relative_speedup'], width=0.6, color='purple', label='Relative Speedup (vs. Without Bloom Filter)')
+
+    # Center 0 on y-axis in second plot
+    max_speedup = aligned_medians['relative_speedup'].max()
+    min_speedup = aligned_medians['relative_speedup'].min()
+    y_limit = max(abs(max_speedup), abs(min_speedup)) * 1.1
+    ax2.set_ylim((-y_limit, y_limit))
+
+    ax2.text(-0.5, ax2.get_ylim()[1] * 0.8, f'Avg. Relative Speedup: {aligned_medians['relative_speedup'].mean():.2%}')
+
+    # Customize the bottom plot
+    ax2.set_xticks(x)
+    ax2.set_xticklabels(query_ids, rotation=45, ha='right')
+    ax2.set_ylabel('Relative Speedup')
+    ax2.set_xlabel('Query ID')
+    ax2.set_title('Relative Speedup of Queries with Bloom Filters')
+    ax2.axhline(0, color='black', linestyle='--', linewidth=0.8, alpha=0.7)
+    ax2.grid(True, axis='y', linestyle='--', alpha=0.7)
+    ax2.legend()
+
+    # Adjust layout and save plot if needed
     plt.tight_layout()
-
-    # Save plot to file as SVG if a path is provided
     if save_path:
         plt.savefig(save_path, dpi=300, bbox_inches='tight', format='svg')
         print(f"Plot saved to {save_path}")
-    
-    # Display the plot
+
+    # Show the plot
     plt.show()
 
 
