@@ -48,7 +48,7 @@ public:
 	TableIndexList append_indexes;
 	//! The set of delete indexes.
 	TableIndexList delete_indexes;
-	//! True, if we're skipping constraint checking during a WAL replay.
+	//! Set to INSERT_DUPLICATES, if we are skipping constraint checking during, e.g., WAL replay.
 	IndexAppendMode index_append_mode = IndexAppendMode::DEFAULT;
 	//! The number of deleted rows
 	idx_t deleted_rows;
