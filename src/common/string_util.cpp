@@ -485,7 +485,6 @@ idx_t StringUtil::SimilarityScore(const string &s1, const string &s2) {
 
 double StringUtil::SimilarityRating(const string &s1, const string &s2) {
 	return rapidfuzz::jaro_winkler_similarity(s1.data(), s1.data() + s1.size(), s2.data(), s2.data() + s2.size());
-	;
 }
 
 vector<string> StringUtil::TopNLevenshtein(const vector<string> &strings, const string &target, idx_t n,
