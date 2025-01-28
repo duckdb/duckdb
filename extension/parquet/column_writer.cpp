@@ -717,6 +717,7 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	column_chunk.meta_data.total_compressed_size =
 	    UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten() - start_offset);
 	column_chunk.meta_data.total_uncompressed_size = UnsafeNumericCast<int64_t>(total_uncompressed_size);
+	state.row_group.total_byte_size += column_chunk.meta_data.total_uncompressed_size;
 
 	if (state.bloom_filter) {
 		writer.BufferBloomFilter(state.col_idx, std::move(state.bloom_filter));
