@@ -41,8 +41,13 @@ select * from read_csv_auto('data/csv/auto/multi_column_string_r.csv', buffer_si
 100000000	15519	785	p9
 
 # Test read_csv auto with mix \r and \n
-query IIII
+statement error
 select * from read_csv_auto('data/csv/auto/multi_column_string_mix_r_n.csv', buffer_size=${i})
+----
+* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
+
+query IIII
+select * from read_csv_auto('data/csv/auto/multi_column_string_mix_r_n.csv', buffer_size=${i}, strict_mode = False)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -72,8 +77,13 @@ select * from read_csv_auto('data/csv/test/multi_column_string_rn.csv', buffer_s
 endloop
 
 # Test read_csv auto with mix \r, \n and \r\n (This must always run single threaded)
-query IIII
+statement error
 select * from read_csv_auto('data/csv/auto/multi_column_string_mix.csv')
+----
+Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
+
+query IIII
+select * from read_csv_auto('data/csv/auto/multi_column_string_mix.csv', strict_mode=false)
 ----
 1	6370	371	p1
 10	214	465	p2

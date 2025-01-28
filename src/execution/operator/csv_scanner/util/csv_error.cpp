@@ -416,8 +416,7 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 		      << '\n';
 	}
 	// 3.0.1 Inform the user about encoding
-	error << "* Make sure you are using the correct file encoding. If not, set it (e.g., encoding = 'utf-16')."
-		      << '\n';
+	error << "* Make sure you are using the correct file encoding. If not, set it (e.g., encoding = 'utf-16')." << '\n';
 	// 3.1 Inform the reader of the dialect
 	// delimiter
 	if (!options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {

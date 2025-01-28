@@ -273,7 +273,20 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 	if (state_machine_options.quote == state_machine_options.escape) {
 		transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::QUOTED;
 	}
-	if (state_machine_options.strict_mode == false) {
+	if (state_machine_options.strict_mode.GetValue()) {
+		// strict rules to error on the new line delimiter
+		switch (new_line_id) {
+		case NewLineIdentifier::CARRY_ON:
+		case NewLineIdentifier::SINGLE_R:
+			transition_array[static_cast<uint8_t>('\n')][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::INVALID;
+			break;
+		case NewLineIdentifier::SINGLE_N:
+			transition_array[static_cast<uint8_t>('\r')][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::INVALID;
+			break;
+		default:
+			break;
+		}
+	} else {
 		if (escape == '\0') {
 			// If escape is defined, it limits a bit how relaxed quotes can be in a reliable way.
 			transition_array[quote][static_cast<uint8_t>(CSVState::UNQUOTED)] = CSVState::MAYBE_QUOTED;
