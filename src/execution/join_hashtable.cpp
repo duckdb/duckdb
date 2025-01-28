@@ -6,6 +6,7 @@
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include <iostream>
 
 namespace duckdb {
 using ValidityBytes = JoinHashTable::ValidityBytes;
@@ -705,7 +706,7 @@ void JoinHashTable::InitializePointerTable() {
 	bitmask = capacity - 1;
 }
 
-void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel) {
+void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel, JoinBloomFilter *bloom_filter) {
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.get());
 
@@ -724,6 +725,11 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 		}
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
+		// Build Bloom-filter before inserting hashes into the hash table because InsertHashes() truncates the hash values in-place.
+		if (bloom_filter) {
+			const SelectionVector sel;
+			bloom_filter->BuildWithPrecomputedHashes(hashes, sel, count);
+		}
 		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
 	} while (iterator.Next());
 }

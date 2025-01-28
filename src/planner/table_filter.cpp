@@ -59,6 +59,12 @@ void DynamicTableFilterSet::PushBloomFilter(const PhysicalOperator &op, unique_p
 	bloom_filters[op].push_back(std::move(bloom_filter));
 }
 
+JoinBloomFilter *DynamicTableFilterSet::GetPtrToLastBf(const PhysicalOperator &op) {
+	lock_guard<mutex> l(lock);
+	const auto& entry = bloom_filters.find(op);
+	return entry->second.back().get();
+}
+
 bool DynamicTableFilterSet::HasFilters() const {
 	lock_guard<mutex> l(lock);
 	return !filters.empty();

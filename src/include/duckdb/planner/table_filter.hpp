@@ -123,6 +123,7 @@ public:
 	bool HasFilters() const;
 	bool HasBloomFilters() const;
 
+JoinBloomFilter *GetPtrToLastBf(const PhysicalOperator &op);
 	unique_ptr<TableFilterSet> GetFinalTableFilters(const PhysicalTableScan &scan,
 	                                                optional_ptr<TableFilterSet> existing_filters) const;
 	

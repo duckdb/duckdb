@@ -205,6 +205,8 @@ public:
 
 	bool skip_filter_pushdown = false;
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
+
+	bool build_bloom_fitler = false;
 };
 
 unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {
@@ -429,7 +431,24 @@ public:
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
+		// TODO: why does one hash join has multiple probe infos? can we just copy the bloom filter between them?
+		if (sink.hash_table->should_build_bloom_filter) {
+			vector<column_t> column_ids;
+			auto bf = make_uniq<JoinBloomFilter>(sink.hash_table->Count(), 0.01, std::move(column_ids));
+
+			sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel, bf.get());
+
+			std::cout << "Bloom-filter scarcity: " << bf->GetScarcity() << std::endl;
+
+			for (auto &info : sink.op.filter_pushdown->probe_info) {
+				vector<column_t> column_ids;
+				auto bf_c = bf->Copy();
+				std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(bf->GetColumnIds()), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
+				info.dynamic_filters->PushBloomFilter(*op.get(), std::move(bf));
+			}
+		} else {
+			sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
+		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -734,19 +753,17 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 	auto hash_join_bloom_filter = ClientConfig::GetSetting<HashJoinBloomFilterSetting>(context);
 	if (hash_join_bloom_filter) {
 		if (ht.Count() > dynamic_or_filter_threshold) {
-			for (auto &info : probe_info) {
-				Profiler p;
-				p.Start();
+			ht.should_build_bloom_filter = true;
+			//for (auto &info : probe_info) {
+				//vector<column_t> column_ids;
+				//std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(column_ids), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
 
-				vector<column_t> column_ids;
-				std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(column_ids), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
-
-				BuildAndPushBloomFilter(info, ht, op, column_ids);
-
-				p.End();
-				//Logger::Info(context, "Building the Bloom-filter took %f s", p.Elapsed());
-				//std::cerr << "Building the Bloom-filter took " << p.Elapsed() << std::endl;
-			}
+				// We initialize a Bloom-filter. Actual building of it will be done as part of hashtable build.
+				//auto bf = make_uniq<JoinBloomFilter>(ht.Count(), 0.01, std::move(column_ids));
+				//info.dynamic_filters->PushBloomFilter(op, std::move(bf));
+				//gstate.bloom_filter = info.dynamic_filters->GetPtrToLastBf(op);
+				//BuildAndPushBloomFilter(info, ht, op, column_ids);
+			//}
 		} else {
 			Logger::Info(context, "Not building a Bloom-filter because the number of rows on the build side %u is smaller than the threshold %u", ht.Count(), dynamic_or_filter_threshold);
 		}
@@ -757,6 +774,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             OperatorSinkFinalizeInput &input) const {
+	//std::cout << "we are in PhysicalHashJoin::Finalize" << std::endl;
 	auto &sink = input.global_state.Cast<HashJoinGlobalSinkState>();
 	auto &ht = *sink.hash_table;
 
@@ -1278,7 +1296,7 @@ void HashJoinLocalSourceState::ExternalBuild(HashJoinGlobalSinkState &sink, Hash
 	D_ASSERT(local_stage == HashJoinSourceStage::BUILD);
 
 	auto &ht = *sink.hash_table;
-	ht.Finalize(build_chunk_idx_from, build_chunk_idx_to, true);
+	ht.Finalize(build_chunk_idx_from, build_chunk_idx_to, true, sink.global_filter_state->bloom_filter);
 
 	auto guard = gstate.Lock();
 	gstate.build_chunk_done += build_chunk_idx_to - build_chunk_idx_from;

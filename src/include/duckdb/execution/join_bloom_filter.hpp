@@ -36,8 +36,16 @@ public:
 		return static_cast<double>(num_filtered_keys) / static_cast<double>(num_probed_keys);
 	}
 
+	vector<column_t> &GetColumnIds() {
+		return column_ids;
+	}
+
 	const vector<column_t> &GetColumnIds() const {
 		return column_ids;
+	}
+
+	double GetScarcity() const {
+		return static_cast<double>(bloom_filter_bits.CountValid(bloom_filter_size)) / static_cast<double>(bloom_filter_size);
 	}
 
 	JoinBloomFilter Copy() const {
