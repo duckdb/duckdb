@@ -542,6 +542,12 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT: /* TODO: Maybe blob? */
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::VARINT:
 		return SQLITE_INTEGER;
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:
