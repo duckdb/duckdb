@@ -426,7 +426,12 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 			entries.emplace_back(catalog, schema_name);
 		}
 		if (entries.empty()) {
-			entries.emplace_back(catalog, DEFAULT_SCHEMA);
+			auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
+			if (catalog_entry) {
+				entries.emplace_back(catalog, catalog_entry->GetDefaultSchema());
+			} else {
+				entries.emplace_back(catalog, DEFAULT_SCHEMA);
+			}
 		}
 	} else {
 		// specific catalog and schema provided
@@ -1071,6 +1076,10 @@ vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 
 optional_ptr<DependencyManager> Catalog::GetDependencyManager() {
 	return nullptr;
+}
+
+string Catalog::GetDefaultSchema() const {
+	return DEFAULT_SCHEMA;
 }
 
 //! Whether this catalog has a default table. Catalogs with a default table can be queries by their catalog name
