@@ -28,8 +28,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
     duckdb_extension_load(arrow
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
-            GIT_TAG c50862c82c065096722745631f4230832a3a04e8
-            APPLY_PATCHES
+            GIT_TAG cff2f0e21b1608e38640e15b4cf0693dd52dd0eb
             )
 endif()
 
