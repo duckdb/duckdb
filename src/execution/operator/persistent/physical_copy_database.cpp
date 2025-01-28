@@ -70,13 +70,15 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
 		catalog.CreateIndex(context.client, create_info->Cast<CreateIndexInfo>());
 
 		auto &create_index_info = create_info->Cast<CreateIndexInfo>();
-		auto &catalog_table = catalog.GetEntry(context.client, CatalogType::TABLE_ENTRY, create_index_info.schema, create_index_info.table);
+		auto &catalog_table = catalog.GetEntry(context.client, CatalogType::TABLE_ENTRY, create_index_info.schema,
+		                                       create_index_info.table);
 		auto &duck_table_entry = catalog_table.Cast<DuckTableEntry>();
 		auto &data_table = duck_table_entry.GetStorage();
 
 		IndexStorageInfo storage_info(create_index_info.index_name);
 		storage_info.options.emplace("v1_0_0_storage", false);
-		auto unbound_index = make_uniq<UnboundIndex>(create_index_info.Copy(), storage_info, data_table.GetTableIOManager(), catalog.GetAttached());
+		auto unbound_index = make_uniq<UnboundIndex>(create_index_info.Copy(), storage_info,
+		                                             data_table.GetTableIOManager(), catalog.GetAttached());
 		data_table.AddIndex(std::move(unbound_index));
 	}
 

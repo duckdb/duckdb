@@ -1,73 +1,40 @@
 # name: test/sql/copy_database/copy_database_with_index.test
-# description: Test the COPY DATABASE statement with indexes
+# description: Test the COPY DATABASE statement with an index.
 # group: [copy_database]
 
 statement ok
 PRAGMA enable_verification;
 
 statement ok
-SET threads=1;
+ATTACH ':memory:' AS db1;
 
 statement ok
-ATTACH '__TEST_DIR__/old.db' AS old;
+USE db1;
 
 statement ok
-CREATE TABLE old.items (_id INTEGER);
+CREATE TABLE data AS
+SELECT i, hash(i)::VARCHAR AS value FROM generate_series(1, 10000) s(i);
 
 statement ok
-INSERT INTO old.items (_id) VALUES (1), (2), (3);
+ALTER TABLE data ALTER COLUMN value SET NOT NULL;
 
 statement ok
-CREATE UNIQUE INDEX idx_id ON old.items(_id);
-
-# query I
-# FROM old.items WHERE _id > 2;
-# ----
-# 3
+CREATE INDEX data_value ON data(value);
 
 statement ok
-ATTACH '__TEST_DIR__/new.db' AS new;
+ATTACH ':memory:' AS db2;
 
 statement ok
-COPY FROM DATABASE "old" TO "new" (SCHEMA);
+COPY FROM DATABASE db1 TO db2;
 
-statement ok
-COPY FROM DATABASE "old" TO "new" (DATA);
-
-# statement ok
-# COPY FROM DATABASE old TO new;
-
-# query I
-# FROM new.items ORDER BY ALL;
-# ----
-# 1
-# 2
-# 3
-#
-# query I
-# FROM new.items WHERE _id > 2;
-# ----
-# 3
-
-statement ok
-DETACH new;
-
-statement ok
-ATTACH '__TEST_DIR__/new.db' AS new;
-
-statement error
-INSERT INTO new.items VALUES (1);
+query III
+SELECT database_name, table_name, index_name FROM duckdb_indexes ORDER BY ALL;
 ----
-constraint
+db1	data	data_value
+db2	data	data_value
 
-# query I
-# FROM new.items ORDER BY ALL;
-# ----
-# 1
-# 2
-# 3
-#
-# query I
-# FROM new.items WHERE _id > 2;
-# ----
-# 3
+query III
+SELECT database_name, table_name, index_count FROM duckdb_tables ORDER BY ALL;
+----
+db1	data	1
+db2	data	1
