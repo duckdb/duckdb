@@ -174,7 +174,8 @@ protected:
 	//! Returns the amount of updated tuples
 	void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
 	                       DataChunk &result) const;
-	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate) const;
+	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate,
+	                         InsertGlobalState &gstate) const;
 };
 
 } // namespace duckdb
