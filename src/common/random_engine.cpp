@@ -23,7 +23,7 @@ RandomEngine::RandomEngine(int64_t seed) : random_state(make_uniq<RandomState>()
 		idx_t random_seed = 0;
 		int result = -1;
 #if defined(SYS_getrandom)
-		result = syscall(SYS_getrandom, &random_seed, sizeof(random_seed), 0);
+		result = static_cast<int>(syscall(SYS_getrandom, &random_seed, sizeof(random_seed), 0));
 #endif
 		if (result == -1) {
 			// Something went wrong with the syscall, we use chrono
