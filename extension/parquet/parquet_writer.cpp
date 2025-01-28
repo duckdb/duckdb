@@ -395,7 +395,6 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	// set up a new row group for this chunk collection
 	auto &row_group = result.row_group;
 	row_group.num_rows = NumericCast<int64_t>(buffer.Count());
-	row_group.total_byte_size = NumericCast<int64_t>(buffer.SizeInBytes());
 	row_group.__isset.file_offset = true;
 
 	auto &states = result.states;
