@@ -16,6 +16,7 @@
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "iostream"
 
 namespace duckdb {
 
@@ -142,6 +143,12 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					throw BinderException(
 					    "There is a WITH item named \"%s\", but it cannot be referenced from this part of the query.",
 					    ref.table_name);
+				}
+
+				if (ref.schema_name == "recurring") {
+					throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
+					                      "referenced from this part of the query.",
+					                      ref.table_name);
 				}
 
 				// Move CTE to subquery and bind recursively

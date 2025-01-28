@@ -29,6 +29,27 @@ WITH RECURSIVE tbl(a) USING KEY (a) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl AS 
 1
 2
 
+# second cte references recurring table of first cte while first cte does not
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a) AS (SELECT 5, 1 UNION SELECT a, b + 1 FROM tbl WHERE b < a),
+tbl1(a,b) AS (SELECT * FROM recurring.tbl) SELECT * FROM tbl1;
+----
+Binder Error: There is a WITH item named "tbl", but the recurring table cannot be referenced from this part of the query.
+
+# second cte references recurring table of first cte like the first cte
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a) AS (SELECT  * FROM ((VALUES (5, 1), (6,1)) UNION SELECT a, b + 1 FROM recurring.tbl WHERE b < a) WHERE a = 5),
+tbl1(a,b) AS (SELECT * FROM recurring.tbl) SELECT * FROM tbl1;
+----
+Binder Error: There is a WITH item named "tbl", but the recurring table cannot be referenced from this part of the query.
+
+
+# reference only the recurring table
+query II
+WITH RECURSIVE tbl2(a, b) USING KEY (a) AS (SELECT 5, 1 UNION SELECT a, b + 1 FROM recurring.tbl2 WHERE b < a) SELECT * FROM tbl2;
+----
+5	5
+
 statement error
 WITH RECURSIVE tbl2(a,b) AS (SELECT 1, NULL UNION SELECT a.a+1, a.b FROM tbl2 AS a, (SELECT * FROM recurring.tbl2) AS b WHERE a.a < 2) SELECT * FROM tbl2;
 ----
