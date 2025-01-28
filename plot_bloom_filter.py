@@ -1,62 +1,125 @@
+import re
+import json
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# 1. Clean a TSV file (both with and without bloom filter files)
-def clean_file(input_file, output_file):
-    with open(input_file, 'r') as infile, open(output_file, 'w') as outfile:
-        header = infile.readline()
-        outfile.write(header)  # Write the header to the output file
-        
-        for line in infile:
-            if line.startswith("benchmark"):
-                # Split the line into columns
-                columns = line.strip().split('\t')
-                # Check if the "timing" column contains a valid number
-                try:
-                    float(columns[2])  # Attempt to convert the timing column to a float
-                    outfile.write(line)
-                except (IndexError, ValueError):
-                    continue  # Skip rows with invalid or missing "timing" values
+# Function to handle duplicate keys in JSON
+def array_on_duplicate_keys(ordered_pairs):
+    """Convert duplicate keys to arrays."""
+    d = {}
+    for k, v in ordered_pairs:
+        if k in d:
+            if isinstance(d[k], list):
+                d[k].append(v)
+            else:
+                d[k] = [d[k], v]
+        else:
+            d[k] = v
+    return d
 
-# 2. Load the cleaned and other TSV files
-def load_data(file_path):
-    return pd.read_csv(file_path, sep='\t')  # TSV uses tab as the separator
+# Preprocess JSON to clean trailing commas and invalid values
+def preprocess_json_file(file_path):
+    with open(file_path, 'r') as file:
+        raw_data = file.read()
+    # Remove trailing commas before } or ] (also accounts for line breaks or spaces)
+    cleaned_data = re.sub(r',([\s\n\r])*([\}\]])', r'\2', raw_data, flags=re.MULTILINE)
+    # Replace "nan" with "null"
+    cleaned_data = cleaned_data.replace('nan', 'null')
+    return cleaned_data
 
-# 3. Calculate median execution times for each query
+# Load JSON using json with preprocessing
+def load_json_data(file_path):
+    cleaned_data = preprocess_json_file(file_path)
+    # Parse the JSON data with duplicate key handling
+    data = json.loads(cleaned_data, object_pairs_hook=array_on_duplicate_keys)
+    # Convert to pandas DataFrame
+    df = pd.json_normalize(data)
+    # Ensure "name" and "time" columns exist and drop rows where "time" is NaN
+    df = df.dropna(subset=['name', 'time'])
+    return df
+
+# Function to remove rows where iteration equals 0
+def remove_cold_runs(df):
+    return df[df['iteration'] != 0]
+
+def remove_faulty_runs(df):
+    return df[df['result'] == 'correct']
+
+# Sum array values in a column, or set to 0 if no array is present
+def sum_array_values(df, column_name):
+    # If the column contains lists (arrays), sum them, otherwise set to 0
+    return df[column_name].apply(lambda x: sum(x) if isinstance(x, list) else 0)
+
+# Calculate median execution times for each query and filter out queries with no valid runtime
 def calculate_medians(df, query_column, time_column):
-    return df.groupby(query_column)[time_column].median()
+    # Group by 'name' and find the median 'time' for each group
+    median_times = df.groupby(query_column)[time_column].median()
+    
+    # Merge the median times with the original dataframe to keep the whole row for each group
+    # For each group, find the row that has the 'time' closest to the median
+    def find_median_row(group, median_time):
+        return group.iloc[(group[time_column] - median_time).abs().argmin()]
 
-# 4. Extract query IDs from names
-def extract_query_ids(series):
-    return series.index.to_series().str.extract(r'/([a-zA-Z0-9]+)\.benchmark$')[0]
+    # Apply the function to each group
+    result_df = df.groupby(query_column).apply(
+        lambda group: find_median_row(group, median_times.loc[group.name])
+    )
+    
+    # Reset index to ensure the result is a flat DataFrame
+    result_df = result_df.reset_index(drop=True)
+    
+    return result_df
 
-# 5. Merge medians to align queries
+# Extract query IDs from full names
+def extract_query_ids(df):
+    return df['name'].str.extract(r'/([a-zA0-9]+)\.benchmark$')[0]
+
+# Merge medians to align queries
 def align_medians(medians_enabled, medians_disabled):
-    # Combine both series into a DataFrame to align queries
-    combined = pd.DataFrame({
-        'With Bloom Filter': medians_enabled,
-        'Without Bloom Filter': medians_disabled
-    })
+    # Combine both dataframes into a DataFrame to align queries by their "name"
+    combined = pd.merge(medians_enabled, medians_disabled, on="name", how="outer", suffixes=('_with_bloom', '_without_bloom'))
     return combined
 
-# 6. Create the bar plot
-def plot_medians(aligned_medians, save_path=None):
-    # Extract query IDs from full names
+
+def drop_columns(df):
+    # Drop all unnecessary columns and keep only the relevant ones
+    return df[['name', 'time', 'agg_build_times', 'agg_probe_times', 'agg_hash_times']]
+
+
+# Create the stacked bar plot
+def plot_stacked_medians(aligned_medians, save_path=None):
+    # Extract query IDs from the 'name' column
     query_ids = extract_query_ids(aligned_medians)
     aligned_medians.index = query_ids  # Update index with query IDs
     
+    # Make sure the aligned medians and query_ids have the same length
+    aligned_medians = aligned_medians.reindex(query_ids).reset_index()
+
     x = range(len(query_ids))
     
     # Set the figure size before plotting
-    plt.figure(figsize=(15, 8))  # Adjust the size of the plot
+    plt.figure(figsize=(12, 8))  # Adjust the size of the plot
     
-    plt.bar(x, aligned_medians['With Bloom Filter'], width=0.4, label='With Bloom Filter', align='center')
-    plt.bar([xi + 0.4 for xi in x], aligned_medians['Without Bloom Filter'], width=0.4, label='Without Bloom Filter', align='center')
+    # Handle queries with Bloom filter (using the correct column names after merge)
+    rest_runtime = aligned_medians['time_with_bloom'] - aligned_medians['agg_build_times_with_bloom'] - aligned_medians['agg_hash_times_with_bloom'] - aligned_medians['agg_probe_times_with_bloom']
+    build_time = aligned_medians['agg_build_times_with_bloom']
+    hash_time = aligned_medians['agg_hash_times_with_bloom']
+    probe_time = aligned_medians['agg_probe_times_with_bloom']
     
+    plt.bar(x, rest_runtime, width=0.4, label='Query Execution Time (without Bloom Filter)', align='center', color='green')
+    plt.bar(x, build_time, width=0.4, bottom=rest_runtime, label='BF Build', align='center', color='red')
+    plt.bar(x, hash_time, width=0.4, bottom=rest_runtime + build_time, label='BF Hash (probe side)', align='center', color='orange')
+    plt.bar(x, probe_time, width=0.4, bottom=rest_runtime + build_time + hash_time, label='BF Probe', align='center', color='blue')
+
+    # Handle queries without Bloom filter (just show the query execution time)
+    aligned_medians_without_bloom = aligned_medians['time_without_bloom']
+    plt.bar([xi + 0.4 for xi in x], aligned_medians_without_bloom, width=0.4, label='Without Bloom Filter', align='center', color='black')
+
+    # Customize the ticks and labels
     plt.xticks([xi + 0.2 for xi in x], query_ids, rotation=45, ha='right')
     plt.ylabel('Median Query Execution Time (seconds)')
     plt.xlabel('Query ID')
-    plt.title('Median Query Execution Times with and without Bloom Filters')
+    plt.title('Median Query Execution Times with and without Bloom Filters (Stacked)')
     plt.legend()
     plt.tight_layout()
 
@@ -68,26 +131,41 @@ def plot_medians(aligned_medians, save_path=None):
     # Display the plot
     plt.show()
 
+
+
 # Main script
-file_with_bloom_dirty = "job_benchmark_with_bloom.tsv"
-file_with_bloom_clean = "job_benchmark_with_bloom_clean.tsv"
-file_without_bloom_dirty = "job_benchmark_without_bloom.tsv"
-file_without_bloom_clean = "job_benchmark_without_bloom_clean.tsv"
+file_with_bloom = "imdb_with_bloom.log"
+file_without_bloom = "imdb_without_bloom.log"
 
-# Clean both files
-clean_file(file_with_bloom_dirty, file_with_bloom_clean)
-clean_file(file_without_bloom_dirty, file_without_bloom_clean)
+# Load data from JSON files
+df_with_bloom = load_json_data(file_with_bloom)
+df_without_bloom = load_json_data(file_without_bloom)
 
-# Load data
-df_with_bloom = load_data(file_with_bloom_clean)
-df_without_bloom = load_data(file_without_bloom_clean)
+# Remove rows where iteration = 0
+df_with_bloom = remove_faulty_runs(remove_cold_runs(df_with_bloom))
+df_without_bloom = remove_faulty_runs(remove_cold_runs(df_without_bloom))
 
-# Calculate medians
-medians_with_bloom = calculate_medians(df_with_bloom, query_column='name', time_column='timing')
-medians_without_bloom = calculate_medians(df_without_bloom, query_column='name', time_column='timing')
+print(df_with_bloom)
 
-# Align medians to ensure all queries are included
+# Add aggregated build_time and probe_time columns for queries with Bloom filter
+df_with_bloom['agg_build_times'] = sum_array_values(df_with_bloom, 'build_time')
+df_with_bloom['agg_probe_times'] = sum_array_values(df_with_bloom, 'probe_time')
+df_with_bloom['agg_hash_times'] = sum_array_values(df_with_bloom, 'hash_time')
+
+# No need to calculate 'agg_build_times' or 'agg_probe_times' for queries without Bloom filter
+df_without_bloom['agg_build_times'] = 0
+df_without_bloom['agg_probe_times'] = 0
+df_without_bloom['agg_hash_times'] = 0
+
+# Calculate medians (only include valid queries)
+medians_with_bloom = calculate_medians(df_with_bloom, query_column='name', time_column='time')
+medians_without_bloom = calculate_medians(df_without_bloom, query_column='name', time_column='time')
+
+medians_with_bloom = drop_columns(medians_with_bloom)
+medians_without_bloom = drop_columns(medians_without_bloom)
+
 aligned_medians = align_medians(medians_with_bloom, medians_without_bloom)
 
+
 # Save the plot as SVG and display it
-plot_medians(aligned_medians, save_path='query_execution_times.svg')
+plot_stacked_medians(aligned_medians, save_path='query_execution_times_stacked.svg')

@@ -120,9 +120,14 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	Profiler profiler;
 	auto display_name = benchmark->DisplayName();
 
+
 	auto state = benchmark->Initialize(configuration);
 	auto nruns = benchmark->NRuns();
 	for (size_t i = 0; i < nruns + 1; i++) {
+		std::cout << "  {" << std::endl;
+		std::cout << "    \"name\": \"" << benchmark->name << "\"," << std::endl;
+		std::cout << "    \"iteration\": " << i << "," << std::endl;
+
 		bool hotrun = i > 0;
 		if (hotrun) {
 			Log(StringUtil::Format("%s\t%d\t", benchmark->name, i));
@@ -146,7 +151,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 			if (timeout) {
 				// write timeout
 				LogResult("TIMEOUT");
-				break;
+				std::cout << "    \"result\": \"timeout\"," << std::endl;
 			} else {
 				// write time
 				auto verify = benchmark->Verify(state.get());
@@ -154,23 +159,29 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 					LogResult("INCORRECT");
 					LogLine("INCORRECT RESULT: " + verify);
 					LogOutput("INCORRECT RESULT: " + verify);
-					break;
+					std::cout << "    \"result\": \"incorrect\"," << std::endl;
 				} else {
 					LogResult(std::to_string(profiler.Elapsed()));
+					std::cout << "    \"result\": \"correct\"," << std::endl;
 				}
+				std::cout << "    \"time\": " << profiler.Elapsed() << "," << std::endl;
 			}
 		}
+		std::cout << "  }," << std::endl;
 		benchmark->Cleanup(state.get());
 	}
 	benchmark->Finalize();
+
 }
 
 void BenchmarkRunner::RunBenchmarks() {
 	LogLine("Starting benchmark run.");
 	LogLine("name\trun\ttiming");
+	std::cout << "[" << std::endl;
 	for (auto &benchmark : benchmarks) {
 		RunBenchmark(benchmark);
 	}
+	std::cout << "]" << std::endl;
 }
 
 void print_help() {
@@ -329,9 +340,11 @@ ConfigurationError run_benchmarks() {
 			}
 		} else {
 			instance.LogLine("name\trun\ttiming");
+			std::cout << "[" << std::endl;
 			for (const auto &benchmark_index : benchmark_indices) {
 				instance.RunBenchmark(benchmarks[benchmark_index]);
 			}
+			std::cout << "]" << std::endl;
 		}
 	} else {
 		if (instance.configuration.meta != BenchmarkMetaType::NONE) {

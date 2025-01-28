@@ -7,6 +7,7 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
 #include "duckdb/storage/table/row_group_segment_tree.hpp"
 #include "duckdb/transaction/duck_transaction.hpp"
+#include <iostream>
 
 namespace duckdb {
 
@@ -14,6 +15,16 @@ TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 }
 
 TableScanState::~TableScanState() {
+	auto &info = GetFilterInfo();
+	auto &bfs = info.GetBloomFilterList();
+			
+	for (auto &bf : bfs) {
+		std::cout << "    \"selectivity\": " << bf->GetObservedSelectivity() << "," << std::endl;
+		std::cout << "    \"probed_keys\": " << bf->GetNumProbedKeys() << "," << std::endl;
+		std::cout << "    \"probe_time\": " << bf->probe_time << "," << std::endl;
+		std::cout << "    \"build_time\": " << bf->build_time << "," << std::endl;
+		std::cout << "    \"hash_time\": " << bf->hash_time << "," << std::endl;
+	}		
 }
 
 void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<TableFilterSet> table_filters, optional_ptr<vector<unique_ptr<JoinBloomFilter>>> bloom_filters,
@@ -203,6 +214,10 @@ ParallelCollectionScanState::ParallelCollectionScanState()
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
     : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
       valid_sel(STANDARD_VECTOR_SIZE), random(-1), parent(parent_p) {
+}
+
+CollectionScanState::~CollectionScanState() {
+	
 }
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {

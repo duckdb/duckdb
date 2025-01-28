@@ -69,12 +69,18 @@ inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, c
 }
 
 void JoinBloomFilter::BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector &rsel, idx_t count) {
+    Profiler p;
+    p.Start();
+
     // Rotate hash by a couple of bits to produce a new "hash value".
     // With this trick, keys have to be hashed only once.
     for (idx_t i = 0; i < num_hash_functions; i++) {
         SetBloomBitsForHashes(i, hashes, rsel, count);
     }
     num_inserted_keys += count;
+
+    p.End();
+    build_time += p.Elapsed();
 }
 
 inline size_t JoinBloomFilter::ProbeInternal(size_t fni, Vector &hashes, SelectionVector &current_sel, idx_t current_sel_count) const {
@@ -136,7 +142,10 @@ inline size_t JoinBloomFilter::ProbeInternal(size_t fni, Vector &hashes, Selecti
 }
 
 
-size_t JoinBloomFilter::ProbeWithPrecomputedHashes(SelectionVector &sel, idx_t count, Vector &precomputed_hashes) const {
+size_t JoinBloomFilter::ProbeWithPrecomputedHashes(SelectionVector &sel, idx_t count, Vector &precomputed_hashes) {
+    Profiler p;
+    p.Start();
+
     //probing_started = true;
     num_probed_keys += count;
 
@@ -152,6 +161,9 @@ size_t JoinBloomFilter::ProbeWithPrecomputedHashes(SelectionVector &sel, idx_t c
     }
 
     num_filtered_keys += (count - sel_tmp_count);
+
+    p.End();
+    probe_time += p.Elapsed();
     return sel_tmp_count;
 }
 

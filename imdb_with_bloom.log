@@ -1,0 +1,7 @@
+[
+  {
+    "name": "benchmark/imdb/01a.benchmark",
+    "iteration": 0,
+    "bf_num_hash_functions": 7,
+    "bf_size_bits": 1408,
+    "bf_scarcity": 0.392756,

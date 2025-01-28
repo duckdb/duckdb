@@ -438,7 +438,9 @@ public:
 
 			sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel, bf.get());
 
-			std::cout << "Bloom-filter scarcity: " << bf->GetScarcity() << std::endl;
+			std::cout << "    \"bf_num_hash_functions\": " << bf->GetNumHashFunctions() << "," << std::endl;
+			std::cout << "    \"bf_size_bits\": " << bf->GetSizeBits() << "," << std::endl;
+			std::cout << "    \"bf_scarcity\": " << bf->GetScarcity() << "," << std::endl;
 
 			for (auto &info : sink.op.filter_pushdown->probe_info) {
 				vector<column_t> column_ids;
