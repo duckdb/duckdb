@@ -27,6 +27,10 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	bool ref_recurring = node.right_binder->bind_context.cte_references["recurring." + node.ctename] &&
 	                     *node.right_binder->bind_context.cte_references["recurring." + node.ctename] != 0;
 
+	if (node.key_targets.empty() && ref_recurring) {
+		throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
+	}
+
 	// Check if there is a reference to the recursive or recurring table, if not create a set operator.
 	if ((!node.right_binder->bind_context.cte_references[node.ctename] ||
 	     *node.right_binder->bind_context.cte_references[node.ctename] == 0) &&

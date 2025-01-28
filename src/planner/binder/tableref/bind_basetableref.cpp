@@ -16,7 +16,6 @@
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
-#include "iostream"
 
 namespace duckdb {
 
@@ -92,10 +91,6 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		found_ctes = FindCTE(ref.table_name, ref.table_name == alias);
 	}
 
-	if (ref.schema_name == "recurring" && found_ctes.empty()) {
-		throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
-	}
-
 	if (!found_ctes.empty()) {
 		// Check if there is a CTE binding in the BindContext
 		bool circular_cte = false;
@@ -116,6 +111,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 #endif
 				}
+
+				if (ref.schema_name == "recurring" && cte.key_targets.empty()) {
+					throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
+				}
+
 				auto result =
 				    make_uniq<BoundCTERef>(index, ctebinding->index, materialized, ref.schema_name == "recurring");
 				auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
