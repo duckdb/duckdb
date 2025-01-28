@@ -24,9 +24,13 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	left_node = CastLogicalOperatorToTypes(node.left->types, node.types, std::move(left_node));
 	right_node = CastLogicalOperatorToTypes(node.right->types, node.types, std::move(right_node));
 
+	bool ref_recurring = node.right_binder->bind_context.cte_references["recurring." + node.ctename] &&
+	                     *node.right_binder->bind_context.cte_references["recurring." + node.ctename] != 0;
+
 	// Check if there is a reference to the recursive or recurring table, if not create a set operator.
 	if ((!node.right_binder->bind_context.cte_references[node.ctename] ||
-	     *node.right_binder->bind_context.cte_references[node.ctename] == 0)) {
+	     *node.right_binder->bind_context.cte_references[node.ctename] == 0) &&
+	    !ref_recurring) {
 		auto root = make_uniq<LogicalSetOperation>(node.setop_index, node.types.size(), std::move(left_node),
 		                                           std::move(right_node), LogicalOperatorType::LOGICAL_UNION, true);
 		return VisitQueryNode(node, std::move(root));
@@ -35,7 +39,7 @@ unique_ptr<LogicalOperator> Binder::CreatePlan(BoundRecursiveCTENode &node) {
 	auto root =
 	    make_uniq<LogicalRecursiveCTE>(node.ctename, node.setop_index, node.types.size(), node.union_all,
 	                                   std::move(node.key_targets), std::move(left_node), std::move(right_node));
-
+	root->ref_recurring = ref_recurring;
 	return VisitQueryNode(node, std::move(root));
 }
 

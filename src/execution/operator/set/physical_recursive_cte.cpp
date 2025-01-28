@@ -47,13 +47,13 @@ public:
 
 	unique_ptr<GroupedAggregateHashTable> ht;
 
-	bool intermediate_empty = true;
 	mutex intermediate_table_lock;
 	ColumnDataCollection intermediate_table;
 	ColumnDataScanState scan_state;
 	bool initialized = false;
 	bool finished_scan = false;
 	SelectionVector new_groups;
+	AggregateHTScanState ht_scan_state;
 };
 
 unique_ptr<GlobalSinkState> PhysicalRecursiveCTE::GetGlobalSinkState(ClientContext &context) const {
@@ -129,6 +129,7 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 		if (!using_key) {
 			gstate.intermediate_table.InitializeScan(gstate.scan_state);
 		} else {
+			gstate.ht->InitializeScan(gstate.ht_scan_state);
 			recurring_table->InitializeScan(gstate.scan_state);
 		}
 		gstate.finished_scan = false;
@@ -152,7 +153,7 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 
 			// After an iteration, we reset the recurring table
 			// and fill it up with the new hash table rows for the next iteration.
-			if (using_key && gstate.intermediate_table.Count() != 0) {
+			if (using_key && ref_recurring && gstate.intermediate_table.Count() != 0) {
 				recurring_table->Reset();
 				AggregateHTScanState scan_state;
 				gstate.ht->InitializeScan(scan_state);
@@ -191,7 +192,18 @@ SourceResultType PhysicalRecursiveCTE::GetData(ExecutionContext &context, DataCh
 			if (gstate.intermediate_table.Count() == 0) {
 				gstate.finished_scan = true;
 				if (using_key) {
-					recurring_table->Scan(gstate.scan_state, chunk);
+					// Initialise the DataChunks to read the ht.
+					// One DataChunk for payload, one for keys.
+					DataChunk payload_rows;
+					DataChunk distinct_rows;
+					distinct_rows.Initialize(Allocator::DefaultAllocator(), distinct_types);
+					if (!payload_types.empty()) {
+						payload_rows.Initialize(Allocator::DefaultAllocator(), payload_types);
+					}
+
+					gstate.ht->Scan(gstate.ht_scan_state, distinct_rows, payload_rows);
+					PopulateChunk(chunk, distinct_rows, distinct_idx, false);
+					PopulateChunk(chunk, payload_rows, payload_idx, false);
 				}
 				break;
 			}
@@ -307,7 +319,6 @@ vector<const_reference<PhysicalOperator>> PhysicalRecursiveCTE::GetSources() con
 InsertionOrderPreservingMap<string> PhysicalRecursiveCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename;
-	result["Table Index"] = StringUtil::Format("%llu", table_index);
 	return result;
 }
 

@@ -122,8 +122,11 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 				auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
 
 				bind_context.AddGenericBinding(index, alias, names, ctebinding->types);
+
+				auto cte_reference = ref.schema_name.empty() ? ref.table_name : ref.schema_name + "." + ref.table_name;
+
 				// Update references to CTE
-				auto cteref = bind_context.cte_references[ref.table_name];
+				auto cteref = bind_context.cte_references[cte_reference];
 				(*cteref)++;
 
 				result->types = ctebinding->types;

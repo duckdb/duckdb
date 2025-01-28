@@ -516,6 +516,11 @@
         "id": 204,
         "name": "key_targets",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 205,
+        "name": "ref_recurring",
+        "type": "bool"
       }
     ]
   },

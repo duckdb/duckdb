@@ -33,6 +33,8 @@ public:
 	}
 
 	bool union_all;
+	// Flag if recurring table is referenced, if not we do not copy ht into ColumnDataCollection
+	bool ref_recurring;
 	string ctename;
 	idx_t table_index;
 	idx_t column_count;
