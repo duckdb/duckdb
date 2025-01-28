@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
@@ -61,6 +62,8 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 	// we have reached the logical get - now we need to push the row-id column (if it is not yet projected out)
 	auto &get = child.get().Cast<LogicalGet>();
 	auto row_id_idx = GetOrInsertRowId(get);
+	idx_t column_count = get.projection_ids.empty() ? get.GetColumnIds().size() : get.projection_ids.size();
+	D_ASSERT(column_count == get.GetColumnBindings().size());
 
 	// the row id has been projected - now project it up the stack
 	ColumnBinding row_id_binding(get.table_index, row_id_idx);
@@ -74,11 +77,18 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 			    make_uniq<BoundColumnRefExpression>("rowid", get.GetRowIdType(), row_id_binding));
 			// modify the row-id-binding to push to the new projection
 			row_id_binding = ColumnBinding(proj.table_index, proj.expressions.size() - 1);
+			column_count = proj.expressions.size();
 			break;
 		}
-		case LogicalOperatorType::LOGICAL_FILTER:
-			// column bindings pass-through this operator as-is
+		case LogicalOperatorType::LOGICAL_FILTER: {
+			auto &filter = op.Cast<LogicalFilter>();
+			// column bindings pass-through this operator as-is UNLESS the filter has a projection map
+			if (filter.HasProjectionMap()) {
+				// if the filter has a projection map, we need to project the new column
+				filter.projection_map.push_back(column_count - 1);
+			}
 			break;
+		}
 		default:
 			throw InternalException("Unsupported logical operator in LateMaterialization::ConstructRHS");
 		}
@@ -212,12 +222,13 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 			child = *child.get().children[0];
 			break;
 		}
-		case LogicalOperatorType::LOGICAL_FILTER:
+		case LogicalOperatorType::LOGICAL_FILTER: {
 			// visit filter expressions - we need these columns
 			VisitOperatorExpressions(child.get());
 			// continue into child
 			child = *child.get().children[0];
 			break;
+		}
 		default:
 			// unsupported operator for late materialization
 			return false;
