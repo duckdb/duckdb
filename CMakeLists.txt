@@ -640,9 +640,6 @@ include_directories(third_party/tdigest)
 include_directories(third_party/mbedtls/include)
 include_directories(third_party/yyjson/include)
 include_directories(third_party/zstd/include)
-include_directories(third_party/rapidfuzz)
-include_directories(third_party/rapidfuzz/details)
-include_directories(third_party/rapidfuzz/distance)
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
@@ -1430,6 +1427,7 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
 
   add_executable(duckdb_platform_binary ${VERSION_SOURCES})
   link_threads(duckdb_platform_binary)
+  target_link_libraries(duckdb_platform_binary rapidfuzz::rapidfuzz)
 
   set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
   set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY

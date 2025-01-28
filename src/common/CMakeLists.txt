@@ -2,6 +2,8 @@ if(NOT CLANG_TIDY)
   add_subdirectory(adbc)
 endif()
 
+include_directories(third_party/rapidfuzz)
+
 add_subdirectory(arrow)
 add_subdirectory(crypto)
 add_subdirectory(enums)

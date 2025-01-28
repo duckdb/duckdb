@@ -1,4 +1,4 @@
-#include "rapidfuzz_all.hpp"
+#include "rapidfuzz/distance.hpp"
 
 #include "core_functions/scalar/string_functions.hpp"
 
@@ -7,16 +7,16 @@ namespace duckdb {
 static inline double JaroScalarFunction(const string_t &s1, const string_t &s2, const double_t &score_cutoff = 0.0) {
 	auto s1_begin = s1.GetData();
 	auto s2_begin = s2.GetData();
-	return duckdb_rapidfuzz::jaro_similarity(s1_begin, s1_begin + s1.GetSize(), s2_begin, s2_begin + s2.GetSize(),
-	                                            score_cutoff);
+	return rapidfuzz::jaro_similarity(s1_begin, s1_begin + s1.GetSize(), s2_begin, s2_begin + s2.GetSize(),
+	                                  score_cutoff);
 }
 
 static inline double JaroWinklerScalarFunction(const string_t &s1, const string_t &s2,
                                                const double_t &score_cutoff = 0.0) {
 	auto s1_begin = s1.GetData();
 	auto s2_begin = s2.GetData();
-	return duckdb_rapidfuzz::jaro_winkler_similarity(s1_begin, s1_begin + s1.GetSize(), s2_begin,
-	                                                    s2_begin + s2.GetSize(), 0.1, score_cutoff);
+	return rapidfuzz::jaro_winkler_similarity(s1_begin, s1_begin + s1.GetSize(), s2_begin, s2_begin + s2.GetSize(), 0.1,
+	                                          score_cutoff);
 }
 
 template <class CACHED_SIMILARITY>
@@ -75,12 +75,11 @@ static void TemplatedJaroWinklerFunction(DataChunk &args, Vector &result, SIMILA
 }
 
 static void JaroFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	TemplatedJaroWinklerFunction<duckdb_rapidfuzz::CachedJaroSimilarity<char>>(args, result, JaroScalarFunction);
+	TemplatedJaroWinklerFunction<rapidfuzz::CachedJaro<char>>(args, result, JaroScalarFunction);
 }
 
 static void JaroWinklerFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	TemplatedJaroWinklerFunction<duckdb_rapidfuzz::CachedJaroWinklerSimilarity<char>>(args, result,
-	                                                                                     JaroWinklerScalarFunction);
+	TemplatedJaroWinklerFunction<rapidfuzz::CachedJaroWinkler<char>>(args, result, JaroWinklerScalarFunction);
 }
 
 ScalarFunctionSet JaroSimilarityFun::GetFunctions() {
