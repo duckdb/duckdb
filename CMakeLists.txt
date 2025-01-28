@@ -1448,7 +1448,6 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
 
   add_executable(duckdb_platform_binary ${VERSION_SOURCES})
   link_threads(duckdb_platform_binary)
-  target_link_libraries(duckdb_platform_binary rapidfuzz::rapidfuzz)
 
   set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
   set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
