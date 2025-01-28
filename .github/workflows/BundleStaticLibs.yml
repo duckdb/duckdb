@@ -60,6 +60,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: 'recursive'
           ref: ${{ inputs.git_ref }}
 
       - uses: actions/setup-python@v5
@@ -110,6 +111,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: 'recursive'
           ref: ${{ inputs.git_ref }}
 
       - uses: actions/setup-python@v5

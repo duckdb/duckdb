@@ -50,6 +50,7 @@ runs:
 
     - uses: actions/checkout@v3
       with:
+        submodules: 'recursive'
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 

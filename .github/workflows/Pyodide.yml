@@ -58,7 +58,7 @@ jobs:
           # fetch everything so that the version on the built wheel path is
           # correct
           fetch-depth: 0
-          submodules: 'true'
+          submodules: 'recursive'
           ref: ${{ inputs.git_ref }}
 
       - name: Check/Act on inputs.override_git_describe

@@ -43,7 +43,7 @@ jobs:
         with:
           path: 'duckdb'
           fetch-depth: 0
-          submodules: 'true'
+          submodules: 'recursive'
           ref: ${{ inputs.git_ref }}
 
       - uses: actions/checkout@v4
