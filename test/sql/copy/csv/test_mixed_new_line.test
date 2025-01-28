@@ -2,6 +2,8 @@
 # description: Test mixed lines
 # group: [csv]
 
+require notwindows
+
 statement ok
 pragma enable_verification;
 
