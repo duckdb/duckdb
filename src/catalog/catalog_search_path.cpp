@@ -193,6 +193,18 @@ const vector<CatalogSearchEntry> &CatalogSearchPath::Get() {
 	return paths;
 }
 
+string CatalogSearchPath::GetDefaultSchema(const string &catalog) {
+	for (auto &path : paths) {
+		if (path.catalog == TEMP_CATALOG) {
+			continue;
+		}
+		if (StringUtil::CIEquals(path.catalog, catalog)) {
+			return path.schema;
+		}
+	}
+	return DEFAULT_SCHEMA;
+}
+
 string CatalogSearchPath::GetDefaultSchema(ClientContext &context, const string &catalog) {
 	for (auto &path : paths) {
 		if (path.catalog == TEMP_CATALOG) {
