@@ -296,9 +296,11 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 			return update_chunk.size();
 		}
 		auto &local_storage = LocalStorage::Get(context.client, data_table.db);
-		D_ASSERT(gstate.initialized);
-		data_table.FinalizeLocalAppend(gstate.append_state);
-		gstate.initialized = false;
+		if (gstate.initialized) {
+			// Flush the data first, it might be referenced by the Update
+			data_table.FinalizeLocalAppend(gstate.append_state);
+			gstate.initialized = false;
+		}
 		local_storage.Update(data_table, row_ids, set_columns, update_chunk);
 		return update_chunk.size();
 	}
@@ -661,31 +663,39 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			gstate.initialized = true;
 		}
 
+		// FIXME: this is way too optimistic
+		// some tuples could be filtered out entirely and thus shouldn't be added to the return chunk.
 		if (action_type != OnConflictAction::NOTHING && return_chunk) {
 			// If the action is UPDATE or REPLACE, we will always create either an APPEND or an INSERT
 			// for NOTHING we don't create either an APPEND or an INSERT for the tuple
 			// so it should not be added to the RETURNING chunk
 			gstate.return_collection.Append(lstate.insert_chunk);
 		}
+
 		idx_t updated_tuples = OnConflictHandling(table, context, lstate, gstate);
+
 		if (action_type == OnConflictAction::NOTHING && return_chunk) {
 			// Because we didn't add to the RETURNING chunk yet
 			// we add the tuples that did not get filtered out now
 			gstate.return_collection.Append(lstate.insert_chunk);
 		}
+
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
 		storage.LocalAppend(gstate.append_state, context.client, lstate.insert_chunk, true);
 		if (action_type == OnConflictAction::UPDATE && lstate.update_chunk.size() != 0) {
-			// Flush the append so we can target the data we just appended with the update
-			storage.FinalizeLocalAppend(gstate.append_state);
-			gstate.initialized = false;
+			if (gstate.initialized) {
+				// Flush the append so we can target the data we just appended with the update
+				storage.FinalizeLocalAppend(gstate.append_state);
+				gstate.initialized = false;
+			}
 			(void)HandleInsertConflicts<true>(table, context, lstate, gstate, lstate.update_chunk, *this);
 			(void)HandleInsertConflicts<false>(table, context, lstate, gstate, lstate.update_chunk, *this);
 			// All of the tuples should have been turned into an update, leaving the chunk empty afterwards
 			D_ASSERT(lstate.update_chunk.size() == 0);
 		}
 	} else {
+		//! FIXME: can't we enable this by using a BatchedDataCollection ?
 		D_ASSERT(!return_chunk);
 		// parallel append
 		if (!lstate.local_collection) {
