@@ -795,6 +795,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        submodules: 'true'
         path: duckdb-wasm/submodules/duckdb
 
     - name: Setup
@@ -855,6 +856,7 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          submodules: 'true'
 
       - name: Install
         shell: bash
@@ -911,6 +913,7 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0
+        submodules: 'true'
 
     - uses: actions/setup-python@v5
       with:

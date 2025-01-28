@@ -23,6 +23,7 @@ jobs:
         with:
           # we need tags for the ubiquity build script to run without errors
           fetch-depth: '0'
+          submodules: 'true'
           ref: ${{ env.SOURCE_REF }}
           path: 'source-repo'
 

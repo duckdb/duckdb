@@ -55,6 +55,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          fetch-depth: 0
+          submodules: 'true'
           path: ${{ env.DUCKDB_SRC }}
 
       - uses: actions/checkout@v4

@@ -24,11 +24,16 @@ jobs:
       COVERITY_PROJECT_NAME: DuckDB
     steps:
     - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: 'true'
+
     - name: Download and extract the Coverity Build Tool
       run: |
           wget https://scan.coverity.com/download/cxx/linux64 --post-data "token=${{ secrets.COVERITY_SCAN_TOKEN }}&project=${{ env.COVERITY_PROJECT_NAME  }}" -O cov-analysis-linux64.tar.gz
           mkdir cov-analysis-linux64
           tar xzf cov-analysis-linux64.tar.gz --strip 1 -C cov-analysis-linux64
+
     - name: Install dependencies
       run: sudo apt update -y -qq && sudo apt install -y git g++ cmake ninja-build libssl-dev default-jdk
 

@@ -71,6 +71,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        submodules: 'true'
         ref: ${{ inputs.git_ref }}
 
     - name: Check/Act on inputs.override_git_describe
@@ -136,6 +137,7 @@ jobs:
         with:
           path: 'duckdb'
           fetch-depth: 0
+          submodules: 'true'
           ref: ${{ inputs.git_ref }}
 
       - uses: ./duckdb/.github/actions/build_extensions_dockerized
@@ -206,6 +208,7 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
+        submodules: 'true'
         ref: ${{ inputs.git_ref }}
 
     - name: Check/Act on inputs.override_git_describe
@@ -297,6 +300,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: 'true'
           ref: ${{ inputs.git_ref }}
 
       - name: Check/Act on inputs.override_git_describe
@@ -371,6 +375,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: 'true'
           ref: ${{ inputs.git_ref }}
 
       - name: Check/Act on inputs.override_git_describe
@@ -441,6 +446,7 @@ jobs:
      - uses: actions/checkout@v4
        with:
          fetch-depth: 0
+         submodules: 'true'
          ref: ${{ inputs.git_ref }}
 
      - uses: actions/setup-python@v5
