@@ -684,11 +684,6 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		gstate.insert_count += updated_tuples;
 		storage.LocalAppend(gstate.append_state, context.client, lstate.insert_chunk, true);
 		if (action_type == OnConflictAction::UPDATE && lstate.update_chunk.size() != 0) {
-			if (gstate.initialized) {
-				// Flush the append so we can target the data we just appended with the update
-				storage.FinalizeLocalAppend(gstate.append_state);
-				gstate.initialized = false;
-			}
 			(void)HandleInsertConflicts<true>(table, context, lstate, gstate, lstate.update_chunk, *this);
 			(void)HandleInsertConflicts<false>(table, context, lstate, gstate, lstate.update_chunk, *this);
 			// All of the tuples should have been turned into an update, leaving the chunk empty afterwards
