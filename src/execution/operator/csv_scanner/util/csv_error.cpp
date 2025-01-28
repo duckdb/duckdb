@@ -406,14 +406,19 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	// 2. What was the search space?
 	error << "The search space used was:" << '\n';
 	error << search_space;
+	error << "Encoding: " << options.encoding << '\n';
 	// 3. Suggest how to fix it!
 	error << "Possible fixes:" << '\n';
-	// 3.1 Inform the reader of the dialect
+	// 3.0 Inform the user about the strict_mode
 	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
 		error << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with "
 		         "the CSV standard."
 		      << '\n';
 	}
+	// 3.0.1 Inform the user about encoding
+	error << "* Make sure you are using the correct file encoding. If not, set it (e.g., encoding = 'utf-16')."
+		      << '\n';
+	// 3.1 Inform the reader of the dialect
 	// delimiter
 	if (!options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
 		error << "* Set delimiter (e.g., delim=\',\')" << '\n';
