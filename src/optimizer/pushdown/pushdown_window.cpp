@@ -39,7 +39,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 	// into the children.
 	vector<column_binding_set_t> window_exprs_partition_bindings;
 	for (auto &expr : window.expressions) {
-		if (expr->expression_class != ExpressionClass::BOUND_WINDOW) {
+		if (expr->GetExpressionClass() != ExpressionClass::BOUND_WINDOW) {
 			continue;
 		}
 		auto &window_expr = expr->Cast<BoundWindowExpression>();
@@ -53,7 +53,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownWindow(unique_ptr<LogicalOpe
 		column_binding_set_t partition_bindings;
 		// 2. Get the binding information of the partitions of the window expression
 		for (auto &partition_expr : partitions) {
-			switch (partition_expr->type) {
+			switch (partition_expr->GetExpressionType()) {
 			// TODO: Add expressions for function expressions like FLOOR, CEIL etc.
 			case ExpressionType::BOUND_COLUMN_REF: {
 				auto &partition_col = partition_expr->Cast<BoundColumnRefExpression>();

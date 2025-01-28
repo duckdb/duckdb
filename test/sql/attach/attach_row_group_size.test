@@ -1,0 +1,29 @@
+# name: test/sql/attach/attach_row_group_size.test
+# description: Tests attaching database files and using new compression methods
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+ATTACH '__TEST_DIR__/attach_row_group_size.db' AS db1 (STORAGE_VERSION 'v1.0.0', ROW_GROUP_SIZE 245760);
+----
+Explicitly specify a newer storage version when creating the database to enable larger row groups
+
+statement ok
+ATTACH '__TEST_DIR__/attach_row_group_size.db' AS db1 (STORAGE_VERSION 'v1.0.0');
+
+statement ok
+CREATE TABLE db1.tbl AS FROM range(10000) t(i)
+
+# we can upgrade to a higher row group size
+statement ok
+DETACH db1
+
+statement ok
+ATTACH '__TEST_DIR__/attach_row_group_size.db' AS db1 (STORAGE_VERSION 'v1.2.0', ROW_GROUP_SIZE 245760);
+
+statement ok
+INSERT INTO db1.tbl FROM range(10000)

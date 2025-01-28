@@ -76,6 +76,7 @@ void ExpressionExecutor::Execute(const BoundFunctionExpression &expr, Expression
 	arguments.Verify();
 
 	D_ASSERT(expr.function.function);
+	// #ifdef DEBUG
 	expr.function.function(arguments, *state, result);
 
 	VerifyNullHandling(expr, arguments, result);

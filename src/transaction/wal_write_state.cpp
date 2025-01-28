@@ -236,10 +236,10 @@ void WALWriteState::WriteUpdate(UpdateInfo &info) {
 
 	// construct the column index path
 	vector<column_t> column_indexes;
-	reference<ColumnData> current_column_data = column_data;
-	while (current_column_data.get().parent) {
+	reference<const ColumnData> current_column_data = column_data;
+	while (current_column_data.get().HasParent()) {
 		column_indexes.push_back(current_column_data.get().column_index);
-		current_column_data = *current_column_data.get().parent;
+		current_column_data = current_column_data.get().Parent();
 	}
 	column_indexes.push_back(info.column_index);
 	std::reverse(column_indexes.begin(), column_indexes.end());

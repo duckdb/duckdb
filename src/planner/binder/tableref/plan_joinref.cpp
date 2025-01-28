@@ -51,13 +51,13 @@ static bool CreateJoinCondition(Expression &expr, const unordered_set<idx_t> &le
 	if (left_side != JoinSide::BOTH && right_side != JoinSide::BOTH) {
 		// join condition can be divided in a left/right side
 		JoinCondition condition;
-		condition.comparison = expr.type;
+		condition.comparison = expr.GetExpressionType();
 		auto left = std::move(comparison.left);
 		auto right = std::move(comparison.right);
 		if (left_side == JoinSide::RIGHT) {
 			// left = right, right = left, flip the comparison symbol and reverse sides
 			swap(left, right);
-			condition.comparison = FlipComparisonExpression(expr.type);
+			condition.comparison = FlipComparisonExpression(expr.GetExpressionType());
 		}
 		condition.left = std::move(left);
 		condition.right = std::move(right);
@@ -99,19 +99,20 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 					continue;
 				}
 			}
-		} else if (expr->type == ExpressionType::COMPARE_EQUAL || expr->type == ExpressionType::COMPARE_NOTEQUAL ||
-		           expr->type == ExpressionType::COMPARE_BOUNDARY_START ||
-		           expr->type == ExpressionType::COMPARE_LESSTHAN ||
-		           expr->type == ExpressionType::COMPARE_GREATERTHAN ||
-		           expr->type == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
-		           expr->type == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
-		           expr->type == ExpressionType::COMPARE_BOUNDARY_START ||
-		           expr->type == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
-		           expr->type == ExpressionType::COMPARE_DISTINCT_FROM)
+		} else if (expr->GetExpressionType() == ExpressionType::COMPARE_EQUAL ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_NOTEQUAL ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_BOUNDARY_START ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_LESSTHAN ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_GREATERTHAN ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_LESSTHANOREQUALTO ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_GREATERTHANOREQUALTO ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_BOUNDARY_START ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_NOT_DISTINCT_FROM ||
+		           expr->GetExpressionType() == ExpressionType::COMPARE_DISTINCT_FROM)
 
 		{
 			// comparison, check if we can create a comparison JoinCondition
-			if (IsJoinTypeCondition(ref_type, expr->type) &&
+			if (IsJoinTypeCondition(ref_type, expr->GetExpressionType()) &&
 			    CreateJoinCondition(*expr, left_bindings, right_bindings, conditions)) {
 				// successfully created the join condition
 				continue;
@@ -246,7 +247,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 }
 
 static bool HasCorrelatedColumns(Expression &expression) {
-	if (expression.type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expression.GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &colref = expression.Cast<BoundColumnRefExpression>();
 		if (colref.depth > 0) {
 			return true;

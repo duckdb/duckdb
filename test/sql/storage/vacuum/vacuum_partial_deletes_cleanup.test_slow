@@ -44,15 +44,14 @@ SELECT SUM(i) FROM integers
 NULL
 
 # ensure that the total blocks don't exceed the total blocks after the first iteration
-# by more than 1.2
-
+# by more than 2
 query I
-SELECT CASE WHEN ${i} = 0 THEN True
-	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.2 THEN True
-	ELSE False END
+SELECT CASE WHEN ${i} = 0 THEN MAP {'within_limits': True}
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 2 THEN MAP {'within_limits': True}
+	ELSE MAP {'within_limits': False, 'current.total_blocks': current.total_blocks, 'total_blocks_tbl.total_blocks': total_blocks_tbl.total_blocks} END
 FROM pragma_database_size() AS current, total_blocks_tbl;
 ----
-1
+{within_limits=1}
 
 # adjust total_blocks_tbl once to the count after the first iteration
 

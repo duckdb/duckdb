@@ -50,9 +50,10 @@ struct ArrowScanFunctionData : public TableFunctionData {
 public:
 	ArrowScanFunctionData(stream_factory_produce_t scanner_producer_p, uintptr_t stream_factory_ptr_p,
 	                      shared_ptr<DependencyItem> dependency = nullptr)
-	    : lines_read(0), stream_factory_ptr(stream_factory_ptr_p), scanner_producer(scanner_producer_p),
-	      dependency(std::move(dependency)) {
+	    : lines_read(0), rows_per_thread(0), stream_factory_ptr(stream_factory_ptr_p),
+	      scanner_producer(scanner_producer_p), dependency(std::move(dependency)) {
 	}
+
 	vector<LogicalType> all_types;
 	atomic<idx_t> lines_read;
 	ArrowSchemaWrapper schema_root;
@@ -88,7 +89,7 @@ public:
 struct ArrowScanLocalState;
 struct ArrowArrayScanState {
 public:
-	explicit ArrowArrayScanState(ArrowScanLocalState &state);
+	explicit ArrowArrayScanState(ArrowScanLocalState &state, ClientContext &context);
 
 public:
 	ArrowScanLocalState &state;
@@ -101,6 +102,7 @@ public:
 	unique_ptr<Vector> dictionary;
 	//! Run-end-encoding state
 	ArrowRunEndEncodingState run_end_encoding;
+	ClientContext &context;
 
 public:
 	ArrowArrayScanState &GetChild(idx_t child_idx);
@@ -126,7 +128,8 @@ public:
 
 struct ArrowScanLocalState : public LocalTableFunctionState {
 public:
-	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk) : chunk(current_chunk.release()) {
+	explicit ArrowScanLocalState(unique_ptr<ArrowArrayWrapper> current_chunk, ClientContext &context)
+	    : chunk(current_chunk.release()), context(context) {
 	}
 
 public:
@@ -139,6 +142,7 @@ public:
 	TableFilterSet *filters = nullptr;
 	//! The DataChunk containing all read columns (even filter columns that are immediately removed)
 	DataChunk all_columns;
+	ClientContext &context;
 
 public:
 	void Reset() {
@@ -150,7 +154,7 @@ public:
 	ArrowArrayScanState &GetState(idx_t child_idx) {
 		auto it = array_states.find(child_idx);
 		if (it == array_states.end()) {
-			auto child_p = make_uniq<ArrowArrayScanState>(*this);
+			auto child_p = make_uniq<ArrowArrayScanState>(*this, context);
 			auto &child = *child_p;
 			array_states.emplace(child_idx, std::move(child_p));
 			return child;
@@ -190,7 +194,8 @@ public:
 	                                                  vector<LogicalType> &return_types, vector<string> &names);
 	//! Actual conversion from Arrow to DuckDB
 	static void ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
-	                          DataChunk &output, idx_t start, bool arrow_scan_is_projected = true);
+	                          DataChunk &output, idx_t start, bool arrow_scan_is_projected = true,
+	                          idx_t rowid_column_index = COLUMN_IDENTIFIER_ROW_ID);
 
 	//! Get next scan state
 	static bool ArrowScanParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
@@ -210,7 +215,8 @@ public:
 
 	//! Scan Function
 	static void ArrowScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
-	static void PopulateArrowTableType(ArrowTableType &arrow_table, ArrowSchemaWrapper &schema_p, vector<string> &names,
+	static void PopulateArrowTableType(DBConfig &config, ArrowTableType &arrow_table,
+	                                   const ArrowSchemaWrapper &schema_p, vector<string> &names,
 	                                   vector<LogicalType> &return_types);
 
 protected:
@@ -228,10 +234,6 @@ protected:
 	//! Gets the progress on the table scan, used for Progress Bars
 	static double ArrowProgress(ClientContext &context, const FunctionData *bind_data,
 	                            const GlobalTableFunctionState *global_state);
-
-public:
-	//! Helper function to get the DuckDB logical type
-	static unique_ptr<ArrowType> GetArrowLogicalType(ArrowSchema &schema);
 };
 
 } // namespace duckdb

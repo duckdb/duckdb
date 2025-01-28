@@ -111,7 +111,7 @@ public:
      *              otherwise.
      * @stable ICU 2.0
      */
-    virtual UBool operator==(const TimeZone& that) const;
+    virtual bool operator==(const TimeZone& that) const;
 
     /**
      * Constructs a SimpleTimeZone with the given raw GMT offset and time zone ID,

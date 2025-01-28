@@ -17,6 +17,35 @@
 namespace duckdb {
 
 class CSVFileScan;
+
+//! Class that keeps track of line starts, used for line size verification
+class LinePosition {
+public:
+	LinePosition() {
+	}
+	LinePosition(idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t buffer_size_p)
+	    : buffer_pos(buffer_pos_p), buffer_size(buffer_size_p), buffer_idx(buffer_idx_p) {
+	}
+
+	idx_t operator-(const LinePosition &other) const {
+		if (other.buffer_idx == buffer_idx) {
+			return buffer_pos - other.buffer_pos;
+		}
+		return other.buffer_size - other.buffer_pos + buffer_pos;
+	}
+
+	bool operator==(const LinePosition &other) const {
+		return buffer_pos == other.buffer_pos && buffer_idx == other.buffer_idx && buffer_size == other.buffer_size;
+	}
+
+	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl = false) const {
+		return requested_buffer_size * buffer_idx + buffer_pos + first_char_nl;
+	}
+	idx_t buffer_pos = 0;
+	idx_t buffer_size = 0;
+	idx_t buffer_idx = 0;
+};
+
 class ScannerResult {
 public:
 	ScannerResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size);
@@ -30,6 +59,11 @@ public:
 	}
 
 	static inline void SetUnquoted(ScannerResult &result) {
+		if (result.states.states[0] == CSVState::UNQUOTED && result.states.states[1] == CSVState::UNQUOTED &&
+		    result.state_machine.dialect_options.state_machine_options.escape != '\0') {
+			// This means we touched an unescaped quote, we must go through the remove escape code to remove it.
+			result.escaped = true;
+		}
 		result.quoted = true;
 	}
 
@@ -47,6 +81,10 @@ public:
 		return result.comment == true;
 	}
 
+	inline bool IsStateCurrent(CSVState state) const {
+		return states.states[1] == state;
+	}
+
 	//! Variable to keep information regarding quoted and escaped values
 	bool quoted = false;
 	//! If the current quoted value is unquoted
@@ -56,6 +94,8 @@ public:
 	//! Variable to keep track if we are in a comment row. Hence, won't add it
 	bool comment = false;
 	idx_t quoted_position = 0;
+
+	LinePosition last_position;
 
 	//! Size of the result
 	const idx_t result_size;
@@ -83,7 +123,7 @@ public:
 	//! Returns true if the scanner is finished
 	bool FinishedFile() const;
 
-	//! Parses data into a output_chunk
+	//! Parses data into an output_chunk
 	virtual ScannerResult &ParseChunk();
 
 	//! Returns the result from the last Parse call. Shouts at you if you call it wrong
@@ -160,6 +200,7 @@ protected:
 	template <class T>
 	void Process(T &result) {
 		idx_t to_pos;
+		const bool has_escaped_value = state_machine->dialect_options.state_machine_options.escape != '\0';
 		const idx_t start_pos = iterator.pos.buffer_pos;
 		if (iterator.IsBoundarySet()) {
 			to_pos = iterator.GetEndPos();
@@ -240,14 +281,15 @@ protected:
 				iterator.pos.buffer_pos++;
 				break;
 			case CSVState::QUOTED: {
-				if (states.states[0] == CSVState::UNQUOTED) {
+				if ((states.states[0] == CSVState::UNQUOTED || states.states[0] == CSVState::MAYBE_QUOTED) &&
+				    has_escaped_value) {
 					T::SetEscaped(result);
 				}
 				ever_quoted = true;
 				T::SetQuoted(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				while (iterator.pos.buffer_pos + 8 < to_pos) {
-					uint64_t value =
+					const uint64_t value =
 					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
 					if (ContainsZeroByte((value ^ state_machine->transition_array.quote) &
 					                     (value ^ state_machine->transition_array.escape))) {
@@ -263,6 +305,9 @@ protected:
 				}
 			} break;
 			case CSVState::UNQUOTED: {
+				if (states.states[0] == CSVState::MAYBE_QUOTED) {
+					T::SetEscaped(result);
+				}
 				T::SetUnquoted(result);
 				iterator.pos.buffer_pos++;
 				break;
@@ -303,7 +348,7 @@ protected:
 				T::SetComment(result, iterator.pos.buffer_pos);
 				iterator.pos.buffer_pos++;
 				while (iterator.pos.buffer_pos + 8 < to_pos) {
-					uint64_t value =
+					const uint64_t value =
 					    Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(&buffer_handle_ptr[iterator.pos.buffer_pos]));
 					if (ContainsZeroByte((value ^ state_machine->transition_array.new_line) &
 					                     (value ^ state_machine->transition_array.carriage_return))) {

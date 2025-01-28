@@ -248,7 +248,7 @@ struct MacroExtractor {
 		vector<Value> results;
 		auto &macro_entry = *entry.macros[offset];
 		for (auto &param : macro_entry.parameters) {
-			D_ASSERT(param->type == ExpressionType::COLUMN_REF);
+			D_ASSERT(param->GetExpressionType() == ExpressionType::COLUMN_REF);
 			auto &colref = param->Cast<ColumnRefExpression>();
 			results.emplace_back(colref.GetColumnName());
 		}
@@ -319,7 +319,7 @@ struct TableMacroExtractor {
 		vector<Value> results;
 		auto &macro_entry = *entry.macros[offset];
 		for (auto &param : macro_entry.parameters) {
-			D_ASSERT(param->type == ExpressionType::COLUMN_REF);
+			D_ASSERT(param->GetExpressionType() == ExpressionType::COLUMN_REF);
 			auto &colref = param->Cast<ColumnRefExpression>();
 			results.emplace_back(colref.GetColumnName());
 		}

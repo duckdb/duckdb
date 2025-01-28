@@ -132,7 +132,7 @@ ChoiceFormat::ChoiceFormat(const UnicodeString& newPattern,
 }
 // -------------------------------------
 
-UBool
+bool
 ChoiceFormat::operator==(const Format& that) const
 {
     if (this == &that) return TRUE;

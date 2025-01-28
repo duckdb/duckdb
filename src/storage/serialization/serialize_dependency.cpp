@@ -30,9 +30,9 @@ void LogicalDependency::Serialize(Serializer &serializer) const {
 }
 
 LogicalDependency LogicalDependency::Deserialize(Deserializer &deserializer) {
-	LogicalDependency result;
-	deserializer.ReadProperty<CatalogEntryInfo>(100, "entry", result.entry);
-	deserializer.ReadPropertyWithDefault<string>(101, "catalog", result.catalog);
+	auto entry = deserializer.ReadProperty<CatalogEntryInfo>(100, "entry");
+	auto catalog = deserializer.ReadPropertyWithDefault<string>(101, "catalog");
+	LogicalDependency result(deserializer.TryGet<Catalog>(), entry, std::move(catalog));
 	return result;
 }
 

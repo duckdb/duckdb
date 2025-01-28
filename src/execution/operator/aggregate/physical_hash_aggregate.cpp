@@ -75,7 +75,7 @@ static vector<LogicalType> CreateGroupChunkTypes(vector<unique_ptr<Expression>> 
 	}
 
 	for (auto &group : groups) {
-		D_ASSERT(group->type == ExpressionType::BOUND_REF);
+		D_ASSERT(group->GetExpressionType() == ExpressionType::BOUND_REF);
 		auto &bound_ref = group->Cast<BoundReferenceExpression>();
 		group_indices.insert(bound_ref.index);
 	}
@@ -366,7 +366,7 @@ SinkResultType PhysicalHashAggregate::Sink(ExecutionContext &context, DataChunk 
 	for (auto &aggregate : aggregates) {
 		auto &aggr = aggregate->Cast<BoundAggregateExpression>();
 		for (auto &child_expr : aggr.children) {
-			D_ASSERT(child_expr->type == ExpressionType::BOUND_REF);
+			D_ASSERT(child_expr->GetExpressionType() == ExpressionType::BOUND_REF);
 			auto &bound_ref_expr = child_expr->Cast<BoundReferenceExpression>();
 			D_ASSERT(bound_ref_expr.index < chunk.data.size());
 			aggregate_input_chunk.data[aggregate_input_idx++].Reference(chunk.data[bound_ref_expr.index]);

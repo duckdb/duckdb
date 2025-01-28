@@ -302,10 +302,12 @@ ScalarFunctionSet StrpTimeFun::GetFunctions() {
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
 	                          StrpTimeFunction::Parse<timestamp_t>, StrpTimeFunction::Bind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	BaseScalarFunction::SetReturnsError(fun);
 	strptime.AddFunction(fun);
 
 	fun = ScalarFunction({LogicalType::VARCHAR, list_type}, LogicalType::TIMESTAMP,
 	                     StrpTimeFunction::Parse<timestamp_t>, StrpTimeFunction::Bind);
+	BaseScalarFunction::SetReturnsError(fun);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	strptime.AddFunction(fun);
 	return strptime;

@@ -33,12 +33,13 @@ unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator
 }
 
 unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	if (expr.type != ExpressionType::COMPARE_IN && expr.type != ExpressionType::COMPARE_NOT_IN) {
+	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN &&
+	    expr.GetExpressionType() != ExpressionType::COMPARE_NOT_IN) {
 		return nullptr;
 	}
 	D_ASSERT(root);
 	auto in_type = expr.children[0]->return_type;
-	bool is_regular_in = expr.type == ExpressionType::COMPARE_IN;
+	bool is_regular_in = expr.GetExpressionType() == ExpressionType::COMPARE_IN;
 	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
 	// we can only do this if the expressions in the expression list are scalar

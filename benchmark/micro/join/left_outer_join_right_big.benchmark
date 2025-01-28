@@ -20,4 +20,4 @@ run
 SELECT count(*) FROM small_table d LEFT OUTER JOIN big_table f ON ( d.pkey=f.c_10k);
 
 result I
-99995004
+99995018

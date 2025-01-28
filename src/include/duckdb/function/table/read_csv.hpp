@@ -35,8 +35,8 @@ struct BaseCSVData : public TableFunctionData {
 	//! The CSV reader options
 	CSVReaderOptions options;
 	//! Offsets for generated columns
-	idx_t filename_col_idx;
-	idx_t hive_partition_col_idx;
+	idx_t filename_col_idx {};
+	idx_t hive_partition_col_idx {};
 
 	void Finalize();
 };

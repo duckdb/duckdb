@@ -35,7 +35,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	auto constant_binder = Binder::CreateBinder(context);
 	constant_binder->SetCanContainNulls(true);
 	for (auto &pair : mapped_named_values) {
-		bool is_literal = pair.second->type == ExpressionType::VALUE_CONSTANT;
+		bool is_literal = pair.second->GetExpressionType() == ExpressionType::VALUE_CONSTANT;
 
 		ConstantBinder cbinder(*constant_binder, context, "EXECUTE statement");
 		auto bound_expr = cbinder.Bind(pair.second);
@@ -54,7 +54,8 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 			parameter_data = BoundParameterData(std::move(constant.value), std::move(return_type));
 		} else {
 			auto value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
-			parameter_data = BoundParameterData(std::move(value));
+			auto value_type = value.type();
+			parameter_data = BoundParameterData(std::move(value), std::move(value_type));
 		}
 		bind_values[pair.first] = std::move(parameter_data);
 	}

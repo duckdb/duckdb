@@ -381,14 +381,6 @@ public:
 		return radix_bits;
 	}
 
-	idx_t GetPartitionStart() const {
-		return partition_start;
-	}
-
-	idx_t GetPartitionEnd() const {
-		return partition_end;
-	}
-
 	//! Capacity of the pointer table given the ht count
 	//! (minimum of 1024 to prevent collision chance for small HT's)
 	static idx_t PointerTableCapacity(idx_t count) {
@@ -409,6 +401,12 @@ public:
 	//! Sets number of radix bits according to the max ht size
 	void SetRepartitionRadixBits(const idx_t max_ht_size, const idx_t max_partition_size,
 	                             const idx_t max_partition_count);
+	//! Initialized "current_partitions" and "completed_partitions"
+	void InitializePartitionMasks();
+	//! How many partitions are currently active
+	idx_t CurrentPartitionCount() const;
+	//! How many partitions are fully done
+	idx_t FinishedPartitionCount() const;
 	//! Partition this HT
 	void Repartition(JoinHashTable &global_ht);
 
@@ -425,9 +423,10 @@ private:
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
 
-	//! First and last partition of the current probe round
-	idx_t partition_start;
-	idx_t partition_end;
+	//! Bits set to 1 for currently active partitions
+	ValidityMask current_partitions;
+	//! Bits set to 1 for completed partitions
+	ValidityMask completed_partitions;
 };
 
 } // namespace duckdb

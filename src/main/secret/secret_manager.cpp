@@ -80,7 +80,7 @@ void SecretManager::LoadSecretStorageInternal(unique_ptr<SecretStorage> storage)
 
 	// Check for tie-break offset collisions to ensure we can always tie-break cleanly
 	for (const auto &storage_ptr : secret_storages) {
-		if (storage_ptr.second->GetTieBreakOffset() == storage->GetTieBreakOffset()) {
+		if (storage_ptr.second->tie_break_offset == storage->tie_break_offset) {
 			throw InternalException("Failed to load secret storage '%s', tie break score collides with '%s'",
 			                        storage->GetName(), storage_ptr.second->GetName());
 		}
@@ -484,6 +484,17 @@ vector<SecretEntry> SecretManager::AllSecrets(CatalogTransaction transaction) {
 		for (const auto &it : backend_result) {
 			result.push_back(it);
 		}
+	}
+
+	return result;
+}
+
+vector<SecretType> SecretManager::AllSecretTypes() {
+	unique_lock<mutex> lck(manager_lock);
+	vector<SecretType> result;
+
+	for (const auto &secret : secret_types) {
+		result.push_back(secret.second);
 	}
 
 	return result;

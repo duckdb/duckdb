@@ -17,11 +17,15 @@ unique_ptr<Expression> ExpressionRewriter::ApplyRules(LogicalOperator &op, const
 		if (rule.get().root->Match(*expr, bindings)) {
 			// the rule matches! try to apply it
 			bool rule_made_change = false;
+			auto alias = expr->alias;
 			auto result = rule.get().Apply(op, bindings, rule_made_change, is_root);
 			if (result) {
 				changes_made = true;
 				// the base node changed: the rule applied changes
 				// rerun on the new node
+				if (!alias.empty()) {
+					result->alias = std::move(alias);
+				}
 				return ExpressionRewriter::ApplyRules(op, rules, std::move(result), changes_made);
 			} else if (rule_made_change) {
 				changes_made = true;

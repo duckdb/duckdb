@@ -221,17 +221,17 @@ string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
 }
 
 vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) {
-	vector<string> schemas;
+	vector<string> catalogs;
 	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
-		schemas.push_back(SYSTEM_CATALOG);
+		catalogs.push_back(SYSTEM_CATALOG);
 	} else {
 		for (auto &path : paths) {
 			if (StringUtil::CIEquals(path.schema, schema)) {
-				schemas.push_back(path.catalog);
+				catalogs.push_back(path.catalog);
 			}
 		}
 	}
-	return schemas;
+	return catalogs;
 }
 
 vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) {

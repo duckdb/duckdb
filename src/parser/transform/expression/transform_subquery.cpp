@@ -109,7 +109,7 @@ unique_ptr<ParsedExpression> Transformer::TransformSubquery(duckdb_libpgquery::P
 		// transform constants (e.g. ORDER BY 1) into positional references (ORDER BY #1)
 		if (aggr->order_bys) {
 			for (auto &order : aggr->order_bys->orders) {
-				if (order.expression->type == ExpressionType::VALUE_CONSTANT) {
+				if (order.expression->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 					auto &constant_expr = order.expression->Cast<ConstantExpression>();
 					Value bigint_value;
 					string error;

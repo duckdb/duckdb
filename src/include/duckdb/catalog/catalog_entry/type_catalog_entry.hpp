@@ -27,7 +27,7 @@ public:
 
 	LogicalType user_type;
 
-	bind_type_modifiers_function_t bind_modifiers;
+	bind_logical_type_function_t bind_function;
 
 public:
 	unique_ptr<CreateInfo> GetInfo() const override;

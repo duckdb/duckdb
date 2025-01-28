@@ -59,7 +59,7 @@ void ExtractSubqueryChildren(unique_ptr<Expression> &child, vector<unique_ptr<Ex
 		// child is not an unnamed struct
 		return;
 	}
-	if (child->expression_class != ExpressionClass::BOUND_FUNCTION) {
+	if (child->GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		// not a function
 		return;
 	}

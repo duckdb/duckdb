@@ -106,6 +106,13 @@ public:
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 	virtual BlockManager &GetBlockManager() = 0;
 
+	void SetStorageVersion(idx_t version) {
+		storage_version = version;
+	}
+	idx_t GetStorageVersion() const {
+		return storage_version.GetIndex();
+	}
+
 protected:
 	virtual void LoadDatabase(StorageOptions options) = 0;
 
@@ -121,6 +128,8 @@ protected:
 	//! When loading a database, we do not yet set the wal-field. Therefore, GetWriteAheadLog must
 	//! return nullptr when loading a database
 	bool load_complete = false;
+	//! The serialization compatibility version when reading and writing from this database
+	optional_idx storage_version;
 
 public:
 	template <class TARGET>

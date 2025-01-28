@@ -27,34 +27,6 @@ struct CSVBufferUsage {
 	idx_t buffer_idx;
 };
 
-//! Class that keeps track of line starts, used for line size verification
-class LinePosition {
-public:
-	LinePosition() {
-	}
-	LinePosition(idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t buffer_size_p)
-	    : buffer_pos(buffer_pos_p), buffer_size(buffer_size_p), buffer_idx(buffer_idx_p) {
-	}
-
-	idx_t operator-(const LinePosition &other) const {
-		if (other.buffer_idx == buffer_idx) {
-			return buffer_pos - other.buffer_pos;
-		}
-		return other.buffer_size - other.buffer_pos + buffer_pos;
-	}
-
-	bool operator==(const LinePosition &other) const {
-		return buffer_pos == other.buffer_pos && buffer_idx == other.buffer_idx && buffer_size == other.buffer_size;
-	}
-
-	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl = false) const {
-		return requested_buffer_size * buffer_idx + buffer_pos + first_char_nl;
-	}
-	idx_t buffer_pos = 0;
-	idx_t buffer_size = 0;
-	idx_t buffer_idx = 0;
-};
-
 //! Keeps track of start and end of line positions in regard to the CSV file
 class FullLinePosition {
 public:
@@ -96,7 +68,8 @@ public:
 
 class LineError {
 public:
-	explicit LineError(bool ignore_errors_p) : is_error_in_line(false), ignore_errors(ignore_errors_p) {};
+	explicit LineError(const idx_t scan_id_p, const bool ignore_errors_p)
+	    : is_error_in_line(false), ignore_errors(ignore_errors_p), scan_id(scan_id_p) {};
 	//! We clear up our CurrentError Vector
 	void Reset() {
 		current_errors.clear();
@@ -136,10 +109,15 @@ public:
 		return !current_errors.empty();
 	}
 
+	idx_t Size() const {
+		return current_errors.size();
+	}
+
 private:
 	vector<CurrentError> current_errors;
 	bool is_error_in_line;
 	bool ignore_errors;
+	idx_t scan_id;
 };
 
 struct ParseTypeInfo {
@@ -159,13 +137,14 @@ struct ParseTypeInfo {
 	uint8_t scale;
 	uint8_t width;
 };
+
 class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
 	                  idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler, CSVIterator &iterator,
 	                  bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing,
-	                  string path);
+	                  string path, idx_t scan_id);
 
 	~StringValueResult();
 
@@ -174,7 +153,7 @@ public:
 	unsafe_vector<ValidityMask *> validity_mask;
 
 	//! Variables to iterate over the CSV buffers
-	LinePosition last_position;
+
 	char *buffer_ptr;
 	idx_t buffer_size;
 	idx_t position_before_comment;
@@ -315,7 +294,8 @@ public:
 	bool FinishedIterator() const;
 
 	//! Creates a new string with all escaped values removed
-	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector);
+	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool strict_mode,
+	                             Vector &vector);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
 	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);
@@ -324,6 +304,8 @@ public:
 	ValidatorLine GetValidationLine();
 
 	const idx_t scanner_idx;
+	//! We use the max of idx_t to signify this is a line finder scanner.
+	static constexpr idx_t LINE_FINDER_ID = NumericLimits<idx_t>::Maximum();
 
 	//! Variable that manages buffer tracking
 	shared_ptr<CSVBufferUsage> buffer_tracker;

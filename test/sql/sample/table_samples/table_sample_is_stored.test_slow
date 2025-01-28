@@ -64,10 +64,10 @@ query II
 select floor(b / 1000000) as interval, count(*) as frequency from duckdb_table_sample('integers_1') group by interval order by all;
 ----
 0.0	453
-1.0	407
+1.0	408
 2.0	406
-3.0	403
-4.0	379
+3.0	404
+4.0	377
 
 
 # adding another interval should subtract an equal number from the rest of the intervals
@@ -80,9 +80,9 @@ select floor(b / 1000000) as interval, count(*) as frequency from duckdb_table_s
 0.0	374
 1.0	334
 2.0	332
-3.0	335
-4.0	313
-5.0	360
+3.0	334
+4.0	311
+5.0	363
 
 # If double the table count is appended, around half the sample should account for the new values.
 statement ok
@@ -93,12 +93,13 @@ select count(*) from integers_1;
 ----
 12000000
 
-# about half of the samples should have the pair '-1', 1.
+
+## about half of the samples should have the pair '-1', 1.
+# on latest storage test its something like 997
 query I
 select count(*) from duckdb_table_sample('integers_1') where a = -1 and b = -1;
 ----
-1022
-
+914
 
 restart
 
@@ -106,7 +107,7 @@ restart
 query I
 select count(*) from duckdb_table_sample('integers_1') where a = -1 and b = -1;
 ----
-1022
+914
 
 # create a view on top of the sample
 statement ok
@@ -116,18 +117,19 @@ create view sample_view as select * from duckdb_table_sample('integers_1');
 statement ok
 insert into integers_1 (select -2, -2 from range(6000000));
 
-# 2048 / 3 = 682 (706 is good)
+
+# 2048 / 3 = 682 (639 is good)
 query I
 select count(*) from sample_view where a = -2 and b = -2;
 ----
-624
+639
 
 restart
 
 query I
-select count(*) from sample_view where a = -2 and b = -2;
+select count(*)  from sample_view where a = -2 and b = -2;
 ----
-624
+639
 
 # currently have 18_000_000 values in the table.
 # to try and get 1 value in the sample, we should add

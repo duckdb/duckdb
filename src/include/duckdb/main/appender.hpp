@@ -67,6 +67,7 @@ public:
 	// Append functions
 	template <class T>
 	void Append(T value) = delete;
+	DUCKDB_API void Append(DataChunk &target, const Value &value, idx_t col, idx_t row);
 
 	DUCKDB_API void Append(const char *value, uint32_t length);
 
@@ -120,6 +121,7 @@ protected:
 	}
 
 	void AppendValue(const Value &value);
+	void AppendValue(DataChunk target, const Value &value);
 };
 
 class Appender : public BaseAppender {
@@ -143,11 +145,13 @@ public:
 
 public:
 	void AppendDefault();
+	void AppendDefault(DataChunk &chunk, idx_t col, idx_t row);
 	void AddColumn(const string &name) override;
 	void ClearColumns() override;
 
 protected:
 	void FlushInternal(ColumnDataCollection &collection) override;
+	Value GetDefaultValue(idx_t column);
 };
 
 class InternalAppender : public BaseAppender {

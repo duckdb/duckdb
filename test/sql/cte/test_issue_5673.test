@@ -31,9 +31,9 @@ select * from some_more_logic;
 ----
 1
 
-require noalternativeverify
+require no_alternative_verify
 
-# this one needs 'noalternativeverify' otherwise the error message is different
+# this one needs 'no_alternative_verify' otherwise the error message is different
 statement error
 with
 orders as (

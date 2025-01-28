@@ -154,6 +154,7 @@ public:
 
 	//! Remove unneeded/duplicate order elements.
 	//! Returns true of orders is not empty.
+	static bool Simplify(vector<BoundOrderByNode> &orders, const vector<unique_ptr<Expression>> &groups);
 	bool Simplify(const vector<unique_ptr<Expression>> &groups);
 };
 

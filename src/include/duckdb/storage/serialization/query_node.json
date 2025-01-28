@@ -102,8 +102,15 @@
         "name": "setop_all",
         "type": "bool",
         "default": "true"
+      },
+      {
+        "id": 204,
+        "name": "children",
+        "type": "vector<QueryNode*>",
+        "serialize_property": "SerializeChildNodes()"
       }
-    ]
+    ],
+    "constructor": ["setop_type", "left", "right", "children", "setop_all"]
   },
   {
     "class": "RecursiveCTENode",
