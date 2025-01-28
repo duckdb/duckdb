@@ -4004,7 +4004,7 @@ MetadataResult ToggleTimer(ShellState &state, const char **azArg, idx_t nArg) {
 }
 
 MetadataResult ShowVersion(ShellState &state, const char **azArg, idx_t nArg) {
-	utf8_printf(state.out, "SQLite %s %s\n" /*extra-version-info*/, sqlite3_libversion(), sqlite3_sourceid());
+	utf8_printf(state.out, "DuckDB %s %s\n" /*extra-version-info*/, sqlite3_libversion(), sqlite3_sourceid());
 #define CTIMEOPT_VAL_(opt) #opt
 #define CTIMEOPT_VAL(opt)  CTIMEOPT_VAL_(opt)
 #if defined(__clang__) && defined(__clang_major__)
