@@ -8,6 +8,14 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
+
+namespace {
+
+enum class TryExpressionBindError : uint8_t { NONE, VOLATILE_FUNCTION, SUBQUERY };
+
+} // namespace
 
 namespace duckdb {
 
@@ -173,6 +181,33 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	case ExpressionType::ARROW:
 		function_name = "json_extract";
 		break;
+	case ExpressionType::OPERATOR_TRY: {
+		auto &expr = BoundExpression::GetExpression(*op.children[0]);
+		TryExpressionBindError bind_error = TryExpressionBindError::NONE;
+		ExpressionIterator::EnumerateExpression(expr, [&bind_error](Expression &child) {
+			if (bind_error != TryExpressionBindError::NONE) {
+				return;
+			}
+			if (child.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
+				bind_error = TryExpressionBindError::SUBQUERY;
+			} else if (child.GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
+				auto &bound_function = child.Cast<BoundFunctionExpression>();
+				if (bound_function.function.stability == FunctionStability::VOLATILE) {
+					bind_error = TryExpressionBindError::VOLATILE_FUNCTION;
+					return;
+				}
+			}
+		});
+		switch (bind_error) {
+		case TryExpressionBindError::SUBQUERY:
+			throw BinderException("TRY can not be used in combination with a scalar subquery");
+		case TryExpressionBindError::VOLATILE_FUNCTION:
+			throw BinderException("TRY can not be used in combination with a volatile function");
+		default:
+			break;
+		}
+		break;
+	}
 	default:
 		break;
 	}
