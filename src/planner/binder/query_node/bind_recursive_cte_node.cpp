@@ -15,6 +15,9 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// the left side is visited first and is added to the BindContext of the right side
 	D_ASSERT(statement.left);
 	D_ASSERT(statement.right);
+	if (statement.union_all && !statement.key_targets.empty()) {
+		throw BinderException("UNION ALL cannot be used with USING KEY in recursive CTE.");
+	}
 
 	result->ctename = statement.ctename;
 	result->union_all = statement.union_all;
@@ -39,6 +42,11 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// Add bindings of left side to temporary CTE bindings context
 	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
 	                                                 result->types);
+	if (!statement.key_targets.empty()) {
+		result->right_binder->bind_context.AddCTEBinding(result->setop_index, "recurring." + statement.ctename,
+		                                                 result->names, result->types);
+	}
+
 	result->right = result->right_binder->BindNode(*statement.right);
 	for (auto &c : result->left_binder->correlated_columns) {
 		result->right_binder->AddCorrelatedColumn(c);
@@ -47,6 +55,14 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 	// move the correlated expressions from the child binders to this binder
 	MoveCorrelatedExpressions(*result->left_binder);
 	MoveCorrelatedExpressions(*result->right_binder);
+
+	// bind specified keys to the referenced column
+	auto expression_binder = ExpressionBinder(*this, context);
+	for (unique_ptr<ParsedExpression> &expr : statement.key_targets) {
+		auto bound_expr = expression_binder.Bind(expr);
+		D_ASSERT(bound_expr->type == ExpressionType::BOUND_COLUMN_REF);
+		result->key_targets.push_back(std::move(bound_expr));
+	}
 
 	// now both sides have been bound we can resolve types
 	if (result->left->types.size() != result->right->types.size()) {

@@ -42,6 +42,11 @@
         "id": 102,
         "name": "materialized",
         "type": "CTEMaterialize"
+      },
+      {
+        "id": 103,
+        "name": "key_targets",
+        "type": "vector<ParsedExpression*>"
       }
     ]
   },

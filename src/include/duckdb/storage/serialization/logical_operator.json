@@ -353,6 +353,10 @@
         "id": 204,
         "name": "materialized_cte",
         "type": "CTEMaterialize"
+      }, {
+        "id": 205,
+        "name": "is_recurring",
+        "type": "bool"
       }
     ],
     "constructor": ["table_index", "cte_index", "chunk_types", "bound_columns", "materialized_cte"]
@@ -507,6 +511,16 @@
         "id": 203,
         "name": "column_count",
         "type": "idx_t"
+      },
+      {
+        "id": 204,
+        "name": "key_targets",
+        "type": "vector<Expression*>"
+      },
+      {
+        "id": 205,
+        "name": "ref_recurring",
+        "type": "bool"
       }
     ]
   },
