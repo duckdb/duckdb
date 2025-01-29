@@ -108,7 +108,7 @@ jobs:
       - name: install deps into environment
         run: |
           source .venv-pyodide/bin/activate
-          pip install pytest numpy pandas mypy
+          pip install pytest numpy pandas 'mypy<=1.13'
 
       - name: install duckdb wasm wheel into environment
         run: |
