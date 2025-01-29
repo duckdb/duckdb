@@ -319,6 +319,7 @@ vector<const_reference<PhysicalOperator>> PhysicalRecursiveCTE::GetSources() con
 InsertionOrderPreservingMap<string> PhysicalRecursiveCTE::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["CTE Name"] = ctename;
+	result["Table Index"] = StringUtil::Format("%llu", table_index);
 	return result;
 }
 

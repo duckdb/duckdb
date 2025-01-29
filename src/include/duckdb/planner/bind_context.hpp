@@ -167,8 +167,6 @@ public:
 
 	//! Get all bindings that match a specific binding alias - returns an error if none match
 	vector<reference<Binding>> GetBindings(const BindingAlias &alias, ErrorData &out_error);
-	//! The set of CTE bindings
-	case_insensitive_map_t<shared_ptr<Binding>> cte_bindings;
 
 private:
 	void AddBinding(unique_ptr<Binding> binding);
@@ -182,5 +180,8 @@ private:
 	case_insensitive_map_t<reference_set_t<UsingColumnSet>> using_columns;
 	//! Using column sets
 	vector<unique_ptr<UsingColumnSet>> using_column_sets;
+
+	//! The set of CTE bindings
+	case_insensitive_map_t<shared_ptr<Binding>> cte_bindings;
 };
 } // namespace duckdb
