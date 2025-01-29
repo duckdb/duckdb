@@ -1412,6 +1412,16 @@ StrpTimeFormat::ParseResult StrpTimeFormat::Parse(const string &format_string, c
 	return result;
 }
 
+bool StrpTimeFormat::TryParse(const string &format_string, const string &text, ParseResult &result) {
+	StrpTimeFormat format;
+	format.format_specifier = format_string;
+	string error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+	if (!error.empty()) {
+		throw InvalidInputException("Failed to parse format specifier %s: %s", format_string, error);
+	}
+	return format.Parse(text, result);
+}
+
 bool StrTimeFormat::Empty() const {
 	return format_specifier.empty();
 }

@@ -18,6 +18,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/scan_vector_type.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
+#include "duckdb/common/atomic_ptr.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -25,6 +26,7 @@ class ColumnSegment;
 class DatabaseInstance;
 class RowGroup;
 class RowGroupWriter;
+class StorageManager;
 class TableDataWriter;
 class TableStorageInfo;
 struct DataTableInfo;
@@ -33,6 +35,8 @@ struct RowGroupWriteInfo;
 struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
+
+using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
 struct ColumnCheckpointInfo {
 	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
@@ -65,8 +69,6 @@ public:
 	idx_t column_index;
 	//! The type of the column
 	LogicalType type;
-	//! The parent column (if any)
-	optional_ptr<ColumnData> parent;
 
 public:
 	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
@@ -76,10 +78,22 @@ public:
 	}
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
+	StorageManager &GetStorageManager() const;
 	virtual idx_t GetMaxEntry();
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
+	}
+	optional_ptr<const CompressionFunction> GetCompressionFunction() const {
+		return compression.get();
+	}
+
+	bool HasParent() const {
+		return parent != nullptr;
+	}
+	const ColumnData &Parent() const {
+		D_ASSERT(HasParent());
+		return *parent;
 	}
 
 	virtual void SetStart(idx_t new_start);
@@ -87,6 +101,7 @@ public:
 	const LogicalType &RootType() const;
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
+	bool HasChanges(idx_t start_row, idx_t end_row) const;
 	//! Whether or not we can scan an entire vector
 	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 
@@ -217,9 +232,13 @@ protected:
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	idx_t allocation_size;
+
+private:
+	//! The parent column (if any)
+	optional_ptr<ColumnData> parent;
 	//!	The compression function used by the ColumnData
 	//! This is empty if the segments have mixed compression or the ColumnData is empty
-	optional_ptr<const CompressionFunction> compression;
+	atomic_ptr<const CompressionFunction> compression;
 };
 
 struct PersistentColumnData {

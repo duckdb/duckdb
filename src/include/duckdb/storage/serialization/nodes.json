@@ -674,7 +674,7 @@
       },
       {"id": 105,
         "name": "maximum_line_size",
-        "type": "idx_t"
+        "type": "CSVOption<idx_t>"
       },
       {"id": 106,
         "name": "normalize_names",
@@ -710,7 +710,8 @@
       },
       {"id": 114,
         "name": "buffer_size",
-        "type": "idx_t"
+        "type": "idx_t",
+        "deleted": true
       },
       {"id": 115,
         "name": "file_options",
@@ -830,14 +831,22 @@
         "type": "string"
       },
       {"id": 140,
-        "name": "rfc_4180",
-        "property": "dialect_options.state_machine_options.rfc_4180",
+        "name": "strict_mode",
+        "property": "dialect_options.state_machine_options.strict_mode",
         "type": "CSVOption<bool>"
       },
       {"id": 141,
         "name": "multi_byte_delimiter",
         "type": "CSVOption<string>",
         "serialize_property": "GetMultiByteDelimiter()"
+      },
+      {"id": 142,
+        "name": "multi_file_reader",
+        "type": "bool"
+      },
+      {"id": 143,
+        "name": "buffer_size_option",
+        "type": "CSVOption<idx_t>"
       }
     ],
     "constructor": ["delimiter", "multi_byte_delimiter"],

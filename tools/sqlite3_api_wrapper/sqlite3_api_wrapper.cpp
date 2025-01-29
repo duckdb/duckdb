@@ -264,7 +264,6 @@ void sqlite3_print_duckbox(sqlite3_stmt *pStmt, size_t max_rows, size_t max_widt
 			pStmt->db->last_error = ErrorData("Statement has already been executed");
 			return;
 		}
-
 		if (pStmt->prepared) {
 			pStmt->result = pStmt->prepared->Execute(pStmt->bound_values, false);
 		} else if (pStmt->pending) {
@@ -543,6 +542,12 @@ int sqlite3_column_type(sqlite3_stmt *pStmt, int iCol) {
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT: /* TODO: Maybe blob? */
+	case LogicalTypeId::USMALLINT:
+	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::UBIGINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::VARINT:
 		return SQLITE_INTEGER;
 	case LogicalTypeId::FLOAT:
 	case LogicalTypeId::DOUBLE:

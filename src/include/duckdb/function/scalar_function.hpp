@@ -78,13 +78,13 @@ struct FunctionModifiedDatabasesInput {
 
 struct FunctionBindExpressionInput {
 	FunctionBindExpressionInput(ClientContext &context_p, optional_ptr<FunctionData> bind_data_p,
-	                            BoundFunctionExpression &function_p)
-	    : context(context_p), bind_data(bind_data_p), function(function_p) {
+	                            vector<unique_ptr<Expression>> &children_p)
+	    : context(context_p), bind_data(bind_data_p), children(children_p) {
 	}
 
 	ClientContext &context;
 	optional_ptr<FunctionData> bind_data;
-	BoundFunctionExpression &function;
+	vector<unique_ptr<Expression>> &children;
 };
 
 struct ScalarFunctionBindInput {

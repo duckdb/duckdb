@@ -108,7 +108,7 @@ class RBBINode : public UMemory {
 
     private:
         RBBINode &operator = (const RBBINode &other); // No defs.
-        UBool operator == (const RBBINode &other);    // Private, so these functions won't accidently be used.
+        bool operator == (const RBBINode &other);    // Private, so these functions won't accidently be used.
 
 #ifdef RBBI_DEBUG
     public:

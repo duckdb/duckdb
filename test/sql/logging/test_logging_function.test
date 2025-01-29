@@ -1,0 +1,40 @@
+# name: test/sql/logging/test_logging_function.test
+# description: Use test_logging function to test logging
+# group: [logging]
+
+require noforcestorage
+
+query IIIIIIII
+from duckdb_logs
+----
+
+statement ok
+set enable_logging=true;
+
+statement ok
+set logging_level='info';
+
+statement ok
+SELECT write_log('hello from the global log scope', level := 'info', scope := 'database', log_type := 'global_type' ) from range(0,3);
+
+statement ok
+SELECT write_log('hello from the connection log scope', level := 'info', scope := 'connection', log_type := 'client_context_type' ) from range(0,3);
+
+statement ok
+SELECT write_log('hello from the file_opener log scope', level := 'info', scope := 'file_opener', log_type := 'opener_type' ) from range(0,3);
+
+statement ok
+from duckdb_logs
+
+query IIII
+SELECT * EXCLUDE (timestamp, client_context, transaction_id, thread) FROM duckdb_logs where starts_with(message, 'hello from the') order by timestamp
+----
+global_type	INFO	hello from the global log scope	DATABASE
+global_type	INFO	hello from the global log scope	DATABASE
+global_type	INFO	hello from the global log scope	DATABASE
+client_context_type	INFO	hello from the connection log scope	CONNECTION
+client_context_type	INFO	hello from the connection log scope	CONNECTION
+client_context_type	INFO	hello from the connection log scope	CONNECTION
+opener_type	INFO	hello from the file_opener log scope	CONNECTION
+opener_type	INFO	hello from the file_opener log scope	CONNECTION
+opener_type	INFO	hello from the file_opener log scope	CONNECTION

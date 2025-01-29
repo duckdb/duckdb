@@ -50,7 +50,10 @@ ReservoirSample::ReservoirSample(idx_t sample_count, unique_ptr<ReservoirChunk> 
 	if (reservoir_chunk) {
 		this->reservoir_chunk = std::move(reservoir_chunk);
 		sel_size = this->reservoir_chunk->chunk.size();
-		sel = SelectionVector(0, sel_size);
+		sel = SelectionVector(FIXED_SAMPLE_SIZE);
+		for (idx_t i = 0; i < sel_size; i++) {
+			sel.set_index(i, i);
+		}
 		ExpandSerializedSample();
 	}
 	stats_sample = true;
@@ -225,10 +228,6 @@ vector<uint32_t> ReservoirSample::GetRandomizedVector(uint32_t range, uint32_t s
 	for (uint32_t i = 0; i < range; i++) {
 		ret.push_back(i);
 	}
-	if (size == FIXED_SAMPLE_SIZE) {
-		std::shuffle(ret.begin(), ret.end(), base_reservoir_sample->random);
-		return ret;
-	}
 	for (uint32_t i = 0; i < size; i++) {
 		uint32_t random_shuffle = base_reservoir_sample->random.NextRandomInteger32(i, range);
 		if (random_shuffle == i) {
@@ -305,6 +304,7 @@ void ReservoirSample::SimpleMerge(ReservoirSample &other) {
 	auto offset = reservoir_chunk->chunk.size();
 	for (idx_t i = keep_from_this; i < size_after_merge; i++) {
 		if (i >= GetActiveSampleCount()) {
+			D_ASSERT(sel_size >= GetActiveSampleCount());
 			sel.set_index(GetActiveSampleCount(), offset);
 			sel_size += 1;
 		} else {
@@ -505,7 +505,7 @@ void ReservoirSample::EvictOverBudgetSamples() {
 	D_ASSERT(num_samples_to_keep <= sample_count);
 	D_ASSERT(stats_sample);
 	D_ASSERT(sample_count == FIXED_SAMPLE_SIZE);
-	auto new_reservoir_chunk = CreateNewSampleChunk(types, FIXED_SAMPLE_SIZE);
+	auto new_reservoir_chunk = CreateNewSampleChunk(types, sample_count);
 
 	// The current selection vector can potentially have 2048 valid mappings.
 	// If we need to save a sample with less rows than that, we need to do the following

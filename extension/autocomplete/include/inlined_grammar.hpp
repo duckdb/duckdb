@@ -141,7 +141,7 @@ const char INLINED_PEG_GRAMMAR[] = {
 	"DescribeStatement <- ShowSelect / ShowAllTables / ShowQualifiedName\n"
 	"ShowSelect <- ShowOrDescribeOrSummarize SelectStatement\n"
 	"ShowAllTables <- ShowOrDescribe 'ALL'i 'TABLES'\n"
-	"ShowQualifiedName <- ShowOrDescribeOrSummarize (QualifiedName / StringLiteral)?\n"
+	"ShowQualifiedName <- ShowOrDescribeOrSummarize (BaseTableName / StringLiteral)?\n"
 	"ShowOrDescribeOrSummarize <- ShowOrDescribe / 'SUMMARIZE'i\n"
 	"ShowOrDescribe <- 'SHOW'i / 'DESCRIBE'i / 'DESC'i\n"
 	"VacuumStatement <- 'VACUUM'i 'FULL'i? QualifiedName?\n"

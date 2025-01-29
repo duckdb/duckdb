@@ -109,7 +109,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		auto &b_exp = BoundExpression::GetExpression(*op.children[0]);
 		const auto &b_exp_type = b_exp->return_type;
 		if (b_exp_type.id() == LogicalTypeId::MAP) {
-			function_name = "map_extract";
+			function_name = "map_extract_value";
 		} else if (b_exp_type.IsJSONType() && op.children.size() == 2) {
 			function_name = "json_extract";
 			// Make sure we only extract array elements, not fields, by adding the $[] syntax
@@ -134,6 +134,9 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		D_ASSERT(op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		D_ASSERT(op.children[1]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &extract_exp = BoundExpression::GetExpression(*op.children[0]);
+		if (extract_exp->HasParameter() || extract_exp->return_type.id() == LogicalTypeId::UNKNOWN) {
+			throw ParameterNotResolvedException();
+		}
 		auto &name_exp = BoundExpression::GetExpression(*op.children[1]);
 		const auto &extract_expr_type = extract_exp->return_type;
 		if (extract_expr_type.id() != LogicalTypeId::STRUCT && extract_expr_type.id() != LogicalTypeId::UNION &&
@@ -146,7 +149,7 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		if (extract_expr_type.id() == LogicalTypeId::UNION) {
 			function_name = "union_extract";
 		} else if (extract_expr_type.id() == LogicalTypeId::MAP) {
-			function_name = "map_extract";
+			function_name = "map_extract_value";
 		} else if (extract_expr_type.IsJSONType()) {
 			function_name = "json_extract";
 			// Make sure we only extract fields, not array elements, by adding $. syntax

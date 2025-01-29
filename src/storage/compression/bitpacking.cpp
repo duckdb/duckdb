@@ -377,18 +377,18 @@ idx_t BitpackingFinalAnalyze(AnalyzeState &state) {
 template <class T, bool WRITE_STATISTICS, class T_S = typename MakeSigned<T>::type>
 struct BitpackingCompressState : public CompressionState {
 public:
-	explicit BitpackingCompressState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
-	    : CompressionState(info), checkpointer(checkpointer),
-	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING)) {
-		CreateEmptySegment(checkpointer.GetRowGroup().start);
+	explicit BitpackingCompressState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
+	    : CompressionState(info), checkpoint_data(checkpoint_data),
+	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_BITPACKING)) {
+		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 
 		state.data_ptr = reinterpret_cast<void *>(this);
 
-		auto &config = DBConfig::GetConfig(checkpointer.GetDatabase());
+		auto &config = DBConfig::GetConfig(checkpoint_data.GetDatabase());
 		state.mode = config.options.force_bitpacking_mode;
 	}
 
-	ColumnDataCheckpointer &checkpointer;
+	ColumnDataCheckpointData &checkpoint_data;
 	CompressionFunction &function;
 	unique_ptr<ColumnSegment> current_segment;
 	BufferHandle handle;
@@ -495,8 +495,8 @@ public:
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
+		auto &db = checkpoint_data.GetDatabase();
+		auto &type = checkpoint_data.GetType();
 
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockSize());
@@ -528,7 +528,7 @@ public:
 	}
 
 	void FlushSegment() {
-		auto &state = checkpointer.GetCheckpointState();
+		auto &state = checkpoint_data.GetCheckpointState();
 		auto base_ptr = handle.Ptr();
 
 		// Compact the segment by moving the metadata next to the data.
@@ -563,9 +563,9 @@ public:
 };
 
 template <class T, bool WRITE_STATISTICS>
-unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointer &checkpointer,
+unique_ptr<CompressionState> BitpackingInitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                        unique_ptr<AnalyzeState> state) {
-	return make_uniq<BitpackingCompressState<T, WRITE_STATISTICS>>(checkpointer, state->info);
+	return make_uniq<BitpackingCompressState<T, WRITE_STATISTICS>>(checkpoint_data, state->info);
 }
 
 template <class T, bool WRITE_STATISTICS>

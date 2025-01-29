@@ -21,6 +21,10 @@ public:
 	explicit DatabaseFileOpener(DatabaseInstance &db_p) : db(db_p) {
 	}
 
+	Logger &GetLogger() const override {
+		return Logger::Get(db);
+	}
+
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) override {
 		return db.TryGetCurrentSetting(key, result);
 	}

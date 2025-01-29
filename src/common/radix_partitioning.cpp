@@ -60,27 +60,25 @@ RETURN_TYPE RadixBitsSwitch(const idx_t radix_bits, ARGS &&... args) {
 	} // LCOV_EXCL_STOP
 }
 
-template <idx_t radix_bits>
-struct RadixLessThan {
-	static inline bool Operation(hash_t hash, hash_t cutoff) {
-		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
-		return CONSTANTS::ApplyMask(hash) < cutoff;
-	}
-};
-
 struct SelectFunctor {
 	template <idx_t radix_bits>
-	static idx_t Operation(Vector &hashes, const SelectionVector *sel, const idx_t count, const idx_t cutoff,
-	                       SelectionVector *true_sel, SelectionVector *false_sel) {
-		Vector cutoff_vector(Value::HASH(cutoff));
-		return BinaryExecutor::Select<hash_t, hash_t, RadixLessThan<radix_bits>>(hashes, cutoff_vector, sel, count,
-		                                                                         true_sel, false_sel);
+	static idx_t Operation(Vector &hashes, const SelectionVector *sel, const idx_t count,
+	                       const ValidityMask &partition_mask, SelectionVector *true_sel, SelectionVector *false_sel) {
+		using CONSTANTS = RadixPartitioningConstants<radix_bits>;
+		return UnaryExecutor::Select<hash_t>(
+		    hashes, sel, count,
+		    [&](const hash_t hash) {
+			    const auto partition_idx = CONSTANTS::ApplyMask(hash);
+			    return partition_mask.RowIsValidUnsafe(partition_idx);
+		    },
+		    true_sel, false_sel);
 	}
 };
 
 idx_t RadixPartitioning::Select(Vector &hashes, const SelectionVector *sel, const idx_t count, const idx_t radix_bits,
-                                const idx_t cutoff, SelectionVector *true_sel, SelectionVector *false_sel) {
-	return RadixBitsSwitch<SelectFunctor, idx_t>(radix_bits, hashes, sel, count, cutoff, true_sel, false_sel);
+                                const ValidityMask &partition_mask, SelectionVector *true_sel,
+                                SelectionVector *false_sel) {
+	return RadixBitsSwitch<SelectFunctor, idx_t>(radix_bits, hashes, sel, count, partition_mask, true_sel, false_sel);
 }
 
 struct ComputePartitionIndicesFunctor {

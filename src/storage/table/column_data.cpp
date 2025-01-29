@@ -24,7 +24,7 @@ namespace duckdb {
 ColumnData::ColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
                        LogicalType type_p, optional_ptr<ColumnData> parent)
     : start(start_row), count(0), block_manager(block_manager), info(info), column_index(column_index),
-      type(std::move(type_p)), parent(parent), allocation_size(0) {
+      type(std::move(type_p)), allocation_size(0), parent(parent) {
 	if (!parent) {
 		stats = make_uniq<SegmentStatistics>(type);
 	}
@@ -51,6 +51,10 @@ DataTableInfo &ColumnData::GetTableInfo() const {
 	return info;
 }
 
+StorageManager &ColumnData::GetStorageManager() const {
+	return info.GetDB().GetStorageManager();
+}
+
 const LogicalType &ColumnData::RootType() const {
 	if (parent) {
 		return parent->RootType();
@@ -61,6 +65,16 @@ const LogicalType &ColumnData::RootType() const {
 bool ColumnData::HasUpdates() const {
 	lock_guard<mutex> update_guard(update_lock);
 	return updates.get();
+}
+
+bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
+	if (!updates) {
+		return false;
+	}
+	if (updates->HasUpdates(start_row, end_row)) {
+		return true;
+	}
+	return false;
 }
 
 void ColumnData::ClearUpdates() {
@@ -571,12 +585,12 @@ void ColumnData::UpdateCompressionFunction(SegmentLock &l, const CompressionFunc
 		// if we have no segments - we have not set it yet, so assign it
 		// if we have segments, the compression is mixed, so ignore it
 		if (data.GetSegmentCount(l) == 0) {
-			compression = function;
+			compression.set(function);
 		}
 	} else if (compression->type != function.type) {
 		// we already have compression set - and we are adding a segment with a different compression
 		// compression in the segment is mixed - clear the compression pointer
-		compression = nullptr;
+		compression.reset();
 	}
 }
 
@@ -620,25 +634,16 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
-	auto l = data.Lock();
-	auto nodes = data.MoveSegments(l);
+	auto &nodes = data.ReferenceSegments();
 	if (nodes.empty()) {
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
 
-	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
-	checkpointer.Checkpoint(std::move(nodes));
-
-	// reset the compression function
-	compression = nullptr;
-	// replace the old tree with the new one
-	auto new_segments = checkpoint_state->new_tree.MoveSegments();
-	for (auto &new_segment : new_segments) {
-		AppendSegment(l, std::move(new_segment.node));
-	}
-	ClearUpdates();
-
+	vector<reference<ColumnCheckpointState>> states {*checkpoint_state};
+	ColumnDataCheckpointer checkpointer(states, GetDatabase(), row_group, checkpoint_info);
+	checkpointer.Checkpoint();
+	checkpointer.FinalizeCheckpoint();
 	return checkpoint_state;
 }
 

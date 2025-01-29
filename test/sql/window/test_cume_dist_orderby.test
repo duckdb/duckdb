@@ -1,0 +1,53 @@
+# name: test/sql/window/test_cume_dist_orderby.test
+# description: Test argument ordering for CUME_DIST
+# group: [window]
+
+statement ok
+PRAGMA enable_verification
+
+query IIII
+SELECT 
+	i,
+	(i * 29) % 11 AS outside,
+	i // 2 AS inside,
+	cume_dist(ORDER BY inside DESC) OVER w,
+FROM range(10) tbl(i)
+WINDOW w AS (
+	ORDER BY outside
+)
+ORDER BY inside DESC, i
+----
+8	1	4	0.5
+9	8	4	0.25
+6	9	3	0.4444444444444444
+7	5	3	0.4
+4	6	2	0.6666666666666666
+5	2	2	0.6666666666666666
+2	3	1	0.75
+3	10	1	0.8
+0	0	0	1.0
+1	7	0	1.0
+
+# Test moving frame with identical orderings
+query III
+SELECT 
+	i,
+	i // 2 AS inside,
+	cume_dist(ORDER BY i // 2) OVER w AS cd,
+FROM range(10) tbl(i)
+WINDOW w AS (
+	ORDER BY i // 2
+	ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING
+)
+ORDER BY 1;
+----
+0	0	0.5
+1	0	0.4
+2	1	0.6666666666666666
+3	1	0.5714285714285714
+4	2	0.7142857142857143
+5	2	0.5714285714285714
+6	3	0.7142857142857143
+7	3	0.6666666666666666
+8	4	1.0
+9	4	1.0

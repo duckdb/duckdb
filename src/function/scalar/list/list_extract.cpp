@@ -164,7 +164,8 @@ ScalarFunctionSet ListExtractFun::GetFunctions() {
 	                    ListExtractFunction, ListExtractBind, nullptr, ListExtractStats);
 
 	ScalarFunction sfun({LogicalType::VARCHAR, LogicalType::BIGINT}, LogicalType::VARCHAR, ListExtractFunction);
-
+	BaseScalarFunction::SetReturnsError(lfun);
+	BaseScalarFunction::SetReturnsError(sfun);
 	list_extract_set.AddFunction(lfun);
 	list_extract_set.AddFunction(sfun);
 	return list_extract_set;

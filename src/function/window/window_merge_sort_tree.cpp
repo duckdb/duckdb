@@ -1,4 +1,5 @@
 #include "duckdb/function/window/window_merge_sort_tree.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 #include <thread>
 #include <utility>
@@ -6,12 +7,13 @@
 namespace duckdb {
 
 WindowMergeSortTree::WindowMergeSortTree(ClientContext &context, const vector<BoundOrderByNode> &orders,
-                                         const vector<column_t> &sort_idx, const idx_t count)
+                                         const vector<column_t> &sort_idx, const idx_t count, bool unique)
     : context(context), memory_per_thread(PhysicalOperator::GetMaxThreadMemory(context)), sort_idx(sort_idx),
       build_stage(PartitionSortStage::INIT), tasks_completed(0) {
 	// Sort the unfiltered indices by the orders
+	const auto force_external = ClientConfig::GetConfig(context).force_external;
 	LogicalType index_type;
-	if (count < std::numeric_limits<uint32_t>::max()) {
+	if (count < std::numeric_limits<uint32_t>::max() && !force_external) {
 		index_type = LogicalType::INTEGER;
 		mst32 = make_uniq<MergeSortTree32>();
 	} else {
@@ -26,8 +28,20 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &context, const vector<Bo
 	payload_layout.Initialize(payload_types);
 
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
-	global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
-	global_sort->external = ClientConfig::GetConfig(context).force_external;
+	if (unique) {
+		vector<BoundOrderByNode> unique_orders;
+		for (const auto &order : orders) {
+			unique_orders.emplace_back(order.Copy());
+		}
+		auto unique_expr = make_uniq<BoundConstantExpression>(Value(index_type));
+		const auto order_type = OrderType::ASCENDING;
+		const auto order_by_type = OrderByNullType::NULLS_LAST;
+		unique_orders.emplace_back(BoundOrderByNode(order_type, order_by_type, std::move(unique_expr)));
+		global_sort = make_uniq<GlobalSortState>(buffer_manager, unique_orders, payload_layout);
+	} else {
+		global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
+	}
+	global_sort->external = force_external;
 }
 
 optional_ptr<LocalSortState> WindowMergeSortTree::AddLocalSort() {
@@ -48,17 +62,21 @@ WindowMergeSortTreeLocalState::WindowMergeSortTreeLocalState(WindowMergeSortTree
 
 void WindowMergeSortTreeLocalState::SinkChunk(DataChunk &chunk, const idx_t row_idx,
                                               optional_ptr<SelectionVector> filter_sel, idx_t filtered) {
+	//	Sequence the payload column
+	auto &indices = payload_chunk.data[0];
+	payload_chunk.SetCardinality(chunk);
+	indices.Sequence(int64_t(row_idx), 1, payload_chunk.size());
+
 	//	Reference the sort columns
 	auto &sort_idx = window_tree.sort_idx;
 	for (column_t c = 0; c < sort_idx.size(); ++c) {
 		sort_chunk.data[c].Reference(chunk.data[sort_idx[c]]);
 	}
+	// Add the row numbers if we are uniquifying
+	if (sort_idx.size() < sort_chunk.ColumnCount()) {
+		sort_chunk.data[sort_idx.size()].Reference(indices);
+	}
 	sort_chunk.SetCardinality(chunk);
-
-	//	Sequence the payload column
-	auto &indices = payload_chunk.data[0];
-	payload_chunk.SetCardinality(sort_chunk);
-	indices.Sequence(int64_t(row_idx), 1, payload_chunk.size());
 
 	//	Apply FILTER clause, if any
 	if (filter_sel) {

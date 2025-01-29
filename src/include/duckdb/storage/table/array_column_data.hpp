@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table/list_column_data.hpp
+// duckdb/storage/table/array_column_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,7 +21,7 @@ public:
 
 	//! The child-column of the list
 	unique_ptr<ColumnData> child_column;
-	//! The validity column data of the struct
+	//! The validity column data of the array
 	ValidityColumnData validity;
 
 public:

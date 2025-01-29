@@ -4,6 +4,7 @@
 
 statement maybe
 FROM read_csv('${path}/bad_date.csv')
+----
 
 require skip_reload
 

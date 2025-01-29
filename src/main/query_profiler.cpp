@@ -373,9 +373,17 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 	}
 	active_operator = phys_op;
 
-	// Start the timing of the current operator.
-	if (ProfilingInfo::Enabled(settings, MetricsType::OPERATOR_TIMING)) {
-		op.Start();
+	if (!settings.empty()) {
+		if (ProfilingInfo::Enabled(settings, MetricsType::EXTRA_INFO)) {
+			auto &info = GetOperatorInfo(*active_operator);
+			auto params = active_operator->ParamsToString();
+			info.extra_info = params;
+		}
+
+		// Start the timing of the current operator.
+		if (ProfilingInfo::Enabled(settings, MetricsType::OPERATOR_TIMING)) {
+			op.Start();
+		}
 	}
 }
 
@@ -405,22 +413,24 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 }
 
 OperatorInformation &OperatorProfiler::GetOperatorInfo(const PhysicalOperator &phys_op) {
-	auto entry = timings.find(phys_op);
-	if (entry != timings.end()) {
+	auto entry = operator_infos.find(phys_op);
+	if (entry != operator_infos.end()) {
 		return entry->second;
 	}
+
 	// Add a new entry.
-	timings[phys_op] = OperatorInformation();
-	return timings[phys_op];
+	operator_infos[phys_op] = OperatorInformation();
+	return operator_infos[phys_op];
 }
 
 void OperatorProfiler::Flush(const PhysicalOperator &phys_op) {
-	auto entry = timings.find(phys_op);
-	if (entry == timings.end()) {
+	auto entry = operator_infos.find(phys_op);
+	if (entry == operator_infos.end()) {
 		return;
 	}
-	auto &operator_timing = timings.find(phys_op)->second;
-	operator_timing.name = phys_op.GetName();
+
+	auto &info = operator_infos.find(phys_op)->second;
+	info.name = phys_op.GetName();
 }
 
 void QueryProfiler::Flush(OperatorProfiler &profiler) {
@@ -428,7 +438,7 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 	if (!IsEnabled() || !running) {
 		return;
 	}
-	for (auto &node : profiler.timings) {
+	for (auto &node : profiler.operator_infos) {
 		auto &op = node.first.get();
 		auto entry = tree_map.find(op);
 		D_ASSERT(entry != tree_map.end());
@@ -458,8 +468,11 @@ void QueryProfiler::Flush(OperatorProfiler &profiler) {
 		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::RESULT_SET_SIZE)) {
 			info.AddToMetric<idx_t>(MetricsType::RESULT_SET_SIZE, node.second.result_set_size);
 		}
+		if (ProfilingInfo::Enabled(profiler.settings, MetricsType::EXTRA_INFO)) {
+			info.extra_info = node.second.extra_info;
+		}
 	}
-	profiler.timings.clear();
+	profiler.operator_infos.clear();
 }
 
 void QueryProfiler::SetInfo(const double &blocked_thread_time) {

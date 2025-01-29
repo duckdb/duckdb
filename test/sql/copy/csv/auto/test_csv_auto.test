@@ -8,6 +8,25 @@ PRAGMA enable_verification
 statement ok 
 PRAGMA verify_parallelism
 
+query II
+FROM read_csv('data/csv/repromarket.csv',
+   columns={
+      'email': 'varchar',
+      'password': 'varchar'
+   },
+   all_varchar=true,
+   delim=':',
+   header=false,
+   skip=0,
+   null_padding=true,
+   ignore_errors=true,
+   strict_mode=true
+);
+----
+nemanja.krpovic@gmail.com	krlleta
+vega@example.combogus	NULL
+mirkofoto@gmail.com	mirko
+
 query I
 FROM read_csv('data/csv/pipe_delim.csv', columns={'a': 'VARCHAR'}, auto_detect=False)
 ----
@@ -35,7 +54,8 @@ select columns FROM sniff_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_
 [{'name': id, 'type': BIGINT}, {'name': name, 'type': VARCHAR}, {'name': age, 'type': BIGINT}, {'name': sex, 'type': VARCHAR}, {'name': state, 'type': VARCHAR}]
 
 query IIIII
-FROM read_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_errors = true)
+FROM read_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_errors = true,
+   strict_mode=true)
 ----
 1	James	30	M	AL
 2	Jill	32	F	CO
@@ -46,7 +66,8 @@ FROM read_csv('data/csv/auto/mock_duckdb_test_data.csv', ignore_errors = true)
 9	Titus	38	M	WY
 
 statement error
-select * from read_csv_auto('data/csv/dates.csv', auto_detect=false, delim=',', quote='"', columns={'a': 'VARCHAR'})
+select * from read_csv_auto('data/csv/dates.csv', auto_detect=false, delim=',', quote='"', columns={'a': 'VARCHAR'},
+   strict_mode=true)
 ----
 Expected Number of Columns: 1 Found: 2
 

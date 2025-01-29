@@ -67,6 +67,16 @@ public:
 		auto l = Lock();
 		return MoveSegments(l);
 	}
+
+	const vector<SegmentNode<T>> &ReferenceSegments(SegmentLock &l) {
+		LoadAllSegments(l);
+		return nodes;
+	}
+	const vector<SegmentNode<T>> &ReferenceSegments() {
+		auto l = Lock();
+		return ReferenceSegments(l);
+	}
+
 	idx_t GetSegmentCount() {
 		auto l = Lock();
 		return GetSegmentCount(l);

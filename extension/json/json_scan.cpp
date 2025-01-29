@@ -206,11 +206,15 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 		gstate.json_readers.emplace_back(reader.get());
 	}
 
-	vector<LogicalType> dummy_types(input.column_ids.size(), LogicalType::ANY);
+	vector<LogicalType> dummy_global_types(bind_data.names.size(), LogicalType::ANY);
+	vector<LogicalType> dummy_local_types(gstate.names.size(), LogicalType::ANY);
+	auto local_columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(gstate.names, dummy_local_types);
+	auto global_columns =
+	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, dummy_global_types);
 	for (auto &reader : gstate.json_readers) {
 		MultiFileReader().FinalizeBind(reader->GetOptions().file_options, gstate.bind_data.reader_bind,
-		                               reader->GetFileName(), gstate.names, dummy_types, bind_data.names,
-		                               input.column_indexes, reader->reader_data, context, nullptr);
+		                               reader->GetFileName(), local_columns, global_columns, input.column_indexes,
+		                               reader->reader_data, context, nullptr);
 	}
 
 	return std::move(result);
@@ -249,7 +253,7 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
 	auto result = make_uniq<JSONLocalTableFunctionState>(context.client, gstate.state);
 
 	// Copy the transform options / date format map because we need to do thread-local stuff
-	result->state.date_format_map = gstate.state.bind_data.date_format_map;
+	result->state.date_format_map = gstate.state.bind_data.date_format_map.Copy();
 	result->state.transform_options = gstate.state.transform_options;
 	result->state.transform_options.date_format_map = &result->state.date_format_map;
 
@@ -390,8 +394,19 @@ void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size
 		doc = JSONCommon::ReadDocumentUnsafe(json_start, remaining, JSONCommon::READ_INSITU_FLAG, allocator.GetYYAlc(),
 		                                     &err);
 	}
-	if (!bind_data.ignore_errors && err.code != YYJSON_READ_SUCCESS) {
-		current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err);
+	if (err.code != YYJSON_READ_SUCCESS) {
+		auto can_ignore_this_error = bind_data.ignore_errors;
+		string extra;
+		if (current_reader->GetFormat() != JSONFormat::NEWLINE_DELIMITED) {
+			can_ignore_this_error = false;
+			extra = bind_data.ignore_errors
+			            ? "Parse errors cannot be ignored for JSON formats other than 'newline_delimited'"
+			            : "";
+		}
+		if (!can_ignore_this_error) {
+			current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err,
+			                                extra);
+		}
 	}
 
 	// We parse with YYJSON_STOP_WHEN_DONE, so we need to check this by hand

@@ -16,7 +16,7 @@ SELECT * FROM read_csv(
 query IIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
 ----
-0	5	23	23	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:19 bytes.
+0	5	23	23	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:18 bytes.
 
 statement ok
 DROP TABLE reject_errors;
@@ -37,7 +37,7 @@ SELECT * FROM read_csv(
 query IIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
 ----
-0	5	23	23	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:19 bytes.
+0	5	23	23	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:18 bytes.
 
 statement ok
 DROP TABLE reject_errors;
@@ -57,9 +57,9 @@ SELECT * FROM read_csv(
 query IIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
 ----
-0	2282	13685	13685	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 20 bytes exceeded. Actual Size:25 bytes.
-0	2591	15558	15558	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 20 bytes exceeded. Actual Size:25 bytes.
-0	2923	17569	17569	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	Maximum line size of 20 bytes exceeded. Actual Size:25 bytes.
+0	2282	13685	13685	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 20 bytes exceeded. Actual Size:24 bytes.
+0	2591	15558	15558	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 20 bytes exceeded. Actual Size:24 bytes.
+0	2923	17569	17569	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	Maximum line size of 20 bytes exceeded. Actual Size:24 bytes.
 
 statement ok
 DROP TABLE reject_errors;
@@ -77,10 +77,10 @@ SELECT * FROM read_csv(
 query IIIIIIIII
 SELECT * EXCLUDE (scan_id) FROM reject_errors order by all;
 ----
-0	5	23	23	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:19 bytes.
-1	2282	13685	13685	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 10 bytes exceeded. Actual Size:25 bytes.
-1	2591	15558	15558	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 10 bytes exceeded. Actual Size:25 bytes.
-1	2923	17569	17569	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	Maximum line size of 10 bytes exceeded. Actual Size:25 bytes.
+0	5	23	23	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaa,4	Maximum line size of 10 bytes exceeded. Actual Size:18 bytes.
+1	2282	13685	13685	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 10 bytes exceeded. Actual Size:24 bytes.
+1	2591	15558	15558	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,1	Maximum line size of 10 bytes exceeded. Actual Size:24 bytes.
+1	2923	17569	17569	NULL	NULL	LINE SIZE OVER MAXIMUM	blaaaaaaaaaaaaaaaaaaaa,3	Maximum line size of 10 bytes exceeded. Actual Size:24 bytes.
 
 statement ok
 DROP TABLE reject_errors;

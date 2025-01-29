@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/arrow/arrow_type_extension.hpp"
+
 #include "duckdb/common/allocator.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/cgroups.hpp"
@@ -34,6 +36,7 @@
 #include "duckdb/planner/operator_extension.hpp"
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 
@@ -53,6 +56,7 @@ class CompressionInfo;
 class EncryptionUtil;
 
 struct CompressionFunctionSet;
+struct DatabaseCacheEntry;
 struct DBConfig;
 
 enum class CheckpointAbort : uint8_t {
@@ -97,6 +101,8 @@ struct ExtensionOption {
 
 class SerializationCompatibility {
 public:
+	static SerializationCompatibility FromDatabase(AttachedDatabase &db);
+	static SerializationCompatibility FromIndex(idx_t serialization_version);
 	static SerializationCompatibility FromString(const string &input);
 	static SerializationCompatibility Default();
 	static SerializationCompatibility Latest();
@@ -198,6 +204,8 @@ struct DBConfigOptions {
 	uint64_t zstd_min_string_length = 4096;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
+	//! The set of disabled compression methods (default empty)
+	set<CompressionType> disabled_compression_methods;
 	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
@@ -277,6 +285,8 @@ struct DBConfigOptions {
 	unordered_set<string> allowed_paths;
 	//! Directories that are explicitly allowed, even if enable_external_access is false
 	set<string> allowed_directories;
+	//! The log configuration
+	LogConfig log_config = LogConfig();
 
 	bool operator==(const DBConfigOptions &other) const;
 };
@@ -326,6 +336,8 @@ public:
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
+	//! Reference to the database cache entry (if any)
+	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -366,9 +378,15 @@ public:
 	//! Returns the encode function matching the encoding name.
 	DUCKDB_API optional_ptr<EncodingFunction> GetEncodeFunction(const string &name) const;
 	DUCKDB_API void RegisterEncodeFunction(const EncodingFunction &function) const;
-
 	//! Returns the encode function names.
 	DUCKDB_API vector<reference<EncodingFunction>> GetLoadedEncodedFunctions() const;
+	//! Returns the encode function matching the encoding name.
+	DUCKDB_API ArrowTypeExtension GetArrowExtension(ArrowExtensionMetadata info) const;
+	DUCKDB_API ArrowTypeExtension GetArrowExtension(const LogicalType &type) const;
+	DUCKDB_API bool HasArrowExtension(const LogicalType &type) const;
+	DUCKDB_API bool HasArrowExtension(ArrowExtensionMetadata info) const;
+	DUCKDB_API void RegisterArrowExtension(const ArrowTypeExtension &extension) const;
+
 	bool operator==(const DBConfig &other);
 	bool operator!=(const DBConfig &other);
 
@@ -405,6 +423,7 @@ public:
 private:
 	unique_ptr<CompressionFunctionSet> compression_functions;
 	unique_ptr<EncodingFunctionSet> encoding_functions;
+	unique_ptr<ArrowTypeExtensionSet> arrow_extensions;
 	unique_ptr<CastFunctionSet> cast_functions;
 	unique_ptr<CollationBinding> collation_bindings;
 	unique_ptr<IndexTypeSet> index_types;
