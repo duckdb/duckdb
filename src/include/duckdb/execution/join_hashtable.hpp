@@ -143,6 +143,7 @@ public:
 		// or matched against during probing
 		Vector rhs_row_locations;
 		Vector salt_v;
+		Vector ht_offsets_v;
 
 		SelectionVector salt_match_sel;
 		SelectionVector key_no_match_sel;
@@ -151,7 +152,6 @@ public:
 	struct ProbeState : SharedState {
 		ProbeState();
 
-		Vector ht_offsets_v;
 		Vector ht_offsets_dense_v;
 
 		SelectionVector non_empty_sel;

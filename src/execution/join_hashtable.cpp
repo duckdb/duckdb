@@ -15,12 +15,12 @@ using ProbeSpill = JoinHashTable::ProbeSpill;
 using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
 
 JoinHashTable::SharedState::SharedState()
-    : rhs_row_locations(LogicalType::POINTER), salt_v(LogicalType::UBIGINT), salt_match_sel(STANDARD_VECTOR_SIZE),
+    : rhs_row_locations(LogicalType::POINTER), salt_v(LogicalType::UBIGINT), ht_offsets_v(LogicalType::UBIGINT), salt_match_sel(STANDARD_VECTOR_SIZE),
       key_no_match_sel(STANDARD_VECTOR_SIZE) {
 }
 
 JoinHashTable::ProbeState::ProbeState()
-    : SharedState(), ht_offsets_v(LogicalType::UBIGINT), ht_offsets_dense_v(LogicalType::UBIGINT),
+    : SharedState(), ht_offsets_dense_v(LogicalType::UBIGINT),
       non_empty_sel(STANDARD_VECTOR_SIZE) {
 }
 
@@ -135,23 +135,26 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 	sink_collection->Combine(*other.sink_collection);
 }
 
-static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const idx_t &count, const idx_t &bitmask) {
+static void ApplyBitmaskAndGetSaltBuild(const Vector &hashes_v, Vector &ht_offsets_v, Vector &salt_v, const idx_t &count, const idx_t &bitmask) {
+	const auto &hashes = ConstantVector::GetData<hash_t>(hashes_v);
 	if (hashes_v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		auto &hash = *ConstantVector::GetData<hash_t>(hashes_v);
-		salt_v.SetVectorType(VectorType::CONSTANT_VECTOR);
+		
 
-		*ConstantVector::GetData<hash_t>(salt_v) = ht_entry_t::ExtractSalt(hash);
+		salt_v.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ht_offsets_v.SetVectorType(VectorType::CONSTANT_VECTOR);
+
+		*ConstantVector::GetData<hash_t>(salt_v) = ht_entry_t::ExtractSalt(*hashes);
 		salt_v.Flatten(count);
 
-		hash = hash & bitmask;
-		hashes_v.Flatten(count);
+		*ConstantVector::GetData<hash_t>(ht_offsets_v) = *hashes & bitmask;
+		ht_offsets_v.Flatten(count);
 	} else {
-		hashes_v.Flatten(count);
+		ht_offsets_v.Flatten(count);
 		auto salts = FlatVector::GetData<hash_t>(salt_v);
-		auto hashes = FlatVector::GetData<hash_t>(hashes_v);
+		auto ht_offsets = FlatVector::GetData<hash_t>(ht_offsets_v);
 		for (idx_t i = 0; i < count; i++) {
 			salts[i] = ht_entry_t::ExtractSalt(hashes[i]);
-			hashes[i] &= bitmask;
+			ht_offsets[i] = hashes[i] & bitmask;
 		}
 	}
 }
@@ -168,7 +171,6 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
 
 	auto hashes = UnifiedVectorFormat::GetData<hash_t>(hashes_v_unified);
 	auto salts = FlatVector::GetData<hash_t>(state.salt_v);
-
 	auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
 	auto ht_offsets_dense = FlatVector::GetData<idx_t>(state.ht_offsets_dense_v);
 
@@ -555,10 +557,10 @@ static void InsertHashesLoop(atomic<ht_entry_t> entries[], Vector &row_locations
                              JoinHashTable::InsertState &state, const TupleDataCollection &data_collection,
                              JoinHashTable &ht) {
 	D_ASSERT(hashes_v.GetType().id() == LogicalType::HASH);
-	ApplyBitmaskAndGetSaltBuild(hashes_v, state.salt_v, count, ht.bitmask);
+	ApplyBitmaskAndGetSaltBuild(hashes_v, state.ht_offsets_v, state.salt_v, count, ht.bitmask);
 
 	// the salts offset for each row to insert
-	const auto ht_offsets = FlatVector::GetData<idx_t>(hashes_v);
+	const auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
 	const auto hash_salts = FlatVector::GetData<hash_t>(state.salt_v);
 	// the row locations of the rows that are already in the hash table
 	const auto rhs_row_locations = FlatVector::GetData<data_ptr_t>(state.rhs_row_locations);
