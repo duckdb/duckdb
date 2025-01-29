@@ -4,6 +4,11 @@
 # breaks with constant verification
 require no_vector_verification
 
+# requires the implicit insertion order to be unimpacted
+require no_force_async
+
+require vector_size 2048
+
 statement ok
 PRAGMA enable_verification;
 
