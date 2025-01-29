@@ -80,17 +80,15 @@ InsertGlobalState::InsertGlobalState(ClientContext &context, const vector<Logica
     : table(table), insert_count(0), initialized(false), return_collection(context, return_types) {
 }
 
-InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalType> &types_p,
+InsertLocalState::InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
                                    const vector<unique_ptr<Expression>> &bound_defaults,
                                    const vector<unique_ptr<BoundConstraint>> &bound_constraints)
     : default_executor(context, bound_defaults), bound_constraints(bound_constraints) {
 
 	auto &allocator = Allocator::Get(context);
-
-	types = types_p;
-	auto initialize = vector<bool>(types.size(), false);
-	update_chunk.Initialize(allocator, types, initialize);
-	append_chunk.Initialize(allocator, types, initialize);
+	insert_chunk.Initialize(allocator, types);
+	update_chunk.Initialize(allocator, types);
+	append_chunk.Initialize(allocator, types);
 }
 
 ConstraintState &InsertLocalState::GetConstraintState(DataTable &table, TableCatalogEntry &table_ref) {
@@ -187,10 +185,8 @@ static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_ch
 	auto &insert_types = op.insert_types;
 
 	if (types_to_fetch.empty()) {
-		// We have not scanned the initial table, so we duplicate the initial chunk.
-		const auto &types = input_chunk.GetTypes();
-		auto initialize = vector<bool>(types.size(), false);
-		result.Initialize(client, types, initialize, input_chunk.size());
+		// We have not scanned the initial table, so we can just duplicate the initial chunk
+		result.Initialize(client, input_chunk.GetTypes());
 		result.Reference(input_chunk);
 		result.SetCardinality(input_chunk);
 		return;
@@ -200,7 +196,7 @@ static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_ch
 	combined_types.insert(combined_types.end(), insert_types.begin(), insert_types.end());
 	combined_types.insert(combined_types.end(), types_to_fetch.begin(), types_to_fetch.end());
 
-	result.Initialize(client, combined_types, input_chunk.size());
+	result.Initialize(client, combined_types);
 	result.Reset();
 	// Add the VALUES list
 	for (idx_t i = 0; i < insert_types.size(); i++) {
@@ -227,8 +223,8 @@ static void CombineExistingAndInsertTuples(DataChunk &result, DataChunk &scan_ch
 	result.SetCardinality(input_chunk.size());
 }
 
-static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, Vector &row_ids, DataChunk &update_chunk,
-                              const PhysicalInsert &op) {
+static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
+                              DataChunk &update_chunk, const PhysicalInsert &op) {
 
 	auto &do_update_condition = op.do_update_condition;
 	auto &set_types = op.set_types;
@@ -284,7 +280,7 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, ExecutionContext 
 
 	auto &set_columns = op.set_columns;
 	DataChunk update_chunk;
-	CreateUpdateChunk(context, chunk, row_ids, update_chunk, op);
+	CreateUpdateChunk(context, chunk, table, row_ids, update_chunk, op);
 	auto &data_table = table.GetStorage();
 
 	// Perform the UPDATE on the (global) storage.
@@ -488,9 +484,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	DataChunk combined_chunk; // contains conflict_chunk + scan_chunk (wide)
 
 	// Filter out everything but the conflicting rows
-	const auto &types = tuples.GetTypes();
-	auto initialize = vector<bool>(types.size(), false);
-	conflict_chunk.Initialize(context.client, types, initialize, tuples.size());
+	conflict_chunk.Initialize(context.client, tuples.GetTypes());
 	conflict_chunk.Reference(tuples);
 	conflict_chunk.Slice(conflicts.Selection(), conflicts.Count());
 	conflict_chunk.SetCardinality(conflicts.Count());
@@ -501,7 +495,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		D_ASSERT(scan_chunk.size() == 0);
 		// When these values are required for the conditions or the SET expressions,
 		// then we scan the existing table for the conflicting tuples, using the rowids
-		scan_chunk.Initialize(context.client, types_to_fetch, conflicts.Count());
+		scan_chunk.Initialize(context.client, types_to_fetch);
 		fetch_state = make_uniq<ColumnFetchState>();
 		if (GLOBAL) {
 			auto &transaction = DuckTransaction::Get(context.client, table.catalog);
@@ -534,7 +528,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	return affected_tuples;
 }
 
-idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context,
+idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertGlobalState &gstate,
                                          InsertLocalState &lstate) const {
 	auto &data_table = table.GetStorage();
 	auto &local_storage = LocalStorage::Get(context.client, data_table.db);
@@ -634,21 +628,6 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 
 	auto &table = gstate.table;
 	auto &storage = table.GetStorage();
-	if (lstate.init_insert_chunk) {
-		auto initialize = vector<bool>(lstate.types.size(), false);
-		if (!column_index_map.empty()) {
-			for (auto &col : table.GetColumns().Physical()) {
-				auto storage_idx = col.StorageOid();
-				auto mapped_index = column_index_map[col.Physical()];
-				if (mapped_index == DConstants::INVALID_INDEX) {
-					initialize[storage_idx] = true;
-				}
-			}
-		}
-		auto &allocator = Allocator::Get(context.client);
-		lstate.insert_chunk.Initialize(allocator, lstate.types, initialize, chunk.size());
-		lstate.init_insert_chunk = false;
-	}
 	PhysicalInsert::ResolveDefaults(table, chunk, column_index_map, lstate.default_executor, lstate.insert_chunk);
 
 	if (!parallel) {
@@ -663,7 +642,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			// so it should not be added to the RETURNING chunk
 			gstate.return_collection.Append(lstate.insert_chunk);
 		}
-		idx_t updated_tuples = OnConflictHandling(table, context, lstate);
+		idx_t updated_tuples = OnConflictHandling(table, context, gstate, lstate);
 		if (action_type == OnConflictAction::NOTHING && return_chunk) {
 			// Because we didn't add to the RETURNING chunk yet
 			// we add the tuples that did not get filtered out now
@@ -694,7 +673,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			lstate.local_collection->InitializeAppend(lstate.local_append_state);
 			lstate.writer = &gstate.table.GetStorage().CreateOptimisticWriter(context.client);
 		}
-		OnConflictHandling(table, context, lstate);
+		OnConflictHandling(table, context, gstate, lstate);
 		D_ASSERT(action_type != OnConflictAction::UPDATE);
 
 		auto new_row_group = lstate.local_collection->Append(lstate.insert_chunk, lstate.local_append_state);

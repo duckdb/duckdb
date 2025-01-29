@@ -38,7 +38,7 @@ public:
 class InsertLocalState : public LocalSinkState {
 public:
 public:
-	InsertLocalState(ClientContext &context, const vector<LogicalType> &types_p,
+	InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
 	                 const vector<unique_ptr<Expression>> &bound_defaults,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 
@@ -47,12 +47,8 @@ public:
 	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &table_ref, ClientContext &context);
 
 public:
-	//! The to-be-inserted chunk.
-	//! We initialize it lazily, as we need to know which columns will be references and which will be set to their
-	//! default values.
+	//! The chunk that ends up getting inserted
 	DataChunk insert_chunk;
-	bool init_insert_chunk = true;
-	vector<LogicalType> types;
 	//! The chunk containing the tuples that become an update (if DO UPDATE)
 	DataChunk update_chunk;
 	ExpressionExecutor default_executor;
@@ -174,7 +170,8 @@ protected:
 	//! Returns the amount of updated tuples
 	void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
 	                       DataChunk &result) const;
-	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate) const;
+	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertGlobalState &gstate,
+	                         InsertLocalState &lstate) const;
 };
 
 } // namespace duckdb
