@@ -1,3 +1,4 @@
+#include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -5,7 +6,9 @@
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_empty_result.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 
 namespace duckdb {
@@ -126,7 +129,23 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	});
 	right_pushdown.GenerateFilters();
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
-	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+
+	bool rewrite_right = true;
+	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		auto &any_join = join.Cast<LogicalAnyJoin>();
+		if (AddFilter(any_join.condition->Copy()) == FilterResult::UNSATISFIABLE) {
+			// filter statically evaluates to false, strip tree
+			if (any_join.join_type == JoinType::LEFT) {
+				op->children[1] = make_uniq<LogicalEmptyResult>(std::move(op->children[1]));
+				rewrite_right = false;
+			}
+		}
+	}
+
+	if (rewrite_right) {
+		op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	}
+
 	return PushFinalFilters(std::move(op));
 }
 

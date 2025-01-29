@@ -1,0 +1,30 @@
+# name: test/sql/join/left_outer/left_join_issue_15316.test
+# description: Issue #15316: Left join should strip tree if filter statically evaluates to false
+# group: [left_outer]
+
+statement ok
+set explain_output='optimized_only';
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE OR REPLACE TABLE big_table AS
+SELECT i.range AS col1,
+       CAST(random() * 1000 AS INTEGER) AS col2
+FROM range(100) i;
+
+statement ok
+CREATE OR REPLACE TABLE single_col_table AS
+SELECT i.range AS col1
+FROM range(50) i;
+
+query II
+explain SELECT * 
+FROM big_table c
+LEFT OUTER JOIN single_col_table hd ON hd.col1=c.col1 
+AND (
+    FALSE
+);
+----
+logical_opt	<REGEX>:.*EMPTY_RESULT.*
