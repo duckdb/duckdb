@@ -13,12 +13,13 @@
 #include "duckdb/common/typedefs.hpp"
 
 namespace duckdb {
+class Allocator;
 
 class MemoryStream : public WriteStream, public ReadStream {
 private:
+	optional_ptr<Allocator> allocator;
 	idx_t position;
 	idx_t capacity;
-	bool owns_data;
 	data_ptr_t data;
 
 public:
@@ -26,7 +27,7 @@ public:
 
 	// Create a new owning MemoryStream with an internal  backing buffer with the specified capacity. The stream will
 	// own the backing buffer, resize it when needed and free its memory when the stream is destroyed
-	explicit MemoryStream(idx_t capacity = DEFAULT_INITIAL_CAPACITY);
+	explicit MemoryStream(Allocator &allocator, idx_t capacity = DEFAULT_INITIAL_CAPACITY);
 
 	// Create a new non-owning MemoryStream over the specified external buffer and capacity. The stream will not take
 	// ownership of the backing buffer, will not attempt to resize it and will not free the memory when the stream

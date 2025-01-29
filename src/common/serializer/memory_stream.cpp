@@ -4,18 +4,18 @@
 
 namespace duckdb {
 
-MemoryStream::MemoryStream(idx_t capacity) : position(0), capacity(capacity), owns_data(true) {
+MemoryStream::MemoryStream(Allocator &allocator_p, idx_t capacity)
+    : allocator(&allocator_p), position(0), capacity(capacity) {
 	D_ASSERT(capacity != 0 && IsPowerOfTwo(capacity));
-	data = Allocator::DefaultAllocatorReference()->AllocateData(capacity);
+	data = allocator_p.AllocateData(capacity);
 }
 
-MemoryStream::MemoryStream(data_ptr_t buffer, idx_t capacity)
-    : position(0), capacity(capacity), owns_data(false), data(buffer) {
+MemoryStream::MemoryStream(data_ptr_t buffer, idx_t capacity) : position(0), capacity(capacity), data(buffer) {
 }
 
 MemoryStream::~MemoryStream() {
-	if (owns_data) {
-		Allocator::DefaultAllocatorReference()->FreeData(data, capacity);
+	if (allocator && data) {
+		allocator->FreeData(data, capacity);
 	}
 }
 
@@ -24,33 +24,33 @@ MemoryStream::MemoryStream(MemoryStream &&other) noexcept {
 	data = other.data;
 	position = other.position;
 	capacity = other.capacity;
-	owns_data = other.owns_data;
+	allocator = other.allocator;
 
 	// Reset the other stream
 	other.data = nullptr;
 	other.position = 0;
 	other.capacity = 0;
-	other.owns_data = false;
+	other.allocator = nullptr;
 }
 
 MemoryStream &MemoryStream::operator=(MemoryStream &&other) noexcept {
 	if (this != &other) {
 		// Free the current data
-		if (owns_data) {
-			Allocator::DefaultAllocatorReference()->FreeData(data, capacity);
+		if (allocator) {
+			allocator->FreeData(data, capacity);
 		}
 
 		// Move the data from the other stream into this stream
 		data = other.data;
 		position = other.position;
 		capacity = other.capacity;
-		owns_data = other.owns_data;
+		allocator = other.allocator;
 
 		// Reset the other stream
 		other.data = nullptr;
 		other.position = 0;
 		other.capacity = 0;
-		other.owns_data = false;
+		other.allocator = nullptr;
 	}
 	return *this;
 }
@@ -58,7 +58,7 @@ MemoryStream &MemoryStream::operator=(MemoryStream &&other) noexcept {
 void MemoryStream::WriteData(const_data_ptr_t source, idx_t write_size) {
 	const auto old_capacity = capacity;
 	while (position + write_size > capacity) {
-		if (owns_data) {
+		if (allocator) {
 			capacity *= 2;
 		} else {
 			throw SerializationException("Failed to serialize: not enough space in buffer to fulfill write request");
@@ -84,7 +84,7 @@ void MemoryStream::Rewind() {
 }
 
 void MemoryStream::Release() {
-	owns_data = false;
+	allocator = nullptr;
 }
 
 data_ptr_t MemoryStream::GetData() const {
