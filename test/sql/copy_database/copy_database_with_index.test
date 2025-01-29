@@ -1,0 +1,42 @@
+# name: test/sql/copy_database/copy_database_with_index.test
+# description: Test the COPY DATABASE statement with an index.
+# group: [copy_database]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+ATTACH ':memory:' AS db1;
+
+statement ok
+USE db1;
+
+statement ok
+CREATE TABLE data AS
+SELECT i, hash(i)::VARCHAR AS value FROM generate_series(1, 10000) s(i);
+
+statement ok
+ALTER TABLE data ALTER COLUMN value SET NOT NULL;
+
+statement ok
+CREATE INDEX data_value ON data(value);
+
+statement ok
+ATTACH ':memory:' AS db2;
+
+statement ok
+COPY FROM DATABASE db1 TO db2;
+
+query III
+SELECT database_name, table_name, index_name FROM duckdb_indexes ORDER BY ALL;
+----
+db1	data	data_value
+db2	data	data_value
+
+query III
+SELECT database_name, table_name, index_count FROM duckdb_tables ORDER BY ALL;
+----
+db1	data	1
+db2	data	1

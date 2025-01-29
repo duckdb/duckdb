@@ -43,13 +43,10 @@ SELECT * FROM test WHERE a = 42;
 ----
 42	88	hello
 
-# FIXME: We do not yet copy indexes.
-# See issue 14909.
-
 query II
 EXPLAIN ANALYZE SELECT * FROM test WHERE a = 42;
 ----
-analyzed_plan	<REGEX>:.*Type: Sequential Scan.*
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 statement ok
 DROP INDEX i_index;
