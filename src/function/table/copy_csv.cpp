@@ -582,7 +582,7 @@ CopyFunctionExecutionMode WriteCSVExecutionMode(bool preserve_insertion_order, b
 // Prepare Batch
 //===--------------------------------------------------------------------===//
 struct WriteCSVBatchData : public PreparedBatchData {
-	WriteCSVBatchData(Allocator &allocator) : stream(allocator) {
+	explicit WriteCSVBatchData(Allocator &allocator) : stream(allocator) {
 	}
 
 	//! The thread-local buffer to write data into
