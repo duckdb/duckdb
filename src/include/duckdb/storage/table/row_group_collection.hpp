@@ -108,7 +108,7 @@ public:
 	                         bool schedule_vacuum);
 	unique_ptr<CheckpointTask> GetCheckpointTask(CollectionCheckpointState &checkpoint_state, idx_t segment_idx);
 
-	void CommitDropColumn(idx_t index);
+	void CommitDropColumn(const idx_t column_index);
 	void CommitDropTable();
 
 	vector<PartitionStatistics> GetPartitionStats() const;
