@@ -2,6 +2,8 @@
 # description: Test the COPY DATABASE statement with an index.
 # group: [copy_database]
 
+require noforcestorage
+
 statement ok
 PRAGMA enable_verification;
 
