@@ -257,6 +257,7 @@ static void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, Vecto
 			chunk.SetCardinality(selection.Count());
 			// Also apply this Slice to the to-update row_ids
 			row_ids.Slice(selection.Selection(), selection.Count());
+			row_ids.Flatten(selection.Count());
 		}
 	}
 
@@ -290,6 +291,14 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 
 	// Perform the UPDATE on the (global) storage.
 	if (!op.update_is_del_and_insert) {
+		if (update_chunk.size() == 0) {
+			return update_chunk.size();
+		}
+
+		if (!op.parallel && op.return_chunk) {
+			gstate.return_collection.Append(chunk);
+		}
+
 		if (GLOBAL) {
 			auto update_state = data_table.InitializeUpdate(table, context.client, op.bound_constraints);
 			data_table.Update(*update_state, context.client, row_ids, set_columns, update_chunk);
@@ -323,6 +332,9 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 		local_storage.Delete(data_table, row_ids, update_chunk.size());
 	}
 
+	if (!op.parallel && op.return_chunk) {
+		gstate.return_collection.Append(append_chunk);
+	}
 	data_table.LocalAppend(table, context.client, append_chunk, op.bound_constraints, row_ids, append_chunk);
 	return update_chunk.size();
 }
@@ -663,25 +675,13 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 			gstate.initialized = true;
 		}
 
-		// FIXME: this is way too optimistic
-		// some tuples could be filtered out entirely and thus shouldn't be added to the return chunk.
-		if (action_type != OnConflictAction::NOTHING && return_chunk) {
-			// If the action is UPDATE or REPLACE, we will always create either an APPEND or an INSERT
-			// for NOTHING we don't create either an APPEND or an INSERT for the tuple
-			// so it should not be added to the RETURNING chunk
-			gstate.return_collection.Append(lstate.insert_chunk);
-		}
-
 		idx_t updated_tuples = OnConflictHandling(table, context, lstate, gstate);
-
-		if (action_type == OnConflictAction::NOTHING && return_chunk) {
-			// Because we didn't add to the RETURNING chunk yet
-			// we add the tuples that did not get filtered out now
-			gstate.return_collection.Append(lstate.insert_chunk);
-		}
 
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
+		if (!parallel && return_chunk) {
+			gstate.return_collection.Append(lstate.insert_chunk);
+		}
 		storage.LocalAppend(gstate.append_state, context.client, lstate.insert_chunk, true);
 		if (action_type == OnConflictAction::UPDATE && lstate.update_chunk.size() != 0) {
 			(void)HandleInsertConflicts<true>(table, context, lstate, gstate, lstate.update_chunk, *this);
