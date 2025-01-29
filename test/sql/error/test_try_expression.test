@@ -15,19 +15,19 @@ NULL
 
 ## FIXME: this should error?
 #query I
-#select ~error('test')
+#select ~CAST('abc' as INTEGER)
 #----
 #NULL
 
 query I
-select TRY(~error('test'))
+select TRY(~CAST('abc' as INTEGER))
 ----
 NULL
 
 # --- OPERATOR_IS_NULL ---
 
 query I
-select TRY(error('test') IS NULL);
+select TRY(CAST('abc' as INTEGER) IS NULL);
 ----
 NULL
 
@@ -35,28 +35,28 @@ NULL
 # --- OPERATOR_IS_NOT_NULL ---
 
 query I
-select TRY(error('test') IS NOT NULL);
+select TRY(CAST('abc' as INTEGER) IS NOT NULL);
 ----
 NULL
 
 # --- COMPARE_EQUAL ---
 
 query I
-select TRY(error('test') == 'abc')
+select TRY(CAST('abc' as INTEGER) == 'abc')
 ----
 NULL
 
 # --- COMPARE_EQUAL ---
 
 query I
-select TRY(error('test') == 'abc')
+select TRY(CAST('abc' as INTEGER) == 'abc')
 ----
 NULL
 
 # --- COMPARE_NOTEQUAL ---
 
 query I
-select TRY(error('test') != 'abc')
+select TRY(CAST('abc' as INTEGER) != 'abc')
 ----
 NULL
 
