@@ -165,7 +165,7 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 		if (path.catalog.empty()) {
 			auto catalog = Catalog::GetCatalogEntry(context, path.schema);
 			if (catalog) {
-				auto schema = catalog->GetSchema(context, DEFAULT_SCHEMA, OnEntryNotFound::RETURN_NULL);
+				auto schema = catalog->GetSchema(context, catalog->GetDefaultSchema(), OnEntryNotFound::RETURN_NULL);
 				if (schema) {
 					path.catalog = std::move(path.schema);
 					path.schema = schema->name;
@@ -201,6 +201,22 @@ string CatalogSearchPath::GetDefaultSchema(const string &catalog) {
 		if (StringUtil::CIEquals(path.catalog, catalog)) {
 			return path.schema;
 		}
+	}
+	return DEFAULT_SCHEMA;
+}
+
+string CatalogSearchPath::GetDefaultSchema(ClientContext &context, const string &catalog) {
+	for (auto &path : paths) {
+		if (path.catalog == TEMP_CATALOG) {
+			continue;
+		}
+		if (StringUtil::CIEquals(path.catalog, catalog)) {
+			return path.schema;
+		}
+	}
+	auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
+	if (catalog_entry) {
+		return catalog_entry->GetDefaultSchema();
 	}
 	return DEFAULT_SCHEMA;
 }
