@@ -10,8 +10,13 @@
 
 namespace duckdb {
 
-JoinBloomFilter::JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids) 
-: column_ids(std::move(column_ids)) {
+JoinBloomFilter::JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids, uint64_t bitmask) 
+: column_ids(std::move(column_ids)), bitmask(bitmask) {
+    int b_ones = 0;
+    while ((bitmask >> b_ones) > 0) {
+        b_ones++;
+    }
+
     // Approximate size of the Bloom-filter rounded up to the next 8 byte.
     size_t approx_size = static_cast<size_t>(std::ceil(-double(expected_cardinality) * log(desired_false_positive_rate) / 0.48045));
 	bloom_filter_size = approx_size + (64 - approx_size % 64);
@@ -29,11 +34,14 @@ JoinBloomFilter::JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_fu
 JoinBloomFilter::~JoinBloomFilter() {
 }
 
-inline size_t HashToIndex(hash_t hash, uint32_t bloom_filter_size, size_t i) {
+inline size_t JoinBloomFilter::HashToIndex(hash_t hash, size_t i) const {
     // Create different hashes out of a single hash by shifting a variable length of bits.
-    const auto r = (hash >> (i << 4)) & 0xffffffff;
+    //std::cout << "inserting hash " << hash << std::endl;
+    //const auto h = hash & bitmask;
+    const auto r = (hash >> ((i << 4))) & 0xffffffff;
     // Fast modulo reduction: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
-    return (r * (bloom_filter_size & 0xffffffff)) >> 32;
+    return r % bloom_filter_size;
+    //return (r * (bloom_filter_size & 0xffffffff)) >> 32;
 }
 
 inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const SelectionVector &rsel, idx_t count) {
@@ -42,7 +50,7 @@ inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, c
 
     if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
         auto hash = ConstantVector::GetData<hash_t>(hashes);
-		auto bloom_idx = HashToIndex(*hash, bloom_filter_size, fni);
+		auto bloom_idx = HashToIndex(*hash, fni);
         bloom_filter_bits.SetValid(bloom_idx);
     } else {
         UnifiedVectorFormat u_hashes;
@@ -54,7 +62,7 @@ inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, c
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 if (u_hashes.validity.RowIsValid(hash_idx)) {
                     auto hash = UnifiedVectorFormat::GetData<hash_t>(u_hashes)[hash_idx];
-                    auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
+                    auto bloom_idx = HashToIndex(hash, fni);
                     bloom_filter_bits.SetValid(bloom_idx);
                 }
             }
@@ -64,7 +72,9 @@ inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, c
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
                 auto hash = hashes[hash_idx];
-                auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
+                //std::cout << "inserting hash " << hash << std::endl;
+                auto bloom_idx = HashToIndex(hash, fni);
+                //std::cout << "idx="<<bloom_idx << std::endl;
                 bloom_filter_bits.SetValid(bloom_idx);
             }
         }
@@ -92,7 +102,7 @@ inline size_t JoinBloomFilter::ProbeInternal(size_t fni, Vector &hashes, Selecti
 
     if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
         auto hash = ConstantVector::GetData<hash_t>(hashes);
-		auto bloom_idx = HashToIndex(*hash, bloom_filter_size, fni);
+		auto bloom_idx = HashToIndex(ht_entry_t::ExtractSalt(*hash) ^ (*hash & bitmask), fni);
 
         if (bloom_filter_bits.RowIsValid(bloom_idx)) {
             // All constant elements match. No need to modify the selection vector.
@@ -115,7 +125,7 @@ inline size_t JoinBloomFilter::ProbeInternal(size_t fni, Vector &hashes, Selecti
                 if (u_hashes.validity.RowIsValid(hash_idx)) {
                     auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
                     auto hash = hashes[hash_idx];
-                    auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
+                    auto bloom_idx = HashToIndex(ht_entry_t::ExtractSalt(hash) ^ (hash & bitmask), fni);
                     if (bloom_filter_bits.RowIsValid(bloom_idx)) {
                         // Bit is set in Bloom-filter. We keep the entry for now.
                         tmp_sel.set_index(sel_out_idx++, key_idx);
@@ -132,7 +142,7 @@ inline size_t JoinBloomFilter::ProbeInternal(size_t fni, Vector &hashes, Selecti
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
                 auto hash = hashes[hash_idx];
-                auto bloom_idx = HashToIndex(hash, bloom_filter_size, fni);
+                auto bloom_idx = HashToIndex(ht_entry_t::ExtractSalt(hash) ^ (hash & bitmask), fni);
                 if (bloom_filter_bits.RowIsValid(bloom_idx)) {
                     // Bit is set in Bloom-filter. We keep the entry for now.
                     tmp_sel.set_index(sel_out_idx++, key_idx);

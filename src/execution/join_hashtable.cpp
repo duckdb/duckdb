@@ -1392,6 +1392,34 @@ idx_t JoinHashTable::FillWithHTOffsets(JoinHTScanState &state, Vector &addresses
 	return key_count;
 }
 
+idx_t JoinHashTable::CollectTruncatedHashes(Vector &hashes) {
+	D_ASSERT(hashes.GetVectorType() == VectorType::FLAT_VECTOR);
+	auto hash_ptr = FlatVector::GetData<hash_t>(hashes);
+	hash_t last_salt = 0;
+	idx_t num_hashes = 0;
+	for (idx_t i = 0; i < capacity; i++) {
+		auto &entry = entries[i];
+		bool occupied = entry.IsOccupied();
+		if (entry.IsOccupied()) {
+			hash_t cur_salt = entry.GetSalt();
+			if (cur_salt!=last_salt) {
+				last_salt = cur_salt;
+
+				hash_ptr[num_hashes] = cur_salt ^ i;
+				num_hashes++;
+			}
+		}
+	}
+	/*
+	unordered_set<hash_t> uniq;
+	for (int i=0;i<num_hashes;i++) {
+		uniq.insert(hash_ptr[i]);
+	}
+	D_ASSERT(uniq.size() == num_hashes);
+	*/
+	return num_hashes;
+}
+
 idx_t JoinHashTable::GetTotalSize(const vector<idx_t> &partition_sizes, const vector<idx_t> &partition_counts,
                                   idx_t &max_partition_size, idx_t &max_partition_count) const {
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);

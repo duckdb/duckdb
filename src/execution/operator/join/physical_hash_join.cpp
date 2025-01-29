@@ -432,7 +432,7 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		// TODO: why does one hash join has multiple probe infos? can we just copy the bloom filter between them?
-		if (sink.hash_table->should_build_bloom_filter) {
+		/*if (sink.hash_table->should_build_bloom_filter) {
 			vector<column_t> column_ids;
 			auto bf = make_uniq<JoinBloomFilter>(sink.hash_table->Count(), 0.01, std::move(column_ids));
 
@@ -448,9 +448,9 @@ public:
 				std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(bf->GetColumnIds()), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
 				info.dynamic_filters->PushBloomFilter(*op.get(), std::move(bf));
 			}
-		} else {
+		} else {*/
 			sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
-		}
+		//}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -506,6 +506,32 @@ public:
 	void FinishEvent() override {
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 		sink.hash_table->finalized = true;
+
+		// Hash table is finished. Now we can build the Bloom-filter based on the hash table keys.
+		if (sink.hash_table->should_build_bloom_filter) {
+			Vector hashes(LogicalType::HASH, sink.hash_table->capacity);
+			auto hash_cnt = sink.hash_table->CollectTruncatedHashes(hashes);
+			vector<column_t> column_ids;
+			auto bf = make_uniq<JoinBloomFilter>(hash_cnt, 0.01, std::move(column_ids), sink.hash_table->bitmask);
+			
+			SelectionVector sel;
+			bf->BuildWithPrecomputedHashes(hashes, sel, hash_cnt);
+
+			std::cout << "    \"bf_num_hash_functions\": " << bf->GetNumHashFunctions() << "," << std::endl;
+			std::cout << "    \"bf_size_bits\": " << bf->GetSizeBits() << "," << std::endl;
+			std::cout << "    \"bf_scarcity\": " << bf->GetScarcity() << "," << std::endl;
+			std::cout << "    \"bf_inserted_keys\": " << bf->GetNumInsertedRows() << "," << std::endl;
+			std::cout << "    \"bf_bitmask\": " << bf->bitmask << "," << std::endl;
+
+			for (auto &info : sink.op.filter_pushdown->probe_info) {
+				vector<column_t> column_ids;
+				auto bf_c = bf->Copy();
+				std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(bf->GetColumnIds()), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
+				info.dynamic_filters->PushBloomFilter(sink.op, std::move(bf));
+			}
+		}
+
+
 	}
 
 	static constexpr idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
@@ -671,7 +697,7 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 
 void JoinFilterPushdownInfo::BuildAndPushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
                                           const PhysicalOperator &op, vector<column_t> column_ids) const {
-	auto bf = make_uniq<JoinBloomFilter>(ht.Count(), 0.01, std::move(column_ids));
+	auto bf = make_uniq<JoinBloomFilter>(ht.Count(), 0.01, std::move(column_ids), 0);
 	//auto bf = make_shared_ptr<JoinBloomFilter>(std::move(column_ids), ht.CurrentPartitionCount(), 0.01);  // TODO: maybe??
 
 	// FIXME: this code is duplicated from building the hash table.

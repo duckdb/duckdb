@@ -680,7 +680,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					// Evaluate Bloom-filters
 					if (true){
 					for (auto &bf : bloom_filter_list) {
-						if (bf->GetNumProbedKeys() < 2000 || bf->GetObservedSelectivity() >= 0.95) {
+						if (bf->GetNumProbedKeys() < 4000 || bf->GetObservedSelectivity() >= 0.6) {
 							Vector hashes(LogicalType::HASH);
 							// TODO: Can we directly put the keys and hashes into the hash join's state so that we don't have to perform hashing twice?
 							Profiler p;

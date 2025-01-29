@@ -14,7 +14,7 @@ namespace duckdb {
 
 class JoinBloomFilter {
 public:
-	explicit JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids);
+	explicit JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids, uint64_t bitmask);
 	JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_functions, size_t bloom_filter_size);
 	~JoinBloomFilter();
 
@@ -65,10 +65,13 @@ public:
 		bf.build_time = build_time;
 		bf.probe_time = probe_time;
 		bf.hash_time = hash_time;
+		bf.bitmask = bitmask;
 		return bf;
 	}
 
 private:
+	size_t HashToIndex(hash_t hash, size_t i) const;
+
 	void SetBloomBitsForHashes(size_t shift, Vector &hashes, const SelectionVector &rsel, idx_t count);
 
 	size_t ProbeInternal(size_t shift, Vector &hashes, SelectionVector &current_sel, idx_t current_sel_count) const;
@@ -87,8 +90,12 @@ public:
 private:
 
 	vector<column_t> column_ids;
+
 	vector<validity_t> bloom_data_buffer;
 	ValidityMask bloom_filter_bits;
+
+public:
+	uint64_t bitmask = DConstants::INVALID_INDEX;
 };
 
 } // namespace duckdb
