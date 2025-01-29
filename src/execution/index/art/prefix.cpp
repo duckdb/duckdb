@@ -292,7 +292,8 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 }
 
 ARTConflictType Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id,
-                               const GateStatus status, optional_ptr<ART> delete_art) {
+                               const GateStatus status, optional_ptr<ART> delete_art,
+                               const IndexAppendMode append_mode) {
 	reference<Node> next(node);
 	auto pos = TraverseMutable(art, next, key, depth);
 
@@ -301,7 +302,7 @@ ARTConflictType Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t de
 	// (2) we reach a gate.
 	if (pos == DConstants::INVALID_INDEX) {
 		if (next.get().GetType() != NType::PREFIX || next.get().GetGateStatus() == GateStatus::GATE_SET) {
-			return art.Insert(next, key, depth, row_id, status, delete_art);
+			return art.Insert(next, key, depth, row_id, status, delete_art, append_mode);
 		}
 	}
 
