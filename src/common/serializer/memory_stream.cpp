@@ -10,6 +10,9 @@ MemoryStream::MemoryStream(Allocator &allocator_p, idx_t capacity)
 	data = allocator_p.AllocateData(capacity);
 }
 
+MemoryStream::MemoryStream(idx_t capacity) : MemoryStream(Allocator::DefaultAllocator(), capacity) {
+}
+
 MemoryStream::MemoryStream(data_ptr_t buffer, idx_t capacity) : position(0), capacity(capacity), data(buffer) {
 }
 
