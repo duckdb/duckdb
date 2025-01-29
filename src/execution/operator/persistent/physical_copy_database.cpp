@@ -12,6 +12,7 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
