@@ -68,7 +68,7 @@ void MemoryStream::WriteData(const_data_ptr_t source, idx_t write_size) {
 		}
 	}
 	if (capacity != old_capacity) {
-		data = Allocator::DefaultAllocatorReference()->ReallocateData(data, old_capacity, capacity);
+		data = allocator->ReallocateData(data, old_capacity, capacity);
 	}
 	memcpy(data + position, source, write_size);
 	position += write_size;
