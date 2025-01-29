@@ -749,6 +749,7 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 
 	if (chunk_sel.size == 0) {
 		// not adding any samples
+		base_reservoir_sample->num_entries_seen_total += chunk.size();
 		return;
 	}
 	idx_t size = chunk_sel.size;

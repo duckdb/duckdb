@@ -21,7 +21,10 @@ RandomEngine::RandomEngine(int64_t seed) : random_state(make_uniq<RandomState>()
 	if (seed < 0) {
 #ifdef __linux__
 		idx_t random_seed = 0;
-		auto result = syscall(SYS_getrandom, &random_seed, sizeof(random_seed), 0);
+		int result = -1;
+#if defined(SYS_getrandom)
+		result = static_cast<int>(syscall(SYS_getrandom, &random_seed, sizeof(random_seed), 0));
+#endif
 		if (result == -1) {
 			// Something went wrong with the syscall, we use chrono
 			const auto now = std::chrono::high_resolution_clock::now();

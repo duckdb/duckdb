@@ -38,24 +38,22 @@ ErrorData BoundIndex::Append(DataChunk &chunk, Vector &row_ids) {
 	return Append(l, chunk, row_ids);
 }
 
-ErrorData BoundIndex::AppendWithDeleteIndex(IndexLock &l, DataChunk &chunk, Vector &row_ids,
-                                            optional_ptr<BoundIndex> delete_index) {
+ErrorData BoundIndex::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
 	// Fallback to the old Append.
 	return Append(l, chunk, row_ids);
 }
 
-ErrorData BoundIndex::AppendWithDeleteIndex(DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index) {
+ErrorData BoundIndex::Append(DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
 	IndexLock l;
 	InitializeLock(l);
-	return AppendWithDeleteIndex(l, chunk, row_ids, delete_index);
+	return Append(l, chunk, row_ids, info);
 }
 
-void BoundIndex::VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_index,
-                              optional_ptr<ConflictManager> manager) {
+void BoundIndex::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager) {
 	throw NotImplementedException("this implementation of VerifyAppend does not exist.");
 }
 
-void BoundIndex::VerifyConstraint(DataChunk &chunk, optional_ptr<BoundIndex> delete_index, ConflictManager &manager) {
+void BoundIndex::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) {
 	throw NotImplementedException("this implementation of VerifyConstraint does not exist.");
 }
 
@@ -71,7 +69,7 @@ void BoundIndex::Delete(DataChunk &entries, Vector &row_identifiers) {
 	Delete(state, entries, row_identifiers);
 }
 
-ErrorData BoundIndex::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index) {
+ErrorData BoundIndex::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
 	throw NotImplementedException("this implementation of Insert does not exist.");
 }
 
