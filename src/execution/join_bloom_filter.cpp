@@ -15,7 +15,7 @@ JoinBloomFilter::JoinBloomFilter(size_t expected_cardinality, double desired_fal
     // Approximate size of the Bloom-filter rounded up to the next 8 byte.
     size_t approx_size = static_cast<size_t>(std::ceil(-double(expected_cardinality) * log(desired_false_positive_rate) / 0.48045));
 	bloom_filter_size = approx_size + (64 - approx_size % 64);
-    num_hash_functions = static_cast<size_t>(std::ceil(approx_size / expected_cardinality * 0.693147));
+    num_hash_functions = MinValue(4, static_cast<int>(std::ceil(approx_size / expected_cardinality * 0.693147)));  // Limit to up to 3 hash functions for performance.
 
     bloom_data_buffer.resize(bloom_filter_size / 64, 0);
     bloom_filter_bits.Initialize(bloom_data_buffer.data(), bloom_filter_size);
@@ -29,8 +29,11 @@ JoinBloomFilter::JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_fu
 JoinBloomFilter::~JoinBloomFilter() {
 }
 
-inline size_t HashToIndex(hash_t hash, size_t bloom_filter_size, size_t i) {
-    return (hash >> (i * 1)) % bloom_filter_size;  // TODO: rotation would be a bit nicer because it allows us to generate more values. But C++20 in stdlib.
+inline size_t HashToIndex(hash_t hash, uint32_t bloom_filter_size, size_t i) {
+    // Create different hashes out of a single hash by shifting a variable length of bits.
+    const auto r = (hash >> (i << 4)) & 0xffffffff;
+    // Fast modulo reduction: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+    return (r * (bloom_filter_size & 0xffffffff)) >> 32;
 }
 
 inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const SelectionVector &rsel, idx_t count) {
