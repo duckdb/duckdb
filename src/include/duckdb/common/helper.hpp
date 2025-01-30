@@ -189,16 +189,16 @@ T AbsValue(T a) {
 	return a < 0 ? -a : a;
 }
 
-//! Align value (ceiling)
-template<class T, T val=8>
+//! Align value (ceiling) (not for pointer types)
+template<class T, T val=8, typename = typename std::enable_if<!std::is_pointer<T>::value>::type>
 static inline T AlignValue(T n) {
 	return ((n + (val - 1)) / val) * val;
 }
 
-template<uintptr_t alignment>
-inline data_ptr_t AlignValue(data_ptr_t addr) {
+template<uintptr_t alignment, class T>
+inline T *AlignPointer(T *addr) {
 	static_assert((alignment & (alignment - 1)) == 0, "'alignment' has to be a power of 2");
-	return reinterpret_cast<data_ptr_t>((reinterpret_cast<uintptr_t>(addr) + alignment - 1) & ~(alignment - 1));
+	return reinterpret_cast<T *>((reinterpret_cast<uintptr_t>(addr) + alignment - 1) & ~(alignment - 1));
 }
 
 template<class T, T val=8>

@@ -51,7 +51,7 @@ CHECKPOINT
 query I
 SELECT compression FROM pragma_storage_info('test_dict') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
-Dictionary
+DICT_FSST
 
 # This test defaults to another compression function for smaller block sizes,
 # because the bitpacking groups no longer fit the blocks.
