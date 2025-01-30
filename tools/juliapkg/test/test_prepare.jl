@@ -89,6 +89,49 @@ end
     DBInterface.close!(con)
 end
 
+@testset "prepare: Named parameters" begin
+    con = DBInterface.connect(DuckDB.DB)
+    DBInterface.execute(con, "CREATE TABLE test_table(i INTEGER, j DOUBLE)")
+
+    # Check named syntax with Kwargs and Dict
+    stmt = DBInterface.prepare(con, raw"INSERT INTO test_table VALUES($col1, $col2)")
+    DBInterface.execute(stmt, Dict(["col1" => 1, "col2" => 3.5]))
+    DBInterface.execute(stmt; col1 = 2, col2 = 4.5)
+    results = DBInterface.execute(con, "SELECT * FROM test_table") |> DataFrame
+    @test isequal(results.i, [1, 2])
+    @test isequal(results.j, [3.5, 4.5])
+
+
+    # Check positional syntax
+    DBInterface.execute(con, "TRUNCATE TABLE test_table")
+    stmt = DBInterface.prepare(con, raw"INSERT INTO test_table VALUES($2, $1)")
+    DBInterface.execute(stmt, (3.5, 1))
+    DBInterface.execute(stmt, (4.5, 2))
+    results = DBInterface.execute(con, "SELECT * FROM test_table") |> DataFrame
+    @test isequal(results.i, [1, 2])
+    @test isequal(results.j, [3.5, 4.5])
+
+    DBInterface.close!(con)
+end
+
+@testset "DBInterface.prepare: execute many" begin
+    con = DBInterface.connect(DuckDB.DB)
+
+    DBInterface.execute(con, "CREATE TABLE test_table(i INTEGER, j DOUBLE)")
+    @test_throws DuckDB.QueryException DBInterface.prepare(con, "INSERT INTO test_table VALUES(:col1, :col2)")
+    stmt = DBInterface.prepare(con, raw"INSERT INTO test_table VALUES($col1, $col2)")
+    col1 = [1, 2, 3, 4, 5]
+    col2 = [1, 2, 4, 8, -0.5]
+    DBInterface.executemany(stmt, (col1 = col1, col2 = col2))
+    results = DBInterface.execute(con, "SELECT * FROM test_table") |> DataFrame
+
+    @test isequal(results.i, col1)
+    @test isequal(results.j, col2)
+
+    DBInterface.close!(con)
+end
+
+
 @testset "DBInterface.prepare: ambiguous parameters" begin
     con = DBInterface.connect(DuckDB.DB)
 
