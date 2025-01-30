@@ -71,9 +71,10 @@ statement error
 SELECT SUM(t) FROM timestamp
 ----
 
-statement error
+query I
 SELECT AVG(t) FROM timestamp
 ----
+2007-11-14 11:44:19.142857
 
 statement error
 SELECT t+t FROM timestamp
