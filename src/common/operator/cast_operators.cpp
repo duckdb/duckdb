@@ -1556,6 +1556,7 @@ template <>
 bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, CastParameters &parameters) {
 	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result)) {
 	case TimestampCastResult::SUCCESS:
+	case TimestampCastResult::STRICT_UTC:
 		return true;
 	case TimestampCastResult::ERROR_INCORRECT_FORMAT:
 		HandleCastError::AssignError(Timestamp::FormatError(input), parameters);
