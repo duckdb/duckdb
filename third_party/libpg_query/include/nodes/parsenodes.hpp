@@ -1289,6 +1289,7 @@ typedef struct PGSelectStmt {
 	PGSetOperation op;         /* type of set op */
 	bool all;                  /* ALL specified? */
 	bool from_first;           /* FROM first or SELECT first */
+	bool offset_first;         /* OFFSET first or LIMIT first */
 	struct PGNode *larg; /* left child */
 	struct PGNode *rarg; /* right child */
 	                           /* Eventually add fields for CORRESPONDING spec here */

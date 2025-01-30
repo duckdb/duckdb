@@ -366,7 +366,7 @@ static PGNode* makeNamedParamRef(char *name, int location)
 static void
 insertSelectOptions(PGSelectStmt *stmt,
 					PGList *sortClause, PGList *lockingClause,
-					PGNode *limitOffset, PGNode *limitCount,
+					PGNode *limitOffset, PGNode *limitCount, PGNode *isLimitOffsetFirst,
 					PGWithClause *withClause,
 					core_yyscan_t yyscanner)
 {
@@ -410,6 +410,9 @@ insertSelectOptions(PGSelectStmt *stmt,
 					 errmsg("multiple LIMIT clauses not allowed"),
 					 parser_errposition(exprLocation(limitCount))));
 		stmt->limitCount = limitCount;
+	}
+	if (limitOffset == isLimitOffsetFirst) {
+		stmt->offset_first = true;
 	}
 	if (withClause)
 	{
