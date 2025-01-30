@@ -1,5 +1,4 @@
 #include "capi_tester.hpp"
-
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
@@ -756,4 +755,84 @@ TEST_CASE("Array value construction") {
 		duckdb_destroy_value(&val);
 	}
 	duckdb_destroy_value(&array_value);
+}
+
+TEST_CASE("Map value construction") {
+	auto key_type = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto value_type = duckdb_create_logical_type(DUCKDB_TYPE_DOUBLE);
+	auto map_type = duckdb_create_map_type(key_type, value_type);
+
+	duckdb::vector<duckdb_value> keys;
+	keys.push_back(duckdb_create_int64(42));
+	keys.push_back(duckdb_create_int64(43));
+	keys.push_back(duckdb_create_int64(44));
+
+	duckdb::vector<duckdb_value> values;
+	values.push_back(duckdb_create_double(42.0));
+	values.push_back(duckdb_create_double(43.0));
+	values.push_back(duckdb_create_double(44.0));
+
+	duckdb_value keys_v = duckdb_create_list_value(key_type, keys.data(), keys.size());
+	duckdb_value values_v = duckdb_create_list_value(value_type, values.data(), values.size());
+
+	auto map_value = duckdb_create_map_value(map_type, keys_v, values_v);
+	REQUIRE(map_value);
+
+	duckdb_destroy_value(&keys_v);
+	duckdb_destroy_value(&values_v);
+
+	REQUIRE(duckdb_get_map_size(map_value) == 3);
+
+	for (idx_t i = 0; i < 3; i++) {
+		auto key = duckdb_get_map_key(map_value, i);
+		REQUIRE(duckdb_get_int64(key) == 42L + (int64_t)i);
+		duckdb_destroy_value(&key);
+
+		auto value = duckdb_get_map_value(map_value, i);
+		REQUIRE(duckdb_get_double(value) == 42.0 + i);
+		duckdb_destroy_value(&value);
+	}
+
+	duckdb_destroy_logical_type(&key_type);
+	duckdb_destroy_logical_type(&value_type);
+	duckdb_destroy_logical_type(&map_type);
+
+	for (auto &val : keys) {
+		duckdb_destroy_value(&val);
+	}
+
+	for (auto &val : values) {
+		duckdb_destroy_value(&val);
+	}
+
+	duckdb_destroy_value(&map_value);
+}
+
+TEST_CASE("Union value construction") {
+	duckdb_logical_type member_types[2] = {duckdb_create_logical_type(DUCKDB_TYPE_INTEGER),
+	                                       duckdb_create_logical_type(DUCKDB_TYPE_DOUBLE)};
+	const char *member_names[2] = {"i", "d"};
+	auto union_type = duckdb_create_union_type(member_types, member_names, 2);
+	REQUIRE(union_type);
+
+	auto int_value = duckdb_create_int32(42);
+	auto union_value = duckdb_create_union_value(union_type, int_value, 0);
+	REQUIRE(union_value);
+	duckdb_destroy_value(&union_value);
+	duckdb_destroy_value(&int_value);
+
+	auto double_value = duckdb_create_double(42.0);
+	union_value = duckdb_create_union_value(union_type, double_value, 1);
+	REQUIRE(union_value);
+	duckdb_destroy_value(&union_value);
+	duckdb_destroy_value(&double_value);
+
+	auto invalid_value = duckdb_create_float(43);
+	auto invalid_union_value = duckdb_create_union_value(union_type, invalid_value, 0);
+	REQUIRE(invalid_union_value == nullptr);
+	duckdb_destroy_value(&invalid_value);
+
+	duckdb_destroy_logical_type(&union_type);
+	duckdb_destroy_logical_type(&member_types[0]);
+	duckdb_destroy_logical_type(&member_types[1]);
 }
