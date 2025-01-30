@@ -13,8 +13,6 @@
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
 #include "duckdb/execution/index/unbound_index.hpp"
 #include "duckdb/storage/data_table.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/expression_binder/index_binder.hpp"
 
 namespace duckdb {
 
