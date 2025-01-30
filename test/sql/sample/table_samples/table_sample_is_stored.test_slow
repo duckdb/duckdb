@@ -6,6 +6,8 @@ require vector_size 2048
 
 require noforcestorage
 
+require icu
+
 load __TEST_DIR__/test_samples.db
 
 statement ok
