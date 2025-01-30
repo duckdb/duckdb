@@ -46,6 +46,13 @@ LIMIT 1;
 ----
 DOUBLE	BIGINT	TINYINT
 
+query III
+SELECT typeof(a), typeof(b), typeof(c)
+FROM  read_csv_auto('__TEST_DIR__/ubn*.csv', UNION_BY_NAME=TRUE, dtypes={'c': TINYINT, 'A': DOUBLE}, CACHE_UNION_READERS=FALSE)
+LIMIT 1;
+----
+DOUBLE	BIGINT	TINYINT
+
 # unrecognized in any file
 statement error
 SELECT typeof(a), typeof(b), typeof(c)
