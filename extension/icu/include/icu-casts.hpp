@@ -13,7 +13,7 @@
 namespace duckdb {
 
 struct ICUMakeDate : public ICUDateFunc {
-	static inline date_t Operation(icu::Calendar *calendar, timestamp_t instant);
+	static date_t Operation(icu::Calendar *calendar, timestamp_t instant);
 
 	static bool CastToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters);
 
