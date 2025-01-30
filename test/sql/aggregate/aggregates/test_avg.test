@@ -56,6 +56,45 @@ SELECT AVG(i) FROM integers WHERE i > 100
 ----
 NULL
 
+# Intervals
+statement ok
+CREATE TABLE intervals(itvl INTERVAL)
+
+statement ok
+INSERT INTO intervals VALUES 
+	('1 day'), 
+	('30 days'), 
+	('30 days'), 
+	('30 days'), 
+	('30 days')
+
+query II
+SELECT AVG(itvl), AVG(DISTINCT itvl) FROM intervals
+----
+24 days 04:48:00	15 days 12:00:00
+
+# The only test of AVG(INTERVAL) in the PG test suite...
+statement ok
+CREATE TABLE interval_tbl (f1 interval);
+
+statement ok
+INSERT INTO interval_tbl (f1) VALUES 
+	('@ 1 minute'),
+	('@ 5 hour'),
+	('@ 10 day'),
+	('@ 34 year'),
+	('@ 3 months'),
+	('@ 14 seconds ago'),
+	('1 day 2 hours 3 minutes 4 seconds'),
+	('6 years'),
+	('5 months'),
+	('5 months 12 hours');
+
+query I
+select avg(f1) from interval_tbl;
+----
+4 years 1 month 10 days 04:18:23
+
 # invalid use of average
 statement error
 SELECT AVG()
@@ -80,3 +119,38 @@ query III
 SELECT AVG(i), AVG(j), AVG(k) FROM vals;
 ----
 NULL	NULL	NULL
+
+# Temporal values
+statement ok
+CREATE OR REPLACE TABLE timestamps AS 
+	SELECT range AS ts
+	FROM range('2024-11-01'::DATE, '2024-12-01'::DATE, INTERVAL 1 DAY)
+
+query I
+SELECT AVG(ts::DATE) 
+FROM timestamps
+----
+2024-11-15 12:00:00
+
+query I
+SELECT AVG(ts) 
+FROM timestamps
+----
+2024-11-15 12:00:00
+
+query I
+SELECT AVG(ts::TIMESTAMPTZ) 
+FROM timestamps
+----
+2024-11-15 12:00:00+00
+
+statement ok
+CREATE OR REPLACE TABLE times AS 
+	SELECT range AS ts
+	FROM range('2024-11-01'::DATE, '2024-11-02'::DATE, INTERVAL 7 MINUTES)
+
+query I
+SELECT AVG(ts::TIME) 
+FROM times
+----
+11:57:30

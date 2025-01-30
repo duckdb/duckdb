@@ -22,6 +22,21 @@ struct AvgState {
 	}
 };
 
+struct IntervalAvgState {
+	int64_t count;
+	interval_t value;
+
+	void Initialize() {
+		this->count = 0;
+		this->value = interval_t();
+	}
+
+	void Combine(const IntervalAvgState &other) {
+		this->count += other.count;
+		this->value = AddOperator::Operation<interval_t, interval_t, interval_t>(this->value, other.value);
+	}
+};
+
 struct KahanAvgState {
 	uint64_t count;
 	double value;
@@ -105,6 +120,20 @@ struct IntegerAverageOperationHugeint : public BaseSumOperation<AverageSetOperat
 	}
 };
 
+struct DiscreteAverageOperation : public BaseSumOperation<AverageSetOperation, AddToHugeint> {
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
+		} else {
+			uint64_t remainder;
+			target = Hugeint::Cast<T>(Hugeint::DivModPositive(state.value, state.count, remainder));
+			// Round the result
+			target += (remainder > (state.count / 2));
+		}
+	}
+};
+
 struct HugeintAverageOperation : public BaseSumOperation<AverageSetOperation, HugeintAdd> {
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
@@ -139,6 +168,45 @@ struct KahanAverageOperation : public BaseSumOperation<AverageSetOperation, Kaha
 	}
 };
 
+struct IntervalAverageOperation : public BaseSumOperation<AverageSetOperation, IntervalAdd> {
+	// Override BaseSumOperation::Initialize because
+	// IntervalAvgState does not have an assignment constructor from 0
+	static void Initialize(IntervalAvgState &state) {
+		AverageSetOperation::Initialize<IntervalAvgState>(state);
+	}
+
+	template <class RESULT_TYPE, class STATE>
+	static void Finalize(STATE &state, RESULT_TYPE &target, AggregateFinalizeData &finalize_data) {
+		if (state.count == 0) {
+			finalize_data.ReturnNull();
+		} else {
+			// DivideOperator does not borrow fractions right,
+			// TODO: Maybe it should?
+			// Copy PG implementation.
+			const auto &value = state.value;
+			const auto count = UnsafeNumericCast<int64_t>(state.count);
+
+			target.months = value.months / count;
+			auto months_remainder = value.months % count;
+
+			target.days = value.days / count;
+			auto days_remainder = value.days % count;
+
+			target.micros = value.micros / count;
+			auto micros_remainder = value.micros % count;
+
+			//	Shift the remainders right
+			months_remainder *= Interval::DAYS_PER_MONTH;
+			target.days += months_remainder / count;
+			days_remainder += months_remainder % count;
+
+			days_remainder *= Interval::MICROS_PER_DAY;
+			micros_remainder += days_remainder / count;
+			target.micros += micros_remainder;
+		}
+	}
+};
+
 AggregateFunction GetAverageAggregate(PhysicalType type) {
 	switch (type) {
 	case PhysicalType::INT16: {
@@ -156,6 +224,10 @@ AggregateFunction GetAverageAggregate(PhysicalType type) {
 	case PhysicalType::INT128: {
 		return AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, hugeint_t, double, HugeintAverageOperation>(
 		    LogicalType::HUGEINT, LogicalType::DOUBLE);
+	}
+	case PhysicalType::INTERVAL: {
+		return AggregateFunction::UnaryAggregate<IntervalAvgState, interval_t, interval_t, IntervalAverageOperation>(
+		    LogicalType::INTERVAL, LogicalType::INTERVAL);
 	}
 	default:
 		throw InternalException("Unimplemented average aggregate");
@@ -183,8 +255,17 @@ AggregateFunctionSet AvgFun::GetFunctions() {
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT32));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT64));
 	avg.AddFunction(GetAverageAggregate(PhysicalType::INT128));
+	avg.AddFunction(GetAverageAggregate(PhysicalType::INTERVAL));
 	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<double>, double, double, NumericAverageOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
+
+	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
+	    LogicalType::TIMESTAMP, LogicalType::TIMESTAMP));
+	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
+	    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP_TZ));
+	avg.AddFunction(AggregateFunction::UnaryAggregate<AvgState<hugeint_t>, int64_t, int64_t, DiscreteAverageOperation>(
+	    LogicalType::TIME, LogicalType::TIME));
+
 	return avg;
 }
 
