@@ -42,9 +42,6 @@ static unique_ptr<FunctionData> DuckDBExtensionsBind(ClientContext &context, Tab
 	names.emplace_back("loaded");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
-	names.emplace_back("installed");
-	return_types.emplace_back(LogicalType::BOOLEAN);
-
 	names.emplace_back("install_path");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -190,25 +187,24 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 	while (data.offset < data.entries.size() && count < STANDARD_VECTOR_SIZE) {
 		auto &entry = data.entries[data.offset];
 
+		int col = 0;
 		// return values:
 		// extension_name LogicalType::VARCHAR
-		output.SetValue(0, count, Value(entry.name));
+		output.SetValue(col++, count, Value(entry.name));
 		// loaded LogicalType::BOOLEAN
-		output.SetValue(1, count, Value::BOOLEAN(entry.loaded));
-		// installed LogicalType::BOOLEAN
-		output.SetValue(2, count, Value::BOOLEAN(entry.installed));
+		output.SetValue(col++, count, Value::BOOLEAN(entry.loaded));
 		// install_path LogicalType::VARCHAR
-		output.SetValue(3, count, Value(entry.file_path));
+		output.SetValue(col++, count, Value(entry.file_path));
 		// description LogicalType::VARCHAR
-		output.SetValue(4, count, Value(entry.description));
+		output.SetValue(col++, count, Value(entry.description));
 		// aliases     LogicalType::LIST(LogicalType::VARCHAR)
-		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, entry.aliases));
+		output.SetValue(col++, count, Value::LIST(LogicalType::VARCHAR, entry.aliases));
 		// extension version     LogicalType::LIST(LogicalType::VARCHAR)
-		output.SetValue(6, count, Value(entry.extension_version));
+		output.SetValue(col++, count, Value(entry.extension_version));
 		// installed_mode LogicalType::VARCHAR
-		output.SetValue(7, count, entry.installed ? Value(EnumUtil::ToString(entry.install_mode)) : Value());
+		output.SetValue(col++, count, entry.installed ? Value(EnumUtil::ToString(entry.install_mode)) : Value());
 		// installed_source LogicalType::VARCHAR
-		output.SetValue(8, count, Value(entry.installed_from));
+		output.SetValue(col++, count, Value(entry.installed_from));
 
 		data.offset++;
 		count++;
