@@ -271,6 +271,24 @@ jobs:
           rm -rf build/release
           make
 
+      - name: debug print install
+        if: always()
+        shell: bash
+        run: |
+          cat build/release/vcpkg-manifest-install.log
+
+      - name: debug print out
+        if: always()
+        shell: bash
+        run: |
+          cat vcpkg/buildtrees/openssl/-x64-osx-dbg-out.log
+
+      - name: debug print err
+        if: always()
+        shell: bash
+        run: |
+          cat vcpkg/buildtrees/openssl/-x64-osx-dbg-err.log
+
       # Run autoload unittests (including the out-of-tree tests) without any extensions linked, relying on the autoloader
       - name: Run tests with auto loading
         if: ${{ matrix.osx_arch == 'arm64' && inputs.skip_tests != 'true' }}
