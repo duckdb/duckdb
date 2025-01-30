@@ -38,6 +38,11 @@ date_t ICUMakeDate::Operation(icu::Calendar *calendar, timestamp_t instant) {
 	return result;
 }
 
+date_t ICUMakeDate::ToDate(ClientContext &context, timestamp_t instant) {
+	ICUDateFunc::BindData data(context);
+	return Operation(data.calendar.get(), instant);
+}
+
 bool ICUMakeDate::CastToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<CastData>();
 	auto &info = cast_data.info->Cast<BindData>();

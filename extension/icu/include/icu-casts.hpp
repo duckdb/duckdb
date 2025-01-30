@@ -20,6 +20,8 @@ struct ICUMakeDate : public ICUDateFunc {
 	static BoundCastInfo BindCastToDate(BindCastInput &input, const LogicalType &source, const LogicalType &target);
 
 	static void AddCasts(DatabaseInstance &db);
+
+	static date_t ToDate(ClientContext &context, timestamp_t instant);
 };
 
 struct ICUToTimeTZ : public ICUDateFunc {

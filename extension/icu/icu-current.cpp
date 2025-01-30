@@ -30,8 +30,7 @@ static void CurrentDateFunction(DataChunk &input, ExpressionState &state, Vector
 	D_ASSERT(input.ColumnCount() == 0);
 	auto instant = GetTransactionTimestamp(state);
 
-	ICUDateFunc::BindData data(state.GetContext());
-	auto val = Value::DATE(ICUMakeDate::Operation(data.calendar.get(), instant));
+	auto val = Value::DATE(ICUMakeDate::ToDate(state.GetContext(), instant));
 	result.Reference(val);
 }
 
