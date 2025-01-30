@@ -132,12 +132,12 @@ SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-12-31 12:00
 ----
 
 # start is smaller than end but we have a negative interval
-statement error
+query I
 SELECT d FROM range(TIMESTAMP '1992-01-01 00:00:00', TIMESTAMP '1992-12-31 12:00:00', INTERVAL '1 MONTH ago') tbl(d)
 ----
 
 # start is bigger than end but we have a positive interval
-statement error
+query I
 SELECT d FROM range(TIMESTAMP '1993-01-01 00:00:00', TIMESTAMP '1992-01-01 00:00:00', INTERVAL '1 MONTH') tbl(d)
 ----
 
