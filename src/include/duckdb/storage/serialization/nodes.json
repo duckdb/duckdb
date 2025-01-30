@@ -826,8 +826,8 @@
         "type": "string"
       },
       {"id": 140,
-        "name": "rfc_4180",
-        "property": "dialect_options.state_machine_options.rfc_4180",
+        "name": "strict_mode",
+        "property": "dialect_options.state_machine_options.strict_mode",
         "type": "CSVOption<bool>"
       },
       {"id": 141,
