@@ -16,7 +16,7 @@ SELECT '[12,13,14]'::INT[];
 query I
 SELECT '["hello", "world", "!"]'::VARCHAR[];
 ----
-["hello", "world", "!"]
+[hello, world, !]
 
 query I
 SELECT CAST('[Hello World!]' AS VARCHAR[]);
@@ -110,8 +110,8 @@ INSERT INTO stringList VALUES ('["hello","world","!"]'), ('["Amazing","text"]'),
 query I
 SELECT col1::VARCHAR[] FROM stringList;
 ----
-["hello", "world", "!"]
-["Amazing", "text"]
+[hello, world, !]
+[Amazing, text]
 [Hello World!]
 
 # ---------------------------------------------------
@@ -124,8 +124,8 @@ INSERT INTO nestedStrings VALUES ('[["hello"], ["world"],["!"]]'), ('[["Amazing"
 query I
 SELECT col1::VARCHAR[][] FROM nestedStrings;
 ----
-[["hello"], ["world"], ["!"]]
-[["Amazing"], ["text"]]
+[[hello], [world], [!]]
+[[Amazing], [text]]
 [[Hello World!]]
 
 # ---------------------------------------------------
@@ -138,8 +138,8 @@ INSERT INTO superNestedStrings VALUES ('[[[[["hello"]]], [[["world"],["!"]]]]]')
 query I
 SELECT col1::VARCHAR[][][][][] FROM superNestedStrings;
 ----
-[[[[["hello"]]], [[["world"], ["!"]]]]]
-[[[[["Amazing"]], [["text"]]]]]
+[[[[[hello]]], [[[world], [!]]]]]
+[[[[[Amazing]], [[text]]]]]
 [[[[[Hello World!]]]]]
 
 # ---------------------------------------------------
@@ -201,39 +201,39 @@ SELECT col1::INT[][][][][][] FROM crazyNested;
 #               Quote handling
 # ---------------------------------------------------
 query I
-SELECT CAST('[''hello'',''world'', ''!'']' AS VARCHAR[]);
+SELECT CAST($$['hello','world', '!']$$ AS VARCHAR[]);
+----
+[hello, world, !]
+
+query I
+SELECT CAST($$[''hello'',''world'', ''!'']$$ AS VARCHAR[]);
 ----
 ['hello', 'world', '!']
 
 query I
-SELECT CAST('[''''hello'''',''''world'''', ''''!'''']' AS VARCHAR[]);
+SELECT CAST($$[[ ['🦆, 🦆, 🦆']], [[duck, db, '🦆'] ]]$$ AS VARCHAR[][][]);
 ----
-[''hello'', ''world'', ''!'']
+[[[🦆, 🦆, 🦆]], [[duck, db, 🦆]]]
 
 query I
-SELECT CAST('[[ [''🦆, 🦆, 🦆'']], [[duck, db, ''🦆''] ]]' AS VARCHAR[][][]);
-----
-[[['🦆, 🦆, 🦆']], [[duck, db, '🦆']]]
-
-query I
-SELECT CAST('["can''t", "you''re", "i''m"]' AS VARCHAR[]);
-----
-["can't", "you're", "i'm"]
-
-query I
-SELECT CAST('[can''t, you''re, i''m]' AS VARCHAR[]);
+SELECT CAST($$["can't", "you're", "i'm"]$$ AS VARCHAR[]);
 ----
 [can't, you're, i'm]
 
 query I
-SELECT CAST('["]", "hello", "world"]' AS VARCHAR[]);
+SELECT CAST($$[can't, you're, i'm]$$ AS VARCHAR[]);
 ----
-["]", "hello", "world"]
+[can't, you're, i'm]
 
 query I
-SELECT CAST('['']'', "hello", "world"]' AS VARCHAR[]);
+SELECT CAST($$["]", "hello", "world"]$$ AS VARCHAR[]);
 ----
-[']', "hello", "world"]
+[], hello, world]
+
+query I
+SELECT CAST($$[']', "hello", "world"]$$ AS VARCHAR[]);
+----
+[], hello, world]
 
 
 #               Test for whitespaces
@@ -249,9 +249,9 @@ SELECT CAST('[          [ [12,     13,14], [8, 9         ]  ],[[ 4    ]   ],    
 [[[12, 13, 14], [8, 9]], [[4]], [[2, 1, 0]]]
 
 query I
-SELECT CAST('["   hello","          ''  world", "!         "]' AS VARCHAR[]);
+SELECT CAST($$["   hello","          '  world", "!         "]$$ AS VARCHAR[]);
 ----
-["   hello", "          '  world", "!         "]
+[   hello,           '  world, !         ]
 
 query I
 SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);     
@@ -259,9 +259,9 @@ SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);
 [hello, world, !]
 
 query I
-SELECT CAST('[    [ "   hello"]  ,["            world"        ],[ "!        "           ]      ]' AS VARCHAR[][]);
+SELECT CAST($$[    [ "   hello"]  ,["            world"        ],[ "!        "           ]      ]$$ AS VARCHAR[][]);
 ----
-[["   hello"], ["            world"], ["!        "]]
+[[   hello], [            world], [!        ]]
 
 
 #               Empty list

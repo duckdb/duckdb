@@ -141,12 +141,9 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 			idx_t struct_lvl = 0;
 			SkipToClose(pos, buf, len, struct_lvl, '}');
 		} else if (buf[pos] == ',' || buf[pos] == ']') {
-			idx_t trailing_whitespace = 0;
-			while (StringUtil::CharacterIsSpace(buf[pos - trailing_whitespace - 1])) {
-				trailing_whitespace++;
-			}
+			auto trimmed_pos = StringTrim(buf, start_pos, pos);
 			if (buf[pos] != ']' || start_pos != pos || seen_value) {
-				state.HandleValue(buf, start_pos, pos - trailing_whitespace);
+				state.HandleValue(buf, start_pos, trimmed_pos);
 				seen_value = true;
 			}
 			if (buf[pos] == ']') {
