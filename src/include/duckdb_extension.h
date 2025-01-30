@@ -542,6 +542,14 @@ typedef struct {
 	                                               idx_t row);
 #endif
 
+// New prepared statement functions that expose more information about the prepared statement
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	idx_t (*duckdb_prepared_column_count)(duckdb_prepared_statement statement);
+	const char *(*duckdb_prepared_column_name)(duckdb_prepared_statement statement, idx_t column_idx);
+	duckdb_type (*duckdb_prepared_column_type)(duckdb_prepared_statement statement, idx_t column_idx);
+	duckdb_logical_type (*duckdb_prepared_column_logical_type)(duckdb_prepared_statement statement, idx_t column_idx);
+#endif
+
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -963,6 +971,12 @@ typedef struct {
 
 // Version unstable_new_append_functions
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// Version unstable_prepared_statement_functions
+#define duckdb_prepared_column_count        duckdb_ext_api.duckdb_prepared_column_count
+#define duckdb_prepared_column_name         duckdb_ext_api.duckdb_prepared_column_name
+#define duckdb_prepared_column_type         duckdb_ext_api.duckdb_prepared_column_type
+#define duckdb_prepared_column_logical_type duckdb_ext_api.duckdb_prepared_column_logical_type
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
