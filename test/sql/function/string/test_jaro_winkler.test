@@ -77,11 +77,10 @@ select jaro_winkler_similarity(null, 'foo')
 ----
 NULL
 
-# this is 1.0 in the apache commons library, but 0.0 in our library
 query T
 select jaro_winkler_similarity('', '')
 ----
-0.0
+1.0
 
 query T
 select jaro_winkler_similarity('foo', 'foo')
