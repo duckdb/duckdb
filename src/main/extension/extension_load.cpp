@@ -481,7 +481,8 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSyste
 	string error;
 	ExtensionInitResult result;
 	if (!TryInitialLoad(db, fs, extension, result, error)) {
-		if (!ExtensionHelper::AllowAutoInstall(extension)) {
+		auto &config = DBConfig::GetConfig(db);
+		if (!config.options.autoinstall_known_extensions || !ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
