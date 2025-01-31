@@ -735,6 +735,8 @@ void ART::CommitDrop(IndexLock &index_lock) {
 }
 
 void ART::Delete(IndexLock &state, DataChunk &input, Vector &row_ids) {
+	// FIXME: We could pass a row_count in here, as we sometimes don't have to delete all row IDs in the chunk,
+	// FIXME: but rather all row IDs up to the conflicting row.
 	auto row_count = input.size();
 
 	DataChunk expr_chunk;
@@ -780,10 +782,9 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	// Traverse the prefix.
 	reference<Node> next(node);
 	if (next.get().GetType() == NType::PREFIX) {
-		Prefix::TraverseMutable(*this, next, key, depth);
-
-		// Prefixes don't match: nothing to erase.
-		if (next.get().GetType() == NType::PREFIX && next.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
+		auto pos = Prefix::TraverseMutable(*this, next, key, depth);
+		if (pos.IsValid()) {
+			// Prefixes don't match: nothing to erase.
 			return;
 		}
 	}
@@ -844,10 +845,9 @@ void ART::Erase(Node &node, reference<const ARTKey> key, idx_t depth, reference<
 	reference<Node> ref(*child);
 
 	if (ref.get().GetType() == NType::PREFIX) {
-		Prefix::TraverseMutable(*this, ref, key, temp_depth);
-
-		// Prefixes don't match: nothing to erase.
-		if (ref.get().GetType() == NType::PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
+		auto pos = Prefix::TraverseMutable(*this, ref, key, temp_depth);
+		if (pos.IsValid()) {
+			// Prefixes don't match: nothing to erase.
 			return;
 		}
 	}
@@ -883,8 +883,8 @@ const unsafe_optional_ptr<const Node> ART::Lookup(const Node &node, const ARTKey
 
 		// Traverse the prefix.
 		if (ref.get().GetType() == NType::PREFIX) {
-			Prefix::Traverse(*this, ref, key, depth);
-			if (ref.get().GetType() == NType::PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
+			auto pos = Prefix::Traverse(*this, ref, key, depth);
+			if (pos.IsValid()) {
 				// Prefix mismatch, return nullptr.
 				return nullptr;
 			}

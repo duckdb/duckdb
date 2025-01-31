@@ -1193,7 +1193,8 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 		if (!index.IsBound()) {
 			throw InternalException("Unbound index found in DataTable::RemoveFromIndexes");
 		}
-		index.Cast<BoundIndex>().Delete(chunk, row_identifiers);
+		auto &bound_index = index.Cast<BoundIndex>();
+		bound_index.Delete(chunk, row_identifiers);
 		return false;
 	});
 }
