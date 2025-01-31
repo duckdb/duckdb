@@ -56,6 +56,18 @@ const vector<string> ExtensionHelper::PathComponents() {
 	return vector<string> {GetVersionDirectoryName(), DuckDB::Platform()};
 }
 
+string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extension_name) {
+	auto components = PathComponents();
+
+	string link = "https://duckdb.org/docs/installing_extensions";
+
+	if (components.size() >= 2) {
+		link += "/?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
+	}
+
+	return link;
+}
+
 duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
 	string home_directory = fs.GetHomeDirectory();
 	// exception if the home directory does not exist, don't create whatever we think is home
@@ -445,6 +457,12 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 			// if we should not retry or exceeded the number of retries - bubble up the error
 			string message;
 			auto exact_match = ExtensionHelper::CreateSuggestions(extension_name, message);
+
+			auto documentation_link = ExtensionHelper::ExtensionInstallDocumentationLink(extension_name);
+			if (!documentation_link.empty()) {
+				message += "\nFor more info, visit " + documentation_link;
+			}
+
 			if (exact_match && !ExtensionHelper::IsRelease(DuckDB::LibraryVersion())) {
 				message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
 			}
