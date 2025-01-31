@@ -553,6 +553,7 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 		// if we have serialized the row groups - push the serialized block pointers into the commit state
 		commit_state->AddRowGroupData(*table, start_index, optimistically_written_count, std::move(row_group_data));
 	}
+	stats.MergeStats(data.stats);
 	total_rows += data.total_rows.load();
 }
 
