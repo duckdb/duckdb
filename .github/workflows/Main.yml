@@ -55,6 +55,7 @@ jobs:
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
+      CRASH_ON_ASSERT: 1
 
     steps:
     - uses: actions/checkout@v4
@@ -102,6 +103,7 @@ jobs:
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       DISABLE_SANITIZER: 1
+      CRASH_ON_ASSERT: 1
 
     steps:
     - uses: actions/checkout@v3
