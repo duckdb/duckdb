@@ -923,3 +923,21 @@ query I
 select '1981-09-27 01:00:00+00'::TIMESTAMPTZ;
 ----
 1981-09-27 00:00:00-01
+
+# 2025a
+# Paraguay will stop changing its clocks after the spring-forward
+# transition on 2024-10-06, so it is now permanently at -03.
+statement ok
+set timezone='America/Asuncion';
+
+query I
+select '2025-03-23'::timestamptz;
+----
+2025-03-23 00:00:00-03
+
+query II
+select utc_offset, is_dst
+from pg_timezone_names() 
+where name = 'America/Asuncion'
+----
+-03:00:00	false

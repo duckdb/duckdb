@@ -26,7 +26,7 @@ find ${data_path/version/$data_version} -type f ! -iname "*.txt" -delete
 cp -r ${data_path/version/$data_version} ${source_path/version/$code_version}
 
 # download IANA and copy the latest Time Zone Data
-tz_version=2024b
+tz_version=2025a
 rm -rf icu-data
 git clone git@github.com:unicode-org/icu-data.git
 cp icu-data/tzdata/icunew/${tz_version}/44/*.txt ${data_path/version/$code_version}/misc
