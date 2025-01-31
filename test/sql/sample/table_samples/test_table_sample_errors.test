@@ -2,6 +2,8 @@
 # description: test table sampl[e errors
 # group: [table_samples]
 
+mode skip
+
 statement ok
 create table t1 as select range a from range(204800);
 

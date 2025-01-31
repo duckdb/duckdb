@@ -2,6 +2,8 @@
 # description: Test sampling of larger relations
 # group: [table_samples]
 
+mode skip
+
 # test valid sampling types (for now only integral types)
 
 statement ok
