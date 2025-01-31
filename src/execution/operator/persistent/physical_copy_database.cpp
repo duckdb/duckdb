@@ -82,7 +82,10 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
 		storage_info.options.emplace("v1_0_0_storage", false);
 		auto unbound_index = make_uniq<UnboundIndex>(create_index_info.Copy(), storage_info,
 		                                             data_table.GetTableIOManager(), catalog.GetAttached());
+
 		data_table.AddIndex(std::move(unbound_index));
+		auto &data_table_info = *data_table.GetDataTableInfo();
+		data_table_info.GetIndexes().InitializeIndexes(context.client, data_table_info);
 	}
 
 	return SourceResultType::FINISHED;
