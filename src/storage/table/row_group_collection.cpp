@@ -404,12 +404,6 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		column_stats.UpdateDistinctStatistics(chunk.data[col_idx], chunk.size(), state.hashes);
 	}
 
-	auto &table_sample = state.stats.GetTableSampleRef(*local_stats_lock);
-	if (!table_sample.destroyed) {
-		D_ASSERT(table_sample.type == SampleType::RESERVOIR_SAMPLE);
-		table_sample.AddToReservoir(chunk);
-	}
-
 	return new_row_group;
 }
 
@@ -441,22 +435,6 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 			continue;
 		}
 		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
-	}
-
-	auto local_sample = state.stats.GetTableSample(*local_stats_lock);
-	auto global_sample = stats.GetTableSample(*global_stats_lock);
-
-	if (local_sample && global_sample) {
-		D_ASSERT(global_sample->type == SampleType::RESERVOIR_SAMPLE);
-		auto &reservoir_sample = global_sample->Cast<ReservoirSample>();
-		reservoir_sample.Merge(std::move(local_sample));
-		// initialize the thread local sample again
-		auto new_local_sample = make_uniq<ReservoirSample>(reservoir_sample.GetSampleCount());
-		state.stats.SetTableSample(*local_stats_lock, std::move(new_local_sample));
-		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
-	} else {
-		state.stats.SetTableSample(*local_stats_lock, std::move(local_sample));
-		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
 	}
 
 	Verify();
@@ -575,7 +553,6 @@ void RowGroupCollection::MergeStorage(RowGroupCollection &data, optional_ptr<Dat
 		// if we have serialized the row groups - push the serialized block pointers into the commit state
 		commit_state->AddRowGroupData(*table, start_index, optimistically_written_count, std::move(row_group_data));
 	}
-	stats.MergeStats(data.stats);
 	total_rows += data.total_rows.load();
 }
 
@@ -606,10 +583,6 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		}
 		delete_count += row_group->Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
-
-	// When deleting destroy the sample.
-	auto stats_guard = stats.GetLock();
-	stats.DestroyTableSample(*stats_guard);
 
 	return delete_count;
 }
@@ -648,9 +621,6 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 			stats.MergeStats(*l, column_id.index, *row_group->GetStatistics(column_id.index));
 		}
 	} while (pos < updates.size());
-	// on update destroy the sample
-	auto stats_guard = stats.GetLock();
-	stats.DestroyTableSample(*stats_guard);
 }
 
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
@@ -1171,8 +1141,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
-	// When adding a column destroy the sample
-	stats.DestroyTableSample(*lock);
 
 	return result;
 }
@@ -1291,14 +1259,6 @@ unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 }
 
 unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
-	auto lock = stats.GetLock();
-	auto &sample = stats.GetTableSampleRef(*lock);
-	if (!sample.destroyed) {
-		D_ASSERT(sample.type == SampleType::RESERVOIR_SAMPLE);
-		auto ret = sample.Copy();
-		ret->Cast<ReservoirSample>().EvictOverBudgetSamples();
-		return ret;
-	}
 	return nullptr;
 }
 
