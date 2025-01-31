@@ -25,6 +25,9 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 	if (options.db_type.empty()) {
 		DBPathAndType::ExtractExtensionPrefix(path, options.db_type);
 	}
+	if (!config.options.enable_external_access && !options.db_type.empty()) {
+		throw PermissionException("Attaching external databases is disabled through configuration");
+	}
 	if (name.empty()) {
 		auto &fs = FileSystem::GetFileSystem(context.client);
 		name = AttachedDatabase::ExtractDatabaseName(path, fs);
