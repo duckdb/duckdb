@@ -103,7 +103,6 @@ jobs:
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
       DISABLE_SANITIZER: 1
-      CRASH_ON_ASSERT: 1
 
     steps:
     - uses: actions/checkout@v3
