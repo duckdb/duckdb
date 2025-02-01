@@ -105,7 +105,8 @@ TEST_CASE("Test using a remote optimizer pass in case thats important to someone
 			idx_t num_chunks = collection.ChunkCount();
 			REQUIRE(write(connfd, &num_chunks, sizeof(idx_t)) == sizeof(idx_t));
 			for (auto &chunk : collection.Chunks()) {
-				MemoryStream target;
+				Allocator allocator;
+				MemoryStream target(allocator);
 				BinarySerializer serializer(target);
 				serializer.Begin();
 				chunk.Serialize(serializer);

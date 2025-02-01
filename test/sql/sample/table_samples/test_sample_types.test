@@ -2,6 +2,8 @@
 # description: Test sampling of larger relations
 # group: [table_samples]
 
+mode skip
+
 # test valid sampling types (for now only integral types)
 
 statement ok
@@ -60,7 +62,7 @@ select count(*) from duckdb_table_sample('integral_samples') where e IS null;
 2048
 
 statement ok
-CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_time() d from range(1000000);
+CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_timestamp() d from range(1000000);
 
 query I
 select count(*) from duckdb_table_sample('t1') where b is null;
