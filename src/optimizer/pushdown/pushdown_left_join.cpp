@@ -1,15 +1,24 @@
 #include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include <utility>
 
 namespace duckdb {
 
@@ -134,9 +143,26 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
 		auto &any_join = join.Cast<LogicalAnyJoin>();
 		if (AddFilter(any_join.condition->Copy()) == FilterResult::UNSATISFIABLE) {
-			// filter statically evaluates to false, strip tree
+			// filter statically evaluates to false, turns it to the cross product join with 1 row NULLs
 			if (any_join.join_type == JoinType::LEFT) {
-				op->children[1] = make_uniq<LogicalEmptyResult>(std::move(op->children[1]));
+				unordered_map<idx_t, vector<unique_ptr<Expression>>> projections_groups;
+				auto column_bindings = op->children[1]->GetColumnBindings();
+				op->children[1]->ResolveOperatorTypes();
+				auto &types = op->children[1]->types;
+				for (idx_t i = 0; i < column_bindings.size(); i++) {
+					projections_groups[column_bindings[i].table_index].emplace_back(
+					    make_uniq<BoundConstantExpression>(Value(types[i])));
+				}
+				// create dummy scan with 1 row NULLs for each table index, then cross product it with the left side
+				auto left = std::move(op->children[0]);
+				for (auto &group : projections_groups) {
+					auto proj = make_uniq<LogicalProjection>(group.first, std::move(group.second));
+					auto dummy_scan = make_uniq<LogicalDummyScan>(optimizer.binder.GenerateTableIndex());
+					proj->AddChild(std::move(dummy_scan));
+					op = LogicalCrossProduct::Create(std::move(left), std::move(proj));
+					left = std::move(op);
+				}
+				op = std::move(left);
 				rewrite_right = false;
 			}
 		}

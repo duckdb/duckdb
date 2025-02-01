@@ -27,4 +27,27 @@ AND (
     FALSE
 );
 ----
-logical_opt	<REGEX>:.*EMPTY_RESULT.*
+logical_opt	<REGEX>:.*CROSS_PRODUCT.*
+
+# RHS contains multiple tables
+statement ok
+CREATE TABLE integers1 AS SELECT * FROM (VALUES (1), (2), (3)) tbl(i);
+
+statement ok
+CREATE TABLE integers2 AS SELECT * FROM (VALUES (1, '1'), (2, '2'), (3, '3')) tbl(i, s);
+
+statement ok
+CREATE TABLE integers3 AS SELECT * FROM (VALUES (1, '4'), (2, '5'), (3, '6')) tbl(i, s);
+
+query III
+SELECT
+    i1.i AS i1_i,
+    i2.s,
+    i3.i AS i3_i
+FROM
+    integers1 i1
+LEFT OUTER JOIN (integers2 i2 LEFT OUTER JOIN integers3 i3 ON i2.i = i3.i) on false;
+----
+1	NULL	NULL
+2	NULL	NULL
+3	NULL	NULL
