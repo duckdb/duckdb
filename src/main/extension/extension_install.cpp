@@ -456,15 +456,11 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		if (!should_retry || retry_count >= MAX_RETRY_COUNT) {
 			// if we should not retry or exceeded the number of retries - bubble up the error
 			string message;
-			auto exact_match = ExtensionHelper::CreateSuggestions(extension_name, message);
+			ExtensionHelper::CreateSuggestions(extension_name, message);
 
 			auto documentation_link = ExtensionHelper::ExtensionInstallDocumentationLink(extension_name);
 			if (!documentation_link.empty()) {
 				message += "\nFor more info, visit " + documentation_link;
-			}
-
-			if (exact_match && !ExtensionHelper::IsRelease(DuckDB::LibraryVersion())) {
-				message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
 			}
 			if (res.error() == duckdb_httplib::Error::Success) {
 				throw HTTPException(res.value(), "Failed to download extension \"%s\" at URL \"%s%s\" (HTTP %n)\n%s",
