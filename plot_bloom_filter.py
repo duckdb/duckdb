@@ -168,6 +168,26 @@ def plot_stacked_medians(aligned_medians, save_path=None):
     plt.show()
 
 
+def plot_build_side_distinct_values_histogram(df, save_path=None):
+    df = df[df['iteration'] == 3]
+    df = df['distinct_values_build_side'].explode().dropna()
+
+    fig, ax = plt.subplots(figsize=(12, 3))
+    ax.hist(df, bins=100, log=True)
+    ax.ticklabel_format(style='plain', axis='x')
+
+    ax.set_ylabel('Number of Joins')
+    ax.set_xlabel('Number of Distinct Values on the Build Side')
+    ax.set_title('Distribution of the Number of Distinct Values for Join Build Sides in JOB')
+
+    plt.tight_layout()
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight', format='svg')
+        print(f"Plot saved to {save_path}")
+
+    plt.show()
+
+
 
 # Main script
 file_with_bloom = "imdb_with_bloom.log"
@@ -177,11 +197,11 @@ file_without_bloom = "imdb_without_bloom.log"
 df_with_bloom = load_json_data(file_with_bloom)
 df_without_bloom = load_json_data(file_without_bloom)
 
+#plot_build_side_distinct_values_histogram(df_with_bloom, save_path='build_ndv_histogram.svg')
+
 # Remove rows where iteration = 0
 df_with_bloom = remove_faulty_runs(remove_cold_runs(df_with_bloom))
 df_without_bloom = remove_faulty_runs(remove_cold_runs(df_without_bloom))
-
-print(df_with_bloom)
 
 # Add aggregated build_time and probe_time columns for queries with Bloom filter
 df_with_bloom['agg_build_times'] = sum_array_values(df_with_bloom, 'build_time')

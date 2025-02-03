@@ -719,11 +719,14 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	                                chunk_idx_to, false);
 	const auto row_locations = iterator.GetRowLocations();
 
+	std::unordered_set<hash_t> uniq_hashes;
+
 	InsertState insert_state(*this);
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = 0; i < count; i++) {
 			hash_data[i] = Load<hash_t>(row_locations[i] + pointer_offset);
+			uniq_hashes.insert(hash_data[i]);
 		}
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
@@ -734,6 +737,8 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 		}
 		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
 	} while (iterator.Next());
+
+	std::cout << "    \"distinct_values_build_side\": " << uniq_hashes.size() << "," << std::endl;
 }
 
 void JoinHashTable::InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys,
@@ -1412,13 +1417,13 @@ idx_t JoinHashTable::CollectTruncatedHashes(Vector &hashes) {
 			}
 		}
 	}
-	/*
+	
 	unordered_set<hash_t> uniq;
 	for (int i=0;i<num_hashes;i++) {
 		uniq.insert(hash_ptr[i]);
 	}
 	D_ASSERT(uniq.size() == num_hashes);
-	*/
+	std::cout << "    \"distinct_values_build_side\": " << num_hashes << "," << std::endl;
 	return num_hashes;
 }
 
