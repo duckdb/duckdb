@@ -598,6 +598,11 @@ idx_t PhysicalInsert::OnConflictHandling(TableCatalogEntry &table, ExecutionCont
 			}
 		}
 		if (action_type == OnConflictAction::UPDATE) {
+			if (do_update_condition) {
+				//! See https://github.com/duckdblabs/duckdb-internal/issues/4090 for context
+				throw NotImplementedException("Inner conflicts detected with a conditional DO UPDATE on-conflict "
+				                              "action, not fully implemented yet");
+			}
 			ManagedSelection last_occurrences(last_occurrences_of_conflict.size());
 			for (auto &idx : last_occurrences_of_conflict) {
 				last_occurrences.Append(idx);
