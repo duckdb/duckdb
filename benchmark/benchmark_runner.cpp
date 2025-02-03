@@ -123,7 +123,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	duckdb::unique_ptr<BenchmarkState> state;
 	try {
 		state = benchmark->Initialize(configuration);
-	} catch(std::exception &ex) {
+	} catch (std::exception &ex) {
 		Log(StringUtil::Format("%s\t1\t", benchmark->name));
 		LogResult("ERROR");
 		duckdb::ErrorData error_data(ex);
@@ -149,7 +149,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 			profiler.Start();
 			benchmark->Run(state.get());
 			profiler.End();
-		} catch(std::exception &ex) {
+		} catch (std::exception &ex) {
 			duckdb::ErrorData error_data(ex);
 			error = error_data.Message();
 		}
