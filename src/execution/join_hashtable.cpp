@@ -35,7 +35,7 @@ JoinHashTable::JoinHashTable(ClientContext &context, const vector<JoinCondition>
     : buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
-      radix_bits(INITIAL_RADIX_BITS) {
+      radix_bits(INITIAL_RADIX_BITS), build_side_hll(HyperLogLog()) {
 	for (idx_t i = 0; i < conditions.size(); ++i) {
 		auto &condition = conditions[i];
 		D_ASSERT(condition.left->return_type == condition.right->return_type);
@@ -133,6 +133,7 @@ void JoinHashTable::Merge(JoinHashTable &other) {
 	}
 
 	sink_collection->Combine(*other.sink_collection);
+	build_side_hll.Merge(other.build_side_hll);
 }
 
 static void ApplyBitmaskAndGetSaltBuild(const Vector &hashes_v, Vector &ht_offsets_v, Vector &salt_v, const idx_t &count, const idx_t &bitmask) {
@@ -410,6 +411,11 @@ void JoinHashTable::Build(PartitionedTupleDataAppendState &append_state, DataChu
 	// Re-reference and ToUnifiedFormat the hash column after computing it
 	source_chunk.data[col_offset].Reference(hash_values);
 	hash_values.ToUnifiedFormat(source_chunk.size(), append_state.chunk_state.vector_data.back().unified);
+
+	auto* h = UnifiedVectorFormat::GetData<hash_t>(append_state.chunk_state.vector_data.back().unified);
+	for (idx_t i = 0; i < source_chunk.size(); i++) {
+		build_side_hll.InsertElement(h[i]);
+	}
 
 	// We already called TupleDataCollection::ToUnifiedFormat, so we can AppendUnified here
 	sink_collection->AppendUnified(append_state, source_chunk, *current_sel, added_count);
@@ -719,14 +725,14 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 	                                chunk_idx_to, false);
 	const auto row_locations = iterator.GetRowLocations();
 
-	std::unordered_set<hash_t> uniq_hashes;
+	//std::unordered_set<hash_t> uniq_hashes;
 
 	InsertState insert_state(*this);
 	do {
 		const auto count = iterator.GetCurrentChunkCount();
 		for (idx_t i = 0; i < count; i++) {
 			hash_data[i] = Load<hash_t>(row_locations[i] + pointer_offset);
-			uniq_hashes.insert(hash_data[i]);
+			//uniq_hashes.insert(hash_data[i]);
 		}
 		TupleDataChunkState &chunk_state = iterator.GetChunkState();
 
@@ -738,7 +744,7 @@ void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool para
 		InsertHashes(hashes, count, chunk_state, insert_state, parallel);
 	} while (iterator.Next());
 
-	std::cout << "    \"distinct_values_build_side\": " << uniq_hashes.size() << "," << std::endl;
+	//std::cout << "    \"distinct_values_build_side\": " << uniq_hashes.size() << "," << std::endl;
 }
 
 void JoinHashTable::InitializeScanStructure(ScanStructure &scan_structure, DataChunk &keys,

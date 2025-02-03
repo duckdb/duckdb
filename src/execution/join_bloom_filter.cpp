@@ -10,6 +10,47 @@
 
 namespace duckdb {
 
+size_t ComputeBloomFilterSize(size_t expected_cardinality, double desired_false_positive_rate) {
+    size_t approx_size = static_cast<size_t>(std::ceil(-double(expected_cardinality) * log(desired_false_positive_rate) / 0.48045));
+
+    // Approximate size rounded to the next power of 2
+    int v = approx_size;
+    v--;
+    v |= v >> 1;
+    v |= v >> 2;
+    v |= v >> 4;
+    v |= v >> 8;
+    v |= v >> 16;
+    v++;
+    return v;
+    return MinValue(v, 32 * 1024 * 8 /*32 KB L1 cache size*/);
+
+    // Approximate size of the Bloom-filter rounded up to the next 8 byte.
+	return approx_size + (64 - approx_size % 64);
+}
+
+size_t ComputeNumHashFunctions(size_t expected_cardinality, size_t bloom_filter_size) {
+    // Limit to up to 4 hash functions for performance.
+    return MinValue(4, static_cast<int>(std::ceil(bloom_filter_size / expected_cardinality * 0.693147)));
+}
+
+inline size_t JoinBloomFilter::HashToIndex(hash_t hash, size_t i) const {
+    const auto rot_hash = hash >> ((i << 5));
+    // Direct indexing
+    //return rot_hash & 0xffff;
+
+    // Next power of 2
+    return rot_hash & bitmask;
+
+    // Create different hashes out of a single hash by shifting a variable length of bits.
+    //std::cout << "inserting hash " << hash << std::endl;
+    //const auto h = hash & bitmask;
+    const auto r = rot_hash & 0xffffffff;
+    // Fast modulo reduction: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+    //return r % bloom_filter_size;
+    return (r * (bloom_filter_size & 0xffffffff)) >> 32;
+}
+
 JoinBloomFilter::JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids, uint64_t bitmask) 
 : column_ids(std::move(column_ids)), bitmask(bitmask) {
     int b_ones = 0;
@@ -17,13 +58,20 @@ JoinBloomFilter::JoinBloomFilter(size_t expected_cardinality, double desired_fal
         b_ones++;
     }
 
-    // Approximate size of the Bloom-filter rounded up to the next 8 byte.
-    size_t approx_size = static_cast<size_t>(std::ceil(-double(expected_cardinality) * log(desired_false_positive_rate) / 0.48045));
-	bloom_filter_size = approx_size + (64 - approx_size % 64);
-    num_hash_functions = MinValue(4, static_cast<int>(std::ceil(approx_size / expected_cardinality * 0.693147)));  // Limit to up to 3 hash functions for performance.
+	bloom_filter_size = ComputeBloomFilterSize(expected_cardinality, desired_false_positive_rate);
+    //std::cout << "bloom filter size: " << bloom_filter_size << std::endl;
+    num_hash_functions = ComputeNumHashFunctions(expected_cardinality, bloom_filter_size);
 
     bloom_data_buffer.resize(bloom_filter_size / 64, 0);
     bloom_filter_bits.Initialize(bloom_data_buffer.data(), bloom_filter_size);
+
+    size_t v = bloom_filter_size;
+    this->bitmask = 0;
+    while (v > 1) { // is this loop correct or off by 1?
+        v = v >> 1;
+        this->bitmask = this->bitmask << 1 | 0x1;
+    }
+    //std::cout << "bitmask: " << bitmask << std::endl;
 }
 
 JoinBloomFilter::JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_functions, size_t bloom_filter_size) : num_hash_functions(num_hash_functions), bloom_filter_size(bloom_filter_size), column_ids(std::move(column_ids))  {
@@ -32,19 +80,6 @@ JoinBloomFilter::JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_fu
 }
 
 JoinBloomFilter::~JoinBloomFilter() {
-}
-
-inline size_t JoinBloomFilter::HashToIndex(hash_t hash, size_t i) const {
-    // Direct indexing
-    return (hash >> ((i << 5))) & 0xffff;
-
-    // Create different hashes out of a single hash by shifting a variable length of bits.
-    //std::cout << "inserting hash " << hash << std::endl;
-    //const auto h = hash & bitmask;
-    ////const auto r = (hash >> ((i << 4))) & 0xffffffff;
-    // Fast modulo reduction: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
-    //return r % bloom_filter_size;
-    ////return (r * (bloom_filter_size & 0xffffffff)) >> 32;
 }
 
 inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const SelectionVector &rsel, idx_t count) {

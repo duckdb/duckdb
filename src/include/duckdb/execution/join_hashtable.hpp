@@ -18,6 +18,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/execution/aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
+#include "duckdb/common/types/hyperloglog.hpp"
 
 namespace duckdb {
 
@@ -273,6 +274,8 @@ public:
 	uint64_t bitmask = DConstants::INVALID_INDEX;
 	//! Whether or not we error on multiple rows found per match in a SINGLE join
 	bool single_join_error_on_multiple_rows = true;
+	//! HLL sketch of the build side to estimate the number of distinct values before the hash table is finalized.
+	HyperLogLog build_side_hll;
 public:
 	// TODO: move this somewhere else outside of hash table.
 	bool should_build_bloom_filter = false;

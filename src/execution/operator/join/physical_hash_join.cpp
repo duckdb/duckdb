@@ -434,8 +434,9 @@ public:
 		// TODO: why does one hash join has multiple probe infos? can we just copy the bloom filter between them?
 		if (sink.hash_table->should_build_bloom_filter) {
 			vector<column_t> column_ids;
-			//auto bf = make_uniq<JoinBloomFilter>(sink.hash_table->Count(), 0.01, std::move(column_ids));
-			auto bf = make_uniq<JoinBloomFilter>(std::move(column_ids), /*num_hash_funcs=*/4, /*size=*/65536);  // Fixed-sized bloom filter
+			size_t approx_ndv = sink.hash_table->build_side_hll.Count();
+			auto bf = make_uniq<JoinBloomFilter>(approx_ndv, 0.01, std::move(column_ids), 0xffffffff);
+			//auto bf = make_uniq<JoinBloomFilter>(std::move(column_ids), /*num_hash_funcs=*/4, /*size=*/8388608);  // Fixed-sized bloom filter
 
 			sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel, bf.get());
 
@@ -451,7 +452,7 @@ public:
 				auto bf_c = bf->Copy();
 				std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(bf->GetColumnIds()), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
 				if (bf->GetScarcity() <= 0.34) {
-					// only use bloom filter for probing if it's selective enough.
+					// only use bloom filter for probing if it's false-positive-rate is low enough (<=1.3%)
 					info.dynamic_filters->PushBloomFilter(*op.get(), std::move(bf));
 				}
 			}
@@ -804,8 +805,21 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 	// Build Bloom-filters for sideways-information-passing
 	auto hash_join_bloom_filter = ClientConfig::GetSetting<HashJoinBloomFilterSetting>(context);
 	if (hash_join_bloom_filter) {
+		size_t build_side_original_cardinality = 0;
+		const auto& build_side_children = op.children[1]->GetSources();
+		for (const PhysicalOperator &s : build_side_children) {
+			//auto &info = op.GetProfilingInfo();
+			//auto cardinality = info.GetMetricAsString(MetricsType::OPERATOR_CARDINALITY);
+			//const PhysicalTableScan &ts = s.Cast<PhysicalTableScan>();
+			build_side_original_cardinality += s.estimated_cardinality; // ??
+		}
+		double build_side_selectivity = 1.0 - (static_cast<double>(ht.Count()) / static_cast<double>(build_side_original_cardinality));
+
 		if (ht.Count() > dynamic_or_filter_threshold) {
 			ht.should_build_bloom_filter = true;
+
+			
+
 			//for (auto &info : probe_info) {
 				//vector<column_t> column_ids;
 				//std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(column_ids), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
