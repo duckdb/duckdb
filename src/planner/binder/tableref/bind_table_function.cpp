@@ -126,8 +126,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
 			auto fun = table_function.functions.GetFunctionByOffset(0);
-			if (table_function.functions.Size() != 1 || fun.arguments.empty() ||
-			    fun.arguments[0].id() != LogicalTypeId::TABLE) {
+			if (table_function.functions.Size() != 1 || fun.arguments.empty()) {
 				throw BinderException(
 				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
 				    fun.name);

@@ -28,6 +28,19 @@ class ConflictManager;
 struct IndexLock;
 struct IndexScanState;
 
+enum class IndexAppendMode : uint8_t { DEFAULT = 0, IGNORE_DUPLICATES = 1, INSERT_DUPLICATES = 2 };
+
+class IndexAppendInfo {
+public:
+	IndexAppendInfo() : append_mode(IndexAppendMode::DEFAULT), delete_index(nullptr) {};
+	IndexAppendInfo(const IndexAppendMode append_mode, const optional_ptr<BoundIndex> delete_index)
+	    : append_mode(append_mode), delete_index(delete_index) {};
+
+public:
+	IndexAppendMode append_mode;
+	optional_ptr<BoundIndex> delete_index;
+};
+
 //! The index is an abstract base class that serves as the basis for indexes
 class BoundIndex : public Index {
 public:
@@ -71,17 +84,15 @@ public:
 	virtual ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids) = 0;
 	//! Obtains a lock and calls Append while holding that lock.
 	ErrorData Append(DataChunk &chunk, Vector &row_ids);
-	//! Appends data to the locked index and verifies constraint violations against a delete index.
-	virtual ErrorData AppendWithDeleteIndex(IndexLock &l, DataChunk &chunk, Vector &row_ids,
-	                                        optional_ptr<BoundIndex> delete_index);
-	//! Obtains a lock and calls Append with an delete_index while holding that lock.
-	ErrorData AppendWithDeleteIndex(DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index);
+	//! Appends data to the locked index and verifies constraint violations.
+	virtual ErrorData Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info);
+	//! Obtains a lock and calls Append while holding that lock.
+	ErrorData Append(DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info);
 
 	//! Verify that data can be appended to the index without a constraint violation.
-	virtual void VerifyAppend(DataChunk &chunk, optional_ptr<BoundIndex> delete_index,
-	                          optional_ptr<ConflictManager> manager);
+	virtual void VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager);
 	//! Verifies the constraint for a chunk of data.
-	virtual void VerifyConstraint(DataChunk &chunk, optional_ptr<BoundIndex> delete_index, ConflictManager &manager);
+	virtual void VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager);
 
 	//! Deletes all data from the index. The lock obtained from InitializeLock must be held
 	virtual void CommitDrop(IndexLock &index_lock) = 0;
@@ -94,8 +105,8 @@ public:
 
 	//! Insert a chunk.
 	virtual ErrorData Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids) = 0;
-	//! Insert a chunk and verifies constraint violations against a delete index.
-	virtual ErrorData Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, optional_ptr<BoundIndex> delete_index);
+	//! Insert a chunk and verifies constraint violations.
+	virtual ErrorData Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info);
 
 	//! Merge another index into this index. The lock obtained from InitializeLock must be held, and the other
 	//! index must also be locked during the merge

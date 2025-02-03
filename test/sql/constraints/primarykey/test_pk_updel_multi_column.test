@@ -2,6 +2,9 @@
 # description: PRIMARY KEY and update/delete on multiple columns
 # group: [primarykey]
 
+# See test/sql/index/art/constraints/test_art_tx_returning.test.
+require vector_size 2048
+
 statement ok
 PRAGMA enable_verification;
 

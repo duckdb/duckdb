@@ -10,15 +10,15 @@ pragma enable_verification;
 statement error
 from 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/202204-clean-sane-header.csv'
 ----
-Enable scanning files that are not RFC 4180 compliant (rfc_4180=false).
+* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
 
 query I
-select count(*) from read_csv('https://github.com/duckdb/duckdb-data/releases/download/v1.0/202204-clean-sane-header.csv', rfc_4180=false)
+select count(*) from read_csv('https://github.com/duckdb/duckdb-data/releases/download/v1.0/202204-clean-sane-header.csv', strict_mode=false)
 ----
 50000
 
 query IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
-from read_csv('https://github.com/duckdb/duckdb-data/releases/download/v1.0/202204-clean-sane-header.csv', rfc_4180=false) order by all limit 10
+from read_csv('https://github.com/duckdb/duckdb-data/releases/download/v1.0/202204-clean-sane-header.csv', strict_mode=false) order by all limit 10
 ----
 11111111	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	1111-11-11	1111-11-11	11111111	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	aaaa111111aaaaaaaaaaaaaaaaaaaaaaaa	aaaaaaaaaaaa	1111a1aa-1111-1111-aa11-11aa11a11111	aaaaaaaaaaaaaaaaaaaaaaaaaa	1111-11-11	aaaaaa-aaaaa-aaaaaaaaaaaaaaaaa	a1a-11111	a1111111-1aaa-11a1-a1a1-aa1a111111a1	aaaaaaa	aaaaaaa	aaaaa	NULL	aaaaaaaaaaaaaaaaaaaa	1a1111	1a111111111111111	1a111111111111111	1a11111	aaa	aaaaaaaaaaaa	NULL	aaaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaa1111a1aa-1111-1111-aa11-11aa11a11111aaaaaaaaaaaaaaaaaa-aa-aaa-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	aaaaaaaaaaa	NULL	NULL	NULL	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	NULL	aaaaaaa	aaaaaaa	11a	aa-aa-aaa-aaaaaa	NULL	NULL	NULL	NULL	aa-aaa-1111a	aaaa	NULL	NULL	NULL	aaaaa	aaaaaaaaaa	aaaaa	1a1	aaaaaaaa	NULL	NULL	NULL	aaaaaaaaaa
 11111111	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	1111-11-11	1111-11-11	11111111	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	aaaa111111aaaaaaaaaaaaaaaaaaaaaaaa	aaaaaaaaaaaa	1111a1aa-1111-1111-aa11-11aa11a11111	aaaaaaaaaaaaaaaaaaaaaaaaaa	1111-11-11	aaaaaa-aaaaa-aaaaaaaaaaaaaaaaa	a1a-11111	a1111111-1aaa-11a1-a1a1-aa1a111111a1	aaaaaaa	aaaaaaa	aaaaa	NULL	aaaaaaaaaaaaaaaaaaaa	1a1111	1a111111111111111	1a111111111111111	1a11111	aaa	aaaaaaaaaaaa	NULL	aaaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaa1111a1aa-1111-1111-aa11-11aa11a11111aaaaaaaaaaaaaaaaaa-aaaa-aaaaaaaa-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	aaaaaaaaaaaaaaaaaaaaaa	NULL	NULL	NULL	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	NULL	aaaaaaa	aaaaaaa	11a	aa-aaaa-aaaaaaaa-aaa	NULL	NULL	NULL	NULL	aa-aaa-1111a	aaaa	NULL	NULL	NULL	aaaaa	aaaaaaaaaa	aaaaa	1a1	aaaaaaaa	NULL	NULL	NULL	aaaaaaaaaa

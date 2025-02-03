@@ -14,13 +14,6 @@
         "type": "scalar_function_set"
     },
     {
-        "name": "current_date",
-        "description": "Returns the current date",
-        "example": "current_date()",
-        "type": "scalar_function",
-        "aliases": ["today"]
-    },
-    {
         "name": "date_diff",
         "parameters": "part,startdate,enddate",
         "description": "The number of partition boundaries between the timestamps",
@@ -125,13 +118,6 @@
         "description": "Extract the epoch component in nanoseconds from a temporal type",
         "example": "epoch_ns(timestamp '2021-08-03 11:59:44.123456')",
         "type": "scalar_function_set"
-    },
-    {
-        "struct": "CurrentTimeFun",
-        "name": "get_current_time",
-        "description": "Returns the current time",
-        "example": "get_current_time()",
-        "type": "scalar_function"
     },
     {
         "name": "era",

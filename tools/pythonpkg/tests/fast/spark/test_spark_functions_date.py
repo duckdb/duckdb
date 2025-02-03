@@ -177,20 +177,13 @@ class TestsSparkFunctionsDate(object):
     def test_to_timestamp(self, spark):
         df = spark.createDataFrame([('1997-02-28 10:30:00',)], ['t'])
         res = df.select(F.to_timestamp(df.t).alias('dt')).collect()
-        # FIXME: Fix difference between DuckDB and Spark
-        if USE_ACTUAL_SPARK:
-            assert res == [Row(dt=datetime(1997, 2, 28, 10, 30))]
-        else:
-            assert res == [Row(dt=datetime(1997, 2, 28, 10, 30, tzinfo=timezone.utc))]
+        assert res == [Row(dt=datetime(1997, 2, 28, 10, 30))]
 
     def test_to_timestamp_ltz(self, spark):
         df = spark.createDataFrame([("2016-12-31",)], ["e"])
         res = df.select(F.to_timestamp_ltz(df.e).alias('r')).collect()
-        # FIXME: Fix difference between DuckDB and Spark
-        if USE_ACTUAL_SPARK:
-            assert res == [Row(r=datetime(2016, 12, 31, 0, 0))]
-        else:
-            assert res == [Row(r=datetime(2016, 12, 31, 0, 0, tzinfo=timezone.utc))]
+
+        assert res == [Row(r=datetime(2016, 12, 31, 0, 0))]
 
     def test_to_timestamp_ntz(self, spark):
         df = spark.createDataFrame([("2016-04-08",)], ["e"])

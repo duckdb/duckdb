@@ -2,6 +2,13 @@
 # description: Test updates on the primary key containing RETURNING.
 # group: [constraints]
 
+# For each incoming chunk, we add the row IDs to the delete index.
+# For standard_vector_size = 2, we delete [0, 1], and then try to insert value [1, 2].
+# This is expected to throw a constraint violation.
+# The value 2 is not yet in the delete index, as the chunk that would add that value hasn't been processed, yet.
+# This scenario is a known limitation (also in postgres).
+require vector_size 2048
+
 statement ok
 PRAGMA enable_verification
 
