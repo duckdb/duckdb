@@ -48,6 +48,14 @@ idx_t StrfTimepecifierSize(StrTimeSpecifier specifier) {
 	}
 }
 
+void StrfTimeSplitOffset(int offset, int &hh, int &mm, int &ss) {
+	hh = offset / Interval::SECS_PER_HOUR;
+	offset = offset % Interval::SECS_PER_HOUR;
+
+	mm = offset / Interval::SECS_PER_MINUTE;
+	ss = offset % Interval::SECS_PER_MINUTE;
+}
+
 void StrTimeFormat::AddLiteral(string literal) {
 	constant_size += literal.size();
 	literals.push_back(std::move(literal));
@@ -93,9 +101,12 @@ idx_t StrfTimeFormat::GetSpecifierLength(StrTimeSpecifier specifier, date_t date
 		len += month >= 10;
 		return len;
 	}
-	case StrTimeSpecifier::UTC_OFFSET:
-		// ±HH or ±HH:MM
-		return (data[7] % 60) ? 6 : 3;
+	case StrTimeSpecifier::UTC_OFFSET: {
+		// ±HH or ±HH:MM or ±HH:MM:SS
+		int hh, mm, ss;
+		StrfTimeSplitOffset(data[7], hh, mm, ss);
+		return ss ? 9 : (mm ? 6 : 3);
+	}
 	case StrTimeSpecifier::TZ_NAME:
 		if (tz_name) {
 			return strlen(tz_name);
@@ -295,7 +306,7 @@ char *StrfTimeFormat::WriteDateSpecifier(StrTimeSpecifier specifier, date_t date
 
 char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t data[], const char *tz_name,
                                              size_t tz_len, char *target) const {
-	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] ns, [7] utc
+	// data contains [0] year, [1] month, [2] day, [3] hour, [4] minute, [5] second, [6] ns, [7] utc (secs)
 	switch (specifier) {
 	case StrTimeSpecifier::DAY_OF_MONTH_PADDED:
 		target = WritePadded2(target, UnsafeNumericCast<uint32_t>(data[2]));
@@ -365,12 +376,16 @@ char *StrfTimeFormat::WriteStandardSpecifier(StrTimeSpecifier specifier, int32_t
 		*target++ = (data[7] < 0) ? '-' : '+';
 
 		auto offset = abs(data[7]);
-		auto offset_hours = offset / Interval::MINS_PER_HOUR;
-		auto offset_minutes = offset % Interval::MINS_PER_HOUR;
-		target = WritePadded2(target, UnsafeNumericCast<uint32_t>(offset_hours));
-		if (offset_minutes) {
+		int hh, mm, ss;
+		StrfTimeSplitOffset(offset, hh, mm, ss);
+		target = WritePadded2(target, UnsafeNumericCast<uint32_t>(hh));
+		if (mm || ss) {
 			*target++ = ':';
-			target = WritePadded2(target, UnsafeNumericCast<uint32_t>(offset_minutes));
+			target = WritePadded2(target, UnsafeNumericCast<uint32_t>(mm));
+		}
+		if (ss) {
+			*target++ = ':';
+			target = WritePadded2(target, UnsafeNumericCast<uint32_t>(ss));
 		}
 		break;
 	}
@@ -1270,13 +1285,13 @@ bool StrpTimeFormat::Parse(const char *data, size_t size, ParseResult &result, b
 				break;
 			}
 			case StrTimeSpecifier::UTC_OFFSET: {
-				int hour_offset, minute_offset;
-				if (!Timestamp::TryParseUTCOffset(data, pos, size, hour_offset, minute_offset)) {
-					error_message = "Expected +HH[MM] or -HH[MM]";
+				int hh, mm, ss;
+				if (!Timestamp::TryParseUTCOffset(data, pos, size, hh, mm, ss)) {
+					error_message = "Expected ±HH[MM] or -HH[:MM[:SS]]";
 					error_position = pos;
 					return false;
 				}
-				result_data[7] = hour_offset * Interval::MINS_PER_HOUR + minute_offset;
+				result_data[7] = (hh * Interval::MINS_PER_HOUR + mm) * Interval::SECS_PER_MINUTE + ss;
 				break;
 			}
 			case StrTimeSpecifier::TZ_NAME: {
@@ -1449,15 +1464,15 @@ int32_t StrpTimeFormat::ParseResult::GetMicros() const {
 }
 
 dtime_t StrpTimeFormat::ParseResult::ToTime() {
-	const auto hour_offset = data[7] / Interval::MINS_PER_HOUR;
-	const auto mins_offset = data[7] % Interval::MINS_PER_HOUR;
-	return Time::FromTime(data[3] - hour_offset, data[4] - mins_offset, data[5], GetMicros());
+	int hh, mm, ss;
+	StrfTimeSplitOffset(data[7], hh, mm, ss);
+	return Time::FromTime(data[3] - hh, data[4] - mm, data[5] - ss, GetMicros());
 }
 
 int64_t StrpTimeFormat::ParseResult::ToTimeNS() {
-	const int32_t hour_offset = data[7] / Interval::MINS_PER_HOUR;
-	const int32_t mins_offset = data[7] % Interval::MINS_PER_HOUR;
-	return Time::ToNanoTime(data[3] - hour_offset, data[4] - mins_offset, data[5], data[6]);
+	int hh, mm, ss;
+	StrfTimeSplitOffset(data[7], hh, mm, ss);
+	return Time::ToNanoTime(data[3] - hh, data[4] - mm, data[5] - ss, data[6]);
 }
 
 bool StrpTimeFormat::ParseResult::TryToTime(dtime_t &result) {

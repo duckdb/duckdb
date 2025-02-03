@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
@@ -198,8 +197,7 @@ public:
 	//! Convert a timestamp to a Julian Day
 	DUCKDB_API static double GetJulianDay(timestamp_t timestamp);
 
-	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset,
-	                                         int &minute_offset);
+	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss);
 
 	DUCKDB_API static string FormatError(const string &str);
 	DUCKDB_API static string FormatError(string_t str);
