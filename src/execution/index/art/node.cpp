@@ -44,7 +44,7 @@ void Node::New(ART &art, Node &node, NType type) {
 		Node256::New(art, node);
 		break;
 	default:
-		throw InternalException("Invalid node type for New: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for New: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -113,7 +113,7 @@ uint8_t Node::GetAllocatorIdx(const NType type) {
 	case NType::NODE_256_LEAF:
 		return 8;
 	default:
-		throw InternalException("Invalid node type for GetAllocatorIdx: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetAllocatorIdx: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -135,7 +135,7 @@ void Node::ReplaceChild(const ART &art, const uint8_t byte, const Node child) co
 	case NType::NODE_256:
 		return Ref<Node256>(art, *this, type).ReplaceChild(byte, child);
 	default:
-		throw InternalException("Invalid node type for ReplaceChild: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for ReplaceChild: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -159,7 +159,7 @@ void Node::InsertChild(ART &art, Node &node, const uint8_t byte, const Node chil
 	case NType::NODE_256_LEAF:
 		return Node256Leaf::InsertByte(art, node, byte);
 	default:
-		throw InternalException("Invalid node type for InsertChild: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for InsertChild: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -188,7 +188,7 @@ void Node::DeleteChild(ART &art, Node &node, Node &prefix, const uint8_t byte, c
 	case NType::NODE_256_LEAF:
 		return Node256Leaf::DeleteByte(art, node, byte);
 	default:
-		throw InternalException("Invalid node type for DeleteChild: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for DeleteChild: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -212,7 +212,7 @@ unsafe_optional_ptr<Node> GetChildInternal(ART &art, NODE &node, const uint8_t b
 		return Node256::GetChild(Node::Ref<Node256>(art, node, type), byte);
 	}
 	default:
-		throw InternalException("Invalid node type for GetChildInternal: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetChildInternal: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -239,7 +239,7 @@ unsafe_optional_ptr<Node> GetNextChildInternal(ART &art, NODE &node, uint8_t &by
 	case NType::NODE_256:
 		return Node256::GetNextChild(Node::Ref<Node256>(art, node, type), byte);
 	default:
-		throw InternalException("Invalid node type for GetNextChildInternal: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetNextChildInternal: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -263,7 +263,7 @@ bool Node::HasByte(ART &art, uint8_t &byte) const {
 	case NType::NODE_256_LEAF:
 		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).HasByte(byte);
 	default:
-		throw InternalException("Invalid node type for GetNextByte: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetNextByte: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -279,7 +279,7 @@ bool Node::GetNextByte(ART &art, uint8_t &byte) const {
 	case NType::NODE_256_LEAF:
 		return Ref<Node256Leaf>(art, *this, NType::NODE_256_LEAF).GetNextByte(byte);
 	default:
-		throw InternalException("Invalid node type for GetNextByte: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetNextByte: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -304,7 +304,7 @@ idx_t GetCapacity(NType type) {
 	case NType::NODE_256:
 		return Node256::CAPACITY;
 	default:
-		throw InternalException("Invalid node type for GetCapacity: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for GetCapacity: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -572,7 +572,7 @@ bool Node::MergeInternal(ART &art, Node &other, const GateStatus status) {
 		ArenaAllocator allocator(Allocator::Get(art.db));
 		for (idx_t i = 0; i < row_ids.size(); i++) {
 			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, row_ids[i]);
-			art.Insert(*this, row_id, 0, row_id, GateStatus::GATE_SET, nullptr);
+			art.Insert(*this, row_id, 0, row_id, GateStatus::GATE_SET, nullptr, IndexAppendMode::DEFAULT);
 		}
 		return true;
 	}
@@ -637,7 +637,7 @@ void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 	case NType::NODE_256_LEAF:
 		return;
 	default:
-		throw InternalException("Invalid node type for Vacuum: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for Vacuum: %s.", EnumUtil::ToString(type));
 	}
 }
 
@@ -670,7 +670,7 @@ void Node::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSi
 	case NType::NODE_256:
 		return TransformToDeprecatedInternal(art, InMemoryRef<Node256>(art, node, type), allocator);
 	default:
-		throw InternalException("Invalid node type for TransformToDeprecated: %d.", static_cast<uint8_t>(type));
+		throw InternalException("Invalid node type for TransformToDeprecated: %s.", EnumUtil::ToString(type));
 	}
 }
 

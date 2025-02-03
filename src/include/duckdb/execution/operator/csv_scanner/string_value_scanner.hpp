@@ -217,6 +217,8 @@ public:
 	//! (i.e., non-comment) line.
 	bool first_line_is_comment = false;
 
+	bool ignore_empty_values = true;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Specialized code for possibly escaped values, makes sure to remove escapes
@@ -294,7 +296,7 @@ public:
 	bool FinishedIterator() const;
 
 	//! Creates a new string with all escaped values removed
-	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool rfc_4180,
+	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool strict_mode,
 	                             Vector &vector);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later

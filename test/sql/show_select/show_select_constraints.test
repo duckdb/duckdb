@@ -82,3 +82,42 @@ query II
 SELECT column_name, key FROM (DESCRIBE SELECT c4 + 1 AS expr FROM integers LIMIT 5)
 ----
 expr	NULL
+
+# Alias and Actual column name
+statement ok
+CREATE TABLE base_table(base_name int);
+
+# base without alias
+# column_name | column_type | null | key | default | extra
+query TTTITI
+DESCRIBE base_table
+----
+base_name	INTEGER	YES	NULL	NULL	NULL
+
+# With Alias
+# column_name | column_type | null | key | default | extra
+query TTTITI
+DESCRIBE SELECT base_name AS alias_name FROM base_table
+----
+alias_name	INTEGER	YES	NULL	NULL	NULL
+
+# With Alias 2 Deep
+# column_name | column_type | null | key | default | extra
+query TTTITI
+DESCRIBE SELECT alias_name as alias_alias_name FROM (SELECT base_name AS alias_name FROM base_table)
+----
+alias_alias_name	INTEGER	YES	NULL	NULL	NULL
+
+# Alias inline
+# column_name | column_type | null | key | default | extra
+query TTTITI
+DESCRIBE SELECT base_name AS alias_name FROM VALUES (1) AS base_table(base_name)
+----
+alias_name	INTEGER	YES	NULL	NULL	NULL
+
+# Alias CTE
+# column_name | column_type | null | key | default | extra
+query TTTITI
+DESCRIBE WITH cte_rel AS (SELECT 1 as base_name) SELECT base_name as alias_name FROM cte_rel;
+----
+alias_name	INTEGER	YES	NULL	NULL	NULL

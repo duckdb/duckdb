@@ -173,9 +173,11 @@ void TableIndexList::VerifyForeignKey(optional_ptr<LocalTableStorage> storage, c
 	D_ASSERT(index && index->IsBound());
 	if (storage) {
 		auto delete_index = storage->delete_indexes.Find(index->GetIndexName());
-		index->Cast<BoundIndex>().VerifyConstraint(chunk, delete_index, conflict_manager);
+		IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
+		index->Cast<BoundIndex>().VerifyConstraint(chunk, index_append_info, conflict_manager);
 	} else {
-		index->Cast<BoundIndex>().VerifyConstraint(chunk, nullptr, conflict_manager);
+		IndexAppendInfo index_append_info;
+		index->Cast<BoundIndex>().VerifyConstraint(chunk, index_append_info, conflict_manager);
 	}
 }
 
@@ -201,10 +203,9 @@ vector<IndexStorageInfo> TableIndexList::GetStorageInfos(const case_insensitive_
 		}
 
 		auto info = index->Cast<UnboundIndex>().GetStorageInfo();
-		D_ASSERT(info.IsValid() && !info.name.empty());
+		D_ASSERT(!info.name.empty());
 		infos.push_back(info);
 	}
-
 	return infos;
 }
 

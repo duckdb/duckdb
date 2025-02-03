@@ -462,7 +462,7 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 	}
 	return MaxValue<idx_t>(CGroups::GetCPULimit(fs, physical_cores), 1);
 #else
-	return physical_cores;
+	return MaxValue<idx_t>(physical_cores, 1);
 #endif
 #endif
 }
