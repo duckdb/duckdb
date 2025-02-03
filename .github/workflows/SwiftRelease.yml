@@ -62,7 +62,7 @@ jobs:
           export TAG_NAME=`python3 -c "import sys, os; sys.path.append(os.path.join('scripts')); import package_build; print(package_build.git_dev_version())"`
           cd ..
           if git -C updated-repo tag -l $TAG_NAME; then
-            echo 'Tag $TAG_NAME already exists - skipping'
+            echo 'Tag '$TAG_NAME' already exists - skipping'
           else
             git -C updated-repo tag -a $TAG_NAME -m "Release $TAG_NAME"
             git -C updated-repo push origin $TAG_NAME
