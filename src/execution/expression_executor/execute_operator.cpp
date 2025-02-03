@@ -140,6 +140,9 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			}
 			result.SetValue(i, val);
 		}
+		if (count == 1) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
 	} else if (expr.children.size() == 1) {
 		state->intermediate_chunk.Reset();
 		auto &child = state->intermediate_chunk.data[0];
