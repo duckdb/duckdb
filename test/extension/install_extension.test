@@ -37,3 +37,9 @@ statement error
 INSTALL will_never_exist FROM 'core';
 ----
 IO Error: Failed to copy local extension "will_never_exist" at PATH 
+
+# Error message should point to extensions troubleshooting page
+statement error
+INSTALL will_never_exist FROM core;
+----
+For more info, visit https://duckdb.org/docs/extensions/troubleshooting
