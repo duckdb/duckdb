@@ -285,14 +285,25 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 	CreateUpdateChunk(context, chunk, table, row_ids, update_chunk, op);
 	auto &data_table = table.GetStorage();
 
+	if (update_chunk.size() == 0) {
+		// Nothing to do
+		return update_chunk.size();
+	}
+
+	// Arrange the columns in the standard table order.
+	DataChunk &append_chunk = lstate.append_chunk;
+	append_chunk.SetCardinality(update_chunk);
+	for (idx_t i = 0; i < append_chunk.ColumnCount(); i++) {
+		append_chunk.data[i].Reference(chunk.data[i]);
+	}
+	for (idx_t i = 0; i < set_columns.size(); i++) {
+		append_chunk.data[set_columns[i].index].Reference(update_chunk.data[i]);
+	}
+
 	// Perform the UPDATE on the (global) storage.
 	if (!op.update_is_del_and_insert) {
-		if (update_chunk.size() == 0) {
-			return update_chunk.size();
-		}
-
 		if (!op.parallel && op.return_chunk) {
-			gstate.return_collection.Append(chunk);
+			gstate.return_collection.Append(append_chunk);
 		}
 
 		if (GLOBAL) {
@@ -308,16 +319,6 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 		}
 		local_storage.Update(data_table, row_ids, set_columns, update_chunk);
 		return update_chunk.size();
-	}
-
-	// Arrange the columns in the standard table order.
-	DataChunk &append_chunk = lstate.append_chunk;
-	append_chunk.SetCardinality(update_chunk);
-	for (idx_t i = 0; i < append_chunk.ColumnCount(); i++) {
-		append_chunk.data[i].Reference(chunk.data[i]);
-	}
-	for (idx_t i = 0; i < set_columns.size(); i++) {
-		append_chunk.data[set_columns[i].index].Reference(update_chunk.data[i]);
 	}
 
 	if (GLOBAL) {
