@@ -22,7 +22,7 @@ TableScanState::~TableScanState() {
 		std::cout << "    \"selectivity\": " << bf->GetObservedSelectivity() << "," << std::endl;
 		std::cout << "    \"probed_keys\": " << bf->GetNumProbedKeys() << "," << std::endl;
 		std::cout << "    \"probe_time\": " << bf->probe_time << "," << std::endl;
-		std::cout << "    \"build_time\": " << bf->build_time << "," << std::endl;
+		//std::cout << "    \"build_time\": " << bf->build_time << "," << std::endl;
 		std::cout << "    \"hash_time\": " << bf->hash_time << "," << std::endl;
 	}		
 }

@@ -432,25 +432,32 @@ public:
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
 		// TODO: why does one hash join has multiple probe infos? can we just copy the bloom filter between them?
-		/*if (sink.hash_table->should_build_bloom_filter) {
+		if (sink.hash_table->should_build_bloom_filter) {
 			vector<column_t> column_ids;
-			auto bf = make_uniq<JoinBloomFilter>(sink.hash_table->Count(), 0.01, std::move(column_ids));
+			//auto bf = make_uniq<JoinBloomFilter>(sink.hash_table->Count(), 0.01, std::move(column_ids));
+			auto bf = make_uniq<JoinBloomFilter>(std::move(column_ids), /*num_hash_funcs=*/4, /*size=*/65536);  // Fixed-sized bloom filter
 
 			sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel, bf.get());
 
 			std::cout << "    \"bf_num_hash_functions\": " << bf->GetNumHashFunctions() << "," << std::endl;
 			std::cout << "    \"bf_size_bits\": " << bf->GetSizeBits() << "," << std::endl;
 			std::cout << "    \"bf_scarcity\": " << bf->GetScarcity() << "," << std::endl;
+			std::cout << "    \"bf_inserted_keys\": " << bf->GetNumInsertedRows() << "," << std::endl;
+			std::cout << "    \"bf_bitmask\": " << bf->bitmask << "," << std::endl;
+			std::cout << "    \"build_time\": " << bf->build_time << "," << std::endl;
 
 			for (auto &info : sink.op.filter_pushdown->probe_info) {
 				vector<column_t> column_ids;
 				auto bf_c = bf->Copy();
 				std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(bf->GetColumnIds()), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
-				info.dynamic_filters->PushBloomFilter(*op.get(), std::move(bf));
+				if (bf->GetScarcity() <= 0.34) {
+					// only use bloom filter for probing if it's selective enough.
+					info.dynamic_filters->PushBloomFilter(*op.get(), std::move(bf));
+				}
 			}
-		} else {*/
+		} else {
 			sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
-		//}
+		}
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
@@ -508,14 +515,31 @@ public:
 		sink.hash_table->finalized = true;
 
 		// Hash table is finished. Now we can build the Bloom-filter based on the hash table keys.
+		/*
 		if (sink.hash_table->should_build_bloom_filter) {
 			Vector hashes(LogicalType::HASH, sink.hash_table->capacity);
 			auto hash_cnt = sink.hash_table->CollectTruncatedHashes(hashes);
 			vector<column_t> column_ids;
 			auto bf = make_uniq<JoinBloomFilter>(hash_cnt, 0.01, std::move(column_ids), sink.hash_table->bitmask);
 			
-			SelectionVector sel;
-			bf->BuildWithPrecomputedHashes(hashes, sel, hash_cnt);
+
+			Vector hashvals(LogicalType::HASH);
+			auto hash_data = FlatVector::GetData<hash_t>(hashvals);
+
+			TupleDataChunkIterator iterator(sink.hash_table->GetDataCollection(), TupleDataPinProperties::KEEP_EVERYTHING_PINNED, false);
+			const auto row_locations = iterator.GetRowLocations();
+
+			do {
+				const auto count = iterator.GetCurrentChunkCount();
+				for (idx_t i = 0; i < count; i++) {
+					hash_data[i] = Load<hash_t>(row_locations[i] + sink.hash_table->pointer_offset);
+				}
+
+				const SelectionVector sel;
+				bf->BuildWithPrecomputedHashes(hashvals, sel, count);
+			} while (iterator.Next());
+
+
 
 			std::cout << "    \"bf_num_hash_functions\": " << bf->GetNumHashFunctions() << "," << std::endl;
 			std::cout << "    \"bf_size_bits\": " << bf->GetSizeBits() << "," << std::endl;
@@ -530,7 +554,7 @@ public:
 				info.dynamic_filters->PushBloomFilter(sink.op, std::move(bf));
 			}
 		}
-
+		*/
 
 	}
 
