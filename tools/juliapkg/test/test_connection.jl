@@ -17,7 +17,8 @@ end
 @testset "Test opening a bogus directory" begin
     @test_throws DuckDB.ConnectionException DBInterface.connect(DuckDB.DB, "/path/to/bogus/directory")
 end
-@testset "Test closing of the DB" begin
+
+
 @testset "Test opening and closing an on-disk database" begin
     # This checks for an issue where the DB and the connection are 
     # closed but the actual db is not (and subsequently cannot be opened
