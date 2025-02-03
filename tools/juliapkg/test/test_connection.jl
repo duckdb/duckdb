@@ -45,6 +45,11 @@ end
     @test isfile(db_path_wal) === false # WAL file should not exist
 
     @test isfile(db_path) # check if the database file exists
-    result = run(`duckdb $db_path -c "SELECT * FROM test LIMIT 1"`) # check if the database can be opened
-    @test success(result)
+
+    # check if the database can be opened
+    if haskey(ENV, "JULIA_DUCKDB_LIBRARY")
+        duckdb_binary = joinpath(dirname(ENV["JULIA_DUCKDB_LIBRARY"]), "..", "duckdb")
+        result = run(`$duckdb_binary $db_path -c "SELECT * FROM test LIMIT 1"`) # check if the database can be opened
+        @test success(result)
+    end
 end
