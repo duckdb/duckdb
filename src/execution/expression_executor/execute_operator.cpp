@@ -113,8 +113,11 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		}
 	} else if (expression_type == ExpressionType::OPERATOR_TRY) {
 		auto &child_state = *state->child_states[0];
+		auto &ok_vec = UnionVector::GetMember(result, 0);
+		Vector temp(ok_vec.GetType(), count);
 		try {
-			Execute(*expr.children[0], &child_state, sel, count, result);
+			Execute(*expr.children[0], &child_state, sel, count, temp);
+			UnionVector::SetToMember(result, 0, temp, count, false);
 			return;
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
@@ -123,23 +126,36 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				throw;
 			}
 		}
+
+		auto &err_vec = UnionVector::GetMember(result, 1);
+		auto &tags_vec = UnionVector::GetTags(result);
+		auto tags_data = FlatVector::GetData<union_tag_t>(tags_vec);
+
+		auto &ok_validity = FlatVector::Validity(ok_vec);
+		auto &err_validity = FlatVector::Validity(err_vec);
 		SelectionVector selvec(1);
-		Vector intermediate(result.GetType(), 1);
+		Vector intermediate(ok_vec.GetType(), 1);
 		for (idx_t i = 0; i < count; i++) {
 			selvec.set_index(0, sel ? sel->get_index(i) : i);
 			Value val;
 			try {
 				Execute(*expr.children[0], &child_state, &selvec, 1, intermediate);
 				val = intermediate.GetValue(0);
+				err_validity.SetInvalid(i);
+				ok_vec.SetValue(i, val);
+				tags_data[i] = 0;
 			} catch (std::exception &ex) {
 				ErrorData error(ex);
 				auto error_type = error.Type();
 				if (!Exception::IsExecutionError(error_type)) {
 					throw;
 				}
+				ok_validity.SetInvalid(i);
+				err_vec.SetValue(i, error.Message());
+				tags_data[i] = 1;
 			}
-			result.SetValue(i, val);
 		}
+		result.Verify(count);
 		if (count == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}

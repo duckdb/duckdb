@@ -7,7 +7,7 @@ pragma enable_verification;
 # --- OPERATOR_CAST ---
 
 query I
-select TRY('abc'::INTEGER)
+select TRY('abc'::INTEGER).ok
 ----
 NULL
 
@@ -20,14 +20,14 @@ NULL
 #NULL
 
 query I
-select TRY(~CAST('abc' as INTEGER))
+select TRY(~CAST('abc' as INTEGER)).ok
 ----
 NULL
 
 # --- OPERATOR_IS_NULL ---
 
 query I
-select TRY(CAST('abc' as INTEGER) IS NULL);
+select TRY(CAST('abc' as INTEGER) IS NULL).ok;
 ----
 NULL
 
@@ -35,37 +35,51 @@ NULL
 # --- OPERATOR_IS_NOT_NULL ---
 
 query I
-select TRY(CAST('abc' as INTEGER) IS NOT NULL);
+select TRY(CAST('abc' as INTEGER) IS NOT NULL).ok;
 ----
 NULL
 
 # --- COMPARE_EQUAL ---
 
 query I
-select TRY(CAST('abc' as INTEGER) == 'abc')
+select TRY(CAST('abc' as INTEGER) == 'abc').ok
 ----
 NULL
 
 # --- COMPARE_EQUAL ---
 
 query I
-select TRY(CAST('abc' as INTEGER) == 'abc')
+select TRY(CAST('abc' as INTEGER) == 'abc').ok
 ----
 NULL
 
 # --- COMPARE_NOTEQUAL ---
 
 query I
-select TRY(CAST('abc' as INTEGER) != 'abc')
+select TRY(CAST('abc' as INTEGER) != 'abc').ok
 ----
 NULL
 
 # --- Functions ---
 
 query I
-select TRY(ln(0));
+select TRY(ln(0)).ok;
 ----
 NULL
+
+query I
+with cte as (
+	select * from (VALUES
+		('123'),
+		('test'),
+		('235')
+	) t(a)
+)
+select try(a::INTEGER).ok from cte
+----
+123
+NULL
+235
 
 query I
 with cte as (
@@ -78,7 +92,21 @@ with cte as (
 select try(a::INTEGER) from cte
 ----
 123
-NULL
+Conversion Error: Could not convert string 'test' to INT32
+235
+
+query I
+with cte as (
+	select * from (VALUES
+		('123'),
+		('456'),
+		('235')
+	) t(a)
+)
+select try(a::INTEGER) from cte
+----
+123
+456
 235
 
 # Using TRY('abc'::BIGINT) results in null
@@ -99,17 +127,17 @@ with cte as (
 	select i % 5 i from range(100_000) t(i)
 ),
 cte2 as (
-	select TRY(if(i == 0, 'abc', i::VARCHAR)::BIGINT) res from cte
+	select TRY(if(i == 0, 'abc', i::VARCHAR)::BIGINT).ok res from cte
 )
 select count(res) from cte2;
 ----
 
 statement error
-select try(if(random() > 2.0, '123', 'abc')::TINYINT)
+select try(if(random() > 2.0, '123', 'abc')::TINYINT).ok
 ----
 TRY can not be used in combination with a volatile function
 
 statement error
-select try(CAST((select 'ABC') as INTEGER))
+select try(CAST((select 'ABC') as INTEGER)).ok
 ----
 TRY can not be used in combination with a scalar subquery
