@@ -261,9 +261,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				if (entry == column_references.end()) {
 					throw InternalException("RemoveUnusedColumns - could not find referenced column");
 				}
-				if (final_column_ids[col_sel_idx].HasChildren()) {
-					throw InternalException("RemoveUnusedColumns - LogicalGet::column_ids already has children");
-				}
 				ColumnIndex new_index(final_column_ids[col_sel_idx].GetPrimaryIndex(), entry->second.child_columns);
 				column_ids.emplace_back(new_index);
 			}
