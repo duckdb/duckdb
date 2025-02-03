@@ -44,6 +44,7 @@ end
     write_data(db_path) # call the function
     @test isfile(db_path_wal) === false # WAL file should not exist
 
+    @test isfile(db_path) # check if the database file exists
     result = run(`duckdb $db_path -c "SELECT * FROM test LIMIT 1"`) # check if the database can be opened
     @test success(result)
 end
