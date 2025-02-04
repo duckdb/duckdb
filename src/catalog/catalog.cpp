@@ -714,7 +714,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 
 	string did_you_mean;
 	if (suggestions.size() > 2) {
-		string last = *suggestions.end();
+		string last = *suggestions.rbegin();
 		suggestions.erase(last);
 		did_you_mean = StringUtil::Join(suggestions, ", ") + ", or " + last;
 	} else {
