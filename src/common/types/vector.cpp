@@ -1399,11 +1399,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 					}
 					new_sel[i] = map_sel[pos];
 				}
-				if (1 || used_count * 2 < count) { // only serialize as a dict vector if that makes things smaller
+				if (used_count * 2 < count) { // only serialize as a dict vector if that makes things smaller
+					auto sel_data = reinterpret_cast<data_ptr_t>(new_sel.data());
 					dict.Slice(used_sel, used_count);
 					serializer.WriteProperty(200, "vector_type", VectorType::DICTIONARY_VECTOR);
-					serializer.WriteProperty(201, "sel_vector",
-											 reinterpret_cast<data_ptr_t>(new_sel.data()), sizeof(sel_t) * count);
+					serializer.WriteProperty(201, "sel_vector", sel_data, sizeof(sel_t) * count);
 					serializer.WriteProperty(202, "dict_count", used_count);
 					return dict.SerializeFlat(serializer, used_count);
 				}
