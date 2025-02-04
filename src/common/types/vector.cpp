@@ -25,6 +25,10 @@
 #include "fsst.h"
 
 #include <cstring> // strlen() on Solaris
+#define PETER
+#ifndef PETER
+#include <iostream> 
+#endif
 
 namespace duckdb {
 
@@ -1367,19 +1371,22 @@ void Vector::DeserializeFlat(Deserializer &deserializer, idx_t count) {
 
 void Vector::Serialize(Serializer &serializer, idx_t count) {
 	// serialize compressed vectors to save space, but skip this if serializing into older versions
-	if (serializer.ShouldSerialize(4)) {
+	if (serializer.ShouldSerialize(1)) {
 		auto vector_type = GetVectorType();
 		if (vector_type == VectorType::DICTIONARY_VECTOR && DictionaryVector::DictionarySize(*this).IsValid()) {
+#ifndef PETER2
+std::cerr << "serialize_dict\n";
+#endif
 			auto &dict = DictionaryVector::Child(*this);
 			if (dict.GetVectorType() == VectorType::FLAT_VECTOR) {
 				idx_t dict_count = DictionaryVector::DictionarySize(*this).GetIndex();
 				auto old_sel = DictionaryVector::SelVector(*this);
-				SelectionVector new_sel(count), map_sel(count), used_sel(count);
+				SelectionVector new_sel(count), used_sel(count), map_sel(dict_count);
 
 				// dictionaries may be large (row-group level). A vector may use only a small part.
 				// So, restrict dict to only the used_sel subset & remap old_sel into new_sel to the new dict positions
 				sel_t CODE_UNSEEN = static_cast<sel_t>(dict_count);
-				for (sel_t i = 0; i < dict_count; ++i) {
+				for (sel_t i = 0; i < count; ++i) {
 					map_sel[i] = CODE_UNSEEN; // initialize with unused marker
 				}
 				sel_t used_count = 0;
@@ -1391,7 +1398,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 					}
 					new_sel[i] = map_sel[pos];
 				}
-				if (used_count * 2 < count) { // only serialize as a dict vector if that makes things smaller
+				if (1 || used_count * 2 < count) { // only serialize as a dict vector if that makes things smaller
 					dict.Slice(used_sel, used_count);
 					serializer.WriteProperty(200, "vector_type", VectorType::DICTIONARY_VECTOR);
 					serializer.WriteProperty(201, "sel_vector",
@@ -1401,9 +1408,15 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 				}
 			}
 		} else if (vector_type == VectorType::CONSTANT_VECTOR && count >= 1) {
+#ifndef PETER
+std::cerr << "serialize_const\n";
+#endif
 			serializer.WriteProperty(200, "vector_type", VectorType::CONSTANT_VECTOR);
 			return Vector::SerializeFlat(serializer, 1); // just serialize one value
 		} else if (vector_type == VectorType::SEQUENCE_VECTOR) {
+#ifndef PETER
+std::cerr << "serialize_seq\n";
+#endif
 			serializer.WriteProperty(200, "vector_type", VectorType::SEQUENCE_VECTOR);
 			auto data = reinterpret_cast<int64_t *>(buffer->GetData());
 			serializer.WriteProperty(201, "seq_start", data[0]);
@@ -1423,10 +1436,16 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 
 	// first handle (supported) deserialization of compressed vector types
 	if (vector_type == VectorType::CONSTANT_VECTOR) {
+#ifndef PETER
+std::cerr << "deserialize_const\n";
+#endif
 		Vector::DeserializeFlat(deserializer, 1); // read a vector of size 1
 		Vector::SetVectorType(VectorType::CONSTANT_VECTOR);
 		return;
 	} else if (vector_type == VectorType::DICTIONARY_VECTOR) {
+#ifndef PETER2
+std::cerr << "deserialize_dict\n";
+#endif
 		SelectionVector sel(count);
 		deserializer.ReadProperty(201, "sel_vector", reinterpret_cast<data_ptr_t>(sel.data()), sizeof(sel_t) * count);
 		const auto dict_count = deserializer.ReadProperty<idx_t>(202, "dict_count");
@@ -1434,6 +1453,9 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		Vector::Slice(sel, count); // will create a dictionary vector
 		return;
 	} else if (vector_type == VectorType::SEQUENCE_VECTOR) {
+#ifndef PETER
+std::cerr << "deserialize_seq\n";
+#endif
 		const int64_t seq_start = deserializer.ReadProperty<int64_t>(201, "seq_start");
 		const int64_t seq_increment = deserializer.ReadProperty<int64_t>(202, "seq_increment");
 		Vector::Sequence(seq_start, seq_increment, count);
@@ -1532,14 +1554,15 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 	auto vtype = vector->GetVectorType();
 	if (vector->GetVectorType() == VectorType::DICTIONARY_VECTOR) {
 		auto &child = DictionaryVector::Child(*vector);
-		D_ASSERT(child.GetVectorType() != VectorType::DICTIONARY_VECTOR);
-		auto &dict_sel = DictionaryVector::SelVector(*vector);
-		// merge the selection vectors and verify the child
-		auto new_buffer = dict_sel.Slice(*sel, count);
-		owned_sel.Initialize(new_buffer);
-		sel = &owned_sel;
-		vector = &child;
-		vtype = vector->GetVectorType();
+		if (child.GetVectorType() == VectorType::DICTIONARY_VECTOR) {
+			auto &dict_sel = DictionaryVector::SelVector(*vector);
+			// merge the selection vectors and verify the child
+			auto new_buffer = dict_sel.Slice(*sel, count);
+			owned_sel.Initialize(new_buffer);
+			sel = &owned_sel;
+			vector = &child;
+			vtype = vector->GetVectorType();
+		}
 	}
 	if (TypeIsConstantSize(type.InternalType()) &&
 	    (vtype == VectorType::CONSTANT_VECTOR || vtype == VectorType::FLAT_VECTOR)) {
