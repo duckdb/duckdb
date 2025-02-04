@@ -1375,7 +1375,7 @@ void Vector::DeserializeFlat(Deserializer &deserializer, idx_t count) {
 
 void Vector::Serialize(Serializer &serializer, idx_t count) {
 	// serialize compressed vectors to save space, but skip this if serializing into older versions
-	if (serializer.ShouldSerialize(1)) {
+	if (serializer.ShouldSerialize(4)) {
 		auto vtype = GetVectorType();
 		if (vtype == VectorType::DICTIONARY_VECTOR && DictionaryVector::DictionarySize(*this).IsValid()) {
 			auto dict = DictionaryVector::Child(*this);
@@ -1426,7 +1426,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 
 void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	const auto vtype = // older versions that only supported flat vectors did not serialize vector_type,
-			deserializer.ReadPropertyWithExplicitDefault<VectorType>(200, "vector_type", VectorType::FLAT_VECTOR);
+		deserializer.ReadPropertyWithExplicitDefault<VectorType>(200, "vector_type", VectorType::FLAT_VECTOR);
 
 	// first handle (supported) deserialization of compressed vector types
 	if (vtype == VectorType::CONSTANT_VECTOR) {
@@ -1438,7 +1438,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		deserializer.ReadProperty(201, "sel_vector", reinterpret_cast<data_ptr_t>(sel.data()), sizeof(sel_t) * count);
 		const auto dict_count = deserializer.ReadProperty<idx_t>(202, "dict_count");
 		Vector::DeserializeFlat(deserializer, dict_count); // deserialize the dictionary in this vector
-		Vector::Slice(sel, count); // will create a dictionary vector
+		Vector::Slice(sel, count);                         // will create a dictionary vector
 		return;
 	} else if (vtype == VectorType::SEQUENCE_VECTOR) {
 		const int64_t seq_start = deserializer.ReadProperty<int64_t>(201, "seq_start");
