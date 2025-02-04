@@ -870,7 +870,14 @@ The resultset iterator supports the [Tables.jl](https://github.com/JuliaData/Tab
 like `DataFrame(results)`, `CSV.write("results.csv", results)`, etc.
 """
 DBInterface.execute(stmt::Stmt, params::DBInterface.StatementParams) = execute(stmt, params)
-DBInterface.execute(con::Connection, sql::AbstractString, result_type::Type) = execute(Stmt(con, sql, result_type))
+function DBInterface.execute(con::Connection, sql::AbstractString, result_type::Type)
+    stmt = Stmt(con, sql, result_type)
+    try
+        return execute(stmt)
+    finally
+        _close_stmt(stmt) # immediately close, don't wait for GC
+    end
+end
 DBInterface.execute(con::Connection, sql::AbstractString) = DBInterface.execute(con, sql, MaterializedResult)
 DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) =
     DBInterface.execute(db.main_connection, sql, result_type)
