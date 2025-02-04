@@ -59,6 +59,9 @@ select distinct on (types) vector_type(a) as types from test order by all;
 CONSTANT_VECTOR
 FLAT_VECTOR
 
+statement ok
+PRAGMA disable_optimizer
+
 # The first 4 vectors are constant
 query I
 select distinct on (types) types from (select vector_type(a) from test limit 8192) tbl(types)

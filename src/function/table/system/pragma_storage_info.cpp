@@ -79,6 +79,9 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 	names.emplace_back("segment_info");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("additional_block_ids");
+	return_types.emplace_back(LogicalType::LIST(LogicalTypeId::BIGINT));
+
 	auto qname = QualifiedName::Parse(input.inputs[0].GetValue<string>());
 
 	// look up the table name in the catalog
@@ -91,6 +94,14 @@ static unique_ptr<FunctionData> PragmaStorageInfoBind(ClientContext &context, Ta
 
 unique_ptr<GlobalTableFunctionState> PragmaStorageInfoInit(ClientContext &context, TableFunctionInitInput &input) {
 	return make_uniq<PragmaStorageOperatorData>();
+}
+
+static Value ValueFromBlockIdList(const vector<block_id_t> &block_ids) {
+	vector<Value> blocks;
+	for (auto &block_id : block_ids) {
+		blocks.push_back(Value::BIGINT(block_id));
+	}
+	return Value::LIST(LogicalTypeId::BIGINT, blocks);
 }
 
 static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -138,6 +149,12 @@ static void PragmaStorageInfoFunction(ClientContext &context, TableFunctionInput
 		}
 		// segment_info
 		output.SetValue(col_idx++, count, Value(entry.segment_info));
+		// additional_block_ids
+		if (entry.persistent) {
+			output.SetValue(col_idx++, count, ValueFromBlockIdList(entry.additional_blocks));
+		} else {
+			output.SetValue(col_idx++, count, Value());
+		}
 		count++;
 	}
 	output.SetCardinality(count);

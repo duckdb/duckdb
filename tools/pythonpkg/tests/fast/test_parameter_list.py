@@ -25,6 +25,21 @@ class TestParameterList(object):
             res = conn.execute("select count(*) from bool_table where a =?", [df_in])
 
     def test_explicit_nan_param(self):
-        con = duckdb.default_connection
+        con = duckdb.default_connection()
         res = con.execute('select isnan(cast(? as double))', (float("nan"),))
         assert res.fetchone()[0] == True
+
+    def test_string_parameter(self, duckdb_cursor):
+        conn = duckdb.connect()
+        conn.execute("create table orders (o_orderdate date)")
+        conn.execute("insert into orders values (date '1992-01-01'), (date '1994-01-01')")
+        conn.execute(
+            """
+            SELECT COUNT(*)
+            FROM ORDERS
+            WHERE O_ORDERDATE BETWEEN ? AND ?
+            """,
+            ["1994-01-01", "1996-01-01"],
+        )
+        res = conn.fetchall()
+        assert res == [(1,)]

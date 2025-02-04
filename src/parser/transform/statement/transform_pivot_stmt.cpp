@@ -163,6 +163,8 @@ unique_ptr<QueryNode> Transformer::TransformPivotStatement(duckdb_libpgquery::PG
 		if (pivot->aggrs) {
 			TransformExpressionList(*pivot->aggrs, select_node->select_list);
 		}
+		// transform order by/limit modifiers
+		TransformModifiers(select, *select_node);
 		return std::move(select_node);
 	}
 

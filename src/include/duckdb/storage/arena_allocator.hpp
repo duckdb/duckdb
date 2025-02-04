@@ -25,6 +25,7 @@ struct ArenaChunk {
 };
 
 class ArenaAllocator {
+public:
 	static constexpr const idx_t ARENA_ALLOCATOR_INITIAL_CAPACITY = 2048;
 	static constexpr const idx_t ARENA_ALLOCATOR_MAX_CAPACITY = 1ULL << 24ULL; // 16MB
 

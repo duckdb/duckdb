@@ -8,7 +8,7 @@ statement ok
 pragma threads=${i};
 
 statement ok
-CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_time() c from range(1000);
+CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_timestamp() c from range(1000);
 
 query I
 SELECT count(*) from t1 using sample 0 percent (reservoir);
@@ -36,7 +36,7 @@ SELECT count(*) from t1 using sample 100 percent (reservoir);
 1000
 
 statement ok
-CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_time() c from range(10000);
+CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_timestamp() c from range(10000);
 
 query I
 select count(*) from t1 using sample 80 percent (reservoir);
@@ -44,7 +44,7 @@ select count(*) from t1 using sample 80 percent (reservoir);
 8000
 
 statement ok
-CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_time() c from range(1000000);
+CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_timestamp() c from range(1000000);
 
 query I
 select count(*) from t1 using sample 20 percent (reservoir);

@@ -40,6 +40,7 @@ void ParquetColumnDefinition::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(101, "name", name);
 	serializer.WriteProperty<LogicalType>(103, "type", type);
 	serializer.WriteProperty<Value>(104, "default_value", default_value);
+	serializer.WritePropertyWithDefault<Value>(105, "identifier", identifier, Value());
 }
 
 ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deserializer) {
@@ -48,6 +49,7 @@ ParquetColumnDefinition ParquetColumnDefinition::Deserialize(Deserializer &deser
 	deserializer.ReadPropertyWithDefault<string>(101, "name", result.name);
 	deserializer.ReadProperty<LogicalType>(103, "type", result.type);
 	deserializer.ReadProperty<Value>(104, "default_value", result.default_value);
+	deserializer.ReadPropertyWithExplicitDefault<Value>(105, "identifier", result.identifier, Value());
 	return result;
 }
 
@@ -70,6 +72,7 @@ void ParquetOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", schema);
 	serializer.WritePropertyWithDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", encryption_config, nullptr);
 	serializer.WritePropertyWithDefault<bool>(105, "debug_use_openssl", debug_use_openssl, true);
+	serializer.WritePropertyWithDefault<idx_t>(106, "explicit_cardinality", explicit_cardinality, 0);
 }
 
 ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
@@ -80,6 +83,7 @@ ParquetOptions ParquetOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<vector<ParquetColumnDefinition>>(103, "schema", result.schema);
 	deserializer.ReadPropertyWithExplicitDefault<shared_ptr<ParquetEncryptionConfig>>(104, "encryption_config", result.encryption_config, nullptr);
 	deserializer.ReadPropertyWithExplicitDefault<bool>(105, "debug_use_openssl", result.debug_use_openssl, true);
+	deserializer.ReadPropertyWithExplicitDefault<idx_t>(106, "explicit_cardinality", result.explicit_cardinality, 0);
 	return result;
 }
 

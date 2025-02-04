@@ -62,6 +62,12 @@ public:
 	idx_t AllocationSize() const {
 		return allocated_size;
 	}
+	//! Sets the partition index of this tuple data collection
+	void SetPartitionIndex(idx_t index) {
+		D_ASSERT(!partition_index.IsValid());
+		D_ASSERT(blocks.empty() && allocated_data.empty());
+		partition_index = index;
+	}
 
 public:
 	void AllocateData(idx_t size, uint32_t &block_id, uint32_t &offset, ChunkManagementState *chunk_state);
@@ -107,6 +113,8 @@ private:
 	mutex lock;
 	//! Total allocated size
 	idx_t allocated_size = 0;
+	//! Partition index (optional, if partitioned)
+	optional_idx partition_index;
 };
 
 } // namespace duckdb

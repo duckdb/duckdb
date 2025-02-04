@@ -31,7 +31,7 @@ public:
 	explicit LocalTableStorage(ClientContext &context, DataTable &table);
 	// Create a LocalTableStorage from an ALTER TYPE
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
-	                  const LogicalType &target_type, const vector<column_t> &bound_columns, Expression &cast_expr);
+	                  const LogicalType &target_type, const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 	// Create a LocalTableStorage from a DROP COLUMN
 	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
 	// Create a LocalTableStorage from an ADD COLUMN
@@ -44,8 +44,12 @@ public:
 	Allocator &allocator;
 	//! The main chunk collection holding the data
 	shared_ptr<RowGroupCollection> row_groups;
-	//! The set of unique indexes
-	TableIndexList indexes;
+	//! The set of unique append indexes.
+	TableIndexList append_indexes;
+	//! The set of delete indexes.
+	TableIndexList delete_indexes;
+	//! Set to INSERT_DUPLICATES, if we are skipping constraint checking during, e.g., WAL replay.
+	IndexAppendMode index_append_mode = IndexAppendMode::DEFAULT;
 	//! The number of deleted rows
 	idx_t deleted_rows;
 	//! The main optimistic data writer
@@ -65,10 +69,10 @@ public:
 	void Rollback();
 	idx_t EstimatedSize();
 
-	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, idx_t append_count,
-	                     bool append_to_table);
+	void AppendToIndexes(DuckTransaction &transaction, TableAppendState &append_state, bool append_to_table);
 	ErrorData AppendToIndexes(DuckTransaction &transaction, RowGroupCollection &source, TableIndexList &index_list,
 	                          const vector<LogicalType> &table_types, row_t &start_row);
+	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
 
 	//! Creates an optimistic writer for this table
 	OptimisticDataWriter &CreateOptimisticWriter();
@@ -79,23 +83,19 @@ class LocalTableManager {
 public:
 	shared_ptr<LocalTableStorage> MoveEntry(DataTable &table);
 	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> MoveEntries();
-	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
+	optional_ptr<LocalTableStorage> GetStorage(DataTable &table) const;
 	LocalTableStorage &GetOrCreateStorage(ClientContext &context, DataTable &table);
-	idx_t EstimatedSize();
-	bool IsEmpty();
+	idx_t EstimatedSize() const;
+	bool IsEmpty() const;
 	void InsertEntry(DataTable &table, shared_ptr<LocalTableStorage> entry);
 
 private:
-	mutex table_storage_lock;
+	mutable mutex table_storage_lock;
 	reference_map_t<DataTable, shared_ptr<LocalTableStorage>> table_storage;
 };
 
 //! The LocalStorage class holds appends that have not been committed yet
 class LocalStorage {
-public:
-	// Threshold to merge row groups instead of appending
-	static constexpr const idx_t MERGE_THRESHOLD = Storage::ROW_GROUP_SIZE;
-
 public:
 	struct CommitState {
 		CommitState();
@@ -114,7 +114,7 @@ public:
 	//! Initialize a scan of the local storage
 	void InitializeScan(DataTable &table, CollectionScanState &state, optional_ptr<TableFilterSet> table_filters);
 	//! Scan
-	void Scan(CollectionScanState &state, const vector<storage_t> &column_ids, DataChunk &result);
+	void Scan(CollectionScanState &state, const vector<StorageIndex> &column_ids, DataChunk &result);
 
 	void InitializeParallelScan(DataTable &table, ParallelCollectionScanState &state);
 	bool NextParallelScan(ClientContext &context, DataTable &table, ParallelCollectionScanState &state,
@@ -122,6 +122,8 @@ public:
 
 	//! Begin appending to the local storage
 	void InitializeAppend(LocalAppendState &state, DataTable &table);
+	//! Initialize the storage and its indexes, but no row groups.
+	void InitializeStorage(LocalAppendState &state, DataTable &table);
 	//! Append a chunk to the local storage
 	static void Append(LocalAppendState &state, DataChunk &chunk);
 	//! Finish appending to the local storage
@@ -149,17 +151,19 @@ public:
 	bool Find(DataTable &table);
 
 	idx_t AddedRows(DataTable &table);
+	vector<PartitionStatistics> GetPartitionStats(DataTable &table) const;
 
 	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
 	               ExpressionExecutor &default_executor);
 	void DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column);
 	void ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
-	                const vector<column_t> &bound_columns, Expression &cast_expr);
+	                const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 
 	void MoveStorage(DataTable &old_dt, DataTable &new_dt);
-	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<column_t> &col_ids, DataChunk &chunk,
-	                ColumnFetchState &fetch_state);
+	void FetchChunk(DataTable &table, Vector &row_ids, idx_t count, const vector<StorageIndex> &col_ids,
+	                DataChunk &chunk, ColumnFetchState &fetch_state);
 	TableIndexList &GetIndexes(DataTable &table);
+	optional_ptr<LocalTableStorage> GetStorage(DataTable &table);
 
 	void VerifyNewConstraint(DataTable &parent, const BoundConstraint &constraint);
 

@@ -646,7 +646,7 @@ static void TupleDataTemplatedScatter(const Vector &, const TupleDataVectorForma
 				TupleDataValueStore<T>(data[source_idx], target_locations[i], offset_in_row, target_heap_locations[i]);
 			} else {
 				TupleDataValueStore<T>(NullValue<T>(), target_locations[i], offset_in_row, target_heap_locations[i]);
-				ValidityBytes(target_locations[i]).SetInvalidUnsafe(entry_idx, idx_in_entry);
+				ValidityBytes(target_locations[i], layout.ColumnCount()).SetInvalidUnsafe(entry_idx, idx_in_entry);
 			}
 		}
 	}
@@ -675,7 +675,7 @@ static void TupleDataStructScatter(const Vector &source, const TupleDataVectorFo
 		for (idx_t i = 0; i < append_count; i++) {
 			const auto source_idx = source_sel.get_index(append_sel.get_index(i));
 			if (!validity.RowIsValid(source_idx)) {
-				ValidityBytes(target_locations[i]).SetInvalidUnsafe(entry_idx, idx_in_entry);
+				ValidityBytes(target_locations[i], layout.ColumnCount()).SetInvalidUnsafe(entry_idx, idx_in_entry);
 			}
 		}
 	}
@@ -742,7 +742,7 @@ static void TupleDataListScatter(const Vector &source, const TupleDataVectorForm
 			Store<uint64_t>(data[source_idx].length, target_heap_location);
 			target_heap_location += sizeof(uint64_t);
 		} else {
-			ValidityBytes(target_locations[i]).SetInvalidUnsafe(entry_idx, idx_in_entry);
+			ValidityBytes(target_locations[i], layout.ColumnCount()).SetInvalidUnsafe(entry_idx, idx_in_entry);
 		}
 	}
 
@@ -791,7 +791,7 @@ static void TupleDataArrayScatter(const Vector &source, const TupleDataVectorFor
 			Store<uint64_t>(data[source_idx].length, target_heap_location);
 			target_heap_location += sizeof(uint64_t);
 		} else {
-			ValidityBytes(target_locations[i]).SetInvalidUnsafe(entry_idx, idx_in_entry);
+			ValidityBytes(target_locations[i], layout.ColumnCount()).SetInvalidUnsafe(entry_idx, idx_in_entry);
 		}
 	}
 
@@ -843,7 +843,7 @@ static void TupleDataTemplatedWithinCollectionScatter(const Vector &, const Tupl
 
 		// Initialize validity mask and skip heap pointer over it
 		auto &target_heap_location = target_heap_locations[i];
-		ValidityBytes child_mask(target_heap_location);
+		ValidityBytes child_mask(target_heap_location, list_length);
 		child_mask.SetAllValid(list_length);
 		target_heap_location += ValidityBytes::SizeInBytes(list_length);
 
@@ -901,7 +901,7 @@ static void TupleDataStructWithinCollectionScatter(const Vector &source, const T
 
 		// Initialize validity mask and skip the heap pointer over it
 		auto &target_heap_location = target_heap_locations[i];
-		ValidityBytes child_mask(target_heap_location);
+		ValidityBytes child_mask(target_heap_location, list_length);
 		child_mask.SetAllValid(list_length);
 		target_heap_location += ValidityBytes::SizeInBytes(list_length);
 
@@ -964,7 +964,7 @@ static void TupleDataCollectionWithinCollectionScatter(const Vector &child_list,
 
 		// Initialize validity mask and skip heap pointer over it
 		auto &target_heap_location = target_heap_locations[i];
-		ValidityBytes child_mask(target_heap_location);
+		ValidityBytes child_mask(target_heap_location, list_length);
 		child_mask.SetAllValid(list_length);
 		target_heap_location += ValidityBytes::SizeInBytes(list_length);
 
@@ -1129,7 +1129,7 @@ static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_
 		const auto &source_row = source_locations[scan_sel.get_index(i)];
 		const auto target_idx = target_sel.get_index(i);
 		target_data[target_idx] = Load<T>(source_row + offset_in_row);
-		ValidityBytes row_mask(source_row);
+		ValidityBytes row_mask(source_row, layout.ColumnCount());
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
 			target_validity.SetInvalid(target_idx);
 		}
@@ -1165,7 +1165,7 @@ static void TupleDataStructGather(const TupleDataLayout &layout, Vector &row_loc
 		const auto &source_row = source_locations[source_idx];
 
 		// Set the validity
-		ValidityBytes row_mask(source_row);
+		ValidityBytes row_mask(source_row, layout.ColumnCount());
 		if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
 			const auto target_idx = target_sel.get_index(i);
 			target_validity.SetInvalid(target_idx);
@@ -1214,10 +1214,11 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 	const auto source_heap_locations = FlatVector::GetData<data_ptr_t>(heap_locations);
 
 	const auto offset_in_row = layout.GetOffsets()[col_idx];
-	uint64_t target_list_offset = 0;
+	auto list_size_before = ListVector::GetListSize(target);
+	uint64_t target_list_offset = list_size_before;
 	for (idx_t i = 0; i < scan_count; i++) {
 		const auto &source_row = source_locations[scan_sel.get_index(i)];
-		ValidityBytes row_mask(source_row);
+		ValidityBytes row_mask(source_row, layout.ColumnCount());
 
 		const auto target_idx = target_sel.get_index(i);
 		if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
@@ -1237,9 +1238,8 @@ static void TupleDataListGather(const TupleDataLayout &layout, Vector &row_locat
 			target_list_validity.SetInvalid(target_idx);
 		}
 	}
-	auto list_size_before = ListVector::GetListSize(target);
-	ListVector::Reserve(target, list_size_before + target_list_offset);
-	ListVector::SetListSize(target, list_size_before + target_list_offset);
+	ListVector::Reserve(target, target_list_offset);
+	ListVector::SetListSize(target, target_list_offset);
 
 	// Recurse
 	D_ASSERT(child_functions.size() == 1);
@@ -1282,7 +1282,7 @@ TupleDataTemplatedWithinCollectionGather(const TupleDataLayout &, Vector &heap_l
 
 		// Initialize validity mask
 		auto &source_heap_location = source_heap_locations[i];
-		ValidityBytes source_mask(source_heap_location);
+		ValidityBytes source_mask(source_heap_location, list_length);
 		source_heap_location += ValidityBytes::SizeInBytes(list_length);
 
 		// Get the start to the fixed-size data and skip the heap pointer over it
@@ -1333,7 +1333,7 @@ static void TupleDataStructWithinCollectionGather(const TupleDataLayout &layout,
 
 		// Initialize validity mask and skip over it
 		auto &source_heap_location = source_heap_locations[i];
-		ValidityBytes source_mask(source_heap_location);
+		ValidityBytes source_mask(source_heap_location, list_length);
 		source_heap_location += ValidityBytes::SizeInBytes(list_length);
 
 		// Load the child validity belonging to this list entry
@@ -1398,7 +1398,7 @@ static void TupleDataCollectionWithinCollectionGather(const TupleDataLayout &lay
 
 		// Initialize validity mask and skip over it
 		auto &source_heap_location = source_heap_locations[i];
-		ValidityBytes source_mask(source_heap_location);
+		ValidityBytes source_mask(source_heap_location, list_length);
 		source_heap_location += ValidityBytes::SizeInBytes(list_length);
 
 		// Get the start to the fixed-size data and skip the heap pointer over it

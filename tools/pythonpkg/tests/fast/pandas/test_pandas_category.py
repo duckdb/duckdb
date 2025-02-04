@@ -70,7 +70,7 @@ class TestCategory(object):
         print(duckdb.query_df(df_in, "data", "SELECT * FROM data").fetchall())
         assert df_out['int'][0] == 1
         assert df_out['int'][1] == 2
-        assert numpy.isnan(df_out['int'][2])
+        assert pd.isna(df_out['int'][2])
 
     def test_category_string(self, duckdb_cursor):
         check_category_equal(['foo', 'bla', 'zoo', 'foo', 'foo', 'bla'])

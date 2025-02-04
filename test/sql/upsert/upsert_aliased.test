@@ -87,4 +87,4 @@ select * from tbl;
 statement error
 insert into tbl as excluded values (8,3) on conflict (j) do update set i = 5;
 ----
-Binder Error: Duplicate alias "excluded" in query!
+Ambiguous reference to table "excluded"

@@ -8,7 +8,7 @@
 namespace duckdb {
 
 struct GlobFunctionBindData : public TableFunctionData {
-	unique_ptr<MultiFileList> file_list;
+	shared_ptr<MultiFileList> file_list;
 };
 
 static unique_ptr<FunctionData> GlobFunctionBind(ClientContext &context, TableFunctionBindInput &input,

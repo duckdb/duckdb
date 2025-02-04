@@ -1,4 +1,13 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// thrift_tools.hpp
+//
+//
+//===----------------------------------------------------------------------===/
+
 #pragma once
+
 #include <list>
 #include "thrift/protocol/TCompactProtocol.h"
 #include "thrift/transport/TBufferTransports.h"
@@ -89,7 +98,10 @@ struct ReadAheadBuffer {
 		}
 
 		if (read_head.GetEnd() > handle.GetFileSize()) {
-			throw std::runtime_error("Prefetch registered for bytes outside file");
+			throw std::runtime_error("Prefetch registered for bytes outside file: " + handle.GetPath() +
+			                         ", attempted range: [" + std::to_string(pos) + ", " +
+			                         std::to_string(read_head.GetEnd()) +
+			                         "), file size: " + std::to_string(handle.GetFileSize()));
 		}
 	}
 

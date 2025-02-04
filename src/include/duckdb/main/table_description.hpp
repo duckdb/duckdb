@@ -12,13 +12,23 @@
 
 namespace duckdb {
 
-struct TableDescription {
+class TableDescription {
 public:
-	//! The schema of the table
+	TableDescription(const string &database_name, const string &schema_name, const string &table_name)
+	    : database(database_name), schema(schema_name), table(table_name) {};
+
+	TableDescription() = delete;
+
+public:
+	//! The database of the table.
+	string database;
+	//! The schema of the table.
 	string schema;
-	//! The table name of the table
+	//! The name of the table.
 	string table;
-	//! The columns of the table
+	//! True, if the catalog is readonly.
+	bool readonly;
+	//! The columns of the table.
 	vector<ColumnDefinition> columns;
 
 public:

@@ -177,7 +177,7 @@ struct ICUDateTrunc : public ICUDateFunc {
 	static void AddBinaryTimestampFunction(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetDateTruncFunction<timestamp_t>(LogicalType::TIMESTAMP_TZ));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 };
 
@@ -222,6 +222,13 @@ ICUDateFunc::part_trunc_t ICUDateFunc::TruncationFactory(DatePartSpecifier type)
 	default:
 		throw NotImplementedException("Specifier type not implemented for ICU DATETRUNC");
 	}
+}
+
+timestamp_t ICUDateFunc::CurrentMidnight(icu::Calendar *calendar, ExpressionState &state) {
+	const auto current_timestamp = MetaTransaction::Get(state.GetContext()).start_timestamp;
+	auto current_micros = SetTime(calendar, current_timestamp);
+	ICUDateTrunc::TruncDay(calendar, current_micros);
+	return GetTime(calendar);
 }
 
 void RegisterICUDateTruncFunctions(DatabaseInstance &db) {

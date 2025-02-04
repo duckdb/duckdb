@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/common/operator/add.hpp"
 #include "duckdb/function/aggregate/distributive_functions.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/list.hpp"
@@ -99,7 +100,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoin(unique_
 }
 
 bool SubqueryDependentFilter(Expression &expr) {
-	if (expr.expression_class == ExpressionClass::BOUND_CONJUNCTION &&
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION &&
 	    expr.GetExpressionType() == ExpressionType::CONJUNCTION_AND) {
 		auto &bound_conjunction = expr.Cast<BoundConjunctionExpression>();
 		for (auto &child : bound_conjunction.children) {
@@ -108,7 +109,7 @@ bool SubqueryDependentFilter(Expression &expr) {
 			}
 		}
 	}
-	if (expr.expression_class == ExpressionClass::BOUND_SUBQUERY) {
+	if (expr.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
 		return true;
 	}
 	return false;
@@ -240,7 +241,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			delim_data_offset = aggr.groups.size();
 			for (idx_t i = 0; i < correlated_columns.size(); i++) {
 				auto &col = correlated_columns[i];
-				auto first_aggregate = FirstFun::GetFunction(col.type);
+				auto first_aggregate = FirstFunctionGetter::GetFunction(col.type);
 				auto colref = make_uniq<BoundColumnRefExpression>(
 				    col.name, col.type, ColumnBinding(base_binding.table_index, base_binding.column_index + i));
 				vector<unique_ptr<Expression>> aggr_children;
@@ -300,7 +301,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				D_ASSERT(aggr.expressions[i]->GetExpressionClass() == ExpressionClass::BOUND_AGGREGATE);
 				auto &bound = aggr.expressions[i]->Cast<BoundAggregateExpression>();
 				vector<LogicalType> arguments;
-				if (bound.function == CountFun::GetFunction() || bound.function == CountStarFun::GetFunction()) {
+				if (bound.function == CountFunctionBase::GetFunction() ||
+				    bound.function == CountStarFun::GetFunction()) {
 					// have to replace this ColumnBinding with the CASE expression
 					replacement_map[ColumnBinding(aggr.aggregate_index, i)] = i;
 				}
@@ -399,6 +401,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				// only right has correlation: push into right
 				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
 				                                                  parent_propagate_null_values, lateral_depth);
+				delim_offset += plan->children[0]->GetColumnBindings().size();
 				// Remove the correlated columns coming from outside for current join node
 				return plan;
 			}
@@ -412,11 +415,12 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				return plan;
 			}
 		} else if (join.join_type == JoinType::RIGHT) {
-			// left outer join
+			// right outer join
 			if (!left_has_correlation) {
 				// only right has correlation: push into right
 				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
 				                                                  parent_propagate_null_values, lateral_depth);
+				delim_offset += plan->children[0]->GetColumnBindings().size();
 				return plan;
 			}
 		} else if (join.join_type == JoinType::MARK) {
@@ -448,6 +452,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			this->base_binding = left_binding;
 		} else if (join.join_type == JoinType::RIGHT) {
 			this->base_binding = right_binding;
+			delim_offset += plan->children[0]->GetColumnBindings().size();
 		}
 		// add the correlated columns to the join conditions
 		for (idx_t i = 0; i < correlated_columns.size(); i++) {
@@ -618,6 +623,29 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 #endif
 		plan->children[0] = PushDownDependentJoin(std::move(plan->children[0]));
 		plan->children[1] = PushDownDependentJoin(std::move(plan->children[1]));
+		for (idx_t i = 0; i < plan->children.size(); i++) {
+			if (plan->children[i]->type == LogicalOperatorType::LOGICAL_CROSS_PRODUCT) {
+				auto proj_index = binder.GenerateTableIndex();
+				auto bindings = plan->children[i]->GetColumnBindings();
+				plan->children[i]->ResolveOperatorTypes();
+				auto types = plan->children[i]->types;
+				vector<unique_ptr<Expression>> expressions;
+				expressions.reserve(bindings.size());
+				D_ASSERT(bindings.size() == types.size());
+
+				// No column binding replaceent is needed because the parent operator is
+				// a setop which will immediately assign new bindings.
+				for (idx_t col_idx = 0; col_idx < bindings.size(); col_idx++) {
+					expressions.push_back(make_uniq<BoundColumnRefExpression>(types[col_idx], bindings[col_idx]));
+				}
+				auto proj = make_uniq<LogicalProjection>(proj_index, std::move(expressions));
+				proj->children.push_back(std::move(plan->children[i]));
+				plan->children[i] = std::move(proj);
+			}
+		}
+
+		// here we need to check the children. If they have reorderable bindings, you need to plan a projection
+		// on top that will guarantee the order of the bindings.
 #ifdef DEBUG
 		D_ASSERT(plan->children[0]->GetColumnBindings().size() == plan->children[1]->GetColumnBindings().size());
 		plan->children[0]->ResolveOperatorTypes();
@@ -748,6 +776,8 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 	}
 	case LogicalOperatorType::LOGICAL_SAMPLE:
 		throw BinderException("Sampling in correlated subqueries is not (yet) supported");
+	case LogicalOperatorType::LOGICAL_POSITIONAL_JOIN:
+		throw BinderException("Positional join in correlated subqueries is not (yet) supported");
 	default:
 		throw InternalException("Logical operator type \"%s\" for dependent join", LogicalOperatorToString(plan->type));
 	}

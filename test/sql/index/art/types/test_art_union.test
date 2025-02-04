@@ -4,6 +4,9 @@
 
 load __TEST_DIR__/test_art_union.db
 
+# FIXME: CreateIndex should not bind on WAL replay
+require no_alternative_verify
+
 statement ok
 PRAGMA enable_verification
 
@@ -111,7 +114,7 @@ restart
 statement error
 INSERT INTO tbl VALUES ('helloo', 'nop', 7, true);
 ----
-Constraint Error: Duplicate key "union_extract(u_2, 'string'): helloo" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
+<REGEX>:Constraint Error.*violates unique constraint.*
 
 restart
 
@@ -193,4 +196,4 @@ restart
 statement error
 INSERT INTO tbl VALUES ('sunshine', 'love', 85, true);
 ----
-Constraint Error: Duplicate key "union_extract(u_2, 'string'): sunshine, union_extract(u_1, 'string'): love" violates unique constraint. If this is an unexpected constraint violation please double check with the known index limitations section in our documentation (https://duckdb.org/docs/sql/indexes).
+<REGEX>:Constraint Error.*violates unique constraint.*

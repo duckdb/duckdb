@@ -2,27 +2,33 @@ import duckdb
 import os
 import pytest
 
-try:
-    import pyarrow as pa
-    import pyarrow.dataset as ds
-
-    can_run = True
-except:
-    can_run = False
-
 
 class TestArrowProjectionPushdown(object):
     def test_projection_pushdown_no_filter(self, duckdb_cursor):
-        if not can_run:
-            return
-        duckdb_conn = duckdb.connect()
-        duckdb_conn.execute("CREATE TABLE test (a  INTEGER, b INTEGER, c INTEGER)")
-        duckdb_conn.execute("INSERT INTO  test VALUES (1,1,1),(10,10,10),(100,10,100),(NULL,NULL,NULL)")
-        duck_tbl = duckdb_conn.table("test")
+        pa = pytest.importorskip("pyarrow")
+        ds = pytest.importorskip("pyarrow.dataset")
+
+        duckdb_cursor.execute(
+            """
+            CREATE TABLE test (a  INTEGER, b INTEGER, c INTEGER)
+        """
+        )
+        duckdb_cursor.execute(
+            """
+            INSERT INTO test VALUES
+                (1,2,3),
+                (10,20,30),
+                (100,200,300),
+                (NULL,NULL,NULL)
+        """
+        )
+        duck_tbl = duckdb_cursor.table("test")
         arrow_table = duck_tbl.arrow()
-        duckdb_conn.register("testarrowtable", arrow_table)
-        assert duckdb_conn.execute("SELECT sum(a) FROM  testarrowtable").fetchall() == [(111,)]
+        assert duckdb_cursor.execute("SELECT sum(c) FROM arrow_table").fetchall() == [(333,)]
+
+        # RecordBatch does not use projection pushdown, test that this also still works
+        record_batch = arrow_table.to_batches()[0]
+        assert duckdb_cursor.execute("SELECT sum(c) FROM record_batch").fetchall() == [(333,)]
 
         arrow_dataset = ds.dataset(arrow_table)
-        duckdb_conn.register("testarrowdataset", arrow_dataset)
-        assert duckdb_conn.execute("SELECT sum(a) FROM  testarrowdataset").fetchall() == [(111,)]
+        assert duckdb_cursor.execute("SELECT sum(c) FROM arrow_dataset").fetchall() == [(333,)]

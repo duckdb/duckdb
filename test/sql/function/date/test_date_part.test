@@ -264,6 +264,14 @@ NULL
 NULL
 NULL
 
+# Cache upper bound
+query I
+select date_part('year', dt::DATE) * 10,
+from generate_series('2050-01-01'::date,'2051-12-31'::date,interval 1 day) t(dt)
+where dt = '2050-12-31';
+----
+20500
+
 #
 # Two-argument timezone
 #

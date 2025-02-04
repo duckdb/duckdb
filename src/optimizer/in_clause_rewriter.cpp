@@ -6,22 +6,24 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/operator/logical_column_data_get.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
 unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator> op) {
-	if (op->children.size() == 1) {
-		if (op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-			auto &get = op->children[0]->Cast<LogicalGet>();
-			if (get.function.to_string && get.function.to_string(get.bind_data.get()) == "REMOTE") {
-				return op;
-			}
-		}
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		current_op = op.get();
 		root = std::move(op->children[0]);
 		VisitOperatorExpressions(*op);
 		op->children[0] = std::move(root);
+		break;
+	}
+	default:
+		break;
 	}
 
 	for (auto &child : op->children) {
@@ -31,12 +33,13 @@ unique_ptr<LogicalOperator> InClauseRewriter::Rewrite(unique_ptr<LogicalOperator
 }
 
 unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &expr, unique_ptr<Expression> *expr_ptr) {
-	if (expr.type != ExpressionType::COMPARE_IN && expr.type != ExpressionType::COMPARE_NOT_IN) {
+	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN &&
+	    expr.GetExpressionType() != ExpressionType::COMPARE_NOT_IN) {
 		return nullptr;
 	}
 	D_ASSERT(root);
 	auto in_type = expr.children[0]->return_type;
-	bool is_regular_in = expr.type == ExpressionType::COMPARE_IN;
+	bool is_regular_in = expr.GetExpressionType() == ExpressionType::COMPARE_IN;
 	bool all_scalar = true;
 	// IN clause with many children: try to generate a mark join that replaces this IN expression
 	// we can only do this if the expressions in the expression list are scalar
@@ -110,6 +113,19 @@ unique_ptr<Expression> InClauseRewriter::VisitReplace(BoundOperatorExpression &e
 	cond.comparison = ExpressionType::COMPARE_EQUAL;
 	join->conditions.push_back(std::move(cond));
 	root = std::move(join);
+
+	if (current_op->type == LogicalOperatorType::LOGICAL_FILTER) {
+		// project out the mark index again
+		auto &filter = current_op->Cast<LogicalFilter>();
+		if (filter.projection_map.empty()) {
+			auto child_bindings = root->GetColumnBindings();
+			for (idx_t i = 0; i < child_bindings.size(); i++) {
+				if (child_bindings[i].table_index != chunk_index) {
+					filter.projection_map.push_back(i);
+				}
+			}
+		}
+	}
 
 	// we replace the original subquery with a BoundColumnRefExpression referring to the mark column
 	unique_ptr<Expression> result =

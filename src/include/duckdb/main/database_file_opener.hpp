@@ -21,8 +21,12 @@ public:
 	explicit DatabaseFileOpener(DatabaseInstance &db_p) : db(db_p) {
 	}
 
+	Logger &GetLogger() const override {
+		return Logger::Get(db);
+	}
+
 	SettingLookupResult TryGetCurrentSetting(const string &key, Value &result) override {
-		return SettingLookupResult();
+		return db.TryGetCurrentSetting(key, result);
 	}
 
 	optional_ptr<ClientContext> TryGetClientContext() override {

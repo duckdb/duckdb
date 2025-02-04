@@ -77,7 +77,7 @@ INSERT INTO integers2 SELECT i FROM integers;
 statement error
 INSERT INTO integers2 VALUES (42);
 ----
-PRIMARY KEY or UNIQUE constraint violated
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violation.*
 
 statement ok
 ROLLBACK
@@ -105,7 +105,7 @@ INSERT INTO integers2 VALUES (999999)
 statement error
 INSERT INTO integers2 SELECT i FROM integers;
 ----
-PRIMARY KEY or UNIQUE constraint violated
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violation.*
 
 statement ok
 ROLLBACK

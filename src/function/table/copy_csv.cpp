@@ -40,6 +40,15 @@ void SubstringDetection(char str_1, string &str_2, const string &name_str_1, con
 	}
 }
 
+void StringDetection(const string &str_1, const string &str_2, const string &name_str_1, const string &name_str_2) {
+	if (str_1.empty() || str_2.empty()) {
+		return;
+	}
+	if (str_2.find(str_1) != string::npos) {
+		throw BinderException("%s must not appear in the %s specification and vice versa", name_str_1, name_str_2);
+	}
+}
+
 //===--------------------------------------------------------------------===//
 // Bind
 //===--------------------------------------------------------------------===//
@@ -50,17 +59,15 @@ void WriteQuoteOrEscape(WriteStream &writer, char quote_or_escape) {
 }
 
 void BaseCSVData::Finalize() {
-	// verify that the options are correct in the final pass
-	if (options.dialect_options.state_machine_options.escape == '\0') {
-		options.dialect_options.state_machine_options.escape = options.dialect_options.state_machine_options.quote;
-	}
-	// escape and delimiter must not be substrings of each other
-	AreOptionsEqual(options.dialect_options.state_machine_options.delimiter.GetValue(),
-	                options.dialect_options.state_machine_options.escape.GetValue(), "DELIMITER", "ESCAPE");
+	auto delimiter_string = options.dialect_options.state_machine_options.delimiter.GetValue();
 
-	// delimiter and quote must not be substrings of each other
-	AreOptionsEqual(options.dialect_options.state_machine_options.quote.GetValue(),
-	                options.dialect_options.state_machine_options.delimiter.GetValue(), "DELIMITER", "QUOTE");
+	// quote and delimiter must not be substrings of each other
+	SubstringDetection(options.dialect_options.state_machine_options.quote.GetValue(), delimiter_string, "QUOTE",
+	                   "DELIMITER");
+
+	// escape and delimiter must not be substrings of each other
+	SubstringDetection(options.dialect_options.state_machine_options.escape.GetValue(), delimiter_string, "ESCAPE",
+	                   "DELIMITER");
 
 	// escape and quote must not be substrings of each other (but can be the same)
 	if (options.dialect_options.state_machine_options.quote != options.dialect_options.state_machine_options.escape) {
@@ -68,26 +75,33 @@ void BaseCSVData::Finalize() {
 		                options.dialect_options.state_machine_options.escape.GetValue(), "QUOTE", "ESCAPE");
 	}
 
-	// delimiter and quote must not be substrings of each other
+	// comment and quote must not be substrings of each other
 	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
 	                options.dialect_options.state_machine_options.quote.GetValue(), "COMMENT", "QUOTE");
 
-	// delimiter and quote must not be substrings of each other
-	AreOptionsEqual(options.dialect_options.state_machine_options.comment.GetValue(),
-	                options.dialect_options.state_machine_options.delimiter.GetValue(), "COMMENT", "DELIMITER");
+	// delimiter and comment must not be substrings of each other
+	SubstringDetection(options.dialect_options.state_machine_options.comment.GetValue(), delimiter_string, "COMMENT",
+	                   "DELIMITER");
 
 	// null string and delimiter must not be substrings of each other
 	for (auto &null_str : options.null_str) {
 		if (!null_str.empty()) {
-			SubstringDetection(options.dialect_options.state_machine_options.delimiter.GetValue(), null_str,
-			                   "DELIMITER", "NULL");
+			StringDetection(options.dialect_options.state_machine_options.delimiter.GetValue(), null_str, "DELIMITER",
+			                "NULL");
 
-			// quote/escape and nullstr must not be substrings of each other
+			// quote and nullstr must not be substrings of each other
 			SubstringDetection(options.dialect_options.state_machine_options.quote.GetValue(), null_str, "QUOTE",
 			                   "NULL");
 
-			SubstringDetection(options.dialect_options.state_machine_options.escape.GetValue(), null_str, "ESCAPE",
-			                   "NULL");
+			// Validate the nullstr against the escape character
+			const char escape = options.dialect_options.state_machine_options.escape.GetValue();
+			// Allow nullstr to be escape character + some non-special character, e.g., "\N" (MySQL default).
+			// In this case, only unquoted occurrences of the nullstr will be recognized as null values.
+			if (options.dialect_options.state_machine_options.strict_mode == false && null_str.size() == 2 &&
+			    null_str[0] == escape && null_str[1] != '\0') {
+				continue;
+			}
+			SubstringDetection(escape, null_str, "ESCAPE", "NULL");
 		}
 	}
 
@@ -203,7 +217,7 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	bind_data->requires_quotes['\n'] = true;
 	bind_data->requires_quotes['\r'] = true;
 	bind_data->requires_quotes[NumericCast<idx_t>(
-	    bind_data->options.dialect_options.state_machine_options.delimiter.GetValue())] = true;
+	    bind_data->options.dialect_options.state_machine_options.delimiter.GetValue()[0])] = true;
 	bind_data->requires_quotes[NumericCast<idx_t>(
 	    bind_data->options.dialect_options.state_machine_options.quote.GetValue())] = true;
 
@@ -311,7 +325,8 @@ static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const
 		// force quote is disabled: check if we need to add quotes anyway
 		force_quote = RequiresQuotes(csv_data, str, len);
 	}
-	if (force_quote) {
+	// If a quote is set to none (i.e., null-terminator) we skip the quotation
+	if (force_quote && options.dialect_options.state_machine_options.quote.GetValue() != '\0') {
 		// quoting is enabled: we might need to escape things in the string
 		bool requires_escape = false;
 		// simple CSV
@@ -356,7 +371,7 @@ static void WriteQuotedString(WriteStream &writer, WriteCSVData &csv_data, const
 struct LocalWriteCSVData : public LocalFunctionData {
 public:
 	LocalWriteCSVData(ClientContext &context, vector<unique_ptr<Expression>> &expressions)
-	    : executor(context, expressions) {
+	    : executor(context, expressions), stream(Allocator::Get(context)) {
 	}
 
 public:
@@ -436,11 +451,11 @@ static unique_ptr<GlobalFunctionData> WriteCSVInitializeGlobal(ClientContext &co
 	}
 
 	if (!(options.dialect_options.header.IsSetByUser() && !options.dialect_options.header.GetValue())) {
-		MemoryStream stream;
+		MemoryStream stream(Allocator::Get(context));
 		// write the header line to the file
 		for (idx_t i = 0; i < csv_data.options.name_list.size(); i++) {
 			if (i != 0) {
-				WriteQuoteOrEscape(stream, options.dialect_options.state_machine_options.delimiter.GetValue());
+				WriteQuoteOrEscape(stream, options.dialect_options.state_machine_options.delimiter.GetValue()[0]);
 			}
 			WriteQuotedString(stream, csv_data, csv_data.options.name_list[i].c_str(),
 			                  csv_data.options.name_list[i].size(), false);
@@ -477,7 +492,7 @@ static void WriteCSVChunkInternal(ClientContext &context, FunctionData &bind_dat
 		D_ASSERT(options.null_str.size() == 1);
 		for (idx_t col_idx = 0; col_idx < cast_chunk.ColumnCount(); col_idx++) {
 			if (col_idx != 0) {
-				WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.delimiter.GetValue());
+				WriteQuoteOrEscape(writer, options.dialect_options.state_machine_options.delimiter.GetValue()[0]);
 			}
 			if (FlatVector::IsNull(cast_chunk.data[col_idx], row_idx)) {
 				// write null value
@@ -539,7 +554,7 @@ void WriteCSVFinalize(ClientContext &context, FunctionData &bind_data, GlobalFun
 	auto &csv_data = bind_data.Cast<WriteCSVData>();
 	auto &options = csv_data.options;
 
-	MemoryStream stream;
+	MemoryStream stream(Allocator::Get(context));
 	if (!options.suffix.empty()) {
 		stream.WriteData(const_data_ptr_cast(options.suffix.c_str()), options.suffix.size());
 	} else if (global_state.written_anything) {
@@ -567,6 +582,9 @@ CopyFunctionExecutionMode WriteCSVExecutionMode(bool preserve_insertion_order, b
 // Prepare Batch
 //===--------------------------------------------------------------------===//
 struct WriteCSVBatchData : public PreparedBatchData {
+	explicit WriteCSVBatchData(Allocator &allocator) : stream(allocator) {
+	}
+
 	//! The thread-local buffer to write data into
 	MemoryStream stream;
 };
@@ -588,7 +606,7 @@ unique_ptr<PreparedBatchData> WriteCSVPrepareBatch(ClientContext &context, Funct
 
 	// write CSV chunks to the batch data
 	bool written_anything = false;
-	auto batch = make_uniq<WriteCSVBatchData>();
+	auto batch = make_uniq<WriteCSVBatchData>(Allocator::Get(context));
 	for (auto &chunk : collection->Chunks()) {
 		WriteCSVChunkInternal(context, bind_data, cast_chunk, batch->stream, chunk, written_anything, executor);
 	}

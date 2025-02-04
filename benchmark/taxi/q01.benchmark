@@ -1,0 +1,8 @@
+# name: benchmark/taxi/q01.benchmark
+# description: Run query 01 from the taxi benchmark
+# group: [taxi]
+
+template benchmark/taxi/taxi.benchmark.in
+QUERY_NUMBER=1
+QUERY_NUMBER_PADDED=01
+RESULT_QUERY=SELECT cab_type,COUNT(*) FROM trips GROUP BY cab_type ORDER BY ALL;

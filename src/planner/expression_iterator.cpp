@@ -22,7 +22,7 @@ void ExpressionIterator::EnumerateChildren(Expression &expr, const std::function
 
 void ExpressionIterator::EnumerateChildren(Expression &expr,
                                            const std::function<void(unique_ptr<Expression> &child)> &callback) {
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_AGGREGATE: {
 		auto &aggr_expr = expr.Cast<BoundAggregateExpression>();
 		for (auto &child : aggr_expr.children) {
@@ -88,8 +88,8 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 	}
 	case ExpressionClass::BOUND_SUBQUERY: {
 		auto &subquery_expr = expr.Cast<BoundSubqueryExpression>();
-		if (subquery_expr.child) {
-			callback(subquery_expr.child);
+		for (auto &child : subquery_expr.children) {
+			callback(child);
 		}
 		break;
 	}
@@ -118,6 +118,9 @@ void ExpressionIterator::EnumerateChildren(Expression &expr,
 		}
 		if (window_expr.default_expr) {
 			callback(window_expr.default_expr);
+		}
+		for (auto &order : window_expr.arg_orders) {
+			callback(order.expression);
 		}
 		break;
 	}

@@ -5,6 +5,7 @@ Do not clone this repository directly to use the DuckPGQ extension.
 To build the extension from source, see the [DuckPGQ](https://github.com/cwida/duckpgq-extension) repository 
 and the [documentation page](https://duckpgq.notion.site/duckpgq/b8ac652667964f958bfada1c3e53f1bb?v=3b47a8d44bdf4e0c8b503bf23f1b76f2) for instructions.
 
+<<<<<<< HEAD
 [![Discord](https://discordapp.com/api/guilds/1225369321077866496/widget.png?style=banner3)](https://discord.gg/8X95XHhQB7)
 
 # Loading DuckPGQ into DuckDB

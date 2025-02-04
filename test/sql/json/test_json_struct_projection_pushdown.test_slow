@@ -1,0 +1,164 @@
+# name: test/sql/json/test_json_struct_projection_pushdown.test_slow
+# description: Test JSON struct projection pushdown with TPC-H
+# group: [json]
+
+require json
+
+require tpch
+
+statement ok
+call dbgen(sf=1)
+
+statement ok
+export database '__TEST_DIR__/tpch_json' (format json)
+
+statement ok
+DROP TABLE customer;
+
+statement ok
+DROP TABLE lineitem;
+
+statement ok
+DROP TABLE nation;
+
+statement ok
+DROP TABLE orders;
+
+statement ok
+DROP TABLE part;
+
+statement ok
+DROP TABLE partsupp;
+
+statement ok
+DROP TABLE region;
+
+statement ok
+DROP TABLE supplier;
+
+statement ok
+CREATE VIEW customer AS
+SELECT
+	json['c_custkey']::INTEGER AS c_custkey,
+	json['c_name']::VARCHAR AS c_name,
+	json['c_address']::VARCHAR AS c_address,
+	json['c_nationkey']::INTEGER AS c_nationkey,
+	json['c_phone']::VARCHAR AS c_phone,
+	json['c_acctbal']::DECIMAL(15,2) AS c_acctbal,
+	json['c_mktsegment']::VARCHAR AS c_mktsegment,
+	json['c_comment']::VARCHAR AS c_comment,
+FROM
+	read_json_auto('__TEST_DIR__/tpch_json/customer.json', records=false)
+
+statement ok
+CREATE VIEW lineitem AS
+SELECT
+	json['l_orderkey']::INTEGER AS l_orderkey,
+	json['l_partkey']::INTEGER AS l_partkey,
+	json['l_suppkey']::INTEGER AS l_suppkey,
+	json['l_linenumber']::INTEGER AS l_linenumber,
+	json['l_quantity']::DECIMAL(15,2) AS l_quantity,
+	json['l_extendedprice']::DECIMAL(15,2) AS l_extendedprice,
+	json['l_discount']::DECIMAL(15,2) AS l_discount,
+	json['l_tax']::DECIMAL(15,2) AS l_tax,
+	json['l_returnflag']::VARCHAR AS l_returnflag,
+	json['l_linestatus']::VARCHAR AS l_linestatus,
+	json['l_shipdate']::DATE AS l_shipdate,
+	json['l_commitdate']::DATE AS l_commitdate,
+	json['l_receiptdate']::DATE AS l_receiptdate,
+	json['l_shipinstruct']::VARCHAR AS l_shipinstruct,
+	json['l_shipmode']::VARCHAR AS l_shipmode,
+	json['l_comment']::VARCHAR AS l_comment,
+FROM
+	read_json_auto('__TEST_DIR__/tpch_json/lineitem.json', records=false)
+
+statement ok
+CREATE VIEW nation AS
+SELECT
+	json['n_nationkey']::INTEGER AS n_nationkey,
+	json['n_name']::VARCHAR AS n_name,
+	json['n_regionkey']::INTEGER AS n_regionkey,
+	json['n_comment']::VARCHAR AS n_comment,
+FROM
+	read_json_auto('__TEST_DIR__/tpch_json/nation.json', records=false)
+
+statement ok
+CREATE VIEW orders AS
+SELECT
+	json['o_orderkey']::INTEGER AS o_orderkey,
+	json['o_custkey']::INTEGER AS o_custkey,
+	json['o_orderstatus']::VARCHAR AS o_orderstatus,
+	json['o_totalprice']::DECIMAL(15,2) AS o_totalprice,
+	json['o_orderdate']::DATE AS o_orderdate,
+	json['o_orderpriority']::VARCHAR AS o_orderpriority,
+	json['o_clerk']::VARCHAR AS o_clerk,
+	json['o_shippriority']::INTEGER AS o_shippriority,
+	json['o_comment']::VARCHAR AS o_comment,
+FROM
+	read_json_auto('__TEST_DIR__/tpch_json/orders.json', records=false)
+
+statement ok
+CREATE VIEW part AS
+SELECT
+	json['p_partkey']::INTEGER AS p_partkey,
+	json['p_name']::VARCHAR AS p_name,
+	json['p_mfgr']::VARCHAR AS p_mfgr,
+	json['p_brand']::VARCHAR AS p_brand,
+	json['p_type']::VARCHAR AS p_type,
+	json['p_size']::INTEGER AS p_size,
+	json['p_container']::VARCHAR AS p_container,
+	json['p_retailprice']::DECIMAL(15,2) AS p_retailprice,
+	json['p_comment']::VARCHAR AS p_comment,
+FROM
+	read_json_auto('__TEST_DIR__/tpch_json/part.json', records=false)
+
+statement ok
+CREATE VIEW partsupp AS
+SELECT
+	json['ps_partkey']::INTEGER AS ps_partkey,
+	json['ps_suppkey']::INTEGER AS ps_suppkey,
+	json['ps_availqty']::INTEGER AS ps_availqty,
+	json['ps_supplycost']::DECIMAL(15,2) AS ps_supplycost,
+	json['ps_comment']::VARCHAR AS ps_comment,
+FROM
+	read_json_auto('__TEST_DIR__/tpch_json/partsupp.json', records=false)
+
+statement ok
+CREATE VIEW region AS
+SELECT
+	json['r_regionkey']::INTEGER AS r_regionkey,
+	json['r_name']::VARCHAR AS r_name,
+	json['r_comment']::VARCHAR AS r_comment,
+FROM
+	read_json_auto('__TEST_DIR__/tpch_json/region.json', records=false)
+
+statement ok
+CREATE VIEW supplier AS
+SELECT
+	json['s_suppkey']::INTEGER AS s_suppkey,
+	json['s_name']::VARCHAR AS s_name,
+	json['s_address']::VARCHAR AS s_address,
+	json['s_nationkey']::INTEGER AS s_nationkey,
+	json['s_phone']::VARCHAR AS s_phone,
+	json['s_acctbal']::DECIMAL(15,2) AS s_acctbal,
+	json['s_comment']::VARCHAR AS s_comment,
+FROM
+	read_json_auto('__TEST_DIR__/tpch_json/supplier.json', records=false)
+
+loop i 1 9
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+endloop
+
+loop i 10 23
+
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop

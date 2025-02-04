@@ -13,8 +13,6 @@ import cmath
 
 from duckdb.typing import *
 
-from arrow_canonical_extensions import HugeIntType
-
 
 def make_annotated_function(type):
     # Create a function that returns its input
@@ -70,8 +68,6 @@ class TestScalarUDF(object):
 
         con = duckdb.connect()
         con.create_function('test', test_function, type=function_type)
-        if type == HUGEINT:
-            pa.register_extension_type(HugeIntType())
         # Single value
         res = con.execute(f"select test(?::{str(type)})", [value]).fetchall()
         assert res[0][0] == value
@@ -121,8 +117,6 @@ class TestScalarUDF(object):
         table_rel = con.table('tbl')
         res = table_rel.project('test(x)').fetchall()
         assert res[0][0] == value
-        if type == HUGEINT:
-            pa.unregister_extension_type("duckdb.hugeint")
 
     @pytest.mark.parametrize('udf_type', ['arrow', 'native'])
     def test_map_coverage(self, udf_type):

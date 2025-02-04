@@ -166,7 +166,8 @@
       {
         "id": 201,
         "name": "projections",
-        "type": "vector<idx_t>"
+        "type": "vector<idx_t>",
+        "property": "projection_map"
       }
     ],
     "constructor": ["orders"]
@@ -630,6 +631,12 @@
         "id": 217,
         "name": "expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 218,
+        "name": "update_is_del_and_insert",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": ["$ClientContext", "table_info"]
@@ -874,9 +881,15 @@
         "id": 201,
         "name": "unbound_expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 202,
+        "name": "alter_table_info",
+        "type": "unique_ptr<AlterTableInfo>",
+        "base": "ParseInfo"
       }
     ],
-    "constructor": ["$ClientContext", "info", "unbound_expressions"]
+    "constructor": ["$ClientContext", "info", "unbound_expressions", "alter_table_info"]
   },
   {
     "class": "LogicalExtensionOperator",

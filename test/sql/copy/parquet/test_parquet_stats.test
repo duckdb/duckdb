@@ -77,17 +77,15 @@ explain select * from parquet_scan('data/parquet-testing/data-types.parquet') wh
 
 # see if stats work correctly for globs
 
-statement ok
-pragma disable_object_cache
-
-
 query I nosort nostats
 explain select time from parquet_scan('data/parquet-testing/timestamp*.parquet') where time > '2020-10-06'
 ----
 
 statement ok
-pragma enable_object_cache
+SET parquet_metadata_cache=true;
 
+# we no longer gather stats with parquet_metadata_cache=true (for now?)
+mode skip
 
 # no stats since there are two files and the cache is on but we have not read all files yet
 query I nosort nostats

@@ -5,7 +5,6 @@
 statement ok
 PRAGMA enable_verification
 
-
 # no newline at end of file with simple delimiter
 # load CSV file into a table
 statement ok
@@ -16,12 +15,11 @@ COPY no_newline FROM 'data/csv/test/no_newline.csv';
 ----
 1024
 
-# no newline at end of file with unicode delimiter
-# load CSV file into a table
-statement ok
-CREATE TABLE no_newline_unicode (a INTEGER, b INTEGER, c VARCHAR(10));
-
-statement error
-COPY no_newline_unicode FROM 'data/csv/test/no_newline_unicode.csv' DELIMITER '🦆';
+query III
+FROM read_csv('data/csv/test/no_newline_unicode.csv', delim= '🦆') limit 5;
 ----
-The delimiter option cannot exceed a size of 1 byte.
+0	0	 test
+1	1	 test
+2	2	 test
+3	3	 test
+4	4	 test

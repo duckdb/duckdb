@@ -1,0 +1,44 @@
+# name: test/optimizer/sampling_pushdown.test_slow
+# description: Test the performance of Sampling Pushdown optimization
+# group: [optimizer]
+
+require tpch
+
+statement ok
+CALL DBGEN(sf=0.1);
+
+# tablesample system + seq scan becomes sample scan
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lineitem tablesample system(0.1%)
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*System: 0.1%.*
+
+# using sample system + seq scan becomes sample scan
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lineitem using sample system(0.1%)
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*System: 0.1%.*
+
+# tablesample system + seq scan with join becomes sample scan with join
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lineitem tablesample system(0.1%), orders tablesample system(0.1%)
+----
+analyzed_plan	<REGEX>:.*TABLE_SCAN.*System: 0.1%.*
+
+# tablesample bernoulli: no pushdown
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lineitem tablesample bernoulli(0.1%)
+----
+analyzed_plan	<REGEX>:.*Bernoulli.*TABLE_SCAN.*
+
+# tablesample reservoir: no pushdown
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lineitem tablesample reservoir(0.1%)
+----
+analyzed_plan	<REGEX>:.*RESERVOIR_SAMPLE.*TABLE_SCAN.*
+
+# tablesample system after a derived table: no pushdown
+query II
+EXPLAIN ANALYZE SELECT count(*) FROM lineitem, orders where l_orderkey = o_orderkey USING SAMPLE SYSTEM(25%)
+----
+analyzed_plan	<REGEX>:.*System.*TABLE_SCAN.*

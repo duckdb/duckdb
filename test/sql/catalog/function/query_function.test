@@ -205,7 +205,7 @@ Catalog Error: Table with name FROM query('select 1 + 2;') does not exist!
 statement error
 FROM query_table('FROM query("select 1 + 2;")');
 ----
-Catalog Error: Table with name FROM query("select 1 + 2;") does not exist!
+Catalog Error: Table with name FROM query(select 1 + 2;) does not exist!
 
 statement error
 FROM query_table('(SELECT 17 + 25)');
@@ -248,6 +248,16 @@ statement error
 FROM query_table('SELECT 4 + 2');
 ----
 Catalog Error: Table with name SELECT 4 + 2 does not exist!
+
+query I
+SELECT f.* FROM query_table('tbl_int') as f;
+----
+42
+
+query I
+SELECT f.x FROM query_table('tbl_int') as f(x);
+----
+42
 
 # test by_name argument
 query I

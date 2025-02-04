@@ -153,10 +153,6 @@ protected:
 		return DConstants::INVALID_INDEX;
 	}
 
-	//! Whether or not to iterate over the original partitions in reverse order when repartitioning (optional)
-	virtual bool RepartitionReverseOrder() const {
-		return false;
-	}
 	//! Finalize states while repartitioning - useful for unpinning blocks that are no longer needed (optional)
 	virtual void RepartitionFinalizeStates(PartitionedTupleData &old_partitioned_data,
 	                                       PartitionedTupleData &new_partitioned_data,

@@ -100,6 +100,21 @@ if(${FORCE_COLORED_OUTPUT})
   endif()
 endif()
 
+option (WASM_ENABLED "Are DuckDB-Wasm extensions build enabled" FALSE)
+if (DEFINED ENV{WASM_EXTENSIONS})
+     set(WASM_ENABLED "$ENV{WASM_EXTENSIONS}")
+endif()
+option (MUSL_ENABLED "Are Musl extensions build enabled" FALSE)
+if (DEFINED ENV{DUCKDB_PLATFORM})
+     if ("$ENV{DUCKDB_PLATFORM}" STREQUAL "linux_amd64_musl")
+          set(MUSL_ENABLED ON)
+     endif()
+endif()
+
+if (MUSL_ENABLED)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__MUSL_ENABLED__")
+endif()
+
 set(M32_FLAG "")
 if(FORCE_32_BIT)
   set(M32_FLAG " -m32 ")
@@ -213,6 +228,11 @@ endif()
 option(EXPLICIT_EXCEPTIONS "Explicitly enable C++ exceptions." FALSE)
 if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
+endif()
+
+option(EXPORT_DYNAMIC_SYMBOLS "Export dynamic symbols." FALSE)
+if(${EXPORT_DYNAMIC_SYMBOLS})
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rdynamic")
 endif()
 
 if (UNSAFE_NUMERIC_CAST)
@@ -368,10 +388,10 @@ if(WIN32 OR ZOS)
 endif()
 
 option(BUILD_EXTENSIONS_ONLY "Build all extension as linkable, overriding DONT_LINK, and don't build core." FALSE)
-option(BUILD_CORE_FUNCTIONS_EXTENSION "Build the core functions." TRUE)
 option(BUILD_BENCHMARKS "Enable building of the benchmark suite." FALSE)
 option(BUILD_TPCE "Enable building of the TPC-E tool." FALSE)
 option(DISABLE_BUILTIN_EXTENSIONS "Disable linking extensions." FALSE)
+option(GENERATE_EXTENSION_ENTRIES "Build for generating extension_entries.hpp" FALSE)
 option(BUILD_PYTHON "Build the DuckDB Python extension" FALSE)
 option(USER_SPACE "Build the DuckDB Python in the user space" FALSE)
 option(FORCE_QUERY_LOG "If enabled, all queries will be logged to the specified path" OFF)
@@ -382,6 +402,7 @@ option(DISABLE_STR_INLINE "Debug setting: disable inlining of strings" FALSE)
 option(DISABLE_MEMORY_SAFETY "Debug setting: disable memory access checks at runtime" FALSE)
 option(DISABLE_ASSERTIONS "Debug setting: disable assertions" FALSE)
 option(ALTERNATIVE_VERIFY "Debug setting: use alternative verify mode" FALSE)
+option(DISABLE_POINTER_SALT "Debug setting: verify correct results without pointer salt" FALSE)
 option(RUN_SLOW_VERIFIERS "Debug setting: enable a more extensive set of verifiers" FALSE)
 option(DESTROY_UNPINNED_BLOCKS "Debug setting: destroy unpinned buffer-managed blocks" FALSE)
 option(FORCE_ASYNC_SINK_SOURCE "Debug setting: forces sinks/sources to block the first 2 times they're called" FALSE)
@@ -400,6 +421,8 @@ option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" FALSE)
 option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
+option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
+option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -419,8 +442,16 @@ if (NOT BUILD_MAIN_DUCKDB_LIBRARY)
   set(DISABLE_BUILTIN_EXTENSIONS TRUE)
 endif()
 
+if (GENERATE_EXTENSION_ENTRIES)
+  set(DISABLE_BUILTIN_EXTENSIONS TRUE)
+endif()
+
 if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
+endif()
+
+if(NATIVE_ARCH)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 endif()
 
 if(CRASH_ON_ASSERT)
@@ -455,6 +486,10 @@ if(ALTERNATIVE_VERIFY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_ALTERNATIVE_VERIFY")
 endif()
 
+if(DISABLE_POINTER_SALT)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDISABLE_POINTER_SALT")
+endif()
+
 if(LATEST_STORAGE)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_LATEST_STORAGE")
 endif()
@@ -473,6 +508,10 @@ endif()
 
 if (CLANG_TIDY)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_CLANG_TIDY")
+endif()
+
+if (SMALLER_BINARY)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DDUCKDB_SMALLER_BINARY")
 endif()
 
 if(FORCE_ASSERT)
@@ -548,7 +587,7 @@ if(NOT MSVC)
       "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG -Wall ${M32_FLAG} ${CXX_EXTRA}")
   set(CMAKE_CXX_FLAGS_RELEASE
       "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG ${M32_FLAG} ${CXX_EXTRA}")
-  if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_LTO)
+  if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang$" AND CMAKE_LTO)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto=${CMAKE_LTO}")
   elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_LTO)
     set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -flto")
@@ -621,6 +660,7 @@ include_directories(third_party/tdigest)
 include_directories(third_party/mbedtls/include)
 include_directories(third_party/jaro_winkler)
 include_directories(third_party/yyjson/include)
+include_directories(third_party/zstd/include)
 
 # todo only regenerate ub file if one of the input files changed hack alert
 function(enable_unity_build UB_SUFFIX SOURCE_VARIABLE_NAME)
@@ -739,19 +779,30 @@ function(add_extension_dependencies LIBRARY)
   endforeach()
 endfunction()
 
-function(link_extension_libraries LIBRARY)
-  if(${DISABLE_BUILTIN_EXTENSIONS})
-    return()
+function(get_statically_linked_extensions DUCKDB_EXTENSION_NAMES OUT_VARIABLE)
+  if(NOT ${DISABLE_BUILTIN_EXTENSIONS})
+      set(${OUT_VARIABLE} ${DUCKDB_EXTENSION_NAMES} PARENT_SCOPE)
+  elseif(${GENERATE_EXTENSION_ENTRIES})
+      set(${OUT_VARIABLE} "" PARENT_SCOPE)
+  else()
+      set(${OUT_VARIABLE} "" PARENT_SCOPE)
+      foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+          if(${EXT_NAME} STREQUAL "core_functions")
+              set(${OUT_VARIABLE} "core_functions" PARENT_SCOPE)
+          endif()
+      endforeach()
   endif()
+endfunction()
 
+function(link_extension_libraries LIBRARY)
+  get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}" STATICALLY_LINKED_EXTENSIONS)
   # Now link against any registered out-of-tree extensions
-  foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
+  foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
     if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
       target_link_libraries(${LIBRARY} ${EXT_NAME}_extension)
     endif()
   endforeach()
-
 endfunction()
 
 function(link_threads LIBRARY)
@@ -825,7 +876,7 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
   #    dynamic loader will look up the missing symbols when the extension is dlopen-ed.
   if(WASM_LOADABLE_EXTENSIONS)
     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -sSIDE_MODULE=1 -DWASM_LOADABLE_EXTENSIONS")
-  elseif(${ABI_TYPE} STREQUAL "C_STRUCT")
+  elseif(${ABI_TYPE} STREQUAL "C_STRUCT" OR ${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
     # TODO strip all symbols except the capi init
   elseif (EXTENSION_STATIC_BUILD)
     if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" OR "${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
@@ -876,7 +927,7 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
     string(REPLACE ";" " " TO_BE_LINKED "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS}")
     if (${ABI_TYPE} STREQUAL "CPP")
       set(EXPORTED_FUNCTIONS "_${NAME}_init,_${NAME}_version")
-    elseif (${ABI_TYPE} STREQUAL "C_STRUCT")
+    elseif (${ABI_TYPE} STREQUAL "C_STRUCT" OR ${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
       set(EXPORTED_FUNCTIONS "_${NAME}_init_c_api")
     endif()
     add_custom_command(
@@ -887,6 +938,8 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
   endif()
 
   if (${ABI_TYPE} STREQUAL "CPP")
+    set(FOOTER_VERSION_VALUE ${DUCKDB_NORMALIZED_VERSION})
+  elseif (${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
     set(FOOTER_VERSION_VALUE ${DUCKDB_NORMALIZED_VERSION})
   elseif (${ABI_TYPE} STREQUAL "C_STRUCT")
     set(FOOTER_VERSION_VALUE ${CAPI_VERSION})
@@ -913,13 +966,32 @@ function(build_loadable_extension NAME PARAMETERS)
   build_loadable_extension_directory(${NAME} "CPP" "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "" "${PARAMETERS}" ${FILES})
 endfunction()
 
-function(build_loadable_extension_capi NAME CAPI_VERSION PARAMETERS)
+function(build_loadable_extension_capi NAME CAPI_VERSION_MAJOR CAPI_VERSION_MINOR CAPI_VERSION_PATCH PARAMETERS)
+  set(FILES "${ARGV}")
+  list(REMOVE_AT FILES 0 1 2 3)
+  set(CAPI_VERSION v${CAPI_VERSION_MAJOR}.${CAPI_VERSION_MINOR}.${CAPI_VERSION_PATCH})
+  build_loadable_extension_capi_internal(${NAME} ${CAPI_VERSION} "C_STRUCT" ${FILES})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_MAJOR=${CAPI_VERSION_MAJOR})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_MINOR=${CAPI_VERSION_MINOR})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_PATCH=${CAPI_VERSION_PATCH})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
+endfunction()
+
+function(build_loadable_extension_capi_unstable NAME PARAMETERS)
+  set(FILES "${ARGV}")
+  list(REMOVE_AT FILES 0)
+  build_loadable_extension_capi_internal(${NAME} "" "C_STRUCT_UNSTABLE" ${FILES})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_API_VERSION_UNSTABLE=${DUCKDB_NORMALIZED_VERSION})
+  target_compile_definitions(${NAME}_loadable_extension PRIVATE DUCKDB_EXTENSION_NAME=${NAME})
+endfunction()
+
+function(build_loadable_extension_capi_internal NAME VERSION ABI_TYPE PARAMETERS)
   # all parameters after name
   set(FILES "${ARGV}")
-  list(REMOVE_AT FILES 0 1)
+  list(REMOVE_AT FILES 0 1 2)
   string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
 
-  build_loadable_extension_directory(${NAME} "C_STRUCT" "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "${CAPI_VERSION}" "${PARAMETERS}" ${FILES})
+  build_loadable_extension_directory(${NAME} ${ABI_TYPE} "extension/${NAME}" "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_EXT_VERSION}" "${VERSION}" "${PARAMETERS}" ${FILES})
 endfunction()
 
 function(build_static_extension NAME PARAMETERS)
@@ -942,21 +1014,28 @@ function(register_extension NAME DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PA
   else()
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LOAD_TESTS FALSE PARENT_SCOPE)
   endif()
-
-  if (${BUILD_EXTENSIONS_ONLY})
-    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK TRUE PARENT_SCOPE)
-  else ()
-    if (NOT ${DONT_LINK} AND NOT DISABLE_BUILTIN_EXTENSIONS)
-      set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK TRUE PARENT_SCOPE)
-    else()
-      set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK FALSE PARENT_SCOPE)
+  set(LINK_EXTENSION TRUE)
+  if (NOT ${BUILD_EXTENSIONS_ONLY})
+    if (${DONT_LINK})
+      set(LINK_EXTENSION FALSE)
+    endif()
+    if(DISABLE_BUILTIN_EXTENSIONS)
+      if(${GENERATE_EXTENSION_ENTRIES})
+        set(LINK_EXTENSION FALSE)
+      elseif(${EXTENSION_NAME_UPPERCASE} STREQUAL "CORE_FUNCTIONS")
+      else()
+        set(LINK_EXTENSION FALSE)
+      endif()
     endif()
   endif()
+  set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_LINK ${LINK_EXTENSION} PARENT_SCOPE)
 
   set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS "${LINKED_LIBS}" PARENT_SCOPE)
 
   # Allows explicitly disabling extensions that may be specified in other configurations
   if (NOT ${DONT_BUILD} AND NOT ${EXTENSION_TESTS_ONLY})
+    set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD TRUE PARENT_SCOPE)
+  elseif(NOT ${GENERATE_EXTENSION_ENTRIES} AND ${EXTENSION_NAME_UPPERCASE} STREQUAL "CORE_FUNCTIONS")
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD TRUE PARENT_SCOPE)
   else()
     set(DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_SHOULD_BUILD FALSE PARENT_SCOPE)
@@ -1373,19 +1452,21 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
   set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                                          ${PROJECT_BINARY_DIR})
-  add_custom_target(
-          duckdb_platform ALL
+  add_custom_command(
+          OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
+          DEPENDS duckdb_platform_binary
           COMMAND duckdb_platform_binary > ${PROJECT_BINARY_DIR}/duckdb_platform_out || ( echo "Provide explicit DUCKDB_PLATFORM=your_target_arch to avoid build-type detection of the platform" && exit 1 )
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           )
-  add_dependencies(duckdb_platform duckdb_platform_binary)
 else()
-  add_custom_target(
-          duckdb_platform ALL
+  add_custom_command(
+          OUTPUT ${PROJECT_BINARY_DIR}/duckdb_platform_out
           COMMAND
-          ${CMAKE_COMMAND} -E echo_append \"${DUCKDB_EXPLICIT_PLATFORM}\" > duckdb_platform_out
+          ${CMAKE_COMMAND} -E echo_append \"${DUCKDB_EXPLICIT_PLATFORM}\" > ${PROJECT_BINARY_DIR}/duckdb_platform_out
+          WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           )
 endif()
+add_custom_target(duckdb_platform DEPENDS ${PROJECT_BINARY_DIR}/duckdb_platform_out)
 
 if(NOT CLANG_TIDY)
   if(${BUILD_UNITTESTS})

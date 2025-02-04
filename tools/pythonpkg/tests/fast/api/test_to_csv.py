@@ -181,10 +181,10 @@ class TestToCSV(object):
             f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE);'''
         )
         expected = [
-            (True, 1.0, 42, 'a', 'a'),
+            (True, 1.0, 42.0, 'a', 'a'),
             (False, 3.2, None, 'b,c', 'a'),
-            (True, 3.0, 123, 'e', 'b'),
-            (True, 4.0, 321, 'f', 'b'),
+            (True, 3.0, 123.0, 'e', 'b'),
+            (True, 4.0, 321.0, 'f', 'b'),
         ]
 
         assert csv_rel.execute().fetchall() == expected
@@ -202,11 +202,12 @@ class TestToCSV(object):
             }
         )
         rel = duckdb.from_df(df)
+        res = duckdb.sql("FROM rel order by all")
         rel.to_csv(temp_file_name, header=True, partition_by=["c_category"], write_partition_columns=True)
         csv_rel = duckdb.sql(
-            f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE);'''
+            f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE) order by all;'''
         )
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        assert res.execute().fetchall() == csv_rel.execute().fetchall()
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_to_csv_overwrite(self, pandas):
@@ -229,12 +230,11 @@ class TestToCSV(object):
         )
         # When partition columns are read from directory names, column order become different from original
         expected = [
-            ('c', True, 1.0, 42, 'a', 'a'),
+            ('c', True, 1.0, 42.0, 'a', 'a'),
             ('c', False, 3.2, None, 'b,c', 'a'),
-            ('d', True, 3.0, 123, 'e', 'b'),
-            ('d', True, 4.0, 321, 'f', 'b'),
+            ('d', True, 3.0, 123.0, 'e', 'b'),
+            ('d', True, 4.0, 321.0, 'f', 'b'),
         ]
-
         assert csv_rel.execute().fetchall() == expected
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
@@ -258,9 +258,10 @@ class TestToCSV(object):
             temp_file_name, header=True, partition_by=["c_category_1"], overwrite=True, write_partition_columns=True
         )
         csv_rel = duckdb.sql(
-            f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE);'''
+            f'''FROM read_csv_auto('{temp_file_name}/*/*.csv', hive_partitioning=TRUE, header=TRUE) order by all;'''
         )
-        assert rel.execute().fetchall() == csv_rel.execute().fetchall()
+        res = duckdb.sql("FROM rel order by all")
+        assert res.execute().fetchall() == csv_rel.execute().fetchall()
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
     def test_to_csv_overwrite_not_enabled(self, pandas):
@@ -281,7 +282,6 @@ class TestToCSV(object):
             rel.to_csv(temp_file_name, header=True, partition_by=["c_category_1"])
 
     @pytest.mark.parametrize('pandas', [NumpyPandas(), ArrowPandas()])
-    @pytest.mark.skip(reason="Skip test due to unreliablility on certain platforms")
     def test_to_csv_per_thread_output(self, pandas):
         temp_file_name = os.path.join(tempfile.mkdtemp(), next(tempfile._get_candidate_names()))
         num_threads = duckdb.sql("select current_setting('threads')").fetchone()[0]

@@ -1,7 +1,7 @@
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from duckdb.experimental.spark.sql.types import Row
+from spark_namespace.sql.types import Row
 
 
 class TestReplaceValue(object):
@@ -11,12 +11,12 @@ class TestReplaceValue(object):
         df = spark.createDataFrame(address, ["id", "address", "state"])
 
         # Replace part of string with another string
-        from duckdb.experimental.spark.sql.functions import regexp_replace
+        from spark_namespace.sql.functions import regexp_replace
 
         df2 = df.withColumn('address', regexp_replace('address', 'Rd', 'Road'))
 
         # Replace string column value conditionally
-        from duckdb.experimental.spark.sql.functions import when
+        from spark_namespace.sql.functions import when
 
         res = df2.collect()
         print(res)

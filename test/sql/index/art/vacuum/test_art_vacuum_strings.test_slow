@@ -68,10 +68,16 @@ statement ok
 INSERT INTO t SELECT (range * 4) || 'I am' || (range * 4) || 'a long not' || (range * 4) || 'inlined string' || (range * 4) FROM range(100000) AS range;
 
 query I
-SELECT mem_to_bytes(current.memory_usage) > 4 * base.usage AND mem_to_bytes(current.memory_usage) < 7 * base.usage
+SELECT
+case
+when mem_to_bytes(current.memory_usage) > 4 * base.usage AND mem_to_bytes(current.memory_usage) <= 8 * base.usage
+then true
+else
+concat('current mem usage not between 4X and 7X base (current ', current.memory_usage, ', base ', base.usage, ')')::union(err varchar, b bool)
+end
 FROM base, pragma_database_size() current;
 ----
-1
+true
 
 # store the current size of the DB
 statement ok

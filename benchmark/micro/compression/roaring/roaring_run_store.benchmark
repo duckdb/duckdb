@@ -1,0 +1,20 @@
+# name: benchmark/micro/compression/roaring/roaring_run_store.benchmark
+# description: Writing 250m tuples, with validity masks compressed with Roaring Bitmap Compression (Run Containers)
+# group: [roaring]
+
+name Roaring Write Run Container
+group roaring
+storage persistent
+
+# Roughly 8 runs per Vector
+load
+PRAGMA force_compression='Roaring';
+SET checkpoint_threshold = '10.0 GB';
+CREATE TABLE data_source AS SELECT case when i = 0 or (i % 512 != 0 and (i % 512) < 350 or (i % 512) > 450) then null else 1337 end as a FROM range(0, 250_000_000) tbl(i);
+
+run
+CREATE TABLE tbl AS FROM data_source;
+checkpoint;
+
+cleanup
+DROP TABLE IF EXISTS tbl;

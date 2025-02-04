@@ -176,9 +176,8 @@ void GeoParquetColumnMetadataWriter::Update(GeoParquetColumnMetadata &meta, Vect
 // GeoParquetFileMetadata
 //------------------------------------------------------------------------------
 
-unique_ptr<GeoParquetFileMetadata>
-GeoParquetFileMetadata::TryRead(const duckdb_parquet::format::FileMetaData &file_meta_data,
-                                const ClientContext &context) {
+unique_ptr<GeoParquetFileMetadata> GeoParquetFileMetadata::TryRead(const duckdb_parquet::FileMetaData &file_meta_data,
+                                                                   const ClientContext &context) {
 
 	// Conversion not enabled, or spatial is not loaded!
 	if (!IsGeoParquetConversionEnabled(context)) {
@@ -289,7 +288,7 @@ void GeoParquetFileMetadata::FlushColumnMeta(const string &column_name, const Ge
 	column.bbox.Combine(meta.bbox);
 }
 
-void GeoParquetFileMetadata::Write(duckdb_parquet::format::FileMetaData &file_meta_data) const {
+void GeoParquetFileMetadata::Write(duckdb_parquet::FileMetaData &file_meta_data) const {
 
 	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
 	yyjson_mut_val *root = yyjson_mut_obj(doc);
@@ -343,7 +342,7 @@ void GeoParquetFileMetadata::Write(duckdb_parquet::format::FileMetaData &file_me
 	}
 
 	// Create a string from the JSON
-	duckdb_parquet::format::KeyValue kv;
+	duckdb_parquet::KeyValue kv;
 	kv.__set_key("geo");
 	kv.__set_value(string(json, len));
 

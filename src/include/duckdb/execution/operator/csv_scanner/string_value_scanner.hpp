@@ -12,7 +12,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/scanner_boundary.hpp"
 #include "duckdb/execution/operator/csv_scanner/base_scanner.hpp"
-
+#include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
 namespace duckdb {
 
 struct CSVBufferUsage {
@@ -25,34 +25,6 @@ struct CSVBufferUsage {
 	}
 	CSVBufferManager &buffer_manager;
 	idx_t buffer_idx;
-};
-
-//! Class that keeps track of line starts, used for line size verification
-class LinePosition {
-public:
-	LinePosition() {
-	}
-	LinePosition(idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t buffer_size_p)
-	    : buffer_pos(buffer_pos_p), buffer_size(buffer_size_p), buffer_idx(buffer_idx_p) {
-	}
-
-	idx_t operator-(const LinePosition &other) const {
-		if (other.buffer_idx == buffer_idx) {
-			return buffer_pos - other.buffer_pos;
-		}
-		return other.buffer_size - other.buffer_pos + buffer_pos;
-	}
-
-	bool operator==(const LinePosition &other) const {
-		return buffer_pos == other.buffer_pos && buffer_idx == other.buffer_idx && buffer_size == other.buffer_size;
-	}
-
-	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl = false) const {
-		return requested_buffer_size * buffer_idx + buffer_pos + first_char_nl;
-	}
-	idx_t buffer_pos = 0;
-	idx_t buffer_size = 0;
-	idx_t buffer_idx = 0;
 };
 
 //! Keeps track of start and end of line positions in regard to the CSV file
@@ -96,7 +68,8 @@ public:
 
 class LineError {
 public:
-	explicit LineError(bool ignore_errors_p) : is_error_in_line(false), ignore_errors(ignore_errors_p) {};
+	explicit LineError(const idx_t scan_id_p, const bool ignore_errors_p)
+	    : is_error_in_line(false), ignore_errors(ignore_errors_p), scan_id(scan_id_p) {};
 	//! We clear up our CurrentError Vector
 	void Reset() {
 		current_errors.clear();
@@ -132,10 +105,19 @@ public:
 
 	bool HandleErrors(StringValueResult &result);
 
+	bool HasError() const {
+		return !current_errors.empty();
+	}
+
+	idx_t Size() const {
+		return current_errors.size();
+	}
+
 private:
 	vector<CurrentError> current_errors;
 	bool is_error_in_line;
 	bool ignore_errors;
+	idx_t scan_id;
 };
 
 struct ParseTypeInfo {
@@ -155,13 +137,14 @@ struct ParseTypeInfo {
 	uint8_t scale;
 	uint8_t width;
 };
+
 class StringValueResult : public ScannerResult {
 public:
 	StringValueResult(CSVStates &states, CSVStateMachine &state_machine,
 	                  const shared_ptr<CSVBufferHandle> &buffer_handle, Allocator &buffer_allocator,
 	                  idx_t result_size_p, idx_t buffer_position, CSVErrorHandler &error_handler, CSVIterator &iterator,
 	                  bool store_line_size, shared_ptr<CSVFileScan> csv_file_scan, idx_t &lines_read, bool sniffing,
-	                  string path);
+	                  string path, idx_t scan_id);
 
 	~StringValueResult();
 
@@ -170,7 +153,7 @@ public:
 	unsafe_vector<ValidityMask *> validity_mask;
 
 	//! Variables to iterate over the CSV buffers
-	LinePosition last_position;
+
 	char *buffer_ptr;
 	idx_t buffer_size;
 	idx_t position_before_comment;
@@ -179,6 +162,8 @@ public:
 	const uint32_t number_of_columns;
 	const bool null_padding;
 	const bool ignore_errors;
+
+	const idx_t extra_delimiter_bytes = 0;
 
 	unsafe_unique_array<const char *> null_str_ptr;
 	unsafe_unique_array<idx_t> null_str_size;
@@ -232,8 +217,13 @@ public:
 	//! (i.e., non-comment) line.
 	bool first_line_is_comment = false;
 
+	bool ignore_empty_values = true;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
+	//! Specialized code for possibly escaped values, makes sure to remove escapes
+	static inline void AddPossiblyEscapedValue(StringValueResult &result, const idx_t buffer_pos, const char *value_ptr,
+	                                           const idx_t length, const bool empty);
 	//! Adds a Value to the result
 	static inline void AddValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Adds a Row to the result
@@ -246,12 +236,14 @@ public:
 	//! Handles EmptyLine states
 	static inline bool EmptyLine(StringValueResult &result, const idx_t buffer_pos);
 	inline bool AddRowInternal();
-	//! Force the throw of a unicode error
+	//! Force the throw of a Unicode error
 	void HandleUnicodeError(idx_t col_idx, LinePosition &error_position);
 	bool HandleTooManyColumnsError(const char *value_ptr, const idx_t size);
 	inline void AddValueToVector(const char *value_ptr, const idx_t size, bool allocate = false);
 	static inline void SetComment(StringValueResult &result, idx_t buffer_pos);
 	static inline bool UnsetComment(StringValueResult &result, idx_t buffer_pos);
+
+	inline idx_t HandleMultiDelimiter(const idx_t buffer_pos) const;
 
 	DataChunk &ToChunk();
 	//! Resets the state of the result
@@ -267,6 +259,18 @@ public:
 	void RemoveLastLine();
 };
 
+struct ValidRowInfo {
+	ValidRowInfo(bool is_valid_p, idx_t start_pos_p, idx_t end_buffer_idx_p, idx_t end_pos_p, bool last_state_quote_p)
+	    : is_valid(is_valid_p), start_pos(start_pos_p), end_buffer_idx(end_buffer_idx_p), end_pos(end_pos_p),
+	      last_state_quote(last_state_quote_p) {};
+	ValidRowInfo() : is_valid(false), start_pos(0), end_buffer_idx(0), end_pos(0) {};
+
+	bool is_valid;
+	idx_t start_pos;
+	idx_t end_buffer_idx;
+	idx_t end_pos;
+	bool last_state_quote = false;
+};
 //! Our dialect scanner basically goes over the CSV and actually parses the values to a DuckDB vector of string_t
 class StringValueScanner : public BaseScanner {
 public:
@@ -292,12 +296,18 @@ public:
 	bool FinishedIterator() const;
 
 	//! Creates a new string with all escaped values removed
-	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, Vector &vector);
+	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool strict_mode,
+	                             Vector &vector);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
 	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);
 
+	//! Gets validation line information
+	ValidatorLine GetValidationLine();
+
 	const idx_t scanner_idx;
+	//! We use the max of idx_t to signify this is a line finder scanner.
+	static constexpr idx_t LINE_FINDER_ID = NumericLimits<idx_t>::Maximum();
 
 	//! Variable that manages buffer tracking
 	shared_ptr<CSVBufferUsage> buffer_tracker;
@@ -308,21 +318,31 @@ private:
 	void FinalizeChunkProcess() override;
 
 	//! Function used to process values that go over the first buffer, extra allocation might be necessary
-	void ProcessOverbufferValue();
+	void ProcessOverBufferValue();
 
 	void ProcessExtraRow();
 	//! Function used to move from one buffer to the other, if necessary
 	bool MoveToNextBuffer();
 
-	void SkipUntilNewLine();
-
+	//! -------- Functions used to figure out where lines start ---------!//
+	//! Main function, sets the correct start
 	void SetStart();
+	//! From a given initial state, it skips until we reach the until_state
+	bool SkipUntilState(CSVState initial_state, CSVState until_state, CSVIterator &current_iterator,
+	                    bool &quoted) const;
+	//! If the current row we found is valid
+	bool IsRowValid(CSVIterator &current_iterator) const;
+	ValidRowInfo TryRow(CSVState state, idx_t start_pos, idx_t end_pos) const;
+	bool FirstValueEndsOnQuote(CSVIterator iterator) const;
 
 	StringValueResult result;
 	vector<LogicalType> types;
-
-	//! Pointer to the previous buffer handle, necessary for overbuffer values
+	//! True Position where this scanner started scanning(i.e., after figuring out where the first line starts)
+	idx_t start_pos;
+	//! Pointer to the previous buffer handle, necessary for over-buffer values
 	shared_ptr<CSVBufferHandle> previous_buffer_handle;
+	//! Strict state machine, is basically a state machine with rfc 4180 set to true, used to figure out new line.
+	shared_ptr<CSVStateMachine> state_machine_strict;
 };
 
 } // namespace duckdb

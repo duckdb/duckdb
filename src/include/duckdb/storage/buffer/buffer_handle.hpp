@@ -18,7 +18,7 @@ class FileBuffer;
 class BufferHandle {
 public:
 	DUCKDB_API BufferHandle();
-	DUCKDB_API explicit BufferHandle(shared_ptr<BlockHandle> handle);
+	DUCKDB_API explicit BufferHandle(shared_ptr<BlockHandle> handle, optional_ptr<FileBuffer> node);
 	DUCKDB_API ~BufferHandle();
 	// disable copy constructors
 	BufferHandle(const BufferHandle &other) = delete;

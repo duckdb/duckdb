@@ -295,7 +295,7 @@ TEST_CASE("Test prepared statements in C API", "[capi]") {
 	duckdb_destroy_prepare(&stmt);
 }
 
-TEST_CASE("Test duckdb_param_type", "[capi]") {
+TEST_CASE("Test duckdb_param_type and duckdb_param_logical_type", "[capi]") {
 	duckdb_database db;
 	duckdb_connection conn;
 	duckdb_prepared_statement stmt;
@@ -304,9 +304,19 @@ TEST_CASE("Test duckdb_param_type", "[capi]") {
 	REQUIRE(duckdb_connect(db, &conn) == DuckDBSuccess);
 	REQUIRE(duckdb_prepare(conn, "select $1::integer, $2::integer", &stmt) == DuckDBSuccess);
 
+	auto logical_type = duckdb_param_logical_type(stmt, 2);
+	REQUIRE(logical_type);
+	REQUIRE(duckdb_get_type_id(logical_type) == DUCKDB_TYPE_INTEGER);
+	duckdb_destroy_logical_type(&logical_type);
+
 	REQUIRE(duckdb_param_type(stmt, 2) == DUCKDB_TYPE_INTEGER);
 	REQUIRE(duckdb_bind_null(stmt, 1) == DuckDBSuccess);
 	REQUIRE(duckdb_bind_int32(stmt, 2, 10) == DuckDBSuccess);
+
+	REQUIRE(!duckdb_param_logical_type(nullptr, 2));
+	REQUIRE(duckdb_param_type(nullptr, 2) == DUCKDB_TYPE_INVALID);
+	REQUIRE(!duckdb_param_logical_type(stmt, 2000));
+	REQUIRE(duckdb_param_type(stmt, 2000) == DUCKDB_TYPE_INVALID);
 
 	duckdb_result result;
 	REQUIRE(duckdb_execute_prepared(stmt, &result) == DuckDBSuccess);
@@ -340,6 +350,13 @@ TEST_CASE("Test prepared statements with named parameters in C API", "[capi]") {
 
 	status = duckdb_bind_parameter_index(stmt, &parameter_index, "my_val");
 	REQUIRE(status == DuckDBSuccess);
+
+	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_BIGINT);
+
+	auto logical_type = duckdb_param_logical_type(stmt, 1);
+	REQUIRE(logical_type);
+	REQUIRE(duckdb_get_type_id(logical_type) == DUCKDB_TYPE_BIGINT);
+	duckdb_destroy_logical_type(&logical_type);
 
 	idx_t param_count = duckdb_nparams(stmt);
 	duckdb::vector<string> names;

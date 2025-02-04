@@ -224,12 +224,15 @@ def require():
 # By making the scope 'function' we ensure that a new connection gets created for every function that uses the fixture
 @pytest.fixture(scope='function')
 def spark():
+    from spark_namespace import USE_ACTUAL_SPARK
+
     if not hasattr(spark, 'session'):
         # Cache the import
-        from duckdb.experimental.spark.sql import SparkSession as session
+        from spark_namespace.sql import SparkSession as session
 
         spark.session = session
-    return spark.session.builder.master(':memory:').appName('pyspark').getOrCreate()
+
+    return spark.session.builder.appName('pyspark').getOrCreate()
 
 
 @pytest.fixture(scope='function')
@@ -243,7 +246,22 @@ def duckdb_cursor():
 def integers(duckdb_cursor):
     cursor = duckdb_cursor
     cursor.execute('CREATE TABLE integers (i integer)')
-    cursor.execute('INSERT INTO integers VALUES (0),(1),(2),(3),(4),(5),(6),(7),(8),(9),(NULL)')
+    cursor.execute(
+        """
+        INSERT INTO integers VALUES
+            (0),
+            (1),
+            (2),
+            (3),
+            (4),
+            (5),
+            (6),
+            (7),
+            (8),
+            (9),
+            (NULL)
+    """
+    )
     yield
     cursor.execute("drop table integers")
 

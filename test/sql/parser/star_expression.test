@@ -51,7 +51,7 @@ SELECT * FROM integers ORDER BY *, *
 statement error
 SELECT * FROM integers ORDER BY * + 42
 ----
-only allowed as the root element
+cannot be applied to a star expression
 
 statement error
 INSERT INTO integers VALUES (*, *)

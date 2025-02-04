@@ -1,0 +1,20 @@
+# name: test/sql/types/enum/test_enum_case.test
+# description: Test enum in CASE expressions
+# group: [enum]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TYPE E1 AS ENUM ('v1', 'v2');
+
+statement ok
+CREATE TABLE t1 (v E1);
+
+statement ok
+INSERT INTO t1 VALUES ('v1');
+
+query I
+SELECT typeof(CASE WHEN 1 THEN v END) FROM t1;
+----
+ENUM('v1', 'v2')

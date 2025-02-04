@@ -36,6 +36,11 @@ public:
 	                    idx_t target_count) override;
 	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
 
+	void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	            SelectionVector &sel, idx_t &count, const TableFilter &filter) override;
+	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	            SelectionVector &sel, idx_t sel_count) override;
+
 	void InitializeAppend(ColumnAppendState &state) override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
 	void RevertAppend(row_t start_row) override;

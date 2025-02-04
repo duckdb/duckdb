@@ -30,6 +30,9 @@ public:
 	virtual BlockManager &GetBlockManagerForRowData() = 0;
 
 	virtual MetadataManager &GetMetadataManager() = 0;
+
+	//! Returns the target row group size for the table
+	virtual idx_t GetRowGroupSize() const = 0;
 };
 
 } // namespace duckdb

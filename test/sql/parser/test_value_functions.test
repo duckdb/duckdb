@@ -2,6 +2,8 @@
 # description: Test SQL value functions
 # group: [parser]
 
+require no_extension_autoloading "FIXME: Unimplemented type for cast (TIMESTAMP WITH TIME ZONE -> DATE)"
+
 statement ok
 PRAGMA enable_verification
 
@@ -69,3 +71,9 @@ select a as "CURRENT_TIMESTAMP" from (VALUES (84), (42)) t(a) order by "CURRENT_
 ----
 42
 84
+
+# value function conflict in WHERE
+query I
+select a as localtime from (VALUES ('2018-01-01'), ('2022-01-01')) t(a) where localtime >= '2020-01-01'
+----
+2022-01-01

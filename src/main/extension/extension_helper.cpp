@@ -12,6 +12,10 @@
 
 // Note that c++ preprocessor doesn't have a nice way to clean this up so we need to set the defines we use to false
 // explicitly when they are undefined
+#ifndef DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
+#define DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED false
+#endif
+
 #ifndef DUCKDB_EXTENSION_ICU_LINKED
 #define DUCKDB_EXTENSION_ICU_LINKED false
 #endif
@@ -30,10 +34,6 @@
 
 #ifndef DUCKDB_EXTENSION_TPCDS_LINKED
 #define DUCKDB_EXTENSION_TPCDS_LINKED false
-#endif
-
-#ifndef DUCKDB_EXTENSION_FTS_LINKED
-#define DUCKDB_EXTENSION_FTS_LINKED false
 #endif
 
 #ifndef DUCKDB_EXTENSION_HTTPFS_LINKED
@@ -58,6 +58,10 @@
 #else
 // TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
 //		 these can be removed
+#if DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
+#include "core_functions_extension.hpp"
+#endif
+
 #if DUCKDB_EXTENSION_ICU_LINKED
 #include "icu_extension.hpp"
 #endif
@@ -74,14 +78,6 @@
 #include "tpcds_extension.hpp"
 #endif
 
-#if DUCKDB_EXTENSION_FTS_LINKED
-#include "fts_extension.hpp"
-#endif
-
-#if DUCKDB_EXTENSION_HTTPFS_LINKED
-#include "httpfs_extension.hpp"
-#endif
-
 #if DUCKDB_EXTENSION_JSON_LINKED
 #include "json_extension.hpp"
 #endif
@@ -93,6 +89,7 @@
 #if DUCKDB_EXTENSION_AUTOCOMPLETE_LINKED
 #include "autocomplete_extension.hpp"
 #endif
+
 #endif
 
 namespace duckdb {
@@ -101,12 +98,12 @@ namespace duckdb {
 // Default Extensions
 //===--------------------------------------------------------------------===//
 static const DefaultExtension internal_extensions[] = {
+    {"core_functions", "Core function library", DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED},
     {"icu", "Adds support for time zones and collations using the ICU library", DUCKDB_EXTENSION_ICU_LINKED},
     {"excel", "Adds support for Excel-like format strings", DUCKDB_EXTENSION_EXCEL_LINKED},
     {"parquet", "Adds support for reading and writing parquet files", DUCKDB_EXTENSION_PARQUET_LINKED},
     {"tpch", "Adds TPC-H data generation and query support", DUCKDB_EXTENSION_TPCH_LINKED},
     {"tpcds", "Adds TPC-DS data generation and query support", DUCKDB_EXTENSION_TPCDS_LINKED},
-    {"fts", "Adds support for Full-Text Search Indexes", DUCKDB_EXTENSION_FTS_LINKED},
     {"httpfs", "Adds support for reading and writing files over a HTTP(S) connection", DUCKDB_EXTENSION_HTTPFS_LINKED},
     {"json", "Adds support for JSON operations", DUCKDB_EXTENSION_JSON_LINKED},
     {"jemalloc", "Overwrites system allocator with JEMalloc", DUCKDB_EXTENSION_JEMALLOC_LINKED},
@@ -117,13 +114,13 @@ static const DefaultExtension internal_extensions[] = {
     {"postgres_scanner", "Adds support for connecting to a Postgres database", false},
     {"inet", "Adds support for IP-related data types and functions", false},
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
-    {"substrait", "Adds support for the Substrait integration", false},
     {"aws", "Provides features that depend on the AWS SDK", false},
     {"arrow", "A zero-copy data integration between Apache Arrow and DuckDB", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
     {"iceberg", "Adds support for Apache Iceberg", false},
     {"vss", "Adds indexing support to accelerate Vector Similarity Search", false},
     {"delta", "Adds support for Delta Lake", false},
+    {"fts", "Adds support for Full-Text Search Indexes", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -142,13 +139,13 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
 static const char *const auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner",
-                                           nullptr};
+                                           "delta",      "iceberg",          "uc_catalog",    nullptr};
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
-	auto lcase = StringUtil::Lower(extension);
+	auto extension_name = ApplyExtensionAlias(extension);
 	for (idx_t i = 0; auto_install[i]; i++) {
-		if (lcase == auto_install[i]) {
+		if (extension_name == auto_install[i]) {
 			return true;
 		}
 	}
@@ -212,7 +209,8 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	try {
 		if (dbconfig.options.autoinstall_known_extensions) {
 			auto &config = DBConfig::GetConfig(context);
-			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(config.options.autoinstall_extension_repo);
+			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(
+			    StringValue::Get(config.GetSetting<AutoinstallExtensionRepositorySetting>(context)));
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(context, extension_name, options);
@@ -390,6 +388,8 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		}
 #endif
 		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
+		DUCKDB_LOG_INFO(db, "duckdb.Extensions.ExtensionAutoloaded", extension_name);
+
 	} catch (std::exception &e) {
 		ErrorData error(e);
 		throw AutoloadException(extension_name, error.RawMessage());
@@ -403,8 +403,8 @@ void ExtensionHelper::LoadAllExtensions(DuckDB &db) {
 	// The in-tree extensions that we check. Non-cmake builds are currently limited to these for static linking
 	// TODO: rewrite package_build.py to allow also loading out-of-tree extensions in non-cmake builds, after that
 	//		 these can be removed
-	unordered_set<string> extensions {"parquet", "icu",   "tpch", "tpcds",    "fts",         "httpfs",
-	                                  "json",    "excel", "inet", "jemalloc", "autocomplete"};
+	vector<string> extensions {"parquet", "icu",  "tpch",     "tpcds",        "httpfs",        "json",
+	                           "excel",   "inet", "jemalloc", "autocomplete", "core_functions"};
 	for (auto &ext : extensions) {
 		LoadExtensionInternal(db, ext, true);
 	}
@@ -492,13 +492,6 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		// icu extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
-	} else if (extension == "fts") {
-#if DUCKDB_EXTENSION_FTS_LINKED
-//		db.LoadStaticExtension<FtsExtension>();
-#else
-		// fts extension required but not build: skip this test
-		return ExtensionLoadResult::NOT_LOADED;
-#endif
 	} else if (extension == "httpfs") {
 #if DUCKDB_EXTENSION_HTTPFS_LINKED
 		db.LoadStaticExtension<HttpfsExtension>();
@@ -538,6 +531,13 @@ ExtensionLoadResult ExtensionHelper::LoadExtensionInternal(DuckDB &db, const std
 		db.LoadStaticExtension<InetExtension>();
 #else
 		// inet extension required but not build: skip this test
+		return ExtensionLoadResult::NOT_LOADED;
+#endif
+	} else if (extension == "core_functions") {
+#if DUCKDB_EXTENSION_CORE_FUNCTIONS_LINKED
+		db.LoadStaticExtension<CoreFunctionsExtension>();
+#else
+		// core_functions extension required but not build: skip this test
 		return ExtensionLoadResult::NOT_LOADED;
 #endif
 	}

@@ -36,9 +36,14 @@ void ExecutorTask::Reschedule() {
 TaskExecutionResult ExecutorTask::Execute(TaskExecutionMode mode) {
 	try {
 		if (thread_context) {
-			thread_context->profiler.StartOperator(op);
-			auto result = ExecuteTask(mode);
-			thread_context->profiler.EndOperator(nullptr);
+			TaskExecutionResult result;
+			do {
+				thread_context->profiler.StartOperator(op);
+				// to allow continuous profiling, always execute in small steps
+				result = ExecuteTask(TaskExecutionMode::PROCESS_PARTIAL);
+				thread_context->profiler.EndOperator(nullptr);
+				executor.Flush(*thread_context);
+			} while (mode == TaskExecutionMode::PROCESS_ALL && result == TaskExecutionResult::TASK_NOT_FINISHED);
 			return result;
 		} else {
 			return ExecuteTask(mode);

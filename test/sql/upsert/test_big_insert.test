@@ -2,8 +2,6 @@
 # description: Test insert into statements
 # group: [upsert]
 
-# TODO: remove this, behavior should be consistent at all vector sizes
-
 statement ok
 pragma enable_verification;
 

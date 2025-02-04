@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-require no_extension_autoloading
+require no_extension_autoloading "EXPECTED: zstd requires the parquet extension, currently not autoloaded"
 
 # zstd requires the parquet extension
 statement error

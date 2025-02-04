@@ -258,8 +258,14 @@ struct ICUStrptime : public ICUDateFunc {
 			    const auto len = input.GetSize();
 			    string_t tz(nullptr, 0);
 			    bool has_offset = false;
-			    if (!Timestamp::TryConvertTimestampTZ(str, len, result, has_offset, tz)) {
-				    auto msg = Timestamp::ConversionError(string(str, len));
+			    auto success = Timestamp::TryConvertTimestampTZ(str, len, result, has_offset, tz);
+			    if (success != TimestampCastResult::SUCCESS) {
+				    string msg;
+				    if (success == TimestampCastResult::ERROR_RANGE) {
+					    msg = Timestamp::RangeError(string(str, len));
+				    } else {
+					    msg = Timestamp::FormatError(string(str, len));
+				    }
 				    HandleCastError::AssignError(msg, parameters);
 				    mask.SetInvalid(idx);
 			    } else if (!has_offset) {
@@ -434,7 +440,7 @@ struct ICUStrftime : public ICUDateFunc {
 		ScalarFunctionSet set(name);
 		set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP_TZ, LogicalType::VARCHAR}, LogicalType::VARCHAR,
 		                               ICUStrftimeFunction, Bind));
-		ExtensionUtil::AddFunctionOverload(db, set);
+		ExtensionUtil::RegisterFunction(db, set);
 	}
 
 	static string_t CastOperation(icu::Calendar *calendar, timestamp_t input, Vector &result) {

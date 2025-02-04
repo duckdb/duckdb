@@ -15,6 +15,7 @@
 #include "duckdb/storage/write_ahead_log.hpp"
 #include "duckdb/storage/database_size.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
+#include "duckdb/storage/storage_options.hpp"
 
 namespace duckdb {
 class BlockManager;
@@ -71,7 +72,7 @@ public:
 	//! Initialize a database or load an existing database from the database file path. The block_alloc_size is
 	//! either set, or invalid. If invalid, then DuckDB defaults to the default_block_alloc_size (DBConfig),
 	//! or the file's block allocation size, if it is an existing database.
-	void Initialize(const optional_idx block_alloc_size);
+	void Initialize(StorageOptions options);
 
 	DatabaseInstance &GetDatabase();
 	AttachedDatabase &GetAttached() {
@@ -105,8 +106,15 @@ public:
 	virtual shared_ptr<TableIOManager> GetTableIOManager(BoundCreateTableInfo *info) = 0;
 	virtual BlockManager &GetBlockManager() = 0;
 
+	void SetStorageVersion(idx_t version) {
+		storage_version = version;
+	}
+	idx_t GetStorageVersion() const {
+		return storage_version.GetIndex();
+	}
+
 protected:
-	virtual void LoadDatabase(const optional_idx block_alloc_size) = 0;
+	virtual void LoadDatabase(StorageOptions options) = 0;
 
 protected:
 	//! The database this storage manager belongs to
@@ -120,6 +128,8 @@ protected:
 	//! When loading a database, we do not yet set the wal-field. Therefore, GetWriteAheadLog must
 	//! return nullptr when loading a database
 	bool load_complete = false;
+	//! The serialization compatibility version when reading and writing from this database
+	optional_idx storage_version;
 
 public:
 	template <class TARGET>
@@ -156,6 +166,6 @@ public:
 	BlockManager &GetBlockManager() override;
 
 protected:
-	void LoadDatabase(const optional_idx block_alloc_size) override;
+	void LoadDatabase(StorageOptions options) override;
 };
 } // namespace duckdb

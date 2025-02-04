@@ -155,7 +155,7 @@ struct DecimalScaleDownCheckOperator {
 			                                data->result.GetType().ToString());
 			return HandleVectorCastError::Operation<RESULT_TYPE>(std::move(error), mask, idx, data->vector_cast_data);
 		}
-		return Cast::Operation<INPUT_TYPE, RESULT_TYPE>(input / data->factor);
+		return DecimalScaleDownOperator::Operation<INPUT_TYPE, RESULT_TYPE>(input, mask, idx, dataptr);
 	}
 };
 

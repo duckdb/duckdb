@@ -49,7 +49,7 @@ version_map = json.load(version_map_file)
 
 
 def verify_serialization_versions(version_map):
-    serialization = version_map['serialization']
+    serialization = version_map['serialization']['values']
     if list(serialization.keys())[-1] != 'latest':
         print(f"The version map ({version_map_path}) for serialization versions must end in 'latest'!")
         exit(1)
@@ -64,7 +64,7 @@ def lookup_serialization_version(version: str):
             f"'latest' is not an allowed 'version' to use in serialization JSON files, please provide a duckdb version"
         )
 
-    versions = version_map['serialization']
+    versions = version_map['serialization']['values']
     if version not in versions:
         from packaging.version import Version
 
@@ -141,6 +141,7 @@ SWITCH_CODE_FORMAT = '''\tswitch ({switch_variable}) {{
 SET_DESERIALIZE_PARAMETER_FORMAT = '\tdeserializer.Set<{property_type}>({property_name});\n'
 UNSET_DESERIALIZE_PARAMETER_FORMAT = '\tdeserializer.Unset<{property_type}>();\n'
 GET_DESERIALIZE_PARAMETER_FORMAT = 'deserializer.Get<{property_type}>()'
+TRY_GET_DESERIALIZE_PARAMETER_FORMAT = 'deserializer.TryGet<{property_type}>()'
 
 SWITCH_HEADER_FORMAT = '\tcase {enum_type}::{enum_value}:\n'
 
@@ -166,11 +167,11 @@ MOVE_LIST = [
     'BoundLimitNode',
 ]
 
-REFERENCE_LIST = ['ClientContext', 'bound_parameter_map_t']
+REFERENCE_LIST = ['ClientContext', 'bound_parameter_map_t', 'Catalog']
 
 
 def is_container(type):
-    return '<' in type
+    return '<' in type and 'CSVOption' not in type
 
 
 def is_pointer(type):
@@ -266,7 +267,7 @@ def get_deserialize_element_template(
         template = template.replace('ReadProperty', 'ReadPropertyWithDefault')
     elif has_default and default_value is not None:
         template = template.replace('ReadProperty', 'ReadPropertyWithExplicitDefault')
-    return template.format(
+    template = template.format(
         property_name=property_name,
         property_key=property_key,
         property_id=str(property_id),
@@ -274,11 +275,15 @@ def get_deserialize_element_template(
         property_type=property_type,
         assignment=assignment,
     )
+    if is_deleted:
+        template = template.replace(f'auto {property_name} = ', '')
+    return template
 
 
 def get_deserialize_element(
     property_name, property_key, property_id, property_type, has_default, default_value, is_deleted, base, pointer_type
 ):
+    property_name = property_name.replace('.', '_')
     template = DESERIALIZE_ELEMENT_FORMAT
     if base:
         template = DESERIALIZE_ELEMENT_BASE_FORMAT.replace('{base_property}', base.replace('*', ''))
@@ -298,7 +303,7 @@ def get_deserialize_element(
 
 def get_deserialize_assignment(property_name, property_type, pointer_type):
     assignment = '.' if pointer_type == 'none' else '->'
-    property = property_name
+    property = property_name.replace('.', '_')
     if requires_move(property_type):
         property = f'std::move({property})'
     return f'\tresult{assignment}{property_name} = {property};\n'
@@ -556,6 +561,8 @@ def generate_base_class_code(base_class):
         base_class_deserialize += UNSET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type)
 
     for entry in assign_entries:
+        if entry.deleted:
+            continue
         move = False
         if entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type):
             move = True
@@ -608,19 +615,26 @@ def generate_class_code(class_entry):
                     if len(constructor_parameters) > 0:
                         constructor_parameters += ", "
                     type_name = replace_pointer(entry.type)
+                    entry.deserialize_property = entry.deserialize_property.replace('.', '_')
                     if requires_move(type_name) and not is_reference:
                         constructor_parameters += 'std::move(' + entry.deserialize_property + ')'
                     else:
                         constructor_parameters += entry.deserialize_property
                     found = True
                     break
-            if constructor_entry.startswith('$'):
+            if constructor_entry.startswith('$') or constructor_entry.startswith('?'):
                 if len(constructor_parameters) > 0:
                     constructor_parameters += ", "
-                param_type = constructor_entry.replace('$', '')
-                if param_type in REFERENCE_LIST:
-                    param_type += ' &'
-                constructor_parameters += GET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=param_type)
+                is_optional = constructor_entry.startswith('?')
+                if is_optional:
+                    param_type = constructor_entry.replace('?', '')
+                    get_format = TRY_GET_DESERIALIZE_PARAMETER_FORMAT
+                else:
+                    param_type = constructor_entry.replace('$', '')
+                    get_format = GET_DESERIALIZE_PARAMETER_FORMAT
+                    if param_type in REFERENCE_LIST:
+                        param_type += ' &'
+                constructor_parameters += get_format.format(property_type=param_type)
                 found = True
             if class_entry.base_object is not None:
                 for entry in class_entry.base_object.set_parameters:
@@ -691,11 +705,11 @@ def generate_class_code(class_entry):
                 entry.deleted,
                 class_entry.pointer_type,
             )
-        elif entry.name not in constructor_entries:
+        elif entry.name not in constructor_entries and not entry.deleted:
             class_deserialize += get_deserialize_assignment(
                 entry.deserialize_property, entry.type, class_entry.pointer_type
             )
-        if entry.name in class_entry.set_parameter_names:
+        if entry.name in class_entry.set_parameter_names and not entry.deleted:
             class_deserialize += SET_DESERIALIZE_PARAMETER_FORMAT.format(
                 property_type=entry.type, property_name=entry.name
             )

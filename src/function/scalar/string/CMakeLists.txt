@@ -7,11 +7,16 @@ add_library_unity(
   concat_ws.cpp
   length.cpp
   like.cpp
+  md5.cpp
   nfc_normalize.cpp
   regexp.cpp
   substring.cpp
   prefix.cpp
+  regexp_escape.cpp
+  sha1.cpp
+  sha256.cpp
   strip_accents.cpp
+  string_split.cpp
   suffix.cpp
   contains.cpp)
 set(ALL_OBJECT_FILES

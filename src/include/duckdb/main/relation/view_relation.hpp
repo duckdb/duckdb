@@ -15,6 +15,7 @@ namespace duckdb {
 class ViewRelation : public Relation {
 public:
 	ViewRelation(const shared_ptr<ClientContext> &context, string schema_name, string view_name);
+	ViewRelation(const shared_ptr<RelationContextWrapper> &context, string schema_name, string view_name);
 	ViewRelation(const shared_ptr<ClientContext> &context, unique_ptr<TableRef> ref, const string &view_name);
 
 	string schema_name;

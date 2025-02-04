@@ -29,12 +29,6 @@ static bool GetBooleanArg(ClientContext &context, const vector<Value> &arg) {
 }
 
 BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) {
-	// COPY TO a file
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("COPY TO is disabled by configuration");
-	}
-
 	// lookup the format in the catalog
 	auto &copy_function =
 	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, INVALID_CATALOG, DEFAULT_SCHEMA, stmt.info->format);
@@ -128,7 +122,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
 		} else if (loption == "write_partition_columns") {
-			write_partition_columns = true;
+			write_partition_columns = GetBooleanArg(context, option.second);
 		} else {
 			stmt.info->options[option.first] = option.second;
 		}
@@ -272,10 +266,6 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 }
 
 BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
-	auto &config = DBConfig::GetConfig(context);
-	if (!config.options.enable_external_access) {
-		throw PermissionException("COPY FROM is disabled by configuration");
-	}
 	BoundStatement result;
 	result.types = {LogicalType::BIGINT};
 	result.names = {"Count"};
@@ -284,7 +274,7 @@ BoundStatement Binder::BindCopyFrom(CopyStatement &stmt) {
 		throw ParserException("COPY FROM requires a table name to be specified");
 	}
 	// COPY FROM a file
-	// generate an insert statement for the the to-be-inserted table
+	// generate an insert statement for the to-be-inserted table
 	InsertStatement insert;
 	insert.table = stmt.info->table;
 	insert.schema = stmt.info->schema;

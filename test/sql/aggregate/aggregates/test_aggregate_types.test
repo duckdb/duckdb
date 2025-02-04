@@ -162,9 +162,11 @@ NULL
 1
 1
 
-statement error
+query I
 SELECT SUM(b) FROM booleans GROUP BY g ORDER BY g
 ----
+0
+1
 
 statement error
 SELECT AVG(b) FROM booleans GROUP BY g ORDER BY g

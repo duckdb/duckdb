@@ -24,10 +24,11 @@ select part, filename.replace('\', '/').split('/')[-2], value from read_csv_auto
 a	date=2012-01-01	value1
 b	date=2013-01-01	value2
 
-statement error
+query III
 select * exclude(filename) from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1, FILENAME=1)  order by 1
 ----
-Could not convert string
+99	world	2
+xxx	42	1
 
 query III
 select * from read_csv_auto('data/csv/hive-partitioning/mismatching_types/*/*.csv', HIVE_PARTITIONING=1,  UNION_BY_NAME=1)  order by 1

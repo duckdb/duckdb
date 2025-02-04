@@ -73,7 +73,7 @@ class TestNativeTimeZone(object):
         duckdb_cursor.execute("SET timezone='America/Los_Angeles';")
         res1 = duckdb_cursor.execute(f"select TimeRecStart::TIMETZ  as tz  from '{filename}'").arrow().to_pandas()
         res2 = duckdb_cursor.execute(f"select TimeRecStart::TIMETZ::TIME  as tz  from '{filename}'").arrow().to_pandas()
-        assert res1['tz'][0].hour == 21 and res1['tz'][0].minute == 52
+        assert res1['tz'][0].hour == 14 and res1['tz'][0].minute == 52
         assert res2['tz'][0].hour == res2['tz'][0].hour and res2['tz'][0].minute == res1['tz'][0].minute
 
         duckdb_cursor.execute("SET timezone='UTC';")

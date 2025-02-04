@@ -2,7 +2,7 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from duckdb.experimental.spark.sql.types import (
+from spark_namespace.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -14,7 +14,7 @@ from duckdb.experimental.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from duckdb.experimental.spark.sql.functions import col, struct, when, lit
+from spark_namespace.sql.functions import col, struct, when, lit
 import duckdb
 import re
 
@@ -28,7 +28,7 @@ class TestWithColumnRenamed(object):
             (('Maria', 'Anne', 'Jones'), '1967-12-01', 'F', 4000),
             (('Jen', 'Mary', 'Brown'), '1980-02-17', 'F', -1),
         ]
-        from duckdb.experimental.spark.sql.types import StructType, StructField, StringType, IntegerType
+        from spark_namespace.sql.types import StructType, StructField, StringType, IntegerType
 
         schema = StructType(
             [
@@ -51,10 +51,10 @@ class TestWithColumnRenamed(object):
         df = spark.createDataFrame(data=dataDF, schema=schema)
 
         df2 = df.withColumnRenamed("dob", "DateOfBirth").withColumnRenamed("salary", "salary_amount")
-        assert 'dob' not in df2
-        assert 'salary' not in df2
-        assert 'DateOfBirth' in df2
-        assert 'salary_amount' in df2
+        assert 'dob' not in df2.columns
+        assert 'salary' not in df2.columns
+        assert 'DateOfBirth' in df2.columns
+        assert 'salary_amount' in df2.columns
 
         schema2 = StructType(
             [
@@ -72,9 +72,9 @@ class TestWithColumnRenamed(object):
         )
 
         df2 = df.withColumnRenamed("name", "full name")
-        assert 'name' not in df2
-        assert 'full name' in df2
-        assert 'firstname' in df2.schema['full name'].dataType
+        assert 'name' not in df2.columns
+        assert 'full name' in df2.columns
+        assert 'firstname' in df2.schema['full name'].dataType.fieldNames()
 
         df2 = df.select(
             col("name").alias("full name"),
@@ -82,9 +82,9 @@ class TestWithColumnRenamed(object):
             col("gender"),
             col("salary"),
         )
-        assert 'name' not in df2
-        assert 'full name' in df2
-        assert 'firstname' in df2.schema['full name'].dataType
+        assert 'name' not in df2.columns
+        assert 'full name' in df2.columns
+        assert 'firstname' in df2.schema['full name'].dataType.fieldNames()
 
         df2 = df.select(
             col("name.firstname").alias("fname"),
@@ -94,5 +94,5 @@ class TestWithColumnRenamed(object):
             col("gender"),
             col("salary"),
         )
-        assert 'firstname' not in df2
-        assert 'fname' in df2
+        assert 'firstname' not in df2.columns
+        assert 'fname' in df2.columns

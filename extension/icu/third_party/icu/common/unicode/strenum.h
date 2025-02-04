@@ -199,7 +199,7 @@ public:
      * @return TRUE if the enumerations are equal. FALSE if not.
      * @stable ICU 3.6 
      */
-    virtual UBool operator==(const StringEnumeration& that)const;
+    virtual bool operator==(const StringEnumeration& that)const;
     /**
      * Compares this enumeration to other to check if both are not equal
      *
@@ -207,7 +207,7 @@ public:
      * @return TRUE if the enumerations are equal. FALSE if not.
      * @stable ICU 3.6 
      */
-    virtual UBool operator!=(const StringEnumeration& that)const;
+    virtual bool operator!=(const StringEnumeration& that)const;
 
 protected:
     /**

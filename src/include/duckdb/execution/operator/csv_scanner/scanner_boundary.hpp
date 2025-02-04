@@ -27,7 +27,7 @@ namespace duckdb {
 struct CSVBoundary {
 	CSVBoundary(idx_t buffer_idx, idx_t buffer_pos, idx_t boundary_idx, idx_t end_pos);
 	CSVBoundary();
-	void Print();
+	void Print() const;
 	//! Start Buffer index of the file where we start scanning
 	idx_t buffer_idx = 0;
 	//! Start Buffer position of the buffer of the file where we start scanning
@@ -53,10 +53,10 @@ struct CSVIterator {
 public:
 	CSVIterator();
 
-	void Print();
+	void Print() const;
 	//! Moves the boundary to the next one to be scanned, if there are no next boundaries, it returns False
 	//! Otherwise, if there are boundaries, it returns True
-	bool Next(CSVBufferManager &buffer_manager);
+	bool Next(CSVBufferManager &buffer_manager, const CSVReaderOptions &reader_options);
 	//! If boundary is set
 	bool IsBoundarySet() const;
 
@@ -67,18 +67,28 @@ public:
 
 	void SetCurrentPositionToBoundary();
 
-	void SetCurrentBoundaryToPosition(bool single_threaded);
+	void SetCurrentBoundaryToPosition(bool single_threaded, const CSVReaderOptions &reader_options);
 
 	void SetStart(idx_t pos);
+	void SetEnd(idx_t pos);
 
-	//! 8 MB TODO: Should benchmarks other values
-	static constexpr idx_t BYTES_PER_THREAD = 8000000;
+	// Gets the current position for the file
+	idx_t GetGlobalCurrentPos() const;
+
+	//! Checks if we are done with this iterator
+	void CheckIfDone();
+
+	static idx_t BytesPerThread(const CSVReaderOptions &reader_options);
+
+	static constexpr idx_t ROWS_PER_THREAD = 4;
 
 	CSVPosition pos;
 
 	bool done = false;
 
 	bool first_one = true;
+
+	idx_t buffer_size;
 
 private:
 	//! The original setting

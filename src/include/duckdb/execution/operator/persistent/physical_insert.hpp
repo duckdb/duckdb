@@ -13,10 +13,58 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/common/index_vector.hpp"
 #include "duckdb/parser/statement/insert_statement.hpp"
+#include "duckdb/storage/table/append_state.hpp"
+#include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/storage/table/delete_state.hpp"
 
 namespace duckdb {
 
-class InsertLocalState;
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+class InsertGlobalState : public GlobalSinkState {
+public:
+	explicit InsertGlobalState(ClientContext &context, const vector<LogicalType> &return_types, DuckTableEntry &table);
+
+public:
+	mutex lock;
+	DuckTableEntry &table;
+	idx_t insert_count;
+	bool initialized;
+	LocalAppendState append_state;
+	ColumnDataCollection return_collection;
+};
+
+class InsertLocalState : public LocalSinkState {
+public:
+public:
+	InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
+	                 const vector<unique_ptr<Expression>> &bound_defaults,
+	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+
+public:
+	ConstraintState &GetConstraintState(DataTable &table, TableCatalogEntry &table_ref);
+	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &table_ref, ClientContext &context);
+
+public:
+	//! The chunk that ends up getting inserted
+	DataChunk insert_chunk;
+	//! The chunk containing the tuples that become an update (if DO UPDATE)
+	DataChunk update_chunk;
+	ExpressionExecutor default_executor;
+	TableAppendState local_append_state;
+	unique_ptr<RowGroupCollection> local_collection;
+	optional_ptr<OptimisticDataWriter> writer;
+	// Rows that have been updated by a DO UPDATE conflict
+	unordered_set<row_t> updated_rows;
+	idx_t update_count = 0;
+	unique_ptr<ConstraintState> constraint_state;
+	const vector<unique_ptr<BoundConstraint>> &bound_constraints;
+	//! The delete state for ON CONFLICT handling that is rewritten into DELETE + INSERT.
+	unique_ptr<TableDeleteState> delete_state;
+	//! The append chunk for ON CONFLICT handling that is rewritting into DELETE + INSERT.
+	DataChunk append_chunk;
+};
 
 //! Physically insert a set of data into a table
 class PhysicalInsert : public PhysicalOperator {
@@ -31,7 +79,7 @@ public:
 	               vector<LogicalType> set_types, idx_t estimated_cardinality, bool return_chunk, bool parallel,
 	               OnConflictAction action_type, unique_ptr<Expression> on_conflict_condition,
 	               unique_ptr<Expression> do_update_condition, unordered_set<column_t> on_conflict_filter,
-	               vector<column_t> columns_to_fetch);
+	               vector<column_t> columns_to_fetch, bool update_is_del_and_insert);
 	//! CREATE TABLE AS
 	PhysicalInsert(LogicalOperator &op, SchemaCatalogEntry &schema, unique_ptr<BoundCreateTableInfo> info,
 	               idx_t estimated_cardinality, bool parallel);
@@ -71,9 +119,11 @@ public:
 	unique_ptr<Expression> do_update_condition;
 	// The column ids to apply the ON CONFLICT on
 	unordered_set<column_t> conflict_target;
+	//! True, if the INSERT OR REPLACE requires delete + insert.
+	bool update_is_del_and_insert;
 
 	// Column ids from the original table to fetch
-	vector<column_t> columns_to_fetch;
+	vector<StorageIndex> columns_to_fetch;
 	// Matching types to the column ids to fetch
 	vector<LogicalType> types_to_fetch;
 
@@ -120,7 +170,8 @@ protected:
 	//! Returns the amount of updated tuples
 	void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
 	                       DataChunk &result) const;
-	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate) const;
+	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertGlobalState &gstate,
+	                         InsertLocalState &lstate) const;
 };
 
 } // namespace duckdb

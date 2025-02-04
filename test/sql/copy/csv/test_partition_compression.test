@@ -5,7 +5,7 @@
 statement ok
 PRAGMA enable_verification
 
-require no_extension_autoloading
+require no_extension_autoloading "FIXME: Autoloading not working in CSV Value conversion"
 
 statement ok
 CREATE TABLE test AS VALUES ('a', 'foo', 1), ('a', 'foo', 2), ('a', 'bar', 1), ('b', 'bar', 1);
@@ -20,20 +20,20 @@ FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv')
 No files found that match the pattern
 
 query III
-FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.gz');
+FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.gz') order by all;
 ----
 1	a	bar
 1	a	foo
-2	a	foo
 1	b	bar
+2	a	foo
 
 query III
-FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.*');
+FROM read_csv_auto('__TEST_DIR__/data.csv.d/*/*/*.csv.*') order by all;
 ----
 1	a	bar
 1	a	foo
-2	a	foo
 1	b	bar
+2	a	foo
 
 require parquet
 
@@ -47,17 +47,17 @@ FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv')
 No files found that match the pattern
 
 query III
-FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.zst');
+FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.zst') order by all;
 ----
 1	a	bar
 1	a	foo
-2	a	foo
 1	b	bar
+2	a	foo
 
 query III
-FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.*');
+FROM read_csv_auto('__TEST_DIR__/data.csv.d2/*/*/*.csv.*')  order by all;
 ----
 1	a	bar
 1	a	foo
-2	a	foo
 1	b	bar
+2	a	foo

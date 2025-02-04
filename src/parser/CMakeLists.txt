@@ -25,6 +25,7 @@ add_library_unity(
   path_pattern.cpp
   path_reference.cpp
   property_graph_table.cpp
+  qualified_name.cpp
   query_error_context.cpp
   query_node.cpp
   result_modifier.cpp

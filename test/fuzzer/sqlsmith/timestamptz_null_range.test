@@ -4,7 +4,7 @@
 
 require icu
 
-require no_extension_autoloading
+require no_extension_autoloading "FIXME: generate_series(TIMESTAMP WITH TIME ZONE,...) currently do not autoload ICU"
 
 statement ok
 PRAGMA enable_verification

@@ -62,7 +62,7 @@ struct ICUDateFunc {
 	//! Extracts the field from the calendar
 	static int32_t ExtractField(icu::Calendar *calendar, UCalendarDateFields field);
 	//! Subtracts the field of the given date from the calendar
-	static int64_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date);
+	static int32_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date);
 	//! Adds the timestamp and the interval using the calendar
 	static timestamp_t Add(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval);
 	//! Subtracts the interval from the timestamp using the calendar
@@ -77,6 +77,7 @@ struct ICUDateFunc {
 	//! Truncates the calendar time to the given part precision
 	typedef void (*part_trunc_t)(icu::Calendar *calendar, uint64_t &micros);
 	static part_trunc_t TruncationFactory(DatePartSpecifier part);
+	static timestamp_t CurrentMidnight(icu::Calendar *calendar, ExpressionState &state);
 
 	//! Subtracts the two times at the given part precision
 	typedef int64_t (*part_sub_t)(icu::Calendar *calendar, timestamp_t start_date, timestamp_t end_date);

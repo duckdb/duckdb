@@ -88,20 +88,110 @@ void ConstantFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row
 }
 
 //===--------------------------------------------------------------------===//
+// Select
+//===--------------------------------------------------------------------===//
+void ConstantSelectValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+                            const SelectionVector &sel, idx_t sel_count) {
+	ConstantScanFunctionValidity(segment, state, vector_count, result);
+}
+
+template <class T>
+void ConstantSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+                    const SelectionVector &sel, idx_t sel_count) {
+	ConstantScanFunction<T>(segment, state, vector_count, result);
+}
+
+//===--------------------------------------------------------------------===//
+// Filter
+//===--------------------------------------------------------------------===//
+void FiltersNullValues(const TableFilter &filter, bool &filters_nulls, bool &filters_valid_values) {
+	filters_nulls = false;
+	filters_valid_values = false;
+
+	switch (filter.filter_type) {
+	case TableFilterType::OPTIONAL_FILTER:
+		break;
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
+		filters_nulls = true;
+		filters_valid_values = true;
+		for (auto &child_filter : conjunction_or.child_filters) {
+			bool child_filters_nulls, child_filters_valid_values;
+			FiltersNullValues(*child_filter, child_filters_nulls, child_filters_valid_values);
+			filters_nulls = filters_nulls && child_filters_nulls;
+			filters_valid_values = filters_valid_values && child_filters_valid_values;
+		}
+		break;
+	}
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
+		filters_nulls = false;
+		filters_valid_values = false;
+		for (auto &child_filter : conjunction_and.child_filters) {
+			bool child_filters_nulls, child_filters_valid_values;
+			FiltersNullValues(*child_filter, child_filters_nulls, child_filters_valid_values);
+			filters_nulls = filters_nulls || child_filters_nulls;
+			filters_valid_values = filters_valid_values || child_filters_valid_values;
+		}
+		break;
+	}
+	case TableFilterType::CONSTANT_COMPARISON:
+		filters_nulls = true;
+		break;
+	case TableFilterType::IS_NULL:
+		filters_valid_values = true;
+		break;
+	case TableFilterType::IS_NOT_NULL:
+		filters_nulls = true;
+		break;
+	default:
+		throw InternalException("FIXME: unsupported type for filter selection in validity select");
+	}
+}
+
+void ConstantFilterValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+                            SelectionVector &sel, idx_t &sel_count, const TableFilter &filter) {
+	// check what effect the filter has on NULL values
+	bool filters_nulls, filters_valid_values;
+	FiltersNullValues(filter, filters_nulls, filters_valid_values);
+
+	auto &stats = segment.stats.statistics;
+	if (stats.CanHaveNull()) {
+		// all values are NULL
+		if (filters_nulls) {
+			// ... and the filter removes NULL values
+			sel_count = 0;
+			return;
+		}
+	} else {
+		// all values are valid
+		if (filters_valid_values) {
+			// ... and the filter removes valid values
+			sel_count = 0;
+			return;
+		}
+	}
+	ConstantScanFunctionValidity(segment, state, vector_count, result);
+}
+
+//===--------------------------------------------------------------------===//
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction ConstantGetFunctionValidity(PhysicalType data_type) {
 	D_ASSERT(data_type == PhysicalType::BIT);
 	return CompressionFunction(CompressionType::COMPRESSION_CONSTANT, data_type, nullptr, nullptr, nullptr, nullptr,
 	                           nullptr, nullptr, ConstantInitScan, ConstantScanFunctionValidity,
-	                           ConstantScanPartialValidity, ConstantFetchRowValidity, UncompressedFunctions::EmptySkip);
+	                           ConstantScanPartialValidity, ConstantFetchRowValidity, UncompressedFunctions::EmptySkip,
+	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
+	                           ConstantSelectValidity, ConstantFilterValidity);
 }
 
 template <class T>
 CompressionFunction ConstantGetFunction(PhysicalType data_type) {
 	return CompressionFunction(CompressionType::COMPRESSION_CONSTANT, data_type, nullptr, nullptr, nullptr, nullptr,
 	                           nullptr, nullptr, ConstantInitScan, ConstantScanFunction<T>, ConstantScanPartial<T>,
-	                           ConstantFetchRow<T>, UncompressedFunctions::EmptySkip);
+	                           ConstantFetchRow<T>, UncompressedFunctions::EmptySkip, nullptr, nullptr, nullptr,
+	                           nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, ConstantSelect<T>);
 }
 
 CompressionFunction ConstantFun::GetFunction(PhysicalType data_type) {

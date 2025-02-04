@@ -1,0 +1,32 @@
+# name: test/sql/pivot/pivot_15141.test
+# description: Test #15141: order by with no pivot columns
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+create table p (col1 timestamp, col2 int);
+
+statement ok
+INSERT INTO p VALUES 
+    ('2024-12-04 09:30:01', 100),
+    ('2024-12-04 09:30:02', 100),
+    ('2024-12-04 09:30:03', 100),
+    ('2024-12-04 09:30:04', 100),
+    ('2024-12-04 09:30:05', 100),
+    ('2024-12-04 09:30:06', 100),
+    ('2024-12-04 09:30:07', 100),
+    ('2024-12-04 09:30:08', 100);
+
+query II
+pivot p using sum (col2) group by col1 order by col1;
+----
+2024-12-04 09:30:01	100
+2024-12-04 09:30:02	100
+2024-12-04 09:30:03	100
+2024-12-04 09:30:04	100
+2024-12-04 09:30:05	100
+2024-12-04 09:30:06	100
+2024-12-04 09:30:07	100
+2024-12-04 09:30:08	100

@@ -16,7 +16,7 @@ SELECT histogram[min], histogram[max] FROM (
 	FROM all_types
 )
 ----
-[1]	[1]
+1	1
 
 # binned histogram
 query II
@@ -25,6 +25,6 @@ SELECT histogram[min], histogram[max] FROM (
 	FROM all_types
 )
 ----
-[1]	[1]
+1	1
 
 endloop

@@ -2,6 +2,10 @@
 # description: Issue #5546: non-foldable constant parameters to table function
 # group: [table_function]
 
+require no_extension_autoloading "FIXME: Unimplemented type for cast (TIMESTAMP WITH TIME ZONE -> DATE)"
+
+require icu
+
 statement ok
 PRAGMA enable_verification
 

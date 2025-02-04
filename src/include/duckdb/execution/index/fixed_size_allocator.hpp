@@ -55,7 +55,7 @@ public:
 		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 
 		auto &buffer = buffers.find(ptr.GetBufferId())->second;
-		auto buffer_ptr = buffer.Get(dirty);
+		auto buffer_ptr = buffer->Get(dirty);
 		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
 	}
 
@@ -71,11 +71,11 @@ public:
 		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 
 		auto &buffer = buffers.find(ptr.GetBufferId())->second;
-		if (!buffer.InMemory()) {
+		if (!buffer->InMemory()) {
 			return nullptr;
 		}
 
-		auto buffer_ptr = buffer.Get();
+		auto buffer_ptr = buffer->Get();
 		auto raw_ptr = buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
 		return raw_ptr;
 	}
@@ -92,6 +92,10 @@ public:
 	//! Returns the total segment count.
 	inline idx_t GetSegmentCount() const {
 		return total_segment_count;
+	}
+
+	inline idx_t GetMaxSegmentsPerBuffer() const {
+		return available_segments_per_buffer;
 	}
 
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
@@ -148,7 +152,7 @@ private:
 	idx_t total_segment_count;
 
 	//! Buffers containing the segments
-	unordered_map<idx_t, FixedSizeBuffer> buffers;
+	unordered_map<idx_t, unique_ptr<FixedSizeBuffer>> buffers;
 	//! Buffers with free space
 	unordered_set<idx_t> buffers_with_free_space;
 	//! Buffers qualifying for a vacuum (helper field to allow for fast NeedsVacuum checks)

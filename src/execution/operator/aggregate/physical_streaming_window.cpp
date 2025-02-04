@@ -129,7 +129,7 @@ public:
 			}
 
 			//	We can only support LEAD and LAG values within one standard vector
-			if (wexpr.type == ExpressionType::WINDOW_LEAD) {
+			if (wexpr.GetExpressionType() == ExpressionType::WINDOW_LEAD) {
 				offset = -offset;
 			}
 			return idx_t(std::abs(offset)) < MAX_BUFFER;
@@ -153,8 +153,6 @@ public:
 			ComputeOffset(context, wexpr, offset);
 			ComputeDefault(context, wexpr, dflt);
 
-			curr_chunk.Initialize(context, {wexpr.return_type});
-
 			buffered = idx_t(std::abs(offset));
 			prev.Reference(dflt);
 			prev.Flatten(buffered);
@@ -162,6 +160,10 @@ public:
 		}
 
 		void Execute(ExecutionContext &context, DataChunk &input, DataChunk &delayed, Vector &result) {
+			if (!curr_chunk.ColumnCount()) {
+				curr_chunk.Initialize(context.client, {result.GetType()}, delayed.GetCapacity());
+			}
+
 			if (offset >= 0) {
 				ExecuteLag(context, input, result);
 			} else {
@@ -212,7 +214,7 @@ public:
 			idx_t pos = 0;
 			idx_t unified_offset = buffered;
 			if (unified_offset < count) {
-				curr_chunk.Reset();
+				Reset(curr_chunk);
 				executor.Execute(input, curr_chunk);
 				VectorOperations::Copy(curr, result, count, unified_offset, pos);
 				pos += count - unified_offset;
@@ -221,7 +223,7 @@ public:
 			// Copy unified[unified_offset:] => result[pos:]
 			idx_t unified_count = count + delayed.size();
 			if (unified_offset < unified_count) {
-				curr_chunk.Reset();
+				Reset(curr_chunk);
 				executor.Execute(delayed, curr_chunk);
 				idx_t delayed_offset = unified_offset - count;
 				// Only copy as many values as we need
@@ -312,6 +314,13 @@ public:
 		initialized = true;
 	}
 
+	static inline void Reset(DataChunk &chunk) {
+		//	Reset trashes the capacity...
+		const auto capacity = chunk.GetCapacity();
+		chunk.Reset();
+		chunk.SetCapacity(capacity);
+	}
+
 public:
 	//! We can't initialise until we have an input chunk
 	bool initialized;
@@ -332,11 +341,11 @@ public:
 
 bool PhysicalStreamingWindow::IsStreamingFunction(ClientContext &context, unique_ptr<Expression> &expr) {
 	auto &wexpr = expr->Cast<BoundWindowExpression>();
-	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || wexpr.ignore_nulls ||
+	if (!wexpr.partitions.empty() || !wexpr.orders.empty() || wexpr.ignore_nulls || !wexpr.arg_orders.empty() ||
 	    wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
 		return false;
 	}
-	switch (wexpr.type) {
+	switch (wexpr.GetExpressionType()) {
 	// TODO: add more expression types here?
 	case ExpressionType::WINDOW_AGGREGATE:
 		// We can stream aggregates if they are "running totals"
@@ -470,34 +479,34 @@ void StreamingWindowState::AggregateState::Execute(ExecutionContext &context, Da
 	}
 }
 
-void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataChunk &chunk, DataChunk &delayed,
+void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataChunk &output, DataChunk &delayed,
                                                GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &gstate = gstate_p.Cast<StreamingWindowGlobalState>();
 	auto &state = state_p.Cast<StreamingWindowState>();
 
 	// Compute window functions
-	const idx_t count = chunk.size();
+	const idx_t count = output.size();
 	const column_t input_width = children[0]->GetTypes().size();
 	for (column_t expr_idx = 0; expr_idx < select_list.size(); expr_idx++) {
 		column_t col_idx = input_width + expr_idx;
 		auto &expr = *select_list[expr_idx];
-		auto &result = chunk.data[col_idx];
+		auto &result = output.data[col_idx];
 		switch (expr.GetExpressionType()) {
 		case ExpressionType::WINDOW_AGGREGATE:
-			state.aggregate_states[expr_idx]->Execute(context, chunk, result);
+			state.aggregate_states[expr_idx]->Execute(context, output, result);
 			break;
 		case ExpressionType::WINDOW_FIRST_VALUE:
 		case ExpressionType::WINDOW_PERCENT_RANK:
 		case ExpressionType::WINDOW_RANK:
 		case ExpressionType::WINDOW_RANK_DENSE: {
 			// Reference constant vector
-			chunk.data[col_idx].Reference(*state.const_vectors[expr_idx]);
+			output.data[col_idx].Reference(*state.const_vectors[expr_idx]);
 			break;
 		}
 		case ExpressionType::WINDOW_ROW_NUMBER: {
 			// Set row numbers
 			int64_t start_row = gstate.row_number;
-			auto rdata = FlatVector::GetData<int64_t>(chunk.data[col_idx]);
+			auto rdata = FlatVector::GetData<int64_t>(output.data[col_idx]);
 			for (idx_t i = 0; i < count; i++) {
 				rdata[i] = NumericCast<int64_t>(start_row + NumericCast<int64_t>(i));
 			}
@@ -505,7 +514,7 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 		}
 		case ExpressionType::WINDOW_LAG:
 		case ExpressionType::WINDOW_LEAD:
-			state.lead_lag_states[expr_idx]->Execute(context, chunk, delayed, result);
+			state.lead_lag_states[expr_idx]->Execute(context, output, delayed, result);
 			break;
 		default:
 			throw NotImplementedException("%s for StreamingWindow", ExpressionTypeToString(expr.GetExpressionType()));
@@ -515,13 +524,13 @@ void PhysicalStreamingWindow::ExecuteFunctions(ExecutionContext &context, DataCh
 }
 
 void PhysicalStreamingWindow::ExecuteInput(ExecutionContext &context, DataChunk &delayed, DataChunk &input,
-                                           DataChunk &chunk, GlobalOperatorState &gstate_p,
+                                           DataChunk &output, GlobalOperatorState &gstate_p,
                                            OperatorState &state_p) const {
 	auto &state = state_p.Cast<StreamingWindowState>();
 
 	// Put payload columns in place
 	for (idx_t col_idx = 0; col_idx < input.data.size(); col_idx++) {
-		chunk.data[col_idx].Reference(input.data[col_idx]);
+		output.data[col_idx].Reference(input.data[col_idx]);
 	}
 	idx_t count = input.size();
 
@@ -531,51 +540,53 @@ void PhysicalStreamingWindow::ExecuteInput(ExecutionContext &context, DataChunk 
 		count -= state.lead_count;
 		input.Copy(delayed, count);
 	}
-	chunk.SetCardinality(count);
+	output.SetCardinality(count);
 
-	ExecuteFunctions(context, chunk, state.delayed, gstate_p, state_p);
+	ExecuteFunctions(context, output, state.delayed, gstate_p, state_p);
 }
 
 void PhysicalStreamingWindow::ExecuteShifted(ExecutionContext &context, DataChunk &delayed, DataChunk &input,
-                                             DataChunk &chunk, GlobalOperatorState &gstate_p,
+                                             DataChunk &output, GlobalOperatorState &gstate_p,
                                              OperatorState &state_p) const {
 	auto &state = state_p.Cast<StreamingWindowState>();
 	auto &shifted = state.shifted;
 
-	idx_t i = input.size();
-	idx_t d = delayed.size();
-	shifted.Reset();
+	idx_t out = output.size();
+	idx_t in = input.size();
+	idx_t delay = delayed.size();
+	D_ASSERT(out <= delay);
+
+	state.Reset(shifted);
 	// shifted = delayed
 	delayed.Copy(shifted);
-	delayed.Reset();
+	state.Reset(delayed);
 	for (idx_t col_idx = 0; col_idx < delayed.data.size(); ++col_idx) {
-		// chunk[0:i] = shifted[0:i]
-		chunk.data[col_idx].Reference(shifted.data[col_idx]);
-		// delayed[0:i] = chunk[i:d-i]
-		VectorOperations::Copy(shifted.data[col_idx], delayed.data[col_idx], d, i, 0);
-		// delayed[d-i:d] = input[0:i]
-		VectorOperations::Copy(input.data[col_idx], delayed.data[col_idx], i, 0, d - i);
+		// output[0:out] = delayed[0:out]
+		output.data[col_idx].Reference(shifted.data[col_idx]);
+		// delayed[0:out] = delayed[out:delay-out]
+		VectorOperations::Copy(shifted.data[col_idx], delayed.data[col_idx], delay, out, 0);
+		// delayed[delay-out:delay-out+in] = input[0:in]
+		VectorOperations::Copy(input.data[col_idx], delayed.data[col_idx], in, 0, delay - out);
 	}
-	chunk.SetCardinality(i);
-	delayed.SetCardinality(d);
+	delayed.SetCardinality(delay - out + in);
 
-	ExecuteFunctions(context, chunk, delayed, gstate_p, state_p);
+	ExecuteFunctions(context, output, delayed, gstate_p, state_p);
 }
 
 void PhysicalStreamingWindow::ExecuteDelayed(ExecutionContext &context, DataChunk &delayed, DataChunk &input,
-                                             DataChunk &chunk, GlobalOperatorState &gstate_p,
+                                             DataChunk &output, GlobalOperatorState &gstate_p,
                                              OperatorState &state_p) const {
 	// Put payload columns in place
 	for (idx_t col_idx = 0; col_idx < delayed.data.size(); col_idx++) {
-		chunk.data[col_idx].Reference(delayed.data[col_idx]);
+		output.data[col_idx].Reference(delayed.data[col_idx]);
 	}
 	idx_t count = delayed.size();
-	chunk.SetCardinality(count);
+	output.SetCardinality(count);
 
-	ExecuteFunctions(context, chunk, input, gstate_p, state_p);
+	ExecuteFunctions(context, output, input, gstate_p, state_p);
 }
 
-OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
+OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, DataChunk &input, DataChunk &output,
                                                     GlobalOperatorState &gstate_p, OperatorState &state_p) const {
 	auto &state = state_p.Cast<StreamingWindowState>();
 	if (!state.initialized) {
@@ -585,37 +596,37 @@ OperatorResultType PhysicalStreamingWindow::Execute(ExecutionContext &context, D
 	auto &delayed = state.delayed;
 	// We can Reset delayed now that no one can be referencing it.
 	if (!delayed.size()) {
-		delayed.Reset();
+		state.Reset(delayed);
 	}
-	const idx_t available = delayed.size() + input.size();
-	if (available <= state.lead_count) {
+	if (delayed.size() < state.lead_count) {
 		//	If we don't have enough to produce a single row,
 		//	then just delay more rows, return nothing
 		//	and ask for more data.
 		delayed.Append(input);
-		chunk.SetCardinality(0);
+		output.SetCardinality(0);
 		return OperatorResultType::NEED_MORE_INPUT;
 	} else if (input.size() < delayed.size()) {
 		// If we can't consume all of the delayed values,
 		// we need to split them instead of referencing them all
-		ExecuteShifted(context, delayed, input, chunk, gstate_p, state_p);
+		output.SetCardinality(input.size());
+		ExecuteShifted(context, delayed, input, output, gstate_p, state_p);
 		// We delayed the unused input so ask for more
 		return OperatorResultType::NEED_MORE_INPUT;
 	} else if (delayed.size()) {
 		//	We have enough delayed rows so flush them
-		ExecuteDelayed(context, delayed, input, chunk, gstate_p, state_p);
+		ExecuteDelayed(context, delayed, input, output, gstate_p, state_p);
 		// Defer resetting delayed as it may be referenced.
 		delayed.SetCardinality(0);
 		// Come back to process the input
 		return OperatorResultType::HAVE_MORE_OUTPUT;
 	} else {
 		//	No delayed rows, so emit what we can and delay the rest.
-		ExecuteInput(context, delayed, input, chunk, gstate_p, state_p);
+		ExecuteInput(context, delayed, input, output, gstate_p, state_p);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 }
 
-OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContext &context, DataChunk &chunk,
+OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContext &context, DataChunk &output,
                                                                  GlobalOperatorState &gstate_p,
                                                                  OperatorState &state_p) const {
 	auto &state = state_p.Cast<StreamingWindowState>();
@@ -624,8 +635,15 @@ OperatorFinalizeResultType PhysicalStreamingWindow::FinalExecute(ExecutionContex
 		auto &delayed = state.delayed;
 		//	There are no more input rows
 		auto &input = state.shifted;
-		input.Reset();
-		ExecuteDelayed(context, delayed, input, chunk, gstate_p, state_p);
+		state.Reset(input);
+
+		if (output.GetCapacity() < delayed.size()) {
+			//	More than one output buffer was delayed, so shift in what we can
+			output.SetCardinality(output.GetCapacity());
+			ExecuteShifted(context, delayed, input, output, gstate_p, state_p);
+			return OperatorFinalizeResultType::HAVE_MORE_OUTPUT;
+		}
+		ExecuteDelayed(context, delayed, input, output, gstate_p, state_p);
 	}
 
 	return OperatorFinalizeResultType::FINISHED;

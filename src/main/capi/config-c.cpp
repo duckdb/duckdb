@@ -1,6 +1,7 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/main/extension_helper.hpp"
 
 using duckdb::DBConfig;
 using duckdb::Value;
@@ -22,19 +23,31 @@ duckdb_state duckdb_create_config(duckdb_config *out_config) {
 }
 
 size_t duckdb_config_count() {
-	return DBConfig::GetOptionCount();
+	return DBConfig::GetOptionCount() + duckdb::ExtensionHelper::ArraySize(duckdb::EXTENSION_SETTINGS);
 }
 
 duckdb_state duckdb_get_config_flag(size_t index, const char **out_name, const char **out_description) {
 	auto option = DBConfig::GetOptionByIndex(index);
-	if (!option) {
+	if (option) {
+		if (out_name) {
+			*out_name = option->name;
+		}
+		if (out_description) {
+			*out_description = option->description;
+		}
+		return DuckDBSuccess;
+	}
+
+	// extension index?
+	auto entry = duckdb::ExtensionHelper::GetArrayEntry(duckdb::EXTENSION_SETTINGS, index - DBConfig::GetOptionCount());
+	if (!entry) {
 		return DuckDBError;
 	}
 	if (out_name) {
-		*out_name = option->name;
+		*out_name = entry->name;
 	}
 	if (out_description) {
-		*out_description = option->description;
+		*out_description = entry->extension;
 	}
 	return DuckDBSuccess;
 }

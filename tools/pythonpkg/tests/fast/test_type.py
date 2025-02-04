@@ -125,9 +125,9 @@ class TestType(object):
         type = duckdb.list_type(list[str])
         assert str(type.child) == "VARCHAR[]"
 
-        mapping = {'VARCHAR': str, 'BIGINT': int, 'BLOB': bytes, 'BLOB': bytearray, 'BOOLEAN': bool, 'DOUBLE': float}
-        for expected, type in mapping.items():
-            res = duckdb.list_type(type)
+        mapping = {str: 'VARCHAR', int: 'BIGINT', bytes: 'BLOB', bytearray: 'BLOB', bool: 'BOOLEAN', float: 'DOUBLE'}
+        for duckdb_type, expected in mapping.items():
+            res = duckdb.list_type(duckdb_type)
             assert str(res.child) == expected
 
         res = duckdb.list_type({'a': str, 'b': int})
@@ -209,6 +209,10 @@ class TestType(object):
         val = duckdb.Value('{"duck": 42}', json_type)
         res = duckdb.execute("select typeof($1)", [val]).fetchone()
         assert res == ('JSON',)
+
+    def test_struct_from_dict(self):
+        res = duckdb.list_type({'a': VARCHAR, 'b': VARCHAR})
+        assert res == 'STRUCT(a VARCHAR, b VARCHAR)[]'
 
     # NOTE: we can support this, but I don't think going through hoops for an outdated version of python is worth it
     @pytest.mark.skipif(sys.version_info < (3, 9), reason="python3.7 does not store Optional[..] in a recognized way")

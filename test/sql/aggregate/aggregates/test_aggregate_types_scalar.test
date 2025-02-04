@@ -23,9 +23,10 @@ SELECT SUM(1), SUM(NULL), SUM(33.3)
 NULL
 33.3
 
-statement error
+query I
 SELECT SUM(True)
 ----
+1
 
 statement error
 SELECT SUM('hello')

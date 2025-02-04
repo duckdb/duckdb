@@ -1,0 +1,32 @@
+# name: test/sql/optimizer/test_rowid_pushdown_plan.test
+# group: [optimizer]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=0.01);
+
+query IIIIIIIIIIIIIIII rowsort top5_result
+SELECT * FROM lineitem ORDER BY l_orderkey DESC LIMIT 5;
+----
+
+# Rewritten using rowid pushdown
+query IIIIIIIIIIIIIIII rowsort top5_result
+SELECT * FROM lineitem WHERE rowid IN (SELECT rowid FROM lineitem ORDER BY l_orderkey DESC LIMIT 5);
+----
+
+
+query IIIIIIIIIIIIIIII rowsort filter_result
+SELECT * FROM lineitem WHERE l_orderkey % 20000 == 0;
+----
+
+# Rewritten using rowid pushdown
+query IIIIIIIIIIIIIIII rowsort filter_result
+SELECT * FROM lineitem WHERE rowid IN (SELECT rowid FROM lineitem WHERE l_orderkey % 20000 == 0);
+----
+
+# The above use dynamic join filters so the pushdown doesnt show up in the plan, but static filters do
+query II
+EXPLAIN SELECT * FROM lineitem WHERE rowid = 20058;
+----
+physical_plan	<REGEX>:.* SEQ_SCAN.*Filters:.*rowid=20058.*

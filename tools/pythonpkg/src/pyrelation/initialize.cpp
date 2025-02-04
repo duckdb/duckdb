@@ -33,7 +33,10 @@ static void InitializeConsumers(py::class_<DuckDBPyRelation> &m) {
 	DefineMethod({"to_parquet", "write_parquet"}, m, &DuckDBPyRelation::ToParquet,
 	             "Write the relation object to a Parquet file in 'file_name'", py::arg("file_name"), py::kw_only(),
 	             py::arg("compression") = py::none(), py::arg("field_ids") = py::none(),
-	             py::arg("row_group_size_bytes") = py::none(), py::arg("row_group_size") = py::none());
+	             py::arg("row_group_size_bytes") = py::none(), py::arg("row_group_size") = py::none(),
+	             py::arg("overwrite") = py::none(), py::arg("per_thread_output") = py::none(),
+	             py::arg("use_tmp_file") = py::none(), py::arg("partition_by") = py::none(),
+	             py::arg("write_partition_columns") = py::none(), py::arg("append") = py::none());
 
 	DefineMethod(
 	    {"to_csv", "write_csv"}, m, &DuckDBPyRelation::ToCSV, "Write the relation object to a CSV file in 'file_name'",
@@ -217,7 +220,7 @@ static void InitializeSetOperators(py::class_<DuckDBPyRelation> &m) {
 
 static void InitializeMetaQueries(py::class_<DuckDBPyRelation> &m) {
 	m.def("describe", &DuckDBPyRelation::Describe,
-	      "Gives basic statistics (e.g., min,max) and if null exists for each column of the relation.")
+	      "Gives basic statistics (e.g., min, max) and if NULL exists for each column of the relation.")
 	    .def("explain", &DuckDBPyRelation::Explain, py::arg("type") = "standard");
 }
 
@@ -263,11 +266,16 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 	         "Join the relation object with another relation object in other_rel using the join condition expression "
 	         "in join_condition. Types supported are 'inner' and 'left'",
 	         py::arg("other_rel"), py::arg("condition"), py::arg("how") = "inner")
+	    .def("cross", &DuckDBPyRelation::Cross, "Create cross/cartesian product of two relational objects",
+	         py::arg("other_rel"))
+
 	    .def("distinct", &DuckDBPyRelation::Distinct, "Retrieve distinct rows from this relation object")
 	    .def("limit", &DuckDBPyRelation::Limit,
 	         "Only retrieve the first n rows from this relation object, starting at offset", py::arg("n"),
 	         py::arg("offset") = 0)
 	    .def("insert", &DuckDBPyRelation::Insert, "Inserts the given values into the relation", py::arg("values"))
+	    .def("update", &DuckDBPyRelation::Update, "Update the given relation with the provided expressions",
+	         py::arg("set"), py::kw_only(), py::arg("condition") = py::none())
 
 	    // This should be deprecated in favor of a replacement scan
 	    .def("query", &DuckDBPyRelation::Query,

@@ -71,10 +71,12 @@ public:
 	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
 
 public:
+	// DEPRECATED, use 'identifier' instead
 	int32_t field_id;
 	string name;
 	LogicalType type;
 	Value default_value;
+	Value identifier;
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -127,18 +129,15 @@ public:
 	FileSystem &fs;
 	Allocator &allocator;
 	string file_name;
-	vector<LogicalType> return_types;
-	vector<string> names;
+	vector<MultiFileReaderColumnDefinition> columns;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
 	MultiFileReaderData reader_data;
 	unique_ptr<ColumnReader> root_reader;
 	shared_ptr<EncryptionUtil> encryption_util;
 
-	//! Index of the file_row_number column
-	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 	//! Parquet schema for the generated columns
-	vector<duckdb_parquet::format::SchemaElement> generated_column_schema;
+	vector<duckdb_parquet::SchemaElement> generated_column_schema;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
 
@@ -150,24 +149,30 @@ public:
 		auto result = make_uniq<ParquetUnionData>();
 		result->file_name = reader_p->file_name;
 		if (file_idx == 0) {
-			result->names = reader_p->names;
-			result->types = reader_p->return_types;
+			for (auto &column : reader_p->columns) {
+				result->names.push_back(column.name);
+				result->types.push_back(column.type);
+			}
 			result->options = reader_p->parquet_options;
 			result->metadata = reader_p->metadata;
 			result->reader = std::move(reader_p);
 		} else {
-			result->names = std::move(reader_p->names);
-			result->types = std::move(reader_p->return_types);
+			for (auto &column : reader_p->columns) {
+				result->names.push_back(column.name);
+				result->types.push_back(column.type);
+			}
+			reader_p->columns.clear();
 			result->options = std::move(reader_p->parquet_options);
 			result->metadata = std::move(reader_p->metadata);
 		}
+
 		return result;
 	}
 
 	idx_t NumRows();
 	idx_t NumRowGroups();
 
-	const duckdb_parquet::format::FileMetaData *GetFileMetadata();
+	const duckdb_parquet::FileMetaData *GetFileMetadata();
 
 	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
 	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,
@@ -183,11 +188,9 @@ public:
 	const string &GetFileName() {
 		return file_name;
 	}
-	const vector<string> &GetNames() {
-		return names;
-	}
-	const vector<LogicalType> &GetTypes() {
-		return return_types;
+
+	const vector<MultiFileReaderColumnDefinition> &GetColumns() {
+		return columns;
 	}
 
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
@@ -202,9 +205,10 @@ private:
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
 	unique_ptr<ColumnReader> CreateReader(ClientContext &context);
 
-	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, idx_t depth, idx_t max_define,
-	                                               idx_t max_repeat, idx_t &next_schema_idx, idx_t &next_file_idx);
-	const duckdb_parquet::format::RowGroup &GetGroup(ParquetReaderScanState &state);
+	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const vector<ColumnIndex> &indexes,
+	                                               idx_t depth, idx_t max_define, idx_t max_repeat,
+	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
+	const duckdb_parquet::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
 	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size

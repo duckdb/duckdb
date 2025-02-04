@@ -1,0 +1,77 @@
+# name: test/sql/storage/parallel/reclaim_space_primary_key_optimistic.test_slow
+# description: Test space reclamation of optimistic writing with a PK constraint violation.
+# group: [parallel]
+
+# FIXME: see internal issue 3931.
+mode skip
+
+load __TEST_DIR__/reclaim_space_primary_key.db
+
+statement ok
+SET preserve_insertion_order=false;
+
+statement ok
+CREATE TABLE integers AS SELECT * FROM range(10000000) t(i);
+
+statement ok
+CREATE TABLE integers2 (i INTEGER PRIMARY KEY);
+
+statement ok
+INSERT INTO integers2 VALUES (9999999);
+
+statement error
+INSERT INTO integers2 SELECT * FROM integers;
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+statement ok
+CREATE TABLE block_count (count INT);
+
+loop i 0 10
+
+statement error
+INSERT INTO integers2 SELECT * FROM integers;
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+
+statement ok
+BEGIN;
+
+statement ok
+INSERT INTO integers2 VALUES (9999998);
+
+statement error
+INSERT INTO integers2 SELECT * FROM integers WHERE i <= 9999998;
+----
+<REGEX>:Constraint Error.*PRIMARY KEY or UNIQUE constraint violation.*
+
+statement ok
+ROLLBACK
+
+query I
+SELECT COUNT(*) - ${i} FROM integers2;
+----
+1
+
+statement ok
+INSERT INTO integers2 VALUES (10000000 + ${i});
+
+statement ok
+CHECKPOINT;
+
+statement ok
+INSERT INTO block_count SELECT total_blocks FROM pragma_database_size();
+
+query I
+SELECT COUNT(*) - ${i} FROM integers2;
+----
+2
+
+# Ensure there is only a small difference between the MIN and MAX block counts.
+
+query I
+SELECT (MAX(count) - MIN(count)) < 20 FROM block_count;
+----
+true
+
+endloop

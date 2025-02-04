@@ -43,7 +43,6 @@ unique_ptr<LogicalOperator> Binder::BindCopyDatabaseSchema(Catalog &from_databas
 		info->entries.push_back(std::move(create_info));
 	}
 
-	// FIXME: copy indexes
 	return make_uniq<LogicalCopyDatabase>(std::move(info));
 }
 

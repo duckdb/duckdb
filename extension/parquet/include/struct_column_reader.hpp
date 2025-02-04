@@ -24,7 +24,7 @@ public:
 	vector<unique_ptr<ColumnReader>> child_readers;
 
 public:
-	ColumnReader *GetChildReader(idx_t child_idx);
+	ColumnReader &GetChildReader(idx_t child_idx);
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 

@@ -513,8 +513,8 @@
 		"docs": "Create a relation object from the passed values",
 		"args": [
 			{
-				"name": "values",
-				"type": "List[Any]"
+				"name": "*args",
+				"type": "Union[List[Any],Expression, Tuple[Expression]]"
 			}
 		],
 		"return": "DuckDBPyRelation"
@@ -983,68 +983,6 @@
 			{
 				"name": "compression",
 				"default": "None",
-				"type": "str"
-			}
-		],
-		"return": "DuckDBPyRelation"
-	},
-	{
-		"name": "from_substrait",
-		"function": "FromSubstrait",
-		"docs": "Create a query object from protobuf plan",
-		"args": [
-			{
-				"name": "proto",
-				"type": "str"
-			}
-		],
-		"return": "DuckDBPyRelation"
-	},
-	{
-		"name": "get_substrait",
-		"function": "GetSubstrait",
-		"docs": "Serialize a query to protobuf",
-		"args": [
-			{
-				"name": "query",
-				"type": "str"
-			}
-		],
-		"kwargs": [
-			{
-				"name": "enable_optimizer",
-				"default": "True",
-				"type": "bool"
-			}
-		],
-		"return": "str"
-	},
-	{
-		"name": "get_substrait_json",
-		"function": "GetSubstraitJSON",
-		"docs": "Serialize a query to protobuf on the JSON format",
-		"args": [
-			{
-				"name": "query",
-				"type": "str"
-			}
-		],
-		"kwargs": [
-			{
-				"name": "enable_optimizer",
-				"default": "True",
-				"type": "bool"
-			}
-		],
-		"return": "str"
-	},
-	{
-		"name": "from_substrait_json",
-		"function": "FromSubstraitJSON",
-		"docs": "Create a query object from a JSON protobuf plan",
-		"args": [
-			{
-				"name": "json",
 				"type": "str"
 			}
 		],

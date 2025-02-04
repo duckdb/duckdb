@@ -92,7 +92,7 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 	GenerateOrderings(partitions, orders, partition_bys, order_bys, partition_stats);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
-	external = ClientConfig::GetConfig(context).force_external;
+	external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
 
 	const auto thread_pages = PreviousPowerOfTwo(memory_per_thread / (4 * buffer_manager.GetBlockAllocSize()));
 	while (max_bits < 10 && (thread_pages >> max_bits) > 1) {
@@ -148,7 +148,7 @@ void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
 		return;
 	}
 	//	Is the average partition size too large?
-	const idx_t partition_size = STANDARD_ROW_GROUPS_SIZE;
+	const idx_t partition_size = DEFAULT_ROW_GROUP_SIZE;
 	const auto bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	auto new_bits = bits ? bits : 4;
 	while (new_bits < max_bits && (cardinality / RadixPartitioning::NumberOfPartitions(new_bits)) > partition_size) {

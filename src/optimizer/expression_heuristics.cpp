@@ -1,4 +1,5 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
+
 #include "duckdb/planner/expression/list.hpp"
 
 namespace duckdb {
@@ -40,6 +41,13 @@ void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &ex
 			return cost < p.cost;
 		}
 	};
+
+	for (idx_t i = 0; i < expressions.size(); i++) {
+		if (expressions[i]->CanThrow()) {
+			// do not allow reordering if an expression can throw
+			return;
+		}
+	}
 
 	vector<ExpressionCosts> expression_costs;
 	expression_costs.reserve(expressions.size());
@@ -117,7 +125,7 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundFunctionExpression &expr) {
 	}
 }
 
-idx_t ExpressionHeuristics::ExpressionCost(BoundOperatorExpression &expr, ExpressionType &expr_type) {
+idx_t ExpressionHeuristics::ExpressionCost(BoundOperatorExpression &expr, ExpressionType expr_type) {
 	idx_t sum = 0;
 	for (auto &child : expr.children) {
 		sum += Cost(*child);
@@ -151,7 +159,7 @@ idx_t ExpressionHeuristics::ExpressionCost(PhysicalType return_type, idx_t multi
 }
 
 idx_t ExpressionHeuristics::Cost(Expression &expr) {
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_CASE: {
 		auto &case_expr = expr.Cast<BoundCaseExpression>();
 		return ExpressionCost(case_expr);
@@ -178,7 +186,7 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 	}
 	case ExpressionClass::BOUND_OPERATOR: {
 		auto &op_expr = expr.Cast<BoundOperatorExpression>();
-		return ExpressionCost(op_expr, expr.type);
+		return ExpressionCost(op_expr, expr.GetExpressionType());
 	}
 	case ExpressionClass::BOUND_COLUMN_REF: {
 		auto &col_expr = expr.Cast<BoundColumnRefExpression>();

@@ -26,15 +26,15 @@ unique_ptr<MacroFunction> Transformer::TransformMacroFunction(duckdb_libpgquery:
 		Value const_param;
 		if (ConstructConstantFromExpression(*param, const_param)) {
 			// parameters with default value (must have an alias)
-			if (param->alias.empty()) {
+			if (param->GetAlias().empty()) {
 				throw ParserException("Invalid parameter: '%s'", param->ToString());
 			}
-			if (macro_func->default_parameters.find(param->alias) != macro_func->default_parameters.end()) {
-				throw ParserException("Duplicate default parameter: '%s'", param->alias);
+			if (macro_func->default_parameters.find(param->GetAlias()) != macro_func->default_parameters.end()) {
+				throw ParserException("Duplicate default parameter: '%s'", param->GetAlias());
 			}
 			auto constructed_constant = make_uniq<ConstantExpression>(std::move(const_param));
-			constructed_constant->alias = param->alias;
-			macro_func->default_parameters[param->alias] = std::move(constructed_constant);
+			constructed_constant->SetAlias(param->GetAlias());
+			macro_func->default_parameters[param->GetAlias()] = std::move(constructed_constant);
 		} else if (param->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 			// positional parameters
 			if (!macro_func->default_parameters.empty()) {

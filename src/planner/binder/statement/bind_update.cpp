@@ -43,7 +43,7 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_pt
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
 		columns.push_back(column.Physical());
-		if (expr->type == ExpressionType::VALUE_DEFAULT) {
+		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
 			op.expressions.push_back(make_uniq<BoundDefaultExpression>(column.Type()));
 		} else {
 			UpdateBinder binder(*this, context);
@@ -106,7 +106,9 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		update->return_chunk = true;
 	}
 	// bind the default values
-	BindDefaultValues(table.GetColumns(), update->bound_defaults);
+	auto &catalog_name = table.ParentCatalog().GetName();
+	auto &schema_name = table.ParentSchema().name;
+	BindDefaultValues(table.GetColumns(), update->bound_defaults, catalog_name, schema_name);
 	update->bound_constraints = BindConstraints(table);
 
 	// project any additional columns required for the condition/expressions
@@ -133,7 +135,7 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	// finally add the row id column to the projection list
 	auto &column_ids = get->GetColumnIds();
 	proj->expressions.push_back(
-	    make_uniq<BoundColumnRefExpression>(LogicalType::ROW_TYPE, ColumnBinding(get->table_index, column_ids.size())));
+	    make_uniq<BoundColumnRefExpression>(table.GetRowIdType(), ColumnBinding(get->table_index, column_ids.size())));
 	get->AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result

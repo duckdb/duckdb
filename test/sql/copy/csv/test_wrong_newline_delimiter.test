@@ -16,7 +16,7 @@ FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\n
 new_line = \n (Set By User)
 
 statement error
-FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r\n')
+FROM read_csv('data/csv/timestamp.csv', columns = {'a': 'BIGINT'}, new_line= '\r\n', auto_detect = false)
 ----
 new_line = \r\n (Set By User)
 
