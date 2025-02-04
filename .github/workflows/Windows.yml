@@ -280,7 +280,6 @@ jobs:
      - uses: ./.github/actions/build_extensions
        with:
          vcpkg_target_triplet: x64-windows-static-md
-         deploy_as: windows_amd64
          treat_warn_as_error: 0
          run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
          run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}

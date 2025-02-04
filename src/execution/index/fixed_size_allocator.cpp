@@ -253,6 +253,12 @@ FixedSizeAllocatorInfo FixedSizeAllocator::GetInfo() const {
 
 	for (const auto &buffer : buffers) {
 		info.buffer_ids.push_back(buffer.first);
+
+		// Memory safety check.
+		if (buffer.first > idx_t(MAX_ROW_ID)) {
+			throw InternalException("Initializing invalid buffer ID in FixedSizeAllocator::GetInfo");
+		}
+
 		info.block_pointers.push_back(buffer.second->block_pointer);
 		info.segment_counts.push_back(buffer.second->segment_count);
 		info.allocation_sizes.push_back(buffer.second->allocation_size);
@@ -289,6 +295,12 @@ void FixedSizeAllocator::Init(const FixedSizeAllocatorInfo &info) {
 
 		// read all FixedSizeBuffer data
 		auto buffer_id = info.buffer_ids[i];
+
+		// Memory safety check.
+		if (buffer_id > idx_t(MAX_ROW_ID)) {
+			throw InternalException("Initializing invalid buffer ID in FixedSizeAllocator::Init");
+		}
+
 		auto buffer_block_pointer = info.block_pointers[i];
 		auto segment_count = info.segment_counts[i];
 		auto allocation_size = info.allocation_sizes[i];
