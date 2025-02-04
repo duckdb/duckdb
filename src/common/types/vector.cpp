@@ -1390,11 +1390,11 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 				for (sel_t i = 0; i < dict_count; ++i) {
 					map_sel[i] = CODE_UNSEEN; // initialize with unused marker
 				}
-				sel_t used_count = 0;
-				for (sel_t i = 0; i < count; ++i) {
+				idx_t used_count = 0;
+				for (idx_t i = 0; i < count; ++i) {
 					auto pos = old_sel[i];
 					if (map_sel[pos] == CODE_UNSEEN) {
-						map_sel[pos] = used_count;
+						map_sel[pos] = static_cast<sel_t>(used_count);
 						used_sel[used_count++] = pos;
 					}
 					new_sel[i] = map_sel[pos];
