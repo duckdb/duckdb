@@ -169,7 +169,9 @@ public:
 	//! Access to the individual vector elements can be performed through data_pointer[sel_idx[i]]/validity[sel_idx[i]]
 	//! The most common vector types (flat, constant & dictionary) can be converted to the canonical format "for free"
 	//! ToUnifiedFormat was originally called Orrify, as a tribute to Orri Erling who came up with it
-	DUCKDB_API void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data);
+	DUCKDB_API void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data) {
+		ToUnifiedFormat(count, data, GetVectorType());
+	};
 	//! Recursively calls UnifiedVectorFormat on a vector and its child vectors (for nested types)
 	static void RecursiveToUnifiedFormat(Vector &input, idx_t count, RecursiveUnifiedVectorFormat &data);
 
@@ -242,6 +244,10 @@ private:
 	static Value GetValue(const Vector &v, idx_t index);
 	//! Returns the [index] element of the Vector as a Value.
 	static Value GetValueInternal(const Vector &v, idx_t index);
+
+	void ToUnifiedFormat(idx_t count, UnifiedVectorFormat &data, VectorType vector_type);
+	void SerializeFlat(Serializer &serializer, idx_t count);
+	void DeserializeFlat(Deserializer &deserializer, idx_t count);
 
 protected:
 	//! The vector type specifies how the data of the vector is physically stored (i.e. if it is a single repeated
