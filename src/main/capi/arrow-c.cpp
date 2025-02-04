@@ -287,30 +287,7 @@ duckdb_state Ingest(duckdb_connection connection, const char *table_name, struct
 duckdb_state duckdb_arrow_scan(duckdb_connection connection, const char *table_name, duckdb_arrow_stream arrow) {
 	auto stream = reinterpret_cast<ArrowArrayStream *>(arrow);
 
-	// Backup release functions - we nullify children schema release functions because we don't want to release on
-	// behalf of the caller, downstream in our code. Note that Arrow releases target immediate children, but aren't
-	// recursive. So we only back up immediate children here and restore their functions.
-	ArrowSchema schema;
-	if (stream->get_schema(stream, &schema) == DuckDBError) {
-		return DuckDBError;
-	}
-
-	typedef void (*release_fn_t)(ArrowSchema *);
-	std::vector<release_fn_t> release_fns(duckdb::NumericCast<idx_t>(schema.n_children));
-	for (idx_t i = 0; i < duckdb::NumericCast<idx_t>(schema.n_children); i++) {
-		auto child = schema.children[i];
-		release_fns[i] = child->release;
-		child->release = arrow_array_stream_wrapper::EmptySchemaRelease;
-	}
-
-	auto ret = arrow_array_stream_wrapper::Ingest(connection, table_name, stream);
-
-	// Restore release functions.
-	for (idx_t i = 0; i < duckdb::NumericCast<idx_t>(schema.n_children); i++) {
-		schema.children[i]->release = release_fns[i];
-	}
-
-	return ret;
+	return arrow_array_stream_wrapper::Ingest(connection, table_name, stream);
 }
 
 duckdb_state duckdb_arrow_array_scan(duckdb_connection connection, const char *table_name,
