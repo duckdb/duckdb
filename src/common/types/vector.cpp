@@ -1426,7 +1426,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 
 void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	const auto vtype = // older versions that only supported flat vectors did not serialize vector_type,
-		deserializer.ReadPropertyWithExplicitDefault<VectorType>(200, "vector_type", VectorType::FLAT_VECTOR);
+	    deserializer.ReadPropertyWithExplicitDefault<VectorType>(200, "vector_type", VectorType::FLAT_VECTOR);
 
 	// first handle (supported) deserialization of compressed vector types
 	if (vtype == VectorType::CONSTANT_VECTOR) {
