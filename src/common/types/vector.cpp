@@ -1375,7 +1375,7 @@ void Vector::DeserializeFlat(Deserializer &deserializer, idx_t count) {
 
 void Vector::Serialize(Serializer &serializer, idx_t count) {
 	// serialize compressed vectors to save space, but skip this if serializing into older versions
-	if (serializer.ShouldSerialize(4)) {
+	if (serializer.ShouldSerialize(1)) {
 		auto vtype = GetVectorType();
 		if (vtype == VectorType::DICTIONARY_VECTOR && DictionaryVector::DictionarySize(*this).IsValid()) {
 			auto dict = DictionaryVector::Child(*this);
