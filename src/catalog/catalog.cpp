@@ -692,7 +692,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	// however, if there is an exact match in another schema, we will always show it
 	static constexpr const double UNSEEN_PENALTY = 0.2;
 	auto unseen_entries = SimilarEntriesInSchemas(context, entry_name, type, unseen_schemas);
-	vector<string> suggestions;
+	set<string> suggestions;
 	if (!unseen_entries.empty() && (unseen_entries[0].score == 1.0 || unseen_entries[0].score - UNSEEN_PENALTY >
 	                                                                      (entries.empty() ? 0.0 : entries[0].score))) {
 		// the closest matching entry requires qualification as it is not in the default search path
@@ -703,19 +703,19 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 			bool qualify_database;
 			bool qualify_schema;
 			FindMinimalQualification(retriever, catalog_name, schema_name, qualify_database, qualify_schema);
-			suggestions.push_back(unseen_entry.GetQualifiedName(qualify_database, qualify_schema));
+			auto qualified_name = unseen_entry.GetQualifiedName(qualify_database, qualify_schema);
+			suggestions.insert(qualified_name);
 		}
 	} else if (!entries.empty()) {
 		for (auto &entry : entries) {
-			suggestions.push_back(entry.name);
+			suggestions.insert(entry.name);
 		}
 	}
 
 	string did_you_mean;
-	std::sort(suggestions.begin(), suggestions.end());
 	if (suggestions.size() > 2) {
-		auto last = suggestions.back();
-		suggestions.pop_back();
+		string last = *suggestions.end();
+		suggestions.erase(last);
 		did_you_mean = StringUtil::Join(suggestions, ", ") + ", or " + last;
 	} else {
 		did_you_mean = StringUtil::Join(suggestions, " or ");
