@@ -74,4 +74,4 @@ physical_plan	<!REGEX>:.*optional.*
 query II
 explain select b from t1 where b = 'foo9' or b = 'foo10';
 ----
-physical_plan	<!REGEX>:.*optional.*
+physical_plan	<REGEX>:.*optional.*

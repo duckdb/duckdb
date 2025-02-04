@@ -70,10 +70,13 @@ duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
 	return res;
 }
 
-string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs) {
-#ifdef WASM_LOADABLE_EXTENSIONS
-	throw PermissionException("ExtensionDirectory functionality is not supported in duckdb-wasm");
-#endif
+string ExtensionHelper::GetExtensionDirectoryPath(ClientContext &context) {
+	auto &db = DatabaseInstance::GetDatabase(context);
+	auto &fs = FileSystem::GetFileSystem(context);
+	return GetExtensionDirectoryPath(db, fs);
+}
+
+string ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs) {
 	string extension_directory;
 	auto &config = db.config;
 	if (!config.options.extension_directory.empty()) { // create the extension directory if not present
@@ -83,10 +86,25 @@ string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs)
 	} else { // otherwise default to home
 		extension_directory = DefaultExtensionFolder(fs);
 	}
+
+	extension_directory = fs.ConvertSeparators(extension_directory);
+	// expand ~ in extension directory
+	extension_directory = fs.ExpandPath(extension_directory);
+
+	auto path_components = PathComponents();
+	for (auto &path_ele : path_components) {
+		extension_directory = fs.JoinPath(extension_directory, path_ele);
+	}
+
+	return extension_directory;
+}
+
+string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs) {
+#ifdef WASM_LOADABLE_EXTENSIONS
+	throw PermissionException("ExtensionDirectory functionality is not supported in duckdb-wasm");
+#endif
+	string extension_directory = GetExtensionDirectoryPath(db, fs);
 	{
-		extension_directory = fs.ConvertSeparators(extension_directory);
-		// expand ~ in extension directory
-		extension_directory = fs.ExpandPath(extension_directory);
 		if (!fs.DirectoryExists(extension_directory)) {
 			auto sep = fs.PathSeparator(extension_directory);
 			auto splits = StringUtil::Split(extension_directory, sep);
@@ -105,13 +123,6 @@ string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs)
 	}
 	D_ASSERT(fs.DirectoryExists(extension_directory));
 
-	auto path_components = PathComponents();
-	for (auto &path_ele : path_components) {
-		extension_directory = fs.JoinPath(extension_directory, path_ele);
-		if (!fs.DirectoryExists(extension_directory)) {
-			fs.CreateDirectory(extension_directory);
-		}
-	}
 	return extension_directory;
 }
 

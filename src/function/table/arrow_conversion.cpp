@@ -118,7 +118,8 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &a
 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset = -1,
-                                ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0);
+                                ValidityMask *parent_mask = nullptr, uint64_t parent_offset = 0,
+                                bool ignore_extensions = false);
 
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
                                           idx_t size, const ArrowType &arrow_type, int64_t nested_offset = -1,
@@ -725,6 +726,9 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &a
 	D_ASSERT(vector.GetType() == values_type.GetDuckType());
 
 	auto &scan_state = array_state.state;
+	if (vector.GetBuffer()) {
+		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	}
 
 	D_ASSERT(run_ends_array.length == values_array.length);
 	auto compressed_size = NumericCast<idx_t>(run_ends_array.length);
@@ -762,10 +766,23 @@ static void ColumnArrowToDuckDBRunEndEncoded(Vector &vector, const ArrowArray &a
 
 static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state, idx_t size,
                                 const ArrowType &arrow_type, int64_t nested_offset, ValidityMask *parent_mask,
-                                uint64_t parent_offset) {
+                                uint64_t parent_offset, bool ignore_extensions) {
 	auto &scan_state = array_state.state;
 	D_ASSERT(!array.dictionary);
+	if (!ignore_extensions && arrow_type.HasExtension()) {
+		if (arrow_type.extension_data->arrow_to_duckdb) {
+			// Convert the storage and then call the cast function
+			Vector input_data(arrow_type.extension_data->GetInternalType());
+			ColumnArrowToDuckDB(input_data, array, array_state, size, arrow_type, nested_offset, parent_mask,
+			                    parent_offset, /*ignore_extensions*/ true);
+			arrow_type.extension_data->arrow_to_duckdb(array_state.context, input_data, vector, size);
+			return;
+		}
+	}
 
+	if (vector.GetBuffer()) {
+		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	}
 	switch (vector.GetType().id()) {
 	case LogicalTypeId::SQLNULL:
 		vector.Reference(Value());
@@ -1087,7 +1104,7 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 				break;
 			case ArrowArrayPhysicalType::DEFAULT:
 				ColumnArrowToDuckDB(child_entry, child_array, child_state, size, child_type, nested_offset,
-				                    &struct_validity_mask, NumericCast<uint64_t>(array.offset));
+				                    &struct_validity_mask, NumericCast<uint64_t>(array.offset), false);
 				break;
 			default:
 				throw NotImplementedException("ArrowArrayPhysicalType not recognized");
@@ -1120,7 +1137,8 @@ static void ColumnArrowToDuckDB(Vector &vector, ArrowArray &array, ArrowArraySca
 				ColumnArrowToDuckDBRunEndEncoded(child, child_array, child_state, size, child_type);
 				break;
 			case ArrowArrayPhysicalType::DEFAULT:
-				ColumnArrowToDuckDB(child, child_array, child_state, size, child_type, nested_offset, &validity_mask);
+				ColumnArrowToDuckDB(child, child_array, child_state, size, child_type, nested_offset, &validity_mask,
+				                    false);
 				break;
 			default:
 				throw NotImplementedException("ArrowArrayPhysicalType not recognized");
@@ -1284,6 +1302,9 @@ static bool CanContainNull(const ArrowArray &array, const ValidityMask *parent_m
 static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, ArrowArrayScanState &array_state,
                                           idx_t size, const ArrowType &arrow_type, int64_t nested_offset,
                                           const ValidityMask *parent_mask, uint64_t parent_offset) {
+	if (vector.GetBuffer()) {
+		vector.GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
+	}
 	D_ASSERT(arrow_type.HasDictionary());
 	auto &scan_state = array_state.state;
 	const bool has_nulls = CanContainNull(array, parent_mask);
@@ -1340,7 +1361,8 @@ static void ColumnArrowToDuckDBDictionary(Vector &vector, ArrowArray &array, Arr
 }
 
 void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const arrow_column_map_t &arrow_convert_data,
-                                       DataChunk &output, idx_t start, bool arrow_scan_is_projected) {
+                                       DataChunk &output, idx_t start, bool arrow_scan_is_projected,
+                                       idx_t rowid_column_index) {
 	for (idx_t idx = 0; idx < output.ColumnCount(); idx++) {
 		auto col_idx = scan_state.column_ids.empty() ? idx : scan_state.column_ids[idx];
 
@@ -1348,9 +1370,22 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		// table function, we need to use original column ids here.
 		auto arrow_array_idx = arrow_scan_is_projected ? idx : col_idx;
 
-		if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
-			// This column is skipped by the projection pushdown
-			continue;
+		if (rowid_column_index != COLUMN_IDENTIFIER_ROW_ID) {
+			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				arrow_array_idx = rowid_column_index;
+			} else if (col_idx >= rowid_column_index) {
+				// Since the rowid column is skipped when the table is bound (its not a named column),
+				// we need to shift references forward in the Arrow array by one to match the alignment
+				// that DuckDB believes the Arrow array is in.
+				col_idx += 1;
+				arrow_array_idx += 1;
+			}
+		} else {
+			// If there isn't any defined row_id_index, and we're asked for it, skip the column.
+			// This is the incumbent behavior.
+			if (col_idx == COLUMN_IDENTIFIER_ROW_ID) {
+				continue;
+			}
 		}
 
 		auto &parent_array = scan_state.chunk->arrow_array;
@@ -1370,7 +1405,6 @@ void ArrowTableFunction::ArrowToDuckDB(ArrowScanLocalState &scan_state, const ar
 		if (!array_state.owned_data) {
 			array_state.owned_data = scan_state.chunk;
 		}
-		output.data[idx].GetBuffer()->SetAuxiliaryData(make_uniq<ArrowAuxiliaryData>(array_state.owned_data));
 
 		auto array_physical_type = GetArrowArrayPhysicalType(arrow_type);
 

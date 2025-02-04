@@ -50,11 +50,13 @@ public:
 	WriteAheadLogDeserializer(ReplayState &state_p, BufferedFileReader &stream_p, bool deserialize_only = false)
 	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(nullptr),
 	      stream(nullptr, 0), deserializer(stream_p), deserialize_only(deserialize_only) {
+		deserializer.Set<Catalog &>(catalog);
 	}
 	WriteAheadLogDeserializer(ReplayState &state_p, unique_ptr<data_t[]> data_p, idx_t size,
 	                          bool deserialize_only = false)
 	    : state(state_p), db(state.db), context(state.context), catalog(state.catalog), data(std::move(data_p)),
 	      stream(data.get(), size), deserializer(stream), deserialize_only(deserialize_only) {
+		deserializer.Set<Catalog &>(catalog);
 	}
 
 	static WriteAheadLogDeserializer Open(ReplayState &state_p, BufferedFileReader &stream,
@@ -735,10 +737,10 @@ void WriteAheadLogDeserializer::ReplayInsert() {
 		throw InternalException("Corrupt WAL: insert without table");
 	}
 
-	// append to the current table
-	// we don't do any constraint verification here
+	// Append to the current table without constraint verification.
 	vector<unique_ptr<BoundConstraint>> bound_constraints;
-	state.current_table->GetStorage().LocalAppend(*state.current_table, context, chunk, bound_constraints);
+	auto &storage = state.current_table->GetStorage();
+	storage.LocalWALAppend(*state.current_table, context, chunk, bound_constraints);
 }
 
 static void MarkBlocksAsUsed(BlockManager &manager, const PersistentColumnData &col_data) {

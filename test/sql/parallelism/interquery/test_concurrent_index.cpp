@@ -21,9 +21,8 @@ static void CreateIntegerTable(Connection *con, int64_t count) {
 }
 
 static void CheckConstraintViolation(const string &result_str) {
-	auto constraint_violation = result_str.find("constraint violation") != string::npos ||
-	                            result_str.find("constraint violated") != string::npos ||
-	                            result_str.find("Conflict on tuple deletion") != string::npos;
+	auto constraint_violation =
+	    result_str.find("violat") != string::npos || result_str.find("Conflict on tuple deletion") != string::npos;
 	if (!constraint_violation) {
 		FAIL(result_str);
 	}

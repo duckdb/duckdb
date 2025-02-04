@@ -54,7 +54,6 @@ struct QuantileOperation {
 	                       data_ptr_t g_state) {
 		D_ASSERT(partition.inputs);
 
-		const auto count = partition.count;
 		const auto &stats = partition.stats;
 
 		//	If frames overlap significantly, then use local skip lists.
@@ -71,11 +70,7 @@ struct QuantileOperation {
 		//	Build the tree
 		auto &state = *reinterpret_cast<STATE *>(g_state);
 		auto &window_state = state.GetOrCreateWindowState();
-		if (count < std::numeric_limits<uint32_t>::max()) {
-			window_state.qst32 = QuantileSortTree<uint32_t>::WindowInit<INPUT_TYPE>(aggr_input_data, partition);
-		} else {
-			window_state.qst64 = QuantileSortTree<uint64_t>::WindowInit<INPUT_TYPE>(aggr_input_data, partition);
-		}
+		window_state.qst = make_uniq<QuantileSortTree>(aggr_input_data, partition);
 	}
 
 	template <class INPUT_TYPE>
@@ -109,10 +104,7 @@ struct SkipLess {
 template <typename INPUT_TYPE>
 struct WindowQuantileState {
 	// Windowed Quantile merge sort trees
-	using QuantileSortTree32 = QuantileSortTree<uint32_t>;
-	using QuantileSortTree64 = QuantileSortTree<uint64_t>;
-	unique_ptr<QuantileSortTree32> qst32;
-	unique_ptr<QuantileSortTree64> qst64;
+	unique_ptr<QuantileSortTree> qst;
 
 	// Windowed Quantile skip lists
 	using SkipType = pair<idx_t, INPUT_TYPE>;
@@ -196,18 +188,16 @@ struct WindowQuantileState {
 		}
 	}
 
-	bool HasTrees() const {
-		return qst32 || qst64;
+	bool HasTree() const {
+		return qst.get();
 	}
 
 	template <typename RESULT_TYPE, bool DISCRETE>
 	RESULT_TYPE WindowScalar(CursorType &data, const SubFrames &frames, const idx_t n, Vector &result,
 	                         const QuantileValue &q) const {
 		D_ASSERT(n > 0);
-		if (qst32) {
-			return qst32->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frames, n, result, q);
-		} else if (qst64) {
-			return qst64->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frames, n, result, q);
+		if (qst) {
+			return qst->WindowScalar<INPUT_TYPE, RESULT_TYPE, DISCRETE>(data, frames, n, result, q);
 		} else if (s) {
 			// Find the position(s) needed
 			try {
@@ -284,8 +274,8 @@ struct QuantileState {
 		v.emplace_back(TYPE_OP::Operation(element, aggr_input));
 	}
 
-	bool HasTrees() const {
-		return window_state && window_state->HasTrees();
+	bool HasTree() const {
+		return window_state && window_state->HasTree();
 	}
 	WindowQuantileState<INPUT_TYPE> &GetOrCreateWindowState() {
 		if (!window_state) {

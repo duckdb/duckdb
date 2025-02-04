@@ -436,6 +436,7 @@ void TopNHeap::Reduce() {
 	new_heap_data.Slice(heap_data, new_payload_sel, heap.size());
 	new_heap_data.Flatten();
 
+	sort_key_heap.Destroy();
 	sort_key_heap.Move(new_sort_heap);
 	heap_data.Reference(new_heap_data);
 }

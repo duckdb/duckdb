@@ -38,3 +38,6 @@ query I
 SELECT json_serialize_plan('SELECT * FROM nonexistent_table') LIKE '%Table with name nonexistent_table does not exist%';
 ----
 true
+
+statement ok
+select json_serialize_plan('select blob ''\\x00''');

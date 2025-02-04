@@ -237,7 +237,6 @@ using socket_t = int;
 #include <map>
 #include <memory>
 #include <mutex>
-#include <random>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -246,9 +245,8 @@ using socket_t = int;
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
-
 #include "duckdb/common/re2_regex.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 #ifdef _WIN32
@@ -2080,8 +2078,7 @@ namespace detail {
 
 std::string encode_query_param(const std::string &value);
 
-std::string decode_url(const std::string &s, bool convert_plus_to_space);
-
+std::string decode_url(const std::string &s, bool convert_plus_to_space, const std::set<char> &exclude = {});
 void read_file(const std::string &path, std::string &out);
 
 std::string trim_copy(const std::string &s);
@@ -2469,7 +2466,6 @@ inline std::string encode_url(const std::string &s) {
   for (size_t i = 0; s[i]; i++) {
     switch (s[i]) {
     case ' ': result += "%20"; break;
-    case '+': result += "%2B"; break;
     case '\r': result += "%0D"; break;
     case '\n': result += "%0A"; break;
     case '\'': result += "%27"; break;
@@ -2495,7 +2491,8 @@ inline std::string encode_url(const std::string &s) {
 }
 
 inline std::string decode_url(const std::string &s,
-                              bool convert_plus_to_space) {
+                              bool convert_plus_to_space,
+                              const std::set<char> &exclude) {
   std::string result;
 
   for (size_t i = 0; i < s.size(); i++) {
@@ -2514,8 +2511,12 @@ inline std::string decode_url(const std::string &s,
       } else {
         auto val = 0;
         if (from_hex_to_i(s, i + 1, 2, val)) {
-          // 2 digits hex codes
-          result += static_cast<char>(val);
+          const auto converted = static_cast<char>(val);
+          if (exclude.count(converted) == 0) {
+            result += converted;
+          } else {
+            result.append(s, i, 3);
+          }
           i += 2; // '00'
         } else {
           result += s[i];
@@ -4642,19 +4643,10 @@ inline std::string make_multipart_data_boundary() {
   static const char data[] =
       "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-  // std::random_device might actually be deterministic on some
-  // platforms, but due to lack of support in the c++ standard library,
-  // doing better requires either some ugly hacks or breaking portability.
-  std::random_device seed_gen;
-
-  // Request 128 bits of entropy for initialization
-  std::seed_seq seed_sequence{seed_gen(), seed_gen(), seed_gen(), seed_gen()};
-  std::mt19937 engine(seed_sequence);
-
   std::string result = "--cpp-httplib-multipart-data-";
-
+  duckdb::RandomEngine engine;
   for (auto i = 0; i < 16; i++) {
-    result += data[engine() % (sizeof(data) - 1)];
+    result += data[engine.NextRandomInteger32(0,sizeof(data) - 1)];
   }
 
   return result;
@@ -7105,9 +7097,9 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   if (next_scheme.empty()) { next_scheme = scheme; }
   if (next_host.empty()) { next_host = host_; }
   if (next_path.empty()) { next_path = "/"; }
-
-  auto path = detail::decode_url(next_path, true) + next_query;
-
+  
+  auto path = detail::decode_url(next_path, true, std::set<char> {'/'}) + next_query;
+	
   if (next_scheme == scheme && next_host == host_ && next_port == port_) {
     return detail::redirect(*this, req, res, path, location, error);
   } else {

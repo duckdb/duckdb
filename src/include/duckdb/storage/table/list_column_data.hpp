@@ -21,7 +21,7 @@ public:
 
 	//! The child-column of the list
 	unique_ptr<ColumnData> child_column;
-	//! The validity column data of the struct
+	//! The validity column data of the list
 	ValidityColumnData validity;
 
 public:

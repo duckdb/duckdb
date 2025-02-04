@@ -135,6 +135,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"covar_samp", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"create_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"current_database", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"current_date", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_localtime", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_localtimestamp", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_query", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -179,8 +180,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"from_hex", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_json_strict", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"from_substrait", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"from_substrait_json", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
     {"fsum", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"fuzz_all_functions", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
     {"fuzzyduck", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -188,9 +187,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"gcd", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"gen_random_uuid", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"get_bit", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"get_current_time", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"get_current_timestamp", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"get_substrait", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"get_substrait_json", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
     {"grade_up", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"greatest", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"greatest_common_divisor", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -424,11 +422,13 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"make_date", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_time", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamp", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"make_timestamp_ns", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"make_timestamptz", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_concat", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_entries", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_extract", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"map_extract_value", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_from_entries", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_keys", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_values", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -486,6 +486,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"read_ndjson_auto", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_ndjson_objects", "json", CatalogType::TABLE_FUNCTION_ENTRY},
     {"read_parquet", "parquet", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"read_xlsx", "excel", CatalogType::TABLE_FUNCTION_ENTRY},
     {"reduce", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"reduce_sql_statement", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
     {"regr_avgx", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
@@ -643,6 +644,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_zmax", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_zmflag", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_zmin", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"start_ui", "motherduck", CatalogType::TABLE_FUNCTION_ENTRY},
     {"starts_with", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"stats", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"stddev", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
@@ -679,6 +681,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"to_timestamp", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"to_weeks", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"to_years", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"today", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"tpcds", "tpcds", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"tpcds_answers", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"tpcds_queries", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -978,6 +981,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"s3_use_ssl", "httpfs"},
     {"sqlite_all_varchar", "sqlite_scanner"},
     {"timezone", "icu"},
+    {"unsafe_enable_version_guessing", "iceberg"},
 }; // END_OF_EXTENSION_SETTINGS
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
@@ -1026,8 +1030,9 @@ static constexpr ExtensionEntry EXTENSION_FILE_PREFIXES[] = {
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
 static constexpr ExtensionEntry EXTENSION_FILE_POSTFIXES[] = {
-    {".parquet", "parquet"}, {".json", "json"},    {".jsonl", "json"}, {".ndjson", "json"},
-    {".shp", "spatial"},     {".gpkg", "spatial"}, {".fgb", "spatial"}}; // END_OF_EXTENSION_FILE_POSTFIXES
+    {".parquet", "parquet"}, {".json", "json"},    {".jsonl", "json"},  {".ndjson", "json"},
+    {".shp", "spatial"},     {".gpkg", "spatial"}, {".fgb", "spatial"}, {".xlsx", "excel"},
+}; // END_OF_EXTENSION_FILE_POSTFIXES
 
 // Note: these are currently hardcoded in scripts/generate_extensions_function.py
 // TODO: automate by passing though to script via duckdb
@@ -1064,8 +1069,9 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"postgres/config", "postgres_scanner"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    "aws",   "azure", "autocomplete", "core_functions", "delta",   "excel",          "fts",      "httpfs",
-    "inet",  "icu",   "json",         "mysql_scanner",  "parquet", "sqlite_scanner", "sqlsmith", "postgres_scanner",
-    "tpcds", "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
+    "aws",        "azure",         "autocomplete", "core_functions", "delta",    "excel",
+    "fts",        "httpfs",        "iceberg",      "inet",           "icu",      "json",
+    "motherduck", "mysql_scanner", "parquet",      "sqlite_scanner", "sqlsmith", "postgres_scanner",
+    "tpcds",      "tpch",          "uc_catalog"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb

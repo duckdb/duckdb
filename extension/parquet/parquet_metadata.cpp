@@ -615,8 +615,8 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 	auto meta_data = reader->GetFileMetadata();
 
 	optional_idx probe_column_idx;
-	for (idx_t column_idx = 0; column_idx < reader->names.size(); column_idx++) {
-		if (reader->names[column_idx] == column_name) {
+	for (idx_t column_idx = 0; column_idx < reader->columns.size(); column_idx++) {
+		if (reader->columns[column_idx].name == column_name) {
 			probe_column_idx = column_idx;
 		}
 	}
@@ -632,7 +632,7 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 
 	D_ASSERT(!probe.IsNull());
 	ConstantFilter filter(ExpressionType::COMPARE_EQUAL,
-	                      probe.CastAs(context, reader->GetTypes()[probe_column_idx.GetIndex()]));
+	                      probe.CastAs(context, reader->GetColumns()[probe_column_idx.GetIndex()].type));
 
 	for (idx_t row_group_idx = 0; row_group_idx < meta_data->row_groups.size(); row_group_idx++) {
 		auto &row_group = meta_data->row_groups[row_group_idx];
@@ -641,7 +641,7 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 		auto bloom_excludes =
 		    ParquetStatisticsUtils::BloomFilterExcludes(filter, column.meta_data, *protocol, allocator);
 		current_chunk.SetValue(0, count, Value(file_path));
-		current_chunk.SetValue(1, count, Value::BIGINT(row_group_idx));
+		current_chunk.SetValue(1, count, Value::BIGINT(NumericCast<int64_t>(row_group_idx)));
 		current_chunk.SetValue(2, count, Value::BOOLEAN(bloom_excludes));
 
 		count++;

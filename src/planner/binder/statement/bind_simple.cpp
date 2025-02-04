@@ -1,6 +1,7 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
+#include "duckdb/catalog/duck_catalog.hpp"
 #include "duckdb/execution/index/art/art.hpp"
 #include "duckdb/function/table/table_scan.hpp"
 #include "duckdb/parser/constraints/unique_constraint.hpp"
@@ -17,11 +18,21 @@
 
 namespace duckdb {
 
+unique_ptr<LogicalOperator> DuckCatalog::BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
+                                                           unique_ptr<LogicalOperator> plan,
+                                                           unique_ptr<CreateIndexInfo> create_info,
+                                                           unique_ptr<AlterTableInfo> alter_info) {
+	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
+	IndexBinder index_binder(binder, binder.context);
+	return index_binder.BindCreateIndex(binder.context, std::move(create_info), table_entry, std::move(plan),
+	                                    std::move(alter_info));
+}
+
 BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry,
                                          unique_ptr<AlterInfo> alter_info) {
 	auto &table_info = alter_info->Cast<AlterTableInfo>();
 	auto &constraint_info = table_info.Cast<AddConstraintInfo>();
-	auto &table = entry.Cast<DuckTableEntry>();
+	auto &table = entry.Cast<TableCatalogEntry>();
 	auto &column_list = table.GetColumns();
 
 	auto bound_constraint = BindUniqueConstraint(*constraint_info.constraint, table_info.name, column_list);
@@ -56,10 +67,9 @@ BoundStatement Binder::BindAlterAddIndex(BoundStatement &result, CatalogEntry &e
 	auto &get = plan->Cast<LogicalGet>();
 	get.names = column_list.GetColumnNames();
 
-	IndexBinder index_binder(*this, context);
-	auto op = index_binder.BindCreateIndex(context, std::move(create_index_info), table, std::move(plan),
-	                                       unique_ptr_cast<AlterInfo, AlterTableInfo>(std::move(alter_info)));
-	result.plan = std::move(op);
+	auto alter_table_info = unique_ptr_cast<AlterInfo, AlterTableInfo>(std::move(alter_info));
+	result.plan = table.catalog.BindAlterAddIndex(*this, table, std::move(plan), std::move(create_index_info),
+	                                              std::move(alter_table_info));
 	return std::move(result);
 }
 

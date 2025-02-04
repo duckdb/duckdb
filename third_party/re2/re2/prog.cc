@@ -6,7 +6,6 @@
 // Tested by compile_test.cc
 
 #include "re2/prog.h"
-#include "re2/bitstate.h"
 
 #if defined(__AVX2__)
 #include <immintrin.h>

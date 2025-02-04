@@ -2,36 +2,53 @@
 # group: [upsert]
 
 statement ok
-pragma enable_verification;
+PRAGMA enable_verification;
 
-# Create a table, most columns are indexed on
 statement ok
-create or replace table tbl(
-	i integer PRIMARY KEY,
-	j integer UNIQUE,
-	k integer
+CREATE OR REPLACE TABLE tbl(
+	i INT PRIMARY KEY,
+	j INT UNIQUE,
+	k INT
 );
 
-# Populate the table
 statement ok
-insert into tbl VALUES
-	(1, 10, 1),
-	(2, 20, 1),
-	(3, 30, 2);
+INSERT INTO tbl VALUES (1, 10, 1), (2, 20, 1), (3, 30, 2);
 
-# The column referenced in the SET expression is indexed on, can't be updated
-statement error
-insert into tbl VALUES
-	(3,5,1)
-ON CONFLICT (i) DO UPDATE SET i = i;
-----
+# Update the on-conflict column.
+statement ok
+INSERT INTO tbl VALUES (3, 5, 1)
+ON CONFLICT (i) DO UPDATE SET i = i + 1;
 
 query III
-select * from tbl;
+SELECT i, j, k FROM tbl ORDER BY ALL;
+----
+1	10	1
+2	20	1
+4	5	1
+
+query III
+SELECT i, j, k FROM tbl WHERE i = 4;
+----
+4	5	1
+
+# Update the on-conflict column again.
+statement ok
+INSERT INTO tbl VALUES (4, 30, 2)
+ON CONFLICT (i) DO UPDATE SET i = i - 1;
+
+query III
+SELECT i, j, k FROM tbl ORDER BY ALL;
 ----
 1	10	1
 2	20	1
 3	30	2
+
+# Cannot update to the same PK value as another column.
+statement error
+INSERT INTO tbl VALUES (3, 30, 2)
+ON CONFLICT (i) DO UPDATE SET i = i - 2;
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
 
 # 'excluded' refers to the VALUES list, turning this into:
 # (k)2 + (k.excluded)1 = 3

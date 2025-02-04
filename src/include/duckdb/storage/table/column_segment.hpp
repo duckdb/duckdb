@@ -38,23 +38,18 @@ enum class ColumnSegmentType : uint8_t { TRANSIENT, PERSISTENT };
 
 class ColumnSegment : public SegmentBase<ColumnSegment> {
 public:
+	//! Construct a column segment.
+	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
+	              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
+	              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
+	              const idx_t offset, const idx_t segment_size_p,
+	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
+	//! Construct a column segment from another column segment.
+	//! The other column segment becomes invalid (std::move).
+	ColumnSegment(ColumnSegment &other, const idx_t start);
 	~ColumnSegment();
 
-	//! The database instance
-	DatabaseInstance &db;
-	//! The type stored in the column
-	LogicalType type;
-	//! The size of the type
-	idx_t type_size;
-	//! The column segment type (transient or persistent)
-	ColumnSegmentType segment_type;
-	//! The compression function
-	reference<CompressionFunction> function;
-	//! The statistics for the segment
-	SegmentStatistics stats;
-	//! The block that this segment relates to
-	shared_ptr<BlockHandle> block;
-
+public:
 	static unique_ptr<ColumnSegment> CreatePersistentSegment(DatabaseInstance &db, BlockManager &block_manager,
 	                                                         block_id_t id, idx_t offset, const LogicalType &type_p,
 	                                                         idx_t start, idx_t count, CompressionType compression_type,
@@ -87,6 +82,7 @@ public:
 	idx_t SegmentSize() const;
 	//! Resize the block
 	void Resize(idx_t segment_size);
+	const CompressionFunction &GetCompressionFunction();
 
 	//! Initialize an append of this segment. Appends are only supported on transient segments.
 	void InitializeAppend(ColumnAppendState &state);
@@ -137,22 +133,27 @@ public:
 
 	void CommitDropSegment();
 
-public:
-	//! Construct a column segment.
-	ColumnSegment(DatabaseInstance &db, shared_ptr<BlockHandle> block, const LogicalType &type,
-	              const ColumnSegmentType segment_type, const idx_t start, const idx_t count,
-	              CompressionFunction &function_p, BaseStatistics statistics, const block_id_t block_id_p,
-	              const idx_t offset, const idx_t segment_size_p,
-	              unique_ptr<ColumnSegmentState> segment_state_p = nullptr);
-	//! Construct a column segment from another column segment.
-	//! The other column segment becomes invalid (std::move).
-	ColumnSegment(ColumnSegment &other, const idx_t start);
-
 private:
 	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);
 	void ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
 
+public:
+	//! The database instance
+	DatabaseInstance &db;
+	//! The type stored in the column
+	LogicalType type;
+	//! The size of the type
+	idx_t type_size;
+	//! The column segment type (transient or persistent)
+	ColumnSegmentType segment_type;
+	//! The statistics for the segment
+	SegmentStatistics stats;
+	//! The block that this segment relates to
+	shared_ptr<BlockHandle> block;
+
 private:
+	//! The compression function
+	reference<CompressionFunction> function;
 	//! The block id that this segment relates to (persistent segment only)
 	block_id_t block_id;
 	//! The offset into the block (persistent segment only)

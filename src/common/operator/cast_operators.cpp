@@ -1470,8 +1470,16 @@ bool TryCastToUUID::Operation(string_t input, hugeint_t &result, Vector &result_
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastErrorMessage::Operation(string_t input, date_t &result, CastParameters &parameters) {
-	if (!TryCast::Operation<string_t, date_t>(input, result, parameters.strict)) {
-		HandleCastError::AssignError(Date::ConversionError(input), parameters);
+	idx_t pos;
+	bool special = false;
+	switch (Date::TryConvertDate(input.GetData(), input.GetSize(), pos, result, special, parameters.strict)) {
+	case DateCastResult::SUCCESS:
+		break;
+	case DateCastResult::ERROR_INCORRECT_FORMAT:
+		HandleCastError::AssignError(Date::FormatError(input), parameters);
+		return false;
+	case DateCastResult::ERROR_RANGE:
+		HandleCastError::AssignError(Date::RangeError(input), parameters);
 		return false;
 	}
 	return true;
@@ -1481,7 +1489,8 @@ template <>
 bool TryCast::Operation(string_t input, date_t &result, bool strict) {
 	idx_t pos;
 	bool special = false;
-	return Date::TryConvertDate(input.GetData(), input.GetSize(), pos, result, special, strict);
+	return Date::TryConvertDate(input.GetData(), input.GetSize(), pos, result, special, strict) ==
+	       DateCastResult::SUCCESS;
 }
 
 template <>
@@ -1545,14 +1554,18 @@ dtime_tz_t Cast::Operation(string_t input) {
 //===--------------------------------------------------------------------===//
 template <>
 bool TryCastErrorMessage::Operation(string_t input, timestamp_t &result, CastParameters &parameters) {
-	auto cast_result = Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result);
-	if (cast_result == TimestampCastResult::SUCCESS) {
+	switch (Timestamp::TryConvertTimestamp(input.GetData(), input.GetSize(), result)) {
+	case TimestampCastResult::SUCCESS:
 		return true;
-	}
-	if (cast_result == TimestampCastResult::ERROR_INCORRECT_FORMAT) {
-		HandleCastError::AssignError(Timestamp::ConversionError(input), parameters);
-	} else {
+	case TimestampCastResult::ERROR_INCORRECT_FORMAT:
+		HandleCastError::AssignError(Timestamp::FormatError(input), parameters);
+		break;
+	case TimestampCastResult::ERROR_NON_UTC_TIMEZONE:
 		HandleCastError::AssignError(Timestamp::UnsupportedTimezoneError(input), parameters);
+		break;
+	case TimestampCastResult::ERROR_RANGE:
+		HandleCastError::AssignError(Timestamp::RangeError(input), parameters);
+		break;
 	}
 	return false;
 }
@@ -1578,7 +1591,7 @@ timestamp_ns_t Cast::Operation(string_t input) {
 	const auto ts = Timestamp::FromCString(input.GetData(), input.GetSize(), &nanos);
 	timestamp_ns_t result;
 	if (!Timestamp::TryFromTimestampNanos(ts, nanos, result)) {
-		throw ConversionException(Timestamp::ConversionError(input));
+		throw ConversionException(Timestamp::RangeError(input));
 	}
 	return result;
 }
@@ -2298,7 +2311,7 @@ bool DoubleToDecimalCast(SRC input, DST &result, CastParameters &parameters, uin
 	double roundedValue = round(value);
 	if (roundedValue <= -NumericHelper::DOUBLE_POWERS_OF_TEN[width] ||
 	    roundedValue >= NumericHelper::DOUBLE_POWERS_OF_TEN[width]) {
-		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", value, width, scale);
+		string error = StringUtil::Format("Could not cast value %f to DECIMAL(%d,%d)", input, width, scale);
 		HandleCastError::AssignError(error, parameters);
 		return false;
 	}

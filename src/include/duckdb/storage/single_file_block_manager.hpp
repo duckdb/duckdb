@@ -26,7 +26,9 @@ struct StorageManagerOptions {
 	bool read_only = false;
 	bool use_direct_io = false;
 	DebugInitialize debug_initialize = DebugInitialize::NO_INITIALIZE;
-	optional_idx block_alloc_size = optional_idx();
+	optional_idx block_alloc_size;
+	optional_idx storage_version;
+	optional_idx version_number;
 };
 
 //! SingleFileBlockManager is an implementation for a BlockManager which manages blocks in a single file
@@ -106,6 +108,9 @@ private:
 
 	//! Verify the block usage count
 	void VerifyBlocks(const unordered_map<block_id_t, idx_t> &block_usage_count) override;
+
+	void AddStorageVersionTag();
+	uint64_t GetVersionNumber();
 
 private:
 	AttachedDatabase &db;

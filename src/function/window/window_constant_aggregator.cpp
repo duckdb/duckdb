@@ -1,4 +1,6 @@
 #include "duckdb/function/window/window_constant_aggregator.hpp"
+
+#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/window/window_aggregate_states.hpp"
 #include "duckdb/function/window/window_shared_expressions.hpp"
 #include "duckdb/planner/expression/bound_window_expression.hpp"
@@ -6,7 +8,7 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
-// WindowConstantAggregator
+// WindowConstantAggregatorGlobalState
 //===--------------------------------------------------------------------===//
 
 class WindowConstantAggregatorGlobalState : public WindowAggregatorGlobalState {
@@ -22,33 +24,6 @@ public:
 	WindowAggregateStates statef;
 	//! Aggregate results
 	unique_ptr<Vector> results;
-};
-
-class WindowConstantAggregatorLocalState : public WindowAggregatorLocalState {
-public:
-	explicit WindowConstantAggregatorLocalState(const WindowConstantAggregatorGlobalState &gstate);
-	~WindowConstantAggregatorLocalState() override {
-	}
-
-	void Sink(DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel,
-	          idx_t filtered);
-	void Combine(WindowConstantAggregatorGlobalState &gstate);
-
-public:
-	//! The global state we are sharing
-	const WindowConstantAggregatorGlobalState &gstate;
-	//! Reusable chunk for sinking
-	DataChunk inputs;
-	//! Chunk for referencing the input columns
-	DataChunk payload_chunk;
-	//! A vector of pointers to "state", used for intermediate window segment aggregation
-	Vector statep;
-	//! Reused result state container for the window functions
-	WindowAggregateStates statef;
-	//! The current result partition being read
-	idx_t partition;
-	//! Shared SV for evaluation
-	SelectionVector matches;
 };
 
 WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientContext &context,
@@ -93,6 +68,36 @@ WindowConstantAggregatorGlobalState::WindowConstantAggregatorGlobalState(ClientC
 	partition_offsets.emplace_back(group_count);
 }
 
+//===--------------------------------------------------------------------===//
+// WindowConstantAggregatorLocalState
+//===--------------------------------------------------------------------===//
+class WindowConstantAggregatorLocalState : public WindowAggregatorLocalState {
+public:
+	explicit WindowConstantAggregatorLocalState(const WindowConstantAggregatorGlobalState &gstate);
+	~WindowConstantAggregatorLocalState() override {
+	}
+
+	void Sink(DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel,
+	          idx_t filtered);
+	void Combine(WindowConstantAggregatorGlobalState &gstate);
+
+public:
+	//! The global state we are sharing
+	const WindowConstantAggregatorGlobalState &gstate;
+	//! Reusable chunk for sinking
+	DataChunk inputs;
+	//! Chunk for referencing the input columns
+	DataChunk payload_chunk;
+	//! A vector of pointers to "state", used for intermediate window segment aggregation
+	Vector statep;
+	//! Reused result state container for the window functions
+	WindowAggregateStates statef;
+	//! The current result partition being read
+	idx_t partition;
+	//! Shared SV for evaluation
+	SelectionVector matches;
+};
+
 WindowConstantAggregatorLocalState::WindowConstantAggregatorLocalState(
     const WindowConstantAggregatorGlobalState &gstate)
     : gstate(gstate), statep(Value::POINTER(0)), statef(gstate.statef.aggr), partition(0) {
@@ -110,10 +115,81 @@ WindowConstantAggregatorLocalState::WindowConstantAggregatorLocalState(
 	gstate.locals++;
 }
 
-WindowConstantAggregator::WindowConstantAggregator(const BoundWindowExpression &wexpr,
-                                                   const WindowExcludeMode exclude_mode_p,
-                                                   WindowSharedExpressions &shared)
-    : WindowAggregator(wexpr, exclude_mode_p) {
+//===--------------------------------------------------------------------===//
+// WindowConstantAggregator
+//===--------------------------------------------------------------------===//
+bool WindowConstantAggregator::CanAggregate(const BoundWindowExpression &wexpr) {
+	if (!wexpr.aggregate) {
+		return false;
+	}
+	// window exclusion cannot be handled by constant aggregates
+	if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
+		return false;
+	}
+
+	// 	DISTINCT aggregation cannot be handled by constant aggregation
+	if (wexpr.distinct) {
+		return false;
+	}
+
+	//	COUNT(*) is already handled efficiently by segment trees.
+	if (wexpr.children.empty()) {
+		return false;
+	}
+
+	/*
+	    The default framing option is RANGE UNBOUNDED PRECEDING, which
+	    is the same as RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT
+	    ROW; it sets the frame to be all rows from the partition start
+	    up through the current row's last peer (a row that the window's
+	    ORDER BY clause considers equivalent to the current row; all
+	    rows are peers if there is no ORDER BY). In general, UNBOUNDED
+	    PRECEDING means that the frame starts with the first row of the
+	    partition, and similarly UNBOUNDED FOLLOWING means that the
+	    frame ends with the last row of the partition, regardless of
+	    RANGE, ROWS or GROUPS mode. In ROWS mode, CURRENT ROW means that
+	    the frame starts or ends with the current row; but in RANGE or
+	    GROUPS mode it means that the frame starts or ends with the
+	    current row's first or last peer in the ORDER BY ordering. The
+	    offset PRECEDING and offset FOLLOWING options vary in meaning
+	    depending on the frame mode.
+	*/
+	switch (wexpr.start) {
+	case WindowBoundary::UNBOUNDED_PRECEDING:
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		if (!wexpr.orders.empty()) {
+			return false;
+		}
+		break;
+	default:
+		return false;
+	}
+
+	switch (wexpr.end) {
+	case WindowBoundary::UNBOUNDED_FOLLOWING:
+		break;
+	case WindowBoundary::CURRENT_ROW_RANGE:
+		if (!wexpr.orders.empty()) {
+			return false;
+		}
+		break;
+	default:
+		return false;
+	}
+
+	return true;
+}
+
+BoundWindowExpression &WindowConstantAggregator::RebindAggregate(ClientContext &context, BoundWindowExpression &wexpr) {
+	FunctionBinder::BindSortedAggregate(context, wexpr);
+
+	return wexpr;
+}
+
+WindowConstantAggregator::WindowConstantAggregator(BoundWindowExpression &wexpr, WindowSharedExpressions &shared,
+                                                   ClientContext &context)
+    : WindowAggregator(RebindAggregate(context, wexpr)) {
 
 	// We only need these values for Sink
 	for (auto &child : wexpr.children) {

@@ -33,7 +33,7 @@ public:
 	//! The validity checker of the transaction
 	ValidChecker transaction_validity;
 	//! The active query number
-	transaction_t active_query;
+	atomic<transaction_t> active_query;
 
 public:
 	DUCKDB_API static MetaTransaction &Get(ClientContext &context);

@@ -141,10 +141,7 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 			Linenoise::Log("\nComplete Character %d\n", (int)c);
 			switch (c) {
 			case TAB: /* tab */
-				i = (i + 1) % (completions.size() + 1);
-				if (i == completions.size()) {
-					Terminal::Beep();
-				}
+				i = (i + 1) % completions.size();
 				break;
 			case ESC: { /* escape */
 				auto escape = Terminal::ReadEscapeSequence(ifd);
@@ -152,16 +149,17 @@ int Linenoise::CompleteLine(EscapeSequence &current_sequence) {
 				case EscapeSequence::SHIFT_TAB:
 					// shift-tab: move backwards
 					if (i == 0) {
-						Terminal::Beep();
+						// pressing shift-tab at the first completion cancels completion
+						RefreshLine();
+						current_sequence = escape;
+						stop = true;
 					} else {
 						i--;
 					}
 					break;
 				case EscapeSequence::ESCAPE:
 					/* Re-show original buffer */
-					if (i < completions.size()) {
-						RefreshLine();
-					}
+					RefreshLine();
 					current_sequence = escape;
 					stop = true;
 					break;
@@ -1144,6 +1142,7 @@ int Linenoise::Edit() {
 
 		Linenoise::Log("%d\n", (int)c);
 		switch (c) {
+		case CTRL_G:
 		case CTRL_J:
 		case ENTER: { /* enter */
 #ifdef LINENOISE_EDITOR
@@ -1180,12 +1179,19 @@ int Linenoise::Edit() {
 				buf[len] = '\0';
 				if (buf[0] != '.' && !AllWhitespace(buf) && !sqlite3_complete(buf)) {
 					// not a complete SQL statement yet! continuation
-					// insert "\r\n" at the end
 					pos = len;
-					if (EditInsertMulti("\r\n")) {
-						return -1;
+					if (c != CTRL_G) {
+						// insert "\r\n" at the end if this is enter/ctrl+j
+						if (EditInsertMulti("\r\n")) {
+							return -1;
+						}
+						break;
+					} else {
+						// if this is Ctrl+G, terminate the statement
+						if (EditInsertMulti(";")) {
+							return -1;
+						}
 					}
-					break;
 				}
 			}
 			// final refresh before returning control to the shell
@@ -1219,7 +1225,6 @@ int Linenoise::Edit() {
 			return (int)new_len;
 		}
 		case CTRL_O:
-		case CTRL_G:
 		case CTRL_C: /* ctrl-c */ {
 			if (Terminal::IsMultiline()) {
 				continuation_markers = false;

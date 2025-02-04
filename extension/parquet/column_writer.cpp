@@ -3,8 +3,10 @@
 #include "duckdb.hpp"
 #include "geo_parquet.hpp"
 #include "parquet_dbp_encoder.hpp"
+#include "parquet_dlba_encoder.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
+#include "parquet_bss_encoder.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_writer.hpp"
 #ifndef DUCKDB_AMALGAMATION
@@ -496,6 +498,7 @@ void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;
 
 		write_info.temp_writer = make_uniq<MemoryStream>(
+		    Allocator::Get(writer.GetContext()),
 		    MaxValue<idx_t>(NextPowerOfTwo(page_info.estimated_page_size), MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		write_info.write_count = page_info.empty_count;
 		write_info.max_write_count = page_info.row_count;
@@ -715,6 +718,7 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	column_chunk.meta_data.total_compressed_size =
 	    UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten() - start_offset);
 	column_chunk.meta_data.total_uncompressed_size = UnsafeNumericCast<int64_t>(total_uncompressed_size);
+	state.row_group.total_byte_size += column_chunk.meta_data.total_uncompressed_size;
 
 	if (state.bloom_filter) {
 		writer.BufferBloomFilter(state.col_idx, std::move(state.bloom_filter));
@@ -1059,34 +1063,42 @@ public:
 	}
 	~StandardColumnWriterState() override = default;
 
-	// analysis state for integer values for DELTA_BINARY_PACKED
+	// analysis state for integer values for DELTA_BINARY_PACKED/DELTA_LENGTH_BYTE_ARRAY
 	idx_t total_value_count = 0;
+	idx_t total_string_size = 0;
 
 	unordered_map<T, uint32_t> dictionary;
 	duckdb_parquet::Encoding::type encoding;
 };
 
-template <class T>
+template <class SRC, class TGT>
 class StandardWriterPageState : public ColumnWriterPageState {
 public:
-	explicit StandardWriterPageState(const idx_t total_value_count, Encoding::type encoding_p,
-	                                 const unordered_map<T, uint32_t> &dictionary_p)
-	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dictionary(dictionary_p),
-	      dict_written_value(false), dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())),
-	      dict_encoder(dict_bit_width) {
+	explicit StandardWriterPageState(const idx_t total_value_count, const idx_t total_string_size,
+	                                 Encoding::type encoding_p, const unordered_map<SRC, uint32_t> &dictionary_p)
+	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dlba_initialized(false),
+	      dlba_encoder(total_value_count, total_string_size), bss_encoder(total_value_count, sizeof(TGT)),
+	      dictionary(dictionary_p), dict_written_value(false),
+	      dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(dict_bit_width) {
 	}
 	duckdb_parquet::Encoding::type encoding;
 
 	bool dbp_initialized;
 	DbpEncoder dbp_encoder;
 
-	const unordered_map<T, uint32_t> &dictionary;
+	bool dlba_initialized;
+	DlbaEncoder dlba_encoder;
+
+	BssEncoder bss_encoder;
+
+	const unordered_map<SRC, uint32_t> &dictionary;
 	bool dict_written_value;
 	uint32_t dict_bit_width;
 	RleBpEncoder dict_encoder;
 };
 
 namespace dbp_encoder {
+
 template <class T>
 void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const T &first_value) {
 	throw InternalException("Can't write type to DELTA_BINARY_PACKED column");
@@ -1139,6 +1151,60 @@ void WriteValue(DbpEncoder &encoder, WriteStream &writer, const uint32_t &value)
 
 } // namespace dbp_encoder
 
+namespace dlba_encoder {
+
+template <class T>
+void BeginWrite(DlbaEncoder &encoder, WriteStream &writer, const T &first_value) {
+	throw InternalException("Can't write type to DELTA_LENGTH_BYTE_ARRAY column");
+}
+
+template <>
+void BeginWrite(DlbaEncoder &encoder, WriteStream &writer, const string_t &first_value) {
+	encoder.BeginWrite(writer, first_value);
+}
+
+template <class T>
+void WriteValue(DlbaEncoder &encoder, WriteStream &writer, const T &value) {
+	throw InternalException("Can't write type to DELTA_LENGTH_BYTE_ARRAY column");
+}
+
+template <>
+void WriteValue(DlbaEncoder &encoder, WriteStream &writer, const string_t &value) {
+	encoder.WriteValue(writer, value);
+}
+
+// helpers to get size from strings
+template <class SRC>
+static idx_t GetDlbaStringSize(const SRC &src_value) {
+	return 0;
+}
+
+template <>
+idx_t GetDlbaStringSize(const string_t &src_value) {
+	return src_value.GetSize();
+}
+
+} // namespace dlba_encoder
+
+namespace bss_encoder {
+
+template <class T>
+void WriteValue(BssEncoder &encoder, const T &value) {
+	throw InternalException("Can't write type to BYTE_STREAM_SPLIT column");
+}
+
+template <>
+void WriteValue(BssEncoder &encoder, const float &value) {
+	encoder.WriteValue(value);
+}
+
+template <>
+void WriteValue(BssEncoder &encoder, const double &value) {
+	encoder.WriteValue(value);
+}
+
+} // namespace bss_encoder
+
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public BasicColumnWriter {
 public:
@@ -1159,13 +1225,13 @@ public:
 	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 
-		auto result =
-		    make_uniq<StandardWriterPageState<SRC>>(state.total_value_count, state.encoding, state.dictionary);
+		auto result = make_uniq<StandardWriterPageState<SRC, TGT>>(state.total_value_count, state.total_string_size,
+		                                                           state.encoding, state.dictionary);
 		return std::move(result);
 	}
 
 	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override {
-		auto &page_state = state_p->Cast<StandardWriterPageState<SRC>>();
+		auto &page_state = state_p->Cast<StandardWriterPageState<SRC, TGT>>();
 		switch (page_state.encoding) {
 		case Encoding::DELTA_BINARY_PACKED:
 			if (!page_state.dbp_initialized) {
@@ -1182,7 +1248,15 @@ public:
 				return;
 			}
 			page_state.dict_encoder.FinishWrite(temp_writer);
-
+			break;
+		case Encoding::DELTA_LENGTH_BYTE_ARRAY:
+			if (!page_state.dlba_initialized) {
+				dlba_encoder::BeginWrite<string_t>(page_state.dlba_encoder, temp_writer, string_t(""));
+			}
+			page_state.dlba_encoder.FinishWrite(temp_writer);
+			break;
+		case Encoding::BYTE_STREAM_SPLIT:
+			page_state.bss_encoder.FinishWrite(temp_writer);
 			break;
 		case Encoding::PLAIN:
 			break;
@@ -1220,14 +1294,15 @@ public:
 				continue;
 			}
 			if (validity.RowIsValid(vector_index)) {
+				const auto &src_value = data_ptr[vector_index];
 				if (state.dictionary.size() <= writer.DictionarySizeLimit()) {
-					const auto &src_value = data_ptr[vector_index];
 					if (state.dictionary.find(src_value) == state.dictionary.end()) {
 						state.dictionary[src_value] = new_value_index;
 						new_value_index++;
 					}
 				}
 				state.total_value_count++;
+				state.total_string_size += dlba_encoder::GetDlbaStringSize(src_value);
 			}
 			vector_index++;
 		}
@@ -1238,9 +1313,27 @@ public:
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 		if (state.dictionary.size() == 0 || state.dictionary.size() > writer.DictionarySizeLimit()) {
-			// special handling for int column: dpb, otherwise plain
-			state.encoding = (type == Type::type::INT32 || type == Type::type::INT64) ? Encoding::DELTA_BINARY_PACKED
-			                                                                          : Encoding::PLAIN;
+			if (writer.GetParquetVersion() == ParquetVersion::V1) {
+				// Can't do the cool stuff for V1
+				state.encoding = Encoding::PLAIN;
+			} else {
+				// If we aren't doing dictionary encoding, these encodings are virtually always better than PLAIN
+				switch (type) {
+				case Type::type::INT32:
+				case Type::type::INT64:
+					state.encoding = Encoding::DELTA_BINARY_PACKED;
+					break;
+				case Type::type::BYTE_ARRAY:
+					state.encoding = Encoding::DELTA_LENGTH_BYTE_ARRAY;
+					break;
+				case Type::type::FLOAT:
+				case Type::type::DOUBLE:
+					state.encoding = Encoding::BYTE_STREAM_SPLIT;
+					break;
+				default:
+					state.encoding = Encoding::PLAIN;
+				}
+			}
 			state.dictionary.clear();
 		}
 	}
@@ -1261,7 +1354,7 @@ public:
 
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
-		auto &page_state = page_state_p->Cast<StandardWriterPageState<SRC>>();
+		auto &page_state = page_state_p->Cast<StandardWriterPageState<SRC, TGT>>();
 
 		const auto &mask = FlatVector::Validity(input_column);
 		const auto *data_ptr = FlatVector::GetData<SRC>(input_column);
@@ -1287,7 +1380,6 @@ public:
 			}
 			break;
 		}
-
 		case Encoding::DELTA_BINARY_PACKED: {
 			idx_t r = chunk_start;
 			if (!page_state.dbp_initialized) {
@@ -1312,6 +1404,44 @@ public:
 				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
 				OP::template HandleStats<SRC, TGT>(stats, target_value);
 				dbp_encoder::WriteValue(page_state.dbp_encoder, temp_writer, target_value);
+			}
+			break;
+		}
+		case Encoding::DELTA_LENGTH_BYTE_ARRAY: {
+			idx_t r = chunk_start;
+			if (!page_state.dlba_initialized) {
+				// find first non-null value
+				for (; r < chunk_end; r++) {
+					if (!mask.RowIsValid(r)) {
+						continue;
+					}
+					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+					OP::template HandleStats<SRC, TGT>(stats, target_value);
+					dlba_encoder::BeginWrite(page_state.dlba_encoder, temp_writer, target_value);
+					page_state.dlba_initialized = true;
+					r++; // skip over
+					break;
+				}
+			}
+
+			for (; r < chunk_end; r++) {
+				if (!mask.RowIsValid(r)) {
+					continue;
+				}
+				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+				OP::template HandleStats<SRC, TGT>(stats, target_value);
+				dlba_encoder::WriteValue(page_state.dlba_encoder, temp_writer, target_value);
+			}
+			break;
+		}
+		case Encoding::BYTE_STREAM_SPLIT: {
+			for (idx_t r = chunk_start; r < chunk_end; r++) {
+				if (!mask.RowIsValid(r)) {
+					continue;
+				}
+				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+				OP::template HandleStats<SRC, TGT>(stats, target_value);
+				bss_encoder::WriteValue(page_state.bss_encoder, target_value);
 			}
 			break;
 		}
@@ -1340,8 +1470,9 @@ public:
 		    make_uniq<ParquetBloomFilter>(state.dictionary.size(), writer.BloomFilterFalsePositiveRatio());
 
 		// first write the contents of the dictionary page to a temporary buffer
-		auto temp_writer = make_uniq<MemoryStream>(MaxValue<idx_t>(
-		    NextPowerOfTwo(state.dictionary.size() * sizeof(TGT)), MemoryStream::DEFAULT_INITIAL_CAPACITY));
+		auto temp_writer = make_uniq<MemoryStream>(
+		    Allocator::Get(writer.GetContext()), MaxValue<idx_t>(NextPowerOfTwo(state.dictionary.size() * sizeof(TGT)),
+		                                                         MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		for (idx_t r = 0; r < values.size(); r++) {
 			const TGT target_value = OP::template Operation<SRC, TGT>(values[r]);
 			// update the statistics
@@ -1715,7 +1846,7 @@ public:
 		auto enum_count = EnumType::GetSize(enum_type);
 		auto string_values = FlatVector::GetData<string_t>(enum_values);
 		// first write the contents of the dictionary page to a temporary buffer
-		auto temp_writer = make_uniq<MemoryStream>();
+		auto temp_writer = make_uniq<MemoryStream>(Allocator::Get(writer.GetContext()));
 		for (idx_t r = 0; r < enum_count; r++) {
 			D_ASSERT(!FlatVector::IsNull(enum_values, r));
 			// update the statistics
@@ -2119,8 +2250,9 @@ void ArrayColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t 
 struct double_na_equal {
 	double_na_equal() : val(0) {
 	}
-	double_na_equal(const double val_p) : val(val_p) {
+	explicit double_na_equal(const double val_p) : val(val_p) {
 	}
+	// NOLINTNEXTLINE: allow implicit conversion to double
 	operator double() const {
 		return val;
 	}
@@ -2137,8 +2269,9 @@ struct double_na_equal {
 struct float_na_equal {
 	float_na_equal() : val(0) {
 	}
-	float_na_equal(const float val_p) : val(val_p) {
+	explicit float_na_equal(const float val_p) : val(val_p) {
 	}
+	// NOLINTNEXTLINE: allow implicit conversion to float
 	operator float() const {
 		return val;
 	}

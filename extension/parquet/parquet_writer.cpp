@@ -321,12 +321,12 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
                              const vector<pair<string, string>> &kv_metadata,
                              shared_ptr<ParquetEncryptionConfig> encryption_config_p, idx_t dictionary_size_limit_p,
                              double bloom_filter_false_positive_ratio_p, int64_t compression_level_p,
-                             bool debug_use_openssl_p)
-    : file_name(std::move(file_name_p)), sql_types(std::move(types_p)), column_names(std::move(names_p)), codec(codec),
-      field_ids(std::move(field_ids_p)), encryption_config(std::move(encryption_config_p)),
-      dictionary_size_limit(dictionary_size_limit_p),
+                             bool debug_use_openssl_p, ParquetVersion parquet_version)
+    : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
+      column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
+      encryption_config(std::move(encryption_config_p)), dictionary_size_limit(dictionary_size_limit_p),
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
-      debug_use_openssl(debug_use_openssl_p) {
+      debug_use_openssl(debug_use_openssl_p), parquet_version(parquet_version) {
 
 	// initialize the file writer
 	writer = make_uniq<BufferedFileWriter>(fs, file_name.c_str(),
@@ -395,7 +395,6 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	// set up a new row group for this chunk collection
 	auto &row_group = result.row_group;
 	row_group.num_rows = NumericCast<int64_t>(buffer.Count());
-	row_group.total_byte_size = NumericCast<int64_t>(buffer.SizeInBytes());
 	row_group.__isset.file_offset = true;
 
 	auto &states = result.states;
@@ -534,7 +533,7 @@ void ParquetWriter::Finalize() {
 		// write nonsense bloom filter header
 		duckdb_parquet::BloomFilterHeader filter_header;
 		auto bloom_filter_bytes = bloom_filter_entry.bloom_filter->Get();
-		filter_header.numBytes = bloom_filter_bytes->len;
+		filter_header.numBytes = NumericCast<int32_t>(bloom_filter_bytes->len);
 		filter_header.algorithm.__set_BLOCK(duckdb_parquet::SplitBlockAlgorithm());
 		filter_header.compression.__set_UNCOMPRESSED(duckdb_parquet::Uncompressed());
 		filter_header.hash.__set_XXHASH(duckdb_parquet::XxHash());
@@ -544,14 +543,15 @@ void ParquetWriter::Finalize() {
 		    file_meta_data.row_groups[bloom_filter_entry.row_group_idx].columns[bloom_filter_entry.column_idx];
 
 		column_chunk.meta_data.__isset.bloom_filter_offset = true;
-		column_chunk.meta_data.bloom_filter_offset = writer->GetTotalWritten();
+		column_chunk.meta_data.bloom_filter_offset = NumericCast<int64_t>(writer->GetTotalWritten());
 
 		auto bloom_filter_header_size = Write(filter_header);
 		// write actual data
 		WriteData(bloom_filter_bytes->ptr, bloom_filter_bytes->len);
 
 		column_chunk.meta_data.__isset.bloom_filter_length = true;
-		column_chunk.meta_data.bloom_filter_length = bloom_filter_header_size + bloom_filter_bytes->len;
+		column_chunk.meta_data.bloom_filter_length =
+		    NumericCast<int32_t>(bloom_filter_header_size + bloom_filter_bytes->len);
 	}
 
 	const auto metadata_start_offset = writer->GetTotalWritten();

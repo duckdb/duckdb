@@ -24,6 +24,8 @@ struct dtime_tz_t; // NOLINT
 
 //! Type used to represent a TIMESTAMP. timestamp_t holds the microseconds since 1970-01-01.
 struct timestamp_t { // NOLINT
+	// NOTE: The unit of value is microseconds for timestamp_t, but it can be
+	// different for subclasses (e.g. it's nanos for timestamp_ns, etc).
 	int64_t value;
 
 	timestamp_t() = default;
@@ -110,7 +112,7 @@ struct timestamp_tz_t : public timestamp_t { // NOLINT
 	}
 };
 
-enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE };
+enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE, ERROR_RANGE };
 
 //! The static Timestamp class holds helper functions for the timestamp types.
 class Timestamp {
@@ -126,8 +128,9 @@ public:
 	//! Convert a string where the offset can also be a time zone string: / [A_Za-z0-9/_]+/
 	//! If has_offset is true, then the result is an instant that was offset from UTC
 	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
-	DUCKDB_API static bool TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
-	                                             string_t &tz, optional_ptr<int32_t> nanos = nullptr);
+	DUCKDB_API static TimestampCastResult TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result,
+	                                                            bool &has_offset, string_t &tz,
+	                                                            optional_ptr<int32_t> nanos = nullptr);
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
 	                                                          optional_ptr<int32_t> nanos = nullptr);
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result);
@@ -189,6 +192,7 @@ public:
 	DUCKDB_API static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
 	//! Convert a timestamp to epoch (in nanoseconds)
 	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
+	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_ns_t timestamp);
 	//! Convert a timestamp to a rounded epoch at a given resolution.
 	DUCKDB_API static int64_t GetEpochRounded(timestamp_t timestamp, const int64_t power_of_ten);
 	//! Convert a timestamp to a Julian Day
@@ -197,10 +201,12 @@ public:
 	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset,
 	                                         int &minute_offset);
 
-	DUCKDB_API static string ConversionError(const string &str);
-	DUCKDB_API static string ConversionError(string_t str);
+	DUCKDB_API static string FormatError(const string &str);
+	DUCKDB_API static string FormatError(string_t str);
 	DUCKDB_API static string UnsupportedTimezoneError(const string &str);
 	DUCKDB_API static string UnsupportedTimezoneError(string_t str);
+	DUCKDB_API static string RangeError(const string &str);
+	DUCKDB_API static string RangeError(string_t str);
 };
 
 } // namespace duckdb

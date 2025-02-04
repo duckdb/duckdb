@@ -20,7 +20,7 @@ JoinFilterPushdownOptimizer::JoinFilterPushdownOptimizer(Optimizer &optimizer) :
 }
 
 bool PushdownJoinFilterExpression(Expression &expr, JoinFilterPushdownColumn &filter) {
-	if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		// not a simple column ref - bail-out
 		return false;
 	}
@@ -174,7 +174,7 @@ void JoinFilterPushdownOptimizer::GenerateJoinFilters(LogicalComparisonJoin &joi
 			// only equality supported for now
 			continue;
 		}
-		if (cond.left->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (cond.left->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			// only bound column ref supported for now
 			continue;
 		}

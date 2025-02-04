@@ -18,10 +18,10 @@ on:
         type: string
   repository_dispatch:
   push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
     paths-ignore:
       - '**'
       - '!.github/workflows/Wasm.yml'
@@ -82,7 +82,7 @@ jobs:
           DUCKDB_GIT_VERSION: ${{ inputs.duckdb_version }}
           WASM_EXTENSIONS: 1
         run: |
-          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang-format-11 cmake
+          sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build cmake
           make configure_ci
 
       - name: Build Wasm module
@@ -99,3 +99,15 @@ jobs:
           path: |
             build/${{ matrix.duckdb_arch }}/extension/*/*.duckdb_extension.wasm
 
+ upload-wasm-extensions:
+    name: Upload Wasm Extensions
+    needs: wasm-extensions
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    strategy:
+      matrix:
+        duckdb_arch: [wasm_mvp, wasm_eh, wasm_threads]
+    with:
+      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
+      duckdb_arch: ${{ matrix.duckdb_arch }}
+      duckdb_sha: ${{ github.sha }}

@@ -54,28 +54,29 @@ static unique_ptr<FunctionData> JsonSerializeBind(ClientContext &context, Scalar
 		if (!arg->IsFoldable()) {
 			throw BinderException("json_serialize_sql: arguments must be constant");
 		}
-		if (arg->alias == "skip_null") {
+		auto &alias = arg->GetAlias();
+		if (alias == "skip_null") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_sql: 'skip_null' argument must be a boolean");
 			}
 			skip_if_null = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-		} else if (arg->alias == "skip_empty") {
+		} else if (alias == "skip_empty") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_sql: 'skip_empty' argument must be a boolean");
 			}
 			skip_if_empty = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-		} else if (arg->alias == "format") {
+		} else if (alias == "format") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_sql: 'format' argument must be a boolean");
 			}
 			format = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
-		} else if (arg->alias == "skip_default") {
+		} else if (alias == "skip_default") {
 			if (arg->return_type.id() != LogicalTypeId::BOOLEAN) {
 				throw BinderException("json_serialize_sql: 'skip_default' argument must be a boolean");
 			}
 			skip_if_default = BooleanValue::Get(ExpressionExecutor::EvaluateScalar(context, *arg));
 		} else {
-			throw BinderException(StringUtil::Format("json_serialize_sql: Unknown argument '%s'", arg->alias));
+			throw BinderException(StringUtil::Format("json_serialize_sql: Unknown argument '%s'", alias));
 		}
 	}
 	return make_uniq<JsonSerializeBindData>(skip_if_null, skip_if_empty, skip_if_default, format);

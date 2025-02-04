@@ -1705,6 +1705,9 @@ ScalarFunctionSet GetGenericDatePartFunction(scalar_function_t date_func, scalar
 	operator_set.AddFunction(ScalarFunction({LogicalType::TIMESTAMP}, LogicalType::BIGINT, std::move(ts_func), nullptr,
 	                                        nullptr, ts_stats, DATE_CACHE));
 	operator_set.AddFunction(ScalarFunction({LogicalType::INTERVAL}, LogicalType::BIGINT, std::move(interval_func)));
+	for (auto &func : operator_set.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
 	return operator_set;
 }
 
@@ -2019,7 +2022,11 @@ ScalarFunctionSet QuarterFun::GetFunctions() {
 }
 
 ScalarFunctionSet DayOfWeekFun::GetFunctions() {
-	return GetDatePartFunction<DatePart::DayOfWeekOperator>();
+	auto set = GetDatePartFunction<DatePart::DayOfWeekOperator>();
+	for (auto &func : set.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
+	return set;
 }
 
 ScalarFunctionSet ISODayOfWeekFun::GetFunctions() {
@@ -2046,9 +2053,14 @@ ScalarFunctionSet TimezoneFun::GetFunctions() {
 	auto operator_set = GetDatePartFunction<DatePart::TimezoneOperator>();
 
 	//	PG also defines timezone(INTERVAL, TIME_TZ) => TIME_TZ
-	operator_set.AddFunction(
-	    ScalarFunction({LogicalType::INTERVAL, LogicalType::TIME_TZ}, LogicalType::TIME_TZ,
-	                   DatePart::TimezoneOperator::BinaryFunction<interval_t, dtime_tz_t, dtime_tz_t>));
+	ScalarFunction function({LogicalType::INTERVAL, LogicalType::TIME_TZ}, LogicalType::TIME_TZ,
+	                        DatePart::TimezoneOperator::BinaryFunction<interval_t, dtime_tz_t, dtime_tz_t>);
+
+	operator_set.AddFunction(function);
+
+	for (auto &func : operator_set.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
 
 	return operator_set;
 }
@@ -2065,6 +2077,19 @@ ScalarFunctionSet EpochFun::GetFunctions() {
 	return GetTimePartFunction<DatePart::EpochOperator, double>(LogicalType::DOUBLE);
 }
 
+struct GetEpochNanosOperator {
+	static int64_t Operation(timestamp_ns_t timestamp) {
+		return Timestamp::GetEpochNanoSeconds(timestamp);
+	}
+};
+
+static void ExecuteGetNanosFromTimestampNs(DataChunk &input, ExpressionState &state, Vector &result) {
+	D_ASSERT(input.ColumnCount() == 1);
+
+	auto func = GetEpochNanosOperator::Operation;
+	UnaryExecutor::Execute<timestamp_ns_t, int64_t>(input.data[0], result, input.size(), func);
+}
+
 ScalarFunctionSet EpochNsFun::GetFunctions() {
 	using OP = DatePart::EpochNanosecondsOperator;
 	auto operator_set = GetTimePartFunction<OP>();
@@ -2074,6 +2099,9 @@ ScalarFunctionSet EpochNsFun::GetFunctions() {
 	auto tstz_stats = OP::template PropagateStatistics<timestamp_t>;
 	operator_set.AddFunction(
 	    ScalarFunction({LogicalType::TIMESTAMP_TZ}, LogicalType::BIGINT, tstz_func, nullptr, nullptr, tstz_stats));
+
+	operator_set.AddFunction(
+	    ScalarFunction({LogicalType::TIMESTAMP_NS}, LogicalType::BIGINT, ExecuteGetNanosFromTimestampNs));
 	return operator_set;
 }
 
@@ -2224,6 +2252,10 @@ ScalarFunctionSet DatePartFun::GetFunctions() {
 	date_part.AddFunction(StructDatePart::GetFunction<dtime_t>(LogicalType::TIME));
 	date_part.AddFunction(StructDatePart::GetFunction<interval_t>(LogicalType::INTERVAL));
 	date_part.AddFunction(StructDatePart::GetFunction<dtime_tz_t>(LogicalType::TIME_TZ));
+
+	for (auto &func : date_part.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
 
 	return date_part;
 }

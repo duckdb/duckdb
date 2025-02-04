@@ -326,6 +326,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	// require command
 	string param = StringUtil::Lower(params[0]);
 	// os specific stuff
+
+	if (param == "notmusl") {
+#ifdef __MUSL_ENABLED__
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
 	if (param == "notmingw") {
 #ifdef __MINGW32__
 		return RequireResult::MISSING;
@@ -407,6 +415,22 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 			return RequireResult::MISSING;
 		}
 		if (limit.GetIndex() < required_limit) {
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
+	}
+
+	if (param == "disk_space") {
+		if (params.size() != 2) {
+			parser.Fail("require disk_space requires a parameter");
+		}
+		// require a minimum amount of disk space
+		auto required_limit = DBConfig::ParseMemoryLimit(params[1]);
+		auto available_space = FileSystem::GetAvailableDiskSpace(".");
+		if (!available_space.IsValid()) {
+			return RequireResult::MISSING;
+		}
+		if (available_space.GetIndex() < required_limit) {
 			return RequireResult::MISSING;
 		}
 		return RequireResult::PRESENT;

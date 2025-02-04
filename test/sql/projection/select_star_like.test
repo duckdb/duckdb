@@ -45,6 +45,22 @@ SELECT * EXCLUDE (col1) SIMILAR TO '.*col.*' FROM integers
 ----
 2
 
+# SIMILAR TO alias can use regex groups
+query II
+SELECT c2, c1 FROM (
+SELECT * SIMILAR TO 'number(\d+)' AS 'c\1' FROM (SELECT 1 AS number1, 2 AS number2, 3 AS end)
+)
+----
+2	1
+
+# LIKE
+query I
+SELECT val FROM (
+SELECT * NOT LIKE '%number%' AS val FROM (SELECT 1 AS number1, 2 AS number2, 3 AS end)
+)
+----
+3
+
 # non-constant pattern
 statement error
 SELECT * SIMILAR TO pattern FROM integers, (SELECT '.*col.*') t(pattern)
@@ -62,3 +78,9 @@ statement error
 SELECT * REPLACE (col1 + 42 AS col1) SIMILAR TO '.*col.*' FROM integers
 ----
 Replace list cannot be combined with a filtering operation
+
+# rename
+statement error
+SELECT * RENAME (col1 AS other_) SIMILAR TO '.*col.*' FROM integers
+----
+Rename list cannot be combined with a filtering operation

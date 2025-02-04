@@ -12,7 +12,7 @@
 namespace duckdb {
 
 string GetColumnsStringValue(ParsedExpression &expr) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		return colref.GetColumnName();
 	} else {
@@ -43,6 +43,11 @@ bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpressi
 				// '*' inside COLUMNS can not have a REPLACE list
 				throw BinderException(
 				    "STAR expression with REPLACE list is only allowed as the root element of COLUMNS");
+			}
+			if (!current_star.rename_list.empty()) {
+				// '*' inside COLUMNS can not have a REPLACE list
+				throw BinderException(
+				    "STAR expression with RENAME list is only allowed as the root element of COLUMNS");
 			}
 
 			// '*' expression inside a COLUMNS - convert to a constant list of strings (column names)
@@ -86,10 +91,10 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 	D_ASSERT(expr);
 	if (StarExpression::IsColumns(*expr) || StarExpression::IsStar(*expr)) {
 		D_ASSERT(replacement);
-		auto alias = expr->alias;
+		auto alias = expr->GetAlias();
 		expr = replacement->Copy();
 		if (!alias.empty()) {
-			expr->alias = std::move(alias);
+			expr->SetAlias(std::move(alias));
 		}
 		return;
 	}
@@ -136,7 +141,7 @@ static string ReplaceColumnsAlias(const string &alias, const string &column_name
 
 void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	// detect "* LIKE [literal]" and similar expressions
-	if (root->expression_class != ExpressionClass::FUNCTION) {
+	if (root->GetExpressionClass() != ExpressionClass::FUNCTION) {
 		return;
 	}
 	auto &function = root->Cast<FunctionExpression>();
@@ -145,7 +150,7 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 	}
 	auto &left = function.children[0];
 	// expression must have a star on the LHS, and a literal on the RHS
-	if (left->expression_class != ExpressionClass::STAR) {
+	if (left->GetExpressionClass() != ExpressionClass::STAR) {
 		return;
 	}
 	auto &star = left->Cast<StarExpression>();
@@ -159,39 +164,50 @@ void TryTransformStarLike(unique_ptr<ParsedExpression> &root) {
 		throw BinderException(*root, "Function \"%s\" cannot be applied to a star expression", function.function_name);
 	}
 	auto &right = function.children[1];
-	if (right->expression_class != ExpressionClass::CONSTANT) {
+	if (right->GetExpressionClass() != ExpressionClass::CONSTANT) {
 		throw BinderException(*root, "Pattern applied to a star expression must be a constant");
+	}
+	if (!star.rename_list.empty()) {
+		throw BinderException(*root, "Rename list cannot be combined with a filtering operation");
 	}
 	if (!star.replace_list.empty()) {
 		throw BinderException(*root, "Replace list cannot be combined with a filtering operation");
 	}
-	// generate a columns expression
-	// "* LIKE '%literal%'
-	// -> COLUMNS(list_filter(*, x -> x LIKE '%literal%'))
+	auto original_alias = root->GetAlias();
 	auto star_expr = std::move(left);
+	unique_ptr<ParsedExpression> child_expr;
+	if (function.function_name == "regexp_full_match" && star.exclude_list.empty()) {
+		// * SIMILAR TO '[regex]' is equivalent to COLUMNS('[regex]') so we can just move the expression directly
+		child_expr = std::move(right);
+	} else {
+		// for other expressions -> generate a columns expression
+		// "* LIKE '%literal%'
+		// -> COLUMNS(list_filter(*, x -> x LIKE '%literal%'))
+		auto lhs = make_uniq<ColumnRefExpression>("__lambda_col");
+		function.children[0] = lhs->Copy();
 
-	auto lhs = make_uniq<ColumnRefExpression>("__lambda_col");
-	function.children[0] = lhs->Copy();
-
-	auto lambda = make_uniq<LambdaExpression>(std::move(lhs), std::move(root));
-	vector<unique_ptr<ParsedExpression>> filter_children;
-	filter_children.push_back(std::move(star_expr));
-	filter_children.push_back(std::move(lambda));
-	auto list_filter = make_uniq<FunctionExpression>("list_filter", std::move(filter_children));
+		auto lambda = make_uniq<LambdaExpression>(std::move(lhs), std::move(root));
+		vector<unique_ptr<ParsedExpression>> filter_children;
+		filter_children.push_back(std::move(star_expr));
+		filter_children.push_back(std::move(lambda));
+		auto list_filter = make_uniq<FunctionExpression>("list_filter", std::move(filter_children));
+		child_expr = std::move(list_filter);
+	}
 
 	auto columns_expr = make_uniq<StarExpression>();
 	columns_expr->columns = true;
-	columns_expr->expr = std::move(list_filter);
+	columns_expr->expr = std::move(child_expr);
+	columns_expr->SetAlias(std::move(original_alias));
 	root = std::move(columns_expr);
 }
 
 optional_ptr<ParsedExpression> Binder::GetResolvedColumnExpression(ParsedExpression &root_expr) {
 	optional_ptr<ParsedExpression> expr = &root_expr;
 	while (expr) {
-		if (expr->type == ExpressionType::COLUMN_REF) {
+		if (expr->GetExpressionType() == ExpressionType::COLUMN_REF) {
 			break;
 		}
-		if (expr->type == ExpressionType::OPERATOR_COALESCE) {
+		if (expr->GetExpressionType() == ExpressionType::OPERATOR_COALESCE) {
 			expr = expr->Cast<OperatorExpression>().children[0].get();
 		} else {
 			// unknown expression
@@ -320,10 +336,10 @@ void Binder::ExpandStarExpression(unique_ptr<ParsedExpression> expr,
 			auto expr = GetResolvedColumnExpression(*star_list[i]);
 			if (expr) {
 				auto &colref = expr->Cast<ColumnRefExpression>();
-				if (new_expr->alias.empty()) {
-					new_expr->alias = colref.GetColumnName();
+				if (new_expr->GetAlias().empty()) {
+					new_expr->SetAlias(colref.GetColumnName());
 				} else {
-					new_expr->alias = ReplaceColumnsAlias(new_expr->alias, colref.GetColumnName(), regex.get());
+					new_expr->SetAlias(ReplaceColumnsAlias(new_expr->GetAlias(), colref.GetColumnName(), regex.get()));
 				}
 			}
 		}

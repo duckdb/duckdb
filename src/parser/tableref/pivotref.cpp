@@ -143,8 +143,8 @@ string PivotRef::ToString() const {
 				result += ", ";
 			}
 			result += aggregates[aggr_idx]->ToString();
-			if (!aggregates[aggr_idx]->alias.empty()) {
-				result += " AS " + KeywordHelper::WriteOptionallyQuoted(aggregates[aggr_idx]->alias);
+			if (!aggregates[aggr_idx]->GetAlias().empty()) {
+				result += " AS " + KeywordHelper::WriteOptionallyQuoted(aggregates[aggr_idx]->GetAlias());
 			}
 		}
 	} else {

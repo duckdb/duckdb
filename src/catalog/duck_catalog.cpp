@@ -14,7 +14,7 @@ namespace duckdb {
 
 DuckCatalog::DuckCatalog(AttachedDatabase &db)
     : Catalog(db), dependency_manager(make_uniq<DependencyManager>(*this)),
-      schemas(make_uniq<CatalogSet>(*this, make_uniq<DefaultSchemaGenerator>(*this))) {
+      schemas(make_uniq<CatalogSet>(*this, IsSystemCatalog() ? make_uniq<DefaultSchemaGenerator>(*this) : nullptr)) {
 }
 
 DuckCatalog::~DuckCatalog() {
@@ -56,6 +56,10 @@ optional_ptr<DependencyManager> DuckCatalog::GetDependencyManager() {
 //===--------------------------------------------------------------------===//
 optional_ptr<CatalogEntry> DuckCatalog::CreateSchemaInternal(CatalogTransaction transaction, CreateSchemaInfo &info) {
 	LogicalDependencyList dependencies;
+
+	if (!info.internal && DefaultSchemaGenerator::IsDefaultSchema(info.schema)) {
+		return nullptr;
+	}
 	auto entry = make_uniq<DuckSchemaEntry>(*this, info);
 	auto result = entry.get();
 	if (!schemas->CreateEntry(transaction, info.schema, std::move(entry), dependencies)) {

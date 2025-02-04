@@ -21,6 +21,7 @@ from .statement import (
     Sleep,
     SleepUnit,
     Skip,
+    Unzip,
     SortStyle,
     Unskip,
 )
@@ -332,9 +333,9 @@ class QueryResult:
                 hash_compare_error = values[0] != hash_value
 
             if hash_compare_error:
-                expected_result = self.result_label_map.get(query_label)
-                logger.wrong_result_hash(expected_result, self)
-                self.fail_query(query)
+                expected_result = runner.result_label_map.get(query_label)
+                # logger.wrong_result_hash(expected_result, self)
+                context.fail(query)
 
             assert not hash_compare_error
 
@@ -764,6 +765,7 @@ class SQLLogicContext:
             Restart: self.execute_restart,
             HashThreshold: self.execute_hash_threshold,
             Set: self.execute_set,
+            Unzip: self.execute_unzip,
             Loop: self.execute_loop,
             Foreach: self.execute_foreach,
             Endloop: None,  # <-- should never be encountered outside of Loop/Foreach
@@ -899,6 +901,18 @@ class SQLLogicContext:
 
     def execute_skip(self, statement: Skip):
         self.runner.skip()
+
+    def execute_unzip(self, statement: Unzip):
+        import gzip
+        import shutil
+
+        source = self.replace_keywords(statement.source)
+        destination = self.replace_keywords(statement.destination)
+
+        with gzip.open(source, 'rb') as f_in:
+            with open(destination, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        print(f"Extracted to '{destination}'")
 
     def execute_unskip(self, statement: Unskip):
         self.runner.unskip()

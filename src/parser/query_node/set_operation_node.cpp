@@ -5,6 +5,9 @@
 
 namespace duckdb {
 
+SetOperationNode::SetOperationNode() : QueryNode(QueryNodeType::SET_OPERATION_NODE) {
+}
+
 string SetOperationNode::ToString() const {
 	string result;
 	result = cte_map.ToString();
@@ -61,6 +64,52 @@ unique_ptr<QueryNode> SetOperationNode::Copy() const {
 	result->right = right->Copy();
 	this->CopyProperties(*result);
 	return std::move(result);
+}
+
+SetOperationNode::SetOperationNode(SetOperationType setop_type, unique_ptr<QueryNode> left, unique_ptr<QueryNode> right,
+                                   vector<unique_ptr<QueryNode>> children, bool setop_all)
+    : QueryNode(QueryNodeType::SET_OPERATION_NODE), setop_type(setop_type), setop_all(setop_all) {
+	if (left && right) {
+		// simple case - left/right are supplied
+		this->left = std::move(left);
+		this->right = std::move(right);
+		return;
+	}
+	if (children.size() == 2) {
+		this->left = std::move(children[0]);
+		this->right = std::move(children[1]);
+	}
+	// we have multiple children - we need to construct a tree of set operation nodes
+	if (children.size() <= 1) {
+		throw SerializationException("Set Operation requires at least 2 children");
+	}
+	if (setop_type != SetOperationType::UNION) {
+		throw SerializationException("Multiple children in set-operations are only supported for UNION");
+	}
+	// construct a balanced tree from the union
+	while (children.size() > 2) {
+		vector<unique_ptr<QueryNode>> new_children;
+		for (idx_t i = 0; i < children.size(); i += 2) {
+			if (i + 1 == children.size()) {
+				new_children.push_back(std::move(children[i]));
+			} else {
+				vector<unique_ptr<QueryNode>> empty_children;
+				auto setop_node =
+				    make_uniq<SetOperationNode>(setop_type, std::move(children[i]), std::move(children[i + 1]),
+				                                std::move(empty_children), setop_all);
+				new_children.push_back(std::move(setop_node));
+			}
+		}
+		children = std::move(new_children);
+	}
+	// two children left - fill in the left/right of this node
+	this->left = std::move(children[0]);
+	this->right = std::move(children[1]);
+}
+
+vector<unique_ptr<QueryNode>> SetOperationNode::SerializeChildNodes() const {
+	// we always serialize children as left/right currently
+	return vector<unique_ptr<QueryNode>>();
 }
 
 } // namespace duckdb

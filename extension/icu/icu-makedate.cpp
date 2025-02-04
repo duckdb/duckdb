@@ -9,6 +9,7 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "include/icu-casts.hpp"
 #include "include/icu-datefunc.hpp"
 #include "include/icu-datetrunc.hpp"
 
@@ -16,55 +17,58 @@
 
 namespace duckdb {
 
-struct ICUMakeDate : public ICUDateFunc {
-	static inline date_t Operation(icu::Calendar *calendar, timestamp_t instant) {
-		if (!Timestamp::IsFinite(instant)) {
-			return Timestamp::GetDate(instant);
-		}
-
-		// Extract the time zone parts
-		SetTime(calendar, instant);
-		const auto era = ExtractField(calendar, UCAL_ERA);
-		const auto year = ExtractField(calendar, UCAL_YEAR);
-		const auto mm = ExtractField(calendar, UCAL_MONTH) + 1;
-		const auto dd = ExtractField(calendar, UCAL_DATE);
-
-		const auto yyyy = era ? year : (-year + 1);
-		date_t result;
-		if (!Date::TryFromDate(yyyy, mm, dd, result)) {
-			throw ConversionException("Unable to convert TIMESTAMPTZ to DATE");
-		}
-
-		return result;
+date_t ICUMakeDate::Operation(icu::Calendar *calendar, timestamp_t instant) {
+	if (!Timestamp::IsFinite(instant)) {
+		return Timestamp::GetDate(instant);
 	}
 
-	static bool CastToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = parameters.cast_data->Cast<CastData>();
-		auto &info = cast_data.info->Cast<BindData>();
-		CalendarPtr calendar(info.calendar->clone());
+	// Extract the time zone parts
+	SetTime(calendar, instant);
+	const auto era = ExtractField(calendar, UCAL_ERA);
+	const auto year = ExtractField(calendar, UCAL_YEAR);
+	const auto mm = ExtractField(calendar, UCAL_MONTH) + 1;
+	const auto dd = ExtractField(calendar, UCAL_DATE);
 
-		UnaryExecutor::Execute<timestamp_t, date_t>(
-		    source, result, count, [&](timestamp_t input) { return Operation(calendar.get(), input); });
-		return true;
+	const auto yyyy = era ? year : (-year + 1);
+	date_t result;
+	if (!Date::TryFromDate(yyyy, mm, dd, result)) {
+		throw ConversionException("Unable to convert TIMESTAMPTZ to DATE");
 	}
 
-	static BoundCastInfo BindCastToDate(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-		if (!input.context) {
-			throw InternalException("Missing context for TIMESTAMPTZ to DATE cast.");
-		}
+	return result;
+}
 
-		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
+date_t ICUMakeDate::ToDate(ClientContext &context, timestamp_t instant) {
+	ICUDateFunc::BindData data(context);
+	return Operation(data.calendar.get(), instant);
+}
 
-		return BoundCastInfo(CastToDate, std::move(cast_data));
+bool ICUMakeDate::CastToDate(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto &cast_data = parameters.cast_data->Cast<CastData>();
+	auto &info = cast_data.info->Cast<BindData>();
+	CalendarPtr calendar(info.calendar->clone());
+
+	UnaryExecutor::Execute<timestamp_t, date_t>(source, result, count,
+	                                            [&](timestamp_t input) { return Operation(calendar.get(), input); });
+	return true;
+}
+
+BoundCastInfo ICUMakeDate::BindCastToDate(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
+	if (!input.context) {
+		throw InternalException("Missing context for TIMESTAMPTZ to DATE cast.");
 	}
 
-	static void AddCasts(DatabaseInstance &db) {
-		auto &config = DBConfig::GetConfig(db);
-		auto &casts = config.GetCastFunctions();
+	auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
-		casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::DATE, BindCastToDate);
-	}
-};
+	return BoundCastInfo(CastToDate, std::move(cast_data));
+}
+
+void ICUMakeDate::AddCasts(DatabaseInstance &db) {
+	auto &config = DBConfig::GetConfig(db);
+	auto &casts = config.GetCastFunctions();
+
+	casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::DATE, BindCastToDate);
+}
 
 struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 	template <typename T>
@@ -94,8 +98,13 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 	template <typename T>
 	static void FromMicros(DataChunk &input, ExpressionState &state, Vector &result) {
-		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(),
-		                                       [&](T micros) { return timestamp_t(micros); });
+		UnaryExecutor::Execute<T, timestamp_t>(input.data[0], result, input.size(), [&](T micros) {
+			const auto result = timestamp_t(micros);
+			if (!Timestamp::IsFinite(result)) {
+				throw ConversionException("Timestamp microseconds out of range: %ld", micros);
+			}
+			return result;
+		});
 	}
 
 	template <typename T>
@@ -137,21 +146,27 @@ struct ICUMakeTimestampTZFunc : public ICUDateFunc {
 
 	template <typename TA>
 	static ScalarFunction GetSenaryFunction(const LogicalTypeId &type) {
-		return ScalarFunction({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
-		                      Execute<TA>, Bind);
+		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE}, LogicalType::TIMESTAMP_TZ,
+		                        Execute<TA>, Bind);
+		BaseScalarFunction::SetReturnsError(function);
+		return function;
 	}
 
 	template <typename TA>
 	static ScalarFunction GetSeptenaryFunction(const LogicalTypeId &type) {
-		return ScalarFunction({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
-		                      LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
+		ScalarFunction function({type, type, type, type, type, LogicalType::DOUBLE, LogicalType::VARCHAR},
+		                        LogicalType::TIMESTAMP_TZ, Execute<TA>, Bind);
+		BaseScalarFunction::SetReturnsError(function);
+		return function;
 	}
 
 	static void AddFunction(const string &name, DatabaseInstance &db) {
 		ScalarFunctionSet set(name);
 		set.AddFunction(GetSenaryFunction<int64_t>(LogicalType::BIGINT));
 		set.AddFunction(GetSeptenaryFunction<int64_t>(LogicalType::BIGINT));
-		set.AddFunction(ScalarFunction({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>));
+		ScalarFunction function({LogicalType::BIGINT}, LogicalType::TIMESTAMP_TZ, FromMicros<int64_t>);
+		BaseScalarFunction::SetReturnsError(function);
+		set.AddFunction(function);
 		ExtensionUtil::RegisterFunction(db, set);
 	}
 };

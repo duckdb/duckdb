@@ -169,6 +169,8 @@ void TupleDataCollection::InitializeChunkState(TupleDataChunkState &chunk_state,
 	}
 	InitializeVectorFormat(chunk_state.vector_data, types);
 
+	chunk_state.cached_cast_vectors.clear();
+	chunk_state.cached_cast_vector_cache.clear();
 	for (auto &col : column_ids) {
 		auto &type = types[col];
 		if (TypeVisitor::Contains(type, LogicalTypeId::ARRAY)) {

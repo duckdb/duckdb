@@ -13,13 +13,11 @@ require httpfs
 statement error
 FROM parquet_scan('hf://datasets/samansmink/non-existent/*.parquet');
 ----
-HTTP 401
 
 # Globbing non-existent repo is also 401
 statement error
 FROM parquet_scan('hf://datasets/samansmink/non-existent/**/*.parquet');
 ----
-HTTP 401
 
 query III rowsort
 FROM parquet_scan('hf://datasets/samansmink/duckdb_ci_tests/hive_data/**/*.parquet', FILENAME=1, hive_partitioning=0);

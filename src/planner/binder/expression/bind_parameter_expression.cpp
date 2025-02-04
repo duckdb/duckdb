@@ -24,7 +24,7 @@ BindResult ExpressionBinder::BindExpression(ParameterExpression &expr, idx_t dep
 		bool is_literal =
 		    return_type.id() == LogicalTypeId::INTEGER_LITERAL || return_type.id() == LogicalTypeId::STRING_LITERAL;
 		auto constant = make_uniq<BoundConstantExpression>(data.GetValue());
-		constant->alias = expr.alias;
+		constant->SetAlias(expr.GetAlias());
 		if (is_literal) {
 			return BindResult(std::move(constant));
 		}

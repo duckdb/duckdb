@@ -20,8 +20,8 @@ string_t FSSTPrimitives::DecompressValue(void *duckdb_fsst_decoder, Vector &resu
 	                                     decompressed_string_size);
 }
 
-Value FSSTPrimitives::DecompressValue(void *duckdb_fsst_decoder, const char *compressed_string,
-                                      const idx_t compressed_string_len, vector<unsigned char> &decompress_buffer) {
+string FSSTPrimitives::DecompressValue(void *duckdb_fsst_decoder, const char *compressed_string,
+                                       const idx_t compressed_string_len, vector<unsigned char> &decompress_buffer) {
 
 	auto compressed_string_ptr = (unsigned char *)compressed_string; // NOLINT
 	auto fsst_decoder = reinterpret_cast<duckdb_fsst_decoder_t *>(duckdb_fsst_decoder);
@@ -30,7 +30,7 @@ Value FSSTPrimitives::DecompressValue(void *duckdb_fsst_decoder, const char *com
 
 	D_ASSERT(!decompress_buffer.empty());
 	D_ASSERT(decompressed_string_size <= decompress_buffer.size() - 1);
-	return Value(string(char_ptr_cast(decompress_buffer.data()), decompressed_string_size));
+	return string(char_ptr_cast(decompress_buffer.data()), decompressed_string_size);
 }
 
 } // namespace duckdb

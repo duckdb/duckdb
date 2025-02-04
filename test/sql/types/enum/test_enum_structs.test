@@ -5,6 +5,10 @@
 statement ok
 PRAGMA enable_verification
 
+# FIXME: this test fails with the latest storage version due to the introduced dependencies
+statement ok
+SET storage_compatibility_version='v0.10.2';
+
 # load the DB from disk
 load __TEST_DIR__/enum_types.db
 

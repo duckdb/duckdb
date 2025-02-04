@@ -31,10 +31,19 @@ else
     echo "Deploying extensions.. (DRY RUN)"
 fi
 
-FILES="$BASE_DIR/*.duckdb_extension"
+if [[ $1 == wasm* ]]; then
+  FILES="$BASE_DIR/*.duckdb_extension.wasm"
+else
+  FILES="$BASE_DIR/*.duckdb_extension"
+fi
+
 for f in $FILES
 do
-    ext_name=`basename $f .duckdb_extension`
+    if [[ $1 == wasm* ]]; then
+      ext_name=`basename $f .duckdb_extension.wasm`
+    else
+      ext_name=`basename $f .duckdb_extension`
+    fi
     echo "found extension: '$ext_name'"
 
     # args: <name> <extension_version> <duckdb_version> <architecture> <s3_bucket> <copy_to_latest> <copy_to_versioned> [<path_to_ext>]

@@ -16,17 +16,20 @@ struct ProgressData {
 	double done = 0.0;
 	double total = 0.0;
 	bool invalid = false;
+
+public:
 	double ProgressDone() const {
 		// ProgressDone requires a valid state
 		D_ASSERT(IsValid());
 
 		return done / total;
 	}
+
 	void Add(const ProgressData &other) {
 		// Add is unchecked, propagating invalid
 		done += other.done;
 		total += other.total;
-		invalid |= other.invalid;
+		invalid = invalid || other.invalid;
 	}
 	void Normalize(const double target = 1.0) {
 		// Normalize checks only `target`, propagating invalid

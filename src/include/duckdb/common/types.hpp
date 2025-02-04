@@ -234,6 +234,7 @@ enum class LogicalTypeId : uint8_t {
 };
 
 struct ExtraTypeInfo;
+struct ExtensionTypeInfo;
 
 struct aggregate_state_t; // NOLINT: mimic std casing
 
@@ -252,7 +253,7 @@ struct LogicalType {
 	inline PhysicalType InternalType() const {
 		return physical_type_;
 	}
-	inline const ExtraTypeInfo *AuxInfo() const {
+	inline const optional_ptr<ExtraTypeInfo> AuxInfo() const {
 		return type_info_.get();
 	}
 	inline bool IsNested() const {
@@ -323,11 +324,11 @@ struct LogicalType {
 	DUCKDB_API void SetAlias(string alias);
 	DUCKDB_API bool HasAlias() const;
 	DUCKDB_API string GetAlias() const;
-	DUCKDB_API void SetModifiers(vector<Value> modifiers);
-	DUCKDB_API bool HasModifiers() const;
-	DUCKDB_API vector<Value> GetModifiersCopy() const;
-	DUCKDB_API optional_ptr<vector<Value>> GetModifiers();
-	DUCKDB_API optional_ptr<const vector<Value>> GetModifiers() const;
+
+	DUCKDB_API bool HasExtensionInfo() const;
+	DUCKDB_API optional_ptr<const ExtensionTypeInfo> GetExtensionInfo() const;
+	DUCKDB_API optional_ptr<ExtensionTypeInfo> GetExtensionInfo();
+	DUCKDB_API void SetExtensionInfo(unique_ptr<ExtensionTypeInfo> info);
 
 	//! Returns the maximum logical type when combining the two types - or throws an exception if combining is not possible
 	DUCKDB_API static LogicalType MaxLogicalType(ClientContext &context, const LogicalType &left, const LogicalType &right);
@@ -345,6 +346,9 @@ struct LogicalType {
 
 	DUCKDB_API bool IsValid() const;
 	DUCKDB_API bool IsComplete() const;
+
+	//! True, if this type supports in-place updates.
+	bool SupportsRegularUpdate() const;
 
 
 private:

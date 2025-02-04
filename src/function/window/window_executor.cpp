@@ -24,7 +24,6 @@ void WindowExecutorBoundsState::UpdateBounds(WindowExecutorGlobalState &gstate, 
 	WindowInputExpression boundary_end(eval_chunk, gstate.executor.boundary_end_idx);
 
 	const auto count = eval_chunk.size();
-	bounds.Reset();
 	state.Bounds(bounds, row_idx, range, count, boundary_start, boundary_end, partition_mask, order_mask);
 }
 
@@ -42,6 +41,17 @@ WindowExecutor::WindowExecutor(BoundWindowExpression &wexpr, ClientContext &cont
 
 	boundary_start_idx = shared.RegisterEvaluate(wexpr.start_expr);
 	boundary_end_idx = shared.RegisterEvaluate(wexpr.end_expr);
+}
+
+void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &eval_chunk, Vector &result, WindowExecutorLocalState &lstate,
+                              WindowExecutorGlobalState &gstate) const {
+	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
+	lbstate.UpdateBounds(gstate, row_idx, eval_chunk, lstate.range_cursor);
+
+	const auto count = eval_chunk.size();
+	EvaluateInternal(gstate, lstate, eval_chunk, result, count, row_idx);
+
+	result.Verify(count);
 }
 
 WindowExecutorGlobalState::WindowExecutorGlobalState(const WindowExecutor &executor, const idx_t payload_count,

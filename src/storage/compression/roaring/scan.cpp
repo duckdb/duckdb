@@ -224,6 +224,10 @@ RoaringScanState::RoaringScanState(ColumnSegment &segment) : segment(segment) {
 		container_metadata.push_back(metadata);
 		if (metadata.IsUncompressed()) {
 			position = AlignValue<idx_t>(position);
+		} else if (metadata.IsArray() && metadata.Cardinality() < COMPRESSED_ARRAY_THRESHOLD) {
+			position = AlignValue<idx_t, sizeof(uint16_t)>(position);
+		} else if (metadata.IsRun() && metadata.NumberOfRuns() < COMPRESSED_RUN_THRESHOLD) {
+			position = AlignValue<idx_t, sizeof(RunContainerRLEPair)>(position);
 		}
 		data_start_position.push_back(position);
 		position += SkipVector(metadata);
@@ -281,6 +285,7 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 			current_container = make_uniq<CompressedRunContainerScanState>(container_index, container_size,
 			                                                               number_of_runs, segments, data_ptr);
 		} else {
+			D_ASSERT(AlignValue<sizeof(RunContainerRLEPair)>(data_ptr) == data_ptr);
 			current_container =
 			    make_uniq<RunContainerScanState>(container_index, container_size, number_of_runs, data_ptr);
 		}
@@ -297,6 +302,7 @@ ContainerScanState &RoaringScanState::LoadContainer(idx_t container_index, idx_t
 				    container_index, container_size, cardinality, segments, data_ptr);
 			}
 		} else {
+			D_ASSERT(AlignValue<sizeof(uint16_t)>(data_ptr) == data_ptr);
 			if (metadata.IsInverted()) {
 				current_container =
 				    make_uniq<ArrayContainerScanState<NULLS>>(container_index, container_size, cardinality, data_ptr);

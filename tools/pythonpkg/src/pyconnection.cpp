@@ -266,15 +266,6 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("binary_as_string") = false, py::kw_only(), py::arg("file_row_number") = false,
 	      py::arg("filename") = false, py::arg("hive_partitioning") = false, py::arg("union_by_name") = false,
 	      py::arg("compression") = py::none());
-	m.def("from_substrait", &DuckDBPyConnection::FromSubstrait, "Create a query object from protobuf plan",
-	      py::arg("proto"));
-	m.def("get_substrait", &DuckDBPyConnection::GetSubstrait, "Serialize a query to protobuf", py::arg("query"),
-	      py::kw_only(), py::arg("enable_optimizer") = true);
-	m.def("get_substrait_json", &DuckDBPyConnection::GetSubstraitJSON,
-	      "Serialize a query to protobuf on the JSON format", py::arg("query"), py::kw_only(),
-	      py::arg("enable_optimizer") = true);
-	m.def("from_substrait_json", &DuckDBPyConnection::FromSubstraitJSON,
-	      "Create a query object from a JSON protobuf plan", py::arg("json"));
 	m.def("get_table_names", &DuckDBPyConnection::GetTableNames, "Extract the required table names from a query",
 	      py::arg("query"));
 	m.def("install_extension", &DuckDBPyConnection::InstallExtension,
@@ -930,7 +921,9 @@ PathLike DuckDBPyConnection::GetPathLike(const py::object &object) {
 static void AcceptableCSVOptions(const string &unkown_parameter) {
 	// List of strings to match against
 	const unordered_set<string> valid_parameters = {"header",
+	                                                "strict_mode",
 	                                                "compression",
+	                                                "comment"
 	                                                "sep",
 	                                                "delimiter",
 	                                                "dtype",
@@ -976,9 +969,30 @@ static void AcceptableCSVOptions(const string &unkown_parameter) {
 	}
 	throw InvalidInputException(error.str());
 }
+void ConvertBooleanValue(const py::object &value, string param_name, named_parameter_map_t &bind_parameters) {
+	if (!py::none().is(value)) {
+
+		bool value_as_int = py::isinstance<py::int_>(value);
+		bool value_as_bool = py::isinstance<py::bool_>(value);
+
+		bool converted_value;
+		if (value_as_bool) {
+			converted_value = py::bool_(value);
+		} else if (value_as_int) {
+			if (static_cast<int>(py::int_(value)) != 0) {
+				throw InvalidInputException("read_csv only accepts 0 if '%s' is given as an integer", param_name);
+			}
+			converted_value = true;
+		} else {
+			throw InvalidInputException("read_csv only accepts '%s' as an integer, or a boolean", param_name);
+		}
+		bind_parameters[param_name] = Value::BOOLEAN(converted_value);
+	}
+}
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_p, py::kwargs &kwargs) {
 	py::object header = py::none();
+	py::object strict_mode = py::none();
 	py::object auto_detect = py::none();
 	py::object compression = py::none();
 	py::object sep = py::none();
@@ -1015,6 +1029,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 	py::object union_by_name = py::none();
 	py::object hive_types = py::none();
 	py::object hive_types_autocast = py::none();
+	py::object comment = py::none();
+
 	for (auto &arg : kwargs) {
 		const auto &arg_name = py::str(arg.first).cast<std::string>();
 		if (arg_name == "header") {
@@ -1025,6 +1041,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			sep = kwargs[arg_name.c_str()];
 		} else if (arg_name == "delimiter") {
 			delimiter = kwargs[arg_name.c_str()];
+		} else if (arg_name == "comment") {
+			comment = kwargs[arg_name.c_str()];
 		} else if (arg_name == "dtype") {
 			dtype = kwargs[arg_name.c_str()];
 		} else if (arg_name == "na_values") {
@@ -1091,6 +1109,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			hive_types = kwargs[arg_name.c_str()];
 		} else if (arg_name == "hive_types_autocast") {
 			hive_types_autocast = kwargs[arg_name.c_str()];
+		} else if (arg_name == "strict_mode") {
+			strict_mode = kwargs[arg_name.c_str()];
 		} else {
 			AcceptableCSVOptions(arg_name);
 		}
@@ -1108,24 +1128,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 	// First check if the header is explicitly set
 	// when false this affects the returned types, so it needs to be known at initialization of the relation
-	if (!py::none().is(header)) {
-
-		bool header_as_int = py::isinstance<py::int_>(header);
-		bool header_as_bool = py::isinstance<py::bool_>(header);
-
-		bool header_value;
-		if (header_as_bool) {
-			header_value = py::bool_(header);
-		} else if (header_as_int) {
-			if ((int)py::int_(header) != 0) {
-				throw InvalidInputException("read_csv only accepts 0 if 'header' is given as an integer");
-			}
-			header_value = true;
-		} else {
-			throw InvalidInputException("read_csv only accepts 'header' as an integer, or a boolean");
-		}
-		bind_parameters["header"] = Value::BOOLEAN(header_value);
-	}
+	ConvertBooleanValue(header, "header", bind_parameters);
+	ConvertBooleanValue(strict_mode, "strict_mode", bind_parameters);
 
 	if (!py::none().is(compression)) {
 		if (!py::isinstance<py::str>(compression)) {
@@ -1226,6 +1230,13 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			throw InvalidInputException("read_csv only accepts 'quotechar' as a string");
 		}
 		bind_parameters["quote"] = Value(py::str(quotechar));
+	}
+
+	if (!py::none().is(comment)) {
+		if (!py::isinstance<py::str>(comment)) {
+			throw InvalidInputException("read_csv only accepts 'comment' as a string");
+		}
+		bind_parameters["comment"] = Value(py::str(comment));
 	}
 
 	if (!py::none().is(escapechar)) {
@@ -1719,40 +1730,6 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstrait(py::bytes &proto) {
-	auto &connection = con.GetConnection();
-	string name = "substrait_" + StringUtil::GenerateRandomName();
-	vector<Value> params;
-	params.emplace_back(Value::BLOB_RAW(proto));
-	return make_uniq<DuckDBPyRelation>(connection.TableFunction("from_substrait", params)->Alias(name));
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstrait(const string &query, bool enable_optimizer) {
-	auto &connection = con.GetConnection();
-	vector<Value> params;
-	params.emplace_back(query);
-	named_parameter_map_t named_parameters({{"enable_optimizer", Value::BOOLEAN(enable_optimizer)}});
-	return make_uniq<DuckDBPyRelation>(
-	    connection.TableFunction("get_substrait", params, named_parameters)->Alias(query));
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::GetSubstraitJSON(const string &query, bool enable_optimizer) {
-	auto &connection = con.GetConnection();
-	vector<Value> params;
-	params.emplace_back(query);
-	named_parameter_map_t named_parameters({{"enable_optimizer", Value::BOOLEAN(enable_optimizer)}});
-	return make_uniq<DuckDBPyRelation>(
-	    connection.TableFunction("get_substrait_json", params, named_parameters)->Alias(query));
-}
-
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromSubstraitJSON(const string &json) {
-	auto &connection = con.GetConnection();
-	string name = "from_substrait_" + StringUtil::GenerateRandomName();
-	vector<Value> params;
-	params.emplace_back(json);
-	return make_uniq<DuckDBPyRelation>(connection.TableFunction("from_substrait_json", params)->Alias(name));
-}
-
 unordered_set<string> DuckDBPyConnection::GetTableNames(const string &query) {
 	auto &connection = con.GetConnection();
 	return connection.GetTableNames(query);
@@ -2010,8 +1987,11 @@ py::dict DuckDBPyConnection::FetchTF() {
 }
 
 PolarsDataFrame DuckDBPyConnection::FetchPolars(idx_t rows_per_batch) {
-	auto arrow = FetchArrow(rows_per_batch);
-	return py::cast<PolarsDataFrame>(py::module::import("polars").attr("DataFrame")(arrow));
+	if (!con.HasResult()) {
+		throw InvalidInputException("No open result set");
+	}
+	auto &result = con.GetResult();
+	return result.ToPolars(rows_per_batch);
 }
 
 duckdb::pyarrow::RecordBatchReader DuckDBPyConnection::FetchRecordBatchReader(const idx_t rows_per_batch) {
@@ -2224,15 +2204,6 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	}
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
 	return py::isinstance(object, import_cache_py.pandas.DataFrame());
-}
-
-bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
-	if (!ModuleIsLoaded<PolarsCacheItem>()) {
-		return false;
-	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache_py.polars.DataFrame()) ||
-	       py::isinstance(object, import_cache_py.polars.LazyFrame());
 }
 
 bool IsValidNumpyDimensions(const py::handle &object, int &dim) {

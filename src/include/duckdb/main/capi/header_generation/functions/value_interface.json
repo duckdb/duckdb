@@ -245,6 +245,40 @@
             }
         },
         {
+            "name": "duckdb_create_varint",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_varint",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a VARINT value from a duckdb_varint\n\n",
+                "param_comments": {
+                    "input": "The duckdb_varint value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_decimal",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_decimal",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a DECIMAL value from a duckdb_decimal\n\n",
+                "param_comments": {
+                    "input": "The duckdb_decimal value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
             "name": "duckdb_create_float",
             "return_type": "duckdb_value",
             "params": [
@@ -454,6 +488,40 @@
             }
         },
         {
+            "name": "duckdb_create_bit",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_bit",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a BIT value from a duckdb_bit\n\n",
+                "param_comments": {
+                    "input": "The duckdb_bit value"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
+            "name": "duckdb_create_uuid",
+            "return_type": "duckdb_value",
+            "params": [
+                {
+                    "type": "duckdb_uhugeint",
+                    "name": "input"
+                }
+            ],
+            "comment": {
+                "description": "Creates a UUID value from a uhugeint\n\n",
+                "param_comments": {
+                    "input": "The duckdb_uhugeint containing the UUID"
+                },
+                "return_value": "The value. This must be destroyed with `duckdb_destroy_value`."
+            }
+        },
+        {
             "name": "duckdb_get_bool",
             "return_type": "bool",
             "params": [
@@ -638,6 +706,40 @@
                     "val": "A duckdb_value containing a uhugeint"
                 },
                 "return_value": "A duckdb_uhugeint, or MinValue<uhugeint> if the value cannot be converted"
+            }
+        },
+        {
+            "name": "duckdb_get_varint",
+            "return_type": "duckdb_varint",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the duckdb_varint value of the given value.\nThe `data` field must be destroyed with `duckdb_free`.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a VARINT"
+                },
+                "return_value": "A duckdb_varint. The `data` field must be destroyed with `duckdb_free`."
+            }
+        },
+        {
+            "name": "duckdb_get_decimal",
+            "return_type": "duckdb_decimal",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the duckdb_decimal value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a DECIMAL"
+                },
+                "return_value": "A duckdb_decimal, or MinValue<decimal> if the value cannot be converted"
             }
         },
         {
@@ -859,6 +961,40 @@
                     "val": "A duckdb_value containing a blob"
                 },
                 "return_value": "A duckdb_blob"
+            }
+        },
+        {
+            "name": "duckdb_get_bit",
+            "return_type": "duckdb_bit",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns the duckdb_bit value of the given value.\nThe `data` field must be destroyed with `duckdb_free`.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a BIT"
+                },
+                "return_value": "A duckdb_bit"
+            }
+        },
+        {
+            "name": "duckdb_get_uuid",
+            "return_type": "duckdb_uhugeint",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "val"
+                }
+            ],
+            "comment": {
+                "description": "Returns a duckdb_uhugeint representing the UUID value of the given value.\n\n",
+                "param_comments": {
+                    "val": "A duckdb_value containing a UUID"
+                },
+                "return_value": "A duckdb_uhugeint representing the UUID value"
             }
         },
         {

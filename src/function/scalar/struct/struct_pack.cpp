@@ -43,10 +43,10 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 		auto &child = arguments[i];
 		string alias;
 		if (IS_STRUCT_PACK) {
-			if (child->alias.empty()) {
+			if (child->GetAlias().empty()) {
 				throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 			}
-			alias = child->alias;
+			alias = child->GetAlias();
 			if (name_collision_set.find(alias) != name_collision_set.end()) {
 				throw BinderException("Duplicate struct entry name \"%s\"", alias);
 			}

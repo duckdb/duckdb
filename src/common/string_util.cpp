@@ -6,6 +6,7 @@
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/exception/parser_exception.hpp"
+#include "duckdb/common/random_engine.hpp"
 #include "jaro_winkler.hpp"
 #include "utf8proc_wrapper.hpp"
 
@@ -16,7 +17,6 @@
 #include <sstream>
 #include <stdarg.h>
 #include <string.h>
-#include <random>
 #include <stack>
 
 #include "yyjson.hpp"
@@ -26,13 +26,10 @@ using namespace duckdb_yyjson; // NOLINT
 namespace duckdb {
 
 string StringUtil::GenerateRandomName(idx_t length) {
-	std::random_device rd;
-	std::mt19937 gen(rd());
-	std::uniform_int_distribution<> dis(0, 15);
-
+	RandomEngine engine;
 	std::stringstream ss;
 	for (idx_t i = 0; i < length; i++) {
-		ss << "0123456789abcdef"[dis(gen)];
+		ss << "0123456789abcdef"[engine.NextRandomInteger(0, 15)];
 	}
 	return ss.str();
 }
@@ -51,6 +48,10 @@ optional_idx StringUtil::Find(const string &haystack, const string &needle) {
 
 bool StringUtil::Contains(const string &haystack, const char &needle_char) {
 	return (haystack.find(needle_char) != string::npos);
+}
+
+idx_t StringUtil::ToUnsigned(const string &str) {
+	return std::stoull(str);
 }
 
 void StringUtil::LTrim(string &str) {

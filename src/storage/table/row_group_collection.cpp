@@ -1,5 +1,4 @@
 #include "duckdb/storage/table/row_group_collection.hpp"
-
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -397,11 +396,14 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		}
 	}
 	state.current_row += row_t(total_append_count);
+
 	auto local_stats_lock = state.stats.GetLock();
+
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		auto &column_stats = state.stats.GetStats(*local_stats_lock, col_idx);
 		column_stats.UpdateDistinctStatistics(chunk.data[col_idx], chunk.size(), state.hashes);
 	}
+
 	return new_row_group;
 }
 
@@ -421,8 +423,8 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 	state.total_append_count = 0;
 	state.start_row_group = nullptr;
 
-	auto global_stats_lock = stats.GetLock();
 	auto local_stats_lock = state.stats.GetLock();
+	auto global_stats_lock = stats.GetLock();
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		auto &global_stats = stats.GetStats(*global_stats_lock, col_idx);
 		if (!global_stats.HasDistinctStats()) {
@@ -582,6 +584,7 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		}
 		delete_count += row_group->Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
+
 	return delete_count;
 }
 
@@ -624,64 +627,101 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
-	// initialize the fetch state
-	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
-	TableScanState state;
+	// Collect all indexed columns.
+	unordered_set<column_t> indexed_column_id_set;
+	indexes.Scan([&](Index &index) {
+		D_ASSERT(index.IsBound());
+		auto &set = index.GetColumnIdSet();
+		indexed_column_id_set.insert(set.begin(), set.end());
+		return false;
+	});
 	vector<StorageIndex> column_ids;
-	column_ids.reserve(types.size());
-	for (idx_t i = 0; i < types.size(); i++) {
-		column_ids.emplace_back(i);
+	for (auto &col : indexed_column_id_set) {
+		column_ids.emplace_back(col);
 	}
+	sort(column_ids.begin(), column_ids.end());
+
+	vector<LogicalType> column_types;
+	for (auto &col : column_ids) {
+		column_types.push_back(types[col.GetPrimaryIndex()]);
+	}
+
+	// Initialize the fetch state. Only use indexed columns.
+	TableScanState state;
 	state.Initialize(std::move(column_ids));
 	state.table_state.max_row = row_start + total_rows;
 
-	// initialize the fetch chunk
-	DataChunk result;
-	result.Initialize(GetAllocator(), types);
+	// Used for scanning data. Only contains the indexed columns.
+	DataChunk fetch_chunk;
+	fetch_chunk.Initialize(GetAllocator(), column_types);
 
+	// Used for index value removal.
+	// Contains all columns but only initializes indexed ones.
+	DataChunk result_chunk;
+	auto fetched_columns = vector<bool>(types.size(), false);
+	result_chunk.Initialize(GetAllocator(), types, fetched_columns);
+
+	// Now set all to-be-fetched columns.
+	for (auto &col : indexed_column_id_set) {
+		fetched_columns[col] = true;
+	}
+
+	// Iterate over the row ids.
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	// now iterate over the row ids
 	for (idx_t r = 0; r < count;) {
-		result.Reset();
-		// figure out which row_group to fetch from
+		fetch_chunk.Reset();
+		result_chunk.Reset();
+
+		// Figure out which row_group to fetch from.
 		auto row_id = row_ids[r];
 		auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(row_id));
 		auto row_group_vector_idx = (UnsafeNumericCast<idx_t>(row_id) - row_group->start) / STANDARD_VECTOR_SIZE;
 		auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE + row_group->start;
 
-		// fetch the current vector
+		// Fetch the current vector into fetch_chunk.
 		state.table_state.Initialize(GetTypes());
 		row_group->InitializeScanWithOffset(state.table_state, row_group_vector_idx);
-		row_group->ScanCommitted(state.table_state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
-		result.Verify();
+		row_group->ScanCommitted(state.table_state, fetch_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		fetch_chunk.Verify();
 
-		// check for any remaining row ids if they also fall into this vector
-		// we try to fetch handle as many rows as possible at the same time
+		// Check for any remaining row ids, if they also fall into this vector.
+		// We try to fetch as many rows as possible at the same time.
 		idx_t sel_count = 0;
 		for (; r < count; r++) {
 			idx_t current_row = idx_t(row_ids[r]);
-			if (current_row < base_row_id || current_row >= base_row_id + result.size()) {
-				// this row-id does not fall into the current chunk - break
+			if (current_row < base_row_id || current_row >= base_row_id + fetch_chunk.size()) {
+				// This row id does not fall into the current chunk.
 				break;
 			}
 			auto row_in_vector = current_row - base_row_id;
-			D_ASSERT(row_in_vector < result.size());
+			D_ASSERT(row_in_vector < fetch_chunk.size());
 			sel.set_index(sel_count++, row_in_vector);
 		}
 		D_ASSERT(sel_count > 0);
-		// slice the vector with all rows that are present in this vector and erase from the index
-		result.Slice(sel, sel_count);
 
+		// Reference the necessary columns of the fetch_chunk.
+		idx_t fetch_idx = 0;
+		for (idx_t j = 0; j < types.size(); j++) {
+			if (fetched_columns[j]) {
+				result_chunk.data[j].Reference(fetch_chunk.data[fetch_idx++]);
+				continue;
+			}
+			result_chunk.data[j].Reference(Value(types[j]));
+		}
+		result_chunk.SetCardinality(fetch_chunk);
+
+		// Slice the vector with all rows that are present in this vector.
+		// Then, erase all values from the indexes.
+		result_chunk.Slice(sel, sel_count);
 		indexes.Scan([&](Index &index) {
 			if (index.IsBound()) {
-				index.Cast<BoundIndex>().Delete(result, row_identifiers);
-			} else {
-				throw MissingExtensionException(
-				    "Cannot delete from index '%s', unknown index type '%s'. You need to load the "
-				    "extension that provides this index type before table '%s' can be modified.",
-				    index.GetIndexName(), index.GetIndexType(), info->GetTableName());
+				index.Cast<BoundIndex>().Delete(result_chunk, row_identifiers);
+				return false;
 			}
-			return false;
+			throw MissingExtensionException(
+			    "Cannot delete from index '%s', unknown index type '%s'. You need to load the "
+			    "extension that provides this index type before table '%s' can be modified.",
+			    index.GetIndexName(), index.GetIndexType(), info->GetTableName());
 		});
 	}
 }
@@ -1054,6 +1094,17 @@ void RowGroupCollection::CommitDropTable() {
 }
 
 //===--------------------------------------------------------------------===//
+// GetPartitionStats
+//===--------------------------------------------------------------------===//
+vector<PartitionStatistics> RowGroupCollection::GetPartitionStats() const {
+	vector<PartitionStatistics> result;
+	for (auto &row_group : row_groups->Segments()) {
+		result.push_back(row_group.GetPartitionStats());
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // GetColumnSegmentInfo
 //===--------------------------------------------------------------------===//
 vector<ColumnSegmentInfo> RowGroupCollection::GetColumnSegmentInfo() {
@@ -1091,6 +1142,7 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
+
 	return result;
 }
 
@@ -1102,6 +1154,9 @@ shared_ptr<RowGroupCollection> RowGroupCollection::RemoveColumn(idx_t col_idx) {
 	auto result = make_shared_ptr<RowGroupCollection>(info, block_manager, std::move(new_types), row_start,
 	                                                  total_rows.load(), row_group_size);
 	result->stats.InitializeRemoveColumn(stats, col_idx);
+
+	auto result_lock = result->stats.GetLock();
+	result->stats.DestroyTableSample(*result_lock);
 
 	for (auto &current_row_group : row_groups->Segments()) {
 		auto new_row_group = current_row_group.RemoveColumn(*result, col_idx);
@@ -1149,7 +1204,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AlterType(ClientContext &cont
 		new_row_group->MergeIntoStatistics(changed_idx, changed_stats.Statistics());
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
-
 	return result;
 }
 
@@ -1196,13 +1250,17 @@ void RowGroupCollection::VerifyNewConstraint(DataTable &parent, const BoundConst
 
 //===--------------------------------------------------------------------===//
 // Statistics
-//===--------------------------------------------------------------------===//
+//===---------------------------------------------------------------r-----===//
 void RowGroupCollection::CopyStats(TableStatistics &other_stats) {
 	stats.CopyStats(other_stats);
 }
 
 unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 	return stats.CopyStats(column_id);
+}
+
+unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
+	return nullptr;
 }
 
 void RowGroupCollection::SetDistinct(column_t column_id, unique_ptr<DistinctStatistics> distinct_stats) {

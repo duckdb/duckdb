@@ -186,19 +186,6 @@ MEM_STATIC void ZSTD_cwksp_assert_internal_consistency(ZSTD_cwksp* ws) {
     assert(ws->allocStart <= ws->workspaceEnd);
     assert(ws->initOnceStart <= ZSTD_cwksp_initialAllocStart(ws));
     assert(ws->workspace <= ws->initOnceStart);
-#if ZSTD_MEMORY_SANITIZER
-    {
-        intptr_t const offset = __msan_test_shadow(ws->initOnceStart,
-            (U8*)ZSTD_cwksp_initialAllocStart(ws) - (U8*)ws->initOnceStart);
-        (void)offset;
-#if defined(ZSTD_MSAN_PRINT)
-        if(offset!=-1) {
-            __msan_print_shadow((U8*)ws->initOnceStart + offset - 8, 32);
-        }
-#endif
-        assert(offset==-1);
-    };
-#endif
 }
 
 /**

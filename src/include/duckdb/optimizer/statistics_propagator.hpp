@@ -99,6 +99,8 @@ private:
 	unique_ptr<BaseStatistics> PropagateExpression(BoundColumnRefExpression &expr, unique_ptr<Expression> &expr_ptr);
 	unique_ptr<BaseStatistics> PropagateExpression(BoundOperatorExpression &expr, unique_ptr<Expression> &expr_ptr);
 
+	//! Try to execute aggregates using only the statistics if possible
+	void TryExecuteAggregates(LogicalAggregate &op, unique_ptr<LogicalOperator> &node_ptr);
 	void ReplaceWithEmptyResult(unique_ptr<LogicalOperator> &node);
 
 	bool ExpressionIsConstant(Expression &expr, const Value &val);

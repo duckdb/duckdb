@@ -1,5 +1,5 @@
 import warnings
-from typing import Any, Callable, Union, overload, Optional, List, Tuple
+from typing import Any, Callable, Union, overload, Optional, List, Tuple, TYPE_CHECKING
 
 from duckdb import (
     CaseExpression,
@@ -10,6 +10,8 @@ from duckdb import (
     FunctionExpression,
     LambdaExpression
 )
+if TYPE_CHECKING:
+    from .dataframe import DataFrame
 
 from ..errors import PySparkTypeError
 from ..exception import ContributionsAcceptedError
@@ -5615,7 +5617,7 @@ def to_timestamp(col: "ColumnOrName", format: Optional[str] = None) -> Column:
     >>> df.select(to_timestamp(df.t, 'yyyy-MM-dd HH:mm:ss').alias('dt')).collect()
     [Row(dt=datetime.datetime(1997, 2, 28, 10, 30))]
     """
-    return _to_date_or_timestamp(col, _types.TimestampType(), format)
+    return _to_date_or_timestamp(col, _types.TimestampNTZType(), format)
 
 
 def to_timestamp_ltz(
@@ -5647,7 +5649,7 @@ def to_timestamp_ltz(
     ... # doctest: +SKIP
     [Row(r=datetime.datetime(2016, 12, 31, 0, 0))]
     """
-    return _to_date_or_timestamp(timestamp, _types.TimestampType(), format)
+    return _to_date_or_timestamp(timestamp, _types.TimestampNTZType(), format)
 
 
 def to_timestamp_ntz(
@@ -5729,7 +5731,7 @@ def substr(
 
 
 def _unix_diff(col: "ColumnOrName", part: str) -> Column:
-    return _invoke_function_over_columns("date_diff", lit(part), lit("1970-01-01 00:00:00+00:00").cast("timestamptz"), col)
+    return _invoke_function_over_columns("date_diff", lit(part), lit("1970-01-01 00:00:00+00:00").cast("timestamp"), col)
 
 def unix_date(col: "ColumnOrName") -> Column:
     """Returns the number of days since 1970-01-01.
@@ -6054,3 +6056,11 @@ def instr(str: "ColumnOrName", substr: str) -> Column:
     """
     return _invoke_function("instr", _to_column_expr(str), ConstantExpression(substr))
 
+def broadcast(df: "DataFrame") -> "DataFrame":
+    """
+    The broadcast function in Spark is used to optimize joins by broadcasting a smaller
+    dataset to all the worker nodes. However, DuckDB operates on a single-node architecture .
+    As a result, the function simply returns the input DataFrame without applying any modifications
+    or optimizations, since broadcasting is not applicable in the DuckDB context.
+    """
+    return df

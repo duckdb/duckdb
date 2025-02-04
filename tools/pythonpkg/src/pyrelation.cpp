@@ -1023,13 +1023,27 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::GetAttribute(const string &name) 
 		throw py::attribute_error(
 		    StringUtil::Format("This relation does not contain a column by the name of '%s'", name));
 	}
+	vector<string> column_names;
 	if (names.size() == 1 && ContainsStructFieldByName(types[0], name)) {
-		return make_uniq<DuckDBPyRelation>(rel->Project({StringUtil::Format("%s.%s", names[0], name)}));
+		// e.g 'rel['my_struct']['my_field']:
+		// first 'my_struct' is selected by the bottom condition
+		// then 'my_field' is accessed on the result of this
+		column_names.push_back(names[0]);
+		column_names.push_back(name);
+	} else if (ContainsColumnByName(name)) {
+		column_names.push_back(name);
 	}
-	if (ContainsColumnByName(name)) {
-		return make_uniq<DuckDBPyRelation>(rel->Project({StringUtil::Format("\"%s\"", name)}));
+
+	if (column_names.empty()) {
+		throw py::attribute_error(
+		    StringUtil::Format("This relation does not contain a column by the name of '%s'", name));
 	}
-	throw py::attribute_error(StringUtil::Format("This relation does not contain a column by the name of '%s'", name));
+
+	vector<unique_ptr<ParsedExpression>> expressions;
+	expressions.push_back(std::move(make_uniq<ColumnRefExpression>(column_names)));
+	vector<string> aliases;
+	aliases.push_back(name);
+	return make_uniq<DuckDBPyRelation>(rel->Project(std::move(expressions), aliases));
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Union(DuckDBPyRelation *other) {

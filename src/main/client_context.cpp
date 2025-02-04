@@ -76,6 +76,9 @@ private:
 #ifdef DEBUG
 struct DebugClientContextState : public ClientContextState {
 	~DebugClientContextState() override {
+		if (Exception::UncaughtException()) {
+			return;
+		}
 		D_ASSERT(!active_transaction);
 		D_ASSERT(!active_query);
 	}
@@ -135,11 +138,15 @@ struct DebugClientContextState : public ClientContextState {
 #endif
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(std::move(database)), interrupted(false), client_data(make_uniq<ClientData>(*this)), transaction(*this) {
+    : db(std::move(database)), interrupted(false), transaction(*this) {
 	registered_state = make_uniq<RegisteredStateManager>();
 #ifdef DEBUG
 	registered_state->GetOrCreate<DebugClientContextState>("debug_client_context_state");
 #endif
+	LoggingContext context(LogContextScope::CONNECTION);
+	context.client_context = reinterpret_cast<idx_t>(this);
+	logger = db->GetLogManager().CreateLogger(context, true);
+	client_data = make_uniq<ClientData>(*this);
 }
 
 ClientContext::~ClientContext() {
@@ -167,9 +174,10 @@ void ClientContext::Destroy() {
 }
 
 void ClientContext::ProcessError(ErrorData &error, const string &query) const {
+	error.FinalizeError();
 	if (config.errors_as_json) {
 		error.ConvertErrorToJSON();
-	} else if (!query.empty()) {
+	} else {
 		error.AddErrorLocation(query);
 	}
 }
@@ -201,6 +209,16 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	for (auto &state : registered_state->States()) {
 		state->QueryBegin(*this);
 	}
+
+	// Flush the old Logger
+	logger->Flush();
+
+	// Refresh the logger to ensure we are in sync with global log settings
+	LoggingContext context(LogContextScope::CONNECTION);
+	context.client_context = reinterpret_cast<idx_t>(this);
+	context.transaction_id = transaction.GetActiveQuery();
+	logger = db->GetLogManager().CreateLogger(context, true);
+	DUCKDB_LOG_INFO(*this, "duckdb.ClientContext.BeginQuery", query);
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
@@ -211,7 +229,6 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		active_query->executor->CancelTasks();
 	}
 	active_query->progress_bar.reset();
-
 	D_ASSERT(active_query.get());
 	active_query.reset();
 	query_progress.Initialize();
@@ -232,13 +249,19 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		}
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
-		if (Exception::InvalidatesDatabase(error.Type())) {
+		if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 			auto &db_inst = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_inst, error.RawMessage());
 		}
 	} catch (...) { // LCOV_EXCL_START
 		error = ErrorData("Unhandled exception!");
 	} // LCOV_EXCL_STOP
+
+	// Refresh the logger
+	logger->Flush();
+	LoggingContext context(LogContextScope::CONNECTION);
+	context.client_context = reinterpret_cast<idx_t>(this);
+	logger = db->GetLogManager().CreateLogger(context, true);
 
 	// Notify any registered state of query end
 	for (auto const &s : registered_state->States()) {
@@ -282,6 +305,10 @@ Executor &ClientContext::GetExecutor() {
 	D_ASSERT(active_query);
 	D_ASSERT(active_query->executor);
 	return *active_query->executor;
+}
+
+Logger &ClientContext::GetLogger() const {
+	return *logger;
 }
 
 const string &ClientContext::GetCurrentQuery() {
@@ -580,7 +607,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			}
 		} else if (!Exception::InvalidatesTransaction(error.Type())) {
 			invalidate_transaction = false;
-		} else if (Exception::InvalidatesDatabase(error.Type())) {
+		} else if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 			// fatal exceptions invalidate the entire database
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
@@ -1022,7 +1049,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 
 		return PendingQueryInternal(*lock, std::move(statements[0]), params, true);
 	} catch (std::exception &ex) {
-		return make_uniq<PendingQueryResult>(ErrorData(ex));
+		ErrorData error(ex);
+		ProcessError(error, query);
+		return make_uniq<PendingQueryResult>(std::move(error));
 	}
 }
 
@@ -1339,15 +1368,19 @@ ParserOptions ClientContext::GetParserOptions() const {
 	return options;
 }
 
-ClientProperties ClientContext::GetClientProperties() const {
+ClientProperties ClientContext::GetClientProperties() {
 	string timezone = "UTC";
 	Value result;
 
 	if (TryGetCurrentSetting("TimeZone", result)) {
 		timezone = result.ToString();
 	}
-	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
-	        db->config.options.produce_arrow_string_views, db->config.options.arrow_lossless_conversion};
+	return {timezone,
+	        db->config.options.arrow_offset_size,
+	        db->config.options.arrow_use_list_view,
+	        db->config.options.produce_arrow_string_views,
+	        db->config.options.arrow_lossless_conversion,
+	        this};
 }
 
 bool ClientContext::ExecutionIsFinished() {

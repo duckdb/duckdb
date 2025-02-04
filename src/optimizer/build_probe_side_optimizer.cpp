@@ -8,6 +8,10 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
+#include "duckdb/optimizer/column_binding_replacer.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
 
 namespace duckdb {
 
@@ -48,7 +52,9 @@ BuildProbeSideOptimizer::BuildProbeSideOptimizer(ClientContext &context, Logical
 
 static void FlipChildren(LogicalOperator &op) {
 	std::swap(op.children[0], op.children[1]);
-	if (op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN || op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		join.join_type = InverseJoinType(join.join_type);
 		for (auto &cond : join.conditions) {
@@ -56,11 +62,20 @@ static void FlipChildren(LogicalOperator &op) {
 			cond.comparison = FlipComparisonExpression(cond.comparison);
 		}
 		std::swap(join.left_projection_map, join.right_projection_map);
+		return;
 	}
-	if (op.type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &join = op.Cast<LogicalAnyJoin>();
 		join.join_type = InverseJoinType(join.join_type);
 		std::swap(join.left_projection_map, join.right_projection_map);
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_CROSS_PRODUCT: {
+		// don't need to do anything here
+		return;
+	}
+	default:
+		throw InternalException("Flipping children, but children were not flipped");
 	}
 }
 
@@ -195,6 +210,7 @@ void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 }
 
 void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
+	// then the currentoperator
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
@@ -225,8 +241,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 		}
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &join = op.Cast<LogicalJoin>();
 		// We do not yet support the RIGHT_SEMI or RIGHT_ANTI join types for these, so don't try to flip
 		switch (join.join_type) {

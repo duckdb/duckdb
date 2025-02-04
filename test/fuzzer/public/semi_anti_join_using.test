@@ -1,0 +1,21 @@
+# name: test/fuzzer/public/semi_anti_join_using.test
+# description: Test semi/anti join in combination with USING columns
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE v00 (c01 INT);
+
+statement ok
+INSERT INTO v00 VALUES (42);
+
+query I
+SELECT c01 FROM ( v00 AS ta03 SEMI JOIN ( v00 AS ta04 JOIN v00 AS ta05 USING ( c01 ) ) ON 42 ) ;
+----
+42
+
+query I
+SELECT c01 FROM ( v00 AS ta03 ANTI JOIN ( v00 AS ta04 JOIN v00 AS ta05 USING ( c01 ) ) ON 42 ) ;
+----

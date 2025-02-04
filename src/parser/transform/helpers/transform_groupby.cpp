@@ -40,7 +40,7 @@ static void MergeGroupingSet(GroupingSet &result, GroupingSet &other) {
 
 void Transformer::AddGroupByExpression(unique_ptr<ParsedExpression> expression, GroupingExpressionMap &map,
                                        GroupByNode &result, vector<idx_t> &result_set) {
-	if (expression->type == ExpressionType::FUNCTION) {
+	if (expression->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &func = expression->Cast<FunctionExpression>();
 		if (func.function_name == "row") {
 			for (auto &child : func.children) {

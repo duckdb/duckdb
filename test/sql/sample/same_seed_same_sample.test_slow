@@ -23,15 +23,15 @@ SELECT * from t1 using sample reservoir(100) repeatable (1) order by a;
 
 endloop
 
-# testing a table with greater cardinality than the standard vector size
+# testing a table with greater cardinality than the standard vector size, and greater than a row group size.
 
 statement ok
 CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_timestamp() c from range(100000);
 
-loop i 1 8
+# samples are only equal when threads = 1
 
 statement ok
-pragma threads=${i};
+set threads=1;
 
 query III nosort result_2
 SELECT * from t1 using sample reservoir(6000) repeatable (1) order by a;
@@ -41,8 +41,6 @@ SELECT * from t1 using sample reservoir(6000) repeatable (1) order by a;
 query III nosort result_2
 SELECT * from t1 using sample reservoir(6000) repeatable (1) order by a;
 ----
-
-endloop
 
 statement ok
 CREATE or replace TABLE t1 as select range a, [1, a, 2] b, a::VARCHAR || 'ducktastic' c, get_current_timestamp() c from range(1000000);
@@ -72,6 +70,4 @@ query I
 select count(*) < 10 from (select * from sample1 intersect select * from sample2);
 ----
 true
-
-
 

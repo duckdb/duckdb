@@ -42,6 +42,13 @@ bool BoundFunctionExpression::IsFoldable() const {
 	return function.stability == FunctionStability::VOLATILE ? false : Expression::IsFoldable();
 }
 
+bool BoundFunctionExpression::CanThrow() const {
+	if (function.errors == FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
+		return true;
+	}
+	return Expression::CanThrow();
+}
+
 string BoundFunctionExpression::ToString() const {
 	return FunctionExpression::ToString<BoundFunctionExpression, Expression>(*this, string(), string(), function.name,
 	                                                                         is_operator);
@@ -102,12 +109,28 @@ void BoundFunctionExpression::Serialize(Serializer &serializer) const {
 unique_ptr<Expression> BoundFunctionExpression::Deserialize(Deserializer &deserializer) {
 	auto return_type = deserializer.ReadProperty<LogicalType>(200, "return_type");
 	auto children = deserializer.ReadProperty<vector<unique_ptr<Expression>>>(201, "children");
+
 	auto entry = FunctionSerializer::Deserialize<ScalarFunction, ScalarFunctionCatalogEntry>(
 	    deserializer, CatalogType::SCALAR_FUNCTION_ENTRY, children, return_type);
 	auto function_return_type = entry.first.return_type;
+
+	auto is_operator = deserializer.ReadProperty<bool>(202, "is_operator");
+
+	if (entry.first.bind_expression) {
+		// bind the function expression
+		auto &context = deserializer.Get<ClientContext &>();
+		auto bind_input = FunctionBindExpressionInput(context, entry.second, children);
+		// replace the function expression with the bound expression
+		auto bound_expression = entry.first.bind_expression(bind_input);
+		if (bound_expression) {
+			return bound_expression;
+		}
+		// Otherwise, fall thorugh and continue on normally
+	}
+
 	auto result = make_uniq<BoundFunctionExpression>(std::move(function_return_type), std::move(entry.first),
 	                                                 std::move(children), std::move(entry.second));
-	deserializer.ReadProperty(202, "is_operator", result->is_operator);
+	result->is_operator = is_operator;
 	if (result->return_type != return_type) {
 		// return type mismatch - push a cast
 		auto &context = deserializer.Get<ClientContext &>();

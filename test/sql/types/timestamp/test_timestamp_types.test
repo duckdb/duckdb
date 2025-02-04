@@ -74,6 +74,17 @@ AS tbl(s)
 2024-06-04 10:17:10.9
 2024-06-04 10:17:10
 
+statement error
+SELECT TIMESTAMP_NS '2262-04-11 23:47:16.854775808';
+----
+Conversion Error: Could not convert string
+
+# Negative timestamp_ns
+query I
+select '1969-01-01T23:59:59.9999999'::timestamp_ns;
+----
+1969-01-01 23:59:59.9999999
+
 # TIME conversions are now supported
 query I
 select sec::TIME from timestamp;

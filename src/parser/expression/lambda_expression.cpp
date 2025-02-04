@@ -22,13 +22,13 @@ vector<reference<ParsedExpression>> LambdaExpression::ExtractColumnRefExpression
 	// since we can't distinguish between a lambda function and the JSON operator yet
 	vector<reference<ParsedExpression>> column_refs;
 
-	if (lhs->expression_class == ExpressionClass::COLUMN_REF) {
+	if (lhs->GetExpressionClass() == ExpressionClass::COLUMN_REF) {
 		// single column reference
 		column_refs.emplace_back(*lhs);
 		return column_refs;
 	}
 
-	if (lhs->expression_class == ExpressionClass::FUNCTION) {
+	if (lhs->GetExpressionClass() == ExpressionClass::FUNCTION) {
 		// list of column references
 		auto &func_expr = lhs->Cast<FunctionExpression>();
 		if (func_expr.function_name != "row") {
@@ -37,7 +37,7 @@ vector<reference<ParsedExpression>> LambdaExpression::ExtractColumnRefExpression
 		}
 
 		for (auto &child : func_expr.children) {
-			if (child->expression_class != ExpressionClass::COLUMN_REF) {
+			if (child->GetExpressionClass() != ExpressionClass::COLUMN_REF) {
 				error_message = InvalidParametersErrorMessage();
 				return column_refs;
 			}

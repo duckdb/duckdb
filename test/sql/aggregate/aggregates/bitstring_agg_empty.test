@@ -1,0 +1,27 @@
+# name: test/sql/aggregate/aggregates/bitstring_agg_empty.test
+# description: Test BITSTRING_AGG operator
+# group: [aggregates]
+
+statement ok
+PRAGMA verify_external
+
+require skip_reload
+
+statement ok
+CREATE TABLE t1 (k VARCHAR, el VARCHAR);
+
+statement ok
+CREATE VIEW t1_v AS (SELECT * FROM t1 LIMIT 0);
+
+statement ok
+CREATE TABLE el_ids (el VARCHAR, idx INTEGER);
+
+statement ok
+INSERT INTO el_ids VALUES ('el', 10);
+
+query II
+SELECT    k, bitstring_agg(idx)
+FROM      t1_v
+JOIN      el_ids USING (el)
+GROUP BY  k;
+----

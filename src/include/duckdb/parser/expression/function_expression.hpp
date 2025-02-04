@@ -98,9 +98,9 @@ public:
 			result += "DISTINCT ";
 		}
 		result += StringUtil::Join(entry.children, entry.children.size(), ", ", [&](const unique_ptr<BASE> &child) {
-			return child->alias.empty() || !add_alias
+			return child->GetAlias().empty() || !add_alias
 			           ? child->ToString()
-			           : StringUtil::Format("%s := %s", SQLIdentifier(child->alias), child->ToString());
+			           : StringUtil::Format("%s := %s", SQLIdentifier(child->GetAlias()), child->ToString());
 		});
 		// ordered aggregate
 		if (order_bys && !order_bys->orders.empty()) {

@@ -117,7 +117,7 @@ bool ICUDateFunc::TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp
 timestamp_t ICUDateFunc::GetTime(icu::Calendar *calendar, uint64_t micros) {
 	timestamp_t result;
 	if (!TryGetTime(calendar, micros, result)) {
-		throw ConversionException("Unable to convert ICU date to timestamp");
+		throw ConversionException("ICU date overflows timestamp range");
 	}
 	return result;
 }
@@ -148,7 +148,7 @@ int32_t ICUDateFunc::ExtractField(icu::Calendar *calendar, UCalendarDateFields f
 	return result;
 }
 
-int64_t ICUDateFunc::SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date) {
+int32_t ICUDateFunc::SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date) {
 	const int64_t millis = end_date.value / Interval::MICROS_PER_MSEC;
 	const auto when = UDate(millis);
 	UErrorCode status = U_ZERO_ERROR;

@@ -47,6 +47,9 @@ struct WindowInputExpression {
 			auto &col = chunk.data[col_idx];
 			ptype = col.GetType().InternalType();
 			scalar = (col.GetVectorType() == VectorType::CONSTANT_VECTOR);
+			if (!scalar && col.GetVectorType() != VectorType::FLAT_VECTOR) {
+				col.Flatten(chunk.size());
+			}
 		}
 	}
 
@@ -110,9 +113,9 @@ struct WindowBoundariesState {
 	void ValidEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, bool is_jump, const ValidityMask &partition_mask,
 	              const ValidityMask &order_mask, optional_ptr<WindowCursor> range);
 	void FrameBegin(DataChunk &bounds, idx_t row_idx, const idx_t count, WindowInputExpression &boundary_begin,
-	                optional_ptr<WindowCursor> range);
+	                const ValidityMask &order_mask, optional_ptr<WindowCursor> range);
 	void FrameEnd(DataChunk &bounds, idx_t row_idx, const idx_t count, WindowInputExpression &boundary_end,
-	              optional_ptr<WindowCursor> range);
+	              const ValidityMask &order_mask, optional_ptr<WindowCursor> range);
 
 	static void ClampFrame(const idx_t count, idx_t *values, const idx_t *begin, const idx_t *end) {
 		for (idx_t i = 0; i < count; ++i) {

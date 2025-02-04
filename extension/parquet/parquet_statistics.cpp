@@ -553,9 +553,9 @@ ParquetBloomFilter::ParquetBloomFilter(idx_t num_entries, double bloom_filter_fa
 	// see http://tfk.mit.edu/pdf/bloom.pdf
 	double f = bloom_filter_false_positive_ratio;
 	double k = 8.0;
-	double n = num_entries;
+	double n = LossyNumericCast<double>(num_entries);
 	double m = -k * n / std::log(1 - std::pow(f, 1 / k));
-	auto b = MaxValue<idx_t>(NextPowerOfTwo(m / k) / 32, 1);
+	auto b = MaxValue<idx_t>(NextPowerOfTwo(LossyNumericCast<idx_t>(m / k)) / 32, 1);
 
 	D_ASSERT(b > 0 && IsPowerOfTwo(b));
 
@@ -573,14 +573,14 @@ ParquetBloomFilter::ParquetBloomFilter(unique_ptr<ResizeableBuffer> data_p) {
 }
 
 void ParquetBloomFilter::FilterInsert(uint64_t x) {
-	auto blocks = (ParquetBloomBlock *)(data->ptr);
+	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->ptr);
 	uint64_t i = ((x >> 32) * block_count) >> 32;
 	auto &b = blocks[i];
 	ParquetBloomBlock::BlockInsert(b, x);
 }
 
 bool ParquetBloomFilter::FilterCheck(uint64_t x) {
-	auto blocks = (ParquetBloomBlock *)(data->ptr);
+	auto blocks = reinterpret_cast<ParquetBloomBlock *>(data->ptr);
 	auto i = ((x >> 32) * block_count) >> 32;
 	return ParquetBloomBlock::BlockCheck(blocks[i], x);
 }
@@ -595,12 +595,12 @@ static uint8_t PopCnt64(uint64_t n) {
 }
 
 double ParquetBloomFilter::OneRatio() {
-	auto bloom_ptr = (uint64_t *)data->ptr;
+	auto bloom_ptr = reinterpret_cast<uint64_t *>(data->ptr);
 	idx_t one_count = 0;
 	for (idx_t b_idx = 0; b_idx < data->len / sizeof(uint64_t); ++b_idx) {
 		one_count += PopCnt64(bloom_ptr[b_idx]);
 	}
-	return one_count / (data->len * 8.0);
+	return LossyNumericCast<double>(one_count) / (LossyNumericCast<double>(data->len) * 8.0);
 }
 
 ResizeableBuffer *ParquetBloomFilter::Get() {

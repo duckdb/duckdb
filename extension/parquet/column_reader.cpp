@@ -135,6 +135,14 @@ const SchemaElement &ColumnReader::Schema() const {
 	return schema;
 }
 
+optional_ptr<const SchemaElement> ColumnReader::GetParentSchema() const {
+	return parent_schema;
+}
+
+void ColumnReader::SetParentSchema(const SchemaElement &parent_schema_p) {
+	parent_schema = &parent_schema_p;
+}
+
 idx_t ColumnReader::FileIdx() const {
 	return file_idx;
 }
@@ -533,6 +541,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 
 	idx_t result_offset = 0;
 	auto to_read = num_values;
+	D_ASSERT(to_read <= STANDARD_VECTOR_SIZE);
 
 	while (to_read > 0) {
 		while (page_rows_available == 0) {
@@ -542,7 +551,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 		D_ASSERT(block);
 		auto read_now = MinValue<idx_t>(to_read, page_rows_available);
 
-		D_ASSERT(read_now <= STANDARD_VECTOR_SIZE);
+		D_ASSERT(read_now + result_offset <= STANDARD_VECTOR_SIZE);
 
 		if (HasRepeats()) {
 			D_ASSERT(repeated_decoder);
@@ -565,7 +574,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 
 		if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 			result.Flatten(result_offset);
-			result.Resize(result_offset, result_offset + read_now);
+			result.Resize(result_offset, STANDARD_VECTOR_SIZE);
 		}
 
 		if (dict_decoder) {

@@ -35,7 +35,7 @@ void JSONFileHandle::Reset() {
 	requested_reads = 0;
 	actual_reads = 0;
 	last_read_requested = false;
-	if (IsOpen() && CanSeek()) {
+	if (IsOpen() && !file_handle->IsPipe()) {
 		file_handle->Reset();
 	}
 }
@@ -335,6 +335,11 @@ void BufferedJSONReader::ThrowTransformError(idx_t buf_index, idx_t line_or_obje
 	auto line = GetLineNumber(buf_index, line_or_object_in_buf);
 	throw InvalidInputException("JSON transform error in file \"%s\", in %s %llu: %s", file_name, unit, line,
 	                            error_message);
+}
+
+bool BufferedJSONReader::HasThrown() {
+	lock_guard<mutex> guard(lock);
+	return thrown;
 }
 
 double BufferedJSONReader::GetProgress() const {

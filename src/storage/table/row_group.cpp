@@ -435,6 +435,10 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 			// label the filter as always true so we don't need to check it anymore
 			filters.SetFilterAlwaysTrue(i);
 		}
+		if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
+			// these are only for row group checking, set as always true so we don't check it
+			filters.SetFilterAlwaysTrue(i);
+		}
 	}
 	return true;
 }
@@ -606,8 +610,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					const auto scan_idx = filter.scan_column_index;
 					const auto column_idx = filter.table_column_index;
 
+					auto &result_vector = result.data[scan_idx];
 					if (column_idx == COLUMN_IDENTIFIER_ROW_ID) {
-
 						// We do another quick statistics scan for row ids here
 						const auto rowid_start = this->start + current_row;
 						const auto rowid_end = this->start + current_row + max_count;
@@ -620,9 +624,9 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 						// Generate row ids
 						// Create sequence for row ids
-						D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
-						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
-						auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
+						D_ASSERT(result_vector.GetType().InternalType() == ROW_TYPE);
+						result_vector.SetVectorType(VectorType::FLAT_VECTOR);
+						auto result_data = FlatVector::GetData<int64_t>(result_vector);
 						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
 							result_data[sel.get_index(sel_idx)] =
 							    UnsafeNumericCast<int64_t>(this->start + current_row + sel.get_index(sel_idx));
@@ -635,14 +639,14 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 						// Now apply the filter
 						UnifiedVectorFormat vdata;
-						result.data[i].ToUnifiedFormat(approved_tuple_count, vdata);
-						ColumnSegment::FilterSelection(sel, result.data[i], vdata, filter.filter, approved_tuple_count,
+						result_vector.ToUnifiedFormat(approved_tuple_count, vdata);
+						ColumnSegment::FilterSelection(sel, result_vector, vdata, filter.filter, approved_tuple_count,
 						                               approved_tuple_count);
 
 					} else {
 						auto &col_data = GetColumn(filter.table_column_index);
-						col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx],
-						                result.data[scan_idx], sel, approved_tuple_count, filter.filter);
+						col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector,
+						                sel, approved_tuple_count, filter.filter);
 					}
 				}
 				for (auto &table_filter : filter_list) {
@@ -1106,6 +1110,22 @@ RowGroupPointer RowGroup::Deserialize(Deserializer &deserializer) {
 	result.tuple_count = deserializer.ReadProperty<uint64_t>(101, "tuple_count");
 	result.data_pointers = deserializer.ReadProperty<vector<MetaBlockPointer>>(102, "data_pointers");
 	result.deletes_pointers = deserializer.ReadProperty<vector<MetaBlockPointer>>(103, "delete_pointers");
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// GetPartitionStats
+//===--------------------------------------------------------------------===//
+PartitionStatistics RowGroup::GetPartitionStats() const {
+	PartitionStatistics result;
+	result.row_start = start;
+	result.count = count;
+	if (HasUnloadedDeletes() || version_info.load().get()) {
+		// we have version info - approx count
+		result.count_type = CountType::COUNT_APPROXIMATE;
+	} else {
+		result.count_type = CountType::COUNT_EXACT;
+	}
 	return result;
 }
 

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/catalog/dcatalog.hpp
+// duckdb/catalog/duck_catalog.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -49,6 +49,11 @@ public:
 	DUCKDB_API unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt,
 	                                                       TableCatalogEntry &table,
 	                                                       unique_ptr<LogicalOperator> plan) override;
+	DUCKDB_API unique_ptr<LogicalOperator> BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
+	                                                         unique_ptr<LogicalOperator> plan,
+	                                                         unique_ptr<CreateIndexInfo> create_info,
+	                                                         unique_ptr<AlterTableInfo> alter_info) override;
+
 	CatalogSet &GetSchemaCatalogSet();
 
 	DatabaseSize GetDatabaseSize(ClientContext &context) override;

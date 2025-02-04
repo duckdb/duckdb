@@ -12,25 +12,31 @@ CREATE TABLE test (a INTEGER, b VARCHAR, c INTEGER);
 statement error
 insert into test select * from read_csv('data/csv/test/test_long_line.csv', columns={'a': 'INTEGER',  'b': 'VARCHAR', 'c': 'INTEGER'}, maximum_line_size=0);
 ----
-Maximum line size of 0 bytes exceeded. Actual Size:10006 bytes.
+Be sure that the maximum line size is set to an appropriate value
 
 # Single line too long
 # "a".repeat(2 * 1024 * 1024 + 10);
 statement error
 select * from read_csv_auto('data/csv/issue_8320_1.csv.gz');
 ----
-Maximum line size of 2097152 bytes exceeded
+Maximum line size of 2000000 bytes exceeded
 
 # Single line too long, but with actual newline at the end
 # "a".repeat(2 * 1024 * 1024 + 10) + "\n";
 statement error
 select * from read_csv_auto('data/csv/issue_8320_2.csv.gz');
 ----
-Maximum line size of 2097152 bytes exceeded
+Be sure that the maximum line size is set to an appropriate value
 
 # Multiple lines too long
 # String value = "a".repeat(2 * 1024 * 1024 + 10) + "\n"; String data = value + value + value + value;
 statement error
 select * from read_csv_auto('data/csv/issue_8320_3.csv.gz');
 ----
-Maximum line size of 2097152 bytes exceeded
+Be sure that the maximum line size is set to an appropriate value
+
+# Add a test to verify we throw if max line size below a buffer size
+statement error
+select * from read_csv_auto('data/csv/issue_8320_3.csv.gz', max_line_size = 2097152, buffer_size = 10);
+----
+BUFFER_SIZE option was set to 10, while MAX_LINE_SIZE was set to 2097152. BUFFER_SIZE must have always be set to value bigger than MAX_LINE_SIZE

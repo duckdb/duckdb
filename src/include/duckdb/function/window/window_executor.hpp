@@ -58,7 +58,7 @@ public:
 
 	explicit WindowExecutorLocalState(const WindowExecutorGlobalState &gstate);
 
-	void Sink(WindowExecutorGlobalState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx);
+	virtual void Sink(WindowExecutorGlobalState &gstate, DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx);
 	virtual void Finalize(WindowExecutorGlobalState &gstate, CollectionPtr collection);
 
 	//! The state used for reading the range collection

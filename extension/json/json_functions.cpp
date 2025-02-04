@@ -22,24 +22,22 @@ static JSONPathType CheckPath(const Value &path_val, string &path, size_t &len) 
 	auto path_str = path_str_val.GetValueUnsafe<string_t>();
 	len = path_str.GetSize();
 	const auto ptr = path_str.GetData();
-	// Empty strings and invalid $ paths yield an error
-	if (len == 0) {
-		throw BinderException("Empty JSON path");
-	}
 	JSONPathType path_type = JSONPathType::REGULAR;
 	// Copy over string to the bind data
-	if (*ptr == '/' || *ptr == '$') {
-		path = string(ptr, len);
-	} else if (path_val.type().IsIntegral()) {
-		path = "$[" + string(ptr, len) + "]";
-	} else if (memchr(ptr, '"', len)) {
-		path = "/" + string(ptr, len);
-	} else {
-		path = "$.\"" + string(ptr, len) + "\"";
-	}
-	len = path.length();
-	if (*path.c_str() == '$') {
-		path_type = JSONCommon::ValidatePath(path.c_str(), len, true);
+	if (len != 0) {
+		if (*ptr == '/' || *ptr == '$') {
+			path = string(ptr, len);
+		} else if (path_val.type().IsIntegral()) {
+			path = "$[" + string(ptr, len) + "]";
+		} else if (memchr(ptr, '"', len)) {
+			path = "/" + string(ptr, len);
+		} else {
+			path = "$.\"" + string(ptr, len) + "\"";
+		}
+		len = path.length();
+		if (*path.c_str() == '$') {
+			path_type = JSONCommon::ValidatePath(path.c_str(), len, true);
+		}
 	}
 	return path_type;
 }

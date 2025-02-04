@@ -25,7 +25,7 @@ INSERT INTO test VALUES (2, 1);
 statement error
 COMMIT
 ----
-<REGEX>:TransactionContext Error.*Failed to commit: PRIMARY KEY or UNIQUE constraint violated: duplicate key "1".*
+<REGEX>:TransactionContext Error.*Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key "1".*
 
 # Inserting duplicate values must work after rolling back.
 
@@ -35,21 +35,21 @@ INSERT INTO test VALUES (1, 1), (2, 1), (2, NULL);
 # Invalidate the transaction with a constraint violation.
 
 statement ok
-CREATE TABLE other (i INTEGER, j INTEGER)
+CREATE TABLE other (i INTEGER, j INTEGER);
 
 statement ok
 BEGIN TRANSACTION
 
 statement ok
-INSERT INTO other VALUES (1, 1), (2, 1)
+INSERT INTO other VALUES (1, 1), (2, 1);
 
 statement ok
-ALTER TABLE other ADD PRIMARY KEY (j)
+ALTER TABLE other ADD PRIMARY KEY (j);
 
 statement error
 COMMIT
 ----
-<REGEX>:TransactionContext Error.*Failed to commit: PRIMARY KEY or UNIQUE constraint violated: duplicate key "1".*
+<REGEX>:TransactionContext Error.*Failed to commit: PRIMARY KEY or UNIQUE constraint violation: duplicate key "1".*
 
 # Inserting duplicate values must work after rolling back.
 

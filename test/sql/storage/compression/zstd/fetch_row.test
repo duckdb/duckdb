@@ -1,6 +1,9 @@
 # name: test/sql/storage/compression/zstd/fetch_row.test
 # group: [zstd]
 
+statement ok
+SET storage_compatibility_version='v1.2.0'
+
 # load the DB from disk
 load __TEST_DIR__/test_zstd_compression_fetch_row.db
 

@@ -13,6 +13,6 @@
 namespace duckdb {
 
 //! Whether or not a function can throw an error or not
-enum class FunctionErrors : uint8_t { CANNOT_ERROR = 0, CAN_THROW_ERROR = 1 };
+enum class FunctionErrors : uint8_t { CANNOT_ERROR = 0, CAN_THROW_RUNTIME_ERROR = 1 };
 
 } // namespace duckdb

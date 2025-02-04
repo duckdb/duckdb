@@ -1,8 +1,9 @@
 #include "duckdb/transaction/meta_transaction.hpp"
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/main/attached_database.hpp"
-#include "duckdb/transaction/transaction_manager.hpp"
+
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/transaction/transaction_manager.hpp"
 
 namespace duckdb {
 
@@ -54,7 +55,7 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
 		auto &new_transaction = db.GetTransactionManager().StartTransaction(context);
-		new_transaction.active_query = active_query;
+		new_transaction.active_query = active_query.load();
 #ifdef DEBUG
 		VerifyAllTransactionsUnique(db, all_transactions);
 #endif

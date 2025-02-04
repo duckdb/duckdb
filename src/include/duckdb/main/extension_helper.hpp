@@ -35,6 +35,7 @@ struct ExtensionAlias {
 struct ExtensionInitResult {
 	string filename;
 	string filebase;
+	ExtensionABIType abi_type = ExtensionABIType::UNKNOWN;
 
 	// The deserialized install from the `<ext>.duckdb_extension.info` file
 	unique_ptr<ExtensionInstallInfo> install_info;
@@ -121,6 +122,10 @@ public:
 	//! Get the extension directory base on the current config
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DatabaseInstance &db, FileSystem &fs);
+
+	// Get the extension directory path
+	static string GetExtensionDirectoryPath(ClientContext &context);
+	static string GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);

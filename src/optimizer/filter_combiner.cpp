@@ -78,6 +78,7 @@ FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInforma
 			return FilterResult::SUCCESS;
 		case ValueComparisonResult::UNSATISFIABLE_CONDITION:
 			// combination of filters is unsatisfiable: prune the entire branch
+			info_list.push_back(info);
 			return FilterResult::UNSATISFIABLE;
 		default:
 			// prune nothing, move to the next condition
@@ -402,7 +403,7 @@ bool FilterCombiner::HasFilters() {
 // Try to extract a column index from a bound column ref expression, or a column ref recursively nested
 // inside of a struct_extract call. If the expression is not a column ref (or nested column ref), return false.
 static bool TryGetBoundColumnIndex(const vector<ColumnIndex> &column_ids, const Expression &expr, ColumnIndex &result) {
-	switch (expr.type) {
+	switch (expr.GetExpressionType()) {
 	case ExpressionType::BOUND_COLUMN_REF: {
 		auto &ref = expr.Cast<BoundColumnRefExpression>();
 		result = column_ids[ref.binding.column_index];
@@ -424,7 +425,7 @@ static bool TryGetBoundColumnIndex(const vector<ColumnIndex> &column_ids, const 
 // Try to push down a filter into a expression by recursively wrapping any nested expressions in StructFilters.
 // If the expression is not a struct_extract, return the inner_filter unchanged.
 static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, unique_ptr<TableFilter> inner_filter) {
-	if (expr.type == ExpressionType::BOUND_FUNCTION) {
+	if (expr.GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		auto &child_expr = func.children[0];
 		auto child_value = func.children[1]->Cast<BoundConstantExpression>().value;
@@ -524,11 +525,11 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 	//! Here we look for LIKE or IN filters
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
-		if (remaining_filter->expression_class == ExpressionClass::BOUND_FUNCTION) {
+		if (remaining_filter->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 			auto &func = remaining_filter->Cast<BoundFunctionExpression>();
 			if (func.function.name == "prefix" &&
-			    func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
-			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
+			    func.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+			    func.children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				//! This is a like function.
 				auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 				auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
@@ -545,8 +546,9 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				table_filters.PushFilter(column_index, std::move(lower_bound));
 				table_filters.PushFilter(column_index, std::move(upper_bound));
 			}
-			if (func.function.name == "~~" && func.children[0]->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
-			    func.children[1]->type == ExpressionType::VALUE_CONSTANT) {
+			if (func.function.name == "~~" &&
+			    func.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+			    func.children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
 				//! This is a like function.
 				auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 				auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
@@ -586,10 +588,10 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 					table_filters.PushFilter(column_index, std::move(upper_bound));
 				}
 			}
-		} else if (remaining_filter->type == ExpressionType::COMPARE_IN) {
+		} else if (remaining_filter->GetExpressionType() == ExpressionType::COMPARE_IN) {
 			auto &func = remaining_filter->Cast<BoundOperatorExpression>();
 			D_ASSERT(func.children.size() > 1);
-			if (func.children[0]->expression_class != ExpressionClass::BOUND_COLUMN_REF) {
+			if (func.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
 				continue;
 			}
 			auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
@@ -600,7 +602,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 			//! check if all children are const expr
 			bool children_constant = true;
 			for (size_t i {1}; i < func.children.size(); i++) {
-				if (func.children[i]->type != ExpressionType::VALUE_CONSTANT) {
+				if (func.children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
 					children_constant = false;
 					break;
 				}
@@ -626,9 +628,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				continue;
 			}
 
-			if (!type.IsIntegral()) {
-				continue;
-			}
 			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
 			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
 			vector<Value> in_list;
@@ -637,7 +636,7 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 				D_ASSERT(!const_value_expr.value.IsNull());
 				in_list.push_back(const_value_expr.value);
 			}
-			if (IsDenseRange(in_list)) {
+			if (type.IsIntegral() && IsDenseRange(in_list)) {
 				// dense range! turn this into x >= min AND x <= max
 				// IsDenseRange sorts in_list, so the front element is the min and the back element is the max
 				auto lower_bound =
@@ -660,9 +659,9 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
-		if (remaining_filter->expression_class == ExpressionClass::BOUND_CONJUNCTION) {
+		if (remaining_filter->GetExpressionClass() == ExpressionClass::BOUND_CONJUNCTION) {
 			auto &conj = remaining_filter->Cast<BoundConjunctionExpression>();
-			if (conj.type == ExpressionType::CONJUNCTION_OR) {
+			if (conj.GetExpressionType() == ExpressionType::CONJUNCTION_OR) {
 				optional_idx column_id;
 				auto optional_filter = make_uniq<OptionalFilter>();
 				auto conj_filter = make_uniq<ConjunctionOrFilter>();
@@ -675,12 +674,12 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 					optional_ptr<BoundConstantExpression> const_val;
 					auto &comp = child->Cast<BoundComparisonExpression>();
 					bool invert = false;
-					if (comp.left->expression_class == ExpressionClass::BOUND_COLUMN_REF &&
-					    comp.right->expression_class == ExpressionClass::BOUND_CONSTANT) {
+					if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+					    comp.right->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT) {
 						column_ref = comp.left->Cast<BoundColumnRefExpression>();
 						const_val = comp.right->Cast<BoundConstantExpression>();
-					} else if (comp.left->expression_class == ExpressionClass::BOUND_CONSTANT &&
-					           comp.right->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
+					} else if (comp.left->GetExpressionClass() == ExpressionClass::BOUND_CONSTANT &&
+					           comp.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
 						column_ref = comp.right->Cast<BoundColumnRefExpression>();
 						const_val = comp.left->Cast<BoundConstantExpression>();
 						invert = true;
@@ -701,14 +700,32 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 						break;
 					}
 
-					if (const_val->value.type().IsTemporal() ||
-					    const_val->value.type().id() == LogicalTypeId::VARCHAR) {
+					if (const_val->value.type().IsTemporal()) {
 						column_id.SetInvalid();
 						break;
 					}
-					auto comparison_type = invert ? FlipComparisonExpression(comp.type) : comp.type;
-					auto const_filter = make_uniq<ConstantFilter>(comparison_type, const_val->value);
-					conj_filter->child_filters.push_back(std::move(const_filter));
+					auto comparison_type =
+					    invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
+					if (const_val->value.IsNull()) {
+						switch (comparison_type) {
+						case ExpressionType::COMPARE_DISTINCT_FROM: {
+							auto null_filter = make_uniq<IsNotNullFilter>();
+							conj_filter->child_filters.push_back(std::move(null_filter));
+							break;
+						}
+						case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
+							auto null_filter = make_uniq<IsNullFilter>();
+							conj_filter->child_filters.push_back(std::move(null_filter));
+							break;
+						}
+						// if any other comparison type (i.e EQUAL, NOT_EQUAL) do not push a table filter
+						default:
+							break;
+						}
+					} else {
+						auto const_filter = make_uniq<ConstantFilter>(comparison_type, const_val->value);
+						conj_filter->child_filters.push_back(std::move(const_filter));
+					}
 				}
 				if (column_id.IsValid()) {
 					optional_filter->child_filter = std::move(conj_filter);
@@ -717,8 +734,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 			}
 		}
 	}
-
-	//	GenerateORFilters(table_filters, column_ids);
 
 	return table_filters;
 }
@@ -733,11 +748,12 @@ static bool IsLessThan(ExpressionType type) {
 
 FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 	auto &comparison = expr.Cast<BoundComparisonExpression>();
-	if (comparison.type != ExpressionType::COMPARE_LESSTHAN &&
-	    comparison.type != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
-	    comparison.type != ExpressionType::COMPARE_GREATERTHAN &&
-	    comparison.type != ExpressionType::COMPARE_GREATERTHANOREQUALTO &&
-	    comparison.type != ExpressionType::COMPARE_EQUAL && comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
+	if (comparison.GetExpressionType() != ExpressionType::COMPARE_LESSTHAN &&
+	    comparison.GetExpressionType() != ExpressionType::COMPARE_LESSTHANOREQUALTO &&
+	    comparison.GetExpressionType() != ExpressionType::COMPARE_GREATERTHAN &&
+	    comparison.GetExpressionType() != ExpressionType::COMPARE_GREATERTHANOREQUALTO &&
+	    comparison.GetExpressionType() != ExpressionType::COMPARE_EQUAL &&
+	    comparison.GetExpressionType() != ExpressionType::COMPARE_NOTEQUAL) {
 		// only support [>, >=, <, <=, ==, !=] expressions
 		return FilterResult::UNSUPPORTED;
 	}
@@ -760,7 +776,8 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 
 		// create the ExpressionValueInformation
 		ExpressionValueInformation info;
-		info.comparison_type = left_is_scalar ? FlipComparisonExpression(comparison.type) : comparison.type;
+		info.comparison_type =
+		    left_is_scalar ? FlipComparisonExpression(comparison.GetExpressionType()) : comparison.GetExpressionType();
 		info.constant = constant_value;
 
 		// get the current bucket of constant values
@@ -776,17 +793,21 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		auto transitive_filter = FindTransitiveFilter(non_scalar);
 		if (transitive_filter != nullptr) {
 			// try to add transitive filters
-			if (AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>()) ==
-			    FilterResult::UNSUPPORTED) {
+			auto transitive_result = AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>());
+			if (transitive_result == FilterResult::UNSUPPORTED) {
 				// in case of unsuccessful re-add filter into remaining ones
 				remaining_filters.push_back(std::move(transitive_filter));
+			}
+			if (transitive_result == FilterResult::UNSATISFIABLE) {
+				// in case transitive filter is unsatisfiable - abort filter pushdown
+				return FilterResult::UNSATISFIABLE;
 			}
 		}
 		return ret;
 	} else {
 		// comparison between two non-scalars
 		// only handle comparisons for now
-		if (expr.type != ExpressionType::COMPARE_EQUAL) {
+		if (expr.GetExpressionType() != ExpressionType::COMPARE_EQUAL) {
 			return FilterResult::UNSUPPORTED;
 		}
 		// get the LHS and RHS nodes
@@ -940,7 +961,7 @@ FilterResult FilterCombiner::AddFilter(Expression &expr) {
  * It's missing to create another method to add transitive filters from scalar filters, e.g, i > 10
  */
 FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &comparison, bool is_root) {
-	if (!IsGreaterThan(comparison.type) && !IsLessThan(comparison.type)) {
+	if (!IsGreaterThan(comparison.GetExpressionType()) && !IsLessThan(comparison.GetExpressionType())) {
 		return FilterResult::UNSUPPORTED;
 	}
 	// get the LHS and RHS nodes
@@ -948,20 +969,20 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 	reference<Expression> right_node = GetNode(*comparison.right);
 	// In case with filters like CAST(i) = j and i = 5 we replace the COLUMN_REF i with the constant 5
 	do {
-		if (right_node.get().type != ExpressionType::OPERATOR_CAST) {
+		if (right_node.get().GetExpressionType() != ExpressionType::OPERATOR_CAST) {
 			break;
 		}
 		auto &bound_cast_expr = right_node.get().Cast<BoundCastExpression>();
-		if (bound_cast_expr.child->type != ExpressionType::BOUND_COLUMN_REF) {
+		if (bound_cast_expr.child->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 			break;
 		}
 		auto &col_ref = bound_cast_expr.child->Cast<BoundColumnRefExpression>();
 		for (auto &stored_exp : stored_expressions) {
 			reference<Expression> expr = stored_exp.first;
-			if (expr.get().type == ExpressionType::OPERATOR_CAST) {
+			if (expr.get().GetExpressionType() == ExpressionType::OPERATOR_CAST) {
 				expr = *(right_node.get().Cast<BoundCastExpression>().child);
 			}
-			if (expr.get().type != ExpressionType::BOUND_COLUMN_REF) {
+			if (expr.get().GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 				continue;
 			}
 			auto &st_col_ref = expr.get().Cast<BoundColumnRefExpression>();
@@ -1004,33 +1025,33 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			// suppose the new comparison is j >= i and we have already a filter i = 10,
 			// then we create a new filter j >= 10
 			// and the filter j >= i can be pruned by not adding it into the remaining filters
-			info.comparison_type = comparison.type;
-		} else if ((comparison.type == ExpressionType::COMPARE_GREATERTHANOREQUALTO &&
+			info.comparison_type = comparison.GetExpressionType();
+		} else if ((comparison.GetExpressionType() == ExpressionType::COMPARE_GREATERTHANOREQUALTO &&
 		            IsGreaterThan(right_constant.comparison_type)) ||
-		           (comparison.type == ExpressionType::COMPARE_LESSTHANOREQUALTO &&
+		           (comparison.GetExpressionType() == ExpressionType::COMPARE_LESSTHANOREQUALTO &&
 		            IsLessThan(right_constant.comparison_type))) {
 			// filters (j >= i AND i [>, >=] 10) OR (j <= i AND i [<, <=] 10)
 			// create filter j [>, >=] 10 and add the filter j [>=, <=] i into the remaining filters
 			info.comparison_type = right_constant.comparison_type; // create filter j [>, >=, <, <=] 10
 			if (!is_inserted) {
 				// Add the filter j >= i in the remaing filters
-				auto filter = make_uniq<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
-				                                                   comparison.right->Copy());
+				auto filter = make_uniq<BoundComparisonExpression>(comparison.GetExpressionType(),
+				                                                   comparison.left->Copy(), comparison.right->Copy());
 				remaining_filters.push_back(std::move(filter));
 				is_inserted = true;
 			}
-		} else if ((comparison.type == ExpressionType::COMPARE_GREATERTHAN &&
+		} else if ((comparison.GetExpressionType() == ExpressionType::COMPARE_GREATERTHAN &&
 		            IsGreaterThan(right_constant.comparison_type)) ||
-		           (comparison.type == ExpressionType::COMPARE_LESSTHAN &&
+		           (comparison.GetExpressionType() == ExpressionType::COMPARE_LESSTHAN &&
 		            IsLessThan(right_constant.comparison_type))) {
 			// filters (j > i AND i [>, >=] 10) OR j < i AND i [<, <=] 10
 			// create filter j [>, <] 10 and add the filter j [>, <] i into the remaining filters
 			// the comparisons j > i and j < i are more restrictive
-			info.comparison_type = comparison.type;
+			info.comparison_type = comparison.GetExpressionType();
 			if (!is_inserted) {
 				// Add the filter j [>, <] i
-				auto filter = make_uniq<BoundComparisonExpression>(comparison.type, comparison.left->Copy(),
-				                                                   comparison.right->Copy());
+				auto filter = make_uniq<BoundComparisonExpression>(comparison.GetExpressionType(),
+				                                                   comparison.left->Copy(), comparison.right->Copy());
 				remaining_filters.push_back(std::move(filter));
 				is_inserted = true;
 			}
@@ -1051,9 +1072,14 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			if (transitive_filter != nullptr) {
 				// try to add transitive filters
 				auto &transitive_cast = transitive_filter->Cast<BoundComparisonExpression>();
-				if (AddTransitiveFilters(transitive_cast, false) == FilterResult::UNSUPPORTED) {
+				auto transitive_result = AddTransitiveFilters(transitive_cast, false);
+				if (transitive_result == FilterResult::UNSUPPORTED) {
 					// in case of unsuccessful re-add filter into remaining ones
 					remaining_filters.push_back(std::move(transitive_filter));
+				}
+				if (transitive_result == FilterResult::UNSATISFIABLE) {
+					// while adding transitive filters we discovered the filter is unsatisfisable - we can prune
+					return FilterResult::UNSATISFIABLE;
 				}
 			}
 		}
@@ -1070,13 +1096,13 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
  */
 unique_ptr<Expression> FilterCombiner::FindTransitiveFilter(Expression &expr) {
 	// We only check for bound column ref
-	if (expr.type != ExpressionType::BOUND_COLUMN_REF) {
+	if (expr.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
 		return nullptr;
 	}
 	for (idx_t i = 0; i < remaining_filters.size(); i++) {
 		if (remaining_filters[i]->GetExpressionClass() == ExpressionClass::BOUND_COMPARISON) {
 			auto &comparison = remaining_filters[i]->Cast<BoundComparisonExpression>();
-			if (expr.Equals(*comparison.right) && comparison.type != ExpressionType::COMPARE_NOTEQUAL) {
+			if (expr.Equals(*comparison.right) && comparison.GetExpressionType() != ExpressionType::COMPARE_NOTEQUAL) {
 				auto filter = std::move(remaining_filters[i]);
 				remaining_filters.erase_at(i);
 				return filter;

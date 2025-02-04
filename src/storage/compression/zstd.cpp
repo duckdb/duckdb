@@ -76,7 +76,7 @@ struct ZSTDStorage {
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
-	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointer &checkpointer,
+	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> analyze_state_p);
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
@@ -140,6 +140,12 @@ public:
 };
 
 unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
+	// check if the storage version we are writing to supports sztd
+	auto &storage = col_data.GetStorageManager();
+	if (storage.GetStorageVersion() < 4) {
+		// compatibility mode with old versions - disable zstd
+		return nullptr;
+	}
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	auto &data_table_info = col_data.info;
 	auto &attached_db = data_table_info.GetDB();
@@ -218,10 +224,12 @@ idx_t ZSTDStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 class ZSTDCompressionState : public CompressionState {
 public:
-	explicit ZSTDCompressionState(ColumnDataCheckpointer &checkpointer, unique_ptr<ZSTDAnalyzeState> &&analyze_state_p)
+	explicit ZSTDCompressionState(ColumnDataCheckpointData &checkpoint_data,
+	                              unique_ptr<ZSTDAnalyzeState> &&analyze_state_p)
 	    : CompressionState(analyze_state_p->info), analyze_state(std::move(analyze_state_p)),
-	      checkpointer(checkpointer), partial_block_manager(checkpointer.GetCheckpointState().GetPartialBlockManager()),
-	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)) {
+	      checkpoint_data(checkpoint_data),
+	      partial_block_manager(checkpoint_data.GetCheckpointState().GetPartialBlockManager()),
+	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_ZSTD)) {
 
 		total_vector_count = GetVectorCount(analyze_state->count);
 		total_segment_count = analyze_state->segment_count;
@@ -303,7 +311,7 @@ public:
 			row_start = segment->start + segment->count;
 			FlushSegment();
 		} else {
-			row_start = checkpointer.GetRowGroup().start;
+			row_start = checkpoint_data.GetRowGroup().start;
 		}
 		CreateEmptySegment(row_start);
 
@@ -517,19 +525,18 @@ public:
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
+		auto &db = checkpoint_data.GetDatabase();
+		auto &type = checkpoint_data.GetType();
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockSize());
 		segment = std::move(compressed_segment);
-		segment->function = function;
 
-		auto &buffer_manager = BufferManager::GetBufferManager(checkpointer.GetDatabase());
+		auto &buffer_manager = BufferManager::GetBufferManager(checkpoint_data.GetDatabase());
 		segment_handle = buffer_manager.Pin(segment->block);
 	}
 
 	void FlushSegment() {
-		auto &state = checkpointer.GetCheckpointState();
+		auto &state = checkpoint_data.GetCheckpointState();
 		idx_t segment_block_size;
 
 		if (current_buffer.get() == &segment_handle) {
@@ -556,7 +563,7 @@ public:
 
 public:
 	unique_ptr<ZSTDAnalyzeState> analyze_state;
-	ColumnDataCheckpointer &checkpointer;
+	ColumnDataCheckpointData &checkpoint_data;
 	PartialBlockManager &partial_block_manager;
 	CompressionFunction &function;
 
@@ -612,9 +619,9 @@ public:
 	idx_t vector_size;
 };
 
-unique_ptr<CompressionState> ZSTDStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
+unique_ptr<CompressionState> ZSTDStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                           unique_ptr<AnalyzeState> analyze_state_p) {
-	return make_uniq<ZSTDCompressionState>(checkpointer,
+	return make_uniq<ZSTDCompressionState>(checkpoint_data,
 	                                       unique_ptr_cast<AnalyzeState, ZSTDAnalyzeState>(std::move(analyze_state_p)));
 }
 
@@ -889,7 +896,7 @@ public:
 
 	void ScanInternal(ZSTDVectorScanState &scan_state, idx_t count, Vector &result, idx_t result_offset) {
 		D_ASSERT(scan_state.scanned_count + count <= scan_state.metadata.count);
-		D_ASSERT(result.GetType().id() == LogicalTypeId::VARCHAR);
+		D_ASSERT(result.GetType().InternalType() == PhysicalType::VARCHAR);
 
 		string_length_t *string_lengths = &scan_state.string_lengths[scan_state.scanned_count];
 		idx_t uncompressed_length = 0;

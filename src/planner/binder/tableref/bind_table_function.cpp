@@ -108,25 +108,25 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		string parameter_name;
 
 		// hack to make named parameters work
-		if (child->type == ExpressionType::COMPARE_EQUAL) {
+		if (child->GetExpressionType() == ExpressionType::COMPARE_EQUAL) {
 			// comparison, check if the LHS is a columnref
 			auto &comp = child->Cast<ComparisonExpression>();
-			if (comp.left->type == ExpressionType::COLUMN_REF) {
+			if (comp.left->GetExpressionType() == ExpressionType::COLUMN_REF) {
 				auto &colref = comp.left->Cast<ColumnRefExpression>();
 				if (!colref.IsQualified()) {
 					parameter_name = colref.GetColumnName();
 					child = std::move(comp.right);
 				}
 			}
-		} else if (!child->alias.empty()) {
+		} else if (!child->GetAlias().empty()) {
 			// <name> => <expression> will set the alias of <expression> to <name>
-			parameter_name = child->alias;
+			parameter_name = child->GetAlias();
 		}
-		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION && child->type == ExpressionType::SUBQUERY) {
+		if (bind_type == TableFunctionBindType::TABLE_PARAMETER_FUNCTION &&
+		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
 			auto fun = table_function.functions.GetFunctionByOffset(0);
-			if (table_function.functions.Size() != 1 || fun.arguments.empty() ||
-			    fun.arguments[0].id() != LogicalTypeId::TABLE) {
+			if (table_function.functions.Size() != 1 || fun.arguments.empty()) {
 				throw BinderException(
 				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
 				    fun.name);
@@ -177,7 +177,7 @@ static string GetAlias(const TableFunctionRef &ref) {
 	if (!ref.alias.empty()) {
 		return ref.alias;
 	}
-	if (ref.function && ref.function->type == ExpressionType::FUNCTION) {
+	if (ref.function && ref.function->GetExpressionType() == ExpressionType::FUNCTION) {
 		auto &function_expr = ref.function->Cast<FunctionExpression>();
 		return function_expr.function_name;
 	}
@@ -202,7 +202,9 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		                                  table_function.function_info.get(), this, table_function, ref);
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
-			if (new_plan != nullptr) {
+			if (new_plan) {
+				new_plan->alias = ref.alias;
+				new_plan->column_name_alias = ref.column_name_alias;
 				return CreatePlan(*Bind(*new_plan));
 			} else if (!table_function.bind) {
 				throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
@@ -262,7 +264,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunction(TableFunction &function, v
 unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 
-	D_ASSERT(ref.function->type == ExpressionType::FUNCTION);
+	D_ASSERT(ref.function->GetExpressionType() == ExpressionType::FUNCTION);
 	auto &fexpr = ref.function->Cast<FunctionExpression>();
 
 	string catalog = fexpr.catalog;
@@ -282,7 +284,14 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		binder->can_contain_nulls = true;
 
 		binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
-		auto query = binder->BindNode(*query_node);
+		unique_ptr<BoundQueryNode> query;
+		try {
+			query = binder->BindNode(*query_node);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			error.AddQueryLocation(ref);
+			error.Throw();
+		}
 
 		idx_t bind_index = query->GetRootIndex();
 		// string alias;

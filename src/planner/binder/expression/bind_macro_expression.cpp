@@ -3,6 +3,7 @@
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -12,7 +13,7 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
                                                       vector<unordered_set<string>> &lambda_params) {
 
 	for (auto &child : function.children) {
-		if (child->expression_class != ExpressionClass::LAMBDA) {
+		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			ReplaceMacroParameters(child, lambda_params);
 			continue;
 		}
@@ -126,7 +127,26 @@ void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, Scala
 	macro_binding = new_macro_binding.get();
 
 	// replace current expression with stored macro expression
-	expr = macro_def.expression->Copy();
+	// special case: If this is a window function, then we need to return a window expression
+	if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
+		//	Only allowed if the expression is a function
+		if (macro_def.expression->GetExpressionType() != ExpressionType::FUNCTION) {
+			throw BinderException("Window function macros must be functions");
+		}
+		auto macro_copy = macro_def.expression->Copy();
+		auto &macro_expr = macro_copy->Cast<FunctionExpression>();
+		// Transfer the macro function attributes
+		auto &window_expr = expr->Cast<WindowExpression>();
+		window_expr.catalog = macro_expr.catalog;
+		window_expr.schema = macro_expr.schema;
+		window_expr.function_name = macro_expr.function_name;
+		window_expr.children = std::move(macro_expr.children);
+		window_expr.distinct = macro_expr.distinct;
+		window_expr.filter_expr = std::move(macro_expr.filter);
+		// TODO: transfer order_bys when window functions support them
+	} else {
+		expr = macro_def.expression->Copy();
+	}
 
 	// qualify only the macro parameters with a new empty binder that only knows the macro binding
 	auto dummy_binder = Binder::CreateBinder(context);

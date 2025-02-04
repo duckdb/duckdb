@@ -63,6 +63,9 @@ public:
 	inline void SetCardinality(const DataChunk &other) {
 		SetCardinality(other.size());
 	}
+	inline idx_t GetCapacity() const {
+		return capacity;
+	}
 	inline void SetCapacity(idx_t capacity_p) {
 		this->capacity = capacity_p;
 	}

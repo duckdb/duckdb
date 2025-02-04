@@ -91,7 +91,7 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 			strftime_children.emplace_back(make_uniq<ConstantExpression>(timestamp_format));
 			column = make_uniq<FunctionExpression>("strftime", std::move(strftime_children));
 		}
-		column->alias = name;
+		column->SetAlias(name);
 		select_list.emplace_back(std::move(column));
 	}
 

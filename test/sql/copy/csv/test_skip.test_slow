@@ -65,10 +65,11 @@ SELECT * EXCLUDE (prompt) from sniff_csv('__TEST_DIR__/skip.csv',skip=3000)
 ----
 ,	\0	\0	\n	\0	3000	0	[{'name': column0, 'type': BIGINT}]	NULL	NULL	skip=3000
 
+# If we don't encounter a value, we use skip
 query IIIIIIIIIII
 SELECT * EXCLUDE (prompt) from sniff_csv('__TEST_DIR__/skip.csv',skip=11000)
 ----
-,	\0	\0	\n	\0	11000	0	[{'name': column0, 'type': BIGINT}]	NULL	NULL	skip=11000
+,	\0	\0	\n	\0	11000	0	[{'name': column0, 'type': VARCHAR}]	NULL	NULL	skip=11000
 
 # Test with different buffer sizes
 

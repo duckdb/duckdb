@@ -13,13 +13,9 @@ namespace duckdb {
 
 void Leaf::New(Node &node, const row_t row_id) {
 	D_ASSERT(row_id < MAX_ROW_ID_LOCAL);
-
-	auto status = node.GetGateStatus();
 	node.Clear();
-
 	node.SetMetadata(static_cast<uint8_t>(INLINED));
 	node.SetRowId(row_id);
-	node.SetGateStatus(status);
 }
 
 void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row_ids, const idx_t start,
@@ -30,7 +26,7 @@ void Leaf::New(ART &art, reference<Node> &node, const unsafe_vector<ARTKey> &row
 	// We cannot recurse into the leaf during Construct(...) because row IDs are not sorted.
 	for (idx_t i = 0; i < count; i++) {
 		idx_t offset = start + i;
-		art.Insert(node, row_ids[offset], 0, row_ids[offset], GateStatus::GATE_SET);
+		art.Insert(node, row_ids[offset], 0, row_ids[offset], GateStatus::GATE_SET, nullptr, IndexAppendMode::DEFAULT);
 	}
 	node.get().SetGateStatus(GateStatus::GATE_SET);
 }
@@ -40,7 +36,7 @@ void Leaf::MergeInlined(ART &art, Node &l_node, Node &r_node) {
 
 	ArenaAllocator arena_allocator(Allocator::Get(art.db));
 	auto key = ARTKey::CreateARTKey<row_t>(arena_allocator, r_node.GetRowId());
-	art.Insert(l_node, key, 0, key, l_node.GetGateStatus());
+	art.Insert(l_node, key, 0, key, l_node.GetGateStatus(), nullptr, IndexAppendMode::DEFAULT);
 	r_node.Clear();
 }
 
@@ -106,7 +102,11 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 		auto &leaf = Node::Ref<const Leaf>(art, leaf_ref, LEAF);
 		for (uint8_t i = 0; i < leaf.count; i++) {
 			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, leaf.row_ids[i]);
-			art.Insert(root, row_id, 0, row_id, GateStatus::GATE_SET);
+			auto conflict_type =
+			    art.Insert(root, row_id, 0, row_id, GateStatus::GATE_SET, nullptr, IndexAppendMode::INSERT_DUPLICATES);
+			if (conflict_type != ARTConflictType::NO_CONFLICT) {
+				throw InternalException("invalid conflict type in Leaf::TransformToNested");
+			}
 		}
 		leaf_ref = leaf.ptr;
 	}

@@ -5,6 +5,22 @@
 
 namespace duckdb {
 
+struct LeastOp {
+	using OP = LessThan;
+
+	static OrderByNullType NullOrdering() {
+		return OrderByNullType::NULLS_LAST;
+	}
+};
+
+struct GreaterOp {
+	using OP = GreaterThan;
+
+	static OrderByNullType NullOrdering() {
+		return OrderByNullType::NULLS_FIRST;
+	}
+};
+
 template <class OP>
 struct LeastOperator {
 	template <class T>
@@ -14,8 +30,8 @@ struct LeastOperator {
 };
 
 struct LeastGreatestSortKeyState : public FunctionLocalState {
-	explicit LeastGreatestSortKeyState(idx_t column_count)
-	    : intermediate(LogicalType::BLOB), modifiers(OrderType::ASCENDING, OrderByNullType::NULLS_LAST) {
+	explicit LeastGreatestSortKeyState(idx_t column_count, OrderByNullType null_ordering)
+	    : intermediate(LogicalType::BLOB), modifiers(OrderType::ASCENDING, null_ordering) {
 		vector<LogicalType> types;
 		// initialize sort key chunk
 		for (idx_t i = 0; i < column_count; i++) {
@@ -29,9 +45,10 @@ struct LeastGreatestSortKeyState : public FunctionLocalState {
 	OrderModifiers modifiers;
 };
 
+template <class OP>
 unique_ptr<FunctionLocalState> LeastGreatestSortKeyInit(ExpressionState &state, const BoundFunctionExpression &expr,
                                                         FunctionData *bind_data) {
-	return make_uniq<LeastGreatestSortKeyState>(expr.children.size());
+	return make_uniq<LeastGreatestSortKeyState>(expr.children.size(), OP::NullOrdering());
 }
 
 template <bool STRING>
@@ -155,14 +172,14 @@ static void LeastGreatestFunction(DataChunk &args, ExpressionState &state, Vecto
 	result.SetVectorType(result_type);
 }
 
-template <class OP>
+template <class LEAST_GREATER_OP>
 unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunction &bound_function,
                                            vector<unique_ptr<Expression>> &arguments) {
 	LogicalType child_type = ExpressionBinder::GetExpressionReturnType(*arguments[0]);
 	for (idx_t i = 1; i < arguments.size(); i++) {
 		auto arg_type = ExpressionBinder::GetExpressionReturnType(*arguments[i]);
 		if (!LogicalType::TryGetMaxLogicalType(context, child_type, arg_type, child_type)) {
-			throw BinderException(arguments[i]->query_location,
+			throw BinderException(arguments[i]->GetQueryLocation(),
 			                      "Cannot combine types of %s and %s - an explicit cast is required",
 			                      child_type.ToString(), arg_type.ToString());
 		}
@@ -179,7 +196,9 @@ unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunctio
 	default:
 		break;
 	}
+	using OP = typename LEAST_GREATER_OP::OP;
 	switch (child_type.InternalType()) {
+#ifndef DUCKDB_SMALLER_BINARY
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
 		bound_function.function = LeastGreatestFunction<int8_t, OP>;
@@ -202,10 +221,11 @@ unique_ptr<FunctionData> BindLeastGreatest(ClientContext &context, ScalarFunctio
 	case PhysicalType::VARCHAR:
 		bound_function.function = LeastGreatestFunction<string_t, OP, StandardLeastGreatest<true>>;
 		break;
+#endif
 	default:
 		// fallback with sort keys
 		bound_function.function = LeastGreatestFunction<string_t, OP, SortKeyLeastGreatest>;
-		bound_function.init_local_state = LeastGreatestSortKeyInit;
+		bound_function.init_local_state = LeastGreatestSortKeyInit<LEAST_GREATER_OP>;
 		break;
 	}
 	bound_function.arguments[0] = child_type;
@@ -229,11 +249,11 @@ static ScalarFunctionSet GetLeastGreatestFunctions() {
 }
 
 ScalarFunctionSet LeastFun::GetFunctions() {
-	return GetLeastGreatestFunctions<LessThan>();
+	return GetLeastGreatestFunctions<LeastOp>();
 }
 
 ScalarFunctionSet GreatestFun::GetFunctions() {
-	return GetLeastGreatestFunctions<GreaterThan>();
+	return GetLeastGreatestFunctions<GreaterOp>();
 }
 
 } // namespace duckdb

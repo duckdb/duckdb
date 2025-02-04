@@ -1125,3 +1125,63 @@ TEST_CASE("Test appending with an active column list in the C API") {
 
 	tester.Cleanup();
 }
+
+TEST_CASE("Test appending default value to data chunk in the C API") {
+	CAPITester tester;
+	duckdb::unique_ptr<CAPIResult> result;
+	REQUIRE(tester.OpenDatabase(nullptr));
+
+	tester.Query("CREATE OR REPLACE TABLE tbl (i INT DEFAULT 4, j INT, k INT DEFAULT 30, l AS (random()))");
+	duckdb_appender appender;
+
+	auto status = duckdb_appender_create_ext(tester.connection, nullptr, nullptr, "tbl", &appender);
+	REQUIRE(status == DuckDBSuccess);
+	REQUIRE(duckdb_appender_error(appender) == nullptr);
+
+	duckdb_logical_type types[3];
+	types[0] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	types[1] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	types[2] = duckdb_create_logical_type(DUCKDB_TYPE_INTEGER);
+	auto data_chunk = duckdb_create_data_chunk(types, 3);
+
+	auto col1 = duckdb_data_chunk_get_vector(data_chunk, 0);
+	auto col_data1 = reinterpret_cast<int32_t *>(duckdb_vector_get_data(col1));
+	col_data1[0] = 15;
+	col_data1[1] = 17;
+
+	auto col2 = duckdb_data_chunk_get_vector(data_chunk, 1);
+	auto col_data2 = reinterpret_cast<int32_t *>(duckdb_vector_get_data(col2));
+	col_data2[0] = 16;
+	col_data2[1] = 18;
+
+	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 2, 0) == DuckDBSuccess);
+	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 2, 1) == DuckDBSuccess);
+
+	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 3, 1) == DuckDBError);
+	REQUIRE(duckdb_append_default_to_chunk(appender, data_chunk, 2, duckdb_vector_size() + 1) == DuckDBError);
+
+	duckdb_data_chunk_set_size(data_chunk, 2);
+
+	REQUIRE(duckdb_append_data_chunk(appender, data_chunk) == DuckDBSuccess);
+	duckdb_destroy_data_chunk(&data_chunk);
+	duckdb_destroy_logical_type(&types[0]);
+	duckdb_destroy_logical_type(&types[1]);
+	duckdb_destroy_logical_type(&types[2]);
+
+	REQUIRE(duckdb_appender_flush(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_close(appender) == DuckDBSuccess);
+	REQUIRE(duckdb_appender_destroy(&appender) == DuckDBSuccess);
+
+	result = tester.Query("SELECT i, j, k, l IS NOT NULL FROM tbl");
+	REQUIRE_NO_FAIL(*result);
+	REQUIRE(result->Fetch<int32_t>(0, 0) == 15);
+	REQUIRE(result->Fetch<int32_t>(1, 0) == 16);
+	REQUIRE(result->Fetch<int32_t>(2, 0) == 30);
+	REQUIRE(result->Fetch<bool>(3, 0) == true);
+	REQUIRE(result->Fetch<int32_t>(0, 1) == 17);
+	REQUIRE(result->Fetch<int32_t>(1, 1) == 18);
+	REQUIRE(result->Fetch<int32_t>(2, 1) == 30);
+	REQUIRE(result->Fetch<bool>(3, 1) == true);
+
+	tester.Cleanup();
+}
