@@ -551,7 +551,7 @@ void ReservoirSample::ExpandSerializedSample() {
 }
 
 idx_t ReservoirSample::GetReservoirChunkCapacity() const {
-	return sample_count + (FIXED_SAMPLE_SIZE_MULTIPLIER * FIXED_SAMPLE_SIZE);
+	return sample_count + (FIXED_SAMPLE_SIZE_MULTIPLIER * MinValue<idx_t>(sample_count, FIXED_SAMPLE_SIZE));
 }
 
 idx_t ReservoirSample::FillReservoir(DataChunk &chunk) {
