@@ -138,7 +138,7 @@ unique_ptr<TableRef> Transformer::TransformMatch(duckdb_libpgquery::PGMatchClaus
 	if (root.graph_table) {
 		alias_name = TransformQualifiedName(*root.graph_table).name;
 	}
-	match_info->alias = alias_name.empty() ? "unnamed_graphtable" : alias_name;
+	match_info->alias = alias_name.empty() ? "" : alias_name;
 
 	if (root.where_clause) {
 		match_info->where_clause = TransformExpression(root.where_clause);

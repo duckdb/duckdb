@@ -14,11 +14,12 @@ unique_ptr<QueryNode> Transformer::TransformShow(duckdb_libpgquery::PGVariableSh
 	auto select_node = make_uniq<SelectNode>();
 	select_node->select_list.push_back(make_uniq<StarExpression>());
 	auto showref = make_uniq<ShowRef>();
-	if (stmt.set == std::string("property_graph")) {
-		showref->table_name = stmt.relation->relname;
-	} else if (stmt.set) {
-		// describing a set (e.g. SHOW ALL TABLES) - push it in the table name
-		showref->table_name = stmt.set;
+	if (stmt.set) {
+		if (stmt.set == std::string("property_graph")) {
+			showref->table_name = stmt.relation->relname;
+		} else {
+			showref->table_name = stmt.set;
+		}
 	} else if (!stmt.relation->schemaname) {
 		// describing an unqualified relation - check if this is a "special" relation
 		string table_name = StringUtil::Lower(stmt.relation->relname);
