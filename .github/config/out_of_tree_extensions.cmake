@@ -19,7 +19,7 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG c9732d02310766046a3f574600a456c61f6923da
+    GIT_TAG 85ac4667bcb0d868199e156f8dd918b0278db7b9
     INCLUDE_DIR extension/httpfs/include
     )
 
@@ -100,7 +100,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
-            GIT_TAG ecabb610fa9344c17fc4178aabb5db8e0120db56
+            GIT_TAG 79fcce4a7478d245189d851ce289def2b42f4f93
             )
 endif()
 
@@ -127,7 +127,7 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlite
-        GIT_TAG 1f4b805588018ca775ac68a0b152add8ca833dcd
+        GIT_TAG 96e451c043afa40ee39b7581009ba0c72a523a12
         )
 
 duckdb_extension_load(sqlsmith
@@ -151,7 +151,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-mysql
-            GIT_TAG 547bceb85de9c8dcb96d4a68e4dc0fa01a81ac71
+            GIT_TAG c2a56813a9fe9cb8c24c424be646d41ab2f8e64f
             )
 endif()
 

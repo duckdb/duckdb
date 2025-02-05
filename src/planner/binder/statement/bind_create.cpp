@@ -158,6 +158,9 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 	}
 	view_binder->can_contain_nulls = true;
 
+	auto view_search_path = GetSearchPath(catalog, base.schema);
+	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
+
 	auto copy = base.query->Copy();
 	auto query_node = view_binder->Bind(*base.query);
 	base.query = unique_ptr_cast<SQLStatement, SelectStatement>(std::move(copy));
