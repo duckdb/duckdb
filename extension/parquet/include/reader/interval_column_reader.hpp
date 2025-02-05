@@ -9,7 +9,7 @@
 #pragma once
 
 #include "column_reader.hpp"
-#include "templated_column_reader.hpp"
+#include "reader/templated_column_reader.hpp"
 #include "parquet_reader.hpp"
 
 namespace duckdb {
@@ -56,9 +56,9 @@ class IntervalColumnReader : public TemplatedColumnReader<interval_t, IntervalVa
 
 public:
 	IntervalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-						 idx_t max_define_p, idx_t max_repeat_p)
-		: TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, std::move(type_p), schema_p, file_idx_p,
-																	 max_define_p, max_repeat_p) {};
+	                     idx_t max_define_p, idx_t max_repeat_p)
+	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, std::move(type_p), schema_p, file_idx_p,
+	                                                                 max_define_p, max_repeat_p) {};
 };
 
 } // namespace duckdb

@@ -1,4 +1,4 @@
-#include "struct_column_reader.hpp"
+#include "reader/struct_column_reader.hpp"
 
 namespace duckdb {
 
@@ -125,4 +125,4 @@ idx_t StructColumnReader::GroupRowsAvailable() {
 	return child_readers[0]->GroupRowsAvailable();
 }
 
-}
+} // namespace duckdb

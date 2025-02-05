@@ -20,6 +20,7 @@ include_directories = [
 ]
 prefix = os.path.join('extension', 'parquet')
 
+
 def list_files_recursive(rootdir, suffix):
     file_list = []
     for root, _, files in os.walk(rootdir):

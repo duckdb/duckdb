@@ -1,4 +1,4 @@
-#include "cast_column_reader.hpp"
+#include "reader/cast_column_reader.hpp"
 #include "parquet_reader.hpp"
 
 namespace duckdb {
@@ -88,4 +88,4 @@ idx_t CastColumnReader::GroupRowsAvailable() {
 	return child_reader->GroupRowsAvailable();
 }
 
-}
+} // namespace duckdb

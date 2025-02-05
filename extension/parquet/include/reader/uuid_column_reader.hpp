@@ -59,9 +59,9 @@ class UUIDColumnReader : public TemplatedColumnReader<hugeint_t, UUIDValueConver
 
 public:
 	UUIDColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-					 idx_t max_define_p, idx_t max_repeat_p)
-		: TemplatedColumnReader<hugeint_t, UUIDValueConversion>(reader, std::move(type_p), schema_p, file_idx_p,
-																max_define_p, max_repeat_p) {};
+	                 idx_t max_define_p, idx_t max_repeat_p)
+	    : TemplatedColumnReader<hugeint_t, UUIDValueConversion>(reader, std::move(type_p), schema_p, file_idx_p,
+	                                                            max_define_p, max_repeat_p) {};
 };
 
 } // namespace duckdb

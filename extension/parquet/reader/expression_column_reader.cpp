@@ -1,4 +1,4 @@
-#include "expression_column_reader.hpp"
+#include "reader/expression_column_reader.hpp"
 
 namespace duckdb {
 
@@ -55,4 +55,4 @@ idx_t ExpressionColumnReader::GroupRowsAvailable() {
 	return child_reader->GroupRowsAvailable();
 }
 
-}
+} // namespace duckdb

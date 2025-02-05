@@ -8,7 +8,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "expression_column_reader.hpp"
+#include "reader/expression_column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "yyjson.hpp"
 

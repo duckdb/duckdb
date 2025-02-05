@@ -9,7 +9,7 @@
 #pragma once
 
 #include "column_reader.hpp"
-#include "templated_column_reader.hpp"
+#include "reader/templated_column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_decimal_utils.hpp"
 
@@ -62,7 +62,8 @@ public:
 	                    idx_t file_idx_p, idx_t max_define_p, idx_t max_repeat_p)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
 	                            DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>(
-	          reader, std::move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {}
+	          reader, std::move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {
+	}
 };
 
 } // namespace duckdb

@@ -1,4 +1,4 @@
-#include "list_column_reader.hpp"
+#include "reader/list_column_reader.hpp"
 #include "parquet_reader.hpp"
 
 namespace duckdb {
@@ -144,4 +144,4 @@ void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
 	}
 }
 
-}
+} // namespace duckdb

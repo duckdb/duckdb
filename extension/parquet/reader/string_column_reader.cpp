@@ -1,4 +1,4 @@
-#include "string_column_reader.hpp"
+#include "reader/string_column_reader.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "parquet_reader.hpp"
 #include "duckdb/common/types/blob.hpp"
@@ -179,5 +179,4 @@ void StringParquetValueConversion::UnsafePlainSkip(ByteBuffer &plain_data, Colum
 	PlainSkip(plain_data, reader);
 }
 
-
-}
+} // namespace duckdb
