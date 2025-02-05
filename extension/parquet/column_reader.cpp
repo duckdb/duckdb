@@ -4,13 +4,14 @@
 #include "brotli/decode.h"
 #include "callback_column_reader.hpp"
 #include "cast_column_reader.hpp"
+#include "decimal_column_reader.hpp"
 #include "duckdb.hpp"
 #include "expression_column_reader.hpp"
+#include "interval_column_reader.hpp"
 #include "list_column_reader.hpp"
 #include "lz4.hpp"
 #include "miniz_wrapper.hpp"
 #include "null_column_reader.hpp"
-#include "parquet_decimal_utils.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_timestamp.hpp"
 #include "row_number_column_reader.hpp"
@@ -18,6 +19,7 @@
 #include "string_column_reader.hpp"
 #include "struct_column_reader.hpp"
 #include "templated_column_reader.hpp"
+#include "uuid_column_reader.hpp"
 #include "zstd.h"
 
 #ifndef DUCKDB_AMALGAMATION
@@ -681,222 +683,6 @@ void ColumnReader::ApplyPendingSkips(idx_t num_values) {
 		throw std::runtime_error("Row count mismatch when skipping rows");
 	}
 }
-
-//===--------------------------------------------------------------------===//
-// Decimal Column Reader
-//===--------------------------------------------------------------------===//
-template <class DUCKDB_PHYSICAL_TYPE, bool FIXED_LENGTH>
-struct DecimalParquetValueConversion {
-
-	static DUCKDB_PHYSICAL_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		idx_t byte_len;
-		if (FIXED_LENGTH) {
-			byte_len = (idx_t)reader.Schema().type_length; /* sure, type length needs to be a signed int */
-		} else {
-			byte_len = plain_data.read<uint32_t>();
-		}
-		plain_data.available(byte_len);
-		auto res = ParquetDecimalUtils::ReadDecimalValue<DUCKDB_PHYSICAL_TYPE>(const_data_ptr_cast(plain_data.ptr),
-		                                                                       byte_len, reader.Schema());
-
-		plain_data.inc(byte_len);
-		return res;
-	}
-
-	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		uint32_t decimal_len = FIXED_LENGTH ? reader.Schema().type_length : plain_data.read<uint32_t>();
-		plain_data.inc(decimal_len);
-	}
-
-	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
-		return true;
-	}
-
-	static DUCKDB_PHYSICAL_TYPE UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		return PlainRead(plain_data, reader);
-	}
-
-	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		PlainSkip(plain_data, reader);
-	}
-};
-
-template <class DUCKDB_PHYSICAL_TYPE, bool FIXED_LENGTH>
-class DecimalColumnReader
-    : public TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
-                                   DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>> {
-	using BaseType =
-	    TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE, DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>;
-
-public:
-	DecimalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, // NOLINT
-	                    idx_t file_idx_p, idx_t max_define_p, idx_t max_repeat_p)
-	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
-	                            DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>(
-	          reader, std::move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {};
-
-protected:
-};
-
-template <bool FIXED_LENGTH>
-static unique_ptr<ColumnReader> CreateDecimalReaderInternal(ParquetReader &reader, const LogicalType &type_p,
-                                                            const SchemaElement &schema_p, idx_t file_idx_p,
-                                                            idx_t max_define, idx_t max_repeat) {
-	switch (type_p.InternalType()) {
-	case PhysicalType::INT16:
-		return make_uniq<DecimalColumnReader<int16_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                             max_repeat);
-	case PhysicalType::INT32:
-		return make_uniq<DecimalColumnReader<int32_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                             max_repeat);
-	case PhysicalType::INT64:
-		return make_uniq<DecimalColumnReader<int64_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                             max_repeat);
-	case PhysicalType::INT128:
-		return make_uniq<DecimalColumnReader<hugeint_t, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                               max_repeat);
-	case PhysicalType::DOUBLE:
-		return make_uniq<DecimalColumnReader<double, FIXED_LENGTH>>(reader, type_p, schema_p, file_idx_p, max_define,
-		                                                            max_repeat);
-	default:
-		throw InternalException("Unrecognized type for Decimal");
-	}
-}
-
-template <>
-double ParquetDecimalUtils::ReadDecimalValue(const_data_ptr_t pointer, idx_t size,
-                                             const duckdb_parquet::SchemaElement &schema_ele) {
-	double res = 0;
-	bool positive = (*pointer & 0x80) == 0;
-	for (idx_t i = 0; i < size; i += 8) {
-		auto byte_size = MinValue<idx_t>(sizeof(uint64_t), size - i);
-		uint64_t input = 0;
-		auto res_ptr = reinterpret_cast<uint8_t *>(&input);
-		for (idx_t k = 0; k < byte_size; k++) {
-			auto byte = pointer[i + k];
-			res_ptr[sizeof(uint64_t) - k - 1] = positive ? byte : byte ^ 0xFF;
-		}
-		res *= double(NumericLimits<uint64_t>::Maximum()) + 1;
-		res += static_cast<double>(input);
-	}
-	if (!positive) {
-		res += 1;
-		res /= pow(10, schema_ele.scale);
-		return -res;
-	}
-	res /= pow(10, schema_ele.scale);
-	return res;
-}
-
-unique_ptr<ColumnReader> ParquetDecimalUtils::CreateReader(ParquetReader &reader, const LogicalType &type_p,
-                                                           const SchemaElement &schema_p, idx_t file_idx_p,
-                                                           idx_t max_define, idx_t max_repeat) {
-	if (schema_p.__isset.type_length) {
-		return CreateDecimalReaderInternal<true>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-	} else {
-		return CreateDecimalReaderInternal<false>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-	}
-}
-
-//===--------------------------------------------------------------------===//
-// UUID Column Reader
-//===--------------------------------------------------------------------===//
-struct UUIDValueConversion {
-	static hugeint_t ReadParquetUUID(const_data_ptr_t input) {
-		hugeint_t result;
-		result.lower = 0;
-		uint64_t unsigned_upper = 0;
-		for (idx_t i = 0; i < sizeof(uint64_t); i++) {
-			unsigned_upper <<= 8;
-			unsigned_upper += input[i];
-		}
-		for (idx_t i = sizeof(uint64_t); i < sizeof(hugeint_t); i++) {
-			result.lower <<= 8;
-			result.lower += input[i];
-		}
-		result.upper = static_cast<int64_t>(unsigned_upper ^ (uint64_t(1) << 63));
-		return result;
-	}
-
-	static hugeint_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.available(sizeof(hugeint_t));
-		return UnsafePlainRead(plain_data, reader);
-	}
-
-	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.inc(sizeof(hugeint_t));
-	}
-
-	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
-		return plain_data.check_available(count * sizeof(hugeint_t));
-	}
-
-	static hugeint_t UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		auto res = ReadParquetUUID(const_data_ptr_cast(plain_data.ptr));
-		plain_data.unsafe_inc(sizeof(hugeint_t));
-		return res;
-	}
-
-	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.unsafe_inc(sizeof(hugeint_t));
-	}
-};
-
-class UUIDColumnReader : public TemplatedColumnReader<hugeint_t, UUIDValueConversion> {
-
-public:
-	UUIDColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-	                 idx_t max_define_p, idx_t max_repeat_p)
-	    : TemplatedColumnReader<hugeint_t, UUIDValueConversion>(reader, std::move(type_p), schema_p, file_idx_p,
-	                                                            max_define_p, max_repeat_p) {};
-};
-
-//===--------------------------------------------------------------------===//
-// Interval Column Reader
-//===--------------------------------------------------------------------===//
-struct IntervalValueConversion {
-	static constexpr const idx_t PARQUET_INTERVAL_SIZE = 12;
-
-	static interval_t ReadParquetInterval(const_data_ptr_t input) {
-		interval_t result;
-		result.months = Load<int32_t>(input);
-		result.days = Load<int32_t>(input + sizeof(uint32_t));
-		result.micros = int64_t(Load<uint32_t>(input + sizeof(uint32_t) * 2)) * 1000;
-		return result;
-	}
-
-	static interval_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.available(PARQUET_INTERVAL_SIZE);
-		return UnsafePlainRead(plain_data, reader);
-	}
-
-	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.inc(PARQUET_INTERVAL_SIZE);
-	}
-
-	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
-		return plain_data.check_available(count * PARQUET_INTERVAL_SIZE);
-	}
-
-	static interval_t UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		auto res = ReadParquetInterval(const_data_ptr_cast(plain_data.ptr));
-		plain_data.unsafe_inc(PARQUET_INTERVAL_SIZE);
-		return res;
-	}
-
-	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.unsafe_inc(PARQUET_INTERVAL_SIZE);
-	}
-};
-
-class IntervalColumnReader : public TemplatedColumnReader<interval_t, IntervalValueConversion> {
-
-public:
-	IntervalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-	                     idx_t max_define_p, idx_t max_repeat_p)
-	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, std::move(type_p), schema_p, file_idx_p,
-	                                                                 max_define_p, max_repeat_p) {};
-};
 
 //===--------------------------------------------------------------------===//
 // Create Column Reader
