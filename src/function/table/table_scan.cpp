@@ -576,7 +576,8 @@ unique_ptr<GlobalTableFunctionState> TableScanInitGlobal(ClientContext &context,
 	}
 
 	// The checkpoint lock ensures that we do not checkpoint while scanning this table.
-	auto checkpoint_lock = storage.GetSharedCheckpointLock();
+	auto &transaction = DuckTransaction::Get(context, storage.db);
+	auto checkpoint_lock = transaction.SharedLockTable(*storage.GetDataTableInfo());
 	auto &info = storage.GetDataTableInfo();
 	auto &indexes = info->GetIndexes();
 	if (indexes.Empty()) {
