@@ -340,10 +340,11 @@ typedef struct {
 	uint64_t total_rows_to_process;
 } duckdb_query_progress_type;
 
-//! The internal representation of a VARCHAR (string_t). If the VARCHAR does not
-//! exceed 12 characters, then we inline it. Otherwise, we inline a prefix for faster
-//! string comparisons and store a pointer to the remaining characters. This is a non-
-//! owning structure, i.e., it does not have to be freed.
+//! The internal representation of a VARCHAR (string_t).
+//! If the VARCHAR does not exceed 12 characters, then we inline it.
+//! Otherwise, a pointer to the data is stored instead,
+//! along with an inlined copy of the prefix for faster string comparisons.
+//! This is a non-owning structure, i.e., it does not have to be freed.
 typedef struct {
 	union {
 		struct {
