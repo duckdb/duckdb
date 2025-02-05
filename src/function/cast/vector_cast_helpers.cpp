@@ -138,7 +138,7 @@ public:
 			if (!escaped) {
 				if (buf[start + i] == '\\') {
 					escaped = true;
-				} else {
+				} else if (buf[start + i] != '\'' && buf[start + i] != '"') {
 					string_data[copied_count++] = buf[start + i];
 				}
 			} else {
@@ -191,21 +191,15 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 			}
 			end_pos = pos;
 		} else if ((buf[pos] == '"' || buf[pos] == '\'')) {
+			if (!start_pos.IsValid()) {
+				start_pos = pos;
+			}
 			if (!input_state.escaped) {
-				if (!start_pos.IsValid()) {
-					//! Trim the start quote
-					start_pos = pos + 1;
-				}
 				if (!SkipToCloseQuotes(input_state)) {
 					return false;
 				}
-				end_pos = pos - 1;
-			} else {
-				if (!start_pos.IsValid()) {
-					start_pos = pos;
-				}
-				end_pos = pos;
 			}
+			end_pos = pos;
 		} else if (buf[pos] == '{') {
 			if (!start_pos.IsValid()) {
 				start_pos = pos;
@@ -239,7 +233,12 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 			start_pos = optional_idx();
 			continue;
 		} else if (buf[pos] == '\\') {
-			input_state.escaped = true;
+			if (!start_pos.IsValid()) {
+				start_pos = pos;
+			}
+			if (!input_state.escaped) {
+				input_state.escaped = true;
+			}
 		} else if (!StringUtil::CharacterIsSpace(buf[pos])) {
 			if (!start_pos.IsValid()) {
 				start_pos = pos;

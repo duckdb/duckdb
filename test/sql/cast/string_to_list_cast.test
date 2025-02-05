@@ -206,7 +206,7 @@ SELECT CAST($$['hello','world', '!']$$ AS VARCHAR[]);
 [hello, world, !]
 
 query I
-SELECT CAST($$[''hello'',''world'', ''!'']$$ AS VARCHAR[]);
+SELECT CAST($$[\'hello\',\'world\', \'!\']$$ AS VARCHAR[]);
 ----
 ['hello', 'world', '!']
 
@@ -216,7 +216,7 @@ SELECT CAST($$[[ ['🦆, 🦆, 🦆']], [[duck, db, '🦆'] ]]$$ AS VARCHAR[][][
 [[[🦆, 🦆, 🦆]], [[duck, db, 🦆]]]
 
 query I
-SELECT CAST($$["can't", "you're", "i'm"]$$ AS VARCHAR[]);
+SELECT CAST($$[can\'t, you\'re, i\'m]$$ AS VARCHAR[]);
 ----
 [can't, you're, i'm]
 
@@ -249,7 +249,7 @@ SELECT CAST('[          [ [12,     13,14], [8, 9         ]  ],[[ 4    ]   ],    
 [[[12, 13, 14], [8, 9]], [[4]], [[2, 1, 0]]]
 
 query I
-SELECT CAST($$["   hello","          '  world", "!         "]$$ AS VARCHAR[]);
+SELECT CAST($$["   hello","          \'  world", "!         "]$$ AS VARCHAR[]);
 ----
 [   hello,           '  world, !         ]
 
@@ -259,7 +259,7 @@ SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);
 [hello, world, !]
 
 query I
-SELECT CAST($$[    [ "   hello"]  ,["            world"        ],[ "!        "           ]      ]$$ AS VARCHAR[][]);
+SELECT CAST($$[    [ \"   hello\"]  ,[\"            world\"        ],[ \"!        \"           ]      ]$$ AS VARCHAR[][]);
 ----
 [[   hello], [            world], [!        ]]
 
