@@ -10,68 +10,97 @@
 
 namespace duckdb {
 
+// Maximum number of hash functions used in the bloom-filter.
+static int MAX_HASH_FUNCTIONS = 2;
+// Maximum size of the bloom-filter in bits. Set to 0 for unbounded.
+static int MAX_BF_SIZE_BITS = 0;
+// Whether to use a fixed-size bloom-filter.
+static bool USE_BABY_BLOOM = false;
+// Whether the bloom-filter should have a power-of-two size. If yes, indexing can be done fast with a bitmap. Otherwise, fast-mod is used.
+static bool USE_POWER_2_BF_SIZE = true;
+// The minimum number of keys that need to be probed before the threshold for disabling probing is applied.
+static int PROBE_MIN_KEYS_BEFORE_THRESHOLD = 4000;
+// The minimum acceptable selectivity. If the selectivity is lower, probing will be turned off.
+static double PROBE_SELECTIVITY_THRESHOLD = 0.6;
+
+
 size_t ComputeBloomFilterSize(size_t expected_cardinality, double desired_false_positive_rate) {
+    if (USE_BABY_BLOOM) {
+        return 8 * 1024 * 8;
+    }
+
+    // The theoretically optimal size of the Bloom-filter.
     size_t approx_size = static_cast<size_t>(std::ceil(-double(expected_cardinality) * log(desired_false_positive_rate) / 0.48045));
 
-    // Approximate size rounded to the next power of 2
-    int v = approx_size;
-    v--;
-    v |= v >> 1;
-    v |= v >> 2;
-    v |= v >> 4;
-    v |= v >> 8;
-    v |= v >> 16;
-    v++;
-    return v;
-    return MinValue(v, 32 * 1024 * 8 /*32 KB L1 cache size*/);
+    if (USE_POWER_2_BF_SIZE) {
+        // Approximate size rounded to the next power of 2
+        int v = approx_size;
+        v--;
+        v |= v >> 1;
+        v |= v >> 2;
+        v |= v >> 4;
+        v |= v >> 8;
+        v |= v >> 16;
+        v++;
 
-    // Approximate size of the Bloom-filter rounded up to the next 8 byte.
-	return approx_size + (64 - approx_size % 64);
+        if (MAX_BF_SIZE_BITS > 0) {
+            return MinValue(v, MAX_BF_SIZE_BITS);
+        } else {
+            return v;
+        }
+    } else {
+        // Approximate size of the Bloom-filter rounded up to the next 8 bytes.
+	    int v = approx_size + (64 - approx_size % 64);
+
+        if (MAX_BF_SIZE_BITS > 0) {
+            return MinValue(v, MAX_BF_SIZE_BITS);
+        } else {
+            return v;
+        }
+    }
 }
 
 size_t ComputeNumHashFunctions(size_t expected_cardinality, size_t bloom_filter_size) {
-    // Limit to up to 4 hash functions for performance.
-    return MinValue(4, static_cast<int>(std::ceil(bloom_filter_size / expected_cardinality * 0.693147)));
+    if (USE_BABY_BLOOM) {
+        return 4;
+    }
+
+    // The theoretically optimal number of hash functions.
+    const int theoretical_optimum = std::ceil(bloom_filter_size / expected_cardinality * 0.693147);
+    // Limit the number of hash functions because too many harm performance.
+    return MinValue(MAX_HASH_FUNCTIONS, theoretical_optimum);
 }
 
 inline size_t JoinBloomFilter::HashToIndex(hash_t hash, size_t i) const {
+    // Rotate a single hash to produce multiple hashes. Shift by 32 digits to produce up to 2 non-overlapping hash function.
     const auto rot_hash = hash >> ((i << 5));
-    // Direct indexing
-    //return rot_hash & 0xffff;
-
-    // Next power of 2
-    return rot_hash & bitmask;
-
-    // Create different hashes out of a single hash by shifting a variable length of bits.
-    //std::cout << "inserting hash " << hash << std::endl;
-    //const auto h = hash & bitmask;
-    const auto r = rot_hash & 0xffffffff;
-    // Fast modulo reduction: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
-    //return r % bloom_filter_size;
-    return (r * (bloom_filter_size & 0xffffffff)) >> 32;
+    
+    if (USE_BABY_BLOOM) {
+        return rot_hash & 0xffff;
+    } else if (USE_POWER_2_BF_SIZE) {
+        return rot_hash & bitmask;
+    } else {
+        // Fast modulo reduction: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+        return ((rot_hash & 0xffffffff) * (bloom_filter_size & 0xffffffff)) >> 32;
+    }
 }
 
-JoinBloomFilter::JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids, uint64_t bitmask) 
-: column_ids(std::move(column_ids)), bitmask(bitmask) {
-    int b_ones = 0;
-    while ((bitmask >> b_ones) > 0) {
-        b_ones++;
-    }
-
+JoinBloomFilter::JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids) 
+: column_ids(std::move(column_ids)) {
 	bloom_filter_size = ComputeBloomFilterSize(expected_cardinality, desired_false_positive_rate);
-    //std::cout << "bloom filter size: " << bloom_filter_size << std::endl;
     num_hash_functions = ComputeNumHashFunctions(expected_cardinality, bloom_filter_size);
 
     bloom_data_buffer.resize(bloom_filter_size / 64, 0);
     bloom_filter_bits.Initialize(bloom_data_buffer.data(), bloom_filter_size);
 
-    size_t v = bloom_filter_size;
-    this->bitmask = 0;
-    while (v > 1) { // is this loop correct or off by 1?
-        v = v >> 1;
-        this->bitmask = this->bitmask << 1 | 0x1;
+    if (USE_POWER_2_BF_SIZE) {
+        size_t v = bloom_filter_size;
+        bitmask = 0;
+        while (v > 1) {
+            v = v >> 1;
+            bitmask = bitmask << 1 | 0x1;
+        }
     }
-    //std::cout << "bitmask: " << bitmask << std::endl;
 }
 
 JoinBloomFilter::JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_functions, size_t bloom_filter_size) : num_hash_functions(num_hash_functions), bloom_filter_size(bloom_filter_size), column_ids(std::move(column_ids))  {
@@ -82,7 +111,7 @@ JoinBloomFilter::JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_fu
 JoinBloomFilter::~JoinBloomFilter() {
 }
 
-inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const SelectionVector &rsel, idx_t count) {
+inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const SelectionVector &sel, idx_t count) {
     D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
     D_ASSERT(probing_started == false);
 
@@ -96,7 +125,7 @@ inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, c
 
         if (!u_hashes.validity.AllValid()) {
             for (idx_t i = 0; i < count; i++) {
-                auto key_idx = rsel.get_index(i);
+                auto key_idx = sel.get_index(i);
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 if (u_hashes.validity.RowIsValid(hash_idx)) {
                     auto hash = UnifiedVectorFormat::GetData<hash_t>(u_hashes)[hash_idx];
@@ -106,27 +135,25 @@ inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, c
             }
         } else {
             for (idx_t i = 0; i < count; i++) {
-                auto key_idx = rsel.get_index(i);
+                auto key_idx = sel.get_index(i);
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 auto* hashes = UnifiedVectorFormat::GetData<hash_t>(u_hashes);
                 auto hash = hashes[hash_idx];
-                //std::cout << "inserting hash " << hash << std::endl;
                 auto bloom_idx = HashToIndex(hash, fni);
-                //std::cout << "idx="<<bloom_idx << std::endl;
                 bloom_filter_bits.SetValid(bloom_idx);
             }
         }
     }
 }
 
-void JoinBloomFilter::BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector &rsel, idx_t count) {
+void JoinBloomFilter::BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector &sel, idx_t count) {
     Profiler p;
     p.Start();
 
     // Rotate hash by a couple of bits to produce a new "hash value".
     // With this trick, keys have to be hashed only once.
     for (idx_t i = 0; i < num_hash_functions; i++) {
-        SetBloomBitsForHashes(i, hashes, rsel, count);
+        SetBloomBitsForHashes(i, hashes, sel, count);
     }
     num_inserted_keys += count;
 
@@ -146,7 +173,6 @@ inline size_t JoinBloomFilter::ProbeInternal(size_t fni, Vector &hashes, Selecti
             // All constant elements match. No need to modify the selection vector.
             return current_sel_count;
         } else {
-            // TODO: we need to set the whole 'out' vector to zero?
             return 0;
         }
     } else {
@@ -157,7 +183,6 @@ inline size_t JoinBloomFilter::ProbeInternal(size_t fni, Vector &hashes, Selecti
             size_t sel_out_idx = 0;
             SelectionVector tmp_sel(current_sel_count);
             for (idx_t i = 0; i < current_sel_count; i++) {
-                // TODO: We can skip this row if it was already removed by a previous iteration
                 auto key_idx = current_sel.get_index(i);
 			    auto hash_idx = u_hashes.sel->get_index(key_idx);
                 if (u_hashes.validity.RowIsValid(hash_idx)) {
@@ -193,7 +218,7 @@ inline size_t JoinBloomFilter::ProbeInternal(size_t fni, Vector &hashes, Selecti
 }
 
 
-size_t JoinBloomFilter::ProbeWithPrecomputedHashes(SelectionVector &sel, idx_t count, Vector &precomputed_hashes) {
+size_t JoinBloomFilter::ProbeWithPrecomputedHashes(Vector &precomputed_hashes, SelectionVector &sel, idx_t count) {
     Profiler p;
     p.Start();
 
@@ -216,6 +241,35 @@ size_t JoinBloomFilter::ProbeWithPrecomputedHashes(SelectionVector &sel, idx_t c
     p.End();
     probe_time += p.Elapsed();
     return sel_tmp_count;
+}
+
+bool JoinBloomFilter::ShouldDiscardAfterBuild() const {
+    if (USE_BABY_BLOOM) {
+        // only use bloom filter for probing if it's false-positive-rate is low enough (<=1.3%)
+        return GetScarcity() > 0.34;
+    }
+
+    return GetScarcity() > 0.34;
+}
+
+bool JoinBloomFilter::ShouldStopProbing() const {
+    return num_probed_keys > PROBE_MIN_KEYS_BEFORE_THRESHOLD && GetObservedSelectivity() < PROBE_SELECTIVITY_THRESHOLD;
+}
+
+void JoinBloomFilter::PrintBuildStats() const {
+    std::cout << "    \"bf_num_hash_functions\": " << num_hash_functions << "," << std::endl;
+    std::cout << "    \"bf_size_bits\": " << bloom_filter_size << "," << std::endl;
+    std::cout << "    \"bf_scarcity\": " << GetScarcity() << "," << std::endl;
+    std::cout << "    \"bf_inserted_keys\": " << num_inserted_keys << "," << std::endl;
+    std::cout << "    \"bf_bitmask\": " << bitmask << "," << std::endl;
+    std::cout << "    \"build_time\": " << build_time << "," << std::endl;
+}
+
+void JoinBloomFilter::PrintProbeStats() const {
+    std::cout << "    \"selectivity\": " << GetObservedSelectivity() << "," << std::endl;
+    std::cout << "    \"probed_keys\": " << GetNumProbedKeys() << "," << std::endl;
+    std::cout << "    \"probe_time\": " << probe_time << "," << std::endl;
+    std::cout << "    \"hash_time\": " << hash_time << "," << std::endl;
 }
 
 } // namespace duckdb

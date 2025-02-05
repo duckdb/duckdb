@@ -680,7 +680,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					// Evaluate Bloom-filters
 					if (true){
 					for (auto &bf : bloom_filter_list) {
-						if (bf->GetNumProbedKeys() < 4000 || bf->GetObservedSelectivity() >= 0.6) {
+						if (!bf->ShouldStopProbing()) {
 							Vector hashes(LogicalType::HASH);
 							// TODO: Can we directly put the keys and hashes into the hash join's state so that we don't have to perform hashing twice?
 							Profiler p;
@@ -688,12 +688,11 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 							result.Hash(bf->GetColumnIds(), sel, approved_tuple_count, hashes);
 							p.End();
 							bf->hash_time += p.Elapsed();
-							approved_tuple_count = bf->ProbeWithPrecomputedHashes(sel, approved_tuple_count, hashes);
-							//std::cerr << "selectivity: " << bf->GetObservedSelectivity() << std::endl;
+							approved_tuple_count = bf->ProbeWithPrecomputedHashes(hashes, sel, approved_tuple_count);
 						}
 
 						if (approved_tuple_count == 0) {
-							break; // Filtered everything. No need to evaluate more Bloom-filters.
+							break;
 						}
 					}
 					}

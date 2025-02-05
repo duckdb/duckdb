@@ -14,15 +14,24 @@ namespace duckdb {
 
 class JoinBloomFilter {
 public:
-	explicit JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids, uint64_t bitmask);
+	JoinBloomFilter(size_t expected_cardinality, vector<column_t> column_ids) : JoinBloomFilter(expected_cardinality, /*desired_false_positive_rate*/0.01, std::move(column_ids)) {};
+	JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids);
 	JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_functions, size_t bloom_filter_size);
 	~JoinBloomFilter();
 
 	//! Builds the Bloom-filter with pre-computed key-hashes.
-	void BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector &rsel, idx_t count);
+	void BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector &sel, idx_t count);
 
 	//! Probes the Bloom-filter and adjusts the selection vector accordingly.
-	size_t ProbeWithPrecomputedHashes(SelectionVector &sel, idx_t count, Vector &precomputed_hashes);
+	size_t ProbeWithPrecomputedHashes(Vector &precomputed_hashes, SelectionVector &sel, idx_t count);
+
+	bool ShouldDiscardAfterBuild() const;
+
+	bool ShouldStopProbing() const;
+
+	void PrintBuildStats() const;
+
+	void PrintProbeStats() const;
 
 	size_t GetNumInsertedRows() const {
 		return num_inserted_keys;

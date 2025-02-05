@@ -435,24 +435,17 @@ public:
 		if (sink.hash_table->should_build_bloom_filter) {
 			vector<column_t> column_ids;
 			size_t approx_ndv = sink.hash_table->build_side_hll.Count();
-			auto bf = make_uniq<JoinBloomFilter>(approx_ndv, 0.01, std::move(column_ids), 0xffffffff);
-			//auto bf = make_uniq<JoinBloomFilter>(std::move(column_ids), /*num_hash_funcs=*/4, /*size=*/8388608);  // Fixed-sized bloom filter
+			auto bf = make_uniq<JoinBloomFilter>(approx_ndv, 0.01, std::move(column_ids));
 
 			sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel, bf.get());
 
-			std::cout << "    \"bf_num_hash_functions\": " << bf->GetNumHashFunctions() << "," << std::endl;
-			std::cout << "    \"bf_size_bits\": " << bf->GetSizeBits() << "," << std::endl;
-			std::cout << "    \"bf_scarcity\": " << bf->GetScarcity() << "," << std::endl;
-			std::cout << "    \"bf_inserted_keys\": " << bf->GetNumInsertedRows() << "," << std::endl;
-			std::cout << "    \"bf_bitmask\": " << bf->bitmask << "," << std::endl;
-			std::cout << "    \"build_time\": " << bf->build_time << "," << std::endl;
+			bf->PrintBuildStats();
 
 			for (auto &info : sink.op.filter_pushdown->probe_info) {
 				vector<column_t> column_ids;
 				auto bf_c = bf->Copy();
 				std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(bf->GetColumnIds()), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
-				if (bf->GetScarcity() <= 0.34) {
-					// only use bloom filter for probing if it's false-positive-rate is low enough (<=1.3%)
+				if (!bf->ShouldDiscardAfterBuild()) {
 					info.dynamic_filters->PushBloomFilter(*op.get(), std::move(bf));
 				}
 			}
@@ -540,13 +533,6 @@ public:
 				bf->BuildWithPrecomputedHashes(hashvals, sel, count);
 			} while (iterator.Next());
 
-
-
-			std::cout << "    \"bf_num_hash_functions\": " << bf->GetNumHashFunctions() << "," << std::endl;
-			std::cout << "    \"bf_size_bits\": " << bf->GetSizeBits() << "," << std::endl;
-			std::cout << "    \"bf_scarcity\": " << bf->GetScarcity() << "," << std::endl;
-			std::cout << "    \"bf_inserted_keys\": " << bf->GetNumInsertedRows() << "," << std::endl;
-			std::cout << "    \"bf_bitmask\": " << bf->bitmask << "," << std::endl;
 
 			for (auto &info : sink.op.filter_pushdown->probe_info) {
 				vector<column_t> column_ids;
@@ -722,8 +708,7 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 
 void JoinFilterPushdownInfo::BuildAndPushBloomFilter(const JoinFilterPushdownFilter &info, JoinHashTable &ht,
                                           const PhysicalOperator &op, vector<column_t> column_ids) const {
-	auto bf = make_uniq<JoinBloomFilter>(ht.Count(), 0.01, std::move(column_ids), 0);
-	//auto bf = make_shared_ptr<JoinBloomFilter>(std::move(column_ids), ht.CurrentPartitionCount(), 0.01);  // TODO: maybe??
+	auto bf = make_uniq<JoinBloomFilter>(ht.Count(), 0.01, std::move(column_ids));
 
 	// FIXME: this code is duplicated from building the hash table.
 	auto &data_collection = ht.GetDataCollection();
@@ -818,8 +803,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 		if (ht.Count() > dynamic_or_filter_threshold) {
 			ht.should_build_bloom_filter = true;
 
-			
-
 			//for (auto &info : probe_info) {
 				//vector<column_t> column_ids;
 				//std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(column_ids), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
@@ -840,7 +823,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 
 SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             OperatorSinkFinalizeInput &input) const {
-	//std::cout << "we are in PhysicalHashJoin::Finalize" << std::endl;
 	auto &sink = input.global_state.Cast<HashJoinGlobalSinkState>();
 	auto &ht = *sink.hash_table;
 
