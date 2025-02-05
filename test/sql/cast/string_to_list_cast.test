@@ -259,7 +259,7 @@ SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);
 [hello, world, !]
 
 query I
-SELECT CAST($$[    [ \"   hello\"]  ,[\"            world\"        ],[ \"!        \"           ]      ]$$ AS VARCHAR[][]);
+SELECT CAST($$[    [ "   hello"]  ,["            world"        ],[ "!        "           ]      ]$$ AS VARCHAR[][]);
 ----
 [[   hello], [            world], [!        ]]
 

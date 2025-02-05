@@ -1,5 +1,6 @@
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
 #include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/stack.hpp"
 
 namespace {
 
@@ -134,15 +135,42 @@ public:
 		auto string_data = allocated_string.GetDataWriteable();
 		uint32_t copied_count = 0;
 		bool escaped = false;
+
+		bool quoted = false;
+		char quote_char;
+		stack<char> scopes;
 		for (idx_t i = 0; i < length; i++) {
+			auto current_char = buf[start + i];
 			if (!escaped) {
-				if (buf[start + i] == '\\') {
+				if (scopes.empty() && current_char == '\\') {
+					//! Start of escape
 					escaped = true;
-				} else if (buf[start + i] != '\'' && buf[start + i] != '"') {
-					string_data[copied_count++] = buf[start + i];
+					continue;
 				}
+				if (scopes.empty() && (current_char == '\'' || current_char == '"')) {
+					if (quoted && current_char == quote_char) {
+						quoted = false;
+						//! Skip the ending quote
+						continue;
+					} else if (!quoted) {
+						quoted = true;
+						quote_char = current_char;
+						//! Skip the starting quote
+						continue;
+					}
+				}
+				if (!quoted && !scopes.empty() && current_char == scopes.top()) {
+					//! Close scope
+					scopes.pop();
+				}
+				if (!quoted && (current_char == '[' || current_char == '{')) {
+					//! New scope
+					scopes.push(current_char == '[' ? ']' : '}');
+				}
+				//! Regular character
+				string_data[copied_count++] = current_char;
 			} else {
-				string_data[copied_count++] = buf[start + i];
+				string_data[copied_count++] = current_char;
 				escaped = false;
 			}
 		}
