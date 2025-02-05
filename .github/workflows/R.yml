@@ -62,7 +62,6 @@ jobs:
 
       - uses: ./.github/actions/build_extensions
         with:
-          deploy_as: windows_amd64_mingw
           duckdb_arch: windows_amd64_mingw
           vcpkg_target_triplet: x64-mingw-static
           treat_warn_as_error: 0

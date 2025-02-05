@@ -744,7 +744,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 
 	// set the header inside the buffer
-	MemoryStream serializer;
+	MemoryStream serializer(Allocator::Get(db));
 	header.Write(serializer);
 	memcpy(header_buffer.buffer, serializer.GetData(), serializer.GetPosition());
 	// now write the header to the file, active_header determines whether we write to h1 or h2

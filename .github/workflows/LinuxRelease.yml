@@ -123,7 +123,7 @@ jobs:
       shell: bash
       if: ${{ inputs.skip_tests != 'true' }}
       run: |
-        build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
+        build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
  linux-release-aarch64:
@@ -196,6 +196,7 @@ jobs:
         with:
           vcpkg_target_triplet: x64-linux
           duckdb_arch: linux_amd64
+          run_tests: ${{ inputs.skip_tests != 'true' }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -234,6 +235,7 @@ jobs:
         with:
           vcpkg_target_triplet: x64-linux
           duckdb_arch: linux_amd64_musl
+          run_tests: ${{ inputs.skip_tests != 'true' }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -278,6 +280,7 @@ jobs:
         with:
           vcpkg_target_triplet: arm64-linux
           duckdb_arch: linux_arm64
+          run_tests: ${{ inputs.skip_tests != 'true' }}
 
       - uses: actions/upload-artifact@v4
         with:

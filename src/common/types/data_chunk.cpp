@@ -369,7 +369,8 @@ void DataChunk::Verify() {
 	}
 
 	// verify that we can round-trip chunk serialization
-	MemoryStream mem_stream;
+	Allocator allocator;
+	MemoryStream mem_stream(allocator);
 	BinarySerializer serializer(mem_stream);
 
 	serializer.Begin();
