@@ -221,7 +221,7 @@ SELECT CAST($$["can't", "you're", "i'm"]$$ AS VARCHAR[]);
 [can't, you're, i'm]
 
 query I
-SELECT CAST($$[can't, you're, i'm]$$ AS VARCHAR[]);
+SELECT CAST($$[can\'t, you\'re, i\'m]$$ AS VARCHAR[]);
 ----
 [can't, you're, i'm]
 
