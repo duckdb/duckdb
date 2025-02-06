@@ -16,7 +16,7 @@
 namespace duckdb {
 
 class ConflictManager;
-
+class LocalTableStorage;
 struct IndexStorageInfo;
 struct DataTableInfo;
 
@@ -78,17 +78,19 @@ public:
 	//! Overwrite this list with the other list.
 	void Move(TableIndexList &other);
 	//! Find the foreign key matching the keys.
-	Index *FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
+	optional_ptr<Index> FindForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, const ForeignKeyType fk_type);
 	//! Verify a foreign key constraint.
-	void VerifyForeignKey(const vector<PhysicalIndex> &fk_keys, DataChunk &chunk, ConflictManager &conflict_manager);
+	void VerifyForeignKey(optional_ptr<LocalTableStorage> storage, const vector<PhysicalIndex> &fk_keys,
+	                      DataChunk &chunk, ConflictManager &conflict_manager);
 	//! Get the combined column ids of the indexes in this list.
 	unordered_set<column_t> GetRequiredColumns();
 	//! Serialize all indexes of this table.
 	vector<IndexStorageInfo> GetStorageInfos(const case_insensitive_map_t<Value> &options);
 
 private:
+	//! A lock to prevent any concurrent changes to the indexes.
 	mutex indexes_lock;
-	// Indexes associated with the table.
+	//! Indexes associated with the table.
 	vector<unique_ptr<Index>> indexes;
 };
 

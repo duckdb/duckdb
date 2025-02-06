@@ -55,7 +55,7 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
 		auto &new_transaction = db.GetTransactionManager().StartTransaction(context);
-		new_transaction.active_query = active_query;
+		new_transaction.active_query = active_query.load();
 #ifdef DEBUG
 		VerifyAllTransactionsUnique(db, all_transactions);
 #endif

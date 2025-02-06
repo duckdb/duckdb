@@ -135,6 +135,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"covar_samp", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"create_fts_index", "fts", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"current_database", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"current_date", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_localtime", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_localtimestamp", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"current_query", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -179,8 +180,6 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"from_hex", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_json", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"from_json_strict", "json", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"from_substrait", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"from_substrait_json", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
     {"fsum", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"fuzz_all_functions", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
     {"fuzzyduck", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -188,9 +187,8 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"gcd", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"gen_random_uuid", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"get_bit", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"get_current_time", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"get_current_timestamp", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"get_substrait", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
-    {"get_substrait_json", "substrait", CatalogType::TABLE_FUNCTION_ENTRY},
     {"grade_up", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"greatest", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"greatest_common_divisor", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -430,6 +428,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"map_concat", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_entries", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_extract", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"map_extract_value", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_from_entries", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_keys", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"map_values", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -523,6 +522,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"skewness", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"sql_auto_complete", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlite_attach", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"sqlite_query", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlite_scan", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlsmith", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqrt", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -682,6 +682,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"to_timestamp", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"to_weeks", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"to_years", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"today", "icu", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"tpcds", "tpcds", CatalogType::PRAGMA_FUNCTION_ENTRY},
     {"tpcds_answers", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
     {"tpcds_queries", "tpcds", CatalogType::TABLE_FUNCTION_ENTRY},
@@ -980,6 +981,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"s3_url_style", "httpfs"},
     {"s3_use_ssl", "httpfs"},
     {"sqlite_all_varchar", "sqlite_scanner"},
+    {"sqlite_debug_show_queries", "sqlite_scanner"},
     {"timezone", "icu"},
     {"unsafe_enable_version_guessing", "iceberg"},
 }; // END_OF_EXTENSION_SETTINGS
@@ -1069,8 +1071,9 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"postgres/config", "postgres_scanner"}}; // EXTENSION_SECRET_PROVIDERS
 
 static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    "aws",   "azure", "autocomplete", "core_functions", "delta",   "excel",          "fts",      "httpfs",
-    "inet",  "icu",   "json",         "mysql_scanner",  "parquet", "sqlite_scanner", "sqlsmith", "postgres_scanner",
-    "tpcds", "tpch"}; // END_OF_AUTOLOADABLE_EXTENSIONS
+    "aws",        "azure",         "autocomplete", "core_functions", "delta",    "excel",
+    "fts",        "httpfs",        "iceberg",      "inet",           "icu",      "json",
+    "motherduck", "mysql_scanner", "parquet",      "sqlite_scanner", "sqlsmith", "postgres_scanner",
+    "tpcds",      "tpch",          "uc_catalog"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb

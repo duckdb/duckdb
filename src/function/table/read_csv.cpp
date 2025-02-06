@@ -124,7 +124,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		names = best_schema.GetNames();
 		return_types = best_schema.GetTypes();
 	}
-	if (only_header_or_empty_files == current_file) {
+	if (only_header_or_empty_files == current_file && !options.columns_set) {
 		for (auto &type : return_types) {
 			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
 			// we default to varchar if all files are empty or only have a header after all the sniffing
@@ -350,7 +350,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
 	table_function.named_parameters["encoding"] = LogicalType::VARCHAR;
-	table_function.named_parameters["rfc_4180"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["strict_mode"] = LogicalType::BOOLEAN;
 
 	MultiFileReader::AddParameters(table_function);
 }
@@ -374,7 +374,8 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, info, filters);
 	if (filtered_list) {
 		data.files = filtered_list->GetAllFiles();
-		MultiFileReader::PruneReaders(data, file_list);
+		SimpleMultiFileList simple_filtered_list(data.files);
+		MultiFileReader::PruneReaders(data, simple_filtered_list);
 	} else {
 		data.files = file_list.GetAllFiles();
 	}

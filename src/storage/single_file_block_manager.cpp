@@ -10,6 +10,7 @@
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/metadata/metadata_reader.hpp"
 #include "duckdb/storage/metadata/metadata_writer.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 #include <algorithm>
 #include <cstring>
@@ -77,7 +78,7 @@ MainHeader MainHeader::Read(ReadStream &source) {
 		    "The database file was created with %s.\n\n"
 		    "Newer DuckDB version might introduce backward incompatible changes (possibly guarded by compatibility "
 		    "settings)"
-		    "See the storage page for migration strategy and more informations: https://duckdb.org/internals/storage",
+		    "See the storage page for migration strategy and more information: https://duckdb.org/internals/storage",
 		    header.version_number, VERSION_NUMBER_LOWER, VERSION_NUMBER_UPPER, version_text);
 	}
 	// read the flags
@@ -96,15 +97,15 @@ void DatabaseHeader::Write(WriteStream &ser) {
 	ser.Write<uint64_t>(block_count);
 	ser.Write<idx_t>(block_alloc_size);
 	ser.Write<idx_t>(vector_size);
+	ser.Write<idx_t>(serialization_compatibility);
 }
 
-DatabaseHeader DatabaseHeader::Read(ReadStream &source) {
+DatabaseHeader DatabaseHeader::Read(const MainHeader &main_header, ReadStream &source) {
 	DatabaseHeader header;
 	header.iteration = source.Read<uint64_t>();
 	header.meta_block = source.Read<idx_t>();
 	header.free_list = source.Read<idx_t>();
 	header.block_count = source.Read<uint64_t>();
-
 	header.block_alloc_size = source.Read<idx_t>();
 
 	// backwards compatibility
@@ -122,7 +123,13 @@ DatabaseHeader DatabaseHeader::Read(ReadStream &source) {
 		                  "vector size of %llu bytes.",
 		                  STANDARD_VECTOR_SIZE, header.vector_size);
 	}
-
+	if (main_header.version_number == 64) {
+		// version number 64 does not have the serialization compatibility in the file - default to 1
+		header.serialization_compatibility = 1;
+	} else {
+		// read from the file
+		header.serialization_compatibility = source.Read<idx_t>();
+	}
 	return header;
 }
 
@@ -132,10 +139,14 @@ void SerializeHeaderStructure(T header, data_ptr_t ptr) {
 	header.Write(ser);
 }
 
-template <class T>
-T DeserializeHeaderStructure(data_ptr_t ptr) {
+MainHeader DeserializeMainHeader(data_ptr_t ptr) {
 	MemoryStream source(ptr, Storage::FILE_HEADER_SIZE);
-	return T::Read(source);
+	return MainHeader::Read(source);
+}
+
+DatabaseHeader DeserializeDatabaseHeader(const MainHeader &main_header, data_ptr_t ptr) {
+	MemoryStream source(ptr, Storage::FILE_HEADER_SIZE);
+	return DatabaseHeader::Read(main_header, source);
 }
 
 SingleFileBlockManager::SingleFileBlockManager(AttachedDatabase &db, const string &path_p,
@@ -165,8 +176,23 @@ FileOpenFlags SingleFileBlockManager::GetFileFlags(bool create_new) const {
 	return result;
 }
 
-static void AddStorageVersion(AttachedDatabase &db, const uint64_t version) {
-	db.tags["storage_version"] = std::to_string(version);
+void SingleFileBlockManager::AddStorageVersionTag() {
+	db.tags["storage_version"] = GetStorageVersionName(options.storage_version.GetIndex());
+}
+
+uint64_t SingleFileBlockManager::GetVersionNumber() {
+	uint64_t version_number = VERSION_NUMBER;
+	if (options.storage_version.GetIndex() >= 4) {
+		version_number = 65;
+	}
+	return version_number;
+}
+
+MainHeader ConstructMainHeader(idx_t version_number) {
+	MainHeader main_header;
+	main_header.version_number = version_number;
+	memset(main_header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
+	return main_header;
 }
 
 void SingleFileBlockManager::CreateNewDatabase() {
@@ -180,11 +206,11 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	// first fill in the new header
 	header_buffer.Clear();
 
-	MainHeader main_header;
-	main_header.version_number = VERSION_NUMBER;
-	memset(main_header.flags, 0, sizeof(uint64_t) * MainHeader::FLAG_COUNT);
-	AddStorageVersion(db, main_header.version_number);
+	options.version_number = GetVersionNumber();
+	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
+	AddStorageVersionTag();
 
+	MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
 	SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
 	// now write the header to the file
 	ChecksumAndWrite(header_buffer, 0);
@@ -202,6 +228,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h1.block_alloc_size = GetBlockAllocSize();
 	h1.vector_size = STANDARD_VECTOR_SIZE;
+	h1.serialization_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h1, header_buffer.buffer);
 	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE);
 
@@ -214,6 +241,7 @@ void SingleFileBlockManager::CreateNewDatabase() {
 	// We create the SingleFileBlockManager with the desired block allocation size before calling CreateNewDatabase.
 	h2.block_alloc_size = GetBlockAllocSize();
 	h2.vector_size = STANDARD_VECTOR_SIZE;
+	h2.serialization_compatibility = options.storage_version.GetIndex();
 	SerializeHeaderStructure<DatabaseHeader>(h2, header_buffer.buffer);
 	ChecksumAndWrite(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
 
@@ -239,17 +267,17 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 	MainHeader::CheckMagicBytes(*handle);
 	// otherwise, we check the metadata of the file
 	ReadAndChecksum(header_buffer, 0);
-	MainHeader main_header = DeserializeHeaderStructure<MainHeader>(header_buffer.buffer);
-	AddStorageVersion(db, main_header.version_number);
+	MainHeader main_header = DeserializeMainHeader(header_buffer.buffer);
+	options.version_number = main_header.version_number;
 
 	// read the database headers from disk
 	DatabaseHeader h1;
 	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE);
-	h1 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
+	h1 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
 
 	DatabaseHeader h2;
 	ReadAndChecksum(header_buffer, Storage::FILE_HEADER_SIZE * 2ULL);
-	h2 = DeserializeHeaderStructure<DatabaseHeader>(header_buffer.buffer);
+	h2 = DeserializeDatabaseHeader(main_header, header_buffer.buffer);
 
 	// check the header with the highest iteration count
 	if (h1.iteration > h2.iteration) {
@@ -261,6 +289,7 @@ void SingleFileBlockManager::LoadExistingDatabase() {
 		active_header = 1;
 		Initialize(h2, GetOptionalBlockAllocSize());
 	}
+	AddStorageVersionTag();
 	LoadFreeList();
 }
 
@@ -293,11 +322,32 @@ void SingleFileBlockManager::Initialize(const DatabaseHeader &header, const opti
 	meta_block = header.meta_block;
 	iteration_count = header.iteration;
 	max_block = NumericCast<block_id_t>(header.block_count);
+	if (options.storage_version.IsValid()) {
+		// storage version specified explicity - use requested storage version
+		auto requested_compat_version = options.storage_version.GetIndex();
+		if (requested_compat_version < header.serialization_compatibility) {
+			throw InvalidInputException(
+			    "Error opening \"%s\": cannot initialize database with storage version %d - which is lower than what "
+			    "the database itself uses (%d). The storage version of an existing database cannot be lowered.",
+			    path, requested_compat_version, header.serialization_compatibility);
+		}
+	} else {
+		// load storage version from header
+		options.storage_version = header.serialization_compatibility;
+	}
+	if (header.serialization_compatibility > SerializationCompatibility::Latest().serialization_version) {
+		throw InvalidInputException(
+		    "Error opening \"%s\": file was written with a storage version greater than the latest version supported "
+		    "by this DuckDB instance. Try opening the file with a newer version of DuckDB.",
+		    path);
+	}
+	db.GetStorageManager().SetStorageVersion(options.storage_version.GetIndex());
 
 	if (block_alloc_size.IsValid() && block_alloc_size.GetIndex() != header.block_alloc_size) {
-		throw InvalidInputException("cannot initialize the same database with a different block size: provided block "
-		                            "size: %llu, file block size: %llu",
-		                            GetBlockAllocSize(), header.block_alloc_size);
+		throw InvalidInputException(
+		    "Error opening \"%s\": cannot initialize the same database with a different block size: provided block "
+		    "size: %llu, file block size: %llu",
+		    path, GetBlockAllocSize(), header.block_alloc_size);
 	}
 	SetBlockAllocSize(header.block_alloc_size);
 }
@@ -671,6 +721,7 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	}
 	metadata_manager.Flush();
 	header.block_count = NumericCast<idx_t>(max_block);
+	header.serialization_compatibility = options.storage_version.GetIndex();
 
 	auto &config = DBConfig::Get(db);
 	if (config.options.checkpoint_abort == CheckpointAbort::DEBUG_ABORT_AFTER_FREE_LIST_WRITE) {
@@ -680,9 +731,20 @@ void SingleFileBlockManager::WriteHeader(DatabaseHeader header) {
 	// We need to fsync BEFORE we write the header to ensure that all the previous blocks are written as well
 	handle->Sync();
 
-	// set the header inside the buffer
 	header_buffer.Clear();
-	MemoryStream serializer;
+	// if we are upgrading the database from version 64 -> version 65, we need to re-write the main header
+	if (options.version_number.GetIndex() == 64 && options.storage_version.GetIndex() >= 4) {
+		// rewrite the main header
+		options.version_number = 65;
+		MainHeader main_header = ConstructMainHeader(options.version_number.GetIndex());
+		SerializeHeaderStructure<MainHeader>(main_header, header_buffer.buffer);
+		// now write the header to the file
+		ChecksumAndWrite(header_buffer, 0);
+		header_buffer.Clear();
+	}
+
+	// set the header inside the buffer
+	MemoryStream serializer(Allocator::Get(db));
 	header.Write(serializer);
 	memcpy(header_buffer.buffer, serializer.GetData(), serializer.GetPosition());
 	// now write the header to the file, active_header determines whether we write to h1 or h2

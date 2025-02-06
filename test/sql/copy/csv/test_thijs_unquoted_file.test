@@ -5,21 +5,27 @@
 statement ok
 PRAGMA enable_verification
 
-query III
+
+statement error
 from read_csv('data/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"', columns={'a':'varchar', 'b': 'varchar', 'c': 'integer'}, auto_detect=false);
 ----
-HYDRONIC GESELLSCHAFT FÜR WASSERTECHNIK MBH                                                     	 	2011
+* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with the CSV standard.
+
+query III
+from read_csv('data/csv/thijs_unquoted.csv', quote='"', sep='|', escape='"', columns={'a':'varchar', 'b': 'varchar', 'c': 'integer'}, auto_detect=false, strict_mode = False);
+----
+HYDRONIC GESELLSCHAFT FÜR WASSERTECHNIK MBH	 	2011
 ANTON SONNENSCHUTZSYSTEME GESELLSCHAFT MIT BESCHRÄNKTER HAFTUN	 	2012
 ENERGYS MAINTENANCE S	 	2015
 SYSTEMAT BELGIUM  S	 	2013
 
 query II
-SELECT DELIMITER, QUOTE FROM sniff_csv('data/csv/rabo-anon.csv.gz', RFC_4180=FALSE)
+SELECT DELIMITER, QUOTE FROM sniff_csv('data/csv/rabo-anon.csv.gz', strict_mode=FALSE)
 ----
 ,	"
 
 statement ok
-CREATE TABLE T AS FROM read_csv('data/csv/rabo-anon.csv.gz', RFC_4180=FALSE);
+CREATE TABLE T AS FROM read_csv('data/csv/rabo-anon.csv.gz', strict_mode=FALSE);
 
 query I
 select count(*) from T

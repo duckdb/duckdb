@@ -222,3 +222,30 @@ FROM range(10) tbl(i)
 7	8	9
 8	9	NULL
 9	NULL	NULL
+
+# Test incomplete buffering
+query II
+select * from (
+	select 
+		id, 
+		lead(id, 2047, -1) over() l 
+	from range(6144) tbl(id)
+	where id != 1 
+	  and id != 2 
+	  and id != 2500 
+	  and id != 2501 
+	  and id != 2502
+) 
+where id >= 2040 and id <= 2050;
+----
+2040	4090
+2041	4091
+2042	4092
+2043	4093
+2044	4094
+2045	4095
+2046	4096
+2047	4097
+2048	4098
+2049	4099
+2050	4100

@@ -27,34 +27,6 @@ struct CSVBufferUsage {
 	idx_t buffer_idx;
 };
 
-//! Class that keeps track of line starts, used for line size verification
-class LinePosition {
-public:
-	LinePosition() {
-	}
-	LinePosition(idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t buffer_size_p)
-	    : buffer_pos(buffer_pos_p), buffer_size(buffer_size_p), buffer_idx(buffer_idx_p) {
-	}
-
-	idx_t operator-(const LinePosition &other) const {
-		if (other.buffer_idx == buffer_idx) {
-			return buffer_pos - other.buffer_pos;
-		}
-		return other.buffer_size - other.buffer_pos + buffer_pos;
-	}
-
-	bool operator==(const LinePosition &other) const {
-		return buffer_pos == other.buffer_pos && buffer_idx == other.buffer_idx && buffer_size == other.buffer_size;
-	}
-
-	idx_t GetGlobalPosition(idx_t requested_buffer_size, bool first_char_nl = false) const {
-		return requested_buffer_size * buffer_idx + buffer_pos + first_char_nl;
-	}
-	idx_t buffer_pos = 0;
-	idx_t buffer_size = 0;
-	idx_t buffer_idx = 0;
-};
-
 //! Keeps track of start and end of line positions in regard to the CSV file
 class FullLinePosition {
 public:
@@ -181,7 +153,7 @@ public:
 	unsafe_vector<ValidityMask *> validity_mask;
 
 	//! Variables to iterate over the CSV buffers
-	LinePosition last_position;
+
 	char *buffer_ptr;
 	idx_t buffer_size;
 	idx_t position_before_comment;
@@ -244,6 +216,8 @@ public:
 	//! Variable used when trying to figure out where a new segment starts, we must always start from a Valid
 	//! (i.e., non-comment) line.
 	bool first_line_is_comment = false;
+
+	bool ignore_empty_values = true;
 
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
@@ -322,7 +296,8 @@ public:
 	bool FinishedIterator() const;
 
 	//! Creates a new string with all escaped values removed
-	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, Vector &vector);
+	static string_t RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool strict_mode,
+	                             Vector &vector);
 
 	//! If we can directly cast the type when consuming the CSV file, or we have to do it later
 	static bool CanDirectlyCast(const LogicalType &type, bool icu_loaded);

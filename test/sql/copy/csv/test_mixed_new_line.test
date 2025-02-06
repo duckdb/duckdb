@@ -15,7 +15,7 @@ from read_csv('data/csv/mixed_new_line.csv')
 foreach newline '\r' '\n' '\r\n'
 
 query III
-from read_csv('data/csv/mixed_new_line.csv', new_line = ${newline}, rfc_4180 = false)
+from read_csv('data/csv/mixed_new_line.csv', new_line = ${newline}, strict_mode = false)
 ----
 1	2	3
 4	5	6
@@ -25,21 +25,21 @@ from read_csv('data/csv/mixed_new_line.csv', new_line = ${newline}, rfc_4180 = f
 endloop
 
 statement error
-from read_csv('data/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, rfc_4180=true, delim = ',')
+from read_csv('data/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, strict_mode=true, delim = ',')
 ----
 Error when sniffing file "data/csv/mixed_new_line.csv".
 
 statement error
-from read_csv('data/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, rfc_4180=true, delim = ',', auto_detect= false)
+from read_csv('data/csv/mixed_new_line.csv', columns = {'a':'integer', 'b':'integer', 'c':'integer'}, new_line = '\r\n', header = false, strict_mode=true, delim = ',', auto_detect= false)
 ----
 The CSV Parser state machine reached an invalid state.
 
 query I
-select count(*) from read_csv('data/csv/mixed_new_line_2.csv', new_line ='\r\n', rfc_4180 = False, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
+select count(*) from read_csv('data/csv/mixed_new_line_2.csv', new_line ='\r\n', strict_mode = False, columns = {'a':'varchar', 'b':'varchar'},  delim = ',', ignore_errors = true, header = false)
 ----
 3
 
 statement error
-select count(*) from read_csv('data/csv/mixed_new_line_2.csv', new_line ='\r\n', rfc_4180 = False, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
+select count(*) from read_csv('data/csv/mixed_new_line_2.csv', new_line ='\r\n', strict_mode = False, columns = {'a':'varchar', 'b':'varchar'}, auto_detect = false, delim = ',')
 ----
 Expected Number of Columns: 2 Found: 1

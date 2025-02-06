@@ -4,6 +4,9 @@
 
 require skip_reload
 
+# These files were created with vector-size 2048
+require vector_size 2048
+
 ## Files created via `duckdb file_name -c "CHECKPOINT;"
 
 statement ok
@@ -20,5 +23,5 @@ IO Error: Trying to read a database file with version number 66, but we can only
 query I
 SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty%' ORDER BY database_name;
 ----
-{storage_version=64}
-{storage_version=65}
+{storage_version=v1.0.0 - v1.1.3}
+{storage_version=v1.2.0}

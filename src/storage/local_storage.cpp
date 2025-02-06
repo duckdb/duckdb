@@ -41,7 +41,6 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &table)
 		// Create a delete index and a local index.
 		auto delete_index = make_uniq<ART>(art.GetIndexName(), constraint_type, art.GetColumnIds(),
 		                                   art.table_io_manager, std::move(delete_expressions), art.db);
-		delete_index->append_mode = ARTAppendMode::IGNORE_DUPLICATES;
 		delete_indexes.AddIndex(std::move(delete_index));
 
 		auto index = make_uniq<ART>(art.GetIndexName(), constraint_type, art.GetColumnIds(), art.table_io_manager,
@@ -152,7 +151,7 @@ ErrorData LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, RowGr
 		}
 		mock_chunk.SetCardinality(chunk);
 		// append this chunk to the indexes of the table
-		error = DataTable::AppendToIndexes(index_list, nullptr, mock_chunk, start_row);
+		error = DataTable::AppendToIndexes(index_list, nullptr, mock_chunk, start_row, index_append_mode);
 		if (error.HasError()) {
 			return false;
 		}
@@ -173,7 +172,7 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		// appending: need to scan entire
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
 			// append this chunk to the indexes of the table
-			error = table.AppendToIndexes(delete_indexes, chunk, append_state.current_row);
+			error = table.AppendToIndexes(delete_indexes, chunk, append_state.current_row, index_append_mode);
 			if (error.HasError()) {
 				return false;
 			}
@@ -186,12 +185,13 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		auto &index_list = data_table_info->GetIndexes();
 		error = AppendToIndexes(transaction, *row_groups, index_list, table.GetTypes(), append_state.current_row);
 	}
+
 	if (error.HasError()) {
 		// need to revert all appended row ids
 		row_t current_row = append_state.row_start;
 		// remove the data from the indexes, if there are any indexes
 		row_groups->Scan(transaction, [&](DataChunk &chunk) -> bool {
-			// append this chunk to the indexes of the table
+			// Remove this chunk from the indexes.
 			try {
 				table.RemoveFromIndexes(append_state, chunk, current_row);
 			} catch (std::exception &ex) { // LCOV_EXCL_START
@@ -386,7 +386,8 @@ void LocalTableStorage::AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete
 		if (!art.IsUnique()) {
 			return false;
 		}
-		auto result = art.Cast<BoundIndex>().Append(delete_chunk, row_ids);
+		IndexAppendInfo index_append_info(IndexAppendMode::IGNORE_DUPLICATES, nullptr);
+		auto result = art.Cast<BoundIndex>().Append(delete_chunk, row_ids, index_append_info);
 		if (result.HasError()) {
 			throw InternalException("unexpected constraint violation on delete ART: ", result.Message());
 		}
@@ -401,7 +402,7 @@ void LocalStorage::Append(LocalAppendState &state, DataChunk &chunk) {
 	idx_t base_id = offset + state.append_state.total_append_count;
 
 	auto error = DataTable::AppendToIndexes(storage->append_indexes, storage->delete_indexes, chunk,
-	                                        NumericCast<row_t>(base_id));
+	                                        NumericCast<row_t>(base_id), storage->index_append_mode);
 	if (error.HasError()) {
 		error.Throw();
 	}
@@ -473,6 +474,7 @@ idx_t LocalStorage::Delete(DataTable &table, Vector &row_ids, idx_t count) {
 
 void LocalStorage::Update(DataTable &table, Vector &row_ids, const vector<PhysicalIndex> &column_ids,
                           DataChunk &updates) {
+	D_ASSERT(updates.size() >= 1);
 	auto storage = table_manager.GetStorage(table);
 	D_ASSERT(storage);
 

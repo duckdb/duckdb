@@ -88,27 +88,6 @@ jobs:
       shell: bash
       run: ./build/release/duckdb -c "PRAGMA platform;"
 
-    - name: Test
-      shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
-      run: |
-        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
-
-    - name: Tools Tests
-      shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
-      run: |
-        python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
-
-    - name: Examples
-      shell: bash
-      if: ${{ inputs.skip_tests != 'true' }}
-      run: |
-        (cd examples/embedded-c; make)
-        (cd examples/embedded-c++; make)
-        build/release/benchmark/benchmark_runner benchmark/tpch/sf1/q01.benchmark
-        build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
-
     - name: Deploy
       shell: bash
       env:
@@ -128,6 +107,24 @@ jobs:
           libduckdb-linux-amd64.zip
           duckdb_cli-linux-amd64.zip
 
+    - name: Test
+      shell: bash
+      if: ${{ inputs.skip_tests != 'true' }}
+      run: |
+        python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
+
+    - name: Tools Tests
+      shell: bash
+      if: ${{ inputs.skip_tests != 'true' }}
+      run: |
+        python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+
+    - name: Examples
+      shell: bash
+      if: ${{ inputs.skip_tests != 'true' }}
+      run: |
+        build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
+        build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
  linux-release-aarch64:
    # Builds binaries for linux_arm64
@@ -199,6 +196,7 @@ jobs:
         with:
           vcpkg_target_triplet: x64-linux
           duckdb_arch: linux_amd64
+          run_tests: ${{ inputs.skip_tests != 'true' }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -237,6 +235,7 @@ jobs:
         with:
           vcpkg_target_triplet: x64-linux
           duckdb_arch: linux_amd64_musl
+          run_tests: ${{ inputs.skip_tests != 'true' }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -281,6 +280,7 @@ jobs:
         with:
           vcpkg_target_triplet: arm64-linux
           duckdb_arch: linux_arm64
+          run_tests: ${{ inputs.skip_tests != 'true' }}
 
       - uses: actions/upload-artifact@v4
         with:

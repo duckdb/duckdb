@@ -41,7 +41,7 @@ public:
 		return art.prefix_count;
 	}
 	static idx_t GetMismatchWithOther(const Prefix &l_prefix, const Prefix &r_prefix, const idx_t max_count);
-	static idx_t GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, idx_t &depth);
+	static optional_idx GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, idx_t &depth);
 	static uint8_t GetByte(const ART &art, const Node &node, const uint8_t pos);
 
 public:
@@ -64,8 +64,8 @@ public:
 	//! 1. a non-prefix node.
 	//! 2. a mismatching byte.
 	//! Early-out, if the next prefix is a gate node.
-	static idx_t Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth);
-	static idx_t TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth);
+	static optional_idx Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth);
+	static optional_idx TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth);
 
 	//! Traverse two prefixes to find
 	//! 1. that they match.
@@ -85,7 +85,8 @@ public:
 
 	//! Insert a key into a prefix.
 	static ARTConflictType Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id,
-	                              const GateStatus status, optional_ptr<ART> delete_art);
+	                              const GateStatus status, optional_ptr<ART> delete_art,
+	                              const IndexAppendMode append_mode);
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);

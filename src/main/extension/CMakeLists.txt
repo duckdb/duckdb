@@ -4,10 +4,13 @@ include_directories(../../../third_party/httplib/)
 # include file and a loader function based on the `DUCKDB_EXTENSION_NAMES`
 # parameter.
 
-# generated_extension_headers.hpp
+# generated_extension_headers.hpp we first write into a 'candidate' file and
+# then use `configure_file` again the advantage of this is that we don't change
+# modification time if nothing changed
+
 configure_file(
   generated_extension_headers.hpp.in
-  "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp")
+  "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp.cand")
 
 get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}"
                                  STATICALLY_LINKED_EXTENSIONS)
@@ -15,11 +18,16 @@ foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
   string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
   if(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
     set(DUCKDB_EXTENSION_HEADER "${EXT_NAME}_extension.hpp")
-    file(APPEND
-         "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp"
-         "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
+    file(
+      APPEND
+      "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp.cand"
+      "#include \"${DUCKDB_EXTENSION_HEADER}\"\n")
   endif()
 endforeach()
+
+configure_file(
+  "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp.cand"
+  "${PROJECT_BINARY_DIR}/codegen/include/generated_extension_headers.hpp")
 
 # generated_extension_loader.hpp
 set(EXT_LOADER_NAME_LIST "")

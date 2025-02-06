@@ -194,11 +194,18 @@ void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const 
 				errors_appender.Append(Value());
 				break;
 			case CSVErrorType::TOO_FEW_COLUMNS:
-				D_ASSERT(bind_data.return_names.size() > col_idx + 1);
-				errors_appender.Append(string_t(bind_data.return_names[col_idx + 1]));
+				if (col_idx + 1 < bind_data.return_names.size()) {
+					errors_appender.Append(string_t(bind_data.return_names[col_idx + 1]));
+				} else {
+					errors_appender.Append(Value());
+				}
 				break;
 			default:
-				errors_appender.Append(string_t(bind_data.return_names[col_idx]));
+				if (col_idx < bind_data.return_names.size()) {
+					errors_appender.Append(string_t(bind_data.return_names[col_idx]));
+				} else {
+					errors_appender.Append(Value());
+				}
 			}
 			// 8. Error Type
 			errors_appender.Append(string_t(CSVErrorTypeToEnum(error.type)));
@@ -321,11 +328,13 @@ CSVError CSVError::InvalidState(const CSVReaderOptions &options, idx_t current_c
 	std::ostringstream error;
 	error << "The CSV Parser state machine reached an invalid state.\nThis can happen when is not possible to parse "
 	         "your CSV File with the given options, or the CSV File is not RFC 4180 compliant ";
-
 	std::ostringstream how_to_fix_it;
-	how_to_fix_it << "Possible fixes:" << '\n';
-	how_to_fix_it << "* Enable scanning files that are not RFC 4180 compliant (rfc_4180=false)." << '\n';
-
+	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
+		how_to_fix_it << "Possible fixes:" << '\n';
+		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
+		                 "comply with the CSV standard."
+		              << '\n';
+	}
 	return CSVError(error.str(), INVALID_STATE, current_column, csv_row, error_info, row_byte_position, byte_position,
 	                options, how_to_fix_it.str(), current_path);
 }
@@ -356,6 +365,11 @@ CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const ve
 
 	// 3. Suggest how to fix it!
 	error << "Possible fixes:" << '\n';
+	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
+		error << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with "
+		         "the CSV standard."
+		      << '\n';
+	}
 	// header
 	if (!options.dialect_options.header.IsSetByUser()) {
 		error << "* Set header (header = true) if your CSV has a header, or (header = false) if it doesn't" << '\n';
@@ -395,6 +409,11 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	// 3. Suggest how to fix it!
 	error << "Possible fixes:" << '\n';
 	// 3.1 Inform the reader of the dialect
+	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
+		error << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with "
+		         "the CSV standard."
+		      << '\n';
+	}
 	// delimiter
 	if (!options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
 		error << "* Set delimiter (e.g., delim=\',\')" << '\n';
@@ -440,11 +459,6 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	error << "* Be sure that the maximum line size is set to an appropriate value, otherwise set it (e.g., "
 	         "max_line_size=10000000)"
 	      << "\n";
-
-	if (options.dialect_options.state_machine_options.rfc_4180.GetValue() != false ||
-	    !options.dialect_options.state_machine_options.rfc_4180.IsSetByUser()) {
-		error << "* Enable scanning files that are not RFC 4180 compliant (rfc_4180=false). " << '\n';
-	}
 	return CSVError(error.str(), SNIFFING, {});
 }
 
@@ -466,6 +480,11 @@ CSVError CSVError::UnterminatedQuotesError(const CSVReaderOptions &options, idx_
 	error << "Value with unterminated quote found." << '\n';
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible fixes:" << '\n';
+	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
+		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
+		                 "comply with the CSV standard."
+		              << '\n';
+	}
 	how_to_fix_it << "* Enable ignore errors (ignore_errors=true) to skip this row" << '\n';
 	how_to_fix_it << "* Set quote to empty or to a different value (e.g., quote=\'\')" << '\n';
 	return CSVError(error.str(), UNTERMINATED_QUOTES, current_column, csv_row, error_info, row_byte_position,
@@ -479,6 +498,11 @@ CSVError CSVError::IncorrectColumnAmountError(const CSVReaderOptions &options, i
 	// We don't have a fix for this
 	std::ostringstream how_to_fix_it;
 	how_to_fix_it << "Possible fixes:" << '\n';
+	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
+		how_to_fix_it << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not "
+		                 "comply with the CSV standard."
+		              << '\n';
+	}
 	if (!options.null_padding) {
 		how_to_fix_it << "* Enable null padding (null_padding=true) to replace missing values with NULL" << '\n';
 	}

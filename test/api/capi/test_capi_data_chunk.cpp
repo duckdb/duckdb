@@ -513,12 +513,13 @@ TEST_CASE("Test DataChunk write BLOB", "[capi]") {
 	duckdb_destroy_logical_type(&column_type);
 	uint8_t bytes[] = {0x80, 0x00, 0x01, 0x2a};
 	duckdb_vector_assign_string_element_len(vector, 0, (const char *)bytes, 4);
-	auto string_data = (duckdb_string_t *)duckdb_vector_get_data(vector);
-	REQUIRE(string_data[0].value.inlined.length == 4);
-	REQUIRE(string_data[0].value.inlined.inlined[0] == (char)0x80);
-	REQUIRE(string_data[0].value.inlined.inlined[1] == (char)0x00);
-	REQUIRE(string_data[0].value.inlined.inlined[2] == (char)0x01);
-	REQUIRE(string_data[0].value.inlined.inlined[3] == (char)0x2a);
+	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	auto string_value = duckdb_string_t_data(string_data);
+	REQUIRE(duckdb_string_t_length(*string_data) == 4);
+	REQUIRE(string_value[0] == (char)0x80);
+	REQUIRE(string_value[1] == (char)0x00);
+	REQUIRE(string_value[2] == (char)0x01);
+	REQUIRE(string_value[3] == (char)0x2a);
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&type);
 }
@@ -536,12 +537,13 @@ TEST_CASE("Test DataChunk write VARINT", "[capi]") {
 	duckdb_destroy_logical_type(&column_type);
 	uint8_t bytes[] = {0x80, 0x00, 0x01, 0x2a}; // VARINT 42
 	duckdb_vector_assign_string_element_len(vector, 0, (const char *)bytes, 4);
-	auto string_data = (duckdb_string_t *)duckdb_vector_get_data(vector);
-	REQUIRE(string_data[0].value.inlined.length == 4);
-	REQUIRE(string_data[0].value.inlined.inlined[0] == (char)0x80);
-	REQUIRE(string_data[0].value.inlined.inlined[1] == (char)0x00);
-	REQUIRE(string_data[0].value.inlined.inlined[2] == (char)0x01);
-	REQUIRE(string_data[0].value.inlined.inlined[3] == (char)0x2a);
+	auto string_data = static_cast<duckdb_string_t *>(duckdb_vector_get_data(vector));
+	auto string_value = duckdb_string_t_data(string_data);
+	REQUIRE(duckdb_string_t_length(*string_data) == 4);
+	REQUIRE(string_value[0] == (char)0x80);
+	REQUIRE(string_value[1] == (char)0x00);
+	REQUIRE(string_value[2] == (char)0x01);
+	REQUIRE(string_value[3] == (char)0x2a);
 	duckdb_destroy_data_chunk(&chunk);
 	duckdb_destroy_logical_type(&type);
 }
