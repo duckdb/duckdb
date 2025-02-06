@@ -10,14 +10,13 @@
 
 #include "duckdb.hpp"
 #include "parquet_bss_decoder.hpp"
-#include "parquet_dbp_decoder.hpp"
-#include "parquet_rle_bp_decoder.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
 #include "thrift_tools.hpp"
 #include "decoder/delta_binary_packed_decoder.hpp"
 #include "decoder/dictionary_decoder.hpp"
+#include "decoder/rle_decoder.hpp"
 #ifndef DUCKDB_AMALGAMATION
 
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -52,6 +51,7 @@ enum class ColumnEncoding {
 class ColumnReader {
 	friend class DeltaBinaryPackedDecoder;
 	friend class DictionaryDecoder;
+	friend class RLEDecoder;
 public:
 	ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
 	             idx_t max_define_p, idx_t max_repeat_p);
@@ -196,7 +196,7 @@ private:
 	unique_ptr<RleBpDecoder> repeated_decoder;
 	DictionaryDecoder dictionary_decoder;
 	DeltaBinaryPackedDecoder delta_binary_packed_decoder;
-	unique_ptr<RleBpDecoder> rle_decoder;
+	RLEDecoder rle_decoder;
 	unique_ptr<BssDecoder> bss_decoder;
 
 	// dummies for Skip()
