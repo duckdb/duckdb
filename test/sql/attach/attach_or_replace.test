@@ -4,8 +4,6 @@
 
 require skip_reload
 
-require sqlite_scanner
-
 statement ok
 PRAGMA enable_verification
 
