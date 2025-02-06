@@ -108,7 +108,7 @@ const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
                            idx_t max_define_p, idx_t max_repeat_p)
     : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
-      type(std::move(type_p)), page_rows_available(0), dictionary_decoder(*this), delta_binary_packed_decoder(*this), rle_decoder(*this) {
+      type(std::move(type_p)), page_rows_available(0), dictionary_decoder(*this), delta_binary_packed_decoder(*this), rle_decoder(*this), delta_byte_array_decoder(*this) {
 
 	// dummies for Skip()
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -199,19 +199,6 @@ unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vect
 void ColumnReader::Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, // NOLINT
                          parquet_filter_t *filter, idx_t result_offset, Vector &result) {
 	throw NotImplementedException("Plain");
-}
-
-void ColumnReader::PrepareDeltaLengthByteArray(ResizeableBuffer &buffer) {
-	throw std::runtime_error("DELTA_LENGTH_BYTE_ARRAY encoding is only supported for text or binary data");
-}
-
-void ColumnReader::PrepareDeltaByteArray(ResizeableBuffer &buffer) {
-	throw std::runtime_error("DELTA_BYTE_ARRAY encoding is only supported for text or binary data");
-}
-
-void ColumnReader::DeltaByteArray(uint8_t *defines, idx_t num_values, // NOLINT
-                                  parquet_filter_t &filter, idx_t result_offset, Vector &result) {
-	throw NotImplementedException("DeltaByteArray");
 }
 
 void ColumnReader::PlainReference(shared_ptr<ResizeableBuffer> &, Vector &result) { // NOLINT
@@ -462,11 +449,13 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		break;
 	}
 	case Encoding::DELTA_LENGTH_BYTE_ARRAY: {
-		PrepareDeltaLengthByteArray(*block);
+		encoding = ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY;
+		delta_byte_array_decoder.InitializeDeltaLengthByteArray();
 		break;
 	}
 	case Encoding::DELTA_BYTE_ARRAY: {
-		PrepareDeltaByteArray(*block);
+		encoding = ColumnEncoding::DELTA_BYTE_ARRAY;
+		delta_byte_array_decoder.InitializeDeltaByteArray();
 		break;
 	}
 	case Encoding::BYTE_STREAM_SPLIT: {
@@ -543,9 +532,9 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			delta_binary_packed_decoder.Read(define_ptr, read_now, result, result_offset);
 		} else if (encoding == ColumnEncoding::RLE) {
 			rle_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (byte_array_data) {
+		} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY || encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
 			// DELTA_BYTE_ARRAY or DELTA_LENGTH_BYTE_ARRAY
-			DeltaByteArray(define_out, read_now, filter, result_offset, result);
+			delta_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
 		} else if (bss_decoder) {
 			auto read_buf = make_shared_ptr<ResizeableBuffer>();
 

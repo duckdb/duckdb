@@ -17,6 +17,7 @@
 #include "decoder/delta_binary_packed_decoder.hpp"
 #include "decoder/dictionary_decoder.hpp"
 #include "decoder/rle_decoder.hpp"
+#include "decoder/delta_byte_array_decoder.hpp"
 #ifndef DUCKDB_AMALGAMATION
 
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -44,12 +45,15 @@ enum class ColumnEncoding {
 	DICTIONARY,
 	DELTA_BINARY_PACKED,
 	RLE,
+	DELTA_LENGTH_BYTE_ARRAY,
+	DELTA_BYTE_ARRAY,
 	BYTE_STREAM_SPLIT,
 	PLAIN
 };
 
 class ColumnReader {
 	friend class DeltaBinaryPackedDecoder;
+	friend class DeltaByteArrayDecoder;
 	friend class DictionaryDecoder;
 	friend class RLEDecoder;
 public:
@@ -138,11 +142,6 @@ protected:
 	// these are nops for most types, but not for strings
 	virtual void PlainReference(shared_ptr<ResizeableBuffer> &, Vector &result);
 
-	virtual void PrepareDeltaLengthByteArray(ResizeableBuffer &buffer);
-	virtual void PrepareDeltaByteArray(ResizeableBuffer &buffer);
-	virtual void DeltaByteArray(uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
-	                            Vector &result);
-
 	// applies any skips that were registered using Skip()
 	virtual void ApplyPendingSkips(idx_t num_values);
 
@@ -164,8 +163,6 @@ protected:
 
 	ParquetReader &reader;
 	LogicalType type;
-	unique_ptr<Vector> byte_array_data;
-	idx_t byte_array_count = 0;
 
 	idx_t pending_skips = 0;
 
@@ -197,6 +194,7 @@ private:
 	DictionaryDecoder dictionary_decoder;
 	DeltaBinaryPackedDecoder delta_binary_packed_decoder;
 	RLEDecoder rle_decoder;
+	DeltaByteArrayDecoder delta_byte_array_decoder;
 	unique_ptr<BssDecoder> bss_decoder;
 
 	// dummies for Skip()
