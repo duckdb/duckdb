@@ -16,6 +16,7 @@
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
 #include "thrift_tools.hpp"
+#include "reader/dictionary_decoder.hpp"
 #ifndef DUCKDB_AMALGAMATION
 
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -38,7 +39,17 @@ using duckdb_parquet::Type;
 
 typedef std::bitset<STANDARD_VECTOR_SIZE> parquet_filter_t;
 
+enum class ColumnEncoding {
+	INVALID,
+	DICTIONARY,
+	DELTA_BINARY_PACKED,
+	RLE,
+	BYTE_STREAM_SPLIT,
+	PLAIN
+};
+
 class ColumnReader {
+	friend class DictionaryDecoder;
 public:
 	ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
 	             idx_t max_define_p, idx_t max_repeat_p);
@@ -167,8 +178,6 @@ private:
 	void PreparePageV2(PageHeader &page_hdr);
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
-	void ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now,
-	                         idx_t result_offset);
 	const ColumnChunk *chunk = nullptr;
 
 	TProtocol *protocol;
@@ -179,11 +188,11 @@ private:
 	shared_ptr<ResizeableBuffer> block;
 
 	ResizeableBuffer compressed_buffer;
-	ResizeableBuffer offset_buffer;
 
-	unique_ptr<RleBpDecoder> dict_decoder;
+	ColumnEncoding encoding = ColumnEncoding::INVALID;
 	unique_ptr<RleBpDecoder> defined_decoder;
 	unique_ptr<RleBpDecoder> repeated_decoder;
+	DictionaryDecoder dictionary_decoder;
 	unique_ptr<DbpDecoder> dbp_decoder;
 	unique_ptr<RleBpDecoder> rle_decoder;
 	unique_ptr<BssDecoder> bss_decoder;
@@ -192,11 +201,6 @@ private:
 	parquet_filter_t none_filter;
 	ResizeableBuffer dummy_define;
 	ResizeableBuffer dummy_repeat;
-
-	SelectionVector dictionary_selection_vector;
-	idx_t dictionary_size;
-	unique_ptr<Vector> dictionary;
-	string dictionary_id;
 
 public:
 	template <class TARGET>

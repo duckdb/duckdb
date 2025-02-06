@@ -108,8 +108,7 @@ const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
                            idx_t max_define_p, idx_t max_repeat_p)
     : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
-      type(std::move(type_p)), page_rows_available(0), dictionary_selection_vector(STANDARD_VECTOR_SIZE),
-      dictionary_size(0) {
+      type(std::move(type_p)), page_rows_available(0), dictionary_decoder(*this) {
 
 	// dummies for Skip()
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -239,7 +238,7 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 }
 
 void ColumnReader::PrepareRead(parquet_filter_t &filter) {
-	dict_decoder.reset();
+	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
 	bss_decoder.reset();
 	block.reset();
@@ -261,22 +260,11 @@ void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 		break;
 	case PageType::DICTIONARY_PAGE: {
 		PreparePage(page_hdr);
-		if (page_hdr.dictionary_page_header.num_values < 0) {
+		auto dictionary_size = page_hdr.dictionary_page_header.num_values;
+		if (dictionary_size < 0) {
 			throw std::runtime_error("Invalid dictionary page header (num_values < 0)");
 		}
-		auto old_dict_size = dictionary_size;
-		// we use the first value in the dictionary to keep a NULL
-		dictionary_size = page_hdr.dictionary_page_header.num_values;
-		if (!dictionary) {
-			dictionary = make_uniq<Vector>(type, dictionary_size + 1);
-		} else if (dictionary_size > old_dict_size) {
-			dictionary->Resize(old_dict_size, dictionary_size + 1);
-		}
-		dictionary_id = reader.file_name + "_" + schema.name + "_" + std::to_string(chunk_read_offset);
-		// we use the first entry as a NULL, dictionary vectors don't have a separate validity mask
-		FlatVector::Validity(*dictionary).SetInvalid(0);
-		PlainReference(block, *dictionary);
-		Plain(block, nullptr, dictionary_size, nullptr, 1, *dictionary);
+		dictionary_decoder.InitializeDictionary(dictionary_size);
 		break;
 	}
 	default:
@@ -459,17 +447,15 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	switch (page_encoding) {
 	case Encoding::RLE_DICTIONARY:
 	case Encoding::PLAIN_DICTIONARY: {
-		// where is it otherwise??
-		auto dict_width = block->read<uint8_t>();
-		// TODO somehow dict_width can be 0 ?
-		dict_decoder = make_uniq<RleBpDecoder>(block->ptr, block->len, dict_width);
-		block->inc(block->len);
+		encoding = ColumnEncoding::DICTIONARY;
+		dictionary_decoder.InitializePage();
 		break;
 	}
 	case Encoding::RLE: {
 		if (type.id() != LogicalTypeId::BOOLEAN) {
 			throw std::runtime_error("RLE encoding is only supported for boolean data");
 		}
+		encoding = ColumnEncoding::RLE;
 		block->inc(sizeof(uint32_t));
 		rle_decoder = make_uniq<RleBpDecoder>(block->ptr, block->len, 1);
 		break;
@@ -477,6 +463,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	case Encoding::DELTA_BINARY_PACKED: {
 		dbp_decoder = make_uniq<DbpDecoder>(block->ptr, block->len);
 		block->inc(block->len);
+		encoding = ColumnEncoding::DELTA_BINARY_PACKED;
 		break;
 	}
 	case Encoding::DELTA_LENGTH_BYTE_ARRAY: {
@@ -492,40 +479,17 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		// but the byte stream split encoder needs to know the correct data size.
 		bss_decoder = make_uniq<BssDecoder>(block->ptr, block->len - 1);
 		block->inc(block->len);
+		encoding = ColumnEncoding::BYTE_STREAM_SPLIT;
 		break;
 	}
 	case Encoding::PLAIN:
 		// nothing to do here, will be read directly below
+		encoding = ColumnEncoding::PLAIN;
 		break;
 
 	default:
 		throw std::runtime_error("Unsupported page encoding");
 	}
-}
-
-void ColumnReader::ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now,
-                                       idx_t result_offset) {
-	D_ASSERT(read_now <= STANDARD_VECTOR_SIZE);
-	idx_t offset_idx = 0;
-	for (idx_t row_idx = 0; row_idx < read_now; row_idx++) {
-		if (HasDefines() && defines[row_idx + result_offset] != max_define) {
-			dictionary_selection_vector.set_index(row_idx, 0); // dictionary entry 0 is NULL
-			continue;                                          // we don't have a dict entry for NULLs
-		}
-		if (filter.test(row_idx + result_offset)) {
-			auto offset = offsets[offset_idx++];
-			if (offset >= dictionary_size) {
-				throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
-			}
-			dictionary_selection_vector.set_index(row_idx, offset + 1);
-		} else {
-			dictionary_selection_vector.set_index(row_idx, 0); // just set NULL if the filter excludes this row
-			offset_idx++;
-		}
-	}
-#ifdef DEBUG
-	dictionary_selection_vector.Verify(read_now, dictionary_size + 1);
-#endif
 }
 
 idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
@@ -565,7 +529,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 
 		idx_t null_count = 0;
 
-		if ((dict_decoder || dbp_decoder || rle_decoder || bss_decoder) && HasDefines()) {
+		if ((dbp_decoder || rle_decoder || bss_decoder) && HasDefines()) {
 			// we need the null count because the dictionary offsets have no entries for nulls
 			for (idx_t i = result_offset; i < result_offset + read_now; i++) {
 				null_count += (define_out[i] != max_define);
@@ -577,22 +541,9 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			result.Resize(result_offset, STANDARD_VECTOR_SIZE);
 		}
 
-		if (dict_decoder) {
-			if ((!dictionary || dictionary_size == 0) && null_count < read_now) {
-				throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
-			}
-			offset_buffer.resize(reader.allocator, sizeof(uint32_t) * (read_now - null_count));
-			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, read_now - null_count);
-			ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr),
-			                    reinterpret_cast<uint8_t *>(define_out), filter, read_now, result_offset);
-			if (result_offset == 0) {
-				result.Dictionary(*dictionary, dictionary_size + 1, dictionary_selection_vector, read_now);
-				DictionaryVector::SetDictionaryId(result, dictionary_id);
-				D_ASSERT(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
-			} else {
-				D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-				VectorOperations::Copy(*dictionary, result, dictionary_selection_vector, read_now, 0, result_offset);
-			}
+		if (encoding == ColumnEncoding::DICTIONARY) {
+			auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) + result_offset : nullptr;
+			dictionary_decoder.Read(define_ptr, read_now, result, result_offset);
 		} else if (dbp_decoder) {
 			// TODO keep this in the state
 			auto read_buf = make_shared_ptr<ResizeableBuffer>();
