@@ -249,9 +249,9 @@ SELECT CAST('[          [ [12,     13,14], [8, 9         ]  ],[[ 4    ]   ],    
 [[[12, 13, 14], [8, 9]], [[4]], [[2, 1, 0]]]
 
 query I
-SELECT CAST($$["   hello","          \'  world", "!         "]$$ AS VARCHAR[]);
+SELECT CAST($$["   hello","          \"'  world", "!         "]$$ AS VARCHAR[]);
 ----
-[   hello,           '  world, !         ]
+[   hello,           "'  world, !         ]
 
 query I
 SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);     
