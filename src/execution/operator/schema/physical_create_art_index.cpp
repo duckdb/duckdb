@@ -34,7 +34,10 @@ PhysicalCreateARTIndex::PhysicalCreateARTIndex(LogicalOperator &op, TableCatalog
 
 class CreateARTIndexGlobalSinkState : public GlobalSinkState {
 public:
+	//! We merge the local indexes into one global index.
 	unique_ptr<BoundIndex> global_index;
+	//! True, if CREATE IF NOT EXISTS and an index already exists.
+	bool finished;
 };
 
 class CreateARTIndexLocalSinkState : public LocalSinkState {
@@ -53,8 +56,16 @@ public:
 };
 
 unique_ptr<GlobalSinkState> PhysicalCreateARTIndex::GetGlobalSinkState(ClientContext &context) const {
-	// Create the global sink state and add the global index.
+	// Create the global sink state.
 	auto state = make_uniq<CreateARTIndexGlobalSinkState>();
+
+	// Eager catalog lookup to early-out, if the index already exists.
+	state->finished = VerifyIndexDoesNotExist(context);
+	if (state->finished) {
+		return state;
+	}
+
+	// Create the global index.
 	auto &storage = table.GetStorage();
 	state->global_index = make_uniq<ART>(info->index_name, info->constraint_type, storage_ids,
 	                                     TableIOManager::Get(storage), unbound_expressions, storage.db);
@@ -123,6 +134,10 @@ SinkResultType PhysicalCreateARTIndex::SinkSorted(OperatorSinkInput &input) cons
 
 SinkResultType PhysicalCreateARTIndex::Sink(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSinkInput &input) const {
+	auto &g_state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
+	if (g_state.finished) {
+		return SinkResultType::NEED_MORE_INPUT;
+	}
 
 	D_ASSERT(chunk.ColumnCount() >= 2);
 	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
@@ -151,11 +166,13 @@ SinkResultType PhysicalCreateARTIndex::Sink(ExecutionContext &context, DataChunk
 
 SinkCombineResultType PhysicalCreateARTIndex::Combine(ExecutionContext &context,
                                                       OperatorSinkCombineInput &input) const {
-
 	auto &g_state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
-	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
+	if (g_state.finished) {
+		return SinkCombineResultType::FINISHED;
+	}
 
 	// Merge the local index into the global index.
+	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	if (!g_state.global_index->MergeIndexes(*l_state.local_index)) {
 		throw ConstraintException("Data contains duplicates on indexed column(s)");
 	}
@@ -165,57 +182,75 @@ SinkCombineResultType PhysicalCreateARTIndex::Combine(ExecutionContext &context,
 
 SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                   OperatorSinkFinalizeInput &input) const {
+	auto &g_state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
+	if (g_state.finished) {
+		return SinkFinalizeType::READY;
+	}
 
-	// Here, we set the resulting global index as the newly created index of the table.
-	auto &state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
+	info->column_ids = storage_ids;
 
 	// Vacuum excess memory and verify.
-	state.global_index->Vacuum();
-	D_ASSERT(!state.global_index->VerifyAndToString(true).empty());
-	state.global_index->VerifyAllocations();
+	g_state.global_index->Vacuum();
+	D_ASSERT(!g_state.global_index->VerifyAndToString(true).empty());
+	g_state.global_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
 	if (!storage.IsRoot()) {
 		throw TransactionException("cannot add an index to a table that has been altered");
 	}
 
-	auto &schema = table.schema;
-	info->column_ids = storage_ids;
+	// Throw, if we trigger a catalog exception.
+	auto finished = VerifyIndexDoesNotExist(context);
 
-	// FIXME: We should check for catalog exceptions prior to index creation, and later double-check.
+	if (alter_table_info) {
+		auto &catalog = Catalog::GetCatalog(context, info->catalog);
+		catalog.Alter(context, *alter_table_info);
+		table.GetStorage().AddIndex(std::move(g_state.global_index));
+		return SinkFinalizeType::READY;
+	}
+
+	if (finished) {
+		return SinkFinalizeType::READY;
+	}
+
+	auto &schema = table.schema;
+	auto transaction = schema.GetCatalogTransaction(context);
+	auto index_entry = schema.CreateIndex(transaction, *info, table).get();
+
+	D_ASSERT(index_entry);
+	auto &index = index_entry->Cast<DuckIndexEntry>();
+	index.initial_index_size = g_state.global_index->GetInMemorySize();
+
+	// Add the index to the storage.
+	table.GetStorage().AddIndex(std::move(g_state.global_index));
+	return SinkFinalizeType::READY;
+}
+
+bool PhysicalCreateARTIndex::VerifyIndexDoesNotExist(ClientContext &context) const {
 	if (!alter_table_info) {
 		// Ensure that the index does not yet exist in the catalog.
+		auto &schema = table.schema;
 		auto entry = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->index_name);
 		if (entry) {
 			if (info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
 				throw CatalogException("Index with name \"%s\" already exists!", info->index_name);
 			}
 			// IF NOT EXISTS on existing index. We are done.
-			return SinkFinalizeType::READY;
+			return true;
 		}
-
-		auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(context), *info, table).get();
-		D_ASSERT(index_entry);
-		auto &index = index_entry->Cast<DuckIndexEntry>();
-		index.initial_index_size = state.global_index->GetInMemorySize();
-
-	} else {
-		// Ensure that there are no other indexes with that name on this table.
-		auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-		indexes.Scan([&](Index &index) {
-			if (index.GetIndexName() == info->index_name) {
-				throw CatalogException("an index with that name already exists for this table: %s", info->index_name);
-			}
-			return false;
-		});
-
-		auto &catalog = Catalog::GetCatalog(context, info->catalog);
-		catalog.Alter(context, *alter_table_info);
+		return false;
 	}
 
-	// Add the index to the storage.
-	storage.AddIndex(std::move(state.global_index));
-	return SinkFinalizeType::READY;
+	// Ensure that there are no other indexes with that name on this table.
+	auto &storage = table.GetStorage();
+	auto &indexes = storage.GetDataTableInfo()->GetIndexes();
+	indexes.Scan([&](Index &index) {
+		if (index.GetIndexName() == info->index_name) {
+			throw CatalogException("an index with that name already exists for this table: %s", info->index_name);
+		}
+		return false;
+	});
+	return false;
 }
 
 //===--------------------------------------------------------------------===//

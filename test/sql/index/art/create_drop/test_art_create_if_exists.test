@@ -1,0 +1,62 @@
+# name: test/sql/index/art/create_drop/test_art_create_if_exists.test
+# description: Test ART creation with the same index already existing
+# group: [create_drop]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA immediate_transaction_mode = True;
+
+statement ok
+CREATE TABLE tbl AS SELECT range AS i FROM range(100);
+
+mode skip
+
+# Trigger write-write conflict.
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+CREATE INDEX IF NOT EXISTS my_idx ON tbl(i);
+
+statement ok con2
+BEGIN;
+
+statement error con2
+CREATE INDEX IF NOT EXISTS my_idx ON tbl(i);
+----
+<REGEX>:TransactionContext Error.*write-write.*
+
+statement ok con1
+COMMIT;
+
+statement ok con2
+COMMIT;
+
+query I
+SELECT COUNT(*) FROM duckdb_indexes;
+----
+1
+
+statement ok
+DROP INDEX my_idx;
+
+mode unskip
+
+# Trigger early-out.
+
+statement ok
+CREATE INDEX IF NOT EXISTS my_idx ON tbl(i);
+
+statement ok
+CREATE INDEX IF NOT EXISTS my_idx ON tbl(i);
+
+query I
+SELECT COUNT(*) FROM duckdb_indexes;
+----
+1
+
+statement ok
+DROP INDEX my_idx;
