@@ -53,16 +53,12 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
 	}
 	idx_t valid_count = read_count;
-	auto sel = FlatVector::IncrementalSelectionVector();
 	if (defines) {
 		valid_count = 0;
 		for (idx_t i = 0; i < read_count; i++) {
 			valid_sel.set_index(valid_count, i);
 			dictionary_selection_vector.set_index(i, dictionary_size);
 			valid_count += defines[result_offset + i] == reader.max_define;
-		}
-		if (valid_count < read_count) {
-			sel = &valid_sel;
 		}
 	}
 	if (valid_count == read_count) {
@@ -78,7 +74,7 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 		// for the valid entries - decode the offsets
 		offset_buffer.resize(reader.reader.allocator, sizeof(uint32_t) * valid_count);
 		dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, valid_count);
-		ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr), *sel, valid_count, result_offset);
+		ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr), valid_sel, valid_count, result_offset);
 	}
 #ifdef DEBUG
 	dictionary_selection_vector.Verify(read_count, dictionary_size + 1);
