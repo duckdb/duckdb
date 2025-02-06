@@ -19,17 +19,18 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size) {
 		dictionary->Resize(old_dict_size, dictionary_size + 1);
 	}
 	dictionary_id = reader.reader.file_name + "_" + reader.schema.name + "_" + std::to_string(reader.chunk_read_offset);
-	// we use the first entry as a NULL, dictionary vectors don't have a separate validity mask
-	FlatVector::Validity(*dictionary).SetInvalid(0);
+	// we use the last entry as a NULL, dictionary vectors don't have a separate validity mask
+	auto &dict_validity = FlatVector::Validity(*dictionary);
+	dict_validity.Reset(dictionary_size + 1);
+	dict_validity.SetInvalid(dictionary_size);
 	reader.PlainReference(reader.block, *dictionary);
-	reader.Plain(reader.block, nullptr, dictionary_size, nullptr, 1, *dictionary);
+	reader.Plain(reader.block, nullptr, dictionary_size, nullptr, 0, *dictionary);
 }
 
 void DictionaryDecoder::InitializePage() {
 	// where is it otherwise??
 	auto &block = reader.block;
 	auto dict_width = block->read<uint8_t>();
-	// TODO somehow dict_width can be 0 ?
 	dict_decoder = make_uniq<RleBpDecoder>(block->ptr, block->len, dict_width);
 	block->inc(block->len);
 }
@@ -43,7 +44,7 @@ void DictionaryDecoder::ConvertDictToSelVec(uint32_t *offsets, const SelectionVe
 		if (offset >= dictionary_size) {
 			throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
 		}
-		dictionary_selection_vector.set_index(row_idx, offset + 1);
+		dictionary_selection_vector.set_index(row_idx, offset);
 	}
 }
 
@@ -57,14 +58,23 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 		valid_count = 0;
 		for (idx_t i = 0; i < read_count; i++) {
 			valid_sel.set_index(valid_count, i);
-			dictionary_selection_vector.set_index(i, 0);
+			dictionary_selection_vector.set_index(i, dictionary_size);
 			valid_count += defines[result_offset + i] == reader.max_define;
 		}
 		if (valid_count < read_count) {
 			sel = &valid_sel;
 		}
 	}
-	if (valid_count > 0) {
+	if (valid_count == read_count) {
+		// all values are valid - we can directly decompress the offsets into the selection vector
+		dict_decoder->GetBatch<uint32_t>(data_ptr_cast(dictionary_selection_vector.data()), valid_count);
+		// we do still need to verify the offsets though
+		for (idx_t idx = 0; idx < valid_count; idx++) {
+			if (dictionary_selection_vector.get_index(idx) >= dictionary_size) {
+				throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
+			}
+		}
+	} else if (valid_count > 0) {
 		// for the valid entries - decode the offsets
 		offset_buffer.resize(reader.reader.allocator, sizeof(uint32_t) * valid_count);
 		dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, valid_count);
