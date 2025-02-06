@@ -9,25 +9,45 @@ namespace duckdb {
 using expression_list_t = vector<unique_ptr<ParsedExpression>>;
 
 static void AddChild(unique_ptr<ParsedExpression> &child, expression_list_t &new_children,
-                     expression_list_t &replacements) {
+                     expression_list_t &replacements, StarExpression &star, void *regex) {
 	if (!StarExpression::IsColumnsUnpacked(*child)) {
 		// Just add the child directly
 		new_children.push_back(std::move(child));
 		return;
 	}
+	auto &unpack = child->Cast<OperatorExpression>();
+	D_ASSERT(unpack.type == ExpressionType::OPERATOR_UNPACK);
+	D_ASSERT(unpack.children.size() == 1);
+	auto &unpack_child = unpack.children[0];
+
 	// Replace the child with the replacement expression(s)
 	for (auto &replacement : replacements) {
-		new_children.push_back(replacement->Copy());
+		auto new_expr = unpack_child->Copy();
+		Binder::ReplaceStarExpression(new_expr, replacement);
+		if (StarExpression::IsColumns(star)) {
+			auto expr = Binder::GetResolvedColumnExpression(*replacement);
+			if (expr) {
+				auto &colref = expr->Cast<ColumnRefExpression>();
+				if (new_expr->GetAlias().empty()) {
+					new_expr->SetAlias(colref.GetColumnName());
+				} else {
+					new_expr->SetAlias(
+					    Binder::ReplaceColumnsAlias(new_expr->GetAlias(), colref.GetColumnName(), regex));
+				}
+			}
+		}
+		new_children.push_back(std::move(new_expr));
 	}
 }
 
-static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list) {
+static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list, StarExpression &star,
+                              void *regex) {
 	auto &function_expr = expr->Cast<FunctionExpression>();
 
 	// Replace children
 	expression_list_t new_children;
 	for (auto &child : function_expr.children) {
-		AddChild(child, new_children, star_list);
+		AddChild(child, new_children, star_list, star, regex);
 	}
 	function_expr.children = std::move(new_children);
 
@@ -35,7 +55,7 @@ static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_lis
 	if (function_expr.order_bys) {
 		expression_list_t new_orders;
 		for (auto &order : function_expr.order_bys->orders) {
-			AddChild(order.expression, new_orders, star_list);
+			AddChild(order.expression, new_orders, star_list, star, regex);
 		}
 		if (new_orders.size() != function_expr.order_bys->orders.size()) {
 			throw NotImplementedException("*COLUMNS(...) is not supported in the order expression");
@@ -47,35 +67,33 @@ static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_lis
 	}
 }
 
-static void ReplaceInOperator(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list) {
+static void ReplaceInOperator(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list, StarExpression &star,
+                              void *regex) {
 	auto &operator_expr = expr->Cast<OperatorExpression>();
 
 	// Replace children
 	expression_list_t new_children;
 	for (auto &child : operator_expr.children) {
-		AddChild(child, new_children, star_list);
+		AddChild(child, new_children, star_list, star, regex);
 	}
 	operator_expr.children = std::move(new_children);
 }
 
-void Binder::ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list) {
+void Binder::ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list,
+                                           StarExpression &star, void *regex) {
 	D_ASSERT(expr);
 	auto expression_class = expr->GetExpressionClass();
 	// Replace *COLUMNS(...) in the supported places
 	switch (expression_class) {
-	case ExpressionClass::STAR: {
-		if (!StarExpression::IsColumnsUnpacked(*expr)) {
-			break;
-		}
-		// Deal with any *COLUMNS that was not replaced
-		throw BinderException("*COLUMNS() can not be used in this place");
-	}
 	case ExpressionClass::FUNCTION: {
-		ReplaceInFunction(expr, star_list);
+		ReplaceInFunction(expr, star_list, star, regex);
 		break;
 	}
 	case ExpressionClass::OPERATOR: {
-		ReplaceInOperator(expr, star_list);
+		if (StarExpression::IsColumnsUnpacked(*expr)) {
+			throw BinderException("*COLUMNS() can not be used in this place");
+		}
+		ReplaceInOperator(expr, star_list, star, regex);
 		break;
 	}
 	default: {
@@ -84,8 +102,9 @@ void Binder::ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr, e
 	}
 
 	// Visit the children of this expression, collecting the unpacked expressions
-	ParsedExpressionIterator::EnumerateChildren(
-	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { ReplaceUnpackedStarExpression(child_expr, star_list); });
+	ParsedExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<ParsedExpression> &child_expr) {
+		ReplaceUnpackedStarExpression(child_expr, star_list, star, regex);
+	});
 }
 
 } // namespace duckdb

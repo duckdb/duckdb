@@ -13,10 +13,6 @@ StarExpression::StarExpression(string relation_name_p)
 
 string StarExpression::ToString() const {
 	string result;
-	if (unpacked) {
-		D_ASSERT(columns);
-		result += "*";
-	}
 	if (expr) {
 		D_ASSERT(columns);
 		result += "COLUMNS(" + expr->ToString() + ")";
@@ -79,9 +75,6 @@ bool StarExpression::Equal(const StarExpression &a, const StarExpression &b) {
 	if (a.columns != b.columns) {
 		return false;
 	}
-	if (a.unpacked != b.unpacked) {
-		return false;
-	}
 	if (a.replace_list.size() != b.replace_list.size()) {
 		return false;
 	}
@@ -113,15 +106,14 @@ bool StarExpression::IsColumns(const ParsedExpression &a) {
 		return false;
 	}
 	auto &star = a.Cast<StarExpression>();
-	return star.columns == true && star.unpacked == false;
+	return star.columns == true;
 }
 
 bool StarExpression::IsColumnsUnpacked(const ParsedExpression &a) {
-	if (a.GetExpressionClass() != ExpressionClass::STAR) {
+	if (a.GetExpressionType() != ExpressionType::OPERATOR_UNPACK) {
 		return false;
 	}
-	auto &star = a.Cast<StarExpression>();
-	return star.columns == true && star.unpacked == true;
+	return true;
 }
 
 unique_ptr<ParsedExpression> StarExpression::Copy() const {
@@ -134,7 +126,6 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	copy->columns = columns;
 	copy->expr = expr ? expr->Copy() : nullptr;
 	copy->CopyProperties(*this);
-	copy->unpacked = unpacked;
 	return std::move(copy);
 }
 

@@ -319,7 +319,6 @@ typedef struct PGAStar {
 	PGList *replace_list; /* optional: REPLACE list */
 	PGList *rename_list;  /* optional: RENAME list */
 	bool columns;         /* whether or not this is a columns list */
-	bool unpacked;        /* whether or not the columns list is unpacked */
 	int location;
 } PGAStar;
 

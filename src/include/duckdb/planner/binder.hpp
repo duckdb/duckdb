@@ -23,6 +23,7 @@
 #include "duckdb/planner/bound_statement.hpp"
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/planner/joinside.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
 #include "duckdb/planner/logical_operator.hpp"
@@ -220,6 +221,8 @@ public:
 	void SetAlwaysRequireRebind();
 
 	StatementProperties &GetStatementProperties();
+	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
+	static string ReplaceColumnsAlias(const string &alias, const string &column_name, void *regex);
 
 private:
 	//! The parent binder (if any)
@@ -408,10 +411,11 @@ private:
 	void ExpandStarExpressions(vector<unique_ptr<ParsedExpression>> &select_list,
 	                           vector<unique_ptr<ParsedExpression>> &new_select_list);
 	void ExpandStarExpression(unique_ptr<ParsedExpression> expr, vector<unique_ptr<ParsedExpression>> &new_select_list);
-	bool FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root, bool in_columns);
+	StarExpressionType FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root,
+	                                      bool in_columns);
 	void ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr,
-	                                   vector<unique_ptr<ParsedExpression>> &replacements);
-	void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
+	                                   vector<unique_ptr<ParsedExpression>> &replacements, StarExpression &star,
+	                                   void *regex);
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
