@@ -548,7 +548,7 @@ class u8string_view : public basic_string_view<fmt_char8_t> {
 
 #if FMT_USE_USER_DEFINED_LITERALS
 inline namespace literals {
-inline u8string_view operator""_u(const char* s, std::size_t n) {
+inline u8string_view operator"" _u(const char* s, std::size_t n) {
   return {s, n};
 }
 }  // namespace literals
@@ -3342,11 +3342,11 @@ FMT_CONSTEXPR internal::udl_formatter<Char, CHARS...> operator""_format() {
     std::string message = "The answer is {}"_format(42);
   \endrst
  */
-FMT_CONSTEXPR internal::udl_formatter<char> operator""_format(const char* s,
+FMT_CONSTEXPR internal::udl_formatter<char> operator"" _format(const char* s,
                                                                std::size_t n) {
   return {{s, n}};
 }
-FMT_CONSTEXPR internal::udl_formatter<wchar_t> operator""_format(
+FMT_CONSTEXPR internal::udl_formatter<wchar_t> operator"" _format(
     const wchar_t* s, std::size_t n) {
   return {{s, n}};
 }
@@ -3362,11 +3362,11 @@ FMT_CONSTEXPR internal::udl_formatter<wchar_t> operator""_format(
     fmt::print("Elapsed time: {s:.2f} seconds", "s"_a=1.23);
   \endrst
  */
-FMT_CONSTEXPR internal::udl_arg<char> operator""_a(const char* s,
+FMT_CONSTEXPR internal::udl_arg<char> operator"" _a(const char* s,
                                                     std::size_t n) {
   return {{s, n}};
 }
-FMT_CONSTEXPR internal::udl_arg<wchar_t> operator""_a(const wchar_t* s,
+FMT_CONSTEXPR internal::udl_arg<wchar_t> operator"" _a(const wchar_t* s,
                                                        std::size_t n) {
   return {{s, n}};
 }

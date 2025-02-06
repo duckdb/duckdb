@@ -149,7 +149,7 @@ TimestampCastResult Timestamp::TryConvertTimestampTZ(const char *str, idx_t len,
 }
 
 TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
-                                                   optional_ptr<int32_t> nanos) {
+                                                   optional_ptr<int32_t> nanos, bool strict) {
 	string_t tz(nullptr, 0);
 	bool has_offset = false;
 	// We don't understand TZ without an extension, so fail if one was provided.
@@ -159,6 +159,9 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
 	}
 	if (tz.GetSize() == 0) {
 		// no timezone provided - success!
+		if (strict && has_offset) {
+			return TimestampCastResult::STRICT_UTC;
+		}
 		return TimestampCastResult::SUCCESS;
 	}
 	if (tz.GetSize() == 3) {
@@ -166,6 +169,9 @@ TimestampCastResult Timestamp::TryConvertTimestamp(const char *str, idx_t len, t
 		auto tz_ptr = tz.GetData();
 		if ((tz_ptr[0] == 'u' || tz_ptr[0] == 'U') && (tz_ptr[1] == 't' || tz_ptr[1] == 'T') &&
 		    (tz_ptr[2] == 'c' || tz_ptr[2] == 'C')) {
+			if (strict && has_offset) {
+				return TimestampCastResult::STRICT_UTC;
+			}
 			return TimestampCastResult::SUCCESS;
 		}
 	}
@@ -233,6 +239,7 @@ timestamp_t Timestamp::FromCString(const char *str, idx_t len, optional_ptr<int3
 	timestamp_t result;
 	switch (Timestamp::TryConvertTimestamp(str, len, result, nanos)) {
 	case TimestampCastResult::SUCCESS:
+	case TimestampCastResult::STRICT_UTC:
 		break;
 	case TimestampCastResult::ERROR_NON_UTC_TIMEZONE:
 		throw ConversionException(UnsupportedTimezoneError(string(str, len)));

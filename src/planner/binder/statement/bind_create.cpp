@@ -98,7 +98,7 @@ SchemaCatalogEntry &Binder::BindSchema(CreateInfo &info) {
 		info.catalog = default_entry.catalog;
 		info.schema = default_entry.schema;
 	} else if (IsInvalidSchema(info.schema)) {
-		info.schema = search_path->GetDefaultSchema(info.catalog);
+		info.schema = search_path->GetDefaultSchema(context, info.catalog);
 	} else if (IsInvalidCatalog(info.catalog)) {
 		info.catalog = search_path->GetDefaultCatalog(info.schema);
 	}
@@ -157,6 +157,9 @@ void Binder::BindCreateViewInfo(CreateViewInfo &base) {
 		});
 	}
 	view_binder->can_contain_nulls = true;
+
+	auto view_search_path = GetSearchPath(catalog, base.schema);
+	view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 
 	auto copy = base.query->Copy();
 	auto query_node = view_binder->Bind(*base.query);

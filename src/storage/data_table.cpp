@@ -679,9 +679,11 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 
 			if (storage) {
 				auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
-				art.VerifyAppend(chunk, delete_index, nullptr);
+				IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
+				art.VerifyAppend(chunk, index_append_info, nullptr);
 			} else {
-				art.VerifyAppend(chunk, nullptr, nullptr);
+				IndexAppendInfo index_append_info;
+				art.VerifyAppend(chunk, index_append_info, nullptr);
 			}
 			return false;
 		});
@@ -712,8 +714,10 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 	manager->SetMode(ConflictManagerMode::SCAN);
 	auto &matched_indexes = manager->MatchedIndexes();
 	auto &matched_delete_indexes = manager->MatchedDeleteIndexes();
+	IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, nullptr);
 	for (idx_t i = 0; i < matched_indexes.size(); i++) {
-		matched_indexes[i].get().VerifyAppend(chunk, matched_delete_indexes[i], *manager);
+		index_append_info.delete_index = matched_delete_indexes[i];
+		matched_indexes[i].get().VerifyAppend(chunk, index_append_info, *manager);
 	}
 
 	// Scan the other indexes and throw, if there are any conflicts.
@@ -728,9 +732,11 @@ void DataTable::VerifyUniqueIndexes(TableIndexList &indexes, optional_ptr<LocalT
 
 		if (storage) {
 			auto delete_index = storage->delete_indexes.Find(art.GetIndexName());
-			art.VerifyAppend(chunk, delete_index, *manager);
+			IndexAppendInfo index_append_info(IndexAppendMode::DEFAULT, delete_index);
+			art.VerifyAppend(chunk, index_append_info, *manager);
 		} else {
-			art.VerifyAppend(chunk, nullptr, *manager);
+			IndexAppendInfo index_append_info;
+			art.VerifyAppend(chunk, index_append_info, *manager);
 		}
 		return false;
 	});
@@ -863,13 +869,14 @@ void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collectio
 	local_storage.LocalMerge(*this, collection);
 }
 
-void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-                            const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+void DataTable::LocalWALAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+                               const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	LocalAppendState append_state;
 	auto &storage = table.GetStorage();
 	storage.InitializeLocalAppend(append_state, table, context, bound_constraints);
 
-	storage.LocalAppend(append_state, context, chunk, false);
+	storage.LocalAppend(append_state, context, chunk, true);
+	append_state.storage->index_append_mode = IndexAppendMode::INSERT_DUPLICATES;
 	storage.FinalizeLocalAppend(append_state);
 }
 
@@ -1109,7 +1116,7 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 // Indexes
 //===--------------------------------------------------------------------===//
 ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-                                     DataChunk &chunk, row_t row_start) {
+                                     DataChunk &chunk, row_t row_start, const IndexAppendMode index_append_mode) {
 	ErrorData error;
 	if (indexes.Empty()) {
 		return error;
@@ -1137,7 +1144,8 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 		}
 
 		try {
-			error = index.AppendWithDeleteIndex(chunk, row_ids, delete_index);
+			IndexAppendInfo index_append_info(index_append_mode, delete_index);
+			error = index.Append(chunk, row_ids, index_append_info);
 		} catch (std::exception &ex) {
 			error = ErrorData(ex);
 		}
@@ -1160,9 +1168,10 @@ ErrorData DataTable::AppendToIndexes(TableIndexList &indexes, optional_ptr<Table
 	return error;
 }
 
-ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start) {
+ErrorData DataTable::AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
+                                     const IndexAppendMode index_append_mode) {
 	D_ASSERT(is_root);
-	return AppendToIndexes(info->indexes, delete_indexes, chunk, row_start);
+	return AppendToIndexes(info->indexes, delete_indexes, chunk, row_start, index_append_mode);
 }
 
 void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start) {
@@ -1184,7 +1193,8 @@ void DataTable::RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, Vec
 		if (!index.IsBound()) {
 			throw InternalException("Unbound index found in DataTable::RemoveFromIndexes");
 		}
-		index.Cast<BoundIndex>().Delete(chunk, row_identifiers);
+		auto &bound_index = index.Cast<BoundIndex>();
+		bound_index.Delete(chunk, row_identifiers);
 		return false;
 	});
 }

@@ -1,6 +1,8 @@
 #include "duckdb/execution/operator/persistent/physical_copy_database.hpp"
+
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
@@ -9,6 +11,8 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/create_index_info.hpp"
+#include "duckdb/execution/index/unbound_index.hpp"
+#include "duckdb/storage/data_table.hpp"
 
 namespace duckdb {
 
@@ -52,7 +56,7 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
 			break;
 		}
 		case CatalogType::INDEX_ENTRY: {
-			catalog.CreateIndex(context.client, create_info->Cast<CreateIndexInfo>());
+			// Skip for now.
 			break;
 		}
 		default:
@@ -60,6 +64,30 @@ SourceResultType PhysicalCopyDatabase::GetData(ExecutionContext &context, DataCh
 			                              CatalogTypeToString(create_info->type));
 		}
 	}
+
+	// Create the indexes after table creation.
+	for (auto &create_info : info->entries) {
+		if (!create_info || create_info->type != CatalogType::INDEX_ENTRY) {
+			continue;
+		}
+		catalog.CreateIndex(context.client, create_info->Cast<CreateIndexInfo>());
+
+		auto &create_index_info = create_info->Cast<CreateIndexInfo>();
+		auto &catalog_table = catalog.GetEntry(context.client, CatalogType::TABLE_ENTRY, create_index_info.schema,
+		                                       create_index_info.table);
+		auto &table_entry = catalog_table.Cast<TableCatalogEntry>();
+		auto &data_table = table_entry.GetStorage();
+
+		IndexStorageInfo storage_info(create_index_info.index_name);
+		storage_info.options.emplace("v1_0_0_storage", false);
+		auto unbound_index = make_uniq<UnboundIndex>(create_index_info.Copy(), storage_info,
+		                                             data_table.GetTableIOManager(), catalog.GetAttached());
+
+		data_table.AddIndex(std::move(unbound_index));
+		auto &data_table_info = *data_table.GetDataTableInfo();
+		data_table_info.GetIndexes().InitializeIndexes(context.client, data_table_info);
+	}
+
 	return SourceResultType::FINISHED;
 }
 

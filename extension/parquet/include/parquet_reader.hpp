@@ -216,12 +216,6 @@ private:
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
 
-	template <typename... Args>
-	std::runtime_error FormatException(const string fmt_str, Args... params) {
-		return std::runtime_error("Failed to read Parquet file \"" + file_name +
-		                          "\": " + StringUtil::Format(fmt_str, params...));
-	}
-
 private:
 	unique_ptr<FileHandle> file_handle;
 };

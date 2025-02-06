@@ -91,6 +91,9 @@ public:
 	static duckdb_parquet::Type::type DuckDBTypeToParquetType(const LogicalType &duckdb_type);
 	static void SetSchemaProperties(const LogicalType &duckdb_type, duckdb_parquet::SchemaElement &schema_ele);
 
+	ClientContext &GetContext() {
+		return context;
+	}
 	duckdb_apache::thrift::protocol::TProtocol *GetProtocol() {
 		return protocol.get();
 	}
@@ -138,6 +141,7 @@ public:
 	void BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter);
 
 private:
+	ClientContext &context;
 	string file_name;
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
