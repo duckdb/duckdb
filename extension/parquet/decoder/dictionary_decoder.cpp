@@ -21,7 +21,6 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size) {
 	dictionary_id = reader.reader.file_name + "_" + reader.schema.name + "_" + std::to_string(reader.chunk_read_offset);
 	// we use the first entry as a NULL, dictionary vectors don't have a separate validity mask
 	FlatVector::Validity(*dictionary).SetInvalid(0);
-	reader.PlainReference(reader.block, *dictionary);
 	reader.Plain(reader.block, nullptr, dictionary_size, nullptr, 1, *dictionary);
 }
 

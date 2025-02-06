@@ -198,12 +198,14 @@ unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vect
 	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns);
 }
 
-void ColumnReader::Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, // NOLINT
+void ColumnReader::Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, // NOLINT
                          parquet_filter_t *filter, idx_t result_offset, Vector &result) {
-	throw NotImplementedException("Plain");
+	throw NotImplementedException("Plain not implemented");
 }
 
-void ColumnReader::PlainReference(shared_ptr<ResizeableBuffer> &, Vector &result) { // NOLINT
+void ColumnReader::Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values,
+                         parquet_filter_t *filter, idx_t result_offset, Vector &result) {
+	Plain(*plain_data, defines, num_values, filter, result_offset, result);
 }
 
 void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
@@ -528,7 +530,6 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 		} else if (encoding == ColumnEncoding::BYTE_STREAM_SPLIT) {
 			byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);
 		} else {
-			PlainReference(block, result);
 			Plain(block, define_out, read_now, &filter, result_offset, result);
 		}
 

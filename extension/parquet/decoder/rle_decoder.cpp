@@ -31,7 +31,7 @@ void RLEDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t 
 	auto read_buf = make_shared_ptr<ResizeableBuffer>();
 	read_buf->resize(reader.reader.allocator, sizeof(bool) * valid_count);
 	rle_decoder->GetBatch<uint8_t>(read_buf->ptr, valid_count);
-	reader.PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(read_buf, defines, read_count, nullptr,
+	reader.PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(*read_buf, defines, read_count, nullptr,
 	                                                                   result_offset, result);
 }
 
