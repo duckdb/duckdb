@@ -26,6 +26,7 @@ class ColumnSegment;
 class DatabaseInstance;
 class RowGroup;
 class RowGroupWriter;
+class StorageManager;
 class TableDataWriter;
 class TableStorageInfo;
 struct DataTableInfo;
@@ -77,6 +78,7 @@ public:
 	}
 	DatabaseInstance &GetDatabase() const;
 	const DataTableInfo &GetTableInfo() const;
+	StorageManager &GetStorageManager() const;
 	virtual idx_t GetMaxEntry();
 
 	idx_t GetAllocationSize() const {
@@ -99,6 +101,7 @@ public:
 	const LogicalType &RootType() const;
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
+	bool HasChanges(idx_t start_row, idx_t end_row) const;
 	//! Whether or not we can scan an entire vector
 	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) const;
 

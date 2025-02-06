@@ -49,7 +49,8 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 
 void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
 	if (InLoop()) {
-		active_loops.back()->loop_commands.push_back(std::move(command));
+		auto &current_loop = *active_loops.back();
+		current_loop.loop_commands.push_back(std::move(command));
 	} else {
 		ExecuteContext context;
 		command->Execute(context);
@@ -60,7 +61,8 @@ void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
 	auto loop = make_uniq<LoopCommand>(*this, std::move(definition));
 	auto loop_ptr = loop.get();
 	if (InLoop()) {
-		active_loops.back()->loop_commands.push_back(std::move(loop));
+		auto &current_loop = *active_loops.back();
+		current_loop.loop_commands.push_back(std::move(loop));
 	} else {
 		// not in a loop yet: new top-level loop
 		top_level_loop = std::move(loop);
@@ -326,6 +328,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	// require command
 	string param = StringUtil::Lower(params[0]);
 	// os specific stuff
+
+	if (param == "notmusl") {
+#ifdef __MUSL_ENABLED__
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
 	if (param == "notmingw") {
 #ifdef __MINGW32__
 		return RequireResult::MISSING;

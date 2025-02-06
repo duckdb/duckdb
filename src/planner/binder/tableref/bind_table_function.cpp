@@ -126,8 +126,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
 			auto fun = table_function.functions.GetFunctionByOffset(0);
-			if (table_function.functions.Size() != 1 || fun.arguments.empty() ||
-			    fun.arguments[0].id() != LogicalTypeId::TABLE) {
+			if (table_function.functions.Size() != 1 || fun.arguments.empty()) {
 				throw BinderException(
 				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
 				    fun.name);
@@ -203,7 +202,13 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		                                  table_function.function_info.get(), this, table_function, ref);
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
-			if (new_plan != nullptr) {
+			if (new_plan) {
+				if (!ref.alias.empty()) {
+					new_plan->alias = ref.alias;
+				}
+				if (!ref.column_name_alias.empty()) {
+					new_plan->column_name_alias = ref.column_name_alias;
+				}
 				return CreatePlan(*Bind(*new_plan));
 			} else if (!table_function.bind) {
 				throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
@@ -283,7 +288,14 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		binder->can_contain_nulls = true;
 
 		binder->alias = ref.alias.empty() ? "unnamed_query" : ref.alias;
-		auto query = binder->BindNode(*query_node);
+		unique_ptr<BoundQueryNode> query;
+		try {
+			query = binder->BindNode(*query_node);
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			error.AddQueryLocation(ref);
+			error.Throw();
+		}
 
 		idx_t bind_index = query->GetRootIndex();
 		// string alias;

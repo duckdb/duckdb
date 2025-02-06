@@ -165,12 +165,19 @@ select {'a': '0'} as c union all by name select {'a': 0} as c
 {'a': 0}
 {'a': 0}
 
-statement error
-select {'a': 'hello'} as c union all by name select {'b': 'hello'} as c;
+query I
+SELECT {'a': 'hello'} AS c UNION ALL BY NAME SELECT {'b': 'hello'} AS c;
 ----
-<REGEX>:Mismatch Type Error.*Type STRUCT\(b VARCHAR\) does not match with STRUCT\(a VARCHAR\).*
+{'a': hello, 'b': NULL}
+{'a': NULL, 'b': hello}
 
-statement error
-select {'a': 'hello'} as c union all by name select {'a': 'hello', 'b': 'world'} as c;
+query I
+SELECT {'a': 'hello'} AS c UNION ALL BY NAME SELECT {'a': 'hello', 'b': 'world'} AS c;
 ----
-<REGEX>:Mismatch Type Error.*Type STRUCT\(a VARCHAR, b VARCHAR\).*with STRUCT\(a VARCHAR\).*
+{'a': hello, 'b': NULL}
+{'a': hello, 'b': world}
+
+query I
+SELECT [{'a': 42}, {'b': 84}];
+----
+[{'a': 42, 'b': NULL}, {'a': NULL, 'b': 84}]

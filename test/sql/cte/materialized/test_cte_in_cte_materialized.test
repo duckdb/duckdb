@@ -48,9 +48,9 @@ with cte1 as MATERIALIZED (Select i as j from a) select * from cte1 where j = (w
 ----
 42
 
-require noalternativeverify
+require no_alternative_verify
 
-# same name, both get materialized with ALTERNATIVE_VERIFY, so we need 'noalternativeverify'
+# same name, both get materialized with ALTERNATIVE_VERIFY, so we need 'no_alternative_verify'
 query I
 with cte as materialized (Select i as j from a) select * from cte where j = (with cte as (select max(j) as j from cte) select j from cte);
 ----

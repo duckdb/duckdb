@@ -404,12 +404,6 @@ bool RowGroupCollection::Append(DataChunk &chunk, TableAppendState &state) {
 		column_stats.UpdateDistinctStatistics(chunk.data[col_idx], chunk.size(), state.hashes);
 	}
 
-	auto &table_sample = state.stats.GetTableSampleRef(*local_stats_lock);
-	if (!table_sample.destroyed) {
-		D_ASSERT(table_sample.type == SampleType::RESERVOIR_SAMPLE);
-		table_sample.AddToReservoir(chunk);
-	}
-
 	return new_row_group;
 }
 
@@ -441,22 +435,6 @@ void RowGroupCollection::FinalizeAppend(TransactionData transaction, TableAppend
 			continue;
 		}
 		global_stats.DistinctStats().Merge(local_stats.DistinctStats());
-	}
-
-	auto local_sample = state.stats.GetTableSample(*local_stats_lock);
-	auto global_sample = stats.GetTableSample(*global_stats_lock);
-
-	if (local_sample && global_sample) {
-		D_ASSERT(global_sample->type == SampleType::RESERVOIR_SAMPLE);
-		auto &reservoir_sample = global_sample->Cast<ReservoirSample>();
-		reservoir_sample.Merge(std::move(local_sample));
-		// initialize the thread local sample again
-		auto new_local_sample = make_uniq<ReservoirSample>(reservoir_sample.GetSampleCount());
-		state.stats.SetTableSample(*local_stats_lock, std::move(new_local_sample));
-		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
-	} else {
-		state.stats.SetTableSample(*local_stats_lock, std::move(local_sample));
-		stats.SetTableSample(*global_stats_lock, std::move(global_sample));
 	}
 
 	Verify();
@@ -607,10 +585,6 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 		delete_count += row_group->Delete(transaction, table, ids + start, pos - start);
 	} while (pos < count);
 
-	// When deleting destroy the sample.
-	auto stats_guard = stats.GetLock();
-	stats.DestroyTableSample(*stats_guard);
-
 	return delete_count;
 }
 
@@ -619,6 +593,7 @@ idx_t RowGroupCollection::Delete(TransactionData transaction, DataTable &table, 
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const vector<PhysicalIndex> &column_ids,
                                 DataChunk &updates) {
+	D_ASSERT(updates.size() >= 1);
 	idx_t pos = 0;
 	do {
 		idx_t start = pos;
@@ -648,72 +623,106 @@ void RowGroupCollection::Update(TransactionData transaction, row_t *ids, const v
 			stats.MergeStats(*l, column_id.index, *row_group->GetStatistics(column_id.index));
 		}
 	} while (pos < updates.size());
-	// on update destroy the sample
-	auto stats_guard = stats.GetLock();
-	stats.DestroyTableSample(*stats_guard);
 }
 
 void RowGroupCollection::RemoveFromIndexes(TableIndexList &indexes, Vector &row_identifiers, idx_t count) {
 	auto row_ids = FlatVector::GetData<row_t>(row_identifiers);
 
-	// initialize the fetch state
-	// FIXME: we do not need to fetch all columns, only the columns required by the indices!
-	TableScanState state;
+	// Collect all indexed columns.
+	unordered_set<column_t> indexed_column_id_set;
+	indexes.Scan([&](Index &index) {
+		D_ASSERT(index.IsBound());
+		auto &set = index.GetColumnIdSet();
+		indexed_column_id_set.insert(set.begin(), set.end());
+		return false;
+	});
 	vector<StorageIndex> column_ids;
-	column_ids.reserve(types.size());
-	for (idx_t i = 0; i < types.size(); i++) {
-		column_ids.emplace_back(i);
+	for (auto &col : indexed_column_id_set) {
+		column_ids.emplace_back(col);
 	}
+	sort(column_ids.begin(), column_ids.end());
+
+	vector<LogicalType> column_types;
+	for (auto &col : column_ids) {
+		column_types.push_back(types[col.GetPrimaryIndex()]);
+	}
+
+	// Initialize the fetch state. Only use indexed columns.
+	TableScanState state;
 	state.Initialize(std::move(column_ids));
 	state.table_state.max_row = row_start + total_rows;
 
-	// initialize the fetch chunk
-	DataChunk result;
-	result.Initialize(GetAllocator(), types);
+	// Used for scanning data. Only contains the indexed columns.
+	DataChunk fetch_chunk;
+	fetch_chunk.Initialize(GetAllocator(), column_types);
 
+	// Used for index value removal.
+	// Contains all columns but only initializes indexed ones.
+	DataChunk result_chunk;
+	auto fetched_columns = vector<bool>(types.size(), false);
+	result_chunk.Initialize(GetAllocator(), types, fetched_columns);
+
+	// Now set all to-be-fetched columns.
+	for (auto &col : indexed_column_id_set) {
+		fetched_columns[col] = true;
+	}
+
+	// Iterate over the row ids.
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	// now iterate over the row ids
 	for (idx_t r = 0; r < count;) {
-		result.Reset();
-		// figure out which row_group to fetch from
+		fetch_chunk.Reset();
+		result_chunk.Reset();
+
+		// Figure out which row_group to fetch from.
 		auto row_id = row_ids[r];
 		auto row_group = row_groups->GetSegment(UnsafeNumericCast<idx_t>(row_id));
 		auto row_group_vector_idx = (UnsafeNumericCast<idx_t>(row_id) - row_group->start) / STANDARD_VECTOR_SIZE;
 		auto base_row_id = row_group_vector_idx * STANDARD_VECTOR_SIZE + row_group->start;
 
-		// fetch the current vector
+		// Fetch the current vector into fetch_chunk.
 		state.table_state.Initialize(GetTypes());
 		row_group->InitializeScanWithOffset(state.table_state, row_group_vector_idx);
-		row_group->ScanCommitted(state.table_state, result, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
-		result.Verify();
+		row_group->ScanCommitted(state.table_state, fetch_chunk, TableScanType::TABLE_SCAN_COMMITTED_ROWS);
+		fetch_chunk.Verify();
 
-		// check for any remaining row ids if they also fall into this vector
-		// we try to fetch handle as many rows as possible at the same time
+		// Check for any remaining row ids, if they also fall into this vector.
+		// We try to fetch as many rows as possible at the same time.
 		idx_t sel_count = 0;
 		for (; r < count; r++) {
 			idx_t current_row = idx_t(row_ids[r]);
-			if (current_row < base_row_id || current_row >= base_row_id + result.size()) {
-				// this row-id does not fall into the current chunk - break
+			if (current_row < base_row_id || current_row >= base_row_id + fetch_chunk.size()) {
+				// This row id does not fall into the current chunk.
 				break;
 			}
 			auto row_in_vector = current_row - base_row_id;
-			D_ASSERT(row_in_vector < result.size());
+			D_ASSERT(row_in_vector < fetch_chunk.size());
 			sel.set_index(sel_count++, row_in_vector);
 		}
 		D_ASSERT(sel_count > 0);
-		// slice the vector with all rows that are present in this vector and erase from the index
-		result.Slice(sel, sel_count);
 
+		// Reference the necessary columns of the fetch_chunk.
+		idx_t fetch_idx = 0;
+		for (idx_t j = 0; j < types.size(); j++) {
+			if (fetched_columns[j]) {
+				result_chunk.data[j].Reference(fetch_chunk.data[fetch_idx++]);
+				continue;
+			}
+			result_chunk.data[j].Reference(Value(types[j]));
+		}
+		result_chunk.SetCardinality(fetch_chunk);
+
+		// Slice the vector with all rows that are present in this vector.
+		// Then, erase all values from the indexes.
+		result_chunk.Slice(sel, sel_count);
 		indexes.Scan([&](Index &index) {
 			if (index.IsBound()) {
-				index.Cast<BoundIndex>().Delete(result, row_identifiers);
-			} else {
-				throw MissingExtensionException(
-				    "Cannot delete from index '%s', unknown index type '%s'. You need to load the "
-				    "extension that provides this index type before table '%s' can be modified.",
-				    index.GetIndexName(), index.GetIndexType(), info->GetTableName());
+				index.Cast<BoundIndex>().Delete(result_chunk, row_identifiers);
+				return false;
 			}
-			return false;
+			throw MissingExtensionException(
+			    "Cannot delete from index '%s', unknown index type '%s'. You need to load the "
+			    "extension that provides this index type before table '%s' can be modified.",
+			    index.GetIndexName(), index.GetIndexType(), info->GetTableName());
 		});
 	}
 }
@@ -1134,8 +1143,6 @@ shared_ptr<RowGroupCollection> RowGroupCollection::AddColumn(ClientContext &cont
 
 		result->row_groups->AppendSegment(std::move(new_row_group));
 	}
-	// When adding a column destroy the sample
-	stats.DestroyTableSample(*lock);
 
 	return result;
 }
@@ -1254,14 +1261,6 @@ unique_ptr<BaseStatistics> RowGroupCollection::CopyStats(column_t column_id) {
 }
 
 unique_ptr<BlockingSample> RowGroupCollection::GetSample() {
-	auto lock = stats.GetLock();
-	auto &sample = stats.GetTableSampleRef(*lock);
-	if (!sample.destroyed) {
-		D_ASSERT(sample.type == SampleType::RESERVOIR_SAMPLE);
-		auto ret = sample.Copy();
-		ret->Cast<ReservoirSample>().EvictOverBudgetSamples();
-		return ret;
-	}
 	return nullptr;
 }
 

@@ -115,6 +115,7 @@ struct TableFunctionInitInput {
 			column_indexes.emplace_back(col_id);
 		}
 	}
+
 	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, vector<ColumnIndex> column_indexes_p,
 	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
 	                       optional_ptr<SampleOptions> sample_options_p = nullptr)
@@ -134,15 +135,15 @@ struct TableFunctionInitInput {
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {
-			// Not set, can't remove filter columns
+			// No filter columns to remove.
 			return false;
-		} else if (projection_ids.size() == column_ids.size()) {
-			// Filter column is used in remainder of plan, can't remove
-			return false;
-		} else {
-			// Less columns need to be projected out than that we scan
-			return true;
 		}
+		if (projection_ids.size() == column_ids.size()) {
+			// Filter column is used in remainder of plan, so we cannot remove it.
+			return false;
+		}
+		// Fewer columns need to be projected out than that we scan.
+		return true;
 	}
 };
 

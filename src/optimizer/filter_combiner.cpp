@@ -78,6 +78,7 @@ FilterResult FilterCombiner::AddConstantComparison(vector<ExpressionValueInforma
 			return FilterResult::SUCCESS;
 		case ValueComparisonResult::UNSATISFIABLE_CONDITION:
 			// combination of filters is unsatisfiable: prune the entire branch
+			info_list.push_back(info);
 			return FilterResult::UNSATISFIABLE;
 		default:
 			// prune nothing, move to the next condition
@@ -705,8 +706,26 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 					}
 					auto comparison_type =
 					    invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
-					auto const_filter = make_uniq<ConstantFilter>(comparison_type, const_val->value);
-					conj_filter->child_filters.push_back(std::move(const_filter));
+					if (const_val->value.IsNull()) {
+						switch (comparison_type) {
+						case ExpressionType::COMPARE_DISTINCT_FROM: {
+							auto null_filter = make_uniq<IsNotNullFilter>();
+							conj_filter->child_filters.push_back(std::move(null_filter));
+							break;
+						}
+						case ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
+							auto null_filter = make_uniq<IsNullFilter>();
+							conj_filter->child_filters.push_back(std::move(null_filter));
+							break;
+						}
+						// if any other comparison type (i.e EQUAL, NOT_EQUAL) do not push a table filter
+						default:
+							break;
+						}
+					} else {
+						auto const_filter = make_uniq<ConstantFilter>(comparison_type, const_val->value);
+						conj_filter->child_filters.push_back(std::move(const_filter));
+					}
 				}
 				if (column_id.IsValid()) {
 					optional_filter->child_filter = std::move(conj_filter);
@@ -715,8 +734,6 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 			}
 		}
 	}
-
-	//	GenerateORFilters(table_filters, column_ids);
 
 	return table_filters;
 }
@@ -776,10 +793,14 @@ FilterResult FilterCombiner::AddBoundComparisonFilter(Expression &expr) {
 		auto transitive_filter = FindTransitiveFilter(non_scalar);
 		if (transitive_filter != nullptr) {
 			// try to add transitive filters
-			if (AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>()) ==
-			    FilterResult::UNSUPPORTED) {
+			auto transitive_result = AddTransitiveFilters(transitive_filter->Cast<BoundComparisonExpression>());
+			if (transitive_result == FilterResult::UNSUPPORTED) {
 				// in case of unsuccessful re-add filter into remaining ones
 				remaining_filters.push_back(std::move(transitive_filter));
+			}
+			if (transitive_result == FilterResult::UNSATISFIABLE) {
+				// in case transitive filter is unsatisfiable - abort filter pushdown
+				return FilterResult::UNSATISFIABLE;
 			}
 		}
 		return ret;
@@ -1051,9 +1072,14 @@ FilterResult FilterCombiner::AddTransitiveFilters(BoundComparisonExpression &com
 			if (transitive_filter != nullptr) {
 				// try to add transitive filters
 				auto &transitive_cast = transitive_filter->Cast<BoundComparisonExpression>();
-				if (AddTransitiveFilters(transitive_cast, false) == FilterResult::UNSUPPORTED) {
+				auto transitive_result = AddTransitiveFilters(transitive_cast, false);
+				if (transitive_result == FilterResult::UNSUPPORTED) {
 					// in case of unsuccessful re-add filter into remaining ones
 					remaining_filters.push_back(std::move(transitive_filter));
+				}
+				if (transitive_result == FilterResult::UNSATISFIABLE) {
+					// while adding transitive filters we discovered the filter is unsatisfisable - we can prune
+					return FilterResult::UNSATISFIABLE;
 				}
 			}
 		}

@@ -2,6 +2,9 @@ name: "Build Extensions using Docker"
 description: "Build and test the DuckDB extensions"
 inputs:
   # Build config
+  run_tests:
+    description: 'Run extension tests after build'
+    default: 1
   duckdb_arch:
     description: 'Provide DUCKDB_PLATFORM to build system for cross compilation'
     default: ''
@@ -91,6 +94,6 @@ runs:
 
       - name: Test extension (inside docker)
         shell: bash
-        if: inputs.duckdb_arch != 'linux_arm64'
+        if: ${{ inputs.run_tests == 1 && inputs.duckdb_arch != 'linux_arm64'}}
         run: |
           docker run --env-file=docker_env.txt -v `pwd`:/duckdb_build_dir -v `pwd`/ccache_dir:/ccache_dir duckdb/${{ inputs.duckdb_arch }} make test_release

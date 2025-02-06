@@ -62,6 +62,8 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	options.file_path = file_paths[current_file];
 
 	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0, false);
+	idx_t only_header_or_empty_files = 0;
+
 	{
 		CSVSniffer sniffer(options, result.buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
@@ -71,14 +73,17 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read,
 		                     result.buffer_manager->GetBuffer(0)->actual_size == 0);
 		total_number_of_rows += sniffer.LinesSniffed();
+		current_file++;
+		if (sniffer.EmptyOrOnlyHeader()) {
+			only_header_or_empty_files++;
+		}
 	}
 
 	// We do a copy of the options to not pollute the options of the first file.
 	constexpr idx_t max_files_to_sniff = 10;
 	idx_t files_to_sniff = file_paths.size() > max_files_to_sniff ? max_files_to_sniff : file_paths.size();
-	while (total_number_of_rows < required_number_of_lines && current_file + 1 < files_to_sniff) {
+	while (total_number_of_rows < required_number_of_lines && current_file < files_to_sniff) {
 		auto option_copy = option_og;
-		current_file++;
 		option_copy.file_path = file_paths[current_file];
 		auto buffer_manager =
 		    make_shared_ptr<CSVBufferManager>(context, option_copy, option_copy.file_path, current_file, false);
@@ -94,6 +99,10 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 			schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, option_copy.file_path, rows_read);
 		}
 		total_number_of_rows += sniffer.LinesSniffed();
+		if (sniffer.EmptyOrOnlyHeader()) {
+			only_header_or_empty_files++;
+		}
+		current_file++;
 	}
 
 	// We might now have multiple schemas, we need to go through them to define the one true schema
@@ -114,6 +123,13 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	if (names.empty()) {
 		names = best_schema.GetNames();
 		return_types = best_schema.GetTypes();
+	}
+	if (only_header_or_empty_files == current_file && !options.columns_set) {
+		for (auto &type : return_types) {
+			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
+			// we default to varchar if all files are empty or only have a header after all the sniffing
+			type = LogicalType::VARCHAR;
+		}
 	}
 	result.csv_types = return_types;
 	result.csv_names = names;
@@ -334,7 +350,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
 	table_function.named_parameters["encoding"] = LogicalType::VARCHAR;
-	table_function.named_parameters["rfc_4180"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["strict_mode"] = LogicalType::BOOLEAN;
 
 	MultiFileReader::AddParameters(table_function);
 }
@@ -358,7 +374,8 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, info, filters);
 	if (filtered_list) {
 		data.files = filtered_list->GetAllFiles();
-		MultiFileReader::PruneReaders(data, file_list);
+		SimpleMultiFileList simple_filtered_list(data.files);
+		MultiFileReader::PruneReaders(data, simple_filtered_list);
 	} else {
 		data.files = file_list.GetAllFiles();
 	}

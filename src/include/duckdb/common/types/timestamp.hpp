@@ -112,7 +112,13 @@ struct timestamp_tz_t : public timestamp_t { // NOLINT
 	}
 };
 
-enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE };
+enum class TimestampCastResult : uint8_t {
+	SUCCESS,
+	ERROR_INCORRECT_FORMAT,
+	ERROR_NON_UTC_TIMEZONE,
+	ERROR_RANGE,
+	STRICT_UTC
+};
 
 //! The static Timestamp class holds helper functions for the timestamp types.
 class Timestamp {
@@ -128,10 +134,13 @@ public:
 	//! Convert a string where the offset can also be a time zone string: / [A_Za-z0-9/_]+/
 	//! If has_offset is true, then the result is an instant that was offset from UTC
 	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
-	DUCKDB_API static bool TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
-	                                             string_t &tz, optional_ptr<int32_t> nanos = nullptr);
+	DUCKDB_API static TimestampCastResult TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result,
+	                                                            bool &has_offset, string_t &tz,
+	                                                            optional_ptr<int32_t> nanos = nullptr);
+	//! Strict Timestamp does not accept offsets.
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
-	                                                          optional_ptr<int32_t> nanos = nullptr);
+	                                                          optional_ptr<int32_t> nanos = nullptr,
+	                                                          bool strict = false);
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result);
 	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len, optional_ptr<int32_t> nanos = nullptr);
 	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
@@ -200,10 +209,12 @@ public:
 	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset,
 	                                         int &minute_offset);
 
-	DUCKDB_API static string ConversionError(const string &str);
-	DUCKDB_API static string ConversionError(string_t str);
+	DUCKDB_API static string FormatError(const string &str);
+	DUCKDB_API static string FormatError(string_t str);
 	DUCKDB_API static string UnsupportedTimezoneError(const string &str);
 	DUCKDB_API static string UnsupportedTimezoneError(string_t str);
+	DUCKDB_API static string RangeError(const string &str);
+	DUCKDB_API static string RangeError(string_t str);
 };
 
 } // namespace duckdb

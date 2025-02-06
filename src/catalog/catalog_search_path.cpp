@@ -165,7 +165,7 @@ void CatalogSearchPath::Set(vector<CatalogSearchEntry> new_paths, CatalogSetPath
 		if (path.catalog.empty()) {
 			auto catalog = Catalog::GetCatalogEntry(context, path.schema);
 			if (catalog) {
-				auto schema = catalog->GetSchema(context, DEFAULT_SCHEMA, OnEntryNotFound::RETURN_NULL);
+				auto schema = catalog->GetSchema(context, catalog->GetDefaultSchema(), OnEntryNotFound::RETURN_NULL);
 				if (schema) {
 					path.catalog = std::move(path.schema);
 					path.schema = schema->name;
@@ -205,6 +205,22 @@ string CatalogSearchPath::GetDefaultSchema(const string &catalog) {
 	return DEFAULT_SCHEMA;
 }
 
+string CatalogSearchPath::GetDefaultSchema(ClientContext &context, const string &catalog) {
+	for (auto &path : paths) {
+		if (path.catalog == TEMP_CATALOG) {
+			continue;
+		}
+		if (StringUtil::CIEquals(path.catalog, catalog)) {
+			return path.schema;
+		}
+	}
+	auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
+	if (catalog_entry) {
+		return catalog_entry->GetDefaultSchema();
+	}
+	return DEFAULT_SCHEMA;
+}
+
 string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
 	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
 		return SYSTEM_CATALOG;
@@ -221,17 +237,17 @@ string CatalogSearchPath::GetDefaultCatalog(const string &schema) {
 }
 
 vector<string> CatalogSearchPath::GetCatalogsForSchema(const string &schema) {
-	vector<string> schemas;
+	vector<string> catalogs;
 	if (DefaultSchemaGenerator::IsDefaultSchema(schema)) {
-		schemas.push_back(SYSTEM_CATALOG);
+		catalogs.push_back(SYSTEM_CATALOG);
 	} else {
 		for (auto &path : paths) {
 			if (StringUtil::CIEquals(path.schema, schema)) {
-				schemas.push_back(path.catalog);
+				catalogs.push_back(path.catalog);
 			}
 		}
 	}
-	return schemas;
+	return catalogs;
 }
 
 vector<string> CatalogSearchPath::GetSchemasForCatalog(const string &catalog) {

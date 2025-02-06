@@ -49,7 +49,7 @@ public:
 	//! The reference can only be safely accessed while the lock is held
 	ColumnStatistics &GetStats(TableStatisticsLock &lock, idx_t i);
 	//! Get a reference to the table sample - this requires us to hold the lock.
-	BlockingSample &GetTableSampleRef(TableStatisticsLock &lock);
+	// BlockingSample &GetTableSampleRef(TableStatisticsLock &lock);
 	//! Take ownership of the sample, needed for merging. Requires the lock
 	unique_ptr<BlockingSample> GetTableSample(TableStatisticsLock &lock);
 	void SetTableSample(TableStatisticsLock &lock, unique_ptr<BlockingSample> sample);

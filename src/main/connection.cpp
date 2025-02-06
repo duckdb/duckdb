@@ -28,9 +28,10 @@ Connection::Connection(DatabaseInstance &database)
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
+	// Initialization of warning_cb happens in the other constructor
 }
 
-Connection::Connection(Connection &&other) noexcept {
+Connection::Connection(Connection &&other) noexcept : warning_cb(nullptr) {
 	std::swap(context, other.context);
 	std::swap(warning_cb, other.warning_cb);
 }
@@ -96,34 +97,6 @@ unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
 	auto result = context->Query(query, false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
-}
-
-DUCKDB_API string Connection::GetSubstrait(const string &query) {
-	vector<Value> params;
-	params.emplace_back(query);
-	auto result = TableFunction("get_substrait", params)->Execute();
-	auto protobuf = result->FetchRaw()->GetValue(0, 0);
-	return protobuf.GetValueUnsafe<string_t>().GetString();
-}
-
-DUCKDB_API unique_ptr<QueryResult> Connection::FromSubstrait(const string &proto) {
-	vector<Value> params;
-	params.emplace_back(Value::BLOB_RAW(proto));
-	return TableFunction("from_substrait", params)->Execute();
-}
-
-DUCKDB_API string Connection::GetSubstraitJSON(const string &query) {
-	vector<Value> params;
-	params.emplace_back(query);
-	auto result = TableFunction("get_substrait_json", params)->Execute();
-	auto protobuf = result->FetchRaw()->GetValue(0, 0);
-	return protobuf.GetValueUnsafe<string_t>().GetString();
-}
-
-DUCKDB_API unique_ptr<QueryResult> Connection::FromSubstraitJSON(const string &json) {
-	vector<Value> params;
-	params.emplace_back(json);
-	return TableFunction("from_substrait_json", params)->Execute();
 }
 
 unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement) {

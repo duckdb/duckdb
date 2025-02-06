@@ -51,6 +51,10 @@ const DataTableInfo &ColumnData::GetTableInfo() const {
 	return info;
 }
 
+StorageManager &ColumnData::GetStorageManager() const {
+	return info.GetDB().GetStorageManager();
+}
+
 const LogicalType &ColumnData::RootType() const {
 	if (parent) {
 		return parent->RootType();
@@ -61,6 +65,16 @@ const LogicalType &ColumnData::RootType() const {
 bool ColumnData::HasUpdates() const {
 	lock_guard<mutex> update_guard(update_lock);
 	return updates.get();
+}
+
+bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
+	if (!updates) {
+		return false;
+	}
+	if (updates->HasUpdates(start_row, end_row)) {
+		return true;
+	}
+	return false;
 }
 
 void ColumnData::ClearUpdates() {
@@ -621,26 +635,16 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
-	auto l = data.Lock();
-	auto &nodes = data.ReferenceSegments(l);
+	auto &nodes = data.ReferenceSegments();
 	if (nodes.empty()) {
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
 
-	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
-	checkpointer.Checkpoint(nodes);
-	checkpointer.FinalizeCheckpoint(data.MoveSegments(l));
-
-	// reset the compression function
-	compression.reset();
-	// replace the old tree with the new one
-	auto new_segments = checkpoint_state->new_tree.MoveSegments();
-	for (auto &new_segment : new_segments) {
-		AppendSegment(l, std::move(new_segment.node));
-	}
-	ClearUpdates();
-
+	vector<reference<ColumnCheckpointState>> states {*checkpoint_state};
+	ColumnDataCheckpointer checkpointer(states, GetDatabase(), row_group, checkpoint_info);
+	checkpointer.Checkpoint();
+	checkpointer.FinalizeCheckpoint();
 	return checkpoint_state;
 }
 
@@ -903,9 +907,21 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 		} else {
 			column_info.persistent = false;
 		}
+		auto &compression_function = segment->GetCompressionFunction();
+		if (compression_function.get_segment_info) {
+			InsertionOrderPreservingMap<string> segment_info = compression_function.get_segment_info(*segment);
+			vector<string> sinfo;
+			for (auto &item : segment_info) {
+				auto &mode = item.first;
+				auto &count = item.second;
+				sinfo.push_back(StringUtil::Format("%s: %s", mode, count));
+			}
+			column_info.segment_info = StringUtil::Join(sinfo, ", ");
+		} else {
+			column_info.segment_info = "";
+		}
 		auto segment_state = segment->GetSegmentState();
 		if (segment_state) {
-			column_info.segment_info = segment_state->GetSegmentInfo();
 			column_info.additional_blocks = segment_state->GetAdditionalBlocks();
 		}
 		result.emplace_back(column_info);

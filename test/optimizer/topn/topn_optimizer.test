@@ -44,7 +44,7 @@ EXPLAIN SELECT * FROM (SELECT * FROM range(100000000) AS _(x) ORDER BY x) AS cte
 ----
 logical_opt	<REGEX>:.*TOP_N.*
 
-require noalternativeverify
+require no_alternative_verify
 
 # top n optimization with more complex projection pull up
 query II

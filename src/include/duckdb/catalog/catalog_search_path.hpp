@@ -53,7 +53,9 @@ public:
 		return set_paths;
 	}
 	DUCKDB_API const CatalogSearchEntry &GetDefault();
+	//! FIXME: this method is deprecated
 	DUCKDB_API string GetDefaultSchema(const string &catalog);
+	DUCKDB_API string GetDefaultSchema(ClientContext &context, const string &catalog);
 	DUCKDB_API string GetDefaultCatalog(const string &schema);
 
 	DUCKDB_API vector<string> GetSchemasForCatalog(const string &catalog);

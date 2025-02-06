@@ -2,10 +2,10 @@ name: ExtendedTests
 on:
   workflow_dispatch:
   push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
     paths-ignore:
       - '**'
       - '!.github/workflows/ExtendedTests.yml'

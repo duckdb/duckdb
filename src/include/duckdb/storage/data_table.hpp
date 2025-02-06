@@ -107,8 +107,8 @@ public:
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, Vector &row_ids,
 	                 DataChunk &delete_chunk);
 	//! Append a chunk to the transaction-local storage of this table.
-	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+	void LocalWALAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+	                    const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Append a column data collection with default values to the transaction-local storage of this table.
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
@@ -167,9 +167,10 @@ public:
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
 	//! Returns empty ErrorData, if the append was successful.
-	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start);
+	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
+	                          const IndexAppendMode index_append_mode);
 	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-	                                 DataChunk &chunk, row_t row_start);
+	                                 DataChunk &chunk, row_t row_start, const IndexAppendMode index_append_mode);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
@@ -206,7 +207,6 @@ public:
 	idx_t GetTotalRows() const;
 
 	vector<ColumnSegmentInfo> GetColumnSegmentInfo();
-	static bool IsForeignKeyIndex(const vector<PhysicalIndex> &fk_keys, Index &index, ForeignKeyType fk_type);
 
 	//! Scans the next chunk for the CREATE INDEX operator
 	bool CreateIndexScan(TableScanState &state, DataChunk &result, TableScanType type);
@@ -259,16 +259,20 @@ private:
 	void VerifyUpdateConstraints(ConstraintState &state, ClientContext &context, DataChunk &chunk,
 	                             const vector<PhysicalIndex> &column_ids);
 	//! Verify constraints with a chunk from the Delete containing all columns of the table
-	void VerifyDeleteConstraints(TableDeleteState &state, ClientContext &context, DataChunk &chunk);
+	void VerifyDeleteConstraints(optional_ptr<LocalTableStorage> storage, TableDeleteState &state,
+	                             ClientContext &context, DataChunk &chunk);
 
 	void InitializeScanWithOffset(DuckTransaction &transaction, TableScanState &state,
 	                              const vector<StorageIndex> &column_ids, idx_t start_row, idx_t end_row);
 
-	void VerifyForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context, DataChunk &chunk,
-	                                VerifyExistenceType verify_type);
-	void VerifyAppendForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
+	void VerifyForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
+	                                const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
+	                                DataChunk &chunk, VerifyExistenceType type);
+	void VerifyAppendForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
+	                                      const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
 	                                      DataChunk &chunk);
-	void VerifyDeleteForeignKeyConstraint(const BoundForeignKeyConstraint &bfk, ClientContext &context,
+	void VerifyDeleteForeignKeyConstraint(optional_ptr<LocalTableStorage> storage,
+	                                      const BoundForeignKeyConstraint &bound_foreign_key, ClientContext &context,
 	                                      DataChunk &chunk);
 
 private:

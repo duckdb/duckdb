@@ -60,7 +60,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	auto pointer = table_data_writer.GetMetaBlockPointer();
 
 	// Serialize statistics as a single unit
-	BinarySerializer stats_serializer(table_data_writer);
+	BinarySerializer stats_serializer(table_data_writer, serializer.GetOptions());
 	stats_serializer.Begin();
 	global_stats.Serialize(stats_serializer);
 	stats_serializer.End();
@@ -75,7 +75,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 		}
 
 		// Each RowGroup is its own unit
-		BinarySerializer row_group_serializer(table_data_writer);
+		BinarySerializer row_group_serializer(table_data_writer, serializer.GetOptions());
 		row_group_serializer.Begin();
 		RowGroup::Serialize(row_group_pointer, row_group_serializer);
 		row_group_serializer.End();
@@ -86,8 +86,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	auto db_options = checkpoint_manager.db.GetDatabase().config.options;
-	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
+	auto v1_0_0_storage = serializer.GetOptions().serialization_compatibility.serialization_version < 3;
 	case_insensitive_map_t<Value> options;
 	if (!v1_0_0_storage) {
 		options.emplace("v1_0_0_storage", v1_0_0_storage);

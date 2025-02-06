@@ -263,20 +263,14 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		// internal errors are never expected
 		// neither are "unoptimized result differs from original result" errors
 
-		bool internal_error = false;
-		if (result.HasError()) {
-			if (TestIsInternalError(runner.always_fail_error_messages, result.GetError())) {
-				internal_error = true;
-			}
+		if (result.HasError() && TestIsInternalError(runner.always_fail_error_messages, result.GetError())) {
+			logger.InternalException(result);
+			return false;
 		}
-		if (!internal_error) {
-			if (expected_result == ExpectedResult::RESULT_UNKNOWN) {
-				error = false;
-			} else {
-				error = !error;
-			}
+		if (expected_result == ExpectedResult::RESULT_UNKNOWN) {
+			error = false;
 		} else {
-			expected_result = ExpectedResult::RESULT_SUCCESS;
+			error = !error;
 		}
 		if (result.HasError() && !statement.expected_error.empty()) {
 			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
@@ -320,7 +314,8 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
                                                     string &error) {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.Query("PRAGMA threads=" + to_string(std::thread::hardware_concurrency()));
+	auto threads = MaxValue<idx_t>(std::thread::hardware_concurrency(), 1);
+	con.Query("PRAGMA threads=" + to_string(threads));
 	fname = StringUtil::Replace(fname, "<FILE>:", "");
 
 	string struct_definition = "STRUCT_PACK(";
