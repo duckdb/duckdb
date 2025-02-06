@@ -16,7 +16,8 @@
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
 #include "thrift_tools.hpp"
-#include "reader/dictionary_decoder.hpp"
+#include "decoder/delta_binary_packed_decoder.hpp"
+#include "decoder/dictionary_decoder.hpp"
 #ifndef DUCKDB_AMALGAMATION
 
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -49,6 +50,7 @@ enum class ColumnEncoding {
 };
 
 class ColumnReader {
+	friend class DeltaBinaryPackedDecoder;
 	friend class DictionaryDecoder;
 public:
 	ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
@@ -193,7 +195,7 @@ private:
 	unique_ptr<RleBpDecoder> defined_decoder;
 	unique_ptr<RleBpDecoder> repeated_decoder;
 	DictionaryDecoder dictionary_decoder;
-	unique_ptr<DbpDecoder> dbp_decoder;
+	DeltaBinaryPackedDecoder delta_binary_packed_decoder;
 	unique_ptr<RleBpDecoder> rle_decoder;
 	unique_ptr<BssDecoder> bss_decoder;
 

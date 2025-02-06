@@ -3,7 +3,6 @@ add_library_unity(
   OBJECT
   cast_column_reader.cpp
   decimal_column_reader.cpp
-  dictionary_decoder.cpp
   expression_column_reader.cpp
   list_column_reader.cpp
   row_number_column_reader.cpp

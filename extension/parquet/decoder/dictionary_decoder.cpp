@@ -1,4 +1,4 @@
-#include "reader/dictionary_decoder.hpp"
+#include "decoder/dictionary_decoder.hpp"
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
 
@@ -32,12 +32,11 @@ void DictionaryDecoder::InitializePage() {
 	block->inc(block->len);
 }
 
-void DictionaryDecoder::ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, const SelectionVector &rows, idx_t count, idx_t result_offset) {
+void DictionaryDecoder::ConvertDictToSelVec(uint32_t *offsets, const SelectionVector &rows, idx_t count, idx_t result_offset) {
 	D_ASSERT(count <= STANDARD_VECTOR_SIZE);
-	idx_t offset_idx = 0;
 	for (idx_t idx = 0; idx < count; idx++) {
 		auto row_idx = rows.get_index(idx);
-		auto offset = offsets[offset_idx++];
+		auto offset = offsets[idx];
 		if (offset >= dictionary_size) {
 			throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
 		}
@@ -56,7 +55,7 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 		for (idx_t i = 0; i < read_count; i++) {
 			valid_sel.set_index(valid_count, i);
 			dictionary_selection_vector.set_index(i, 0);
-			valid_count += defines[i] == reader.max_define;
+			valid_count += defines[result_offset + i] == reader.max_define;
 		}
 		if (valid_count < read_count) {
 			sel = &valid_sel;
@@ -67,7 +66,7 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 		offset_buffer.resize(reader.reader.allocator, sizeof(uint32_t) * valid_count);
 		dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, valid_count);
 		ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr),
-							defines, *sel, valid_count, result_offset);
+							*sel, valid_count, result_offset);
 	}
 #ifdef DEBUG
 	dictionary_selection_vector.Verify(read_count, dictionary_size + 1);
