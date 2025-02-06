@@ -62,7 +62,7 @@ unique_ptr<GlobalSinkState> PhysicalCreateARTIndex::GetGlobalSinkState(ClientCon
 	// Eager catalog lookup to early-out, if the index already exists.
 	state->finished = VerifyIndexDoesNotExist(context);
 	if (state->finished) {
-		return state;
+		return (std::move(state));
 	}
 
 	// Create the global index.
