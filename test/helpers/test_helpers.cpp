@@ -126,6 +126,24 @@ string TestDirectoryPath() {
 	return path;
 }
 
+void ClearTestDirectory() {
+	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
+	auto test_dir = TestDirectoryPath();
+	// try to clear any files we created in the test directory
+	fs->ListFiles(test_dir, [&](const string &file, bool is_dir) {
+		auto full_path = fs->JoinPath(test_dir, file);
+		try {
+			if (is_dir) {
+				fs->RemoveDirectory(full_path);
+			} else {
+				fs->RemoveFile(full_path);
+			}
+		} catch (...) {
+			// skip
+		}
+	});
+}
+
 string TestCreatePath(string suffix) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	return fs->JoinPath(TestDirectoryPath(), suffix);

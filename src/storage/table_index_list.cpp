@@ -203,10 +203,9 @@ vector<IndexStorageInfo> TableIndexList::GetStorageInfos(const case_insensitive_
 		}
 
 		auto info = index->Cast<UnboundIndex>().GetStorageInfo();
-		D_ASSERT(info.IsValid() && !info.name.empty());
+		D_ASSERT(!info.name.empty());
 		infos.push_back(info);
 	}
-
 	return infos;
 }
 

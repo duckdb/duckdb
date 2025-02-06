@@ -1328,6 +1328,10 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   else()
     message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
   endif()
+
+  if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}" STREQUAL "")
+    remove_definitions(-DEXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")
+  endif()
 endforeach()
 
 # Output the extensions that we linked into DuckDB for some nice build logs

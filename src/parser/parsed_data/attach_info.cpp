@@ -40,7 +40,7 @@ string AttachInfo::ToString() const {
 		result += " IF NOT EXISTS";
 	}
 	result += " DATABASE";
-	result += StringUtil::Format(" '%s'", path);
+	result += KeywordHelper::WriteQuoted(path, '\'');
 	if (!name.empty()) {
 		result += " AS " + KeywordHelper::WriteOptionallyQuoted(name);
 	}
