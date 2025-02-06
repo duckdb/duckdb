@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-DeltaBinaryPackedDecoder::DeltaBinaryPackedDecoder(ColumnReader &reader) : reader(reader) {
+DeltaBinaryPackedDecoder::DeltaBinaryPackedDecoder(ColumnReader &reader)
+    : reader(reader), decoded_data_buffer(reader.encoding_buffers[0]) {
 }
 
 void DeltaBinaryPackedDecoder::InitializePage() {
@@ -14,9 +15,6 @@ void DeltaBinaryPackedDecoder::InitializePage() {
 }
 
 void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
-	// TODO keep this in the state
-	auto read_buf = make_shared_ptr<ResizeableBuffer>();
-
 	idx_t null_count = 0;
 	if (defines) {
 		// we need the null count because the dictionary offsets have no entries for nulls
@@ -27,22 +25,24 @@ void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &
 	idx_t valid_count = read_count - null_count;
 
 	auto &allocator = reader.reader.allocator;
+
+	decoded_data_buffer.reset();
 	switch (reader.schema.type) {
 	case duckdb_parquet::Type::INT32:
-		read_buf->resize(allocator, sizeof(int32_t) * (valid_count));
-		dbp_decoder->GetBatch<int32_t>(read_buf->ptr, valid_count);
+		decoded_data_buffer.resize(allocator, sizeof(int32_t) * (valid_count));
+		dbp_decoder->GetBatch<int32_t>(decoded_data_buffer.ptr, valid_count);
 
 		break;
 	case duckdb_parquet::Type::INT64:
-		read_buf->resize(allocator, sizeof(int64_t) * (valid_count));
-		dbp_decoder->GetBatch<int64_t>(read_buf->ptr, valid_count);
+		decoded_data_buffer.resize(allocator, sizeof(int64_t) * (valid_count));
+		dbp_decoder->GetBatch<int64_t>(decoded_data_buffer.ptr, valid_count);
 		break;
 
 	default:
 		throw std::runtime_error("DELTA_BINARY_PACKED should only be INT32 or INT64");
 	}
 	// Plain() will put NULLs in the right place
-	reader.Plain(read_buf, defines, read_count, nullptr, result_offset, result);
+	reader.Plain(decoded_data_buffer, defines, read_count, nullptr, result_offset, result);
 }
 
 } // namespace duckdb

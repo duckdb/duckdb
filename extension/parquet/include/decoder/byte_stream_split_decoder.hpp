@@ -24,6 +24,7 @@ public:
 
 private:
 	ColumnReader &reader;
+	ResizeableBuffer &decoded_data_buffer;
 	unique_ptr<BssDecoder> bss_decoder;
 };
 

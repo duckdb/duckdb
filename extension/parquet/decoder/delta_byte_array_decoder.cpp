@@ -12,6 +12,7 @@ void DeltaByteArrayDecoder::ReadDbpData(Allocator &allocator, ResizeableBuffer &
                                         idx_t &value_count) {
 	auto decoder = make_uniq<DbpDecoder>(buffer.ptr, buffer.len);
 	value_count = decoder->TotalValues();
+	result_buffer.reset();
 	result_buffer.resize(allocator, sizeof(uint32_t) * value_count);
 	decoder->GetBatch<uint32_t>(result_buffer.ptr, value_count);
 	decoder->Finalize();

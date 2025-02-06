@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-RLEDecoder::RLEDecoder(ColumnReader &reader) : reader(reader) {
+RLEDecoder::RLEDecoder(ColumnReader &reader) : reader(reader), decoded_data_buffer(reader.encoding_buffers[0]) {
 }
 
 void RLEDecoder::InitializePage() {
@@ -28,11 +28,11 @@ void RLEDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t 
 		}
 	}
 	idx_t valid_count = read_count - null_count;
-	auto read_buf = make_shared_ptr<ResizeableBuffer>();
-	read_buf->resize(reader.reader.allocator, sizeof(bool) * valid_count);
-	rle_decoder->GetBatch<uint8_t>(read_buf->ptr, valid_count);
-	reader.PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(*read_buf, defines, read_count, nullptr,
-	                                                                   result_offset, result);
+	decoded_data_buffer.reset();
+	decoded_data_buffer.resize(reader.reader.allocator, sizeof(bool) * valid_count);
+	rle_decoder->GetBatch<uint8_t>(decoded_data_buffer.ptr, valid_count);
+	reader.PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(decoded_data_buffer, defines, read_count,
+	                                                                   nullptr, result_offset, result);
 }
 
 } // namespace duckdb
