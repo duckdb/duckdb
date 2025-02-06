@@ -1051,7 +1051,6 @@ class SQLLogicContext:
             "64bit",
             "noforcestorage",
             "nothreadsan",
-            "no_force_async",
             "strinline",
             "vector_size",
             "exact_vector_size",

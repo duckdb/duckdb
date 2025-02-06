@@ -390,14 +390,6 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		return RequireResult::PRESENT;
 	}
 
-	if (param == "no_force_async") {
-#ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
-		return RequireResult::MISSING;
-#else
-		return RequireResult::PRESENT;
-#endif
-	}
-
 	if (param == "nothreadsan") {
 #ifdef DUCKDB_THREAD_SANITIZER
 		return RequireResult::MISSING;
