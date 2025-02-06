@@ -45,4 +45,4 @@ void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &
 	reader.Plain(read_buf, defines, read_count, nullptr, result_offset, result);
 }
 
-}
+} // namespace duckdb

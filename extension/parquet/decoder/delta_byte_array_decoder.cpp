@@ -102,13 +102,12 @@ void DeltaByteArrayDecoder::Read(uint8_t *defines, idx_t read_count, Vector &res
 		}
 		if (delta_offset >= byte_array_count) {
 			throw IOException("DELTA_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
-							  "read of %d from %d entries) - corrupt file?",
-							  delta_offset + 1, byte_array_count);
+			                  "read of %d from %d entries) - corrupt file?",
+			                  delta_offset + 1, byte_array_count);
 		}
 		result_ptr[row_idx + result_offset] = string_data[delta_offset++];
 	}
 	StringVector::AddHeapReference(result, *byte_array_data);
 }
 
-
-}
+} // namespace duckdb

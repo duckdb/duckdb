@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_parquet_decoders
   OBJECT
+  byte_stream_split_decoder.cpp
   delta_binary_packed_decoder.cpp
   delta_byte_array_decoder.cpp
   dictionary_decoder.cpp

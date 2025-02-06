@@ -108,7 +108,8 @@ const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
                            idx_t max_define_p, idx_t max_repeat_p)
     : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
-      type(std::move(type_p)), page_rows_available(0), dictionary_decoder(*this), delta_binary_packed_decoder(*this), rle_decoder(*this), delta_byte_array_decoder(*this) {
+      type(std::move(type_p)), page_rows_available(0), dictionary_decoder(*this), delta_binary_packed_decoder(*this),
+      rle_decoder(*this), delta_byte_array_decoder(*this), byte_stream_split_decoder(*this) {
 
 	// dummies for Skip()
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -227,7 +228,6 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 void ColumnReader::PrepareRead(parquet_filter_t &filter) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
-	bss_decoder.reset();
 	block.reset();
 	PageHeader page_hdr;
 	reader.Read(page_hdr, *protocol);
@@ -459,11 +459,8 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 		break;
 	}
 	case Encoding::BYTE_STREAM_SPLIT: {
-		// Subtract 1 from length as the block is allocated with 1 extra byte,
-		// but the byte stream split encoder needs to know the correct data size.
-		bss_decoder = make_uniq<BssDecoder>(block->ptr, block->len - 1);
-		block->inc(block->len);
 		encoding = ColumnEncoding::BYTE_STREAM_SPLIT;
+		byte_stream_split_decoder.InitializePage();
 		break;
 	}
 	case Encoding::PLAIN:
@@ -511,15 +508,6 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			defined_decoder->GetBatch<uint8_t>(define_out + result_offset, read_now);
 		}
 
-		idx_t null_count = 0;
-
-		if ((bss_decoder) && HasDefines()) {
-			// we need the null count because the dictionary offsets have no entries for nulls
-			for (idx_t i = result_offset; i < result_offset + read_now; i++) {
-				null_count += (define_out[i] != max_define);
-			}
-		}
-
 		if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 			result.Flatten(result_offset);
 			result.Resize(result_offset, STANDARD_VECTOR_SIZE);
@@ -532,26 +520,12 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			delta_binary_packed_decoder.Read(define_ptr, read_now, result, result_offset);
 		} else if (encoding == ColumnEncoding::RLE) {
 			rle_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY || encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
+		} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY ||
+		           encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
 			// DELTA_BYTE_ARRAY or DELTA_LENGTH_BYTE_ARRAY
 			delta_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (bss_decoder) {
-			auto read_buf = make_shared_ptr<ResizeableBuffer>();
-
-			switch (schema.type) {
-			case duckdb_parquet::Type::FLOAT:
-				read_buf->resize(reader.allocator, sizeof(float) * (read_now - null_count));
-				bss_decoder->GetBatch<float>(read_buf->ptr, read_now - null_count);
-				break;
-			case duckdb_parquet::Type::DOUBLE:
-				read_buf->resize(reader.allocator, sizeof(double) * (read_now - null_count));
-				bss_decoder->GetBatch<double>(read_buf->ptr, read_now - null_count);
-				break;
-			default:
-				throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT or DOUBLE data");
-			}
-
-			Plain(read_buf, define_out, read_now, &filter, result_offset, result);
+		} else if (encoding == ColumnEncoding::BYTE_STREAM_SPLIT) {
+			byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);
 		} else {
 			PlainReference(block, result);
 			Plain(block, define_out, read_now, &filter, result_offset, result);

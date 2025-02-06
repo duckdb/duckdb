@@ -4,8 +4,10 @@
 
 namespace duckdb {
 
-DictionaryDecoder::DictionaryDecoder(ColumnReader &reader) : reader(reader), valid_sel(STANDARD_VECTOR_SIZE), dictionary_selection_vector(STANDARD_VECTOR_SIZE),
-	  dictionary_size(0) {}
+DictionaryDecoder::DictionaryDecoder(ColumnReader &reader)
+    : reader(reader), valid_sel(STANDARD_VECTOR_SIZE), dictionary_selection_vector(STANDARD_VECTOR_SIZE),
+      dictionary_size(0) {
+}
 
 void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size) {
 	auto old_dict_size = dictionary_size;
@@ -32,7 +34,8 @@ void DictionaryDecoder::InitializePage() {
 	block->inc(block->len);
 }
 
-void DictionaryDecoder::ConvertDictToSelVec(uint32_t *offsets, const SelectionVector &rows, idx_t count, idx_t result_offset) {
+void DictionaryDecoder::ConvertDictToSelVec(uint32_t *offsets, const SelectionVector &rows, idx_t count,
+                                            idx_t result_offset) {
 	D_ASSERT(count <= STANDARD_VECTOR_SIZE);
 	for (idx_t idx = 0; idx < count; idx++) {
 		auto row_idx = rows.get_index(idx);
@@ -65,8 +68,7 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 		// for the valid entries - decode the offsets
 		offset_buffer.resize(reader.reader.allocator, sizeof(uint32_t) * valid_count);
 		dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, valid_count);
-		ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr),
-							*sel, valid_count, result_offset);
+		ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr), *sel, valid_count, result_offset);
 	}
 #ifdef DEBUG
 	dictionary_selection_vector.Verify(read_count, dictionary_size + 1);
@@ -81,4 +83,4 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 	}
 }
 
-}
+} // namespace duckdb
