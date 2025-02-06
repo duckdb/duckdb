@@ -37,6 +37,7 @@
 #include "duckdb/storage/compression/bitpacking.hpp"
 #include "duckdb/function/encoding_function.hpp"
 #include "duckdb/logging/log_manager.hpp"
+#include "duckdb/optimizer/pre_optimizer_extension.hpp"
 
 namespace duckdb {
 
@@ -318,6 +319,8 @@ public:
 	DBConfigOptions options;
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
+	//! Extension to be run before the optimizer optimizations
+	vector<PreOptimizerExtension> pre_optimizer_extensions;
 	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
 	//! Error manager

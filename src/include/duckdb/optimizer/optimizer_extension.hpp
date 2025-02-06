@@ -32,11 +32,8 @@ typedef void (*optimize_function_t)(OptimizerExtensionInput &input, unique_ptr<L
 
 class OptimizerExtension {
 public:
-	//! The parse function of the parser extension.
-	//! Takes a query string as input and returns ParserExtensionParseData (on success) or an error
 	optimize_function_t optimize_function;
 
-	//! Additional parser info passed to the parse function
 	shared_ptr<OptimizerExtensionInfo> optimizer_info;
 };
 

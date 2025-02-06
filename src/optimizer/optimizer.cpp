@@ -272,6 +272,11 @@ unique_ptr<LogicalOperator> Optimizer::Optimize(unique_ptr<LogicalOperator> plan
 
 	this->plan = std::move(plan_p);
 
+	for (auto &pre_optimizer_extension : DBConfig::GetConfig(context).pre_optimizer_extensions) {
+		PreOptimizerExtensionInput input {GetContext()};
+		pre_optimizer_extension.optimize_function(input, plan);
+	}
+
 	RunBuiltInOptimizers();
 
 	for (auto &optimizer_extension : DBConfig::GetConfig(context).optimizer_extensions) {
