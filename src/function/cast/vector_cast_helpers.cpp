@@ -50,14 +50,17 @@ static bool SkipToCloseQuotes(StringCastInputState &input_state) {
 	pos++;
 
 	while (pos < len) {
+		bool set_escaped = false;
 		if (buf[pos] == '\\') {
-			escaped = true;
+			if (!escaped) {
+				set_escaped = true;
+			}
 		} else {
 			if (buf[pos] == quote && !escaped) {
 				return true;
 			}
-			escaped = false;
 		}
+		escaped = set_escaped;
 		pos++;
 	}
 	return false;
@@ -324,6 +327,7 @@ struct SplitStringMapOperation {
 		StringCastInputState temp_state(buf, start_pos, pos);
 		if (IsNull(temp_state)) {
 			FlatVector::SetNull(varchar_val, child_start, true);
+			FlatVector::SetNull(varchar_key, child_start, true);
 			child_start++;
 			return false;
 		}
@@ -359,6 +363,11 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 	SkipWhitespace(input_state);
 	if (pos == len) {
 		return false;
+	}
+	if (buf[pos] == '}') {
+		pos++;
+		SkipWhitespace(input_state);
+		return pos == len;
 	}
 
 	while (pos < len) {
@@ -508,49 +517,6 @@ idx_t VectorStringToMap::CountPartsMap(const string_t &input) {
 }
 
 // ------- STRUCT SPLIT -------
-static bool FindKeyStruct(const char *buf, idx_t len, idx_t &pos) {
-	while (pos < len) {
-		if (buf[pos] == ':') {
-			return true;
-		}
-		pos++;
-	}
-	return false;
-}
-
-static bool FindValueStruct(StringCastInputState &input_state, Vector &varchar_child, idx_t &row_idx,
-                            ValidityMask &child_mask) {
-	auto start_pos = input_state.pos;
-	idx_t lvl = 0;
-
-	auto &len = input_state.len;
-	auto &pos = input_state.pos;
-	auto &buf = input_state.buf;
-	while (pos < len) {
-		if (buf[pos] == '"' || buf[pos] == '\'') {
-			SkipToCloseQuotes(input_state);
-		} else if (buf[pos] == '{') {
-			SkipToClose(input_state, lvl, '}');
-		} else if (buf[pos] == '[') {
-			SkipToClose(input_state, lvl, ']');
-		} else if (buf[pos] == ',' || buf[pos] == '}') {
-			// TODO: start_pos at first non-whitespace character
-			StringCastInputState temp_state(buf, start_pos, pos);
-			if (IsNull(temp_state)) {
-				FlatVector::SetNull(varchar_child, row_idx, true);
-				return true;
-			}
-			// TODO: copy the unescaped portion of the string
-			FlatVector::GetData<string_t>(varchar_child)[row_idx] =
-			    StringVector::AddString(varchar_child, buf + start_pos, pos - start_pos);
-			child_mask.SetValid(row_idx); // any child not set to valid will remain invalid
-			return true;
-		}
-		pos++;
-	}
-	return false;
-}
-
 bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<Vector>> &varchar_vectors,
                                        idx_t &row_idx, string_map_t<idx_t> &child_names,
                                        vector<reference<ValidityMask>> &child_masks) {
@@ -558,7 +524,9 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 	idx_t len = input.GetSize();
 	idx_t pos = 0;
 	idx_t child_idx;
+	idx_t lvl = 0;
 
+	Vector temp_vec(LogicalType::VARCHAR);
 	StringCastInputState input_state(buf, pos, len);
 
 	SkipWhitespace(input_state);
@@ -569,35 +537,162 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 	SkipWhitespace(input_state);
 	if (buf[pos] == '}') {
 		pos++;
-	} else {
-		while (pos < len) {
-			auto key_start = pos;
-			if (!FindKeyStruct(buf, len, pos)) {
-				return false;
-			}
-			// TODO: process the string
-			// auto key_end = StringTrim(buf, key_start, pos);
-			auto key_end = pos;
-			if (key_start >= key_end) {
-				// empty key name unsupported
-				return false;
-			}
-			string_t found_key(buf + key_start, UnsafeNumericCast<uint32_t>(key_end - key_start));
-
-			auto it = child_names.find(found_key);
-			if (it == child_names.end()) {
-				return false; // false key
-			}
-			child_idx = it->second;
-			pos++;
-			SkipWhitespace(input_state);
-			if (!FindValueStruct(input_state, *varchar_vectors[child_idx], row_idx, child_masks[child_idx].get())) {
-				return false;
-			}
-			pos++;
-			SkipWhitespace(input_state);
-		}
+		SkipWhitespace(input_state);
+		return (pos == len);
 	}
+
+	while (pos < len) {
+		optional_idx start_pos;
+		idx_t end_pos;
+		while (pos < len && (buf[pos] != ':' || input_state.escaped)) {
+			bool set_escaped = false;
+			if (buf[pos] == '"' || buf[pos] == '\'') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					if (!SkipToCloseQuotes(input_state)) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '{') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					if (!SkipToClose(input_state, lvl, '}')) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '[') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					lvl++;
+					if (!SkipToClose(input_state, lvl, ']')) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '\\') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					set_escaped = true;
+				}
+			} else if (!StringUtil::CharacterIsSpace(buf[pos])) {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				end_pos = pos;
+			}
+			input_state.escaped = set_escaped;
+			pos++;
+		}
+		if (pos == len) {
+			return false;
+		}
+		if (!start_pos.IsValid()) {
+			//! Key can not be empty
+			return false;
+		}
+		idx_t key_start = start_pos.GetIndex();
+		end_pos++;
+		StringCastInputState key_temp_state(buf, key_start, end_pos);
+		if (IsNull(key_temp_state)) {
+			//! Key can not be NULL
+			return false;
+		}
+		auto child_name = HandleString(temp_vec, buf, key_start, end_pos);
+		auto it = child_names.find(child_name);
+		if (it == child_names.end()) {
+			return false; // false key
+		}
+		child_idx = it->second;
+
+		start_pos = optional_idx();
+		pos++;
+		SkipWhitespace(input_state);
+		while (pos < len && ((buf[pos] != ',' && buf[pos] != '}') || input_state.escaped)) {
+			if (buf[pos] == '"' || buf[pos] == '\'') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					if (!SkipToCloseQuotes(input_state)) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '{') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					if (!SkipToClose(input_state, lvl, '}')) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '[') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					lvl++;
+					if (!SkipToClose(input_state, lvl, ']')) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '\\') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					input_state.escaped = true;
+				}
+			} else if (!StringUtil::CharacterIsSpace(buf[pos])) {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				end_pos = pos;
+			}
+			pos++;
+		}
+		if (pos == len) {
+			return false;
+		}
+		auto &child_vec = *varchar_vectors[child_idx];
+		auto string_data = FlatVector::GetData<string_t>(child_vec);
+		auto &child_mask = child_masks[child_idx].get();
+
+		if (!start_pos.IsValid()) {
+			start_pos = 0;
+			end_pos = 0;
+		} else {
+			end_pos++;
+		}
+		auto value_start = start_pos.GetIndex();
+		StringCastInputState value_temp_state(buf, value_start, end_pos);
+		if (IsNull(value_temp_state)) {
+			child_mask.SetInvalid(row_idx);
+		} else {
+			string_data[row_idx] = HandleString(child_vec, buf, value_start, end_pos);
+			child_mask.SetValid(row_idx);
+		}
+
+		if (buf[pos] == '}') {
+			break;
+		}
+		pos++;
+		SkipWhitespace(input_state);
+	}
+	pos++;
 	SkipWhitespace(input_state);
 	return (pos == len);
 }
