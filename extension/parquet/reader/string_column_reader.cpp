@@ -138,16 +138,16 @@ void StringColumnReader::DeltaByteArray(uint8_t *defines, idx_t num_values, parq
 
 class ParquetStringVectorBuffer : public VectorBuffer {
 public:
-	explicit ParquetStringVectorBuffer(shared_ptr<ByteBuffer> buffer_p)
+	explicit ParquetStringVectorBuffer(shared_ptr<ResizeableBuffer> buffer_p)
 	    : VectorBuffer(VectorBufferType::OPAQUE_BUFFER), buffer(std::move(buffer_p)) {
 	}
 
 private:
-	shared_ptr<ByteBuffer> buffer;
+	shared_ptr<ResizeableBuffer> buffer;
 };
 
-void StringColumnReader::PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) {
-	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(std::move(plain_data)));
+void StringColumnReader::PlainReference(shared_ptr<ResizeableBuffer> &plain_data, Vector &result) {
+	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(plain_data));
 }
 
 string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {

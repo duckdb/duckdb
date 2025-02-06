@@ -123,7 +123,7 @@ protected:
 	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t *filter,
 	                   idx_t result_offset, Vector &result);
 	// these are nops for most types, but not for strings
-	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result);
+	virtual void PlainReference(shared_ptr<ResizeableBuffer> &, Vector &result);
 
 	virtual void PrepareDeltaLengthByteArray(ResizeableBuffer &buffer);
 	virtual void PrepareDeltaByteArray(ResizeableBuffer &buffer);

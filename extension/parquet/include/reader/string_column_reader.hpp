@@ -40,7 +40,7 @@ public:
 	uint32_t VerifyString(const char *str_data, uint32_t str_len);
 
 protected:
-	void PlainReference(shared_ptr<ByteBuffer> plain_data, Vector &result) override;
+	void PlainReference(shared_ptr<ResizeableBuffer> &plain_data, Vector &result) override;
 };
 
 } // namespace duckdb

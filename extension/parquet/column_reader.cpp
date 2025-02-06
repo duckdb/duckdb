@@ -215,7 +215,7 @@ void ColumnReader::DeltaByteArray(uint8_t *defines, idx_t num_values, // NOLINT
 	throw NotImplementedException("DeltaByteArray");
 }
 
-void ColumnReader::PlainReference(shared_ptr<ByteBuffer>, Vector &result) { // NOLINT
+void ColumnReader::PlainReference(shared_ptr<ResizeableBuffer> &, Vector &result) { // NOLINT
 }
 
 void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
