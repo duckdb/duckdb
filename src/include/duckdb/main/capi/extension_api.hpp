@@ -471,6 +471,12 @@ typedef struct {
 
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
+	// New prepared statement functions that expose more information about the prepared statement
+
+	idx_t (*duckdb_prepared_column_count)(duckdb_prepared_statement statement);
+	const char *(*duckdb_prepared_column_name)(duckdb_prepared_statement statement, idx_t column_idx);
+	duckdb_type (*duckdb_prepared_column_type)(duckdb_prepared_statement statement, idx_t column_idx);
+	duckdb_logical_type (*duckdb_prepared_column_logical_type)(duckdb_prepared_statement statement, idx_t column_idx);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -886,6 +892,10 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_get_or_create_from_cache = duckdb_get_or_create_from_cache;
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
+	result.duckdb_prepared_column_count = duckdb_prepared_column_count;
+	result.duckdb_prepared_column_name = duckdb_prepared_column_name;
+	result.duckdb_prepared_column_type = duckdb_prepared_column_type;
+	result.duckdb_prepared_column_logical_type = duckdb_prepared_column_logical_type;
 	return result;
 }
 

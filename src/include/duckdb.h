@@ -1596,6 +1596,48 @@ Returns the statement type of the statement to be executed
 */
 DUCKDB_API duckdb_statement_type duckdb_prepared_statement_type(duckdb_prepared_statement statement);
 
+/*!
+Returns the number of columns in the result of the prepared statement.
+
+* @param statement The prepared statement.
+*/
+DUCKDB_API idx_t duckdb_prepared_column_count(duckdb_prepared_statement statement);
+
+/*!
+Returns the name of the column at the specified index.
+
+Returns `nullptr` if the index is out of range.
+
+* @param statement The prepared statement.
+* @param column_idx The column index.
+*/
+DUCKDB_API const char *duckdb_prepared_column_name(duckdb_prepared_statement statement, idx_t column_idx);
+
+/*!
+Returns the type of the column at the specified index.
+
+Returns `DUCKDB_TYPE_INVALID` if the index is out of range.
+
+* @param statement The prepared statement.
+* @param column_idx The column index.
+* @return The column type.
+*/
+DUCKDB_API duckdb_type duckdb_prepared_column_type(duckdb_prepared_statement statement, idx_t column_idx);
+
+/*!
+Returns the logical type of the column at the specified index.
+
+Returns `nullptr` if the index is out of range.
+
+The return type of this call should be destroyed with `duckdb_destroy_logical_type`.
+
+* @param statement The prepared statement.
+* @param column_idx The column index.
+* @return The logical type of the column.
+*/
+DUCKDB_API duckdb_logical_type duckdb_prepared_column_logical_type(duckdb_prepared_statement statement,
+                                                                   idx_t column_idx);
+
 //===--------------------------------------------------------------------===//
 // Bind Values To Prepared Statements
 //===--------------------------------------------------------------------===//
