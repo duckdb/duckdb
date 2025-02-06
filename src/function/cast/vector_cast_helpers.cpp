@@ -85,6 +85,9 @@ static bool SkipToClose(StringCastInputState &input_state, idx_t &lvl, char clos
 				lvl++;
 			} else if (buf[idx] == brackets.back()) {
 				if (buf[idx] == ']') {
+					if (lvl == 0) {
+						return false;
+					}
 					lvl--;
 				}
 				brackets.pop_back();
@@ -114,6 +117,55 @@ struct CountPartOperation {
 	}
 };
 
+static string_t HandleString(Vector &vec, const char *buf, idx_t start, idx_t end) {
+	D_ASSERT(start <= end);
+	auto length = end - start;
+	auto allocated_string = StringVector::EmptyString(vec, length);
+	auto string_data = allocated_string.GetDataWriteable();
+	uint32_t copied_count = 0;
+	bool escaped = false;
+
+	bool quoted = false;
+	char quote_char;
+	stack<char> scopes;
+	for (idx_t i = 0; i < length; i++) {
+		auto current_char = buf[start + i];
+		if (!escaped) {
+			if (scopes.empty() && current_char == '\\') {
+				//! Start of escape
+				escaped = true;
+				continue;
+			}
+			if (scopes.empty() && (current_char == '\'' || current_char == '"')) {
+				if (quoted && current_char == quote_char) {
+					quoted = false;
+					//! Skip the ending quote
+					continue;
+				} else if (!quoted) {
+					quoted = true;
+					quote_char = current_char;
+					//! Skip the starting quote
+					continue;
+				}
+			}
+			if (!quoted && !scopes.empty() && current_char == scopes.top()) {
+				//! Close scope
+				scopes.pop();
+			}
+			if (!quoted && (current_char == '[' || current_char == '{')) {
+				//! New scope
+				scopes.push(current_char == '[' ? ']' : '}');
+			}
+			//! Regular character
+			string_data[copied_count++] = current_char;
+		} else {
+			string_data[copied_count++] = current_char;
+			escaped = false;
+		}
+	}
+	return string_t((const char *)string_data, copied_count); // NOLINT
+}
+
 // ------- LIST SPLIT -------
 struct SplitStringListOperation {
 public:
@@ -129,52 +181,7 @@ public:
 			entry_count++;
 			return;
 		}
-		D_ASSERT(start <= end);
-		auto length = end - start;
-		auto allocated_string = StringVector::EmptyString(child, length);
-		auto string_data = allocated_string.GetDataWriteable();
-		uint32_t copied_count = 0;
-		bool escaped = false;
-
-		bool quoted = false;
-		char quote_char;
-		stack<char> scopes;
-		for (idx_t i = 0; i < length; i++) {
-			auto current_char = buf[start + i];
-			if (!escaped) {
-				if (scopes.empty() && current_char == '\\') {
-					//! Start of escape
-					escaped = true;
-					continue;
-				}
-				if (scopes.empty() && (current_char == '\'' || current_char == '"')) {
-					if (quoted && current_char == quote_char) {
-						quoted = false;
-						//! Skip the ending quote
-						continue;
-					} else if (!quoted) {
-						quoted = true;
-						quote_char = current_char;
-						//! Skip the starting quote
-						continue;
-					}
-				}
-				if (!quoted && !scopes.empty() && current_char == scopes.top()) {
-					//! Close scope
-					scopes.pop();
-				}
-				if (!quoted && (current_char == '[' || current_char == '{')) {
-					//! New scope
-					scopes.push(current_char == '[' ? ']' : '}');
-				}
-				//! Regular character
-				string_data[copied_count++] = current_char;
-			} else {
-				string_data[copied_count++] = current_char;
-				escaped = false;
-			}
-		}
-		child_data[entry_count] = string_t((const char *)string_data, copied_count); // NOLINT
+		child_data[entry_count] = HandleString(child, buf, start, end);
 		entry_count++;
 	}
 
@@ -206,6 +213,11 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 	idx_t end_pos;
 	bool seen_value = false;
 	while (pos < len) {
+		if (pos == len) {
+			return false;
+		}
+		bool set_escaped = false;
+
 		if (buf[pos] == '[') {
 			if (!start_pos.IsValid()) {
 				start_pos = pos;
@@ -253,19 +265,19 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 				seen_value = true;
 			}
 			if (buf[pos] == ']') {
+				if (lvl == 0) {
+					return false;
+				}
 				lvl--;
 				break;
 			}
-			pos++;
-			SkipWhitespace(input_state);
 			start_pos = optional_idx();
-			continue;
 		} else if (buf[pos] == '\\') {
 			if (!start_pos.IsValid()) {
 				start_pos = pos;
 			}
 			if (!input_state.escaped) {
-				input_state.escaped = true;
+				set_escaped = true;
 			}
 		} else if (!StringUtil::CharacterIsSpace(buf[pos])) {
 			if (!start_pos.IsValid()) {
@@ -273,7 +285,9 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 			}
 			end_pos = pos;
 		}
+		input_state.escaped = set_escaped;
 		pos++;
+		SkipWhitespace(input_state);
 	}
 	pos++;
 	SkipWhitespace(input_state);
@@ -313,7 +327,7 @@ struct SplitStringMapOperation {
 			child_start++;
 			return false;
 		}
-		child_key_data[child_start] = StringVector::AddString(varchar_key, buf + start_pos, pos - start_pos);
+		child_key_data[child_start] = HandleString(varchar_key, buf, start_pos, pos);
 		return true;
 	}
 
@@ -324,43 +338,10 @@ struct SplitStringMapOperation {
 			child_start++;
 			return;
 		}
-		child_val_data[child_start] = StringVector::AddString(varchar_val, buf + start_pos, pos - start_pos);
+		child_val_data[child_start] = HandleString(varchar_val, buf, start_pos, pos);
 		child_start++;
 	}
 };
-
-template <class OP>
-static bool FindKeyOrValueMap(StringCastInputState &input_state, OP &state, bool key) {
-	auto start_pos = input_state.pos;
-	idx_t lvl = 0;
-
-	auto &buf = input_state.buf;
-	auto &len = input_state.len;
-	auto &pos = input_state.pos;
-
-	while (pos < len) {
-		if (buf[pos] == '"' || buf[pos] == '\'') {
-			SkipToCloseQuotes(input_state);
-		} else if (buf[pos] == '{') {
-			SkipToClose(input_state, lvl, '}');
-		} else if (buf[pos] == '[') {
-			SkipToClose(input_state, lvl, ']');
-		} else if (key && buf[pos] == '=') {
-			// TODO: process the string
-			// idx_t end_pos = StringTrim(buf, start_pos, pos);
-			idx_t end_pos = pos;
-			return state.HandleKey(buf, start_pos, end_pos); // put string in KEY_child_vector
-		} else if (!key && (buf[pos] == ',' || buf[pos] == '}')) {
-			// TODO: process the string
-			// idx_t end_pos = StringTrim(buf, start_pos, pos);
-			idx_t end_pos = pos;
-			state.HandleValue(buf, start_pos, end_pos); // put string in VALUE_child_vector
-			return true;
-		}
-		pos++;
-	}
-	return false;
-}
 
 template <class OP>
 static bool SplitStringMapInternal(const string_t &input, OP &state) {
@@ -368,6 +349,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 	idx_t len = input.GetSize();
 	idx_t pos = 0;
 	StringCastInputState input_state(buf, pos, len);
+	idx_t lvl = 0;
 
 	SkipWhitespace(input_state);
 	if (pos == len || buf[pos] != '{') {
@@ -378,24 +360,139 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 	if (pos == len) {
 		return false;
 	}
-	if (buf[pos] == '}') {
-		pos++;
-		SkipWhitespace(input_state);
-		return (pos == len);
-	}
+
 	while (pos < len) {
-		if (!FindKeyOrValueMap(input_state, state, true)) {
+		optional_idx start_pos;
+		idx_t end_pos;
+		while (pos < len && (buf[pos] != '=' || input_state.escaped)) {
+			bool set_escaped = false;
+			if (buf[pos] == '"' || buf[pos] == '\'') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					if (!SkipToCloseQuotes(input_state)) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '{') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					if (!SkipToClose(input_state, lvl, '}')) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '[') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					lvl++;
+					if (!SkipToClose(input_state, lvl, ']')) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '\\') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					set_escaped = true;
+				}
+			} else if (!StringUtil::CharacterIsSpace(buf[pos])) {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				end_pos = pos;
+			}
+			input_state.escaped = set_escaped;
+			pos++;
+		}
+		if (pos == len) {
 			return false;
 		}
+		if (!start_pos.IsValid()) {
+			//! Key can not be empty
+			return false;
+		}
+		auto key_substr = std::string(buf + start_pos.GetIndex(), buf + end_pos + 1);
+		if (!state.HandleKey(buf, start_pos.GetIndex(), end_pos + 1)) {
+			return false;
+		}
+		start_pos = optional_idx();
 		pos++;
 		SkipWhitespace(input_state);
-		if (!FindKeyOrValueMap(input_state, state, false)) {
+		while (pos < len && ((buf[pos] != ',' && buf[pos] != '}') || input_state.escaped)) {
+			if (buf[pos] == '"' || buf[pos] == '\'') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					if (!SkipToCloseQuotes(input_state)) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '{') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					if (!SkipToClose(input_state, lvl, '}')) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '[') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					lvl++;
+					if (!SkipToClose(input_state, lvl, ']')) {
+						return false;
+					}
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '\\') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!input_state.escaped) {
+					input_state.escaped = true;
+				}
+			} else if (!StringUtil::CharacterIsSpace(buf[pos])) {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				end_pos = pos;
+			}
+			pos++;
+		}
+		if (pos == len) {
 			return false;
+		}
+		if (!start_pos.IsValid()) {
+			//! Value is empty
+			state.HandleValue(buf, 0, 0);
+		} else {
+			auto value_substr = std::string(buf + start_pos.GetIndex(), buf + end_pos + 1);
+			state.HandleValue(buf, start_pos.GetIndex(), end_pos + 1);
+		}
+		if (buf[pos] == '}') {
+			break;
 		}
 		pos++;
 		SkipWhitespace(input_state);
 	}
-	return true;
+	pos++;
+	SkipWhitespace(input_state);
+	return (pos == len && lvl == 0);
 }
 
 bool VectorStringToMap::SplitStringMap(const string_t &input, string_t *child_key_data, string_t *child_val_data,
