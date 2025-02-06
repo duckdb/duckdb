@@ -437,6 +437,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 		pos++;
 		SkipWhitespace(input_state);
 		while (pos < len && ((buf[pos] != ',' && buf[pos] != '}') || input_state.escaped)) {
+			bool set_escaped = false;
 			if (buf[pos] == '"' || buf[pos] == '\'') {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
@@ -473,7 +474,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 					start_pos = pos;
 				}
 				if (!input_state.escaped) {
-					input_state.escaped = true;
+					set_escaped = true;
 				}
 			} else if (!StringUtil::CharacterIsSpace(buf[pos])) {
 				if (!start_pos.IsValid()) {
@@ -481,6 +482,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 				}
 				end_pos = pos;
 			}
+			input_state.escaped = set_escaped;
 			pos++;
 		}
 		if (pos == len) {
