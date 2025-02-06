@@ -71,10 +71,12 @@ public:
 	static ParquetColumnDefinition FromSchemaValue(ClientContext &context, const Value &column_value);
 
 public:
+	// DEPRECATED, use 'identifier' instead
 	int32_t field_id;
 	string name;
 	LogicalType type;
 	Value default_value;
+	Value identifier;
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -127,16 +129,13 @@ public:
 	FileSystem &fs;
 	Allocator &allocator;
 	string file_name;
-	vector<LogicalType> return_types;
-	vector<string> names;
+	vector<MultiFileReaderColumnDefinition> columns;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
 	MultiFileReaderData reader_data;
 	unique_ptr<ColumnReader> root_reader;
 	shared_ptr<EncryptionUtil> encryption_util;
 
-	//! Index of the file_row_number column
-	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
 	//! Parquet schema for the generated columns
 	vector<duckdb_parquet::SchemaElement> generated_column_schema;
 	//! Table column names - set when using COPY tbl FROM file.parquet
@@ -150,17 +149,23 @@ public:
 		auto result = make_uniq<ParquetUnionData>();
 		result->file_name = reader_p->file_name;
 		if (file_idx == 0) {
-			result->names = reader_p->names;
-			result->types = reader_p->return_types;
+			for (auto &column : reader_p->columns) {
+				result->names.push_back(column.name);
+				result->types.push_back(column.type);
+			}
 			result->options = reader_p->parquet_options;
 			result->metadata = reader_p->metadata;
 			result->reader = std::move(reader_p);
 		} else {
-			result->names = std::move(reader_p->names);
-			result->types = std::move(reader_p->return_types);
+			for (auto &column : reader_p->columns) {
+				result->names.push_back(column.name);
+				result->types.push_back(column.type);
+			}
+			reader_p->columns.clear();
 			result->options = std::move(reader_p->parquet_options);
 			result->metadata = std::move(reader_p->metadata);
 		}
+
 		return result;
 	}
 
@@ -183,11 +188,9 @@ public:
 	const string &GetFileName() {
 		return file_name;
 	}
-	const vector<string> &GetNames() {
-		return names;
-	}
-	const vector<LogicalType> &GetTypes() {
-		return return_types;
+
+	const vector<MultiFileReaderColumnDefinition> &GetColumns() {
+		return columns;
 	}
 
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
@@ -212,12 +215,6 @@ private:
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
-
-	template <typename... Args>
-	std::runtime_error FormatException(const string fmt_str, Args... params) {
-		return std::runtime_error("Failed to read Parquet file \"" + file_name +
-		                          "\": " + StringUtil::Format(fmt_str, params...));
-	}
 
 private:
 	unique_ptr<FileHandle> file_handle;

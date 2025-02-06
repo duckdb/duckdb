@@ -54,12 +54,7 @@ ColumnDataAllocator::~ColumnDataAllocator() {
 	for (auto &block : blocks) {
 		block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 	}
-	const auto data_size = SizeInBytes();
 	blocks.clear();
-	if (Allocator::SupportsFlush() &&
-	    data_size > alloc.buffer_manager->GetBufferPool().GetAllocatorBulkDeallocationFlushThreshold()) {
-		Allocator::FlushAll();
-	}
 }
 
 BufferHandle ColumnDataAllocator::Pin(uint32_t block_id) {

@@ -111,7 +111,7 @@ NULL
 query I
 SELECT map_extract(MAP(LIST_VALUE([10],[9],[12],[11],[13]),LIST_VALUE(10,9,10,11,13)),[10])
 ----
-10
+[10]
 
 #Multiple constants
 query I

@@ -7,6 +7,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -92,6 +93,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
     DUCKDB_GLOBAL(DefaultOrderSetting),
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
+    DUCKDB_GLOBAL(DisabledCompressionMethodsSetting),
     DUCKDB_GLOBAL(DisabledFilesystemsSetting),
     DUCKDB_GLOBAL(DisabledLogTypes),
     DUCKDB_GLOBAL(DisabledOptimizersSetting),
@@ -126,6 +128,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(IndexScanMaxCountSetting),
     DUCKDB_GLOBAL(IndexScanPercentageSetting),
     DUCKDB_LOCAL(IntegerDivisionSetting),
+    DUCKDB_LOCAL(LateMaterializationMaxRowsSetting),
     DUCKDB_GLOBAL(LockConfigurationSetting),
     DUCKDB_LOCAL(LogQueryPathSetting),
     DUCKDB_GLOBAL(LoggingLevel),
@@ -459,7 +462,7 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 	}
 	return MaxValue<idx_t>(CGroups::GetCPULimit(fs, physical_cores), 1);
 #else
-	return physical_cores;
+	return MaxValue<idx_t>(physical_cores, 1);
 #endif
 #endif
 }
@@ -739,6 +742,22 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 	return true;
 }
 
+SerializationOptions::SerializationOptions(AttachedDatabase &db) {
+	serialization_compatibility = SerializationCompatibility::FromDatabase(db);
+}
+
+SerializationCompatibility SerializationCompatibility::FromDatabase(AttachedDatabase &db) {
+	return FromIndex(db.GetStorageManager().GetStorageVersion());
+}
+
+SerializationCompatibility SerializationCompatibility::FromIndex(const idx_t version) {
+	SerializationCompatibility result;
+	result.duckdb_version = "";
+	result.serialization_version = version;
+	result.manually_set = false;
+	return result;
+}
+
 SerializationCompatibility SerializationCompatibility::FromString(const string &input) {
 	if (input.empty()) {
 		throw InvalidInputException("Version string can not be empty");
@@ -747,7 +766,7 @@ SerializationCompatibility SerializationCompatibility::FromString(const string &
 	auto serialization_version = GetSerializationVersion(input.c_str());
 	if (!serialization_version.IsValid()) {
 		auto candidates = GetSerializationCandidates();
-		throw InvalidInputException("The version string '%s' is not a valid DuckDB version, valid options are: %s",
+		throw InvalidInputException("The version string '%s' is not a known DuckDB version, valid options are: %s",
 		                            input, StringUtil::Join(candidates, ", "));
 	}
 	SerializationCompatibility result;

@@ -498,6 +498,7 @@ void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		hdr.data_page_header.repetition_level_encoding = Encoding::RLE;
 
 		write_info.temp_writer = make_uniq<MemoryStream>(
+		    Allocator::Get(writer.GetContext()),
 		    MaxValue<idx_t>(NextPowerOfTwo(page_info.estimated_page_size), MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		write_info.write_count = page_info.empty_count;
 		write_info.max_write_count = page_info.row_count;
@@ -717,6 +718,7 @@ void BasicColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	column_chunk.meta_data.total_compressed_size =
 	    UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten() - start_offset);
 	column_chunk.meta_data.total_uncompressed_size = UnsafeNumericCast<int64_t>(total_uncompressed_size);
+	state.row_group.total_byte_size += column_chunk.meta_data.total_uncompressed_size;
 
 	if (state.bloom_filter) {
 		writer.BufferBloomFilter(state.col_idx, std::move(state.bloom_filter));
@@ -1173,7 +1175,7 @@ void WriteValue(DlbaEncoder &encoder, WriteStream &writer, const string_t &value
 
 // helpers to get size from strings
 template <class SRC>
-static constexpr idx_t GetDlbaStringSize(const SRC &src_value) {
+static idx_t GetDlbaStringSize(const SRC &src_value) {
 	return 0;
 }
 
@@ -1311,21 +1313,26 @@ public:
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 		if (state.dictionary.size() == 0 || state.dictionary.size() > writer.DictionarySizeLimit()) {
-			// If we aren't doing dictionary encoding, the following encodings are virtually always better than PLAIN
-			switch (type) {
-			case Type::type::INT32:
-			case Type::type::INT64:
-				state.encoding = Encoding::DELTA_BINARY_PACKED;
-				break;
-			case Type::type::BYTE_ARRAY:
-				state.encoding = Encoding::DELTA_LENGTH_BYTE_ARRAY;
-				break;
-			case Type::type::FLOAT:
-			case Type::type::DOUBLE:
-				state.encoding = Encoding::BYTE_STREAM_SPLIT;
-				break;
-			default:
+			if (writer.GetParquetVersion() == ParquetVersion::V1) {
+				// Can't do the cool stuff for V1
 				state.encoding = Encoding::PLAIN;
+			} else {
+				// If we aren't doing dictionary encoding, these encodings are virtually always better than PLAIN
+				switch (type) {
+				case Type::type::INT32:
+				case Type::type::INT64:
+					state.encoding = Encoding::DELTA_BINARY_PACKED;
+					break;
+				case Type::type::BYTE_ARRAY:
+					state.encoding = Encoding::DELTA_LENGTH_BYTE_ARRAY;
+					break;
+				case Type::type::FLOAT:
+				case Type::type::DOUBLE:
+					state.encoding = Encoding::BYTE_STREAM_SPLIT;
+					break;
+				default:
+					state.encoding = Encoding::PLAIN;
+				}
 			}
 			state.dictionary.clear();
 		}
@@ -1463,8 +1470,9 @@ public:
 		    make_uniq<ParquetBloomFilter>(state.dictionary.size(), writer.BloomFilterFalsePositiveRatio());
 
 		// first write the contents of the dictionary page to a temporary buffer
-		auto temp_writer = make_uniq<MemoryStream>(MaxValue<idx_t>(
-		    NextPowerOfTwo(state.dictionary.size() * sizeof(TGT)), MemoryStream::DEFAULT_INITIAL_CAPACITY));
+		auto temp_writer = make_uniq<MemoryStream>(
+		    Allocator::Get(writer.GetContext()), MaxValue<idx_t>(NextPowerOfTwo(state.dictionary.size() * sizeof(TGT)),
+		                                                         MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		for (idx_t r = 0; r < values.size(); r++) {
 			const TGT target_value = OP::template Operation<SRC, TGT>(values[r]);
 			// update the statistics
@@ -1838,7 +1846,7 @@ public:
 		auto enum_count = EnumType::GetSize(enum_type);
 		auto string_values = FlatVector::GetData<string_t>(enum_values);
 		// first write the contents of the dictionary page to a temporary buffer
-		auto temp_writer = make_uniq<MemoryStream>();
+		auto temp_writer = make_uniq<MemoryStream>(Allocator::Get(writer.GetContext()));
 		for (idx_t r = 0; r < enum_count; r++) {
 			D_ASSERT(!FlatVector::IsNull(enum_values, r));
 			// update the statistics

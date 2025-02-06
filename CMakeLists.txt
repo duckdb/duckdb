@@ -422,6 +422,7 @@ option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
 option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
+option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -447,6 +448,10 @@ endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
+endif()
+
+if(NATIVE_ARCH)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 endif()
 
 if(CRASH_ON_ASSERT)
@@ -1322,6 +1327,10 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
     add_subdirectory(${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_PATH} extension/${EXT_NAME})
   else()
     message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
+  endif()
+
+  if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}" STREQUAL "")
+    remove_definitions(-DEXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")
   endif()
 endforeach()
 

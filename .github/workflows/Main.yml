@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
   repository_dispatch:
   push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
     paths-ignore:
       - '**.md'
       - 'tools/**'
@@ -55,6 +55,7 @@ jobs:
       CXX: g++-10
       TREAT_WARNINGS_AS_ERRORS: 1
       GEN: ninja
+      CRASH_ON_ASSERT: 1
 
     steps:
     - uses: actions/checkout@v4
@@ -94,6 +95,37 @@ jobs:
       run: |
         python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --tests-per-invocation 100 ${{ matrix.start_offset }} ${{ matrix.end_offset }}
 
+ linux-release:
+    name: Linux Release (full suite)
+    runs-on: ubuntu-24.04
+    env:
+      GEN: ninja
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      DISABLE_SANITIZER: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: make release
+
+    - name: Test
+      shell: bash
+      run: make allunit
 
  force-storage:
     name: Force Storage

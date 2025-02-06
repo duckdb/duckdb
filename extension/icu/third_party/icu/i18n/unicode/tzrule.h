@@ -56,7 +56,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically equal.
      * @stable ICU 3.8
      */
-    virtual UBool operator==(const TimeZoneRule& that) const;
+    virtual bool operator==(const TimeZoneRule& that) const;
 
     /**
      * Return true if the given <code>TimeZoneRule</code> objects are semantically unequal. Objects
@@ -65,7 +65,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically unequal.
      * @stable ICU 3.8
      */
-    virtual UBool operator!=(const TimeZoneRule& that) const;
+    virtual bool operator!=(const TimeZoneRule& that) const;
 
     /**
      * Fills in "name" with the name of this time zone.
@@ -247,7 +247,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically equal.
      * @stable ICU 3.8
      */
-    virtual UBool operator==(const TimeZoneRule& that) const;
+    virtual bool operator==(const TimeZoneRule& that) const;
 
     /**
      * Return true if the given <code>TimeZoneRule</code> objects are semantically unequal. Objects
@@ -256,7 +256,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically unequal.
      * @stable ICU 3.8
      */
-    virtual UBool operator!=(const TimeZoneRule& that) const;
+    virtual bool operator!=(const TimeZoneRule& that) const;
 
     /**
      * Gets the time when this rule takes effect in the given year.
@@ -458,7 +458,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically equal.
      * @stable ICU 3.8
      */
-    virtual UBool operator==(const TimeZoneRule& that) const;
+    virtual bool operator==(const TimeZoneRule& that) const;
 
     /**
      * Return true if the given <code>TimeZoneRule</code> objects are semantically unequal. Objects
@@ -467,7 +467,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically unequal.
      * @stable ICU 3.8
      */
-    virtual UBool operator!=(const TimeZoneRule& that) const;
+    virtual bool operator!=(const TimeZoneRule& that) const;
 
     /**
      * Gets the start date/time rule used by this rule.
@@ -674,7 +674,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically equal.
      * @stable ICU 3.8
      */
-    virtual UBool operator==(const TimeZoneRule& that) const;
+    virtual bool operator==(const TimeZoneRule& that) const;
 
     /**
      * Return true if the given <code>TimeZoneRule</code> objects are semantically unequal. Objects
@@ -683,7 +683,7 @@ public:
      * @return  true if the given <code>TimeZoneRule</code> objects are semantically unequal.
      * @stable ICU 3.8
      */
-    virtual UBool operator!=(const TimeZoneRule& that) const;
+    virtual bool operator!=(const TimeZoneRule& that) const;
 
     /**
      * Gets the time type of the start times used by this rule.  The return value

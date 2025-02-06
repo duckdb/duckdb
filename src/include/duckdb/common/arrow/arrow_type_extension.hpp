@@ -65,11 +65,13 @@ typedef void (*populate_arrow_schema_t)(DuckDBArrowSchemaHolder &root_holder, Ar
                                         const LogicalType &type, ClientContext &context,
                                         const ArrowTypeExtension &extension);
 
-typedef shared_ptr<ArrowType> (*get_type_t)(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata);
+typedef unique_ptr<ArrowType> (*get_type_t)(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata);
 
 class ArrowTypeExtension {
 public:
 	ArrowTypeExtension() {};
+	//! This type is not registered, so we just use whatever is the format and hope for the best
+	explicit ArrowTypeExtension(ArrowExtensionMetadata &extension_metadata, unique_ptr<ArrowType> type);
 	//! We either have simple extensions where we only return one type
 	ArrowTypeExtension(string extension_name, string arrow_format, shared_ptr<ArrowTypeExtensionData> type);
 	ArrowTypeExtension(string vendor_name, string type_name, string arrow_format,
@@ -84,7 +86,7 @@ public:
 
 	ArrowExtensionMetadata GetInfo() const;
 
-	shared_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) const;
+	unique_ptr<ArrowType> GetType(const ArrowSchema &schema, const ArrowSchemaMetadata &schema_metadata) const;
 
 	shared_ptr<ArrowTypeExtensionData> GetTypeExtension() const;
 

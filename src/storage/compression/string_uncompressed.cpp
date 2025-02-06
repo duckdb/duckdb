@@ -94,7 +94,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
-	auto dict = GetDictionary(segment, scan_state.handle);
+	auto dict_end = GetDictionaryEnd(segment, scan_state.handle);
 	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
@@ -105,7 +105,7 @@ void UncompressedStringStorage::StringScanPartial(ColumnSegment &segment, Column
 		auto current_offset = base_data[start + i];
 		auto string_length = UnsafeNumericCast<uint32_t>(std::abs(current_offset) - std::abs(previous_offset));
 		result_data[result_offset + i] =
-		    FetchStringFromDict(segment, dict, result, baseptr, current_offset, string_length);
+		    FetchStringFromDict(segment, dict_end, result, baseptr, current_offset, string_length);
 		previous_offset = base_data[start + i];
 	}
 }
@@ -125,7 +125,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 	auto start = segment.GetRelativeIndex(state.row_index);
 
 	auto baseptr = scan_state.handle.Ptr() + segment.GetBlockOffset();
-	auto dict = GetDictionary(segment, scan_state.handle);
+	auto dict_end = GetDictionaryEnd(segment, scan_state.handle);
 	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
@@ -134,7 +134,7 @@ void UncompressedStringStorage::Select(ColumnSegment &segment, ColumnScanState &
 		auto current_offset = base_data[index];
 		auto prev_offset = index > 0 ? base_data[index - 1] : 0;
 		auto string_length = UnsafeNumericCast<uint32_t>(std::abs(current_offset) - std::abs(prev_offset));
-		result_data[i] = FetchStringFromDict(segment, dict, result, baseptr, current_offset, string_length);
+		result_data[i] = FetchStringFromDict(segment, dict_end, result, baseptr, current_offset, string_length);
 	}
 }
 
@@ -164,7 +164,7 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	auto &handle = state.GetOrInsertHandle(segment);
 
 	auto baseptr = handle.Ptr() + segment.GetBlockOffset();
-	auto dict = GetDictionary(segment, handle);
+	auto dict_end = GetDictionaryEnd(segment, handle);
 	auto base_data = reinterpret_cast<int32_t *>(baseptr + DICTIONARY_HEADER_SIZE);
 	auto result_data = FlatVector::GetData<string_t>(result);
 
@@ -176,7 +176,7 @@ void UncompressedStringStorage::StringFetchRow(ColumnSegment &segment, ColumnFet
 	} else {
 		string_length = NumericCast<uint32_t>(std::abs(dict_offset) - std::abs(base_data[row_id - 1]));
 	}
-	result_data[result_idx] = FetchStringFromDict(segment, dict, result, baseptr, dict_offset, string_length);
+	result_data[result_idx] = FetchStringFromDict(segment, dict_end, result, baseptr, dict_offset, string_length);
 }
 
 //===--------------------------------------------------------------------===//
@@ -299,6 +299,11 @@ StringDictionaryContainer UncompressedStringStorage::GetDictionary(ColumnSegment
 	container.size = Load<uint32_t>(startptr);
 	container.end = Load<uint32_t>(startptr + sizeof(uint32_t));
 	return container;
+}
+
+uint32_t UncompressedStringStorage::GetDictionaryEnd(ColumnSegment &segment, BufferHandle &handle) {
+	auto startptr = handle.Ptr() + segment.GetBlockOffset();
+	return Load<uint32_t>(startptr + sizeof(uint32_t));
 }
 
 idx_t UncompressedStringStorage::RemainingSpace(ColumnSegment &segment, BufferHandle &handle) {

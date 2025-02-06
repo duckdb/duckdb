@@ -56,6 +56,7 @@ class CompressionInfo;
 class EncryptionUtil;
 
 struct CompressionFunctionSet;
+struct DatabaseCacheEntry;
 struct DBConfig;
 
 enum class CheckpointAbort : uint8_t {
@@ -100,6 +101,8 @@ struct ExtensionOption {
 
 class SerializationCompatibility {
 public:
+	static SerializationCompatibility FromDatabase(AttachedDatabase &db);
+	static SerializationCompatibility FromIndex(idx_t serialization_version);
 	static SerializationCompatibility FromString(const string &input);
 	static SerializationCompatibility Default();
 	static SerializationCompatibility Latest();
@@ -201,6 +204,8 @@ struct DBConfigOptions {
 	uint64_t zstd_min_string_length = 4096;
 	//! Force a specific compression method to be used when checkpointing (if available)
 	CompressionType force_compression = CompressionType::COMPRESSION_AUTO;
+	//! The set of disabled compression methods (default empty)
+	set<CompressionType> disabled_compression_methods;
 	//! Force a specific bitpacking mode to be used when using the bitpacking compression method
 	BitpackingMode force_bitpacking_mode = BitpackingMode::AUTO;
 	//! Debug setting for window aggregation mode: (window, combine, separate)
@@ -331,6 +336,8 @@ public:
 	vector<unique_ptr<ExtensionCallback>> extension_callbacks;
 	//! Encryption Util for OpenSSL
 	shared_ptr<EncryptionUtil> encryption_util;
+	//! Reference to the database cache entry (if any)
+	shared_ptr<DatabaseCacheEntry> db_cache_entry;
 
 public:
 	DUCKDB_API static DBConfig &GetConfig(ClientContext &context);
@@ -377,6 +384,7 @@ public:
 	DUCKDB_API ArrowTypeExtension GetArrowExtension(ArrowExtensionMetadata info) const;
 	DUCKDB_API ArrowTypeExtension GetArrowExtension(const LogicalType &type) const;
 	DUCKDB_API bool HasArrowExtension(const LogicalType &type) const;
+	DUCKDB_API bool HasArrowExtension(ArrowExtensionMetadata info) const;
 	DUCKDB_API void RegisterArrowExtension(const ArrowTypeExtension &extension) const;
 
 	bool operator==(const DBConfig &other);

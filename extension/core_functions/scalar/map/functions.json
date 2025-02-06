@@ -29,6 +29,13 @@
         "aliases": ["element_at"]
     },
     {
+        "name": "map_extract_value",
+        "parameters": "map,key",
+        "description": "Returns the value for a given key or NULL if the key is not contained in the map. The type of the key provided in the second parameter must match the type of the map’s keys else an error is returned",
+        "example": "map_extract_value(map(['key'], ['val']), 'key')",
+        "type": "scalar_function"
+    },
+    {
         "name": "map_from_entries",
         "parameters": "map",
         "description": "Returns a map created from the entries of the array",

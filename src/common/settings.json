@@ -266,6 +266,13 @@
         "custom_implementation": true
     },
     {
+        "name": "disabled_compression_methods",
+        "description": "Disable a specific set of compression methods (comma separated)",
+        "type": "VARCHAR",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "disabled_filesystems",
         "description": "Disable specific file systems preventing access (e.g. LocalFileSystem)",
         "type": "VARCHAR",
@@ -514,6 +521,12 @@
         "name": "integer_division",
         "description": "Whether or not the / operator defaults to integer division, or to floating point division",
         "type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
+        "name": "late_materialization_max_rows",
+        "description": "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization",
+        "type": "UBIGINT",
         "scope": "local"
     },
     {

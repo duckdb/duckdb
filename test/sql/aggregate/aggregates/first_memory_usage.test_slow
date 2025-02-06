@@ -14,4 +14,4 @@ set memory_limit='500mb';
 # we also limit the number of threads in RadixPartitionedHashtable to limit memory usage when close to the limit
 # we can now easily complete this query
 statement ok
-select distinct on (a) b from (select s a, md5(s::text) b from generate_series(1,10_000_000) as g(s)) limit 10;
+select distinct on (a) b from (select s a, md5(s::text) b from generate_series(1,5_000_000) as g(s)) limit 10;

@@ -56,7 +56,7 @@ void ArrowType::ThrowIfInvalid() const {
 	}
 }
 
-unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format) {
+unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(string &format) {
 	if (format == "n") {
 		return make_uniq<ArrowType>(LogicalType::SQLNULL);
 	} else if (format == "b") {
@@ -178,6 +178,14 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema
 			throw NotImplementedException(" Timestamptz precision of not accepted");
 		}
 		return make_uniq<ArrowType>(LogicalType::TIMESTAMP_TZ, std::move(type_info));
+	}
+	return nullptr;
+}
+
+unique_ptr<ArrowType> ArrowType::GetTypeFromFormat(DBConfig &config, ArrowSchema &schema, string &format) {
+	auto type = GetTypeFromFormat(format);
+	if (type) {
+		return type;
 	}
 	if (format == "+l") {
 		return CreateListType(config, *schema.children[0], ArrowVariableSizeType::NORMAL, false);
@@ -361,8 +369,13 @@ unique_ptr<ArrowType> ArrowType::GetTypeFromSchema(DBConfig &config, ArrowSchema
 	auto arrow_type = GetTypeFromFormat(config, schema, format);
 	if (schema_metadata.HasExtension()) {
 		auto extension_info = schema_metadata.GetExtensionInfo(string(format));
-		arrow_type->extension_data = config.GetArrowExtension(extension_info).GetTypeExtension();
+		if (config.HasArrowExtension(extension_info)) {
+			auto extension = config.GetArrowExtension(extension_info);
+			arrow_type = extension.GetType(schema, schema_metadata);
+			arrow_type->extension_data = extension.GetTypeExtension();
+		}
 	}
+
 	return arrow_type;
 }
 

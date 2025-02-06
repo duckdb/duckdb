@@ -189,11 +189,11 @@ void CSVReaderOptions::SetNewline(const string &input) {
 }
 
 bool CSVReaderOptions::GetRFC4180() const {
-	return this->dialect_options.state_machine_options.rfc_4180.GetValue();
+	return this->dialect_options.state_machine_options.strict_mode.GetValue();
 }
 
 void CSVReaderOptions::SetRFC4180(bool input) {
-	this->dialect_options.state_machine_options.rfc_4180.Set(input);
+	this->dialect_options.state_machine_options.strict_mode.Set(input);
 }
 
 bool CSVReaderOptions::IgnoreErrors() const {
@@ -210,15 +210,18 @@ string CSVReaderOptions::GetMultiByteDelimiter() const {
 
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
-	if (read_format) {
-		StrpTimeFormat strpformat;
-		error = StrTimeFormat::ParseFormatSpecifier(format, strpformat);
-		dialect_options.date_format[type].Set(strpformat);
-	} else {
-		write_date_format[type] = Value(format);
-	}
-	if (!error.empty()) {
-		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+	const string auto_format = StringUtil::Lower(format);
+	if (auto_format != "auto") {
+		if (read_format) {
+			StrpTimeFormat strpformat;
+			error = StrTimeFormat::ParseFormatSpecifier(format, strpformat);
+			dialect_options.date_format[type].Set(strpformat);
+		} else {
+			write_date_format[type] = Value(format);
+		}
+		if (!error.empty()) {
+			throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+		}
 	}
 }
 
@@ -413,7 +416,7 @@ bool CSVReaderOptions::SetBaseOption(const string &loption, const Value &value, 
 
 	} else if (loption == "compression") {
 		SetCompression(ParseString(value, loption));
-	} else if (loption == "rfc_4180") {
+	} else if (loption == "strict_mode") {
 		SetRFC4180(ParseBoolean(value, loption));
 	} else {
 		// unrecognized option in base CSV
@@ -440,7 +443,7 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 	auto &escape = dialect_options.state_machine_options.escape;
 	auto &comment = dialect_options.state_machine_options.comment;
 	auto &new_line = dialect_options.state_machine_options.new_line;
-	auto &rfc_4180 = dialect_options.state_machine_options.rfc_4180;
+	auto &strict_mode = dialect_options.state_machine_options.strict_mode;
 	auto &skip_rows = dialect_options.skip_rows;
 
 	auto &header = dialect_options.header;
@@ -460,8 +463,8 @@ string CSVReaderOptions::ToString(const string &current_file_path) const {
 	error += FormatOptionLine("skip_rows", skip_rows);
 	// comment
 	error += FormatOptionLine("comment", comment);
-	// rfc_4180
-	error += FormatOptionLine("rfc_4180", rfc_4180);
+	// strict_mode
+	error += FormatOptionLine("strict_mode", strict_mode);
 	// date format
 	error += FormatOptionLine("date_format", dialect_options.date_format.at(LogicalType::DATE));
 	// timestamp format
@@ -494,13 +497,13 @@ static Value StringVectorToValue(const vector<string> &vec) {
 static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	//! Const ht with accepted auto_types and their weights in specificity
 	const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity {
-	    {static_cast<uint8_t>(LogicalTypeId::VARCHAR), 0},   {static_cast<uint8_t>(LogicalTypeId::DOUBLE), 1},
-	    {static_cast<uint8_t>(LogicalTypeId::FLOAT), 2},     {static_cast<uint8_t>(LogicalTypeId::DECIMAL), 3},
-	    {static_cast<uint8_t>(LogicalTypeId::BIGINT), 4},    {static_cast<uint8_t>(LogicalTypeId::INTEGER), 5},
-	    {static_cast<uint8_t>(LogicalTypeId::SMALLINT), 6},  {static_cast<uint8_t>(LogicalTypeId::TINYINT), 7},
-	    {static_cast<uint8_t>(LogicalTypeId::TIMESTAMP), 8}, {static_cast<uint8_t>(LogicalTypeId::DATE), 9},
-	    {static_cast<uint8_t>(LogicalTypeId::TIME), 10},     {static_cast<uint8_t>(LogicalTypeId::BOOLEAN), 11},
-	    {static_cast<uint8_t>(LogicalTypeId::SQLNULL), 12}};
+	    {static_cast<uint8_t>(LogicalTypeId::VARCHAR), 0},      {static_cast<uint8_t>(LogicalTypeId::DOUBLE), 1},
+	    {static_cast<uint8_t>(LogicalTypeId::FLOAT), 2},        {static_cast<uint8_t>(LogicalTypeId::DECIMAL), 3},
+	    {static_cast<uint8_t>(LogicalTypeId::BIGINT), 4},       {static_cast<uint8_t>(LogicalTypeId::INTEGER), 5},
+	    {static_cast<uint8_t>(LogicalTypeId::SMALLINT), 6},     {static_cast<uint8_t>(LogicalTypeId::TINYINT), 7},
+	    {static_cast<uint8_t>(LogicalTypeId::TIMESTAMP_TZ), 8}, {static_cast<uint8_t>(LogicalTypeId::TIMESTAMP), 9},
+	    {static_cast<uint8_t>(LogicalTypeId::DATE), 10},        {static_cast<uint8_t>(LogicalTypeId::TIME), 11},
+	    {static_cast<uint8_t>(LogicalTypeId::BOOLEAN), 12},     {static_cast<uint8_t>(LogicalTypeId::SQLNULL), 13}};
 
 	auto id = static_cast<uint8_t>(candidate_type.id());
 	auto it = auto_type_candidates_specificity.find(id);
@@ -638,6 +641,9 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 			}
 			auto &children = ListValue::GetChildren(kv.second);
 			for (auto &child : children) {
+				if (child.IsNull()) {
+					throw BinderException("read_csv %s parameter cannot have a NULL value", kv.first);
+				}
 				name_list.push_back(StringValue::Get(child));
 			}
 			for (auto &name : name_list) {
@@ -716,7 +722,7 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 	auto &quote = dialect_options.state_machine_options.quote;
 	auto &escape = dialect_options.state_machine_options.escape;
 	auto &comment = dialect_options.state_machine_options.comment;
-	auto &rfc_4180 = dialect_options.state_machine_options.rfc_4180;
+	auto &strict_mode = dialect_options.state_machine_options.strict_mode;
 	auto &header = dialect_options.header;
 	if (delimiter.IsSetByUser()) {
 		named_params["delim"] = Value(GetDelimiter());
@@ -736,8 +742,8 @@ void CSVReaderOptions::ToNamedParameters(named_parameter_map_t &named_params) co
 	if (header.IsSetByUser()) {
 		named_params["header"] = Value(GetHeader());
 	}
-	if (rfc_4180.IsSetByUser()) {
-		named_params["rfc_4180"] = Value(GetRFC4180());
+	if (strict_mode.IsSetByUser()) {
+		named_params["strict_mode"] = Value(GetRFC4180());
 	}
 	named_params["max_line_size"] = Value::BIGINT(NumericCast<int64_t>(maximum_line_size.GetValue()));
 	if (dialect_options.skip_rows.IsSetByUser()) {

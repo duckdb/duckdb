@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-ConnectionManager::ConnectionManager() {
+ConnectionManager::ConnectionManager() : connection_count(0) {
 }
 
 void ConnectionManager::AddConnection(ClientContext &context) {
@@ -14,6 +14,7 @@ void ConnectionManager::AddConnection(ClientContext &context) {
 		callback->OnConnectionOpened(context);
 	}
 	connections[context] = weak_ptr<ClientContext>(context.shared_from_this());
+	connection_count = connections.size();
 }
 
 void ConnectionManager::RemoveConnection(ClientContext &context) {
@@ -22,11 +23,11 @@ void ConnectionManager::RemoveConnection(ClientContext &context) {
 		callback->OnConnectionClosed(context);
 	}
 	connections.erase(context);
+	connection_count = connections.size();
 }
 
 idx_t ConnectionManager::GetConnectionCount() const {
-	lock_guard<mutex> lock(connections_lock);
-	return connections.size();
+	return connection_count;
 }
 
 vector<shared_ptr<ClientContext>> ConnectionManager::GetConnectionList() {
@@ -36,6 +37,7 @@ vector<shared_ptr<ClientContext>> ConnectionManager::GetConnectionList() {
 		auto connection = it.second.lock();
 		if (!connection) {
 			connections.erase(it.first);
+			connection_count = connections.size();
 			continue;
 		} else {
 			result.push_back(std::move(connection));

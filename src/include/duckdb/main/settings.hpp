@@ -419,6 +419,16 @@ struct DefaultSecretStorageSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct DisabledCompressionMethodsSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "disabled_compression_methods";
+	static constexpr const char *Description = "Disable a specific set of compression methods (comma separated)";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct DisabledFilesystemsSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "disabled_filesystems";
@@ -778,6 +788,17 @@ struct IntegerDivisionSetting {
 	static constexpr const char *Description =
 	    "Whether or not the / operator defaults to integer division, or to floating point division";
 	static constexpr const char *InputType = "BOOLEAN";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct LateMaterializationMaxRowsSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "late_materialization_max_rows";
+	static constexpr const char *Description =
+	    "The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization";
+	static constexpr const char *InputType = "UBIGINT";
 	static void SetLocal(ClientContext &context, const Value &parameter);
 	static void ResetLocal(ClientContext &context);
 	static Value GetSetting(const ClientContext &context);

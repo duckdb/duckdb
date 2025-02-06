@@ -134,8 +134,8 @@ class TestCanonicalExtensionTypes(object):
 
         arrow_table = pa.Table.from_arrays([storage_array, age_array], names=['pedro_pedro_pedro', 'age'])
 
-        with pytest.raises(duckdb.NotImplementedException, match="pedro.binary"):
-            duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
+        duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
+        assert duckdb_cursor.execute('FROM duck_arrow').fetchall() == [(b'pedro', 29)]
 
     def test_hugeint(self):
         con = duckdb.connect()

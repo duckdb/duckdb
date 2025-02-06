@@ -664,6 +664,30 @@ class TestReadCSV(object):
         with pytest.raises(duckdb.CatalogException, match="Type with name mood_2 does not exist!"):
             rel = con.read_csv(str(file1), dtype=['mood_2'])
 
+    def test_strict_mode(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('one|two|three|four\n1|2|3|4\n1|2|3|4|5\n1|2|3|4\n')
+
+        con = duckdb.connect()
+        with pytest.raises(duckdb.InvalidInputException, match="CSV Error on Line"):
+            rel = con.read_csv(
+                str(file1),
+                header=True,
+                delimiter='|',
+                columns={'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
+                auto_detect=False,
+            )
+            rel.fetchall()
+        rel = con.read_csv(
+            str(file1),
+            header=True,
+            delimiter='|',
+            strict_mode=False,
+            columns={'a': 'INTEGER', 'b': 'INTEGER', 'c': 'INTEGER', 'd': 'INTEGER'},
+            auto_detect=False,
+        )
+        assert rel.fetchall() == [(1, 2, 3, 4), (1, 2, 3, 4), (1, 2, 3, 4)]
+
     def test_union_by_name(self, tmp_path):
         file1 = tmp_path / "file1.csv"
         file1.write_text('one|two|three|four\n1|2|3|4')

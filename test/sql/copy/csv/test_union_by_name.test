@@ -149,7 +149,7 @@ NULL
 query TTT
 SELECT typeof(a), typeof(b), typeof(ts) FROM read_csv_auto('data/csv/union-by-name/ubn2.csv') LIMIT 1;
 ----
-VARCHAR	BIGINT	TIMESTAMP
+VARCHAR	BIGINT	TIMESTAMP WITH TIME ZONE
 
 # Test glob pattern [12] and union_by_name with filename options
 query IIIII
@@ -159,18 +159,18 @@ ORDER BY a, c, ts
 ----
 1	2	3	NULL	data/csv/union-by-name/ubn1.csv
 3	4	5	NULL	data/csv/union-by-name/ubn1.csv
-34fd321	91	NULL	2020-12-30 02:25:58.745232	data/csv/union-by-name/ubn2.csv
+34fd321	91	NULL	2020-12-30 02:25:58.745232+00	data/csv/union-by-name/ubn2.csv
 4	5	6	NULL	data/csv/union-by-name/ubn1.csv
-8cb123cb8	90	NULL	2020-12-30 01:25:58.745232	data/csv/union-by-name/ubn2.csv
-fg5391jn4	92	NULL	2020-12-30 03:25:58.745232	data/csv/union-by-name/ubn2.csv
-test	88	NULL	2020-12-30 00:25:58.745232	data/csv/union-by-name/ubn2.csv
+8cb123cb8	90	NULL	2020-12-30 01:25:58.745232+00	data/csv/union-by-name/ubn2.csv
+fg5391jn4	92	NULL	2020-12-30 03:25:58.745232+00	data/csv/union-by-name/ubn2.csv
+test	88	NULL	2020-12-30 00:25:58.745232+00	data/csv/union-by-name/ubn2.csv
 
 query TTTT
 SELECT typeof(a), typeof(b), typeof(c), typeof(ts)
 FROM read_csv_auto('data/csv/union-by-name/ubn[12].csv',UNION_BY_NAME=TRUE)
 LIMIT 1
 ----
-VARCHAR	BIGINT	BIGINT	TIMESTAMP
+VARCHAR	BIGINT	BIGINT	TIMESTAMP WITH TIME ZONE
 
 
 # Test ubn[23] timestamp type casting
@@ -179,7 +179,7 @@ SELECT typeof(ts)
 FROM read_csv_auto('data/csv/union-by-name/ubn[23].csv',UNION_BY_NAME=TRUE)
 LIMIT 1
 ----
-TIMESTAMP
+TIMESTAMP WITH TIME ZONE
 
 # Test glob pattern [!1-2] and union_by_name with filename options
 query IIII

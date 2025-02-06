@@ -28,6 +28,7 @@ void ExpressionBinder::TestCollation(ClientContext &context, const string &colla
 
 static bool SwitchVarcharComparison(const LogicalType &type) {
 	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
