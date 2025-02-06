@@ -1292,7 +1292,7 @@ static PGList *check_func_name(PGList *names, core_yyscan_t yyscanner);
 static PGList *check_indirection(PGList *indirection, core_yyscan_t yyscanner);
 static void insertSelectOptions(PGSelectStmt *stmt,
 								PGList *sortClause, PGList *lockingClause,
-								PGNode *limitOffset, PGNode *limitCount,
+								PGNode *limitOffset, PGNode *limitCount, PGNode *isLimitOffsetFirst,
 								PGWithClause *withClause,
 								core_yyscan_t yyscanner);
 static PGNode *makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg);
@@ -24378,7 +24378,7 @@ yyreduce:
 #line 74 "third_party/libpg_query/grammar/statements/select.y"
     {
 					insertSelectOptions((PGSelectStmt *) (yyvsp[(1) - (2)].node), (yyvsp[(2) - (2)].list), NIL,
-										NULL, NULL, NULL,
+										NULL, NULL, NULL, NULL,
 										yyscanner);
 					(yyval.node) = (yyvsp[(1) - (2)].node);
 				;}
@@ -24388,7 +24388,7 @@ yyreduce:
 #line 81 "third_party/libpg_query/grammar/statements/select.y"
     {
 					insertSelectOptions((PGSelectStmt *) (yyvsp[(1) - (4)].node), (yyvsp[(2) - (4)].list), (yyvsp[(3) - (4)].list),
-										(PGNode*) list_nth((yyvsp[(4) - (4)].list), 0), (PGNode*) list_nth((yyvsp[(4) - (4)].list), 1),
+										(PGNode*) list_nth((yyvsp[(4) - (4)].list), 0), (PGNode*) list_nth((yyvsp[(4) - (4)].list), 1), (PGNode*) list_nth((yyvsp[(4) - (4)].list), 2),
 										NULL,
 										yyscanner);
 					(yyval.node) = (yyvsp[(1) - (4)].node);
@@ -24399,7 +24399,7 @@ yyreduce:
 #line 89 "third_party/libpg_query/grammar/statements/select.y"
     {
 					insertSelectOptions((PGSelectStmt *) (yyvsp[(1) - (4)].node), (yyvsp[(2) - (4)].list), (yyvsp[(4) - (4)].list),
-										(PGNode*) list_nth((yyvsp[(3) - (4)].list), 0), (PGNode*) list_nth((yyvsp[(3) - (4)].list), 1),
+										(PGNode*) list_nth((yyvsp[(3) - (4)].list), 0), (PGNode*) list_nth((yyvsp[(3) - (4)].list), 1), (PGNode*) list_nth((yyvsp[(3) - (4)].list), 2),
 										NULL,
 										yyscanner);
 					(yyval.node) = (yyvsp[(1) - (4)].node);
@@ -24410,7 +24410,7 @@ yyreduce:
 #line 97 "third_party/libpg_query/grammar/statements/select.y"
     {
 					insertSelectOptions((PGSelectStmt *) (yyvsp[(2) - (2)].node), NULL, NIL,
-										NULL, NULL,
+										NULL, NULL, NULL,
 										(yyvsp[(1) - (2)].with),
 										yyscanner);
 					(yyval.node) = (yyvsp[(2) - (2)].node);
@@ -24421,7 +24421,7 @@ yyreduce:
 #line 105 "third_party/libpg_query/grammar/statements/select.y"
     {
 					insertSelectOptions((PGSelectStmt *) (yyvsp[(2) - (3)].node), (yyvsp[(3) - (3)].list), NIL,
-										NULL, NULL,
+										NULL, NULL, NULL,
 										(yyvsp[(1) - (3)].with),
 										yyscanner);
 					(yyval.node) = (yyvsp[(2) - (3)].node);
@@ -24432,7 +24432,7 @@ yyreduce:
 #line 113 "third_party/libpg_query/grammar/statements/select.y"
     {
 					insertSelectOptions((PGSelectStmt *) (yyvsp[(2) - (5)].node), (yyvsp[(3) - (5)].list), (yyvsp[(4) - (5)].list),
-										(PGNode*) list_nth((yyvsp[(5) - (5)].list), 0), (PGNode*) list_nth((yyvsp[(5) - (5)].list), 1),
+										(PGNode*) list_nth((yyvsp[(5) - (5)].list), 0), (PGNode*) list_nth((yyvsp[(5) - (5)].list), 1), (PGNode*) list_nth((yyvsp[(5) - (5)].list), 2),
 										(yyvsp[(1) - (5)].with),
 										yyscanner);
 					(yyval.node) = (yyvsp[(2) - (5)].node);
@@ -24443,7 +24443,7 @@ yyreduce:
 #line 121 "third_party/libpg_query/grammar/statements/select.y"
     {
 					insertSelectOptions((PGSelectStmt *) (yyvsp[(2) - (5)].node), (yyvsp[(3) - (5)].list), (yyvsp[(5) - (5)].list),
-										(PGNode*) list_nth((yyvsp[(4) - (5)].list), 0), (PGNode*) list_nth((yyvsp[(4) - (5)].list), 1),
+										(PGNode*) list_nth((yyvsp[(4) - (5)].list), 0), (PGNode*) list_nth((yyvsp[(4) - (5)].list), 1), (PGNode*) list_nth((yyvsp[(4) - (5)].list), 2),
 										(yyvsp[(1) - (5)].with),
 										yyscanner);
 					(yyval.node) = (yyvsp[(2) - (5)].node);
@@ -25103,22 +25103,22 @@ yyreduce:
 
   case 622:
 #line 643 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.list) = list_make2((yyvsp[(2) - (2)].node), (yyvsp[(1) - (2)].node)); ;}
+    { (yyval.list) = list_make3((yyvsp[(2) - (2)].node), (yyvsp[(1) - (2)].node), NULL); ;}
     break;
 
   case 623:
 #line 644 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.list) = list_make2((yyvsp[(1) - (2)].node), (yyvsp[(2) - (2)].node)); ;}
+    { (yyval.list) = list_make3((yyvsp[(1) - (2)].node), (yyvsp[(2) - (2)].node), (yyvsp[(1) - (2)].node)); ;}
     break;
 
   case 624:
 #line 645 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.list) = list_make2(NULL, (yyvsp[(1) - (1)].node)); ;}
+    { (yyval.list) = list_make3(NULL, (yyvsp[(1) - (1)].node), NULL); ;}
     break;
 
   case 625:
 #line 646 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.list) = list_make2((yyvsp[(1) - (1)].node), NULL); ;}
+    { (yyval.list) = list_make3((yyvsp[(1) - (1)].node), NULL, (yyvsp[(1) - (1)].node)); ;}
     break;
 
   case 626:
@@ -25128,7 +25128,7 @@ yyreduce:
 
   case 627:
 #line 651 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.list) = list_make2(NULL,NULL); ;}
+    { (yyval.list) = list_make3(NULL,NULL,NULL); ;}
     break;
 
   case 628:
@@ -32114,7 +32114,7 @@ static PGNode* makeNamedParamRef(char *name, int location)
 static void
 insertSelectOptions(PGSelectStmt *stmt,
 					PGList *sortClause, PGList *lockingClause,
-					PGNode *limitOffset, PGNode *limitCount,
+					PGNode *limitOffset, PGNode *limitCount, PGNode *isLimitOffsetFirst,
 					PGWithClause *withClause,
 					core_yyscan_t yyscanner)
 {
@@ -32159,6 +32159,9 @@ insertSelectOptions(PGSelectStmt *stmt,
 					 parser_errposition(exprLocation(limitCount))));
 		stmt->limitCount = limitCount;
 	}
+  if (limitOffset == isLimitOffsetFirst) {
+    stmt->offset_first = true;
+  }
 	if (withClause)
 	{
 		if (stmt->withClause)

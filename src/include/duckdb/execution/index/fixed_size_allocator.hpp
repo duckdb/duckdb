@@ -54,8 +54,9 @@ public:
 		D_ASSERT(ptr.GetOffset() < available_segments_per_buffer);
 		D_ASSERT(buffers.find(ptr.GetBufferId()) != buffers.end());
 
-		auto &buffer = buffers.find(ptr.GetBufferId())->second;
-		auto buffer_ptr = buffer->Get(dirty);
+		auto buffer_it = buffers.find(ptr.GetBufferId());
+		D_ASSERT(buffer_it != buffers.end());
+		auto buffer_ptr = buffer_it->second->Get(dirty);
 		return buffer_ptr + ptr.GetOffset() * segment_size + bitmask_offset;
 	}
 

@@ -33,21 +33,6 @@ struct CenturyFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
-struct CurrentDateFun {
-	static constexpr const char *Name = "current_date";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "Returns the current date";
-	static constexpr const char *Example = "current_date()";
-
-	static ScalarFunction GetFunction();
-};
-
-struct TodayFun {
-	using ALIAS = CurrentDateFun;
-
-	static constexpr const char *Name = "today";
-};
-
 struct DateDiffFun {
 	static constexpr const char *Name = "date_diff";
 	static constexpr const char *Parameters = "part,startdate,enddate";
@@ -196,15 +181,6 @@ struct EpochNsFun {
 	static constexpr const char *Example = "epoch_ns(timestamp '2021-08-03 11:59:44.123456')";
 
 	static ScalarFunctionSet GetFunctions();
-};
-
-struct CurrentTimeFun {
-	static constexpr const char *Name = "get_current_time";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "Returns the current time";
-	static constexpr const char *Example = "get_current_time()";
-
-	static ScalarFunction GetFunction();
 };
 
 struct EraFun {
