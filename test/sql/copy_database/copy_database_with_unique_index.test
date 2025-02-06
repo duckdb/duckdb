@@ -1,0 +1,62 @@
+# name: test/sql/copy_database/copy_database_with_unique_index.test
+# description: Test the COPY DATABASE statement with unique indexes.
+# group: [copy_database]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+ATTACH '__TEST_DIR__/copy_db_old.db' AS old;
+
+statement ok
+CREATE TABLE old.items (id INT, uniq INT UNIQUE);
+
+statement ok
+INSERT INTO old.items VALUES (1, 1), (2, 2), (3, 3);
+
+statement ok
+CREATE UNIQUE INDEX idx_id ON old.items(id);
+
+statement ok
+ATTACH '__TEST_DIR__/copy_db_new1.db' AS new1;
+
+statement ok
+COPY FROM DATABASE old TO new1 (SCHEMA);
+
+statement ok
+COPY FROM DATABASE old TO new1 (DATA);
+
+query II
+SELECT id, uniq FROM new1.items ORDER BY ALL;
+----
+1	1
+2	2
+3	3
+
+statement error
+INSERT INTO new1.items VALUES (1, 4);
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+statement error
+INSERT INTO new1.items VALUES (4, 1);
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+statement ok
+DETACH new1;
+
+statement ok
+ATTACH '__TEST_DIR__/copy_db_new1.db' AS new1;
+
+statement error
+INSERT INTO new1.items VALUES (1, 4);
+----
+<REGEX>:Constraint Error.*violates unique constraint.*
+
+statement error
+INSERT INTO new1.items VALUES (4, 1);
+----
+<REGEX>:Constraint Error.*violates unique constraint.*

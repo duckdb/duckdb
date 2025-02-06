@@ -69,7 +69,7 @@ select current_setting('max_temp_directory_size')
 
 # When we change the temp_directory to something that doesnt exist
 statement ok
-set temp_directory = '__TEST_DIR__/does_not_exist'
+set temp_directory = '__TEST_DIR__/does_not_exist3'
 
 query I nosort unchanged
 select current_setting('max_temp_directory_size')
@@ -99,7 +99,7 @@ reset max_temp_directory_size;
 
 # When we change the temp_directory to something that doesnt exist
 statement ok
-set temp_directory = '__TEST_DIR__/does_not_exist'
+set temp_directory = '__TEST_DIR__/does_not_exist4'
 
 query I
 select current_setting('max_temp_directory_size')
