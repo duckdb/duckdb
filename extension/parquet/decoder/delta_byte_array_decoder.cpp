@@ -8,16 +8,14 @@ namespace duckdb {
 DeltaByteArrayDecoder::DeltaByteArrayDecoder(ColumnReader &reader) : reader(reader) {
 }
 
-shared_ptr<ResizeableBuffer> DeltaByteArrayDecoder::ReadDbpData(Allocator &allocator, ResizeableBuffer &buffer,
-                                                                idx_t &value_count) {
+void DeltaByteArrayDecoder::ReadDbpData(Allocator &allocator, ResizeableBuffer &buffer, ResizeableBuffer &result_buffer,
+                                        idx_t &value_count) {
 	auto decoder = make_uniq<DbpDecoder>(buffer.ptr, buffer.len);
 	value_count = decoder->TotalValues();
-	auto result = make_shared_ptr<ResizeableBuffer>();
-	result->resize(allocator, sizeof(uint32_t) * value_count);
-	decoder->GetBatch<uint32_t>(result->ptr, value_count);
+	result_buffer.resize(allocator, sizeof(uint32_t) * value_count);
+	decoder->GetBatch<uint32_t>(result_buffer.ptr, value_count);
 	decoder->Finalize();
 	buffer.inc(buffer.len - decoder->BufferPtr().len);
-	return result;
 }
 
 void DeltaByteArrayDecoder::InitializePage() {
@@ -27,8 +25,10 @@ void DeltaByteArrayDecoder::InitializePage() {
 	auto &block = *reader.block;
 	auto &allocator = reader.reader.allocator;
 	idx_t prefix_count, suffix_count;
-	auto prefix_buffer = ReadDbpData(allocator, block, prefix_count);
-	auto suffix_buffer = ReadDbpData(allocator, block, suffix_count);
+	auto &prefix_buffer = reader.encoding_buffers[0];
+	auto &suffix_buffer = reader.encoding_buffers[1];
+	ReadDbpData(allocator, block, prefix_buffer, prefix_count);
+	ReadDbpData(allocator, block, suffix_buffer, suffix_count);
 	if (prefix_count != suffix_count) {
 		throw std::runtime_error("DELTA_BYTE_ARRAY - prefix and suffix counts are different - corrupt file?");
 	}
@@ -37,8 +37,8 @@ void DeltaByteArrayDecoder::InitializePage() {
 		byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, nullptr);
 		return;
 	}
-	auto prefix_data = reinterpret_cast<uint32_t *>(prefix_buffer->ptr);
-	auto suffix_data = reinterpret_cast<uint32_t *>(suffix_buffer->ptr);
+	auto prefix_data = reinterpret_cast<uint32_t *>(prefix_buffer.ptr);
+	auto suffix_data = reinterpret_cast<uint32_t *>(suffix_buffer.ptr);
 	byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, prefix_count);
 	byte_array_count = prefix_count;
 	delta_offset = 0;

@@ -26,7 +26,7 @@ public:
 
 private:
 	ColumnReader &reader;
-	shared_ptr<ResizeableBuffer> length_buffer;
+	ResizeableBuffer &length_buffer;
 	idx_t byte_array_count = 0;
 	idx_t length_idx;
 };

@@ -6,7 +6,8 @@
 
 namespace duckdb {
 
-DeltaLengthByteArrayDecoder::DeltaLengthByteArrayDecoder(ColumnReader &reader) : reader(reader) {
+DeltaLengthByteArrayDecoder::DeltaLengthByteArrayDecoder(ColumnReader &reader)
+    : reader(reader), length_buffer(reader.encoding_buffers[0]) {
 }
 
 void DeltaLengthByteArrayDecoder::InitializePage() {
@@ -16,16 +17,13 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 	// read the binary packed lengths
 	auto &block = *reader.block;
 	auto &allocator = reader.reader.allocator;
-	length_buffer = DeltaByteArrayDecoder::ReadDbpData(allocator, block, byte_array_count);
+	DeltaByteArrayDecoder::ReadDbpData(allocator, block, length_buffer, byte_array_count);
 	length_idx = 0;
 }
 
 void DeltaLengthByteArrayDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
-	if (!length_buffer) {
-		throw std::runtime_error("Internal error - DeltaLengthByteArrayDecoder called but there was no length buffer");
-	}
 	auto &block = *reader.block;
-	auto length_data = reinterpret_cast<uint32_t *>(length_buffer->ptr);
+	auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {

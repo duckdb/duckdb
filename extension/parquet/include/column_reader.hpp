@@ -203,6 +203,9 @@ private:
 	DeltaByteArrayDecoder delta_byte_array_decoder;
 	ByteStreamSplitDecoder byte_stream_split_decoder;
 
+	//! Resizeable buffers used for the various encodings above
+	ResizeableBuffer encoding_buffers[2];
+
 	// dummies for Skip()
 	parquet_filter_t none_filter;
 	ResizeableBuffer dummy_define;

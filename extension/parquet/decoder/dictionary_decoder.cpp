@@ -5,8 +5,8 @@
 namespace duckdb {
 
 DictionaryDecoder::DictionaryDecoder(ColumnReader &reader)
-    : reader(reader), valid_sel(STANDARD_VECTOR_SIZE), dictionary_selection_vector(STANDARD_VECTOR_SIZE),
-      dictionary_size(0) {
+    : reader(reader), offset_buffer(reader.encoding_buffers[0]), valid_sel(STANDARD_VECTOR_SIZE),
+      dictionary_selection_vector(STANDARD_VECTOR_SIZE), dictionary_size(0) {
 }
 
 void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size) {

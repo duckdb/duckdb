@@ -29,7 +29,7 @@ private:
 
 private:
 	ColumnReader &reader;
-	ResizeableBuffer offset_buffer;
+	ResizeableBuffer &offset_buffer;
 	unique_ptr<RleBpDecoder> dict_decoder;
 	SelectionVector valid_sel;
 	SelectionVector dictionary_selection_vector;
