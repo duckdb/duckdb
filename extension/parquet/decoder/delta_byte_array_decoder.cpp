@@ -8,7 +8,8 @@ namespace duckdb {
 DeltaByteArrayDecoder::DeltaByteArrayDecoder(ColumnReader &reader) : reader(reader) {
 }
 
-static shared_ptr<ResizeableBuffer> ReadDbpData(Allocator &allocator, ResizeableBuffer &buffer, idx_t &value_count) {
+shared_ptr<ResizeableBuffer> DeltaByteArrayDecoder::ReadDbpData(Allocator &allocator, ResizeableBuffer &buffer,
+                                                                idx_t &value_count) {
 	auto decoder = make_uniq<DbpDecoder>(buffer.ptr, buffer.len);
 	value_count = decoder->TotalValues();
 	auto result = make_shared_ptr<ResizeableBuffer>();
@@ -19,36 +20,7 @@ static shared_ptr<ResizeableBuffer> ReadDbpData(Allocator &allocator, Resizeable
 	return result;
 }
 
-void DeltaByteArrayDecoder::InitializeDeltaLengthByteArray() {
-	if (reader.type.InternalType() != PhysicalType::VARCHAR) {
-		throw std::runtime_error("Delta Length Byte Array encoding is only supported for string/blob data");
-	}
-	auto &block = *reader.block;
-	auto &allocator = reader.reader.allocator;
-	idx_t value_count;
-	auto length_buffer = ReadDbpData(allocator, block, value_count);
-	if (value_count == 0) {
-		// no values
-		byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, nullptr);
-		return;
-	}
-	auto length_data = reinterpret_cast<uint32_t *>(length_buffer->ptr);
-	byte_array_data = make_uniq<Vector>(LogicalType::VARCHAR, value_count);
-	byte_array_count = value_count;
-	delta_offset = 0;
-	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
-	for (idx_t i = 0; i < value_count; i++) {
-		auto str_len = length_data[i];
-		block.available(str_len);
-		string_data[i] = StringVector::EmptyString(*byte_array_data, str_len);
-		auto result_data = string_data[i].GetDataWriteable();
-		memcpy(result_data, block.ptr, length_data[i]);
-		block.inc(length_data[i]);
-		string_data[i].Finalize();
-	}
-}
-
-void DeltaByteArrayDecoder::InitializeDeltaByteArray() {
+void DeltaByteArrayDecoder::InitializePage() {
 	if (reader.type.InternalType() != PhysicalType::VARCHAR) {
 		throw std::runtime_error("Delta Byte Array encoding is only supported for string/blob data");
 	}
