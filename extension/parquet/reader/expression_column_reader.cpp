@@ -1,4 +1,5 @@
 #include "reader/expression_column_reader.hpp"
+#include "parquet_reader.hpp"
 
 namespace duckdb {
 
