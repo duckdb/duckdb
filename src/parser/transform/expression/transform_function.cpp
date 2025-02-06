@@ -365,6 +365,13 @@ unique_ptr<ParsedExpression> Transformer::TransformFuncCall(duckdb_libpgquery::P
 		expr->case_checks.push_back(std::move(check));
 		expr->else_expr = std::move(children[2]);
 		return std::move(expr);
+	} else if (lowercase_name == "*") {
+		if (children.size() != 1) {
+			throw ParserException("Wrong number of arguments to the UNPACK operator (shorthand '*')");
+		}
+		auto expr = make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK);
+		expr->children = std::move(children);
+		return std::move(expr);
 	} else if (lowercase_name == "construct_array") {
 		auto construct_array = make_uniq<OperatorExpression>(ExpressionType::ARRAY_CONSTRUCTOR);
 		construct_array->children = std::move(children);

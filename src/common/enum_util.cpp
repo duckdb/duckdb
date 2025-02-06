@@ -1407,6 +1407,7 @@ const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {
 		{ static_cast<uint32_t>(ExpressionType::OPERATOR_NOT), "OPERATOR_NOT" },
 		{ static_cast<uint32_t>(ExpressionType::OPERATOR_IS_NULL), "OPERATOR_IS_NULL" },
 		{ static_cast<uint32_t>(ExpressionType::OPERATOR_IS_NOT_NULL), "OPERATOR_IS_NOT_NULL" },
+		{ static_cast<uint32_t>(ExpressionType::OPERATOR_UNPACK), "OPERATOR_UNPACK" },
 		{ static_cast<uint32_t>(ExpressionType::COMPARE_EQUAL), "COMPARE_EQUAL" },
 		{ static_cast<uint32_t>(ExpressionType::COMPARE_NOTEQUAL), "COMPARE_NOTEQUAL" },
 		{ static_cast<uint32_t>(ExpressionType::COMPARE_LESSTHAN), "COMPARE_LESSTHAN" },
@@ -1477,12 +1478,12 @@ const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value) {
-	return StringUtil::EnumToString(GetExpressionTypeValues(), 69, "ExpressionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExpressionTypeValues(), 70, "ExpressionType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
-	return static_cast<ExpressionType>(StringUtil::StringToEnum(GetExpressionTypeValues(), 69, "ExpressionType", value));
+	return static_cast<ExpressionType>(StringUtil::StringToEnum(GetExpressionTypeValues(), 70, "ExpressionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExtensionABITypeValues() {

@@ -61,6 +61,9 @@ public:
 			child_list += ")";
 			return "(" + in_child + op_type + child_list + ")";
 		}
+		case ExpressionType::OPERATOR_UNPACK: {
+			return StringUtil::Format("*(%s)", entry.children[0]->ToString());
+		}
 		case ExpressionType::OPERATOR_NOT: {
 			string result = "(";
 			result += ExpressionTypeToString(entry.GetExpressionType());

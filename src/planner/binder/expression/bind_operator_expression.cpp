@@ -104,6 +104,8 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	// all children bound successfully
 	string function_name;
 	switch (op.GetExpressionType()) {
+	case ExpressionType::OPERATOR_UNPACK:
+		return BindResult("UNPACK not allowed here, should have been resolved earlier");
 	case ExpressionType::ARRAY_EXTRACT: {
 		D_ASSERT(op.children[0]->GetExpressionClass() == ExpressionClass::BOUND_EXPRESSION);
 		auto &b_exp = BoundExpression::GetExpression(*op.children[0]);

@@ -23,6 +23,9 @@ string GetColumnsStringValue(ParsedExpression &expr) {
 bool Binder::FindStarExpression(unique_ptr<ParsedExpression> &expr, StarExpression **star, bool is_root,
                                 bool in_columns) {
 	bool has_star = false;
+	if (expr->GetExpressionType() == ExpressionType::OPERATOR_UNPACK) {
+		return true;
+	}
 	if (expr->GetExpressionClass() == ExpressionClass::STAR) {
 		auto &current_star = expr->Cast<StarExpression>();
 		if (StarExpression::IsStar(*expr)) {
