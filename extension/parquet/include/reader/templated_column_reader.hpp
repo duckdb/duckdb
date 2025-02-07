@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// templated__column_reader.hpp
+// reader/templated_column_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -58,10 +58,13 @@ public:
 		}
 	}
 
-	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t *filter,
-	           idx_t result_offset, Vector &result) override {
-		PlainTemplated<VALUE_TYPE, VALUE_CONVERSION>(std::move(plain_data), defines, num_values, filter, result_offset,
-		                                             result);
+	void Plain(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values, idx_t result_offset,
+	           Vector &result) override {
+		PlainTemplated<VALUE_TYPE, VALUE_CONVERSION>(plain_data, defines, num_values, result_offset, result);
+	}
+
+	void PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) override {
+		PlainSkipTemplated<VALUE_CONVERSION>(plain_data, defines, num_values);
 	}
 };
 

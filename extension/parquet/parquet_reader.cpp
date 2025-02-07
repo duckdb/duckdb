@@ -1,22 +1,22 @@
 #include "parquet_reader.hpp"
 
-#include "boolean_column_reader.hpp"
-#include "callback_column_reader.hpp"
-#include "cast_column_reader.hpp"
+#include "reader/boolean_column_reader.hpp"
+#include "reader/callback_column_reader.hpp"
+#include "reader/cast_column_reader.hpp"
 #include "column_reader.hpp"
 #include "duckdb.hpp"
-#include "expression_column_reader.hpp"
+#include "reader/expression_column_reader.hpp"
 #include "geo_parquet.hpp"
-#include "list_column_reader.hpp"
+#include "reader/list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_timestamp.hpp"
 #include "mbedtls_wrapper.hpp"
-#include "row_number_column_reader.hpp"
-#include "string_column_reader.hpp"
-#include "struct_column_reader.hpp"
-#include "templated_column_reader.hpp"
+#include "reader/row_number_column_reader.hpp"
+#include "reader/string_column_reader.hpp"
+#include "reader/struct_column_reader.hpp"
+#include "reader/templated_column_reader.hpp"
 #include "thrift_tools.hpp"
 #include "duckdb/main/config.hpp"
 
@@ -1213,7 +1213,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 				auto &result_vector = result.data[result_idx];
 				auto &child_reader = root_reader.GetChildReader(file_col_idx);
-				child_reader.Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
+				child_reader.Read(result.size(), define_ptr, repeat_ptr, result_vector);
 				need_to_read[id] = false;
 
 				ApplyFilter(result_vector, *filter_col.second, filter_mask, this_output_chunk_rows);
@@ -1232,7 +1232,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			}
 			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
-			child_reader.Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
+			child_reader.Read(result.size(), define_ptr, repeat_ptr, result_vector);
 		}
 
 		idx_t sel_size = 0;
@@ -1248,7 +1248,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			auto file_col_idx = reader_data.column_ids[col_idx];
 			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
-			auto rows_read = child_reader.Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
+			auto rows_read = child_reader.Read(result.size(), define_ptr, repeat_ptr, result_vector);
 			if (rows_read != result.size()) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",
 				                            file_col_idx, result.size(), rows_read);

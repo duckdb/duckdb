@@ -10,12 +10,16 @@
 
 #include "duckdb.hpp"
 #include "parquet_bss_decoder.hpp"
-#include "parquet_dbp_decoder.hpp"
-#include "parquet_rle_bp_decoder.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
 #include "thrift_tools.hpp"
+#include "decoder/byte_stream_split_decoder.hpp"
+#include "decoder/delta_binary_packed_decoder.hpp"
+#include "decoder/dictionary_decoder.hpp"
+#include "decoder/rle_decoder.hpp"
+#include "decoder/delta_length_byte_array_decoder.hpp"
+#include "decoder/delta_byte_array_decoder.hpp"
 #ifndef DUCKDB_AMALGAMATION
 
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -38,7 +42,25 @@ using duckdb_parquet::Type;
 
 typedef std::bitset<STANDARD_VECTOR_SIZE> parquet_filter_t;
 
+enum class ColumnEncoding {
+	INVALID,
+	DICTIONARY,
+	DELTA_BINARY_PACKED,
+	RLE,
+	DELTA_LENGTH_BYTE_ARRAY,
+	DELTA_BYTE_ARRAY,
+	BYTE_STREAM_SPLIT,
+	PLAIN
+};
+
 class ColumnReader {
+	friend class ByteStreamSplitDecoder;
+	friend class DeltaBinaryPackedDecoder;
+	friend class DeltaByteArrayDecoder;
+	friend class DeltaLengthByteArrayDecoder;
+	friend class DictionaryDecoder;
+	friend class RLEDecoder;
+
 public:
 	ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
 	             idx_t max_define_p, idx_t max_repeat_p);
@@ -49,8 +71,7 @@ public:
 	                                             const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define,
 	                                             idx_t max_repeat);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
-	virtual idx_t Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
-	                   Vector &result_out);
+	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
 
 	virtual void Skip(idx_t num_values);
 
@@ -74,45 +95,82 @@ public:
 	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
 
 	template <class VALUE_TYPE, class CONVERSION>
-	void PlainTemplated(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values,
-	                    parquet_filter_t *filter, idx_t result_offset, Vector &result) {
+	void PlainTemplated(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values, idx_t result_offset,
+	                    Vector &result) {
 		if (HasDefines()) {
-			if (CONVERSION::PlainAvailable(*plain_data, num_values)) {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, true>(*plain_data, defines, num_values, filter,
+			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, true>(plain_data, defines, num_values,
 				                                                           result_offset, result);
 			} else {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, false>(*plain_data, defines, num_values, filter,
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, false>(plain_data, defines, num_values,
 				                                                            result_offset, result);
 			}
 		} else {
-			if (CONVERSION::PlainAvailable(*plain_data, num_values)) {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, true>(*plain_data, defines, num_values, filter,
+			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, true>(plain_data, defines, num_values,
 				                                                            result_offset, result);
 			} else {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, false>(*plain_data, defines, num_values, filter,
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, false>(plain_data, defines, num_values,
 				                                                             result_offset, result);
 			}
 		}
 	}
 
+	template <class CONVERSION>
+	void PlainSkipTemplated(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values) {
+		if (HasDefines()) {
+			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
+				PlainSkipTemplatedInternal<CONVERSION, true, true>(plain_data, defines, num_values);
+			} else {
+				PlainSkipTemplatedInternal<CONVERSION, true, false>(plain_data, defines, num_values);
+			}
+		} else {
+			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
+				PlainSkipTemplatedInternal<CONVERSION, false, true>(plain_data, defines, num_values);
+			} else {
+				PlainSkipTemplatedInternal<CONVERSION, false, false>(plain_data, defines, num_values);
+			}
+		}
+	}
+
+	idx_t GetValidCount(uint8_t *defines, idx_t count, idx_t offset = 0) {
+		if (!defines) {
+			return count;
+		}
+		idx_t valid_count = 0;
+		for (idx_t i = offset; i < offset + count; i++) {
+			valid_count += defines[i] == max_define;
+		}
+		return valid_count;
+	}
+
 private:
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
 	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
-	                            const parquet_filter_t *filter, const idx_t result_offset, Vector &result) {
+	                            const idx_t result_offset, Vector &result) {
 		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
 		auto &result_mask = FlatVector::Validity(result);
 		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
 			if (HAS_DEFINES && defines && defines[row_idx] != max_define) {
 				result_mask.SetInvalid(row_idx);
-			} else if (!filter || filter->test(row_idx)) {
-				result_ptr[row_idx] =
-				    UNSAFE ? CONVERSION::UnsafePlainRead(plain_data, *this) : CONVERSION::PlainRead(plain_data, *this);
-			} else { // there is still some data there that we have to skip over
-				if (UNSAFE) {
-					CONVERSION::UnsafePlainSkip(plain_data, *this);
-				} else {
-					CONVERSION::PlainSkip(plain_data, *this);
-				}
+				continue;
+			}
+			result_ptr[row_idx] =
+			    UNSAFE ? CONVERSION::UnsafePlainRead(plain_data, *this) : CONVERSION::PlainRead(plain_data, *this);
+		}
+	}
+
+	template <class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
+	void PlainSkipTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines,
+	                                const uint64_t num_values) {
+		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
+			if (HAS_DEFINES && defines && defines[row_idx] != max_define) {
+				continue;
+			}
+			if (UNSAFE) {
+				CONVERSION::UnsafePlainSkip(plain_data, *this);
+			} else {
+				CONVERSION::PlainSkip(plain_data, *this);
 			}
 		}
 	}
@@ -120,18 +178,13 @@ private:
 protected:
 	Allocator &GetAllocator();
 	// readers that use the default Read() need to implement those
-	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t *filter,
+	virtual void PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values);
+	virtual void Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, idx_t result_offset, Vector &result);
+	virtual void Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values,
 	                   idx_t result_offset, Vector &result);
-	// these are nops for most types, but not for strings
-	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result);
-
-	virtual void PrepareDeltaLengthByteArray(ResizeableBuffer &buffer);
-	virtual void PrepareDeltaByteArray(ResizeableBuffer &buffer);
-	virtual void DeltaByteArray(uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
-	                            Vector &result);
 
 	// applies any skips that were registered using Skip()
-	virtual void ApplyPendingSkips(idx_t num_values);
+	virtual void ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out);
 
 	bool HasDefines() const {
 		return max_define > 0;
@@ -151,8 +204,6 @@ protected:
 
 	ParquetReader &reader;
 	LogicalType type;
-	unique_ptr<Vector> byte_array_data;
-	idx_t byte_array_count = 0;
 
 	idx_t pending_skips = 0;
 
@@ -161,14 +212,12 @@ protected:
 private:
 	void AllocateBlock(idx_t size);
 	void AllocateCompressed(idx_t size);
-	void PrepareRead(parquet_filter_t &filter);
+	void PrepareRead();
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
-	void ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now,
-	                         idx_t result_offset);
 	const ColumnChunk *chunk = nullptr;
 
 	TProtocol *protocol;
@@ -179,24 +228,19 @@ private:
 	shared_ptr<ResizeableBuffer> block;
 
 	ResizeableBuffer compressed_buffer;
-	ResizeableBuffer offset_buffer;
 
-	unique_ptr<RleBpDecoder> dict_decoder;
+	ColumnEncoding encoding = ColumnEncoding::INVALID;
 	unique_ptr<RleBpDecoder> defined_decoder;
 	unique_ptr<RleBpDecoder> repeated_decoder;
-	unique_ptr<DbpDecoder> dbp_decoder;
-	unique_ptr<RleBpDecoder> rle_decoder;
-	unique_ptr<BssDecoder> bss_decoder;
+	DictionaryDecoder dictionary_decoder;
+	DeltaBinaryPackedDecoder delta_binary_packed_decoder;
+	RLEDecoder rle_decoder;
+	DeltaLengthByteArrayDecoder delta_length_byte_array_decoder;
+	DeltaByteArrayDecoder delta_byte_array_decoder;
+	ByteStreamSplitDecoder byte_stream_split_decoder;
 
-	// dummies for Skip()
-	parquet_filter_t none_filter;
-	ResizeableBuffer dummy_define;
-	ResizeableBuffer dummy_repeat;
-
-	SelectionVector dictionary_selection_vector;
-	idx_t dictionary_size;
-	unique_ptr<Vector> dictionary;
-	string dictionary_id;
+	//! Resizeable buffers used for the various encodings above
+	ResizeableBuffer encoding_buffers[2];
 
 public:
 	template <class TARGET>

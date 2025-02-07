@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// boolean_column_reader.hpp
+// reader/boolean_column_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,7 +9,7 @@
 #pragma once
 
 #include "column_reader.hpp"
-#include "templated_column_reader.hpp"
+#include "reader/templated_column_reader.hpp"
 
 namespace duckdb {
 
