@@ -109,7 +109,8 @@ ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const Sche
                            idx_t max_define_p, idx_t max_repeat_p)
     : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
       type(std::move(type_p)), page_rows_available(0), dictionary_decoder(*this), delta_binary_packed_decoder(*this),
-      rle_decoder(*this), delta_byte_array_decoder(*this), byte_stream_split_decoder(*this) {
+      rle_decoder(*this), delta_length_byte_array_decoder(*this), delta_byte_array_decoder(*this),
+      byte_stream_split_decoder(*this) {
 
 	// dummies for Skip()
 	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
@@ -450,12 +451,12 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 	case Encoding::DELTA_LENGTH_BYTE_ARRAY: {
 		encoding = ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY;
-		delta_byte_array_decoder.InitializeDeltaLengthByteArray();
+		delta_length_byte_array_decoder.InitializePage();
 		break;
 	}
 	case Encoding::DELTA_BYTE_ARRAY: {
 		encoding = ColumnEncoding::DELTA_BYTE_ARRAY;
-		delta_byte_array_decoder.InitializeDeltaByteArray();
+		delta_byte_array_decoder.InitializePage();
 		break;
 	}
 	case Encoding::BYTE_STREAM_SPLIT: {
@@ -520,9 +521,9 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 			delta_binary_packed_decoder.Read(define_ptr, read_now, result, result_offset);
 		} else if (encoding == ColumnEncoding::RLE) {
 			rle_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY ||
-		           encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
-			// DELTA_BYTE_ARRAY or DELTA_LENGTH_BYTE_ARRAY
+		} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY) {
+			delta_length_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
+		} else if (encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
 			delta_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
 		} else if (encoding == ColumnEncoding::BYTE_STREAM_SPLIT) {
 			byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);

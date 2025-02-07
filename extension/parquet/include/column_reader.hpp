@@ -18,6 +18,7 @@
 #include "decoder/delta_binary_packed_decoder.hpp"
 #include "decoder/dictionary_decoder.hpp"
 #include "decoder/rle_decoder.hpp"
+#include "decoder/delta_length_byte_array_decoder.hpp"
 #include "decoder/delta_byte_array_decoder.hpp"
 #ifndef DUCKDB_AMALGAMATION
 
@@ -56,6 +57,7 @@ class ColumnReader {
 	friend class ByteStreamSplitDecoder;
 	friend class DeltaBinaryPackedDecoder;
 	friend class DeltaByteArrayDecoder;
+	friend class DeltaLengthByteArrayDecoder;
 	friend class DictionaryDecoder;
 	friend class RLEDecoder;
 
@@ -197,6 +199,7 @@ private:
 	DictionaryDecoder dictionary_decoder;
 	DeltaBinaryPackedDecoder delta_binary_packed_decoder;
 	RLEDecoder rle_decoder;
+	DeltaLengthByteArrayDecoder delta_length_byte_array_decoder;
 	DeltaByteArrayDecoder delta_byte_array_decoder;
 	ByteStreamSplitDecoder byte_stream_split_decoder;
 
