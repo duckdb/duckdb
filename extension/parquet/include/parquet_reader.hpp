@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
@@ -17,16 +16,13 @@
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/table_filter.hpp"
-#endif
+#include "duckdb/storage/table/scan_filter.hpp"
 #include "column_reader.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
+#include "duckdb/execution/adaptive_filter.hpp"
 
 #include <exception>
 
@@ -117,6 +113,14 @@ struct ParquetUnionData {
 	}
 };
 
+struct ParquetScanFilter {
+	ParquetScanFilter(idx_t filter_idx, TableFilter &filter) :
+		filter_idx(filter_idx), filter(filter) {}
+
+	idx_t filter_idx;
+	TableFilter &filter;
+};
+
 class ParquetReader {
 public:
 	using UNION_READER_DATA = unique_ptr<ParquetUnionData>;
@@ -140,6 +144,11 @@ public:
 	vector<duckdb_parquet::SchemaElement> generated_column_schema;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
+	//! Adaptive filter
+	unique_ptr<AdaptiveFilter> adaptive_filter;
+	//! Table filter list
+	vector<ParquetScanFilter> scan_filters;
+
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
