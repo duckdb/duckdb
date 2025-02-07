@@ -302,6 +302,7 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deseriali
 	auto replace_list = deserializer.ReadPropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list");
 	auto columns = deserializer.ReadPropertyWithDefault<bool>(203, "columns");
 	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr");
+	auto unpacked = deserializer.ReadPropertyWithExplicitDefault<bool>(205, "unpacked", false);
 	auto qualified_exclude_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_set_t>(206, "qualified_exclude_list", qualified_column_set_t());
 	auto result = duckdb::unique_ptr<StarExpression>(new StarExpression(exclude_list, qualified_exclude_list));
 	result->relation_name = std::move(relation_name);
@@ -309,6 +310,13 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deseriali
 	result->columns = columns;
 	result->expr = std::move(expr);
 	deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<string>>(207, "rename_list", result->rename_list, qualified_column_map_t<string>());
+	if (unpacked) {
+		//! This was previously a member of StarExpression, but not anymore
+		//! We wrap it into an OPERATOR_UNPACK instead
+		vector<unique_ptr<ParsedExpression>> unpack_children;
+		unpack_children.push_back(std::move(result));
+		return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK, std::move(unpack_children));
+	}
 	return std::move(result);
 }
 

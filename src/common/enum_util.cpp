@@ -117,6 +117,7 @@
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
@@ -3576,6 +3577,26 @@ const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value) {
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value) {
 	return static_cast<SourceResultType>(StringUtil::StringToEnum(GetSourceResultTypeValues(), 3, "SourceResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetStarExpressionTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(StarExpressionType::STAR), "STAR" },
+		{ static_cast<uint32_t>(StarExpressionType::COLUMNS), "COLUMNS" },
+		{ static_cast<uint32_t>(StarExpressionType::UNPACKED), "UNPACKED" },
+		{ static_cast<uint32_t>(StarExpressionType::NONE), "NONE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value) {
+	return StringUtil::EnumToString(GetStarExpressionTypeValues(), 4, "StarExpressionType", static_cast<uint32_t>(value));
+}
+
+template<>
+StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value) {
+	return static_cast<StarExpressionType>(StringUtil::StringToEnum(GetStarExpressionTypeValues(), 4, "StarExpressionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStatementReturnTypeValues() {
