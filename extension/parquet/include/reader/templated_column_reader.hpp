@@ -62,6 +62,10 @@ public:
 	           idx_t result_offset, Vector &result) override {
 		PlainTemplated<VALUE_TYPE, VALUE_CONVERSION>(plain_data, defines, num_values, filter, result_offset, result);
 	}
+
+	void PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) override {
+		PlainSkipTemplated<VALUE_CONVERSION>(plain_data, defines, num_values);
+	}
 };
 
 template <class PARQUET_PHYSICAL_TYPE, class DUCKDB_PHYSICAL_TYPE,

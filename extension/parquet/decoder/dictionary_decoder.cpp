@@ -82,4 +82,13 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 	}
 }
 
+void DictionaryDecoder::Skip(uint8_t *defines, idx_t skip_count) {
+	if (!dictionary || dictionary_size < 0) {
+		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
+	}
+	idx_t valid_count = reader.GetValidCount(defines, skip_count);
+	// skip past the valid offsets
+	dict_decoder->Skip(valid_count);
+}
+
 } // namespace duckdb

@@ -55,6 +55,10 @@ void StringColumnReader::Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t
 	                                                       result);
 }
 
+void StringColumnReader::PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) {
+	PlainSkipTemplated<StringParquetValueConversion>(plain_data, defines, num_values);
+}
+
 string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 	auto &scr = reader.Cast<StringColumnReader>();
 	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;

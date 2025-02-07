@@ -36,7 +36,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, da
 	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
 
 	if (pending_skips > 0) {
-		ApplyPendingSkips(pending_skips);
+		throw InternalException("StructColumnReader cannot have pending skips");
 	}
 
 	optional_idx read_count;

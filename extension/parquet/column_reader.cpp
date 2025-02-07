@@ -111,10 +111,6 @@ ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const Sche
       type(std::move(type_p)), page_rows_available(0), dictionary_decoder(*this), delta_binary_packed_decoder(*this),
       rle_decoder(*this), delta_length_byte_array_decoder(*this), delta_byte_array_decoder(*this),
       byte_stream_split_decoder(*this) {
-
-	// dummies for Skip()
-	dummy_define.resize(reader.allocator, STANDARD_VECTOR_SIZE);
-	dummy_repeat.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 }
 
 ColumnReader::~ColumnReader() {
@@ -198,6 +194,10 @@ unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vect
 	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns);
 }
 
+void ColumnReader::PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) {
+	throw NotImplementedException("PlainSkip not implemented");
+}
+
 void ColumnReader::Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, // NOLINT
                          parquet_filter_t *filter, idx_t result_offset, Vector &result) {
 	throw NotImplementedException("Plain not implemented");
@@ -228,7 +228,7 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 	group_rows_available = chunk->meta_data.num_values;
 }
 
-void ColumnReader::PrepareRead(parquet_filter_t &filter) {
+void ColumnReader::PrepareRead() {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
 	block.reset();
@@ -484,7 +484,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 
 	// Perform any skips that were not applied yet.
 	if (pending_skips > 0) {
-		ApplyPendingSkips(pending_skips);
+		ApplyPendingSkips(pending_skips, define_out, repeat_out);
 	}
 
 	idx_t result_offset = 0;
@@ -493,7 +493,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 
 	while (to_read > 0) {
 		while (page_rows_available == 0) {
-			PrepareRead(filter);
+			PrepareRead();
 		}
 
 		D_ASSERT(block);
@@ -547,28 +547,57 @@ void ColumnReader::Skip(idx_t num_values) {
 	pending_skips += num_values;
 }
 
-void ColumnReader::ApplyPendingSkips(idx_t num_values) {
+void ColumnReader::ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out) {
+	D_ASSERT(num_values >= pending_skips);
 	pending_skips -= num_values;
 
-	dummy_define.zero();
-	dummy_repeat.zero();
+	// we need to reset the location because multiple column readers share the same protocol
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+	trans.SetLocation(chunk_read_offset);
 
-	// TODO this can be optimized, for example we dont actually have to bitunpack offsets
-	Vector base_result(type, nullptr);
+	auto to_skip = num_values;
 
-	idx_t remaining = num_values;
-	idx_t read = 0;
+	while (to_skip > 0) {
+		while (page_rows_available == 0) {
+			PrepareRead();
+		}
 
-	while (remaining) {
-		Vector dummy_result(base_result);
-		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
-		read += Read(to_read, none_filter, dummy_define.ptr, dummy_repeat.ptr, dummy_result);
-		remaining -= to_read;
+		D_ASSERT(block);
+		auto skip_now = MinValue<idx_t>(MinValue<idx_t>(to_skip, page_rows_available), STANDARD_VECTOR_SIZE);
+
+		// we need to read the repeats/defines even when we are skipping
+		if (HasRepeats()) {
+			D_ASSERT(repeated_decoder);
+			repeated_decoder->GetBatch<uint8_t>(repeat_out, skip_now);
+		}
+
+		if (HasDefines()) {
+			D_ASSERT(defined_decoder);
+			defined_decoder->GetBatch<uint8_t>(define_out, skip_now);
+		}
+
+		auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
+		if (encoding == ColumnEncoding::DICTIONARY) {
+			dictionary_decoder.Skip(define_ptr, skip_now);
+		} else if (encoding == ColumnEncoding::DELTA_BINARY_PACKED) {
+			delta_binary_packed_decoder.Skip(define_ptr, skip_now);
+		} else if (encoding == ColumnEncoding::RLE) {
+			rle_decoder.Skip(define_ptr, skip_now);
+		} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY) {
+			delta_length_byte_array_decoder.Skip(define_ptr, skip_now);
+		} else if (encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
+			delta_byte_array_decoder.Skip(define_ptr, skip_now);
+		} else if (encoding == ColumnEncoding::BYTE_STREAM_SPLIT) {
+			byte_stream_split_decoder.Skip(define_ptr, skip_now);
+		} else {
+			PlainSkip(*block, define_out, skip_now);
+		}
+
+		page_rows_available -= skip_now;
+		to_skip -= skip_now;
 	}
-
-	if (read != num_values) {
-		throw std::runtime_error("Row count mismatch when skipping rows");
-	}
+	group_rows_available -= num_values;
+	chunk_read_offset = trans.GetLocation();
 }
 
 //===--------------------------------------------------------------------===//

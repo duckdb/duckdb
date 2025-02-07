@@ -20,19 +20,17 @@ void RLEDecoder::InitializePage() {
 void RLEDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
 	// RLE encoding for boolean
 	D_ASSERT(reader.type.id() == LogicalTypeId::BOOLEAN);
-	idx_t null_count = 0;
-	if (defines) {
-		// we need the null count because the dictionary offsets have no entries for nulls
-		for (idx_t i = result_offset; i < result_offset + read_count; i++) {
-			null_count += (defines[i] != reader.max_define);
-		}
-	}
-	idx_t valid_count = read_count - null_count;
+	idx_t valid_count = reader.GetValidCount(defines, read_count, result_offset);
 	decoded_data_buffer.reset();
 	decoded_data_buffer.resize(reader.reader.allocator, sizeof(bool) * valid_count);
 	rle_decoder->GetBatch<uint8_t>(decoded_data_buffer.ptr, valid_count);
 	reader.PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(decoded_data_buffer, defines, read_count,
 	                                                                   nullptr, result_offset, result);
+}
+
+void RLEDecoder::Skip(uint8_t *defines, idx_t skip_count) {
+	idx_t valid_count = reader.GetValidCount(defines, skip_count);
+	rle_decoder->Skip(valid_count);
 }
 
 } // namespace duckdb

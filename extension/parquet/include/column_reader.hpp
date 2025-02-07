@@ -117,6 +117,34 @@ public:
 		}
 	}
 
+	template <class CONVERSION>
+	void PlainSkipTemplated(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values) {
+		if (HasDefines()) {
+			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
+				PlainSkipTemplatedInternal<CONVERSION, true, true>(plain_data, defines, num_values);
+			} else {
+				PlainSkipTemplatedInternal<CONVERSION, true, false>(plain_data, defines, num_values);
+			}
+		} else {
+			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
+				PlainSkipTemplatedInternal<CONVERSION, false, true>(plain_data, defines, num_values);
+			} else {
+				PlainSkipTemplatedInternal<CONVERSION, false, false>(plain_data, defines, num_values);
+			}
+		}
+	}
+
+	idx_t GetValidCount(uint8_t *defines, idx_t count, idx_t offset = 0) {
+		if (!defines) {
+			return count;
+		}
+		idx_t valid_count = 0;
+		for (idx_t i = offset; i < offset + count; i++) {
+			valid_count += defines[i] == max_define;
+		}
+		return valid_count;
+	}
+
 private:
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
 	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
@@ -139,16 +167,32 @@ private:
 		}
 	}
 
+	template <class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
+	void PlainSkipTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines,
+	                                const uint64_t num_values) {
+		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
+			if (HAS_DEFINES && defines && defines[row_idx] != max_define) {
+				continue;
+			}
+			if (UNSAFE) {
+				CONVERSION::UnsafePlainSkip(plain_data, *this);
+			} else {
+				CONVERSION::PlainSkip(plain_data, *this);
+			}
+		}
+	}
+
 protected:
 	Allocator &GetAllocator();
 	// readers that use the default Read() need to implement those
+	virtual void PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values);
 	virtual void Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t *filter,
 	                   idx_t result_offset, Vector &result);
 	virtual void Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values,
 	                   parquet_filter_t *filter, idx_t result_offset, Vector &result);
 
 	// applies any skips that were registered using Skip()
-	virtual void ApplyPendingSkips(idx_t num_values);
+	virtual void ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out);
 
 	bool HasDefines() const {
 		return max_define > 0;
@@ -176,7 +220,7 @@ protected:
 private:
 	void AllocateBlock(idx_t size);
 	void AllocateCompressed(idx_t size);
-	void PrepareRead(parquet_filter_t &filter);
+	void PrepareRead();
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
@@ -205,11 +249,6 @@ private:
 
 	//! Resizeable buffers used for the various encodings above
 	ResizeableBuffer encoding_buffers[2];
-
-	// dummies for Skip()
-	parquet_filter_t none_filter;
-	ResizeableBuffer dummy_define;
-	ResizeableBuffer dummy_repeat;
 
 public:
 	template <class TARGET>

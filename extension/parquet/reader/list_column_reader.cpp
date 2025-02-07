@@ -3,20 +3,80 @@
 
 namespace duckdb {
 
-//===--------------------------------------------------------------------===//
-// List Column Reader
-//===--------------------------------------------------------------------===//
-idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out,
-                             data_ptr_t repeat_out, Vector &result_out) {
-	idx_t result_offset = 0;
-	auto result_ptr = FlatVector::GetData<list_entry_t>(result_out);
-	auto &result_mask = FlatVector::Validity(result_out);
-
-	if (pending_skips > 0) {
-		ApplyPendingSkips(pending_skips);
+struct ListReaderData {
+	ListReaderData(list_entry_t *result_ptr, ValidityMask &result_mask)
+	    : result_ptr(result_ptr), result_mask(result_mask) {
 	}
 
-	D_ASSERT(ListVector::GetListSize(result_out) == 0);
+	list_entry_t *result_ptr;
+	ValidityMask &result_mask;
+};
+
+struct TemplatedListReader {
+	using DATA = ListReaderData;
+
+	static DATA Initialize(optional_ptr<Vector> result_out) {
+		D_ASSERT(ListVector::GetListSize(*result_out) == 0);
+
+		auto result_ptr = FlatVector::GetData<list_entry_t>(*result_out);
+		auto &result_mask = FlatVector::Validity(*result_out);
+		return ListReaderData(result_ptr, result_mask);
+	}
+
+	static idx_t GetOffset(optional_ptr<Vector> result_out) {
+		return ListVector::GetListSize(*result_out);
+	}
+
+	static void HandleRepeat(DATA &data, idx_t offset) {
+		data.result_ptr[offset].length++;
+	}
+
+	static void HandleListStart(DATA &data, idx_t offset, idx_t offset_in_child, idx_t length) {
+		data.result_ptr[offset].offset = offset_in_child;
+		data.result_ptr[offset].length = length;
+	}
+
+	static void HandleNull(DATA &data, idx_t offset) {
+		data.result_mask.SetInvalid(offset);
+		data.result_ptr[offset].offset = 0;
+		data.result_ptr[offset].length = 0;
+	}
+
+	static void AppendVector(optional_ptr<Vector> result_out, Vector &read_vector, idx_t child_idx) {
+		ListVector::Append(*result_out, read_vector, child_idx);
+	}
+};
+
+struct TemplatedListSkipper {
+	using DATA = bool;
+
+	static DATA Initialize(optional_ptr<Vector>) {
+		return false;
+	}
+
+	static idx_t GetOffset(optional_ptr<Vector>) {
+		return 0;
+	}
+
+	static void HandleRepeat(DATA &, idx_t) {
+	}
+
+	static void HandleListStart(DATA &, idx_t, idx_t, idx_t) {
+	}
+
+	static void HandleNull(DATA &, idx_t) {
+	}
+
+	static void AppendVector(optional_ptr<Vector>, Vector &, idx_t) {
+	}
+};
+
+template <class OP = TemplatedListReader>
+idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out,
+                                     optional_ptr<Vector> result_out) {
+	idx_t result_offset = 0;
+	auto data = OP::Initialize(result_out);
+
 	// if an individual list is longer than STANDARD_VECTOR_SIZE we actually have to loop the child read to fill it
 	bool finished = false;
 	while (!finished) {
@@ -47,7 +107,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data
 			break;
 		}
 		read_vector.Verify(child_actual_num_values);
-		idx_t current_chunk_offset = ListVector::GetListSize(result_out);
+		idx_t current_chunk_offset = OP::GetOffset(result_out);
 
 		// hard-won piece of code this, modify at your own risk
 		// the intuition is that we have to only collapse values into lists that are repeated *on this level*
@@ -57,7 +117,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data
 			if (child_repeats_ptr[child_idx] == max_repeat) {
 				// value repeats on this level, append
 				D_ASSERT(result_offset > 0);
-				result_ptr[result_offset - 1].length++;
+				OP::HandleRepeat(data, result_offset - 1);
 				continue;
 			}
 
@@ -68,17 +128,13 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data
 			}
 			if (child_defines_ptr[child_idx] >= max_define) {
 				// value has been defined down the stack, hence its NOT NULL
-				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
-				result_ptr[result_offset].length = 1;
+				OP::HandleListStart(data, result_offset, child_idx + current_chunk_offset, 1);
 			} else if (child_defines_ptr[child_idx] == max_define - 1) {
 				// empty list
-				result_ptr[result_offset].offset = child_idx + current_chunk_offset;
-				result_ptr[result_offset].length = 0;
+				OP::HandleListStart(data, result_offset, child_idx + current_chunk_offset, 0);
 			} else {
 				// value is NULL somewhere up the stack
-				result_mask.SetInvalid(result_offset);
-				result_ptr[result_offset].offset = 0;
-				result_ptr[result_offset].length = 0;
+				OP::HandleNull(data, result_offset);
 			}
 
 			repeat_out[result_offset] = child_repeats_ptr[child_idx];
@@ -87,7 +143,7 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data
 			result_offset++;
 		}
 		// actually append the required elements to the child list
-		ListVector::Append(result_out, read_vector, child_idx);
+		OP::AppendVector(result_out, read_vector, child_idx);
 
 		// we have read more values from the child reader than we can fit into the result for this read
 		// we have to pass everything from child_idx to child_actual_num_values into the next call
@@ -103,8 +159,15 @@ idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data
 			}
 		}
 	}
-	result_out.Verify(result_offset);
 	return result_offset;
+}
+
+idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out,
+                             data_ptr_t repeat_out, Vector &result_out) {
+	if (pending_skips > 0) {
+		ApplyPendingSkips(pending_skips, define_out, repeat_out);
+	}
+	return ReadInternal(num_values, define_out, repeat_out, result_out);
 }
 
 ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
@@ -122,26 +185,8 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_filter.set();
 }
 
-void ListColumnReader::ApplyPendingSkips(idx_t num_values) {
-	pending_skips -= num_values;
-
-	auto define_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
-	auto repeat_out = unique_ptr<uint8_t[]>(new uint8_t[num_values]);
-
-	idx_t remaining = num_values;
-	idx_t read = 0;
-
-	while (remaining) {
-		Vector result_out(Type());
-		parquet_filter_t filter;
-		idx_t to_read = MinValue<idx_t>(remaining, STANDARD_VECTOR_SIZE);
-		read += Read(to_read, filter, define_out.get(), repeat_out.get(), result_out);
-		remaining -= to_read;
-	}
-
-	if (read != num_values) {
-		throw InternalException("Not all skips done!");
-	}
+void ListColumnReader::ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out) {
+	ReadInternal<TemplatedListSkipper>(num_values, define_out, repeat_out, nullptr);
 }
 
 } // namespace duckdb
