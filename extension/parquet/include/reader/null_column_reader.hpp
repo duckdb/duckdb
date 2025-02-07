@@ -25,7 +25,7 @@ public:
 	shared_ptr<ResizeableBuffer> dict;
 
 public:
-	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t *filter,
+	void Plain(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t *filter,
 	           idx_t result_offset, Vector &result) override {
 		(void)defines;
 		(void)plain_data;

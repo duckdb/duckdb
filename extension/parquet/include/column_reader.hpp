@@ -96,22 +96,22 @@ public:
 	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
 
 	template <class VALUE_TYPE, class CONVERSION>
-	void PlainTemplated(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values,
-	                    parquet_filter_t *filter, idx_t result_offset, Vector &result) {
+	void PlainTemplated(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t *filter,
+	                    idx_t result_offset, Vector &result) {
 		if (HasDefines()) {
-			if (CONVERSION::PlainAvailable(*plain_data, num_values)) {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, true>(*plain_data, defines, num_values, filter,
+			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, true>(plain_data, defines, num_values, filter,
 				                                                           result_offset, result);
 			} else {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, false>(*plain_data, defines, num_values, filter,
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, false>(plain_data, defines, num_values, filter,
 				                                                            result_offset, result);
 			}
 		} else {
-			if (CONVERSION::PlainAvailable(*plain_data, num_values)) {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, true>(*plain_data, defines, num_values, filter,
+			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, true>(plain_data, defines, num_values, filter,
 				                                                            result_offset, result);
 			} else {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, false>(*plain_data, defines, num_values, filter,
+				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, false>(plain_data, defines, num_values, filter,
 				                                                             result_offset, result);
 			}
 		}
@@ -142,10 +142,10 @@ private:
 protected:
 	Allocator &GetAllocator();
 	// readers that use the default Read() need to implement those
-	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t *filter,
+	virtual void Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t *filter,
 	                   idx_t result_offset, Vector &result);
-	// these are nops for most types, but not for strings
-	virtual void PlainReference(shared_ptr<ResizeableBuffer> &, Vector &result);
+	virtual void Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values,
+	                   parquet_filter_t *filter, idx_t result_offset, Vector &result);
 
 	// applies any skips that were registered using Skip()
 	virtual void ApplyPendingSkips(idx_t num_values);
@@ -202,6 +202,9 @@ private:
 	DeltaLengthByteArrayDecoder delta_length_byte_array_decoder;
 	DeltaByteArrayDecoder delta_byte_array_decoder;
 	ByteStreamSplitDecoder byte_stream_split_decoder;
+
+	//! Resizeable buffers used for the various encodings above
+	ResizeableBuffer encoding_buffers[2];
 
 	// dummies for Skip()
 	parquet_filter_t none_filter;

@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-ByteStreamSplitDecoder::ByteStreamSplitDecoder(ColumnReader &reader) : reader(reader) {
+ByteStreamSplitDecoder::ByteStreamSplitDecoder(ColumnReader &reader)
+    : reader(reader), decoded_data_buffer(reader.encoding_buffers[0]) {
 }
 
 void ByteStreamSplitDecoder::InitializePage() {
@@ -26,22 +27,22 @@ void ByteStreamSplitDecoder::Read(uint8_t *defines, idx_t read_count, Vector &re
 	}
 	idx_t valid_count = read_count - null_count;
 
-	auto read_buf = make_shared_ptr<ResizeableBuffer>();
 	auto &allocator = reader.reader.allocator;
+	decoded_data_buffer.reset();
 	switch (reader.schema.type) {
 	case duckdb_parquet::Type::FLOAT:
-		read_buf->resize(allocator, sizeof(float) * valid_count);
-		bss_decoder->GetBatch<float>(read_buf->ptr, valid_count);
+		decoded_data_buffer.resize(allocator, sizeof(float) * valid_count);
+		bss_decoder->GetBatch<float>(decoded_data_buffer.ptr, valid_count);
 		break;
 	case duckdb_parquet::Type::DOUBLE:
-		read_buf->resize(allocator, sizeof(double) * valid_count);
-		bss_decoder->GetBatch<double>(read_buf->ptr, valid_count);
+		decoded_data_buffer.resize(allocator, sizeof(double) * valid_count);
+		bss_decoder->GetBatch<double>(decoded_data_buffer.ptr, valid_count);
 		break;
 	default:
 		throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT or DOUBLE data");
 	}
 
-	reader.Plain(read_buf, defines, read_count, nullptr, result_offset, result);
+	reader.Plain(decoded_data_buffer, defines, read_count, nullptr, result_offset, result);
 }
 
 } // namespace duckdb

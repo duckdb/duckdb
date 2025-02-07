@@ -10,8 +10,7 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 StringColumnReader::StringColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
                                        idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p)
-    : TemplatedColumnReader<string_t, StringParquetValueConversion>(reader, std::move(type_p), schema_p, schema_idx_p,
-                                                                    max_define_p, max_repeat_p) {
+    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {
 	fixed_width_string_length = 0;
 	if (schema_p.type == Type::FIXED_LEN_BYTE_ARRAY) {
 		D_ASSERT(schema_p.__isset.type_length);
@@ -49,8 +48,11 @@ private:
 	shared_ptr<ResizeableBuffer> buffer;
 };
 
-void StringColumnReader::PlainReference(shared_ptr<ResizeableBuffer> &plain_data, Vector &result) {
+void StringColumnReader::Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values,
+                               parquet_filter_t *filter, idx_t result_offset, Vector &result) {
 	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(plain_data));
+	PlainTemplated<string_t, StringParquetValueConversion>(*plain_data, defines, num_values, filter, result_offset,
+	                                                       result);
 }
 
 string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {

@@ -21,7 +21,7 @@ struct StringParquetValueConversion {
 	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader);
 };
 
-class StringColumnReader : public TemplatedColumnReader<string_t, StringParquetValueConversion> {
+class StringColumnReader : public ColumnReader {
 public:
 	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
 
@@ -35,7 +35,12 @@ public:
 	uint32_t VerifyString(const char *str_data, uint32_t str_len);
 
 protected:
-	void PlainReference(shared_ptr<ResizeableBuffer> &plain_data, Vector &result) override;
+	void Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t *filter,
+	           idx_t result_offset, Vector &result) override {
+		throw NotImplementedException("StringColumnReader can only read plain data from a shared buffer");
+	}
+	void Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t *filter,
+	           idx_t result_offset, Vector &result) override;
 };
 
 } // namespace duckdb
