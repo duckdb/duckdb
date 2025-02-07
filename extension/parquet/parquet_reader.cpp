@@ -854,9 +854,6 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 		state.file_handle = fs.OpenFile(file_handle->path, flags);
 	}
-	state.scan_filters.clear();
-	state.adaptive_filter.reset();
-
 	state.thrift_file_proto = CreateThriftFileProtocol(allocator, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
