@@ -1,0 +1,29 @@
+# name: benchmark/tpch/pivot/lineitem_pivot_many_groups_few_pivots.benchmark
+# description: lineitem pivot over l_returnflag grouped by l_orderkey
+# group: [pivot]
+
+name Lineitem Pivot (l_returnflag group by l_orderkey)
+group pivot
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+FROM (PIVOT lineitem ON l_returnflag USING SUM(l_extendedprice) GROUP BY l_orderkey) ORDER BY l_orderkey LIMIT 10
+
+result IIII
+1	NULL	181861.27	NULL
+2	NULL	44694.46	NULL
+3	71243.28	NULL	133841.04
+4	NULL	30690.90	NULL
+5	73426.50	NULL	74402.47
+6	61998.31	NULL	NULL
+7	NULL	262131.32	NULL
+32	NULL	208845.62	NULL
+33	95093.85	NULL	75928.31
+34	NULL	58110.94	NULL

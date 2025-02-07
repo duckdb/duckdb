@@ -1,0 +1,15 @@
+# name: benchmark/micro/index/point/point_query_without_index.benchmark
+# description: Point query without index on randomly ordered data
+# group: [point]
+
+name Point Query (No Index, Random Data)
+group index
+
+load
+CREATE TABLE integers AS SELECT (i * 9876983769044::INT128 % 100000000)::INT64 AS i, i + 2 AS j FROM range(0, 100000000) t(i);
+
+run
+SELECT i FROM integers WHERE i=50000 LIMIT 1
+
+result I
+50000

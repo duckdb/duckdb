@@ -1,0 +1,15 @@
+# name: benchmark/micro/aggregate/simple_distinct.benchmark
+# description: SUM(i) over a bunch of integers
+# group: [aggregate]
+
+name Integer Sum (Ungrouped)
+group aggregate
+
+load
+CREATE TABLE integers AS SELECT i % 5 AS i FROM range(0, 10000000) tbl(i);
+
+run
+SELECT SUM(distinct i), COUNT(distinct i), AVG(distinct i), PRODUCT(distinct i) FROM integers
+
+result IIII
+10	5	2	0

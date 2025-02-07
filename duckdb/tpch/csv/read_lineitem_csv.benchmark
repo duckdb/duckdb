@@ -1,0 +1,27 @@
+# name: benchmark/tpch/csv/read_lineitem_csv.benchmark
+# description: Read the lineitem of TPC-H SF0.1 from a CSV file with an ASCII delimiter
+# group: [csv]
+
+name Read Lineitem CSV (ASCII Delimiter)
+group csv
+
+require tpch
+
+# create the CSV file
+load
+CALL dbgen(sf=0.1, suffix='_normal');
+COPY lineitem_normal TO '${BENCHMARK_DIR}/lineitem.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+CREATE SCHEMA tpch;
+CALL dbgen(sf=0, schema='tpch');
+
+run
+COPY tpch.lineitem FROM '${BENCHMARK_DIR}/lineitem.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+
+# cleanup: delete and re-create the lineitem table
+cleanup
+DROP SCHEMA tpch CASCADE;
+CREATE SCHEMA tpch;
+CALL dbgen(sf=0, schema='tpch');
+
+result I
+600572

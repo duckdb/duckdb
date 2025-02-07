@@ -1,0 +1,39 @@
+# name: benchmark/micro/aggregate/grouped_distinct.benchmark
+# description: SUM(i) over a bunch of integers
+# group: [aggregate]
+
+name Integer Sum (Grouped)
+group aggregate
+
+load
+CREATE TABLE integers AS SELECT i % 5 AS i, i % 25 as j FROM range(0, 10000000) tbl(i);
+
+run
+SELECT SUM(distinct i), COUNT(distinct i), AVG(distinct i), PRODUCT(distinct i) FROM integers group by j order by all
+
+result IIII
+0	1	0.0	0.0
+0	1	0.0	0.0
+0	1	0.0	0.0
+0	1	0.0	0.0
+0	1	0.0	0.0
+1	1	1.0	1.0
+1	1	1.0	1.0
+1	1	1.0	1.0
+1	1	1.0	1.0
+1	1	1.0	1.0
+2	1	2.0	2.0
+2	1	2.0	2.0
+2	1	2.0	2.0
+2	1	2.0	2.0
+2	1	2.0	2.0
+3	1	3.0	3.0
+3	1	3.0	3.0
+3	1	3.0	3.0
+3	1	3.0	3.0
+3	1	3.0	3.0
+4	1	4.0	4.0
+4	1	4.0	4.0
+4	1	4.0	4.0
+4	1	4.0	4.0
+4	1	4.0	4.0

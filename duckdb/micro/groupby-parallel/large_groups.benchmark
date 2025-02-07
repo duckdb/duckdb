@@ -1,0 +1,25 @@
+# name: benchmark/micro/groupby-parallel/large_groups.benchmark
+# description: Aggregation with large group count
+# group: [groupby-parallel]
+
+name Grouped Aggregate (L, 1000000 groups)
+group aggregate
+subgroup parallel
+
+load
+create temporary table d as select mod(range, 1000000) g, 42 p from range(1000000);
+
+run
+select g, count(*), min(p), max(p) c from d group by g order by g limit 10;
+
+result IIII
+0	1	42	42
+1	1	42	42
+2	1	42	42
+3	1	42	42
+4	1	42	42
+5	1	42	42
+6	1	42	42
+7	1	42	42
+8	1	42	42
+9	1	42	42

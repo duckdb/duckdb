@@ -1,0 +1,10 @@
+# name: benchmark/h2oai/group/q06.benchmark
+# description: Run query 06 from the H2OAI benchmark
+# group: [group]
+
+template benchmark/h2oai/group/h2oai.benchmark.in
+QUERY_NUMBER=6
+QUERY_NUMBER_PADDED=06
+RESULT_COLUMNS=IIIII
+RESULT_QUERY=SELECT COUNT(DISTINCT id4), COUNT(DISTINCT id5), SUM(median_v3), SUM(sd_v3), COUNT(*) FROM ans
+RESULT_ANSWER=95	95	460771.2164439997	266006.9046221105	9216

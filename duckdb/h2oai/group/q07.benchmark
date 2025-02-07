@@ -1,0 +1,10 @@
+# name: benchmark/h2oai/group/q07.benchmark
+# description: Run query 07 from the H2OAI benchmark
+# group: [group]
+
+template benchmark/h2oai/group/h2oai.benchmark.in
+QUERY_NUMBER=7
+QUERY_NUMBER_PADDED=07
+RESULT_COLUMNS=III
+RESULT_QUERY=SELECT COUNT(DISTINCT id3), SUM(range_v1_v2), COUNT(*) FROM ans
+RESULT_ANSWER=95000	379850	95001

@@ -1,0 +1,17 @@
+# name: benchmark/micro/list/list_extract_struct_null.benchmark
+# description: Benchmark for the list_extract function
+# group: [list]
+
+name list_extract micro
+group micro
+subgroup list
+
+load
+CREATE TABLE t1 as SELECT list_transform(range(0,1000), x -> if(e % x = 0, null, {'foo': x, 'bar': (-x)::VARCHAR})) as l
+FROM range(0,10000) as r(e);
+
+run
+SELECT sum(list_extract(l, 500).foo) FROM t1;
+
+result I
+4979521

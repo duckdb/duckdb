@@ -1,0 +1,69 @@
+# name: benchmark/tpch/aggregate/lineitem_group.benchmark
+# description: Grouped aggregate over lineitem (grouped by an integer column)
+# group: [aggregate]
+
+name Lineitem Group By Integer
+group aggregate
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT l_quantity, SUM(l_quantity) FROM lineitem GROUP BY l_quantity ORDER BY 1
+
+result II
+1	120401
+2	238920
+3	360141
+4	478484
+5	597545
+6	716592
+7	840798
+8	961224
+9	1084527
+10	1197000
+11	1315072
+12	1438956
+13	1556841
+14	1671880
+15	1804860
+16	1928288
+17	2041462
+18	2149722
+19	2286897
+20	2402280
+21	2518446
+22	2637514
+23	2773639
+24	2879304
+25	3015875
+26	3112252
+27	3240351
+28	3368596
+29	3477303
+30	3590130
+31	3718853
+32	3860160
+33	3964191
+34	4078844
+35	4226355
+36	4333392
+37	4442590
+38	4568398
+39	4674189
+40	4799080
+41	4938327
+42	5055624
+43	5155098
+44	5281056
+45	5383710
+46	5528234
+47	5642350
+48	5769168
+49	5861576
+50	5992300

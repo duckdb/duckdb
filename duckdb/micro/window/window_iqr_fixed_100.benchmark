@@ -1,0 +1,23 @@
+# name: benchmark/micro/window/window_iqr_fixed_100.benchmark
+# description: Moving IQR performance, fixed 100 element window
+# group: [window]
+
+name Windowed IQR, Fixed 100
+group window
+
+load
+create table rank100 as
+    select b % 100 as a, b from range(10000000) tbl(b)
+
+run
+select min(iqr), max(iqr)
+from (
+    select quantile_cont(a, [0.25, 0.5, 0.75]) over (
+        order by b asc
+        rows between 100 preceding and current row) as iqr
+    from rank100
+    ) q;
+
+result II
+[0.000000, 0.000000, 0.000000]	[25.000000, 50.000000, 75.000000]
+

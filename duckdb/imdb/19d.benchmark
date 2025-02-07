@@ -1,0 +1,7 @@
+# name: benchmark/imdb/19d.benchmark
+# description: Run query 19d from the imdb benchmark (single-threaded)
+# group: [imdb]
+
+template benchmark/imdb/imdb.benchmark.in
+QUERY_NUMBER=19d
+QUERY_NUMBER_PADDED=19d

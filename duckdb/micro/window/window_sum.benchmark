@@ -1,0 +1,15 @@
+# name: benchmark/micro/window/window_sum.benchmark
+# description: Window Sum
+# group: [window]
+
+name Window Sum
+group window
+
+load
+CREATE TABLE integers AS SELECT ((i * 9582398353) % 10000)::INTEGER AS i FROM range(0, 100000) tbl(i);
+
+run
+SELECT MIN(i) FROM (SELECT SUM(i) OVER(order by i rows between 1000 preceding and 1000 following) FROM integers) tbl(i)
+
+result I
+49600

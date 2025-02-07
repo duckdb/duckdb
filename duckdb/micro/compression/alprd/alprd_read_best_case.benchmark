@@ -1,0 +1,16 @@
+# name: benchmark/micro/compression/alprd/alprd_read_best_case.benchmark
+# description: ALPRD best case scenario is when all the floats share their front bits
+# group: [alprd]
+
+name Alprd Scan
+group alprd
+storage persistent
+
+load
+DROP TABLE IF EXISTS alprd_random_doubles;
+PRAGMA force_compression='alprd';
+create table alprd_random_doubles as select (random() + 10)::DOUBLE as data from range(200000000) tbl(i);
+checkpoint;
+
+run
+select avg(data) from alprd_random_doubles;

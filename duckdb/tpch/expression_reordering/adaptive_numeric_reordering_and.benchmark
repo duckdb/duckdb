@@ -1,0 +1,16 @@
+# name: benchmark/tpch/expression_reordering/adaptive_numeric_reordering_and.benchmark
+# description: Re-order numeric comparisons adaptively
+# group: [expression_reordering]
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT COUNT(*) FROM lineitem WHERE l_quantity < 11 AND l_shipdate < DATE '1998-09-02' AND l_receiptdate < DATE '1998-09-23' AND l_tax < 0.05;
+
+result I
+656007

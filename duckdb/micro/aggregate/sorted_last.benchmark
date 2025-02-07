@@ -1,0 +1,17 @@
+# name: benchmark/micro/aggregate/sorted_last.benchmark
+# description: LAST with ORDER BY
+# group: [aggregate]
+
+load
+SELECT SETSEED(0.8675309);
+CREATE TABLE df AS
+	SELECT 
+		'2019-01-01 00:00:00'::TIMESTAMP + INTERVAL (FLOOR(RANDOM() * 25000)::INT * 20) MINUTE AS time,
+		RANDOM()::DECIMAL(18, 17) AS value,
+		FLOOR(RANDOM() * 300)::INT AS id
+	FROM range(70000000);
+
+run
+SELECT time::DATE, id, last(value ORDER BY time ASC)
+FROM df
+GROUP BY ALL

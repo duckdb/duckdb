@@ -1,0 +1,13 @@
+# name: benchmark/micro/list/unnest.benchmark
+# description: Large unnest
+# group: [list]
+
+name Unnest
+group micro
+subgroup list
+
+run
+SELECT COUNT(k) FROM (SELECT UNNEST(l) FROM (SELECT LIST(i) l FROM RANGE(1000000) tbl(i)) tbl2(l)) tbl3(k)
+
+result I
+1000000

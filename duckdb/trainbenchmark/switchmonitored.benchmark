@@ -1,0 +1,13 @@
+# name: benchmark/trainbenchmark/switchmonitored.benchmark
+# description: The Train Benchmark's SwitchMonitored query
+# group: [trainbenchmark]
+
+load benchmark/trainbenchmark/load.sql
+
+run
+SELECT Switch.id AS sw
+FROM Switch
+LEFT JOIN monitoredBy ON monitoredBy.TrackElement_id = Switch.id
+WHERE monitoredBy.TrackElement_id IS NULL;
+
+result I

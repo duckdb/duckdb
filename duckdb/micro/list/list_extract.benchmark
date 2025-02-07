@@ -1,0 +1,16 @@
+# name: benchmark/micro/list/list_extract.benchmark
+# description: Benchmark for the list_extract function
+# group: [list]
+
+name list_extract micro
+group micro
+subgroup list
+
+load
+CREATE TABLE t1 as SELECT range(0,1000) as l FROM range(0,10000) as r(e);
+
+run
+SELECT sum(list_extract(l, 500)) FROM t1;
+
+result I
+4990000

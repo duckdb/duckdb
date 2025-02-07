@@ -1,0 +1,7 @@
+# name: benchmark/large/ingestion/tpch/csv/ingest_orders.benchmark
+# description: benchmark ingestion of orders
+# group: [csv]
+
+template benchmark/large/ingestion/tpch/tpch_ingestion_persistent.benchmark.in
+table_name=orders
+format=csv

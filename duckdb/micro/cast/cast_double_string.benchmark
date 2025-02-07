@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_double_string.benchmark
+# description: Cast double values to string
+# group: [cast]
+
+name Cast DOUBLE -> VARCHAR
+group cast
+
+load
+CREATE TABLE doubles AS SELECT (i*0.8)::DOUBLE d FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MIN(CAST(d AS VARCHAR)) FROM doubles
+
+result I
+0.0

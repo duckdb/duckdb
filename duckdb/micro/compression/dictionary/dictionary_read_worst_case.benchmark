@@ -1,0 +1,16 @@
+# name: benchmark/micro/compression/dictionary/dictionary_read_worst_case.benchmark
+# description: Scanning data that is uncompressible with dictionary encoding
+# group: [dictionary]
+
+name Dictionary Compression Scan
+group aggregate
+storage persistent
+
+load
+DROP TABLE IF EXISTS test;
+PRAGMA force_compression='dictionary';
+CREATE TABLE test AS SELECT i::VARCHAR AS i FROM range(0, 200000000) tbl(i);
+checkpoint;
+
+run
+select avg(i::INT) from test;

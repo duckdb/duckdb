@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/string_agg_long.benchmark
+# description: String Agg (Long)
+# group: [string]
+
+name String Agg (Long)
+group string
+
+load benchmark/micro/string/strings_long.sql
+
+run
+SELECT STRLEN(STRING_AGG(s1, ' ')) FROM strings
+
+result I
+154499999

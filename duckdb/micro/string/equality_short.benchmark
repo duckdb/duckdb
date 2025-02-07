@@ -1,0 +1,14 @@
+# name: benchmark/micro/string/equality_short.benchmark
+# description: String Equality
+# group: [string]
+
+name String Equality
+group string
+
+load benchmark/micro/string/strings_small.sql
+
+run
+SELECT MIN(s1 == s2) FROM strings
+
+result I
+false

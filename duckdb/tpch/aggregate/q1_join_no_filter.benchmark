@@ -1,0 +1,40 @@
+# name: benchmark/tpch/aggregate/q1_join_no_filter.benchmark
+# description: Perform TPC-H Q1 including a nop join (FK-PK join)
+# group: [aggregate]
+
+name Q1 + Nop Join (No Filter)
+group aggregate
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT l_returnflag,
+       l_linestatus,
+       sum(l_quantity) AS sum_qty,
+       sum(l_extendedprice) AS sum_base_price,
+       sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+       sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+       avg(l_quantity) AS avg_qty,
+       avg(l_extendedprice) AS avg_price,
+       avg(l_discount) AS avg_disc,
+       count(*) AS count_order
+FROM lineitem,
+     orders
+WHERE l_orderkey=o_orderkey
+GROUP BY l_returnflag,
+         l_linestatus
+ORDER BY l_returnflag,
+         l_linestatus
+
+result IIIIIIIIII
+A	F	37734107	56586554400.73	53758257134.8700	55909065222.827692	25.522005853257337	38273.12973462185	0.049985295838398135	1478493
+N	F	991417	1487504710.38	1413082168.0541	1469649223.194375	25.51647192052298	38284.46776084826	0.050093426674216325	38854
+N	O	76633518	114935210409.19	109189591897.4720	113561024263.013782	25.50201963528761	38248.01560905835	0.050000259567560455	3004998
+R	F	37719753	56568041380.90	53741292684.6040	55889619119.831932	25.50579361269077	38250.85462609964	0.050009405830126356	1478870
+

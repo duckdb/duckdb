@@ -1,0 +1,19 @@
+# name: benchmark/micro/aggregate/simple_group.benchmark
+# description: SUM(i) over integer, grouped by integer
+# group: [aggregate]
+
+name Integer Sum (Grouped)
+group aggregate
+
+load
+CREATE TABLE integers AS SELECT i % 5 AS i, i % 100 AS j FROM range(0, 10000000) tbl(i);
+
+run
+SELECT i, SUM(j) FROM integers GROUP BY i ORDER BY i
+
+result II
+0	95000000
+1	97000000
+2	99000000
+3	101000000
+4	103000000

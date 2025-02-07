@@ -1,0 +1,8 @@
+# name: benchmark/clickbench/q22.benchmark
+# description: Run query 22 from the ClickBench benchmark
+# group: [clickbench]
+
+template benchmark/clickbench/clickbench-noresult.benchmark.in
+QUERY_NUMBER=22
+QUERY_NUMBER_PADDED=22
+RESULT_QUERY=SELECT * FROM __answer ORDER BY c DESC, SearchPhrase LIMIT 5

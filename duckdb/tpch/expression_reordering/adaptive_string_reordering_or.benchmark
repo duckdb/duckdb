@@ -1,0 +1,16 @@
+# name: benchmark/tpch/expression_reordering/adaptive_string_reordering_or.benchmark
+# description: Re-order string comparisons adaptively
+# group: [expression_reordering]
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT COUNT(*) FROM lineitem WHERE l_comment LIKE '%_%' OR l_comment LIKE '%s%' OR l_comment LIKE '%str%';
+
+result I
+6001215

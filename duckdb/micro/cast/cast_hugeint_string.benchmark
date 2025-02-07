@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_hugeint_string.benchmark
+# description: Cast small HUGEINT values to string
+# group: [cast]
+
+name Cast HUGEINT -> VARCHAR
+group cast
+
+load
+CREATE TABLE integers AS SELECT i::HUGEINT AS i FROM range(0, 10000000, 1) tbl(i);
+
+run
+SELECT MAX(CAST(i AS VARCHAR)) FROM integers
+
+result I
+9999999

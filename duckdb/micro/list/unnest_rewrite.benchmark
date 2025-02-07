@@ -1,0 +1,27 @@
+# name: benchmark/micro/list/unnest_rewrite.benchmark
+# description: Benchmarking rewritten nested UNNESTs
+# group: [list]
+
+name Unnest Rewriter
+group micro
+subgroup list
+
+run
+with stage1 as (
+  SELECT r, md5(r::VARCHAR) as h, gen_random_uuid() as id
+  FROM (SELECT UNNEST(GENERATE_SERIES(1,100,1)) r ))
+, stage2 as (
+  SELECT a.*, list({r:b.r, h:b.h, id: gen_random_uuid()}) as sub
+  FROM stage1 as a, stage1 as b
+  GROUP BY ALL)
+, stage3 as (
+  SELECT a.r, a.h, list({r:b.r, h:b.h, sub:b.sub, id: gen_random_uuid()}) as sub
+  FROM stage1 as a, stage2 as b
+  GROUP BY ALL)
+SELECT count(*) as r
+FROM stage3,
+  (SELECT UNNEST(stage3.sub) sub) as s1(sub),
+  (SELECT UNNEST(s1.sub.sub) sub) as s2(sub);
+
+result I
+1000000

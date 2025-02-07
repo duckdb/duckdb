@@ -1,0 +1,22 @@
+# name: benchmark/tpch/pivot/lineitem_pivot_shipdate.benchmark
+# description: lineitem pivot over l_shipdate
+# group: [pivot]
+
+name Lineitem Pivot (l_shipdate)
+group pivot
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT l_returnflag, "1992-01-02", "1992-01-03", "1992-01-04" FROM (PIVOT lineitem ON l_shipdate USING SUM(l_extendedprice) GROUP BY l_returnflag) ORDER BY l_returnflag
+
+result IIII
+A	98400.35	628803.06	908754.78
+N	NULL	NULL	NULL
+R	496508.01	941612.09	759225.87

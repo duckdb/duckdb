@@ -1,0 +1,19 @@
+# name: benchmark/micro/string/contains_regular.benchmark
+# description: Contains word 'regular' in the l_comment (11.5%~)
+# group: [string]
+
+name Contains ('regular')
+group string
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 'regular')
+
+result I
+687323

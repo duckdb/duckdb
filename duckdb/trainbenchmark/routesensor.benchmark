@@ -1,0 +1,34 @@
+# name: benchmark/trainbenchmark/routesensor.benchmark
+# description: The Train Benchmark's RouteSensor query
+# group: [trainbenchmark]
+
+load benchmark/trainbenchmark/load.sql
+
+run
+SELECT
+	Route.id AS route,
+	Sensor.id AS sensor,
+	SwitchPosition.id AS swP,
+	Switch.id as sw
+FROM Sensor
+     INNER JOIN monitoredBy    ON monitoredBy.Sensor_id = Sensor.id
+     INNER JOIN Switch         ON Switch.id = monitoredBy.TrackElement_id
+     INNER JOIN SwitchPosition ON SwitchPosition.target = Switch.id
+     INNER JOIN Route          ON Route.id = SwitchPosition.route
+LEFT OUTER JOIN requires       ON requires.Route_id = Route.id
+                              AND requires.Sensor_id = Sensor.id
+WHERE requires.Sensor_id IS NULL
+
+result IIII
+3	43	49	5
+68	107	113	70
+68	193	211	174
+213	240	270	215
+213	278	284	271
+213	346	358	339
+213	390	402	359
+213	428	458	403
+213	522	534	509
+213	548	566	535
+213	614	620	595
+621	668	674	631

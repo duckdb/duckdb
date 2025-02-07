@@ -1,0 +1,18 @@
+# name: benchmark/micro/result_collection/arrow_result.benchmark
+# description: Show the performance of the ArrowQueryResult
+# group: [result_collection]
+
+name arrow_result
+group micro
+subgroup result_collection
+
+resultmode arrow
+
+# Disable order preservation to test the parallel result collector
+load
+pragma preserve_insertion_order=false;
+create table tbl (a varchar);
+insert into tbl select 'this is a long string' from range(300000000)
+
+run
+select * from tbl;

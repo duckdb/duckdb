@@ -1,0 +1,12 @@
+# name: benchmark/cast/varchar_varint_10M.benchmark
+# description: Casting of a Varchar with 10M digits to varint
+# group: [cast]
+
+name Casting of a Varchar with 10M digits to varint
+group csv
+
+load
+CREATE TABLE t1 AS select concat('1', repeat('0', 10000000)) as a;
+
+run
+SELECT a::varint from t1

@@ -1,0 +1,10 @@
+# name: benchmark/h2oai/join/q01.benchmark
+# description: Run query 01 from the H2OAI join benchmark
+# group: [join]
+
+template benchmark/h2oai/join/h2oai.benchmark.in
+QUERY_NUMBER=1
+QUERY_NUMBER_PADDED=01
+RESULT_COLUMNS=III
+RESULT_QUERY=SELECT COUNT(DISTINCT id4), SUM(v2), COUNT(*) FROM ans
+RESULT_ANSWER=9	347720187.3928393	8998860

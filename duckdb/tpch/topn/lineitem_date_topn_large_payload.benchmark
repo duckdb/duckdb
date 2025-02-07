@@ -1,0 +1,24 @@
+# name: benchmark/tpch/topn/lineitem_date_topn_large_payload.benchmark
+# description: Top-N over lineitem (over a single date)
+# group: [topn]
+
+name Lineitem Top N
+group topn
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT * FROM lineitem ORDER BY l_shipdate, l_orderkey LIMIT 5;
+
+result IIIIIIIIIIIIIIII
+721220	177803	5355	2	19.00	35735.20	0.08	0.03	R	F	1992-01-02	1992-02-04	1992-01-09	TAKE BACK RETURN	SHIP	egular requests? slyly
+842980	188156	5711	4	5.00	6220.75	0.01	0.03	A	F	1992-01-02	1992-03-20	1992-01-20	COLLECT COD	REG AIR	yly fluffy packages. slyly 
+904677	56678	1689	1	43.00	70290.81	0.08	0.01	R	F	1992-01-02	1992-03-22	1992-01-14	COLLECT COD	AIR	cuses cajole blithely silent
+990147	154290	4291	1	6.00	8065.74	0.10	0.01	R	F	1992-01-02	1992-03-01	1992-01-15	NONE	REG AIR	thely after the regular dep
+1054181	16217	6218	1	45.00	50994.45	0.03	0.08	R	F	1992-01-02	1992-02-05	1992-01-15	NONE	MAIL	e fluffily. final theodolites sleep f

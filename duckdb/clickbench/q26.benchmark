@@ -1,0 +1,7 @@
+# name: benchmark/clickbench/q26.benchmark
+# description: Run query 26 from the ClickBench benchmark
+# group: [clickbench]
+
+template benchmark/clickbench/clickbench.benchmark.in
+QUERY_NUMBER=26
+QUERY_NUMBER_PADDED=26

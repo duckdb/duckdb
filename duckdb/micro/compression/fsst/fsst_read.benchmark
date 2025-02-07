@@ -1,0 +1,19 @@
+# name: benchmark/micro/compression/fsst/fsst_read.benchmark
+# description: Scanning strings at ~3.35x compression
+# group: [fsst]
+
+name fsst Compression Scan
+group fsst
+storage persistent
+
+load
+DROP TABLE IF EXISTS test;
+PRAGMA force_compression='fsst';
+CREATE TABLE test AS SELECT (100 + (i%1000))::VARCHAR AS i FROM range(0, 50000000) tbl(i);
+checkpoint;
+
+run
+select avg(i::INT) from test;
+
+result I
+599.500000

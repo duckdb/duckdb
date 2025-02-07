@@ -1,0 +1,46 @@
+# name: benchmark/csv/multiple_small_files.benchmark
+# description: Run CSV scan over multiple small (2048 rows) values
+# group: [csv]
+
+name CSV Read Benchmark over multiple small files
+group csv
+
+load
+CREATE TABLE t1 AS select i,i,i,i,i,i,i,i,i,i from range(0,2048) tbl(i);
+COPY t1 TO '${BENCHMARK_DIR}/small_csv.csv' (FORMAT CSV, HEADER 1);
+
+run
+SELECT * from
+read_csv(['${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv',
+'${BENCHMARK_DIR}/small_csv.csv','${BENCHMARK_DIR}/small_csv.csv'],delim= ',',  header = 0)

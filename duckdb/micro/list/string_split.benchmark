@@ -1,0 +1,20 @@
+# name: benchmark/micro/list/string_split.benchmark
+# description: String split benchmark
+# group: [list]
+
+name String Split
+group micro
+subgroup list
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT SUM(LENGTH(str_split(l_comment, ' '))) FROM lineitem
+
+result I
+27116609

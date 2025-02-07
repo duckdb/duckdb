@@ -1,0 +1,13 @@
+# name: benchmark/micro/lambdas/list_reduce/list_length_2.benchmark
+# description: list_reduce with lists that have a length of 2 benchmark
+# group: [list_reduce]
+
+name list length 2
+group micro
+subgroup lambdas
+
+load
+CREATE TABLE tbl AS SELECT range(i, i + 1) || range(i + 1, i + 2) AS l FROM range(5000000) t(i); 
+
+run
+SELECT list_reduce(l, (x, y) -> x + y) FROM tbl;

@@ -1,0 +1,21 @@
+# name: benchmark/tpch/join/join_filter_pushdown.benchmark
+# description: Join filter pushdown
+# group: [join]
+
+name Join Filter Pushdown
+group join
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT * from lineitem WHERE l_orderkey=(SELECT MAX(l_orderkey) FROM lineitem) ORDER BY ALL
+
+result IIIIIIIIIIIIIIII
+6000000	32255	2256	1	5.00	5936.25	0.04	0.03	N	O	1996-11-02	1996-11-19	1996-12-01	TAKE BACK RETURN	MAIL	riously pe
+6000000	96127	6128	2	28.00	31447.36	0.01	0.02	N	O	1996-09-22	1996-10-01	1996-10-21	NONE	AIR	pecial excuses nag evenly f

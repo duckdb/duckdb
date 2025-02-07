@@ -1,0 +1,20 @@
+# name: benchmark/tpch/parquet/parquet_q1.benchmark
+# description: Execute Q1 over lineitem stored in a parquet file
+# group: [parquet]
+
+name Q1 (Parquet)
+group parquet
+subgroup tpch
+
+require parquet
+require tpch
+
+load
+CALL dbgen(sf=1, suffix='_normal');
+COPY lineitem_normal TO '${BENCHMARK_DIR}/lineitem.parquet' (FORMAT PARQUET);
+CREATE VIEW lineitem AS SELECT * FROM read_parquet('${BENCHMARK_DIR}/lineitem.parquet');
+
+run
+PRAGMA tpch(1)
+
+result extension/tpch/dbgen/answers/sf1/q01.csv

@@ -1,0 +1,23 @@
+# name: benchmark/micro/window/window_mode_fixed_100.benchmark
+# description: Moving MODE performance, fixed 100 element frame
+# group: [window]
+
+name Windowed MODE, Fixed 100
+group window
+
+load
+create table rank100 as
+    select b % 100 as a, b from range(10000000) tbl(b)
+
+run
+select sum(m)
+from (
+    select mode(a) over (
+        order by b asc
+        rows between 100 preceding and current row) as m
+    from rank100
+    ) q;
+
+result I
+494995050
+

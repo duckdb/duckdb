@@ -1,0 +1,8 @@
+# name: benchmark/clickbench/q40.benchmark
+# description: Run query 40 from the ClickBench benchmark
+# group: [clickbench]
+
+template benchmark/clickbench/clickbench-noresult.benchmark.in
+QUERY_NUMBER=40
+QUERY_NUMBER_PADDED=40
+RESULT_QUERY=SELECT MIN(PageViews), MAX(PageViews), COUNT(*) FROM __answer

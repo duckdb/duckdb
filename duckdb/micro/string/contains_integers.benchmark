@@ -1,0 +1,19 @@
+# name: benchmark/micro/string/contains_integers.benchmark
+# description: Contains the string 'riously. regular, express dep' in the l_comment (3)
+# group: [string]
+
+name Contains ('1234')
+group string
+
+require tpch
+
+load
+CREATE TABLE strs AS SELECT (i * 9 % 10000000)::VARCHAR AS s FROM range(0, 10000000) t(i);
+
+run
+SELECT COUNT(*) FROM strs WHERE contains(s, '1234')
+
+result I
+4000
+
+

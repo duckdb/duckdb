@@ -1,0 +1,24 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [h2oaijoin]
+
+require httpfs
+
+name Q${QUERY_NUMBER_PADDED}
+group H2OAI Join
+
+storage persistent
+
+cache h2oaijoin.duckdb
+
+load benchmark/h2oai/join/queries/load.sql
+
+run benchmark/h2oai/join/queries/q${QUERY_NUMBER_PADDED}.sql
+
+result_query ${RESULT_COLUMNS}
+${RESULT_QUERY}
+----
+${RESULT_ANSWER}
+
+cleanup
+DROP TABLE ans

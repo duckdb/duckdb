@@ -1,0 +1,10 @@
+# name: benchmark/h2oai/group/q03.benchmark
+# description: Run query 03 from the H2OAI benchmark
+# group: [group]
+
+template benchmark/h2oai/group/h2oai.benchmark.in
+QUERY_NUMBER=3
+QUERY_NUMBER_PADDED=03
+RESULT_COLUMNS=IIII
+RESULT_QUERY=SELECT COUNT(DISTINCT id3), SUM(v1), SUM(v3), COUNT(*) FROM ans
+RESULT_ANSWER=95000	28498857	4749467.631946747	95001

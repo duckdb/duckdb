@@ -1,0 +1,10 @@
+# name: benchmark/h2oai/group/q08.benchmark
+# description: Run query 08 from the H2OAI benchmark
+# group: [group]
+
+template benchmark/h2oai/group/h2oai.benchmark.in
+QUERY_NUMBER=8
+QUERY_NUMBER_PADDED=08
+RESULT_COLUMNS=III
+RESULT_QUERY=SELECT COUNT(DISTINCT id6), SUM(largest2_v3), COUNT(*) FROM ans;
+RESULT_ANSWER=95000	18700554.77963206	190002

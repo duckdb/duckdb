@@ -1,0 +1,25 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [clickbench]
+
+name Q${QUERY_NUMBER_PADDED}
+group appian
+
+require httpfs
+
+cache ads.5M.duck
+
+load
+LOAD httpfs;
+attach 'https://duckdb-blobs.s3.amazonaws.com/data/appian_benchmark_data.duckdb' as appian_db (READ_ONLY);
+create table AddressView as select * from appian_db.AddressView;
+create table CustomerView as select * from appian_db.CustomerView;
+create table OrderView as select * from appian_db.OrderView;
+create table CategoryView as select * from appian_db.CategoryView;
+create table OrderItemNovelty_Update as select * from appian_db.OrderItemNovelty_Update;
+create table ProductView as select * from appian_db.ProductView;
+create table CreditCardView as select * from appian_db.CreditCardView;
+create table OrderItemView as select * from appian_db.OrderItemView;
+create table TaxRecordView as select * from appian_db.TaxRecordView;
+
+run benchmark/appian_benchmarks/queries/q${QUERY_NUMBER_PADDED}.sql

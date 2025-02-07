@@ -1,0 +1,19 @@
+# name: benchmark/micro/string/contains_r.benchmark
+# description: Contains word 'r' in the l_comment
+# group: [string]
+
+name Contains ('r')
+group string
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 'r')
+
+result I
+4239956

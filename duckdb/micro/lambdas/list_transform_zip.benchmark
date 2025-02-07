@@ -1,0 +1,13 @@
+# name: benchmark/micro/lambdas/list_transform_zip.benchmark
+# description: Simulate a zip-function with lambda functions on 100K values
+# group: [lambdas]
+
+name Benchmark list_transform
+group lambdas
+
+load
+CREATE TABLE tbl (l INTEGER[], zip VARCHAR[]);
+INSERT INTO tbl VALUES (range(100000), [x::VARCHAR || (x + 1)::VARCHAR for x in range(100000)]);
+
+run
+SELECT list_transform(l, (x, x_i) -> (x, zip[x_i])) FROM tbl;

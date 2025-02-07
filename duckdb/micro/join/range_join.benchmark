@@ -1,0 +1,15 @@
+# name: benchmark/micro/join/range_join.benchmark
+# description: Range join between integers
+# group: [join]
+
+name Range Join
+group join
+
+load
+CREATE TABLE integers AS SELECT ((i * 9582398353) % 1000)::INTEGER AS i, ((i * 847892347987) % 100)::INTEGER AS j FROM range(0, 100000) tbl(i);
+
+run
+SELECT COUNT(*) FROM integers a, integers b WHERE (a.i // 1000) > b.j ORDER BY 1;
+
+result I
+0

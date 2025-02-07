@@ -1,0 +1,19 @@
+# name: benchmark/micro/string/contains_long.benchmark
+# description: Contains the string 'riously. regular, express dep' in the l_comment (3)
+# group: [string]
+
+name Contains ('riously. regular, express dep')
+group string
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 'riously. regular, express pinto ')
+
+result I
+3

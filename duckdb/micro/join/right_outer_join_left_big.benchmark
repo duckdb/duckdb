@@ -1,0 +1,23 @@
+# name: benchmark/micro/join/right_outer_join_left_big.benchmark
+# description: RIGHT OUTER JOIN between two tables, where the left table is significantly bigger than the right table
+# group: [join]
+
+name Right Outer Join (big LHS, small RHS)
+group join
+
+load
+SELECT setseed(0.4);
+CREATE TABLE small_table ( pkey integer, c0 char(2), c_1k integer, c_10k integer, c_100k integer, c_1m integer, c_10m integer, c_100m integer );
+INSERT INTO small_table
+SELECT i, concat('A',mod(i,2)), (random()* 1000)::int, (random()* 10000)::int, (random()* 100000)::int,
+         (random()* 1000000)::int, (random()* 10000000)::int, (random()* 100000000)::int  FROM range(0,10000) tbl(i) ;
+CREATE TABLE big_table ( pkey integer, c0 char(2), c_1k integer, c_10k integer, c_100k integer, c_1m integer, c_10m integer, c_100m integer);
+INSERT INTO big_table
+SELECT i, concat('A',mod(i,2)), (random()* 1000)::int, (random()* 10000)::int, (random()* 100000)::int,
+         (random()* 1000000)::int, (random()* 10000000)::int, (random()* 100000000)::int  FROM range(0,100000000) tbl(i);
+
+run
+SELECT count(*) FROM big_table f RIGHT OUTER JOIN small_table d ON ( d.pkey=f.c_10k);
+
+result I
+99995018

@@ -1,0 +1,15 @@
+# name: benchmark/micro/timestamp/extract_year.benchmark
+# description: EXTRACT(year from timestamp)
+# group: [timestamp]
+
+name Extract Year (TS)
+group timestamp
+
+load
+CREATE TABLE timestamps AS SELECT TIMESTAMP '1992-01-01 12:00:00' + concat(i % 10000, ' days')::interval AS d FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MIN(EXTRACT(YEAR FROM d)) FROM timestamps
+
+result I
+1992

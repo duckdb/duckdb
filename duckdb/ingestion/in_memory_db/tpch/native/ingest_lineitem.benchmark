@@ -1,0 +1,7 @@
+# name: benchmark/ingestion/in_memory_db/tpch/native/ingest_lineitem.benchmark
+# description: benchmark ingestion of lineitem
+# group: [native]
+
+template benchmark/ingestion/in_memory_db/tpch/native/tpch_ingest_native.benchmark.in
+table_name=lineitem
+format=native

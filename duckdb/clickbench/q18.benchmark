@@ -1,0 +1,8 @@
+# name: benchmark/clickbench/q18.benchmark
+# description: Run query 18 from the ClickBench benchmark
+# group: [clickbench]
+
+template benchmark/clickbench/clickbench-noresult.benchmark.in
+QUERY_NUMBER=18
+QUERY_NUMBER_PADDED=18
+RESULT_QUERY=SELECT COUNT(*) AS count FROM (SELECT UserID, SearchPhrase FROM __answer GROUP BY UserID, SearchPhrase) t

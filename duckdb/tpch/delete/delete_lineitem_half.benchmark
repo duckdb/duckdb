@@ -1,0 +1,21 @@
+# name: benchmark/tpch/delete/delete_lineitem_half.benchmark
+# description: Delete half of the lineitem table
+# group: [delete]
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+CREATE TABLE lineitem_deletes AS FROM lineitem;
+
+run
+DELETE FROM lineitem_deletes WHERE l_orderkey%2=0;
+
+result I
+3000586
+
+cleanup
+DROP TABLE lineitem_deletes;
+CREATE TABLE lineitem_deletes AS FROM lineitem;

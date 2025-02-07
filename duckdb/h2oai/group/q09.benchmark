@@ -1,0 +1,10 @@
+# name: benchmark/h2oai/group/q09.benchmark
+# description: Run query 09 from the H2OAI benchmark
+# group: [group]
+
+template benchmark/h2oai/group/h2oai.benchmark.in
+QUERY_NUMBER=9
+QUERY_NUMBER_PADDED=09
+RESULT_COLUMNS=IIII
+RESULT_QUERY=SELECT COUNT(DISTINCT id2), COUNT(DISTINCT id4), SUM(r2), COUNT(*) FROM ans;
+RESULT_ANSWER=95	95	9.940515516534347	9216

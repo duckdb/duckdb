@@ -1,0 +1,10 @@
+# name: benchmark/h2oai/join/q04.benchmark
+# description: Run query 04 from the H2OAI join benchmark
+# group: [join]
+
+template benchmark/h2oai/join/h2oai.benchmark.in
+QUERY_NUMBER=4
+QUERY_NUMBER_PADDED=04
+RESULT_COLUMNS=IIIII
+RESULT_QUERY=SELECT COUNT(DISTINCT medium_id1), COUNT(DISTINCT medium_id2), COUNT(DISTINCT medium_id4), SUM(v2), COUNT(*) FROM ans
+RESULT_ANSWER=10	9000	10	449999844.9375197	8998412

@@ -1,0 +1,23 @@
+# name: benchmark/micro/window/window_median_variable_100.benchmark
+# description: Moving MEDIAN performance, varbiable 100 element frame
+# group: [window]
+
+name Windowed MEDIAN, Variable 100
+group window
+
+load
+create table rank100 as
+    select b % 100 as a, b from range(10000000) tbl(b)
+
+run
+select sum(m)
+from (
+    select median(a) over (
+        order by b asc
+        rows between mod(b * 47, 521) preceding and 100 - mod(b * 47, 521) following) as m
+    from rank100
+    ) q;
+
+result I
+494989867
+

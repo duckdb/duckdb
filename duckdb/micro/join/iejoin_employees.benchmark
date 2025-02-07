@@ -1,0 +1,67 @@
+# name: benchmark/micro/join/iejoin_employees.benchmark
+# description: Range join between integers
+# group: [join]
+
+name Range Join
+group join
+
+# (1) Employees. A dataset that contains employees’ salary and tax information [3] with eight attributes:
+# state, married, dependents, salary, tax, and three others for notes.
+# The relation has been populated with real-life data: tax rates, income brackets, and exemptions
+# for each state in the USA have been manually collected to generate synthetic tax records.
+# We used the following self-join query to identify anomalies [7]:
+# Q1 : SELECT r.id, s.id
+#      FROM Employees r, Employees s
+#      WHERE r.salary < s.salary AND r.tax > s.tax;
+# The above query returns a set of employee pairs, where one employee earns higher salary than the other but pays less tax.
+# To make sure that we generate output for Q1, we selected 10% random rows and increased their tax values.
+# Employees2 is a group of larger input datasets with up to 6 Billion records, but with only 0.001% random changes to tax values.
+# The higher selectivity is used to test the distributed algorithm on large input files.
+
+load
+CREATE TYPE surname_t AS ENUM (
+    'Smith',
+    'Johnson',
+    'Williams',
+    'Jones',
+    'Brown',
+    'Davis',
+    'Miller',
+    'Wilson',
+    'Moore',
+    'Taylor',
+    'Anderson',
+    'Thomas',
+    'Jackson',
+    'White',
+    'Harris',
+    'Martin',
+    'Thompson',
+    'Garcia',
+    'Martinez',
+    'Robinson'
+);
+SELECT SETSEED(0.8675309);
+CREATE TABLE employees AS
+	SELECT
+		facts.id AS id,
+		surname AS "name",
+		dept,
+		salary,
+		(salary / 10 - CASE WHEN random() <= 0.01 THEN (10 + 1) ELSE 0 END)::INTEGER AS tax
+	FROM (
+		SELECT
+			id,
+			enum_range(NULL::surname_t)[(round(random() * 19))::INTEGER] AS surname,
+			round(random() * 5)::INTEGER  AS dept,
+			100 * id AS salary
+		FROM (SELECT UNNEST(range(1, 10000000))) tbl(id)
+	) facts
+;
+
+run
+SELECT COUNT(*) FROM (
+	SELECT r.id, s.id
+	FROM employees r, employees s
+	WHERE r.salary < s.salary AND r.tax > s.tax
+) q1;

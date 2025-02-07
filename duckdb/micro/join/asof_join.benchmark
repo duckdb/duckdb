@@ -1,0 +1,24 @@
+# name: benchmark/micro/join/asof_join.benchmark
+# description: AsOf Join with 50 keys of 100K times
+# group: [join]
+
+name AsOf Join scaling
+group join
+
+load
+PRAGMA debug_asof_iejoin=False;
+CREATE TABLE build AS (
+	SELECT k, '2001-01-01 00:00:00'::TIMESTAMP + INTERVAL (v) MINUTE AS t, v
+	FROM range(0,100000) vals(v), range(0,50) keys(k)
+);
+CREATE TABLE probe AS (
+	SELECT k * 2 AS k, t - INTERVAL (30) SECOND AS t
+	FROM build
+);
+
+run
+SELECT SUM(v)
+FROM probe ASOF JOIN build USING(k, t);
+
+result I
+124996250025

@@ -1,0 +1,13 @@
+# name: benchmark/micro/aggregate/any_value_uuid.benchmark
+# description: ANY_VALUE(uuid) over a bunch of uuids
+# group: [aggregate]
+
+name Any Value (UUID)
+group aggregate
+
+load
+CREATE TABLE t AS SELECT uuid() AS uuid FROM range(100000000) tbl(i);
+
+run
+SELECT ANY_VALUE(uuid) FROM t;
+

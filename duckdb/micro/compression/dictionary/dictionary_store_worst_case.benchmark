@@ -1,0 +1,16 @@
+# name: benchmark/micro/compression/dictionary/dictionary_store_worst_case.benchmark
+# description: Storing a column containing only unique strings.
+# group: [dictionary]
+
+name Dictionary Compression Write
+group dictionary
+storage persistent
+require_reinit
+
+load
+PRAGMA force_compression='dictionary';
+DROP TABLE IF EXISTS test;
+
+run
+CREATE TABLE test AS SELECT i::VARCHAR AS i FROM range(0, 50000000) tbl(i);
+checkpoint;

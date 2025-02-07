@@ -1,0 +1,14 @@
+# name: benchmark/micro/aggregate/quantile/quantile_approx.benchmark
+# description: Approximate Quantile Function
+# group: [quantile]
+
+name Approximate Quantile
+group aggregate
+
+load
+create table quantile as select range r, random() from range(10000000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+
+run
+SELECT approx_quantile(r, 0.5) FROM quantile
+
+

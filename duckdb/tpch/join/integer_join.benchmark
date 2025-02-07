@@ -1,0 +1,20 @@
+# name: benchmark/tpch/join/integer_join.benchmark
+# description: COUNT aggregate over join on integer keys
+# group: [join]
+
+name Join Integer Keys
+group join
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT COUNT(*) from lineitem join orders on (l_orderkey=o_orderkey);
+
+result I
+6001215

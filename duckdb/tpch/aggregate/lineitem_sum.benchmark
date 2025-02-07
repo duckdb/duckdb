@@ -1,0 +1,20 @@
+# name: benchmark/tpch/aggregate/lineitem_sum.benchmark
+# description: Simple SUM aggregate over lineitem
+# group: [aggregate]
+
+name Lineitem Simple Sum
+group aggregate
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT SUM(l_quantity) FROM lineitem
+
+result I
+153078795

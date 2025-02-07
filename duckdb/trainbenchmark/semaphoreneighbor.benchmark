@@ -1,0 +1,41 @@
+# name: benchmark/trainbenchmark/semaphoreneighbor.benchmark
+# description: The Train Benchmark's SemaphoreNeighbor query
+# group: [trainbenchmark]
+
+load benchmark/trainbenchmark/load.sql
+
+run
+SELECT
+    Route1.exit AS semaphore,
+    Route1.id AS route1,
+    Route2.id AS route2,
+    requires1.Sensor_id AS sensor1,
+    requires2.Sensor_id AS sensor2,
+    ct.TrackElement1_id AS te1,
+    ct.TrackElement2_id AS te2
+FROM Route AS Route1
+INNER JOIN requires AS requires1
+ON Route1.id = requires1.Route_id
+INNER JOIN monitoredBy AS mb1
+ON requires1.Sensor_id = mb1.Sensor_id
+INNER JOIN connectsTo AS ct
+ON mb1.TrackElement_id = ct.TrackElement1_id
+INNER JOIN monitoredBy AS mb2
+ON ct.TrackElement2_id = mb2.TrackElement_id
+INNER JOIN requires AS requires2
+ON mb2.Sensor_id = requires2.Sensor_id
+INNER JOIN Route AS Route2
+ON requires2.Route_id = Route2.id
+WHERE Route1.id != Route2.id
+  AND Route1.exit IS NOT NULL
+  AND (Route2.entry IS NULL OR Route2.entry != Route1.exit) ORDER BY ALL;
+
+result IIIIIII
+67	68	213	205	216	210	215
+67	68	213	205	222	210	215
+67	68	213	205	228	210	215
+67	68	213	205	234	210	215
+67	68	213	205	246	210	215
+67	68	213	205	252	210	215
+67	68	213	205	258	210	215
+67	68	213	205	264	210	215

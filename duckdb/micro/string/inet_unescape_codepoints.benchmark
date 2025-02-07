@@ -1,0 +1,13 @@
+# name: benchmark/micro/string/inet_unescape_codepoints.benchmark
+# description: inet's extension unescape function benchmark with Unicode codepoints
+# group: [string]
+
+name html_unescape benchmark with hexadecimal values
+group string
+require inet
+
+load
+CREATE TABLE html_hex_tbl AS SELECT format('&#x{:x}', i) html_text FROM range(1000000) t(i);
+
+run
+SELECT html_unescape(html_text) FROM html_hex_tbl;

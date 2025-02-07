@@ -1,0 +1,17 @@
+# name: benchmark/micro/pushdown/or_pushdown.benchmark
+# description: Show the performance of OR pushed down
+# group: [pushdown]
+
+name OrPushdown
+group micro
+subgroup pushdown
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT COUNT(l_orderkey) FROM lineitem WHERE l_orderkey=1 OR l_orderkey=80000

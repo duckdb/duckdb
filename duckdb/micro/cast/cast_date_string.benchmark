@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_date_string.benchmark
+# description: Cast date values to string
+# group: [cast]
+
+name Cast DATE -> VARCHAR
+group cast
+
+load
+CREATE TABLE dates AS SELECT DATE '1992-01-01' + interval (i % 10000) days AS d FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MIN(CAST(d AS VARCHAR)) FROM dates
+
+result I
+1992-01-01 00:00:00

@@ -1,0 +1,15 @@
+# name: benchmark/micro/join/range_join_big_result.benchmark
+# description: Range join between integers that has many result
+# group: [join]
+
+name Range Join with big result
+group join
+
+load
+CREATE TABLE integers AS SELECT ((i * 9582398353) % 1000)::INTEGER AS i, ((i * 847892347987) % 100)::INTEGER AS j FROM range(0, 50000) tbl(i);
+
+run
+SELECT COUNT(*) FROM integers a, integers b WHERE (a.i // 1000) < b.j ORDER BY 1;
+
+result I
+2475000000

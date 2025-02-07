@@ -1,0 +1,12 @@
+# name: benchmark/cast/small_double_varint.benchmark
+# description: Casting of small doubles to varint
+# group: [cast]
+
+name Casting of Small Doubles to Varint
+group csv
+
+load
+CREATE TABLE t1 AS select '340282366920938463463374607431768211455'::DOUBLE as a from range(0,10000000) tbl(i);
+
+run
+create or replace table t2 as select a::varint from t1

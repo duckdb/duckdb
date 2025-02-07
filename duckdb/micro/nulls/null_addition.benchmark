@@ -1,0 +1,16 @@
+# name: benchmark/micro/nulls/null_addition.benchmark
+# description: Benchmark of sum and addition with nulls
+# group: [nulls]
+
+name NULL Addition
+group micro
+subgroup nulls
+
+load
+CREATE TABLE integers AS SELECT CASE WHEN i=0 THEN NULL ELSE i END i FROM range(1000) tbl(i), repeat(0, 100000) tbl2(j)
+
+run
+SELECT MIN(i + 1) FROM integers
+
+result I
+2

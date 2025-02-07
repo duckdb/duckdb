@@ -1,0 +1,7 @@
+# name: benchmark/tpch/sf1/q21.benchmark
+# description: Run query 21 from the TPC-H benchmark (single-threaded)
+# group: [sf1]
+
+template benchmark/tpch/sf1/tpch_sf1.benchmark.in
+QUERY_NUMBER=21
+QUERY_NUMBER_PADDED=21

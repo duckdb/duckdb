@@ -1,0 +1,24 @@
+# name: benchmark/tpch/topn/lineitem_orderkey_topn_large_payload.benchmark
+# description: Top-N over lineitem (over a single date)
+# group: [topn]
+
+name Lineitem Top N (order key)
+group topn
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT l_orderkey,l_partkey,l_suppkey,l_linenumber,l_quantity,l_extendedprice,l_discount,l_tax,l_returnflag,l_linestatus,l_shipdate,l_commitdate,l_receiptdate,l_shipinstruct,l_shipmode FROM lineitem ORDER BY l_orderkey DESC, l_shipdate DESC LIMIT 5;
+
+result IIIIIIIIIIIIIII
+6000000	32255	2256	1	5	5936.25	0.04	0.03	N	O	1996-11-02	1996-11-19	1996-12-01	TAKE BACK RETURN	MAIL
+6000000	96127	6128	2	28	31447.36	0.01	0.02	N	O	1996-09-22	1996-10-01	1996-10-21	NONE	AIR
+5999975	37131	2138	3	18	19226.34	0.04	0.01	A	F	1993-11-17	1993-08-28	1993-12-08	DELIVER IN PERSON	FOB
+5999975	6452	1453	2	7	9509.15	0.04	0.00	A	F	1993-11-02	1993-09-23	1993-11-19	DELIVER IN PERSON	SHIP
+5999975	7272	2273	1	32	37736.64	0.07	0.01	R	F	1993-10-07	1993-09-30	1993-10-21	COLLECT COD	REG AIR

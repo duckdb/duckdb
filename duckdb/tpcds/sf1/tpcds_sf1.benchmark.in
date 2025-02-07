@@ -1,0 +1,19 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [tpcds-sf1]
+
+name DSQ${QUERY_NUMBER_PADDED}
+group tpcds
+subgroup sf1
+
+require tpcds
+
+storage persistent
+
+cache tpcds_sf1.duckdb
+
+load benchmark/tpcds/sf1/load.sql
+
+run extension/tpcds/dsdgen/queries/${QUERY_NUMBER_PADDED}.sql
+
+result extension/tpcds/dsdgen/answers/sf1/${QUERY_NUMBER_PADDED}.csv

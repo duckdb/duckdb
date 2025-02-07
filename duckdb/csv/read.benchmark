@@ -1,0 +1,17 @@
+# name: benchmark/csv/read.benchmark
+# description: Run CSV auto-detection on the lineitem CSV
+# group: [csv]
+
+name CSV Read Benchmark
+group csv
+
+require tpch
+
+cache lineitem_sf1.csv
+
+load
+CALL dbgen(sf=1);
+COPY lineitem TO '${BENCHMARK_DIR}/lineitem_sf1.csv' (FORMAT CSV, DELIMITER '|', HEADER);
+
+run
+SELECT * FROM '${BENCHMARK_DIR}/lineitem_sf1.csv'

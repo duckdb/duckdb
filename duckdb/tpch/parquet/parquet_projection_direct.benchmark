@@ -1,0 +1,20 @@
+# name: benchmark/tpch/parquet/parquet_projection_direct.benchmark
+# description: Execute a simple aggregate + projection over lineitem to test projection pushdown
+# group: [parquet]
+
+name Lineitem Projection Pushdown (Direct)
+group parquet
+subgroup tpch
+
+require parquet
+require tpch
+
+load
+CALL dbgen(sf=1, suffix='_normal');
+COPY lineitem_normal TO '${BENCHMARK_DIR}/lineitem.parquet' (FORMAT PARQUET);
+
+run
+SELECT SUM(l_extendedprice * (1 - l_discount) * (1 + l_tax)) FROM read_parquet('${BENCHMARK_DIR}/lineitem.parquet');
+
+result I
+226829357828.867781

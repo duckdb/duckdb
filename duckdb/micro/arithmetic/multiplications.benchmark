@@ -1,0 +1,15 @@
+# name: benchmark/micro/arithmetic/multiplications.benchmark
+# description: Integer multiplications between 10000000 values
+# group: [arithmetic]
+
+name Integer Multiplication
+group micro
+
+load
+CREATE TABLE integers AS SELECT ((i * 9582398353) % 100)::INTEGER AS i, ((i * 847892347987) % 100)::INTEGER AS j FROM range(0, 10000000) tbl(i);
+
+run
+SELECT MIN((i * j) + (i * j) + (i * j) + (i * j)) FROM integers
+
+result I
+0

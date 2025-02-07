@@ -1,0 +1,15 @@
+# name: benchmark/micro/list/column_data_collection_copy/large_lists.benchmark
+# description: Benchmark code paths that use the column data collection copy for large lists
+# group: [column_data_collection_copy]
+
+name Column Data Collection Copy Large Lists
+group micro
+subgroup list
+
+load
+CREATE TABLE stage AS SELECT range AS len FROM range(20000);
+
+run
+SELECT a from (SELECT STRUCT_PACK(a := (SELECT LIST(len + j) FROM stage), b := j)
+as a FROM range(5000) tbl2(j)) as t;
+

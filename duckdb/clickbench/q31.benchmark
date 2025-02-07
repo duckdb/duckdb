@@ -1,0 +1,8 @@
+# name: benchmark/clickbench/q31.benchmark
+# description: Run query 31 from the ClickBench benchmark
+# group: [clickbench]
+
+template benchmark/clickbench/clickbench-noresult.benchmark.in
+QUERY_NUMBER=31
+QUERY_NUMBER_PADDED=31
+RESULT_QUERY=SELECT * FROM __answer ORDER BY c DESC, ClientIP

@@ -1,0 +1,22 @@
+# name: benchmark/tpch/aggregate/lineitem_group_string.benchmark
+# description: Grouped aggregate over lineitem (grouped by a string column)
+# group: [aggregate]
+
+name Lineitem Group By String
+group aggregate
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT l_returnflag, SUM(l_quantity) FROM lineitem GROUP BY l_returnflag ORDER BY 1
+
+result II
+A	37734107
+N	77624935
+R	37719753

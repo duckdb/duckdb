@@ -1,0 +1,20 @@
+# name: benchmark/tpch/join/floating_point_join.benchmark
+# description: COUNT aggregate over join on double keys
+# group: [join]
+
+name Join Double Keys
+group join
+subgroup tpch
+
+require tpch
+
+load
+CALL dbgen(sf=1, suffix='_normal');
+CREATE TABLE lineitem AS SELECT * REPLACE (l_orderkey::DOUBLE AS l_orderkey) FROM lineitem_normal;
+CREATE TABLE orders AS SELECT * REPLACE (o_orderkey::DOUBLE AS o_orderkey) FROM orders_normal;
+
+run
+SELECT COUNT(*) from lineitem join orders on (l_orderkey=o_orderkey);
+
+result I
+6001215

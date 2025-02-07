@@ -1,0 +1,7 @@
+# name: benchmark/appian_benchmarks/q03.benchmark
+# description: Run query 03 from the appian benchmarks
+# group: [appian_benchmarks]
+
+template benchmark/appian_benchmarks/appian.benchmark.in
+QUERY_NUMBER=3
+QUERY_NUMBER_PADDED=03

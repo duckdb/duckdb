@@ -1,0 +1,69 @@
+# name: benchmark/tpch/aggregate/q1_integer_keys.benchmark
+# description: Simple COUNT aggregate over lineitem
+# group: [aggregate]
+
+name Q1 Integer Keys
+group aggregate
+subgroup tpch
+
+require tpch
+
+load
+CALL dbgen(sf=1, suffix='_normal');
+CREATE TABLE lineitem AS
+SELECT l_orderkey,
+       l_partkey,
+       l_suppkey,
+       l_linenumber,
+       l_quantity,
+       l_extendedprice,
+       l_discount,
+       l_tax,
+       CASE l_returnflag
+           WHEN 'N' THEN 1
+           WHEN 'R' THEN 2
+           WHEN 'A' THEN 0
+           ELSE NULL
+       END l_returnflag,
+       CASE l_linestatus
+           WHEN 'F' THEN 0
+           WHEN 'O' THEN 1
+           ELSE NULL
+       END l_linestatus,
+       l_shipdate,
+       l_commitdate,
+       l_receiptdate,
+       l_shipinstruct,
+       l_shipmode,
+       l_comment
+FROM lineitem_normal;
+
+run
+SELECT
+    l_returnflag,
+    l_linestatus,
+    sum(l_quantity) AS sum_qty,
+    sum(l_extendedprice) AS sum_base_price,
+    sum(l_extendedprice * (1 - l_discount)) AS sum_disc_price,
+    sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) AS sum_charge,
+    sum(l_quantity)::DOUBLE / count(l_quantity)::DOUBLE AS avg_qty,
+    sum(l_extendedprice)::DOUBLE / count(l_extendedprice)::DOUBLE AS avg_price,
+    sum(l_discount)::DOUBLE / count(l_discount)::DOUBLE AS avg_disc,
+    count(*) AS count_order
+FROM
+    lineitem
+WHERE
+    l_shipdate <= CAST('1998-09-02' AS date)
+GROUP BY
+    l_returnflag,
+    l_linestatus
+ORDER BY
+    l_returnflag,
+    l_linestatus;
+
+
+result IIIIIIIIII
+0	0	37734107	56586554400.73	53758257134.8700	55909065222.827692	25.5220	38273.1297	0.0500	1478493
+1	0	991417	1487504710.38	1413082168.0541	1469649223.194375	25.5165	38284.4678	0.0501	38854
+1	1	74476040	111701729697.74	106118230307.6056	110367043872.497010	25.5022	38249.1180	0.0500	2920374
+2	0	37719753	56568041380.90	53741292684.6040	55889619119.831932	25.5058	38250.8546	0.0500	1478870

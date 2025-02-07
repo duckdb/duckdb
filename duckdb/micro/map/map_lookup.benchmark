@@ -1,0 +1,16 @@
+# name: benchmark/micro/map/map_lookup.benchmark
+# description: lookup speed of map
+# group: [map]
+
+name Lookup
+group micro
+subgroup map
+
+load
+CREATE TABLE mapvalues AS SELECT map([i, i+1, i+2],[i+1, i+2, i+3]) col FROM range(0, 1000000) tbl(i);
+
+run
+SELECT MIN(col) FROM mapvalues;
+
+result I
+{0=1, 1=2, 2=3}

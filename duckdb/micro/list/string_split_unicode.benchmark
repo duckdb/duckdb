@@ -1,0 +1,19 @@
+# name: benchmark/micro/list/string_split_unicode.benchmark
+# description: String split unicode benchmark
+# group: [list]
+
+name String Split Unicode
+group micro
+subgroup list
+
+require tpch
+
+load
+CALL dbgen(sf=1);
+CREATE TABLE duck_comments AS SELECT concat(l_comment, '🦆') l_comment FROM lineitem
+
+run
+SELECT SUM(LENGTH(str_split(l_comment, ' '))) FROM duck_comments
+
+result I
+27116609

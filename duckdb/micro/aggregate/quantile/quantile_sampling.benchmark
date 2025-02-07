@@ -1,0 +1,15 @@
+# name: benchmark/micro/aggregate/quantile/quantile_sampling.benchmark
+# description: Quantile Function With Sampling
+# group: [quantile]
+
+name Quantile With Sampling
+group quantile
+
+load
+create table quantile as select range r, random() from range(10000000) union all values (NULL, 0.1), (NULL, 0.5), (NULL, 0.9) order by 2;
+
+run
+SELECT reservoir_quantile(r, 0.5) FROM quantile
+
+
+

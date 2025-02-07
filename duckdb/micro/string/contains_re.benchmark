@@ -1,0 +1,19 @@
+# name: benchmark/micro/string/contains_re.benchmark
+# description: Contains word 're' in the l_comment
+# group: [string]
+
+name Contains ('re')
+group string
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT COUNT(*) FROM lineitem WHERE contains(l_comment, 're')
+
+result I
+2453562

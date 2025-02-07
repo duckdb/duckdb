@@ -1,0 +1,16 @@
+# name: benchmark/micro/map/map_extract.benchmark
+# description: lookup speed of map
+# group: [map]
+
+name Lookup
+group micro
+subgroup map
+
+load
+CREATE TABLE mapvalues AS SELECT map([5, i],[i, i+1]) col FROM range(10, 1000000) tbl(i);
+
+run
+SELECT COUNT(col[5]) FROM mapvalues;
+
+result I
+999990

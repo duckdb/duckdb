@@ -1,0 +1,16 @@
+# name: benchmark/micro/nulls/no_nulls_addition.benchmark
+# description: Benchmark of sum and addition without nulls
+# group: [nulls]
+
+name NULL Addition (no nulls)
+group micro
+subgroup nulls
+
+load
+CREATE TABLE integers AS SELECT i FROM range(1000) tbl(i), repeat(0, 100000) tbl2(j)
+
+run
+SELECT MIN(i + 1) FROM integers
+
+result I
+1

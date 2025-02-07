@@ -1,0 +1,24 @@
+# name: benchmark/micro/window/window_constant_count.benchmark
+# description: Moving COUNT(*) performance, fixed 100 element window
+# group: [window]
+
+load
+SELECT SETSEED(0.8675309);
+CREATE TABLE arrow_001 AS
+	SELECT date, item, ROUND(100 * exp(-random() ** 2))::INTEGER AS sale
+	FROM
+		(SELECT '1970-01-01'::DATE + INTERVAL (range) DAY AS date FROM range(0, 1000000)) dates,
+		range(1, 5) items(item)
+	ORDER BY 1, 2
+;
+
+run
+SELECT sum(total)
+FROM (
+	SELECT date, item, COUNT(*) FILTER (WHERE item % 3 = 0) OVER (PARTITION BY "date") AS "total"
+	FROM arrow_001
+) df
+;
+
+result I
+4000000

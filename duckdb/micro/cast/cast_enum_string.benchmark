@@ -1,0 +1,15 @@
+# name: benchmark/micro/cast/cast_enum_string.benchmark
+# description: Benchmark casting enums to varchar and the comparisons
+# group: [cast]
+
+name Cast ENUM -> VARCHAR
+group cast
+
+load
+create type integer_enum as enum('0', '1', '2', '3', '4');
+create table integers as select cast((i%5)::varchar as integer_enum) as enum_val, (i%7) as integer_val, (i%7)::varchar as string_val from range(100000000) t(i);
+
+
+# cast both should auto-cast to varchar
+run
+select count(*) FROM integers WHERE enum_val = integer_val;

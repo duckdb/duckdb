@@ -1,0 +1,43 @@
+# name: benchmark/micro/join/iejoin_events.benchmark
+# description: Range self-join between event dates
+# group: [join]
+
+name IEJoin Events
+group join
+
+# (2) Events. A synthetic dataset that contains start and end time information for a set of independent events.
+# Each event contains the name of the event, event ID, number of attending people, and the sponsor ID.
+# We used this dataset with a self-join query that collects pairs of overlapping events:
+# Q2 :  SELECT r.id, s.id
+#       FROM Events r, Events s
+#       WHERE r.start ≤ s.end AND r.end ≥ s.start AND r.id ≠ s.id;
+# Again, to make sure we generate output for Q2, we selected 10% random events and extended their end values.
+# We also generate Events2 as larger datasets with up to 6 Billion records, but with 0.001% extended random events.
+
+load
+SELECT SETSEED(0.8675309);
+CREATE TABLE events AS (
+	SELECT *,
+		 "start" + INTERVAL (CASE WHEN random() < 0.1 THEN 120 ELSE (5 + round(random() * 50, 0)::BIGINT) END) MINUTE
+		 	AS "end"
+	FROM (
+		SELECT id,
+			'Event ' || id::VARCHAR as "name",
+			(5 + round(random() * 5000, 0)::BIGINT) AS audience,
+			'1992-01-01'::TIMESTAMP
+				+ INTERVAL (round(random() * 40 * 365, 0)::BIGINT) DAY
+				+ INTERVAL (round(random() * 23, 0)::BIGINT) HOUR
+				AS "start",
+			'Sponsor ' || (1 + round(random() * 10, 0)::BIGINT) AS sponsor
+		FROM range(1, 30000) tbl(id)
+	) q
+);
+
+run
+SELECT COUNT(*) FROM (
+	SELECT r.id, s.id
+	FROM events r, events s
+	WHERE r.start <= s.end AND r.end >= s.start
+	  AND r.id <> s.id
+) q2;
+

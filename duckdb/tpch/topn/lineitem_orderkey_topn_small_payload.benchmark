@@ -1,0 +1,24 @@
+# name: benchmark/tpch/topn/lineitem_orderkey_topn_small_payload.benchmark
+# description: Top-N over lineitem (over a single date)
+# group: [topn]
+
+name Lineitem Top N (order key)
+group topn
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT l_orderkey, l_shipdate FROM lineitem ORDER BY l_orderkey DESC, l_shipdate DESC LIMIT 5;
+
+result II
+6000000	1996-11-02
+6000000	1996-09-22
+5999975	1993-11-17
+5999975	1993-11-02
+5999975	1993-10-07

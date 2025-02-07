@@ -1,0 +1,20 @@
+# name: benchmark/micro/list/list_few_rows.benchmark
+# description: List aggregate with few rows per list
+# group: [list]
+
+name List aggregate (small)
+group micro
+subgroup list
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT MIN(LENGTH(l)), MAX(LENGTH(l)), COUNT(*) FROM (SELECT l_orderkey, LIST(l_shipdate) AS l FROM lineitem GROUP BY l_orderkey)
+
+result III
+1	7	1500000

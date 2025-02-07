@@ -1,0 +1,37 @@
+# name: ${FILE_PATH}
+# description: ${DESCRIPTION}
+# group: [sf1]
+
+name Q${QUERY_NUMBER_PADDED}
+group tpch
+subgroup sf1
+
+require tpch
+
+require parquet
+
+cache tpch_sf1_parquet.duckdb
+
+load
+call dbgen(sf=1);
+EXPORT DATABASE '${BENCHMARK_DIR}/tpch_sf1_parquet/' (FORMAT PARQUET);
+drop table lineitem;
+drop table customer;
+drop table nation;
+drop table orders;
+drop table part;
+drop table partsupp;
+drop table region;
+drop table supplier;
+create view lineitem as select * from '${BENCHMARK_DIR}/tpch_sf1_parquet/lineitem.parquet';
+create view customer as select * from '${BENCHMARK_DIR}/tpch_sf1_parquet/customer.parquet';
+create view nation as select * from '${BENCHMARK_DIR}/tpch_sf1_parquet/nation.parquet';
+create view orders as select * from '${BENCHMARK_DIR}/tpch_sf1_parquet/orders.parquet';
+create view part as select * from '${BENCHMARK_DIR}/tpch_sf1_parquet/part.parquet';
+create view partsupp as select * from '${BENCHMARK_DIR}/tpch_sf1_parquet/partsupp.parquet';
+create view region as select * from '${BENCHMARK_DIR}/tpch_sf1_parquet/region.parquet';
+create view supplier as select * from '${BENCHMARK_DIR}/tpch_sf1_parquet/supplier.parquet';
+
+run extension/tpch/dbgen/queries/q${QUERY_NUMBER_PADDED}.sql
+
+result extension/tpch/dbgen/answers/sf1/q${QUERY_NUMBER_PADDED}.csv

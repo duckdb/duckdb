@@ -1,0 +1,14 @@
+# name: benchmark/csv/null_padding.benchmark
+# description: Run CSV scan on file that needs null_padding
+# group: [csv]
+
+name CSV Read Benchmark with nullpadding
+group csv
+
+load
+CREATE TABLE t1 AS select 'pedro;nl;1.73;31';
+insert into t1  select 'mark;nl;1.72' from range(0,10000000) tbl(i);
+COPY t1 TO '${BENCHMARK_DIR}/null_padding.csv' (FORMAT CSV, HEADER 0);
+
+run
+SELECT * from read_csv('${BENCHMARK_DIR}/null_padding.csv',delim= ';', null_padding = true, header = 0)

@@ -1,0 +1,7 @@
+# name: benchmark/realnest/hep/q04.benchmark
+# description: Q4 - Plot the energy emission of the events that have at least two jets with a momentum threshold 40 GeV (gigaelectronvolt).
+# group: [hep]
+
+template benchmark/realnest/hep/hep.benchmark.in
+QUERY_NUMBER=4
+QUERY_NUMBER_PADDED=04

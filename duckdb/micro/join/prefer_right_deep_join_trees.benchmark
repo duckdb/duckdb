@@ -1,0 +1,11 @@
+# name: benchmark/micro/join/prefer_right_deep_join_trees.benchmark
+# description: Prefer right deep join trees, so we can rebuild the same tables.
+# group: [join]
+
+load
+create or replace table t1 as select range a from range(48183280);
+create or replace table t2 as select range b from range(48183280);
+create or replace table t3 as select range c from range(2000000);
+
+run
+select * from t1 RIGHT JOIN (select * from t2 RIGHT JOIN t3 on b = c) ON a = b;

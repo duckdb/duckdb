@@ -1,0 +1,38 @@
+# name: benchmark/tpch/union/ungrouped_aggregate_union.benchmark
+# description: Ungrouped aggregates split over separate unions
+# group: [union]
+
+name Lineitem Union Ungrouped Aggregate
+group union
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+SELECT sum(l_quantity) AS sum FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT sum(l_extendedprice) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT sum(l_extendedprice * (1 - l_discount)) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT sum(l_extendedprice * (1 - l_discount) * (1 + l_tax)) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT avg(l_quantity) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT avg(l_extendedprice) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+UNION ALL
+SELECT count(*) FROM lineitem WHERE l_shipdate <= CAST('1998-09-02' AS date)
+
+result I
+150921317.0
+226343830189.75
+215030862295.13
+223635377438.35
+25.50815444231315
+38255.78448632836
+5916591.0
