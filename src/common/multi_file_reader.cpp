@@ -508,14 +508,14 @@ void MultiFileReader::CreateMapping(const string &file_name,
 	// copy global columns and inject any different defaults
 	CreateColumnMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
 	                    initial_file, global_state);
-	CreateFilterMap(global_columns, filters, reader_data, global_state);
+	CreateFilterMap(global_column_ids, filters, reader_data, global_state);
 }
 
-void MultiFileReader::CreateFilterMap(const vector<MultiFileReaderColumnDefinition> &global_columns,
+void MultiFileReader::CreateFilterMap(const vector<ColumnIndex> &global_column_ids,
                                       optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
                                       optional_ptr<MultiFileReaderGlobalState> global_state) {
 	if (filters) {
-		auto filter_map_size = global_columns.size();
+		auto filter_map_size = global_column_ids.size();
 		if (global_state) {
 			filter_map_size += global_state->extra_columns.size();
 		}
