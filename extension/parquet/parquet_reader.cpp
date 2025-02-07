@@ -854,6 +854,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 		state.file_handle = fs.OpenFile(file_handle->path, flags);
 	}
+	state.scan_filters.clear();
+	state.adaptive_filter.reset();
 
 	state.thrift_file_proto = CreateThriftFileProtocol(allocator, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
@@ -979,22 +981,22 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		vector<bool> need_to_read(reader_data.column_ids.size(), true);
 
 		state.sel.Initialize(nullptr);
-		if (!adaptive_filter) {
-			adaptive_filter = make_uniq<AdaptiveFilter>(*reader_data.filters);
-			for(auto &entry : reader_data.filters->filters) {
-				scan_filters.emplace_back(entry.first, *entry.second);
+		if (state.scan_filters.empty()) {
+			state.adaptive_filter = make_uniq<AdaptiveFilter>(*reader_data.filters);
+			for (auto &entry : reader_data.filters->filters) {
+				state.scan_filters.emplace_back(entry.first, *entry.second);
 			}
 		}
+		D_ASSERT(state.scan_filters.size() == reader_data.filters->filters.size());
 
 		// first load the columns that are used in filters
-		// auto filter_state = adaptive_filter->BeginFilter();
-		for(idx_t i = 0; i < scan_filters.size(); i++) {
-		//for (auto &filter_col : reader_data.filters->filters) {
+		auto filter_state = state.adaptive_filter->BeginFilter();
+		for (idx_t i = 0; i < state.scan_filters.size(); i++) {
 			if (filter_count == 0) {
 				// if no rows are left we can stop checking filters
 				break;
 			}
-			auto &scan_filter = scan_filters[i];
+			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
 			auto filter_entry = reader_data.filter_map[scan_filter.filter_idx];
 			if (filter_entry.is_constant) {
 				// this is a constant vector, look for the constant
@@ -1013,7 +1015,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				need_to_read[id] = false;
 			}
 		}
-		// adaptive_filter->EndFilter(filter_state);
+		state.adaptive_filter->EndFilter(filter_state);
 
 		// we still may have to read some cols
 		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {

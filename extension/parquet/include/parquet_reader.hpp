@@ -44,6 +44,14 @@ struct ParquetReaderPrefetchConfig {
 	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
 };
 
+struct ParquetScanFilter {
+	ParquetScanFilter(idx_t filter_idx, TableFilter &filter) : filter_idx(filter_idx), filter(filter) {
+	}
+
+	idx_t filter_idx;
+	TableFilter &filter;
+};
+
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
@@ -60,6 +68,11 @@ struct ParquetReaderScanState {
 
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
+
+	//! Adaptive filter
+	unique_ptr<AdaptiveFilter> adaptive_filter;
+	//! Table filter list
+	vector<ParquetScanFilter> scan_filters;
 };
 
 struct ParquetColumnDefinition {
@@ -113,14 +126,6 @@ struct ParquetUnionData {
 	}
 };
 
-struct ParquetScanFilter {
-	ParquetScanFilter(idx_t filter_idx, TableFilter &filter) :
-		filter_idx(filter_idx), filter(filter) {}
-
-	idx_t filter_idx;
-	TableFilter &filter;
-};
-
 class ParquetReader {
 public:
 	using UNION_READER_DATA = unique_ptr<ParquetUnionData>;
@@ -144,11 +149,6 @@ public:
 	vector<duckdb_parquet::SchemaElement> generated_column_schema;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
-	//! Adaptive filter
-	unique_ptr<AdaptiveFilter> adaptive_filter;
-	//! Table filter list
-	vector<ParquetScanFilter> scan_filters;
-
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
