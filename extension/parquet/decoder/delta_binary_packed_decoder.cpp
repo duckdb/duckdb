@@ -15,17 +15,9 @@ void DeltaBinaryPackedDecoder::InitializePage() {
 }
 
 void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
-	idx_t null_count = 0;
-	if (defines) {
-		// we need the null count because the dictionary offsets have no entries for nulls
-		for (idx_t i = result_offset; i < result_offset + read_count; i++) {
-			null_count += (defines[i] != reader.max_define);
-		}
-	}
-	idx_t valid_count = read_count - null_count;
+	idx_t valid_count = reader.GetValidCount(defines, read_count, result_offset);
 
 	auto &allocator = reader.reader.allocator;
-
 	decoded_data_buffer.reset();
 	switch (reader.schema.type) {
 	case duckdb_parquet::Type::INT32:
@@ -42,7 +34,23 @@ void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &
 		throw std::runtime_error("DELTA_BINARY_PACKED should only be INT32 or INT64");
 	}
 	// Plain() will put NULLs in the right place
-	reader.Plain(decoded_data_buffer, defines, read_count, nullptr, result_offset, result);
+	reader.Plain(decoded_data_buffer, defines, read_count, result_offset, result);
+}
+
+void DeltaBinaryPackedDecoder::Skip(uint8_t *defines, idx_t skip_count) {
+	idx_t valid_count = reader.GetValidCount(defines, skip_count);
+	switch (reader.schema.type) {
+	case duckdb_parquet::Type::INT32:
+		dbp_decoder->Skip<int32_t>(valid_count);
+
+		break;
+	case duckdb_parquet::Type::INT64:
+		dbp_decoder->Skip<int64_t>(valid_count);
+		break;
+
+	default:
+		throw std::runtime_error("DELTA_BINARY_PACKED should only be INT32 or INT64");
+	}
 }
 
 } // namespace duckdb

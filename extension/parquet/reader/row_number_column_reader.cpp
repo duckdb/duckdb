@@ -36,8 +36,7 @@ void RowNumberColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<C
 	}
 }
 
-idx_t RowNumberColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out,
-                                  data_ptr_t repeat_out, Vector &result) {
+idx_t RowNumberColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
 
 	auto data_ptr = FlatVector::GetData<int64_t>(result);
 	for (idx_t i = 0; i < num_values; i++) {

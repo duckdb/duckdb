@@ -21,10 +21,9 @@ public:
 	ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
 	                 idx_t max_define_p, idx_t max_repeat_p, unique_ptr<ColumnReader> child_column_reader_p);
 
-	idx_t Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
-	           Vector &result_out) override;
+	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out) override;
 
-	void ApplyPendingSkips(idx_t num_values) override;
+	void ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out) override;
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override {
 		child_column_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
@@ -42,6 +41,11 @@ public:
 		child_column_reader->RegisterPrefetch(transport, allow_merge);
 	}
 
+protected:
+	template <class OP>
+	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out,
+	                   optional_ptr<Vector> result_out);
+
 private:
 	unique_ptr<ColumnReader> child_column_reader;
 	ResizeableBuffer child_defines;
@@ -51,8 +55,6 @@ private:
 
 	VectorCache read_cache;
 	Vector read_vector;
-
-	parquet_filter_t child_filter;
 
 	idx_t overflow_child_count;
 };

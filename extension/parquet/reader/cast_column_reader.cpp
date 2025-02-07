@@ -24,23 +24,11 @@ void CastColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Column
 	child_reader->InitializeRead(row_group_idx_p, columns, protocol_p);
 }
 
-idx_t CastColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out,
-                             data_ptr_t repeat_out, Vector &result) {
+idx_t CastColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
 	intermediate_chunk.Reset();
 	auto &intermediate_vector = intermediate_chunk.data[0];
 
-	auto amount = child_reader->Read(num_values, filter, define_out, repeat_out, intermediate_vector);
-	if (!filter.all()) {
-		// work-around for filters: set all values that are filtered to NULL to prevent the cast from failing on
-		// uninitialized data
-		intermediate_vector.Flatten(amount);
-		auto &validity = FlatVector::Validity(intermediate_vector);
-		for (idx_t i = 0; i < amount; i++) {
-			if (!filter.test(i)) {
-				validity.SetInvalid(i);
-			}
-		}
-	}
+	auto amount = child_reader->Read(num_values, define_out, repeat_out, intermediate_vector);
 	string error_message;
 	bool all_succeeded = VectorOperations::DefaultTryCast(intermediate_vector, result, amount, &error_message);
 	if (!all_succeeded) {

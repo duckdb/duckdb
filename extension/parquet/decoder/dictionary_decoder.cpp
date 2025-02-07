@@ -23,7 +23,7 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size) {
 	auto &dict_validity = FlatVector::Validity(*dictionary);
 	dict_validity.Reset(dictionary_size + 1);
 	dict_validity.SetInvalid(dictionary_size);
-	reader.Plain(reader.block, nullptr, dictionary_size, nullptr, 0, *dictionary);
+	reader.Plain(reader.block, nullptr, dictionary_size, 0, *dictionary);
 }
 
 void DictionaryDecoder::InitializePage() {
@@ -86,6 +86,15 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(*dictionary, result, dictionary_selection_vector, read_count, 0, result_offset);
 	}
+}
+
+void DictionaryDecoder::Skip(uint8_t *defines, idx_t skip_count) {
+	if (!dictionary || dictionary_size < 0) {
+		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
+	}
+	idx_t valid_count = reader.GetValidCount(defines, skip_count);
+	// skip past the valid offsets
+	dict_decoder->Skip(valid_count);
 }
 
 } // namespace duckdb

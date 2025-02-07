@@ -48,4 +48,22 @@ void DeltaLengthByteArrayDecoder::Read(uint8_t *defines, idx_t read_count, Vecto
 	}
 }
 
+void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
+	auto &block = *reader.block;
+	auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	for (idx_t row_idx = 0; row_idx < skip_count; row_idx++) {
+		if (defines && defines[row_idx] != reader.max_define) {
+			continue;
+		}
+		if (length_idx >= byte_array_count) {
+			throw IOException(
+			    "DELTA_LENGTH_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
+			    "read of %d from %d entries) - corrupt file?",
+			    length_idx, byte_array_count);
+		}
+		auto str_len = length_data[length_idx++];
+		block.inc(str_len);
+	}
+}
+
 } // namespace duckdb

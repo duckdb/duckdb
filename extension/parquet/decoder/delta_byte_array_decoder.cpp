@@ -83,4 +83,21 @@ void DeltaByteArrayDecoder::Read(uint8_t *defines, idx_t read_count, Vector &res
 	StringVector::AddHeapReference(result, *byte_array_data);
 }
 
+void DeltaByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
+	if (!byte_array_data) {
+		throw std::runtime_error("Internal error - DeltaByteArray called but there was no byte_array_data set");
+	}
+	for (idx_t row_idx = 0; row_idx < skip_count; row_idx++) {
+		if (defines && defines[row_idx] != reader.max_define) {
+			continue;
+		}
+		if (delta_offset >= byte_array_count) {
+			throw IOException("DELTA_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
+			                  "read of %d from %d entries) - corrupt file?",
+			                  delta_offset + 1, byte_array_count);
+		}
+		delta_offset++;
+	}
+}
+
 } // namespace duckdb
