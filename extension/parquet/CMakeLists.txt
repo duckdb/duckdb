@@ -7,6 +7,7 @@ include_directories(
   ../../third_party/thrift ../../third_party/snappy
   ../../third_party/brotli/include)
 
+add_subdirectory(decoder)
 add_subdirectory(reader)
 set(PARQUET_EXTENSION_FILES
     ${PARQUET_EXTENSION_FILES}

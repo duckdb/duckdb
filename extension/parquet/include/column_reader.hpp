@@ -10,12 +10,15 @@
 
 #include "duckdb.hpp"
 #include "parquet_bss_decoder.hpp"
-#include "parquet_dbp_decoder.hpp"
-#include "parquet_rle_bp_decoder.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
 #include "thrift_tools.hpp"
+#include "decoder/byte_stream_split_decoder.hpp"
+#include "decoder/delta_binary_packed_decoder.hpp"
+#include "decoder/dictionary_decoder.hpp"
+#include "decoder/rle_decoder.hpp"
+#include "decoder/delta_byte_array_decoder.hpp"
 #ifndef DUCKDB_AMALGAMATION
 
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -38,7 +41,24 @@ using duckdb_parquet::Type;
 
 typedef std::bitset<STANDARD_VECTOR_SIZE> parquet_filter_t;
 
+enum class ColumnEncoding {
+	INVALID,
+	DICTIONARY,
+	DELTA_BINARY_PACKED,
+	RLE,
+	DELTA_LENGTH_BYTE_ARRAY,
+	DELTA_BYTE_ARRAY,
+	BYTE_STREAM_SPLIT,
+	PLAIN
+};
+
 class ColumnReader {
+	friend class ByteStreamSplitDecoder;
+	friend class DeltaBinaryPackedDecoder;
+	friend class DeltaByteArrayDecoder;
+	friend class DictionaryDecoder;
+	friend class RLEDecoder;
+
 public:
 	ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
 	             idx_t max_define_p, idx_t max_repeat_p);
@@ -123,12 +143,7 @@ protected:
 	virtual void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, idx_t num_values, parquet_filter_t *filter,
 	                   idx_t result_offset, Vector &result);
 	// these are nops for most types, but not for strings
-	virtual void PlainReference(shared_ptr<ByteBuffer>, Vector &result);
-
-	virtual void PrepareDeltaLengthByteArray(ResizeableBuffer &buffer);
-	virtual void PrepareDeltaByteArray(ResizeableBuffer &buffer);
-	virtual void DeltaByteArray(uint8_t *defines, idx_t num_values, parquet_filter_t &filter, idx_t result_offset,
-	                            Vector &result);
+	virtual void PlainReference(shared_ptr<ResizeableBuffer> &, Vector &result);
 
 	// applies any skips that were registered using Skip()
 	virtual void ApplyPendingSkips(idx_t num_values);
@@ -151,8 +166,6 @@ protected:
 
 	ParquetReader &reader;
 	LogicalType type;
-	unique_ptr<Vector> byte_array_data;
-	idx_t byte_array_count = 0;
 
 	idx_t pending_skips = 0;
 
@@ -167,8 +180,6 @@ private:
 	void PreparePageV2(PageHeader &page_hdr);
 	void DecompressInternal(CompressionCodec::type codec, const_data_ptr_t src, idx_t src_size, data_ptr_t dst,
 	                        idx_t dst_size);
-	void ConvertDictToSelVec(uint32_t *offsets, uint8_t *defines, parquet_filter_t &filter, idx_t read_now,
-	                         idx_t result_offset);
 	const ColumnChunk *chunk = nullptr;
 
 	TProtocol *protocol;
@@ -179,24 +190,20 @@ private:
 	shared_ptr<ResizeableBuffer> block;
 
 	ResizeableBuffer compressed_buffer;
-	ResizeableBuffer offset_buffer;
 
-	unique_ptr<RleBpDecoder> dict_decoder;
+	ColumnEncoding encoding = ColumnEncoding::INVALID;
 	unique_ptr<RleBpDecoder> defined_decoder;
 	unique_ptr<RleBpDecoder> repeated_decoder;
-	unique_ptr<DbpDecoder> dbp_decoder;
-	unique_ptr<RleBpDecoder> rle_decoder;
-	unique_ptr<BssDecoder> bss_decoder;
+	DictionaryDecoder dictionary_decoder;
+	DeltaBinaryPackedDecoder delta_binary_packed_decoder;
+	RLEDecoder rle_decoder;
+	DeltaByteArrayDecoder delta_byte_array_decoder;
+	ByteStreamSplitDecoder byte_stream_split_decoder;
 
 	// dummies for Skip()
 	parquet_filter_t none_filter;
 	ResizeableBuffer dummy_define;
 	ResizeableBuffer dummy_repeat;
-
-	SelectionVector dictionary_selection_vector;
-	idx_t dictionary_size;
-	unique_ptr<Vector> dictionary;
-	string dictionary_id;
 
 public:
 	template <class TARGET>
