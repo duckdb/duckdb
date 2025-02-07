@@ -492,7 +492,8 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	}
 	// check if we like this schema
 	if (file_meta_data->schema.size() < 2) {
-		throw FormatException("Need at least one non-root column in the file");
+		throw InvalidInputException("Failed to read Parquet file '%s': Need at least one non-root column in the file",
+		                            file_name);
 	}
 	root_reader = CreateReader(context);
 	auto &root_type = root_reader->Type();

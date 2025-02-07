@@ -15,6 +15,7 @@
 namespace duckdb {
 struct BenchmarkFileReader;
 class MaterializedQueryResult;
+struct InterpretedBenchmarkState;
 
 const string DEFAULT_DB_PATH = "duckdb_benchmark_db.db";
 
@@ -67,6 +68,8 @@ private:
 	void ReadResultFromFile(BenchmarkFileReader &reader, const string &file);
 	void ReadResultFromReader(BenchmarkFileReader &reader, const string &file);
 
+	unique_ptr<QueryResult> RunLoadQuery(InterpretedBenchmarkState &state, const string &load_query);
+
 private:
 	bool is_loaded = false;
 	std::unordered_map<string, string> replacement_mapping;
@@ -84,6 +87,8 @@ private:
 	int64_t result_column_count = 0;
 	vector<vector<string>> result_values;
 	string result_query;
+	//! How many times to retry the load, if any
+	idx_t retry_load = 0;
 
 	string display_name;
 	string display_group;
