@@ -25,7 +25,7 @@ void RLEDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t 
 	decoded_data_buffer.resize(reader.reader.allocator, sizeof(bool) * valid_count);
 	rle_decoder->GetBatch<uint8_t>(decoded_data_buffer.ptr, valid_count);
 	reader.PlainTemplated<bool, TemplatedParquetValueConversion<bool>>(decoded_data_buffer, defines, read_count,
-	                                                                   nullptr, result_offset, result);
+	                                                                   result_offset, result);
 }
 
 void RLEDecoder::Skip(uint8_t *defines, idx_t skip_count) {

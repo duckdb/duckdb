@@ -94,8 +94,8 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 			auto child_req_num_values =
 			    MinValue<idx_t>(STANDARD_VECTOR_SIZE, child_column_reader->GroupRowsAvailable());
 			read_vector.ResetFromCache(read_cache);
-			child_actual_num_values = child_column_reader->Read(child_req_num_values, child_filter, child_defines_ptr,
-			                                                    child_repeats_ptr, read_vector);
+			child_actual_num_values =
+			    child_column_reader->Read(child_req_num_values, child_defines_ptr, child_repeats_ptr, read_vector);
 		} else {
 			// we do: use the overflow values
 			child_actual_num_values = overflow_child_count;
@@ -137,8 +137,12 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 				OP::HandleNull(data, result_offset);
 			}
 
-			repeat_out[result_offset] = child_repeats_ptr[child_idx];
-			define_out[result_offset] = child_defines_ptr[child_idx];
+			if (repeat_out) {
+				repeat_out[result_offset] = child_repeats_ptr[child_idx];
+			}
+			if (define_out) {
+				define_out[result_offset] = child_defines_ptr[child_idx];
+			}
 
 			result_offset++;
 		}
@@ -162,8 +166,7 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 	return result_offset;
 }
 
-idx_t ListColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out,
-                             data_ptr_t repeat_out, Vector &result_out) {
+idx_t ListColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out) {
 	if (pending_skips > 0) {
 		ApplyPendingSkips(pending_skips, define_out, repeat_out);
 	}
@@ -181,12 +184,10 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_repeats.resize(reader.allocator, STANDARD_VECTOR_SIZE);
 	child_defines_ptr = (uint8_t *)child_defines.ptr;
 	child_repeats_ptr = (uint8_t *)child_repeats.ptr;
-
-	child_filter.set();
 }
 
 void ListColumnReader::ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out) {
-	ReadInternal<TemplatedListSkipper>(num_values, define_out, repeat_out, nullptr);
+	ReadInternal<TemplatedListSkipper>(num_values, nullptr, nullptr, nullptr);
 }
 
 } // namespace duckdb

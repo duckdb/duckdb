@@ -34,7 +34,7 @@ void ByteStreamSplitDecoder::Read(uint8_t *defines, idx_t read_count, Vector &re
 		throw std::runtime_error("BYTE_STREAM_SPLIT encoding is only supported for FLOAT or DOUBLE data");
 	}
 
-	reader.Plain(decoded_data_buffer, defines, read_count, nullptr, result_offset, result);
+	reader.Plain(decoded_data_buffer, defines, read_count, result_offset, result);
 }
 
 void ByteStreamSplitDecoder::Skip(uint8_t *defines, idx_t skip_count) {

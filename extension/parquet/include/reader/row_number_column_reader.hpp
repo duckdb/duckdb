@@ -26,8 +26,7 @@ public:
 	                      idx_t max_define_p, idx_t max_repeat_p);
 
 public:
-	idx_t Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
-	           Vector &result) override;
+	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) override;
 
 	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) override;
 

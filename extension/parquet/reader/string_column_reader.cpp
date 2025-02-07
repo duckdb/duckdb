@@ -49,10 +49,9 @@ private:
 };
 
 void StringColumnReader::Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values,
-                               parquet_filter_t *filter, idx_t result_offset, Vector &result) {
+                               idx_t result_offset, Vector &result) {
 	StringVector::AddBuffer(result, make_buffer<ParquetStringVectorBuffer>(plain_data));
-	PlainTemplated<string_t, StringParquetValueConversion>(*plain_data, defines, num_values, filter, result_offset,
-	                                                       result);
+	PlainTemplated<string_t, StringParquetValueConversion>(*plain_data, defines, num_values, result_offset, result);
 }
 
 void StringColumnReader::PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) {

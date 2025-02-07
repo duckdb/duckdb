@@ -199,13 +199,13 @@ void ColumnReader::PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num
 }
 
 void ColumnReader::Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, // NOLINT
-                         parquet_filter_t *filter, idx_t result_offset, Vector &result) {
+                         idx_t result_offset, Vector &result) {
 	throw NotImplementedException("Plain not implemented");
 }
 
 void ColumnReader::Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values,
-                         parquet_filter_t *filter, idx_t result_offset, Vector &result) {
-	Plain(*plain_data, defines, num_values, filter, result_offset, result);
+                         idx_t result_offset, Vector &result) {
+	Plain(*plain_data, defines, num_values, result_offset, result);
 }
 
 void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
@@ -476,8 +476,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 }
 
-idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
-                         Vector &result) {
+idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
 	// we need to reset the location because multiple column readers share the same protocol
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 	trans.SetLocation(chunk_read_offset);
@@ -530,7 +529,7 @@ idx_t ColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr
 		} else if (encoding == ColumnEncoding::BYTE_STREAM_SPLIT) {
 			byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);
 		} else {
-			Plain(block, define_out, read_now, &filter, result_offset, result);
+			Plain(block, define_out, read_now, result_offset, result);
 		}
 
 		result_offset += read_now;

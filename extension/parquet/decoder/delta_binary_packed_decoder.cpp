@@ -34,7 +34,7 @@ void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &
 		throw std::runtime_error("DELTA_BINARY_PACKED should only be INT32 or INT64");
 	}
 	// Plain() will put NULLs in the right place
-	reader.Plain(decoded_data_buffer, defines, read_count, nullptr, result_offset, result);
+	reader.Plain(decoded_data_buffer, defines, read_count, result_offset, result);
 }
 
 void DeltaBinaryPackedDecoder::Skip(uint8_t *defines, idx_t skip_count) {
