@@ -52,7 +52,7 @@ public:
 	string DebugToString();
 	virtual unique_ptr<TableFilter> Copy() const = 0;
 	virtual bool Equals(const TableFilter &other) const {
-		return filter_type != other.filter_type;
+		return filter_type == other.filter_type;
 	}
 	virtual unique_ptr<Expression> ToExpression(const Expression &column) const = 0;
 

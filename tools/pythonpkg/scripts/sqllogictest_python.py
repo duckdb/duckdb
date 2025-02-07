@@ -38,6 +38,9 @@ class SQLLogicTestExecutor(SQLLogicRunner):
                 'test/sql/json/table/read_json_objects.test',  # <-- Python client is always loaded with JSON available
                 'test/sql/copy/csv/zstd_crash.test',  # <-- Python client is always loaded with Parquet available
                 'test/sql/error/extension_function_error.test',  # <-- Python client is always loaded with TPCH available
+                'test/optimizer/joins/tpcds_nofail.test',  # <-- Python client is always loaded with TPCDS available
+                'test/sql/settings/errors_as_json.test',  # <-- errors_as_json not currently supported in Python
+                'test/sql/parallelism/intraquery/depth_first_evaluation_union_and_join.test',  # <-- Python client is always loaded with TPCDS available
                 'test/sql/types/timestamp/test_timestamp_tz.test',  # <-- Python client is always loaded wih ICU available - making the TIMESTAMPTZ::DATE cast pass
                 'test/sql/parser/invisible_spaces.test',  # <-- Parser is getting tripped up on the invisible spaces
                 'test/sql/copy/csv/code_cov/csv_state_machine_invalid_utf.test',  # <-- ConversionException is empty, see Python Mega Issue (duckdb-internal #1488)
