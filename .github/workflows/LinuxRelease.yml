@@ -126,6 +126,85 @@ jobs:
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
+
+
+ linux-release-64-arm2:
+   # Builds binaries for linux_amd64_gcc4
+   name: Linux (aarch64)
+   runs-on: ubuntu-24.04-arm
+  # needs: linux-extensions-64
+  # if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
+
+   steps:
+     - uses: actions/checkout@v3
+       with:
+         fetch-depth: 0
+         ref: ${{ inputs.git_ref }}
+
+     - name: Install pytest
+       run: |
+         python3 -m pip install pytest
+
+     - name: Build
+       shell: bash
+       run: |
+         export PWD=`pwd`
+         docker run                                                             \
+         -v$PWD:$PWD                                                            \
+         -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
+         -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
+         -e EXTENSION_CONFIGS="$PWD/.github/config/bundled_extensions.cmake"    \
+         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
+         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
+         -e BUILD_BENCHMARK=1                                                   \
+         -e FORCE_WARN_UNUSED=1                                                 \
+         -e DUCKDB_RUN_PARALLEL_CSV_TESTS=1                                     \
+         quay.io/pypa/manylinux2014_aarch64                                      \
+         bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make -C $PWD"
+
+     - name: Print platform
+       shell: bash
+       run: ./build/release/duckdb -c "PRAGMA platform;"
+
+     - name: Deploy
+       shell: bash
+       env:
+         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
+         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
+       run: |
+         python3 scripts/amalgamation.py
+         zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
+         zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+         zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
+         ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip
+
+     - uses: actions/upload-artifact@v4
+       with:
+         name: duckdb-binaries-linux
+         path: |
+           libduckdb-linux-aarch64.zip
+           duckdb_cli-linux-aarch64.zip
+
+     - name: Test
+       shell: bash
+       if: ${{ inputs.skip_tests != 'true' }}
+       run: |
+         python3 scripts/run_tests_one_by_one.py build/release/test/unittest "*" --time_execution
+
+     - name: Tools Tests
+       shell: bash
+       if: ${{ inputs.skip_tests != 'true' }}
+       run: |
+         python3 -m pytest tools/shell/tests --shell-binary build/release/duckdb
+
+     - name: Examples
+       shell: bash
+       if: ${{ inputs.skip_tests != 'true' }}
+       run: |
+         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
+         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
+
+
  linux-release-aarch64:
    # Builds binaries for linux_arm64
    name: Linux (aarch64)
