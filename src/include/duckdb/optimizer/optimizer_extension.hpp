@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/common.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
@@ -17,9 +18,8 @@ class ClientContext;
 
 //! The OptimizerExtensionInfo holds static information relevant to the optimizer extension
 struct OptimizerExtensionInfo {
-	virtual ~OptimizerExtensionInfo() = default;
-
-	[[nodiscard]] virtual const std::string &GetName() const;
+	virtual ~OptimizerExtensionInfo() {
+	}
 };
 
 struct OptimizerExtensionInput {
@@ -31,16 +31,12 @@ struct OptimizerExtensionInput {
 typedef void (*optimize_function_t)(OptimizerExtensionInput &input, unique_ptr<LogicalOperator> &plan);
 
 class OptimizerExtension {
-	OptimizerExtension(const optimize_function_t optimize_function_p,
-	                   shared_ptr<OptimizerExtensionInfo> optimizer_info_p)
-	    : optimize_function(optimize_function_p), optimizer_info(move(optimizer_info_p)) {
-		D_ASSERT(optimizer_info);
-		D_ASSERT(!optimizer_info->GetName().empty());
-	}
-
 public:
+	//! The optimize function of the optimizer extension.
+	//! Takes a logical query plan as an input, which it can modify in place
 	optimize_function_t optimize_function;
 
+	//! Additional optimizer info passed to the optimize function
 	shared_ptr<OptimizerExtensionInfo> optimizer_info;
 };
 

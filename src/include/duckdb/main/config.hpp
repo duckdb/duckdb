@@ -318,7 +318,7 @@ public:
 	DBConfigOptions options;
 	//! Extensions made to the parser
 	vector<ParserExtension> parser_extensions;
-	//! Extension to be run before the optimizer optimizations
+	//! Extension running before the optimizer optimizations
 	vector<OptimizerExtension> pre_optimizer_extensions;
 	//! Extensions made to the optimizer
 	vector<OptimizerExtension> optimizer_extensions;
