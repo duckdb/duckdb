@@ -16,7 +16,6 @@
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/storage/table/scan_filter.hpp"
 #include "column_reader.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_rle_bp_decoder.hpp"

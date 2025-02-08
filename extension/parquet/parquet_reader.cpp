@@ -1000,7 +1000,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				auto &result_vector = result.data[result_idx];
 				auto &child_reader = root_reader.GetChildReader(file_col_idx);
 				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter, state.sel,
-				                    filter_count);
+				                    filter_count, i == 0);
 				need_to_read[id] = false;
 			}
 		}

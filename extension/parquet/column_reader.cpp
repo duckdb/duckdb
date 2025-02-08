@@ -508,8 +508,8 @@ idx_t ColumnReader::PrepareRead(idx_t max_read, data_ptr_t define_out, data_ptr_
 	return read_now;
 }
 
-
-void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result, idx_t result_offset) {
+void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+                            idx_t result_offset) {
 	if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 		result.Flatten(result_offset);
 		result.Resize(result_offset, STANDARD_VECTOR_SIZE);
@@ -561,8 +561,53 @@ idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t 
 }
 
 void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                          const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count) {
+                          const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count,
+                          bool is_first_filter) {
+	if (SupportsSpecialFilter() && is_first_filter) {
+		SpecialFilter(num_values, define_out, repeat_out, result, filter, sel, approved_tuple_count);
+		return;
+	}
 	Read(num_values, define_out, repeat_out, result);
+	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
+}
+
+void ColumnReader::SpecialFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+                                 const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count) {
+	auto to_read = num_values;
+
+	// prepare the first read
+	BeginRead(define_out, repeat_out);
+	auto read_now = PrepareRead(to_read, define_out, repeat_out, 0);
+
+	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
+	if (read_now == to_read) {
+		// Push filter into dictionary directly
+		auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
+		if (encoding == ColumnEncoding::DICTIONARY && dictionary_decoder.CanFilter(filter)) {
+			dictionary_decoder.Filter(define_ptr, read_now, result, filter, sel, approved_tuple_count);
+			page_rows_available -= read_now;
+			FinishRead(num_values);
+			return;
+		}
+	}
+
+	// fallback to regular read + filter
+	// first finish this read
+	idx_t result_offset = 0;
+	ReadData(read_now, define_out, repeat_out, result, result_offset);
+	result_offset += read_now;
+	to_read -= read_now;
+	while (to_read > 0) {
+		// finish any remaining reads
+		read_now = PrepareRead(to_read, define_out, repeat_out, result_offset);
+		ReadData(read_now, define_out, repeat_out, result, result_offset);
+
+		result_offset += read_now;
+		to_read -= read_now;
+	}
+	FinishRead(num_values);
+
+	// finally apply the filter to the result
 	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
 }
 

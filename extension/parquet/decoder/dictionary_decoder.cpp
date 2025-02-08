@@ -12,6 +12,8 @@ DictionaryDecoder::DictionaryDecoder(ColumnReader &reader)
 void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size) {
 	auto old_dict_size = dictionary_size;
 	dictionary_size = new_dictionary_size;
+	filter_result.reset();
+	filter_count = 0;
 	// we use the first value in the dictionary to keep a NULL
 	if (!dictionary) {
 		dictionary = make_uniq<Vector>(reader.type, dictionary_size + 1);
@@ -46,10 +48,7 @@ void DictionaryDecoder::ConvertDictToSelVec(uint32_t *offsets, const SelectionVe
 	}
 }
 
-void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
-	if (!dictionary || dictionary_size < 0) {
-		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
-	}
+idx_t DictionaryDecoder::GetValidValues(uint8_t *defines, idx_t read_count, idx_t result_offset) {
 	idx_t valid_count = read_count;
 	if (defines) {
 		valid_count = 0;
@@ -59,6 +58,14 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 			valid_count += defines[result_offset + i] == reader.max_define;
 		}
 	}
+	return valid_count;
+}
+
+idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
+	if (!dictionary || dictionary_size < 0) {
+		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
+	}
+	idx_t valid_count = GetValidValues(defines, read_count, result_offset);
 	if (valid_count == read_count) {
 		// all values are valid - we can directly decompress the offsets into the selection vector
 		dict_decoder->GetBatch<uint32_t>(data_ptr_cast(dictionary_selection_vector.data()), valid_count);
@@ -85,6 +92,7 @@ void DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result,
 		D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 		VectorOperations::Copy(*dictionary, result, dictionary_selection_vector, read_count, 0, result_offset);
 	}
+	return valid_count;
 }
 
 void DictionaryDecoder::Skip(uint8_t *defines, idx_t skip_count) {
@@ -94,6 +102,70 @@ void DictionaryDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 	idx_t valid_count = reader.GetValidCount(defines, skip_count);
 	// skip past the valid offsets
 	dict_decoder->Skip(valid_count);
+}
+
+bool DictionaryDecoder::CanFilter(const TableFilter &filter) {
+	if (dictionary_size == 0) {
+		return false;
+	}
+	// FIXME - we can only push the filter own if the filter removes NULL values
+	// FIXME: we might not want to push filters into the dictionary if the dictionary is too large
+	return true;
+}
+
+void DictionaryDecoder::Filter(uint8_t *defines, idx_t read_count, Vector &result, const TableFilter &filter,
+                               SelectionVector &sel, idx_t &approved_tuple_count) {
+	if (!dictionary || dictionary_size < 0) {
+		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
+	}
+	if (!filter_result) {
+		// no filter result yet - apply filter to the dictionary
+		// initialize the filter result - setting everything to false
+		filter_result = make_unsafe_uniq_array<bool>(dictionary_size);
+
+		// apply the filter
+		UnifiedVectorFormat vdata;
+		dictionary->ToUnifiedFormat(dictionary_size, vdata);
+		SelectionVector dict_sel;
+		filter_count = dictionary_size;
+		ColumnSegment::FilterSelection(dict_sel, *dictionary, vdata, filter, dictionary_size, filter_count);
+
+		// now set all matching tuples to true
+		for (idx_t i = 0; i < filter_count; i++) {
+			auto idx = dict_sel.get_index(i);
+			filter_result[idx] = true;
+		}
+	}
+	if (filter_count == 0) {
+		// nothing matched the dictionary - we are done
+		approved_tuple_count = 0;
+		return;
+	}
+	// read the dictionary values
+	auto valid_count = Read(defines, read_count, result, 0);
+
+	// apply the filter by checking the dictionary offsets directly
+	uint32_t *offsets;
+	if (valid_count == read_count) {
+		offsets = dictionary_selection_vector.data();
+	} else {
+		offsets = reinterpret_cast<uint32_t *>(offset_buffer.ptr);
+	}
+	D_ASSERT(offsets);
+	SelectionVector new_sel(valid_count);
+	approved_tuple_count = 0;
+	for (idx_t idx = 0; idx < valid_count; idx++) {
+		auto row_idx = valid_sel.get_index(idx);
+		auto offset = offsets[idx];
+		if (!filter_result[offset]) {
+			// does not pass the filter
+			continue;
+		}
+		new_sel.set_index(approved_tuple_count++, row_idx);
+	}
+	if (approved_tuple_count < read_count) {
+		sel.Initialize(new_sel);
+	}
 }
 
 } // namespace duckdb
