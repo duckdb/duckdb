@@ -508,9 +508,37 @@ idx_t ColumnReader::PrepareRead(idx_t max_read, data_ptr_t define_out, data_ptr_
 	return read_now;
 }
 
-void ColumnReader::FinishRead() {
+
+void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result, idx_t result_offset) {
+	if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
+		result.Flatten(result_offset);
+		result.Resize(result_offset, STANDARD_VECTOR_SIZE);
+	}
+
+	auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
+	if (encoding == ColumnEncoding::DICTIONARY) {
+		dictionary_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else if (encoding == ColumnEncoding::DELTA_BINARY_PACKED) {
+		delta_binary_packed_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else if (encoding == ColumnEncoding::RLE) {
+		rle_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY) {
+		delta_length_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else if (encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
+		delta_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else if (encoding == ColumnEncoding::BYTE_STREAM_SPLIT) {
+		byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else {
+		Plain(block, define_out, read_now, result_offset, result);
+	}
+	page_rows_available -= read_now;
+}
+
+void ColumnReader::FinishRead(idx_t read_count) {
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 	chunk_read_offset = trans.GetLocation();
+
+	group_rows_available -= read_count;
 }
 
 idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
@@ -522,34 +550,12 @@ idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t 
 
 	while (to_read > 0) {
 		auto read_now = PrepareRead(to_read, define_out, repeat_out, result_offset);
-		if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
-			result.Flatten(result_offset);
-			result.Resize(result_offset, STANDARD_VECTOR_SIZE);
-		}
-
-		auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
-		if (encoding == ColumnEncoding::DICTIONARY) {
-			dictionary_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::DELTA_BINARY_PACKED) {
-			delta_binary_packed_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::RLE) {
-			rle_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY) {
-			delta_length_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
-			delta_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::BYTE_STREAM_SPLIT) {
-			byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else {
-			Plain(block, define_out, read_now, result_offset, result);
-		}
+		ReadData(read_now, define_out, repeat_out, result, result_offset);
 
 		result_offset += read_now;
-		page_rows_available -= read_now;
 		to_read -= read_now;
 	}
-	group_rows_available -= num_values;
-	FinishRead();
+	FinishRead(num_values);
 
 	return num_values;
 }
@@ -605,8 +611,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 		page_rows_available -= skip_now;
 		to_skip -= skip_now;
 	}
-	group_rows_available -= num_values;
-	FinishRead();
+	FinishRead(num_values);
 }
 
 //===--------------------------------------------------------------------===//
