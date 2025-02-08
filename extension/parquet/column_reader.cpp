@@ -563,16 +563,16 @@ idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t 
 void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
                           const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count,
                           bool is_first_filter) {
-	if (SupportsSpecialFilter() && is_first_filter) {
-		SpecialFilter(num_values, define_out, repeat_out, result, filter, sel, approved_tuple_count);
+	if (SupportsDirectFilter() && is_first_filter) {
+		DirectFilter(num_values, define_out, repeat_out, result, filter, sel, approved_tuple_count);
 		return;
 	}
 	Read(num_values, define_out, repeat_out, result);
 	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
 }
 
-void ColumnReader::SpecialFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                                 const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count) {
+void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+                                const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count) {
 	auto to_read = num_values;
 
 	// prepare the first read

@@ -147,11 +147,11 @@ public:
 	}
 
 protected:
-	virtual bool SupportsSpecialFilter() const {
+	virtual bool SupportsDirectFilter() const {
 		return false;
 	}
-	void SpecialFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
-	                   const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count);
+	void DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
+	                  const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count);
 
 private:
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);

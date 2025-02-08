@@ -67,7 +67,7 @@ public:
 		PlainSkipTemplated<VALUE_CONVERSION>(plain_data, defines, num_values);
 	}
 
-	bool SupportsSpecialFilter() const override {
+	bool SupportsDirectFilter() const override {
 		return true;
 	}
 };

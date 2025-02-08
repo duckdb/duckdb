@@ -43,7 +43,7 @@ protected:
 	           Vector &result) override;
 	void PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) override;
 
-	bool SupportsSpecialFilter() const override {
+	bool SupportsDirectFilter() const override {
 		return true;
 	}
 };
