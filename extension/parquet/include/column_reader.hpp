@@ -70,9 +70,10 @@ public:
 	                                             idx_t max_repeat);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
-	virtual void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out, const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count);
+	virtual void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
+	                    const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count);
 	static void ApplyFilter(Vector &v, const TableFilter &filter, idx_t scan_count, SelectionVector &sel,
-							idx_t &approved_tuple_count);
+	                        idx_t &approved_tuple_count);
 	virtual void Skip(idx_t num_values);
 
 	ParquetReader &Reader();
@@ -145,6 +146,11 @@ public:
 	}
 
 private:
+	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
+	void FinishRead();
+	//! Prepare a read of up to "max_read" rows and read the defines/repeats. Returns how many rows are available.
+	idx_t PrepareRead(idx_t max_read, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
+
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
 	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
 	                            const idx_t result_offset, Vector &result) {
@@ -184,7 +190,7 @@ protected:
 	                   idx_t result_offset, Vector &result);
 
 	// applies any skips that were registered using Skip()
-	virtual void ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out);
+	virtual void ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out);
 
 	bool HasDefines() const {
 		return max_define > 0;

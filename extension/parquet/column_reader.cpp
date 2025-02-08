@@ -475,40 +475,53 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 }
 
-idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 	// we need to reset the location because multiple column readers share the same protocol
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 	trans.SetLocation(chunk_read_offset);
 
 	// Perform any skips that were not applied yet.
-	if (pending_skips > 0) {
-		ApplyPendingSkips(pending_skips, define_out, repeat_out);
+	if (define_out && repeat_out) {
+		ApplyPendingSkips(define_out, repeat_out);
 	}
+}
+
+idx_t ColumnReader::PrepareRead(idx_t max_read, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset) {
+	while (page_rows_available == 0) {
+		PrepareRead();
+	}
+
+	D_ASSERT(block);
+	auto read_now = MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
+
+	D_ASSERT(read_now + result_offset <= STANDARD_VECTOR_SIZE);
+
+	if (HasRepeats()) {
+		D_ASSERT(repeated_decoder);
+		repeated_decoder->GetBatch<uint8_t>(repeat_out + result_offset, read_now);
+	}
+
+	if (HasDefines()) {
+		D_ASSERT(defined_decoder);
+		defined_decoder->GetBatch<uint8_t>(define_out + result_offset, read_now);
+	}
+	return read_now;
+}
+
+void ColumnReader::FinishRead() {
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+	chunk_read_offset = trans.GetLocation();
+}
+
+idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+	BeginRead(define_out, repeat_out);
 
 	idx_t result_offset = 0;
 	auto to_read = num_values;
 	D_ASSERT(to_read <= STANDARD_VECTOR_SIZE);
 
 	while (to_read > 0) {
-		while (page_rows_available == 0) {
-			PrepareRead();
-		}
-
-		D_ASSERT(block);
-		auto read_now = MinValue<idx_t>(to_read, page_rows_available);
-
-		D_ASSERT(read_now + result_offset <= STANDARD_VECTOR_SIZE);
-
-		if (HasRepeats()) {
-			D_ASSERT(repeated_decoder);
-			repeated_decoder->GetBatch<uint8_t>(repeat_out + result_offset, read_now);
-		}
-
-		if (HasDefines()) {
-			D_ASSERT(defined_decoder);
-			defined_decoder->GetBatch<uint8_t>(define_out + result_offset, read_now);
-		}
-
+		auto read_now = PrepareRead(to_read, define_out, repeat_out, result_offset);
 		if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 			result.Flatten(result_offset);
 			result.Resize(result_offset, STANDARD_VECTOR_SIZE);
@@ -536,18 +549,19 @@ idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t 
 		to_read -= read_now;
 	}
 	group_rows_available -= num_values;
-	chunk_read_offset = trans.GetLocation();
+	FinishRead();
 
 	return num_values;
 }
 
-void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result, const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count) {
+void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+                          const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count) {
 	Read(num_values, define_out, repeat_out, result);
 	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
 }
 
 void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, idx_t scan_count, SelectionVector &sel,
-						idx_t &approved_tuple_count) {
+                               idx_t &approved_tuple_count) {
 	UnifiedVectorFormat vdata;
 	v.ToUnifiedFormat(scan_count, vdata);
 	ColumnSegment::FilterSelection(sel, v, vdata, filter, scan_count, approved_tuple_count);
@@ -557,34 +571,19 @@ void ColumnReader::Skip(idx_t num_values) {
 	pending_skips += num_values;
 }
 
-void ColumnReader::ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out) {
-	D_ASSERT(num_values >= pending_skips);
-	pending_skips -= num_values;
-
-	// we need to reset the location because multiple column readers share the same protocol
-	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
-	trans.SetLocation(chunk_read_offset);
+void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
+	if (pending_skips == 0) {
+		return;
+	}
+	idx_t num_values = pending_skips;
+	pending_skips = 0;
 
 	auto to_skip = num_values;
+	// start reading but do not apply skips (we are skipping now)
+	BeginRead(nullptr, nullptr);
 
 	while (to_skip > 0) {
-		while (page_rows_available == 0) {
-			PrepareRead();
-		}
-
-		D_ASSERT(block);
-		auto skip_now = MinValue<idx_t>(MinValue<idx_t>(to_skip, page_rows_available), STANDARD_VECTOR_SIZE);
-
-		// we need to read the repeats/defines even when we are skipping
-		if (HasRepeats()) {
-			D_ASSERT(repeated_decoder);
-			repeated_decoder->GetBatch<uint8_t>(repeat_out, skip_now);
-		}
-
-		if (HasDefines()) {
-			D_ASSERT(defined_decoder);
-			defined_decoder->GetBatch<uint8_t>(define_out, skip_now);
-		}
+		auto skip_now = PrepareRead(to_skip, define_out, repeat_out, 0);
 
 		auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
 		if (encoding == ColumnEncoding::DICTIONARY) {
@@ -607,7 +606,7 @@ void ColumnReader::ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, da
 		to_skip -= skip_now;
 	}
 	group_rows_available -= num_values;
-	chunk_read_offset = trans.GetLocation();
+	FinishRead();
 }
 
 //===--------------------------------------------------------------------===//
