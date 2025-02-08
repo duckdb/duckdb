@@ -45,7 +45,7 @@ jobs:
       shell: bash
       run: |
         make
-        git clone https://github.com/duckdb/duckdb.git
+        git clone --recurse-submodules https://github.com/duckdb/duckdb.git
         cd duckdb
         git checkout `git tag --list | tail -n 1`
         make

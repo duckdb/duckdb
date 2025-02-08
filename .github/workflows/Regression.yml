@@ -89,7 +89,7 @@ jobs:
         shell: bash
         run: |
           make
-          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+          git clone --recurse-submodules --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
           make
           cd ..
@@ -100,7 +100,7 @@ jobs:
         shell: bash
         run: |
           make
-          git clone https://github.com/duckdb/duckdb.git
+          git clone --recurse-submodules https://github.com/duckdb/duckdb.git
           cd duckdb
           if [[ -z "${BASE_HASH}" ]]; then
             export CHECKOUT_HASH=$(gh run list --repo duckdb/duckdb --branch=main --workflow=Regression --event=repository_dispatch --status=completed --json=headSha --limit=1 --jq '.[0].headSha')
@@ -214,7 +214,7 @@ jobs:
         shell: bash
         run: |
           make
-          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+          git clone --recurse-submodules --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
           make
           cd ..
@@ -295,7 +295,7 @@ jobs:
         shell: bash
         run: |
           make
-          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+          git clone --recurse-submodules --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
           make
           cd ..
@@ -338,7 +338,7 @@ jobs:
         shell: bash
         run: |
           make
-          git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+          git clone --recurse-submodules --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
           make
           cd ..

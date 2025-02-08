@@ -58,7 +58,7 @@ jobs:
        shell: bash
        run: |
          LTO=full make
-         git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+         git clone --recurse-submodules --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
          cd duckdb
          make
          cd ..
@@ -139,7 +139,7 @@ jobs:
        shell: bash
        run: |
          CMAKE_LLVM_PATH='/opt/homebrew/opt/llvm' make
-         git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+         git clone --recurse-submodules --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
          cd duckdb
          make
          cd ..
@@ -225,7 +225,7 @@ jobs:
            # sudo ./llvm.sh 17
            #####
            CMAKE_LLVM_PATH='/usr/lib/llvm-14' make
-           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+           git clone --recurse-submodules --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
            cd duckdb
            make
            cd ..
@@ -306,7 +306,7 @@ jobs:
          shell: bash
          run: |
            LTO='full' make
-           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
+           git clone --recurse-submodules --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
            cd duckdb
            make
            cd ..
