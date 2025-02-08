@@ -1,6 +1,9 @@
 #include "decoder/dictionary_decoder.hpp"
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
 
@@ -104,12 +107,46 @@ void DictionaryDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 	dict_decoder->Skip(valid_count);
 }
 
+bool DictionarySupportsFilter(const TableFilter &filter) {
+	switch (filter.filter_type) {
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &conjunction = filter.Cast<ConjunctionOrFilter>();
+		for (auto &child_filter : conjunction.child_filters) {
+			if (!DictionarySupportsFilter(*child_filter)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction = filter.Cast<ConjunctionAndFilter>();
+		for (auto &child_filter : conjunction.child_filters) {
+			if (!DictionarySupportsFilter(*child_filter)) {
+				return false;
+			}
+		}
+		return true;
+	}
+	case TableFilterType::CONSTANT_COMPARISON:
+	case TableFilterType::IS_NOT_NULL:
+		return true;
+	case TableFilterType::IS_NULL:
+	case TableFilterType::DYNAMIC_FILTER:
+	case TableFilterType::OPTIONAL_FILTER:
+	case TableFilterType::STRUCT_EXTRACT:
+	default:
+		return false;
+	}
+}
+
 bool DictionaryDecoder::CanFilter(const TableFilter &filter) {
 	if (dictionary_size == 0) {
 		return false;
 	}
-	// FIXME - we can only push the filter own if the filter removes NULL values
-	// FIXME: we might not want to push filters into the dictionary if the dictionary is too large
+	// We can only push the filter if the filter removes NULL values
+	if (!DictionarySupportsFilter(filter)) {
+		return false;
+	}
 	return true;
 }
 
