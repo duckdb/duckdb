@@ -71,7 +71,7 @@ struct TemplatedListSkipper {
 	}
 };
 
-template <class OP = TemplatedListReader>
+template <class OP>
 idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out,
                                      optional_ptr<Vector> result_out) {
 	idx_t result_offset = 0;
@@ -168,7 +168,7 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 
 idx_t ListColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out) {
 	ApplyPendingSkips(define_out, repeat_out);
-	return ReadInternal(num_values, define_out, repeat_out, result_out);
+	return ReadInternal<TemplatedListReader>(num_values, define_out, repeat_out, result_out);
 }
 
 ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,

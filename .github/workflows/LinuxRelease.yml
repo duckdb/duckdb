@@ -50,12 +50,16 @@ env:
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
 
 jobs:
- linux-release-64:
-    # Builds binaries for linux_amd64_gcc4
-    name: Linux (x64)
-    runs-on: ubuntu-latest
+ linux-release-cli:
     needs: linux-extensions-64
     if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
+
+    strategy:
+      matrix:
+        config: [ { runner: ubuntu-latest, arch: amd64, image: x86_64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}]
+
+    name: Linux CLI (${{ matrix.config.arch }})
+    runs-on: ${{ matrix.config.runner }}
 
     steps:
     - uses: actions/checkout@v3
@@ -81,7 +85,7 @@ jobs:
         -e BUILD_BENCHMARK=1                                                   \
         -e FORCE_WARN_UNUSED=1                                                 \
         -e DUCKDB_RUN_PARALLEL_CSV_TESTS=1                                     \
-        quay.io/pypa/manylinux2014_x86_64                                      \
+        quay.io/pypa/manylinux2014_${{ matrix.config.image }}                  \
         bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make -C $PWD"
 
     - name: Print platform
@@ -94,18 +98,17 @@ jobs:
         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
       run: |
-        python3 scripts/amalgamation.py
-        zip -j duckdb_cli-linux-amd64.zip build/release/duckdb
-        zip -j libduckdb-linux-amd64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-        zip -j libduckdb-src.zip src/amalgamation/duckdb.hpp src/amalgamation/duckdb.cpp src/include/duckdb.h src/include/duckdb_extension.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-src.zip libduckdb-linux-amd64.zip duckdb_cli-linux-amd64.zip
+        zip -j duckdb_cli-linux-${{ matrix.config.arch }}.zip build/release/duckdb
+        gzip -9 -k -n -c build/release/duckdb > duckdb_cli-linux-${{ matrix.config.arch }}.gz
+        zip -j libduckdb-linux-${{ matrix.config.arch }}.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.zip duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - uses: actions/upload-artifact@v4
       with:
         name: duckdb-binaries-linux
         path: |
-          libduckdb-linux-amd64.zip
-          duckdb_cli-linux-amd64.zip
+          libduckdb-linux-${{ matrix.config.arch }}.zip
+          duckdb_cli-linux-${{ matrix.config.arch }}.zip
 
     - name: Test
       shell: bash
@@ -126,53 +129,6 @@ jobs:
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
 
- linux-release-aarch64:
-   # Builds binaries for linux_arm64
-   name: Linux (aarch64)
-   runs-on: ubuntu-latest
-   needs: linux-extensions-64
-   if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-
-   steps:
-     - uses: actions/checkout@v3
-       with:
-         fetch-depth: 0
-         ref: ${{ inputs.git_ref }}
-
-     - name: Build
-       shell: bash
-       run: |
-         docker run                                                             \
-         -v.:/duckdb                                                            \
-         -e CC=aarch64-linux-gnu-gcc                                            \
-         -e CXX=aarch64-linux-gnu-g++                                           \
-         -e CMAKE_BUILD_PARALLEL_LEVEL=2                                        \
-         -e OVERRIDE_GIT_DESCRIBE=$OVERRIDE_GIT_DESCRIBE                        \
-         -e EXTENSION_CONFIGS='/duckdb/.github/config/bundled_extensions.cmake' \
-         -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
-         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
-         -e FORCE_WARN_UNUSED=1                                                 \
-         -e DUCKDB_PLATFORM=linux_arm64                                         \
-         ubuntu:18.04                                                           \
-         bash -c "/duckdb/scripts/setup_ubuntu1804.sh && git config --global --add safe.directory /duckdb && make -C /duckdb"
-
-     - name: Deploy
-       shell: bash
-       env:
-         AWS_ACCESS_KEY_ID: ${{ secrets.S3_DUCKDB_STAGING_ID }}
-         AWS_SECRET_ACCESS_KEY: ${{ secrets.S3_DUCKDB_STAGING_KEY }}
-       run: |
-         python3 scripts/amalgamation.py
-         zip -j duckdb_cli-linux-aarch64.zip build/release/duckdb
-         zip -j libduckdb-linux-aarch64.zip build/release/src/libduckdb*.* src/amalgamation/duckdb.hpp src/include/duckdb.h
-         ./scripts/upload-assets-to-staging.sh github_release libduckdb-linux-aarch64.zip duckdb_cli-linux-aarch64.zip
-
-     - uses: actions/upload-artifact@v4
-       with:
-         name: duckdb-binaries-linux-aarch64
-         path: |
-           libduckdb-linux-aarch64.zip
-           duckdb_cli-linux-aarch64.zip
 
  # Linux extensions for builds that use C++11 ABI, currently these are all linux builds based on ubuntu >= 18 (e.g. NodeJS)
  # note that the linux-release-64 is based on the manylinux-based extensions, which are built in .github/workflows/Python.yml
