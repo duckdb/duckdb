@@ -854,7 +854,6 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 		state.file_handle = fs.OpenFile(file_handle->path, flags);
 	}
-
 	state.thrift_file_proto = CreateThriftFileProtocol(allocator, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
@@ -979,18 +978,28 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		vector<bool> need_to_read(reader_data.column_ids.size(), true);
 
 		state.sel.Initialize(nullptr);
+		if (state.scan_filters.empty()) {
+			state.adaptive_filter = make_uniq<AdaptiveFilter>(*reader_data.filters);
+			for (auto &entry : reader_data.filters->filters) {
+				state.scan_filters.emplace_back(entry.first, *entry.second);
+			}
+		}
+		D_ASSERT(state.scan_filters.size() == reader_data.filters->filters.size());
+
 		// first load the columns that are used in filters
-		for (auto &filter_col : reader_data.filters->filters) {
+		auto filter_state = state.adaptive_filter->BeginFilter();
+		for (idx_t i = 0; i < state.scan_filters.size(); i++) {
 			if (filter_count == 0) {
 				// if no rows are left we can stop checking filters
 				break;
 			}
-			auto filter_entry = reader_data.filter_map[filter_col.first];
+			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
+			auto filter_entry = reader_data.filter_map[scan_filter.filter_idx];
 			if (filter_entry.is_constant) {
 				// this is a constant vector, look for the constant
 				auto &constant = reader_data.constant_map[filter_entry.index].value;
 				Vector constant_vector(constant);
-				ApplyFilter(constant_vector, *filter_col.second, scan_count, state.sel, filter_count);
+				ApplyFilter(constant_vector, scan_filter.filter, scan_count, state.sel, filter_count);
 			} else {
 				auto id = filter_entry.index;
 				auto file_col_idx = reader_data.column_ids[id];
@@ -999,10 +1008,11 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				auto &result_vector = result.data[result_idx];
 				auto &child_reader = root_reader.GetChildReader(file_col_idx);
 				child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
-				ApplyFilter(result_vector, *filter_col.second, scan_count, state.sel, filter_count);
+				ApplyFilter(result_vector, scan_filter.filter, scan_count, state.sel, filter_count);
 				need_to_read[id] = false;
 			}
 		}
+		state.adaptive_filter->EndFilter(filter_state);
 
 		// we still may have to read some cols
 		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
