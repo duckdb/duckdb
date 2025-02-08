@@ -26,7 +26,7 @@ public:
 	void Skip(uint8_t *defines, idx_t skip_count);
 
 private:
-	void ConvertDictToSelVec(uint32_t *offsets, const SelectionVector &rows, idx_t count, idx_t result_offset);
+	void ConvertDictToSelVec(uint32_t *offsets, const SelectionVector &rows, idx_t count);
 
 private:
 	ColumnReader &reader;

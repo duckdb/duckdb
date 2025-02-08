@@ -40,8 +40,6 @@ using duckdb_parquet::PageHeader;
 using duckdb_parquet::SchemaElement;
 using duckdb_parquet::Type;
 
-typedef std::bitset<STANDARD_VECTOR_SIZE> parquet_filter_t;
-
 enum class ColumnEncoding {
 	INVALID,
 	DICTIONARY,
