@@ -22,10 +22,9 @@
 #include "reader/uuid_column_reader.hpp"
 #include "zstd.h"
 
-#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/bit.hpp"
-#endif
 
 namespace duckdb {
 
@@ -540,6 +539,18 @@ idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t 
 	chunk_read_offset = trans.GetLocation();
 
 	return num_values;
+}
+
+void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result, const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count) {
+	Read(num_values, define_out, repeat_out, result);
+	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
+}
+
+void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, idx_t scan_count, SelectionVector &sel,
+						idx_t &approved_tuple_count) {
+	UnifiedVectorFormat vdata;
+	v.ToUnifiedFormat(scan_count, vdata);
+	ColumnSegment::FilterSelection(sel, v, vdata, filter, scan_count, approved_tuple_count);
 }
 
 void ColumnReader::Skip(idx_t num_values) {

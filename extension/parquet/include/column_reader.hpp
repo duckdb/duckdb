@@ -70,7 +70,9 @@ public:
 	                                             idx_t max_repeat);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
-
+	virtual void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out, const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count);
+	static void ApplyFilter(Vector &v, const TableFilter &filter, idx_t scan_count, SelectionVector &sel,
+							idx_t &approved_tuple_count);
 	virtual void Skip(idx_t num_values);
 
 	ParquetReader &Reader();
