@@ -17,6 +17,7 @@ namespace duckdb {
 
 template <class DUCKDB_PHYSICAL_TYPE, bool FIXED_LENGTH>
 struct DecimalParquetValueConversion {
+	template <bool CHECKED>
 	static DUCKDB_PHYSICAL_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		idx_t byte_len;
 		if (FIXED_LENGTH) {
@@ -32,6 +33,7 @@ struct DecimalParquetValueConversion {
 		return res;
 	}
 
+	template <bool CHECKED>
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
 		uint32_t decimal_len = FIXED_LENGTH ? reader.Schema().type_length : plain_data.read<uint32_t>();
 		plain_data.inc(decimal_len);
@@ -41,12 +43,8 @@ struct DecimalParquetValueConversion {
 		return true;
 	}
 
-	static DUCKDB_PHYSICAL_TYPE UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		return PlainRead(plain_data, reader);
-	}
-
-	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		PlainSkip(plain_data, reader);
+	static idx_t PlainConstantSize() {
+		return 0;
 	}
 };
 

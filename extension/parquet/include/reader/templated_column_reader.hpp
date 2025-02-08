@@ -15,25 +15,30 @@ namespace duckdb {
 
 template <class VALUE_TYPE>
 struct TemplatedParquetValueConversion {
-
+	template <bool CHECKED>
 	static VALUE_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		return plain_data.read<VALUE_TYPE>();
+		if (CHECKED) {
+			return plain_data.read<VALUE_TYPE>();
+		} else {
+			return plain_data.unsafe_read<VALUE_TYPE>();
+		}
 	}
 
+	template <bool CHECKED>
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.inc(sizeof(VALUE_TYPE));
+		if (CHECKED) {
+			plain_data.inc(sizeof(VALUE_TYPE));
+		} else {
+			plain_data.unsafe_inc(sizeof(VALUE_TYPE));
+		}
 	}
 
 	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
 		return plain_data.check_available(count * sizeof(VALUE_TYPE));
 	}
 
-	static VALUE_TYPE UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		return plain_data.unsafe_read<VALUE_TYPE>();
-	}
-
-	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.unsafe_inc(sizeof(VALUE_TYPE));
+	static idx_t PlainConstantSize() {
+		return sizeof(VALUE_TYPE);
 	}
 };
 
@@ -76,24 +81,30 @@ template <class PARQUET_PHYSICAL_TYPE, class DUCKDB_PHYSICAL_TYPE,
           DUCKDB_PHYSICAL_TYPE (*FUNC)(const PARQUET_PHYSICAL_TYPE &input)>
 struct CallbackParquetValueConversion {
 
+	template <bool CHECKED>
 	static DUCKDB_PHYSICAL_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		return FUNC(plain_data.read<PARQUET_PHYSICAL_TYPE>());
+		if (CHECKED) {
+			return FUNC(plain_data.read<PARQUET_PHYSICAL_TYPE>());
+		} else {
+			return FUNC(plain_data.unsafe_read<PARQUET_PHYSICAL_TYPE>());
+		}
 	}
 
+	template <bool CHECKED>
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.inc(sizeof(PARQUET_PHYSICAL_TYPE));
+		if (CHECKED) {
+			plain_data.inc(sizeof(PARQUET_PHYSICAL_TYPE));
+		} else {
+			plain_data.unsafe_inc(sizeof(PARQUET_PHYSICAL_TYPE));
+		}
 	}
 
 	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
 		return plain_data.check_available(count * sizeof(PARQUET_PHYSICAL_TYPE));
 	}
 
-	static DUCKDB_PHYSICAL_TYPE UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		return FUNC(plain_data.unsafe_read<PARQUET_PHYSICAL_TYPE>());
-	}
-
-	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.unsafe_inc(sizeof(PARQUET_PHYSICAL_TYPE));
+	static idx_t PlainConstantSize() {
+		return 0;
 	}
 };
 
