@@ -249,6 +249,7 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
 	trans.Skip(page_hdr.compressed_page_size);
 
 	page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
+	encoding = ColumnEncoding::DICTIONARY;
 	page_is_filtered_out = true;
 	return true;
 }
@@ -256,8 +257,8 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
 void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
-	block.reset();
 	page_is_filtered_out = false;
+	block.reset();
 	PageHeader page_hdr;
 	reader.Read(page_hdr, *protocol);
 	// some basic sanity check
@@ -544,19 +545,22 @@ void ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t
 
 void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
                             idx_t result_offset) {
-	if (page_is_filtered_out) {
-		// page is filtered out - just emit NULL
-		result.SetVectorType(VectorType::CONSTANT_VECTOR);
-		ConstantVector::SetNull(result, true);
-		return;
-	}
-	// read the defines/repeats
-	PrepareRead(read_now, define_out, repeat_out, result_offset);
 	// flatten the result vector if required
 	if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 		result.Flatten(result_offset);
 		result.Resize(result_offset, STANDARD_VECTOR_SIZE);
 	}
+	if (page_is_filtered_out) {
+		// page is filtered out - emit NULL for any rows
+		auto &validity = FlatVector::Validity(result);
+		for (idx_t i = 0; i < read_now; i++) {
+			validity.SetInvalid(result_offset + i);
+		}
+		page_rows_available -= read_now;
+		return;
+	}
+	// read the defines/repeats
+	PrepareRead(read_now, define_out, repeat_out, result_offset);
 	// read the data according to the encoder
 	auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
 	if (encoding == ColumnEncoding::DICTIONARY) {
@@ -584,9 +588,7 @@ void ColumnReader::FinishRead(idx_t read_count) {
 	group_rows_available -= read_count;
 }
 
-idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
-	BeginRead(define_out, repeat_out);
-
+idx_t ColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
 	idx_t result_offset = 0;
 	auto to_read = num_values;
 	D_ASSERT(to_read <= STANDARD_VECTOR_SIZE);
@@ -602,6 +604,11 @@ idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t 
 	FinishRead(num_values);
 
 	return num_values;
+}
+
+idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+	BeginRead(define_out, repeat_out);
+	return ReadInternal(num_values, define_out, repeat_out, result);
 }
 
 void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
@@ -640,7 +647,7 @@ void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data
 		return;
 	}
 	// fallback to regular read + filter
-	Read(num_values, define_out, repeat_out, result);
+	ReadInternal(num_values, define_out, repeat_out, result);
 	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
 }
 

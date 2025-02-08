@@ -159,6 +159,7 @@ private:
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
 	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr);
+	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result);
 	//! Prepare a read of up to "max_read" rows and read the defines/repeats. Returns how many rows are available.
 	void PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
 	void ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result, idx_t result_offset);
