@@ -154,10 +154,13 @@ protected:
 	                  const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count);
 
 private:
+	//! Check if a previous table filter has filtered out this page
+	bool PageIsFilteredOut(PageHeader &page_hdr);
 	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
 	void FinishRead(idx_t read_count);
+	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr);
 	//! Prepare a read of up to "max_read" rows and read the defines/repeats. Returns how many rows are available.
-	idx_t PrepareRead(idx_t max_read, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
+	void PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
 	void ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result, idx_t result_offset);
 
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
@@ -221,13 +224,14 @@ protected:
 	LogicalType type;
 
 	idx_t pending_skips = 0;
+	bool page_is_filtered_out = false;
 
 	virtual void ResetPage();
 
 private:
 	void AllocateBlock(idx_t size);
 	void AllocateCompressed(idx_t size);
-	void PrepareRead();
+	void PrepareRead(optional_ptr<const TableFilter> filter);
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);

@@ -12,7 +12,7 @@ DictionaryDecoder::DictionaryDecoder(ColumnReader &reader)
       dictionary_selection_vector(STANDARD_VECTOR_SIZE), dictionary_size(0) {
 }
 
-void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size) {
+void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional_ptr<const TableFilter> filter) {
 	auto old_dict_size = dictionary_size;
 	dictionary_size = new_dictionary_size;
 	filter_result.reset();
@@ -29,6 +29,25 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size) {
 	dict_validity.Reset(dictionary_size + 1);
 	dict_validity.SetInvalid(dictionary_size);
 	reader.Plain(reader.block, nullptr, dictionary_size, 0, *dictionary);
+
+	if (filter && CanFilter(*filter)) {
+		// no filter result yet - apply filter to the dictionary
+		// initialize the filter result - setting everything to false
+		filter_result = make_unsafe_uniq_array<bool>(dictionary_size);
+
+		// apply the filter
+		UnifiedVectorFormat vdata;
+		dictionary->ToUnifiedFormat(dictionary_size, vdata);
+		SelectionVector dict_sel;
+		filter_count = dictionary_size;
+		ColumnSegment::FilterSelection(dict_sel, *dictionary, vdata, *filter, dictionary_size, filter_count);
+
+		// now set all matching tuples to true
+		for (idx_t i = 0; i < filter_count; i++) {
+			auto idx = dict_sel.get_index(i);
+			filter_result[idx] = true;
+		}
+	}
 }
 
 void DictionaryDecoder::InitializePage() {
@@ -155,29 +174,7 @@ void DictionaryDecoder::Filter(uint8_t *defines, idx_t read_count, Vector &resul
 	if (!dictionary || dictionary_size < 0) {
 		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
 	}
-	if (!filter_result) {
-		// no filter result yet - apply filter to the dictionary
-		// initialize the filter result - setting everything to false
-		filter_result = make_unsafe_uniq_array<bool>(dictionary_size);
-
-		// apply the filter
-		UnifiedVectorFormat vdata;
-		dictionary->ToUnifiedFormat(dictionary_size, vdata);
-		SelectionVector dict_sel;
-		filter_count = dictionary_size;
-		ColumnSegment::FilterSelection(dict_sel, *dictionary, vdata, filter, dictionary_size, filter_count);
-
-		// now set all matching tuples to true
-		for (idx_t i = 0; i < filter_count; i++) {
-			auto idx = dict_sel.get_index(i);
-			filter_result[idx] = true;
-		}
-	}
-	if (filter_count == 0) {
-		// nothing matched the dictionary - we are done
-		approved_tuple_count = 0;
-		return;
-	}
+	D_ASSERT(filter_count > 0);
 	// read the dictionary values
 	auto valid_count = Read(defines, read_count, result, 0);
 
