@@ -9,10 +9,6 @@ EncryptionState::EncryptionState(const std::string *key) {
 EncryptionState::~EncryptionState() {
 }
 
-bool EncryptionState::IsOpenSSL() {
-	throw NotImplementedException("EncryptionState Abstract Class is called");
-}
-
 void EncryptionState::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) {
 	throw NotImplementedException("EncryptionState Abstract Class is called");
 }
