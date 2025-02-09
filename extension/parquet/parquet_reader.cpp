@@ -578,7 +578,7 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 	if (config.encryption_util && parquet_options.debug_use_openssl) {
 		encryption_util = config.encryption_util;
 	} else {
-		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
+		encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
 	}
 
 	// If metadata cached is disabled

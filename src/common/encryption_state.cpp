@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-EncryptionState::EncryptionState() {
+EncryptionState::EncryptionState(const std::string *key) {
 	// abstract class, no implementation needed
 }
 

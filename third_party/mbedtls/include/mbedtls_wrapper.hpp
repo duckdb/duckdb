@@ -12,6 +12,8 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/encryption_state.hpp"
 
+#include "mbedtls/cipher.h"
+
 #include <string>
 
 namespace duckdb_mbedtls {
@@ -55,10 +57,10 @@ public:
 		void *sha_context;
 	};
 
-class AESGCMStateMBEDTLS : public duckdb::EncryptionState {
+class AESStateMBEDTLS : public duckdb::EncryptionState {
 	public:
-		DUCKDB_API explicit AESGCMStateMBEDTLS();
-		DUCKDB_API ~AESGCMStateMBEDTLS() override;
+		DUCKDB_API explicit AESStateMBEDTLS(const std::string *key = nullptr);
+		DUCKDB_API ~AESStateMBEDTLS() override;
 
 	public:
 		DUCKDB_API bool IsOpenSSL() override;
@@ -70,19 +72,25 @@ class AESGCMStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API void GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) override;
 		DUCKDB_API const std::string GetLib();
 
+		DUCKDB_API mbedtls_cipher_type_t GetCipher(size_t key_len);
+
 	private:
 		bool ssl = false;
 		void *gcm_context;
+		Mode mode;
+
+		mbedtls_cipher_context_t context;
+
 	};
 
-	class AESGCMStateMBEDTLSFactory : public duckdb::EncryptionUtil {
+	class AESStateMBEDTLSFactory : public duckdb::EncryptionUtil {
 
 	public:
-		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState() const override {
-			return duckdb::make_shared_ptr<MbedTlsWrapper::AESGCMStateMBEDTLS>();
+		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(const std::string *key = nullptr) const override {
+			return duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(key);
 		}
 
-		~AESGCMStateMBEDTLSFactory() override {} //
+		~AESStateMBEDTLSFactory() override {} //
 	};
 };
 

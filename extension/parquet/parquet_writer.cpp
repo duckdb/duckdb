@@ -337,7 +337,7 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 			// Use OpenSSL
 			encryption_util = config.encryption_util;
 		} else {
-			encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESGCMStateMBEDTLSFactory>();
+			encryption_util = make_shared_ptr<duckdb_mbedtls::MbedTlsWrapper::AESStateMBEDTLSFactory>();
 		}
 		// encrypted parquet files start with the string "PARE"
 		writer->WriteData(const_data_ptr_cast("PARE"), 4);

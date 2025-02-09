@@ -16,7 +16,7 @@ namespace duckdb {
 class EncryptionState {
 
 public:
-	DUCKDB_API EncryptionState();
+	DUCKDB_API EncryptionState(const std::string *key = nullptr);
 	DUCKDB_API virtual ~EncryptionState();
 
 public:
@@ -37,8 +37,8 @@ public:
 	DUCKDB_API explicit EncryptionUtil() {};
 
 public:
-	virtual shared_ptr<EncryptionState> CreateEncryptionState() const {
-		return make_shared_ptr<EncryptionState>();
+	virtual shared_ptr<EncryptionState> CreateEncryptionState(const std::string *key = nullptr) const {
+		return make_shared_ptr<EncryptionState>(key);
 	}
 
 	virtual ~EncryptionUtil() {
