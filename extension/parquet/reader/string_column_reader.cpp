@@ -57,33 +57,4 @@ void StringColumnReader::PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx
 	PlainSkipTemplated<StringParquetValueConversion>(plain_data, defines, num_values);
 }
 
-string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-	auto &scr = reader.Cast<StringColumnReader>();
-	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
-	plain_data.available(str_len);
-	auto plain_str = char_ptr_cast(plain_data.ptr);
-	scr.VerifyString(plain_str, str_len);
-	auto ret_str = string_t(plain_str, str_len);
-	plain_data.inc(str_len);
-	return ret_str;
-}
-
-void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-	auto &scr = reader.Cast<StringColumnReader>();
-	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
-	plain_data.inc(str_len);
-}
-
-bool StringParquetValueConversion::PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
-	return true;
-}
-
-string_t StringParquetValueConversion::UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-	return PlainRead(plain_data, reader);
-}
-
-void StringParquetValueConversion::UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-	PlainSkip(plain_data, reader);
-}
-
 } // namespace duckdb

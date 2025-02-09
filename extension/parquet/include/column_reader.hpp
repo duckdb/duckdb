@@ -96,42 +96,42 @@ public:
 
 	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
 
+	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES>
+	void PlainTemplatedDefines(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values, idx_t result_offset,
+	                           Vector &result) {
+		if (CONVERSION::PlainAvailable(plain_data, num_values)) {
+			PlainTemplatedInternal<VALUE_TYPE, CONVERSION, HAS_DEFINES, false>(plain_data, defines, num_values,
+			                                                                   result_offset, result);
+		} else {
+			PlainTemplatedInternal<VALUE_TYPE, CONVERSION, HAS_DEFINES, true>(plain_data, defines, num_values,
+			                                                                  result_offset, result);
+		}
+	}
 	template <class VALUE_TYPE, class CONVERSION>
 	void PlainTemplated(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values, idx_t result_offset,
 	                    Vector &result) {
-		if (HasDefines()) {
-			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, true>(plain_data, defines, num_values,
-				                                                           result_offset, result);
-			} else {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, true, false>(plain_data, defines, num_values,
-				                                                            result_offset, result);
-			}
+		if (HasDefines() && defines) {
+			PlainTemplatedDefines<VALUE_TYPE, CONVERSION, true>(plain_data, defines, num_values, result_offset, result);
 		} else {
-			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, true>(plain_data, defines, num_values,
-				                                                            result_offset, result);
-			} else {
-				PlainTemplatedInternal<VALUE_TYPE, CONVERSION, false, false>(plain_data, defines, num_values,
-				                                                             result_offset, result);
-			}
+			PlainTemplatedDefines<VALUE_TYPE, CONVERSION, false>(plain_data, defines, num_values, result_offset,
+			                                                     result);
 		}
 	}
 
+	template <class CONVERSION, bool HAS_DEFINES>
+	void PlainSkipTemplatedDefines(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values) {
+		if (CONVERSION::PlainAvailable(plain_data, num_values)) {
+			PlainSkipTemplatedInternal<CONVERSION, HAS_DEFINES, false>(plain_data, defines, num_values);
+		} else {
+			PlainSkipTemplatedInternal<CONVERSION, HAS_DEFINES, true>(plain_data, defines, num_values);
+		}
+	}
 	template <class CONVERSION>
 	void PlainSkipTemplated(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values) {
-		if (HasDefines()) {
-			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
-				PlainSkipTemplatedInternal<CONVERSION, true, true>(plain_data, defines, num_values);
-			} else {
-				PlainSkipTemplatedInternal<CONVERSION, true, false>(plain_data, defines, num_values);
-			}
+		if (HasDefines() && defines) {
+			PlainSkipTemplatedDefines<CONVERSION, true>(plain_data, defines, num_values);
 		} else {
-			if (CONVERSION::PlainAvailable(plain_data, num_values)) {
-				PlainSkipTemplatedInternal<CONVERSION, false, true>(plain_data, defines, num_values);
-			} else {
-				PlainSkipTemplatedInternal<CONVERSION, false, false>(plain_data, defines, num_values);
-			}
+			PlainSkipTemplatedDefines<CONVERSION, false>(plain_data, defines, num_values);
 		}
 	}
 
@@ -164,33 +164,39 @@ private:
 	void PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
 	void ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result, idx_t result_offset);
 
-	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
+	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool CHECKED>
 	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
 	                            const idx_t result_offset, Vector &result) {
 		const auto result_ptr = FlatVector::GetData<VALUE_TYPE>(result);
+		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() == sizeof(VALUE_TYPE)) {
+			// we can memcpy
+			idx_t copy_count = num_values * CONVERSION::PlainConstantSize();
+			memcpy(result_ptr + result_offset, plain_data.ptr, copy_count);
+			plain_data.unsafe_inc(copy_count);
+			return;
+		}
 		auto &result_mask = FlatVector::Validity(result);
 		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
-			if (HAS_DEFINES && defines && defines[row_idx] != max_define) {
+			if (HAS_DEFINES && defines[row_idx] != max_define) {
 				result_mask.SetInvalid(row_idx);
 				continue;
 			}
-			result_ptr[row_idx] =
-			    UNSAFE ? CONVERSION::UnsafePlainRead(plain_data, *this) : CONVERSION::PlainRead(plain_data, *this);
+			result_ptr[row_idx] = CONVERSION::template PlainRead<CHECKED>(plain_data, *this);
 		}
 	}
 
-	template <class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
+	template <class CONVERSION, bool HAS_DEFINES, bool CHECKED>
 	void PlainSkipTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines,
 	                                const uint64_t num_values) {
+		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() > 0) {
+			plain_data.unsafe_inc(num_values * CONVERSION::PlainConstantSize());
+			return;
+		}
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (HAS_DEFINES && defines && defines[row_idx] != max_define) {
+			if (HAS_DEFINES && defines[row_idx] != max_define) {
 				continue;
 			}
-			if (UNSAFE) {
-				CONVERSION::UnsafePlainSkip(plain_data, *this);
-			} else {
-				CONVERSION::PlainSkip(plain_data, *this);
-			}
+			CONVERSION::template PlainSkip<CHECKED>(plain_data, *this);
 		}
 	}
 

@@ -13,14 +13,6 @@
 
 namespace duckdb {
 
-struct StringParquetValueConversion {
-	static string_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader);
-	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader);
-	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count);
-	static string_t UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader);
-	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader);
-};
-
 class StringColumnReader : public ColumnReader {
 public:
 	static constexpr const PhysicalType TYPE = PhysicalType::VARCHAR;
@@ -45,6 +37,35 @@ protected:
 
 	bool SupportsDirectFilter() const override {
 		return true;
+	}
+};
+
+struct StringParquetValueConversion {
+	template <bool CHECKED>
+	static string_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
+		auto &scr = reader.Cast<StringColumnReader>();
+		uint32_t str_len =
+		    scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
+		plain_data.available(str_len);
+		auto plain_str = char_ptr_cast(plain_data.ptr);
+		scr.VerifyString(plain_str, str_len);
+		auto ret_str = string_t(plain_str, str_len);
+		plain_data.inc(str_len);
+		return ret_str;
+	}
+	template <bool CHECKED>
+	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
+		auto &scr = reader.Cast<StringColumnReader>();
+		uint32_t str_len =
+		    scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
+		plain_data.inc(str_len);
+	}
+	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
+		return false;
+	}
+
+	static idx_t PlainConstantSize() {
+		return 0;
 	}
 };
 
