@@ -27,7 +27,6 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 	// we use the last entry as a NULL, dictionary vectors don't have a separate validity mask
 	auto &dict_validity = FlatVector::Validity(*dictionary);
 	dict_validity.Reset(dictionary_size + 1);
-	dict_validity.SetInvalid(dictionary_size);
 	reader.Plain(reader.block, nullptr, dictionary_size, 0, *dictionary);
 
 	if (filter && CanFilter(*filter)) {
@@ -97,11 +96,15 @@ idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result
 				throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
 			}
 		}
-	} else if (valid_count > 0) {
-		// for the valid entries - decode the offsets
-		offset_buffer.resize(reader.reader.allocator, sizeof(uint32_t) * valid_count);
-		dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, valid_count);
-		ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr), valid_sel, valid_count);
+	} else {
+		auto &dict_validity = FlatVector::Validity(*dictionary);
+		dict_validity.SetInvalid(dictionary_size);
+		if (valid_count > 0) {
+			// for the valid entries - decode the offsets
+			offset_buffer.resize(reader.reader.allocator, sizeof(uint32_t) * valid_count);
+			dict_decoder->GetBatch<uint32_t>(offset_buffer.ptr, valid_count);
+			ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr), valid_sel, valid_count);
+		}
 	}
 #ifdef DEBUG
 	dictionary_selection_vector.Verify(read_count, dictionary_size + 1);
