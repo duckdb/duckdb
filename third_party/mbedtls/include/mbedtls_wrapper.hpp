@@ -75,7 +75,6 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API mbedtls_cipher_type_t GetCipher(size_t key_len);
 
 	private:
-		bool ssl = false;
 		void *gcm_context;
 		Mode mode;
 

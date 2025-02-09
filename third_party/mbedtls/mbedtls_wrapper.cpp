@@ -15,10 +15,7 @@
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/timestamp.hpp"
 #endif
-#define AES_KEY_SIZE 16
 #include <stdexcept>
-
-#define AES_BLOCK_SIZE 16
 
 using namespace std;
 using namespace duckdb_mbedtls;
@@ -239,10 +236,6 @@ MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(const std::string *key) {
 
 MbedTlsWrapper::AESStateMBEDTLS::~AESStateMBEDTLS() {
 	mbedtls_cipher_free(&context);
-}
-
-bool MbedTlsWrapper::AESStateMBEDTLS::IsOpenSSL() {
-	return ssl;
 }
 
 
