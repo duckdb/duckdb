@@ -3,7 +3,6 @@
 # group: [window]
 
 # This only reproduced in release because debug wrote garbage instead of 0s...
- 
 statement ok
 pragma threads=2;
 
