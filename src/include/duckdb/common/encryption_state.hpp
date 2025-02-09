@@ -16,7 +16,7 @@ namespace duckdb {
 class EncryptionState {
 
 public:
-	DUCKDB_API EncryptionState(const std::string *key = nullptr);
+	DUCKDB_API explicit EncryptionState(const std::string *key = nullptr);
 	DUCKDB_API virtual ~EncryptionState();
 
 public:
