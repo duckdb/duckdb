@@ -63,7 +63,6 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API ~AESStateMBEDTLS() override;
 
 	public:
-		DUCKDB_API bool IsOpenSSL() override;
 		DUCKDB_API void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) override;
 		DUCKDB_API void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) override;
 		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,

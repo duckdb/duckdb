@@ -295,9 +295,6 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_pt
 size_t MbedTlsWrapper::AESStateMBEDTLS::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
                                                    duckdb::idx_t out_len) {
 
-	// If the underlying cipher is GCM, all calls to this function,
-	// except the last one before mbedtls_cipher_finish()
-	// must have ilen a multiple of the block size.
 	size_t result;
 	if (mbedtls_cipher_update(&context, reinterpret_cast<const unsigned char *>(in), in_len, out,
 	                      &result) != 0) {
