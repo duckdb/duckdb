@@ -26,7 +26,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
-#include "duckdb/storage/table/column_segment.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -860,13 +859,6 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
-static void ApplyFilter(Vector &v, const TableFilter &filter, idx_t scan_count, SelectionVector &sel,
-                        idx_t &approved_tuple_count) {
-	UnifiedVectorFormat vdata;
-	v.ToUnifiedFormat(scan_count, vdata);
-	ColumnSegment::FilterSelection(sel, v, vdata, filter, scan_count, approved_tuple_count);
-}
-
 void ParquetReader::Scan(ParquetReaderScanState &state, DataChunk &result) {
 	while (ScanInternal(state, result)) {
 		if (result.size() > 0) {
@@ -999,7 +991,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				// this is a constant vector, look for the constant
 				auto &constant = reader_data.constant_map[filter_entry.index].value;
 				Vector constant_vector(constant);
-				ApplyFilter(constant_vector, scan_filter.filter, scan_count, state.sel, filter_count);
+				ColumnReader::ApplyFilter(constant_vector, scan_filter.filter, scan_count, state.sel, filter_count);
 			} else {
 				auto id = filter_entry.index;
 				auto file_col_idx = reader_data.column_ids[id];
@@ -1007,8 +999,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 				auto &result_vector = result.data[result_idx];
 				auto &child_reader = root_reader.GetChildReader(file_col_idx);
-				child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
-				ApplyFilter(result_vector, scan_filter.filter, scan_count, state.sel, filter_count);
+				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter, state.sel,
+				                    filter_count, i == 0);
 				need_to_read[id] = false;
 			}
 		}

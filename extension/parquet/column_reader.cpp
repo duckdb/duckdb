@@ -22,10 +22,9 @@
 #include "reader/uuid_column_reader.hpp"
 #include "zstd.h"
 
-#ifndef DUCKDB_AMALGAMATION
+#include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/bit.hpp"
-#endif
 
 namespace duckdb {
 
@@ -228,15 +227,48 @@ void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChun
 	group_rows_available = chunk->meta_data.num_values;
 }
 
-void ColumnReader::PrepareRead() {
+bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
+	if (!dictionary_decoder.HasFilteredOutAllValues()) {
+		return false;
+	}
+	if (page_hdr.type != PageType::DATA_PAGE && page_hdr.type != PageType::DATA_PAGE_V2) {
+		// we can only filter out data pages
+		return false;
+	}
+	bool is_v1 = page_hdr.type == PageType::DATA_PAGE;
+	auto &v1_header = page_hdr.data_page_header;
+	auto &v2_header = page_hdr.data_page_header_v2;
+	auto page_encoding = is_v1 ? v1_header.encoding : v2_header.encoding;
+	if (page_encoding != Encoding::PLAIN_DICTIONARY && page_encoding != Encoding::RLE_DICTIONARY) {
+		// not a dictionary page
+		return false;
+	}
+	// the page has been filtered out!
+	// skip forward
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+	trans.Skip(page_hdr.compressed_page_size);
+
+	page_rows_available = is_v1 ? v1_header.num_values : v2_header.num_values;
+	encoding = ColumnEncoding::DICTIONARY;
+	page_is_filtered_out = true;
+	return true;
+}
+
+void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
+	page_is_filtered_out = false;
 	block.reset();
 	PageHeader page_hdr;
 	reader.Read(page_hdr, *protocol);
 	// some basic sanity check
 	if (page_hdr.compressed_page_size < 0 || page_hdr.uncompressed_page_size < 0) {
 		throw std::runtime_error("Page sizes can't be < 0");
+	}
+
+	if (PageIsFilteredOut(page_hdr)) {
+		// this page has been filtered out so we don't need to read it
+		return;
 	}
 
 	switch (page_hdr.type) {
@@ -254,7 +286,7 @@ void ColumnReader::PrepareRead() {
 		if (dictionary_size < 0) {
 			throw std::runtime_error("Invalid dictionary page header (num_values < 0)");
 		}
-		dictionary_decoder.InitializeDictionary(dictionary_size);
+		dictionary_decoder.InitializeDictionary(dictionary_size, filter);
 		break;
 	}
 	default:
@@ -476,104 +508,174 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	}
 }
 
-idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 	// we need to reset the location because multiple column readers share the same protocol
 	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 	trans.SetLocation(chunk_read_offset);
 
 	// Perform any skips that were not applied yet.
-	if (pending_skips > 0) {
-		ApplyPendingSkips(pending_skips, define_out, repeat_out);
+	if (define_out && repeat_out) {
+		ApplyPendingSkips(define_out, repeat_out);
+	}
+}
+
+idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter) {
+	while (page_rows_available == 0) {
+		PrepareRead(filter);
+	}
+	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
+}
+
+void ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset) {
+	D_ASSERT(block);
+
+	D_ASSERT(read_now + result_offset <= STANDARD_VECTOR_SIZE);
+	D_ASSERT(!page_is_filtered_out);
+
+	if (HasRepeats()) {
+		D_ASSERT(repeated_decoder);
+		repeated_decoder->GetBatch<uint8_t>(repeat_out + result_offset, read_now);
 	}
 
+	if (HasDefines()) {
+		D_ASSERT(defined_decoder);
+		defined_decoder->GetBatch<uint8_t>(define_out + result_offset, read_now);
+	}
+}
+
+void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+                            idx_t result_offset) {
+	// flatten the result vector if required
+	if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
+		result.Flatten(result_offset);
+		result.Resize(result_offset, STANDARD_VECTOR_SIZE);
+	}
+	if (page_is_filtered_out) {
+		// page is filtered out - emit NULL for any rows
+		auto &validity = FlatVector::Validity(result);
+		for (idx_t i = 0; i < read_now; i++) {
+			validity.SetInvalid(result_offset + i);
+		}
+		page_rows_available -= read_now;
+		return;
+	}
+	// read the defines/repeats
+	PrepareRead(read_now, define_out, repeat_out, result_offset);
+	// read the data according to the encoder
+	auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
+	if (encoding == ColumnEncoding::DICTIONARY) {
+		dictionary_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else if (encoding == ColumnEncoding::DELTA_BINARY_PACKED) {
+		delta_binary_packed_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else if (encoding == ColumnEncoding::RLE) {
+		rle_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY) {
+		delta_length_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else if (encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
+		delta_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else if (encoding == ColumnEncoding::BYTE_STREAM_SPLIT) {
+		byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);
+	} else {
+		Plain(block, define_out, read_now, result_offset, result);
+	}
+	page_rows_available -= read_now;
+}
+
+void ColumnReader::FinishRead(idx_t read_count) {
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+	chunk_read_offset = trans.GetLocation();
+
+	group_rows_available -= read_count;
+}
+
+idx_t ColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
 	idx_t result_offset = 0;
 	auto to_read = num_values;
 	D_ASSERT(to_read <= STANDARD_VECTOR_SIZE);
 
 	while (to_read > 0) {
-		while (page_rows_available == 0) {
-			PrepareRead();
-		}
+		auto read_now = ReadPageHeaders(to_read);
 
-		D_ASSERT(block);
-		auto read_now = MinValue<idx_t>(to_read, page_rows_available);
-
-		D_ASSERT(read_now + result_offset <= STANDARD_VECTOR_SIZE);
-
-		if (HasRepeats()) {
-			D_ASSERT(repeated_decoder);
-			repeated_decoder->GetBatch<uint8_t>(repeat_out + result_offset, read_now);
-		}
-
-		if (HasDefines()) {
-			D_ASSERT(defined_decoder);
-			defined_decoder->GetBatch<uint8_t>(define_out + result_offset, read_now);
-		}
-
-		if (result_offset != 0 && result.GetVectorType() != VectorType::FLAT_VECTOR) {
-			result.Flatten(result_offset);
-			result.Resize(result_offset, STANDARD_VECTOR_SIZE);
-		}
-
-		auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
-		if (encoding == ColumnEncoding::DICTIONARY) {
-			dictionary_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::DELTA_BINARY_PACKED) {
-			delta_binary_packed_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::RLE) {
-			rle_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY) {
-			delta_length_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
-			delta_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else if (encoding == ColumnEncoding::BYTE_STREAM_SPLIT) {
-			byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);
-		} else {
-			Plain(block, define_out, read_now, result_offset, result);
-		}
+		ReadData(read_now, define_out, repeat_out, result, result_offset);
 
 		result_offset += read_now;
-		page_rows_available -= read_now;
 		to_read -= read_now;
 	}
-	group_rows_available -= num_values;
-	chunk_read_offset = trans.GetLocation();
+	FinishRead(num_values);
 
 	return num_values;
+}
+
+idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
+	BeginRead(define_out, repeat_out);
+	return ReadInternal(num_values, define_out, repeat_out, result);
+}
+
+void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+                          const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count,
+                          bool is_first_filter) {
+	if (SupportsDirectFilter() && is_first_filter) {
+		DirectFilter(num_values, define_out, repeat_out, result, filter, sel, approved_tuple_count);
+		return;
+	}
+	Read(num_values, define_out, repeat_out, result);
+	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
+}
+
+void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+                                const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count) {
+	auto to_read = num_values;
+
+	// prepare the first read if we haven't yet
+	BeginRead(define_out, repeat_out);
+	auto read_now = ReadPageHeaders(num_values, &filter);
+
+	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
+	if (encoding == ColumnEncoding::DICTIONARY && read_now == to_read && dictionary_decoder.HasFilter()) {
+		if (page_is_filtered_out) {
+			// the page has been filtered out entirely - skip
+			approved_tuple_count = 0;
+		} else {
+			// Push filter into dictionary directly
+			// read the defines/repeats
+			PrepareRead(read_now, define_out, repeat_out, 0);
+			auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
+			dictionary_decoder.Filter(define_ptr, read_now, result, filter, sel, approved_tuple_count);
+		}
+		page_rows_available -= read_now;
+		FinishRead(num_values);
+		return;
+	}
+	// fallback to regular read + filter
+	ReadInternal(num_values, define_out, repeat_out, result);
+	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
+}
+
+void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, idx_t scan_count, SelectionVector &sel,
+                               idx_t &approved_tuple_count) {
+	UnifiedVectorFormat vdata;
+	v.ToUnifiedFormat(scan_count, vdata);
+	ColumnSegment::FilterSelection(sel, v, vdata, filter, scan_count, approved_tuple_count);
 }
 
 void ColumnReader::Skip(idx_t num_values) {
 	pending_skips += num_values;
 }
 
-void ColumnReader::ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out) {
-	D_ASSERT(num_values >= pending_skips);
-	pending_skips -= num_values;
-
-	// we need to reset the location because multiple column readers share the same protocol
-	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
-	trans.SetLocation(chunk_read_offset);
+void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
+	if (pending_skips == 0) {
+		return;
+	}
+	idx_t num_values = pending_skips;
+	pending_skips = 0;
 
 	auto to_skip = num_values;
+	// start reading but do not apply skips (we are skipping now)
+	BeginRead(nullptr, nullptr);
 
 	while (to_skip > 0) {
-		while (page_rows_available == 0) {
-			PrepareRead();
-		}
-
-		D_ASSERT(block);
-		auto skip_now = MinValue<idx_t>(MinValue<idx_t>(to_skip, page_rows_available), STANDARD_VECTOR_SIZE);
-
-		// we need to read the repeats/defines even when we are skipping
-		if (HasRepeats()) {
-			D_ASSERT(repeated_decoder);
-			repeated_decoder->GetBatch<uint8_t>(repeat_out, skip_now);
-		}
-
-		if (HasDefines()) {
-			D_ASSERT(defined_decoder);
-			defined_decoder->GetBatch<uint8_t>(define_out, skip_now);
-		}
+		auto skip_now = ReadPageHeaders(to_skip);
+		PrepareRead(skip_now, define_out, repeat_out, 0);
 
 		auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
 		if (encoding == ColumnEncoding::DICTIONARY) {
@@ -595,8 +697,7 @@ void ColumnReader::ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, da
 		page_rows_available -= skip_now;
 		to_skip -= skip_now;
 	}
-	group_rows_available -= num_values;
-	chunk_read_offset = trans.GetLocation();
+	FinishRead(num_values);
 }
 
 //===--------------------------------------------------------------------===//

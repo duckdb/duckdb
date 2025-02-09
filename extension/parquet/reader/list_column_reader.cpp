@@ -167,9 +167,7 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 }
 
 idx_t ListColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out) {
-	if (pending_skips > 0) {
-		ApplyPendingSkips(pending_skips, define_out, repeat_out);
-	}
+	ApplyPendingSkips(define_out, repeat_out);
 	return ReadInternal<TemplatedListReader>(num_values, define_out, repeat_out, result_out);
 }
 
@@ -186,8 +184,8 @@ ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, co
 	child_repeats_ptr = (uint8_t *)child_repeats.ptr;
 }
 
-void ListColumnReader::ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out) {
-	ReadInternal<TemplatedListSkipper>(num_values, nullptr, nullptr, nullptr);
+void ListColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out) {
+	ReadInternal<TemplatedListSkipper>(pending_skips, nullptr, nullptr, nullptr);
 }
 
 } // namespace duckdb

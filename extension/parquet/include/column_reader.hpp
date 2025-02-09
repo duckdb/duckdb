@@ -70,7 +70,11 @@ public:
 	                                             idx_t max_repeat);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
-
+	virtual void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
+	                    const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count,
+	                    bool is_first_filter);
+	static void ApplyFilter(Vector &v, const TableFilter &filter, idx_t scan_count, SelectionVector &sel,
+	                        idx_t &approved_tuple_count);
 	virtual void Skip(idx_t num_values);
 
 	ParquetReader &Reader();
@@ -142,7 +146,24 @@ public:
 		return valid_count;
 	}
 
+protected:
+	virtual bool SupportsDirectFilter() const {
+		return false;
+	}
+	void DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
+	                  const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count);
+
 private:
+	//! Check if a previous table filter has filtered out this page
+	bool PageIsFilteredOut(PageHeader &page_hdr);
+	void BeginRead(data_ptr_t define_out, data_ptr_t repeat_out);
+	void FinishRead(idx_t read_count);
+	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr);
+	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result);
+	//! Prepare a read of up to "max_read" rows and read the defines/repeats. Returns how many rows are available.
+	void PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
+	void ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result, idx_t result_offset);
+
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool UNSAFE>
 	void PlainTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines, const uint64_t num_values,
 	                            const idx_t result_offset, Vector &result) {
@@ -182,7 +203,7 @@ protected:
 	                   idx_t result_offset, Vector &result);
 
 	// applies any skips that were registered using Skip()
-	virtual void ApplyPendingSkips(idx_t num_values, data_ptr_t define_out, data_ptr_t repeat_out);
+	virtual void ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out);
 
 	bool HasDefines() const {
 		return max_define > 0;
@@ -204,13 +225,14 @@ protected:
 	LogicalType type;
 
 	idx_t pending_skips = 0;
+	bool page_is_filtered_out = false;
 
 	virtual void ResetPage();
 
 private:
 	void AllocateBlock(idx_t size);
 	void AllocateCompressed(idx_t size);
-	void PrepareRead();
+	void PrepareRead(optional_ptr<const TableFilter> filter);
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
 	void PreparePageV2(PageHeader &page_hdr);
