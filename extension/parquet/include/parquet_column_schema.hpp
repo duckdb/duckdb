@@ -48,7 +48,7 @@ struct ParquetColumnSchema {
 	ParquetExtraTypeInfo type_info = ParquetExtraTypeInfo::NONE;
 	vector<ParquetColumnSchema> children;
 
-	unique_ptr<BaseStatistics> Stats(ParquetReader &reader, idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
+	unique_ptr<BaseStatistics> Stats(ParquetReader &reader, idx_t row_group_idx_p, const vector<ColumnChunk> &columns) const;
 };
 
 } // namespace duckdb

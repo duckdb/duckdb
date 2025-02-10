@@ -100,8 +100,6 @@ public:
 	// register the range this reader will touch for prefetching
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 
-	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
-
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES>
 	void PlainTemplatedDefines(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values, idx_t result_offset,
 	                           Vector &result) {

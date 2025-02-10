@@ -160,9 +160,6 @@ idx_t ColumnReader::GroupRowsAvailable() {
 	return group_rows_available;
 }
 
-unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
-}
-
 void ColumnReader::PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) {
 	throw NotImplementedException("PlainSkip not implemented");
 }
