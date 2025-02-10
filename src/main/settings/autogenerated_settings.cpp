@@ -178,6 +178,23 @@ Value ArrowOutputListViewSetting::GetSetting(const ClientContext &context) {
 }
 
 //===----------------------------------------------------------------------===//
+// Asof Loop Join Threshold
+//===----------------------------------------------------------------------===//
+void AsofLoopJoinThresholdSetting::SetLocal(ClientContext &context, const Value &input) {
+	auto &config = ClientConfig::GetConfig(context);
+	config.asof_loop_join_threshold = input.GetValue<idx_t>();
+}
+
+void AsofLoopJoinThresholdSetting::ResetLocal(ClientContext &context) {
+	ClientConfig::GetConfig(context).asof_loop_join_threshold = ClientConfig().asof_loop_join_threshold;
+}
+
+Value AsofLoopJoinThresholdSetting::GetSetting(const ClientContext &context) {
+	auto &config = ClientConfig::GetConfig(context);
+	return Value::UBIGINT(config.asof_loop_join_threshold);
+}
+
+//===----------------------------------------------------------------------===//
 // Autoinstall Extension Repository
 //===----------------------------------------------------------------------===//
 void AutoinstallExtensionRepositorySetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {

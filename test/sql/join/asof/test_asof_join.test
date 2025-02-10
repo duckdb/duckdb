@@ -68,10 +68,11 @@ SELECT
       s1.starts as s1_starts,
       s2.starts as s2_starts,
 FROM samples AS s1 ASOF JOIN samples as s2 ON s2.ends >= (s1.ends - 5)
-WHERE s1_starts <> s2_starts;
+WHERE s1_starts <> s2_starts
+ORDER BY ALL
 ----
-21 	14
 10	5
+21 	14
 
 # Use an ASOF join inside of a correlated subquery
 
