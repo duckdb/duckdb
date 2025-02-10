@@ -875,8 +875,46 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		duckdb_destroy_prepare(&wrapper->statement);
 		wrapper->statement = nullptr;
 	}
-	auto res = duckdb_prepare(wrapper->connection, query, &wrapper->statement);
+	duckdb_extracted_statements extracted_statements;
+	auto extract_statements_size = duckdb_extract_statements(wrapper->connection, query, &extracted_statements);
+	auto error_msg_extract_statements = duckdb_extract_statements_error(extracted_statements);
+	if (error_msg_extract_statements != nullptr) {
+		// Things went wrong when executing internal prepared statement
+		delete extracted_statements;
+		SetError(error, error_msg_extract_statements);
+		return ADBC_STATUS_INTERNAL;
+	}
+	// Now lets loop over the statements, and execute every one
+	for (idx_t i = 0; i < extract_statements_size - 1; i++) {
+		duckdb_prepared_statement statement_internal;
+		auto res =
+		    duckdb_prepare_extracted_statement(wrapper->connection, extracted_statements, i, &statement_internal);
+		auto error_msg = duckdb_prepare_error(statement_internal);
+		auto adbc_status = CheckResult(res, error, error_msg);
+		if (adbc_status != ADBC_STATUS_OK) {
+			// Things went wrong when executing internal prepared statement
+			delete extracted_statements;
+			delete statement_internal;
+			return adbc_status;
+		}
+		// Execute
+		duckdb_arrow out_result;
+		res = duckdb_execute_prepared_arrow(statement_internal, &out_result);
+		if (res != DuckDBSuccess) {
+			SetError(error, duckdb_query_arrow_error(out_result));
+			delete out_result;
+			delete statement_internal;
+			delete extracted_statements;
+			return ADBC_STATUS_INVALID_ARGUMENT;
+		}
+		delete out_result;
+		delete statement_internal;
+	}
+	// Besides ze last, this one we return
+	auto res = duckdb_prepare_extracted_statement(wrapper->connection, extracted_statements,
+	                                              extract_statements_size - 1, &wrapper->statement);
 	auto error_msg = duckdb_prepare_error(wrapper->statement);
+	delete extracted_statements;
 	return CheckResult(res, error, error_msg);
 }
 
