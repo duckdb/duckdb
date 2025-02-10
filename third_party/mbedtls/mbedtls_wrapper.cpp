@@ -4,7 +4,6 @@
 #define MBEDTLS_ALLOW_PRIVATE_ACCESS
 
 #include "duckdb/common/helper.hpp"
-
 #include "mbedtls/entropy.h"
 #include "mbedtls/gcm.h"
 #include "mbedtls/pk.h"
