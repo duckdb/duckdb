@@ -38,7 +38,7 @@ public:
 
 public:
 	virtual shared_ptr<EncryptionState> CreateEncryptionState(const std::string *key = nullptr) const {
-		return make_shared_ptr<EncryptionState>(key);
+		return make_shared_ptr<EncryptionState>();
 	}
 
 	virtual ~EncryptionUtil() {

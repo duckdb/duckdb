@@ -75,7 +75,7 @@ Invalid Input Error
 
 # what if we try to decrypt with the wrong key?
 statement error
-SELECT * FROM read_parquet('__TEST_DIR__/encrypted128.parquet', encryption_config={footer_key: 'key256'})
+SELECT * FROM read_parquet('__TEST_DIR__/encrypted128.parquet', encryption_config={footer_key: 'key192'})
 ----
 Invalid Input Error: Computed AES tag differs from read AES tag, are you using the right key?
 
