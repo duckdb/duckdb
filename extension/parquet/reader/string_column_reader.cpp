@@ -18,9 +18,9 @@ StringColumnReader::StringColumnReader(ParquetReader &reader, LogicalType type_p
 	}
 }
 
-uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len, const bool is_varchar) {
+void StringColumnReader::VerifyString(const char *str_data, uint32_t str_len, const bool is_varchar) {
 	if (!is_varchar) {
-		return str_len;
+		return;
 	}
 	// verify if a string is actually UTF8, and if there are no null bytes in the middle of the string
 	// technically Parquet should guarantee this, but reality is often disappointing
@@ -31,11 +31,10 @@ uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len
 		throw InvalidInputException("Invalid string encoding found in Parquet file: value \"" +
 		                            Blob::ToString(string_t(str_data, str_len)) + "\" is not valid UTF8!");
 	}
-	return str_len;
 }
 
-uint32_t StringColumnReader::VerifyString(const char *str_data, uint32_t str_len) {
-	return VerifyString(str_data, str_len, Type() == LogicalTypeId::VARCHAR);
+void StringColumnReader::VerifyString(const char *str_data, uint32_t str_len) {
+	VerifyString(str_data, str_len, Type().id() == LogicalTypeId::VARCHAR);
 }
 
 class ParquetStringVectorBuffer : public VectorBuffer {
@@ -56,35 +55,6 @@ void StringColumnReader::Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t
 
 void StringColumnReader::PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) {
 	PlainSkipTemplated<StringParquetValueConversion>(plain_data, defines, num_values);
-}
-
-string_t StringParquetValueConversion::PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-	auto &scr = reader.Cast<StringColumnReader>();
-	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
-	plain_data.available(str_len);
-	auto plain_str = char_ptr_cast(plain_data.ptr);
-	auto actual_str_len = reader.Cast<StringColumnReader>().VerifyString(plain_str, str_len);
-	auto ret_str = string_t(plain_str, actual_str_len);
-	plain_data.inc(str_len);
-	return ret_str;
-}
-
-void StringParquetValueConversion::PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-	auto &scr = reader.Cast<StringColumnReader>();
-	uint32_t str_len = scr.fixed_width_string_length == 0 ? plain_data.read<uint32_t>() : scr.fixed_width_string_length;
-	plain_data.inc(str_len);
-}
-
-bool StringParquetValueConversion::PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
-	return true;
-}
-
-string_t StringParquetValueConversion::UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-	return PlainRead(plain_data, reader);
-}
-
-void StringParquetValueConversion::UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-	PlainSkip(plain_data, reader);
 }
 
 } // namespace duckdb

@@ -535,7 +535,7 @@
       {
         "id": 100,
         "name": "filters",
-        "type": "unordered_map<idx_t, TableFilter*>"
+        "type": "map<idx_t, TableFilter*>"
       }
     ],
     "pointer_type": "none"
