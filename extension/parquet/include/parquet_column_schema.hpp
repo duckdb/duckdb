@@ -31,7 +31,7 @@ struct ParquetColumnSchema {
 	ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index, idx_t file_index,
 	                    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	ParquetColumnSchema(string name, LogicalType type, idx_t max_define, idx_t max_repeat, idx_t schema_index,
-	                    idx_t file_index, ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
+	                    idx_t column_index, ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type);
 
 	ParquetColumnSchemaType schema_type;
@@ -40,7 +40,7 @@ struct ParquetColumnSchema {
 	idx_t max_define;
 	idx_t max_repeat;
 	idx_t schema_index;
-	idx_t file_index;
+	idx_t column_index;
 	optional_idx parent_schema_index;
 	uint32_t type_length = 0;
 	uint32_t type_scale = 0;

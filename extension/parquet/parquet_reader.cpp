@@ -326,9 +326,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, Parquet
 }
 
 ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
-                                                     idx_t schema_index, idx_t file_index,
+                                                     idx_t schema_index, idx_t column_index,
                                                      ParquetColumnSchemaType type) {
-	ParquetColumnSchema schema(max_define, max_repeat, schema_index, file_index, type);
+	ParquetColumnSchema schema(max_define, max_repeat, schema_index, column_index, type);
 	schema.name = s_ele.name;
 	schema.type = DeriveLogicalType(s_ele, schema);
 	return schema;
@@ -394,22 +394,22 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	return ret;
 }
 
-ParquetColumnSchema::ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index, idx_t file_index,
+ParquetColumnSchema::ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index, idx_t column_index,
                                          ParquetColumnSchemaType schema_type)
-    : ParquetColumnSchema(string(), LogicalTypeId::INVALID, max_define, max_repeat, schema_index, file_index,
+    : ParquetColumnSchema(string(), LogicalTypeId::INVALID, max_define, max_repeat, schema_index, column_index,
                           schema_type) {
 }
 
 ParquetColumnSchema::ParquetColumnSchema(string name_p, LogicalType type_p, idx_t max_define, idx_t max_repeat,
-                                         idx_t schema_index, idx_t file_index, ParquetColumnSchemaType schema_type)
+                                         idx_t schema_index, idx_t column_index, ParquetColumnSchemaType schema_type)
     : schema_type(schema_type), name(std::move(name_p)), type(std::move(type_p)), max_define(max_define),
-      max_repeat(max_repeat), schema_index(schema_index), file_index(file_index) {
+      max_repeat(max_repeat), schema_index(schema_index), column_index(column_index) {
 }
 
 ParquetColumnSchema::ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type)
     : schema_type(ParquetColumnSchemaType::CAST), name(parent.name), type(std::move(cast_type)),
       max_define(parent.max_define), max_repeat(parent.max_repeat), schema_index(parent.schema_index),
-      file_index(parent.file_index) {
+      column_index(parent.column_index) {
 	children.push_back(std::move(parent));
 }
 
@@ -871,15 +871,16 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 			FilterPropagateResult prune_result;
 			// TODO we might not have stats but STILL a bloom filter so move this up
 			// check the bloom filter if present
-			bool is_generated_column = column_reader.FileIdx() >= group.columns.size();
+			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
 			if (!column_reader.Type().IsNested() && !is_generated_column &&
 			    ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
-			    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[column_reader.FileIdx()].meta_data,
+			    ParquetStatisticsUtils::BloomFilterExcludes(filter,
+			                                                group.columns[column_reader.ColumnIndex()].meta_data,
 			                                                *state.thrift_file_proto, allocator)) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column &&
-			           group.columns[column_reader.FileIdx()].meta_data.statistics.__isset.min_value &&
-			           group.columns[column_reader.FileIdx()].meta_data.statistics.__isset.max_value) {
+			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
+			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value) {
 
 				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
 				// however, when reading remote Parquet files, skipping row groups is really important
@@ -889,7 +890,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 					auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
 					for (auto &child_filter : and_filter.child_filters) {
 						auto child_prune_result = CheckParquetStringFilter(
-						    *stats, group.columns[column_reader.FileIdx()].meta_data.statistics, *child_filter);
+						    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, *child_filter);
 						if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 							and_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 							break;
@@ -900,7 +901,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 					prune_result = and_result;
 				} else {
 					prune_result = CheckParquetStringFilter(
-					    *stats, group.columns[column_reader.FileIdx()].meta_data.statistics, filter);
+					    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
 				}
 			} else {
 				prune_result = filter.CheckStatistics(*stats);

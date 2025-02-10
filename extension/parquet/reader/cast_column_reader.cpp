@@ -33,8 +33,8 @@ idx_t CastColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_pt
 			extended_error = StringUtil::Format(
 			    "In file \"%s\" the column \"%s\" has type %s, but we are trying to load it into column ",
 			    reader.file_name, column_schema.name, intermediate_vector.GetType());
-			if (FileIdx() < reader.table_columns.size()) {
-				extended_error += "\"" + reader.table_columns[FileIdx()] + "\" ";
+			if (ColumnIndex() < reader.table_columns.size()) {
+				extended_error += "\"" + reader.table_columns[ColumnIndex()] + "\" ";
 			}
 			extended_error += StringUtil::Format("with type %s.", result.GetType());
 			extended_error += "\nThis means the Parquet schema does not match the schema of the table.";

@@ -83,8 +83,8 @@ public:
 		return column_schema;
 	}
 
-	inline idx_t FileIdx() const {
-		return column_schema.file_index;
+	inline idx_t ColumnIndex() const {
+		return column_schema.column_index;
 	}
 	inline idx_t MaxDefine() const {
 		return column_schema.max_define;

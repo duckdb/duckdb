@@ -295,7 +295,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 
 	// Otherwise, its a standard column with stats
 
-	auto &column_chunk = columns[schema.file_index];
+	auto &column_chunk = columns[schema.column_index];
 	if (!column_chunk.__isset.meta_data || !column_chunk.meta_data.__isset.statistics) {
 		// no stats present for row group
 		return nullptr;

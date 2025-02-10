@@ -178,8 +178,8 @@ void ColumnReader::Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defi
 }
 
 void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
-	D_ASSERT(FileIdx() < columns.size());
-	chunk = &columns[FileIdx()];
+	D_ASSERT(ColumnIndex() < columns.size());
+	chunk = &columns[ColumnIndex()];
 	protocol = &protocol_p;
 	D_ASSERT(chunk);
 	D_ASSERT(chunk->__isset.meta_data);
