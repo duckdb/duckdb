@@ -77,6 +77,15 @@ static idx_t CalculateEscapedStringLength(const string_t &string) {
 
 	constexpr const char *SPECIAL_CHARACTERS = "[]\"',{}";
 
+	if (base_length >= 1) {
+		if (isspace(string_data[0])) {
+			length++;
+		}
+		if (isspace(string_data[base_length - 1])) {
+			length++;
+		}
+	}
+
 	for (idx_t i = 0; i < base_length; i++) {
 		auto special_character = memchr(SPECIAL_CHARACTERS, string_data[i], sizeof(SPECIAL_CHARACTERS));
 		length += (special_character != nullptr);
@@ -94,6 +103,13 @@ static idx_t WriteEscapedString(void *dest, const string_t &string) {
 	constexpr const char *SPECIAL_CHARACTERS = "[]\"',{}";
 
 	idx_t dest_offset = 0;
+	if (base_length >= 1) {
+		if (isspace(string_data[0])) {
+			memset(reinterpret_cast<char *>(dest) + dest_offset, '\\', 1);
+			dest_offset++;
+		}
+	}
+
 	while (string_data < string_end) {
 		const void *write_end = nullptr;
 		for (idx_t j = 0; j < sizeof(SPECIAL_CHARACTERS); j++) {
@@ -119,6 +135,17 @@ static idx_t WriteEscapedString(void *dest, const string_t &string) {
 		dest_offset += length + 2;
 		string_data = reinterpret_cast<const char *>(write_end) + 1;
 	}
+
+	if (base_length >= 1) {
+		//! Replace ' ' with '\ '
+		if (isspace(string_start[base_length - 1])) {
+			auto character = reinterpret_cast<const unsigned char *>(dest)[dest_offset - 1];
+			memset(reinterpret_cast<char *>(dest) + dest_offset - 1, '\\', 1);
+			memset(reinterpret_cast<char *>(dest) + dest_offset, character, 1);
+			dest_offset++;
+		}
+	}
+
 	return dest_offset;
 }
 
