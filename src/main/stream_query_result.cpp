@@ -101,6 +101,7 @@ unique_ptr<DataChunk> StreamQueryResult::FetchInternal(ClientContextLock &lock) 
 		SetError(std::move(error));
 	} catch (...) { // LCOV_EXCL_START
 		SetError(ErrorData("Unhandled exception in FetchInternal"));
+		ValidChecker::Invalidate(DatabaseInstance::GetDatabase(*context), "Unhandled exception in FetchInternal");
 	} // LCOV_EXCL_STOP
 	context->CleanupInternal(lock, this, invalidate_query);
 	return nullptr;
