@@ -135,6 +135,7 @@ public:
 	void RegisterGeometryColumn(const string &column_name);
 
 	static bool IsGeoParquetConversionEnabled(const ClientContext &context);
+	static LogicalType GeometryType();
 
 private:
 	mutex write_lock;

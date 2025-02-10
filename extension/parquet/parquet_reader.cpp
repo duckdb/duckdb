@@ -406,10 +406,10 @@ ParquetColumnSchema::ParquetColumnSchema(string name_p, LogicalType type_p, idx_
       max_repeat(max_repeat), schema_index(schema_index), column_index(column_index) {
 }
 
-ParquetColumnSchema::ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type)
-    : schema_type(ParquetColumnSchemaType::CAST), name(parent.name), type(std::move(cast_type)),
-      max_define(parent.max_define), max_repeat(parent.max_repeat), schema_index(parent.schema_index),
-      column_index(parent.column_index) {
+ParquetColumnSchema::ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type,
+                                         ParquetColumnSchemaType schema_type)
+    : schema_type(schema_type), name(parent.name), type(std::move(cast_type)), max_define(parent.max_define),
+      max_repeat(parent.max_repeat), schema_index(parent.schema_index), column_index(parent.column_index) {
 	children.push_back(std::move(parent));
 }
 
@@ -461,8 +461,9 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 	if (depth == 1) {
 		// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata
 		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name)) {
-			return ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++,
-			                         ParquetColumnSchemaType::GEOMETRY);
+			auto root_schema = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
+			return ParquetColumnSchema(std::move(root_schema), GeoParquetFileMetadata::GeometryType(),
+			                           ParquetColumnSchemaType::GEOMETRY);
 		}
 	}
 

@@ -32,7 +32,8 @@ struct ParquetColumnSchema {
 	                    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	ParquetColumnSchema(string name, LogicalType type, idx_t max_define, idx_t max_repeat, idx_t schema_index,
 	                    idx_t column_index, ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
-	ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type);
+	ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type,
+	                    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::CAST);
 
 	ParquetColumnSchemaType schema_type;
 	string name;

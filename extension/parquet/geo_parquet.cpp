@@ -382,6 +382,12 @@ bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &
 	return true;
 }
 
+LogicalType GeoParquetFileMetadata::GeometryType() {
+	auto blob_type = LogicalType(LogicalTypeId::BLOB);
+	blob_type.SetAlias("GEOMETRY");
+	return blob_type;
+}
+
 unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReader &reader,
                                                                     const ParquetColumnSchema &schema,
                                                                     ClientContext &context) {
@@ -394,7 +400,8 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// WKB encoding
-	if (schema.type.id() == LogicalTypeId::BLOB && column.geometry_encoding == GeoParquetColumnEncoding::WKB) {
+	if (schema.children[0].type.id() == LogicalTypeId::BLOB &&
+	    column.geometry_encoding == GeoParquetColumnEncoding::WKB) {
 		// Look for a conversion function in the catalog
 		auto &conversion_func_set =
 		    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_geomfromwkb")
@@ -408,7 +415,7 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 		    make_uniq<BoundFunctionExpression>(conversion_func.return_type, conversion_func, std::move(args), nullptr);
 
 		// Create a child reader
-		auto child_reader = ColumnReader::CreateReader(reader, schema);
+		auto child_reader = ColumnReader::CreateReader(reader, schema.children[0]);
 
 		// Create an expression reader that applies the conversion function to the child reader
 		return make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr));
