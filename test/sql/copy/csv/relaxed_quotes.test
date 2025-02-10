@@ -78,12 +78,7 @@ statement ok
 drop table t;
 
 statement error
-create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', strict_mode=false, buffer_size = 20, header = 0)
-----
-
-
-statement error
-create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', strict_mode=false, buffer_size = 20, header = 0)
+create table t as from read_csv('data/csv/unescaped_quotes/unescaped_quote_new_line_rn.csv', strict_mode=false, buffer_size = 20, header = 0, delim = ';')
 ----
 
 statement ok

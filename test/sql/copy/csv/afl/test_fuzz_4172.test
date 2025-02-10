@@ -1,9 +1,9 @@
 # name: test/sql/copy/csv/afl/test_fuzz_4172.test
 # description: fuzzer generated csv files - should not raise internal exception (by failed assertion).
-# group: [csv]
+# group: [afl]
 
-# statement ok
-# PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 query I
 select count(file) from glob('data/csv/afl/4172/*');
