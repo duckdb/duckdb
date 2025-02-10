@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb.hpp"
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
@@ -17,16 +16,12 @@
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/null_filter.hpp"
-#include "duckdb/planner/table_filter.hpp"
-#endif
 #include "column_reader.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
+#include "duckdb/execution/adaptive_filter.hpp"
 
 #include <exception>
 
@@ -48,6 +43,14 @@ struct ParquetReaderPrefetchConfig {
 	static constexpr double WHOLE_GROUP_PREFETCH_MINIMUM_SCAN = 0.95;
 };
 
+struct ParquetScanFilter {
+	ParquetScanFilter(idx_t filter_idx, TableFilter &filter) : filter_idx(filter_idx), filter(filter) {
+	}
+
+	idx_t filter_idx;
+	TableFilter &filter;
+};
+
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
@@ -64,6 +67,11 @@ struct ParquetReaderScanState {
 
 	bool prefetch_mode = false;
 	bool current_group_prefetched = false;
+
+	//! Adaptive filter
+	unique_ptr<AdaptiveFilter> adaptive_filter;
+	//! Table filter list
+	vector<ParquetScanFilter> scan_filters;
 };
 
 struct ParquetColumnDefinition {
@@ -215,12 +223,6 @@ private:
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
-
-	template <typename... Args>
-	std::runtime_error FormatException(const string fmt_str, Args... params) {
-		return std::runtime_error("Failed to read Parquet file \"" + file_name +
-		                          "\": " + StringUtil::Format(fmt_str, params...));
-	}
 
 private:
 	unique_ptr<FileHandle> file_handle;

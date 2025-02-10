@@ -233,7 +233,7 @@ runs:
 
     # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
     - name: Test deployed extensions
-      if: ${{ inputs.run_tests == 1 }}
+      if: ${{ inputs.deploy_as != '' && inputs.run_tests == 1 }}
       shell: bash
       env:
         AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}

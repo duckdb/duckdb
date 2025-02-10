@@ -895,10 +895,21 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 		} else {
 			column_info.persistent = false;
 		}
+		auto &compression_function = segment->GetCompressionFunction();
 		auto segment_state = segment->GetSegmentState();
 		if (segment_state) {
 			column_info.segment_info = segment_state->GetSegmentInfo();
 			column_info.additional_blocks = segment_state->GetAdditionalBlocks();
+		}
+		if (compression_function.get_segment_info) {
+			auto segment_info = compression_function.get_segment_info(*segment);
+			vector<string> sinfo;
+			for (auto &item : segment_info) {
+				auto &mode = item.first;
+				auto &count = item.second;
+				sinfo.push_back(StringUtil::Format("%s: %s", mode, count));
+			}
+			column_info.segment_info = StringUtil::Join(sinfo, ", ");
 		}
 		result.emplace_back(column_info);
 

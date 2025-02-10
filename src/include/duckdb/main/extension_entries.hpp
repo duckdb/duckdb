@@ -522,6 +522,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"skewness", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"sql_auto_complete", "autocomplete", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlite_attach", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"sqlite_query", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlite_scan", "sqlite_scanner", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqlsmith", "sqlsmith", CatalogType::TABLE_FUNCTION_ENTRY},
     {"sqrt", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -980,6 +981,7 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"s3_url_style", "httpfs"},
     {"s3_use_ssl", "httpfs"},
     {"sqlite_all_varchar", "sqlite_scanner"},
+    {"sqlite_debug_show_queries", "sqlite_scanner"},
     {"timezone", "icu"},
     {"unsafe_enable_version_guessing", "iceberg"},
 }; // END_OF_EXTENSION_SETTINGS

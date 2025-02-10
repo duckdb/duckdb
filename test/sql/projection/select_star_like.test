@@ -61,6 +61,27 @@ SELECT * NOT LIKE '%number%' AS val FROM (SELECT 1 AS number1, 2 AS number2, 3 A
 ----
 3
 
+# ESCAPE
+query I
+SELECT * LIKE '\_%' ESCAPE '\' AS val FROM (SELECT 1 AS number1, 2 AS _number2)
+----
+2
+
+query I
+SELECT * NOT LIKE '\_%' ESCAPE '\' AS val FROM (SELECT 1 AS number1, 2 AS _number2)
+----
+1
+
+query I
+SELECT * ILIKE '\_NUM%' ESCAPE '\' AS val FROM (SELECT 1 AS number1, 2 AS _number2)
+----
+2
+
+query I
+SELECT * NOT ILIKE '\_NUM%' ESCAPE '\' AS val FROM (SELECT 1 AS number1, 2 AS _number2)
+----
+1
+
 # non-constant pattern
 statement error
 SELECT * SIMILAR TO pattern FROM integers, (SELECT '.*col.*') t(pattern)

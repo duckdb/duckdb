@@ -210,15 +210,18 @@ string CSVReaderOptions::GetMultiByteDelimiter() const {
 
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
-	if (read_format) {
-		StrpTimeFormat strpformat;
-		error = StrTimeFormat::ParseFormatSpecifier(format, strpformat);
-		dialect_options.date_format[type].Set(strpformat);
-	} else {
-		write_date_format[type] = Value(format);
-	}
-	if (!error.empty()) {
-		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+	const string auto_format = StringUtil::Lower(format);
+	if (auto_format != "auto") {
+		if (read_format) {
+			StrpTimeFormat strpformat;
+			error = StrTimeFormat::ParseFormatSpecifier(format, strpformat);
+			dialect_options.date_format[type].Set(strpformat);
+		} else {
+			write_date_format[type] = Value(format);
+		}
+		if (!error.empty()) {
+			throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+		}
 	}
 }
 
@@ -494,13 +497,13 @@ static Value StringVectorToValue(const vector<string> &vec) {
 static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	//! Const ht with accepted auto_types and their weights in specificity
 	const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity {
-	    {static_cast<uint8_t>(LogicalTypeId::VARCHAR), 0},   {static_cast<uint8_t>(LogicalTypeId::DOUBLE), 1},
-	    {static_cast<uint8_t>(LogicalTypeId::FLOAT), 2},     {static_cast<uint8_t>(LogicalTypeId::DECIMAL), 3},
-	    {static_cast<uint8_t>(LogicalTypeId::BIGINT), 4},    {static_cast<uint8_t>(LogicalTypeId::INTEGER), 5},
-	    {static_cast<uint8_t>(LogicalTypeId::SMALLINT), 6},  {static_cast<uint8_t>(LogicalTypeId::TINYINT), 7},
-	    {static_cast<uint8_t>(LogicalTypeId::TIMESTAMP), 8}, {static_cast<uint8_t>(LogicalTypeId::DATE), 9},
-	    {static_cast<uint8_t>(LogicalTypeId::TIME), 10},     {static_cast<uint8_t>(LogicalTypeId::BOOLEAN), 11},
-	    {static_cast<uint8_t>(LogicalTypeId::SQLNULL), 12}};
+	    {static_cast<uint8_t>(LogicalTypeId::VARCHAR), 0},      {static_cast<uint8_t>(LogicalTypeId::DOUBLE), 1},
+	    {static_cast<uint8_t>(LogicalTypeId::FLOAT), 2},        {static_cast<uint8_t>(LogicalTypeId::DECIMAL), 3},
+	    {static_cast<uint8_t>(LogicalTypeId::BIGINT), 4},       {static_cast<uint8_t>(LogicalTypeId::INTEGER), 5},
+	    {static_cast<uint8_t>(LogicalTypeId::SMALLINT), 6},     {static_cast<uint8_t>(LogicalTypeId::TINYINT), 7},
+	    {static_cast<uint8_t>(LogicalTypeId::TIMESTAMP_TZ), 8}, {static_cast<uint8_t>(LogicalTypeId::TIMESTAMP), 9},
+	    {static_cast<uint8_t>(LogicalTypeId::DATE), 10},        {static_cast<uint8_t>(LogicalTypeId::TIME), 11},
+	    {static_cast<uint8_t>(LogicalTypeId::BOOLEAN), 12},     {static_cast<uint8_t>(LogicalTypeId::SQLNULL), 13}};
 
 	auto id = static_cast<uint8_t>(candidate_type.id());
 	auto it = auto_type_candidates_specificity.find(id);
