@@ -12,6 +12,8 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/encryption_state.hpp"
 
+#include "mbedtls/aes.h"
+#include "mbedtls/aria.h"
 #include "mbedtls/cipher.h"
 
 #include <string>
