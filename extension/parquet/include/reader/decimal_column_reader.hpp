@@ -21,7 +21,7 @@ struct DecimalParquetValueConversion {
 	static DUCKDB_PHYSICAL_TYPE PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
 		idx_t byte_len;
 		if (FIXED_LENGTH) {
-			byte_len = (idx_t)reader.Schema().type_length; /* sure, type length needs to be a signed int */
+			byte_len = reader.Schema().type_length;
 		} else {
 			byte_len = plain_data.read<uint32_t>();
 		}
@@ -56,11 +56,10 @@ class DecimalColumnReader
 	    TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE, DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>;
 
 public:
-	DecimalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, // NOLINT
-	                    idx_t file_idx_p, idx_t max_define_p, idx_t max_repeat_p)
+	DecimalColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
 	    : TemplatedColumnReader<DUCKDB_PHYSICAL_TYPE,
 	                            DecimalParquetValueConversion<DUCKDB_PHYSICAL_TYPE, FIXED_LENGTH>>(
-	          reader, std::move(type_p), schema_p, file_idx_p, max_define_p, max_repeat_p) {
+	          reader, schema) {
 	}
 };
 

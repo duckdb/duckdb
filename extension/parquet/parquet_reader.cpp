@@ -414,7 +414,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 			result = make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
 			                                     std::move(result));
 		}
-		result->SetParentSchema(s_ele);
+		// result->SetParentSchema(s_ele);
 		return result;
 	} else { // leaf node
 		if (!s_ele.__isset.type) {
@@ -474,6 +474,74 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	return ret;
 }
 
+ParquetColumnSchema::ParquetColumnSchema(LogicalType type_p, idx_t max_define, idx_t max_repeat, idx_t schema_index, ParquetColumnSchemaType schema_type) :
+	schema_type(schema_type), type(std::move(type_p)), max_define(max_define), max_repeat(max_repeat), schema_index(schema_index) {
+}
+
+ParquetColumnSchema::ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type) :
+	schema_type(ParquetColumnSchemaType::CAST), type(std::move(cast_type)), max_define(parent.max_define), max_repeat(parent.max_repeat), schema_index(parent.schema_index) {
+	children.push_back(std::move(parent));
+}
+
+unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(ParquetReader &reader, idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
+	if (schema_type == ParquetColumnSchemaType::CAST) {
+		// casting stats is not supported (yet)
+		return nullptr;
+	}
+	if (schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
+		auto stats = NumericStats::CreateUnknown(type);
+		auto &row_groups = reader.GetFileMetadata()->row_groups;
+		D_ASSERT(row_group_idx_p < row_groups.size());
+		idx_t row_group_offset_min = 0;
+		for (idx_t i = 0; i < row_group_idx_p; i++) {
+			row_group_offset_min += row_groups[i].num_rows;
+		}
+
+		NumericStats::SetMin(stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min)));
+		NumericStats::SetMax(
+			stats, Value::BIGINT(UnsafeNumericCast<int64_t>(row_group_offset_min + row_groups[row_group_idx_p].num_rows)));
+		stats.Set(StatsInfo::CANNOT_HAVE_NULL_VALUES);
+		return stats.ToUnique();
+	}
+	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns);
+}
+
+ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
+						   idx_t &next_schema_idx, idx_t &next_file_idx) {
+	throw InternalException("FIXME: parse schema");
+}
+
+unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
+	auto file_meta_data = GetFileMetadata();
+	idx_t next_schema_idx = 0;
+	idx_t next_file_idx = 0;
+
+	if (file_meta_data->schema.empty()) {
+		throw IOException("Parquet reader: no schema elements found");
+	}
+	if (file_meta_data->schema[0].num_children == 0) {
+		throw IOException("Parquet reader: root schema element has no children");
+	}
+	auto root = ParseSchemaRecursive(0, 0, 0, next_schema_idx, next_file_idx);
+	if (root.type.id() != LogicalTypeId::STRUCT) {
+		throw InvalidInputException("Root element of Parquet file must be a struct");
+	}
+	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
+	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
+	// add casts if required
+	for (auto &entry : reader_data.cast_map) {
+		auto column_idx = entry.first;
+		auto &expected_type = entry.second;
+		auto child_element = std::move(root.children[column_idx]);
+		ParquetColumnSchema cast_element(std::move(child_element), expected_type);
+		root.children[column_idx] = std::move(cast_element);
+	}
+	if (parquet_options.file_row_number) {
+		root.children.emplace_back(LogicalType::BIGINT, 0, 0, next_file_idx, 0, 0);
+	}
+	return make_uniq<ParquetColumnSchema>(root);
+}
+
 void ParquetReader::InitializeSchema(ClientContext &context) {
 	auto file_meta_data = GetFileMetadata();
 
@@ -488,25 +556,16 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 		throw InvalidInputException("Failed to read Parquet file '%s': Need at least one non-root column in the file",
 		                            file_name);
 	}
-	root_reader = CreateReader(context);
-	auto &root_type = root_reader->Type();
-	auto &child_types = StructType::GetChildTypes(root_type);
-
-	auto &struct_reader = root_reader->Cast<StructColumnReader>();
-	auto &child_readers = struct_reader.child_readers;
-	D_ASSERT(root_type.id() == LogicalTypeId::STRUCT);
-
-	D_ASSERT(child_readers.size() >= child_types.size());
-	for (idx_t i = 0; i < child_types.size(); i++) {
-		auto &type_pair = child_types[i];
-		auto column = MultiFileReaderColumnDefinition(type_pair.first, type_pair.second);
-		auto &column_reader = *child_readers[i];
-		auto &column_schema = column_reader.Schema();
+	root_schema = ParseSchema();
+	for (idx_t i = 0; i < root_schema->children.size(); i++) {
+		auto &element = root_schema->children[i];
+		auto column = MultiFileReaderColumnDefinition(element.name, element.type);
+		auto &column_schema = element.schema.get();
 
 		if (column_schema.__isset.field_id) {
 			column.identifier = Value::INTEGER(column_schema.field_id);
-		} else if (column_reader.GetParentSchema()) {
-			auto &parent_column_schema = *column_reader.GetParentSchema();
+		} else if (element.parent_schema) {
+			auto &parent_column_schema = *element.parent_schema;
 			if (parent_column_schema.__isset.field_id) {
 				column.identifier = Value::INTEGER(parent_column_schema.field_id);
 			}
@@ -630,11 +689,11 @@ unique_ptr<BaseStatistics> ParquetReader::ReadStatistics(const string &name) {
 
 	unique_ptr<BaseStatistics> column_stats;
 	auto file_meta_data = GetFileMetadata();
-	auto &column_reader = root_reader->Cast<StructColumnReader>().GetChildReader(file_col_idx);
+	auto &column_schema = root_schema->children[file_col_idx];
 
 	for (idx_t row_group_idx = 0; row_group_idx < file_meta_data->row_groups.size(); row_group_idx++) {
 		auto &row_group = file_meta_data->row_groups[row_group_idx];
-		auto chunk_stats = column_reader.Stats(row_group_idx, row_group.columns);
+		auto chunk_stats = column_schema.Stats(*this, row_group_idx, row_group.columns);
 		if (!chunk_stats) {
 			return nullptr;
 		}

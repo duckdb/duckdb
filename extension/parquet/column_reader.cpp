@@ -104,10 +104,8 @@ const uint64_t ParquetDecodeUtils::BITPACK_MASKS_SIZE = sizeof(ParquetDecodeUtil
 
 const uint8_t ParquetDecodeUtils::BITPACK_DLEN = 8;
 
-ColumnReader::ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-                           idx_t max_define_p, idx_t max_repeat_p)
-    : schema(schema_p), file_idx(file_idx_p), max_define(max_define_p), max_repeat(max_repeat_p), reader(reader),
-      type(std::move(type_p)), page_rows_available(0), dictionary_decoder(*this), delta_binary_packed_decoder(*this),
+ColumnReader::ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p)
+    : column_schema(schema_p), reader(reader), page_rows_available(0), dictionary_decoder(*this), delta_binary_packed_decoder(*this),
       rle_decoder(*this), delta_length_byte_array_decoder(*this), delta_byte_array_decoder(*this),
       byte_stream_split_decoder(*this) {
 }
@@ -123,33 +121,6 @@ ParquetReader &ColumnReader::Reader() {
 	return reader;
 }
 
-const LogicalType &ColumnReader::Type() const {
-	return type;
-}
-
-const SchemaElement &ColumnReader::Schema() const {
-	return schema;
-}
-
-optional_ptr<const SchemaElement> ColumnReader::GetParentSchema() const {
-	return parent_schema;
-}
-
-void ColumnReader::SetParentSchema(const SchemaElement &parent_schema_p) {
-	parent_schema = &parent_schema_p;
-}
-
-idx_t ColumnReader::FileIdx() const {
-	return file_idx;
-}
-
-idx_t ColumnReader::MaxDefine() const {
-	return max_define;
-}
-
-idx_t ColumnReader::MaxRepeat() const {
-	return max_repeat;
-}
 
 void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge) {
 	if (chunk) {
@@ -190,7 +161,6 @@ idx_t ColumnReader::GroupRowsAvailable() {
 }
 
 unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
-	return ParquetStatisticsUtils::TransformColumnStatistics(*this, columns);
 }
 
 void ColumnReader::PlainSkip(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values) {
@@ -208,8 +178,8 @@ void ColumnReader::Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defi
 }
 
 void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
-	D_ASSERT(file_idx < columns.size());
-	chunk = &columns[file_idx];
+	D_ASSERT(FileIdx() < columns.size());
+	chunk = &columns[FileIdx()];
 	protocol = &protocol_p;
 	D_ASSERT(chunk);
 	D_ASSERT(chunk->__isset.meta_data);
@@ -451,7 +421,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (HasRepeats()) {
 		uint32_t rep_length = is_v1 ? block->read<uint32_t>() : v2_header.repetition_levels_byte_length;
 		block->available(rep_length);
-		repeated_decoder = make_uniq<RleBpDecoder>(block->ptr, rep_length, RleBpDecoder::ComputeBitWidth(max_repeat));
+		repeated_decoder = make_uniq<RleBpDecoder>(block->ptr, rep_length, RleBpDecoder::ComputeBitWidth(MaxRepeat()));
 		block->inc(rep_length);
 	} else if (is_v2 && v2_header.repetition_levels_byte_length > 0) {
 		block->inc(v2_header.repetition_levels_byte_length);
@@ -460,7 +430,7 @@ void ColumnReader::PrepareDataPage(PageHeader &page_hdr) {
 	if (HasDefines()) {
 		uint32_t def_length = is_v1 ? block->read<uint32_t>() : v2_header.definition_levels_byte_length;
 		block->available(def_length);
-		defined_decoder = make_uniq<RleBpDecoder>(block->ptr, def_length, RleBpDecoder::ComputeBitWidth(max_define));
+		defined_decoder = make_uniq<RleBpDecoder>(block->ptr, def_length, RleBpDecoder::ComputeBitWidth(MaxDefine()));
 		block->inc(def_length);
 	} else if (is_v2 && v2_header.definition_levels_byte_length > 0) {
 		block->inc(v2_header.definition_levels_byte_length);
@@ -704,210 +674,150 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 // Create Column Reader
 //===--------------------------------------------------------------------===//
 template <class T>
-unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const LogicalType &type_p,
-                                             const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define,
-                                             idx_t max_repeat) {
-	switch (type_p.InternalType()) {
+unique_ptr<ColumnReader> CreateDecimalReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
+	switch (schema.type.InternalType()) {
 	case PhysicalType::INT16:
 		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<T>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	case PhysicalType::INT32:
 		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<T>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	case PhysicalType::INT64:
 		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<T>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	default:
 		throw NotImplementedException("Unimplemented internal type for CreateDecimalReader");
 	}
 }
 
-unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const LogicalType &type_p,
-                                                    const SchemaElement &schema_p, idx_t file_idx_p, idx_t max_define,
-                                                    idx_t max_repeat) {
-	switch (type_p.id()) {
+unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema) {
+	switch (schema.type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		return make_uniq<BooleanColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<BooleanColumnReader>(reader, schema);
 	case LogicalTypeId::UTINYINT:
 		return make_uniq<TemplatedColumnReader<uint8_t, TemplatedParquetValueConversion<uint32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	case LogicalTypeId::USMALLINT:
 		return make_uniq<TemplatedColumnReader<uint16_t, TemplatedParquetValueConversion<uint32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	case LogicalTypeId::UINTEGER:
 		return make_uniq<TemplatedColumnReader<uint32_t, TemplatedParquetValueConversion<uint32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	case LogicalTypeId::UBIGINT:
 		return make_uniq<TemplatedColumnReader<uint64_t, TemplatedParquetValueConversion<uint64_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	case LogicalTypeId::TINYINT:
 		return make_uniq<TemplatedColumnReader<int8_t, TemplatedParquetValueConversion<int32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	case LogicalTypeId::SMALLINT:
 		return make_uniq<TemplatedColumnReader<int16_t, TemplatedParquetValueConversion<int32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	case LogicalTypeId::INTEGER:
 		return make_uniq<TemplatedColumnReader<int32_t, TemplatedParquetValueConversion<int32_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	case LogicalTypeId::BIGINT:
 		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<int64_t>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	case LogicalTypeId::FLOAT:
 		return make_uniq<TemplatedColumnReader<float, TemplatedParquetValueConversion<float>>>(
-		    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		    reader, schema);
 	case LogicalTypeId::DOUBLE:
-		switch (schema_p.type) {
-		case Type::BYTE_ARRAY:
-		case Type::FIXED_LEN_BYTE_ARRAY:
-			return ParquetDecimalUtils::CreateReader(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-		default:
-			return make_uniq<TemplatedColumnReader<double, TemplatedParquetValueConversion<double>>>(
-			    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		if (schema.type_info == ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY) {
+			return ParquetDecimalUtils::CreateReader(reader, schema);
 		}
+		return make_uniq<TemplatedColumnReader<double, TemplatedParquetValueConversion<double>>>(
+			reader, schema);
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIMESTAMP_TZ:
-		switch (schema_p.type) {
-		case Type::INT96:
+		switch (schema.type_info) {
+		case ParquetExtraTypeInfo::IMPALA_TIMESTAMP:
 			return make_uniq<CallbackColumnReader<Int96, timestamp_t, ImpalaTimestampToTimestamp>>(
-			    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-		case Type::INT64:
-			if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIMESTAMP) {
-				if (schema_p.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
-					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.MICROS) {
-					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.NANOS) {
-					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-				}
-			} else if (schema_p.__isset.converted_type) {
-				switch (schema_p.converted_type) {
-				case ConvertedType::TIMESTAMP_MICROS:
-					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-				case ConvertedType::TIMESTAMP_MILLIS:
-					return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-				default:
-					break;
-				}
-			}
+				reader, schema);
+		case ParquetExtraTypeInfo::UNIT_MS:
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMsToTimestamp>>(
+				reader, schema);
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampMicrosToTimestamp>>(
+				reader, schema);
+		case ParquetExtraTypeInfo::UNIT_NS:
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_t, ParquetTimestampNsToTimestamp>>(
+				reader, schema);
 		default:
-			break;
+			throw InternalException("TIMESTAMP requires type info");
 		}
-		break;
 	case LogicalTypeId::TIMESTAMP_NS:
-		switch (schema_p.type) {
-		case Type::INT96:
+		switch (schema.type_info) {
+		case ParquetExtraTypeInfo::IMPALA_TIMESTAMP:
 			return make_uniq<CallbackColumnReader<Int96, timestamp_ns_t, ImpalaTimestampToTimestampNS>>(
-			    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-		case Type::INT64:
-			if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIMESTAMP) {
-				if (schema_p.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
-					return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampMsToTimestampNs>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.MICROS) {
-					return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampUsToTimestampNs>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-				} else if (schema_p.logicalType.TIMESTAMP.unit.__isset.NANOS) {
-					return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampNsToTimestampNs>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-				}
-			} else if (schema_p.__isset.converted_type) {
-				switch (schema_p.converted_type) {
-				case ConvertedType::TIMESTAMP_MICROS:
-					return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampUsToTimestampNs>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-				case ConvertedType::TIMESTAMP_MILLIS:
-					return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampMsToTimestampNs>>(
-					    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-				default:
-					break;
-				}
-			}
+			    reader, schema);
+		case ParquetExtraTypeInfo::UNIT_MS:
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampMsToTimestampNs>>(
+			reader, schema);
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampUsToTimestampNs>>(
+				reader, schema);
+		case ParquetExtraTypeInfo::UNIT_NS:
+			return make_uniq<CallbackColumnReader<int64_t, timestamp_ns_t, ParquetTimestampNsToTimestampNs>>(
+				reader, schema);
 		default:
-			break;
+			throw InternalException("TIMESTAMP_NS requires type info");
 		}
-		break;
 	case LogicalTypeId::DATE:
-		return make_uniq<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, type_p, schema_p, file_idx_p,
-		                                                                          max_define, max_repeat);
+		return make_uniq<CallbackColumnReader<int32_t, date_t, ParquetIntToDate>>(reader, schema);
 	case LogicalTypeId::TIME:
-		if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIME) {
-			if (schema_p.logicalType.TIME.unit.__isset.MILLIS) {
-				return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			} else if (schema_p.logicalType.TIME.unit.__isset.MICROS) {
-				return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			} else if (schema_p.logicalType.TIME.unit.__isset.NANOS) {
-				return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeNs>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			}
-		} else if (schema_p.__isset.converted_type) {
-			switch (schema_p.converted_type) {
-			case ConvertedType::TIME_MICROS:
-				return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			case ConvertedType::TIME_MILLIS:
-				return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			default:
-				break;
-			}
+		switch (schema.type_info) {
+		case ParquetExtraTypeInfo::UNIT_MS:
+			return make_uniq<CallbackColumnReader<int32_t, dtime_t, ParquetIntToTimeMs>>(
+				reader, schema);
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTime>>(
+				reader, schema);
+		case ParquetExtraTypeInfo::UNIT_NS:
+			return make_uniq<CallbackColumnReader<int64_t, dtime_t, ParquetIntToTimeNs>>(
+				reader, schema);
+		default:
+			throw InternalException("TIME requires type info");
 		}
-		throw NotImplementedException("Unsupported time encoding in Parquet file");
 	case LogicalTypeId::TIME_TZ:
-		if (schema_p.__isset.logicalType && schema_p.logicalType.__isset.TIME) {
-			if (schema_p.logicalType.TIME.unit.__isset.MILLIS) {
-				return make_uniq<CallbackColumnReader<int32_t, dtime_tz_t, ParquetIntToTimeMsTZ>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			} else if (schema_p.logicalType.TIME.unit.__isset.MICROS) {
-				return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeTZ>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			} else if (schema_p.logicalType.TIME.unit.__isset.NANOS) {
-				return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeNsTZ>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			}
-		} else if (schema_p.__isset.converted_type) {
-			switch (schema_p.converted_type) {
-			case ConvertedType::TIME_MICROS:
-				return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeTZ>>(
-				    reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-			default:
-				break;
-			}
+			switch (schema.type_info) {
+		case ParquetExtraTypeInfo::UNIT_MS:
+			return make_uniq<CallbackColumnReader<int32_t, dtime_tz_t, ParquetIntToTimeMsTZ>>(
+				reader, schema);
+		case ParquetExtraTypeInfo::UNIT_MICROS:
+			return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeTZ>>(
+				reader, schema);
+		case ParquetExtraTypeInfo::UNIT_NS:
+			return make_uniq<CallbackColumnReader<int64_t, dtime_tz_t, ParquetIntToTimeNsTZ>>(
+				reader, schema);
+		default:
+			throw InternalException("TIME_TZ requires type info");
 		}
-		throw NotImplementedException("Unsupported time encoding in Parquet file");
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::VARCHAR:
-		return make_uniq<StringColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<StringColumnReader>(reader, schema);
 	case LogicalTypeId::DECIMAL:
 		// we have to figure out what kind of int we need
-		switch (schema_p.type) {
-		case Type::INT32:
-			return CreateDecimalReader<int32_t>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-		case Type::INT64:
-			return CreateDecimalReader<int64_t>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
-		case Type::BYTE_ARRAY:
-		case Type::FIXED_LEN_BYTE_ARRAY:
-			return ParquetDecimalUtils::CreateReader(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		switch (schema.type_info) {
+		case ParquetExtraTypeInfo::DECIMAL_INT32:
+			return CreateDecimalReader<int32_t>(reader, schema);
+		case ParquetExtraTypeInfo::DECIMAL_INT64:
+			return CreateDecimalReader<int64_t>(reader, schema);
+		case ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY:
+			return ParquetDecimalUtils::CreateReader(reader, schema);
 		default:
 			throw NotImplementedException("Unrecognized Parquet type for Decimal");
 		}
 		break;
 	case LogicalTypeId::UUID:
-		return make_uniq<UUIDColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<UUIDColumnReader>(reader, schema);
 	case LogicalTypeId::INTERVAL:
-		return make_uniq<IntervalColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<IntervalColumnReader>(reader, schema);
 	case LogicalTypeId::SQLNULL:
-		return make_uniq<NullColumnReader>(reader, type_p, schema_p, file_idx_p, max_define, max_repeat);
+		return make_uniq<NullColumnReader>(reader, schema);
 	default:
 		break;
 	}
-	throw NotImplementedException(type_p.ToString());
+	throw NotImplementedException(schema.type.ToString());
 }
 
 } // namespace duckdb

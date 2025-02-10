@@ -37,6 +37,7 @@ class ClientContext;
 class BaseStatistics;
 class TableFilterSet;
 class ParquetEncryptionConfig;
+class ParquetReader;
 
 struct ParquetReaderPrefetchConfig {
 	// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
@@ -141,7 +142,7 @@ public:
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
 	MultiFileReaderData reader_data;
-	unique_ptr<ColumnReader> root_reader;
+	unique_ptr<ParquetColumnSchema> root_schema;
 	shared_ptr<EncryptionUtil> encryption_util;
 
 	//! Parquet schema for the generated columns
@@ -211,6 +212,11 @@ private:
 
 	void InitializeSchema(ClientContext &context);
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
+	//! Parse the schema of the file
+	unique_ptr<ParquetColumnSchema> ParseSchema();
+	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
+						       idx_t &next_schema_idx, idx_t &next_file_idx);
+
 	unique_ptr<ColumnReader> CreateReader(ClientContext &context);
 
 	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const vector<ColumnIndex> &indexes,

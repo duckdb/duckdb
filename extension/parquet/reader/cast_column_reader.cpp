@@ -6,17 +6,11 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Cast Column Reader
 //===--------------------------------------------------------------------===//
-CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, LogicalType target_type_p)
-    : ColumnReader(child_reader_p->Reader(), std::move(target_type_p), child_reader_p->Schema(),
-                   child_reader_p->FileIdx(), child_reader_p->MaxDefine(), child_reader_p->MaxRepeat()),
+CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, const ParquetColumnSchema &schema)
+    : ColumnReader(child_reader_p->Reader(), schema),
       child_reader(std::move(child_reader_p)) {
 	vector<LogicalType> intermediate_types {child_reader->Type()};
 	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
-}
-
-unique_ptr<BaseStatistics> CastColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
-	// casting stats is not supported (yet)
-	return nullptr;
 }
 
 void CastColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
@@ -37,7 +31,7 @@ idx_t CastColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_pt
 			// COPY .. FROM
 			extended_error = StringUtil::Format(
 			    "In file \"%s\" the column \"%s\" has type %s, but we are trying to load it into column ",
-			    reader.file_name, schema.name, intermediate_vector.GetType());
+			    reader.file_name, column_schema.name, intermediate_vector.GetType());
 			if (FileIdx() < reader.table_columns.size()) {
 				extended_error += "\"" + reader.table_columns[FileIdx()] + "\" ";
 			}
@@ -52,7 +46,7 @@ idx_t CastColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_pt
 			// read_parquet() with multiple files
 			extended_error = StringUtil::Format(
 			    "In file \"%s\" the column \"%s\" has type %s, but we are trying to read it as type %s.",
-			    reader.file_name, schema.name, intermediate_vector.GetType(), result.GetType());
+			    reader.file_name, column_schema.name, intermediate_vector.GetType(), result.GetType());
 			extended_error +=
 			    "\nThis can happen when reading multiple Parquet files. The schema information is taken from "
 			    "the first Parquet file by default. Possible solutions:\n";
@@ -62,7 +56,7 @@ idx_t CastColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_pt
 		}
 		throw ConversionException(
 		    "In Parquet reader of file \"%s\": failed to cast column \"%s\" from type %s to %s: %s\n\n%s",
-		    reader.file_name, schema.name, intermediate_vector.GetType(), result.GetType(), error_message,
+		    reader.file_name, column_schema.name, intermediate_vector.GetType(), result.GetType(), error_message,
 		    extended_error);
 	}
 	return amount;
