@@ -70,6 +70,58 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 	return all_succeeded;
 }
 
+static idx_t CalculateEscapedStringLength(const string_t &string) {
+	auto base_length = string.GetSize();
+	idx_t length = base_length;
+	auto string_data = string.GetData();
+
+	constexpr const char *SPECIAL_CHARACTERS = "[]\"',{}";
+
+	for (idx_t i = 0; i < base_length; i++) {
+		auto special_character = memchr(SPECIAL_CHARACTERS, string_data[i], sizeof(SPECIAL_CHARACTERS));
+		length += (special_character != nullptr);
+	}
+	return length;
+}
+
+static idx_t WriteEscapedString(void *dest, const string_t &string) {
+	auto base_length = string.GetSize();
+
+	auto string_start = string.GetData();
+	const auto string_end = reinterpret_cast<const void *>(string_start + base_length);
+	auto string_data = string_start;
+
+	constexpr const char *SPECIAL_CHARACTERS = "[]\"',{}";
+
+	idx_t dest_offset = 0;
+	while (string_data < string_end) {
+		const void *write_end = nullptr;
+		for (idx_t j = 0; j < sizeof(SPECIAL_CHARACTERS); j++) {
+			write_end = memchr(string_data, SPECIAL_CHARACTERS[j],
+			                   UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(string_end) - string_data));
+			if (write_end) {
+				//! Found a special character
+				break;
+			}
+		}
+		if (!write_end) {
+			write_end = string_end;
+			auto length = UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(write_end) - string_data);
+			memcpy(reinterpret_cast<char *>(dest) + dest_offset, string_data, length);
+			dest_offset += length;
+			break;
+		}
+
+		auto length = UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(write_end) - string_data);
+		memcpy(reinterpret_cast<char *>(dest) + dest_offset, string_data, length);
+		memset(reinterpret_cast<char *>(dest) + dest_offset + length, '\\', 1);
+		memcpy(reinterpret_cast<char *>(dest) + dest_offset + length + 1, write_end, 1);
+		dest_offset += length + 2;
+		string_data = reinterpret_cast<const char *>(write_end) + 1;
+	}
+	return dest_offset;
+}
+
 static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast the child vector to varchar
@@ -103,7 +155,11 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 				list_length += SEP_LENGTH; // ", "
 			}
 			// string length, or "NULL"
-			list_length += child_validity.RowIsValid(idx) ? child_data[idx].GetSize() : NULL_LENGTH;
+			if (child_validity.RowIsValid(idx)) {
+				list_length += CalculateEscapedStringLength(child_data[idx]);
+			} else {
+				list_length += NULL_LENGTH;
+			}
 		}
 		result_data[i] = StringVector::EmptyString(result, list_length);
 		auto dataptr = result_data[i].GetDataWriteable();
@@ -116,9 +172,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 				offset += SEP_LENGTH;
 			}
 			if (child_validity.RowIsValid(idx)) {
-				auto len = child_data[idx].GetSize();
-				memcpy(dataptr + offset, child_data[idx].GetData(), len);
-				offset += len;
+				offset += WriteEscapedString(dataptr + offset, child_data[idx]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;
