@@ -11,7 +11,7 @@ DeltaLengthByteArrayDecoder::DeltaLengthByteArrayDecoder(ColumnReader &reader)
 }
 
 void DeltaLengthByteArrayDecoder::InitializePage() {
-	if (reader.type.InternalType() != PhysicalType::VARCHAR) {
+	if (reader.Type().InternalType() != PhysicalType::VARCHAR) {
 		throw std::runtime_error("Delta Length Byte Array encoding is only supported for string/blob data");
 	}
 	// read the binary packed lengths
@@ -28,7 +28,7 @@ void DeltaLengthByteArrayDecoder::Read(uint8_t *defines, idx_t read_count, Vecto
 	auto &result_mask = FlatVector::Validity(result);
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
 		auto result_idx = result_offset + row_idx;
-		if (defines && defines[result_idx] != reader.max_define) {
+		if (defines && defines[result_idx] != reader.MaxDefine()) {
 			result_mask.SetInvalid(result_idx);
 			continue;
 		}
@@ -52,7 +52,7 @@ void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 	auto &block = *reader.block;
 	auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
 	for (idx_t row_idx = 0; row_idx < skip_count; row_idx++) {
-		if (defines && defines[row_idx] != reader.max_define) {
+		if (defines && defines[row_idx] != reader.MaxDefine()) {
 			continue;
 		}
 		if (length_idx >= byte_array_count) {

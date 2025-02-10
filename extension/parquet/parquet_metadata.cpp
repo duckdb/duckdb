@@ -211,7 +211,8 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 		if (schema_element.num_children > 0) {
 			continue;
 		}
-		column_types.push_back(ParquetReader::DeriveLogicalType(schema_element, false));
+		throw InternalException("FIXME: parquet metadata");
+		// column_types.push_back(ParquetReader::DeriveLogicalType(schema_element, false));
 		schema_indexes.push_back(schema_idx);
 	}
 

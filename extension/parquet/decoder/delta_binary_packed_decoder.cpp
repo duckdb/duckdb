@@ -19,13 +19,13 @@ void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &
 
 	auto &allocator = reader.reader.allocator;
 	decoded_data_buffer.reset();
-	switch (reader.schema.type) {
-	case duckdb_parquet::Type::INT32:
+	switch (reader.Type().InternalType()) {
+	case PhysicalType::INT32:
 		decoded_data_buffer.resize(allocator, sizeof(int32_t) * (valid_count));
 		dbp_decoder->GetBatch<int32_t>(decoded_data_buffer.ptr, valid_count);
 
 		break;
-	case duckdb_parquet::Type::INT64:
+	case PhysicalType::INT64:
 		decoded_data_buffer.resize(allocator, sizeof(int64_t) * (valid_count));
 		dbp_decoder->GetBatch<int64_t>(decoded_data_buffer.ptr, valid_count);
 		break;
@@ -39,12 +39,12 @@ void DeltaBinaryPackedDecoder::Read(uint8_t *defines, idx_t read_count, Vector &
 
 void DeltaBinaryPackedDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 	idx_t valid_count = reader.GetValidCount(defines, skip_count);
-	switch (reader.schema.type) {
-	case duckdb_parquet::Type::INT32:
+	switch (reader.Type().InternalType()) {
+	case PhysicalType::INT32:
 		dbp_decoder->Skip<int32_t>(valid_count);
 
 		break;
-	case duckdb_parquet::Type::INT64:
+	case PhysicalType::INT64:
 		dbp_decoder->Skip<int64_t>(valid_count);
 		break;
 

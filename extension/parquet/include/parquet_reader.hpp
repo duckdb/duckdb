@@ -145,8 +145,6 @@ public:
 	unique_ptr<ParquetColumnSchema> root_schema;
 	shared_ptr<EncryptionUtil> encryption_util;
 
-	//! Parquet schema for the generated columns
-	vector<duckdb_parquet::SchemaElement> generated_column_schema;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
 
@@ -188,7 +186,6 @@ public:
 	                  const uint32_t buffer_size);
 
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
-	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string);
 
 	FileHandle &GetHandle() {
 		return *file_handle;
@@ -228,7 +225,8 @@ private:
 	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
-	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
+	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat, idx_t schema_index, ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
+	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema);
 
 private:
 	unique_ptr<FileHandle> file_handle;

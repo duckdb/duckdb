@@ -19,11 +19,11 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 	filter_count = 0;
 	// we use the first value in the dictionary to keep a NULL
 	if (!dictionary) {
-		dictionary = make_uniq<Vector>(reader.type, dictionary_size + 1);
+		dictionary = make_uniq<Vector>(reader.Type(), dictionary_size + 1);
 	} else if (dictionary_size > old_dict_size) {
 		dictionary->Resize(old_dict_size, dictionary_size + 1);
 	}
-	dictionary_id = reader.reader.file_name + "_" + reader.schema.name + "_" + std::to_string(reader.chunk_read_offset);
+	dictionary_id = reader.reader.file_name + "_" + reader.Schema().name + "_" + std::to_string(reader.chunk_read_offset);
 	// we use the last entry as a NULL, dictionary vectors don't have a separate validity mask
 	auto &dict_validity = FlatVector::Validity(*dictionary);
 	dict_validity.Reset(dictionary_size + 1);
@@ -77,7 +77,7 @@ idx_t DictionaryDecoder::GetValidValues(uint8_t *defines, idx_t read_count, idx_
 		for (idx_t i = 0; i < read_count; i++) {
 			valid_sel.set_index(valid_count, i);
 			dictionary_selection_vector.set_index(i, dictionary_size);
-			valid_count += defines[result_offset + i] == reader.max_define;
+			valid_count += defines[result_offset + i] == reader.MaxDefine();
 		}
 	}
 	return valid_count;

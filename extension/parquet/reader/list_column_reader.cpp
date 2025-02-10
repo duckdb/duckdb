@@ -114,7 +114,7 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 		// the rest is pretty much handed up as-is as a single-valued list or NULL
 		idx_t child_idx;
 		for (child_idx = 0; child_idx < child_actual_num_values; child_idx++) {
-			if (child_repeats_ptr[child_idx] == max_repeat) {
+			if (child_repeats_ptr[child_idx] == MaxRepeat()) {
 				// value repeats on this level, append
 				D_ASSERT(result_offset > 0);
 				OP::HandleRepeat(data, result_offset - 1);
@@ -126,10 +126,10 @@ idx_t ListColumnReader::ReadInternal(uint64_t num_values, data_ptr_t define_out,
 				finished = true;
 				break;
 			}
-			if (child_defines_ptr[child_idx] >= max_define) {
+			if (child_defines_ptr[child_idx] >= MaxDefine()) {
 				// value has been defined down the stack, hence its NOT NULL
 				OP::HandleListStart(data, result_offset, child_idx + current_chunk_offset, 1);
-			} else if (child_defines_ptr[child_idx] == max_define - 1) {
+			} else if (child_defines_ptr[child_idx] == MaxDefine() - 1) {
 				// empty list
 				OP::HandleListStart(data, result_offset, child_idx + current_chunk_offset, 0);
 			} else {
@@ -171,10 +171,9 @@ idx_t ListColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_pt
 	return ReadInternal<TemplatedListReader>(num_values, define_out, repeat_out, result_out);
 }
 
-ListColumnReader::ListColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
-                                   idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
+ListColumnReader::ListColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
                                    unique_ptr<ColumnReader> child_column_reader_p)
-    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
+    : ColumnReader(reader, schema),
       child_column_reader(std::move(child_column_reader_p)),
       read_cache(reader.allocator, ListType::GetChildType(Type())), read_vector(read_cache), overflow_child_count(0) {
 

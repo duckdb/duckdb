@@ -115,11 +115,13 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 
 	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), current_time, std::move(geo_metadata));
 }
-
-LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string) {
+LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) {
 	// inner node
 	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
+	}
+	if (s_ele.__isset.type_length) {
+		schema.type_length = NumericCast<uint32_t>(s_ele.type_length);
 	}
 	if (s_ele.__isset.logicalType) {
 		if (s_ele.logicalType.__isset.UUID) {
@@ -127,6 +129,15 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 				return LogicalType::UUID;
 			}
 		} else if (s_ele.logicalType.__isset.TIMESTAMP) {
+			if (s_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
+				schema.type_info = ParquetExtraTypeInfo::UNIT_MS;
+			} else if (s_ele.logicalType.TIMESTAMP.unit.__isset.MICROS) {
+				schema.type_info = ParquetExtraTypeInfo::UNIT_MICROS;
+			} else if (s_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
+				schema.type_info = ParquetExtraTypeInfo::UNIT_NS;
+			} else {
+				throw NotImplementedException("Unimplemented TIMESTAMP encoding - missing UNIT");
+			}
 			if (s_ele.logicalType.TIMESTAMP.isAdjustedToUTC) {
 				return LogicalType::TIMESTAMP_TZ;
 			} else if (s_ele.logicalType.TIMESTAMP.unit.__isset.NANOS) {
@@ -134,6 +145,15 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			}
 			return LogicalType::TIMESTAMP;
 		} else if (s_ele.logicalType.__isset.TIME) {
+			if (s_ele.logicalType.TIME.unit.__isset.MILLIS) {
+				schema.type_info = ParquetExtraTypeInfo::UNIT_MS;
+			} else if (s_ele.logicalType.TIME.unit.__isset.MICROS) {
+				schema.type_info = ParquetExtraTypeInfo::UNIT_MICROS;
+			} else if (s_ele.logicalType.TIME.unit.__isset.NANOS) {
+				schema.type_info = ParquetExtraTypeInfo::UNIT_NS;
+			} else {
+				throw NotImplementedException("Unimplemented TIME encoding - missing UNIT");
+			}
 			if (s_ele.logicalType.TIME.isAdjustedToUTC) {
 				return LogicalType::TIME_TZ;
 			}
@@ -201,7 +221,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 				throw IOException("DATE converted type can only be set for value of Type::INT32");
 			}
 		case ConvertedType::TIMESTAMP_MICROS:
+			schema.type_info = ParquetExtraTypeInfo::UNIT_MICROS;
+			if (s_ele.type == Type::INT64) {
+				return LogicalType::TIMESTAMP;
+			} else {
+				throw IOException("TIMESTAMP converted type can only be set for value of Type::INT64");
+			}
 		case ConvertedType::TIMESTAMP_MILLIS:
+			schema.type_info = ParquetExtraTypeInfo::UNIT_MS;
 			if (s_ele.type == Type::INT64) {
 				return LogicalType::TIMESTAMP;
 			} else {
@@ -211,19 +238,27 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			if (!s_ele.__isset.precision || !s_ele.__isset.scale) {
 				throw IOException("DECIMAL requires a length and scale specifier!");
 			}
+			schema.type_scale = s_ele.__isset.scale;
 			if (s_ele.precision > DecimalType::MaxWidth()) {
+				schema.type_info = ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY;
 				return LogicalType::DOUBLE;
 			}
 			switch (s_ele.type) {
 			case Type::BYTE_ARRAY:
 			case Type::FIXED_LEN_BYTE_ARRAY:
+				schema.type_info = ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY;
+				break;
 			case Type::INT32:
+				schema.type_info = ParquetExtraTypeInfo::DECIMAL_INT32;
+				break;
 			case Type::INT64:
-				return LogicalType::DECIMAL(s_ele.precision, s_ele.scale);
+				schema.type_info = ParquetExtraTypeInfo::DECIMAL_INT64;
+				break;
 			default:
 				throw IOException(
 				    "DECIMAL converted type can only be set for value of Type::(FIXED_LEN_)BYTE_ARRAY/INT32/INT64");
 			}
+			return LogicalType::DECIMAL(s_ele.precision, s_ele.scale);
 		case ConvertedType::UTF8:
 		case ConvertedType::ENUM:
 			switch (s_ele.type) {
@@ -234,12 +269,14 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 				throw IOException("UTF8 converted type can only be set for Type::(FIXED_LEN_)BYTE_ARRAY");
 			}
 		case ConvertedType::TIME_MILLIS:
+			schema.type_info = ParquetExtraTypeInfo::UNIT_MS;
 			if (s_ele.type == Type::INT32) {
 				return LogicalType::TIME;
 			} else {
 				throw IOException("TIME_MILLIS converted type can only be set for value of Type::INT32");
 			}
 		case ConvertedType::TIME_MICROS:
+			schema.type_info = ParquetExtraTypeInfo::UNIT_MICROS;
 			if (s_ele.type == Type::INT64) {
 				return LogicalType::TIME;
 			} else {
@@ -274,7 +311,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 			return LogicalType::DOUBLE;
 		case Type::BYTE_ARRAY:
 		case Type::FIXED_LEN_BYTE_ARRAY:
-			if (binary_as_string) {
+			if (parquet_options.binary_as_string) {
 				return LogicalType::VARCHAR;
 			}
 			return LogicalType::BLOB;
@@ -284,157 +321,162 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, bool bi
 	}
 }
 
-LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele) {
-	return DeriveLogicalType(s_ele, parquet_options.binary_as_string);
+
+ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat, idx_t schema_index, ParquetColumnSchemaType type) {
+	ParquetColumnSchema schema(max_define, max_repeat, schema_index, type);
+	schema.name = s_ele.name;
+	schema.type = DeriveLogicalType(s_ele, schema);
+	return schema;
 }
 
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context,
                                                               const vector<ColumnIndex> &indexes, idx_t depth,
                                                               idx_t max_define, idx_t max_repeat,
                                                               idx_t &next_schema_idx, idx_t &next_file_idx) {
-	auto file_meta_data = GetFileMetadata();
-	D_ASSERT(file_meta_data);
-	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
-	auto &s_ele = file_meta_data->schema[next_schema_idx];
-	auto this_idx = next_schema_idx;
-
-	auto repetition_type = FieldRepetitionType::REQUIRED;
-	if (s_ele.__isset.repetition_type && this_idx > 0) {
-		repetition_type = s_ele.repetition_type;
-	}
-	if (repetition_type != FieldRepetitionType::REQUIRED) {
-		max_define++;
-	}
-	if (repetition_type == FieldRepetitionType::REPEATED) {
-		max_repeat++;
-	}
-
-	// Check for geoparquet spatial types
-	if (depth == 1) {
-		// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata
-		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name)) {
-			return metadata->geo_metadata->CreateColumnReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++,
-			                                                  max_define, max_repeat, context);
-		}
-	}
-
-	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
-		child_list_t<LogicalType> child_types;
-		vector<unique_ptr<ColumnReader>> child_readers;
-		// this type is a nested type - it has child columns specified
-		// create a mapping for which column readers we should create
-		unordered_map<idx_t, vector<ColumnIndex>> required_readers;
-		for (auto &index : indexes) {
-			required_readers.insert(make_pair(index.GetPrimaryIndex(), index.GetChildIndexes()));
-		}
-
-		idx_t c_idx = 0;
-		while (c_idx < (idx_t)s_ele.num_children) {
-			next_schema_idx++;
-
-			auto &child_ele = file_meta_data->schema[next_schema_idx];
-
-			// figure out which child columns we should read of this child column
-			vector<ColumnIndex> child_indexes;
-			auto entry = required_readers.find(c_idx);
-			if (entry != required_readers.end()) {
-				child_indexes = entry->second;
-			}
-			auto child_reader = CreateReaderRecursive(context, child_indexes, depth + 1, max_define, max_repeat,
-			                                          next_schema_idx, next_file_idx);
-			child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
-			if (indexes.empty() || entry != required_readers.end()) {
-				// either (1) indexes is empty, meaning we need to read all child columns, or (2) we need to read this
-				// column
-				child_readers.push_back(std::move(child_reader));
-			} else {
-				// this column was explicitly not required - push an empty child reader here
-				child_readers.push_back(nullptr);
-			}
-
-			c_idx++;
-		}
-		// rename child type entries if there are case-insensitive duplicates by appending _1, _2 etc.
-		// behavior consistent with CSV reader fwiw
-		case_insensitive_map_t<idx_t> name_collision_count;
-		// get header names from CSV
-		for (auto &child_type : child_types) {
-			auto col_name = child_type.first;
-			// avoid duplicate header names
-			while (name_collision_count.find(col_name) != name_collision_count.end()) {
-				name_collision_count[col_name] += 1;
-				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
-			}
-			child_type.first = col_name;
-			name_collision_count[col_name] = 0;
-		}
-
-		D_ASSERT(!child_types.empty());
-		unique_ptr<ColumnReader> result;
-		LogicalType result_type;
-
-		bool is_repeated = repetition_type == FieldRepetitionType::REPEATED;
-		bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
-		bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
-		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
-		if (!is_map_kv && this_idx > 0) {
-			// check if the parent node of this is a map
-			auto &p_ele = file_meta_data->schema[this_idx - 1];
-			bool parent_is_map = p_ele.__isset.converted_type && p_ele.converted_type == ConvertedType::MAP;
-			bool parent_has_children = p_ele.__isset.num_children && p_ele.num_children == 1;
-			is_map_kv = parent_is_map && parent_has_children;
-		}
-
-		if (is_map_kv) {
-			if (child_types.size() != 2) {
-				throw IOException("MAP_KEY_VALUE requires two children");
-			}
-			if (!is_repeated) {
-				throw IOException("MAP_KEY_VALUE needs to be repeated");
-			}
-			result_type = LogicalType::MAP(std::move(child_types[0].second), std::move(child_types[1].second));
-
-			auto struct_reader =
-			    make_uniq<StructColumnReader>(*this, ListType::GetChildType(result_type), s_ele, this_idx,
-			                                  max_define - 1, max_repeat - 1, std::move(child_readers));
-			return make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                   std::move(struct_reader));
-		}
-		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
-			result_type = LogicalType::STRUCT(child_types);
-			result = make_uniq<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                       std::move(child_readers));
-		} else {
-			// if we have a struct with only a single type, pull up
-			result_type = child_types[0].second;
-			result = std::move(child_readers[0]);
-		}
-		if (is_repeated) {
-			result_type = LogicalType::LIST(result_type);
-			result = make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
-			                                     std::move(result));
-		}
-		// result->SetParentSchema(s_ele);
-		return result;
-	} else { // leaf node
-		if (!s_ele.__isset.type) {
-			throw InvalidInputException(
-			    "Node has neither num_children nor type set - this violates the Parquet spec (corrupted file)");
-		}
-		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
-			const auto derived_type = DeriveLogicalType(s_ele);
-			auto list_type = LogicalType::LIST(derived_type);
-
-			auto element_reader =
-			    ColumnReader::CreateReader(*this, derived_type, s_ele, next_file_idx++, max_define, max_repeat);
-
-			return make_uniq<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat,
-			                                   std::move(element_reader));
-		}
-		// TODO check return value of derive type or should we only do this on read()
-		return ColumnReader::CreateReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
-		                                  max_repeat);
-	}
+	// auto file_meta_data = GetFileMetadata();
+	// D_ASSERT(file_meta_data);
+	// D_ASSERT(next_schema_idx < file_meta_data->schema.size());
+	// auto &s_ele = file_meta_data->schema[next_schema_idx];
+	// auto this_idx = next_schema_idx;
+	//
+	// auto repetition_type = FieldRepetitionType::REQUIRED;
+	// if (s_ele.__isset.repetition_type && this_idx > 0) {
+	// 	repetition_type = s_ele.repetition_type;
+	// }
+	// if (repetition_type != FieldRepetitionType::REQUIRED) {
+	// 	max_define++;
+	// }
+	// if (repetition_type == FieldRepetitionType::REPEATED) {
+	// 	max_repeat++;
+	// }
+	//
+	// // Check for geoparquet spatial types
+	// if (depth == 1) {
+	// 	// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata
+	// 	if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name)) {
+	// 		return metadata->geo_metadata->CreateColumnReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++,
+	// 		                                                  max_define, max_repeat, context);
+	// 	}
+	// }
+	//
+	// if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
+	// 	child_list_t<LogicalType> child_types;
+	// 	vector<unique_ptr<ColumnReader>> child_readers;
+	// 	// this type is a nested type - it has child columns specified
+	// 	// create a mapping for which column readers we should create
+	// 	unordered_map<idx_t, vector<ColumnIndex>> required_readers;
+	// 	for (auto &index : indexes) {
+	// 		required_readers.insert(make_pair(index.GetPrimaryIndex(), index.GetChildIndexes()));
+	// 	}
+	//
+	// 	idx_t c_idx = 0;
+	// 	while (c_idx < (idx_t)s_ele.num_children) {
+	// 		next_schema_idx++;
+	//
+	// 		auto &child_ele = file_meta_data->schema[next_schema_idx];
+	//
+	// 		// figure out which child columns we should read of this child column
+	// 		vector<ColumnIndex> child_indexes;
+	// 		auto entry = required_readers.find(c_idx);
+	// 		if (entry != required_readers.end()) {
+	// 			child_indexes = entry->second;
+	// 		}
+	// 		auto child_reader = CreateReaderRecursive(context, child_indexes, depth + 1, max_define, max_repeat,
+	// 		                                          next_schema_idx, next_file_idx);
+	// 		child_types.push_back(make_pair(child_ele.name, child_reader->Type()));
+	// 		if (indexes.empty() || entry != required_readers.end()) {
+	// 			// either (1) indexes is empty, meaning we need to read all child columns, or (2) we need to read this
+	// 			// column
+	// 			child_readers.push_back(std::move(child_reader));
+	// 		} else {
+	// 			// this column was explicitly not required - push an empty child reader here
+	// 			child_readers.push_back(nullptr);
+	// 		}
+	//
+	// 		c_idx++;
+	// 	}
+	// 	// rename child type entries if there are case-insensitive duplicates by appending _1, _2 etc.
+	// 	// behavior consistent with CSV reader fwiw
+	// 	case_insensitive_map_t<idx_t> name_collision_count;
+	// 	// get header names from CSV
+	// 	for (auto &child_type : child_types) {
+	// 		auto col_name = child_type.first;
+	// 		// avoid duplicate header names
+	// 		while (name_collision_count.find(col_name) != name_collision_count.end()) {
+	// 			name_collision_count[col_name] += 1;
+	// 			col_name = col_name + "_" + to_string(name_collision_count[col_name]);
+	// 		}
+	// 		child_type.first = col_name;
+	// 		name_collision_count[col_name] = 0;
+	// 	}
+	//
+	// 	D_ASSERT(!child_types.empty());
+	// 	unique_ptr<ColumnReader> result;
+	// 	LogicalType result_type;
+	//
+	// 	bool is_repeated = repetition_type == FieldRepetitionType::REPEATED;
+	// 	bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
+	// 	bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
+	// 	bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
+	// 	if (!is_map_kv && this_idx > 0) {
+	// 		// check if the parent node of this is a map
+	// 		auto &p_ele = file_meta_data->schema[this_idx - 1];
+	// 		bool parent_is_map = p_ele.__isset.converted_type && p_ele.converted_type == ConvertedType::MAP;
+	// 		bool parent_has_children = p_ele.__isset.num_children && p_ele.num_children == 1;
+	// 		is_map_kv = parent_is_map && parent_has_children;
+	// 	}
+	//
+	// 	if (is_map_kv) {
+	// 		if (child_types.size() != 2) {
+	// 			throw IOException("MAP_KEY_VALUE requires two children");
+	// 		}
+	// 		if (!is_repeated) {
+	// 			throw IOException("MAP_KEY_VALUE needs to be repeated");
+	// 		}
+	// 		result_type = LogicalType::MAP(std::move(child_types[0].second), std::move(child_types[1].second));
+	//
+	// 		auto struct_reader =
+	// 		    make_uniq<StructColumnReader>(*this, ListType::GetChildType(result_type), s_ele, this_idx,
+	// 		                                  max_define - 1, max_repeat - 1, std::move(child_readers));
+	// 		return make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+	// 		                                   std::move(struct_reader));
+	// 	}
+	// 	if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
+	// 		result_type = LogicalType::STRUCT(child_types);
+	// 		result = make_uniq<StructColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+	// 		                                       std::move(child_readers));
+	// 	} else {
+	// 		// if we have a struct with only a single type, pull up
+	// 		result_type = child_types[0].second;
+	// 		result = std::move(child_readers[0]);
+	// 	}
+	// 	if (is_repeated) {
+	// 		result_type = LogicalType::LIST(result_type);
+	// 		result = make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+	// 		                                     std::move(result));
+	// 	}
+	// 	// result->SetParentSchema(s_ele);
+	// 	return result;
+	// } else { // leaf node
+	// 	if (!s_ele.__isset.type) {
+	// 		throw InvalidInputException(
+	// 		    "Node has neither num_children nor type set - this violates the Parquet spec (corrupted file)");
+	// 	}
+	// 	if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+	// 		const auto derived_type = DeriveLogicalType(s_ele);
+	// 		auto list_type = LogicalType::LIST(derived_type);
+	//
+	// 		auto element_reader =
+	// 		    ColumnReader::CreateReader(*this, derived_type, s_ele, next_file_idx++, max_define, max_repeat);
+	//
+	// 		return make_uniq<ListColumnReader>(*this, list_type, s_ele, this_idx, max_define, max_repeat,
+	// 		                                   std::move(element_reader));
+	// 	}
+	// 	// TODO check return value of derive type or should we only do this on read()
+	// 	return ColumnReader::CreateReader(*this, DeriveLogicalType(s_ele), s_ele, next_file_idx++, max_define,
+	// 	                                  max_repeat);
+	// }
+	throw InternalException("FIXME: create reader");
 }
 
 // TODO we don't need readers for columns we are not going to read ay
@@ -456,22 +498,25 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
 
-	auto &root_struct_reader = ret->Cast<StructColumnReader>();
-	// add casts if required
-	for (auto &entry : reader_data.cast_map) {
-		auto column_idx = entry.first;
-		auto &expected_type = entry.second;
-		auto child_reader = std::move(root_struct_reader.child_readers[column_idx]);
-		auto cast_reader = make_uniq<CastColumnReader>(std::move(child_reader), expected_type);
-		root_struct_reader.child_readers[column_idx] = std::move(cast_reader);
-	}
-	if (parquet_options.file_row_number) {
-		generated_column_schema.push_back(SchemaElement());
-		root_struct_reader.child_readers.push_back(make_uniq<RowNumberColumnReader>(
-		    *this, LogicalType::BIGINT, generated_column_schema.back(), next_file_idx, 0, 0));
-	}
+	// auto &root_struct_reader = ret->Cast<StructColumnReader>();
+	// // add casts if required
+	// for (auto &entry : reader_data.cast_map) {
+	// 	auto column_idx = entry.first;
+	// 	auto &expected_type = entry.second;
+	// 	auto child_reader = std::move(root_struct_reader.child_readers[column_idx]);
+	// 	auto cast_reader = make_uniq<CastColumnReader>(std::move(child_reader), expected_type);
+	// 	root_struct_reader.child_readers[column_idx] = std::move(cast_reader);
+	// }
+	// if (parquet_options.file_row_number) {
+	// 	root_struct_reader.child_readers.push_back(make_uniq<RowNumberColumnReader>(
+	// 	    *this, LogicalType::BIGINT, generated_column_schema.back(), next_file_idx, 0, 0));
+	// }
 
 	return ret;
+}
+
+ParquetColumnSchema::ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index, ParquetColumnSchemaType schema_type) :
+	schema_type(schema_type), max_define(max_define), max_repeat(max_repeat), schema_index(schema_index) {
 }
 
 ParquetColumnSchema::ParquetColumnSchema(LogicalType type_p, idx_t max_define, idx_t max_repeat, idx_t schema_index, ParquetColumnSchemaType schema_type) :
@@ -508,7 +553,125 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(ParquetReader &reader, idx
 
 ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
 						   idx_t &next_schema_idx, idx_t &next_file_idx) {
-	throw InternalException("FIXME: parse schema");
+
+	auto file_meta_data = GetFileMetadata();
+	D_ASSERT(file_meta_data);
+	D_ASSERT(next_schema_idx < file_meta_data->schema.size());
+	auto &s_ele = file_meta_data->schema[next_schema_idx];
+	auto this_idx = next_schema_idx;
+
+	auto repetition_type = FieldRepetitionType::REQUIRED;
+	if (s_ele.__isset.repetition_type && this_idx > 0) {
+		repetition_type = s_ele.repetition_type;
+	}
+	if (repetition_type != FieldRepetitionType::REQUIRED) {
+		max_define++;
+	}
+	if (repetition_type == FieldRepetitionType::REPEATED) {
+		max_repeat++;
+	}
+
+	// Check for geoparquet spatial types
+	if (depth == 1) {
+		// geoparquet types have to be at the root of the schema, and have to be present in the kv metadata
+		if (metadata->geo_metadata && metadata->geo_metadata->IsGeometryColumn(s_ele.name)) {
+			return ParseColumnSchema(s_ele, max_define, max_repeat, next_file_idx++, ParquetColumnSchemaType::GEOMETRY);
+		}
+	}
+
+	if (s_ele.__isset.num_children && s_ele.num_children > 0) { // inner node
+		child_list_t<LogicalType> child_types;
+		vector<ParquetColumnSchema> child_schemas;
+
+		idx_t c_idx = 0;
+		while (c_idx < NumericCast<idx_t>(s_ele.num_children)) {
+			next_schema_idx++;
+
+			auto &child_ele = file_meta_data->schema[next_schema_idx];
+			auto child_schema = ParseSchemaRecursive(depth + 1, max_define, max_repeat,
+			                                          next_schema_idx, next_file_idx);
+			child_types.push_back(make_pair(child_ele.name, child_schema.type));
+			child_schemas.push_back(std::move(child_schema));
+			c_idx++;
+		}
+		// rename child type entries if there are case-insensitive duplicates by appending _1, _2 etc.
+		// behavior consistent with CSV reader fwiw
+		case_insensitive_map_t<idx_t> name_collision_count;
+		// get header names from CSV
+		for (auto &child_type : child_types) {
+			auto col_name = child_type.first;
+			// avoid duplicate header names
+			while (name_collision_count.find(col_name) != name_collision_count.end()) {
+				name_collision_count[col_name] += 1;
+				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
+			}
+			child_type.first = col_name;
+			name_collision_count[col_name] = 0;
+		}
+
+		D_ASSERT(!child_types.empty());
+
+		bool is_repeated = repetition_type == FieldRepetitionType::REPEATED;
+		bool is_list = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::LIST;
+		bool is_map = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP;
+		bool is_map_kv = s_ele.__isset.converted_type && s_ele.converted_type == ConvertedType::MAP_KEY_VALUE;
+		if (!is_map_kv && this_idx > 0) {
+			// check if the parent node of this is a map
+			auto &p_ele = file_meta_data->schema[this_idx - 1];
+			bool parent_is_map = p_ele.__isset.converted_type && p_ele.converted_type == ConvertedType::MAP;
+			bool parent_has_children = p_ele.__isset.num_children && p_ele.num_children == 1;
+			is_map_kv = parent_is_map && parent_has_children;
+		}
+
+		ParquetColumnSchema result;
+		LogicalType result_type;
+		if (is_map_kv) {
+			if (child_types.size() != 2) {
+				throw IOException("MAP_KEY_VALUE requires two children");
+			}
+			if (!is_repeated) {
+				throw IOException("MAP_KEY_VALUE needs to be repeated");
+			}
+			result_type = LogicalType::MAP(std::move(child_types[0].second), std::move(child_types[1].second));
+			throw InternalException("FIXME: MAP");
+			//
+			// auto struct_reader =
+			//     make_uniq<StructColumnReader>(*this, ListType::GetChildType(result_type), s_ele, this_idx,
+			//                                   max_define - 1, max_repeat - 1, std::move(child_readers));
+			// return make_uniq<ListColumnReader>(*this, result_type, s_ele, this_idx, max_define, max_repeat,
+			//                                    std::move(struct_reader));
+		}
+		if (child_types.size() > 1 || (!is_list && !is_map && !is_repeated)) {
+			result_type = LogicalType::STRUCT(child_types);
+			ParquetColumnSchema struct_schema(result_type, max_define, max_repeat, this_idx);
+			struct_schema.children = std::move(child_schemas);
+			result = std::move(struct_schema);
+		} else {
+			// if we have a struct with only a single type, pull up
+			result_type = child_types[0].second;
+			result = std::move(child_schemas[0]);
+		}
+		if (is_repeated) {
+			auto list_type = LogicalType::LIST(result.type);
+			ParquetColumnSchema list_schema(std::move(list_type), max_define, max_repeat, this_idx);
+			list_schema.children.push_back(std::move(result));
+			result = std::move(list_schema);
+		}
+		return result;
+	} else { // leaf node
+		if (!s_ele.__isset.type) {
+			throw InvalidInputException(
+			    "Node has neither num_children nor type set - this violates the Parquet spec (corrupted file)");
+		}
+		auto result = ParseColumnSchema(s_ele, max_define, max_repeat, next_file_idx++);
+		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
+			auto list_type = LogicalType::LIST(result.type);
+			ParquetColumnSchema list_schema(std::move(list_type), max_define, max_repeat, this_idx);
+			list_schema.children.push_back(std::move(result));
+			return list_schema;
+		}
+		return result;
+	}
 }
 
 unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
@@ -537,7 +700,7 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 		root.children[column_idx] = std::move(cast_element);
 	}
 	if (parquet_options.file_row_number) {
-		root.children.emplace_back(LogicalType::BIGINT, 0, 0, next_file_idx, 0, 0);
+		root.children.emplace_back(LogicalType::BIGINT, 0, 0, next_file_idx, ParquetColumnSchemaType::FILE_ROW_NUMBER);
 	}
 	return make_uniq<ParquetColumnSchema>(root);
 }
@@ -560,16 +723,18 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	for (idx_t i = 0; i < root_schema->children.size(); i++) {
 		auto &element = root_schema->children[i];
 		auto column = MultiFileReaderColumnDefinition(element.name, element.type);
-		auto &column_schema = element.schema.get();
 
-		if (column_schema.__isset.field_id) {
-			column.identifier = Value::INTEGER(column_schema.field_id);
-		} else if (element.parent_schema) {
-			auto &parent_column_schema = *element.parent_schema;
-			if (parent_column_schema.__isset.field_id) {
-				column.identifier = Value::INTEGER(parent_column_schema.field_id);
-			}
-		}
+		// FIXME: field ids
+		// auto &column_schema = element.schema.get();
+		//
+		// if (column_schema.__isset.field_id) {
+		// 	column.identifier = Value::INTEGER(column_schema.field_id);
+		// } else if (element.parent_schema) {
+		// 	auto &parent_column_schema = *element.parent_schema;
+		// 	if (parent_column_schema.__isset.field_id) {
+		// 		column.identifier = Value::INTEGER(parent_column_schema.field_id);
+		// 	}
+		// }
 		columns.emplace_back(std::move(column));
 	}
 

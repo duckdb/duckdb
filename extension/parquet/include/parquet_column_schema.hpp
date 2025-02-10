@@ -16,7 +16,8 @@ class ParquetReader;
 enum class ParquetColumnSchemaType {
 	COLUMN,
 	CAST,
-	FILE_ROW_NUMBER
+	FILE_ROW_NUMBER,
+	GEOMETRY
 };
 
 enum class ParquetExtraTypeInfo {
@@ -31,6 +32,8 @@ enum class ParquetExtraTypeInfo {
 };
 
 struct ParquetColumnSchema {
+	ParquetColumnSchema() = default;
+	ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index, ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	ParquetColumnSchema(LogicalType type, idx_t max_define, idx_t max_repeat, idx_t schema_index, ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type);
 
