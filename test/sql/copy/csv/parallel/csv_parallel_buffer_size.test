@@ -35,7 +35,7 @@ select * from read_csv('data/csv/test/multi_column_string.csv',  COLUMNS=STRUCT_
 100000000	15519	785	p9
 
 query IIII
-select * from read_csv('data/csv/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=25)
+select * from read_csv('data/csv/test/multi_column_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=27)
 ----
 1	6370	371	p1
 10	214	465	p2
@@ -53,7 +53,7 @@ SELECT sum(a) FROM read_csv('data/csv/test/new_line_string_rn.csv',  COLUMNS=STR
 111
 
 query I
-SELECT sum(a) FROM read_csv('data/csv/test/new_line_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=80)
+SELECT sum(a) FROM read_csv('data/csv/test/new_line_string_rn.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=100)
 ----
 111
 
@@ -64,7 +64,7 @@ SELECT sum(a) FROM read_csv('data/csv/test/new_line_string_rn_exc.csv',  COLUMNS
 111
 
 query I
-SELECT sum(a) FROM read_csv('data/csv/test/new_line_string_rn_exc.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=60)
+SELECT sum(a) FROM read_csv('data/csv/test/new_line_string_rn_exc.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=80)
 ----
 111
 
@@ -75,6 +75,6 @@ SELECT sum(a) FROM read_csv('data/csv/test/new_line_string.csv',  COLUMNS=STRUCT
 111
 
 query I
-SELECT sum(a) FROM read_csv('data/csv/test/new_line_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=60)
+SELECT sum(a) FROM read_csv('data/csv/test/new_line_string.csv',  COLUMNS=STRUCT_PACK(a := 'INTEGER', b := 'INTEGER', c := 'INTEGER', d := 'VARCHAR'), auto_detect='true', delim = '|', buffer_size=80)
 ----
 111
