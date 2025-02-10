@@ -528,3 +528,8 @@ query I
 select '[{"bar":"\"\"\\\"\"\"\\"}]'::STRUCT(bar VARCHAR)[];
 ----
 [{'bar': ""\"""\}]
+
+query III
+select $$[\  \\abc\\ \ , def, ghi]$$::VARCHAR[] a, a[1], len(a[1])
+----
+[  \abc\  , def, ghi]	  \abc\  	9
