@@ -67,6 +67,9 @@ jobs:
         fetch-depth: 0
         ref: ${{ inputs.git_ref }}
 
+    - name: Install Ninja
+      shell: bash
+      run: sudo apt-get -y update && sudo apt-get -y install ninja-build
 
     - name: Checkout (again)
       shell: bash
