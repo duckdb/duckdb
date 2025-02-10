@@ -208,7 +208,7 @@ jobs:
 
        - name: Install
          shell: bash
-         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build llvm && pip install requests
+         run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build && pip install requests
 
        - name: Setup Ccache
          uses: hendrikmuhs/ccache-action@main
@@ -219,12 +219,10 @@ jobs:
        - name: Build
          shell: bash
          run: |
-           #### This should also be alternative way to instal llvm to a specific version
-           # wget https://apt.llvm.org/llvm.sh
-           # chmod +x llvm.sh
-           # sudo ./llvm.sh 17
-           #####
-           CMAKE_LLVM_PATH='/usr/lib/llvm-14' make
+           wget https://apt.llvm.org/llvm.sh
+           chmod +x llvm.sh
+           sudo ./llvm.sh 17
+           CMAKE_LLVM_PATH='/usr/lib/llvm-17' make
            git clone --recurse-submodules --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
            cd duckdb
            make

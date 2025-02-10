@@ -268,7 +268,7 @@ jobs:
        shell: bash
        run: |
          python --version
-         git archive --format zip --output test-tarball.zip HEAD
+         git ls-files --recurse-submodules | tar caf test-tarball.zip -T-
          mkdir duckdb-test-tarball
          mv test-tarball.zip duckdb-test-tarball
          cd duckdb-test-tarball
