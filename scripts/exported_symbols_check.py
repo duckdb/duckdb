@@ -24,6 +24,7 @@ whitelist = [
     'duckdb_hll::',
     'duckdb_moodycamel::',
     'duckdb_yyjson::',
+    'rapidfuzz::',
     'duckdb_',
     'RefCounter',
     'registerTMCloneTable',
