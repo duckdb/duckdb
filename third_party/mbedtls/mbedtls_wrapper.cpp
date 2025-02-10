@@ -208,15 +208,31 @@ void MbedTlsWrapper::SHA1State::FinishHex(char *out) {
 
 mbedtls_cipher_type_t MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t key_len){
 
-	switch (key_len) {
-	case 16:
-		return MBEDTLS_CIPHER_AES_128_GCM;
-	case 24:
-		return MBEDTLS_CIPHER_AES_192_GCM;
-	case 32:
-		return MBEDTLS_CIPHER_AES_256_GCM;
-	default:
-		throw runtime_error("Invalid AES key length");
+	switch(algorithm){
+		case GCM:
+		    switch (key_len) {
+		    case 16:
+			    return MBEDTLS_CIPHER_AES_128_GCM;
+		    case 24:
+			    return MBEDTLS_CIPHER_AES_192_GCM;
+		    case 32:
+			    return MBEDTLS_CIPHER_AES_256_GCM;
+		    default:
+			    throw runtime_error("Invalid AES key length");
+		    }
+		case CTR:
+		    switch (key_len) {
+		    case 16:
+			    return MBEDTLS_CIPHER_AES_128_CTR;
+		    case 24:
+			    return MBEDTLS_CIPHER_AES_192_CTR;
+		    case 32:
+			    return MBEDTLS_CIPHER_AES_256_CTR;
+		    default:
+			    throw runtime_error("Invalid AES key length");
+		    }
+		default:
+			throw duckdb::InternalException("Invalid Encryption/Decryption Algorithm: %d", static_cast<int>(algorithm));
 	}
 }
 
@@ -310,22 +326,26 @@ size_t MbedTlsWrapper::AESStateMBEDTLS::Finalize(duckdb::data_ptr_t out, duckdb:
 	size_t result = out_len;
 	mbedtls_cipher_finish(&context, out, &result);
 
-	switch (mode) {
-	case ENCRYPT: {
-		if (mbedtls_cipher_write_tag(&context, tag, tag_len) != 0) {
-			runtime_error("Writing tag failed");
-		}
-		break;
-	}
+	if (algorithm == GCM) {
 
-	case DECRYPT: {
-		if (mbedtls_cipher_check_tag(&context, tag, tag_len)!= 0) {
-			throw duckdb::InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
+		switch (mode) {
+		case ENCRYPT: {
+			if (mbedtls_cipher_write_tag(&context, tag, tag_len) != 0) {
+				runtime_error("Writing tag failed");
+			}
+			break;
 		}
-		break;
-	}
-	default:
-		throw duckdb::InternalException("Unhandled encryption mode %d", static_cast<int>(mode));
+
+		case DECRYPT: {
+			if (mbedtls_cipher_check_tag(&context, tag, tag_len) != 0) {
+				throw duckdb::InvalidInputException(
+				    "Computed AES tag differs from read AES tag, are you using the right key?");
+			}
+			break;
+		}
+		default:
+			throw duckdb::InternalException("Unhandled encryption mode %d", static_cast<int>(mode));
+		}
 	}
 
 	return result;
