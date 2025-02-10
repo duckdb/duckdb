@@ -19,10 +19,11 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INVALID;
 
 public:
-	CastColumnReader(unique_ptr<ColumnReader> child_reader, const ParquetColumnSchema &schema);
+	CastColumnReader(unique_ptr<ColumnReader> child_reader, unique_ptr<ParquetColumnSchema> cast_schema);
 
 	unique_ptr<ColumnReader> child_reader;
 	DataChunk intermediate_chunk;
+	unique_ptr<ParquetColumnSchema> cast_schema;
 
 public:
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;

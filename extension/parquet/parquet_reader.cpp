@@ -26,6 +26,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
+#include "duckdb/optimizer/statistics_propagator.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -333,13 +334,7 @@ ParquetColumnSchema ParquetReader::ParseColumnSchema(const SchemaElement &s_ele,
 unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &context,
                                                               const vector<ColumnIndex> &indexes,
                                                               const ParquetColumnSchema &schema) {
-	// FIXME: handle ColumnIndex
 	switch (schema.schema_type) {
-	case ParquetColumnSchemaType::CAST: {
-		auto child_reader = CreateReaderRecursive(context, indexes, schema.children[0]);
-		auto cast_reader = make_uniq<CastColumnReader>(std::move(child_reader), schema);
-		return cast_reader;
-	}
 	case ParquetColumnSchemaType::GEOMETRY:
 		return metadata->geo_metadata->CreateColumnReader(*this, schema, context);
 	case ParquetColumnSchemaType::FILE_ROW_NUMBER:
@@ -383,6 +378,16 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InternalException("Root element of Parquet file must be a struct");
 	}
+	// add casts if required
+	auto &root_struct_reader = ret->Cast<StructColumnReader>();
+	for (auto &entry : reader_data.cast_map) {
+		auto column_idx = entry.first;
+		auto &expected_type = entry.second;
+		auto child_reader = std::move(root_struct_reader.child_readers[column_idx]);
+		auto cast_schema = make_uniq<ParquetColumnSchema>(child_reader->Schema(), expected_type);
+		auto cast_reader = make_uniq<CastColumnReader>(std::move(child_reader), std::move(cast_schema));
+		root_struct_reader.child_readers[column_idx] = std::move(cast_reader);
+	}
 	return ret;
 }
 
@@ -398,16 +403,16 @@ ParquetColumnSchema::ParquetColumnSchema(LogicalType type_p, idx_t max_define, i
 }
 
 ParquetColumnSchema::ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type)
-    : schema_type(ParquetColumnSchemaType::CAST), type(std::move(cast_type)), max_define(parent.max_define),
-      max_repeat(parent.max_repeat), schema_index(parent.schema_index) {
+    : schema_type(ParquetColumnSchemaType::CAST), name(parent.name), type(std::move(cast_type)),
+      max_define(parent.max_define), max_repeat(parent.max_repeat), schema_index(parent.schema_index) {
 	children.push_back(std::move(parent));
 }
 
 unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(ParquetReader &reader, idx_t row_group_idx_p,
                                                       const vector<ColumnChunk> &columns) const {
 	if (schema_type == ParquetColumnSchemaType::CAST) {
-		// casting stats is not supported (yet)
-		return nullptr;
+		auto stats = children[0].Stats(reader, row_group_idx_p, columns);
+		return StatisticsPropagator::TryPropagateCast(*stats, children[0].type, type);
 	}
 	if (schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
 		auto stats = NumericStats::CreateUnknown(type);
@@ -567,14 +572,6 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 	}
 	D_ASSERT(next_schema_idx == file_meta_data->schema.size() - 1);
 	D_ASSERT(file_meta_data->row_groups.empty() || next_file_idx == file_meta_data->row_groups[0].columns.size());
-	// add casts if required
-	for (auto &entry : reader_data.cast_map) {
-		auto column_idx = entry.first;
-		auto &expected_type = entry.second;
-		auto child_element = std::move(root.children[column_idx]);
-		ParquetColumnSchema cast_element(std::move(child_element), expected_type);
-		root.children[column_idx] = std::move(cast_element);
-	}
 	if (parquet_options.file_row_number) {
 		root.children.emplace_back(LogicalType::BIGINT, 0, 0, next_file_idx, ParquetColumnSchemaType::FILE_ROW_NUMBER);
 	}
@@ -859,9 +856,8 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 	auto column_id = reader_data.column_ids[col_idx];
 	auto &column_reader = state.root_reader->Cast<StructColumnReader>().GetChildReader(column_id);
 
-	// TODO move this to columnreader too
 	if (reader_data.filters) {
-		auto stats = column_reader.Schema().Stats(*this, state.group_idx_list[state.current_group], group.columns);
+		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
 		// filters contain output chunk index, not file col idx!
 		auto global_id = reader_data.column_mapping[col_idx];
 		auto filter_entry = reader_data.filters->filters.find(global_id);

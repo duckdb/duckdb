@@ -128,6 +128,10 @@ void ColumnReader::RegisterPrefetch(ThriftFileTransport &transport, bool allow_m
 	}
 }
 
+unique_ptr<BaseStatistics> ColumnReader::Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns) {
+	return Schema().Stats(reader, row_group_idx_p, columns);
+}
+
 uint64_t ColumnReader::TotalCompressedSize() {
 	if (!chunk) {
 		return 0;
