@@ -105,7 +105,7 @@ jobs:
 
     - uses: actions/upload-artifact@v4
       with:
-        name: duckdb-binaries-linux
+        name: duckdb-binaries-linux-${{ matrix.config.arch }}
         path: |
           libduckdb-linux-${{ matrix.config.arch }}.zip
           duckdb_cli-linux-${{ matrix.config.arch }}.zip
