@@ -204,31 +204,20 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
 	auto meta_data = reader->GetFileMetadata();
-	vector<LogicalType> column_types;
-	vector<idx_t> schema_indexes;
-	for (idx_t schema_idx = 0; schema_idx < meta_data->schema.size(); schema_idx++) {
-		auto &schema_element = meta_data->schema[schema_idx];
-		if (schema_element.num_children > 0) {
-			continue;
-		}
-		throw InternalException("FIXME: parquet metadata");
-		// column_types.push_back(ParquetReader::DeriveLogicalType(schema_element, false));
-		schema_indexes.push_back(schema_idx);
-	}
+	auto &column_schemas = reader->root_schema->children;
 
 	for (idx_t row_group_idx = 0; row_group_idx < meta_data->row_groups.size(); row_group_idx++) {
 		auto &row_group = meta_data->row_groups[row_group_idx];
 
-		if (row_group.columns.size() > column_types.size()) {
+		if (row_group.columns.size() > column_schemas.size()) {
 			throw InternalException("Too many column in row group: corrupt file?");
 		}
 		for (idx_t col_idx = 0; col_idx < row_group.columns.size(); col_idx++) {
 			auto &column = row_group.columns[col_idx];
+			auto &column_schema = column_schemas[col_idx];
 			auto &col_meta = column.meta_data;
 			auto &stats = col_meta.statistics;
-			auto &schema_element = meta_data->schema[schema_indexes[col_idx]];
-			auto &column_type = column_types[col_idx];
-			throw InternalException("FIXME: parquet metadata");
+			auto &column_type = column_schema.type;
 
 			// file_name, LogicalType::VARCHAR
 			current_chunk.SetValue(0, count, file_path);
@@ -260,13 +249,13 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 			// type, LogicalType::VARCHAR
 			current_chunk.SetValue(9, count, ConvertParquetElementToString(col_meta.type));
 
-			// // stats_min, LogicalType::VARCHAR
-			// current_chunk.SetValue(10, count,
-			//                        ConvertParquetStats(column_type, schema_element, stats.__isset.min, stats.min));
-			//
-			// // stats_max, LogicalType::VARCHAR
-			// current_chunk.SetValue(11, count,
-			//                        ConvertParquetStats(column_type, schema_element, stats.__isset.max, stats.max));
+			// stats_min, LogicalType::VARCHAR
+			current_chunk.SetValue(10, count,
+			                       ConvertParquetStats(column_type, column_schema, stats.__isset.min, stats.min));
+
+			// stats_max, LogicalType::VARCHAR
+			current_chunk.SetValue(11, count,
+			                       ConvertParquetStats(column_type, column_schema, stats.__isset.max, stats.max));
 
 			// stats_null_count, LogicalType::BIGINT
 			current_chunk.SetValue(12, count, ParquetElementBigint(stats.null_count, stats.__isset.null_count));
@@ -275,14 +264,12 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 			current_chunk.SetValue(13, count, ParquetElementBigint(stats.distinct_count, stats.__isset.distinct_count));
 
 			// stats_min_value, LogicalType::VARCHAR
-			// current_chunk.SetValue(
-			//     14, count, ConvertParquetStats(column_type, schema_element, stats.__isset.min_value,
-			//     stats.min_value));
-			//
-			// // stats_max_value, LogicalType::VARCHAR
-			// current_chunk.SetValue(
-			//     15, count, ConvertParquetStats(column_type, schema_element, stats.__isset.max_value,
-			//     stats.max_value));
+			current_chunk.SetValue(
+			    14, count, ConvertParquetStats(column_type, column_schema, stats.__isset.min_value, stats.min_value));
+
+			// stats_max_value, LogicalType::VARCHAR
+			current_chunk.SetValue(
+			    15, count, ConvertParquetStats(column_type, column_schema, stats.__isset.max_value, stats.max_value));
 
 			// compression, LogicalType::VARCHAR
 			current_chunk.SetValue(16, count, ConvertParquetElementToString(col_meta.codec));
