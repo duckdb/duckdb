@@ -61,5 +61,5 @@ python3 -m pip install awscli
 for var in "${@: 2}"
 do
     filename=$(basename -- "$var")
-    aws s3api put-object --bucket s3://duckdb-staging --key $TARGET/$GITHUB_REPOSITORY/$FOLDER/$filename --body $var $DRY_RUN_PARAM --if-none-match '*' --region us-east-2
+    aws s3api put-object --bucket duckdb-staging --key $TARGET/$GITHUB_REPOSITORY/$FOLDER/$filename --body $var $DRY_RUN_PARAM --if-none-match '*' --region us-east-2
 done

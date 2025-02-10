@@ -78,17 +78,17 @@ if [[ $7 = 'true' ]]; then
   fi
 
   if [[ $4 == wasm* ]]; then
-    aws s3api put-object --bucket s3://$5 --key $1/$2/$3/$4/$1.duckdb_extension.wasm --body $1.duckdb_extension.wasm $DRY_RUN_PARAM --content-encoding br --content-type="application/wasm" --if-none-match '*'
+    aws s3api put-object --bucket $5 --key $1/$2/$3/$4/$1.duckdb_extension.wasm --body $1.duckdb_extension.wasm $DRY_RUN_PARAM --content-encoding br --content-type="application/wasm" --if-none-match '*'
   else
-    aws s3api put-object --bucket s3://$5 --key $1/$2/$3/$4/$1.duckdb_extension.gz --body $1.duckdb_extension.gz $DRY_RUN_PARAM --if-none-match '*'
+    aws s3api put-object --bucket $5 --key $1/$2/$3/$4/$1.duckdb_extension.gz --body $1.duckdb_extension.gz $DRY_RUN_PARAM --if-none-match '*'
   fi
 fi
 
 # upload to latest version
 if [[ $6 = 'true' ]]; then
   if [[ $4 == wasm* ]]; then
-    aws s3api put-object --bucket s3://$5 --key $3/$4/$1.duckdb_extension.wasm --body $1.duckdb_extension.wasm $DRY_RUN_PARAM --content-encoding br --content-type="application/wasm" --if-none-match '*'
+    aws s3api put-object --bucket $5 --key $3/$4/$1.duckdb_extension.wasm --body $1.duckdb_extension.wasm $DRY_RUN_PARAM --content-encoding br --content-type="application/wasm" --if-none-match '*'
   else
-    aws s3api put-object --bucket s3://$5 --key $3/$4/$1.duckdb_extension.gz --body $1.duckdb_extension.gz $DRY_RUN_PARAM --if-none-match '*'
+    aws s3api put-object --bucket $5 --key $3/$4/$1.duckdb_extension.gz --body $1.duckdb_extension.gz $DRY_RUN_PARAM --if-none-match '*'
   fi
 fi
