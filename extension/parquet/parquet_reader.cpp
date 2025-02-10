@@ -123,6 +123,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, Parquet
 	if (s_ele.__isset.type_length) {
 		schema.type_length = NumericCast<uint32_t>(s_ele.type_length);
 	}
+	schema.parquet_type = s_ele.type;
 	if (s_ele.__isset.logicalType) {
 		if (s_ele.logicalType.__isset.UUID) {
 			if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY) {
@@ -377,7 +378,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReaderRecursive(ClientContext &con
 	}
 }
 
-// TODO we don't need readers for columns we are not going to read ay
 unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	auto ret = CreateReaderRecursive(context, reader_data.column_indexes, *root_schema);
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {

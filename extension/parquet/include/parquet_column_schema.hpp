@@ -42,6 +42,7 @@ struct ParquetColumnSchema {
 	idx_t schema_index;
 	uint32_t type_length = 0;
 	uint32_t type_scale = 0;
+	duckdb_parquet::Type::type parquet_type = duckdb_parquet::Type::INT32;
 	ParquetExtraTypeInfo type_info = ParquetExtraTypeInfo::NONE;
 	vector<ParquetColumnSchema> children;
 
