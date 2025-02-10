@@ -8,8 +8,8 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader_p,
                                                unique_ptr<Expression> expr_p)
-    : ColumnReader(child_reader_p->Reader(), child_reader_p->Schema()),
-      child_reader(std::move(child_reader_p)), expr(std::move(expr_p)), executor(context, expr.get()) {
+    : ColumnReader(child_reader_p->Reader(), child_reader_p->Schema()), child_reader(std::move(child_reader_p)),
+      expr(std::move(expr_p)), executor(context, expr.get()) {
 	vector<LogicalType> intermediate_types {child_reader->Type()};
 	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }

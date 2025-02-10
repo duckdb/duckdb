@@ -7,8 +7,7 @@ namespace duckdb {
 // Cast Column Reader
 //===--------------------------------------------------------------------===//
 CastColumnReader::CastColumnReader(unique_ptr<ColumnReader> child_reader_p, const ParquetColumnSchema &schema)
-    : ColumnReader(child_reader_p->Reader(), schema),
-      child_reader(std::move(child_reader_p)) {
+    : ColumnReader(child_reader_p->Reader(), schema), child_reader(std::move(child_reader_p)) {
 	vector<LogicalType> intermediate_types {child_reader->Type()};
 	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }

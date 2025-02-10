@@ -21,8 +21,8 @@ public:
 
 public:
 	BooleanColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
-	    : TemplatedColumnReader<bool, BooleanParquetValueConversion>(reader, schema),
-	      byte_pos(0) {}
+	    : TemplatedColumnReader<bool, BooleanParquetValueConversion>(reader, schema), byte_pos(0) {
+	}
 
 	uint8_t byte_pos;
 

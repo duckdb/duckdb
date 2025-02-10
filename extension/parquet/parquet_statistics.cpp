@@ -21,8 +21,7 @@ namespace duckdb {
 using duckdb_parquet::ConvertedType;
 using duckdb_parquet::Type;
 
-static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type,
-                                                     const ParquetColumnSchema &schema_ele,
+static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type, const ParquetColumnSchema &schema_ele,
                                                      const duckdb_parquet::Statistics &parquet_stats) {
 	auto stats = NumericStats::CreateUnknown(type);
 
@@ -59,8 +58,7 @@ Value ParquetStatisticsUtils::ConvertValue(const LogicalType &type, const Parque
 	}
 	return result;
 }
-Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type,
-                                                   const ParquetColumnSchema &schema_ele,
+Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, const ParquetColumnSchema &schema_ele,
                                                    const std::string &stats) {
 	auto stats_data = const_data_ptr_cast(stats.c_str());
 	switch (type.id()) {
@@ -136,17 +134,17 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type,
 			switch (type.InternalType()) {
 			case PhysicalType::INT16:
 				return Value::DECIMAL(
-					ParquetDecimalUtils::ReadDecimalValue<int16_t>(stats_data, stats.size(), schema_ele), width, scale);
+				    ParquetDecimalUtils::ReadDecimalValue<int16_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT32:
 				return Value::DECIMAL(
-					ParquetDecimalUtils::ReadDecimalValue<int32_t>(stats_data, stats.size(), schema_ele), width, scale);
+				    ParquetDecimalUtils::ReadDecimalValue<int32_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT64:
 				return Value::DECIMAL(
-					ParquetDecimalUtils::ReadDecimalValue<int64_t>(stats_data, stats.size(), schema_ele), width, scale);
+				    ParquetDecimalUtils::ReadDecimalValue<int64_t>(stats_data, stats.size(), schema_ele), width, scale);
 			case PhysicalType::INT128:
 				return Value::DECIMAL(
-					ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema_ele), width,
-					scale);
+				    ParquetDecimalUtils::ReadDecimalValue<hugeint_t>(stats_data, stats.size(), schema_ele), width,
+				    scale);
 			default:
 				throw InvalidInputException("Unsupported internal type for decimal");
 			}
@@ -174,11 +172,11 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type,
 		} else {
 			throw InvalidInputException("Incorrect stats size for type TIME");
 		}
-		switch(schema_ele.type_info) {
+		switch (schema_ele.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
 			return Value::TIME(Time::FromTimeMs(val));
 		case ParquetExtraTypeInfo::UNIT_NS:
-				return Value::TIME(Time::FromTimeNs(val));
+			return Value::TIME(Time::FromTimeNs(val));
 		case ParquetExtraTypeInfo::UNIT_MICROS:
 		default:
 			return Value::TIME(dtime_t(val));
@@ -193,7 +191,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type,
 		} else {
 			throw InvalidInputException("Incorrect stats size for type TIMETZ");
 		}
-		switch(schema_ele.type_info) {
+		switch (schema_ele.type_info) {
 		case ParquetExtraTypeInfo::UNIT_MS:
 			return Value::TIMETZ(ParquetIntToTimeMsTZ(NumericCast<int32_t>(val)));
 		case ParquetExtraTypeInfo::UNIT_NS:
@@ -216,7 +214,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type,
 				throw InvalidInputException("Incorrect stats size for type TIMESTAMP");
 			}
 			auto val = Load<int64_t>(stats_data);
-			switch(schema_ele.type_info) {
+			switch (schema_ele.type_info) {
 			case ParquetExtraTypeInfo::UNIT_MS:
 				timestamp_value = Timestamp::FromEpochMs(val);
 				break;
@@ -246,7 +244,7 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type,
 				throw InvalidInputException("Incorrect stats size for type TIMESTAMP_NS");
 			}
 			auto val = Load<int64_t>(stats_data);
-			switch(schema_ele.type_info) {
+			switch (schema_ele.type_info) {
 			case ParquetExtraTypeInfo::UNIT_MS:
 				timestamp_value = ParquetTimestampMsToTimestampNs(val);
 				break;
@@ -271,8 +269,7 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 
 	// Not supported types
 	auto &type = schema.type;
-	if (type.id() == LogicalTypeId::ARRAY || type.id() == LogicalTypeId::MAP ||
-	    type.id() == LogicalTypeId::LIST) {
+	if (type.id() == LogicalTypeId::ARRAY || type.id() == LogicalTypeId::MAP || type.id() == LogicalTypeId::LIST) {
 		return nullptr;
 	}
 

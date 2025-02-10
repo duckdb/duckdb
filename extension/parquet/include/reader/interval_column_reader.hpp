@@ -60,7 +60,8 @@ class IntervalColumnReader : public TemplatedColumnReader<interval_t, IntervalVa
 
 public:
 	IntervalColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
-	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, schema) {}
+	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, schema) {
+	}
 };
 
 } // namespace duckdb

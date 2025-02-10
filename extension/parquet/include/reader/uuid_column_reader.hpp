@@ -63,7 +63,8 @@ class UUIDColumnReader : public TemplatedColumnReader<hugeint_t, UUIDValueConver
 
 public:
 	UUIDColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
-	    : TemplatedColumnReader<hugeint_t, UUIDValueConversion>(reader, schema) {}
+	    : TemplatedColumnReader<hugeint_t, UUIDValueConversion>(reader, schema) {
+	}
 };
 
 } // namespace duckdb

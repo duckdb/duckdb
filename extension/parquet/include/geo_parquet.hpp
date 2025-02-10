@@ -128,7 +128,8 @@ public:
 	void FlushColumnMeta(const string &column_name, const GeoParquetColumnMetadata &meta);
 	const unordered_map<string, GeoParquetColumnMetadata> &GetColumnMeta() const;
 
-	unique_ptr<ColumnReader> CreateColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema, ClientContext &context);
+	unique_ptr<ColumnReader> CreateColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
+	                                            ClientContext &context);
 
 	bool IsGeometryColumn(const string &column_name) const;
 	void RegisterGeometryColumn(const string &column_name);

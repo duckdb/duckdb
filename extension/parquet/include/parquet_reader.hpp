@@ -211,8 +211,8 @@ private:
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
 	//! Parse the schema of the file
 	unique_ptr<ParquetColumnSchema> ParseSchema();
-	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat,
-						       idx_t &next_schema_idx, idx_t &next_file_idx);
+	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
+	                                         idx_t &next_file_idx);
 
 	unique_ptr<ColumnReader> CreateReader(ClientContext &context);
 
@@ -224,7 +224,9 @@ private:
 	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
-	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat, idx_t schema_index, ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
+	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
+	                                      idx_t schema_index,
+	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema);
 
 private:

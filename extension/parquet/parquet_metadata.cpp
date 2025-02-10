@@ -276,11 +276,13 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 
 			// stats_min_value, LogicalType::VARCHAR
 			// current_chunk.SetValue(
-			//     14, count, ConvertParquetStats(column_type, schema_element, stats.__isset.min_value, stats.min_value));
+			//     14, count, ConvertParquetStats(column_type, schema_element, stats.__isset.min_value,
+			//     stats.min_value));
 			//
 			// // stats_max_value, LogicalType::VARCHAR
 			// current_chunk.SetValue(
-			//     15, count, ConvertParquetStats(column_type, schema_element, stats.__isset.max_value, stats.max_value));
+			//     15, count, ConvertParquetStats(column_type, schema_element, stats.__isset.max_value,
+			//     stats.max_value));
 
 			// compression, LogicalType::VARCHAR
 			current_chunk.SetValue(16, count, ConvertParquetElementToString(col_meta.codec));

@@ -13,12 +13,7 @@
 namespace duckdb {
 class ParquetReader;
 
-enum class ParquetColumnSchemaType {
-	COLUMN,
-	CAST,
-	FILE_ROW_NUMBER,
-	GEOMETRY
-};
+enum class ParquetColumnSchemaType { COLUMN, CAST, FILE_ROW_NUMBER, GEOMETRY };
 
 enum class ParquetExtraTypeInfo {
 	NONE,
@@ -33,8 +28,10 @@ enum class ParquetExtraTypeInfo {
 
 struct ParquetColumnSchema {
 	ParquetColumnSchema() = default;
-	ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index, ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
-	ParquetColumnSchema(LogicalType type, idx_t max_define, idx_t max_repeat, idx_t schema_index, ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
+	ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index,
+	                    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
+	ParquetColumnSchema(LogicalType type, idx_t max_define, idx_t max_repeat, idx_t schema_index,
+	                    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type);
 
 	ParquetColumnSchemaType schema_type;
@@ -48,7 +45,8 @@ struct ParquetColumnSchema {
 	ParquetExtraTypeInfo type_info = ParquetExtraTypeInfo::NONE;
 	vector<ParquetColumnSchema> children;
 
-	unique_ptr<BaseStatistics> Stats(ParquetReader &reader, idx_t row_group_idx_p, const vector<ColumnChunk> &columns) const;
+	unique_ptr<BaseStatistics> Stats(ParquetReader &reader, idx_t row_group_idx_p,
+	                                 const vector<ColumnChunk> &columns) const;
 };
 
 } // namespace duckdb

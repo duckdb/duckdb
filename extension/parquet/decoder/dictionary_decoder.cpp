@@ -23,7 +23,8 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 	} else if (dictionary_size > old_dict_size) {
 		dictionary->Resize(old_dict_size, dictionary_size + 1);
 	}
-	dictionary_id = reader.reader.file_name + "_" + reader.Schema().name + "_" + std::to_string(reader.chunk_read_offset);
+	dictionary_id =
+	    reader.reader.file_name + "_" + reader.Schema().name + "_" + std::to_string(reader.chunk_read_offset);
 	// we use the last entry as a NULL, dictionary vectors don't have a separate validity mask
 	auto &dict_validity = FlatVector::Validity(*dictionary);
 	dict_validity.Reset(dictionary_size + 1);
