@@ -30,7 +30,7 @@ struct ParquetColumnSchema {
 	ParquetColumnSchema() = default;
 	ParquetColumnSchema(idx_t max_define, idx_t max_repeat, idx_t schema_index,
 	                    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
-	ParquetColumnSchema(LogicalType type, idx_t max_define, idx_t max_repeat, idx_t schema_index,
+	ParquetColumnSchema(string name, LogicalType type, idx_t max_define, idx_t max_repeat, idx_t schema_index,
 	                    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type);
 
@@ -40,6 +40,7 @@ struct ParquetColumnSchema {
 	idx_t max_define;
 	idx_t max_repeat;
 	idx_t schema_index;
+	optional_idx parent_schema_index;
 	uint32_t type_length = 0;
 	uint32_t type_scale = 0;
 	duckdb_parquet::Type::type parquet_type = duckdb_parquet::Type::INT32;
