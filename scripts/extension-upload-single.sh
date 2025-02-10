@@ -65,7 +65,7 @@ if [ -z "$AWS_ACCESS_KEY_ID" ]; then
 fi
 
 # Set dry run unless guard var is set
-DRY_RUN_PARAM="--dryrun"
+DRY_RUN_PARAM="--if-match '1234567890abcdef'"
 if [ "$DUCKDB_DEPLOY_SCRIPT_MODE" == "for_real" ]; then
   DRY_RUN_PARAM=""
 fi
