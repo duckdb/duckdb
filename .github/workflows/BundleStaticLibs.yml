@@ -219,7 +219,6 @@ jobs:
           -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
           -e BUILD_BENCHMARK=1                                                   \
           -e FORCE_WARN_UNUSED=1                                                 \
-          -e DUCKDB_RUN_PARALLEL_CSV_TESTS=1                                     \
           quay.io/pypa/manylinux2014_x86_64                                      \
           bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make bundle-library -C $PWD"
       - name: Print platform
