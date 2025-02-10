@@ -12,11 +12,13 @@ DictionaryDecoder::DictionaryDecoder(ColumnReader &reader)
       dictionary_selection_vector(STANDARD_VECTOR_SIZE), dictionary_size(0) {
 }
 
-void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional_ptr<const TableFilter> filter) {
+void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional_ptr<const TableFilter> filter,
+                                             bool has_defines) {
 	auto old_dict_size = dictionary_size;
 	dictionary_size = new_dictionary_size;
 	filter_result.reset();
 	filter_count = 0;
+	can_have_nulls = has_defines;
 	// we use the first value in the dictionary to keep a NULL
 	if (!dictionary) {
 		dictionary = make_uniq<Vector>(reader.type, dictionary_size + 1);
@@ -27,7 +29,9 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 	// we use the last entry as a NULL, dictionary vectors don't have a separate validity mask
 	auto &dict_validity = FlatVector::Validity(*dictionary);
 	dict_validity.Reset(dictionary_size + 1);
-	dict_validity.SetInvalid(dictionary_size);
+	if (can_have_nulls) {
+		dict_validity.SetInvalid(dictionary_size);
+	}
 	reader.Plain(reader.block, nullptr, dictionary_size, 0, *dictionary);
 
 	if (filter && CanFilter(*filter)) {
@@ -73,6 +77,7 @@ void DictionaryDecoder::ConvertDictToSelVec(uint32_t *offsets, const SelectionVe
 idx_t DictionaryDecoder::GetValidValues(uint8_t *defines, idx_t read_count, idx_t result_offset) {
 	idx_t valid_count = read_count;
 	if (defines) {
+		D_ASSERT(can_have_nulls);
 		valid_count = 0;
 		for (idx_t i = 0; i < read_count; i++) {
 			valid_sel.set_index(valid_count, i);
@@ -104,10 +109,10 @@ idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result
 		ConvertDictToSelVec(reinterpret_cast<uint32_t *>(offset_buffer.ptr), valid_sel, valid_count);
 	}
 #ifdef DEBUG
-	dictionary_selection_vector.Verify(read_count, dictionary_size + 1);
+	dictionary_selection_vector.Verify(read_count, dictionary_size + can_have_nulls);
 #endif
 	if (result_offset == 0) {
-		result.Dictionary(*dictionary, dictionary_size + 1, dictionary_selection_vector, read_count);
+		result.Dictionary(*dictionary, dictionary_size + can_have_nulls, dictionary_selection_vector, read_count);
 		DictionaryVector::SetDictionaryId(result, dictionary_id);
 		D_ASSERT(result.GetVectorType() == VectorType::DICTIONARY_VECTOR);
 	} else {

@@ -286,7 +286,7 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter) {
 		if (dictionary_size < 0) {
 			throw std::runtime_error("Invalid dictionary page header (num_values < 0)");
 		}
-		dictionary_decoder.InitializeDictionary(dictionary_size, filter);
+		dictionary_decoder.InitializeDictionary(dictionary_size, filter, HasDefines());
 		break;
 	}
 	default:

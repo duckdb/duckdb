@@ -20,7 +20,7 @@ public:
 	explicit DictionaryDecoder(ColumnReader &reader);
 
 public:
-	void InitializeDictionary(idx_t dictionary_size, optional_ptr<const TableFilter> filter);
+	void InitializeDictionary(idx_t dictionary_size, optional_ptr<const TableFilter> filter, bool has_defines);
 	void InitializePage();
 	idx_t Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset);
 	void Skip(uint8_t *defines, idx_t skip_count);
@@ -48,6 +48,7 @@ private:
 	unique_ptr<Vector> dictionary;
 	unsafe_unique_array<bool> filter_result;
 	idx_t filter_count;
+	bool can_have_nulls;
 	string dictionary_id;
 };
 
