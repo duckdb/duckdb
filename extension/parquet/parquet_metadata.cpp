@@ -199,12 +199,21 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
                                                        const string &file_path) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
+	ParquetReader reader(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
-	auto meta_data = reader->GetFileMetadata();
-	auto &column_schemas = reader->root_schema->children;
+	auto meta_data = reader.GetFileMetadata();
+	vector<ParquetColumnSchema> column_schemas;
+	for (idx_t schema_idx = 0; schema_idx < meta_data->schema.size(); schema_idx++) {
+		auto &schema_element = meta_data->schema[schema_idx];
+		if (schema_element.num_children > 0) {
+			continue;
+		}
+		ParquetColumnSchema column_schema;
+		column_schema.type = reader.DeriveLogicalType(schema_element, column_schema);
+		column_schemas.push_back(std::move(column_schema));
+	}
 
 	for (idx_t row_group_idx = 0; row_group_idx < meta_data->row_groups.size(); row_group_idx++) {
 		auto &row_group = meta_data->row_groups[row_group_idx];

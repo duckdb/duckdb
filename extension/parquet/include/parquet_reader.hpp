@@ -202,6 +202,8 @@ public:
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
 	                                                 shared_ptr<ParquetFileMetadataCache> metadata, const string &name);
 
+	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
+
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
 	ParquetReader(ClientContext &context, ParquetOptions parquet_options,
@@ -227,7 +229,6 @@ private:
 	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
 	                                      idx_t schema_index,
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
-	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema);
 
 private:
 	unique_ptr<FileHandle> file_handle;

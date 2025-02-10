@@ -116,7 +116,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, FileHandle &file_hand
 
 	return make_shared_ptr<ParquetFileMetadataCache>(std::move(metadata), current_time, std::move(geo_metadata));
 }
-LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) {
+LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const {
 	// inner node
 	if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && !s_ele.__isset.type_length) {
 		throw IOException("FIXED_LEN_BYTE_ARRAY requires length to be set");
@@ -306,6 +306,7 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, Parquet
 		case Type::INT64:
 			return LogicalType::BIGINT;
 		case Type::INT96: // always a timestamp it would seem
+			schema.type_info = ParquetExtraTypeInfo::IMPALA_TIMESTAMP;
 			return LogicalType::TIMESTAMP;
 		case Type::FLOAT:
 			return LogicalType::FLOAT;
