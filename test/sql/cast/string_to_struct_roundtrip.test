@@ -49,3 +49,17 @@ select $${"  \'test\'  ": 42}$$::STRUCT("  'test'  " INTEGER) a, a::VARCHAR::STR
 ----
 {'\  \'test\' \ ': 42}	{'\  \'test\' \ ': 42}	true
 
+# Start and end name with escaped backslashes
+query III
+select $${"\\  test  \\": 42}$$::STRUCT("\  test  \" INTEGER) a, a::VARCHAR::STRUCT("\  test  \" INTEGER) b, a == b
+----
+{'\\  test  \\': 42}	{'\\  test  \\': 42}	true
+
+# Start and end value with escaped backslashes
+query III
+select $${"test": \\  test  \\}$$::STRUCT("test" VARCHAR) a, a::VARCHAR::STRUCT("test" VARCHAR) b, a == b
+----
+{'test': \\  test  \\}	{'test': \\  test  \\}	true
+
+
+
