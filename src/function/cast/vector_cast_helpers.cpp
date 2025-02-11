@@ -160,9 +160,18 @@ static string_t HandleString(Vector &vec, const char *buf, idx_t start, idx_t en
 				//! Close scope
 				scopes.pop();
 			}
-			if (!quoted && (current_char == '[' || current_char == '{')) {
+			if (!quoted && (current_char == '[' || current_char == '{' || current_char == '(')) {
 				//! New scope
-				scopes.push(current_char == '[' ? ']' : '}');
+				char end_char;
+				if (current_char == '[') {
+					end_char = ']';
+				} else if (current_char == '{') {
+					end_char = '}';
+				} else {
+					D_ASSERT(current_char == '(');
+					end_char = ')';
+				}
+				scopes.push(end_char);
 			}
 			//! Regular character
 			string_data[copied_count++] = current_char;
