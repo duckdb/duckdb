@@ -880,7 +880,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 			                                                group.columns[column_reader.ColumnIndex()].meta_data,
 			                                                *state.thrift_file_proto, allocator)) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column &&
+			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column && !is_cast &&
 			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
 			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value) {
 
