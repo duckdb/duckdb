@@ -34,17 +34,17 @@ public:
 
 		while (values_read < batch_size) {
 			if (repeat_count_ > 0) {
-				int repeat_batch = MinValue(batch_size - values_read, static_cast<uint32_t>(repeat_count_));
+				auto repeat_batch = MinValue<uint32_t>(batch_size - values_read, repeat_count_);
 				std::fill_n(values + values_read, repeat_batch, static_cast<T>(current_value_));
 				repeat_count_ -= repeat_batch;
 				values_read += repeat_batch;
 			} else if (literal_count_ > 0) {
-				uint32_t literal_batch = MinValue(batch_size - values_read, static_cast<uint32_t>(literal_count_));
+				auto literal_batch = MinValue<uint32_t>(batch_size - values_read, literal_count_);
 				ParquetDecodeUtils::BitUnpack<T>(buffer_, bitpack_pos, values + values_read, literal_batch, bit_width_);
 				literal_count_ -= literal_batch;
 				values_read += literal_batch;
 			} else {
-				if (!NextCounts<T>()) {
+				if (!NextCounts()) {
 					if (values_read != batch_size) {
 						throw std::runtime_error("RLE decode did not find enough values");
 					}
@@ -53,6 +53,33 @@ public:
 			}
 		}
 		if (values_read != batch_size) {
+			throw std::runtime_error("RLE decode did not find enough values");
+		}
+	}
+
+	void Skip(uint32_t batch_size) {
+		uint32_t values_skipped = 0;
+
+		while (values_skipped < batch_size) {
+			if (repeat_count_ > 0) {
+				auto repeat_batch = MinValue<uint32_t>(batch_size - values_skipped, repeat_count_);
+				repeat_count_ -= repeat_batch;
+				values_skipped += repeat_batch;
+			} else if (literal_count_ > 0) {
+				auto literal_batch = MinValue<uint32_t>(batch_size - values_skipped, literal_count_);
+				ParquetDecodeUtils::Skip(buffer_, bitpack_pos, literal_batch, bit_width_);
+				literal_count_ -= literal_batch;
+				values_skipped += literal_batch;
+			} else {
+				if (!NextCounts()) {
+					if (values_skipped != batch_size) {
+						throw std::runtime_error("RLE decode did not find enough values");
+					}
+					return;
+				}
+			}
+		}
+		if (values_skipped != batch_size) {
 			throw std::runtime_error("RLE decode did not find enough values");
 		}
 	}
@@ -83,7 +110,6 @@ private:
 
 	/// Fills literal_count_ and repeat_count_ with next values. Returns false if there
 	/// are no more.
-	template <typename T>
 	bool NextCounts() {
 		// Read the next run's indicator int, it could be a literal or repeated run.
 		// The int is encoded as a vlq-encoded value.

@@ -23,8 +23,10 @@ public:
 	void InitializePage();
 
 	void Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset);
+	void Skip(uint8_t *defines, idx_t skip_count);
 
-	static shared_ptr<ResizeableBuffer> ReadDbpData(Allocator &allocator, ResizeableBuffer &buffer, idx_t &value_count);
+	static void ReadDbpData(Allocator &allocator, ResizeableBuffer &buffer, ResizeableBuffer &result_buffer,
+	                        idx_t &value_count);
 
 private:
 	ColumnReader &reader;

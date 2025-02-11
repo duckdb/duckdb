@@ -32,7 +32,7 @@ string Exception::ToJSON(ExceptionType type, const string &message) {
 string Exception::ToJSON(ExceptionType type, const string &message, const unordered_map<string, string> &extra_info) {
 #ifndef DUCKDB_DEBUG_STACKTRACE
 	// by default we only enable stack traces for internal exceptions
-	if (type == ExceptionType::INTERNAL)
+	if (type == ExceptionType::INTERNAL || type == ExceptionType::FATAL)
 #endif
 	{
 		auto extended_extra_info = extra_info;

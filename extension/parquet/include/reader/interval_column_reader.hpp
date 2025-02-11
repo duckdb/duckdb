@@ -28,37 +28,40 @@ struct IntervalValueConversion {
 		return result;
 	}
 
+	template <bool CHECKED>
 	static interval_t PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.available(PARQUET_INTERVAL_SIZE);
-		return UnsafePlainRead(plain_data, reader);
+		if (CHECKED) {
+			plain_data.available(PARQUET_INTERVAL_SIZE);
+		}
+		auto res = ReadParquetInterval(const_data_ptr_cast(plain_data.ptr));
+		plain_data.unsafe_inc(PARQUET_INTERVAL_SIZE);
+		return res;
 	}
 
+	template <bool CHECKED>
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.inc(PARQUET_INTERVAL_SIZE);
+		if (CHECKED) {
+			plain_data.inc(PARQUET_INTERVAL_SIZE);
+		} else {
+			plain_data.unsafe_inc(PARQUET_INTERVAL_SIZE);
+		}
 	}
 
 	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
 		return plain_data.check_available(count * PARQUET_INTERVAL_SIZE);
 	}
 
-	static interval_t UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		auto res = ReadParquetInterval(const_data_ptr_cast(plain_data.ptr));
-		plain_data.unsafe_inc(PARQUET_INTERVAL_SIZE);
-		return res;
-	}
-
-	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.unsafe_inc(PARQUET_INTERVAL_SIZE);
+	static idx_t PlainConstantSize() {
+		return 0;
 	}
 };
 
 class IntervalColumnReader : public TemplatedColumnReader<interval_t, IntervalValueConversion> {
 
 public:
-	IntervalColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-	                     idx_t max_define_p, idx_t max_repeat_p)
-	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, std::move(type_p), schema_p, file_idx_p,
-	                                                                 max_define_p, max_repeat_p) {};
+	IntervalColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
+	    : TemplatedColumnReader<interval_t, IntervalValueConversion>(reader, schema) {
+	}
 };
 
 } // namespace duckdb

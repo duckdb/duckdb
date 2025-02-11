@@ -5,12 +5,10 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Struct Column Reader
 //===--------------------------------------------------------------------===//
-StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
-                                       idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
+StructColumnReader::StructColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
                                        vector<unique_ptr<ColumnReader>> child_readers_p)
-    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      child_readers(std::move(child_readers_p)) {
-	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+    : ColumnReader(reader, schema), child_readers(std::move(child_readers_p)) {
+	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 }
 
 ColumnReader &StructColumnReader::GetChildReader(idx_t child_idx) {
@@ -30,13 +28,12 @@ void StructColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<Colu
 	}
 }
 
-idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out,
-                               data_ptr_t repeat_out, Vector &result) {
+idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) {
 	auto &struct_entries = StructVector::GetEntries(result);
 	D_ASSERT(StructType::GetChildTypes(Type()).size() == struct_entries.size());
 
 	if (pending_skips > 0) {
-		ApplyPendingSkips(pending_skips);
+		throw InternalException("StructColumnReader cannot have pending skips");
 	}
 
 	optional_idx read_count;
@@ -49,7 +46,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, da
 			ConstantVector::SetNull(target_vector, true);
 			continue;
 		}
-		auto child_num_values = child->Read(num_values, filter, define_out, repeat_out, target_vector);
+		auto child_num_values = child->Read(num_values, define_out, repeat_out, target_vector);
 		if (!read_count.IsValid()) {
 			read_count = child_num_values;
 		} else if (read_count.GetIndex() != child_num_values) {
@@ -62,7 +59,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, parquet_filter_t &filter, da
 	// set the validity mask for this level
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < read_count.GetIndex(); i++) {
-		if (define_out[i] < max_define) {
+		if (define_out[i] < MaxDefine()) {
 			validity.SetInvalid(i);
 		}
 	}

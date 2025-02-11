@@ -374,7 +374,7 @@ unique_ptr<QueryResult> InterpretedBenchmark::RunLoadQuery(InterpretedBenchmarkS
 		}
 		result = state.con.Query(load_query);
 	}
-	return result;
+	return unique_ptr_cast<MaterializedQueryResult, QueryResult>(std::move(result));
 }
 
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {

@@ -546,9 +546,6 @@ void ShellState::UTF8WidthPrint(FILE *pOut, idx_t w, const string &str, bool rig
 	int i;
 	int n;
 	int aw = w < 0 ? -w : w;
-	char zBuf[1000];
-	if (aw > (int)sizeof(zBuf) / 3)
-		aw = (int)sizeof(zBuf) / 3;
 #ifdef HAVE_LINENOISE
 	i = linenoiseGetRenderPosition(zUtf, strlen(zUtf), aw, &n);
 	if (i < 0)
