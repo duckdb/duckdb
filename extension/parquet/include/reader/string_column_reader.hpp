@@ -25,6 +25,8 @@ public:
 	static void VerifyString(const char *str_data, uint32_t str_len, const bool isVarchar);
 	void VerifyString(const char *str_data, uint32_t str_len);
 
+	static void ReferenceBlock(Vector &result, shared_ptr<ResizeableBuffer> &block);
+
 protected:
 	void Plain(ByteBuffer &plain_data, uint8_t *defines, idx_t num_values, idx_t result_offset,
 	           Vector &result) override {

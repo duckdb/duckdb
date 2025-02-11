@@ -549,7 +549,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		rle_decoder.Read(define_ptr, read_now, result, result_offset);
 		break;
 	case ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY:
-		delta_length_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
+		delta_length_byte_array_decoder.Read(block, define_ptr, read_now, result, result_offset);
 		break;
 	case ColumnEncoding::DELTA_BYTE_ARRAY:
 		delta_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
