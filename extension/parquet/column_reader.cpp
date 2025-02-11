@@ -177,6 +177,11 @@ void ColumnReader::Plain(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defi
 	Plain(*plain_data, defines, num_values, result_offset, result);
 }
 
+void ColumnReader::PlainSelect(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values,
+                               Vector &result, const SelectionVector &sel, idx_t count) {
+	throw NotImplementedException("PlainSelect not implemented");
+}
+
 void ColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) {
 	D_ASSERT(ColumnIndex() < columns.size());
 	chunk = &columns[ColumnIndex()];
@@ -533,20 +538,28 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 	PrepareRead(read_now, define_out, repeat_out, result_offset);
 	// read the data according to the encoder
 	auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
-	if (encoding == ColumnEncoding::DICTIONARY) {
+	switch (encoding) {
+	case ColumnEncoding::DICTIONARY:
 		dictionary_decoder.Read(define_ptr, read_now, result, result_offset);
-	} else if (encoding == ColumnEncoding::DELTA_BINARY_PACKED) {
+		break;
+	case ColumnEncoding::DELTA_BINARY_PACKED:
 		delta_binary_packed_decoder.Read(define_ptr, read_now, result, result_offset);
-	} else if (encoding == ColumnEncoding::RLE) {
+		break;
+	case ColumnEncoding::RLE:
 		rle_decoder.Read(define_ptr, read_now, result, result_offset);
-	} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY) {
+		break;
+	case ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY:
 		delta_length_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
-	} else if (encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
+		break;
+	case ColumnEncoding::DELTA_BYTE_ARRAY:
 		delta_byte_array_decoder.Read(define_ptr, read_now, result, result_offset);
-	} else if (encoding == ColumnEncoding::BYTE_STREAM_SPLIT) {
+		break;
+	case ColumnEncoding::BYTE_STREAM_SPLIT:
 		byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);
-	} else {
+		break;
+	default:
 		Plain(block, define_out, read_now, result_offset, result);
+		break;
 	}
 	page_rows_available -= read_now;
 }
@@ -581,6 +594,37 @@ idx_t ColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t 
 	return ReadInternal(num_values, define_out, repeat_out, result);
 }
 
+void ColumnReader::Select(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
+                          const SelectionVector &sel, idx_t approved_tuple_count) {
+	if (SupportsDirectSelect() && approved_tuple_count < num_values) {
+		DirectSelect(num_values, define_out, repeat_out, result_out, sel, approved_tuple_count);
+		return;
+	}
+	Read(num_values, define_out, repeat_out, result_out);
+}
+
+void ColumnReader::DirectSelect(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
+                                const SelectionVector &sel, idx_t approved_tuple_count) {
+	auto to_read = num_values;
+
+	// prepare the first read if we haven't yet
+	BeginRead(define_out, repeat_out);
+	auto read_now = ReadPageHeaders(num_values);
+
+	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
+	if (read_now == to_read && encoding == ColumnEncoding::PLAIN) {
+		PrepareRead(read_now, define_out, repeat_out, 0);
+
+		PlainSelect(block, define_out, read_now, result, sel, approved_tuple_count);
+
+		page_rows_available -= read_now;
+		FinishRead(num_values);
+		return;
+	}
+	// fallback to regular read + filter
+	ReadInternal(num_values, define_out, repeat_out, result);
+}
+
 void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
                           const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count,
                           bool is_first_filter) {
@@ -588,7 +632,7 @@ void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t
 		DirectFilter(num_values, define_out, repeat_out, result, filter, sel, approved_tuple_count);
 		return;
 	}
-	Read(num_values, define_out, repeat_out, result);
+	Select(num_values, define_out, repeat_out, result, sel, approved_tuple_count);
 	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
 }
 
@@ -648,22 +692,29 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 		PrepareRead(skip_now, define_out, repeat_out, 0);
 
 		auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
-		if (encoding == ColumnEncoding::DICTIONARY) {
+		switch (encoding) {
+		case ColumnEncoding::DICTIONARY:
 			dictionary_decoder.Skip(define_ptr, skip_now);
-		} else if (encoding == ColumnEncoding::DELTA_BINARY_PACKED) {
+			break;
+		case ColumnEncoding::DELTA_BINARY_PACKED:
 			delta_binary_packed_decoder.Skip(define_ptr, skip_now);
-		} else if (encoding == ColumnEncoding::RLE) {
+			break;
+		case ColumnEncoding::RLE:
 			rle_decoder.Skip(define_ptr, skip_now);
-		} else if (encoding == ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY) {
+			break;
+		case ColumnEncoding::DELTA_LENGTH_BYTE_ARRAY:
 			delta_length_byte_array_decoder.Skip(define_ptr, skip_now);
-		} else if (encoding == ColumnEncoding::DELTA_BYTE_ARRAY) {
+			break;
+		case ColumnEncoding::DELTA_BYTE_ARRAY:
 			delta_byte_array_decoder.Skip(define_ptr, skip_now);
-		} else if (encoding == ColumnEncoding::BYTE_STREAM_SPLIT) {
+			break;
+		case ColumnEncoding::BYTE_STREAM_SPLIT:
 			byte_stream_split_decoder.Skip(define_ptr, skip_now);
-		} else {
+			break;
+		default:
 			PlainSkip(*block, define_out, skip_now);
+			break;
 		}
-
 		page_rows_available -= skip_now;
 		to_skip -= skip_now;
 	}
