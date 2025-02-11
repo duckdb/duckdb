@@ -113,11 +113,10 @@ static idx_t WriteEscapedString(void *dest, const string_t &string) {
 	while (string_data < string_end) {
 		const void *write_end = nullptr;
 		for (idx_t j = 0; j < sizeof(SPECIAL_CHARACTERS); j++) {
-			write_end = memchr(string_data, SPECIAL_CHARACTERS[j],
-			                   UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(string_end) - string_data));
-			if (write_end) {
-				//! Found a special character
-				break;
+			auto res = memchr(string_data, SPECIAL_CHARACTERS[j],
+			                  UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(string_end) - string_data));
+			if (res && (!write_end || res < write_end)) {
+				write_end = res;
 			}
 		}
 		if (!write_end) {
