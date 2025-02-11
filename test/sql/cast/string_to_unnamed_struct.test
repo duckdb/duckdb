@@ -59,3 +59,8 @@ query I
 select $${'a': [1,2,3],'b':}$$::STRUCT(a INTEGER[], b VARCHAR)
 ----
 {'a': [1, 2, 3], 'b': }
+
+query I
+select $$[("  test  "), {'a': (\\  test  \\)}]$$::STRUCT(a VARCHAR)[]
+----
+[{'a':   test  }, {'a': (\\  test  \\)}]
