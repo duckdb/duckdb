@@ -253,8 +253,10 @@ MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(const std::string *key) : conte
 }
 
 MbedTlsWrapper::AESStateMBEDTLS::~AESStateMBEDTLS() {
+	if (context) {
+		mbedtls_cipher_free(context.get());
+	}
 }
-
 
 void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
 #ifdef MBEDTLS_NO_ENTROPY_SOURCE
