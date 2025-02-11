@@ -461,8 +461,8 @@ public:
 			// Parallel memset
 			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx += ENTRIES_PER_TASK) {
 				auto entry_idx_to = MinValue<idx_t>(entry_idx + ENTRIES_PER_TASK, entry_count);
-				finalize_tasks.push_back(make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink,
-				                                                          entry_idx, entry_idx_to, sink.op));
+				finalize_tasks.push_back(make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink, entry_idx,
+				                                                          entry_idx_to, sink.op));
 			}
 		}
 		SetTasks(std::move(finalize_tasks));
