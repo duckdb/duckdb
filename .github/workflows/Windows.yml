@@ -54,9 +54,6 @@ jobs:
     # Builds binaries for windows_amd64
     name: Windows (64 Bit)
     runs-on: windows-2019
-    strategy:
-      matrix:
-        duckdb_arch: [windows_amd64]
     steps:
     - uses: actions/checkout@v4
       with:
@@ -110,16 +107,16 @@ jobs:
       run: |
         python scripts/amalgamation.py
         choco install zip -y --force
-        zip -j duckdb_cli-${{ matrix.duckdb_arch }}.zip Release/duckdb.exe
-        zip -j libduckdb-${{ matrix.duckdb_arch }}.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
-        ./scripts/upload-assets-to-staging.sh github_release libduckdb-${{ matrix.duckdb_arch }}.zip duckdb_cli-${{ matrix.duckdb_arch }}.zip
+        zip -j duckdb_cli-windows-amd64.zip Release/duckdb.exe
+        zip -j libduckdb-windows-amd64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+        ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-amd64.zip duckdb_cli-windows-amd64.zip
 
     - uses: actions/upload-artifact@v4
       with:
-        name: duckdb-binaries-${{ matrix.duckdb_arch }}
+        name: duckdb-binaries-windows-amd64
         path: |
-          libduckdb-${{ matrix.duckdb_arch }}.zip
-          duckdb_cli-${{ matrix.duckdb_arch }}.zip
+          libduckdb-windows-amd64.zip
+          duckdb_cli-windows-amd64.zip
 
     - uses: ilammy/msvc-dev-cmd@v1
     - name: Duckdb.dll export symbols with C++ on Windows
@@ -171,9 +168,6 @@ jobs:
    if: github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb'
    runs-on: windows-2019
    needs: win-release-64
-   strategy:
-    matrix:
-      duckdb_arch: [windows_arm64]
 
    steps:
      - uses: actions/checkout@v4
@@ -194,7 +188,7 @@ jobs:
      - name: Build
        shell: bash
        run: |
-         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=${{ matrix.duckdb_arch }} -DDUCKDB_CUSTOM_PLATFORM=${{ matrix.duckdb_arch }} -DBUILD_UNITTESTS=FALSE
+         cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
          cmake --build . --config Release --parallel
 
      - name: Deploy
@@ -205,16 +199,16 @@ jobs:
        run: |
          python scripts/amalgamation.py
          choco install zip -y --force
-         zip -j duckdb_cli-${{ matrix.duckdb_arch }}.zip Release/duckdb.exe
-         zip -j libduckdb-${{ matrix.duckdb_arch }}.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
-         ./scripts/upload-assets-to-staging.sh github_release libduckdb-${{ matrix.duckdb_arch }}.zip duckdb_cli-${{ matrix.duckdb_arch }}.zip
+         zip -j duckdb_cli-windows-arm64.zip Release/duckdb.exe
+         zip -j libduckdb-windows-arm64.zip src/Release/duckdb.dll src/Release/duckdb.lib src/amalgamation/duckdb.hpp src/include/duckdb.h
+         ./scripts/upload-assets-to-staging.sh github_release libduckdb-windows-arm64.zip duckdb_cli-windows-arm64.zip
 
      - uses: actions/upload-artifact@v4
        with:
-         name: duckdb-binaries-${{ matrix.duckdb_arch }}
+         name: duckdb-binaries-windows-arm64
          path: |
-           libduckdb-${{ matrix.duckdb_arch }}.zip
-           duckdb_cli-${{ matrix.duckdb_arch }}.zip
+           libduckdb-windows-arm64.zip
+           duckdb_cli-windows-arm64.zip
 
  mingw:
      name: MinGW (64 Bit)
@@ -300,14 +294,11 @@ jobs:
  upload-windows_amd64-extensions:
     name: Upload windows_amd64 Extensions
     needs: win-extensions-64
-    strategy:
-      matrix:
-        duckdb_arch: [windows_amd64]
     uses: ./.github/workflows/_sign_deploy_extensions.yml
     secrets: inherit
     with:
-      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
-      duckdb_arch: ${{ matrix.duckdb_arch }}
+      extension_artifact_name: duckdb-extensions-windows_amd64
+      duckdb_arch: windows_amd64
       duckdb_sha: ${{ github.sha }}
 
  win-packaged-upload:
@@ -318,17 +309,17 @@ jobs:
    steps:
     - uses: actions/download-artifact@v4
       with:
-        name: duckdb-binaries-windows_arm64
+        name: duckdb-binaries-windows-arm64
 
     - uses: actions/download-artifact@v4
       with:
-        name: duckdb-binaries-windows_amd64
+        name: duckdb-binaries-windows-amd64
 
     - uses: actions/upload-artifact@v4
       with:
         name: duckdb-binaries-windows
         path: |
-          libduckdb-windows_amd64.zip
-          duckdb_cli-windows_amd64.zip
-          libduckdb-windows_arm64.zip
-          duckdb_cli-windows_arm64.zip
+          libduckdb-windows-amd64.zip
+          duckdb_cli-windows-amd64.zip
+          libduckdb-windows-arm64.zip
+          duckdb_cli-windows-arm64.zip
