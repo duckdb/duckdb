@@ -37,6 +37,7 @@ class ClientContext;
 class BaseStatistics;
 class TableFilterSet;
 class ParquetEncryptionConfig;
+class ParquetReader;
 
 struct ParquetReaderPrefetchConfig {
 	// Percentage of data in a row group span that should be scanned for enabling whole group prefetch
@@ -141,11 +142,9 @@ public:
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
 	MultiFileReaderData reader_data;
-	unique_ptr<ColumnReader> root_reader;
+	unique_ptr<ParquetColumnSchema> root_schema;
 	shared_ptr<EncryptionUtil> encryption_util;
 
-	//! Parquet schema for the generated columns
-	vector<duckdb_parquet::SchemaElement> generated_column_schema;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
 
@@ -187,7 +186,6 @@ public:
 	                  const uint32_t buffer_size);
 
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
-	static LogicalType DeriveLogicalType(const SchemaElement &s_ele, bool binary_as_string);
 
 	FileHandle &GetHandle() {
 		return *file_handle;
@@ -204,6 +202,8 @@ public:
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
 	                                                 shared_ptr<ParquetFileMetadataCache> metadata, const string &name);
 
+	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
+
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
 	ParquetReader(ClientContext &context, ParquetOptions parquet_options,
@@ -211,18 +211,24 @@ private:
 
 	void InitializeSchema(ClientContext &context);
 	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
+	//! Parse the schema of the file
+	unique_ptr<ParquetColumnSchema> ParseSchema();
+	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,
+	                                         idx_t &next_file_idx);
+
 	unique_ptr<ColumnReader> CreateReader(ClientContext &context);
 
 	unique_ptr<ColumnReader> CreateReaderRecursive(ClientContext &context, const vector<ColumnIndex> &indexes,
-	                                               idx_t depth, idx_t max_define, idx_t max_repeat,
-	                                               idx_t &next_schema_idx, idx_t &next_file_idx);
+	                                               const ParquetColumnSchema &schema);
 	const duckdb_parquet::RowGroup &GetGroup(ParquetReaderScanState &state);
 	uint64_t GetGroupCompressedSize(ParquetReaderScanState &state);
 	idx_t GetGroupOffset(ParquetReaderScanState &state);
 	// Group span is the distance between the min page offset and the max page offset plus the max page compressed size
 	uint64_t GetGroupSpan(ParquetReaderScanState &state);
 	void PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t out_col_idx);
-	LogicalType DeriveLogicalType(const SchemaElement &s_ele);
+	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
+	                                      idx_t schema_index, idx_t column_index,
+	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
 
 private:
 	unique_ptr<FileHandle> file_handle;

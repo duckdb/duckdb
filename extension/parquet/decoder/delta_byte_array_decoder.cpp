@@ -20,7 +20,7 @@ void DeltaByteArrayDecoder::ReadDbpData(Allocator &allocator, ResizeableBuffer &
 }
 
 void DeltaByteArrayDecoder::InitializePage() {
-	if (reader.type.InternalType() != PhysicalType::VARCHAR) {
+	if (reader.Type().InternalType() != PhysicalType::VARCHAR) {
 		throw std::runtime_error("Delta Byte Array encoding is only supported for string/blob data");
 	}
 	auto &block = *reader.block;
@@ -69,7 +69,7 @@ void DeltaByteArrayDecoder::Read(uint8_t *defines, idx_t read_count, Vector &res
 	auto &result_mask = FlatVector::Validity(result);
 	auto string_data = FlatVector::GetData<string_t>(*byte_array_data);
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
-		if (defines && defines[row_idx + result_offset] != reader.max_define) {
+		if (defines && defines[row_idx + result_offset] != reader.MaxDefine()) {
 			result_mask.SetInvalid(row_idx + result_offset);
 			continue;
 		}
@@ -88,7 +88,7 @@ void DeltaByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 		throw std::runtime_error("Internal error - DeltaByteArray called but there was no byte_array_data set");
 	}
 	for (idx_t row_idx = 0; row_idx < skip_count; row_idx++) {
-		if (defines && defines[row_idx] != reader.max_define) {
+		if (defines && defines[row_idx] != reader.MaxDefine()) {
 			continue;
 		}
 		if (delta_offset >= byte_array_count) {
