@@ -2,12 +2,12 @@
 #include "decoder/delta_byte_array_decoder.hpp"
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
-#include "reader/templated_column_reader.hpp"
+#include "reader/string_column_reader.hpp"
 
 namespace duckdb {
 
 DeltaLengthByteArrayDecoder::DeltaLengthByteArrayDecoder(ColumnReader &reader)
-    : reader(reader), length_buffer(reader.encoding_buffers[0]) {
+    : reader(reader), length_buffer(reader.encoding_buffers[0]), length_idx(0) {
 }
 
 void DeltaLengthByteArrayDecoder::InitializePage() {
@@ -21,8 +21,9 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 	length_idx = 0;
 }
 
-void DeltaLengthByteArrayDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
-	auto &block = *reader.block;
+void DeltaLengthByteArrayDecoder::Read(shared_ptr<ResizeableBuffer> &block_ref, uint8_t *defines, idx_t read_count,
+                                       Vector &result, idx_t result_offset) {
+	auto &block = *block_ref;
 	auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
 	auto result_data = FlatVector::GetData<string_t>(result);
 	auto &result_mask = FlatVector::Validity(result);
@@ -40,17 +41,16 @@ void DeltaLengthByteArrayDecoder::Read(uint8_t *defines, idx_t read_count, Vecto
 		}
 		auto str_len = length_data[length_idx++];
 		block.available(str_len);
-		result_data[result_idx] = StringVector::EmptyString(result, str_len);
-		auto str_data = result_data[result_idx].GetDataWriteable();
-		memcpy(str_data, block.ptr, str_len);
-		block.inc(str_len);
-		result_data[result_idx].Finalize();
+		result_data[result_idx] = string_t(char_ptr_cast(block.ptr), str_len);
+		block.unsafe_inc(str_len);
 	}
+	StringColumnReader::ReferenceBlock(result, block_ref);
 }
 
 void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 	auto &block = *reader.block;
 	auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	idx_t skip_bytes = 0;
 	for (idx_t row_idx = 0; row_idx < skip_count; row_idx++) {
 		if (defines && defines[row_idx] != reader.MaxDefine()) {
 			continue;
@@ -61,9 +61,9 @@ void DeltaLengthByteArrayDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 			    "read of %d from %d entries) - corrupt file?",
 			    length_idx, byte_array_count);
 		}
-		auto str_len = length_data[length_idx++];
-		block.inc(str_len);
+		skip_bytes += length_data[length_idx++];
 	}
+	block.inc(skip_bytes);
 }
 
 } // namespace duckdb
