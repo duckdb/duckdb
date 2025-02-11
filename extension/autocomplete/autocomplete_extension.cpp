@@ -76,6 +76,9 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 			throw InternalException("Auto-complete match not found");
 		}
 		auto &suggestion = available_suggestions[entry->second];
+		if (suggestion.extra_char != '\0') {
+			result.pop_back();
+		}
 		if (suggestion.candidate_type == CandidateType::KEYWORD) {
 			if (prefix_is_lower) {
 				result = StringUtil::Lower(result);
