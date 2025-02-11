@@ -459,23 +459,17 @@ public:
 			    make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink, 0U, entry_count, sink.op));
 		} else {
 			// Parallel memset
-			auto entries_per_thread = MaxValue<idx_t>((entry_count + num_threads - 1) / num_threads, 1);
-			idx_t entry_idx = 0;
-			for (idx_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
-				auto entry_idx_from = entry_idx;
-				auto entry_idx_to = MinValue<idx_t>(entry_idx_from + entries_per_thread, entry_count);
+			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx += ENTRIES_PER_TASK) {
+				auto entry_idx_to = MinValue<idx_t>(entry_idx + ENTRIES_PER_TASK, entry_count);
 				finalize_tasks.push_back(make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink,
-				                                                          entry_idx_from, entry_idx_to, sink.op));
-				entry_idx = entry_idx_to;
-				if (entry_idx == entry_count) {
-					break;
-				}
+				                                                          entry_idx, entry_idx_to, sink.op));
 			}
 		}
 		SetTasks(std::move(finalize_tasks));
 	}
 
 	static constexpr const idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
+	static constexpr const idx_t ENTRIES_PER_TASK = 131072;
 };
 
 class HashJoinFinalizeTask : public ExecutorTask {
