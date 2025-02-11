@@ -1,0 +1,61 @@
+# name: test/sql/cast/string_to_unnamed_struct.test
+# group: [cast]
+
+# Basic single value struct
+query I
+select $$(abc)$$::STRUCT(a VARCHAR)
+----
+{'a': abc}
+
+# Multiple values
+query I
+select $$(abc, def, ghi)$$::STRUCT(a VARCHAR, b VARCHAR, c VARCHAR)
+----
+{'a': abc, 'b': def, 'c': ghi}
+
+# Empty unnamed struct
+query I
+select $$()$$::STRUCT(a VARCHAR)
+----
+{'a': NULL}
+
+# Nested regular struct inside unnamed struct
+query I
+select $$({'amount': 42})$$::STRUCT(a STRUCT(amount INT))
+----
+{'a': {'amount': 42}}
+
+# Nested unnamed struct inside unnamed struct
+query I
+select $$((42))$$::STRUCT(a STRUCT(amount INT))
+----
+{'a': {'amount': 42}}
+
+# Nested unnamed struct AND regular struct inside unnamed struct
+query I
+select $$((42), {amount: 21})$$::STRUCT(a STRUCT(amount INT), b STRUCT(amount INT))
+----
+{'a': {'amount': 42}, 'b': {'amount': 21}}
+
+# List inside unnamed struct
+query I
+select $$([1,2,3], [4,5,6])$$::STRUCT(a INTEGER[], b INTEGER[])
+----
+{'a': [1, 2, 3], 'b': [4, 5, 6]}
+
+statement error
+select $$([1,2,3],)$$::STRUCT(a INTEGER[])
+----
+can't be cast to the destination type STRUCT
+
+# Empty string in the second child of the unnamed struct
+query I
+select $$([1,2,3],)$$::STRUCT(a INTEGER[], b VARCHAR)
+----
+{'a': [1, 2, 3], 'b': }
+
+# Empty string in the second child of a named struct
+query I
+select $${'a': [1,2,3],'b':}$$::STRUCT(a INTEGER[], b VARCHAR)
+----
+{'a': [1, 2, 3], 'b': }
