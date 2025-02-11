@@ -34,21 +34,12 @@ inline static void SkipWhitespace(StringCastInputState &input_state) {
 	auto &buf = input_state.buf;
 	auto &pos = input_state.pos;
 	auto &len = input_state.len;
-	while (pos < len) {
-		bool set_escaped = false;
-		if (buf[pos] == '\\') {
-			if (!input_state.escaped) {
-				set_escaped = true;
-			}
-		} else if (StringUtil::CharacterIsSpace(buf[pos])) {
-			if (input_state.escaped) {
-				break;
-			}
-		} else {
-			break;
-		}
+	if (input_state.escaped) {
+		return;
+	}
+	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 		pos++;
-		input_state.escaped = set_escaped;
+		input_state.escaped = false;
 	}
 }
 
