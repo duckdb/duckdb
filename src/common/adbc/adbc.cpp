@@ -880,7 +880,7 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 	auto error_msg_extract_statements = duckdb_extract_statements_error(extracted_statements);
 	if (error_msg_extract_statements != nullptr) {
 		// Things went wrong when executing internal prepared statement
-		delete extracted_statements;
+		delete (reinterpret_cast<duckdb::PreparedStatementWrapper*> (&extracted_statements));
 		SetError(error, error_msg_extract_statements);
 		return ADBC_STATUS_INTERNAL;
 	}
@@ -893,7 +893,7 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		auto adbc_status = CheckResult(res, error, error_msg);
 		if (adbc_status != ADBC_STATUS_OK) {
 			// Things went wrong when executing internal prepared statement
-			delete extracted_statements;
+			delete (reinterpret_cast<duckdb::PreparedStatementWrapper*> (&extracted_statements));
 			delete statement_internal;
 			return adbc_status;
 		}
@@ -904,7 +904,7 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 			SetError(error, duckdb_query_arrow_error(out_result));
 			delete out_result;
 			delete statement_internal;
-			delete extracted_statements;
+			delete (reinterpret_cast<duckdb::PreparedStatementWrapper*> (&extracted_statements));
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 		delete out_result;
@@ -914,7 +914,7 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 	auto res = duckdb_prepare_extracted_statement(wrapper->connection, extracted_statements,
 	                                              extract_statements_size - 1, &wrapper->statement);
 	auto error_msg = duckdb_prepare_error(wrapper->statement);
-	delete extracted_statements;
+	delete (reinterpret_cast<duckdb::PreparedStatementWrapper*> (&extracted_statements));
 	return CheckResult(res, error, error_msg);
 }
 
