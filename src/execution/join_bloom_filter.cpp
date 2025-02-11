@@ -11,15 +11,15 @@
 namespace duckdb {
 
 // Maximum number of hash functions used in the bloom-filter.
-static int MAX_HASH_FUNCTIONS = 2;
+static size_t MAX_HASH_FUNCTIONS = 2;
 // Maximum size of the bloom-filter in bits. Set to 0 for unbounded.
-static int MAX_BF_SIZE_BITS = 0;
+static size_t MAX_BF_SIZE_BITS = 0;
 // Whether to use a fixed-size bloom-filter.
 static bool USE_BABY_BLOOM = false;
 // Whether the bloom-filter should have a power-of-two size. If yes, indexing can be done fast with a bitmap. Otherwise, fast-mod is used.
 static bool USE_POWER_2_BF_SIZE = true;
 // The minimum number of keys that need to be probed before the threshold for disabling probing is applied.
-static int PROBE_MIN_KEYS_BEFORE_THRESHOLD = 4000;
+static size_t PROBE_MIN_KEYS_BEFORE_THRESHOLD = 4000;
 // The minimum acceptable selectivity. If the selectivity is lower, probing will be turned off.
 static double PROBE_SELECTIVITY_THRESHOLD = 0.6;
 
@@ -34,7 +34,7 @@ size_t ComputeBloomFilterSize(size_t expected_cardinality, double desired_false_
 
     if (USE_POWER_2_BF_SIZE) {
         // Approximate size rounded to the next power of 2
-        int v = approx_size;
+        size_t v = approx_size;
         v--;
         v |= v >> 1;
         v |= v >> 2;
@@ -50,7 +50,7 @@ size_t ComputeBloomFilterSize(size_t expected_cardinality, double desired_false_
         }
     } else {
         // Approximate size of the Bloom-filter rounded up to the next 8 bytes.
-	    int v = approx_size + (64 - approx_size % 64);
+	    size_t v = approx_size + (64 - approx_size % 64);
 
         if (MAX_BF_SIZE_BITS > 0) {
             return MinValue(v, MAX_BF_SIZE_BITS);
@@ -66,7 +66,7 @@ size_t ComputeNumHashFunctions(size_t expected_cardinality, size_t bloom_filter_
     }
 
     // The theoretically optimal number of hash functions.
-    const int theoretical_optimum = std::ceil(bloom_filter_size / expected_cardinality * 0.693147);
+    const size_t theoretical_optimum = static_cast<size_t>(std::ceil(bloom_filter_size / expected_cardinality * 0.693147));
     // Limit the number of hash functions because too many harm performance.
     return MinValue(MAX_HASH_FUNCTIONS, theoretical_optimum);
 }
