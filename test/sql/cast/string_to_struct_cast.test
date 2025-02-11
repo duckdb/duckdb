@@ -83,10 +83,10 @@ CREATE TABLE tbl2(col VARCHAR);
 statement ok
 INSERT INTO tbl2 (VALUES ('{a:1, b:"hello, world"}'));
 
-query I
-SELECT col::STRUCT(a INT, b VARCHAR) FROM tbl2;
+query III
+SELECT col::STRUCT(a INT, b VARCHAR) a, a::VARCHAR::STRUCT(a INT, b VARCHAR) b, a == b FROM tbl2;
 ----
-{'a': 1, 'b': hello, world}
+{'a': 1, 'b': hello\, world}	{'a': 1, 'b': hello\, world}	true
 
 # ---------------------------------------------------
 statement ok
@@ -156,19 +156,19 @@ SELECT '{key_D: "World Hello", key_B: [Hello, World], key_C : 5000, key_A: [[{a:
 #               Quote escaping
 # ---------------------------------------------------
 query I
-SELECT ('{a: "can''t", b: "you''re", c: "i''m"}'::STRUCT(a VARCHAR, b VARCHAR, c VARCHAR));
+SELECT ($${a: "can't", b: "you're", c: "i'm"}$$::STRUCT(a VARCHAR, b VARCHAR, c VARCHAR));
 ----
-{'a': can't, 'b': you're, 'c': i'm}
+{'a': can\'t, 'b': you\'re, 'c': i\'m}
 
 query I
 SELECT ('{a:"}", b: hello universe}'::STRUCT(a VARCHAR, b VARCHAR));
 ----
-{'a': }, 'b': hello universe}
+{'a': \}, 'b': hello universe}
 
 query I
-SELECT ('{a:''}'', b: "hello world"}'::STRUCT(a VARCHAR, b VARCHAR));
+SELECT ($${a:'}', b: "hello world"}$$::STRUCT(a VARCHAR, b VARCHAR));
 ----
-{'a': }, 'b': hello world}
+{'a': \}, 'b': hello world}
 
 
 
@@ -183,7 +183,7 @@ query I
 SELECT '    {a:        {b:         DuckDB,    c:12  }, b:  900, c          :{a
                     :   "DuckParty  "}       }    '::STRUCT(a STRUCT(b VARCHAR, c INT), b INT, c STRUCT(a VARCHAR));
 ----
-{'a': {'b': DuckDB, 'c': 12}, 'b': 900, 'c': {'a': DuckParty  }}
+{'a': {'b': DuckDB, 'c': 12}, 'b': 900, 'c': {'a': DuckParty \ }}
 
 query I
 SELECT '{key_A     : [      [{      a: 5    , b  : 900          }, { a: 3, b:    34}],      [   {a:
@@ -394,7 +394,7 @@ COPY assorted_structs FROM '__TEST_DIR__/assorted_structs.csv';
 query I
 SELECT * FROM assorted_structs;
 ----
-{'a': 8, 'b': hello, DuckDB}
+{'a': 8, 'b': hello\, DuckDB}
 
 #               JSON format to Struct testing
 # ---------------------------------------------------
@@ -436,7 +436,7 @@ query I
 SELECT col1::STRUCT(id VARCHAR, type VARCHAR, name VARCHAR, ppu FLOAT, 
     batters STRUCT(batter STRUCT(id VARCHAR, type VARCHAR)[]), topping STRUCT(id VARCHAR, type VARCHAR)[]) FROM json_tbl;
 ----
-{'id': 0001, 'type': donut, 'name': Cake, 'ppu': 0.55, 'batters': {'batter': [{'id': 1001, 'type': Regular}, {'id': 1002, 'type': Chocolate}, {'id': 1003, 'type': Blueberry}, {'id': 1004, 'type': Devil's Food}]}, 'topping': [{'id': 5001, 'type': None}, {'id': 5002, 'type': Glazed}, {'id': 5005, 'type': Sugar}, {'id': 5007, 'type': Powdered Sugar}, {'id': 5006, 'type': Chocolate with Sprinkles}, {'id': 5003, 'type': Chocolate}, {'id': 5004, 'type': Maple}]}
+{'id': 0001, 'type': donut, 'name': Cake, 'ppu': 0.55, 'batters': {'batter': [{'id': 1001, 'type': Regular}, {'id': 1002, 'type': Chocolate}, {'id': 1003, 'type': Blueberry}, {'id': 1004, 'type': Devil\'s Food}]}, 'topping': [{'id': 5001, 'type': None}, {'id': 5002, 'type': Glazed}, {'id': 5005, 'type': Sugar}, {'id': 5007, 'type': Powdered Sugar}, {'id': 5006, 'type': Chocolate with Sprinkles}, {'id': 5003, 'type': Chocolate}, {'id': 5004, 'type': Maple}]}
 
 
 # ---------------------------------------------------

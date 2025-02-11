@@ -519,7 +519,7 @@ select '[{"bar":"\\\""}]'::STRUCT(bar VARCHAR)[];
 [{'bar': \\\"}]
 
 # all are escaped except for the last one
-query I
+query III
 select '[{"bar":"\"\"\\\"\"\"\\"}]'::STRUCT(bar VARCHAR)[] a, CAST(a::VARCHAR AS STRUCT(bar VARCHAR)[]) b, a == b;
 ----
 [{'bar': \"\"\\\"\"\"\\}]	[{'bar': \"\"\\\"\"\"\\}]	true
