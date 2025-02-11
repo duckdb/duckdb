@@ -213,8 +213,12 @@ private:
 	template <class CONVERSION, bool HAS_DEFINES, bool CHECKED>
 	void PlainSkipTemplatedInternal(ByteBuffer &plain_data, const uint8_t *__restrict defines,
 	                                const uint64_t num_values, idx_t row_offset = 0) {
-		if (!HAS_DEFINES && !CHECKED && CONVERSION::PlainConstantSize() > 0) {
-			plain_data.unsafe_inc(num_values * CONVERSION::PlainConstantSize());
+		if (!HAS_DEFINES && CONVERSION::PlainConstantSize() > 0) {
+			if (CHECKED) {
+				plain_data.inc(num_values * CONVERSION::PlainConstantSize());
+			} else {
+				plain_data.unsafe_inc(num_values * CONVERSION::PlainConstantSize());
+			}
 			return;
 		}
 		for (idx_t row_idx = row_offset; row_idx < row_offset + num_values; row_idx++) {
