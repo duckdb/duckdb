@@ -500,7 +500,7 @@ SELECT * FROM assorted_lists;
 query I
 select '[{"bar":"\""}]'::VARCHAR[];
 ----
-[\{\"bar\":\"\\\"\"\}]
+[{\"bar\":\"\\\"\"}]
 
 statement error
 select '[{"bar":"\\""}]'::VARCHAR[];

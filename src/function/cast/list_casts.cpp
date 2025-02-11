@@ -75,7 +75,7 @@ static idx_t CalculateEscapedStringLength(const string_t &string) {
 	idx_t length = base_length;
 	auto string_data = string.GetData();
 
-	constexpr const char *SPECIAL_CHARACTERS = "[]\"',{}\\";
+	constexpr const char SPECIAL_CHARACTERS[] = "[]\"',\\";
 
 	if (base_length >= 1) {
 		if (isspace(string_data[0])) {
@@ -104,7 +104,7 @@ static idx_t WriteEscapedString(void *dest, const string_t &string) {
 	const auto string_end = reinterpret_cast<const void *>(string_start + base_length);
 	auto string_data = string_start;
 
-	constexpr const char *SPECIAL_CHARACTERS = "[]\"',{}\\";
+	constexpr const char SPECIAL_CHARACTERS[] = "[]\"',\\";
 
 	idx_t dest_offset = 0;
 	if (base_length >= 1) {

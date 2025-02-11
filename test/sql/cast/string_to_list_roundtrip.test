@@ -20,9 +20,14 @@ select $$["  \"abc\"  ", def, ghi]$$::VARCHAR[] a, a::VARCHAR, a::VARCHAR[]
 ----
 [\  \"abc\" \ , def, ghi]	[\  \"abc\" \ , def, ghi]	[\  \"abc\" \ , def, ghi]
 
-# Leading and trailing whitespace preservation
+# Escaping backslashes
 query III
 select $$[\  \\abc\\ \ , def, ghi]$$::VARCHAR[] a, a::VARCHAR, a::VARCHAR[]
 ----
 [\  \\abc\\ \ , def, ghi]	[\  \\abc\\ \ , def, ghi]	[\  \\abc\\ \ , def, ghi]
 
+# Escaping '{' and '}'
+query III
+select $$[{}]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a == b
+----
+[{}]	[{}]	true
