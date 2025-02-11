@@ -71,19 +71,9 @@ public:
 		PlainSkipTemplated<VALUE_CONVERSION>(plain_data, defines, num_values);
 	}
 
-	// FIXME: need to profile this to see if it makes sense for primitive types
-	// (or at what ratio of count / num_values it makes sense)
-	// void PlainSelect(shared_ptr<ResizeableBuffer> &plain_data, uint8_t *defines, idx_t num_values, Vector &result,
-	//                  const SelectionVector &sel, idx_t count) override {
-	// 	PlainSelectTemplated<VALUE_TYPE, VALUE_CONVERSION>(*plain_data, defines, num_values, result, sel, count);
-	// }
-
 	bool SupportsDirectFilter() const override {
 		return true;
 	}
-	// bool SupportsDirectSelect() const override {
-	// 	return true;
-	// }
 };
 
 template <class PARQUET_PHYSICAL_TYPE, class DUCKDB_PHYSICAL_TYPE,
