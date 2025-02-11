@@ -448,7 +448,7 @@ SELECT CAST('[{a:[12,13,14], b:"🦆", c:{a:[[a], [b, c]], b:[123]}}]' AS STRUCT
 query I
 SELECT '[{a: hii}, {a: "{" }]'::STRUCT(a VARCHAR)[] FROM struct_tbl1;
 ----
-[{'a': hii}, {'a': {}]
+[{'a': hii}, {'a': \{}]
 
 
 # ---------------------------------------------------
@@ -516,13 +516,13 @@ select '[{"bar":"\\""}]'::STRUCT(bar VARCHAR)[];
 query I
 select '[{"bar":"\\\""}]'::STRUCT(bar VARCHAR)[];
 ----
-[{'bar': \"}]
+[{'bar': \\\"}]
 
 # all are escaped except for the last one
 query I
-select '[{"bar":"\"\"\\\"\"\"\\"}]'::STRUCT(bar VARCHAR)[];
+select '[{"bar":"\"\"\\\"\"\"\\"}]'::STRUCT(bar VARCHAR)[] a, CAST(a::VARCHAR AS STRUCT(bar VARCHAR)[]) b, a == b;
 ----
-[{'bar': ""\"""\}]
+[{'bar': \"\"\\\"\"\"\\}]	[{'bar': \"\"\\\"\"\"\\}]	true
 
 query III
 select $$[\  \\abc\\ \ , def, ghi]$$::VARCHAR[] a, a[1], len(a[1])
