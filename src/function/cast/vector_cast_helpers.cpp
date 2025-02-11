@@ -1,18 +1,18 @@
 #include "duckdb/function/cast/vector_cast_helpers.hpp"
-#include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/stack.hpp"
+#include "duckdb/common/typedefs.hpp"
 
 namespace {
 
 struct StringCastInputState {
 public:
-	StringCastInputState(const char *buf, idx_t &pos, idx_t &len) : buf(buf), pos(pos), len(len) {
+	StringCastInputState(const char *buf, duckdb::idx_t &pos, duckdb::idx_t &len) : buf(buf), pos(pos), len(len) {
 	}
 
 public:
 	const char *buf;
-	idx_t &pos;
-	idx_t &len;
+	duckdb::idx_t &pos;
+	duckdb::idx_t &len;
 	bool escaped = false;
 };
 
