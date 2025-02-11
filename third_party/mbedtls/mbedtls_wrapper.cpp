@@ -251,7 +251,6 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 }
 
 MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(const std::string *key) {
-
 	context = new mbedtls_cipher_context_t();
 	mbedtls_cipher_init(context);
 
@@ -298,7 +297,6 @@ void MbedTlsWrapper::AESStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) {
-
 	mode = ENCRYPT;
 
 	if (mbedtls_cipher_setkey(context, reinterpret_cast<const unsigned char *>(key->data()), key->length() * 8, MBEDTLS_ENCRYPT) != 0) {
@@ -311,7 +309,6 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_pt
 }
 
 void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) {
-
 	mode = DECRYPT;
 
 	if (mbedtls_cipher_setkey(context, reinterpret_cast<const unsigned char *>(key->data()), key->length() * 8, MBEDTLS_DECRYPT) != 0) {
@@ -325,7 +322,6 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_pt
 
 size_t MbedTlsWrapper::AESStateMBEDTLS::Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
                                                    duckdb::idx_t out_len) {
-
 	size_t result;
 	if (mbedtls_cipher_update(context, reinterpret_cast<const unsigned char *>(in), in_len, out,
 	                      &result) != 0) {
@@ -337,12 +333,10 @@ size_t MbedTlsWrapper::AESStateMBEDTLS::Process(duckdb::const_data_ptr_t in, duc
 
 size_t MbedTlsWrapper::AESStateMBEDTLS::Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag,
                                                     duckdb::idx_t tag_len) {
-
 	size_t result = out_len;
 	mbedtls_cipher_finish(context, out, &result);
 
 	if (algorithm == GCM) {
-
 		switch (mode) {
 		case ENCRYPT: {
 			if (mbedtls_cipher_write_tag(context, tag, tag_len) != 0) {
@@ -350,7 +344,6 @@ size_t MbedTlsWrapper::AESStateMBEDTLS::Finalize(duckdb::data_ptr_t out, duckdb:
 			}
 			break;
 		}
-
 		case DECRYPT: {
 			if (mbedtls_cipher_check_tag(context, tag, tag_len) != 0) {
 				throw duckdb::InvalidInputException(
