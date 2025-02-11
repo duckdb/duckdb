@@ -78,7 +78,7 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		Mode mode;
 		// default is GCM
 		Algorithm algorithm = GCM;
-		mbedtls_cipher_context_t *context;
+		duckdb::unique_ptr<mbedtls_cipher_context_t> context;
 	};
 
 	class AESStateMBEDTLSFactory : public duckdb::EncryptionUtil {
