@@ -285,6 +285,7 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 			if (!input_state.escaped) {
 				set_escaped = true;
 			}
+			end_pos = pos;
 		} else if (!StringUtil::CharacterIsSpace(buf[pos]) || input_state.escaped) {
 			if (!start_pos.IsValid()) {
 				start_pos = pos;
@@ -416,6 +417,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 				if (!input_state.escaped) {
 					set_escaped = true;
 				}
+				end_pos = pos;
 			} else if (!StringUtil::CharacterIsSpace(buf[pos]) || input_state.escaped) {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
@@ -479,6 +481,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 				if (!input_state.escaped) {
 					set_escaped = true;
 				}
+				end_pos = pos;
 			} else if (!StringUtil::CharacterIsSpace(buf[pos]) || input_state.escaped) {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
@@ -589,6 +592,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 				if (!input_state.escaped) {
 					set_escaped = true;
 				}
+				end_pos = pos;
 			} else if (!StringUtil::CharacterIsSpace(buf[pos]) || input_state.escaped) {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
@@ -662,6 +666,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 				if (!input_state.escaped) {
 					set_escaped = true;
 				}
+				end_pos = pos;
 			} else if (!StringUtil::CharacterIsSpace(buf[pos]) || input_state.escaped) {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
