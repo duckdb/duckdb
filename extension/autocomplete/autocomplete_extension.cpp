@@ -47,7 +47,10 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 	for (idx_t i = 0; i < available_suggestions.size(); i++) {
 		auto &suggestion = available_suggestions[i];
 		const int32_t BASE_SCORE = 10;
-		auto &str = suggestion.candidate;
+		auto str = suggestion.candidate;
+		if (suggestion.extra_char != '\0') {
+			str += suggestion.extra_char;
+		}
 		auto bonus = suggestion.score_bonus;
 		if (matches.find(str) != matches.end()) {
 			// entry already exists
