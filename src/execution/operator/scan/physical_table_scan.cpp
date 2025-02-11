@@ -4,8 +4,9 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 #include "duckdb/transaction/transaction.hpp"
-
+#include "duckdb/function/table/table_scan.hpp"
 #include <utility>
+#include <iostream>
 
 namespace duckdb {
 
@@ -19,6 +20,13 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
       table_filters(std::move(table_filters_p)), extra_info(extra_info), parameters(std::move(parameters_p)) {
+}
+
+PhysicalTableScan::~PhysicalTableScan() {
+	if (dynamic_filters && dynamic_filters->HasBloomFilters()) {
+		auto &bd = bind_data->Cast<TableScanBindData>();
+		std::cout << "    \"bloom_filter_on\": \"" << bd.table.name << "\"," << std::endl;
+	}
 }
 
 class TableScanGlobalSourceState : public GlobalSourceState {

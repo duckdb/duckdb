@@ -29,6 +29,8 @@ public:
 	                  vector<string> names, unique_ptr<TableFilterSet> table_filters, idx_t estimated_cardinality,
 	                  ExtraOperatorInfo extra_info, vector<Value> parameters);
 
+	~PhysicalTableScan();
+
 	//! The table function
 	TableFunction function;
 	//! Bind data of the function
