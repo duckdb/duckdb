@@ -5,6 +5,8 @@ using Test
 using Dates
 using FixedPointDecimals
 using UUIDs
+using LinearAlgebra
+using Aqua
 
 test_files = [
     "test_appender.jl",
@@ -43,3 +45,6 @@ for fname in test_files
     println(fname)
     include(fname)
 end
+
+# Perform Package Quality Tests
+Aqua.test_all(DuckDB, unbound_args = false, stale_deps = false)
