@@ -623,6 +623,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 		pos++;
 		SkipWhitespace(input_state);
 		while (pos < len && ((buf[pos] != ',' && buf[pos] != '}') || input_state.escaped)) {
+			bool set_escaped = false;
 			if (buf[pos] == '"' || buf[pos] == '\'') {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
@@ -659,7 +660,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 					start_pos = pos;
 				}
 				if (!input_state.escaped) {
-					input_state.escaped = true;
+					set_escaped = true;
 				}
 			} else if (!StringUtil::CharacterIsSpace(buf[pos]) || input_state.escaped) {
 				if (!start_pos.IsValid()) {
@@ -668,6 +669,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 				end_pos = pos;
 			}
 			pos++;
+			input_state.escaped = set_escaped;
 		}
 		if (pos == len) {
 			return false;
