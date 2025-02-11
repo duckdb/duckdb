@@ -813,8 +813,6 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 				//gstate.bloom_filter = info.dynamic_filters->GetPtrToLastBf(op);
 				//BuildAndPushBloomFilter(info, ht, op, column_ids);
 			//}
-		} else {
-			Logger::Info(context, "Not building a Bloom-filter because the number of rows on the build side %u is smaller than the threshold %u", ht.Count(), dynamic_or_filter_threshold);
 		}
 	}
 
