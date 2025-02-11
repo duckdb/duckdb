@@ -239,8 +239,7 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 	}
 }
 
-MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(const std::string *key) {
-	context = duckdb::make_uniq<mbedtls_cipher_context_t>();
+MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(const std::string *key) : context(duckdb::make_uniq<mbedtls_cipher_context_t>()) {
 	mbedtls_cipher_init(context.get());
 
 	auto cipher_info = GetCipher(key->length());
