@@ -207,7 +207,6 @@ jobs:
     strategy:
       matrix:
         duckdb_arch: [linux_amd64_musl]
-        vcpkg_triplet: [x64-linux]
     uses: ./.github/workflows/_sign_deploy_extensions.yml
     secrets: inherit
     with:
@@ -249,7 +248,6 @@ jobs:
     strategy:
       matrix:
         duckdb_arch: [linux_arm64]
-        vcpkg_triplet: [arm64-linux]
     uses: ./.github/workflows/_sign_deploy_extensions.yml
     secrets: inherit
     with:
