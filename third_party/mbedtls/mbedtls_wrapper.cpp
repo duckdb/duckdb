@@ -210,44 +210,33 @@ const mbedtls_cipher_info_t *mbedtls_aes_info_cipher(mbedtls_cipher_type_t ciphe
 }
 
 const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t key_len){
-	mbedtls_cipher_type_t cipher_type;
 
 	switch(algorithm){
 		case GCM:
 		    switch (key_len) {
 		    case 16:
-			    cipher_type = MBEDTLS_CIPHER_AES_128_GCM;
-			    break;
+			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_128_GCM);
 		    case 24:
-			    cipher_type = MBEDTLS_CIPHER_AES_192_GCM;
-			    break;
+			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_192_GCM);
 		    case 32:
-			    cipher_type = MBEDTLS_CIPHER_AES_256_GCM;
-			    break;
+			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_256_GCM);
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
-		    break;
 		case CTR:
 		    switch (key_len) {
 		    case 16:
-			    cipher_type = MBEDTLS_CIPHER_AES_128_CTR;
-			    break;
+			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_128_CTR);
 		    case 24:
-			    cipher_type = MBEDTLS_CIPHER_AES_192_CTR;
-			    break;
+			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_192_CTR);
 		    case 32:
-			    cipher_type = MBEDTLS_CIPHER_AES_256_CTR;
-			    break;
+			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_256_CTR);
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
-		    break;
 		default:
 			throw duckdb::InternalException("Invalid Encryption/Decryption Algorithm: %d", static_cast<int>(algorithm));
 	}
-
-	return mbedtls_aes_info_cipher(cipher_type);
 }
 
 MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(const std::string *key) {
