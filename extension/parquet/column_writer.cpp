@@ -816,7 +816,7 @@ struct BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
-	static idx_t GetRowSize(const Vector &, idx_t ) {
+	static idx_t GetRowSize(const Vector &, idx_t) {
 		return sizeof(TGT);
 	}
 };
