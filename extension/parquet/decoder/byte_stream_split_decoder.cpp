@@ -21,7 +21,7 @@ void ByteStreamSplitDecoder::Read(uint8_t *defines, idx_t read_count, Vector &re
 
 	auto &allocator = reader.reader.allocator;
 	decoded_data_buffer.reset();
-	switch (reader.schema.type) {
+	switch (reader.Schema().parquet_type) {
 	case duckdb_parquet::Type::FLOAT:
 		decoded_data_buffer.resize(allocator, sizeof(float) * valid_count);
 		bss_decoder->GetBatch<float>(decoded_data_buffer.ptr, valid_count);
@@ -39,7 +39,7 @@ void ByteStreamSplitDecoder::Read(uint8_t *defines, idx_t read_count, Vector &re
 
 void ByteStreamSplitDecoder::Skip(uint8_t *defines, idx_t skip_count) {
 	idx_t valid_count = reader.GetValidCount(defines, skip_count);
-	switch (reader.schema.type) {
+	switch (reader.Schema().parquet_type) {
 	case duckdb_parquet::Type::FLOAT:
 		bss_decoder->Skip<float>(valid_count);
 		break;

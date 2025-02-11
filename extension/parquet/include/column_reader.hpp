@@ -20,6 +20,7 @@
 #include "decoder/rle_decoder.hpp"
 #include "decoder/delta_length_byte_array_decoder.hpp"
 #include "decoder/delta_byte_array_decoder.hpp"
+#include "parquet_column_schema.hpp"
 #ifndef DUCKDB_AMALGAMATION
 
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -60,14 +61,11 @@ class ColumnReader {
 	friend class RLEDecoder;
 
 public:
-	ColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t file_idx_p,
-	             idx_t max_define_p, idx_t max_repeat_p);
+	ColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema_p);
 	virtual ~ColumnReader();
 
 public:
-	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const LogicalType &type_p,
-	                                             const SchemaElement &schema_p, idx_t schema_idx_p, idx_t max_define,
-	                                             idx_t max_repeat);
+	static unique_ptr<ColumnReader> CreateReader(ParquetReader &reader, const ParquetColumnSchema &schema);
 	virtual void InitializeRead(idx_t row_group_index, const vector<ColumnChunk> &columns, TProtocol &protocol_p);
 	virtual idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out);
 	virtual void Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result_out,
@@ -78,14 +76,22 @@ public:
 	virtual void Skip(idx_t num_values);
 
 	ParquetReader &Reader();
-	const LogicalType &Type() const;
-	const SchemaElement &Schema() const;
-	optional_ptr<const SchemaElement> GetParentSchema() const;
-	void SetParentSchema(const SchemaElement &parent_schema);
+	const LogicalType &Type() const {
+		return column_schema.type;
+	}
+	const ParquetColumnSchema &Schema() const {
+		return column_schema;
+	}
 
-	idx_t FileIdx() const;
-	idx_t MaxDefine() const;
-	idx_t MaxRepeat() const;
+	inline idx_t ColumnIndex() const {
+		return column_schema.column_index;
+	}
+	inline idx_t MaxDefine() const {
+		return column_schema.max_define;
+	}
+	idx_t MaxRepeat() const {
+		return column_schema.max_repeat;
+	}
 
 	virtual idx_t FileOffset() const;
 	virtual uint64_t TotalCompressedSize();
@@ -94,7 +100,7 @@ public:
 	// register the range this reader will touch for prefetching
 	virtual void RegisterPrefetch(ThriftFileTransport &transport, bool allow_merge);
 
-	virtual unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
+	unique_ptr<BaseStatistics> Stats(idx_t row_group_idx_p, const vector<ColumnChunk> &columns);
 
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES>
 	void PlainTemplatedDefines(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values, idx_t result_offset,
@@ -141,7 +147,7 @@ public:
 		}
 		idx_t valid_count = 0;
 		for (idx_t i = offset; i < offset + count; i++) {
-			valid_count += defines[i] == max_define;
+			valid_count += defines[i] == MaxDefine();
 		}
 		return valid_count;
 	}
@@ -177,7 +183,7 @@ private:
 		}
 		auto &result_mask = FlatVector::Validity(result);
 		for (idx_t row_idx = result_offset; row_idx < result_offset + num_values; row_idx++) {
-			if (HAS_DEFINES && defines[row_idx] != max_define) {
+			if (HAS_DEFINES && defines[row_idx] != MaxDefine()) {
 				result_mask.SetInvalid(row_idx);
 				continue;
 			}
@@ -193,7 +199,7 @@ private:
 			return;
 		}
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {
-			if (HAS_DEFINES && defines[row_idx] != max_define) {
+			if (HAS_DEFINES && defines[row_idx] != MaxDefine()) {
 				continue;
 			}
 			CONVERSION::template PlainSkip<CHECKED>(plain_data, *this);
@@ -211,25 +217,18 @@ protected:
 	// applies any skips that were registered using Skip()
 	virtual void ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_out);
 
-	bool HasDefines() const {
-		return max_define > 0;
+	inline bool HasDefines() const {
+		return MaxDefine() > 0;
 	}
 
-	bool HasRepeats() const {
-		return max_repeat > 0;
+	inline bool HasRepeats() const {
+		return MaxRepeat() > 0;
 	}
 
 protected:
-	const SchemaElement &schema;
-	optional_ptr<const SchemaElement> parent_schema;
-
-	idx_t file_idx;
-	idx_t max_define;
-	idx_t max_repeat;
+	const ParquetColumnSchema &column_schema;
 
 	ParquetReader &reader;
-	LogicalType type;
-
 	idx_t pending_skips = 0;
 	bool page_is_filtered_out = false;
 
@@ -271,7 +270,7 @@ private:
 public:
 	template <class TARGET>
 	TARGET &Cast() {
-		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
+		if (TARGET::TYPE != PhysicalType::INVALID && Type().InternalType() != TARGET::TYPE) {
 			throw InternalException("Failed to cast column reader to type - type mismatch");
 		}
 		return reinterpret_cast<TARGET &>(*this);
@@ -279,7 +278,7 @@ public:
 
 	template <class TARGET>
 	const TARGET &Cast() const {
-		if (TARGET::TYPE != PhysicalType::INVALID && type.InternalType() != TARGET::TYPE) {
+		if (TARGET::TYPE != PhysicalType::INVALID && Type().InternalType() != TARGET::TYPE) {
 			throw InternalException("Failed to cast column reader to type - type mismatch");
 		}
 		return reinterpret_cast<const TARGET &>(*this);

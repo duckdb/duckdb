@@ -5,12 +5,10 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Struct Column Reader
 //===--------------------------------------------------------------------===//
-StructColumnReader::StructColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p,
-                                       idx_t schema_idx_p, idx_t max_define_p, idx_t max_repeat_p,
+StructColumnReader::StructColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema,
                                        vector<unique_ptr<ColumnReader>> child_readers_p)
-    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p),
-      child_readers(std::move(child_readers_p)) {
-	D_ASSERT(type.InternalType() == PhysicalType::STRUCT);
+    : ColumnReader(reader, schema), child_readers(std::move(child_readers_p)) {
+	D_ASSERT(Type().InternalType() == PhysicalType::STRUCT);
 }
 
 ColumnReader &StructColumnReader::GetChildReader(idx_t child_idx) {
@@ -61,7 +59,7 @@ idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_
 	// set the validity mask for this level
 	auto &validity = FlatVector::Validity(result);
 	for (idx_t i = 0; i < read_count.GetIndex(); i++) {
-		if (define_out[i] < max_define) {
+		if (define_out[i] < MaxDefine()) {
 			validity.SetInvalid(i);
 		}
 	}
