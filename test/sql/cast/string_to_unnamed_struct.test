@@ -61,6 +61,6 @@ select $${'a': [1,2,3],'b':}$$::STRUCT(a INTEGER[], b VARCHAR)
 {'a': [1, 2, 3], 'b': }
 
 query I
-select $$[("  test  "), {'a': (\\  test  \\)}]$$::STRUCT(a VARCHAR)[]
+select $$[(("  test  ")), {'a': (\\  test  \\)}]$$::STRUCT(a STRUCT("inner" VARCHAR))[]
 ----
-[{'a':   test  }, {'a': (\\  test  \\)}]
+[{'a': {'inner':   test  }}, {'a': {'inner': \  test  \}}]
