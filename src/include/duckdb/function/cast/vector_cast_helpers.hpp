@@ -180,6 +180,93 @@ struct VectorCastHelpers {
 			throw InternalException("Unimplemented internal type for decimal");
 		}
 	}
+
+	static idx_t CalculateEscapedStringLength(const string_t &string, const char *special_chars,
+	                                          idx_t special_chars_length) {
+		auto base_length = string.GetSize();
+		idx_t length = base_length;
+		auto string_data = string.GetData();
+
+		if (base_length >= 1) {
+			if (isspace(string_data[0])) {
+				length++;
+			}
+			if (isspace(string_data[base_length - 1])) {
+				length++;
+			}
+		}
+
+		for (idx_t i = 0; i < base_length; i++) {
+			auto special_character = memchr(special_chars, string_data[i], special_chars_length);
+			length += (special_character != nullptr);
+		}
+		return length;
+	}
+
+	static idx_t CalculateStringLength(const string_t &string, const char *special_chars, idx_t special_chars_length) {
+		return string.GetSize();
+	}
+
+	static idx_t WriteEscapedString(void *dest, const string_t &string, const char *special_chars,
+	                                idx_t special_chars_length) {
+		auto base_length = string.GetSize();
+
+		auto string_start = string.GetData();
+		const auto string_end = reinterpret_cast<const void *>(string_start + base_length);
+		auto string_data = string_start;
+
+		idx_t dest_offset = 0;
+		if (base_length >= 1) {
+			if (isspace(string_data[0])) {
+				memset(reinterpret_cast<char *>(dest) + dest_offset, '\\', 1);
+				dest_offset++;
+			}
+		}
+
+		while (string_data < string_end) {
+			const void *write_end = nullptr;
+			for (idx_t j = 0; j < special_chars_length; j++) {
+				auto res = memchr(string_data, special_chars[j],
+				                  UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(string_end) - string_data));
+				if (res && (!write_end || res < write_end)) {
+					write_end = res;
+				}
+			}
+			if (!write_end) {
+				write_end = string_end;
+				auto length = UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(write_end) - string_data);
+				memcpy(reinterpret_cast<char *>(dest) + dest_offset, string_data, length);
+				dest_offset += length;
+				break;
+			}
+
+			auto length = UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(write_end) - string_data);
+			memcpy(reinterpret_cast<char *>(dest) + dest_offset, string_data, length);
+			memset(reinterpret_cast<char *>(dest) + dest_offset + length, '\\', 1);
+			memcpy(reinterpret_cast<char *>(dest) + dest_offset + length + 1, write_end, 1);
+			dest_offset += length + 2;
+			string_data = reinterpret_cast<const char *>(write_end) + 1;
+		}
+
+		if (base_length >= 1) {
+			//! Replace ' ' with '\ '
+			if (isspace(string_start[base_length - 1])) {
+				auto character = reinterpret_cast<const unsigned char *>(dest)[dest_offset - 1];
+				memset(reinterpret_cast<char *>(dest) + dest_offset - 1, '\\', 1);
+				memset(reinterpret_cast<char *>(dest) + dest_offset, character, 1);
+				dest_offset++;
+			}
+		}
+
+		return dest_offset;
+	}
+
+	static idx_t WriteString(void *dest, const string_t &string, const char *special_chars,
+	                         idx_t special_chars_length) {
+		auto len = string.GetSize();
+		memcpy(dest, string.GetData(), len);
+		return len;
+	}
 };
 
 struct VectorStringToList {

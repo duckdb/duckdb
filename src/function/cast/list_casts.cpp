@@ -70,94 +70,6 @@ bool ListCast::ListToListCast(Vector &source, Vector &result, idx_t count, CastP
 	return all_succeeded;
 }
 
-static idx_t CalculateEscapedStringLength(const string_t &string) {
-	auto base_length = string.GetSize();
-	idx_t length = base_length;
-	auto string_data = string.GetData();
-
-	constexpr const char SPECIAL_CHARACTERS[] = "[]\"',\\";
-
-	if (base_length >= 1) {
-		if (isspace(string_data[0])) {
-			length++;
-		}
-		if (isspace(string_data[base_length - 1])) {
-			length++;
-		}
-	}
-
-	for (idx_t i = 0; i < base_length; i++) {
-		auto special_character = memchr(SPECIAL_CHARACTERS, string_data[i], sizeof(SPECIAL_CHARACTERS));
-		length += (special_character != nullptr);
-	}
-	return length;
-}
-
-static inline idx_t CalculateStringLengthRegular(const string_t &string) {
-	return string.GetSize();
-}
-
-static idx_t WriteEscapedString(void *dest, const string_t &string) {
-	auto base_length = string.GetSize();
-
-	auto string_start = string.GetData();
-	const auto string_end = reinterpret_cast<const void *>(string_start + base_length);
-	auto string_data = string_start;
-
-	constexpr const char SPECIAL_CHARACTERS[] = "[]\"',\\";
-
-	idx_t dest_offset = 0;
-	if (base_length >= 1) {
-		if (isspace(string_data[0])) {
-			memset(reinterpret_cast<char *>(dest) + dest_offset, '\\', 1);
-			dest_offset++;
-		}
-	}
-
-	while (string_data < string_end) {
-		const void *write_end = nullptr;
-		for (idx_t j = 0; j < sizeof(SPECIAL_CHARACTERS); j++) {
-			auto res = memchr(string_data, SPECIAL_CHARACTERS[j],
-			                  UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(string_end) - string_data));
-			if (res && (!write_end || res < write_end)) {
-				write_end = res;
-			}
-		}
-		if (!write_end) {
-			write_end = string_end;
-			auto length = UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(write_end) - string_data);
-			memcpy(reinterpret_cast<char *>(dest) + dest_offset, string_data, length);
-			dest_offset += length;
-			break;
-		}
-
-		auto length = UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(write_end) - string_data);
-		memcpy(reinterpret_cast<char *>(dest) + dest_offset, string_data, length);
-		memset(reinterpret_cast<char *>(dest) + dest_offset + length, '\\', 1);
-		memcpy(reinterpret_cast<char *>(dest) + dest_offset + length + 1, write_end, 1);
-		dest_offset += length + 2;
-		string_data = reinterpret_cast<const char *>(write_end) + 1;
-	}
-
-	if (base_length >= 1) {
-		//! Replace ' ' with '\ '
-		if (isspace(string_start[base_length - 1])) {
-			auto character = reinterpret_cast<const unsigned char *>(dest)[dest_offset - 1];
-			memset(reinterpret_cast<char *>(dest) + dest_offset - 1, '\\', 1);
-			memset(reinterpret_cast<char *>(dest) + dest_offset, character, 1);
-			dest_offset++;
-		}
-	}
-
-	return dest_offset;
-}
-
-static idx_t WriteStringRegular(void *dest, const string_t &string) {
-	auto len = string.GetSize();
-	memcpy(dest, string.GetData(), len);
-	return len;
-}
-
 static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast the child vector to varchar
@@ -166,8 +78,9 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 
 	auto &child_vec = ListVector::GetEntry(source);
 	auto child_is_nested = child_vec.GetType().IsNested();
-	auto string_length_func = child_is_nested ? CalculateStringLengthRegular : CalculateEscapedStringLength;
-	auto write_string_func = child_is_nested ? WriteStringRegular : WriteEscapedString;
+	auto string_length_func =
+	    child_is_nested ? VectorCastHelpers::CalculateStringLength : VectorCastHelpers::CalculateEscapedStringLength;
+	auto write_string_func = child_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString;
 
 	// now construct the actual varchar vector
 	varchar_list.Flatten(count);
@@ -178,6 +91,8 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	child.Flatten(ListVector::GetListSize(varchar_list));
 	auto child_data = FlatVector::GetData<string_t>(child);
 	auto &child_validity = FlatVector::Validity(child);
+
+	constexpr const char SPECIAL_CHARACTERS[] = "[]\"',\\";
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	static constexpr const idx_t SEP_LENGTH = 2;
@@ -197,7 +112,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 			}
 			// string length, or "NULL"
 			if (child_validity.RowIsValid(idx)) {
-				list_length += string_length_func(child_data[idx]);
+				list_length += string_length_func(child_data[idx], SPECIAL_CHARACTERS, sizeof(SPECIAL_CHARACTERS));
 			} else {
 				list_length += NULL_LENGTH;
 			}
@@ -213,7 +128,8 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 				offset += SEP_LENGTH;
 			}
 			if (child_validity.RowIsValid(idx)) {
-				offset += write_string_func(dataptr + offset, child_data[idx]);
+				offset += write_string_func(dataptr + offset, child_data[idx], SPECIAL_CHARACTERS,
+				                            sizeof(SPECIAL_CHARACTERS));
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;
