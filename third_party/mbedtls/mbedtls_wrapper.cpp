@@ -8,6 +8,7 @@
 #include "mbedtls/pk.h"
 #include "mbedtls/sha1.h"
 #include "mbedtls/sha256.h"
+#include "mbedtls/cipher.h"
 
 #ifdef MBEDTLS_NO_ENTROPY_SOURCE
 #include "duckdb/common/random_engine.hpp"
@@ -204,52 +205,68 @@ void MbedTlsWrapper::SHA1State::FinishHex(char *out) {
 	MbedTlsWrapper::ToBase16(const_cast<char *>(hash.c_str()), out, MbedTlsWrapper::SHA1_HASH_LENGTH_BYTES);
 }
 
-mbedtls_cipher_type_t MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t key_len){
+const mbedtls_cipher_info_t *mbedtls_aes_info_cipher(mbedtls_cipher_type_t cipher) {
+	return mbedtls_cipher_info_from_type(cipher);
+}
+
+const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t key_len){
+	mbedtls_cipher_type_t cipher_type;
 
 	switch(algorithm){
 		case GCM:
 		    switch (key_len) {
 		    case 16:
-			    return MBEDTLS_CIPHER_AES_128_GCM;
+			    cipher_type = MBEDTLS_CIPHER_AES_128_GCM;
+			    break;
 		    case 24:
-			    return MBEDTLS_CIPHER_AES_192_GCM;
+			    cipher_type = MBEDTLS_CIPHER_AES_192_GCM;
+			    break;
 		    case 32:
-			    return MBEDTLS_CIPHER_AES_256_GCM;
+			    cipher_type = MBEDTLS_CIPHER_AES_256_GCM;
+			    break;
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
+		    break;
 		case CTR:
 		    switch (key_len) {
 		    case 16:
-			    return MBEDTLS_CIPHER_AES_128_CTR;
+			    cipher_type = MBEDTLS_CIPHER_AES_128_CTR;
+			    break;
 		    case 24:
-			    return MBEDTLS_CIPHER_AES_192_CTR;
+			    cipher_type = MBEDTLS_CIPHER_AES_192_CTR;
+			    break;
 		    case 32:
-			    return MBEDTLS_CIPHER_AES_256_CTR;
+			    cipher_type = MBEDTLS_CIPHER_AES_256_CTR;
+			    break;
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
+		    break;
 		default:
 			throw duckdb::InternalException("Invalid Encryption/Decryption Algorithm: %d", static_cast<int>(algorithm));
 	}
+
+	return mbedtls_aes_info_cipher(cipher_type);
 }
 
 MbedTlsWrapper::AESStateMBEDTLS::AESStateMBEDTLS(const std::string *key) {
 
-	mbedtls_cipher_init(&context);
+	context = new mbedtls_cipher_context_t();
+	mbedtls_cipher_init(context);
 
-	auto cipher_info = mbedtls_cipher_info_from_type(GetCipher(key->length()));
+	auto cipher_info = GetCipher(key->length());
 	if (!cipher_info) {
-		runtime_error("Failed to get cipher info");
+		runtime_error("Failed to get Cipher");
 	}
 
-	if (mbedtls_cipher_setup(&context, cipher_info) != 0) {
+	if (mbedtls_cipher_setup(context, cipher_info) != 0) {
 		runtime_error("Failed to initialize cipher context");
 	}
 }
 
 MbedTlsWrapper::AESStateMBEDTLS::~AESStateMBEDTLS() {
-	mbedtls_cipher_free(&context);
+	mbedtls_cipher_free(context);
 }
 
 
@@ -284,11 +301,11 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeEncryption(duckdb::const_data_pt
 
 	mode = ENCRYPT;
 
-	if (mbedtls_cipher_setkey(&context, reinterpret_cast<const unsigned char *>(key->data()), key->length() * 8, MBEDTLS_ENCRYPT) != 0) {
+	if (mbedtls_cipher_setkey(context, reinterpret_cast<const unsigned char *>(key->data()), key->length() * 8, MBEDTLS_ENCRYPT) != 0) {
 		runtime_error("Failed to set AES key for encryption");
 	}
 
-	if (mbedtls_cipher_set_iv(&context, iv, iv_len) != 0) {
+	if (mbedtls_cipher_set_iv(context, iv, iv_len) != 0) {
 		runtime_error("Failed to set IV for encryption");
 	}
 }
@@ -297,11 +314,11 @@ void MbedTlsWrapper::AESStateMBEDTLS::InitializeDecryption(duckdb::const_data_pt
 
 	mode = DECRYPT;
 
-	if (mbedtls_cipher_setkey(&context, reinterpret_cast<const unsigned char *>(key->data()), key->length() * 8, MBEDTLS_DECRYPT) != 0) {
+	if (mbedtls_cipher_setkey(context, reinterpret_cast<const unsigned char *>(key->data()), key->length() * 8, MBEDTLS_DECRYPT) != 0) {
 		runtime_error("Failed to set AES key for decryption");
 	}
 
-	if (mbedtls_cipher_set_iv(&context, iv, iv_len) != 0) {
+	if (mbedtls_cipher_set_iv(context, iv, iv_len) != 0) {
 		runtime_error("Failed to set IV for decryption");
 	}
 }
@@ -310,7 +327,7 @@ size_t MbedTlsWrapper::AESStateMBEDTLS::Process(duckdb::const_data_ptr_t in, duc
                                                    duckdb::idx_t out_len) {
 
 	size_t result;
-	if (mbedtls_cipher_update(&context, reinterpret_cast<const unsigned char *>(in), in_len, out,
+	if (mbedtls_cipher_update(context, reinterpret_cast<const unsigned char *>(in), in_len, out,
 	                      &result) != 0) {
 			runtime_error("Encryption or Decryption failed at Process");
 		};
@@ -322,20 +339,20 @@ size_t MbedTlsWrapper::AESStateMBEDTLS::Finalize(duckdb::data_ptr_t out, duckdb:
                                                     duckdb::idx_t tag_len) {
 
 	size_t result = out_len;
-	mbedtls_cipher_finish(&context, out, &result);
+	mbedtls_cipher_finish(context, out, &result);
 
 	if (algorithm == GCM) {
 
 		switch (mode) {
 		case ENCRYPT: {
-			if (mbedtls_cipher_write_tag(&context, tag, tag_len) != 0) {
+			if (mbedtls_cipher_write_tag(context, tag, tag_len) != 0) {
 				runtime_error("Writing tag failed");
 			}
 			break;
 		}
 
 		case DECRYPT: {
-			if (mbedtls_cipher_check_tag(&context, tag, tag_len) != 0) {
+			if (mbedtls_cipher_check_tag(context, tag, tag_len) != 0) {
 				throw duckdb::InvalidInputException(
 				    "Computed AES tag differs from read AES tag, are you using the right key?");
 			}

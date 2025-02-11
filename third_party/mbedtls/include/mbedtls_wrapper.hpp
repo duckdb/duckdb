@@ -12,10 +12,10 @@
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/encryption_state.hpp"
 
-#include <mbedtls/aes.h>
-#include <mbedtls/cipher.h>
-
 #include <string>
+
+typedef struct mbedtls_cipher_context_t mbedtls_cipher_context_t;
+typedef struct mbedtls_cipher_info_t mbedtls_cipher_info_t;
 
 namespace duckdb_mbedtls {
 
@@ -72,13 +72,13 @@ class AESStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API void GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) override;
 		DUCKDB_API const std::string GetLib();
 
-		DUCKDB_API mbedtls_cipher_type_t GetCipher(size_t key_len);
+		DUCKDB_API const mbedtls_cipher_info_t *GetCipher(size_t key_len);
 
 	private:
 		Mode mode;
 		// default is GCM
 		Algorithm algorithm = GCM;
-		mbedtls_cipher_context_t context;
+		mbedtls_cipher_context_t *context;
 	};
 
 	class AESStateMBEDTLSFactory : public duckdb::EncryptionUtil {
