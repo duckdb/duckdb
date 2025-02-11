@@ -93,6 +93,10 @@ static idx_t CalculateEscapedStringLength(const string_t &string) {
 	return length;
 }
 
+static inline idx_t CalculateStringLengthRegular(const string_t &string) {
+	return string.GetSize();
+}
+
 static idx_t WriteEscapedString(void *dest, const string_t &string) {
 	auto base_length = string.GetSize();
 
@@ -148,11 +152,22 @@ static idx_t WriteEscapedString(void *dest, const string_t &string) {
 	return dest_offset;
 }
 
+static idx_t WriteStringRegular(void *dest, const string_t &string) {
+	auto len = string.GetSize();
+	memcpy(dest, string.GetData(), len);
+	return len;
+}
+
 static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto constant = source.GetVectorType() == VectorType::CONSTANT_VECTOR;
 	// first cast the child vector to varchar
 	Vector varchar_list(LogicalType::LIST(LogicalType::VARCHAR), count);
 	ListCast::ListToListCast(source, varchar_list, count, parameters);
+
+	auto &child_vec = ListVector::GetEntry(source);
+	auto child_is_nested = child_vec.GetType().IsNested();
+	auto string_length_func = child_is_nested ? CalculateStringLengthRegular : CalculateEscapedStringLength;
+	auto write_string_func = child_is_nested ? WriteStringRegular : WriteEscapedString;
 
 	// now construct the actual varchar vector
 	varchar_list.Flatten(count);
@@ -182,7 +197,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 			}
 			// string length, or "NULL"
 			if (child_validity.RowIsValid(idx)) {
-				list_length += CalculateEscapedStringLength(child_data[idx]);
+				list_length += string_length_func(child_data[idx]);
 			} else {
 				list_length += NULL_LENGTH;
 			}
@@ -198,7 +213,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 				offset += SEP_LENGTH;
 			}
 			if (child_validity.RowIsValid(idx)) {
-				offset += WriteEscapedString(dataptr + offset, child_data[idx]);
+				offset += write_string_func(dataptr + offset, child_data[idx]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;
