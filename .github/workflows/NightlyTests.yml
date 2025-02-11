@@ -268,8 +268,8 @@ jobs:
        shell: bash
        run: |
          python --version
-         # https://stackoverflow.com/a/67389978
-         git ls-files --recurse-submodules | tar caf test-tarball.zip --verbatim-files-from -T-
+         # https://stackoverflow.com/a/67389978, but added -z and --null to handle unicode names
+         git ls-files -z --recurse-submodules | tar caf test-tarball.zip --null --verbatim-files-from -T-
          mkdir duckdb-test-tarball
          mv test-tarball.zip duckdb-test-tarball
          cd duckdb-test-tarball
