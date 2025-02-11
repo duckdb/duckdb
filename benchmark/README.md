@@ -2,7 +2,7 @@
 #### Clone the repo and compile the benchmark runner
 
 ```
-git clone https://github.com/duckdb/duckdb
+git clone --recurse-submodules https://github.com/duckdb/duckdb
 cd duckdb
 BUILD_BENCHMARK=1 BUILD_TPCH=1 make
 ```
