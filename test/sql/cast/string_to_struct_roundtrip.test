@@ -1,0 +1,51 @@
+# name: test/sql/cast/string_to_struct_roundtrip.test
+# group: [cast]
+
+query I
+select $${
+	a:{
+		b:{
+			b:300
+		},
+		c:12
+	},
+	c:{
+		a:"\{DuckParty\}"
+	}
+}$$::STRUCT(
+	a STRUCT(
+		b STRUCT(
+			a INT,
+			b VARCHAR
+		),
+		c INT
+	),
+	b INT,
+	c STRUCT(
+		a VARCHAR,
+		b STRUCT(
+			a INT
+		)
+	)
+)
+----
+{'a': {'b': {'a': NULL, 'b': 300}, 'c': 12}, 'b': NULL, 'c': {'a': \{DuckParty\}, 'b': NULL}}
+
+# Leading and trailing spaces in struct name
+query III
+select $${"  test  ": 42}$$::STRUCT("  test  " INTEGER) a, a::VARCHAR::STRUCT("  test  " INTEGER) b, a == b
+----
+{'\  test \ ': 42}	{'\  test \ ': 42}	true
+
+# Escaped quotes in struct name (double quote)
+query III
+select $${"  \"test\"  ": 42}$$::STRUCT("  ""test""  " INTEGER) a, a::VARCHAR::STRUCT("  ""test""  " INTEGER) b, a == b
+----
+{'\  \"test\" \ ': 42}	{'\  \"test\" \ ': 42}	true
+
+# Escaped quotes in struct name (single quote)
+query III
+select $${"  \'test\'  ": 42}$$::STRUCT("  'test'  " INTEGER) a, a::VARCHAR::STRUCT("  'test'  " INTEGER) b, a == b
+----
+{'\  \'test\' \ ': 42}	{'\  \'test\' \ ': 42}	true
+
