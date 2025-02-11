@@ -24,5 +24,5 @@ select $$["  \"abc\"  ", def, ghi]$$::VARCHAR[] a, a::VARCHAR, a::VARCHAR[]
 query III
 select $$[\  \\abc\\ \ , def, ghi]$$::VARCHAR[] a, a::VARCHAR, a::VARCHAR[]
 ----
-[\  \"abc\" \ , def, ghi]	[\  \"abc\" \ , def, ghi]	[\  \"abc\" \ , def, ghi]
+[\  \\abc\\ \ , def, ghi]	[\  \\abc\\ \ , def, ghi]	[\  \\abc\\ \ , def, ghi]
 
