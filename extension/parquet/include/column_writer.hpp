@@ -15,7 +15,7 @@ namespace duckdb {
 class MemoryStream;
 class ParquetWriter;
 class ColumnWriterPageState;
-class BasicColumnWriterState;
+class PrimitiveColumnWriterState;
 struct ChildFieldIDs;
 class ResizeableBuffer;
 class ParquetBloomFilter;
@@ -51,6 +51,24 @@ public:
 	virtual string GetMax();
 	virtual string GetMinValue();
 	virtual string GetMaxValue();
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		D_ASSERT(dynamic_cast<const TARGET *>(this));
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
+class ColumnWriterPageState {
+public:
+	virtual ~ColumnWriterPageState() {
+	}
 
 public:
 	template <class TARGET>
