@@ -17,7 +17,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.047135,
+    "time": 0.049732,
   },
   {
     "name": "benchmark/imdb/01a.benchmark",
@@ -28,7 +28,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.04758,
+    "time": 0.049037,
   },
   {
     "name": "benchmark/imdb/01a.benchmark",
@@ -39,7 +39,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.047177,
+    "time": 0.048064,
   },
   {
     "name": "benchmark/imdb/01a.benchmark",
@@ -50,7 +50,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.047669,
+    "time": 0.047856,
   },
   {
     "name": "benchmark/imdb/01a.benchmark",
@@ -61,7 +61,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.047049,
+    "time": 0.049303,
   },
   {
     "name": "benchmark/imdb/01b.benchmark",
@@ -81,7 +81,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.025181,
+    "time": 0.02793,
   },
   {
     "name": "benchmark/imdb/01b.benchmark",
@@ -92,7 +92,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.024636,
+    "time": 0.026502,
   },
   {
     "name": "benchmark/imdb/01b.benchmark",
@@ -103,7 +103,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.024267,
+    "time": 0.025185,
   },
   {
     "name": "benchmark/imdb/01b.benchmark",
@@ -114,7 +114,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.024202,
+    "time": 0.025103,
   },
   {
     "name": "benchmark/imdb/01b.benchmark",
@@ -125,7 +125,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.024559,
+    "time": 0.024922,
   },
   {
     "name": "benchmark/imdb/01c.benchmark",
@@ -145,7 +145,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.023155,
+    "time": 0.023346,
   },
   {
     "name": "benchmark/imdb/01c.benchmark",
@@ -156,7 +156,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.022464,
+    "time": 0.023234,
   },
   {
     "name": "benchmark/imdb/01c.benchmark",
@@ -167,7 +167,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.022744,
+    "time": 0.022735,
   },
   {
     "name": "benchmark/imdb/01c.benchmark",
@@ -178,7 +178,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.022435,
+    "time": 0.022806,
   },
   {
     "name": "benchmark/imdb/01c.benchmark",
@@ -189,7 +189,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.022443,
+    "time": 0.022868,
   },
   {
     "name": "benchmark/imdb/01d.benchmark",
@@ -209,7 +209,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.029252,
+    "time": 0.030282,
   },
   {
     "name": "benchmark/imdb/01d.benchmark",
@@ -220,7 +220,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.029375,
+    "time": 0.029632,
   },
   {
     "name": "benchmark/imdb/01d.benchmark",
@@ -231,7 +231,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.02911,
+    "time": 0.029516,
   },
   {
     "name": "benchmark/imdb/01d.benchmark",
@@ -242,7 +242,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.028834,
+    "time": 0.030136,
   },
   {
     "name": "benchmark/imdb/01d.benchmark",
@@ -253,7 +253,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.029295,
+    "time": 0.029753,
   },
   {
     "name": "benchmark/imdb/02a.benchmark",
@@ -273,7 +273,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.121858,
+    "time": 0.122955,
   },
   {
     "name": "benchmark/imdb/02a.benchmark",
@@ -284,7 +284,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.122047,
+    "time": 0.122895,
   },
   {
     "name": "benchmark/imdb/02a.benchmark",
@@ -295,7 +295,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.122552,
+    "time": 0.123354,
   },
   {
     "name": "benchmark/imdb/02a.benchmark",
@@ -306,7 +306,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.121311,
+    "time": 0.122364,
   },
   {
     "name": "benchmark/imdb/02a.benchmark",
@@ -317,7 +317,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.121656,
+    "time": 0.123546,
   },
   {
     "name": "benchmark/imdb/02b.benchmark",
@@ -337,7 +337,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.119366,
+    "time": 0.118543,
   },
   {
     "name": "benchmark/imdb/02b.benchmark",
@@ -348,7 +348,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.120679,
+    "time": 0.117981,
   },
   {
     "name": "benchmark/imdb/02b.benchmark",
@@ -359,7 +359,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.119307,
+    "time": 0.118744,
   },
   {
     "name": "benchmark/imdb/02b.benchmark",
@@ -370,7 +370,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.120091,
+    "time": 0.118533,
   },
   {
     "name": "benchmark/imdb/02b.benchmark",
@@ -381,7 +381,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.119367,
+    "time": 0.118433,
   },
   {
     "name": "benchmark/imdb/02c.benchmark",
@@ -401,7 +401,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.035222,
+    "time": 0.034227,
   },
   {
     "name": "benchmark/imdb/02c.benchmark",
@@ -412,7 +412,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.035736,
+    "time": 0.034329,
   },
   {
     "name": "benchmark/imdb/02c.benchmark",
@@ -423,7 +423,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.034804,
+    "time": 0.033728,
   },
   {
     "name": "benchmark/imdb/02c.benchmark",
@@ -434,7 +434,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.034452,
+    "time": 0.033531,
   },
   {
     "name": "benchmark/imdb/02c.benchmark",
@@ -445,7 +445,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.034002,
+    "time": 0.03408,
   },
   {
     "name": "benchmark/imdb/02d.benchmark",
@@ -465,7 +465,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.122676,
+    "time": 0.123569,
   },
   {
     "name": "benchmark/imdb/02d.benchmark",
@@ -476,7 +476,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.1236,
+    "time": 0.122833,
   },
   {
     "name": "benchmark/imdb/02d.benchmark",
@@ -487,7 +487,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.122378,
+    "time": 0.122492,
   },
   {
     "name": "benchmark/imdb/02d.benchmark",
@@ -498,7 +498,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.122258,
+    "time": 0.122811,
   },
   {
     "name": "benchmark/imdb/02d.benchmark",
@@ -509,7 +509,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.122969,
+    "time": 0.122042,
   },
   {
     "name": "benchmark/imdb/03a.benchmark",
@@ -527,7 +527,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.614549,
+    "time": 0.423165,
   },
   {
     "name": "benchmark/imdb/03a.benchmark",
@@ -537,7 +537,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.409518,
+    "time": 0.40741,
   },
   {
     "name": "benchmark/imdb/03a.benchmark",
@@ -547,7 +547,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.405202,
+    "time": 0.412871,
   },
   {
     "name": "benchmark/imdb/03a.benchmark",
@@ -557,7 +557,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.40688,
+    "time": 0.406257,
   },
   {
     "name": "benchmark/imdb/03a.benchmark",
@@ -567,7 +567,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.404252,
+    "time": 0.410395,
   },
   {
     "name": "benchmark/imdb/03b.benchmark",
@@ -585,7 +585,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.191281,
+    "time": 0.182745,
   },
   {
     "name": "benchmark/imdb/03b.benchmark",
@@ -595,7 +595,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.188211,
+    "time": 0.180788,
   },
   {
     "name": "benchmark/imdb/03b.benchmark",
@@ -605,7 +605,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.188276,
+    "time": 0.181586,
   },
   {
     "name": "benchmark/imdb/03b.benchmark",
@@ -615,7 +615,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.190941,
+    "time": 0.18247,
   },
   {
     "name": "benchmark/imdb/03b.benchmark",
@@ -625,7 +625,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.199974,
+    "time": 0.181035,
   },
   {
     "name": "benchmark/imdb/03c.benchmark",
@@ -643,7 +643,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.483257,
+    "time": 0.495539,
   },
   {
     "name": "benchmark/imdb/03c.benchmark",
@@ -653,7 +653,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.481745,
+    "time": 0.488176,
   },
   {
     "name": "benchmark/imdb/03c.benchmark",
@@ -663,7 +663,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.694625,
+    "time": 0.537385,
   },
   {
     "name": "benchmark/imdb/03c.benchmark",
@@ -673,7 +673,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.484172,
+    "time": 0.483152,
   },
   {
     "name": "benchmark/imdb/03c.benchmark",
@@ -683,7 +683,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.480152,
+    "time": 0.489212,
   },
   {
     "name": "benchmark/imdb/04a.benchmark",
@@ -703,7 +703,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.147879,
+    "time": 0.156666,
   },
   {
     "name": "benchmark/imdb/04a.benchmark",
@@ -714,7 +714,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.151104,
+    "time": 0.148904,
   },
   {
     "name": "benchmark/imdb/04a.benchmark",
@@ -725,7 +725,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.150569,
+    "time": 0.149701,
   },
   {
     "name": "benchmark/imdb/04a.benchmark",
@@ -736,7 +736,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.146809,
+    "time": 0.987398,
   },
   {
     "name": "benchmark/imdb/04a.benchmark",
@@ -747,7 +747,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.146787,
+    "time": 0.234466,
   },
   {
     "name": "benchmark/imdb/04b.benchmark",
@@ -767,7 +767,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.068139,
+    "time": 0.072785,
   },
   {
     "name": "benchmark/imdb/04b.benchmark",
@@ -778,7 +778,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.067552,
+    "time": 0.07491,
   },
   {
     "name": "benchmark/imdb/04b.benchmark",
@@ -789,7 +789,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.066943,
+    "time": 0.069826,
   },
   {
     "name": "benchmark/imdb/04b.benchmark",
@@ -800,7 +800,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.067316,
+    "time": 0.069321,
   },
   {
     "name": "benchmark/imdb/04b.benchmark",
@@ -811,7 +811,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.068256,
+    "time": 0.06927,
   },
   {
     "name": "benchmark/imdb/04c.benchmark",
@@ -831,7 +831,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.243443,
+    "time": 0.250361,
   },
   {
     "name": "benchmark/imdb/04c.benchmark",
@@ -842,7 +842,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.246121,
+    "time": 0.247962,
   },
   {
     "name": "benchmark/imdb/04c.benchmark",
@@ -853,7 +853,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.250789,
+    "time": 0.246023,
   },
   {
     "name": "benchmark/imdb/04c.benchmark",
@@ -864,7 +864,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.242198,
+    "time": 0.245242,
   },
   {
     "name": "benchmark/imdb/04c.benchmark",
@@ -875,7 +875,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.244179,
+    "time": 0.246298,
   },
   {
     "name": "benchmark/imdb/05a.benchmark",
@@ -895,7 +895,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.118038,
+    "time": 0.112771,
   },
   {
     "name": "benchmark/imdb/05a.benchmark",
@@ -906,7 +906,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.1193,
+    "time": 0.117222,
   },
   {
     "name": "benchmark/imdb/05a.benchmark",
@@ -917,7 +917,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.119019,
+    "time": 0.115375,
   },
   {
     "name": "benchmark/imdb/05a.benchmark",
@@ -928,7 +928,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.117456,
+    "time": 0.113681,
   },
   {
     "name": "benchmark/imdb/05a.benchmark",
@@ -939,7 +939,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.118014,
+    "time": 0.11417,
   },
   {
     "name": "benchmark/imdb/05b.benchmark",
@@ -959,7 +959,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.100518,
+    "time": 0.094739,
   },
   {
     "name": "benchmark/imdb/05b.benchmark",
@@ -970,7 +970,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.101093,
+    "time": 0.093501,
   },
   {
     "name": "benchmark/imdb/05b.benchmark",
@@ -981,7 +981,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.09958,
+    "time": 0.095108,
   },
   {
     "name": "benchmark/imdb/05b.benchmark",
@@ -992,7 +992,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.102716,
+    "time": 0.094838,
   },
   {
     "name": "benchmark/imdb/05b.benchmark",
@@ -1003,7 +1003,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.100878,
+    "time": 0.094687,
   },
   {
     "name": "benchmark/imdb/05c.benchmark",
@@ -1023,7 +1023,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.494045,
+    "time": 0.509116,
   },
   {
     "name": "benchmark/imdb/05c.benchmark",
@@ -1034,7 +1034,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.486934,
+    "time": 0.490408,
   },
   {
     "name": "benchmark/imdb/05c.benchmark",
@@ -1045,7 +1045,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.492664,
+    "time": 0.488111,
   },
   {
     "name": "benchmark/imdb/05c.benchmark",
@@ -1056,7 +1056,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.489251,
+    "time": 0.487808,
   },
   {
     "name": "benchmark/imdb/05c.benchmark",
@@ -1067,7 +1067,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.491447,
+    "time": 0.492227,
   },
   {
     "name": "benchmark/imdb/06a.benchmark",
@@ -1087,7 +1087,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.345186,
+    "time": 0.346899,
   },
   {
     "name": "benchmark/imdb/06a.benchmark",
@@ -1098,7 +1098,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.343461,
+    "time": 0.342944,
   },
   {
     "name": "benchmark/imdb/06a.benchmark",
@@ -1109,7 +1109,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.339023,
+    "time": 0.340467,
   },
   {
     "name": "benchmark/imdb/06a.benchmark",
@@ -1120,7 +1120,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.341673,
+    "time": 0.343159,
   },
   {
     "name": "benchmark/imdb/06a.benchmark",
@@ -1131,7 +1131,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.340996,
+    "time": 0.343527,
   },
   {
     "name": "benchmark/imdb/06b.benchmark",
@@ -1151,7 +1151,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.181848,
+    "time": 0.184326,
   },
   {
     "name": "benchmark/imdb/06b.benchmark",
@@ -1162,7 +1162,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.182168,
+    "time": 0.189824,
   },
   {
     "name": "benchmark/imdb/06b.benchmark",
@@ -1173,7 +1173,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.18334,
+    "time": 0.189322,
   },
   {
     "name": "benchmark/imdb/06b.benchmark",
@@ -1184,7 +1184,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.183462,
+    "time": 0.183381,
   },
   {
     "name": "benchmark/imdb/06b.benchmark",
@@ -1195,7 +1195,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.18298,
+    "time": 0.181657,
   },
   {
     "name": "benchmark/imdb/06c.benchmark",
@@ -1215,7 +1215,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.177795,
+    "time": 0.176361,
   },
   {
     "name": "benchmark/imdb/06c.benchmark",
@@ -1226,7 +1226,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.175227,
+    "time": 0.176507,
   },
   {
     "name": "benchmark/imdb/06c.benchmark",
@@ -1237,7 +1237,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.176585,
+    "time": 0.177067,
   },
   {
     "name": "benchmark/imdb/06c.benchmark",
@@ -1248,7 +1248,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.177609,
+    "time": 0.178041,
   },
   {
     "name": "benchmark/imdb/06c.benchmark",
@@ -1259,7 +1259,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.177804,
+    "time": 0.176253,
   },
   {
     "name": "benchmark/imdb/06d.benchmark",
@@ -1279,7 +1279,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.278256,
+    "time": 0.465614,
   },
   {
     "name": "benchmark/imdb/06d.benchmark",
@@ -1290,7 +1290,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.282082,
+    "time": 0.281599,
   },
   {
     "name": "benchmark/imdb/06d.benchmark",
@@ -1301,7 +1301,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.27616,
+    "time": 0.283924,
   },
   {
     "name": "benchmark/imdb/06d.benchmark",
@@ -1312,7 +1312,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.278803,
+    "time": 0.2789,
   },
   {
     "name": "benchmark/imdb/06d.benchmark",
@@ -1323,7 +1323,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.277696,
+    "time": 0.27765,
   },
   {
     "name": "benchmark/imdb/06e.benchmark",
@@ -1343,7 +1343,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.363746,
+    "time": 0.359484,
   },
   {
     "name": "benchmark/imdb/06e.benchmark",
@@ -1354,7 +1354,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.355993,
+    "time": 0.355286,
   },
   {
     "name": "benchmark/imdb/06e.benchmark",
@@ -1365,7 +1365,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.360901,
+    "time": 0.359532,
   },
   {
     "name": "benchmark/imdb/06e.benchmark",
@@ -1376,7 +1376,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.35669,
+    "time": 0.359045,
   },
   {
     "name": "benchmark/imdb/06e.benchmark",
@@ -1387,7 +1387,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.364372,
+    "time": 0.359675,
   },
   {
     "name": "benchmark/imdb/06f.benchmark",
@@ -1407,7 +1407,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.759263,
+    "time": 0.776912,
   },
   {
     "name": "benchmark/imdb/06f.benchmark",
@@ -1418,7 +1418,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.747702,
+    "time": 0.768651,
   },
   {
     "name": "benchmark/imdb/06f.benchmark",
@@ -1429,7 +1429,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.749499,
+    "time": 0.762728,
   },
   {
     "name": "benchmark/imdb/06f.benchmark",
@@ -1440,7 +1440,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.758925,
+    "time": 0.807225,
   },
   {
     "name": "benchmark/imdb/06f.benchmark",
@@ -1451,7 +1451,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.759498,
+    "time": 0.763141,
   },
   {
     "name": "benchmark/imdb/07a.benchmark",
@@ -1477,7 +1477,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.141065,
+    "time": 0.159543,
   },
   {
     "name": "benchmark/imdb/07a.benchmark",
@@ -1491,7 +1491,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.14354,
+    "time": 0.159647,
   },
   {
     "name": "benchmark/imdb/07a.benchmark",
@@ -1505,7 +1505,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.174034,
+    "time": 0.160468,
   },
   {
     "name": "benchmark/imdb/07a.benchmark",
@@ -1519,7 +1519,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.162703,
+    "time": 0.14152,
   },
   {
     "name": "benchmark/imdb/07a.benchmark",
@@ -1533,7 +1533,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.150581,
+    "time": 0.148457,
   },
   {
     "name": "benchmark/imdb/07b.benchmark",
@@ -1559,7 +1559,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.074911,
+    "time": 0.070967,
   },
   {
     "name": "benchmark/imdb/07b.benchmark",
@@ -1573,7 +1573,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.072007,
+    "time": 0.070597,
   },
   {
     "name": "benchmark/imdb/07b.benchmark",
@@ -1587,7 +1587,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.07085,
+    "time": 0.07496,
   },
   {
     "name": "benchmark/imdb/07b.benchmark",
@@ -1601,7 +1601,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.071315,
+    "time": 0.071353,
   },
   {
     "name": "benchmark/imdb/07b.benchmark",
@@ -1615,7 +1615,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.069517,
+    "time": 0.072902,
   },
   {
     "name": "benchmark/imdb/07c.benchmark",
@@ -1641,7 +1641,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 1.13819,
+    "time": 1.59963,
   },
   {
     "name": "benchmark/imdb/07c.benchmark",
@@ -1655,7 +1655,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 1.01014,
+    "time": 0.864579,
   },
   {
     "name": "benchmark/imdb/07c.benchmark",
@@ -1669,7 +1669,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 1.01939,
+    "time": 1.02296,
   },
   {
     "name": "benchmark/imdb/07c.benchmark",
@@ -1683,7 +1683,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.868264,
+    "time": 1.25351,
   },
   {
     "name": "benchmark/imdb/07c.benchmark",
@@ -1697,7 +1697,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.868379,
+    "time": 0.852756,
   },
   {
     "name": "benchmark/imdb/08a.benchmark",
@@ -1721,7 +1721,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.271062,
+    "time": 0.266636,
   },
   {
     "name": "benchmark/imdb/08a.benchmark",
@@ -1734,7 +1734,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.282217,
+    "time": 0.266772,
   },
   {
     "name": "benchmark/imdb/08a.benchmark",
@@ -1747,7 +1747,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.288618,
+    "time": 0.266915,
   },
   {
     "name": "benchmark/imdb/08a.benchmark",
@@ -1760,7 +1760,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.279951,
+    "time": 0.265328,
   },
   {
     "name": "benchmark/imdb/08a.benchmark",
@@ -1773,7 +1773,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.278947,
+    "time": 0.267995,
   },
   {
     "name": "benchmark/imdb/08b.benchmark",
@@ -1797,7 +1797,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.281548,
+    "time": 0.258509,
   },
   {
     "name": "benchmark/imdb/08b.benchmark",
@@ -1810,7 +1810,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.283321,
+    "time": 0.26342,
   },
   {
     "name": "benchmark/imdb/08b.benchmark",
@@ -1823,7 +1823,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.284544,
+    "time": 0.25903,
   },
   {
     "name": "benchmark/imdb/08b.benchmark",
@@ -1836,7 +1836,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.286435,
+    "time": 0.260921,
   },
   {
     "name": "benchmark/imdb/08b.benchmark",
@@ -1849,7 +1849,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.283077,
+    "time": 0.261233,
   },
   {
     "name": "benchmark/imdb/08c.benchmark",
@@ -1873,7 +1873,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.49151,
+    "time": 0.503661,
   },
   {
     "name": "benchmark/imdb/08c.benchmark",
@@ -1886,7 +1886,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.486666,
+    "time": 0.50145,
   },
   {
     "name": "benchmark/imdb/08c.benchmark",
@@ -1899,7 +1899,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.516747,
+    "time": 0.504106,
   },
   {
     "name": "benchmark/imdb/08c.benchmark",
@@ -1912,7 +1912,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.492569,
+    "time": 0.497209,
   },
   {
     "name": "benchmark/imdb/08c.benchmark",
@@ -1925,7 +1925,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.495686,
+    "time": 0.502939,
   },
   {
     "name": "benchmark/imdb/08d.benchmark",
@@ -1949,7 +1949,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.204448,
+    "time": 0.2027,
   },
   {
     "name": "benchmark/imdb/08d.benchmark",
@@ -1962,7 +1962,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.204695,
+    "time": 0.20962,
   },
   {
     "name": "benchmark/imdb/08d.benchmark",
@@ -1975,7 +1975,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.207687,
+    "time": 0.212973,
   },
   {
     "name": "benchmark/imdb/08d.benchmark",
@@ -1988,7 +1988,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.208292,
+    "time": 0.204402,
   },
   {
     "name": "benchmark/imdb/08d.benchmark",
@@ -2001,7 +2001,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.207133,
+    "time": 0.205742,
   },
   {
     "name": "benchmark/imdb/09a.benchmark",
@@ -2027,7 +2027,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.427443,
+    "time": 0.417242,
   },
   {
     "name": "benchmark/imdb/09a.benchmark",
@@ -2041,7 +2041,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.420865,
+    "time": 0.420166,
   },
   {
     "name": "benchmark/imdb/09a.benchmark",
@@ -2055,7 +2055,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.425928,
+    "time": 0.420016,
   },
   {
     "name": "benchmark/imdb/09a.benchmark",
@@ -2069,7 +2069,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.422298,
+    "time": 0.415726,
   },
   {
     "name": "benchmark/imdb/09a.benchmark",
@@ -2083,7 +2083,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.425723,
+    "time": 0.418543,
   },
   {
     "name": "benchmark/imdb/09b.benchmark",
@@ -2109,7 +2109,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.337385,
+    "time": 0.326021,
   },
   {
     "name": "benchmark/imdb/09b.benchmark",
@@ -2123,7 +2123,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.3382,
+    "time": 0.332308,
   },
   {
     "name": "benchmark/imdb/09b.benchmark",
@@ -2137,7 +2137,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.338092,
+    "time": 0.331274,
   },
   {
     "name": "benchmark/imdb/09b.benchmark",
@@ -2151,7 +2151,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.335095,
+    "time": 0.339932,
   },
   {
     "name": "benchmark/imdb/09b.benchmark",
@@ -2165,7 +2165,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.334572,
+    "time": 0.338266,
   },
   {
     "name": "benchmark/imdb/09c.benchmark",
@@ -2191,7 +2191,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.38415,
+    "time": 0.38165,
   },
   {
     "name": "benchmark/imdb/09c.benchmark",
@@ -2205,7 +2205,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.385691,
+    "time": 0.386973,
   },
   {
     "name": "benchmark/imdb/09c.benchmark",
@@ -2219,7 +2219,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.381113,
+    "time": 0.380778,
   },
   {
     "name": "benchmark/imdb/09c.benchmark",
@@ -2233,7 +2233,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.381426,
+    "time": 0.381893,
   },
   {
     "name": "benchmark/imdb/09c.benchmark",
@@ -2247,7 +2247,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.385413,
+    "time": 0.384317,
   },
   {
     "name": "benchmark/imdb/09d.benchmark",
@@ -2273,7 +2273,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.48489,
+    "time": 0.484911,
   },
   {
     "name": "benchmark/imdb/09d.benchmark",
@@ -2287,7 +2287,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.478485,
+    "time": 0.489326,
   },
   {
     "name": "benchmark/imdb/09d.benchmark",
@@ -2301,7 +2301,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.489497,
+    "time": 0.486457,
   },
   {
     "name": "benchmark/imdb/09d.benchmark",
@@ -2315,7 +2315,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.483102,
+    "time": 0.491092,
   },
   {
     "name": "benchmark/imdb/09d.benchmark",
@@ -2329,7 +2329,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.483287,
+    "time": 0.490716,
   },
   {
     "name": "benchmark/imdb/10a.benchmark",
@@ -2353,7 +2353,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.324928,
+    "time": 0.322998,
   },
   {
     "name": "benchmark/imdb/10a.benchmark",
@@ -2366,7 +2366,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.325566,
+    "time": 0.322466,
   },
   {
     "name": "benchmark/imdb/10a.benchmark",
@@ -2379,7 +2379,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.324067,
+    "time": 0.324384,
   },
   {
     "name": "benchmark/imdb/10a.benchmark",
@@ -2392,7 +2392,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.324599,
+    "time": 0.320937,
   },
   {
     "name": "benchmark/imdb/10a.benchmark",
@@ -2405,7 +2405,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.321838,
+    "time": 0.326669,
   },
   {
     "name": "benchmark/imdb/10b.benchmark",
@@ -2429,7 +2429,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.191632,
+    "time": 0.193779,
   },
   {
     "name": "benchmark/imdb/10b.benchmark",
@@ -2442,7 +2442,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.191262,
+    "time": 0.247819,
   },
   {
     "name": "benchmark/imdb/10b.benchmark",
@@ -2455,7 +2455,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.192554,
+    "time": 0.195517,
   },
   {
     "name": "benchmark/imdb/10b.benchmark",
@@ -2468,7 +2468,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.190593,
+    "time": 0.196384,
   },
   {
     "name": "benchmark/imdb/10b.benchmark",
@@ -2481,7 +2481,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.193481,
+    "time": 0.199513,
   },
   {
     "name": "benchmark/imdb/10c.benchmark",
@@ -2505,7 +2505,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.792154,
+    "time": 0.767557,
   },
   {
     "name": "benchmark/imdb/10c.benchmark",
@@ -2518,7 +2518,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.783381,
+    "time": 0.762251,
   },
   {
     "name": "benchmark/imdb/10c.benchmark",
@@ -2531,7 +2531,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.783855,
+    "time": 0.76081,
   },
   {
     "name": "benchmark/imdb/10c.benchmark",
@@ -2544,7 +2544,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.78902,
+    "time": 0.761799,
   },
   {
     "name": "benchmark/imdb/10c.benchmark",
@@ -2557,7 +2557,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.78225,
+    "time": 0.758337,
   },
   {
     "name": "benchmark/imdb/11a.benchmark",
@@ -2583,7 +2583,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.025733,
+    "time": 0.022476,
   },
   {
     "name": "benchmark/imdb/11a.benchmark",
@@ -2597,7 +2597,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.023199,
+    "time": 0.027345,
   },
   {
     "name": "benchmark/imdb/11a.benchmark",
@@ -2611,7 +2611,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.025245,
+    "time": 0.025039,
   },
   {
     "name": "benchmark/imdb/11a.benchmark",
@@ -2625,7 +2625,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.02573,
+    "time": 0.023098,
   },
   {
     "name": "benchmark/imdb/11a.benchmark",
@@ -2639,7 +2639,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.024286,
+    "time": 0.023719,
   },
   {
     "name": "benchmark/imdb/11b.benchmark",
@@ -2665,7 +2665,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.035456,
+    "time": 0.037974,
   },
   {
     "name": "benchmark/imdb/11b.benchmark",
@@ -2679,7 +2679,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.035901,
+    "time": 0.039446,
   },
   {
     "name": "benchmark/imdb/11b.benchmark",
@@ -2693,7 +2693,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.03612,
+    "time": 0.036977,
   },
   {
     "name": "benchmark/imdb/11b.benchmark",
@@ -2707,7 +2707,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.037653,
+    "time": 0.037593,
   },
   {
     "name": "benchmark/imdb/11b.benchmark",
@@ -2721,7 +2721,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.039565,
+    "time": 0.038432,
   },
   {
     "name": "benchmark/imdb/11c.benchmark",
@@ -2747,7 +2747,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.065538,
+    "time": 0.065715,
   },
   {
     "name": "benchmark/imdb/11c.benchmark",
@@ -2761,7 +2761,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.067667,
+    "time": 0.071181,
   },
   {
     "name": "benchmark/imdb/11c.benchmark",
@@ -2775,7 +2775,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.067046,
+    "time": 0.068985,
   },
   {
     "name": "benchmark/imdb/11c.benchmark",
@@ -2789,7 +2789,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.069867,
+    "time": 0.068568,
   },
   {
     "name": "benchmark/imdb/11c.benchmark",
@@ -2803,7 +2803,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.066857,
+    "time": 0.067999,
   },
   {
     "name": "benchmark/imdb/11d.benchmark",
@@ -2829,7 +2829,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.198996,
+    "time": 0.206677,
   },
   {
     "name": "benchmark/imdb/11d.benchmark",
@@ -2843,7 +2843,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.197199,
+    "time": 0.204145,
   },
   {
     "name": "benchmark/imdb/11d.benchmark",
@@ -2857,7 +2857,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.281081,
+    "time": 0.19978,
   },
   {
     "name": "benchmark/imdb/11d.benchmark",
@@ -2871,7 +2871,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.199178,
+    "time": 0.205668,
   },
   {
     "name": "benchmark/imdb/11d.benchmark",
@@ -2885,7 +2885,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.194414,
+    "time": 0.202575,
   },
   {
     "name": "benchmark/imdb/12a.benchmark",
@@ -2911,7 +2911,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.093272,
+    "time": 0.090893,
   },
   {
     "name": "benchmark/imdb/12a.benchmark",
@@ -2925,7 +2925,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.094122,
+    "time": 0.091383,
   },
   {
     "name": "benchmark/imdb/12a.benchmark",
@@ -2939,7 +2939,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.092508,
+    "time": 0.090533,
   },
   {
     "name": "benchmark/imdb/12a.benchmark",
@@ -2953,7 +2953,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.092022,
+    "time": 0.091074,
   },
   {
     "name": "benchmark/imdb/12a.benchmark",
@@ -2967,7 +2967,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.093733,
+    "time": 0.090639,
   },
   {
     "name": "benchmark/imdb/12b.benchmark",
@@ -2993,7 +2993,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.119905,
+    "time": 0.120713,
   },
   {
     "name": "benchmark/imdb/12b.benchmark",
@@ -3007,7 +3007,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.118136,
+    "time": 0.121709,
   },
   {
     "name": "benchmark/imdb/12b.benchmark",
@@ -3021,7 +3021,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.119601,
+    "time": 0.120815,
   },
   {
     "name": "benchmark/imdb/12b.benchmark",
@@ -3035,7 +3035,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.118798,
+    "time": 0.121413,
   },
   {
     "name": "benchmark/imdb/12b.benchmark",
@@ -3049,7 +3049,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.119797,
+    "time": 0.121031,
   },
   {
     "name": "benchmark/imdb/12c.benchmark",
@@ -3075,7 +3075,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.128388,
+    "time": 0.130215,
   },
   {
     "name": "benchmark/imdb/12c.benchmark",
@@ -3089,7 +3089,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.130834,
+    "time": 0.128528,
   },
   {
     "name": "benchmark/imdb/12c.benchmark",
@@ -3103,7 +3103,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.128861,
+    "time": 0.127983,
   },
   {
     "name": "benchmark/imdb/12c.benchmark",
@@ -3117,7 +3117,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.12977,
+    "time": 0.130438,
   },
   {
     "name": "benchmark/imdb/12c.benchmark",
@@ -3131,7 +3131,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.132428,
+    "time": 0.129554,
   },
   {
     "name": "benchmark/imdb/13a.benchmark",
@@ -3159,7 +3159,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.100119,
+    "time": 0.098103,
   },
   {
     "name": "benchmark/imdb/13a.benchmark",
@@ -3174,7 +3174,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.101604,
+    "time": 0.101575,
   },
   {
     "name": "benchmark/imdb/13a.benchmark",
@@ -3189,7 +3189,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.098574,
+    "time": 0.100267,
   },
   {
     "name": "benchmark/imdb/13a.benchmark",
@@ -3204,7 +3204,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.10177,
+    "time": 0.100803,
   },
   {
     "name": "benchmark/imdb/13a.benchmark",
@@ -3219,7 +3219,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.098911,
+    "time": 0.096332,
   },
   {
     "name": "benchmark/imdb/13b.benchmark",
@@ -3247,7 +3247,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.141231,
+    "time": 0.140951,
   },
   {
     "name": "benchmark/imdb/13b.benchmark",
@@ -3262,7 +3262,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.142176,
+    "time": 0.142074,
   },
   {
     "name": "benchmark/imdb/13b.benchmark",
@@ -3277,7 +3277,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.13873,
+    "time": 0.138261,
   },
   {
     "name": "benchmark/imdb/13b.benchmark",
@@ -3292,7 +3292,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.140839,
+    "time": 0.135512,
   },
   {
     "name": "benchmark/imdb/13b.benchmark",
@@ -3307,7 +3307,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.13899,
+    "time": 0.138978,
   },
   {
     "name": "benchmark/imdb/13c.benchmark",
@@ -3335,7 +3335,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.124933,
+    "time": 0.132686,
   },
   {
     "name": "benchmark/imdb/13c.benchmark",
@@ -3350,7 +3350,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.126857,
+    "time": 0.12465,
   },
   {
     "name": "benchmark/imdb/13c.benchmark",
@@ -3365,7 +3365,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.126516,
+    "time": 0.124444,
   },
   {
     "name": "benchmark/imdb/13c.benchmark",
@@ -3380,7 +3380,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.12237,
+    "time": 0.126138,
   },
   {
     "name": "benchmark/imdb/13c.benchmark",
@@ -3395,7 +3395,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.128874,
+    "time": 0.128304,
   },
   {
     "name": "benchmark/imdb/13d.benchmark",
@@ -3423,7 +3423,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.11685,
+    "time": 0.121663,
   },
   {
     "name": "benchmark/imdb/13d.benchmark",
@@ -3438,7 +3438,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.119163,
+    "time": 0.117711,
   },
   {
     "name": "benchmark/imdb/13d.benchmark",
@@ -3453,7 +3453,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.120485,
+    "time": 0.118769,
   },
   {
     "name": "benchmark/imdb/13d.benchmark",
@@ -3468,7 +3468,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.116955,
+    "time": 0.117867,
   },
   {
     "name": "benchmark/imdb/13d.benchmark",
@@ -3483,7 +3483,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.115779,
+    "time": 0.12048,
   },
   {
     "name": "benchmark/imdb/14a.benchmark",
@@ -3509,7 +3509,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.088212,
+    "time": 0.088323,
   },
   {
     "name": "benchmark/imdb/14a.benchmark",
@@ -3523,7 +3523,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.086425,
+    "time": 0.092101,
   },
   {
     "name": "benchmark/imdb/14a.benchmark",
@@ -3537,7 +3537,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.085355,
+    "time": 0.093886,
   },
   {
     "name": "benchmark/imdb/14a.benchmark",
@@ -3551,7 +3551,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.086046,
+    "time": 0.088789,
   },
   {
     "name": "benchmark/imdb/14a.benchmark",
@@ -3565,7 +3565,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.086271,
+    "time": 0.088849,
   },
   {
     "name": "benchmark/imdb/14b.benchmark",
@@ -3591,7 +3591,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.051998,
+    "time": 0.053224,
   },
   {
     "name": "benchmark/imdb/14b.benchmark",
@@ -3605,7 +3605,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.052196,
+    "time": 0.053132,
   },
   {
     "name": "benchmark/imdb/14b.benchmark",
@@ -3619,7 +3619,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.05088,
+    "time": 0.052783,
   },
   {
     "name": "benchmark/imdb/14b.benchmark",
@@ -3633,7 +3633,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.050171,
+    "time": 0.05228,
   },
   {
     "name": "benchmark/imdb/14b.benchmark",
@@ -3647,7 +3647,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.050488,
+    "time": 0.050246,
   },
   {
     "name": "benchmark/imdb/14c.benchmark",
@@ -3673,7 +3673,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.173057,
+    "time": 0.173323,
   },
   {
     "name": "benchmark/imdb/14c.benchmark",
@@ -3687,7 +3687,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.17636,
+    "time": 0.179614,
   },
   {
     "name": "benchmark/imdb/14c.benchmark",
@@ -3701,7 +3701,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.17841,
+    "time": 0.178849,
   },
   {
     "name": "benchmark/imdb/14c.benchmark",
@@ -3715,7 +3715,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.176157,
+    "time": 0.177895,
   },
   {
     "name": "benchmark/imdb/14c.benchmark",
@@ -3729,7 +3729,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.176424,
+    "time": 0.178389,
   },
   {
     "name": "benchmark/imdb/15a.benchmark",
@@ -3757,7 +3757,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.27775,
+    "time": 0.268846,
   },
   {
     "name": "benchmark/imdb/15a.benchmark",
@@ -3772,7 +3772,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.275904,
+    "time": 0.272607,
   },
   {
     "name": "benchmark/imdb/15a.benchmark",
@@ -3787,7 +3787,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.277705,
+    "time": 0.271096,
   },
   {
     "name": "benchmark/imdb/15a.benchmark",
@@ -3802,7 +3802,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.276298,
+    "time": 0.268903,
   },
   {
     "name": "benchmark/imdb/15a.benchmark",
@@ -3817,7 +3817,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.276956,
+    "time": 0.268985,
   },
   {
     "name": "benchmark/imdb/15b.benchmark",
@@ -3845,7 +3845,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.244655,
+    "time": 0.231058,
   },
   {
     "name": "benchmark/imdb/15b.benchmark",
@@ -3860,7 +3860,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.246039,
+    "time": 0.233885,
   },
   {
     "name": "benchmark/imdb/15b.benchmark",
@@ -3875,7 +3875,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.246003,
+    "time": 0.232094,
   },
   {
     "name": "benchmark/imdb/15b.benchmark",
@@ -3890,7 +3890,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.24025,
+    "time": 0.235572,
   },
   {
     "name": "benchmark/imdb/15b.benchmark",
@@ -3905,7 +3905,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.243322,
+    "time": 0.228431,
   },
   {
     "name": "benchmark/imdb/15c.benchmark",
@@ -3933,7 +3933,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.287354,
+    "time": 0.286879,
   },
   {
     "name": "benchmark/imdb/15c.benchmark",
@@ -3948,7 +3948,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.289329,
+    "time": 0.293234,
   },
   {
     "name": "benchmark/imdb/15c.benchmark",
@@ -3963,7 +3963,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.290157,
+    "time": 0.287517,
   },
   {
     "name": "benchmark/imdb/15c.benchmark",
@@ -3978,7 +3978,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.288652,
+    "time": 0.29232,
   },
   {
     "name": "benchmark/imdb/15c.benchmark",
@@ -3993,7 +3993,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.288459,
+    "time": 0.29004,
   },
   {
     "name": "benchmark/imdb/15d.benchmark",
@@ -4021,7 +4021,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.244722,
+    "time": 0.250719,
   },
   {
     "name": "benchmark/imdb/15d.benchmark",
@@ -4036,7 +4036,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.239634,
+    "time": 0.242649,
   },
   {
     "name": "benchmark/imdb/15d.benchmark",
@@ -4051,7 +4051,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.240387,
+    "time": 0.242558,
   },
   {
     "name": "benchmark/imdb/15d.benchmark",
@@ -4066,7 +4066,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.24915,
+    "time": 0.240398,
   },
   {
     "name": "benchmark/imdb/15d.benchmark",
@@ -4081,7 +4081,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.246176,
+    "time": 0.24397,
   },
   {
     "name": "benchmark/imdb/16a.benchmark",
@@ -4107,7 +4107,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.206826,
+    "time": 0.201998,
   },
   {
     "name": "benchmark/imdb/16a.benchmark",
@@ -4121,7 +4121,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.209423,
+    "time": 0.214573,
   },
   {
     "name": "benchmark/imdb/16a.benchmark",
@@ -4135,7 +4135,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.207091,
+    "time": 0.208061,
   },
   {
     "name": "benchmark/imdb/16a.benchmark",
@@ -4149,7 +4149,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.206791,
+    "time": 0.202278,
   },
   {
     "name": "benchmark/imdb/16a.benchmark",
@@ -4163,7 +4163,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.205854,
+    "time": 0.206633,
   },
   {
     "name": "benchmark/imdb/16b.benchmark",
@@ -4189,7 +4189,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.870289,
+    "time": 0.88467,
   },
   {
     "name": "benchmark/imdb/16b.benchmark",
@@ -4203,7 +4203,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.870523,
+    "time": 0.88803,
   },
   {
     "name": "benchmark/imdb/16b.benchmark",
@@ -4217,7 +4217,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.865337,
+    "time": 0.883512,
   },
   {
     "name": "benchmark/imdb/16b.benchmark",
@@ -4231,7 +4231,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.870293,
+    "time": 0.884271,
   },
   {
     "name": "benchmark/imdb/16b.benchmark",
@@ -4245,7 +4245,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.872561,
+    "time": 0.881302,
   },
   {
     "name": "benchmark/imdb/16c.benchmark",
@@ -4271,7 +4271,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.307307,
+    "time": 0.308101,
   },
   {
     "name": "benchmark/imdb/16c.benchmark",
@@ -4285,7 +4285,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.307105,
+    "time": 0.305341,
   },
   {
     "name": "benchmark/imdb/16c.benchmark",
@@ -4299,7 +4299,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.307345,
+    "time": 0.304776,
   },
   {
     "name": "benchmark/imdb/16c.benchmark",
@@ -4313,7 +4313,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.310105,
+    "time": 0.301111,
   },
   {
     "name": "benchmark/imdb/16c.benchmark",
@@ -4327,7 +4327,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.310624,
+    "time": 0.30076,
   },
   {
     "name": "benchmark/imdb/16d.benchmark",
@@ -4353,7 +4353,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.301027,
+    "time": 0.297519,
   },
   {
     "name": "benchmark/imdb/16d.benchmark",
@@ -4367,7 +4367,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.302701,
+    "time": 0.34391,
   },
   {
     "name": "benchmark/imdb/16d.benchmark",
@@ -4381,7 +4381,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.299184,
+    "time": 0.307249,
   },
   {
     "name": "benchmark/imdb/16d.benchmark",
@@ -4395,7 +4395,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.299935,
+    "time": 0.30056,
   },
   {
     "name": "benchmark/imdb/16d.benchmark",
@@ -4409,7 +4409,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.305062,
+    "time": 0.298555,
   },
   {
     "name": "benchmark/imdb/17a.benchmark",
@@ -4433,7 +4433,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.418278,
+    "time": 0.428564,
   },
   {
     "name": "benchmark/imdb/17a.benchmark",
@@ -4446,7 +4446,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.427618,
+    "time": 0.424525,
   },
   {
     "name": "benchmark/imdb/17a.benchmark",
@@ -4459,7 +4459,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.423647,
+    "time": 0.416503,
   },
   {
     "name": "benchmark/imdb/17a.benchmark",
@@ -4472,7 +4472,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.41755,
+    "time": 0.420753,
   },
   {
     "name": "benchmark/imdb/17a.benchmark",
@@ -4485,7 +4485,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.414213,
+    "time": 0.415908,
   },
   {
     "name": "benchmark/imdb/17b.benchmark",
@@ -4509,7 +4509,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.491345,
+    "time": 0.497931,
   },
   {
     "name": "benchmark/imdb/17b.benchmark",
@@ -4522,7 +4522,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.489232,
+    "time": 0.495233,
   },
   {
     "name": "benchmark/imdb/17b.benchmark",
@@ -4535,7 +4535,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.495999,
+    "time": 0.507895,
   },
   {
     "name": "benchmark/imdb/17b.benchmark",
@@ -4548,7 +4548,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.487758,
+    "time": 0.492925,
   },
   {
     "name": "benchmark/imdb/17b.benchmark",
@@ -4561,7 +4561,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.491599,
+    "time": 0.500707,
   },
   {
     "name": "benchmark/imdb/17c.benchmark",
@@ -4585,7 +4585,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.481223,
+    "time": 0.478897,
   },
   {
     "name": "benchmark/imdb/17c.benchmark",
@@ -4598,7 +4598,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.476138,
+    "time": 0.478903,
   },
   {
     "name": "benchmark/imdb/17c.benchmark",
@@ -4611,7 +4611,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.474892,
+    "time": 0.483069,
   },
   {
     "name": "benchmark/imdb/17c.benchmark",
@@ -4624,7 +4624,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.477115,
+    "time": 0.477192,
   },
   {
     "name": "benchmark/imdb/17c.benchmark",
@@ -4637,7 +4637,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.473432,
+    "time": 0.496585,
   },
   {
     "name": "benchmark/imdb/17d.benchmark",
@@ -4661,7 +4661,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.626808,
+    "time": 0.625112,
   },
   {
     "name": "benchmark/imdb/17d.benchmark",
@@ -4674,7 +4674,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.615964,
+    "time": 0.627414,
   },
   {
     "name": "benchmark/imdb/17d.benchmark",
@@ -4687,7 +4687,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.621783,
+    "time": 0.634095,
   },
   {
     "name": "benchmark/imdb/17d.benchmark",
@@ -4700,7 +4700,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.615049,
+    "time": 0.634734,
   },
   {
     "name": "benchmark/imdb/17d.benchmark",
@@ -4713,7 +4713,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.620276,
+    "time": 0.623783,
   },
   {
     "name": "benchmark/imdb/17e.benchmark",
@@ -4737,7 +4737,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.643045,
+    "time": 0.530286,
   },
   {
     "name": "benchmark/imdb/17e.benchmark",
@@ -4750,7 +4750,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.529363,
+    "time": 0.530031,
   },
   {
     "name": "benchmark/imdb/17e.benchmark",
@@ -4763,7 +4763,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.527742,
+    "time": 0.531549,
   },
   {
     "name": "benchmark/imdb/17e.benchmark",
@@ -4776,7 +4776,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.530529,
+    "time": 0.530487,
   },
   {
     "name": "benchmark/imdb/17e.benchmark",
@@ -4789,7 +4789,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.528429,
+    "time": 0.530008,
   },
   {
     "name": "benchmark/imdb/17f.benchmark",
@@ -4813,7 +4813,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.686257,
+    "time": 0.698724,
   },
   {
     "name": "benchmark/imdb/17f.benchmark",
@@ -4826,7 +4826,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.690411,
+    "time": 0.705795,
   },
   {
     "name": "benchmark/imdb/17f.benchmark",
@@ -4839,7 +4839,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.690866,
+    "time": 0.71394,
   },
   {
     "name": "benchmark/imdb/17f.benchmark",
@@ -4852,7 +4852,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.697411,
+    "time": 0.704738,
   },
   {
     "name": "benchmark/imdb/17f.benchmark",
@@ -4865,7 +4865,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.699094,
+    "time": 0.698657,
   },
   {
     "name": "benchmark/imdb/18a.benchmark",
@@ -4889,7 +4889,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.56965,
+    "time": 0.551702,
   },
   {
     "name": "benchmark/imdb/18a.benchmark",
@@ -4902,7 +4902,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.569032,
+    "time": 0.556142,
   },
   {
     "name": "benchmark/imdb/18a.benchmark",
@@ -4915,7 +4915,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.568755,
+    "time": 0.548152,
   },
   {
     "name": "benchmark/imdb/18a.benchmark",
@@ -4928,7 +4928,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.568952,
+    "time": 0.549595,
   },
   {
     "name": "benchmark/imdb/18a.benchmark",
@@ -4941,7 +4941,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.569127,
+    "time": 0.557813,
   },
   {
     "name": "benchmark/imdb/18b.benchmark",
@@ -4965,7 +4965,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.588877,
+    "time": 0.575554,
   },
   {
     "name": "benchmark/imdb/18b.benchmark",
@@ -4978,7 +4978,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.590206,
+    "time": 0.630177,
   },
   {
     "name": "benchmark/imdb/18b.benchmark",
@@ -4991,7 +4991,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.593138,
+    "time": 0.569446,
   },
   {
     "name": "benchmark/imdb/18b.benchmark",
@@ -5004,7 +5004,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.587715,
+    "time": 0.57396,
   },
   {
     "name": "benchmark/imdb/18b.benchmark",
@@ -5017,7 +5017,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.590086,
+    "time": 0.576,
   },
   {
     "name": "benchmark/imdb/18c.benchmark",
@@ -5041,7 +5041,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.665628,
+    "time": 0.656474,
   },
   {
     "name": "benchmark/imdb/18c.benchmark",
@@ -5054,7 +5054,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.664294,
+    "time": 0.659388,
   },
   {
     "name": "benchmark/imdb/18c.benchmark",
@@ -5067,7 +5067,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.668305,
+    "time": 0.655505,
   },
   {
     "name": "benchmark/imdb/18c.benchmark",
@@ -5080,7 +5080,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.667647,
+    "time": 0.654302,
   },
   {
     "name": "benchmark/imdb/18c.benchmark",
@@ -5093,7 +5093,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.671995,
+    "time": 0.65179,
   },
   {
     "name": "benchmark/imdb/19a.benchmark",
@@ -5123,7 +5123,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.446161,
+    "time": 0.443244,
   },
   {
     "name": "benchmark/imdb/19a.benchmark",
@@ -5139,7 +5139,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.442551,
+    "time": 0.438998,
   },
   {
     "name": "benchmark/imdb/19a.benchmark",
@@ -5155,7 +5155,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.444576,
+    "time": 0.442677,
   },
   {
     "name": "benchmark/imdb/19a.benchmark",
@@ -5171,7 +5171,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.443026,
+    "time": 0.442893,
   },
   {
     "name": "benchmark/imdb/19a.benchmark",
@@ -5187,7 +5187,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.52932,
+    "time": 0.443185,
   },
   {
     "name": "benchmark/imdb/19b.benchmark",
@@ -5217,7 +5217,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.337693,
+    "time": 0.328093,
   },
   {
     "name": "benchmark/imdb/19b.benchmark",
@@ -5233,7 +5233,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.337171,
+    "time": 0.320958,
   },
   {
     "name": "benchmark/imdb/19b.benchmark",
@@ -5249,7 +5249,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.338201,
+    "time": 0.323986,
   },
   {
     "name": "benchmark/imdb/19b.benchmark",
@@ -5265,7 +5265,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.336738,
+    "time": 0.323934,
   },
   {
     "name": "benchmark/imdb/19b.benchmark",
@@ -5281,7 +5281,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.336466,
+    "time": 0.319838,
   },
   {
     "name": "benchmark/imdb/19c.benchmark",
@@ -5311,7 +5311,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.439678,
+    "time": 0.442481,
   },
   {
     "name": "benchmark/imdb/19c.benchmark",
@@ -5327,7 +5327,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.43791,
+    "time": 0.441424,
   },
   {
     "name": "benchmark/imdb/19c.benchmark",
@@ -5343,7 +5343,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.438224,
+    "time": 0.444379,
   },
   {
     "name": "benchmark/imdb/19c.benchmark",
@@ -5359,7 +5359,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.44159,
+    "time": 0.459206,
   },
   {
     "name": "benchmark/imdb/19c.benchmark",
@@ -5375,7 +5375,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.443461,
+    "time": 0.460912,
   },
   {
     "name": "benchmark/imdb/19d.benchmark",
@@ -5405,7 +5405,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.446848,
+    "time": 0.45628,
   },
   {
     "name": "benchmark/imdb/19d.benchmark",
@@ -5421,7 +5421,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.453432,
+    "time": 0.451917,
   },
   {
     "name": "benchmark/imdb/19d.benchmark",
@@ -5437,7 +5437,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.449848,
+    "time": 0.485147,
   },
   {
     "name": "benchmark/imdb/19d.benchmark",
@@ -5453,7 +5453,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.441634,
+    "time": 0.453946,
   },
   {
     "name": "benchmark/imdb/19d.benchmark",
@@ -5469,7 +5469,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.451505,
+    "time": 0.462921,
   },
   {
     "name": "benchmark/imdb/20a.benchmark",
@@ -5499,7 +5499,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.447205,
+    "time": 0.450472,
   },
   {
     "name": "benchmark/imdb/20a.benchmark",
@@ -5515,7 +5515,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.450099,
+    "time": 0.452998,
   },
   {
     "name": "benchmark/imdb/20a.benchmark",
@@ -5531,7 +5531,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.445525,
+    "time": 0.4464,
   },
   {
     "name": "benchmark/imdb/20a.benchmark",
@@ -5547,7 +5547,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.448373,
+    "time": 0.444548,
   },
   {
     "name": "benchmark/imdb/20a.benchmark",
@@ -5563,7 +5563,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.450328,
+    "time": 0.449198,
   },
   {
     "name": "benchmark/imdb/20b.benchmark",
@@ -5593,7 +5593,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.531739,
+    "time": 0.533743,
   },
   {
     "name": "benchmark/imdb/20b.benchmark",
@@ -5609,7 +5609,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.528844,
+    "time": 0.53063,
   },
   {
     "name": "benchmark/imdb/20b.benchmark",
@@ -5625,7 +5625,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.531223,
+    "time": 0.530877,
   },
   {
     "name": "benchmark/imdb/20b.benchmark",
@@ -5641,7 +5641,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.531351,
+    "time": 0.536273,
   },
   {
     "name": "benchmark/imdb/20b.benchmark",
@@ -5657,7 +5657,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.533759,
+    "time": 0.578965,
   },
   {
     "name": "benchmark/imdb/20c.benchmark",
@@ -5687,7 +5687,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.469436,
+    "time": 0.468777,
   },
   {
     "name": "benchmark/imdb/20c.benchmark",
@@ -5703,7 +5703,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.467828,
+    "time": 0.468881,
   },
   {
     "name": "benchmark/imdb/20c.benchmark",
@@ -5719,7 +5719,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.46861,
+    "time": 0.466283,
   },
   {
     "name": "benchmark/imdb/20c.benchmark",
@@ -5735,7 +5735,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.473537,
+    "time": 0.466079,
   },
   {
     "name": "benchmark/imdb/20c.benchmark",
@@ -5751,7 +5751,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.467245,
+    "time": 0.46399,
   },
   {
     "name": "benchmark/imdb/21a.benchmark",
@@ -5779,7 +5779,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.039709,
+    "time": 0.040105,
   },
   {
     "name": "benchmark/imdb/21a.benchmark",
@@ -5794,7 +5794,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.039677,
+    "time": 0.039128,
   },
   {
     "name": "benchmark/imdb/21a.benchmark",
@@ -5809,7 +5809,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.040065,
+    "time": 0.041689,
   },
   {
     "name": "benchmark/imdb/21a.benchmark",
@@ -5824,7 +5824,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.042434,
+    "time": 0.037532,
   },
   {
     "name": "benchmark/imdb/21a.benchmark",
@@ -5839,7 +5839,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.040903,
+    "time": 0.041591,
   },
   {
     "name": "benchmark/imdb/21b.benchmark",
@@ -5867,7 +5867,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.031905,
+    "time": 0.030299,
   },
   {
     "name": "benchmark/imdb/21b.benchmark",
@@ -5882,7 +5882,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.030237,
+    "time": 0.030114,
   },
   {
     "name": "benchmark/imdb/21b.benchmark",
@@ -5897,7 +5897,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.029913,
+    "time": 0.033604,
   },
   {
     "name": "benchmark/imdb/21b.benchmark",
@@ -5912,7 +5912,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.030596,
+    "time": 0.033229,
   },
   {
     "name": "benchmark/imdb/21b.benchmark",
@@ -5927,7 +5927,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.031034,
+    "time": 0.029573,
   },
   {
     "name": "benchmark/imdb/21c.benchmark",
@@ -5955,7 +5955,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.042232,
+    "time": 0.039965,
   },
   {
     "name": "benchmark/imdb/21c.benchmark",
@@ -5970,7 +5970,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.043152,
+    "time": 0.039751,
   },
   {
     "name": "benchmark/imdb/21c.benchmark",
@@ -5985,7 +5985,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.041705,
+    "time": 0.04301,
   },
   {
     "name": "benchmark/imdb/21c.benchmark",
@@ -6000,7 +6000,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.04518,
+    "time": 0.041989,
   },
   {
     "name": "benchmark/imdb/21c.benchmark",
@@ -6015,7 +6015,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.041238,
+    "time": 0.042507,
   },
   {
     "name": "benchmark/imdb/22a.benchmark",
@@ -6047,7 +6047,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.222753,
+    "time": 0.223511,
   },
   {
     "name": "benchmark/imdb/22a.benchmark",
@@ -6064,7 +6064,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.224969,
+    "time": 0.220335,
   },
   {
     "name": "benchmark/imdb/22a.benchmark",
@@ -6081,7 +6081,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.223477,
+    "time": 0.220386,
   },
   {
     "name": "benchmark/imdb/22a.benchmark",
@@ -6098,7 +6098,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.219431,
+    "time": 0.223432,
   },
   {
     "name": "benchmark/imdb/22a.benchmark",
@@ -6115,7 +6115,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.220459,
+    "time": 0.216815,
   },
   {
     "name": "benchmark/imdb/22b.benchmark",
@@ -6147,7 +6147,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.196247,
+    "time": 0.191278,
   },
   {
     "name": "benchmark/imdb/22b.benchmark",
@@ -6164,7 +6164,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.198828,
+    "time": 0.192212,
   },
   {
     "name": "benchmark/imdb/22b.benchmark",
@@ -6181,7 +6181,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.202725,
+    "time": 0.195129,
   },
   {
     "name": "benchmark/imdb/22b.benchmark",
@@ -6198,7 +6198,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.197242,
+    "time": 0.191796,
   },
   {
     "name": "benchmark/imdb/22b.benchmark",
@@ -6215,7 +6215,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.20083,
+    "time": 0.192946,
   },
   {
     "name": "benchmark/imdb/22c.benchmark",
@@ -6247,7 +6247,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.372792,
+    "time": 0.378504,
   },
   {
     "name": "benchmark/imdb/22c.benchmark",
@@ -6264,7 +6264,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.370486,
+    "time": 0.372712,
   },
   {
     "name": "benchmark/imdb/22c.benchmark",
@@ -6281,7 +6281,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.370742,
+    "time": 0.370599,
   },
   {
     "name": "benchmark/imdb/22c.benchmark",
@@ -6298,7 +6298,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.371994,
+    "time": 0.378331,
   },
   {
     "name": "benchmark/imdb/22c.benchmark",
@@ -6315,7 +6315,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.375283,
+    "time": 0.374928,
   },
   {
     "name": "benchmark/imdb/22d.benchmark",
@@ -6347,7 +6347,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.469345,
+    "time": 0.475689,
   },
   {
     "name": "benchmark/imdb/22d.benchmark",
@@ -6364,7 +6364,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.46682,
+    "time": 0.473013,
   },
   {
     "name": "benchmark/imdb/22d.benchmark",
@@ -6381,7 +6381,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.477821,
+    "time": 0.473962,
   },
   {
     "name": "benchmark/imdb/22d.benchmark",
@@ -6398,7 +6398,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.472002,
+    "time": 0.480706,
   },
   {
     "name": "benchmark/imdb/22d.benchmark",
@@ -6415,7 +6415,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.462424,
+    "time": 0.473406,
   },
   {
     "name": "benchmark/imdb/23a.benchmark",
@@ -6447,7 +6447,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.156583,
+    "time": 0.156597,
   },
   {
     "name": "benchmark/imdb/23a.benchmark",
@@ -6464,7 +6464,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.157681,
+    "time": 0.162269,
   },
   {
     "name": "benchmark/imdb/23a.benchmark",
@@ -6481,7 +6481,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.15547,
+    "time": 0.160992,
   },
   {
     "name": "benchmark/imdb/23a.benchmark",
@@ -6498,7 +6498,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.156757,
+    "time": 0.158223,
   },
   {
     "name": "benchmark/imdb/23a.benchmark",
@@ -6515,7 +6515,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.159494,
+    "time": 0.157829,
   },
   {
     "name": "benchmark/imdb/23b.benchmark",
@@ -6547,7 +6547,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.162706,
+    "time": 0.15934,
   },
   {
     "name": "benchmark/imdb/23b.benchmark",
@@ -6564,7 +6564,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.164613,
+    "time": 0.156685,
   },
   {
     "name": "benchmark/imdb/23b.benchmark",
@@ -6581,7 +6581,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.160749,
+    "time": 0.158376,
   },
   {
     "name": "benchmark/imdb/23b.benchmark",
@@ -6598,7 +6598,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.1565,
+    "time": 0.16104,
   },
   {
     "name": "benchmark/imdb/23b.benchmark",
@@ -6615,7 +6615,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.162862,
+    "time": 0.159106,
   },
   {
     "name": "benchmark/imdb/23c.benchmark",
@@ -6647,7 +6647,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.19095,
+    "time": 0.187072,
   },
   {
     "name": "benchmark/imdb/23c.benchmark",
@@ -6664,7 +6664,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.183313,
+    "time": 0.182728,
   },
   {
     "name": "benchmark/imdb/23c.benchmark",
@@ -6681,7 +6681,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.188452,
+    "time": 0.184883,
   },
   {
     "name": "benchmark/imdb/23c.benchmark",
@@ -6698,7 +6698,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.185818,
+    "time": 0.18698,
   },
   {
     "name": "benchmark/imdb/23c.benchmark",
@@ -6715,7 +6715,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.187916,
+    "time": 0.186739,
   },
   {
     "name": "benchmark/imdb/24a.benchmark",
@@ -6749,7 +6749,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.56612,
+    "time": 0.524241,
   },
   {
     "name": "benchmark/imdb/24a.benchmark",
@@ -6767,7 +6767,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.526572,
+    "time": 0.524114,
   },
   {
     "name": "benchmark/imdb/24a.benchmark",
@@ -6785,7 +6785,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.521819,
+    "time": 0.527099,
   },
   {
     "name": "benchmark/imdb/24a.benchmark",
@@ -6803,7 +6803,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.522068,
+    "time": 0.525526,
   },
   {
     "name": "benchmark/imdb/24a.benchmark",
@@ -6821,7 +6821,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.532626,
+    "time": 0.521182,
   },
   {
     "name": "benchmark/imdb/24b.benchmark",
@@ -6855,7 +6855,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.419472,
+    "time": 0.422848,
   },
   {
     "name": "benchmark/imdb/24b.benchmark",
@@ -6873,7 +6873,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.412618,
+    "time": 0.411103,
   },
   {
     "name": "benchmark/imdb/24b.benchmark",
@@ -6891,7 +6891,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.414415,
+    "time": 0.407444,
   },
   {
     "name": "benchmark/imdb/24b.benchmark",
@@ -6909,7 +6909,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.412412,
+    "time": 0.42432,
   },
   {
     "name": "benchmark/imdb/24b.benchmark",
@@ -6927,7 +6927,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.415362,
+    "time": 0.420761,
   },
   {
     "name": "benchmark/imdb/25a.benchmark",
@@ -6955,7 +6955,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.719884,
+    "time": 0.704978,
   },
   {
     "name": "benchmark/imdb/25a.benchmark",
@@ -6970,7 +6970,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.726005,
+    "time": 0.704736,
   },
   {
     "name": "benchmark/imdb/25a.benchmark",
@@ -6985,7 +6985,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.729005,
+    "time": 0.708272,
   },
   {
     "name": "benchmark/imdb/25a.benchmark",
@@ -7000,7 +7000,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.71983,
+    "time": 0.703419,
   },
   {
     "name": "benchmark/imdb/25a.benchmark",
@@ -7015,7 +7015,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.723773,
+    "time": 0.708714,
   },
   {
     "name": "benchmark/imdb/25b.benchmark",
@@ -7043,7 +7043,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.208718,
+    "time": 0.186317,
   },
   {
     "name": "benchmark/imdb/25b.benchmark",
@@ -7058,7 +7058,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.228083,
+    "time": 0.184205,
   },
   {
     "name": "benchmark/imdb/25b.benchmark",
@@ -7073,7 +7073,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.187986,
+    "time": 0.186049,
   },
   {
     "name": "benchmark/imdb/25b.benchmark",
@@ -7088,7 +7088,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.192636,
+    "time": 0.18443,
   },
   {
     "name": "benchmark/imdb/25b.benchmark",
@@ -7103,7 +7103,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.189371,
+    "time": 0.184499,
   },
   {
     "name": "benchmark/imdb/25c.benchmark",
@@ -7131,7 +7131,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.813996,
+    "time": 0.800133,
   },
   {
     "name": "benchmark/imdb/25c.benchmark",
@@ -7146,7 +7146,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.820386,
+    "time": 0.796968,
   },
   {
     "name": "benchmark/imdb/25c.benchmark",
@@ -7161,7 +7161,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.812766,
+    "time": 0.800118,
   },
   {
     "name": "benchmark/imdb/25c.benchmark",
@@ -7176,7 +7176,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.81253,
+    "time": 0.815182,
   },
   {
     "name": "benchmark/imdb/25c.benchmark",
@@ -7191,7 +7191,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.812746,
+    "time": 0.816349,
   },
   {
     "name": "benchmark/imdb/26a.benchmark",
@@ -7225,7 +7225,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.461149,
+    "time": 0.463855,
   },
   {
     "name": "benchmark/imdb/26a.benchmark",
@@ -7243,7 +7243,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.462916,
+    "time": 0.465226,
   },
   {
     "name": "benchmark/imdb/26a.benchmark",
@@ -7261,7 +7261,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.461256,
+    "time": 0.463953,
   },
   {
     "name": "benchmark/imdb/26a.benchmark",
@@ -7279,7 +7279,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.467399,
+    "time": 0.462298,
   },
   {
     "name": "benchmark/imdb/26a.benchmark",
@@ -7297,7 +7297,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.483629,
+    "time": 0.461742,
   },
   {
     "name": "benchmark/imdb/26b.benchmark",
@@ -7331,7 +7331,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.336321,
+    "time": 0.334837,
   },
   {
     "name": "benchmark/imdb/26b.benchmark",
@@ -7349,7 +7349,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.348711,
+    "time": 0.336106,
   },
   {
     "name": "benchmark/imdb/26b.benchmark",
@@ -7367,7 +7367,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.349419,
+    "time": 0.332738,
   },
   {
     "name": "benchmark/imdb/26b.benchmark",
@@ -7385,7 +7385,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.346635,
+    "time": 0.331887,
   },
   {
     "name": "benchmark/imdb/26b.benchmark",
@@ -7403,7 +7403,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.352778,
+    "time": 0.334037,
   },
   {
     "name": "benchmark/imdb/26c.benchmark",
@@ -7437,7 +7437,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.426785,
+    "time": 0.423741,
   },
   {
     "name": "benchmark/imdb/26c.benchmark",
@@ -7455,7 +7455,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.418903,
+    "time": 0.42055,
   },
   {
     "name": "benchmark/imdb/26c.benchmark",
@@ -7473,7 +7473,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.421531,
+    "time": 0.424096,
   },
   {
     "name": "benchmark/imdb/26c.benchmark",
@@ -7491,7 +7491,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.417187,
+    "time": 0.420614,
   },
   {
     "name": "benchmark/imdb/26c.benchmark",
@@ -7509,7 +7509,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.422077,
+    "time": 0.421308,
   },
   {
     "name": "benchmark/imdb/27a.benchmark",
@@ -7543,7 +7543,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.035299,
+    "time": 0.039769,
   },
   {
     "name": "benchmark/imdb/27a.benchmark",
@@ -7561,7 +7561,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.039882,
+    "time": 0.037935,
   },
   {
     "name": "benchmark/imdb/27a.benchmark",
@@ -7579,7 +7579,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.039185,
+    "time": 0.03451,
   },
   {
     "name": "benchmark/imdb/27a.benchmark",
@@ -7597,7 +7597,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.038271,
+    "time": 0.038871,
   },
   {
     "name": "benchmark/imdb/27a.benchmark",
@@ -7615,7 +7615,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.035227,
+    "time": 0.036745,
   },
   {
     "name": "benchmark/imdb/27b.benchmark",
@@ -7649,7 +7649,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.027292,
+    "time": 0.025034,
   },
   {
     "name": "benchmark/imdb/27b.benchmark",
@@ -7667,7 +7667,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.026892,
+    "time": 0.025869,
   },
   {
     "name": "benchmark/imdb/27b.benchmark",
@@ -7685,7 +7685,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.029586,
+    "time": 0.025975,
   },
   {
     "name": "benchmark/imdb/27b.benchmark",
@@ -7703,7 +7703,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.028717,
+    "time": 0.024879,
   },
   {
     "name": "benchmark/imdb/27b.benchmark",
@@ -7721,7 +7721,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.029178,
+    "time": 0.025474,
   },
   {
     "name": "benchmark/imdb/27c.benchmark",
@@ -7755,7 +7755,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.043492,
+    "time": 0.039893,
   },
   {
     "name": "benchmark/imdb/27c.benchmark",
@@ -7773,7 +7773,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.041102,
+    "time": 0.040093,
   },
   {
     "name": "benchmark/imdb/27c.benchmark",
@@ -7791,7 +7791,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.043814,
+    "time": 0.040648,
   },
   {
     "name": "benchmark/imdb/27c.benchmark",
@@ -7809,7 +7809,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.042475,
+    "time": 0.039123,
   },
   {
     "name": "benchmark/imdb/27c.benchmark",
@@ -7827,7 +7827,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.044703,
+    "time": 0.040118,
   },
   {
     "name": "benchmark/imdb/28a.benchmark",
@@ -7865,7 +7865,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.594528,
+    "time": 0.602251,
   },
   {
     "name": "benchmark/imdb/28a.benchmark",
@@ -7885,7 +7885,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.619221,
+    "time": 0.581997,
   },
   {
     "name": "benchmark/imdb/28a.benchmark",
@@ -7905,7 +7905,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.604776,
+    "time": 0.587618,
   },
   {
     "name": "benchmark/imdb/28a.benchmark",
@@ -7925,7 +7925,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.589198,
+    "time": 0.57461,
   },
   {
     "name": "benchmark/imdb/28a.benchmark",
@@ -7945,7 +7945,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.622374,
+    "time": 0.597896,
   },
   {
     "name": "benchmark/imdb/28b.benchmark",
@@ -7983,7 +7983,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.427744,
+    "time": 0.404124,
   },
   {
     "name": "benchmark/imdb/28b.benchmark",
@@ -8003,7 +8003,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.460776,
+    "time": 0.393098,
   },
   {
     "name": "benchmark/imdb/28b.benchmark",
@@ -8023,7 +8023,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.409188,
+    "time": 0.397478,
   },
   {
     "name": "benchmark/imdb/28b.benchmark",
@@ -8043,7 +8043,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.404935,
+    "time": 0.395825,
   },
   {
     "name": "benchmark/imdb/28b.benchmark",
@@ -8063,7 +8063,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.400257,
+    "time": 0.389294,
   },
   {
     "name": "benchmark/imdb/28c.benchmark",
@@ -8101,7 +8101,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.607577,
+    "time": 0.595802,
   },
   {
     "name": "benchmark/imdb/28c.benchmark",
@@ -8121,7 +8121,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.585266,
+    "time": 0.59195,
   },
   {
     "name": "benchmark/imdb/28c.benchmark",
@@ -8141,7 +8141,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.585086,
+    "time": 0.586032,
   },
   {
     "name": "benchmark/imdb/28c.benchmark",
@@ -8161,7 +8161,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.585811,
+    "time": 0.591921,
   },
   {
     "name": "benchmark/imdb/28c.benchmark",
@@ -8181,7 +8181,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.592106,
+    "time": 0.593972,
   },
   {
     "name": "benchmark/imdb/29a.benchmark",
@@ -8225,7 +8225,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.225815,
+    "time": 0.22491,
   },
   {
     "name": "benchmark/imdb/29a.benchmark",
@@ -8248,7 +8248,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.229305,
+    "time": 0.233232,
   },
   {
     "name": "benchmark/imdb/29a.benchmark",
@@ -8271,7 +8271,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.226559,
+    "time": 0.230056,
   },
   {
     "name": "benchmark/imdb/29a.benchmark",
@@ -8294,7 +8294,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.229057,
+    "time": 0.224608,
   },
   {
     "name": "benchmark/imdb/29a.benchmark",
@@ -8317,7 +8317,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.228542,
+    "time": 0.227342,
   },
   {
     "name": "benchmark/imdb/29b.benchmark",
@@ -8361,7 +8361,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.358586,
+    "time": 0.356042,
   },
   {
     "name": "benchmark/imdb/29b.benchmark",
@@ -8384,7 +8384,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.351024,
+    "time": 0.349606,
   },
   {
     "name": "benchmark/imdb/29b.benchmark",
@@ -8407,7 +8407,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.345717,
+    "time": 0.332482,
   },
   {
     "name": "benchmark/imdb/29b.benchmark",
@@ -8430,7 +8430,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.351135,
+    "time": 0.351512,
   },
   {
     "name": "benchmark/imdb/29b.benchmark",
@@ -8453,7 +8453,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.345532,
+    "time": 0.351597,
   },
   {
     "name": "benchmark/imdb/29c.benchmark",
@@ -8497,7 +8497,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.764347,
+    "time": 0.787695,
   },
   {
     "name": "benchmark/imdb/29c.benchmark",
@@ -8520,7 +8520,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 1.47711,
+    "time": 0.727003,
   },
   {
     "name": "benchmark/imdb/29c.benchmark",
@@ -8543,7 +8543,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.747815,
+    "time": 0.732521,
   },
   {
     "name": "benchmark/imdb/29c.benchmark",
@@ -8566,7 +8566,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.75224,
+    "time": 0.734269,
   },
   {
     "name": "benchmark/imdb/29c.benchmark",
@@ -8589,7 +8589,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.756467,
+    "time": 0.732587,
   },
   {
     "name": "benchmark/imdb/30a.benchmark",
@@ -8623,7 +8623,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.612208,
+    "time": 0.60144,
   },
   {
     "name": "benchmark/imdb/30a.benchmark",
@@ -8641,7 +8641,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.610783,
+    "time": 0.645172,
   },
   {
     "name": "benchmark/imdb/30a.benchmark",
@@ -8659,7 +8659,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.614195,
+    "time": 0.592297,
   },
   {
     "name": "benchmark/imdb/30a.benchmark",
@@ -8677,7 +8677,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.611692,
+    "time": 0.596617,
   },
   {
     "name": "benchmark/imdb/30a.benchmark",
@@ -8695,7 +8695,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.608279,
+    "time": 0.596027,
   },
   {
     "name": "benchmark/imdb/30b.benchmark",
@@ -8729,7 +8729,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.381471,
+    "time": 0.364371,
   },
   {
     "name": "benchmark/imdb/30b.benchmark",
@@ -8747,7 +8747,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.385408,
+    "time": 0.367009,
   },
   {
     "name": "benchmark/imdb/30b.benchmark",
@@ -8765,7 +8765,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.387398,
+    "time": 0.365636,
   },
   {
     "name": "benchmark/imdb/30b.benchmark",
@@ -8783,7 +8783,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.385465,
+    "time": 0.359381,
   },
   {
     "name": "benchmark/imdb/30b.benchmark",
@@ -8801,7 +8801,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.38645,
+    "time": 0.364579,
   },
   {
     "name": "benchmark/imdb/30c.benchmark",
@@ -8835,7 +8835,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.743513,
+    "time": 0.736615,
   },
   {
     "name": "benchmark/imdb/30c.benchmark",
@@ -8853,7 +8853,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.743606,
+    "time": 0.735805,
   },
   {
     "name": "benchmark/imdb/30c.benchmark",
@@ -8871,7 +8871,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.742301,
+    "time": 0.730685,
   },
   {
     "name": "benchmark/imdb/30c.benchmark",
@@ -8889,7 +8889,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.745121,
+    "time": 0.734436,
   },
   {
     "name": "benchmark/imdb/30c.benchmark",
@@ -8907,7 +8907,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.741945,
+    "time": 0.732337,
   },
   {
     "name": "benchmark/imdb/31a.benchmark",
@@ -8939,7 +8939,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.535858,
+    "time": 0.515422,
   },
   {
     "name": "benchmark/imdb/31a.benchmark",
@@ -8956,7 +8956,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.535741,
+    "time": 0.511682,
   },
   {
     "name": "benchmark/imdb/31a.benchmark",
@@ -8973,7 +8973,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.532255,
+    "time": 0.509846,
   },
   {
     "name": "benchmark/imdb/31a.benchmark",
@@ -8990,7 +8990,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.538354,
+    "time": 0.515325,
   },
   {
     "name": "benchmark/imdb/31a.benchmark",
@@ -9007,7 +9007,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.530865,
+    "time": 0.509473,
   },
   {
     "name": "benchmark/imdb/31b.benchmark",
@@ -9039,7 +9039,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.238373,
+    "time": 0.243564,
   },
   {
     "name": "benchmark/imdb/31b.benchmark",
@@ -9056,7 +9056,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.239435,
+    "time": 0.234763,
   },
   {
     "name": "benchmark/imdb/31b.benchmark",
@@ -9073,7 +9073,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.238914,
+    "time": 0.230768,
   },
   {
     "name": "benchmark/imdb/31b.benchmark",
@@ -9090,7 +9090,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.247502,
+    "time": 0.245667,
   },
   {
     "name": "benchmark/imdb/31b.benchmark",
@@ -9107,7 +9107,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.240427,
+    "time": 0.233523,
   },
   {
     "name": "benchmark/imdb/31c.benchmark",
@@ -9139,7 +9139,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.671807,
+    "time": 0.663568,
   },
   {
     "name": "benchmark/imdb/31c.benchmark",
@@ -9156,7 +9156,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.669803,
+    "time": 0.655474,
   },
   {
     "name": "benchmark/imdb/31c.benchmark",
@@ -9173,7 +9173,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.669294,
+    "time": 0.649049,
   },
   {
     "name": "benchmark/imdb/31c.benchmark",
@@ -9190,7 +9190,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.675759,
+    "time": 0.64957,
   },
   {
     "name": "benchmark/imdb/31c.benchmark",
@@ -9207,7 +9207,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.666785,
+    "time": 0.652407,
   },
   {
     "name": "benchmark/imdb/32a.benchmark",
@@ -9229,7 +9229,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.005387,
+    "time": 0.006412,
   },
   {
     "name": "benchmark/imdb/32a.benchmark",
@@ -9241,7 +9241,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.005074,
+    "time": 0.00519,
   },
   {
     "name": "benchmark/imdb/32a.benchmark",
@@ -9253,7 +9253,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.005158,
+    "time": 0.006952,
   },
   {
     "name": "benchmark/imdb/32a.benchmark",
@@ -9265,7 +9265,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.005023,
+    "time": 0.006538,
   },
   {
     "name": "benchmark/imdb/32a.benchmark",
@@ -9277,7 +9277,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.005045,
+    "time": 0.005537,
   },
   {
     "name": "benchmark/imdb/32b.benchmark",
@@ -9299,7 +9299,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.111472,
+    "time": 0.105916,
   },
   {
     "name": "benchmark/imdb/32b.benchmark",
@@ -9311,7 +9311,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.106669,
+    "time": 0.105866,
   },
   {
     "name": "benchmark/imdb/32b.benchmark",
@@ -9323,7 +9323,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.106998,
+    "time": 0.105777,
   },
   {
     "name": "benchmark/imdb/32b.benchmark",
@@ -9335,7 +9335,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.106573,
+    "time": 0.106663,
   },
   {
     "name": "benchmark/imdb/32b.benchmark",
@@ -9347,7 +9347,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.106331,
+    "time": 0.106238,
   },
   {
     "name": "benchmark/imdb/33a.benchmark",
@@ -9385,7 +9385,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.04854,
+    "time": 0.041976,
   },
   {
     "name": "benchmark/imdb/33a.benchmark",
@@ -9405,7 +9405,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.045396,
+    "time": 0.046268,
   },
   {
     "name": "benchmark/imdb/33a.benchmark",
@@ -9425,7 +9425,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.043532,
+    "time": 0.044463,
   },
   {
     "name": "benchmark/imdb/33a.benchmark",
@@ -9445,7 +9445,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.048452,
+    "time": 0.046728,
   },
   {
     "name": "benchmark/imdb/33a.benchmark",
@@ -9465,7 +9465,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.046481,
+    "time": 0.04721,
   },
   {
     "name": "benchmark/imdb/33b.benchmark",
@@ -9503,7 +9503,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.063425,
+    "time": 0.061007,
   },
   {
     "name": "benchmark/imdb/33b.benchmark",
@@ -9523,7 +9523,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.062513,
+    "time": 0.063693,
   },
   {
     "name": "benchmark/imdb/33b.benchmark",
@@ -9543,7 +9543,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.062445,
+    "time": 0.068553,
   },
   {
     "name": "benchmark/imdb/33b.benchmark",
@@ -9563,7 +9563,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.062589,
+    "time": 0.064,
   },
   {
     "name": "benchmark/imdb/33b.benchmark",
@@ -9583,7 +9583,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.066481,
+    "time": 0.060564,
   },
   {
     "name": "benchmark/imdb/33c.benchmark",
@@ -9621,7 +9621,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.088004,
+    "time": 0.08806,
   },
   {
     "name": "benchmark/imdb/33c.benchmark",
@@ -9641,7 +9641,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.090149,
+    "time": 0.088603,
   },
   {
     "name": "benchmark/imdb/33c.benchmark",
@@ -9661,7 +9661,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.088804,
+    "time": 0.088824,
   },
   {
     "name": "benchmark/imdb/33c.benchmark",
@@ -9681,7 +9681,7 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.087256,
+    "time": 0.090223,
   },
   {
     "name": "benchmark/imdb/33c.benchmark",
@@ -9701,6 +9701,6 @@
     "num_bloom_filters_in_scan": 0,
     "num_bloom_filters_in_scan": 0,
     "result": "correct",
-    "time": 0.086946,
+    "time": 0.085297,
   },
 ]
