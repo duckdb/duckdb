@@ -1,0 +1,204 @@
+# name: test/sql/cast/string_to_struct_escapes.test
+# group: [cast]
+
+query I
+SELECT $${name: value, age: 30}$$::STRUCT(name VARCHAR, age INT);
+----
+{'name': value, 'age': 30}
+
+query I
+SELECT $${name: John, city: "New York"}$$::STRUCT(name VARCHAR, city VARCHAR);
+----
+{'name': John, 'city': New York}
+
+query I
+SELECT $${quote_at_start: "\"test\"", age: 30}$$::STRUCT(quote_at_start VARCHAR, age INT);
+----
+{'quote_at_start': "test", 'age': 30}
+
+query I
+SELECT $${user_name: Alice, status: active}$$::STRUCT(user_name VARCHAR, status VARCHAR);
+----
+{'user_name': Alice, 'status': active}
+
+query I
+SELECT $${special_characters: "comma, semicolon; and backslash\\", age: 30}$$::STRUCT(special_characters VARCHAR, age INT);
+----
+{'special_characters': comma, semicolon; and backslash\, 'age': 30}
+
+query I
+SELECT $${a: 10, b: "hello world"}$$::STRUCT(a INT, b VARCHAR);
+----
+{'a': 10, 'b': hello world}
+
+query I
+SELECT $${first_name: "John", last_name: "Doe", age: 28}$$::STRUCT(first_name VARCHAR, last_name VARCHAR, age INT);
+----
+{'first_name': John, 'last_name': Doe, 'age': 28}
+
+query I
+SELECT $${first name: John, age: 30}$$::STRUCT("first name" VARCHAR, age INT);
+----
+{'first name': John, 'age': 30}
+
+# Invalid: Value contains a quote that isn't escaped
+statement error
+SELECT $${name: "John "Doe"}$$::STRUCT(name VARCHAR);
+----
+can't be cast to the destination type
+
+# second key has no ending character (:)
+statement error
+SELECT $${name: John, age, 30}$$::STRUCT(name VARCHAR, age INT);
+----
+can't be cast to the destination type
+
+# Name is free to contain `,`, only `:` is problematic
+query I
+SELECT $${user,name: Alice, age: 30}$$::STRUCT("user,name" VARCHAR, age INT);
+----
+{'user,name': Alice, 'age': 30}
+
+# Invalid: Contains an unescaped closing bracket
+statement error
+SELECT $${name: Alice, age: 30})$$::STRUCT(name VARCHAR, age INT);
+----
+can't be cast to the destination type
+
+# Invalid: Name contains a backslash
+statement error
+SELECT $${backslash\name: value}$$::STRUCT("backslash\name" VARCHAR);
+----
+can't be cast to the destination type
+
+# first `:` is not escaped, won't match the "name:" struct key
+statement error
+SELECT $${name: test, value: 30}$$::STRUCT("name:" VARCHAR, value INT);
+----
+can't be cast to the destination type
+
+# Name can contain escaped `:`
+query I
+SELECT $${name\:: test, value: 30}$$::STRUCT("name:" VARCHAR, value INT);
+----
+{'name:': test, 'value': 30}
+
+# Name consists of `{}`, not a problem, with this syntax we expect a name, which is a plain string
+# Only reserved character there is `:` (and quotes, and backslash of course)
+query I
+SELECT $${{name}: John, age: 3}$$::STRUCT("{name}" VARCHAR, age INT);
+----
+{'{name}': John, 'age': 3}
+
+# Name has `{` which normally starts a bracket that disables interpreting escape characters
+query I
+SELECT $${{\"name\"}: John, age: 3}$$::STRUCT("{""name""}" VARCHAR, age INT);
+----
+{'{"name"}': John, 'age': 3}
+
+# Invalid: Unterminated string value
+statement error
+SELECT $${name: "John, age: 30}$$::STRUCT(name VARCHAR, age INT);
+----
+can't be cast to the destination type
+
+query I
+SELECT $${}$$::STRUCT(name VARCHAR, age INT);
+----
+{'name': NULL, 'age': NULL}
+
+# STRUCT with whitespace around colon (escaped)
+query I
+SELECT $${name : John, age : 30}$$::STRUCT(name VARCHAR, age INT);
+----
+{'name': John, 'age': 30}
+
+# STRUCT with escaped backslash in value
+query I
+SELECT $${path: "C:\\Users\\John"}$$::STRUCT(path VARCHAR);
+----
+{'path': C:\Users\John}
+
+# STRUCT with special characters in value, properly escaped
+query I
+SELECT $${description: "Special characters: \\, \", ;, (, )"}$$::STRUCT(description VARCHAR);
+----
+{'description': Special characters: \, ", ;, (, )}
+
+# Valid: Name with escaped space
+query I
+SELECT $${first\ name: "John", age: 30}$$::STRUCT("first name" VARCHAR, age INT);
+----
+{'first name': John, 'age': 30}
+
+# Valid: Name with escaped quote
+query I
+SELECT $${\"quote at start\": "value", age: 30}$$::STRUCT("""quote at start""" VARCHAR, age INT);
+----
+{'"quote at start"': value, 'age': 30}
+
+# Valid: Name with escaped backslash
+query I
+SELECT $${backslash\\name: "John Doe", age: 30}$$::STRUCT("backslash\name" VARCHAR, age INT);
+----
+{'backslash\name': John Doe, 'age': 30}
+
+# Valid: Name with escaped comma
+query I
+SELECT $${user\,name: "Alice", age: 25}$$::STRUCT("user,name" VARCHAR, age INT);
+----
+{'user,name': Alice, 'age': 25}
+
+# Valid: Name with escaped parenthesis
+query I
+SELECT $${user\(name\): "Alice", status: "active"}$$::STRUCT("user(name)" VARCHAR, status VARCHAR);
+----
+{'user(name)': Alice, 'status': active}
+
+# Valid: Name with unescaped parenthesis
+query I
+SELECT $${user(name): "Alice", status: "active"}$$::STRUCT("user(name)" VARCHAR, status VARCHAR);
+----
+{'user(name)': Alice, 'status': active}
+
+# Valid: Name with escaped space at end
+query I
+SELECT $${user\ name\ : "Alice", age\ : 25}$$::STRUCT("user name " VARCHAR, "age " INT);
+----
+{'user name ': Alice, 'age ': 25}
+
+# Invalid: Name contains unescaped quote
+statement error
+SELECT $${"quote"start": "value", age: 30}$$::STRUCT("quote""start" VARCHAR, age INT);
+----
+can't be cast to the destination type
+
+# Invalid: Name contains unescaped backslash
+statement error
+SELECT $${backslash\name: "John", age: 30}$$::STRUCT("backslash\name" VARCHAR, age INT);
+----
+can't be cast to the destination type
+
+# Valid: Name contains (unescaped) opening parenthesis
+query I
+SELECT $${user(name: "Alice", age: 25}$$::STRUCT("user(name" VARCHAR, age INT);
+----
+{'user(name': Alice, 'age': 25}
+
+# Name is single double quote
+query I
+SELECT $${\": "value", age: 30}$$::STRUCT("""" VARCHAR, age INTEGER)
+----
+{'"': value, 'age': 30}
+
+# Name with only a special character (escaped)
+query I
+SELECT $${\\: "escaped", age: 30}$$::STRUCT("\" VARCHAR, age INT);
+----
+{'\': escaped, 'age': 30}
+
+# Name with only a special character (not escaped)
+query I
+SELECT $${@: "value", age: 30}$$::STRUCT("@" VARCHAR, age INT);
+----
+{'@': value, 'age': 30}
