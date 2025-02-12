@@ -203,7 +203,6 @@ static idx_t FindTypedRangeBound(WindowCursor &over, const idx_t order_begin, co
 			throw OutOfRangeException("Invalid RANGE FOLLOWING value");
 		}
 	}
-
 	//	Try to reuse the previous bounds to restrict the search.
 	//	This is only valid if the previous bounds were non-empty
 	//	Only inject the comparisons if the previous bounds are a strict subset.
@@ -686,19 +685,15 @@ void WindowBoundariesState::ValidEnd(DataChunk &bounds, idx_t row_idx, const idx
 		if (!is_same_partition || is_jump) {
 			// Find valid ordering values for the new partition
 			// so we can exclude NULLs from RANGE expression computations
+			const auto valid_start = valid_begin_data[chunk_idx];
 			valid_end = partition_end_data[chunk_idx];
 
 			if ((valid_start < valid_end) && has_following_range) {
 				// Exclude any trailing NULLs
-				const auto valid_start = valid_begin_data[chunk_idx];
 				if (range->CellIsNull(0, valid_end - 1)) {
 					idx_t n = 1;
 					valid_end = FindPrevStart(order_mask, valid_start, valid_end, n);
 				}
-
-				//	Reset range hints
-				prev.start = valid_start;
-				prev.end = valid_end;
 			}
 		}
 
@@ -717,6 +712,11 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 	auto frame_begin_data = FlatVector::GetData<idx_t>(bounds.data[FRAME_BEGIN]);
 
 	idx_t window_start = NumericLimits<idx_t>::Maximum();
+
+	//	Reset previous range hints
+	idx_t prev_partition = partition_begin_data[0];
+	prev.start = valid_begin_data[0];
+	prev.end = valid_end_data[0];
 
 	switch (start_boundary) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
@@ -780,6 +780,11 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 			} else {
 				const auto valid_end = valid_end_data[chunk_idx];
 				prev.end = valid_end;
+				const auto cur_partition = partition_begin_data[chunk_idx];
+				if (cur_partition != prev_partition) {
+					prev.start = valid_begin_data[chunk_idx];
+					prev_partition = cur_partition;
+				}
 				window_start = FindOrderedRangeBound<true>(*range, range_sense, row_idx, valid_end, start_boundary,
 				                                           boundary_begin, chunk_idx, prev);
 				prev.start = window_start;
@@ -852,6 +857,11 @@ void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx
 
 	idx_t window_end = NumericLimits<idx_t>::Maximum();
 
+	//	Reset previous range hints
+	idx_t prev_partition = partition_begin_data[0];
+	prev.start = valid_begin_data[0];
+	prev.end = valid_end_data[0];
+
 	switch (end_boundary) {
 	case WindowBoundary::CURRENT_ROW_ROWS:
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
@@ -915,6 +925,11 @@ void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx
 			} else {
 				const auto valid_end = valid_end_data[chunk_idx];
 				prev.start = valid_begin_data[chunk_idx];
+				const auto cur_partition = partition_begin_data[chunk_idx];
+				if (cur_partition != prev_partition) {
+					prev.end = valid_end;
+					prev_partition = cur_partition;
+				}
 				window_end = FindOrderedRangeBound<false>(*range, range_sense, row_idx, valid_end, end_boundary,
 				                                          boundary_end, chunk_idx, prev);
 				prev.end = window_end;
