@@ -4,6 +4,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
+#include "duckdb/common/fast_mem.hpp"
 
 #include <functional>
 #include <cmath>
@@ -80,68 +81,36 @@ hash_t Hash(char *val) {
 	return Hash<const char *>(val);
 }
 
-// MIT License
-// Copyright (c) 2018-2021 Martin Ankerl
-// https://github.com/martinus/robin-hood-hashing/blob/3.11.5/LICENSE
-hash_t HashBytes(void *ptr, size_t len) noexcept {
-	static constexpr uint64_t M = UINT64_C(0xc6a4a7935bd1e995);
-	static constexpr uint64_t SEED = UINT64_C(0xe17a1465);
-	static constexpr unsigned int R = 47;
+hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
+	// This seed slightly improves bit distribution, taken from here:
+	// https://github.com/martinus/robin-hood-hashing/blob/3.11.5/LICENSE
+	// MIT License Copyright (c) 2018-2021 Martin Ankerl
+	hash_t h = 0xe17a1465U ^ (len * 0xc6a4a7935bd1e995U);
 
-	auto const *const data64 = static_cast<uint64_t const *>(ptr);
-	uint64_t h = SEED ^ (len * M);
-
-	size_t const n_blocks = len / 8;
-	for (size_t i = 0; i < n_blocks; ++i) {
-		auto k = Load<uint64_t>(reinterpret_cast<const_data_ptr_t>(data64 + i));
-
-		k *= M;
-		k ^= k >> R;
-		k *= M;
-
-		h ^= k;
-		h *= M;
+	// Hash/combine in blocks of 8 bytes
+	for (const auto end = ptr + len - (len & 7U); ptr != end; ptr += 8U) {
+		h ^= Load<hash_t>(ptr);
+		h *= 0xd6e8feb86659fd93U;
 	}
 
-	auto const *const data8 = reinterpret_cast<uint8_t const *>(data64 + n_blocks);
-	switch (len & 7U) {
-	case 7:
-		h ^= static_cast<uint64_t>(data8[6]) << 48U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 6:
-		h ^= static_cast<uint64_t>(data8[5]) << 40U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 5:
-		h ^= static_cast<uint64_t>(data8[4]) << 32U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 4:
-		h ^= static_cast<uint64_t>(data8[3]) << 24U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 3:
-		h ^= static_cast<uint64_t>(data8[2]) << 16U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 2:
-		h ^= static_cast<uint64_t>(data8[1]) << 8U;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	case 1:
-		h ^= static_cast<uint64_t>(data8[0]);
-		h *= M;
-		DUCKDB_EXPLICIT_FALLTHROUGH;
-	default:
-		break;
-	}
-	h ^= h >> R;
-	h *= M;
-	h ^= h >> R;
-	return static_cast<hash_t>(h);
+	// XOR with remaining (<8) bytes
+	hash_t hr = 0;
+	FastMemcpy(&hr, ptr, len & 7U);
+	h ^= hr;
+
+	// Finalize
+	h *= 0xd6e8feb86659fd93U;
+	h ^= h >> 32;
+
+	return h;
 }
 
 hash_t Hash(const char *val, size_t size) {
-	return HashBytes((void *)val, size);
+	return HashBytes(const_data_ptr_cast(val), size);
 }
 
 hash_t Hash(uint8_t *val, size_t size) {
-	return HashBytes((void *)val, size);
+	return HashBytes(const_data_ptr_cast(val), size);
 }
 
 } // namespace duckdb
