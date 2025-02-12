@@ -66,17 +66,19 @@ public:
 	}
 };
 
-FixedDecimalColumnWriter::FixedDecimalColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
-						 idx_t max_define, bool can_have_nulls)
-	: PrimitiveColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls) {
+FixedDecimalColumnWriter::FixedDecimalColumnWriter(ParquetWriter &writer, idx_t schema_idx,
+                                                   vector<string> schema_path_p, idx_t max_repeat, idx_t max_define,
+                                                   bool can_have_nulls)
+    : PrimitiveColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls) {
 }
 
 unique_ptr<ColumnWriterStatistics> FixedDecimalColumnWriter::InitializeStatsState() {
 	return make_uniq<FixedDecimalStatistics>();
 }
 
-void FixedDecimalColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state,
-				 Vector &input_column, idx_t chunk_start, idx_t chunk_end) {
+void FixedDecimalColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p,
+                                           ColumnWriterPageState *page_state, Vector &input_column, idx_t chunk_start,
+                                           idx_t chunk_end) {
 	auto &mask = FlatVector::Validity(input_column);
 	auto *ptr = FlatVector::GetData<hugeint_t>(input_column);
 	auto &stats = stats_p->Cast<FixedDecimalStatistics>();
@@ -91,7 +93,8 @@ void FixedDecimalColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWrite
 	}
 }
 
-idx_t FixedDecimalColumnWriter::GetRowSize(const Vector &vector, const idx_t index, const PrimitiveColumnWriterState &state) const {
+idx_t FixedDecimalColumnWriter::GetRowSize(const Vector &vector, const idx_t index,
+                                           const PrimitiveColumnWriterState &state) const {
 	return sizeof(hugeint_t);
 }
 

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "column_writer.hpp"
+#include "writer/parquet_write_stats.hpp"
 
 namespace duckdb {
 
@@ -110,62 +111,6 @@ protected:
 
 	void SetParquetStatistics(PrimitiveColumnWriterState &state, duckdb_parquet::ColumnChunk &column);
 	void RegisterToRowGroup(duckdb_parquet::RowGroup &row_group);
-};
-
-class StringStatisticsState : public ColumnWriterStatistics {
-	static constexpr const idx_t MAX_STRING_STATISTICS_SIZE = 10000;
-
-public:
-	StringStatisticsState() : has_stats(false), values_too_big(false), min(), max() {
-	}
-
-	bool has_stats;
-	bool values_too_big;
-	string min;
-	string max;
-
-public:
-	bool HasStats() override {
-		return has_stats;
-	}
-
-	void Update(const string_t &val) {
-		if (values_too_big) {
-			return;
-		}
-		auto str_len = val.GetSize();
-		if (str_len > MAX_STRING_STATISTICS_SIZE) {
-			// we avoid gathering stats when individual string values are too large
-			// this is because the statistics are copied into the Parquet file meta data in uncompressed format
-			// ideally we avoid placing several mega or giga-byte long strings there
-			// we put a threshold of 10KB, if we see strings that exceed this threshold we avoid gathering stats
-			values_too_big = true;
-			has_stats = false;
-			min = string();
-			max = string();
-			return;
-		}
-		if (!has_stats || LessThan::Operation(val, string_t(min))) {
-			min = val.GetString();
-		}
-		if (!has_stats || GreaterThan::Operation(val, string_t(max))) {
-			max = val.GetString();
-		}
-		has_stats = true;
-	}
-
-	string GetMin() override {
-		return GetMinValue();
-	}
-	string GetMax() override {
-		return GetMaxValue();
-	}
-	string GetMinValue() override {
-		return HasStats() ? min : string();
-	}
-	string GetMaxValue() override {
-		return HasStats() ? max : string();
-	}
 };
 
 } // namespace duckdb

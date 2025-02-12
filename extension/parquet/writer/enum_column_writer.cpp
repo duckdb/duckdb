@@ -16,10 +16,11 @@ public:
 	bool written_value;
 };
 
-EnumColumnWriter::EnumColumnWriter(ParquetWriter &writer, LogicalType enum_type_p, idx_t schema_idx, vector<string> schema_path_p,
-				 idx_t max_repeat, idx_t max_define, bool can_have_nulls)
-	: PrimitiveColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
-	  enum_type(std::move(enum_type_p)) {
+EnumColumnWriter::EnumColumnWriter(ParquetWriter &writer, LogicalType enum_type_p, idx_t schema_idx,
+                                   vector<string> schema_path_p, idx_t max_repeat, idx_t max_define,
+                                   bool can_have_nulls)
+    : PrimitiveColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
+      enum_type(std::move(enum_type_p)) {
 	bit_width = RleBpDecoder::ComputeBitWidth(EnumType::GetSize(enum_type));
 }
 
@@ -28,8 +29,8 @@ unique_ptr<ColumnWriterStatistics> EnumColumnWriter::InitializeStatsState() {
 }
 
 template <class T>
-void EnumColumnWriter::WriteEnumInternal(WriteStream &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end,
-                       EnumWriterPageState &page_state) {
+void EnumColumnWriter::WriteEnumInternal(WriteStream &temp_writer, Vector &input_column, idx_t chunk_start,
+                                         idx_t chunk_end, EnumWriterPageState &page_state) {
 	auto &mask = FlatVector::Validity(input_column);
 	auto *ptr = FlatVector::GetData<T>(input_column);
 	for (idx_t r = chunk_start; r < chunk_end; r++) {
@@ -48,8 +49,9 @@ void EnumColumnWriter::WriteEnumInternal(WriteStream &temp_writer, Vector &input
 	}
 }
 
-void EnumColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
-                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) {
+void EnumColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p,
+                                   ColumnWriterPageState *page_state_p, Vector &input_column, idx_t chunk_start,
+                                   idx_t chunk_end) {
 	auto &page_state = page_state_p->Cast<EnumWriterPageState>();
 	switch (enum_type.InternalType()) {
 	case PhysicalType::UINT8:
@@ -113,8 +115,9 @@ void EnumColumnWriter::FlushDictionary(PrimitiveColumnWriterState &state, Column
 	WriteDictionary(state, std::move(temp_writer), enum_count);
 }
 
-idx_t EnumColumnWriter::GetRowSize(const Vector &vector, const idx_t index, const PrimitiveColumnWriterState &state) const {
+idx_t EnumColumnWriter::GetRowSize(const Vector &vector, const idx_t index,
+                                   const PrimitiveColumnWriterState &state) const {
 	return (bit_width + 7) / 8;
 }
 
-}
+} // namespace duckdb
