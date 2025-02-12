@@ -2,7 +2,6 @@
 #include "parquet_rle_bp_decoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
 #include "parquet_writer.hpp"
-#include "duckdb/common/serializer/memory_stream.hpp"
 
 namespace duckdb {
 using duckdb_parquet::Encoding;

@@ -10,6 +10,8 @@
 
 #include "column_writer.hpp"
 #include "writer/parquet_write_stats.hpp"
+#include "duckdb/common/serializer/memory_stream.hpp"
+#include "parquet_statistics.hpp"
 
 namespace duckdb {
 
