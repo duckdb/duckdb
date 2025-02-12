@@ -197,8 +197,6 @@ public:
 	//! Fill the pointer with all the addresses from the hashtable for full scan
 	static idx_t FillWithHTOffsets(JoinHTScanState &state, Vector &addresses);
 
-	idx_t CollectTruncatedHashes(Vector &hashes);
-
 	idx_t Count() const {
 		return data_collection->Count();
 	}

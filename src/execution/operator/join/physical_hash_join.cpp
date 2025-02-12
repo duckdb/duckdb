@@ -790,6 +790,9 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 	// Build Bloom-filters for sideways-information-passing
 	auto hash_join_bloom_filter = ClientConfig::GetSetting<HashJoinBloomFilterSetting>(context);
 	if (hash_join_bloom_filter) {
+
+		/*
+		// Attempt to only build bloom-filters if there are enough tuples filtered out on the build-side pipeline
 		size_t build_side_original_cardinality = 0;
 		const auto& build_side_children = op.children[1]->GetSources();
 		for (const PhysicalOperator &s : build_side_children) {
@@ -799,6 +802,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 			build_side_original_cardinality += s.estimated_cardinality; // ??
 		}
 		double build_side_selectivity = 1.0 - (static_cast<double>(ht.Count()) / static_cast<double>(build_side_original_cardinality));
+		*/
 
 		if (ht.Count() > dynamic_or_filter_threshold) {
 			ht.should_build_bloom_filter = true;
