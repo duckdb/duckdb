@@ -32,9 +32,9 @@ link_threads(icu_extension)
 if(NOT WITH_INTERNAL_ICU)
   find_package(
     ICU
-    COMPONENTS i18n
+    COMPONENTS i18n uc
     REQUIRED)
-  target_link_libraries(icu_extension ICU::i18n)
+  target_link_libraries(icu_extension ICU::i18n ICU::uc)
 endif()
 disable_target_warnings(icu_extension)
 set(PARAMETERS "-no-warnings")
