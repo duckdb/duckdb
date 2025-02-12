@@ -240,15 +240,12 @@ public:
 				auto &src_val = data_ptr[r];
 				auto value_index = page_state.dictionary.at(src_val);
 				if (!page_state.dict_written_value) {
-					// first value
-					// write the bit-width as a one-byte entry
+					// first value: write the bit-width as a one-byte entry and initialize writer
 					temp_writer.Write<uint8_t>(page_state.dict_bit_width);
-					// now begin writing the actual value
-					page_state.dict_encoder.BeginWrite(temp_writer, value_index);
+					page_state.dict_encoder.BeginWrite();
 					page_state.dict_written_value = true;
-				} else {
-					page_state.dict_encoder.WriteValue(temp_writer, value_index);
 				}
+				page_state.dict_encoder.WriteValue(temp_writer, value_index);
 			}
 			break;
 		}

@@ -123,22 +123,21 @@ void PrimitiveColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_v
 	}
 
 	// write the levels using the RLE-BP encoding
-	auto bit_width = RleBpDecoder::ComputeBitWidth((max_value));
+	const auto bit_width = RleBpDecoder::ComputeBitWidth((max_value));
 	RleBpEncoder rle_encoder(bit_width);
 
-	rle_encoder.BeginPrepare(levels[offset]);
-	for (idx_t i = offset + 1; i < offset + count; i++) {
-		rle_encoder.PrepareValue(levels[i]);
+	// have to write to an intermediate stream first because we need to know the size
+	MemoryStream intermediate_stream(Allocator::DefaultAllocator());
+	rle_encoder.BeginWrite();
+	for (idx_t i = offset; i < offset + count; i++) {
+		rle_encoder.WriteValue(intermediate_stream, levels[i]);
 	}
-	rle_encoder.FinishPrepare();
+	rle_encoder.FinishWrite(intermediate_stream);
 
 	// start off by writing the byte count as a uint32_t
-	temp_writer.Write<uint32_t>(rle_encoder.GetByteCount());
-	rle_encoder.BeginWrite(temp_writer, levels[offset]);
-	for (idx_t i = offset + 1; i < offset + count; i++) {
-		rle_encoder.WriteValue(temp_writer, levels[i]);
-	}
-	rle_encoder.FinishWrite(temp_writer);
+	temp_writer.Write(NumericCast<uint32_t>(intermediate_stream.GetPosition()));
+	// copy over the written data
+	temp_writer.WriteData(intermediate_stream.GetData(), intermediate_stream.GetPosition());
 }
 
 void PrimitiveColumnWriter::NextPage(PrimitiveColumnWriterState &state) {
