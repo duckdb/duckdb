@@ -875,7 +875,7 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		duckdb_destroy_prepare(&wrapper->statement);
 		wrapper->statement = nullptr;
 	}
-	duckdb_extracted_statements extracted_statements;
+	duckdb_extracted_statements extracted_statements = nullptr;
 	auto extract_statements_size = duckdb_extract_statements(wrapper->connection, query, &extracted_statements);
 	auto error_msg_extract_statements = duckdb_extract_statements_error(extracted_statements);
 	if (error_msg_extract_statements != nullptr) {
@@ -886,7 +886,7 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 	}
 	// Now lets loop over the statements, and execute every one
 	for (idx_t i = 0; i < extract_statements_size - 1; i++) {
-		duckdb_prepared_statement statement_internal;
+		duckdb_prepared_statement statement_internal = nullptr;
 		auto res =
 		    duckdb_prepare_extracted_statement(wrapper->connection, extracted_statements, i, &statement_internal);
 		auto error_msg = duckdb_prepare_error(statement_internal);
@@ -894,7 +894,7 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		if (adbc_status != ADBC_STATUS_OK) {
 			// Things went wrong when executing internal prepared statement
 			duckdb_destroy_extracted(&extracted_statements);
-			delete statement_internal;
+			duckdb_destroy_prepare(&statement_internal);
 			return adbc_status;
 		}
 		// Execute
@@ -903,12 +903,12 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		if (res != DuckDBSuccess) {
 			SetError(error, duckdb_query_arrow_error(out_result));
 			delete out_result;
-			delete statement_internal;
+			duckdb_destroy_prepare(&statement_internal);
 			duckdb_destroy_extracted(&extracted_statements);
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
 		delete out_result;
-		delete statement_internal;
+		duckdb_destroy_prepare(&statement_internal);
 	}
 	// Besides ze last, this one we return
 	auto res = duckdb_prepare_extracted_statement(wrapper->connection, extracted_statements,
