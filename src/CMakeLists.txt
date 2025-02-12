@@ -63,12 +63,18 @@ if(AMALGAMATION_BUILD)
   target_link_libraries(duckdb ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb)
   link_extension_libraries(duckdb)
+  if(DUCKDB_CPPTRACE)
+    target_link_libraries(duckdb cpptrace::cpptrace)
+  endif()
 
   add_library(duckdb_static STATIC
               "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
   target_link_libraries(duckdb_static ${DUCKDB_SYSTEM_LIBS})
   link_threads(duckdb_static)
   link_extension_libraries(duckdb_static)
+  if(DUCKDB_CPPTRACE)
+    target_link_libraries(duckdb_static cpptrace::cpptrace)
+  endif()
 
   install(FILES "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
                 "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
@@ -134,11 +140,17 @@ else()
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
   link_threads(duckdb)
   link_extension_libraries(duckdb)
+  if(DUCKDB_CPPTRACE)
+    target_link_libraries(duckdb cpptrace::cpptrace)
+  endif()
 
   add_library(duckdb_static STATIC ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb_static ${DUCKDB_LINK_LIBS})
   link_threads(duckdb_static)
   link_extension_libraries(duckdb_static)
+  if(DUCKDB_CPPTRACE)
+    target_link_libraries(duckdb_static cpptrace::cpptrace)
+  endif()
 
   target_include_directories(
     duckdb PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
