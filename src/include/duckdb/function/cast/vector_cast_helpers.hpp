@@ -184,21 +184,30 @@ struct VectorCastHelpers {
 	static idx_t CalculateEscapedStringLength(const string_t &string, const char *special_chars,
 	                                          idx_t special_chars_length) {
 		auto base_length = string.GetSize();
-		idx_t length = base_length;
+		idx_t length = 0;
 		auto string_data = string.GetData();
-
-		if (base_length >= 1) {
-			if (isspace(string_data[0])) {
-				length++;
-			}
-			if (base_length >= 2 && isspace(string_data[base_length - 1])) {
-				length++;
-			}
+		if (base_length == 0) {
+			return 0;
 		}
 
-		for (idx_t i = 0; i < base_length; i++) {
-			auto special_character = memchr(special_chars, string_data[i], special_chars_length);
-			length += (special_character != nullptr);
+		if (isspace(string_data[0])) {
+			length++;
+		}
+		if (base_length >= 2 && isspace(string_data[base_length - 1])) {
+			length++;
+		}
+
+		const auto string_end = string_data + base_length;
+		while (string_data < string_end) {
+			auto res = std::find_first_of(string_data, string_end, special_chars, special_chars + special_chars_length);
+			if (res == string_end) {
+				auto distance = UnsafeNumericCast<size_t>(res - string_data);
+				length += distance;
+				break;
+			}
+			auto distance = UnsafeNumericCast<size_t>(res - string_data);
+			length += distance + 2;
+			string_data = res + 1;
 		}
 		return length;
 	}
@@ -210,42 +219,36 @@ struct VectorCastHelpers {
 	static idx_t WriteEscapedString(void *dest, const string_t &string, const char *special_chars,
 	                                idx_t special_chars_length) {
 		auto base_length = string.GetSize();
+		if (base_length == 0) {
+			return 0;
+		}
 
 		auto string_start = string.GetData();
-		const auto string_end = reinterpret_cast<const void *>(string_start + base_length);
+		const auto string_end = string_start + base_length;
 		auto string_data = string_start;
 
 		idx_t dest_offset = 0;
-		if (base_length >= 1) {
-			if (isspace(string_data[0])) {
-				memset(reinterpret_cast<char *>(dest) + dest_offset, '\\', 1);
-				dest_offset++;
-			}
+		if (isspace(string_data[0])) {
+			memset(reinterpret_cast<char *>(dest) + dest_offset, '\\', 1);
+			dest_offset++;
 		}
 
 		while (string_data < string_end) {
-			const void *write_end = nullptr;
-			for (idx_t j = 0; j < special_chars_length; j++) {
-				auto res = memchr(string_data, special_chars[j],
-				                  UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(string_end) - string_data));
-				if (res && (!write_end || res < write_end)) {
-					write_end = res;
-				}
-			}
-			if (!write_end) {
-				write_end = string_end;
-				auto length = UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(write_end) - string_data);
+			auto res = std::find_first_of(string_data, string_end, special_chars, special_chars + special_chars_length);
+
+			if (res == string_end) {
+				auto length = UnsafeNumericCast<size_t>(res - string_data);
 				memcpy(reinterpret_cast<char *>(dest) + dest_offset, string_data, length);
 				dest_offset += length;
 				break;
 			}
 
-			auto length = UnsafeNumericCast<size_t>(reinterpret_cast<const char *>(write_end) - string_data);
+			auto length = UnsafeNumericCast<size_t>(res - string_data);
 			memcpy(reinterpret_cast<char *>(dest) + dest_offset, string_data, length);
 			memset(reinterpret_cast<char *>(dest) + dest_offset + length, '\\', 1);
-			memcpy(reinterpret_cast<char *>(dest) + dest_offset + length + 1, write_end, 1);
+			memcpy(reinterpret_cast<char *>(dest) + dest_offset + length + 1, res, 1);
 			dest_offset += length + 2;
-			string_data = reinterpret_cast<const char *>(write_end) + 1;
+			string_data = res + 1;
 		}
 
 		if (base_length >= 2) {
