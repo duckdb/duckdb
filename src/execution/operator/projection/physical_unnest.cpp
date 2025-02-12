@@ -246,11 +246,10 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			if (state.null_counts[col_idx] > 0) {
 				// we have NULL values that we need to set - flatten
 				result_vector.Flatten(result_length);
-				auto &result_mask = FlatVector::Validity(result_vector);
 				auto &null_sel = state.null_sels[col_idx];
 				for (idx_t idx = 0; idx < state.null_counts[col_idx]; idx++) {
 					auto null_index = null_sel.get_index(idx);
-					result_mask.SetInvalid(null_index);
+					FlatVector::SetNull(result_vector, null_index, true);
 				}
 			}
 		}
