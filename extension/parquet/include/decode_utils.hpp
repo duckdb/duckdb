@@ -186,12 +186,17 @@ public:
 		} while (val != 0);
 	}
 
-	template <class T>
+	template <class T, bool CHECKED = true>
 	static T VarintDecode(ByteBuffer &buf) {
 		T result = 0;
 		uint8_t shift = 0;
 		while (true) {
-			auto byte = buf.read<uint8_t>();
+			uint8_t byte;
+			if (CHECKED) {
+				byte = buf.read<uint8_t>();
+			} else {
+				byte = buf.unsafe_read<uint8_t>();
+			}
 			result |= T(byte & 127) << shift;
 			if ((byte & 128) == 0) {
 				break;
