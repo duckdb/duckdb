@@ -11,7 +11,7 @@ SELECT $${key\ with\ space = value\ with\ space}$$::MAP(VARCHAR, VARCHAR);
 query I
 SELECT $${\"key\" = \"value\"}$$::MAP(VARCHAR, VARCHAR);
 ----
-{"key"="value"}
+{\"key\"=\"value\"}
 
 # Valid: key with escaped backslash, value with escaped backslash
 query I
@@ -23,7 +23,7 @@ SELECT $${key\ with\ backslash = value\ with\ backslash}$$::MAP(VARCHAR, VARCHAR
 query I
 SELECT $${key\ with\, comma = value\ with\, comma}$$::MAP(VARCHAR, VARCHAR);
 ----
-{key with, comma=value with, comma}
+{key with\, comma=value with\, comma}
 
 # Valid: key and value with escaped colon
 query I
@@ -60,7 +60,7 @@ SELECT $${key = value"with"quote}$$::MAP(VARCHAR, VARCHAR);
 query I
 SELECT $${key,with,comma = value}$$::MAP(VARCHAR, VARCHAR);
 ----
-{key,with,comma=value}
+{key\,with\,comma=value}
 
 # Invalid: value contains unescaped comma
 statement error
@@ -72,13 +72,13 @@ can't be cast to the destination type MAP
 query I
 SELECT $${key{with}bracket = value}$$::MAP(VARCHAR, VARCHAR);
 ----
-{key{with}bracket=value}
+{key\{with\}bracket=value}
 
 # Invalid: value contains unescaped curly bracket
 query I
 SELECT $${key = value{with}bracket}$$::MAP(VARCHAR, VARCHAR);
 ----
-{key=value{with}bracket}
+{key=value\{with\}bracket}
 
 # Valid: key contains useless backslashes
 query I
@@ -96,19 +96,19 @@ SELECT $${key = value\with\backslash}$$::MAP(VARCHAR, VARCHAR);
 query II
 SELECT $${key=with=equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key'];
 ----
-{key=with=equals = value}	with=equals = value
+{key=with\=equals \= value}	with=equals = value
 
 # Valid: key/value contains unescaped equal sign
 query II
 SELECT $${key\=with=equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key=with'];
 ----
-{key=with=equals = value}	equals = value
+{key\=with=equals \= value}	equals = value
 
 # Valid: key/value contains unescaped equal sign
 query II
 SELECT $${key\=with\=equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key=with=equals'];
 ----
-{key=with=equals=value}	value
+{key\=with\=equals=value}	value
 
 # Edge Case: Empty MAP with no keys/values
 query I
@@ -126,7 +126,7 @@ SELECT $${=}$$::MAP(VARCHAR, VARCHAR);
 query I
 SELECT $${\{escaped\brace\} = \}escaped\brace\\}$$::MAP(VARCHAR, VARCHAR);
 ----
-{{escapedbrace}=}escapedbrace\}
+{\{escapedbrace\}=\}escapedbrace\\}
 
 # Edge Case: MAP with only a key and no value
 query I

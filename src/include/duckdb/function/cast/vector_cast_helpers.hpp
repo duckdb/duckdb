@@ -191,7 +191,7 @@ struct VectorCastHelpers {
 			if (isspace(string_data[0])) {
 				length++;
 			}
-			if (isspace(string_data[base_length - 1])) {
+			if (base_length >= 2 && isspace(string_data[base_length - 1])) {
 				length++;
 			}
 		}
@@ -248,7 +248,7 @@ struct VectorCastHelpers {
 			string_data = reinterpret_cast<const char *>(write_end) + 1;
 		}
 
-		if (base_length >= 1) {
+		if (base_length >= 2) {
 			//! Replace ' ' with '\ '
 			if (isspace(string_start[base_length - 1])) {
 				auto character = reinterpret_cast<const unsigned char *>(dest)[dest_offset - 1];
