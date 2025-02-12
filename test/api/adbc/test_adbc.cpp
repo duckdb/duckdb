@@ -19,7 +19,7 @@ bool SUCCESS(AdbcStatusCode status) {
 	return status == ADBC_STATUS_OK;
 }
 
-const char *duckdb_lib = "/Users/holanda/Documents/Projects/duckdb/cmake-build-debug/src/libduckdb.dylib";
+const char *duckdb_lib = std::getenv("DUCKDB_INSTALL_LIB");
 
 class ADBCTestDatabase {
 public:
