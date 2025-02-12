@@ -807,7 +807,6 @@ public:
 };
 
 struct BaseParquetOperator {
-
 	template <class SRC, class TGT>
 	static void WriteToStream(const TGT &input, WriteStream &ser) {
 		ser.WriteData(const_data_ptr_cast(&input), sizeof(TGT));
@@ -825,6 +824,11 @@ struct BaseParquetOperator {
 
 	template <class SRC, class TGT>
 	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
+	}
+
+	template <class SRC, class TGT>
+	static idx_t GetRowSize(const Vector &, idx_t) {
+		return sizeof(TGT);
 	}
 };
 
@@ -946,6 +950,11 @@ struct ParquetStringOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static uint64_t XXHash64(const TGT &target_value) {
 		return duckdb_zstd::XXH64(target_value.GetData(), target_value.GetSize(), 0);
+	}
+
+	template <class SRC, class TGT>
+	static idx_t GetRowSize(const Vector &vector, idx_t index) {
+		return FlatVector::GetData<string_t>(vector)[index].GetSize();
 	}
 };
 
@@ -1077,6 +1086,7 @@ public:
 	// analysis state for integer values for DELTA_BINARY_PACKED/DELTA_LENGTH_BYTE_ARRAY
 	idx_t total_value_count = 0;
 	idx_t total_string_size = 0;
+	uint32_t key_bit_width = 0;
 
 	unordered_map<T, uint32_t> dictionary;
 	duckdb_parquet::Encoding::type encoding;
@@ -1346,6 +1356,8 @@ public:
 				}
 			}
 			state.dictionary.clear();
+		} else {
+			state.key_bit_width = RleBpDecoder::ComputeBitWidth(state.dictionary.size());
 		}
 	}
 
@@ -1496,9 +1508,13 @@ public:
 		// bloom filter will be queued for writing in ParquetWriter::BufferBloomFilter one level up
 	}
 
-	// TODO this now vastly over-estimates the page size
 	idx_t GetRowSize(const Vector &vector, const idx_t index, const BasicColumnWriterState &state_p) const override {
-		return sizeof(TGT);
+		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
+		if (state.encoding == Encoding::RLE_DICTIONARY) {
+			return (state.key_bit_width + 7) / 8;
+		} else {
+			return OP::template GetRowSize<SRC, TGT>(vector, index);
+		}
 	}
 };
 
