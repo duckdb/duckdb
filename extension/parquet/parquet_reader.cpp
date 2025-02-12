@@ -873,13 +873,14 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 			// TODO we might not have stats but STILL a bloom filter so move this up
 			// check the bloom filter if present
 			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
-			if (!column_reader.Type().IsNested() && !is_generated_column &&
+			bool is_cast = column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::CAST;
+			if (!column_reader.Type().IsNested() && !is_generated_column && !is_cast &&
 			    ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
 			    ParquetStatisticsUtils::BloomFilterExcludes(filter,
 			                                                group.columns[column_reader.ColumnIndex()].meta_data,
 			                                                *state.thrift_file_proto, allocator)) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column &&
+			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column && !is_cast &&
 			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
 			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value) {
 
