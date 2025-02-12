@@ -235,26 +235,27 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 		}
 		bool set_escaped = false;
 
-		if (buf[pos] == '[') {
+		if (input_state.escaped) {
+			if (!start_pos.IsValid()) {
+				start_pos = pos;
+			}
+			end_pos = pos;
+		} else if (buf[pos] == '[') {
 			if (!start_pos.IsValid()) {
 				start_pos = pos;
 			}
 			//! Start of a LIST
-			if (!input_state.escaped) {
-				lvl++;
-				if (!SkipToClose(input_state, lvl, ']')) {
-					return false;
-				}
+			lvl++;
+			if (!SkipToClose(input_state, lvl, ']')) {
+				return false;
 			}
 			end_pos = pos;
 		} else if ((buf[pos] == '"' || buf[pos] == '\'')) {
 			if (!start_pos.IsValid()) {
 				start_pos = pos;
 			}
-			if (!input_state.escaped) {
-				if (!SkipToCloseQuotes(input_state)) {
-					return false;
-				}
+			if (!SkipToCloseQuotes(input_state)) {
+				return false;
 			}
 			end_pos = pos;
 		} else if (buf[pos] == '{') {
@@ -262,14 +263,12 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 				start_pos = pos;
 			}
 			//! Start of a STRUCT
-			if (!input_state.escaped) {
-				idx_t struct_lvl = 0;
-				if (!SkipToClose(input_state, struct_lvl, '}')) {
-					return false;
-				}
+			idx_t struct_lvl = 0;
+			if (!SkipToClose(input_state, struct_lvl, '}')) {
+				return false;
 			}
 			end_pos = pos;
-		} else if (buf[pos] == ',' || buf[pos] == ']') {
+		} else if ((buf[pos] == ',' || buf[pos] == ']')) {
 			if (buf[pos] != ']' || start_pos.IsValid() || seen_value) {
 				if (!start_pos.IsValid()) {
 					state.HandleValue(buf, 0, 0);
@@ -293,11 +292,9 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 			if (!start_pos.IsValid()) {
 				start_pos = pos;
 			}
-			if (!input_state.escaped) {
-				set_escaped = true;
-			}
+			set_escaped = true;
 			end_pos = pos;
-		} else if (!StringUtil::CharacterIsSpace(buf[pos]) || input_state.escaped) {
+		} else if (!StringUtil::CharacterIsSpace(buf[pos])) {
 			if (!start_pos.IsValid()) {
 				start_pos = pos;
 			}
