@@ -10,6 +10,7 @@
 #include "parquet_statistics.hpp"
 #include "parquet_writer.hpp"
 #include "writer/array_column_writer.hpp"
+#include "writer/boolean_column_writer.hpp"
 #include "writer/list_column_writer.hpp"
 #include "writer/primitive_column_writer.hpp"
 #include "writer/struct_column_writer.hpp"
@@ -939,107 +940,14 @@ public:
 		// bloom filter will be queued for writing in ParquetWriter::BufferBloomFilter one level up
 	}
 
-	idx_t GetRowSize(const Vector &vector, const idx_t index, const PrimitiveColumnWriterState &state_p) const override {
+	idx_t GetRowSize(const Vector &vector, const idx_t index,
+	                 const PrimitiveColumnWriterState &state_p) const override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 		if (state.encoding == Encoding::RLE_DICTIONARY) {
 			return (state.key_bit_width + 7) / 8;
 		} else {
 			return OP::template GetRowSize<SRC, TGT>(vector, index);
 		}
-	}
-};
-
-//===--------------------------------------------------------------------===//
-// Boolean Column Writer
-//===--------------------------------------------------------------------===//
-class BooleanStatisticsState : public ColumnWriterStatistics {
-public:
-	BooleanStatisticsState() : min(true), max(false) {
-	}
-
-	bool min;
-	bool max;
-
-public:
-	bool HasStats() override {
-		return !(min && !max);
-	}
-
-	string GetMin() override {
-		return GetMinValue();
-	}
-	string GetMax() override {
-		return GetMaxValue();
-	}
-	string GetMinValue() override {
-		return HasStats() ? string(const_char_ptr_cast(&min), sizeof(bool)) : string();
-	}
-	string GetMaxValue() override {
-		return HasStats() ? string(const_char_ptr_cast(&max), sizeof(bool)) : string();
-	}
-};
-
-class BooleanWriterPageState : public ColumnWriterPageState {
-public:
-	uint8_t byte = 0;
-	uint8_t byte_pos = 0;
-};
-
-class BooleanColumnWriter : public PrimitiveColumnWriter {
-public:
-	BooleanColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
-	                    idx_t max_define, bool can_have_nulls)
-	    : PrimitiveColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls) {
-	}
-	~BooleanColumnWriter() override = default;
-
-public:
-	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
-		return make_uniq<BooleanStatisticsState>();
-	}
-
-	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *state_p,
-	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
-		auto &stats = stats_p->Cast<BooleanStatisticsState>();
-		auto &state = state_p->Cast<BooleanWriterPageState>();
-		auto &mask = FlatVector::Validity(input_column);
-
-		auto *ptr = FlatVector::GetData<bool>(input_column);
-		for (idx_t r = chunk_start; r < chunk_end; r++) {
-			if (mask.RowIsValid(r)) {
-				// only encode if non-null
-				if (ptr[r]) {
-					stats.max = true;
-					state.byte |= 1 << state.byte_pos;
-				} else {
-					stats.min = false;
-				}
-				state.byte_pos++;
-
-				if (state.byte_pos == 8) {
-					temp_writer.Write<uint8_t>(state.byte);
-					state.byte = 0;
-					state.byte_pos = 0;
-				}
-			}
-		}
-	}
-
-	unique_ptr<ColumnWriterPageState> InitializePageState(PrimitiveColumnWriterState &state) override {
-		return make_uniq<BooleanWriterPageState>();
-	}
-
-	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override {
-		auto &state = state_p->Cast<BooleanWriterPageState>();
-		if (state.byte_pos > 0) {
-			temp_writer.Write<uint8_t>(state.byte);
-			state.byte = 0;
-			state.byte_pos = 0;
-		}
-	}
-
-	idx_t GetRowSize(const Vector &vector, const idx_t index, const PrimitiveColumnWriterState &state) const override {
-		return sizeof(bool);
 	}
 };
 

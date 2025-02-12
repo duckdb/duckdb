@@ -2,6 +2,7 @@ add_library_unity(
   duckdb_parquet_writers
   OBJECT
   array_column_writer.cpp
+  boolean_column_writer.cpp
   list_column_writer.cpp
   primitive_column_writer.cpp
   struct_column_writer.cpp)

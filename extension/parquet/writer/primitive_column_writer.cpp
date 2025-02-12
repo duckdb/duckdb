@@ -8,9 +8,9 @@ namespace duckdb {
 using duckdb_parquet::Encoding;
 using duckdb_parquet::PageType;
 
-PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path, idx_t max_repeat,
-				  idx_t max_define, bool can_have_nulls)
-	: ColumnWriter(writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls) {
+PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path,
+                                             idx_t max_repeat, idx_t max_define, bool can_have_nulls)
+    : ColumnWriter(writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls) {
 }
 
 unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
@@ -36,7 +36,8 @@ unique_ptr<ColumnWriterPageState> PrimitiveColumnWriter::InitializePageState(Pri
 void PrimitiveColumnWriter::FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state) {
 }
 
-void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
+void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector,
+                                    idx_t count) {
 	auto &state = state_p.Cast<PrimitiveColumnWriterState>();
 	auto &col_chunk = state.row_group.columns[state.col_idx];
 
@@ -116,8 +117,8 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 	NextPage(state);
 }
 
-void PrimitiveColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels, idx_t max_value,
-                                    idx_t offset, idx_t count) {
+void PrimitiveColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels,
+                                        idx_t max_value, idx_t offset, idx_t count) {
 	if (levels.empty() || count == 0) {
 		return;
 	}
@@ -201,7 +202,7 @@ unique_ptr<ColumnWriterStatistics> PrimitiveColumnWriter::InitializeStatsState()
 }
 
 idx_t PrimitiveColumnWriter::GetRowSize(const Vector &vector, const idx_t index,
-                                    const PrimitiveColumnWriterState &state) const {
+                                        const PrimitiveColumnWriterState &state) const {
 	throw InternalException("GetRowSize unsupported for struct/list column writers");
 }
 
@@ -231,7 +232,8 @@ void PrimitiveColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, id
 	}
 }
 
-void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &state, duckdb_parquet::ColumnChunk &column_chunk) {
+void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &state,
+                                                 duckdb_parquet::ColumnChunk &column_chunk) {
 	if (!state.stats_state) {
 		return;
 	}
@@ -337,7 +339,7 @@ idx_t PrimitiveColumnWriter::DictionarySize(PrimitiveColumnWriterState &state) {
 }
 
 void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, unique_ptr<MemoryStream> temp_writer,
-                                        idx_t row_count) {
+                                            idx_t row_count) {
 	D_ASSERT(temp_writer);
 	D_ASSERT(temp_writer->GetPosition() > 0);
 
@@ -366,5 +368,4 @@ void PrimitiveColumnWriter::WriteDictionary(PrimitiveColumnWriterState &state, u
 	state.write_info.insert(state.write_info.begin(), std::move(write_info));
 }
 
-
-}
+} // namespace duckdb

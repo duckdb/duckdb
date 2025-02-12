@@ -133,4 +133,4 @@ void ListColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	child_writer->FinalizeWrite(*state.child_state);
 }
 
-}
+} // namespace duckdb

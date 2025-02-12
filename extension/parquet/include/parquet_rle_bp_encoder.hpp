@@ -17,7 +17,7 @@ namespace duckdb {
 class RleBpEncoder {
 public:
 	explicit RleBpEncoder(uint32_t bit_width)
-    : byte_width((bit_width + 7) / 8), byte_count(idx_t(-1)), run_count(idx_t(-1)) {
+	    : byte_width((bit_width + 7) / 8), byte_count(idx_t(-1)), run_count(idx_t(-1)) {
 	}
 
 public:
@@ -30,7 +30,7 @@ public:
 		current_run_count = 1;
 		last_value = first_value;
 	}
-	void PrepareValue(uint32_t value){
+	void PrepareValue(uint32_t value) {
 		if (value != last_value) {
 			FinishRun();
 			last_value = value;
@@ -55,11 +55,11 @@ public:
 			current_run_count++;
 		}
 	}
-	void FinishWrite(WriteStream &writer){
+	void FinishWrite(WriteStream &writer) {
 		WriteRun(writer);
 	}
 
-	idx_t GetByteCount(){
+	idx_t GetByteCount() {
 		D_ASSERT(byte_count != idx_t(-1));
 		return byte_count;
 	}
@@ -74,14 +74,14 @@ private:
 	uint32_t last_value;
 
 private:
-	void FinishRun(){
+	void FinishRun() {
 		// last value, or value has changed
 		// write out the current run
 		byte_count += ParquetDecodeUtils::GetVarintSize(current_run_count << 1) + byte_width;
 		current_run_count = 1;
 		run_count++;
 	}
-	void WriteRun(WriteStream &writer){
+	void WriteRun(WriteStream &writer) {
 		// write the header of the run
 		ParquetDecodeUtils::VarintEncode(current_run_count << 1, writer);
 		// now write the value

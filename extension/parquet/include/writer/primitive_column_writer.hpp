@@ -34,7 +34,7 @@ struct PageWriteInformation {
 class PrimitiveColumnWriterState : public ColumnWriterState {
 public:
 	PrimitiveColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
-		: row_group(row_group), col_idx(col_idx) {
+	    : row_group(row_group), col_idx(col_idx) {
 		page_info.emplace_back();
 	}
 	~PrimitiveColumnWriterState() override = default;
@@ -53,7 +53,7 @@ public:
 class PrimitiveColumnWriter : public ColumnWriter {
 public:
 	PrimitiveColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path, idx_t max_repeat,
-	                  idx_t max_define, bool can_have_nulls);
+	                      idx_t max_define, bool can_have_nulls);
 	~PrimitiveColumnWriter() override = default;
 
 	//! We limit the uncompressed page size to 100MB

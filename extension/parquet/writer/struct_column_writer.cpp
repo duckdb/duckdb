@@ -97,4 +97,4 @@ void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	}
 }
 
-}
+} // namespace duckdb
