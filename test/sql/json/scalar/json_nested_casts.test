@@ -35,18 +35,18 @@ Conversion Error
 query I
 select cast(['[1, 2]', '[3, 4]'] as json[]);
 ----
-[[1, 2], [3, 4]]
+[\[1\, 2\], \[3\, 4\]]
 
 # struct with varchar to json
 query I
 SELECT {'a': '[1, 2]'}::ROW(a JSON)
 ----
-{'a': [1, 2]}
+{'a': [1\, 2]}
 
 query I
 SELECT {'a': 42, 'b': '[1, 2]'}::ROW(a JSON, b JSON)
 ----
-{'a': 42, 'b': [1, 2]}
+{'a': 42, 'b': [1\, 2]}
 
 query I
 SELECT {'a': 42, 'b': '[1, 2]'}::ROW(a JSON, b INT[])
@@ -62,7 +62,7 @@ Conversion Error
 query I
 SELECT '{a: [1, 2]}'::ROW(a JSON)
 ----
-{'a': [1, 2]}
+{'a': [1\, 2]}
 
 # map with varchar to json
 query I

@@ -159,7 +159,7 @@ select json_transform('{"a": 4, "a": 2}', '{"a": "UBIGINT", "a": "UBIGINT"}')
 query T
 select json_transform('{"a": {"duck": 42, "goose": 7}}', '{"a": "JSON"}')
 ----
-{'a': {"duck":42,"goose":7}}
+{'a': \{\"duck\"\:42\,\"goose\"\:7\}}
 
 # loops over all types for coverage
 
