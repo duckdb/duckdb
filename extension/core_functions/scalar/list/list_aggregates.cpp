@@ -15,7 +15,17 @@
 
 namespace duckdb {
 
-// FIXME: use a local state for each thread to increase performance?
+struct ListAggregatesLocalState : public FunctionLocalState {
+	explicit ListAggregatesLocalState(Allocator &allocator) : arena_allocator(allocator) {
+	}
+
+	ArenaAllocator arena_allocator;
+};
+
+unique_ptr<FunctionLocalState> ListAggregatesInitLocalState(ExpressionState &state, const BoundFunctionExpression &expr,
+                                                            FunctionData *bind_data) {
+	return make_uniq<ListAggregatesLocalState>(BufferAllocator::Get(state.GetContext()));
+}
 // FIXME: benchmark the use of simple_update against using update (if applicable)
 
 static unique_ptr<FunctionData> ListAggregatesBindFailure(ScalarFunction &bound_function) {
@@ -207,7 +217,8 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ListAggregatesBindData>();
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
-	ArenaAllocator allocator(Allocator::DefaultAllocator());
+	auto &allocator = state.Cast<ListAggregatesLocalState>().arena_allocator;
+	allocator.Reset();
 	AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 
 	D_ASSERT(aggr.function.update);
@@ -523,12 +534,12 @@ ScalarFunction ListAggregateFun::GetFunction() {
 
 ScalarFunction ListDistinctFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::LIST(LogicalType::ANY),
-	                      ListDistinctFunction, ListDistinctBind);
+	                      ListDistinctFunction, ListDistinctBind, nullptr, nullptr, ListAggregatesInitLocalState);
 }
 
 ScalarFunction ListUniqueFun::GetFunction() {
 	return ScalarFunction({LogicalType::LIST(LogicalType::ANY)}, LogicalType::UBIGINT, ListUniqueFunction,
-	                      ListUniqueBind);
+	                      ListUniqueBind, nullptr, nullptr, ListAggregatesInitLocalState);
 }
 
 } // namespace duckdb
