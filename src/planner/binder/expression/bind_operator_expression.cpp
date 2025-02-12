@@ -11,12 +11,6 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
-namespace {
-
-enum class TryExpressionBindError : uint8_t { NONE, VOLATILE_FUNCTION, SUBQUERY };
-
-} // namespace
-
 namespace duckdb {
 
 LogicalType ExpressionBinder::ResolveNotType(OperatorExpression &op, vector<unique_ptr<Expression>> &children) {
@@ -183,28 +177,11 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		break;
 	case ExpressionType::OPERATOR_TRY: {
 		auto &expr = BoundExpression::GetExpression(*op.children[0]);
-		TryExpressionBindError bind_error = TryExpressionBindError::NONE;
-		ExpressionIterator::EnumerateExpression(expr, [&bind_error](Expression &child) {
-			if (bind_error != TryExpressionBindError::NONE) {
-				return;
-			}
-			if (child.GetExpressionClass() == ExpressionClass::BOUND_SUBQUERY) {
-				bind_error = TryExpressionBindError::SUBQUERY;
-			} else if (child.GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
-				auto &bound_function = child.Cast<BoundFunctionExpression>();
-				if (bound_function.function.stability == FunctionStability::VOLATILE) {
-					bind_error = TryExpressionBindError::VOLATILE_FUNCTION;
-					return;
-				}
-			}
-		});
-		switch (bind_error) {
-		case TryExpressionBindError::SUBQUERY:
+		if (expr->HasSubquery()) {
 			throw BinderException("TRY can not be used in combination with a scalar subquery");
-		case TryExpressionBindError::VOLATILE_FUNCTION:
+		}
+		if (expr->IsVolatile()) {
 			throw BinderException("TRY can not be used in combination with a volatile function");
-		default:
-			break;
 		}
 		break;
 	}
