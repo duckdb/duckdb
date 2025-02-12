@@ -45,4 +45,39 @@ private:
 	unsafe_unique_ptr<MemoryStream> stream;
 };
 
+namespace dlba_encoder {
+
+template <class T>
+void BeginWrite(DlbaEncoder &encoder, WriteStream &writer, const T &first_value) {
+	throw InternalException("Can't write type to DELTA_LENGTH_BYTE_ARRAY column");
+}
+
+template <>
+void BeginWrite(DlbaEncoder &encoder, WriteStream &writer, const string_t &first_value) {
+	encoder.BeginWrite(writer, first_value);
+}
+
+template <class T>
+void WriteValue(DlbaEncoder &encoder, WriteStream &writer, const T &value) {
+	throw InternalException("Can't write type to DELTA_LENGTH_BYTE_ARRAY column");
+}
+
+template <>
+void WriteValue(DlbaEncoder &encoder, WriteStream &writer, const string_t &value) {
+	encoder.WriteValue(writer, value);
+}
+
+// helpers to get size from strings
+template <class SRC>
+static idx_t GetDlbaStringSize(const SRC &src_value) {
+	return 0;
+}
+
+template <>
+idx_t GetDlbaStringSize(const string_t &src_value) {
+	return src_value.GetSize();
+}
+
+} // namespace dlba_encoder
+
 } // namespace duckdb
