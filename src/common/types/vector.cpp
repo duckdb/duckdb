@@ -1364,7 +1364,7 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		deserializer.ReadProperty(100, "sel_vector", reinterpret_cast<data_ptr_t>(sel.data()), sizeof(sel_t) * count);
 		const auto dict_count = deserializer.ReadProperty<idx_t>(101, "dict_count");
 		Vector::Deserialize(deserializer, dict_count); // deserialize the dictionary in this vector
-		Vector::Slice(sel, count);                         // will create a dictionary vector
+		Vector::Slice(sel, count);                     // will create a dictionary vector
 		return;
 	} else if (vtype == VectorType::SEQUENCE_VECTOR) {
 		const int64_t seq_start = deserializer.ReadProperty<int64_t>(100, "seq_start");
