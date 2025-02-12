@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// struct_column_reader.hpp
+// reader/struct_column_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,7 +9,7 @@
 #pragma once
 
 #include "column_reader.hpp"
-#include "templated_column_reader.hpp"
+#include "reader/templated_column_reader.hpp"
 
 namespace duckdb {
 
@@ -28,8 +28,7 @@ public:
 
 	void InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns, TProtocol &protocol_p) override;
 
-	idx_t Read(uint64_t num_values, parquet_filter_t &filter, data_ptr_t define_out, data_ptr_t repeat_out,
-	           Vector &result) override;
+	idx_t Read(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result) override;
 
 	void Skip(idx_t num_values) override;
 	idx_t GroupRowsAvailable() override;

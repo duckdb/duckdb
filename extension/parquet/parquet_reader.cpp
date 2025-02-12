@@ -1,38 +1,31 @@
 #include "parquet_reader.hpp"
 
-#include "boolean_column_reader.hpp"
-#include "callback_column_reader.hpp"
-#include "cast_column_reader.hpp"
+#include "reader/boolean_column_reader.hpp"
+#include "reader/callback_column_reader.hpp"
+#include "reader/cast_column_reader.hpp"
 #include "column_reader.hpp"
 #include "duckdb.hpp"
-#include "expression_column_reader.hpp"
+#include "reader/expression_column_reader.hpp"
 #include "geo_parquet.hpp"
-#include "list_column_reader.hpp"
+#include "reader/list_column_reader.hpp"
 #include "parquet_crypto.hpp"
 #include "parquet_file_metadata_cache.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_timestamp.hpp"
 #include "mbedtls_wrapper.hpp"
-#include "row_number_column_reader.hpp"
-#include "string_column_reader.hpp"
-#include "struct_column_reader.hpp"
-#include "templated_column_reader.hpp"
+#include "reader/row_number_column_reader.hpp"
+#include "reader/string_column_reader.hpp"
+#include "reader/struct_column_reader.hpp"
+#include "reader/templated_column_reader.hpp"
 #include "thrift_tools.hpp"
 #include "duckdb/main/config.hpp"
-
-#ifndef DUCKDB_AMALGAMATION
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/planner/filter/conjunction_filter.hpp"
-#include "duckdb/planner/filter/constant_filter.hpp"
-#include "duckdb/planner/filter/struct_filter.hpp"
-#include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
-#endif
 
 #include <cassert>
 #include <chrono>
@@ -860,219 +853,10 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 		state.file_handle = fs.OpenFile(file_handle->path, flags);
 	}
-
 	state.thrift_file_proto = CreateThriftFileProtocol(allocator, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
-}
-
-void FilterIsNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
-	if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		auto &mask = ConstantVector::Validity(v);
-		if (mask.RowIsValid(0)) {
-			filter_mask.reset();
-		}
-		return;
-	}
-
-	UnifiedVectorFormat unified;
-	v.ToUnifiedFormat(count, unified);
-
-	if (unified.validity.AllValid()) {
-		filter_mask.reset();
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			if (filter_mask.test(i)) {
-				filter_mask.set(i, !unified.validity.RowIsValid(unified.sel->get_index(i)));
-			}
-		}
-	}
-}
-
-void FilterIsNotNull(Vector &v, parquet_filter_t &filter_mask, idx_t count) {
-	if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		auto &mask = ConstantVector::Validity(v);
-		if (!mask.RowIsValid(0)) {
-			filter_mask.reset();
-		}
-		return;
-	}
-
-	UnifiedVectorFormat unified;
-	v.ToUnifiedFormat(count, unified);
-
-	if (!unified.validity.AllValid()) {
-		for (idx_t i = 0; i < count; i++) {
-			if (filter_mask.test(i)) {
-				filter_mask.set(i, unified.validity.RowIsValid(unified.sel->get_index(i)));
-			}
-		}
-	}
-}
-
-template <class T, class OP>
-void TemplatedFilterOperation(Vector &v, T constant, parquet_filter_t &filter_mask, idx_t count) {
-	if (v.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		auto v_ptr = ConstantVector::GetData<T>(v);
-		auto &mask = ConstantVector::Validity(v);
-
-		if (mask.RowIsValid(0)) {
-			if (!OP::Operation(v_ptr[0], constant)) {
-				filter_mask.reset();
-			}
-		} else {
-			filter_mask.reset();
-		}
-		return;
-	}
-
-	UnifiedVectorFormat unified;
-	v.ToUnifiedFormat(count, unified);
-	auto data_ptr = UnifiedVectorFormat::GetData<T>(unified);
-
-	if (!unified.validity.AllValid()) {
-		for (idx_t i = 0; i < count; i++) {
-			if (filter_mask.test(i)) {
-				auto idx = unified.sel->get_index(i);
-				bool is_valid = unified.validity.RowIsValid(idx);
-				if (is_valid) {
-					filter_mask.set(i, OP::Operation(data_ptr[idx], constant));
-				} else {
-					filter_mask.set(i, false);
-				}
-			}
-		}
-	} else {
-		for (idx_t i = 0; i < count; i++) {
-			if (filter_mask.test(i)) {
-				filter_mask.set(i, OP::Operation(data_ptr[unified.sel->get_index(i)], constant));
-			}
-		}
-	}
-}
-
-template <class T, class OP>
-void TemplatedFilterOperation(Vector &v, const Value &constant, parquet_filter_t &filter_mask, idx_t count) {
-	TemplatedFilterOperation<T, OP>(v, constant.template GetValueUnsafe<T>(), filter_mask, count);
-}
-
-template <class OP>
-static void FilterOperationSwitch(Vector &v, Value &constant, parquet_filter_t &filter_mask, idx_t count) {
-	if (filter_mask.none() || count == 0) {
-		return;
-	}
-	switch (v.GetType().InternalType()) {
-	case PhysicalType::BOOL:
-		TemplatedFilterOperation<bool, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::UINT8:
-		TemplatedFilterOperation<uint8_t, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedFilterOperation<uint16_t, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedFilterOperation<uint32_t, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedFilterOperation<uint64_t, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::INT8:
-		TemplatedFilterOperation<int8_t, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::INT16:
-		TemplatedFilterOperation<int16_t, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::INT32:
-		TemplatedFilterOperation<int32_t, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::INT64:
-		TemplatedFilterOperation<int64_t, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::INT128:
-		TemplatedFilterOperation<hugeint_t, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedFilterOperation<float, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedFilterOperation<double, OP>(v, constant, filter_mask, count);
-		break;
-	case PhysicalType::VARCHAR:
-		TemplatedFilterOperation<string_t, OP>(v, constant, filter_mask, count);
-		break;
-	default:
-		throw NotImplementedException("Unsupported type for filter %s", v.ToString());
-	}
-}
-
-static void ApplyFilter(Vector &v, TableFilter &filter, parquet_filter_t &filter_mask, idx_t count) {
-	switch (filter.filter_type) {
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction = filter.Cast<ConjunctionAndFilter>();
-		for (auto &child_filter : conjunction.child_filters) {
-			ApplyFilter(v, *child_filter, filter_mask, count);
-		}
-		break;
-	}
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &conjunction = filter.Cast<ConjunctionOrFilter>();
-		parquet_filter_t or_mask;
-		for (auto &child_filter : conjunction.child_filters) {
-			parquet_filter_t child_mask = filter_mask;
-			ApplyFilter(v, *child_filter, child_mask, count);
-			or_mask |= child_mask;
-		}
-		filter_mask &= or_mask;
-		break;
-	}
-	case TableFilterType::CONSTANT_COMPARISON: {
-		auto &constant_filter = filter.Cast<ConstantFilter>();
-		switch (constant_filter.comparison_type) {
-		case ExpressionType::COMPARE_EQUAL:
-			FilterOperationSwitch<Equals>(v, constant_filter.constant, filter_mask, count);
-			break;
-		case ExpressionType::COMPARE_LESSTHAN:
-			FilterOperationSwitch<LessThan>(v, constant_filter.constant, filter_mask, count);
-			break;
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			FilterOperationSwitch<LessThanEquals>(v, constant_filter.constant, filter_mask, count);
-			break;
-		case ExpressionType::COMPARE_GREATERTHAN:
-			FilterOperationSwitch<GreaterThan>(v, constant_filter.constant, filter_mask, count);
-			break;
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			FilterOperationSwitch<GreaterThanEquals>(v, constant_filter.constant, filter_mask, count);
-			break;
-		case ExpressionType::COMPARE_NOTEQUAL:
-			FilterOperationSwitch<NotEquals>(v, constant_filter.constant, filter_mask, count);
-			break;
-		default:
-			throw InternalException("Unsupported comparison for Parquet filter pushdown");
-		}
-		break;
-	}
-	case TableFilterType::IS_NOT_NULL:
-		FilterIsNotNull(v, filter_mask, count);
-		break;
-	case TableFilterType::IS_NULL:
-		FilterIsNull(v, filter_mask, count);
-		break;
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = filter.Cast<StructFilter>();
-		auto &child = StructVector::GetEntries(v)[struct_filter.child_idx];
-		ApplyFilter(*child, *struct_filter.child_filter, filter_mask, count);
-	}
-	case TableFilterType::OPTIONAL_FILTER: {
-		// we don't execute zone map filters here - we only consider them for zone map pruning
-		// do nothing to the mask.
-		break;
-	}
-	default:
-		D_ASSERT(0);
-		break;
-	}
 }
 
 void ParquetReader::Scan(ParquetReaderScanState &state, DataChunk &result) {
@@ -1165,22 +949,12 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		return true;
 	}
 
-	auto this_output_chunk_rows = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.group_offset);
-	result.SetCardinality(this_output_chunk_rows);
+	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.group_offset);
+	result.SetCardinality(scan_count);
 
-	if (this_output_chunk_rows == 0) {
+	if (scan_count == 0) {
 		state.finished = true;
 		return false; // end of last group, we are done
-	}
-
-	// we evaluate simple table filters directly in this scan so we can skip decoding column data that's never going to
-	// be relevant
-	parquet_filter_t filter_mask;
-	filter_mask.set();
-
-	// mask out unused part of bitset
-	for (idx_t i = this_output_chunk_rows; i < STANDARD_VECTOR_SIZE; i++) {
-		filter_mask.set(i, false);
 	}
 
 	state.define_buf.zero();
@@ -1192,20 +966,32 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 	auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
 	if (reader_data.filters) {
+		idx_t filter_count = result.size();
 		vector<bool> need_to_read(reader_data.column_ids.size(), true);
 
+		state.sel.Initialize(nullptr);
+		if (state.scan_filters.empty()) {
+			state.adaptive_filter = make_uniq<AdaptiveFilter>(*reader_data.filters);
+			for (auto &entry : reader_data.filters->filters) {
+				state.scan_filters.emplace_back(entry.first, *entry.second);
+			}
+		}
+		D_ASSERT(state.scan_filters.size() == reader_data.filters->filters.size());
+
 		// first load the columns that are used in filters
-		for (auto &filter_col : reader_data.filters->filters) {
-			if (filter_mask.none()) {
+		auto filter_state = state.adaptive_filter->BeginFilter();
+		for (idx_t i = 0; i < state.scan_filters.size(); i++) {
+			if (filter_count == 0) {
 				// if no rows are left we can stop checking filters
 				break;
 			}
-			auto filter_entry = reader_data.filter_map[filter_col.first];
+			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
+			auto filter_entry = reader_data.filter_map[scan_filter.filter_idx];
 			if (filter_entry.is_constant) {
 				// this is a constant vector, look for the constant
 				auto &constant = reader_data.constant_map[filter_entry.index].value;
 				Vector constant_vector(constant);
-				ApplyFilter(constant_vector, *filter_col.second, filter_mask, this_output_chunk_rows);
+				ColumnReader::ApplyFilter(constant_vector, scan_filter.filter, scan_count, state.sel, filter_count);
 			} else {
 				auto id = filter_entry.index;
 				auto file_col_idx = reader_data.column_ids[id];
@@ -1213,12 +999,12 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 				auto &result_vector = result.data[result_idx];
 				auto &child_reader = root_reader.GetChildReader(file_col_idx);
-				child_reader.Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
+				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter, state.sel,
+				                    filter_count, i == 0);
 				need_to_read[id] = false;
-
-				ApplyFilter(result_vector, *filter_col.second, filter_mask, this_output_chunk_rows);
 			}
 		}
+		state.adaptive_filter->EndFilter(filter_state);
 
 		// we still may have to read some cols
 		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
@@ -1226,37 +1012,30 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				continue;
 			}
 			auto file_col_idx = reader_data.column_ids[col_idx];
-			if (filter_mask.none()) {
+			if (filter_count == 0) {
 				root_reader.GetChildReader(file_col_idx).Skip(result.size());
 				continue;
 			}
 			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
-			child_reader.Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
+			child_reader.Read(result.size(), define_ptr, repeat_ptr, result_vector);
 		}
 
-		idx_t sel_size = 0;
-		for (idx_t i = 0; i < this_output_chunk_rows; i++) {
-			if (filter_mask.test(i)) {
-				state.sel.set_index(sel_size++, i);
-			}
-		}
-
-		result.Slice(state.sel, sel_size);
+		result.Slice(state.sel, filter_count);
 	} else {
 		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
 			auto file_col_idx = reader_data.column_ids[col_idx];
 			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
-			auto rows_read = child_reader.Read(result.size(), filter_mask, define_ptr, repeat_ptr, result_vector);
-			if (rows_read != result.size()) {
+			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
+			if (rows_read != scan_count) {
 				throw InvalidInputException("Mismatch in parquet read for column %llu, expected %llu rows, got %llu",
-				                            file_col_idx, result.size(), rows_read);
+				                            file_col_idx, scan_count, rows_read);
 			}
 		}
 	}
 
-	state.group_offset += this_output_chunk_rows;
+	state.group_offset += scan_count;
 	return true;
 }
 

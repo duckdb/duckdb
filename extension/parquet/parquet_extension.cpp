@@ -2,7 +2,7 @@
 
 #include "parquet_extension.hpp"
 
-#include "cast_column_reader.hpp"
+#include "reader/cast_column_reader.hpp"
 #include "duckdb.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
@@ -15,7 +15,7 @@
 #include "parquet_metadata.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_writer.hpp"
-#include "struct_column_reader.hpp"
+#include "reader/struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
 
 #include <fstream>

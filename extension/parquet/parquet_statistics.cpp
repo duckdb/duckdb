@@ -3,8 +3,8 @@
 #include "duckdb.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_timestamp.hpp"
-#include "string_column_reader.hpp"
-#include "struct_column_reader.hpp"
+#include "reader/string_column_reader.hpp"
+#include "reader/struct_column_reader.hpp"
 #include "zstd/common/xxhash.hpp"
 
 #ifndef DUCKDB_AMALGAMATION
