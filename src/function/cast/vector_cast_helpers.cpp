@@ -279,7 +279,6 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 					state.HandleValue(buf, 0, 0);
 				} else {
 					auto start = start_pos.GetIndex();
-					auto end = (end_pos + 1) - start;
 					state.HandleValue(buf, start, end_pos + 1);
 				}
 				seen_value = true;
