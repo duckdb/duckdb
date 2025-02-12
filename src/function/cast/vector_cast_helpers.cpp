@@ -35,6 +35,7 @@ inline static void SkipWhitespace(StringCastInputState &input_state) {
 	auto &pos = input_state.pos;
 	auto &len = input_state.len;
 	if (input_state.escaped) {
+		//! Escaped whitespace should not be skipped
 		return;
 	}
 	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
@@ -735,56 +736,52 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 			idx_t end_pos;
 			while (pos < len && ((buf[pos] != ',' && buf[pos] != ')') || input_state.escaped)) {
 				bool set_escaped = false;
-				if (buf[pos] == '"' || buf[pos] == '\'') {
+
+				if (input_state.escaped) {
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
-					if (!input_state.escaped) {
-						if (!SkipToCloseQuotes(input_state)) {
-							return false;
-						}
+					end_pos = pos;
+				} else if (buf[pos] == '"' || buf[pos] == '\'') {
+					if (!start_pos.IsValid()) {
+						start_pos = pos;
+					}
+					if (!SkipToCloseQuotes(input_state)) {
+						return false;
 					}
 					end_pos = pos;
 				} else if (buf[pos] == '{') {
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
-					if (!input_state.escaped) {
-						if (!SkipToClose(input_state, lvl, '}')) {
-							return false;
-						}
+					if (!SkipToClose(input_state, lvl, '}')) {
+						return false;
 					}
 					end_pos = pos;
 				} else if (buf[pos] == '(') {
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
-					if (!input_state.escaped) {
-						if (!SkipToClose(input_state, lvl, ')')) {
-							return false;
-						}
+					if (!SkipToClose(input_state, lvl, ')')) {
+						return false;
 					}
 					end_pos = pos;
 				} else if (buf[pos] == '[') {
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
-					if (!input_state.escaped) {
-						lvl++;
-						if (!SkipToClose(input_state, lvl, ']')) {
-							return false;
-						}
+					lvl++;
+					if (!SkipToClose(input_state, lvl, ']')) {
+						return false;
 					}
 					end_pos = pos;
 				} else if (buf[pos] == '\\') {
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
-					if (!input_state.escaped) {
-						set_escaped = true;
-					}
+					set_escaped = true;
 					end_pos = pos;
-				} else if (!StringUtil::CharacterIsSpace(buf[pos]) || input_state.escaped) {
+				} else if (!StringUtil::CharacterIsSpace(buf[pos])) {
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
