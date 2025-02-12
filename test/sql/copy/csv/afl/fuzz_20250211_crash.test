@@ -1,0 +1,539 @@
+# name: test/sql/copy/csv/afl/fuzz_20250211_crash.test
+# description: fuzzer generated csv files - should not raise internal exception (by failed assertion).
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select count(file) from glob('./data/csv/afl/20250211_csv_fuzz_crash/*');
+----
+132
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_1.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_2.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_3.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_4.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_5.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_6.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_7.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_8.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_9.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_10.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_11.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_12.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_13.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_14.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_15.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_16.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_17.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_18.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_19.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_20.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_21.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_22.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_23.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_24.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_25.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_26.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_27.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_28.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_29.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_30.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_31.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_32.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_33.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_34.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=B);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_35.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_36.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, hive_partitioning=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_37.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_38.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_39.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_40.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_41.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_42.csv', auto_detect=false, buffer_size=11, columns={'': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_43.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_44.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_45.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_46.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_47.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_48.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_49.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_50.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_51.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_52.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_53.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_54.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_55.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_56.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_57.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_58.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_59.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_60.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_61.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_62.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_63.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_64.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_65.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', escape='"', quote='"');
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_66.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', escape='"', quote='"');
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_67.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', escape='"', quote='"');
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_68.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', escape='"', quote='"');
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_69.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_70.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_71.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_72.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_73.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_74.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_75.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, rejects_table=0);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_76.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=false, all_varchar=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_77.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_78.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_79.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_80.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_81.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_82.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_83.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_84.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_85.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_86.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_87.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_88.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_89.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_90.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_91.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_92.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_93.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=false);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_94.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_95.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_96.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_97.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_98.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_99.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_100.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_101.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_102.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_103.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_104.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_105.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_106.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_107.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_108.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_109.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_110.csv', buffer_size=57);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_111.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_112.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_113.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_114.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_115.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_116.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=false);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_117.csv', auto_detect=false, buffer_size=2, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_118.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_119.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_120.csv', buffer_size=42);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_121.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_122.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_123.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_124.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_125.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, null_padding=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_126.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', escape='"', quote='"');
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_127.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', escape='"', quote='"');
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_128.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', escape='"', quote='"');
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_129.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', escape='"', quote='"');
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_130.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', escape='"', quote='"');
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_131.csv', auto_detect=false, buffer_size=11, columns={'a': 'integer'}, header=true, allow_quoted_nulls=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_132.csv', auto_detect=false, buffer_size=42, columns={'a':'INTEGER','b':'INTEGER', 'c':'VARCHAR'}, delim=';', escape='"', quote='"');
+----
