@@ -126,6 +126,7 @@ struct CountPartOperation {
 	}
 };
 
+template <bool RESPECT_SCOPES = true>
 static string_t HandleString(Vector &vec, const char *buf, idx_t start, idx_t end) {
 	D_ASSERT(start <= end);
 	auto length = end - start;
@@ -162,17 +163,20 @@ static string_t HandleString(Vector &vec, const char *buf, idx_t start, idx_t en
 				scopes.pop();
 			}
 			if (!quoted && (current_char == '[' || current_char == '{' || current_char == '(')) {
-				//! New scope
-				char end_char;
-				if (current_char == '[') {
-					end_char = ']';
-				} else if (current_char == '{') {
-					end_char = '}';
-				} else {
-					D_ASSERT(current_char == '(');
-					end_char = ')';
+				if (RESPECT_SCOPES) {
+					//! 'RESPECT_SCOPES' is false in things like STRUCT keys, these are regular strings
+					//! New scope
+					char end_char;
+					if (current_char == '[') {
+						end_char = ']';
+					} else if (current_char == '{') {
+						end_char = '}';
+					} else {
+						D_ASSERT(current_char == '(');
+						end_char = ')';
+					}
+					scopes.push(end_char);
 				}
-				scopes.push(end_char);
 			}
 			//! Regular character
 			string_data[copied_count++] = current_char;
@@ -575,31 +579,6 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 						return false;
 					}
 					end_pos = pos;
-				} else if (buf[pos] == '{') {
-					if (!start_pos.IsValid()) {
-						start_pos = pos;
-					}
-					if (!SkipToClose(input_state, lvl, '}')) {
-						return false;
-					}
-					end_pos = pos;
-				} else if (buf[pos] == '(') {
-					if (!start_pos.IsValid()) {
-						start_pos = pos;
-					}
-					if (!SkipToClose(input_state, lvl, ')')) {
-						return false;
-					}
-					end_pos = pos;
-				} else if (buf[pos] == '[') {
-					if (!start_pos.IsValid()) {
-						start_pos = pos;
-					}
-					lvl++;
-					if (!SkipToClose(input_state, lvl, ']')) {
-						return false;
-					}
-					end_pos = pos;
 				} else if (buf[pos] == '\\') {
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
@@ -629,7 +608,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 				//! Key can not be NULL
 				return false;
 			}
-			auto child_name = HandleString(temp_vec, buf, key_start, end_pos);
+			auto child_name = HandleString<false>(temp_vec, buf, key_start, end_pos);
 			auto it = child_names.find(child_name);
 			if (it == child_names.end()) {
 				return false; // false key
