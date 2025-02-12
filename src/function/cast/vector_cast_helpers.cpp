@@ -273,6 +273,16 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 				return false;
 			}
 			end_pos = pos;
+		} else if (buf[pos] == '(') {
+			if (!start_pos.IsValid()) {
+				start_pos = pos;
+			}
+			//! Start of an (unnamed) STRUCT
+			idx_t struct_lvl = 0;
+			if (!SkipToClose(input_state, struct_lvl, ')')) {
+				return false;
+			}
+			end_pos = pos;
 		} else if ((buf[pos] == ',' || buf[pos] == ']')) {
 			if (buf[pos] != ']' || start_pos.IsValid() || seen_value) {
 				if (!start_pos.IsValid()) {
@@ -411,6 +421,14 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 					return false;
 				}
 				end_pos = pos;
+			} else if (buf[pos] == '(') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!SkipToClose(input_state, lvl, ')')) {
+					return false;
+				}
+				end_pos = pos;
 			} else if (buf[pos] == '[') {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
@@ -471,6 +489,14 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 					start_pos = pos;
 				}
 				if (!SkipToClose(input_state, lvl, '}')) {
+					return false;
+				}
+				end_pos = pos;
+			} else if (buf[pos] == '(') {
+				if (!start_pos.IsValid()) {
+					start_pos = pos;
+				}
+				if (!SkipToClose(input_state, lvl, ')')) {
 					return false;
 				}
 				end_pos = pos;
