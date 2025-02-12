@@ -1,6 +1,6 @@
 # name: test/sql/copy/csv/afl/fuzz_20250211_hangs.test
 # description: fuzzer generated csv files - should not raise internal exception (by failed assertion).
-# group: [csv]
+# group: [afl]
 
 # This test takes a very long time to run, ~ 6 minutes on a Mac M1 Max
 mode skip
