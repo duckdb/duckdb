@@ -12,6 +12,7 @@
 #include "writer/array_column_writer.hpp"
 #include "writer/boolean_column_writer.hpp"
 #include "writer/decimal_column_writer.hpp"
+#include "writer/enum_column_writer.hpp"
 #include "writer/list_column_writer.hpp"
 #include "writer/primitive_column_writer.hpp"
 #include "writer/struct_column_writer.hpp"
@@ -295,62 +296,6 @@ struct ParquetTimestampSOperator : public ParquetCastOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return Timestamp::FromEpochSecondsPossiblyInfinite(input).value;
-	}
-};
-
-class StringStatisticsState : public ColumnWriterStatistics {
-	static constexpr const idx_t MAX_STRING_STATISTICS_SIZE = 10000;
-
-public:
-	StringStatisticsState() : has_stats(false), values_too_big(false), min(), max() {
-	}
-
-	bool has_stats;
-	bool values_too_big;
-	string min;
-	string max;
-
-public:
-	bool HasStats() override {
-		return has_stats;
-	}
-
-	void Update(const string_t &val) {
-		if (values_too_big) {
-			return;
-		}
-		auto str_len = val.GetSize();
-		if (str_len > MAX_STRING_STATISTICS_SIZE) {
-			// we avoid gathering stats when individual string values are too large
-			// this is because the statistics are copied into the Parquet file meta data in uncompressed format
-			// ideally we avoid placing several mega or giga-byte long strings there
-			// we put a threshold of 10KB, if we see strings that exceed this threshold we avoid gathering stats
-			values_too_big = true;
-			has_stats = false;
-			min = string();
-			max = string();
-			return;
-		}
-		if (!has_stats || LessThan::Operation(val, string_t(min))) {
-			min = val.GetString();
-		}
-		if (!has_stats || GreaterThan::Operation(val, string_t(max))) {
-			max = val.GetString();
-		}
-		has_stats = true;
-	}
-
-	string GetMin() override {
-		return GetMinValue();
-	}
-	string GetMax() override {
-		return GetMaxValue();
-	}
-	string GetMinValue() override {
-		return HasStats() ? min : string();
-	}
-	string GetMaxValue() override {
-		return HasStats() ? max : string();
 	}
 };
 
@@ -1004,127 +949,6 @@ public:
 private:
 	string column_name;
 	ClientContext &context;
-};
-
-//===--------------------------------------------------------------------===//
-// Enum Column Writer
-//===--------------------------------------------------------------------===//
-class EnumWriterPageState : public ColumnWriterPageState {
-public:
-	explicit EnumWriterPageState(uint32_t bit_width) : encoder(bit_width), written_value(false) {
-	}
-
-	RleBpEncoder encoder;
-	bool written_value;
-};
-
-class EnumColumnWriter : public PrimitiveColumnWriter {
-public:
-	EnumColumnWriter(ParquetWriter &writer, LogicalType enum_type_p, idx_t schema_idx, vector<string> schema_path_p,
-	                 idx_t max_repeat, idx_t max_define, bool can_have_nulls)
-	    : PrimitiveColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
-	      enum_type(std::move(enum_type_p)) {
-		bit_width = RleBpDecoder::ComputeBitWidth(EnumType::GetSize(enum_type));
-	}
-	~EnumColumnWriter() override = default;
-
-	LogicalType enum_type;
-	uint32_t bit_width;
-
-public:
-	unique_ptr<ColumnWriterStatistics> InitializeStatsState() override {
-		return make_uniq<StringStatisticsState>();
-	}
-
-	template <class T>
-	void WriteEnumInternal(WriteStream &temp_writer, Vector &input_column, idx_t chunk_start, idx_t chunk_end,
-	                       EnumWriterPageState &page_state) {
-		auto &mask = FlatVector::Validity(input_column);
-		auto *ptr = FlatVector::GetData<T>(input_column);
-		for (idx_t r = chunk_start; r < chunk_end; r++) {
-			if (mask.RowIsValid(r)) {
-				if (!page_state.written_value) {
-					// first value
-					// write the bit-width as a one-byte entry
-					temp_writer.Write<uint8_t>(bit_width);
-					// now begin writing the actual value
-					page_state.encoder.BeginWrite(temp_writer, ptr[r]);
-					page_state.written_value = true;
-				} else {
-					page_state.encoder.WriteValue(temp_writer, ptr[r]);
-				}
-			}
-		}
-	}
-
-	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
-	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
-		auto &page_state = page_state_p->Cast<EnumWriterPageState>();
-		switch (enum_type.InternalType()) {
-		case PhysicalType::UINT8:
-			WriteEnumInternal<uint8_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
-			break;
-		case PhysicalType::UINT16:
-			WriteEnumInternal<uint16_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
-			break;
-		case PhysicalType::UINT32:
-			WriteEnumInternal<uint32_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
-			break;
-		default:
-			throw InternalException("Unsupported internal enum type");
-		}
-	}
-
-	unique_ptr<ColumnWriterPageState> InitializePageState(PrimitiveColumnWriterState &state) override {
-		return make_uniq<EnumWriterPageState>(bit_width);
-	}
-
-	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override {
-		auto &page_state = state_p->Cast<EnumWriterPageState>();
-		if (!page_state.written_value) {
-			// all values are null
-			// just write the bit width
-			temp_writer.Write<uint8_t>(bit_width);
-			return;
-		}
-		page_state.encoder.FinishWrite(temp_writer);
-	}
-
-	duckdb_parquet::Encoding::type GetEncoding(PrimitiveColumnWriterState &state) override {
-		return Encoding::RLE_DICTIONARY;
-	}
-
-	bool HasDictionary(PrimitiveColumnWriterState &state) override {
-		return true;
-	}
-
-	idx_t DictionarySize(PrimitiveColumnWriterState &state_p) override {
-		return EnumType::GetSize(enum_type);
-	}
-
-	void FlushDictionary(PrimitiveColumnWriterState &state, ColumnWriterStatistics *stats_p) override {
-		auto &stats = stats_p->Cast<StringStatisticsState>();
-		// write the enum values to a dictionary page
-		auto &enum_values = EnumType::GetValuesInsertOrder(enum_type);
-		auto enum_count = EnumType::GetSize(enum_type);
-		auto string_values = FlatVector::GetData<string_t>(enum_values);
-		// first write the contents of the dictionary page to a temporary buffer
-		auto temp_writer = make_uniq<MemoryStream>(Allocator::Get(writer.GetContext()));
-		for (idx_t r = 0; r < enum_count; r++) {
-			D_ASSERT(!FlatVector::IsNull(enum_values, r));
-			// update the statistics
-			stats.Update(string_values[r]);
-			// write this string value to the dictionary
-			temp_writer->Write<uint32_t>(string_values[r].GetSize());
-			temp_writer->WriteData(const_data_ptr_cast(string_values[r].GetData()), string_values[r].GetSize());
-		}
-		// flush the dictionary page and add it to the to-be-written pages
-		WriteDictionary(state, std::move(temp_writer), enum_count);
-	}
-
-	idx_t GetRowSize(const Vector &vector, const idx_t index, const PrimitiveColumnWriterState &state) const override {
-		return (bit_width + 7) / 8;
-	}
 };
 
 // special double/float class to deal with dictionary encoding and NaN equality

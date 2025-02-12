@@ -4,6 +4,7 @@ add_library_unity(
   array_column_writer.cpp
   boolean_column_writer.cpp
   decimal_column_writer.cpp
+  enum_column_writer.cpp
   list_column_writer.cpp
   primitive_column_writer.cpp
   struct_column_writer.cpp)
