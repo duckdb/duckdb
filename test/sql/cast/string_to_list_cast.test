@@ -506,11 +506,11 @@ statement error
 select '[{"bar":"\\""}]'::VARCHAR[];
 ----
 
-# escapes are only processed once the {} is cast as well
+# Unescaped doublequote ends the quote early, leaving an uneven amount of `"`, causing an error
 statement error
-query I
 select '[{"bar":"\\""}]'::STRUCT(bar VARCHAR)[];
 ----
+can't be cast to the destination type LIST
 
 # uneven amount of escapes does escape the "
 query I
