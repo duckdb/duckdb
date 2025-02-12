@@ -9,7 +9,7 @@ RLEDecoder::RLEDecoder(ColumnReader &reader) : reader(reader), decoded_data_buff
 }
 
 void RLEDecoder::InitializePage() {
-	if (reader.type.id() != LogicalTypeId::BOOLEAN) {
+	if (reader.Type().id() != LogicalTypeId::BOOLEAN) {
 		throw std::runtime_error("RLE encoding is only supported for boolean data");
 	}
 	auto &block = reader.block;
@@ -19,7 +19,7 @@ void RLEDecoder::InitializePage() {
 
 void RLEDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset) {
 	// RLE encoding for boolean
-	D_ASSERT(reader.type.id() == LogicalTypeId::BOOLEAN);
+	D_ASSERT(reader.Type().id() == LogicalTypeId::BOOLEAN);
 	idx_t valid_count = reader.GetValidCount(defines, read_count, result_offset);
 	decoded_data_buffer.reset();
 	decoded_data_buffer.resize(reader.reader.allocator, sizeof(bool) * valid_count);

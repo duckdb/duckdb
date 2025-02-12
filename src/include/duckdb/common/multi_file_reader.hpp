@@ -168,7 +168,7 @@ struct MultiFileFilterEntry {
 struct MultiFileConstantEntry {
 	MultiFileConstantEntry(idx_t column_id, Value value_p) : column_id(column_id), value(std::move(value_p)) {
 	}
-	//! The column id to apply the constant value to
+	//! The (global) column id to apply the constant value to
 	idx_t column_id;
 	//! The constant value
 	Value value;
@@ -273,7 +273,7 @@ struct MultiFileReader {
 	                                      const string &initial_file, const MultiFileReaderBindData &options,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
 	//! Populated the filter_map
-	DUCKDB_API virtual void CreateFilterMap(const vector<MultiFileReaderColumnDefinition> &global_columns,
+	DUCKDB_API virtual void CreateFilterMap(const vector<ColumnIndex> &global_column_ids,
 	                                        optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
 	                                        optional_ptr<MultiFileReaderGlobalState> global_state);
 
