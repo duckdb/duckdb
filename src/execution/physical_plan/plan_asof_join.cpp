@@ -31,7 +31,7 @@ static unique_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, 
 	//		 ∏ *,inequality
 	//		 |
 	//       ⨝ swapped
-	//     /   \
+	//     /   \ 
 	//    B     W pk:row_number
 	//          |
 	//          P
