@@ -280,7 +280,6 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 				} else {
 					auto start = start_pos.GetIndex();
 					auto end = (end_pos + 1) - start;
-					auto substr = std::string(buf + start, end);
 					state.HandleValue(buf, start, end_pos + 1);
 				}
 				seen_value = true;
@@ -441,11 +440,12 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 			return false;
 		}
 		if (!start_pos.IsValid()) {
-			//! Key can not be empty
-			return false;
+			start_pos = 0;
+			end_pos = 0;
+		} else {
+			end_pos++;
 		}
-		auto key_substr = std::string(buf + start_pos.GetIndex(), buf + end_pos + 1);
-		if (!state.HandleKey(buf, start_pos.GetIndex(), end_pos + 1)) {
+		if (!state.HandleKey(buf, start_pos.GetIndex(), end_pos)) {
 			return false;
 		}
 		start_pos = optional_idx();
@@ -506,7 +506,6 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 			//! Value is empty
 			state.HandleValue(buf, 0, 0);
 		} else {
-			auto value_substr = std::string(buf + start_pos.GetIndex(), buf + end_pos + 1);
 			state.HandleValue(buf, start_pos.GetIndex(), end_pos + 1);
 		}
 		if (buf[pos] == '}') {
