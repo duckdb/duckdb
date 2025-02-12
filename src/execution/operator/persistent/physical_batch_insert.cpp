@@ -215,7 +215,9 @@ public:
 		auto &gstate = gstate_p.Cast<BatchInsertGlobalState>();
 		auto &lstate = lstate_p.Cast<BatchInsertLocalState>();
 		// merge together the collections
-		D_ASSERT(lstate.writer);
+		if (!lstate.writer) {
+			lstate.writer = &gstate.table.GetStorage().CreateOptimisticWriter(context);
+		}
 		auto final_collection = gstate.MergeCollections(context, std::move(merge_collections), *lstate.writer);
 		// add the merged-together collection to the set of batch indexes
 		lock_guard<mutex> l(gstate.lock);
