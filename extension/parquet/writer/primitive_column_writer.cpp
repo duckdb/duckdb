@@ -13,7 +13,7 @@ PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, idx_t schema
 }
 
 unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
-	auto result = make_uniq<PrimitiveColumnWriterState>(row_group, row_group.columns.size());
+	auto result = make_uniq<PrimitiveColumnWriterState>(writer, row_group, row_group.columns.size());
 	RegisterToRowGroup(row_group);
 	return std::move(result);
 }

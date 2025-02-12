@@ -36,12 +36,13 @@ struct PageWriteInformation {
 
 class PrimitiveColumnWriterState : public ColumnWriterState {
 public:
-	PrimitiveColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
-	    : row_group(row_group), col_idx(col_idx) {
+	PrimitiveColumnWriterState(ParquetWriter &writer_p, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
+	    : writer(writer_p), row_group(row_group), col_idx(col_idx) {
 		page_info.emplace_back();
 	}
 	~PrimitiveColumnWriterState() override = default;
 
+	ParquetWriter &writer;
 	duckdb_parquet::RowGroup &row_group;
 	idx_t col_idx;
 	vector<PageInformation> page_info;

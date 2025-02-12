@@ -209,8 +209,8 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 // GeoParquet files.
 class WKBColumnWriterState final : public StandardColumnWriterState<string_t> {
 public:
-	WKBColumnWriterState(ClientContext &context, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
-	    : StandardColumnWriterState(row_group, col_idx), geo_data(), geo_data_writer(context) {
+	WKBColumnWriterState(ParquetWriter &writer, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
+	    : StandardColumnWriterState(writer, row_group, col_idx), geo_data(), geo_data_writer(writer.GetContext()) {
 	}
 
 	GeoParquetColumnMetadata geo_data;
@@ -228,7 +228,7 @@ public:
 	}
 
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
-		auto result = make_uniq<WKBColumnWriterState>(context, row_group, row_group.columns.size());
+		auto result = make_uniq<WKBColumnWriterState>(writer, row_group, row_group.columns.size());
 		result->encoding = Encoding::RLE_DICTIONARY;
 		RegisterToRowGroup(row_group);
 		return std::move(result);

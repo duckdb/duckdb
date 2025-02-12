@@ -13,6 +13,7 @@
 #include "parquet_dbp_encoder.hpp"
 #include "parquet_dlba_encoder.hpp"
 #include "parquet_rle_bp_encoder.hpp"
+#include "duckdb/common/primitive_dictionary.hpp"
 
 namespace duckdb {
 
@@ -34,8 +35,10 @@ static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, cons
 template <class T>
 class StandardColumnWriterState : public PrimitiveColumnWriterState {
 public:
-	StandardColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
-	    : PrimitiveColumnWriterState(row_group, col_idx) {
+	StandardColumnWriterState(ParquetWriter &writer, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
+	    : PrimitiveColumnWriterState(writer, row_group, col_idx),
+	      dictionary(BufferAllocator::Get(writer.GetContext()), writer.DictionarySizeLimit(),
+	                 2e6) { // TODO: make size configurable
 	}
 	~StandardColumnWriterState() override = default;
 
@@ -44,7 +47,7 @@ public:
 	idx_t total_string_size = 0;
 	uint32_t key_bit_width = 0;
 
-	unordered_map<T, uint32_t> dictionary;
+	PrimitiveDictionary<T> dictionary;
 	duckdb_parquet::Encoding::type encoding;
 };
 
@@ -53,7 +56,7 @@ class StandardWriterPageState : public ColumnWriterPageState {
 public:
 	explicit StandardWriterPageState(const idx_t total_value_count, const idx_t total_string_size,
 	                                 duckdb_parquet::Encoding::type encoding_p,
-	                                 const unordered_map<SRC, uint32_t> &dictionary_p)
+	                                 const PrimitiveDictionary<SRC> &dictionary_p)
 	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dlba_initialized(false),
 	      dlba_encoder(total_value_count, total_string_size), bss_encoder(total_value_count, sizeof(TGT)),
 	      dictionary(dictionary_p), dict_written_value(false),
@@ -69,7 +72,7 @@ public:
 
 	BssEncoder bss_encoder;
 
-	const unordered_map<SRC, uint32_t> &dictionary;
+	const PrimitiveDictionary<SRC> &dictionary;
 	bool dict_written_value;
 	uint32_t dict_bit_width;
 	RleBpEncoder dict_encoder;
@@ -86,7 +89,7 @@ public:
 
 public:
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
-		auto result = make_uniq<StandardColumnWriterState<SRC>>(row_group, row_group.columns.size());
+		auto result = make_uniq<StandardColumnWriterState<SRC>>(writer, row_group, row_group.columns.size());
 		result->encoding = duckdb_parquet::Encoding::RLE_DICTIONARY;
 		RegisterToRowGroup(row_group);
 		return std::move(result);
