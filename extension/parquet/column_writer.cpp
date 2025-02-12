@@ -9,7 +9,7 @@
 #include "parquet_bss_encoder.hpp"
 #include "parquet_statistics.hpp"
 #include "parquet_writer.hpp"
-#ifndef DUCKDB_AMALGAMATION
+#include "writer/struct_column_writer.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/operator/comparison_operators.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
@@ -21,7 +21,6 @@
 #include "duckdb/common/types/timestamp.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 #include "duckdb/execution/expression_executor.hpp"
-#endif
 
 #include "brotli/encode.h"
 #include "lz4.hpp"
@@ -47,7 +46,7 @@ using duckdb_parquet::PageType;
 using ParquetRowGroup = duckdb_parquet::RowGroup;
 using duckdb_parquet::Type;
 
-#define PARQUET_DEFINE_VALID 65535
+constexpr uint16_t ColumnWriter::PARQUET_DEFINE_VALID;
 
 //===--------------------------------------------------------------------===//
 // ColumnWriterStatistics
@@ -1879,127 +1878,6 @@ public:
 		return (bit_width + 7) / 8;
 	}
 };
-
-//===--------------------------------------------------------------------===//
-// Struct Column Writer
-//===--------------------------------------------------------------------===//
-class StructColumnWriter : public ColumnWriter {
-public:
-	StructColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
-	                   idx_t max_define, vector<unique_ptr<ColumnWriter>> child_writers_p, bool can_have_nulls)
-	    : ColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
-	      child_writers(std::move(child_writers_p)) {
-	}
-	~StructColumnWriter() override = default;
-
-	vector<unique_ptr<ColumnWriter>> child_writers;
-
-public:
-	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override;
-	bool HasAnalyze() override;
-	void Analyze(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
-	void FinalizeAnalyze(ColumnWriterState &state) override;
-	void Prepare(ColumnWriterState &state, ColumnWriterState *parent, Vector &vector, idx_t count) override;
-
-	void BeginWrite(ColumnWriterState &state) override;
-	void Write(ColumnWriterState &state, Vector &vector, idx_t count) override;
-	void FinalizeWrite(ColumnWriterState &state) override;
-};
-
-class StructColumnWriterState : public ColumnWriterState {
-public:
-	StructColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
-	    : row_group(row_group), col_idx(col_idx) {
-	}
-	~StructColumnWriterState() override = default;
-
-	duckdb_parquet::RowGroup &row_group;
-	idx_t col_idx;
-	vector<unique_ptr<ColumnWriterState>> child_states;
-};
-
-unique_ptr<ColumnWriterState> StructColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
-	auto result = make_uniq<StructColumnWriterState>(row_group, row_group.columns.size());
-
-	result->child_states.reserve(child_writers.size());
-	for (auto &child_writer : child_writers) {
-		result->child_states.push_back(child_writer->InitializeWriteState(row_group));
-	}
-	return std::move(result);
-}
-
-bool StructColumnWriter::HasAnalyze() {
-	for (auto &child_writer : child_writers) {
-		if (child_writer->HasAnalyze()) {
-			return true;
-		}
-	}
-	return false;
-}
-
-void StructColumnWriter::Analyze(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
-	auto &state = state_p.Cast<StructColumnWriterState>();
-	auto &child_vectors = StructVector::GetEntries(vector);
-	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
-		// Need to check again. It might be that just one child needs it but the rest not
-		if (child_writers[child_idx]->HasAnalyze()) {
-			child_writers[child_idx]->Analyze(*state.child_states[child_idx], &state_p, *child_vectors[child_idx],
-			                                  count);
-		}
-	}
-}
-
-void StructColumnWriter::FinalizeAnalyze(ColumnWriterState &state_p) {
-	auto &state = state_p.Cast<StructColumnWriterState>();
-	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
-		// Need to check again. It might be that just one child needs it but the rest not
-		if (child_writers[child_idx]->HasAnalyze()) {
-			child_writers[child_idx]->FinalizeAnalyze(*state.child_states[child_idx]);
-		}
-	}
-}
-
-void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *parent, Vector &vector, idx_t count) {
-	auto &state = state_p.Cast<StructColumnWriterState>();
-
-	auto &validity = FlatVector::Validity(vector);
-	if (parent) {
-		// propagate empty entries from the parent
-		while (state.is_empty.size() < parent->is_empty.size()) {
-			state.is_empty.push_back(parent->is_empty[state.is_empty.size()]);
-		}
-	}
-	HandleRepeatLevels(state_p, parent, count, max_repeat);
-	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, max_define - 1);
-	auto &child_vectors = StructVector::GetEntries(vector);
-	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
-		child_writers[child_idx]->Prepare(*state.child_states[child_idx], &state_p, *child_vectors[child_idx], count);
-	}
-}
-
-void StructColumnWriter::BeginWrite(ColumnWriterState &state_p) {
-	auto &state = state_p.Cast<StructColumnWriterState>();
-	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
-		child_writers[child_idx]->BeginWrite(*state.child_states[child_idx]);
-	}
-}
-
-void StructColumnWriter::Write(ColumnWriterState &state_p, Vector &vector, idx_t count) {
-	auto &state = state_p.Cast<StructColumnWriterState>();
-	auto &child_vectors = StructVector::GetEntries(vector);
-	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
-		child_writers[child_idx]->Write(*state.child_states[child_idx], *child_vectors[child_idx], count);
-	}
-}
-
-void StructColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
-	auto &state = state_p.Cast<StructColumnWriterState>();
-	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
-		// we add the null count of the struct to the null count of the children
-		state.child_states[child_idx]->null_count += state_p.null_count;
-		child_writers[child_idx]->FinalizeWrite(*state.child_states[child_idx]);
-	}
-}
 
 //===--------------------------------------------------------------------===//
 // List Column Writer

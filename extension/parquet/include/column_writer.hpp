@@ -66,7 +66,8 @@ public:
 };
 
 class ColumnWriter {
-
+protected:
+	static constexpr uint16_t PARQUET_DEFINE_VALID = UINT16_C(65535);
 public:
 	ColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path, idx_t max_repeat,
 	             idx_t max_define, bool can_have_nulls);
