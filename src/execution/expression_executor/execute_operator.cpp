@@ -127,7 +127,7 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		Vector intermediate(result.GetType(), 1);
 		for (idx_t i = 0; i < count; i++) {
 			selvec.set_index(0, sel ? sel->get_index(i) : i);
-			Value val;
+			Value val(result.GetType());
 			try {
 				Execute(*expr.children[0], &child_state, &selvec, 1, intermediate);
 				val = intermediate.GetValue(0);

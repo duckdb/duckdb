@@ -13,11 +13,10 @@ NULL
 
 # --- OPERATOR_NOT ---
 
-## FIXME: this should error?
-#query I
-#select ~CAST('abc' as INTEGER)
-#----
-#NULL
+statement error
+select ~CAST('abc' as INTEGER)
+----
+Could not convert string
 
 query I
 select TRY(~CAST('abc' as INTEGER))
