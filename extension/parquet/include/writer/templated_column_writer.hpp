@@ -161,17 +161,27 @@ public:
 
 		const auto &validity = FlatVector::Validity(vector);
 
-		for (idx_t i = 0; i < vcount; i++) {
-			if (check_parent_empty && parent->is_empty[parent_index + i]) {
-				continue;
-			}
-			if (validity.RowIsValid(vector_index)) {
+		if (!check_parent_empty && validity.AllValid()) {
+			// Fast path
+			for (; vector_index < vcount; vector_index++) {
 				const auto &src_value = data_ptr[vector_index];
 				state.dictionary.Insert(src_value);
 				state.total_value_count++;
 				state.total_string_size += dlba_encoder::GetDlbaStringSize(src_value);
 			}
-			vector_index++;
+		} else {
+			for (idx_t i = 0; i < vcount; i++) {
+				if (check_parent_empty && parent->is_empty[parent_index + i]) {
+					continue;
+				}
+				if (validity.RowIsValid(vector_index)) {
+					const auto &src_value = data_ptr[vector_index];
+					state.dictionary.Insert(src_value);
+					state.total_value_count++;
+					state.total_string_size += dlba_encoder::GetDlbaStringSize(src_value);
+				}
+				vector_index++;
+			}
 		}
 	}
 
