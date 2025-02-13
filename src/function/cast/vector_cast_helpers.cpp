@@ -470,7 +470,6 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 	}
 
 	if (end_char == '}') {
-
 		//! Regular struct, in the form of `{name: value, name_2: value_2, ...}`
 		while (pos < len) {
 			optional_idx start_pos;

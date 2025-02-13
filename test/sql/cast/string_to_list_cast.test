@@ -515,7 +515,7 @@ select '[{"bar":"\\""}]'::VARCHAR[];
 statement error
 select '[{"bar":"\\""}]'::STRUCT(bar VARCHAR)[];
 ----
-can't be cast to the destination type LIST
+can't be cast to the destination type STRUCT(bar VARCHAR)[]
 
 # uneven amount of escapes does escape the "
 query I

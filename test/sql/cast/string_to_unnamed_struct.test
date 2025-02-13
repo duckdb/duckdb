@@ -52,7 +52,7 @@ select [row([7,8,9], [10,11,12]), $$([1,2,3], [4,5,6])$$]
 statement error
 select [row([4,5,6]), $$([1,2,3],)$$]
 ----
-can't be cast to the destination type STRUCT
+can't be cast to the destination type STRUCT(INTEGER[])
 
 # Empty string in the second child of the unnamed struct
 query I
