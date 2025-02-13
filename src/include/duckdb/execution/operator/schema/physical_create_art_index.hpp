@@ -67,6 +67,8 @@ public:
 	SinkFinalizeType Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
 	                          OperatorSinkFinalizeInput &input) const override;
 
+	bool VerifyIndexDoesNotExist(ClientContext &context) const;
+
 	bool IsSink() const override {
 		return true;
 	}
