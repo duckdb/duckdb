@@ -191,10 +191,14 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 		}
 	} else {
 		// no parent: set definition levels only from this validity mask
-		for (idx_t i = 0; i < count; i++) {
-			const auto is_null = !validity.RowIsValid(i);
-			state.definition_levels.emplace_back(is_null ? null_value : define_value);
-			state.null_count += is_null;
+		if (validity.AllValid()) {
+			state.definition_levels.insert(state.definition_levels.end(), count, define_value);
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				const auto is_null = !validity.RowIsValid(i);
+				state.definition_levels.emplace_back(is_null ? null_value : define_value);
+				state.null_count += is_null;
+			}
 		}
 		if (!can_have_nulls && state.null_count != 0) {
 			throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
@@ -219,10 +223,10 @@ public:
 
 class WKBColumnWriter final : public StandardColumnWriter<string_t, string_t, ParquetStringOperator> {
 public:
-	WKBColumnWriter(ClientContext &context_p, ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p,
-	                idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
+	WKBColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
+	                idx_t max_define, bool can_have_nulls, string name)
 	    : StandardColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
-	      column_name(std::move(name)), context(context_p) {
+	      column_name(std::move(name)) {
 
 		this->writer.GetGeoParquetData().RegisterGeometryColumn(column_name);
 	}
@@ -253,7 +257,6 @@ public:
 
 private:
 	string column_name;
-	ClientContext &context;
 };
 
 // special double/float class to deal with dictionary encoding and NaN equality
@@ -461,7 +464,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	schema_path.push_back(name);
 	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB" &&
 	    GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
-		return make_uniq<WKBColumnWriter>(context, writer, schema_idx, std::move(schema_path), max_repeat, max_define,
+		return make_uniq<WKBColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                  can_have_nulls, name);
 	}
 
@@ -584,41 +587,30 @@ struct NumericLimits<double_na_equal> {
 	}
 };
 
+template <>
+hash_t Hash(ParquetIntervalTargetType val) {
+	return Hash(const_char_ptr_cast(val.bytes), ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE);
+}
+
+template <>
+hash_t Hash(ParquetUUIDTargetType val) {
+	return Hash(const_char_ptr_cast(val.bytes), ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+}
+
+template <>
+hash_t Hash(float_na_equal val) {
+	if (std::isnan(val.val)) {
+		return Hash<float>(std::numeric_limits<float>::quiet_NaN());
+	}
+	return Hash<float>(val.val);
+}
+
+template <>
+hash_t Hash(double_na_equal val) {
+	if (std::isnan(val.val)) {
+		return Hash<double>(std::numeric_limits<double>::quiet_NaN());
+	}
+	return Hash<double>(val.val);
+}
+
 } // namespace duckdb
-
-namespace std {
-template <>
-struct hash<duckdb::ParquetIntervalTargetType> {
-	size_t operator()(const duckdb::ParquetIntervalTargetType &val) const {
-		return duckdb::Hash(duckdb::const_char_ptr_cast(val.bytes),
-		                    duckdb::ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE);
-	}
-};
-
-template <>
-struct hash<duckdb::ParquetUUIDTargetType> {
-	size_t operator()(const duckdb::ParquetUUIDTargetType &val) const {
-		return duckdb::Hash(duckdb::const_char_ptr_cast(val.bytes), duckdb::ParquetUUIDTargetType::PARQUET_UUID_SIZE);
-	}
-};
-
-template <>
-struct hash<duckdb::float_na_equal> {
-	size_t operator()(const duckdb::float_na_equal &val) const {
-		if (std::isnan(val.val)) {
-			return duckdb::Hash<float>(std::numeric_limits<float>::quiet_NaN());
-		}
-		return duckdb::Hash<float>(val.val);
-	}
-};
-
-template <>
-struct hash<duckdb::double_na_equal> {
-	inline size_t operator()(const duckdb::double_na_equal &val) const {
-		if (std::isnan(val.val)) {
-			return duckdb::Hash<double>(std::numeric_limits<double>::quiet_NaN());
-		}
-		return duckdb::Hash<double>(val.val);
-	}
-};
-} // namespace std

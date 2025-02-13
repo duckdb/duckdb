@@ -38,7 +38,8 @@ public:
 	StandardColumnWriterState(ParquetWriter &writer, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
 	    : PrimitiveColumnWriterState(writer, row_group, col_idx),
 	      dictionary(BufferAllocator::Get(writer.GetContext()), writer.DictionarySizeLimit(),
-	                 2e6) { // TODO: make size configurable
+	                 2097152), // TODO: make size configurable
+	      encoding(duckdb_parquet::Encoding::PLAIN) {
 	}
 	~StandardColumnWriterState() override = default;
 
@@ -60,7 +61,7 @@ public:
 	    : encoding(encoding_p), dbp_initialized(false), dbp_encoder(total_value_count), dlba_initialized(false),
 	      dlba_encoder(total_value_count, total_string_size), bss_encoder(total_value_count, sizeof(TGT)),
 	      dictionary(dictionary_p), dict_written_value(false),
-	      dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.size())), dict_encoder(dict_bit_width) {
+	      dict_bit_width(RleBpDecoder::ComputeBitWidth(dictionary.GetSize())), dict_encoder(dict_bit_width) {
 	}
 	duckdb_parquet::Encoding::type encoding;
 
@@ -152,7 +153,6 @@ public:
 
 		auto data_ptr = FlatVector::GetData<SRC>(vector);
 		idx_t vector_index = 0;
-		uint32_t new_value_index = state.dictionary.size();
 
 		const bool check_parent_empty = parent && !parent->is_empty.empty();
 		const idx_t parent_index = state.definition_levels.size();
@@ -168,12 +168,7 @@ public:
 			}
 			if (validity.RowIsValid(vector_index)) {
 				const auto &src_value = data_ptr[vector_index];
-				if (state.dictionary.size() <= writer.DictionarySizeLimit()) {
-					if (state.dictionary.find(src_value) == state.dictionary.end()) {
-						state.dictionary[src_value] = new_value_index;
-						new_value_index++;
-					}
-				}
+				state.dictionary.Insert(src_value);
 				state.total_value_count++;
 				state.total_string_size += dlba_encoder::GetDlbaStringSize(src_value);
 			}
@@ -185,7 +180,7 @@ public:
 		const auto type = writer.GetType(schema_idx);
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
-		if (state.dictionary.size() == 0 || state.dictionary.size() > writer.DictionarySizeLimit()) {
+		if (state.dictionary.GetSize() == 0 || state.dictionary.IsFull()) {
 			if (writer.GetParquetVersion() == ParquetVersion::V1) {
 				// Can't do the cool stuff for V1
 				state.encoding = duckdb_parquet::Encoding::PLAIN;
@@ -207,9 +202,8 @@ public:
 					state.encoding = duckdb_parquet::Encoding::PLAIN;
 				}
 			}
-			state.dictionary.clear();
 		} else {
-			state.key_bit_width = RleBpDecoder::ComputeBitWidth(state.dictionary.size());
+			state.key_bit_width = RleBpDecoder::ComputeBitWidth(state.dictionary.GetSize());
 		}
 	}
 
@@ -224,7 +218,7 @@ public:
 
 	idx_t DictionarySize(PrimitiveColumnWriterState &state_p) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
-		return state.dictionary.size();
+		return state.dictionary.GetSize();
 	}
 
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state_p,
@@ -240,14 +234,14 @@ public:
 				if (!mask.RowIsValid(r)) {
 					continue;
 				}
-				auto &src_val = data_ptr[r];
-				auto value_index = page_state.dictionary.at(src_val);
 				if (!page_state.dict_written_value) {
 					// first value: write the bit-width as a one-byte entry and initialize writer
 					temp_writer.Write<uint8_t>(page_state.dict_bit_width);
 					page_state.dict_encoder.BeginWrite();
 					page_state.dict_written_value = true;
 				}
+				const auto &src_value = data_ptr[r];
+				const auto value_index = page_state.dictionary.GetIndex(src_value);
 				page_state.dict_encoder.WriteValue(temp_writer, value_index);
 			}
 			break;
@@ -329,34 +323,22 @@ public:
 
 	void FlushDictionary(PrimitiveColumnWriterState &state_p, ColumnWriterStatistics *stats) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
-
 		D_ASSERT(state.encoding == duckdb_parquet::Encoding::RLE_DICTIONARY);
 
-		// first we need to sort the values in index order
-		auto values = vector<SRC>(state.dictionary.size());
-		for (const auto &entry : state.dictionary) {
-			values[entry.second] = entry.first;
-		}
-
 		state.bloom_filter =
-		    make_uniq<ParquetBloomFilter>(state.dictionary.size(), writer.BloomFilterFalsePositiveRatio());
+		    make_uniq<ParquetBloomFilter>(state.dictionary.GetSize(), writer.BloomFilterFalsePositiveRatio());
 
-		// first write the contents of the dictionary page to a temporary buffer
-		auto temp_writer = make_uniq<MemoryStream>(
-		    Allocator::Get(writer.GetContext()), MaxValue<idx_t>(NextPowerOfTwo(state.dictionary.size() * sizeof(TGT)),
-		                                                         MemoryStream::DEFAULT_INITIAL_CAPACITY));
-		for (idx_t r = 0; r < values.size(); r++) {
-			const TGT target_value = OP::template Operation<SRC, TGT>(values[r]);
+		state.dictionary.IterateValues([&](const SRC &value) {
+			const TGT target_value = OP::template Operation<SRC, TGT>(value);
 			// update the statistics
 			OP::template HandleStats<SRC, TGT>(stats, target_value);
 			// update the bloom filter
 			auto hash = OP::template XXHash64<SRC, TGT>(target_value);
 			state.bloom_filter->FilterInsert(hash);
-			// actually write the dictionary value
-			OP::template WriteToStream<SRC, TGT>(target_value, *temp_writer);
-		}
+		});
+
 		// flush the dictionary page and add it to the to-be-written pages
-		WriteDictionary(state, std::move(temp_writer), values.size());
+		WriteDictionary(state, state.dictionary.GetPlainMemoryStream(), state.dictionary.GetSize());
 		// bloom filter will be queued for writing in ParquetWriter::BufferBloomFilter one level up
 	}
 

@@ -67,6 +67,11 @@ hash_t Hash(interval_t val) {
 }
 
 template <>
+hash_t Hash(dtime_tz_t val) {
+	return Hash(val.bits);
+}
+
+template <>
 hash_t Hash(const char *str) {
 	return Hash(str, strlen(str));
 }

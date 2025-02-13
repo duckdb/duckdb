@@ -117,7 +117,7 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 }
 
 void PrimitiveColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels,
-                                        idx_t max_value, idx_t offset, idx_t count) {
+                                        idx_t max_value, idx_t offset, idx_t count, optional_idx null_count) {
 	if (levels.empty() || count == 0) {
 		return;
 	}
@@ -128,9 +128,15 @@ void PrimitiveColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_v
 
 	// have to write to an intermediate stream first because we need to know the size
 	MemoryStream intermediate_stream(Allocator::DefaultAllocator());
+
 	rle_encoder.BeginWrite();
-	for (idx_t i = offset; i < offset + count; i++) {
-		rle_encoder.WriteValue(intermediate_stream, levels[i]);
+	if (null_count.IsValid() && null_count.GetIndex() == 0 || null_count.GetIndex() == count) {
+		// All are NULL or none are NULL
+		rle_encoder.WriteMany(intermediate_stream, levels[0], count);
+	} else {
+		for (idx_t i = offset; i < offset + count; i++) {
+			rle_encoder.WriteValue(intermediate_stream, levels[i]);
+		}
 	}
 	rle_encoder.FinishWrite(intermediate_stream);
 
@@ -159,7 +165,8 @@ void PrimitiveColumnWriter::NextPage(PrimitiveColumnWriterState &state) {
 	WriteLevels(temp_writer, state.repetition_levels, max_repeat, page_info.offset, page_info.row_count);
 
 	// write the definition levels
-	WriteLevels(temp_writer, state.definition_levels, max_define, page_info.offset, page_info.row_count);
+	WriteLevels(temp_writer, state.definition_levels, max_define, page_info.offset, page_info.row_count,
+	            state.null_count);
 }
 
 void PrimitiveColumnWriter::FlushPage(PrimitiveColumnWriterState &state) {

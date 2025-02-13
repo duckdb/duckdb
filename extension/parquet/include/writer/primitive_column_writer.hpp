@@ -82,7 +82,7 @@ public:
 
 protected:
 	static void WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels, idx_t max_value,
-	                        idx_t start_offset, idx_t count);
+	                        idx_t start_offset, idx_t count, optional_idx null_count = optional_idx());
 
 	virtual duckdb_parquet::Encoding::type GetEncoding(PrimitiveColumnWriterState &state);
 

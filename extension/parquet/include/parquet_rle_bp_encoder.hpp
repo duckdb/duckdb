@@ -8,9 +8,7 @@
 
 #pragma once
 
-#include "parquet_types.h"
-#include "thrift_tools.hpp"
-#include "resizable_buffer.hpp"
+#include "decode_utils.hpp"
 
 namespace duckdb {
 
@@ -25,7 +23,7 @@ public:
 		bp_block_count = 0;
 	}
 
-	void WriteValue(WriteStream &writer, uint32_t value) {
+	void WriteValue(WriteStream &writer, const uint32_t &value) {
 		if (bp_block_count != 0) {
 			// We already committed to a BP run
 			D_ASSERT(rle_count == 0);
@@ -66,6 +64,15 @@ public:
 		}
 		bp_block[bp_block_count++] = value;
 		rle_count = 0;
+	}
+
+	void WriteMany(WriteStream &writer, uint32_t value, idx_t count) {
+		D_ASSERT(bp_block_count == 0);
+		if (rle_count != 0) {
+			WriteRun(writer);
+		}
+		rle_value = value;
+		rle_count = count;
 	}
 
 	void FinishWrite(WriteStream &writer) {
