@@ -19,8 +19,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::STREAMING_SAMPLE;
 
 public:
-	PhysicalStreamingSample(vector<LogicalType> types, unique_ptr<SampleOptions> options,
-	                        idx_t estimated_cardinality);
+	PhysicalStreamingSample(vector<LogicalType> types, unique_ptr<SampleOptions> options, idx_t estimated_cardinality);
 
 	unique_ptr<SampleOptions> sample_options;
 	double percentage;

@@ -2,7 +2,6 @@
 # description: Test reservoir sample crash on large data sets
 # group: [sample]
 
-
 statement ok
 create table output (num_rows INT);
 
