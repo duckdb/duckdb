@@ -28,9 +28,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalSample &op
 			                      "reservoir sampling or use a sample_size",
 			                      EnumUtil::ToString(op.sample_options->method));
 		}
-		sample = make_uniq<PhysicalStreamingSample>(
-		    op.types, op.sample_options->method, op.sample_options->sample_size.GetValue<double>(),
-		    static_cast<int64_t>(op.sample_options->seed.GetIndex()), op.estimated_cardinality);
+		sample = make_uniq<PhysicalStreamingSample>(op.types, std::move(op.sample_options), op.estimated_cardinality);
 		break;
 	default:
 		throw InternalException("Unimplemented sample method");
