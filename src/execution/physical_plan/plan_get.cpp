@@ -133,9 +133,10 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	// create the table scan node
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
-		auto node = make_uniq<PhysicalTableScan>(
-		    op.returned_types, op.function, std::move(op.bind_data), op.returned_types, column_ids, vector<column_t>(),
-		    op.names, std::move(table_filters), op.estimated_cardinality, op.extra_info, std::move(op.parameters));
+		auto node = make_uniq<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data),
+		                                         op.returned_types, column_ids, vector<column_t>(), op.names,
+		                                         std::move(table_filters), op.estimated_cardinality, op.extra_info,
+		                                         std::move(op.parameters), std::move(op.virtual_columns));
 		// first check if an additional projection is necessary
 		if (column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -180,7 +181,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	} else {
 		auto node = make_uniq<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types,
 		                                         column_ids, op.projection_ids, op.names, std::move(table_filters),
-		                                         op.estimated_cardinality, op.extra_info, std::move(op.parameters));
+		                                         op.estimated_cardinality, op.extra_info, std::move(op.parameters),
+		                                         std::move(op.virtual_columns));
 		node->dynamic_filters = op.dynamic_filters;
 		if (filter) {
 			filter->children.push_back(std::move(node));

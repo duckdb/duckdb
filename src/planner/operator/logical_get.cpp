@@ -141,17 +141,21 @@ const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {
 	return names[index.GetPrimaryIndex()];
 }
 
+column_t LogicalGet::GetAnyColumn() const {
+	auto entry = virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
+	if (entry != virtual_columns.end()) {
+		// return the rowid column if the projection supports it
+		return COLUMN_IDENTIFIER_ROW_ID;
+	} else {
+		// otherwise return the first column
+		return 0;
+	}
+}
+
 void LogicalGet::ResolveTypes() {
 	if (column_ids.empty()) {
 		// no projection - we need to push a column
-		auto entry = virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
-		if (entry != virtual_columns.end()) {
-			// push the rowid column if the projection supports it
-			column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
-		} else {
-			// otherwise push the first column
-			column_ids.emplace_back(0);
-		}
+		column_ids.emplace_back(GetAnyColumn());
 	}
 	types.clear();
 	if (projection_ids.empty()) {

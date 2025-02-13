@@ -61,6 +61,7 @@ struct ParquetReadBindData : public TableFunctionData {
 	atomic<idx_t> chunk_count;
 	vector<string> names;
 	vector<LogicalType> types;
+	virtual_column_map_t virtual_columns;
 	vector<MultiFileReaderColumnDefinition> columns;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
@@ -363,6 +364,7 @@ virtual_column_map_t ParquetGetVirtualColumns(ClientContext &context, optional_p
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
 	virtual_column_map_t result;
 	parquet_bind.multi_file_reader->GetVirtualColumns(context, parquet_bind.reader_bind, result);
+	parquet_bind.virtual_columns = result;
 	return result;
 }
 
@@ -754,12 +756,17 @@ public:
 				iota(begin(result->projection_ids), end(result->projection_ids), 0);
 			}
 
-			const auto table_types = bind_data.types;
+			const auto &table_types = bind_data.types;
 			for (const auto &col_idx : input.column_indexes) {
-				if (col_idx.IsRowIdColumn()) {
-					result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
+				auto column_id = col_idx.GetPrimaryIndex();
+				if (col_idx.IsVirtualColumn()) {
+					auto entry = bind_data.virtual_columns.find(column_id);
+					if (entry == bind_data.virtual_columns.end()) {
+						throw InternalException("Parquet - virtual column definition not found");
+					}
+					result->scanned_types.emplace_back(entry->second.type);
 				} else {
-					result->scanned_types.push_back(table_types[col_idx.GetPrimaryIndex()]);
+					result->scanned_types.push_back(table_types[column_id]);
 				}
 			}
 		}

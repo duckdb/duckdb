@@ -19,3 +19,11 @@ select * from 'data/parquet-testing/glob*/t?.parquet' order by i;
 1	a
 2	b
 3	c
+
+require notwindows
+
+# filename in filter
+query III
+select i, j, replace(filename, '\', '/') from 'data/parquet-testing/glob*/t?.parquet' where filename='data/parquet-testing/glob/t1.parquet'
+----
+1	a	data/parquet-testing/glob/t1.parquet
