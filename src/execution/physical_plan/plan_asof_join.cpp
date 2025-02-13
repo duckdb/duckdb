@@ -230,7 +230,7 @@ static unique_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, 
 	auto proj = make_uniq<PhysicalProjection>(op.types, std::move(project_list), probe_cardinality);
 	proj->children.emplace_back(std::move(aggr));
 
-	return proj;
+	return std::move(proj);
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::PlanAsOfJoin(LogicalComparisonJoin &op) {
