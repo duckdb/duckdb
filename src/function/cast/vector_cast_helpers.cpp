@@ -70,7 +70,7 @@ static bool SkipToCloseQuotes(StringCastInputState &input_state) {
 	return false;
 }
 
-static bool SkipToClose(StringCastInputState &input_state, idx_t &lvl) {
+static bool SkipToClose(StringCastInputState &input_state) {
 	auto &idx = input_state.pos;
 	auto &buf = input_state.buf;
 	auto &len = input_state.len;
@@ -91,14 +91,7 @@ static bool SkipToClose(StringCastInputState &input_state, idx_t &lvl) {
 				brackets.push_back(')');
 			} else if (buf[idx] == '[') {
 				brackets.push_back(']');
-				lvl++;
 			} else if (buf[idx] == brackets.back()) {
-				if (buf[idx] == ']') {
-					if (lvl == 0) {
-						return false;
-					}
-					lvl--;
-				}
 				brackets.pop_back();
 				if (brackets.empty()) {
 					return true;
@@ -217,7 +210,6 @@ template <class OP>
 static bool SplitStringListInternal(const string_t &input, OP &state) {
 	const char *buf = input.GetData();
 	idx_t len = input.GetSize();
-	idx_t lvl = 1;
 	idx_t pos = 0;
 
 	StringCastInputState input_state(buf, pos, len);
@@ -250,7 +242,7 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 				start_pos = pos;
 			}
 			//! Start of a LIST
-			if (!SkipToClose(input_state, lvl)) {
+			if (!SkipToClose(input_state)) {
 				return false;
 			}
 			end_pos = pos;
@@ -267,8 +259,7 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 				start_pos = pos;
 			}
 			//! Start of a STRUCT
-			idx_t struct_lvl = 0;
-			if (!SkipToClose(input_state, struct_lvl)) {
+			if (!SkipToClose(input_state)) {
 				return false;
 			}
 			end_pos = pos;
@@ -277,8 +268,7 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 				start_pos = pos;
 			}
 			//! Start of an (unnamed) STRUCT
-			idx_t struct_lvl = 0;
-			if (!SkipToClose(input_state, struct_lvl)) {
+			if (!SkipToClose(input_state)) {
 				return false;
 			}
 			end_pos = pos;
@@ -293,10 +283,6 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 				seen_value = true;
 			}
 			if (buf[pos] == ']') {
-				if (lvl == 0) {
-					return false;
-				}
-				lvl--;
 				break;
 			}
 			start_pos = optional_idx();
@@ -318,7 +304,7 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 	}
 	pos++;
 	SkipWhitespace(input_state);
-	return (pos == len && lvl == 0);
+	return (pos == len);
 }
 
 bool VectorStringToList::SplitStringList(const string_t &input, string_t *child_data, idx_t &child_start,
@@ -377,7 +363,6 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 	idx_t len = input.GetSize();
 	idx_t pos = 0;
 	StringCastInputState input_state(buf, pos, len);
-	idx_t lvl = 0;
 
 	SkipWhitespace(input_state);
 	if (pos == len || buf[pos] != '{') {
@@ -416,7 +401,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
 				}
-				if (!SkipToClose(input_state, lvl)) {
+				if (!SkipToClose(input_state)) {
 					return false;
 				}
 				end_pos = pos;
@@ -424,7 +409,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
 				}
-				if (!SkipToClose(input_state, lvl)) {
+				if (!SkipToClose(input_state)) {
 					return false;
 				}
 				end_pos = pos;
@@ -432,7 +417,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
 				}
-				if (!SkipToClose(input_state, lvl)) {
+				if (!SkipToClose(input_state)) {
 					return false;
 				}
 				end_pos = pos;
@@ -486,7 +471,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
 				}
-				if (!SkipToClose(input_state, lvl)) {
+				if (!SkipToClose(input_state)) {
 					return false;
 				}
 				end_pos = pos;
@@ -494,7 +479,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
 				}
-				if (!SkipToClose(input_state, lvl)) {
+				if (!SkipToClose(input_state)) {
 					return false;
 				}
 				end_pos = pos;
@@ -502,7 +487,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 				if (!start_pos.IsValid()) {
 					start_pos = pos;
 				}
-				if (!SkipToClose(input_state, lvl)) {
+				if (!SkipToClose(input_state)) {
 					return false;
 				}
 				end_pos = pos;
@@ -538,7 +523,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 	}
 	pos++;
 	SkipWhitespace(input_state);
-	return (pos == len && lvl == 0);
+	return (pos == len);
 }
 
 bool VectorStringToMap::SplitStringMap(const string_t &input, string_t *child_key_data, string_t *child_val_data,
@@ -561,7 +546,6 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 	idx_t len = input.GetSize();
 	idx_t pos = 0;
 	idx_t child_idx;
-	idx_t lvl = 0;
 
 	Vector temp_vec(LogicalType::VARCHAR);
 	StringCastInputState input_state(buf, pos, len);
@@ -660,7 +644,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
-					if (!SkipToClose(input_state, lvl)) {
+					if (!SkipToClose(input_state)) {
 						return false;
 					}
 					end_pos = pos;
@@ -668,7 +652,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
-					if (!SkipToClose(input_state, lvl)) {
+					if (!SkipToClose(input_state)) {
 						return false;
 					}
 					end_pos = pos;
@@ -676,7 +660,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
-					if (!SkipToClose(input_state, lvl)) {
+					if (!SkipToClose(input_state)) {
 						return false;
 					}
 					end_pos = pos;
@@ -754,7 +738,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
-					if (!SkipToClose(input_state, lvl)) {
+					if (!SkipToClose(input_state)) {
 						return false;
 					}
 					end_pos = pos;
@@ -762,7 +746,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
-					if (!SkipToClose(input_state, lvl)) {
+					if (!SkipToClose(input_state)) {
 						return false;
 					}
 					end_pos = pos;
@@ -770,7 +754,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 					if (!start_pos.IsValid()) {
 						start_pos = pos;
 					}
-					if (!SkipToClose(input_state, lvl)) {
+					if (!SkipToClose(input_state)) {
 						return false;
 					}
 					end_pos = pos;
