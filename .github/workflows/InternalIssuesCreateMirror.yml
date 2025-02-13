@@ -13,8 +13,8 @@ env:
   PUBLIC_ISSUE_TITLE: ${{ github.event.issue.title }}
 
 jobs:
-  handle_pr_submitted_label:
-    if: github.event.label.name == 'PR submitted'
+  handle_pr_submitted_or_fix_on_nightly_label:
+    if: github.event.label.name == 'PR submitted' || github.event.label.name == 'fixed on nightly'
     runs-on: ubuntu-latest
     steps:
       - name: Remove 'needs triage' label

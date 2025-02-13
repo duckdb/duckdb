@@ -1,8 +1,6 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/to_string.hpp"
 #include "duckdb/parser/expression/case_expression.hpp"
-#include "duckdb/parser/expression/cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 
@@ -44,6 +42,27 @@ static inline WindowBoundary TransformFrameOption(const int frameOptions, const 
 		return groups;
 	} else {
 		return rows;
+	}
+}
+
+static bool IsExcludableWindowFunction(ExpressionType type) {
+	switch (type) {
+	case ExpressionType::WINDOW_FIRST_VALUE:
+	case ExpressionType::WINDOW_LAST_VALUE:
+	case ExpressionType::WINDOW_NTH_VALUE:
+	case ExpressionType::WINDOW_AGGREGATE:
+		return true;
+	case ExpressionType::WINDOW_RANK_DENSE:
+	case ExpressionType::WINDOW_RANK:
+	case ExpressionType::WINDOW_PERCENT_RANK:
+	case ExpressionType::WINDOW_ROW_NUMBER:
+	case ExpressionType::WINDOW_NTILE:
+	case ExpressionType::WINDOW_CUME_DIST:
+	case ExpressionType::WINDOW_LEAD:
+	case ExpressionType::WINDOW_LAG:
+		return false;
+	default:
+		throw InternalException("Unknown excludable window type %s", ExpressionTypeToString(type).c_str());
 	}
 }
 
@@ -100,6 +119,11 @@ void Transformer::TransformWindowFrame(duckdb_libpgquery::PGWindowDef &window_sp
 		expr.exclude_clause = WindowExcludeMode::TIES;
 	} else {
 		expr.exclude_clause = WindowExcludeMode::NO_OTHER;
+	}
+
+	if (expr.exclude_clause != WindowExcludeMode::NO_OTHER && !expr.arg_orders.empty() &&
+	    !IsExcludableWindowFunction(expr.type)) {
+		throw ParserException("EXCLUDE is not supported for the window function \"%s\"", expr.function_name.c_str());
 	}
 }
 

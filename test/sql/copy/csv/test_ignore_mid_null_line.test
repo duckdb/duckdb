@@ -7,7 +7,7 @@ PRAGMA enable_verification
 
 query III
 FROM read_csv('data/csv/error/mid_null.csv', delim = ';',
-     columns = {'a':'integer','b':'integer','c':'integer'}, auto_detect = false, header = true, ignore_errors = true, RFC_4180=True)
+     columns = {'a':'integer','b':'integer','c':'integer'}, auto_detect = false, header = true, ignore_errors = true, strict_mode=True)
 ----
 1	2	3
 1	2	3

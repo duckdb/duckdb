@@ -8,7 +8,7 @@
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/main/extension_helper.hpp"
-#include "expression_column_reader.hpp"
+#include "reader/expression_column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "yyjson.hpp"
 
@@ -382,21 +382,26 @@ bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &
 	return true;
 }
 
+LogicalType GeoParquetFileMetadata::GeometryType() {
+	auto blob_type = LogicalType(LogicalTypeId::BLOB);
+	blob_type.SetAlias("GEOMETRY");
+	return blob_type;
+}
+
 unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReader &reader,
-                                                                    const LogicalType &logical_type,
-                                                                    const SchemaElement &s_ele, idx_t schema_idx_p,
-                                                                    idx_t max_define_p, idx_t max_repeat_p,
+                                                                    const ParquetColumnSchema &schema,
                                                                     ClientContext &context) {
 
-	D_ASSERT(IsGeometryColumn(s_ele.name));
+	D_ASSERT(IsGeometryColumn(schema.name));
 
-	const auto &column = geometry_columns[s_ele.name];
+	const auto &column = geometry_columns[schema.name];
 
 	// Get the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// WKB encoding
-	if (logical_type.id() == LogicalTypeId::BLOB && column.geometry_encoding == GeoParquetColumnEncoding::WKB) {
+	if (schema.children[0].type.id() == LogicalTypeId::BLOB &&
+	    column.geometry_encoding == GeoParquetColumnEncoding::WKB) {
 		// Look for a conversion function in the catalog
 		auto &conversion_func_set =
 		    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_geomfromwkb")
@@ -410,8 +415,7 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 		    make_uniq<BoundFunctionExpression>(conversion_func.return_type, conversion_func, std::move(args), nullptr);
 
 		// Create a child reader
-		auto child_reader =
-		    ColumnReader::CreateReader(reader, logical_type, s_ele, schema_idx_p, max_define_p, max_repeat_p);
+		auto child_reader = ColumnReader::CreateReader(reader, schema.children[0]);
 
 		// Create an expression reader that applies the conversion function to the child reader
 		return make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr));

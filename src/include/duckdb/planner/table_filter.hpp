@@ -13,7 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/common/column_index.hpp"
 
@@ -52,7 +52,7 @@ public:
 	string DebugToString();
 	virtual unique_ptr<TableFilter> Copy() const = 0;
 	virtual bool Equals(const TableFilter &other) const {
-		return filter_type != other.filter_type;
+		return filter_type == other.filter_type;
 	}
 	virtual unique_ptr<Expression> ToExpression(const Expression &column) const = 0;
 
@@ -79,7 +79,7 @@ public:
 
 class TableFilterSet {
 public:
-	unordered_map<idx_t, unique_ptr<TableFilter>> filters;
+	map<idx_t, unique_ptr<TableFilter>> filters;
 
 public:
 	void PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilter> filter);

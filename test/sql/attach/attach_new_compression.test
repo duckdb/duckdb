@@ -47,10 +47,16 @@ statement ok
 CREATE TABLE db1.tbl2 AS FROM db1.tbl
 
 statement ok
+CHECKPOINT db1
+
+statement ok
 SET force_compression='zstd';
 
 statement ok
 CREATE TABLE db1.str_tbl2 AS FROM db1.str_tbl
+
+statement ok
+CHECKPOINT db1
 
 # roaring is used now
 query I

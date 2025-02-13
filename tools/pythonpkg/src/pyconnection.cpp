@@ -921,6 +921,7 @@ PathLike DuckDBPyConnection::GetPathLike(const py::object &object) {
 static void AcceptableCSVOptions(const string &unkown_parameter) {
 	// List of strings to match against
 	const unordered_set<string> valid_parameters = {"header",
+	                                                "strict_mode",
 	                                                "compression",
 	                                                "comment"
 	                                                "sep",
@@ -968,9 +969,30 @@ static void AcceptableCSVOptions(const string &unkown_parameter) {
 	}
 	throw InvalidInputException(error.str());
 }
+void ConvertBooleanValue(const py::object &value, string param_name, named_parameter_map_t &bind_parameters) {
+	if (!py::none().is(value)) {
+
+		bool value_as_int = py::isinstance<py::int_>(value);
+		bool value_as_bool = py::isinstance<py::bool_>(value);
+
+		bool converted_value;
+		if (value_as_bool) {
+			converted_value = py::bool_(value);
+		} else if (value_as_int) {
+			if (static_cast<int>(py::int_(value)) != 0) {
+				throw InvalidInputException("read_csv only accepts 0 if '%s' is given as an integer", param_name);
+			}
+			converted_value = true;
+		} else {
+			throw InvalidInputException("read_csv only accepts '%s' as an integer, or a boolean", param_name);
+		}
+		bind_parameters[param_name] = Value::BOOLEAN(converted_value);
+	}
+}
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_p, py::kwargs &kwargs) {
 	py::object header = py::none();
+	py::object strict_mode = py::none();
 	py::object auto_detect = py::none();
 	py::object compression = py::none();
 	py::object sep = py::none();
@@ -1087,6 +1109,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 			hive_types = kwargs[arg_name.c_str()];
 		} else if (arg_name == "hive_types_autocast") {
 			hive_types_autocast = kwargs[arg_name.c_str()];
+		} else if (arg_name == "strict_mode") {
+			strict_mode = kwargs[arg_name.c_str()];
 		} else {
 			AcceptableCSVOptions(arg_name);
 		}
@@ -1104,24 +1128,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::ReadCSV(const py::object &name_
 
 	// First check if the header is explicitly set
 	// when false this affects the returned types, so it needs to be known at initialization of the relation
-	if (!py::none().is(header)) {
-
-		bool header_as_int = py::isinstance<py::int_>(header);
-		bool header_as_bool = py::isinstance<py::bool_>(header);
-
-		bool header_value;
-		if (header_as_bool) {
-			header_value = py::bool_(header);
-		} else if (header_as_int) {
-			if ((int)py::int_(header) != 0) {
-				throw InvalidInputException("read_csv only accepts 0 if 'header' is given as an integer");
-			}
-			header_value = true;
-		} else {
-			throw InvalidInputException("read_csv only accepts 'header' as an integer, or a boolean");
-		}
-		bind_parameters["header"] = Value::BOOLEAN(header_value);
-	}
+	ConvertBooleanValue(header, "header", bind_parameters);
+	ConvertBooleanValue(strict_mode, "strict_mode", bind_parameters);
 
 	if (!py::none().is(compression)) {
 		if (!py::isinstance<py::str>(compression)) {
@@ -2196,15 +2204,6 @@ bool DuckDBPyConnection::IsPandasDataframe(const py::object &object) {
 	}
 	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
 	return py::isinstance(object, import_cache_py.pandas.DataFrame());
-}
-
-bool DuckDBPyConnection::IsPolarsDataframe(const py::object &object) {
-	if (!ModuleIsLoaded<PolarsCacheItem>()) {
-		return false;
-	}
-	auto &import_cache_py = *DuckDBPyConnection::ImportCache();
-	return py::isinstance(object, import_cache_py.polars.DataFrame()) ||
-	       py::isinstance(object, import_cache_py.polars.LazyFrame());
 }
 
 bool IsValidNumpyDimensions(const py::handle &object, int &dim) {

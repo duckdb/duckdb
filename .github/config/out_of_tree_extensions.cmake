@@ -19,7 +19,7 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 92867fce5a6e90b9a6803fab2b196c00cc11e46c
+    GIT_TAG 85ac4667bcb0d868199e156f8dd918b0278db7b9
     INCLUDE_DIR extension/httpfs/include
     )
 
@@ -28,8 +28,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
     duckdb_extension_load(arrow
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/arrow
-            GIT_TAG c50862c82c065096722745631f4230832a3a04e8
-            APPLY_PATCHES
+            GIT_TAG cff2f0e21b1608e38640e15b4cf0693dd52dd0eb
             )
 endif()
 
@@ -79,9 +78,9 @@ endif()
 
 if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
     duckdb_extension_load(iceberg
-            ${LOAD_ICEBERG_TESTS}
+#            ${LOAD_ICEBERG_TESTS} TODO: re-enable once autoloading test is fixed
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG 3060b30309d82f1059c928de7280286fcf800545
+            GIT_TAG 43b4e37f6e859d6c1c67b787ac511659e9e0b6fb
             )
 endif()
 
@@ -101,7 +100,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
-            GIT_TAG dc0957a3755ea058b047bf6381f5b2894b848e1f
+            GIT_TAG 79fcce4a7478d245189d851ce289def2b42f4f93
             )
 endif()
 
@@ -128,7 +127,7 @@ endif()
 duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlite
-        GIT_TAG 1f4b805588018ca775ac68a0b152add8ca833dcd
+        GIT_TAG 96e451c043afa40ee39b7581009ba0c72a523a12
         )
 
 duckdb_extension_load(sqlsmith
@@ -152,7 +151,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             DONT_LINK
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-mysql
-            GIT_TAG 94b1ec6d6abce189b6dbb68beb14acb41d611fe4
+            GIT_TAG c2a56813a9fe9cb8c24c424be646d41ab2f8e64f
             )
 endif()
 

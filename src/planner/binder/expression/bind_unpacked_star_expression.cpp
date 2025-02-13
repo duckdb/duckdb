@@ -50,6 +50,23 @@ static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_lis
 static void ReplaceInOperator(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list) {
 	auto &operator_expr = expr->Cast<OperatorExpression>();
 
+	vector<ExpressionType> allowed_types({
+	    ExpressionType::OPERATOR_COALESCE,
+	    ExpressionType::COMPARE_IN,
+	    ExpressionType::COMPARE_NOT_IN,
+	});
+	bool allowed = false;
+	for (idx_t i = 0; i < allowed_types.size() && !allowed; i++) {
+		auto &type = allowed_types[i];
+		if (operator_expr.type == type) {
+			allowed = true;
+		}
+	}
+	if (!allowed) {
+		throw BinderException("*COLUMNS() can not be used together with the '%s' operator",
+		                      EnumUtil::ToString(operator_expr.type));
+	}
+
 	// Replace children
 	expression_list_t new_children;
 	for (auto &child : operator_expr.children) {

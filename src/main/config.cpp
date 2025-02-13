@@ -380,7 +380,13 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
                                   const Value &default_value, set_option_callback_t function) {
 	extension_parameters.insert(
 	    make_pair(name, ExtensionOption(std::move(description), std::move(parameter), function, default_value)));
-	if (!default_value.IsNull()) {
+	// copy over unrecognized options, if they match the new extension option
+	auto iter = options.unrecognized_options.find(name);
+	if (iter != options.unrecognized_options.end()) {
+		options.set_variables[name] = iter->second;
+		options.unrecognized_options.erase(iter);
+	}
+	if (!default_value.IsNull() && options.set_variables.find(name) == options.set_variables.end()) {
 		// Default value is set, insert it into the 'set_variables' list
 		options.set_variables[name] = default_value;
 	}
@@ -462,7 +468,7 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 	}
 	return MaxValue<idx_t>(CGroups::GetCPULimit(fs, physical_cores), 1);
 #else
-	return physical_cores;
+	return MaxValue<idx_t>(physical_cores, 1);
 #endif
 #endif
 }
