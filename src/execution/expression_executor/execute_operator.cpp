@@ -19,8 +19,8 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
                                  const SelectionVector *sel, idx_t count, Vector &result) {
 	// special handling for special snowflake 'IN'
 	// IN has n children
-	if (expr.GetExpressionType() == ExpressionType::COMPARE_IN ||
-	    expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN) {
+	auto expression_type = expr.GetExpressionType();
+	if (expression_type == ExpressionType::COMPARE_IN || expression_type == ExpressionType::COMPARE_NOT_IN) {
 		if (expr.children.size() < 2) {
 			throw InvalidInputException("IN needs at least two children");
 		}
@@ -54,14 +54,14 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 				intermediate.Reference(new_result);
 			}
 		}
-		if (expr.GetExpressionType() == ExpressionType::COMPARE_NOT_IN) {
+		if (expression_type == ExpressionType::COMPARE_NOT_IN) {
 			// NOT IN: invert result
 			VectorOperations::Not(intermediate, result, count);
 		} else {
 			// directly use the result
 			result.Reference(intermediate);
 		}
-	} else if (expr.GetExpressionType() == ExpressionType::OPERATOR_COALESCE) {
+	} else if (expression_type == ExpressionType::OPERATOR_COALESCE) {
 		SelectionVector sel_a(count);
 		SelectionVector sel_b(count);
 		SelectionVector slice_sel(count);
@@ -109,6 +109,38 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 		if (sel) {
 			result.Slice(*sel, count);
 		} else if (count == 1) {
+			result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		}
+	} else if (expression_type == ExpressionType::OPERATOR_TRY) {
+		auto &child_state = *state->child_states[0];
+		try {
+			Execute(*expr.children[0], &child_state, sel, count, result);
+			return;
+		} catch (std::exception &ex) {
+			ErrorData error(ex);
+			auto error_type = error.Type();
+			if (!Exception::IsExecutionError(error_type)) {
+				throw;
+			}
+		}
+		SelectionVector selvec(1);
+		Vector intermediate(result.GetType(), 1);
+		for (idx_t i = 0; i < count; i++) {
+			selvec.set_index(0, sel ? sel->get_index(i) : i);
+			Value val(result.GetType());
+			try {
+				Execute(*expr.children[0], &child_state, &selvec, 1, intermediate);
+				val = intermediate.GetValue(0);
+			} catch (std::exception &ex) {
+				ErrorData error(ex);
+				auto error_type = error.Type();
+				if (!Exception::IsExecutionError(error_type)) {
+					throw;
+				}
+			}
+			result.SetValue(i, val);
+		}
+		if (count == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}
 	} else if (expr.children.size() == 1) {
