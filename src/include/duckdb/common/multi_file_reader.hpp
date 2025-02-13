@@ -200,6 +200,10 @@ struct MultiFileReaderData {
 
 //! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
 struct MultiFileReader {
+public:
+	static constexpr column_t COLUMN_IDENTIFIER_FILENAME = UINT64_C(9223372036854775808);
+
+public:
 	virtual ~MultiFileReader();
 
 	//! Create a MultiFileReader for a specific TableFunction, using its function name for errors
@@ -246,7 +250,8 @@ struct MultiFileReader {
 	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required
 	DUCKDB_API virtual void BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
 	                                    vector<LogicalType> &return_types, vector<string> &names,
-	                                    MultiFileReaderBindData &bind_data);
+	                                    MultiFileReaderBindData &bind_data,
+	                                    optional_ptr<virtual_column_map_t> virtual_columns = nullptr);
 
 	//! Initialize global state used by the MultiFileReader
 	DUCKDB_API virtual unique_ptr<MultiFileReaderGlobalState>
@@ -317,7 +322,8 @@ struct MultiFileReader {
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options) {
+	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options,
+	                                   optional_ptr<virtual_column_map_t> virtual_columns = nullptr) {
 		if (options.file_options.union_by_name) {
 			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options);
 		} else {
@@ -330,7 +336,7 @@ struct MultiFileReader {
 			}
 			result.Initialize(std::move(reader));
 			MultiFileReaderBindData bind_data;
-			BindOptions(options.file_options, files, return_types, names, bind_data);
+			BindOptions(options.file_options, files, return_types, names, bind_data, virtual_columns);
 			return bind_data;
 		}
 	}

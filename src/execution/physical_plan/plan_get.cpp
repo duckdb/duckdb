@@ -159,10 +159,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		vector<LogicalType> types;
 		vector<unique_ptr<Expression>> expressions;
 		for (auto &column_id : column_ids) {
-			if (column_id.IsRowIdColumn()) {
-				types.emplace_back(op.GetRowIdType());
-				// Now how to make that a constant expression.
-				expressions.push_back(make_uniq<BoundConstantExpression>(Value(op.GetRowIdType())));
+			if (column_id.IsVirtualColumn()) {
+				throw NotImplementedException("Virtual columns require projection pushdown");
 			} else {
 				auto col_id = column_id.GetPrimaryIndex();
 				auto type = op.returned_types[col_id];

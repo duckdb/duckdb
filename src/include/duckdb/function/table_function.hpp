@@ -12,11 +12,12 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/table_column.hpp"
 #include "duckdb/function/partition_stats.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 #include <functional>
 
@@ -27,7 +28,9 @@ class LogicalDependencyList;
 class LogicalGet;
 class TableFunction;
 class TableFilterSet;
+class TableFunctionRef;
 class TableCatalogEntry;
+class SampleOptions;
 struct MultiFileReader;
 struct OperatorPartitionData;
 struct OperatorPartitionInfo;
@@ -90,9 +93,11 @@ struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
 	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
-	                       TableFunction &table_function, const TableFunctionRef &ref)
+	                       TableFunction &table_function, const TableFunctionRef &ref,
+	                       virtual_column_map_t &virtual_columns)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref) {
+	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref),
+	      virtual_columns(virtual_columns) {
 	}
 
 	vector<Value> &inputs;
@@ -103,6 +108,7 @@ struct TableFunctionBindInput {
 	optional_ptr<Binder> binder;
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
+	virtual_column_map_t &virtual_columns;
 };
 
 struct TableFunctionInitInput {

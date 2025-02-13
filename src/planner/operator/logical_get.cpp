@@ -17,10 +17,11 @@ LogicalGet::LogicalGet() : LogicalOperator(LogicalOperatorType::LOGICAL_GET) {
 }
 
 LogicalGet::LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
-                       vector<LogicalType> returned_types, vector<string> returned_names, LogicalType rowid_type)
+                       vector<LogicalType> returned_types, vector<string> returned_names,
+                       virtual_column_map_t virtual_columns_p)
     : LogicalOperator(LogicalOperatorType::LOGICAL_GET), table_index(table_index), function(std::move(function)),
       bind_data(std::move(bind_data)), returned_types(std::move(returned_types)), names(std::move(returned_names)),
-      extra_info(), rowid_type(std::move(rowid_type)) {
+      virtual_columns(std::move(virtual_columns_p)), extra_info() {
 }
 
 optional_ptr<TableCatalogEntry> LogicalGet::GetTable() const {
@@ -118,6 +119,28 @@ vector<ColumnBinding> LogicalGet::GetColumnBindings() {
 	return result;
 }
 
+const LogicalType &LogicalGet::GetColumnType(const ColumnIndex &index) const {
+	if (index.IsVirtualColumn()) {
+		auto entry = virtual_columns.find(index.GetPrimaryIndex());
+		if (entry == virtual_columns.end()) {
+			throw InternalException("Failed to find referenced virtual column %d", index.GetPrimaryIndex());
+		}
+		return entry->second.type;
+	}
+	return returned_types[index.GetPrimaryIndex()];
+}
+
+const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {
+	if (index.IsVirtualColumn()) {
+		auto entry = virtual_columns.find(index.GetPrimaryIndex());
+		if (entry == virtual_columns.end()) {
+			throw InternalException("Failed to find referenced virtual column %d", index.GetPrimaryIndex());
+		}
+		return entry->second.name;
+	}
+	return names[index.GetPrimaryIndex()];
+}
+
 void LogicalGet::ResolveTypes() {
 	if (column_ids.empty()) {
 		column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
@@ -125,20 +148,12 @@ void LogicalGet::ResolveTypes() {
 	types.clear();
 	if (projection_ids.empty()) {
 		for (auto &index : column_ids) {
-			if (index.IsRowIdColumn()) {
-				types.emplace_back(LogicalType(rowid_type));
-			} else {
-				types.push_back(returned_types[index.GetPrimaryIndex()]);
-			}
+			types.push_back(GetColumnType(index));
 		}
 	} else {
 		for (auto &proj_index : projection_ids) {
 			auto &index = column_ids[proj_index];
-			if (index.IsRowIdColumn()) {
-				types.emplace_back(LogicalType(rowid_type));
-			} else {
-				types.push_back(returned_types[index.GetPrimaryIndex()]);
-			}
+			types.push_back(GetColumnType(index));
 		}
 	}
 	if (!projected_input.empty()) {
@@ -227,9 +242,10 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	if (!has_serialize) {
 		TableFunctionRef empty_ref;
+		unordered_map<column_t, TableColumn> virtual_columns;
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
 		                             result->input_table_names, function.function_info.get(), nullptr, result->function,
-		                             empty_ref);
+		                             empty_ref, virtual_columns);
 
 		vector<LogicalType> bind_return_types;
 		vector<string> bind_names;
@@ -239,20 +255,35 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		bind_data = function.bind(deserializer.Get<ClientContext &>(), input, bind_return_types, bind_names);
 
 		for (auto &col_id : result->column_ids) {
-			if (col_id.IsRowIdColumn()) {
-				// rowid
-				continue;
-			}
-			auto idx = col_id.GetPrimaryIndex();
-			auto &ret_type = result->returned_types[idx];
-			auto &col_name = result->names[idx];
-			if (bind_return_types[idx] != ret_type) {
-				throw SerializationException("Table function deserialization failure in function \"%s\" - column with "
-				                             "name %s was serialized with type %s, but now has type %s",
-				                             function.name, col_name, ret_type, bind_return_types[idx]);
+			if (col_id.IsVirtualColumn()) {
+				auto idx = col_id.GetPrimaryIndex();
+				auto ventry = virtual_columns.find(idx);
+				if (ventry == virtual_columns.end()) {
+					throw SerializationException(
+					    "Table function deserialization failure - could not find virtual column with id %d", idx);
+				}
+				auto &ret_type = ventry->second.type;
+				auto &col_name = ventry->second.name;
+				if (bind_return_types[idx] != ret_type) {
+					throw SerializationException(
+					    "Table function deserialization failure in function \"%s\" - virtual column with "
+					    "name %s was serialized with type %s, but now has type %s",
+					    function.name, col_name, ret_type, bind_return_types[idx]);
+				}
+			} else {
+				auto idx = col_id.GetPrimaryIndex();
+				auto &ret_type = result->returned_types[idx];
+				auto &col_name = result->names[idx];
+				if (bind_return_types[idx] != ret_type) {
+					throw SerializationException(
+					    "Table function deserialization failure in function \"%s\" - column with "
+					    "name %s was serialized with type %s, but now has type %s",
+					    function.name, col_name, ret_type, bind_return_types[idx]);
+				}
 			}
 		}
 		result->returned_types = std::move(bind_return_types);
+		result->virtual_columns = std::move(virtual_columns);
 	}
 	result->bind_data = std::move(bind_data);
 	return std::move(result);

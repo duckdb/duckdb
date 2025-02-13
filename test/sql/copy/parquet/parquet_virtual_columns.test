@@ -1,0 +1,21 @@
+# name: test/sql/copy/parquet/parquet_virtual_columns.test
+# description: Test virtual columns
+# group: [parquet]
+
+require parquet
+
+# Filename without the filename option
+query III
+select i, j, replace(filename, '\', '/') from 'data/parquet-testing/glob*/t?.parquet' order by i;
+----
+1	a	data/parquet-testing/glob/t1.parquet
+2	b	data/parquet-testing/glob/t2.parquet
+3	c	data/parquet-testing/glob2/t1.parquet
+
+# not projected in *
+query II
+select * from 'data/parquet-testing/glob*/t?.parquet' order by i;
+----
+1	a
+2	b
+3	c

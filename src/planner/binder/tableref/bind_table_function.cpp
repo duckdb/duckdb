@@ -197,9 +197,11 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	unique_ptr<FunctionData> bind_data;
 	vector<LogicalType> return_types;
 	vector<string> return_names;
+	unordered_map<column_t, TableColumn> virtual_columns;
 	if (table_function.bind || table_function.bind_replace) {
 		TableFunctionBindInput bind_input(parameters, named_parameters, input_table_types, input_table_names,
-		                                  table_function.function_info.get(), this, table_function, ref);
+		                                  table_function.function_info.get(), this, table_function, ref,
+		                                  virtual_columns);
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan) {
@@ -237,7 +239,8 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		}
 	}
 
-	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names);
+	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names,
+	                                 virtual_columns);
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
@@ -249,7 +252,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	}
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
-	                              get->GetTable().get());
+	                              get->GetTable().get(), std::move(virtual_columns));
 	return std::move(get);
 }
 
