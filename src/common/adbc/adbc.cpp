@@ -892,9 +892,8 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		auto error_msg = duckdb_prepare_error(statement_internal);
 		auto adbc_status = CheckResult(res, error, error_msg);
 		if (adbc_status != ADBC_STATUS_OK) {
-			// Things went wrong when executing internal prepared statement
-			duckdb_destroy_extracted(&extracted_statements);
 			duckdb_destroy_prepare(&statement_internal);
+			duckdb_destroy_extracted(&extracted_statements);
 			return adbc_status;
 		}
 		// Execute
@@ -902,15 +901,16 @@ AdbcStatusCode StatementSetSqlQuery(struct AdbcStatement *statement, const char 
 		res = duckdb_execute_prepared_arrow(statement_internal, &out_result);
 		if (res != DuckDBSuccess) {
 			SetError(error, duckdb_query_arrow_error(out_result));
-			delete out_result;
+			duckdb_destroy_arrow(&out_result);
 			duckdb_destroy_prepare(&statement_internal);
 			duckdb_destroy_extracted(&extracted_statements);
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
-		delete out_result;
+		duckdb_destroy_arrow(&out_result);
 		duckdb_destroy_prepare(&statement_internal);
 	}
-	// Besides ze last, this one we return
+
+	// Final statement (returned to caller)
 	auto res = duckdb_prepare_extracted_statement(wrapper->connection, extracted_statements,
 	                                              extract_statements_size - 1, &wrapper->statement);
 	auto error_msg = duckdb_prepare_error(wrapper->statement);
