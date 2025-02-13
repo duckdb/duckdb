@@ -947,3 +947,4 @@ class TestArrowFilterPushdown(object):
         duck_probe_arrow = duck_probe.arrow()
         duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
         assert duckdb_conn.execute("SELECT * from duck_probe_arrow where a in (1, 999)").fetchall() == [(1,), (999,)]
+        assert duckdb_conn.execute("SELECT * from duck_probe_arrow where a = any([1,999])").fetchall() == [(1,), (999,)]
