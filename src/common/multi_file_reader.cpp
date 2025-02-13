@@ -171,8 +171,7 @@ bool MultiFileReader::Bind(MultiFileReaderOptions &options, MultiFileList &files
 
 void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
                                   vector<LogicalType> &return_types, vector<string> &names,
-                                  MultiFileReaderBindData &bind_data,
-                                  optional_ptr<virtual_column_map_t> virtual_columns) {
+                                  MultiFileReaderBindData &bind_data) {
 	// Add generated constant column for filename
 	if (options.filename) {
 		if (std::find(names.begin(), names.end(), options.filename_column) != names.end()) {
@@ -183,10 +182,6 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 		bind_data.filename_idx = names.size();
 		return_types.emplace_back(LogicalType::VARCHAR);
 		names.emplace_back(options.filename_column);
-	} else if (virtual_columns) {
-		// filename is not specified - add it to the virtual columns list
-		virtual_columns->insert(make_pair(COLUMN_IDENTIFIER_FILENAME, TableColumn("filename", LogicalType::VARCHAR)));
-		bind_data.filename_idx = COLUMN_IDENTIFIER_FILENAME;
 	}
 
 	// Add generated constant columns from hive partitioning scheme
@@ -242,6 +237,14 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 	}
 }
 
+void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
+                                        virtual_column_map_t &result) {
+	if (bind_data.filename_idx == DConstants::INVALID_INDEX) {
+		bind_data.filename_idx = COLUMN_IDENTIFIER_FILENAME;
+		result.insert(make_pair(COLUMN_IDENTIFIER_FILENAME, TableColumn("filename", LogicalType::VARCHAR)));
+	}
+}
+
 void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
                                    const string &filename, const vector<MultiFileReaderColumnDefinition> &local_columns,
                                    const vector<MultiFileReaderColumnDefinition> &global_columns,
@@ -258,12 +261,6 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		auto &col_idx = global_column_ids[i];
-		if (col_idx.IsRowIdColumn()) {
-			// row-id
-			// FIXME: this should probably be removed
-			reader_data.constant_map.emplace_back(i, Value::BIGINT(42));
-			continue;
-		}
 		auto column_id = col_idx.GetPrimaryIndex();
 		if (column_id == options.filename_idx) {
 			// filename

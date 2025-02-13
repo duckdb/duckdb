@@ -93,11 +93,9 @@ struct TableFunctionBindInput {
 	TableFunctionBindInput(vector<Value> &inputs, named_parameter_map_t &named_parameters,
 	                       vector<LogicalType> &input_table_types, vector<string> &input_table_names,
 	                       optional_ptr<TableFunctionInfo> info, optional_ptr<Binder> binder,
-	                       TableFunction &table_function, const TableFunctionRef &ref,
-	                       virtual_column_map_t &virtual_columns)
+	                       TableFunction &table_function, const TableFunctionRef &ref)
 	    : inputs(inputs), named_parameters(named_parameters), input_table_types(input_table_types),
-	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref),
-	      virtual_columns(virtual_columns) {
+	      input_table_names(input_table_names), info(info), binder(binder), table_function(table_function), ref(ref) {
 	}
 
 	vector<Value> &inputs;
@@ -108,7 +106,6 @@ struct TableFunctionBindInput {
 	optional_ptr<Binder> binder;
 	TableFunction &table_function;
 	const TableFunctionRef &ref;
-	virtual_column_map_t &virtual_columns;
 };
 
 struct TableFunctionInitInput {
@@ -298,6 +295,9 @@ typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext 
 typedef vector<PartitionStatistics> (*table_function_get_partition_stats_t)(ClientContext &context,
                                                                             GetPartitionStatsInput &input);
 
+typedef virtual_column_map_t (*table_function_get_virtual_columns_t)(ClientContext &context,
+                                                                     optional_ptr<FunctionData> bind_data);
+
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
 
@@ -366,6 +366,8 @@ public:
 	table_function_get_partition_info_t get_partition_info;
 	//! (Optional) get a list of all the partition stats of the table
 	table_function_get_partition_stats_t get_partition_stats;
+	//! (Optional) returns a list of virtual columns emitted by the table function
+	table_function_get_virtual_columns_t get_virtual_columns;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;

@@ -250,8 +250,7 @@ public:
 	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required
 	DUCKDB_API virtual void BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
 	                                    vector<LogicalType> &return_types, vector<string> &names,
-	                                    MultiFileReaderBindData &bind_data,
-	                                    optional_ptr<virtual_column_map_t> virtual_columns = nullptr);
+	                                    MultiFileReaderBindData &bind_data);
 
 	//! Initialize global state used by the MultiFileReader
 	DUCKDB_API virtual unique_ptr<MultiFileReaderGlobalState>
@@ -294,6 +293,9 @@ public:
 	                                         const OperatorPartitionInfo &partition_info,
 	                                         OperatorPartitionData &partition_data);
 
+	DUCKDB_API virtual void GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
+	                                          virtual_column_map_t &result);
+
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
 	                                        vector<string> &names, MultiFileList &files, RESULT_CLASS &result,
@@ -322,8 +324,7 @@ public:
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options,
-	                                   optional_ptr<virtual_column_map_t> virtual_columns = nullptr) {
+	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options) {
 		if (options.file_options.union_by_name) {
 			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options);
 		} else {
@@ -336,7 +337,7 @@ public:
 			}
 			result.Initialize(std::move(reader));
 			MultiFileReaderBindData bind_data;
-			BindOptions(options.file_options, files, return_types, names, bind_data, virtual_columns);
+			BindOptions(options.file_options, files, return_types, names, bind_data);
 			return bind_data;
 		}
 	}

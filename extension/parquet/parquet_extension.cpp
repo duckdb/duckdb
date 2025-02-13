@@ -359,6 +359,13 @@ TablePartitionInfo ParquetGetPartitionInfo(ClientContext &context, TableFunction
 	return parquet_bind.multi_file_reader->GetPartitionInfo(context, parquet_bind.reader_bind, input);
 }
 
+virtual_column_map_t ParquetGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
+	virtual_column_map_t result;
+	parquet_bind.multi_file_reader->GetVirtualColumns(context, parquet_bind.reader_bind, result);
+	return result;
+}
+
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
@@ -384,6 +391,7 @@ public:
 		table_function.filter_prune = true;
 		table_function.pushdown_complex_filter = ParquetComplexFilterPushdown;
 		table_function.get_partition_info = ParquetGetPartitionInfo;
+		table_function.get_virtual_columns = ParquetGetVirtualColumns;
 
 		MultiFileReader::AddParameters(table_function);
 
@@ -450,11 +458,11 @@ public:
 		return nullptr;
 	}
 
-	static unique_ptr<FunctionData>
-	ParquetScanBindInternal(ClientContext &context, unique_ptr<MultiFileReader> multi_file_reader,
-	                        shared_ptr<MultiFileList> file_list, vector<LogicalType> &return_types,
-	                        vector<string> &names, ParquetOptions parquet_options,
-	                        optional_ptr<virtual_column_map_t> virtual_columns = nullptr) {
+	static unique_ptr<FunctionData> ParquetScanBindInternal(ClientContext &context,
+	                                                        unique_ptr<MultiFileReader> multi_file_reader,
+	                                                        shared_ptr<MultiFileList> file_list,
+	                                                        vector<LogicalType> &return_types, vector<string> &names,
+	                                                        ParquetOptions parquet_options) {
 		auto result = make_uniq<ParquetReadBindData>();
 		result->multi_file_reader = std::move(multi_file_reader);
 		result->file_list = std::move(file_list);
@@ -463,7 +471,7 @@ public:
 		if (result->multi_file_reader->Bind(parquet_options.file_options, *result->file_list, result->types,
 		                                    result->names, result->reader_bind)) {
 			result->multi_file_reader->BindOptions(parquet_options.file_options, *result->file_list, result->types,
-			                                       result->names, result->reader_bind, virtual_columns);
+			                                       result->names, result->reader_bind);
 			// Enable the parquet file_row_number on the parquet options if the file_row_number_idx was set
 			if (result->reader_bind.file_row_number_idx != DConstants::INVALID_INDEX) {
 				parquet_options.file_row_number = true;
@@ -476,7 +484,7 @@ public:
 			parquet_options.file_options.AutoDetectHivePartitioning(*result->file_list, context);
 			// Default bind
 			result->reader_bind = result->multi_file_reader->BindReader<ParquetReader>(
-			    context, result->types, result->names, *result->file_list, *result, parquet_options, virtual_columns);
+			    context, result->types, result->names, *result->file_list, *result, parquet_options);
 		}
 
 		// Set the explicit cardinality if requested
@@ -617,7 +625,7 @@ public:
 
 		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 		return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), return_types, names,
-		                               parquet_options, &input.virtual_columns);
+		                               parquet_options);
 	}
 
 	static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,

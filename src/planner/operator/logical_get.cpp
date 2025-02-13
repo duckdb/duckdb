@@ -143,7 +143,15 @@ const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {
 
 void LogicalGet::ResolveTypes() {
 	if (column_ids.empty()) {
-		column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+		// no projection - we need to push a column
+		auto entry = virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
+		if (entry != virtual_columns.end()) {
+			// push the rowid column if the projection supports it
+			column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+		} else {
+			// otherwise push the first column
+			column_ids.emplace_back(0);
+		}
 	}
 	types.clear();
 	if (projection_ids.empty()) {
@@ -240,19 +248,23 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			result->column_ids.emplace_back(col_id);
 		}
 	}
+	auto &context = deserializer.Get<ClientContext &>();
+	virtual_column_map_t virtual_columns;
 	if (!has_serialize) {
 		TableFunctionRef empty_ref;
-		unordered_map<column_t, TableColumn> virtual_columns;
 		TableFunctionBindInput input(result->parameters, result->named_parameters, result->input_table_types,
 		                             result->input_table_names, function.function_info.get(), nullptr, result->function,
-		                             empty_ref, virtual_columns);
+		                             empty_ref);
 
 		vector<LogicalType> bind_return_types;
 		vector<string> bind_names;
 		if (!function.bind) {
 			throw InternalException("Table function \"%s\" has neither bind nor (de)serialize", function.name);
 		}
-		bind_data = function.bind(deserializer.Get<ClientContext &>(), input, bind_return_types, bind_names);
+		bind_data = function.bind(context, input, bind_return_types, bind_names);
+		if (function.get_virtual_columns) {
+			virtual_columns = function.get_virtual_columns(context, bind_data.get());
+		}
 
 		for (auto &col_id : result->column_ids) {
 			if (col_id.IsVirtualColumn()) {
@@ -283,8 +295,10 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			}
 		}
 		result->returned_types = std::move(bind_return_types);
-		result->virtual_columns = std::move(virtual_columns);
+	} else if (function.get_virtual_columns) {
+		virtual_columns = function.get_virtual_columns(context, bind_data.get());
 	}
+	result->virtual_columns = std::move(virtual_columns);
 	result->bind_data = std::move(bind_data);
 	return std::move(result);
 }
