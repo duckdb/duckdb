@@ -29,6 +29,8 @@ private:
 	};
 
 public:
+	static constexpr uint32_t MAXIMUM_POSSIBLE_SIZE = INVALID_INDEX - 1;
+
 	//! PrimitiveDictionary is a fixed-size linear probing hash table for primitive types
 	//! It is used to dictionary-encode data in, e.g., Parquet files
 	PrimitiveDictionary(Allocator &allocator, idx_t maximum_size_p, idx_t plain_capacity_p)
@@ -47,13 +49,12 @@ public:
 public:
 	//! Insert value into dictionary (if not full)
 	void Insert(T value) {
-		if (full | (size == capacity)) {
-			full = true;
+		if (full) {
 			return;
 		}
 		auto &entry = Lookup(value);
 		if (entry.IsEmpty()) {
-			if (!AddToPlain(value)) {
+			if (size + 1 > maximum_size || !AddToPlain(value)) {
 				full = true;
 				return;
 			}

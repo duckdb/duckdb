@@ -67,12 +67,23 @@ public:
 	}
 
 	void WriteMany(WriteStream &writer, uint32_t value, idx_t count) {
-		D_ASSERT(bp_block_count == 0);
 		if (rle_count != 0) {
-			WriteRun(writer);
+			// If an RLE run is going on, write a single value to either finish it or convert to BP
+			WriteValue(writer, value);
+			count--;
 		}
+
+		if (bp_block_count != 0) {
+			// If a BP run is going on, finish it
+			while (bp_block_count != 0 && count > 0) {
+				WriteValue(writer, value);
+				count--;
+			}
+		}
+
+		// Set remaining as current RLE run
 		rle_value = value;
-		rle_count = count;
+		rle_count += count;
 	}
 
 	void FinishWrite(WriteStream &writer) {

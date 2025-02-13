@@ -100,7 +100,7 @@ hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
 
 	// XOR with remaining (<8) bytes
 	hash_t hr = 0;
-	FastMemcpy(&hr, ptr, len & 7U);
+	memcpy(&hr, ptr, len & 7U);
 	h ^= hr;
 
 	// Finalize

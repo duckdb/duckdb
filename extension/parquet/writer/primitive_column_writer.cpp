@@ -130,7 +130,7 @@ void PrimitiveColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_v
 	MemoryStream intermediate_stream(Allocator::DefaultAllocator());
 
 	rle_encoder.BeginWrite();
-	if (null_count.IsValid() && null_count.GetIndex() == 0 || null_count.GetIndex() == count) {
+	if (null_count.IsValid() && (null_count.GetIndex() == 0 || null_count.GetIndex() == count)) {
 		// All are NULL or none are NULL
 		rle_encoder.WriteMany(intermediate_stream, levels[0], count);
 	} else {

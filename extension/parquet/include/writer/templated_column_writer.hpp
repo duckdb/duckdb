@@ -20,7 +20,6 @@ namespace duckdb {
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, const idx_t chunk_start,
                                 const idx_t chunk_end, const ValidityMask &mask, WriteStream &ser) {
-
 	const auto *ptr = FlatVector::GetData<SRC>(col);
 	for (idx_t r = chunk_start; r < chunk_end; r++) {
 		if (!mask.RowIsValid(r)) {
@@ -38,7 +37,7 @@ public:
 	StandardColumnWriterState(ParquetWriter &writer, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
 	    : PrimitiveColumnWriterState(writer, row_group, col_idx),
 	      dictionary(BufferAllocator::Get(writer.GetContext()), writer.DictionarySizeLimit(),
-	                 2097152), // TODO: make size configurable
+	                 writer.StringDictionaryPageSizeLimit()),
 	      encoding(duckdb_parquet::Encoding::PLAIN) {
 	}
 	~StandardColumnWriterState() override = default;
