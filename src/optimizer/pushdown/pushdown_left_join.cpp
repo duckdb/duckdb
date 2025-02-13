@@ -1,17 +1,21 @@
+#include "duckdb/common/assert.hpp"
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/typedefs.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/binder.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_cross_product.hpp"
@@ -153,16 +157,26 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 					projections_groups[column_bindings[i].table_index].emplace_back(
 					    make_uniq<BoundConstantExpression>(Value(types[i])));
 				}
-				// create dummy scan with 1 row NULLs for each table index, then cross product it with the left side
-				auto left = std::move(op->children[0]);
-				for (auto &group : projections_groups) {
-					auto proj = make_uniq<LogicalProjection>(group.first, std::move(group.second));
+
+				auto create_proj_dummy_scan = [&](idx_t table_index) {
 					auto dummy_scan = make_uniq<LogicalDummyScan>(optimizer.binder.GenerateTableIndex());
+					auto proj = make_uniq<LogicalProjection>(table_index, std::move(projections_groups[table_index]));
 					proj->AddChild(std::move(dummy_scan));
-					op = LogicalCrossProduct::Create(std::move(left), std::move(proj));
+					return proj;
+				};
+				// make cross products on the RHS first
+				auto begin = projections_groups.begin();
+				D_ASSERT(begin != projections_groups.end());
+				unique_ptr<LogicalOperator> left = create_proj_dummy_scan(begin->first);
+				projections_groups.erase(begin);
+				for (auto &group : projections_groups) {
+					auto proj = create_proj_dummy_scan(group.first);
+					auto op = LogicalCrossProduct::Create(std::move(left), std::move(proj));
 					left = std::move(op);
 				}
-				op = std::move(left);
+				// then make cross product with the LHS
+				op = LogicalCrossProduct::Create(std::move(op->children[0]), std::move(left));
+				;
 				rewrite_right = false;
 			}
 		}
