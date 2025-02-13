@@ -203,154 +203,7 @@ private:
 	Vector &child;
 };
 
-template <class OP>
-static bool SplitStringListInternal(const string_t &input, OP &state) {
-	const char *buf = input.GetData();
-	idx_t len = input.GetSize();
-	idx_t pos = 0;
-
-	StringCastInputState input_state(buf, pos, len);
-
-	SkipWhitespace(input_state);
-	if (pos == len || buf[pos] != '[') {
-		//! Does not have a valid list start
-		return false;
-	}
-
-	//! Skip the '['
-	pos++;
-	SkipWhitespace(input_state);
-	optional_idx start_pos;
-	idx_t end_pos;
-	bool seen_value = false;
-	while (pos < len) {
-		bool set_escaped = false;
-
-		if (input_state.escaped) {
-			if (!start_pos.IsValid()) {
-				start_pos = pos;
-			}
-			end_pos = pos;
-		} else if (buf[pos] == '[') {
-			if (!start_pos.IsValid()) {
-				start_pos = pos;
-			}
-			//! Start of a LIST
-			if (!SkipToClose(input_state)) {
-				return false;
-			}
-			end_pos = pos;
-		} else if ((buf[pos] == '"' || buf[pos] == '\'')) {
-			if (!start_pos.IsValid()) {
-				start_pos = pos;
-			}
-			if (!SkipToCloseQuotes(input_state)) {
-				return false;
-			}
-			end_pos = pos;
-		} else if (buf[pos] == '{') {
-			if (!start_pos.IsValid()) {
-				start_pos = pos;
-			}
-			//! Start of a STRUCT
-			if (!SkipToClose(input_state)) {
-				return false;
-			}
-			end_pos = pos;
-		} else if (buf[pos] == '(') {
-			if (!start_pos.IsValid()) {
-				start_pos = pos;
-			}
-			//! Start of an (unnamed) STRUCT
-			if (!SkipToClose(input_state)) {
-				return false;
-			}
-			end_pos = pos;
-		} else if ((buf[pos] == ',' || buf[pos] == ']')) {
-			if (buf[pos] != ']' || start_pos.IsValid() || seen_value) {
-				if (!start_pos.IsValid()) {
-					state.HandleValue(buf, 0, 0);
-				} else {
-					auto start = start_pos.GetIndex();
-					state.HandleValue(buf, start, end_pos + 1);
-				}
-				seen_value = true;
-			}
-			if (buf[pos] == ']') {
-				break;
-			}
-			start_pos = optional_idx();
-		} else if (buf[pos] == '\\') {
-			if (!start_pos.IsValid()) {
-				start_pos = pos;
-			}
-			set_escaped = true;
-			end_pos = pos;
-		} else if (!StringUtil::CharacterIsSpace(buf[pos])) {
-			if (!start_pos.IsValid()) {
-				start_pos = pos;
-			}
-			end_pos = pos;
-		}
-		input_state.escaped = set_escaped;
-		pos++;
-		SkipWhitespace(input_state);
-	}
-	pos++;
-	SkipWhitespace(input_state);
-	return (pos == len);
-}
-
-bool VectorStringToList::SplitStringList(const string_t &input, string_t *child_data, idx_t &child_start,
-                                         Vector &child) {
-	SplitStringListOperation state(child_data, child_start, child);
-	return SplitStringListInternal<SplitStringListOperation>(input, state);
-}
-
-idx_t VectorStringToList::CountPartsList(const string_t &input) {
-	CountPartOperation state;
-	SplitStringListInternal<CountPartOperation>(input, state);
-	return state.count;
-}
-
-// ------- MAP SPLIT -------
-struct SplitStringMapOperation {
-	SplitStringMapOperation(string_t *child_key_data, string_t *child_val_data, idx_t &child_start, Vector &varchar_key,
-	                        Vector &varchar_val)
-	    : child_key_data(child_key_data), child_val_data(child_val_data), child_start(child_start),
-	      varchar_key(varchar_key), varchar_val(varchar_val) {
-	}
-
-	string_t *child_key_data;
-	string_t *child_val_data;
-	idx_t &child_start;
-	Vector &varchar_key;
-	Vector &varchar_val;
-
-	bool HandleKey(const char *buf, idx_t start_pos, idx_t pos) {
-		if (IsNull(buf, start_pos, pos)) {
-			FlatVector::SetNull(varchar_val, child_start, true);
-			FlatVector::SetNull(varchar_key, child_start, true);
-			child_start++;
-			return false;
-		}
-		child_key_data[child_start] = HandleString(varchar_key, buf, start_pos, pos);
-		return true;
-	}
-
-	void HandleValue(const char *buf, idx_t start_pos, idx_t pos) {
-		if (IsNull(buf, start_pos, pos)) {
-			FlatVector::SetNull(varchar_val, child_start, true);
-			child_start++;
-			return;
-		}
-		child_val_data[child_start] = HandleString(varchar_val, buf, start_pos, pos);
-		child_start++;
-	}
-};
-
-static inline bool MapKeyOrValueStateTransition(StringCastInputState &input_state, optional_idx &start_pos,
-                                                idx_t &end_pos) {
+static inline bool ValueStateTransition(StringCastInputState &input_state, optional_idx &start_pos, idx_t &end_pos) {
 	auto &buf = input_state.buf;
 	auto &pos = input_state.pos;
 
@@ -411,6 +264,105 @@ static inline bool MapKeyOrValueStateTransition(StringCastInputState &input_stat
 }
 
 template <class OP>
+static bool SplitStringListInternal(const string_t &input, OP &state) {
+	const char *buf = input.GetData();
+	idx_t len = input.GetSize();
+	idx_t pos = 0;
+
+	StringCastInputState input_state(buf, pos, len);
+
+	SkipWhitespace(input_state);
+	if (pos == len || buf[pos] != '[') {
+		//! Does not have a valid list start
+		return false;
+	}
+
+	//! Skip the '['
+	pos++;
+	SkipWhitespace(input_state);
+	bool seen_value = false;
+	while (pos < len) {
+		optional_idx start_pos;
+		idx_t end_pos;
+
+		while (pos < len && ((buf[pos] != ',' && buf[pos] != ']') || input_state.escaped)) {
+			if (!ValueStateTransition(input_state, start_pos, end_pos)) {
+				return false;
+			}
+		}
+		if (pos == len) {
+			return false;
+		}
+		if (buf[pos] != ']' || start_pos.IsValid() || seen_value) {
+			if (!start_pos.IsValid()) {
+				state.HandleValue(buf, 0, 0);
+			} else {
+				auto start = start_pos.GetIndex();
+				state.HandleValue(buf, start, end_pos + 1);
+			}
+			seen_value = true;
+		}
+		if (buf[pos] == ']') {
+			break;
+		}
+
+		pos++;
+		SkipWhitespace(input_state);
+	}
+	pos++;
+	SkipWhitespace(input_state);
+	return (pos == len);
+}
+
+bool VectorStringToList::SplitStringList(const string_t &input, string_t *child_data, idx_t &child_start,
+                                         Vector &child) {
+	SplitStringListOperation state(child_data, child_start, child);
+	return SplitStringListInternal<SplitStringListOperation>(input, state);
+}
+
+idx_t VectorStringToList::CountPartsList(const string_t &input) {
+	CountPartOperation state;
+	SplitStringListInternal<CountPartOperation>(input, state);
+	return state.count;
+}
+
+// ------- MAP SPLIT -------
+struct SplitStringMapOperation {
+	SplitStringMapOperation(string_t *child_key_data, string_t *child_val_data, idx_t &child_start, Vector &varchar_key,
+	                        Vector &varchar_val)
+	    : child_key_data(child_key_data), child_val_data(child_val_data), child_start(child_start),
+	      varchar_key(varchar_key), varchar_val(varchar_val) {
+	}
+
+	string_t *child_key_data;
+	string_t *child_val_data;
+	idx_t &child_start;
+	Vector &varchar_key;
+	Vector &varchar_val;
+
+	bool HandleKey(const char *buf, idx_t start_pos, idx_t pos) {
+		if (IsNull(buf, start_pos, pos)) {
+			FlatVector::SetNull(varchar_val, child_start, true);
+			FlatVector::SetNull(varchar_key, child_start, true);
+			child_start++;
+			return false;
+		}
+		child_key_data[child_start] = HandleString(varchar_key, buf, start_pos, pos);
+		return true;
+	}
+
+	void HandleValue(const char *buf, idx_t start_pos, idx_t pos) {
+		if (IsNull(buf, start_pos, pos)) {
+			FlatVector::SetNull(varchar_val, child_start, true);
+			child_start++;
+			return;
+		}
+		child_val_data[child_start] = HandleString(varchar_val, buf, start_pos, pos);
+		child_start++;
+	}
+};
+
+template <class OP>
 static bool SplitStringMapInternal(const string_t &input, OP &state) {
 	const char *buf = input.GetData();
 	idx_t len = input.GetSize();
@@ -436,7 +388,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 		optional_idx start_pos;
 		idx_t end_pos;
 		while (pos < len && (buf[pos] != '=' || input_state.escaped)) {
-			if (!MapKeyOrValueStateTransition(input_state, start_pos, end_pos)) {
+			if (!ValueStateTransition(input_state, start_pos, end_pos)) {
 				return false;
 			}
 		}
@@ -456,7 +408,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 		pos++;
 		SkipWhitespace(input_state);
 		while (pos < len && ((buf[pos] != ',' && buf[pos] != '}') || input_state.escaped)) {
-			if (!MapKeyOrValueStateTransition(input_state, start_pos, end_pos)) {
+			if (!ValueStateTransition(input_state, start_pos, end_pos)) {
 				return false;
 			}
 		}
