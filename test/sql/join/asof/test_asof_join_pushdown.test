@@ -63,7 +63,8 @@ FROM right_pushdown d1
 ASOF LEFT JOIN (
 	SELECT * FROM right_pushdown WHERE value is not NULL
 	) d2
-	ON d1.time >= d2.time;
+	ON d1.time >= d2.time
+ORDER BY ALL;
 ----
 0 	0	0.0	0.0
 1 	0	NULL	0.0
