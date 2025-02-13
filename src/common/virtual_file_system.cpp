@@ -139,6 +139,25 @@ void VirtualFileSystem::RegisterSubSystem(FileCompressionType compression_type, 
 	compressed_fs[compression_type] = std::move(fs);
 }
 
+unique_ptr<FileSystem> VirtualFileSystem::ExtractSubSystem(const string &name) {
+	unique_ptr<FileSystem> extracted_filesystem;
+	for (auto iter = sub_systems.begin(); iter != sub_systems.end(); ++iter) {
+		auto &cur_filesystem = *iter;
+		if (cur_filesystem->GetName() == name) {
+			extracted_filesystem = std::move(cur_filesystem);
+			sub_systems.erase(iter);
+			break;
+		}
+	}
+
+	// If found, also remove from disabled filesystem set.
+	if (extracted_filesystem != nullptr) {
+		disabled_file_systems.erase(name);
+	}
+
+	return extracted_filesystem;
+}
+
 vector<string> VirtualFileSystem::ListSubSystems() {
 	vector<string> names(sub_systems.size());
 	for (idx_t i = 0; i < sub_systems.size(); i++) {
