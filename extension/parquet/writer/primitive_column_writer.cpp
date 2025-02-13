@@ -40,7 +40,6 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	auto &state = state_p.Cast<PrimitiveColumnWriterState>();
 	auto &col_chunk = state.row_group.columns[state.col_idx];
 
-	idx_t start = 0;
 	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 	idx_t parent_index = state.definition_levels.size();
 	auto &validity = FlatVector::Validity(vector);
@@ -49,24 +48,35 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 
 	idx_t vector_index = 0;
 	reference<PageInformation> page_info_ref = state.page_info.back();
-	for (idx_t i = start; i < vcount; i++) {
+	col_chunk.meta_data.num_values += vcount;
+
+	const bool check_parent_empty = parent && !parent->is_empty.empty();
+	if (!check_parent_empty && validity.AllValid() && TypeIsConstantSize(vector.GetType().InternalType()) &&
+	    page_info_ref.get().estimated_page_size + GetRowSize(vector, vector_index, state) * vcount <
+	        MAX_UNCOMPRESSED_PAGE_SIZE) {
+		// Fast path
 		auto &page_info = page_info_ref.get();
-		page_info.row_count++;
-		col_chunk.meta_data.num_values++;
-		if (parent && !parent->is_empty.empty() && parent->is_empty[parent_index + i]) {
-			page_info.empty_count++;
-			continue;
-		}
-		if (validity.RowIsValid(vector_index)) {
-			page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
-			if (page_info.estimated_page_size >= MAX_UNCOMPRESSED_PAGE_SIZE) {
-				PageInformation new_info;
-				new_info.offset = page_info.offset + page_info.row_count;
-				state.page_info.push_back(new_info);
-				page_info_ref = state.page_info.back();
+		page_info.row_count += vcount;
+		page_info.estimated_page_size += GetRowSize(vector, vector_index, state) * vcount;
+	} else {
+		for (idx_t i = 0; i < vcount; i++) {
+			auto &page_info = page_info_ref.get();
+			page_info.row_count++;
+			if (check_parent_empty && parent->is_empty[parent_index + i]) {
+				page_info.empty_count++;
+				continue;
 			}
+			if (validity.RowIsValid(vector_index)) {
+				page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
+				if (page_info.estimated_page_size >= MAX_UNCOMPRESSED_PAGE_SIZE) {
+					PageInformation new_info;
+					new_info.offset = page_info.offset + page_info.row_count;
+					state.page_info.push_back(new_info);
+					page_info_ref = state.page_info.back();
+				}
+			}
+			vector_index++;
 		}
-		vector_index++;
 	}
 }
 

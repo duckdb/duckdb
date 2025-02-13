@@ -229,15 +229,24 @@ public:
 
 		switch (page_state.encoding) {
 		case duckdb_parquet::Encoding::RLE_DICTIONARY: {
-			for (idx_t r = chunk_start; r < chunk_end; r++) {
-				if (!mask.RowIsValid(r)) {
-					continue;
-				}
-				if (!page_state.dict_written_value) {
-					// first value: write the bit-width as a one-byte entry and initialize writer
+			idx_t r = chunk_start;
+			if (!page_state.dict_written_value) {
+				// find first non-null value
+				for (; r < chunk_end; r++) {
+					if (!mask.RowIsValid(r)) {
+						continue;
+					}
+					// write the bit-width as a one-byte entry and initialize writer
 					temp_writer.Write<uint8_t>(page_state.dict_bit_width);
 					page_state.dict_encoder.BeginWrite();
 					page_state.dict_written_value = true;
+					break;
+				}
+			}
+
+			for (; r < chunk_end; r++) {
+				if (!mask.RowIsValid(r)) {
+					continue;
 				}
 				const auto &src_value = data_ptr[r];
 				const auto value_index = page_state.dictionary.GetIndex(src_value);
