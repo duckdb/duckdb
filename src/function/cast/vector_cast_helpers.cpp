@@ -573,59 +573,9 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 			optional_idx start_pos;
 			idx_t end_pos;
 			while (pos < len && ((buf[pos] != ',' && buf[pos] != ')') || input_state.escaped)) {
-				bool set_escaped = false;
-
-				if (input_state.escaped) {
-					if (!start_pos.IsValid()) {
-						start_pos = pos;
-					}
-					end_pos = pos;
-				} else if (buf[pos] == '"' || buf[pos] == '\'') {
-					if (!start_pos.IsValid()) {
-						start_pos = pos;
-					}
-					if (!SkipToCloseQuotes(input_state)) {
-						return false;
-					}
-					end_pos = pos;
-				} else if (buf[pos] == '{') {
-					if (!start_pos.IsValid()) {
-						start_pos = pos;
-					}
-					if (!SkipToClose(input_state)) {
-						return false;
-					}
-					end_pos = pos;
-				} else if (buf[pos] == '(') {
-					if (!start_pos.IsValid()) {
-						start_pos = pos;
-					}
-					if (!SkipToClose(input_state)) {
-						return false;
-					}
-					end_pos = pos;
-				} else if (buf[pos] == '[') {
-					if (!start_pos.IsValid()) {
-						start_pos = pos;
-					}
-					if (!SkipToClose(input_state)) {
-						return false;
-					}
-					end_pos = pos;
-				} else if (buf[pos] == '\\') {
-					if (!start_pos.IsValid()) {
-						start_pos = pos;
-					}
-					set_escaped = true;
-					end_pos = pos;
-				} else if (!StringUtil::CharacterIsSpace(buf[pos])) {
-					if (!start_pos.IsValid()) {
-						start_pos = pos;
-					}
-					end_pos = pos;
+				if (!ValueStateTransition(input_state, start_pos, end_pos)) {
+					return false;
 				}
-				pos++;
-				input_state.escaped = set_escaped;
 			}
 			if (pos == len) {
 				return false;
