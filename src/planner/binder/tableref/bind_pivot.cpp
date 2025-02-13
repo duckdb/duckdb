@@ -606,6 +606,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		}
 	}
 
+	vector<string> select_names;
 	for (auto &col_expr : all_columns) {
 		if (col_expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 			throw InternalException("Unexpected child of pivot source - not a ColumnRef");
@@ -615,6 +616,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		auto entry = handled_columns.find(column_name);
 		if (entry == handled_columns.end()) {
 			// not handled - add to the set of regularly selected columns
+			select_names.push_back(col_expr->GetName());
 			select_node->select_list.push_back(std::move(col_expr));
 		} else {
 			name_map[column_name] = column_name;
@@ -662,28 +664,70 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 		unpivot_expressions.push_back(std::move(expressions));
 	}
 
+	idx_t column_count = select_names.size();
+	idx_t unnest_count = unpivot_expressions.size();
+	// add the names for the generated unpivot lists
+	select_names.push_back("unpivot_names");
+	for (idx_t i = 0; i < unpivot_expressions.size(); i++) {
+		if (i > 0) {
+			select_names.push_back("unpivot_list_" + std::to_string(i + 1));
+		} else {
+			select_names.push_back("unpivot_list");
+		}
+	}
+
+	// now de-duplicate the names
+	QueryResult::DeduplicateColumns(select_names);
+
 	// construct the UNNEST expression for the set of names (constant)
 	auto unpivot_list = Value::LIST(LogicalType::VARCHAR, std::move(unpivot_names));
 	auto unpivot_name_expr = make_uniq<ConstantExpression>(std::move(unpivot_list));
-	vector<unique_ptr<ParsedExpression>> unnest_name_children;
-	unnest_name_children.push_back(std::move(unpivot_name_expr));
-	auto unnest_name_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_name_children));
-	unnest_name_expr->SetAlias(unpivot.unpivot_names[0]);
-	select_node->select_list.push_back(std::move(unnest_name_expr));
+	unpivot_name_expr->alias = select_names[column_count];
+	select_node->select_list.push_back(std::move(unpivot_name_expr));
 
-	// construct the UNNEST expression for the set of unpivoted columns
+	// construct the unpivot lists for the set of unpivoted columns
 	if (ref.unpivot_names.size() != unpivot_expressions.size()) {
 		throw BinderException(ref, "UNPIVOT name count mismatch - got %d names but %d expressions",
 		                      ref.unpivot_names.size(), unpivot_expressions.size());
 	}
 	for (idx_t i = 0; i < unpivot_expressions.size(); i++) {
 		auto list_expr = make_uniq<FunctionExpression>("unpivot_list", std::move(unpivot_expressions[i]));
+		list_expr->alias = select_names[column_count + 1 + i];
+		select_node->select_list.push_back(std::move(list_expr));
+	}
+
+	// move the unpivot lists into a subquery
+	auto result_node = make_uniq<SelectNode>();
+	auto sub_select = make_uniq<SelectStatement>();
+	sub_select->node = std::move(select_node);
+	auto subquery = make_uniq<SubqueryRef>(std::move(sub_select));
+	subquery->alias = "unpivot";
+
+	result_node->from_table = std::move(subquery);
+
+	// construct the final UNNEST calls which generate the final unpivot result
+	for (idx_t i = 0; i < column_count; i++) {
+		auto select_col = make_uniq<ColumnRefExpression>(std::move(select_names[i]));
+		result_node->select_list.push_back(std::move(select_col));
+	}
+
+	auto unpivot_name_list = make_uniq<ColumnRefExpression>(std::move(select_names[column_count]));
+	vector<unique_ptr<ParsedExpression>> unnest_name_children;
+	unnest_name_children.push_back(std::move(unpivot_name_list));
+	auto unnest_name_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_name_children));
+	unnest_name_expr->SetAlias(unpivot.unpivot_names[0]);
+	result_node->select_list.push_back(std::move(unnest_name_expr));
+
+	for (idx_t i = 0; i < unnest_count; i++) {
+		auto unpivot_internal_name = std::move(select_names[column_count + 1 + i]);
+
+		auto unpivot_list_ref = make_uniq<ColumnRefExpression>(std::move(unpivot_internal_name));
 		vector<unique_ptr<ParsedExpression>> unnest_val_children;
-		unnest_val_children.push_back(std::move(list_expr));
+		unnest_val_children.push_back(std::move(unpivot_list_ref));
 		auto unnest_val_expr = make_uniq<FunctionExpression>("unnest", std::move(unnest_val_children));
 		auto unnest_name = i < ref.column_name_alias.size() ? ref.column_name_alias[i] : ref.unpivot_names[i];
 		unnest_val_expr->SetAlias(unnest_name);
-		select_node->select_list.push_back(std::move(unnest_val_expr));
+		result_node->select_list.push_back(std::move(unnest_val_expr));
 		if (!ref.include_nulls) {
 			// if we are running with EXCLUDE NULLS we need to add an IS NOT NULL filter
 			auto colref = make_uniq<ColumnRefExpression>(unnest_name);
@@ -696,7 +740,7 @@ unique_ptr<SelectNode> Binder::BindUnpivot(Binder &child_binder, PivotRef &ref,
 			}
 		}
 	}
-	return select_node;
+	return result_node;
 }
 
 unique_ptr<BoundTableRef> Binder::Bind(PivotRef &ref) {
