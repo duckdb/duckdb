@@ -233,9 +233,6 @@ bool VectorStringToStruct::StringToNestedTypeCastLoop(const string_t *source_dat
 			result_mask.SetInvalid(i);
 			continue;
 		}
-		if (is_unnamed) {
-			throw ConversionException("Casting strings to unnamed structs is unsupported");
-		}
 		if (!VectorStringToStruct::SplitStruct(source_data[idx], child_vectors, i, child_names, child_masks)) {
 			string text = "Type VARCHAR with value '" + source_data[idx].GetString() +
 			              "' can't be cast to the destination type STRUCT";

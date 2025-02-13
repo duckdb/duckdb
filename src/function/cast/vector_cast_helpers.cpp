@@ -580,6 +580,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 	}
 
 	if (end_char == '}') {
+
 		//! Regular struct, in the form of `{name: value, name_2: value_2, ...}`
 		while (pos < len) {
 			optional_idx start_pos;
@@ -727,7 +728,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 		D_ASSERT(end_char == ')');
 		idx_t child_idx = 0;
 		while (pos < len) {
-			if (child_idx == child_names.size()) {
+			if (child_idx == child_masks.size()) {
 				return false;
 			}
 
@@ -817,6 +818,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 			pos++;
 			SkipWhitespace(input_state);
 		}
+		(void)child_idx;
 	}
 	pos++;
 	SkipWhitespace(input_state);
