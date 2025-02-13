@@ -176,7 +176,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 				}
 				// then make cross product with the LHS
 				op = LogicalCrossProduct::Create(std::move(op->children[0]), std::move(left));
-				;
 				rewrite_right = false;
 			}
 		}
