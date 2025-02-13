@@ -19,12 +19,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::STREAMING_SAMPLE;
 
 public:
-	PhysicalStreamingSample(vector<LogicalType> types, SampleMethod method, double percentage, int64_t seed,
+	PhysicalStreamingSample(vector<LogicalType> types, unique_ptr<SampleOptions> options,
 	                        idx_t estimated_cardinality);
 
-	SampleMethod method;
+	unique_ptr<SampleOptions> sample_options;
 	double percentage;
-	int64_t seed;
 
 public:
 	// Operator interface
@@ -32,9 +31,7 @@ public:
 	OperatorResultType Execute(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
 	                           GlobalOperatorState &gstate, OperatorState &state) const override;
 
-	bool ParallelOperator() const override {
-		return true;
-	}
+	bool ParallelOperator() const override;
 
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
