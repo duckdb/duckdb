@@ -21,10 +21,8 @@ public:
 namespace duckdb {
 
 // ------- Helper functions for splitting string nested types  -------
-static bool IsNull(StringCastInputState &input_state) {
-	auto &buf = input_state.buf;
-	auto &pos = input_state.pos;
-	if (input_state.pos + 4 != input_state.len) {
+static bool IsNull(const char *buf, idx_t pos, idx_t end_pos) {
+	if (pos + 4 != end_pos) {
 		return false;
 	}
 	return StringUtil::CIEquals(string(buf + pos, buf + pos + 4), "null");
@@ -190,8 +188,7 @@ public:
 
 public:
 	void HandleValue(const char *buf, idx_t start, idx_t end) {
-		StringCastInputState temp_state(buf, start, end);
-		if (IsNull(temp_state)) {
+		if (IsNull(buf, start, end)) {
 			FlatVector::SetNull(child, entry_count, true);
 			entry_count++;
 			return;
@@ -334,8 +331,7 @@ struct SplitStringMapOperation {
 	Vector &varchar_val;
 
 	bool HandleKey(const char *buf, idx_t start_pos, idx_t pos) {
-		StringCastInputState temp_state(buf, start_pos, pos);
-		if (IsNull(temp_state)) {
+		if (IsNull(buf, start_pos, pos)) {
 			FlatVector::SetNull(varchar_val, child_start, true);
 			FlatVector::SetNull(varchar_key, child_start, true);
 			child_start++;
@@ -346,8 +342,7 @@ struct SplitStringMapOperation {
 	}
 
 	void HandleValue(const char *buf, idx_t start_pos, idx_t pos) {
-		StringCastInputState temp_state(buf, start_pos, pos);
-		if (IsNull(temp_state)) {
+		if (IsNull(buf, start_pos, pos)) {
 			FlatVector::SetNull(varchar_val, child_start, true);
 			child_start++;
 			return;
@@ -609,8 +604,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 			}
 			idx_t key_start = start_pos.GetIndex();
 			end_pos++;
-			StringCastInputState key_temp_state(buf, key_start, end_pos);
-			if (IsNull(key_temp_state)) {
+			if (IsNull(buf, key_start, end_pos)) {
 				//! Key can not be NULL
 				return false;
 			}
@@ -693,8 +687,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 				end_pos++;
 			}
 			auto value_start = start_pos.GetIndex();
-			StringCastInputState value_temp_state(buf, value_start, end_pos);
-			if (IsNull(value_temp_state)) {
+			if (IsNull(buf, value_start, end_pos)) {
 				child_mask.SetInvalid(row_idx);
 			} else {
 				string_data[row_idx] = HandleString(child_vec, buf, value_start, end_pos);
@@ -787,8 +780,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 				end_pos++;
 			}
 			auto value_start = start_pos.GetIndex();
-			StringCastInputState value_temp_state(buf, value_start, end_pos);
-			if (IsNull(value_temp_state)) {
+			if (IsNull(buf, value_start, end_pos)) {
 				child_mask.SetInvalid(row_idx);
 			} else {
 				string_data[row_idx] = HandleString(child_vec, buf, value_start, end_pos);
