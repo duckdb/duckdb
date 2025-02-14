@@ -142,14 +142,18 @@ const string &LogicalGet::GetColumnName(const ColumnIndex &index) const {
 }
 
 column_t LogicalGet::GetAnyColumn() const {
-	auto entry = virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
+	auto entry = virtual_columns.find(COLUMN_IDENTIFIER_EMPTY);
+	if (entry != virtual_columns.end()) {
+		// return the empty column if the projection supports it
+		return COLUMN_IDENTIFIER_EMPTY;
+	}
+	entry = virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
 	if (entry != virtual_columns.end()) {
 		// return the rowid column if the projection supports it
 		return COLUMN_IDENTIFIER_ROW_ID;
-	} else {
-		// otherwise return the first column
-		return 0;
 	}
+	// otherwise return the first column
+	return 0;
 }
 
 void LogicalGet::ResolveTypes() {

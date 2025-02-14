@@ -125,6 +125,10 @@ TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vec
 			    "Virtual column index must be larger than VIRTUAL_COLUMN_START - found %d for column \"%s\"", idx,
 			    name);
 		}
+		if (idx == COLUMN_IDENTIFIER_EMPTY) {
+			// the empty column cannot be queried by the user
+			continue;
+		}
 		if (name_map.find(name) == name_map.end()) {
 			name_map[name] = idx;
 		}

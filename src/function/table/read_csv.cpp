@@ -419,7 +419,7 @@ virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_p
 	auto &csv_bind = bind_data->Cast<ReadCSVData>();
 	virtual_column_map_t result;
 	MultiFileReader::GetVirtualColumns(context, csv_bind.reader_bind, result);
-	result.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
+	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
 	return result;
 }
 

@@ -239,7 +239,7 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 
 void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
                                         virtual_column_map_t &result) {
-	if (bind_data.filename_idx == DConstants::INVALID_INDEX) {
+	if (bind_data.filename_idx == DConstants::INVALID_INDEX || bind_data.filename_idx == COLUMN_IDENTIFIER_FILENAME) {
 		bind_data.filename_idx = COLUMN_IDENTIFIER_FILENAME;
 		result.insert(make_pair(COLUMN_IDENTIFIER_FILENAME, TableColumn("filename", LogicalType::VARCHAR)));
 	}
