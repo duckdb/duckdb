@@ -40,6 +40,8 @@ private:
 	Optimizer &optimizer;
 	//! The max row count for which we will consider late materialization
 	idx_t max_row_count;
+	//! The type of the row id column
+	LogicalType row_id_type;
 };
 
 } // namespace duckdb

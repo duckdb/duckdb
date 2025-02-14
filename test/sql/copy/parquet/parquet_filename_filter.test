@@ -4,6 +4,10 @@
 
 require parquet
 
+query III
+select id, value as f, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where filename='value1';
+----
+
 # requires notwindows for windows-style path backslash reasons
 require notwindows
 
@@ -49,14 +53,18 @@ select id, value, date, filename from parquet_scan('data/parquet-testing/hive-pa
 
 # Ensure we don't somehow endup mixing things up
 query III
-select id, value as filename, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where filename='value2';
+select id, value as f, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where f='value2';
 ----
 2	value2	2013-01-01
 
 query III
-select id, value as filename, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where filename='value1';
+select id, value as f, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where f='value1';
 ----
 1	value1	2012-01-01
+
+query III
+select id, value as f, date from parquet_scan('data/parquet-testing/hive-partitioning/different_order/*/*/test.parquet', HIVE_PARTITIONING=1) where filename='value1';
+----
 
 # These tests confirm that the ParquetScanStats will properly handle the pruned files list
 

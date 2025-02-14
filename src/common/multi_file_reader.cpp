@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILENAME;
+
 MultiFileReaderGlobalState::~MultiFileReaderGlobalState() {
 }
 
@@ -235,6 +237,14 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 	}
 }
 
+void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
+                                        virtual_column_map_t &result) {
+	if (bind_data.filename_idx == DConstants::INVALID_INDEX || bind_data.filename_idx == COLUMN_IDENTIFIER_FILENAME) {
+		bind_data.filename_idx = COLUMN_IDENTIFIER_FILENAME;
+		result.insert(make_pair(COLUMN_IDENTIFIER_FILENAME, TableColumn("filename", LogicalType::VARCHAR)));
+	}
+}
+
 void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
                                    const string &filename, const vector<MultiFileReaderColumnDefinition> &local_columns,
                                    const vector<MultiFileReaderColumnDefinition> &global_columns,
@@ -251,15 +261,13 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		auto &col_idx = global_column_ids[i];
-		if (col_idx.IsRowIdColumn()) {
-			// row-id
-			reader_data.constant_map.emplace_back(i, Value::BIGINT(42));
-			continue;
-		}
 		auto column_id = col_idx.GetPrimaryIndex();
 		if (column_id == options.filename_idx) {
 			// filename
 			reader_data.constant_map.emplace_back(i, Value(filename));
+			continue;
+		}
+		if (IsVirtualColumn(column_id)) {
 			continue;
 		}
 		if (!options.hive_partitioning_indexes.empty()) {
@@ -335,6 +343,10 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		// not constant - look up the column in the name map
 		auto &global_idx = global_column_ids[i];
 		auto global_id = global_idx.GetPrimaryIndex();
+		if (IsVirtualColumn(global_id)) {
+			// virtual column - these are emitted for every file
+			continue;
+		}
 		if (global_id >= global_columns.size()) {
 			throw InternalException(
 			    "MultiFileReader::CreateColumnMappingByName - global_id is out of range in global_types for this file");

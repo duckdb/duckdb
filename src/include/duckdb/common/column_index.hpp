@@ -61,6 +61,9 @@ struct ColumnIndex {
 	bool IsRowIdColumn() const {
 		return index == DConstants::INVALID_INDEX;
 	}
+	bool IsVirtualColumn() const {
+		return index >= VIRTUAL_COLUMN_START;
+	}
 	void Serialize(Serializer &serializer) const;
 	static ColumnIndex Deserialize(Deserializer &deserializer);
 

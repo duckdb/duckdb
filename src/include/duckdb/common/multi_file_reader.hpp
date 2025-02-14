@@ -200,6 +200,10 @@ struct MultiFileReaderData {
 
 //! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
 struct MultiFileReader {
+public:
+	static constexpr column_t COLUMN_IDENTIFIER_FILENAME = UINT64_C(9223372036854775808);
+
+public:
 	virtual ~MultiFileReader();
 
 	//! Create a MultiFileReader for a specific TableFunction, using its function name for errors
@@ -288,6 +292,9 @@ struct MultiFileReader {
 	                                         optional_ptr<MultiFileReaderGlobalState> global_state,
 	                                         const OperatorPartitionInfo &partition_info,
 	                                         OperatorPartitionData &partition_data);
+
+	DUCKDB_API static void GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
+	                                         virtual_column_map_t &result);
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,

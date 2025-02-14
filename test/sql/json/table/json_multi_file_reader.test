@@ -32,6 +32,26 @@ select * exclude (filename), replace(filename, '\', '/') as filename from read_j
 5	Raising Arizona	data/json/example_r.ndjson
 5	Raising Arizona	data/json/example_rn.ndjson
 
+# virtual column
+query III
+select *, replace(filename, '\', '/') from read_json_auto('data/json/example_*.ndjson') order by all
+----
+1	O Brother, Where Art Thou?	data/json/example_n.ndjson
+1	O Brother, Where Art Thou?	data/json/example_r.ndjson
+1	O Brother, Where Art Thou?	data/json/example_rn.ndjson
+2	Home for the Holidays	data/json/example_n.ndjson
+2	Home for the Holidays	data/json/example_r.ndjson
+2	Home for the Holidays	data/json/example_rn.ndjson
+3	The Firm	data/json/example_n.ndjson
+3	The Firm	data/json/example_r.ndjson
+3	The Firm	data/json/example_rn.ndjson
+4	Broadcast News	data/json/example_n.ndjson
+4	Broadcast News	data/json/example_r.ndjson
+4	Broadcast News	data/json/example_rn.ndjson
+5	Raising Arizona	data/json/example_n.ndjson
+5	Raising Arizona	data/json/example_r.ndjson
+5	Raising Arizona	data/json/example_rn.ndjson
+
 query III
 select * from read_json_auto(['data/json/example_n.ndjson', 'data/json/top_level_array.json'], union_by_name=true) order by all
 ----

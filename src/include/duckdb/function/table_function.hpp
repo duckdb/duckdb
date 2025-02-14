@@ -12,11 +12,12 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/table_column.hpp"
 #include "duckdb/function/partition_stats.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 #include <functional>
 
@@ -27,7 +28,9 @@ class LogicalDependencyList;
 class LogicalGet;
 class TableFunction;
 class TableFilterSet;
+class TableFunctionRef;
 class TableCatalogEntry;
+class SampleOptions;
 struct MultiFileReader;
 struct OperatorPartitionData;
 struct OperatorPartitionInfo;
@@ -292,6 +295,9 @@ typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext 
 typedef vector<PartitionStatistics> (*table_function_get_partition_stats_t)(ClientContext &context,
                                                                             GetPartitionStatsInput &input);
 
+typedef virtual_column_map_t (*table_function_get_virtual_columns_t)(ClientContext &context,
+                                                                     optional_ptr<FunctionData> bind_data);
+
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
 
@@ -360,6 +366,8 @@ public:
 	table_function_get_partition_info_t get_partition_info;
 	//! (Optional) get a list of all the partition stats of the table
 	table_function_get_partition_stats_t get_partition_stats;
+	//! (Optional) returns a list of virtual columns emitted by the table function
+	table_function_get_virtual_columns_t get_virtual_columns;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
@@ -377,6 +385,8 @@ public:
 	//! Whether or not the table function supports sampling pushdown. If not supported a sample will be taken after the
 	//! table function.
 	bool sampling_pushdown;
+	//! Whether or not the table function supports late materialization
+	bool late_materialization;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 
