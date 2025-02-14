@@ -647,12 +647,12 @@ StrpTimeFormat StrpTimeFormat::Deserialize(Deserializer &deserializer) {
 }
 
 void TableFilterSet::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<unordered_map<idx_t, unique_ptr<TableFilter>>>(100, "filters", filters);
+	serializer.WritePropertyWithDefault<map<idx_t, unique_ptr<TableFilter>>>(100, "filters", filters);
 }
 
 TableFilterSet TableFilterSet::Deserialize(Deserializer &deserializer) {
 	TableFilterSet result;
-	deserializer.ReadPropertyWithDefault<unordered_map<idx_t, unique_ptr<TableFilter>>>(100, "filters", result.filters);
+	deserializer.ReadPropertyWithDefault<map<idx_t, unique_ptr<TableFilter>>>(100, "filters", result.filters);
 	return result;
 }
 

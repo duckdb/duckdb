@@ -16,7 +16,6 @@ on:
         type: string
       skip_tests:
         type: string
-  repository_dispatch:
   push:
     branches-ignore:
       - 'main'
@@ -25,6 +24,10 @@ on:
     paths-ignore:
       - '**'
       - '!.github/workflows/Wasm.yml'
+
+concurrency:
+  group: wasm-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  cancel-in-progress: true
 
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}

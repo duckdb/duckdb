@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// boolean_column_reader.hpp
+// reader/boolean_column_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,7 +9,7 @@
 #pragma once
 
 #include "column_reader.hpp"
-#include "templated_column_reader.hpp"
+#include "reader/templated_column_reader.hpp"
 
 namespace duckdb {
 
@@ -20,11 +20,9 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::BOOL;
 
 public:
-	BooleanColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-	                    idx_t max_define_p, idx_t max_repeat_p)
-	    : TemplatedColumnReader<bool, BooleanParquetValueConversion>(reader, std::move(type_p), schema_p, schema_idx_p,
-	                                                                 max_define_p, max_repeat_p),
-	      byte_pos(0) {};
+	BooleanColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema)
+	    : TemplatedColumnReader<bool, BooleanParquetValueConversion>(reader, schema), byte_pos(0) {
+	}
 
 	uint8_t byte_pos;
 
@@ -40,31 +38,32 @@ public:
 };
 
 struct BooleanParquetValueConversion {
+	template <bool CHECKED>
 	static bool PlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		plain_data.available(1);
-		return UnsafePlainRead(plain_data, reader);
+		auto &byte_pos = reader.Cast<BooleanColumnReader>().byte_pos;
+		bool ret = (*plain_data.ptr >> byte_pos) & 1;
+		if (++byte_pos == 8) {
+			byte_pos = 0;
+			if (CHECKED) {
+				plain_data.inc(1);
+			} else {
+				plain_data.unsafe_inc(1);
+			}
+		}
+		return ret;
 	}
 
+	template <bool CHECKED>
 	static void PlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		PlainRead(plain_data, reader);
+		PlainRead<CHECKED>(plain_data, reader);
 	}
 
 	static bool PlainAvailable(const ByteBuffer &plain_data, const idx_t count) {
 		return plain_data.check_available((count + 7) / 8);
 	}
 
-	static bool UnsafePlainRead(ByteBuffer &plain_data, ColumnReader &reader) {
-		auto &byte_pos = reader.Cast<BooleanColumnReader>().byte_pos;
-		bool ret = (*plain_data.ptr >> byte_pos) & 1;
-		if (++byte_pos == 8) {
-			byte_pos = 0;
-			plain_data.unsafe_inc(1);
-		}
-		return ret;
-	}
-
-	static void UnsafePlainSkip(ByteBuffer &plain_data, ColumnReader &reader) {
-		UnsafePlainRead(plain_data, reader);
+	static idx_t PlainConstantSize() {
+		return 0;
 	}
 };
 

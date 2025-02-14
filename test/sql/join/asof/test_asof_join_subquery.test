@@ -16,6 +16,12 @@ INSERT INTO events VALUES
 	(8, 3)
 ;
 
+# Compare NLJ optimisation to operator
+foreach threshold 0 32
+
+statement ok
+PRAGMA asof_loop_join_threshold = ${threshold};
+
 query II
 SELECT begin, value IN (
 	SELECT e1.value 
@@ -34,3 +40,5 @@ ORDER BY ALL;
 3.0	true
 6.0	true
 8.0	true
+
+endloop

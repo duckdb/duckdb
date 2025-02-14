@@ -8,6 +8,8 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression_iterator.hpp"
 
 namespace duckdb {
 
@@ -75,6 +77,8 @@ LogicalType ExpressionBinder::ResolveOperatorType(OperatorExpression &op, vector
 	case ExpressionType::OPERATOR_COALESCE: {
 		return ResolveCoalesceType(op, children);
 	}
+	case ExpressionType::OPERATOR_TRY:
+		return ExpressionBinder::GetExpressionReturnType(*children[0]);
 	case ExpressionType::OPERATOR_NOT:
 		return ResolveNotType(op, children);
 	default:
@@ -171,6 +175,16 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 	case ExpressionType::ARROW:
 		function_name = "json_extract";
 		break;
+	case ExpressionType::OPERATOR_TRY: {
+		auto &expr = BoundExpression::GetExpression(*op.children[0]);
+		if (expr->HasSubquery()) {
+			throw BinderException("TRY can not be used in combination with a scalar subquery");
+		}
+		if (expr->IsVolatile()) {
+			throw BinderException("TRY can not be used in combination with a volatile function");
+		}
+		break;
+	}
 	default:
 		break;
 	}
