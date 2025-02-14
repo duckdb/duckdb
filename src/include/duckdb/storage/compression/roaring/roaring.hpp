@@ -590,7 +590,7 @@ public:
 
 struct RoaringScanState : public SegmentScanState {
 public:
-	explicit RoaringScanState(ColumnSegment &segment);
+	explicit RoaringScanState(const ColumnSegment &segment);
 
 public:
 	idx_t SkipVector(const ContainerMetadata &metadata);
@@ -605,7 +605,7 @@ public:
 
 public:
 	BufferHandle handle;
-	ColumnSegment &segment;
+	const ColumnSegment &segment;
 	unique_ptr<ContainerScanState> current_container;
 	data_ptr_t data_ptr;
 	ContainerMetadataCollection metadata_collection;

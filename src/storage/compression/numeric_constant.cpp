@@ -10,14 +10,14 @@ namespace duckdb {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-unique_ptr<SegmentScanState> ConstantInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> ConstantInitScan(const ColumnSegment &segment) {
 	return nullptr;
 }
 
 //===--------------------------------------------------------------------===//
 // Scan Partial
 //===--------------------------------------------------------------------===//
-void ConstantFillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
+void ConstantFillFunctionValidity(const ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
 	auto &stats = segment.stats.statistics;
 	if (stats.CanHaveNull()) {
 		auto &mask = FlatVector::Validity(result);
@@ -28,7 +28,7 @@ void ConstantFillFunctionValidity(ColumnSegment &segment, Vector &result, idx_t 
 }
 
 template <class T>
-void ConstantFillFunction(ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
+void ConstantFillFunction(const ColumnSegment &segment, Vector &result, idx_t start_idx, idx_t count) {
 	auto &nstats = segment.stats.statistics;
 
 	auto data = FlatVector::GetData<T>(result);
@@ -38,13 +38,13 @@ void ConstantFillFunction(ColumnSegment &segment, Vector &result, idx_t start_id
 	}
 }
 
-void ConstantScanPartialValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+void ConstantScanPartialValidity(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                                  idx_t result_offset) {
 	ConstantFillFunctionValidity(segment, result, result_offset, scan_count);
 }
 
 template <class T>
-void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+void ConstantScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                          idx_t result_offset) {
 	ConstantFillFunction<T>(segment, result, result_offset, scan_count);
 }
@@ -52,7 +52,8 @@ void ConstantScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t s
 //===--------------------------------------------------------------------===//
 // Scan base data
 //===--------------------------------------------------------------------===//
-void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void ConstantScanFunctionValidity(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
+                                  Vector &result) {
 	auto &stats = segment.stats.statistics;
 	if (stats.CanHaveNull()) {
 		if (result.GetVectorType() == VectorType::CONSTANT_VECTOR) {
@@ -66,7 +67,7 @@ void ConstantScanFunctionValidity(ColumnSegment &segment, ColumnScanState &state
 }
 
 template <class T>
-void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void ConstantScanFunction(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	auto &nstats = segment.stats.statistics;
 
 	auto data = FlatVector::GetData<T>(result);
@@ -77,26 +78,27 @@ void ConstantScanFunction(ColumnSegment &segment, ColumnScanState &state, idx_t 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void ConstantFetchRowValidity(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+void ConstantFetchRowValidity(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                               idx_t result_idx) {
 	ConstantFillFunctionValidity(segment, result, result_idx, 1);
 }
 
 template <class T>
-void ConstantFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void ConstantFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+                      idx_t result_idx) {
 	ConstantFillFunction<T>(segment, result, result_idx, 1);
 }
 
 //===--------------------------------------------------------------------===//
 // Select
 //===--------------------------------------------------------------------===//
-void ConstantSelectValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+void ConstantSelectValidity(const ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                             const SelectionVector &sel, idx_t sel_count) {
 	ConstantScanFunctionValidity(segment, state, vector_count, result);
 }
 
 template <class T>
-void ConstantSelect(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+void ConstantSelect(const ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                     const SelectionVector &sel, idx_t sel_count) {
 	ConstantScanFunction<T>(segment, state, vector_count, result);
 }
@@ -149,7 +151,7 @@ void FiltersNullValues(const TableFilter &filter, bool &filters_nulls, bool &fil
 	}
 }
 
-void ConstantFilterValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+void ConstantFilterValidity(const ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                             SelectionVector &sel, idx_t &sel_count, const TableFilter &filter) {
 	// check what effect the filter has on NULL values
 	bool filters_nulls, filters_valid_values;

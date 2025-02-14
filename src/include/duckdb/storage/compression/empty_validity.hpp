@@ -74,21 +74,21 @@ public:
 		auto &checkpoint_state = checkpoint_data.GetCheckpointState();
 		checkpoint_state.FlushSegment(std::move(compressed_segment), std::move(handle), 0);
 	}
-	static unique_ptr<SegmentScanState> InitScan(ColumnSegment &segment) {
+	static unique_ptr<SegmentScanState> InitScan(const ColumnSegment &segment) {
 		return make_uniq<EmptyValiditySegmentScanState>();
 	}
-	static void ScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+	static void ScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
 	                        idx_t result_offset) {
 		return;
 	}
-	static void Scan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+	static void Scan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 		return;
 	}
-	static void FetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+	static void FetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                     idx_t result_idx) {
 		return;
 	}
-	static void Skip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+	static void Skip(const ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 		return;
 	}
 	static unique_ptr<CompressedSegmentState> InitSegment(ColumnSegment &segment, block_id_t block_id,

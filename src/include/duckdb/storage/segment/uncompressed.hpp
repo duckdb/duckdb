@@ -18,7 +18,7 @@ struct UncompressedFunctions {
 	                                                    unique_ptr<AnalyzeState> state);
 	static void Compress(CompressionState &state_p, Vector &data, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
-	static void EmptySkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+	static void EmptySkip(const ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 	}
 };
 

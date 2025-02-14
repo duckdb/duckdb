@@ -60,29 +60,31 @@ public:
 	                                                        const idx_t segment_size, const idx_t block_size);
 
 public:
-	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state);
-	void InitializeScan(ColumnScanState &state);
+	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state) const;
+	void InitializeScan(ColumnScanState &state) const;
 	//! Scan one vector from this segment
-	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset, ScanVectorType scan_type);
+	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,
+	          ScanVectorType scan_type) const;
 	//! Scan a subset of a vector (defined by the selection vector)
-	void Select(ColumnScanState &state, idx_t scan_count, Vector &result, const SelectionVector &sel, idx_t sel_count);
+	void Select(ColumnScanState &state, idx_t scan_count, Vector &result, const SelectionVector &sel,
+	            idx_t sel_count) const;
 	//! Scan one vector while applying a filter to the vector, returning only the matching elements
 	void Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel, idx_t &sel_count,
-	            const TableFilter &filter);
+	            const TableFilter &filter) const;
 	//! Fetch a value of the specific row id and append it to the result
-	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx);
+	void FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) const;
 
 	static idx_t FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
 	                             const TableFilter &filter, idx_t scan_count, idx_t &approved_tuple_count);
 
 	//! Skip a scan forward to the row_index specified in the scan state
-	void Skip(ColumnScanState &state);
+	void Skip(ColumnScanState &state) const;
 
 	// The maximum size of the buffer (in bytes)
 	idx_t SegmentSize() const;
 	//! Resize the block
 	void Resize(idx_t segment_size);
-	const CompressionFunction &GetCompressionFunction();
+	const CompressionFunction &GetCompressionFunction() const;
 
 	//! Initialize an append of this segment. Appends are only supported on transient segments.
 	void InitializeAppend(ColumnAppendState &state);
@@ -104,7 +106,7 @@ public:
 	//! Gets a data pointer from a persistent column segment
 	DataPointer GetDataPointer();
 
-	block_id_t GetBlockId() {
+	block_id_t GetBlockId() const {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT);
 		return block_id;
 	}
@@ -116,17 +118,20 @@ public:
 		return block->block_manager;
 	}
 
-	idx_t GetBlockOffset() {
+	idx_t GetBlockOffset() const {
 		D_ASSERT(segment_type == ColumnSegmentType::PERSISTENT || offset == 0);
 		return offset;
 	}
 
-	idx_t GetRelativeIndex(idx_t row_index) {
+	idx_t GetRelativeIndex(idx_t row_index) const {
 		D_ASSERT(row_index >= this->start);
 		D_ASSERT(row_index <= this->start + this->count);
 		return row_index - this->start;
 	}
 
+	optional_ptr<const CompressedSegmentState> GetSegmentState() const {
+		return segment_state.get();
+	}
 	optional_ptr<CompressedSegmentState> GetSegmentState() {
 		return segment_state.get();
 	}
@@ -134,8 +139,8 @@ public:
 	void CommitDropSegment();
 
 private:
-	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result);
-	void ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset);
+	void Scan(ColumnScanState &state, idx_t scan_count, Vector &result) const;
+	void ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) const;
 
 public:
 	//! The database instance

@@ -27,7 +27,7 @@ public:
 	static idx_t RequiredSpace(idx_t current_count, idx_t index_count, idx_t dict_size,
 	                           bitpacking_width_t packing_width);
 
-	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
+	static StringDictionaryContainer GetDictionary(const ColumnSegment &segment, BufferHandle &handle);
 	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
 };
 

@@ -25,7 +25,8 @@
 namespace duckdb {
 
 template <class T>
-void ChimpFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void ChimpFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+                   idx_t result_idx) {
 	using INTERNAL_TYPE = typename ChimpType<T>::TYPE;
 
 	ChimpScanState<T> scan_state(segment);

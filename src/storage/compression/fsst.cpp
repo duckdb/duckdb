@@ -48,18 +48,18 @@ struct FSSTStorage {
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
 
-	static unique_ptr<SegmentScanState> StringInitScan(ColumnSegment &segment);
+	static unique_ptr<SegmentScanState> StringInitScan(const ColumnSegment &segment);
 	template <bool ALLOW_FSST_VECTORS = false>
-	static void StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-	                              idx_t result_offset);
-	static void StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
-	static void StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+	static void StringScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
+	                              Vector &result, idx_t result_offset);
+	static void StringScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result);
+	static void StringFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
 	                           idx_t result_idx);
-	static void Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+	static void Select(const ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
 	                   const SelectionVector &sel, idx_t sel_count);
 
-	static void SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
-	static StringDictionaryContainer GetDictionary(ColumnSegment &segment, BufferHandle &handle);
+	static void SetDictionary(const ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container);
+	static StringDictionaryContainer GetDictionary(const ColumnSegment &segment, BufferHandle &handle);
 
 	static char *FetchStringPointer(StringDictionaryContainer dict, data_ptr_t baseptr, int32_t dict_offset);
 	static bp_delta_offsets_t CalculateBpDeltaOffsets(int64_t last_known_row, idx_t start, idx_t scan_count);
@@ -547,7 +547,7 @@ struct FSSTScanState : public StringScanState {
 	}
 };
 
-unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(const ColumnSegment &segment) {
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
 	auto state = make_uniq<FSSTScanState>(string_block_limit);
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -610,8 +610,8 @@ void FSSTStorage::EndScan(FSSTScanState &scan_state, bp_delta_offsets_t &offsets
 }
 
 template <bool ALLOW_FSST_VECTORS>
-void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
-                                    idx_t result_offset) {
+void FSSTStorage::StringScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count,
+                                    Vector &result, idx_t result_offset) {
 
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
@@ -672,14 +672,14 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 	EndScan(scan_state, offsets, start, scan_count);
 }
 
-void FSSTStorage::StringScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void FSSTStorage::StringScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	StringScanPartial<true>(segment, state, scan_count, result, 0);
 }
 
 //===--------------------------------------------------------------------===//
 // Select
 //===--------------------------------------------------------------------===//
-void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
+void FSSTStorage::Select(const ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
                          const SelectionVector &sel, idx_t sel_count) {
 	auto &scan_state = state.scan_state->Cast<FSSTScanState>();
 	auto start = segment.GetRelativeIndex(state.row_index);
@@ -702,7 +702,7 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
+void FSSTStorage::StringFetchRow(const ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                  idx_t result_idx) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
@@ -767,13 +767,14 @@ bool FSSTFun::TypeIsSupported(const PhysicalType physical_type) {
 //===--------------------------------------------------------------------===//
 // Helper Functions
 //===--------------------------------------------------------------------===//
-void FSSTStorage::SetDictionary(ColumnSegment &segment, BufferHandle &handle, StringDictionaryContainer container) {
+void FSSTStorage::SetDictionary(const ColumnSegment &segment, BufferHandle &handle,
+                                StringDictionaryContainer container) {
 	auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
 	Store<uint32_t>(container.size, data_ptr_cast(&header_ptr->dict_size));
 	Store<uint32_t>(container.end, data_ptr_cast(&header_ptr->dict_end));
 }
 
-StringDictionaryContainer FSSTStorage::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
+StringDictionaryContainer FSSTStorage::GetDictionary(const ColumnSegment &segment, BufferHandle &handle) {
 	auto header_ptr = reinterpret_cast<fsst_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
 	StringDictionaryContainer container;
 	container.size = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_size));
