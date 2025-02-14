@@ -103,8 +103,8 @@ private:
 
 	expression_map_t<unique_ptr<Expression>> stored_expressions;
 	expression_map_t<idx_t> equivalence_set_map;
-	unordered_map<idx_t, vector<ExpressionValueInformation>> constant_values;
-	unordered_map<idx_t, vector<reference<Expression>>> equivalence_map;
+	map<idx_t, vector<ExpressionValueInformation>> constant_values;
+	map<idx_t, vector<reference<Expression>>> equivalence_map;
 	idx_t set_index = 0;
 	//
 	//	//! Structures used for OR Filters
