@@ -102,20 +102,22 @@ class UnaryAggregateHeap {
 public:
 	UnaryAggregateHeap() = default;
 
-	explicit UnaryAggregateHeap(idx_t capacity_p) : capacity(capacity_p) {
-		heap.reserve(capacity);
+	UnaryAggregateHeap(ArenaAllocator &allocator, idx_t capacity_p) {
+		Initialize(allocator, capacity_p);
 	}
 
-	void Initialize(const idx_t capacity_p) {
+	void Initialize(ArenaAllocator &allocator, const idx_t capacity_p) {
 		capacity = capacity_p;
-		heap.reserve(capacity);
+		heap = reinterpret_cast<HeapEntry<T> *>(allocator.AllocateAligned(capacity * sizeof(HeapEntry<T>)));
+		memset(heap, 0, capacity * sizeof(HeapEntry<T>));
+		size = 0;
 	}
 
 	bool IsEmpty() const {
-		return heap.empty();
+		return size == 0;
 	}
 	idx_t Size() const {
-		return heap.size();
+		return size;
 	}
 	idx_t Capacity() const {
 		return capacity;
@@ -125,29 +127,28 @@ public:
 		D_ASSERT(capacity != 0); // must be initialized
 
 		// If the heap is not full, insert the value into a new slot
-		if (heap.size() < capacity) {
-			heap.emplace_back();
-			heap.back().Assign(allocator, value);
-			std::push_heap(heap.begin(), heap.end(), Compare);
+		if (size < capacity) {
+			heap[size++].Assign(allocator, value);
+			std::push_heap(heap, heap + size, Compare);
 		}
 		// If the heap is full, check if the value is greater than the smallest value in the heap
 		// If it is, assign the new value to the slot and re-heapify
-		else if (T_COMPARATOR::Operation(value, heap.front().value)) {
-			std::pop_heap(heap.begin(), heap.end(), Compare);
-			heap.back().Assign(allocator, value);
-			std::push_heap(heap.begin(), heap.end(), Compare);
+		else if (T_COMPARATOR::Operation(value, heap[0].value)) {
+			std::pop_heap(heap, heap + size, Compare);
+			heap[size - 1].Assign(allocator, value);
+			std::push_heap(heap, heap + size, Compare);
 		}
-		D_ASSERT(std::is_heap(heap.begin(), heap.end(), Compare));
+		D_ASSERT(std::is_heap(heap, heap + size, Compare));
 	}
 
 	void Insert(ArenaAllocator &allocator, const UnaryAggregateHeap &other) {
-		for (auto &slot : other.heap) {
-			Insert(allocator, slot.value);
+		for (idx_t slot = 0; slot < other.Size(); slot++) {
+			Insert(allocator, other.heap[slot].value);
 		}
 	}
 
-	vector<HeapEntry<T>> &SortAndGetHeap() {
-		std::sort_heap(heap.begin(), heap.end(), Compare);
+	HeapEntry<T> *SortAndGetHeap() {
+		std::sort_heap(heap, heap + size, Compare);
 		return heap;
 	}
 
@@ -160,8 +161,9 @@ private:
 		return T_COMPARATOR::Operation(left.value, right.value);
 	}
 
-	vector<HeapEntry<T>> heap;
 	idx_t capacity;
+	HeapEntry<T> *heap;
+	idx_t size;
 };
 
 template <class K, class V, class K_COMPARATOR>
@@ -171,20 +173,22 @@ class BinaryAggregateHeap {
 public:
 	BinaryAggregateHeap() = default;
 
-	explicit BinaryAggregateHeap(idx_t capacity_p) : capacity(capacity_p) {
-		heap.reserve(capacity);
+	BinaryAggregateHeap(ArenaAllocator &allocator, idx_t capacity_p) {
+		Initialize(allocator, capacity_p);
 	}
 
-	void Initialize(const idx_t capacity_p) {
+	void Initialize(ArenaAllocator &allocator, const idx_t capacity_p) {
 		capacity = capacity_p;
-		heap.reserve(capacity);
+		heap = reinterpret_cast<STORAGE_TYPE *>(allocator.AllocateAligned(capacity * sizeof(STORAGE_TYPE)));
+		memset(heap, 0, capacity * sizeof(STORAGE_TYPE));
+		size = 0;
 	}
 
 	bool IsEmpty() const {
-		return heap.empty();
+		return size == 0;
 	}
 	idx_t Size() const {
-		return heap.size();
+		return size;
 	}
 	idx_t Capacity() const {
 		return capacity;
@@ -194,31 +198,31 @@ public:
 		D_ASSERT(capacity != 0); // must be initialized
 
 		// If the heap is not full, insert the value into a new slot
-		if (heap.size() < capacity) {
-			heap.emplace_back();
-			heap.back().first.Assign(allocator, key);
-			heap.back().second.Assign(allocator, value);
-			std::push_heap(heap.begin(), heap.end(), Compare);
+		if (size < capacity) {
+			heap[size].first.Assign(allocator, key);
+			heap[size].second.Assign(allocator, value);
+			size++;
+			std::push_heap(heap, heap + size, Compare);
 		}
 		// If the heap is full, check if the value is greater than the smallest value in the heap
 		// If it is, assign the new value to the slot and re-heapify
-		else if (K_COMPARATOR::Operation(key, heap.front().first.value)) {
-			std::pop_heap(heap.begin(), heap.end(), Compare);
-			heap.back().first.Assign(allocator, key);
-			heap.back().second.Assign(allocator, value);
-			std::push_heap(heap.begin(), heap.end(), Compare);
+		else if (K_COMPARATOR::Operation(key, heap[0].first.value)) {
+			std::pop_heap(heap, heap + size, Compare);
+			heap[size - 1].first.Assign(allocator, key);
+			heap[size - 1].second.Assign(allocator, value);
+			std::push_heap(heap, heap + size, Compare);
 		}
-		D_ASSERT(std::is_heap(heap.begin(), heap.end(), Compare));
+		D_ASSERT(std::is_heap(heap, heap + size, Compare));
 	}
 
 	void Insert(ArenaAllocator &allocator, const BinaryAggregateHeap &other) {
-		for (auto &slot : other.heap) {
-			Insert(allocator, slot.first.value, slot.second.value);
+		for (idx_t slot = 0; slot < other.Size(); slot++) {
+			Insert(allocator, other.heap[slot].first.value, other.heap[slot].second.value);
 		}
 	}
 
-	vector<STORAGE_TYPE> &SortAndGetHeap() {
-		std::sort_heap(heap.begin(), heap.end(), Compare);
+	STORAGE_TYPE *SortAndGetHeap() {
+		std::sort_heap(heap, heap + size, Compare);
 		return heap;
 	}
 
@@ -231,8 +235,9 @@ private:
 		return K_COMPARATOR::Operation(left.first.value, right.first.value);
 	}
 
-	vector<STORAGE_TYPE> heap;
 	idx_t capacity;
+	STORAGE_TYPE *heap;
+	idx_t size;
 };
 
 //------------------------------------------------------------------------------
@@ -326,7 +331,7 @@ struct MinMaxNOperation {
 		}
 
 		if (!target.is_initialized) {
-			target.Initialize(source.heap.Capacity());
+			target.Initialize(aggr_input.allocator, source.heap.Capacity());
 		} else if (source.heap.Capacity() != target.heap.Capacity()) {
 			throw InvalidInputException("Mismatched n values in min/max/arg_min/arg_max");
 		}
@@ -377,10 +382,10 @@ struct MinMaxNOperation {
 			list_entry.length = state.heap.Size();
 
 			// Turn the heap into a sorted list, invalidating the heap property
-			auto &heap = state.heap.SortAndGetHeap();
+			auto heap = state.heap.SortAndGetHeap();
 
-			for (const auto &slot : heap) {
-				STATE::VAL_TYPE::Assign(child_data, current_offset++, state.heap.GetValue(slot));
+			for (idx_t slot = 0; slot < state.heap.Size(); slot++) {
+				STATE::VAL_TYPE::Assign(child_data, current_offset++, state.heap.GetValue(heap[slot]));
 			}
 		}
 

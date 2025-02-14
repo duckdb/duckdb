@@ -412,8 +412,8 @@ public:
 	UnaryAggregateHeap<T, COMPARATOR> heap;
 	bool is_initialized = false;
 
-	void Initialize(idx_t nval) {
-		heap.Initialize(nval);
+	void Initialize(ArenaAllocator &allocator, idx_t nval) {
+		heap.Initialize(allocator, nval);
 		is_initialized = true;
 	}
 
@@ -432,7 +432,7 @@ static void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t
 	UnifiedVectorFormat val_format;
 	UnifiedVectorFormat n_format;
 	UnifiedVectorFormat state_format;
-	;
+
 	auto val_extra_state = STATE::VAL_TYPE::CreateExtraState(val_vector, count);
 
 	STATE::VAL_TYPE::PrepareData(val_vector, count, val_extra_state, val_format);
@@ -464,7 +464,7 @@ static void MinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, idx_t
 			if (nval >= MAX_N) {
 				throw InvalidInputException("Invalid input for MIN/MAX: n value must be < %d", MAX_N);
 			}
-			state.Initialize(UnsafeNumericCast<idx_t>(nval));
+			state.Initialize(aggr_input.allocator, UnsafeNumericCast<idx_t>(nval));
 		}
 
 		// Now add the input to the heap
