@@ -3,7 +3,7 @@
 
 # Valid: key and value with escaped space
 query I
-SELECT $${key\ with\ space = value\ with\ space}$$::MAP(VARCHAR, VARCHAR);
+SELECT $${"key\ with\ space" = "value\ with\ space"}$$::MAP(VARCHAR, VARCHAR);
 ----
 {key with space=value with space}
 
@@ -15,19 +15,19 @@ SELECT $${\"key\" = \"value\"}$$::MAP(VARCHAR, VARCHAR);
 
 # Valid: key with escaped backslash, value with escaped backslash
 query I
-SELECT $${key\ with\ backslash = value\ with\ backslash}$$::MAP(VARCHAR, VARCHAR);
+SELECT $${"key\ with\ backslash" = "value\ with\ backslash"}$$::MAP(VARCHAR, VARCHAR);
 ----
 {key with backslash=value with backslash}
 
 # Valid: key with escaped comma, value with escaped comma
 query I
-SELECT $${key\ with\, comma = value\ with\, comma}$$::MAP(VARCHAR, VARCHAR);
+SELECT $${"key\ with\, comma" = "value\ with\, comma"}$$::MAP(VARCHAR, VARCHAR);
 ----
 {key with, comma=value with, comma}
 
 # Valid: key and value with escaped colon
 query I
-SELECT $${key\ with\ colon\: = value\ with\ colon\:}$$::MAP(VARCHAR, VARCHAR);
+SELECT $${"key\ with\ colon\:" = "value\ with\ colon\:"}$$::MAP(VARCHAR, VARCHAR);
 ----
 {key with colon:=value with colon:}
 
@@ -82,13 +82,13 @@ SELECT $${key = value{with}bracket}$$::MAP(VARCHAR, VARCHAR);
 
 # Valid: key contains useless backslashes
 query I
-SELECT $${key\with\backslash = value}$$::MAP(VARCHAR, VARCHAR);
+SELECT $${"key\with\backslash" = value}$$::MAP(VARCHAR, VARCHAR);
 ----
 {keywithbackslash=value}
 
 # Valid: value contains useless backslashes
 query I
-SELECT $${key = value\with\backslash}$$::MAP(VARCHAR, VARCHAR);
+SELECT $${key = "value\with\backslash"}$$::MAP(VARCHAR, VARCHAR);
 ----
 {key=valuewithbackslash}
 
@@ -100,13 +100,13 @@ SELECT $${key=with=equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key'];
 
 # Valid: key/value contains unescaped equal sign
 query II
-SELECT $${key\=with=equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key=with'];
+SELECT $${"key\=with" = equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key=with'];
 ----
 {key=with=equals = value}	equals = value
 
 # Valid: key/value contains unescaped equal sign
 query II
-SELECT $${key\=with\=equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key=with=equals'];
+SELECT $${"key\=with\=equals" = value}$$::MAP(VARCHAR, VARCHAR) a, a['key=with=equals'];
 ----
 {key=with=equals=value}	value
 
@@ -123,8 +123,14 @@ SELECT $${=}$$::MAP(VARCHAR, VARCHAR);
 {=}
 
 # Edge Case: MAP with special characters only (escaped)
-query I
+statement error
 SELECT $${\{escaped\brace\} = \}escaped\brace\\}$$::MAP(VARCHAR, VARCHAR);
+----
+can't be cast to the destination type MAP(VARCHAR, VARCHAR)
+
+# Edge Case: MAP with special characters only (escaped)
+query I
+SELECT $${"\{escaped\brace\}" = "\}escaped\brace\\"}$$::MAP(VARCHAR, VARCHAR);
 ----
 {{escapedbrace}=}escapedbrace\}
 

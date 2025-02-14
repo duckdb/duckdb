@@ -32,10 +32,6 @@ inline static void SkipWhitespace(StringCastInputState &input_state) {
 	auto &buf = input_state.buf;
 	auto &pos = input_state.pos;
 	auto &len = input_state.len;
-	if (input_state.escaped) {
-		//! Escaped whitespace should not be skipped
-		return;
-	}
 	while (pos < len && StringUtil::CharacterIsSpace(buf[pos])) {
 		pos++;
 		input_state.escaped = false;
@@ -72,34 +68,35 @@ static bool SkipToClose(StringCastInputState &input_state) {
 	auto &idx = input_state.pos;
 	auto &buf = input_state.buf;
 	auto &len = input_state.len;
-	auto &escaped = input_state.escaped;
 
 	D_ASSERT(buf[idx] == '{' || buf[idx] == '[' || buf[idx] == '(');
 
 	vector<char> brackets;
 	while (idx < len) {
-		if (!escaped) {
-			if (buf[idx] == '"' || buf[idx] == '\'') {
+		bool set_escaped = false;
+		if (buf[idx] == '"' || buf[idx] == '\'') {
+			if (!input_state.escaped) {
 				if (!SkipToCloseQuotes(input_state)) {
 					return false;
 				}
-			} else if (buf[idx] == '{') {
-				brackets.push_back('}');
-			} else if (buf[idx] == '(') {
-				brackets.push_back(')');
-			} else if (buf[idx] == '[') {
-				brackets.push_back(']');
-			} else if (buf[idx] == brackets.back()) {
-				brackets.pop_back();
-				if (brackets.empty()) {
-					return true;
-				}
-			} else if (buf[idx] == '\\') {
-				escaped = true;
 			}
-		} else {
-			escaped = false;
+		} else if (buf[idx] == '{') {
+			brackets.push_back('}');
+		} else if (buf[idx] == '(') {
+			brackets.push_back(')');
+		} else if (buf[idx] == '[') {
+			brackets.push_back(']');
+		} else if (buf[idx] == brackets.back()) {
+			brackets.pop_back();
+			if (brackets.empty()) {
+				return true;
+			}
+		} else if (buf[idx] == '\\') {
+			//! Note that we don't treat `\\` special here, backslashes can't be escaped outside of quotes
+			//! backslashes within quotes will not be encountered in this function
+			set_escaped = true;
 		}
+		input_state.escaped = set_escaped;
 		idx++;
 	}
 	return false;
@@ -133,9 +130,11 @@ static string_t HandleString(Vector &vec, const char *buf, idx_t start, idx_t en
 		auto current_char = buf[start + i];
 		if (!escaped) {
 			if (scopes.empty() && current_char == '\\') {
-				//! Start of escape
-				escaped = true;
-				continue;
+				if (quoted || (start + i + 1 < end && (buf[start + i + 1] == '\'' || buf[start + i + 1] == '"'))) {
+					//! Start of escape
+					escaped = true;
+					continue;
+				}
 			}
 			if (scopes.empty() && (current_char == '\'' || current_char == '"')) {
 				if (quoted && current_char == quote_char) {
@@ -208,17 +207,14 @@ static inline bool ValueStateTransition(StringCastInputState &input_state, optio
 	auto &pos = input_state.pos;
 
 	bool set_escaped = false;
-	if (input_state.escaped) {
+	if (buf[pos] == '"' || buf[pos] == '\'') {
 		if (!start_pos.IsValid()) {
 			start_pos = pos;
 		}
-		end_pos = pos;
-	} else if (buf[pos] == '"' || buf[pos] == '\'') {
-		if (!start_pos.IsValid()) {
-			start_pos = pos;
-		}
-		if (!SkipToCloseQuotes(input_state)) {
-			return false;
+		if (!input_state.escaped) {
+			if (!SkipToCloseQuotes(input_state)) {
+				return false;
+			}
 		}
 		end_pos = pos;
 	} else if (buf[pos] == '{') {
@@ -285,7 +281,7 @@ static bool SplitStringListInternal(const string_t &input, OP &state) {
 		optional_idx start_pos;
 		idx_t end_pos;
 
-		while (pos < len && ((buf[pos] != ',' && buf[pos] != ']') || input_state.escaped)) {
+		while (pos < len && (buf[pos] != ',' && buf[pos] != ']')) {
 			if (!ValueStateTransition(input_state, start_pos, end_pos)) {
 				return false;
 			}
@@ -387,7 +383,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 	while (pos < len) {
 		optional_idx start_pos;
 		idx_t end_pos;
-		while (pos < len && (buf[pos] != '=' || input_state.escaped)) {
+		while (pos < len && buf[pos] != '=') {
 			if (!ValueStateTransition(input_state, start_pos, end_pos)) {
 				return false;
 			}
@@ -407,7 +403,7 @@ static bool SplitStringMapInternal(const string_t &input, OP &state) {
 		start_pos = optional_idx();
 		pos++;
 		SkipWhitespace(input_state);
-		while (pos < len && ((buf[pos] != ',' && buf[pos] != '}') || input_state.escaped)) {
+		while (pos < len && (buf[pos] != ',' && buf[pos] != '}')) {
 			if (!ValueStateTransition(input_state, start_pos, end_pos)) {
 				return false;
 			}
@@ -474,7 +470,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 		while (pos < len) {
 			optional_idx start_pos;
 			idx_t end_pos;
-			while (pos < len && (buf[pos] != ':' || input_state.escaped)) {
+			while (pos < len && buf[pos] != ':') {
 				bool set_escaped = false;
 
 				if (input_state.escaped) {
@@ -528,7 +524,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 			start_pos = optional_idx();
 			pos++;
 			SkipWhitespace(input_state);
-			while (pos < len && ((buf[pos] != ',' && buf[pos] != '}') || input_state.escaped)) {
+			while (pos < len && (buf[pos] != ',' && buf[pos] != '}')) {
 				if (!ValueStateTransition(input_state, start_pos, end_pos)) {
 					return false;
 				}
@@ -571,7 +567,7 @@ bool VectorStringToStruct::SplitStruct(const string_t &input, vector<unique_ptr<
 
 			optional_idx start_pos;
 			idx_t end_pos;
-			while (pos < len && ((buf[pos] != ',' && buf[pos] != ')') || input_state.escaped)) {
+			while (pos < len && (buf[pos] != ',' && buf[pos] != ')')) {
 				if (!ValueStateTransition(input_state, start_pos, end_pos)) {
 					return false;
 				}

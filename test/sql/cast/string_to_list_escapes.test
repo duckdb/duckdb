@@ -7,19 +7,34 @@ SELECT $$[hello, world]$$::VARCHAR[];
 [hello, world]
 
 query I
-SELECT $$[hello\ world, world]$$::VARCHAR[];
+SELECT $$["hello\ world", world]$$::VARCHAR[];
 ----
 [hello world, world]
 
 query I
+SELECT $$[hello\ world, world]$$::VARCHAR[];
+----
+[hello\ world, world]
+
+query I
 SELECT $$[hello\,world, test]$$::VARCHAR[];
+----
+[hello\, world, test]
+
+query I
+SELECT $$["hello\,world", test]$$::VARCHAR[];
 ----
 [hello,world, test]
 
 query I
-SELECT $$[hello\,, test]$$::VARCHAR[];
+SELECT $$["hello\,", test]$$::VARCHAR[];
 ----
 [hello,, test]
+
+query I
+SELECT $$[hello\,, test]$$::VARCHAR[];
+----
+[hello\, , test]
 
 query I
 SELECT $$[hello\"quoted\"text, more]$$::VARCHAR[];
@@ -29,12 +44,27 @@ SELECT $$[hello\"quoted\"text, more]$$::VARCHAR[];
 query I
 SELECT $$[escaped\\backslash, test]$$::VARCHAR[];
 ----
+[escaped\\backslash, test]
+
+query I
+SELECT $$["escaped\\backslash", test]$$::VARCHAR[];
+----
 [escaped\backslash, test]
 
 query I
 SELECT $$[nested[brackets], test]$$::VARCHAR[];
 ----
 [nested[brackets], test]
+
+statement error
+SELECT $$[nested[bracket, test]$$::VARCHAR[];
+----
+can't be cast to the destination type VARCHAR[]
+
+query I
+SELECT $$[nested"["bracket, test]$$::VARCHAR[];
+----
+[nested[bracket, test]
 
 query I
 SELECT $$[quote\'in\'string, test]$$::VARCHAR[];
@@ -43,6 +73,11 @@ SELECT $$[quote\'in\'string, test]$$::VARCHAR[];
 
 query I
 SELECT $$[mix\ of\ special\,chars]$$::VARCHAR[];
+----
+[mix\ of\ special\, chars]
+
+query I
+SELECT $$["mix\ of\ special\,chars"]$$::VARCHAR[];
 ----
 [mix of special,chars]
 
@@ -193,6 +228,16 @@ SELECT $$["\""]$$::VARCHAR[]; -- List with only a quote
 ["]
 
 query I
-SELECT $$[\,]$$::VARCHAR[]; -- List with only a comma
+SELECT $$[\,]$$::VARCHAR[]; -- List with only a comma (not quoted)
+----
+[\, ]
+
+query I
+SELECT $$["\,"]$$::VARCHAR[]; -- List with only a comma
+----
+[,]
+
+query I
+SELECT $$[","]$$::VARCHAR[]; -- List with only a comma
 ----
 [,]
