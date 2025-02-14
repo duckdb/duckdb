@@ -76,12 +76,12 @@ SELECT CAST('{''hello''=2, ''world''=50, ''!''=12}' AS MAP(VARCHAR, INT));
 {hello=2, world=50, !=12}
 
 query I
-SELECT CAST('{''''hello''''=hello, ''''world''''=world, ''''!''''=!}' AS MAP(VARCHAR, VARCHAR));
+SELECT CAST($${\'hello\'=hello, \'world\'=world, \'!\'=!}$$ AS MAP(VARCHAR, VARCHAR));
 ----
 {'hello'=hello, 'world'=world, '!'=!}
 
 query I
-SELECT CAST('{[[''🦆, 🦆, 🦆'']]=100, [[duck, db, ''🦆'']]=101}' AS MAP(VARCHAR[][], INT));
+SELECT CAST($${[[\'🦆, 🦆, 🦆\']]=100, [[duck, db, \'🦆\']]=101}$$ AS MAP(VARCHAR[][], INT));
 ----
 {[['🦆, 🦆, 🦆']]=100, [[duck, db, '🦆']]=101}
 
@@ -114,8 +114,8 @@ SELECT CAST('{ [12,     13,14]=val, [       8, 9         ]      =val, [ 4    ]=v
 {[12, 13, 14]=val, [8, 9]=val, [4]=val}
 
 query I
-SELECT CAST('   { { a:[2,    3], b:  Duckster      }=         {50.0        =50}, {a    : [9,1,4], b:Duck          }
-                ={  1      =    0}  }' AS MAP(STRUCT(a INT[], b VARCHAR), MAP(INT, DOUBLE)));
+SELECT CAST($$   { { a:[2,    3], b:  Duckster      }=         {50.0        =50}, {a    : [9,1,4], b:Duck          }
+                ={  1      =    0}  }$$ AS MAP(STRUCT(a INT[], b VARCHAR), MAP(INT, DOUBLE)));
 ----
 {{'a': [2, 3], 'b': Duckster}={50=50.0}, {'a': [9, 1, 4], 'b': Duck}={1=0.0}}
 
