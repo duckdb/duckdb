@@ -254,6 +254,10 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 			throw BinderException("Invalid value for MAX_LINE_SIZE parameter: it cannot be smaller than 0");
 		}
 		maximum_line_size.Set(NumericCast<idx_t>(line_size));
+		if (buffer_size_option.IsSetByUser() && maximum_line_size.GetValue() > buffer_size_option.GetValue()) {
+			throw InvalidInputException("Buffer Size of %d must be a higher value than the maximum line size %d",
+			                            buffer_size_option.GetValue(), maximum_line_size.GetValue());
+		}
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, true);
@@ -266,6 +270,12 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		buffer_size_option.Set(NumericCast<idx_t>(ParseInteger(value, loption)));
 		if (buffer_size_option == 0) {
 			throw InvalidInputException("Buffer Size option must be higher than 0");
+		}
+		if (maximum_line_size.IsSetByUser() && maximum_line_size.GetValue() > buffer_size_option.GetValue()) {
+			throw InvalidInputException("Buffer Size of %d must be a higher value than the maximum line size %d",
+			                            buffer_size_option.GetValue(), maximum_line_size.GetValue());
+		} else {
+			maximum_line_size.Set(buffer_size_option.GetValue(), false);
 		}
 	} else if (loption == "decimal_separator") {
 		decimal_separator = ParseString(value, loption);
@@ -301,12 +311,18 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		if (table_name.empty()) {
 			throw BinderException("REJECTS_TABLE option cannot be empty");
 		}
+		if (KeywordHelper::RequiresQuotes(table_name)) {
+			throw BinderException("rejects_scan option: %s requires quotes to be used as an identifier", table_name);
+		}
 		rejects_table_name.Set(table_name);
 	} else if (loption == "rejects_scan") {
 		// skip, handled in SetRejectsOptions
 		auto table_name = ParseString(value, loption);
 		if (table_name.empty()) {
 			throw BinderException("rejects_scan option cannot be empty");
+		}
+		if (KeywordHelper::RequiresQuotes(table_name)) {
+			throw BinderException("rejects_scan option: %s requires quotes to be used as an identifier", table_name);
 		}
 		rejects_scan_name.Set(table_name);
 	} else if (loption == "rejects_limit") {
