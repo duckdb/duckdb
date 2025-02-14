@@ -6,4 +6,5 @@ benchmark/csv/projection_pushdown.benchmark
 benchmark/csv/1_byte_values.benchmark
 benchmark/csv/16_byte_values.benchmark
 benchmark/csv/multiple_small_files.benchmark
+benchmark/csv/multiple_small_files_union_by_name.benchmark
 benchmark/csv/time_type.benchmark

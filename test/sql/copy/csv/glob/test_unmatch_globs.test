@@ -33,4 +33,4 @@ FROM 'data/csv/glob_dif_dialect/f_*.csv' order by all
 3	bob	bob@email.com
 3	bob	NULL
 4	pedro	pedro@email.com
-5r	tim	tim@email.com
+5	tim	tim@email.com

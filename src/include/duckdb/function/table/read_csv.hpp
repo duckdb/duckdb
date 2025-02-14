@@ -101,7 +101,7 @@ struct ReadCSVData : public BaseCSVData {
 
 	vector<ColumnInfo> column_info;
 
-	void Initialize(unique_ptr<CSVFileScan> &reader) {
+	void Initialize(unique_ptr<CSVFileScan> reader) {
 		this->initial_reader = std::move(reader);
 	}
 	void Initialize(ClientContext &, unique_ptr<CSVUnionData> &data) {

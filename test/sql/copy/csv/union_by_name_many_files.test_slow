@@ -35,4 +35,9 @@ SELECT COUNT(*), MIN(m), MAX(m), MIN(y), MAX(y), COUNT(v), COUNT(j) FROM read_${
 ----
 360000	1	12	2000	2029	240000	240000
 
+query IIIIIII
+SELECT COUNT(*), MIN(m), MAX(m), MIN(y), MAX(y), COUNT(v), COUNT(j) FROM read_${format}('__TEST_DIR__/many_files_${format}/**/*.${format}', union_by_name=true, cache_union_readers=false)
+----
+360000	1	12	2000	2029	240000	240000
+
 endloop
