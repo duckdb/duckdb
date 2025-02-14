@@ -441,7 +441,7 @@ public:
 	                                                   column_t column_index) {
 		auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
 
-		if (IsRowIdColumnId(column_index)) {
+		if (IsVirtualColumn(column_index)) {
 			return nullptr;
 		}
 

@@ -5,6 +5,9 @@
 require parquet
 
 # Filename without the filename option
+statement ok
+select filename from 'data/parquet-testing/glob/t1.parquet'
+
 query III
 select i, j, replace(filename, '\', '/') from 'data/parquet-testing/glob*/t?.parquet' order by i;
 ----
