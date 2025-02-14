@@ -29,25 +29,25 @@ select $${
 	)
 )
 ----
-{'a': {'b': {'a': NULL, 'b': 300}, 'c': 12}, 'b': NULL, 'c': {'a': \{DuckParty\}, 'b': NULL}}
+{'a': {'b': {'a': NULL, 'b': 300}, 'c': 12}, 'b': NULL, 'c': {'a': '{DuckParty}', 'b': NULL}}
 
 # Leading and trailing spaces in struct name
 query III
 select $${"  test  ": 42}$$::STRUCT("  test  " INTEGER) a, a::VARCHAR::STRUCT("  test  " INTEGER) b, a == b
 ----
-{'\  test \ ': 42}	{'\  test \ ': 42}	true
+{'  test  ': 42}	{'  test  ': 42}	true
 
 # Escaped quotes in struct name (double quote)
 query III
 select $${"  \"test\"  ": 42}$$::STRUCT("  ""test""  " INTEGER) a, a::VARCHAR::STRUCT("  ""test""  " INTEGER) b, a == b
 ----
-{'\  \"test\" \ ': 42}	{'\  \"test\" \ ': 42}	true
+{'  "test"  ': 42}	{'  "test"  ': 42}	true
 
 # Escaped quotes in struct name (single quote)
 query III
 select $${"  \'test\'  ": 42}$$::STRUCT("  'test'  " INTEGER) a, a::VARCHAR::STRUCT("  'test'  " INTEGER) b, a == b
 ----
-{'\  \'test\' \ ': 42}	{'\  \'test\' \ ': 42}	true
+{'  \'test\'  ': 42}	{'  \'test\'  ': 42}	true
 
 # Start and end name with escaped backslashes
 query III
@@ -59,7 +59,7 @@ select $${"\\  test  \\": 42}$$::STRUCT("\  test  \" INTEGER) a, a::VARCHAR::STR
 query III
 select $${"test": \\  test  \\}$$::STRUCT("test" VARCHAR) a, a::VARCHAR::STRUCT("test" VARCHAR) b, a == b
 ----
-{'test': \\  test  \\}	{'test': \\  test  \\}	true
+{'test': '\\\\  test  \\\\'}	{'test': '\\\\  test  \\\\'}	true
 
 
 

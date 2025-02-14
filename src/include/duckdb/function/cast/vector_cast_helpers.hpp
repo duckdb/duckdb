@@ -181,6 +181,7 @@ struct VectorCastHelpers {
 		}
 	}
 
+	template <bool WRITE_QUOTES = true>
 	static idx_t CalculateEscapedStringLength(const string_t &string, const char *special_chars,
 	                                          idx_t special_chars_length) {
 		auto base_length = string.GetSize();
@@ -190,32 +191,41 @@ struct VectorCastHelpers {
 			return 0;
 		}
 
+		bool needs_quotes = false;
 		if (isspace(string_data[0])) {
-			length++;
-		}
-		if (base_length >= 2 && isspace(string_data[base_length - 1])) {
-			length++;
+			needs_quotes = true;
+		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
+			needs_quotes = true;
 		}
 
 		const auto string_end = string_data + base_length;
-		while (string_data < string_end) {
-			auto res = std::find_first_of(string_data, string_end, special_chars, special_chars + special_chars_length);
-			if (res == string_end) {
-				auto distance = UnsafeNumericCast<size_t>(res - string_data);
-				length += distance;
-				break;
+		auto res = std::find_first_of(string_data, string_end, special_chars, special_chars + special_chars_length);
+		if (res != string_end) {
+			needs_quotes = true;
+		}
+
+		if (!needs_quotes) {
+			return base_length;
+		}
+
+		for (idx_t i = 0; i < base_length; i++) {
+			if (string_data[i] == '\'' || string_data[i] == '\\') {
+				length++;
 			}
-			auto distance = UnsafeNumericCast<size_t>(res - string_data);
-			length += distance + 2;
-			string_data = res + 1;
+			length++;
+		}
+		if (WRITE_QUOTES) {
+			length += 2;
 		}
 		return length;
 	}
 
+	template <bool WRITE_QUOTES = false>
 	static idx_t CalculateStringLength(const string_t &string, const char *special_chars, idx_t special_chars_length) {
 		return string.GetSize();
 	}
 
+	template <bool WRITE_QUOTES = false>
 	static idx_t WriteEscapedString(void *dest, const string_t &string, const char *special_chars,
 	                                idx_t special_chars_length) {
 		auto base_length = string.GetSize();
@@ -224,46 +234,62 @@ struct VectorCastHelpers {
 		}
 
 		auto string_start = string.GetData();
-		const auto string_end = string_start + base_length;
 		auto string_data = string_start;
 
-		idx_t dest_offset = 0;
+		bool needs_quotes = false;
 		if (isspace(string_data[0])) {
-			memset(reinterpret_cast<char *>(dest) + dest_offset, '\\', 1);
-			dest_offset++;
+			needs_quotes = true;
+		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
+			needs_quotes = true;
 		}
 
+		const auto string_end = string_data + base_length;
+		auto res = std::find_first_of(string_data, string_end, special_chars, special_chars + special_chars_length);
+		if (res != string_end) {
+			needs_quotes = true;
+		}
+
+		auto destination = reinterpret_cast<char *>(dest);
+		if (!needs_quotes) {
+			memcpy(destination, string_data, base_length);
+			return base_length;
+		}
+
+		idx_t offset = 0;
+		if (WRITE_QUOTES) {
+			memset(reinterpret_cast<char *>(dest) + offset, '\'', 1);
+			offset++;
+		}
+
+		static constexpr const char SPECIAL_CHARACTERS[] = "'\\";
+
 		while (string_data < string_end) {
-			auto res = std::find_first_of(string_data, string_end, special_chars, special_chars + special_chars_length);
+			auto res = std::find_first_of(string_data, string_end, SPECIAL_CHARACTERS,
+			                              SPECIAL_CHARACTERS + sizeof(SPECIAL_CHARACTERS));
 
 			if (res == string_end) {
-				auto length = UnsafeNumericCast<size_t>(res - string_data);
-				memcpy(reinterpret_cast<char *>(dest) + dest_offset, string_data, length);
-				dest_offset += length;
+				auto distance = UnsafeNumericCast<size_t>(res - string_data);
+				memcpy(reinterpret_cast<char *>(dest) + offset, string_data, distance);
+				offset += distance;
 				break;
 			}
 
 			auto length = UnsafeNumericCast<size_t>(res - string_data);
-			memcpy(reinterpret_cast<char *>(dest) + dest_offset, string_data, length);
-			memset(reinterpret_cast<char *>(dest) + dest_offset + length, '\\', 1);
-			memcpy(reinterpret_cast<char *>(dest) + dest_offset + length + 1, res, 1);
-			dest_offset += length + 2;
+			memcpy(reinterpret_cast<char *>(dest) + offset, string_data, length);
+			memset(reinterpret_cast<char *>(dest) + offset + length, '\\', 1);
+			memcpy(reinterpret_cast<char *>(dest) + offset + length + 1, res, 1);
+			offset += length + 2;
 			string_data = res + 1;
 		}
 
-		if (base_length >= 2) {
-			//! Replace ' ' with '\ '
-			if (isspace(string_start[base_length - 1])) {
-				auto character = reinterpret_cast<const unsigned char *>(dest)[dest_offset - 1];
-				memset(reinterpret_cast<char *>(dest) + dest_offset - 1, '\\', 1);
-				memset(reinterpret_cast<char *>(dest) + dest_offset, character, 1);
-				dest_offset++;
-			}
+		if (WRITE_QUOTES) {
+			memset(reinterpret_cast<char *>(dest) + offset, '\'', 1);
+			offset++;
 		}
-
-		return dest_offset;
+		return offset;
 	}
 
+	template <bool WRITE_QUOTES = false>
 	static idx_t WriteString(void *dest, const string_t &string, const char *special_chars,
 	                         idx_t special_chars_length) {
 		auto len = string.GetSize();

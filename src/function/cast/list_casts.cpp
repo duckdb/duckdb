@@ -77,10 +77,11 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	ListCast::ListToListCast(source, varchar_list, count, parameters);
 
 	auto &child_vec = ListVector::GetEntry(source);
-	auto child_is_nested = child_vec.GetType().IsNested();
-	auto string_length_func =
-	    child_is_nested ? VectorCastHelpers::CalculateStringLength : VectorCastHelpers::CalculateEscapedStringLength;
-	auto write_string_func = child_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString;
+	auto child_is_not_varchar = child_vec.GetType().id() != LogicalTypeId::VARCHAR;
+	auto string_length_func = child_is_not_varchar ? VectorCastHelpers::CalculateStringLength<true>
+	                                               : VectorCastHelpers::CalculateEscapedStringLength<true>;
+	auto write_string_func =
+	    child_is_not_varchar ? VectorCastHelpers::WriteString<true> : VectorCastHelpers::WriteEscapedString<true>;
 
 	// now construct the actual varchar vector
 	varchar_list.Flatten(count);
@@ -92,7 +93,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto child_data = FlatVector::GetData<string_t>(child);
 	auto &child_validity = FlatVector::Validity(child);
 
-	constexpr const char SPECIAL_CHARACTERS[] = "[]\"',\\";
+	constexpr const char SPECIAL_CHARACTERS[] = "{}[]()\"',\\";
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	static constexpr const idx_t SEP_LENGTH = 2;

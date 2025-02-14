@@ -3,64 +3,84 @@
 
 # Basic single value struct
 query I
-select $$(abc)$$::STRUCT(a VARCHAR)
+select [row('a'), $$(abc)$$]
 ----
-{'a': abc}
+[(a), (abc)]
 
 # Multiple values
 query I
-select $$(abc, def, ghi)$$::STRUCT(a VARCHAR, b VARCHAR, c VARCHAR)
+select [row('a', 'b', 'c'), $$(abc, def, ghi)$$]
 ----
-{'a': abc, 'b': def, 'c': ghi}
+[(a, b, c), (abc, def, ghi)]
 
 # Empty unnamed struct
 query I
-select $$()$$::STRUCT(a VARCHAR)
+select [row('a'),$$()$$]
 ----
-{'a': NULL}
+[(a), (NULL)]
+
+# Empty string in unnamed struct
+query I
+select [row('a'),$$('')$$]
+----
+[(a), ()]
 
 # Nested regular struct inside unnamed struct
 query I
-select $$({'amount': 42})$$::STRUCT(a STRUCT(amount INT))
+select [row({'amount': 21}), $$({'amount': 42})$$]
 ----
-{'a': {'amount': 42}}
+[({'amount': 21}), ({'amount': 42})]
 
 # Nested unnamed struct inside unnamed struct
 query I
-select $$((42))$$::STRUCT(a STRUCT(amount INT))
+select [row(row(21)), $$((42))$$]
 ----
-{'a': {'amount': 42}}
+[((21)), ((42))]
 
 # Nested unnamed struct AND regular struct inside unnamed struct
 query I
-select $$((42), {amount: 21})$$::STRUCT(a STRUCT(amount INT), b STRUCT(amount INT))
+select [row(row(21), {'amount': 42}), $$((42), {amount: 21})$$]
 ----
-{'a': {'amount': 42}, 'b': {'amount': 21}}
+[((21), {'amount': 42}), ((42), {'amount': 21})]
 
 # List inside unnamed struct
 query I
-select $$([1,2,3], [4,5,6])$$::STRUCT(a INTEGER[], b INTEGER[])
+select [row([7,8,9], [10,11,12]), $$([1,2,3], [4,5,6])$$]
 ----
-{'a': [1, 2, 3], 'b': [4, 5, 6]}
+[([7, 8, 9], [10, 11, 12]), ([1, 2, 3], [4, 5, 6])]
 
 statement error
-select $$([1,2,3],)$$::STRUCT(a INTEGER[])
+select [row([4,5,6]), $$([1,2,3],)$$]
 ----
-can't be cast to the destination type STRUCT
+can't be cast to the destination type STRUCT(INTEGER[])
 
 # Empty string in the second child of the unnamed struct
 query I
-select $$([1,2,3],)$$::STRUCT(a INTEGER[], b VARCHAR)
+select [row([4,5,6], 'abc'), $$([1,2,3],)$$]
 ----
-{'a': [1, 2, 3], 'b': }
+[([4, 5, 6], abc), ([1, 2, 3], )]
 
 # Empty string in the second child of a named struct
 query I
-select $${'a': [1,2,3],'b':}$$::STRUCT(a INTEGER[], b VARCHAR)
+select [{'a': [4,5,6], 'b': 'abc'}, $${'a': [1,2,3],'b':}$$]
 ----
-{'a': [1, 2, 3], 'b': }
+[{'a': [4, 5, 6], 'b': abc}, {'a': [1, 2, 3], 'b': }]
 
 query I
-select $$[(("  test  ")), {'a': (\\  test  \\)}]$$::STRUCT(a STRUCT("inner" VARCHAR))[]
+select [
+	[
+		row(
+			row(
+				'  test  '
+			)
+		),
+		{'a': {
+			'inner':
+				'\  test  \'
+			}
+		}
+	],
+	$$[(("  test  ")), {'a': (\\  test  \\)}]$$
+]
 ----
-[{'a': {'inner': \  test \ }}, {'a': {'inner': \\  test  \\}}]
+[[{'a': {'inner': '  test  '}}, {'a': {'inner': '\\  test  \\'}}], [{'a': {'inner': '  test  '}}, {'a': {'inner': '\\\\  test  \\\\'}}]]

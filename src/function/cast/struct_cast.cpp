@@ -150,7 +150,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NAME_SEP_LENGTH = 4;
 	static constexpr const idx_t NULL_LENGTH = 4;
-	static constexpr const char SPECIAL_CHARACTERS[] = "{}:\"',\\";
+	static constexpr const char SPECIAL_CHARACTERS[] = "{}[]():\"',\\";
 
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
@@ -162,17 +162,17 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			if (c > 0) {
 				string_length += SEP_LENGTH;
 			}
-			auto child_is_nested = base_children[c]->GetType().IsNested();
-			auto string_length_func = child_is_nested ? VectorCastHelpers::CalculateStringLength
-			                                          : VectorCastHelpers::CalculateEscapedStringLength;
+			auto child_is_not_varchar = base_children[c]->GetType().id() != LogicalTypeId::VARCHAR;
+			auto string_length_func = child_is_not_varchar ? VectorCastHelpers::CalculateStringLength<true>
+			                                               : VectorCastHelpers::CalculateEscapedStringLength<true>;
 
 			children[c]->Flatten(count);
 			auto &child_validity = FlatVector::Validity(*children[c]);
 			auto data = FlatVector::GetData<string_t>(*children[c]);
 			auto &name = child_types[c].first;
 			if (!is_unnamed) {
-				string_length += VectorCastHelpers::CalculateEscapedStringLength(name, SPECIAL_CHARACTERS,
-				                                                                 sizeof(SPECIAL_CHARACTERS));
+				string_length += VectorCastHelpers::CalculateEscapedStringLength<false>(name, SPECIAL_CHARACTERS,
+				                                                                        sizeof(SPECIAL_CHARACTERS));
 				string_length += NAME_SEP_LENGTH; // "'{name}': "
 			}
 			if (child_validity.RowIsValid(i)) {
@@ -190,9 +190,9 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
 				offset += SEP_LENGTH;
 			}
-			auto child_is_nested = base_children[c]->GetType().IsNested();
-			auto write_string_func =
-			    child_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString;
+			auto child_is_not_varchar = base_children[c]->GetType().id() != LogicalTypeId::VARCHAR;
+			auto write_string_func = child_is_not_varchar ? VectorCastHelpers::WriteString<true>
+			                                              : VectorCastHelpers::WriteEscapedString<true>;
 
 			auto &child_validity = FlatVector::Validity(*children[c]);
 			auto data = FlatVector::GetData<string_t>(*children[c]);
@@ -200,8 +200,8 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				auto &name = child_types[c].first;
 				// "{'name': <value>}"
 				dataptr[offset++] = '\'';
-				offset += VectorCastHelpers::WriteEscapedString(dataptr + offset, name, SPECIAL_CHARACTERS,
-				                                                sizeof(SPECIAL_CHARACTERS));
+				offset += VectorCastHelpers::WriteEscapedString<false>(dataptr + offset, name, SPECIAL_CHARACTERS,
+				                                                       sizeof(SPECIAL_CHARACTERS));
 				dataptr[offset++] = '\'';
 				dataptr[offset++] = ':';
 				dataptr[offset++] = ' ';

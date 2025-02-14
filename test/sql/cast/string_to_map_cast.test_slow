@@ -31,7 +31,7 @@ SELECT '{greetings=[Hello World!, Hello DuckDB, Howdy], farewells=[Bye World, By
 query I
 SELECT '{"key=A"=Duck, "key=B"="hello=world"}'::MAP(VARCHAR, VARCHAR)
 ----
-{key\=A=Duck, key\=B=hello\=world}
+{'key=A'=Duck, 'key=B'='hello=world'}
 
 statement error
 SELECT '{a=1, b=2, a=3}'::MAP(VARCHAR, INT)
@@ -78,27 +78,27 @@ SELECT CAST('{''hello''=2, ''world''=50, ''!''=12}' AS MAP(VARCHAR, INT));
 query I
 SELECT CAST($${\'hello\'=hello, \'world\'=world, \'!\'=!}$$ AS MAP(VARCHAR, VARCHAR));
 ----
-{\'hello\'=hello, \'world\'=world, \'!\'=!}
+{'\'hello\''=hello, '\'world\''=world, '\'!\''=!}
 
 query I
 SELECT CAST($${[[\'🦆, 🦆, 🦆\']]=100, [[duck, db, \'🦆\']]=101}$$ AS MAP(VARCHAR[][], INT));
 ----
-{[[\'🦆, 🦆, 🦆\']]=100, [[duck, db, \'🦆\']]=101}
+{[['\'🦆', 🦆, '🦆\'']]=100, [[duck, db, '\'🦆\'']]=101}
 
 query I
 SELECT CAST($${"can't"="you're", "i'm"="q'u'o't'e"}$$ AS MAP(VARCHAR, VARCHAR));
 ----
-{can\'t=you\'re, i\'m=q\'u\'o\'t\'e}
+{'can\'t'='you\'re', 'i\'m'='q\'u\'o\'t\'e'}
 
-query I
-SELECT CAST('{"{"="}", "["="]"}' AS MAP(VARCHAR, VARCHAR));
+query III
+SELECT CAST('{"{"="}", "["="]"}' AS MAP(VARCHAR, VARCHAR)) a, a::VARCHAR::MAP(VARCHAR, VARCHAR) b, a == b;
 ----
-{\{=\}, [=]}
+{'{'='}', '['=']'}	{'{'='}', '['=']'}	true
 
-query I
-SELECT CAST('{''}''="{", '']''="["}' AS MAP(VARCHAR, VARCHAR));
+query III
+SELECT CAST($${'}'="{", ']'="["}$$ AS MAP(VARCHAR, VARCHAR)) a, a::VARCHAR::MAP(VARCHAR, VARCHAR) b, a == b;
 ----
-{\}=\{, ]=[}
+{'}'='{', ']'='['}	{'}'='{', ']'='['}	true
 
 
 #               Test for whitespaces
@@ -331,4 +331,4 @@ COPY assembled_maps FROM '__TEST_DIR__/assembled_maps.csv';
 query I
 SELECT * FROM assembled_maps;
 ----
-{8=hello\, DuckDB}
+{8='hello, DuckDB'}

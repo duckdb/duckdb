@@ -44,21 +44,23 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	static constexpr const idx_t KEY_VALUE_SEP_LENGTH = 1;
 	static constexpr const idx_t NULL_LENGTH = 4;
 	static constexpr const idx_t INVALID_LENGTH = 7;
-	static constexpr const char SPECIAL_CHARACTERS[] = "{}=\"',\\";
+	static constexpr const char SPECIAL_CHARACTERS[] = "{}[]()=\"',\\";
 
 	auto &key_vec = MapVector::GetKeys(source);
 	auto &value_vec = MapVector::GetValues(source);
 
-	auto key_is_nested = key_vec.GetType().IsNested();
-	auto value_is_nested = value_vec.GetType().IsNested();
+	auto key_is_not_varchar = key_vec.GetType().id() != LogicalTypeId::VARCHAR;
+	auto value_is_not_varchar = value_vec.GetType().id() != LogicalTypeId::VARCHAR;
 
-	auto key_strlen_func =
-	    key_is_nested ? VectorCastHelpers::CalculateStringLength : VectorCastHelpers::CalculateEscapedStringLength;
-	auto key_write_func = key_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString;
+	auto key_strlen_func = key_is_not_varchar ? VectorCastHelpers::CalculateStringLength<true>
+	                                          : VectorCastHelpers::CalculateEscapedStringLength<true>;
+	auto key_write_func =
+	    key_is_not_varchar ? VectorCastHelpers::WriteString<true> : VectorCastHelpers::WriteEscapedString<true>;
 
-	auto value_strlen_func =
-	    value_is_nested ? VectorCastHelpers::CalculateStringLength : VectorCastHelpers::CalculateEscapedStringLength;
-	auto value_write_func = value_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString;
+	auto value_strlen_func = value_is_not_varchar ? VectorCastHelpers::CalculateStringLength<true>
+	                                              : VectorCastHelpers::CalculateEscapedStringLength<true>;
+	auto value_write_func =
+	    value_is_not_varchar ? VectorCastHelpers::WriteString<true> : VectorCastHelpers::WriteEscapedString<true>;
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {

@@ -1,10 +1,10 @@
 # name: test/sql/cast/string_to_list_roundtrip.test
 # group: [cast]
 
-query II
-select $$[\"abc\", def, ghi]$$::VARCHAR[] a, a::VARCHAR
+query III
+select $$[\"abc\", def, ghi]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a == b
 ----
-[\"abc\", def, ghi]	[\"abc\", def, ghi]
+['"abc"', def, ghi]	['"abc"', def, ghi]	true
 
 statement ok
 COPY (select $$[\"abc\", def, ghi]$$::VARCHAR[] a) TO '__TEST_DIR__/copy_test.csv' (FORMAT CSV);
@@ -12,22 +12,28 @@ COPY (select $$[\"abc\", def, ghi]$$::VARCHAR[] a) TO '__TEST_DIR__/copy_test.cs
 query II
 select a, a::VARCHAR[] from read_csv('__TEST_DIR__/copy_test.csv') t(a);
 ----
-[\"abc\", def, ghi]	[\"abc\", def, ghi]
+['"abc"', def, ghi]	['"abc"', def, ghi]
 
 # Leading and trailing whitespace preservation
 query III
-select $$["  \"abc\"  ", def, ghi]$$::VARCHAR[] a, a::VARCHAR, a::VARCHAR[]
+select $$["  \"abc\"  ", def, ghi]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a == b
 ----
-[\  \"abc\" \ , def, ghi]	[\  \"abc\" \ , def, ghi]	[\  \"abc\" \ , def, ghi]
+['  "abc"  ', def, ghi]	['  "abc"  ', def, ghi]	true
 
 # Escaping backslashes
 query III
-select $$[\  \\abc\\ \ , def, ghi]$$::VARCHAR[] a, a::VARCHAR, a::VARCHAR[]
+select $$[\  \\abc\\ \ , def, ghi]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a == b
 ----
-[\  \\abc\\ \ , def, ghi]	[\  \\abc\\ \ , def, ghi]	[\  \\abc\\ \ , def, ghi]
+['\\  \\\\abc\\\\ \\', def, ghi]	['\\  \\\\abc\\\\ \\', def, ghi]	true
+
+# Escaping backslashes
+query III
+select $$["\  \\abc\\ \ ", def, ghi]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a == b
+----
+['  \\abc\\  ', def, ghi]	['  \\abc\\  ', def, ghi]	true
 
 # Escaping '{' and '}'
 query III
 select $$[{}]$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a == b
 ----
-[{}]	[{}]	true
+['{}']	['{}']	true
