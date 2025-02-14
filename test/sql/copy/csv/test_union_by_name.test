@@ -68,7 +68,7 @@ ORDER BY a;
 9223372036854775807	NULL	NULL
 
 query IIII
-SELECT a, b, c, replace(replace(filename, '\', '/'), '__TEST_DIR__/', '')
+SELECT a, b, c, replace(replace(filename, '__TEST_DIR__', ''), '\', '/')[2:]
 FROM  read_csv_auto(['__TEST_DIR__/ubn1.csv', '__TEST_DIR__/ubn2.csv', '__TEST_DIR__/ubn3.csv'], UNION_BY_NAME=TRUE)
 ORDER BY a;
 ----
