@@ -36,7 +36,6 @@ class Deserializer;
 struct PreparedRowGroup {
 	duckdb_parquet::RowGroup row_group;
 	vector<unique_ptr<ColumnWriterState>> states;
-	vector<shared_ptr<StringHeap>> heaps;
 };
 
 struct FieldID;

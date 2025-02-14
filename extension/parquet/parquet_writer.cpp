@@ -389,9 +389,8 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	// We write 8 columns at a time so that iterating over ColumnDataCollection is more efficient
 	static constexpr idx_t COLUMNS_PER_PASS = 8;
 
-	// We want these to be in-memory/hybrid so we don't have to copy over strings to the dictionary
-	D_ASSERT(buffer.GetAllocatorType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
-	         buffer.GetAllocatorType() == ColumnDataAllocatorType::HYBRID);
+	// We want these to be buffer-managed
+	D_ASSERT(buffer.GetAllocatorType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 
 	// set up a new row group for this chunk collection
 	auto &row_group = result.row_group;
@@ -451,7 +450,6 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 			states.push_back(std::move(write_state));
 		}
 	}
-	result.heaps = buffer.GetHeapReferences();
 }
 
 // Validation code adapted from Impala
@@ -509,8 +507,6 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	// append the row group to the file meta data
 	file_meta_data.row_groups.push_back(row_group);
 	file_meta_data.num_rows += row_group.num_rows;
-
-	prepared.heaps.clear();
 }
 
 void ParquetWriter::Flush(ColumnDataCollection &buffer) {

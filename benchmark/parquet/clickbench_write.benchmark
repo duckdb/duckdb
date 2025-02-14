@@ -1,6 +1,6 @@
 # name: benchmark/parquet/clickbench_write.benchmark
 # description: Write ClickBench data to Parquet
-# group: [clickbench]
+# group: [parquet]
 
 require httpfs
 

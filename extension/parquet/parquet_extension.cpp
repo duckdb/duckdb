@@ -222,7 +222,8 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 
 struct ParquetWriteLocalState : public LocalFunctionData {
 	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
-	    : buffer(BufferAllocator::Get(context), types) {
+	    : buffer(context, types) {
+		buffer.SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 		buffer.InitializeAppend(append_state);
 	}
 
