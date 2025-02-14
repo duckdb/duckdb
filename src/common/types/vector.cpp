@@ -1207,10 +1207,61 @@ void Vector::Sequence(int64_t start, int64_t increment, idx_t count) {
 }
 
 // FIXME: This should ideally be const
-void Vector::Serialize(Serializer &serializer, idx_t count) {
+void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_serialization) {
 	auto &logical_type = GetType();
 
 	UnifiedVectorFormat vdata;
+
+	// serialize compressed vectors to save space, but skip this if serializing into older versions
+	if (serializer.ShouldSerialize(5)) {
+		if (compressed_serialization) {
+			auto vtype = GetVectorType();
+			if (vtype == VectorType::DICTIONARY_VECTOR && DictionaryVector::DictionarySize(*this).IsValid()) {
+				auto dict = DictionaryVector::Child(*this);
+				if (dict.GetVectorType() == VectorType::FLAT_VECTOR) {
+					idx_t dict_count = DictionaryVector::DictionarySize(*this).GetIndex();
+					auto old_sel = DictionaryVector::SelVector(*this);
+					SelectionVector new_sel(count), used_sel(count), map_sel(dict_count);
+
+					// dictionaries may be large (row-group level). A vector may use only a small part.
+					// So, restrict dict to the used_sel subset & remap old_sel into new_sel to the new dict positions
+					sel_t CODE_UNSEEN = static_cast<sel_t>(dict_count);
+					for (sel_t i = 0; i < dict_count; ++i) {
+						map_sel[i] = CODE_UNSEEN; // initialize with unused marker
+					}
+					idx_t used_count = 0;
+					for (idx_t i = 0; i < count; ++i) {
+						auto pos = old_sel[i];
+						if (map_sel[pos] == CODE_UNSEEN) {
+							map_sel[pos] = static_cast<sel_t>(used_count);
+							used_sel[used_count++] = pos;
+						}
+						new_sel[i] = map_sel[pos];
+					}
+					if (used_count * 2 < count) { // only serialize as a dict vector if that makes things smaller
+						auto sel_data = reinterpret_cast<data_ptr_t>(new_sel.data());
+						dict.Slice(used_sel, used_count);
+						serializer.WriteProperty(99, "vector_type", VectorType::DICTIONARY_VECTOR);
+						serializer.WriteProperty(100, "sel_vector", sel_data, sizeof(sel_t) * count);
+						serializer.WriteProperty(101, "dict_count", used_count);
+						return dict.Serialize(serializer, used_count, false);
+					}
+				}
+			} else if (vtype == VectorType::CONSTANT_VECTOR && count >= 1) {
+				serializer.WriteProperty(99, "vector_type", VectorType::CONSTANT_VECTOR);
+				return Vector::Serialize(serializer, 1, false); // just serialize one value
+			} else if (vtype == VectorType::SEQUENCE_VECTOR) {
+				serializer.WriteProperty(99, "vector_type", VectorType::SEQUENCE_VECTOR);
+				auto data = reinterpret_cast<int64_t *>(buffer->GetData());
+				serializer.WriteProperty(100, "seq_start", data[0]);
+				serializer.WriteProperty(100, "seq_increment", data[1]);
+				return; // for sequence vectors we do not serialize anything else
+			} else {
+				// TODO: other compressed vector types (FSST)
+			}
+		}
+		serializer.WriteProperty(99, "vector_type", VectorType::FLAT_VECTOR);
+	}
 	ToUnifiedFormat(count, vdata);
 
 	const bool has_validity_mask = (count > 0) && !vdata.validity.AllValid();
@@ -1300,6 +1351,27 @@ void Vector::Serialize(Serializer &serializer, idx_t count) {
 
 void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	auto &logical_type = GetType();
+	const auto vtype = // older versions that only supported flat vectors did not serialize vector_type,
+	    deserializer.ReadPropertyWithExplicitDefault<VectorType>(99, "vector_type", VectorType::FLAT_VECTOR);
+
+	// first handle deserialization of compressed vector types
+	if (vtype == VectorType::CONSTANT_VECTOR) {
+		Vector::Deserialize(deserializer, 1); // read a vector of size 1
+		Vector::SetVectorType(VectorType::CONSTANT_VECTOR);
+		return;
+	} else if (vtype == VectorType::DICTIONARY_VECTOR) {
+		SelectionVector sel(count);
+		deserializer.ReadProperty(100, "sel_vector", reinterpret_cast<data_ptr_t>(sel.data()), sizeof(sel_t) * count);
+		const auto dict_count = deserializer.ReadProperty<idx_t>(101, "dict_count");
+		Vector::Deserialize(deserializer, dict_count); // deserialize the dictionary in this vector
+		Vector::Slice(sel, count);                     // will create a dictionary vector
+		return;
+	} else if (vtype == VectorType::SEQUENCE_VECTOR) {
+		const int64_t seq_start = deserializer.ReadProperty<int64_t>(100, "seq_start");
+		const int64_t seq_increment = deserializer.ReadProperty<int64_t>(101, "seq_increment");
+		Vector::Sequence(seq_start, seq_increment, count);
+		return;
+	}
 
 	auto &validity = FlatVector::Validity(*this);
 	auto validity_count = MaxValue<idx_t>(count, STANDARD_VECTOR_SIZE);
