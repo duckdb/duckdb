@@ -29,6 +29,9 @@ public:
 	DUCKDB_API explicit PendingQueryResult(ErrorData error_message);
 	DUCKDB_API ~PendingQueryResult() override;
 	DUCKDB_API bool AllowStreamResult() const;
+	PendingQueryResult(const PendingQueryResult&) = delete;
+	PendingQueryResult& operator=(const PendingQueryResult&) = delete;
+
 
 public:
 	//! Executes a single task within the query, returning whether or not the query is ready.
