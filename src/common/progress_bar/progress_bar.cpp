@@ -52,15 +52,15 @@ void ProgressBar::SystemOverrideCheck(ClientConfig &config) {
 	}
 }
 
-unique_ptr<ProgressBarDisplay> ProgressBar::DefaultProgressBarDisplay() {
+unique_ptr<ProgressBarDisplay> ProgressBar::DefaultProgressBarDisplay(void *) {
 	return make_uniq<TerminalProgressBarDisplay>();
 }
 
 ProgressBar::ProgressBar(Executor &executor, idx_t show_progress_after,
-                         progress_bar_display_create_func_t create_display_func)
+                         progress_bar_display_create_func_t create_display_func, void *create_display_func_context)
     : executor(executor), show_progress_after(show_progress_after) {
 	if (create_display_func) {
-		display = create_display_func();
+		display = create_display_func(create_display_func_context);
 	}
 }
 
