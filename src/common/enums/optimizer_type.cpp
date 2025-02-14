@@ -29,6 +29,7 @@ static const DefaultOptimizerType internal_optimizer_types[] = {
     {"column_lifetime", OptimizerType::COLUMN_LIFETIME},
     {"limit_pushdown", OptimizerType::LIMIT_PUSHDOWN},
     {"top_n", OptimizerType::TOP_N},
+    {"remove_useless_projections", OptimizerType::REMOVE_USELESS_PROJECTIONS},
     {"build_side_probe_side", OptimizerType::BUILD_SIDE_PROBE_SIDE},
     {"compressed_materialization", OptimizerType::COMPRESSED_MATERIALIZATION},
     {"duplicate_groups", OptimizerType::DUPLICATE_GROUPS},

@@ -12,6 +12,7 @@
 #include "duckdb/optimizer/cte_filter_pusher.hpp"
 #include "duckdb/optimizer/deliminator.hpp"
 #include "duckdb/optimizer/empty_result_pullup.hpp"
+#include "duckdb/optimizer/remove_useless_projections.hpp"
 #include "duckdb/optimizer/expression_heuristics.hpp"
 #include "duckdb/optimizer/filter_pullup.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
@@ -164,6 +165,13 @@ void Optimizer::RunBuiltInOptimizers() {
 	RunOptimizer(OptimizerType::EMPTY_RESULT_PULLUP, [&]() {
 		EmptyResultPullup empty_result_pullup;
 		plan = empty_result_pullup.Optimize(std::move(plan));
+	});
+
+	// Removes Unnecessary Projections
+	RunOptimizer(OptimizerType::REMOVE_USELESS_PROJECTIONS, [&]() {
+		RemoveUselessProjections remover;
+		plan = remover.RemoveProjections(std::move(plan));
+		remover.ReplaceBindings(*plan);
 	});
 
 	// then we perform the join ordering optimization
