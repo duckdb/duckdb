@@ -274,6 +274,11 @@ struct double_na_equal {
 		}
 		return val == right;
 	}
+
+	bool operator!=(const double &right) const {
+		return !(*this == right);
+	}
+
 	double val;
 };
 

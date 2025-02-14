@@ -21,13 +21,9 @@ struct PrimitiveCastOperator {
 	}
 };
 
-template <class SRC, class TGT = SRC, class CAST_OP = PrimitiveCastOperator>
+template <class SRC, class TGT = SRC, class OP = PrimitiveCastOperator>
 class PrimitiveDictionary {
 private:
-	static_assert(!std::is_same<SRC, string_t>::value ||
-	                  (std::is_same<SRC, string_t>::value && std::is_same<TGT, string_t>::value),
-	              "If SRC is string_t, TGT must also be string_t");
-
 	static constexpr idx_t LOAD_FACTOR = 2;
 
 	static constexpr uint32_t INVALID_INDEX = static_cast<uint32_t>(-1);
@@ -46,13 +42,12 @@ public:
 	//! It is used to dictionary-encode data in, e.g., Parquet files
 	PrimitiveDictionary(Allocator &allocator, idx_t maximum_size_p, idx_t target_capacity_p)
 	    : maximum_size(maximum_size_p), size(0), capacity(NextPowerOfTwo(maximum_size * LOAD_FACTOR)),
-	      capacity_mask(capacity - 1), target_capacity(target_capacity_p), target_offset(0),
+	      capacity_mask(capacity - 1), target_capacity(target_capacity_p),
 	      allocated_dictionary(allocator.Allocate(capacity * sizeof(primitive_dictionary_entry_t))),
 	      allocated_target(
 	          allocator.Allocate(std::is_same<TGT, string_t>::value ? target_capacity : capacity * sizeof(TGT))),
-	      dictionary(reinterpret_cast<primitive_dictionary_entry_t *>(allocated_dictionary.get())),
-	      target_values(reinterpret_cast<TGT *>(allocated_target.get())), target_raw(allocated_target.get()),
-	      full(false) {
+	      target_stream(allocated_target.get(), allocated_target.GetSize()),
+	      dictionary(reinterpret_cast<primitive_dictionary_entry_t *>(allocated_dictionary.get())), full(false) {
 		// Initialize empty
 		for (idx_t i = 0; i < capacity; i++) {
 			dictionary[i].index = INVALID_INDEX;
@@ -86,6 +81,7 @@ public:
 	//! Iterates over inserted values
 	template <typename U = SRC, typename std::enable_if<!std::is_same<U, string_t>::value, int>::type = 0>
 	void IterateValues(const std::function<void(const SRC &, const TGT &)> &fun) const {
+		const auto target_values = reinterpret_cast<const TGT *>(allocated_target.get());
 		for (idx_t i = 0; i < capacity; i++) {
 			auto &entry = dictionary[i];
 			if (entry.IsEmpty()) {
@@ -119,13 +115,13 @@ public:
 
 	//! Get the target written values as a memory stream (zero-copy)
 	unique_ptr<MemoryStream> GetTargetMemoryStream() const {
-		auto result = make_uniq<MemoryStream>(target_raw, target_capacity);
-		result->SetPosition(target_offset);
+		auto result = make_uniq<MemoryStream>(target_stream.GetData(), target_stream.GetCapacity());
+		result->SetPosition(target_stream.GetPosition());
 		return result;
 	}
 
 private:
-	//! Looks up a value in the dictionary using linear probing
+	//! Look up a value in the dictionary using linear probing
 	primitive_dictionary_entry_t &Lookup(const SRC &value) const {
 		auto offset = Hash(value) & capacity_mask;
 		while (!dictionary[offset].IsEmpty() && dictionary[offset].value != value) {
@@ -134,32 +130,31 @@ private:
 		return dictionary[offset];
 	}
 
-	//! Writes a value to the target data
-	template <typename U = SRC, typename std::enable_if<!std::is_same<U, string_t>::value, int>::type = 0>
+	//! Write a value to the target data (if source is not string)
+	template <typename S = SRC, typename std::enable_if<!std::is_same<S, string_t>::value, int>::type = 0>
 	bool AddToTarget(const SRC &src_value) {
-		const auto tgt_value = CAST_OP::template Operation<SRC, TGT>(src_value);
-		target_values[size] = tgt_value;
-		target_offset += sizeof(TGT);
+		const auto tgt_value = OP::template Operation<SRC, TGT>(src_value);
+		if (target_stream.GetPosition() + OP::template WriteSize<SRC, TGT>(tgt_value) > target_stream.GetCapacity()) {
+			return false; // Out of capacity
+		}
+		OP::template WriteToStream<SRC, TGT>(tgt_value, target_stream);
 		return true;
 	}
 
-	//! Specialized template to add a string_t value to the target data
-	template <typename U = SRC, typename std::enable_if<std::is_same<U, string_t>::value, int>::type = 0>
+	//! Write a value to the target data (if source is string)
+	template <typename S = SRC, typename std::enable_if<std::is_same<S, string_t>::value, int>::type = 0>
 	bool AddToTarget(SRC &src_value) {
-		if (target_offset + sizeof(uint32_t) + src_value.GetSize() > target_capacity) {
+		// If source is string, target must also be string
+		if (target_stream.GetPosition() + OP::template WriteSize<SRC, TGT>(src_value) > target_stream.GetCapacity()) {
 			return false; // Out of capacity
 		}
 
-		// Store string length and increment offset
-		Store<uint32_t>(UnsafeNumericCast<uint32_t>(src_value.GetSize()), target_raw + target_offset);
-		target_offset += sizeof(uint32_t);
+		const auto ptr = target_stream.GetData() + target_stream.GetPosition() + sizeof(uint32_t);
+		OP::template WriteToStream<SRC, TGT>(src_value, target_stream);
 
-		// Copy over string data to target, update "value" to point to it, and increment offset
-		memcpy(target_raw + target_offset, src_value.GetData(), src_value.GetSize());
 		if (!src_value.IsInlined()) {
-			src_value.SetPointer(char_ptr_cast(target_raw + target_offset));
+			src_value.SetPointer(char_ptr_cast(ptr));
 		}
-		target_offset += src_value.GetSize();
 
 		return true;
 	}
@@ -169,22 +164,20 @@ private:
 	const idx_t maximum_size;
 	idx_t size;
 
-	//! Capacity (power of two) and corresponding mask
+	//! Dictionary capacity (power of two) and corresponding mask
 	const idx_t capacity;
 	const idx_t capacity_mask;
 
-	//! Capacity/offset of target encoded data
+	//! Capacity of target encoded data
 	const idx_t target_capacity;
-	idx_t target_offset;
 
 	//! Allocated regions for dictionary/target
 	AllocatedData allocated_dictionary;
 	AllocatedData allocated_target;
+	MemoryStream target_stream;
 
 	//! Pointers to allocated regions for convenience
 	primitive_dictionary_entry_t *const dictionary;
-	TGT *const target_values;
-	data_ptr_t const target_raw;
 
 	//! More values inserted than possible
 	bool full;
