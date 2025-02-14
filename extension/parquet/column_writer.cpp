@@ -291,12 +291,18 @@ struct float_na_equal {
 	operator float() const {
 		return val;
 	}
+
 	bool operator==(const float &right) const {
 		if (std::isnan(val) && std::isnan(right)) {
 			return true;
 		}
 		return val == right;
 	}
+
+	bool operator!=(const float &right) const {
+		return !(*this == right);
+	}
+
 	float val;
 };
 
