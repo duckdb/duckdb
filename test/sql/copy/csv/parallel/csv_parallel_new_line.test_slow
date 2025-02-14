@@ -9,7 +9,7 @@ PRAGMA verify_parallelism
 statement ok
 PRAGMA enable_verification
 
-loop i 25 100
+loop i 27 100
 
 
 # Test read_csv auto with \n

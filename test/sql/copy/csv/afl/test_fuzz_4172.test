@@ -1,0 +1,32 @@
+# name: test/sql/copy/csv/afl/test_fuzz_4172.test
+# description: fuzzer generated csv files - should not raise internal exception (by failed assertion).
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+select count(file) from glob('data/csv/afl/4172/*');
+----
+5
+
+statement maybe
+FROM read_csv('data/csv/afl/4172/case_1.csv', auto_detect=false, columns={'a': 'VARCHAR', 'b': 'INTEGER'}, header=true, max_line_size=2305843009213693962, store_rejects=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/4172/case_2.csv', buffer_size=42, columns={'j': 'JSON'}, store_rejects=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/4172/case_3.csv', buffer_size=42, columns={'j': 'JSON'}, store_rejects=true);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/4172/case_4.csv', ignore_errors=true, buffer_size=1, store_rejects=false);
+----
+
+statement maybe
+FROM read_csv('data/csv/afl/4172/case_5.csv', buffer_size=42, auto_detect=true, store_rejects=true);
+----
+
