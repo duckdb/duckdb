@@ -200,7 +200,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 		dictionary_size_limit = row_group_size / 20;
 	}
 
-	idx_t string_dictionary_page_size_limit = 2097152;
+	idx_t string_dictionary_page_size_limit = 1048576;
 
 	//! What false positive rate are we willing to accept for bloom filters
 	double bloom_filter_false_positive_ratio = 0.01;

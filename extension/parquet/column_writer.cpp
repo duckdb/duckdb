@@ -176,6 +176,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 			idx_t current_index = state.definition_levels.size();
 			if (parent->definition_levels[current_index] != PARQUET_DEFINE_VALID) {
 				state.definition_levels.push_back(parent->definition_levels[current_index]);
+				state.parent_null_count++;
 			} else if (validity.RowIsValid(vector_index)) {
 				state.definition_levels.push_back(define_value);
 			} else {

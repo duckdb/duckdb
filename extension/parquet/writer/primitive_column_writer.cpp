@@ -54,7 +54,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	if (!check_parent_empty && validity.AllValid() && TypeIsConstantSize(vector.GetType().InternalType()) &&
 	    page_info_ref.get().estimated_page_size + GetRowSize(vector, vector_index, state) * vcount <
 	        MAX_UNCOMPRESSED_PAGE_SIZE) {
-		// Fast path
+		// Fast path: fixed-size type, all valid, and it fits on the current page
 		auto &page_info = page_info_ref.get();
 		page_info.row_count += vcount;
 		page_info.estimated_page_size += GetRowSize(vector, vector_index, state) * vcount;
@@ -140,8 +140,8 @@ void PrimitiveColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_v
 	MemoryStream intermediate_stream(Allocator::DefaultAllocator());
 
 	rle_encoder.BeginWrite();
-	if (null_count.IsValid() && (null_count.GetIndex() == 0 || null_count.GetIndex() == count)) {
-		// All are NULL or none are NULL
+	if (null_count.IsValid() && null_count.GetIndex() == 0) {
+		// Fast path: no nulls
 		rle_encoder.WriteMany(intermediate_stream, levels[0], count);
 	} else {
 		for (idx_t i = offset; i < offset + count; i++) {
@@ -176,7 +176,7 @@ void PrimitiveColumnWriter::NextPage(PrimitiveColumnWriterState &state) {
 
 	// write the definition levels
 	WriteLevels(temp_writer, state.definition_levels, max_define, page_info.offset, page_info.row_count,
-	            state.null_count);
+	            state.null_count + state.parent_null_count);
 }
 
 void PrimitiveColumnWriter::FlushPage(PrimitiveColumnWriterState &state) {
