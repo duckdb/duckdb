@@ -423,7 +423,6 @@ virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_p
 	return result;
 }
 
-
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInitGlobal,
 	                       ReadCSVInitLocal);

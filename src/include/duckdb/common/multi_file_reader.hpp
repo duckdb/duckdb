@@ -294,7 +294,7 @@ public:
 	                                         OperatorPartitionData &partition_data);
 
 	DUCKDB_API static void GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
-	                                          virtual_column_map_t &result);
+	                                         virtual_column_map_t &result);
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
