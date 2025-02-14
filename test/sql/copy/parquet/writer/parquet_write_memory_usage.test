@@ -9,7 +9,7 @@ load __TEST_DIR__/parquet_write_memory_usage.db
 statement ok
 set threads=1
 
-foreach memory_limit,row_group_size 0.3mb,20480 0.6mb,40960
+foreach memory_limit,row_group_size 0.5mb,20480 1.0mb,40960
 
 statement ok
 set memory_limit='${memory_limit}'

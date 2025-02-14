@@ -91,7 +91,7 @@ ColumnWriterState::~ColumnWriterState() {
 }
 
 void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
-                                unique_ptr<data_t[]> &compressed_buf) {
+                                AllocatedData &compressed_buf) {
 	switch (writer.GetCodec()) {
 	case CompressionCodec::UNCOMPRESSED:
 		compressed_size = temp_writer.GetPosition();
@@ -100,7 +100,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 
 	case CompressionCodec::SNAPPY: {
 		compressed_size = duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition());
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_buf = BufferAllocator::Get(writer.GetContext()).Allocate(compressed_size);
 		duckdb_snappy::RawCompress(const_char_ptr_cast(temp_writer.GetData()), temp_writer.GetPosition(),
 		                           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
@@ -109,7 +109,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 	}
 	case CompressionCodec::LZ4_RAW: {
 		compressed_size = duckdb_lz4::LZ4_compressBound(UnsafeNumericCast<int32_t>(temp_writer.GetPosition()));
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_buf = BufferAllocator::Get(writer.GetContext()).Allocate(compressed_size);
 		compressed_size = duckdb_lz4::LZ4_compress_default(
 		    const_char_ptr_cast(temp_writer.GetData()), char_ptr_cast(compressed_buf.get()),
 		    UnsafeNumericCast<int32_t>(temp_writer.GetPosition()), UnsafeNumericCast<int32_t>(compressed_size));
@@ -119,7 +119,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 	case CompressionCodec::GZIP: {
 		MiniZStream s;
 		compressed_size = s.MaxCompressedLength(temp_writer.GetPosition());
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_buf = BufferAllocator::Get(writer.GetContext()).Allocate(compressed_size);
 		s.Compress(const_char_ptr_cast(temp_writer.GetData()), temp_writer.GetPosition(),
 		           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
@@ -127,7 +127,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 	}
 	case CompressionCodec::ZSTD: {
 		compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.GetPosition());
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_buf = BufferAllocator::Get(writer.GetContext()).Allocate(compressed_size);
 		compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
 		                                             (const void *)temp_writer.GetData(), temp_writer.GetPosition(),
 		                                             UnsafeNumericCast<int32_t>(writer.CompressionLevel()));
@@ -135,15 +135,12 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		break;
 	}
 	case CompressionCodec::BROTLI: {
-
 		compressed_size = duckdb_brotli::BrotliEncoderMaxCompressedSize(temp_writer.GetPosition());
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-
+		compressed_buf = BufferAllocator::Get(writer.GetContext()).Allocate(compressed_size);
 		duckdb_brotli::BrotliEncoderCompress(BROTLI_DEFAULT_QUALITY, BROTLI_DEFAULT_WINDOW, BROTLI_DEFAULT_MODE,
 		                                     temp_writer.GetPosition(), temp_writer.GetData(), &compressed_size,
 		                                     compressed_buf.get());
 		compressed_data = compressed_buf.get();
-
 		break;
 	}
 	default:
@@ -176,6 +173,7 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 			idx_t current_index = state.definition_levels.size();
 			if (parent->definition_levels[current_index] != PARQUET_DEFINE_VALID) {
 				state.definition_levels.push_back(parent->definition_levels[current_index]);
+				state.parent_null_count++;
 			} else if (validity.RowIsValid(vector_index)) {
 				state.definition_levels.push_back(define_value);
 			} else {
@@ -191,10 +189,14 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 		}
 	} else {
 		// no parent: set definition levels only from this validity mask
-		for (idx_t i = 0; i < count; i++) {
-			const auto is_null = !validity.RowIsValid(i);
-			state.definition_levels.emplace_back(is_null ? null_value : define_value);
-			state.null_count += is_null;
+		if (validity.AllValid()) {
+			state.definition_levels.insert(state.definition_levels.end(), count, define_value);
+		} else {
+			for (idx_t i = 0; i < count; i++) {
+				const auto is_null = !validity.RowIsValid(i);
+				state.definition_levels.emplace_back(is_null ? null_value : define_value);
+				state.null_count += is_null;
+			}
 		}
 		if (!can_have_nulls && state.null_count != 0) {
 			throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
@@ -207,10 +209,10 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 //===--------------------------------------------------------------------===//
 // Used to store the metadata for a WKB-encoded geometry column when writing
 // GeoParquet files.
-class WKBColumnWriterState final : public StandardColumnWriterState<string_t> {
+class WKBColumnWriterState final : public StandardColumnWriterState<string_t, string_t, ParquetCastOperator> {
 public:
-	WKBColumnWriterState(ClientContext &context, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
-	    : StandardColumnWriterState(row_group, col_idx), geo_data(), geo_data_writer(context) {
+	WKBColumnWriterState(ParquetWriter &writer, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
+	    : StandardColumnWriterState(writer, row_group, col_idx), geo_data(), geo_data_writer(writer.GetContext()) {
 	}
 
 	GeoParquetColumnMetadata geo_data;
@@ -219,16 +221,16 @@ public:
 
 class WKBColumnWriter final : public StandardColumnWriter<string_t, string_t, ParquetStringOperator> {
 public:
-	WKBColumnWriter(ClientContext &context_p, ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p,
-	                idx_t max_repeat, idx_t max_define, bool can_have_nulls, string name)
+	WKBColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, idx_t max_repeat,
+	                idx_t max_define, bool can_have_nulls, string name)
 	    : StandardColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
-	      column_name(std::move(name)), context(context_p) {
+	      column_name(std::move(name)) {
 
 		this->writer.GetGeoParquetData().RegisterGeometryColumn(column_name);
 	}
 
 	unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) override {
-		auto result = make_uniq<WKBColumnWriterState>(context, row_group, row_group.columns.size());
+		auto result = make_uniq<WKBColumnWriterState>(writer, row_group, row_group.columns.size());
 		result->encoding = Encoding::RLE_DICTIONARY;
 		RegisterToRowGroup(row_group);
 		return std::move(result);
@@ -253,7 +255,6 @@ public:
 
 private:
 	string column_name;
-	ClientContext &context;
 };
 
 // special double/float class to deal with dictionary encoding and NaN equality
@@ -273,6 +274,11 @@ struct double_na_equal {
 		}
 		return val == right;
 	}
+
+	bool operator!=(const double &right) const {
+		return !(*this == right);
+	}
+
 	double val;
 };
 
@@ -285,12 +291,18 @@ struct float_na_equal {
 	operator float() const {
 		return val;
 	}
+
 	bool operator==(const float &right) const {
 		if (std::isnan(val) && std::isnan(right)) {
 			return true;
 		}
 		return val == right;
 	}
+
+	bool operator!=(const float &right) const {
+		return !(*this == right);
+	}
+
 	float val;
 };
 
@@ -461,7 +473,7 @@ unique_ptr<ColumnWriter> ColumnWriter::CreateWriterRecursive(ClientContext &cont
 	schema_path.push_back(name);
 	if (type.id() == LogicalTypeId::BLOB && type.GetAlias() == "WKB_BLOB" &&
 	    GeoParquetFileMetadata::IsGeoParquetConversionEnabled(context)) {
-		return make_uniq<WKBColumnWriter>(context, writer, schema_idx, std::move(schema_path), max_repeat, max_define,
+		return make_uniq<WKBColumnWriter>(writer, schema_idx, std::move(schema_path), max_repeat, max_define,
 		                                  can_have_nulls, name);
 	}
 
@@ -584,41 +596,30 @@ struct NumericLimits<double_na_equal> {
 	}
 };
 
+template <>
+hash_t Hash(ParquetIntervalTargetType val) {
+	return Hash(const_char_ptr_cast(val.bytes), ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE);
+}
+
+template <>
+hash_t Hash(ParquetUUIDTargetType val) {
+	return Hash(const_char_ptr_cast(val.bytes), ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+}
+
+template <>
+hash_t Hash(float_na_equal val) {
+	if (std::isnan(val.val)) {
+		return Hash<float>(std::numeric_limits<float>::quiet_NaN());
+	}
+	return Hash<float>(val.val);
+}
+
+template <>
+hash_t Hash(double_na_equal val) {
+	if (std::isnan(val.val)) {
+		return Hash<double>(std::numeric_limits<double>::quiet_NaN());
+	}
+	return Hash<double>(val.val);
+}
+
 } // namespace duckdb
-
-namespace std {
-template <>
-struct hash<duckdb::ParquetIntervalTargetType> {
-	size_t operator()(const duckdb::ParquetIntervalTargetType &val) const {
-		return duckdb::Hash(duckdb::const_char_ptr_cast(val.bytes),
-		                    duckdb::ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE);
-	}
-};
-
-template <>
-struct hash<duckdb::ParquetUUIDTargetType> {
-	size_t operator()(const duckdb::ParquetUUIDTargetType &val) const {
-		return duckdb::Hash(duckdb::const_char_ptr_cast(val.bytes), duckdb::ParquetUUIDTargetType::PARQUET_UUID_SIZE);
-	}
-};
-
-template <>
-struct hash<duckdb::float_na_equal> {
-	size_t operator()(const duckdb::float_na_equal &val) const {
-		if (std::isnan(val.val)) {
-			return duckdb::Hash<float>(std::numeric_limits<float>::quiet_NaN());
-		}
-		return duckdb::Hash<float>(val.val);
-	}
-};
-
-template <>
-struct hash<duckdb::double_na_equal> {
-	inline size_t operator()(const duckdb::double_na_equal &val) const {
-		if (std::isnan(val.val)) {
-			return duckdb::Hash<double>(std::numeric_limits<double>::quiet_NaN());
-		}
-		return duckdb::Hash<double>(val.val);
-	}
-};
-} // namespace std

@@ -13,7 +13,7 @@ PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, idx_t schema
 }
 
 unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
-	auto result = make_uniq<PrimitiveColumnWriterState>(row_group, row_group.columns.size());
+	auto result = make_uniq<PrimitiveColumnWriterState>(writer, row_group, row_group.columns.size());
 	RegisterToRowGroup(row_group);
 	return std::move(result);
 }
@@ -40,7 +40,6 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	auto &state = state_p.Cast<PrimitiveColumnWriterState>();
 	auto &col_chunk = state.row_group.columns[state.col_idx];
 
-	idx_t start = 0;
 	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 	idx_t parent_index = state.definition_levels.size();
 	auto &validity = FlatVector::Validity(vector);
@@ -49,24 +48,35 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 
 	idx_t vector_index = 0;
 	reference<PageInformation> page_info_ref = state.page_info.back();
-	for (idx_t i = start; i < vcount; i++) {
+	col_chunk.meta_data.num_values += vcount;
+
+	const bool check_parent_empty = parent && !parent->is_empty.empty();
+	if (!check_parent_empty && validity.AllValid() && TypeIsConstantSize(vector.GetType().InternalType()) &&
+	    page_info_ref.get().estimated_page_size + GetRowSize(vector, vector_index, state) * vcount <
+	        MAX_UNCOMPRESSED_PAGE_SIZE) {
+		// Fast path: fixed-size type, all valid, and it fits on the current page
 		auto &page_info = page_info_ref.get();
-		page_info.row_count++;
-		col_chunk.meta_data.num_values++;
-		if (parent && !parent->is_empty.empty() && parent->is_empty[parent_index + i]) {
-			page_info.empty_count++;
-			continue;
-		}
-		if (validity.RowIsValid(vector_index)) {
-			page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
-			if (page_info.estimated_page_size >= MAX_UNCOMPRESSED_PAGE_SIZE) {
-				PageInformation new_info;
-				new_info.offset = page_info.offset + page_info.row_count;
-				state.page_info.push_back(new_info);
-				page_info_ref = state.page_info.back();
+		page_info.row_count += vcount;
+		page_info.estimated_page_size += GetRowSize(vector, vector_index, state) * vcount;
+	} else {
+		for (idx_t i = 0; i < vcount; i++) {
+			auto &page_info = page_info_ref.get();
+			page_info.row_count++;
+			if (check_parent_empty && parent->is_empty[parent_index + i]) {
+				page_info.empty_count++;
+				continue;
 			}
+			if (validity.RowIsValid(vector_index)) {
+				page_info.estimated_page_size += GetRowSize(vector, vector_index, state);
+				if (page_info.estimated_page_size >= MAX_UNCOMPRESSED_PAGE_SIZE) {
+					PageInformation new_info;
+					new_info.offset = page_info.offset + page_info.row_count;
+					state.page_info.push_back(new_info);
+					page_info_ref = state.page_info.back();
+				}
+			}
+			vector_index++;
 		}
-		vector_index++;
 	}
 }
 
@@ -117,28 +127,33 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 }
 
 void PrimitiveColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels,
-                                        idx_t max_value, idx_t offset, idx_t count) {
+                                        idx_t max_value, idx_t offset, idx_t count, optional_idx null_count) {
 	if (levels.empty() || count == 0) {
 		return;
 	}
 
 	// write the levels using the RLE-BP encoding
-	auto bit_width = RleBpDecoder::ComputeBitWidth((max_value));
+	const auto bit_width = RleBpDecoder::ComputeBitWidth((max_value));
 	RleBpEncoder rle_encoder(bit_width);
 
-	rle_encoder.BeginPrepare(levels[offset]);
-	for (idx_t i = offset + 1; i < offset + count; i++) {
-		rle_encoder.PrepareValue(levels[i]);
+	// have to write to an intermediate stream first because we need to know the size
+	MemoryStream intermediate_stream(Allocator::DefaultAllocator());
+
+	rle_encoder.BeginWrite();
+	if (null_count.IsValid() && null_count.GetIndex() == 0) {
+		// Fast path: no nulls
+		rle_encoder.WriteMany(intermediate_stream, levels[0], count);
+	} else {
+		for (idx_t i = offset; i < offset + count; i++) {
+			rle_encoder.WriteValue(intermediate_stream, levels[i]);
+		}
 	}
-	rle_encoder.FinishPrepare();
+	rle_encoder.FinishWrite(intermediate_stream);
 
 	// start off by writing the byte count as a uint32_t
-	temp_writer.Write<uint32_t>(rle_encoder.GetByteCount());
-	rle_encoder.BeginWrite(temp_writer, levels[offset]);
-	for (idx_t i = offset + 1; i < offset + count; i++) {
-		rle_encoder.WriteValue(temp_writer, levels[i]);
-	}
-	rle_encoder.FinishWrite(temp_writer);
+	temp_writer.Write(NumericCast<uint32_t>(intermediate_stream.GetPosition()));
+	// copy over the written data
+	temp_writer.WriteData(intermediate_stream.GetData(), intermediate_stream.GetPosition());
 }
 
 void PrimitiveColumnWriter::NextPage(PrimitiveColumnWriterState &state) {
@@ -160,7 +175,8 @@ void PrimitiveColumnWriter::NextPage(PrimitiveColumnWriterState &state) {
 	WriteLevels(temp_writer, state.repetition_levels, max_repeat, page_info.offset, page_info.row_count);
 
 	// write the definition levels
-	WriteLevels(temp_writer, state.definition_levels, max_define, page_info.offset, page_info.row_count);
+	WriteLevels(temp_writer, state.definition_levels, max_define, page_info.offset, page_info.row_count,
+	            state.null_count + state.parent_null_count);
 }
 
 void PrimitiveColumnWriter::FlushPage(PrimitiveColumnWriterState &state) {

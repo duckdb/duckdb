@@ -227,3 +227,32 @@ copy (select (r1.range*10)::BIGINT r,
 from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom8.parquet' (format parquet, ROW_GROUP_SIZE 10000, dictionary_size_limit 1000, bloom_filter_false_positive_ratio 0);
 ----
 bloom_filter_false_positive_ratio must be greater than 0
+
+# some tests for string_dictionary_page_size_limit
+
+# no bloom filter, limit too low
+statement ok
+copy (select (r1.range*10)::VARCHAR r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 10);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('__TEST_DIR__/bloom9.parquet') order by row_group_id;
+----
+0	false	false
+
+# big enough
+statement ok
+copy (select (r1.range*10)::VARCHAR r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 100000);
+
+query III
+select row_group_id, bloom_filter_offset IS NOT NULL, bloom_filter_length IS NOT NULL from parquet_metadata('__TEST_DIR__/bloom9.parquet') order by row_group_id;
+----
+0	true	true
+
+# too big
+statement error
+copy (select (r1.range*10)::VARCHAR r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 4294967295);
+----
+Binder Error

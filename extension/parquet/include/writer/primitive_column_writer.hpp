@@ -31,17 +31,18 @@ struct PageWriteInformation {
 	idx_t max_write_count = 0;
 	size_t compressed_size;
 	data_ptr_t compressed_data;
-	unique_ptr<data_t[]> compressed_buf;
+	AllocatedData compressed_buf;
 };
 
 class PrimitiveColumnWriterState : public ColumnWriterState {
 public:
-	PrimitiveColumnWriterState(duckdb_parquet::RowGroup &row_group, idx_t col_idx)
-	    : row_group(row_group), col_idx(col_idx) {
+	PrimitiveColumnWriterState(ParquetWriter &writer_p, duckdb_parquet::RowGroup &row_group, idx_t col_idx)
+	    : writer(writer_p), row_group(row_group), col_idx(col_idx) {
 		page_info.emplace_back();
 	}
 	~PrimitiveColumnWriterState() override = default;
 
+	ParquetWriter &writer;
 	duckdb_parquet::RowGroup &row_group;
 	idx_t col_idx;
 	vector<PageInformation> page_info;
@@ -81,7 +82,7 @@ public:
 
 protected:
 	static void WriteLevels(WriteStream &temp_writer, const unsafe_vector<uint16_t> &levels, idx_t max_value,
-	                        idx_t start_offset, idx_t count);
+	                        idx_t start_offset, idx_t count, optional_idx null_count = optional_idx());
 
 	virtual duckdb_parquet::Encoding::type GetEncoding(PrimitiveColumnWriterState &state);
 
