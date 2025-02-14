@@ -31,6 +31,8 @@ void CompressedFile::Initialize(bool write) {
 	stream_data.out_buff_start = stream_data.out_buff.get();
 	stream_data.out_buff_end = stream_data.out_buff.get();
 
+	current_position = 0;
+
 	stream_wrapper = compressed_fs.CreateStream();
 	stream_wrapper->Initialize(*this, write);
 }

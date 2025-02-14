@@ -92,7 +92,7 @@ void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, b
 		auto &handle = override_handle ? *override_handle.get() : *file_handle.get();
 		if (can_seek) {
 			handle.Read(pointer, size, position);
-		} else if (sample_run) { // Cache the buffer
+		} else if (file_handle->IsPipe()) { // Cache the buffer
 			handle.Read(pointer, size, position);
 
 			cached_buffers.emplace_back(allocator.Allocate(size));
@@ -128,7 +128,7 @@ bool JSONFileHandle::Read(char *pointer, idx_t &read_size, idx_t requested_size,
 	if (can_seek) {
 		read_size = ReadInternal(pointer, requested_size);
 		read_position += read_size;
-	} else if (sample_run) { // Cache the buffer
+	} else if (file_handle->IsPipe()) { // Cache the buffer
 		read_size = ReadInternal(pointer, requested_size);
 		if (read_size > 0) {
 			cached_buffers.emplace_back(allocator.Allocate(read_size));
