@@ -1,0 +1,23 @@
+# name: benchmark/parquet/clickbench_write.benchmark
+# description: Write ClickBench data to Parquet
+# group: [clickbench]
+
+require httpfs
+
+require parquet
+
+name ClickBench Write Parquet
+group Clickbench
+
+cache clickbench.duckdb
+
+load benchmark/clickbench/queries/load.sql
+
+init
+set preserve_insertion_order=false;
+
+run
+COPY hits TO '${BENCHMARK_DIR}/hits.parquet';
+
+result I
+10000000
