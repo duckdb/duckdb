@@ -363,7 +363,7 @@ TablePartitionInfo ParquetGetPartitionInfo(ClientContext &context, TableFunction
 virtual_column_map_t ParquetGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
 	auto &parquet_bind = bind_data->Cast<ParquetReadBindData>();
 	virtual_column_map_t result;
-	parquet_bind.multi_file_reader->GetVirtualColumns(context, parquet_bind.reader_bind, result);
+	MultiFileReader::GetVirtualColumns(context, parquet_bind.reader_bind, result);
 	parquet_bind.virtual_columns = result;
 	return result;
 }

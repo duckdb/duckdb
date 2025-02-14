@@ -24,7 +24,7 @@ TableFunction::TableFunction(string name, vector<LogicalType> arguments, table_f
       get_bind_info(nullptr), type_pushdown(nullptr), get_multi_file_reader(nullptr), supports_pushdown_type(nullptr),
       get_partition_info(nullptr), get_partition_stats(nullptr), get_virtual_columns(nullptr), serialize(nullptr),
       deserialize(nullptr), projection_pushdown(false), filter_pushdown(false), filter_prune(false),
-      sampling_pushdown(false) {
+      sampling_pushdown(false), late_materialization(false) {
 }
 
 TableFunction::TableFunction(const vector<LogicalType> &arguments, table_function_t function,
@@ -39,7 +39,7 @@ TableFunction::TableFunction()
       get_partition_data(nullptr), get_bind_info(nullptr), type_pushdown(nullptr), get_multi_file_reader(nullptr),
       supports_pushdown_type(nullptr), get_partition_info(nullptr), get_partition_stats(nullptr),
       get_virtual_columns(nullptr), serialize(nullptr), deserialize(nullptr), projection_pushdown(false),
-      filter_pushdown(false), filter_prune(false), sampling_pushdown(false) {
+      filter_pushdown(false), filter_prune(false), sampling_pushdown(false), late_materialization(false) {
 }
 
 bool TableFunction::Equal(const TableFunction &rhs) const {

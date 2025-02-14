@@ -267,6 +267,9 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			reader_data.constant_map.emplace_back(i, Value(filename));
 			continue;
 		}
+		if (IsVirtualColumn(column_id)) {
+			continue;
+		}
 		if (!options.hive_partitioning_indexes.empty()) {
 			// hive partition constants
 			auto partitions = HivePartitioning::Parse(filename);
@@ -340,6 +343,10 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		// not constant - look up the column in the name map
 		auto &global_idx = global_column_ids[i];
 		auto global_id = global_idx.GetPrimaryIndex();
+		if (IsVirtualColumn(global_id)) {
+			// virtual column - these are emitted for every file
+			continue;
+		}
 		if (global_id >= global_columns.size()) {
 			throw InternalException(
 			    "MultiFileReader::CreateColumnMappingByName - global_id is out of range in global_types for this file");

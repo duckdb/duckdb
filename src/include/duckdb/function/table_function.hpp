@@ -385,6 +385,8 @@ public:
 	//! Whether or not the table function supports sampling pushdown. If not supported a sample will be taken after the
 	//! table function.
 	bool sampling_pushdown;
+	//! Whether or not the table function supports late materialization
+	bool late_materialization;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 

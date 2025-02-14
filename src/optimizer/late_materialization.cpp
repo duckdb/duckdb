@@ -238,10 +238,13 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		// we need all of the columns to compute the root node anyway (Top-N/Limit/etc)
 		return false;
 	}
+	if (!get.function.late_materialization) {
+		// this function does not support late materialization
+		return false;
+	}
 	auto entry = get.virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
 	if (entry == get.virtual_columns.end()) {
-		// we can only do the late-materialization optimization for tables that support the rowid column
-		return false;
+		throw InternalException("Table function supports late materialization but does not expose a rowid column");
 	}
 	row_id_type = entry->second.type;
 	// we benefit from late materialization
