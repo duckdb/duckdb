@@ -24,6 +24,7 @@ static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, cons
 	    ALL_VALID && std::is_same<SRC, TGT>::value && std::is_arithmetic<TGT>::value;
 
 	const auto *const ptr = FlatVector::GetData<SRC>(col);
+
 	TGT local_write[STANDARD_VECTOR_SIZE];
 	idx_t local_write_count = 0;
 
@@ -41,6 +42,10 @@ static void TemplatedWritePlain(Vector &col, ColumnWriterStatistics *stats, cons
 
 		if (std::is_arithmetic<TGT>::value) {
 			local_write[local_write_count++] = target_value;
+			if (local_write_count == STANDARD_VECTOR_SIZE) {
+				ser.WriteData(data_ptr_cast(local_write), local_write_count * sizeof(TGT));
+				local_write_count = 0;
+			}
 		} else {
 			OP::template WriteToStream<SRC, TGT>(target_value, ser);
 		}
