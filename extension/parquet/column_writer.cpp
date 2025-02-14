@@ -78,94 +78,83 @@ string ColumnWriterStatistics::GetMaxValue() {
 //===--------------------------------------------------------------------===//
 // RleBpEncoder
 //===--------------------------------------------------------------------===//
-RleBpEncoder::RleBpEncoder(uint32_t bit_width_p) : bit_width(bit_width_p), byte_width((bit_width + 7) / 8) {
+RleBpEncoder::RleBpEncoder(uint32_t bit_width)
+    : byte_width((bit_width + 7) / 8), byte_count(idx_t(-1)), run_count(idx_t(-1)) {
 }
 
-void RleBpEncoder::BeginWrite() {
-	rle_count = 0;
-	bp_block_count = 0;
+// we always RLE everything (for now)
+void RleBpEncoder::BeginPrepare(uint32_t first_value) {
+	byte_count = 0;
+	run_count = 1;
+	current_run_count = 1;
+	last_value = first_value;
 }
 
-void RleBpEncoder::WriteValue(WriteStream &writer, uint32_t value) {
-	if (bp_block_count != 0) {
-		// We already committed to a BP run
-		D_ASSERT(rle_count == 0);
-		bp_block[bp_block_count++] = value;
-		if (bp_block_count == BP_BLOCK_SIZE) {
-			WriteRun(writer);
-		}
-		return;
-	}
+void RleBpEncoder::FinishRun() {
+	// last value, or value has changed
+	// write out the current run
+	byte_count += ParquetDecodeUtils::GetVarintSize(current_run_count << 1) + byte_width;
+	current_run_count = 1;
+	run_count++;
+}
 
-	if (rle_count == 0) {
-		// Starting fresh, try for an RLE run first
-		rle_value = value;
-		rle_count = 1;
-		return;
+void RleBpEncoder::PrepareValue(uint32_t value) {
+	if (value != last_value) {
+		FinishRun();
+		last_value = value;
+	} else {
+		current_run_count++;
 	}
+}
 
-	// We're trying for an RLE run
-	if (rle_value == value) {
-		// Same as current RLE value
-		rle_count++;
-		return;
-	}
+void RleBpEncoder::FinishPrepare() {
+	FinishRun();
+}
 
-	// Value differs from current RLE value
-	if (rle_count >= MINIMUM_RLE_COUNT) {
-		// We have enough values for an RLE run
-		WriteRun(writer);
-		rle_value = value;
-		rle_count = 1;
-		return;
-	}
+idx_t RleBpEncoder::GetByteCount() {
+	D_ASSERT(byte_count != idx_t(-1));
+	return byte_count;
+}
 
-	// Not enough values, convert and commit to a BP run
-	D_ASSERT(bp_block_count == 0);
-	for (idx_t i = 0; i < rle_count; i++) {
-		bp_block[bp_block_count++] = rle_value;
-	}
-	bp_block[bp_block_count++] = value;
-	rle_count = 0;
+void RleBpEncoder::BeginWrite(WriteStream &writer, uint32_t first_value) {
+	// start the RLE runs
+	last_value = first_value;
+	current_run_count = 1;
 }
 
 void RleBpEncoder::WriteRun(WriteStream &writer) {
-	if (rle_count != 0) {
-		WriteCurrentBlockRLE(writer);
-	} else {
-		WriteCurrentBlockBP(writer);
-	}
-}
-
-void RleBpEncoder::WriteCurrentBlockRLE(WriteStream &writer) {
-	ParquetDecodeUtils::VarintEncode(rle_count << 1 | 0, writer); // (... | 0) signals RLE run
-	D_ASSERT(rle_value >> (byte_width * 8) == 0);
+	// write the header of the run
+	ParquetDecodeUtils::VarintEncode(current_run_count << 1, writer);
+	// now write the value
+	D_ASSERT(last_value >> (byte_width * 8) == 0);
 	switch (byte_width) {
 	case 1:
-		writer.Write<uint8_t>(rle_value);
+		writer.Write<uint8_t>(last_value);
 		break;
 	case 2:
-		writer.Write<uint16_t>(rle_value);
+		writer.Write<uint16_t>(last_value);
 		break;
 	case 3:
-		writer.Write<uint8_t>(rle_value & 0xFF);
-		writer.Write<uint8_t>((rle_value >> 8) & 0xFF);
-		writer.Write<uint8_t>((rle_value >> 16) & 0xFF);
+		writer.Write<uint8_t>(last_value & 0xFF);
+		writer.Write<uint8_t>((last_value >> 8) & 0xFF);
+		writer.Write<uint8_t>((last_value >> 16) & 0xFF);
 		break;
 	case 4:
-		writer.Write<uint32_t>(rle_value);
+		writer.Write<uint32_t>(last_value);
 		break;
 	default:
 		throw InternalException("unsupported byte width for RLE encoding");
 	}
-	rle_count = 0;
+	current_run_count = 1;
 }
 
-void RleBpEncoder::WriteCurrentBlockBP(WriteStream &writer) {
-	ParquetDecodeUtils::VarintEncode(BP_BLOCK_SIZE / 8 << 1 | 1, writer); // (... | 1) signals BP run
-	ParquetDecodeUtils::BitPackAligned(bp_block, data_ptr_cast(bp_block_packed), BP_BLOCK_SIZE, bit_width);
-	writer.WriteData(data_ptr_cast(bp_block_packed), BP_BLOCK_SIZE * bit_width / 8);
-	bp_block_count = 0;
+void RleBpEncoder::WriteValue(WriteStream &writer, uint32_t value) {
+	if (value != last_value) {
+		WriteRun(writer);
+		last_value = value;
+	} else {
+		current_run_count++;
+	}
 }
 
 void RleBpEncoder::FinishWrite(WriteStream &writer) {
@@ -532,22 +521,22 @@ void BasicColumnWriter::WriteLevels(WriteStream &temp_writer, const unsafe_vecto
 	}
 
 	// write the levels using the RLE-BP encoding
-	const auto bit_width = RleBpDecoder::ComputeBitWidth(max_value);
+	auto bit_width = RleBpDecoder::ComputeBitWidth((max_value));
 	RleBpEncoder rle_encoder(bit_width);
 
-	// have to write to an intermediate stream first because we need to know the size
-	MemoryStream level_stream(Allocator::DefaultAllocator());
-	rle_encoder.BeginWrite();
-	for (idx_t i = offset; i < offset + count; i++) {
-		rle_encoder.WriteValue(level_stream, levels[i]);
+	rle_encoder.BeginPrepare(levels[offset]);
+	for (idx_t i = offset + 1; i < offset + count; i++) {
+		rle_encoder.PrepareValue(levels[i]);
 	}
-	rle_encoder.FinishWrite(level_stream);
+	rle_encoder.FinishPrepare();
 
 	// start off by writing the byte count as a uint32_t
-	temp_writer.Write(NumericCast<uint32_t>(level_stream.GetPosition()));
-
-	// copy over the written data
-	temp_writer.WriteData(level_stream.GetData(), level_stream.GetPosition());
+	temp_writer.Write<uint32_t>(rle_encoder.GetByteCount());
+	rle_encoder.BeginWrite(temp_writer, levels[offset]);
+	for (idx_t i = offset + 1; i < offset + count; i++) {
+		rle_encoder.WriteValue(temp_writer, levels[i]);
+	}
+	rle_encoder.FinishWrite(temp_writer);
 }
 
 void BasicColumnWriter::NextPage(BasicColumnWriterState &state) {
@@ -1391,12 +1380,15 @@ public:
 				auto &src_val = data_ptr[r];
 				auto value_index = page_state.dictionary.at(src_val);
 				if (!page_state.dict_written_value) {
-					// first value: write the bit-width as a one-byte entry and initialize writer
+					// first value
+					// write the bit-width as a one-byte entry
 					temp_writer.Write<uint8_t>(page_state.dict_bit_width);
-					page_state.dict_encoder.BeginWrite();
+					// now begin writing the actual value
+					page_state.dict_encoder.BeginWrite(temp_writer, value_index);
 					page_state.dict_written_value = true;
+				} else {
+					page_state.dict_encoder.WriteValue(temp_writer, value_index);
 				}
-				page_state.dict_encoder.WriteValue(temp_writer, value_index);
 			}
 			break;
 		}
@@ -1805,12 +1797,15 @@ public:
 		for (idx_t r = chunk_start; r < chunk_end; r++) {
 			if (mask.RowIsValid(r)) {
 				if (!page_state.written_value) {
-					// first value: write the bit-width as a one-byte entry and initialize writer
+					// first value
+					// write the bit-width as a one-byte entry
 					temp_writer.Write<uint8_t>(bit_width);
-					page_state.encoder.BeginWrite();
+					// now begin writing the actual value
+					page_state.encoder.BeginWrite(temp_writer, ptr[r]);
 					page_state.written_value = true;
+				} else {
+					page_state.encoder.WriteValue(temp_writer, ptr[r]);
 				}
-				page_state.encoder.WriteValue(temp_writer, ptr[r]);
 			}
 		}
 	}

@@ -192,12 +192,7 @@ struct ParquetWriteBindData : public TableFunctionData {
 	bool debug_use_openssl = true;
 
 	//! After how many distinct values should we abandon dictionary compression and bloom filters?
-	idx_t dictionary_size_limit = row_group_size / 20;
-
-	void SetToDefaultDictionarySizeLimit() {
-		// This depends on row group size so we should "reset" if the row group size is changed
-		dictionary_size_limit = row_group_size / 20;
-	}
+	idx_t dictionary_size_limit = row_group_size / 100;
 
 	//! What false positive rate are we willing to accept for bloom filters
 	double bloom_filter_false_positive_ratio = 0.01;
@@ -1190,7 +1185,6 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 	D_ASSERT(names.size() == sql_types.size());
 	bool row_group_size_bytes_set = false;
 	bool compression_level_set = false;
-	bool dictionary_size_limit_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : input.info.options) {
 		const auto loption = StringUtil::Lower(option.first);
@@ -1200,9 +1194,6 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 		}
 		if (loption == "row_group_size" || loption == "chunk_size") {
 			bind_data->row_group_size = option.second[0].GetValue<uint64_t>();
-			if (!dictionary_size_limit_set) {
-				bind_data->SetToDefaultDictionarySizeLimit();
-			}
 		} else if (loption == "row_group_size_bytes") {
 			auto roption = option.second[0];
 			if (roption.GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
@@ -1278,7 +1269,6 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				throw BinderException("dictionary_size_limit must be greater than 0 or 0 to disable");
 			}
 			bind_data->dictionary_size_limit = val;
-			dictionary_size_limit_set = true;
 		} else if (loption == "bloom_filter_false_positive_ratio") {
 			auto val = option.second[0].GetValue<double>();
 			if (val <= 0) {
