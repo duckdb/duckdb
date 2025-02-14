@@ -279,18 +279,10 @@ endloop
 # statement ok for TEMPORAL types
 foreach func_name avg
 
-foreach type date timestamp timestamp_s timestamp_ms timestamp_ns timestamptz
+foreach type date timestamp timestamp_s timestamp_ms timestamp_ns timestamptz timetz
 
 statement ok
 SELECT list_aggr(['2021-08-20'::${type}], '${func_name}')
-
-endloop
-
-foreach type timetz
-
-statement error
-SELECT list_aggr(['2021-08-20'::${type}], '${func_name}')
-----
 
 endloop
 
