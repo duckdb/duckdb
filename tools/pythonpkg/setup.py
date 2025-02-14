@@ -173,7 +173,7 @@ libraries = []
 if 'DUCKDB_BINARY_DIR' in os.environ:
     existing_duckdb_dir = os.environ['DUCKDB_BINARY_DIR']
 if 'DUCKDB_COMPILE_FLAGS' in os.environ:
-    toolchain_args = ['-std=c++11'] + os.environ['DUCKDB_COMPILE_FLAGS'].split()
+    toolchain_args = os.environ['DUCKDB_COMPILE_FLAGS'].split()
 if 'DUCKDB_LIBS' in os.environ:
     libraries = os.environ['DUCKDB_LIBS'].split(' ')
 
