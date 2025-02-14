@@ -98,9 +98,13 @@ hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
 		h *= 0xd6e8feb86659fd93U;
 	}
 
-	// XOR with remaining (<8) bytes
+	// Load and process remaining (<8) bytes
 	hash_t hr = 0;
 	memcpy(&hr, ptr, len & 7U);
+	hr *= 0xd6e8feb86659fd93U;
+	hr ^= h >> 32;
+
+	// XOR with hash
 	h ^= hr;
 
 	// Finalize
@@ -108,6 +112,8 @@ hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
 	h ^= h >> 32;
 
 	return h;
+
+	// return Hash(h);
 }
 
 hash_t Hash(const char *val, size_t size) {
