@@ -91,7 +91,7 @@ ColumnWriterState::~ColumnWriterState() {
 }
 
 void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
-                                unique_ptr<data_t[]> &compressed_buf) {
+                                AllocatedData &compressed_buf) {
 	switch (writer.GetCodec()) {
 	case CompressionCodec::UNCOMPRESSED:
 		compressed_size = temp_writer.GetPosition();
@@ -100,7 +100,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 
 	case CompressionCodec::SNAPPY: {
 		compressed_size = duckdb_snappy::MaxCompressedLength(temp_writer.GetPosition());
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_buf = BufferAllocator::Get(writer.GetContext()).Allocate(compressed_size);
 		duckdb_snappy::RawCompress(const_char_ptr_cast(temp_writer.GetData()), temp_writer.GetPosition(),
 		                           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
@@ -109,7 +109,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 	}
 	case CompressionCodec::LZ4_RAW: {
 		compressed_size = duckdb_lz4::LZ4_compressBound(UnsafeNumericCast<int32_t>(temp_writer.GetPosition()));
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_buf = BufferAllocator::Get(writer.GetContext()).Allocate(compressed_size);
 		compressed_size = duckdb_lz4::LZ4_compress_default(
 		    const_char_ptr_cast(temp_writer.GetData()), char_ptr_cast(compressed_buf.get()),
 		    UnsafeNumericCast<int32_t>(temp_writer.GetPosition()), UnsafeNumericCast<int32_t>(compressed_size));
@@ -119,7 +119,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 	case CompressionCodec::GZIP: {
 		MiniZStream s;
 		compressed_size = s.MaxCompressedLength(temp_writer.GetPosition());
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_buf = BufferAllocator::Get(writer.GetContext()).Allocate(compressed_size);
 		s.Compress(const_char_ptr_cast(temp_writer.GetData()), temp_writer.GetPosition(),
 		           char_ptr_cast(compressed_buf.get()), &compressed_size);
 		compressed_data = compressed_buf.get();
@@ -127,7 +127,7 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 	}
 	case CompressionCodec::ZSTD: {
 		compressed_size = duckdb_zstd::ZSTD_compressBound(temp_writer.GetPosition());
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
+		compressed_buf = BufferAllocator::Get(writer.GetContext()).Allocate(compressed_size);
 		compressed_size = duckdb_zstd::ZSTD_compress((void *)compressed_buf.get(), compressed_size,
 		                                             (const void *)temp_writer.GetData(), temp_writer.GetPosition(),
 		                                             UnsafeNumericCast<int32_t>(writer.CompressionLevel()));
@@ -135,15 +135,12 @@ void ColumnWriter::CompressPage(MemoryStream &temp_writer, size_t &compressed_si
 		break;
 	}
 	case CompressionCodec::BROTLI: {
-
 		compressed_size = duckdb_brotli::BrotliEncoderMaxCompressedSize(temp_writer.GetPosition());
-		compressed_buf = unique_ptr<data_t[]>(new data_t[compressed_size]);
-
+		compressed_buf = BufferAllocator::Get(writer.GetContext()).Allocate(compressed_size);
 		duckdb_brotli::BrotliEncoderCompress(BROTLI_DEFAULT_QUALITY, BROTLI_DEFAULT_WINDOW, BROTLI_DEFAULT_MODE,
 		                                     temp_writer.GetPosition(), temp_writer.GetData(), &compressed_size,
 		                                     compressed_buf.get());
 		compressed_data = compressed_buf.get();
-
 		break;
 	}
 	default:

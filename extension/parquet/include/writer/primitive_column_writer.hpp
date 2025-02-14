@@ -31,7 +31,7 @@ struct PageWriteInformation {
 	idx_t max_write_count = 0;
 	size_t compressed_size;
 	data_ptr_t compressed_data;
-	unique_ptr<data_t[]> compressed_buf;
+	AllocatedData compressed_buf;
 };
 
 class PrimitiveColumnWriterState : public ColumnWriterState {
