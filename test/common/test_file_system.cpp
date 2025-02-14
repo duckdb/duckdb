@@ -3,6 +3,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/common/local_file_system.hpp"
+#include "duckdb/common/virtual_file_system.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -197,4 +198,21 @@ TEST_CASE("absolute paths", "[file_system]") {
 	REQUIRE(fs.NormalizeAbsolutePath(network) == network);
 	REQUIRE(fs.NormalizeAbsolutePath(long_path) == "\\\\?\\d:\\very long network\\");
 #endif
+}
+
+TEST_CASE("extract subsystem", "[file_system]") {
+	duckdb::VirtualFileSystem vfs;
+	auto local_filesystem = FileSystem::CreateLocal();
+	auto *local_filesystem_ptr = local_filesystem.get();
+	vfs.RegisterSubSystem(std::move(local_filesystem));
+
+	// Extract a non-existent filesystem gets nullptr.
+	REQUIRE(vfs.ExtractSubSystem("non-existent") == nullptr);
+
+	// Extract an existing filesystem.
+	auto extracted_filesystem = vfs.ExtractSubSystem(local_filesystem_ptr->GetName());
+	REQUIRE(extracted_filesystem.get() == local_filesystem_ptr);
+
+	// Re-extraction gets nullptr.
+	REQUIRE(vfs.ExtractSubSystem("non-existent") == nullptr);
 }
