@@ -17,7 +17,7 @@
 namespace duckdb {
 
 struct ClientConfig;
-typedef unique_ptr<ProgressBarDisplay> (*progress_bar_display_create_func_t)();
+typedef unique_ptr<ProgressBarDisplay> (*progress_bar_display_create_func_t)(void *);
 
 struct QueryProgress {
 	friend class ProgressBar;
@@ -40,12 +40,11 @@ private:
 
 class ProgressBar {
 public:
-	static unique_ptr<ProgressBarDisplay> DefaultProgressBarDisplay();
+	static unique_ptr<ProgressBarDisplay> DefaultProgressBarDisplay(void *);
 	static void SystemOverrideCheck(ClientConfig &config);
 
-	explicit ProgressBar(
-	    Executor &executor, idx_t show_progress_after,
-	    progress_bar_display_create_func_t create_display_func = ProgressBar::DefaultProgressBarDisplay);
+	explicit ProgressBar(Executor &executor, idx_t show_progress_after,
+	                     progress_bar_display_create_func_t create_display_func, void *create_display_func_context);
 
 	//! Starts the thread
 	void Start();
