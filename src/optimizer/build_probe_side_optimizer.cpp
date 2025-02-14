@@ -158,10 +158,8 @@ idx_t BuildProbeSideOptimizer::ChildHasJoins(LogicalOperator &op) {
 void BuildProbeSideOptimizer::TryFlipJoinChildren(LogicalOperator &op) const {
 	auto &left_child = *op.children[0];
 	auto &right_child = *op.children[1];
-	const auto lhs_cardinality = left_child.has_estimated_cardinality ? left_child.estimated_cardinality
-	                                                                  : left_child.EstimateCardinality(context);
-	const auto rhs_cardinality = right_child.has_estimated_cardinality ? right_child.estimated_cardinality
-	                                                                   : right_child.EstimateCardinality(context);
+	const auto lhs_cardinality = left_child.EstimateCardinality(context);
+	const auto rhs_cardinality = right_child.EstimateCardinality(context);
 
 	auto build_sizes = GetBuildSizes(op, lhs_cardinality, rhs_cardinality);
 	auto &left_side_build_cost = build_sizes.left_side;
