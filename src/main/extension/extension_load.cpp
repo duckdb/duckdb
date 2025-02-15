@@ -92,9 +92,11 @@ struct ExtensionAccess {
 			load_state.database_data->database = make_shared_ptr<DuckDB>(load_state.db);
 			return reinterpret_cast<duckdb_database *>(load_state.database_data.get());
 		} catch (std::exception &ex) {
+			load_state.has_error = true;
 			load_state.error_data = ErrorData(ex);
 			return nullptr;
 		} catch (...) {
+			load_state.has_error = true;
 			load_state.error_data =
 			    ErrorData(ExceptionType::UNKNOWN_TYPE, "Unknown error in GetDatabase when trying to load extension!");
 			return nullptr;
