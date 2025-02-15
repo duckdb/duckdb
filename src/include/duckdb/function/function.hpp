@@ -56,7 +56,7 @@ enum class FunctionCollationHandling : uint8_t {
 };
 
 struct FunctionData {
-	DUCKDB_API virtual ~FunctionData();
+	DUCKDB_API virtual ~FunctionData() = default;
 
 	DUCKDB_API virtual unique_ptr<FunctionData> Copy() const = 0;
 	DUCKDB_API virtual bool Equals(const FunctionData &other) const = 0;
