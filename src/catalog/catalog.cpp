@@ -426,7 +426,12 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 			entries.emplace_back(catalog, schema_name);
 		}
 		if (entries.empty()) {
-			entries.emplace_back(catalog, DEFAULT_SCHEMA);
+			auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
+			if (catalog_entry) {
+				entries.emplace_back(catalog, catalog_entry->GetDefaultSchema());
+			} else {
+				entries.emplace_back(catalog, DEFAULT_SCHEMA);
+			}
 		}
 	} else {
 		// specific catalog and schema provided
@@ -687,7 +692,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	// however, if there is an exact match in another schema, we will always show it
 	static constexpr const double UNSEEN_PENALTY = 0.2;
 	auto unseen_entries = SimilarEntriesInSchemas(context, entry_name, type, unseen_schemas);
-	vector<string> suggestions;
+	set<string> suggestions;
 	if (!unseen_entries.empty() && (unseen_entries[0].score == 1.0 || unseen_entries[0].score - UNSEEN_PENALTY >
 	                                                                      (entries.empty() ? 0.0 : entries[0].score))) {
 		// the closest matching entry requires qualification as it is not in the default search path
@@ -698,19 +703,19 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 			bool qualify_database;
 			bool qualify_schema;
 			FindMinimalQualification(retriever, catalog_name, schema_name, qualify_database, qualify_schema);
-			suggestions.push_back(unseen_entry.GetQualifiedName(qualify_database, qualify_schema));
+			auto qualified_name = unseen_entry.GetQualifiedName(qualify_database, qualify_schema);
+			suggestions.insert(qualified_name);
 		}
 	} else if (!entries.empty()) {
 		for (auto &entry : entries) {
-			suggestions.push_back(entry.name);
+			suggestions.insert(entry.name);
 		}
 	}
 
 	string did_you_mean;
-	std::sort(suggestions.begin(), suggestions.end());
 	if (suggestions.size() > 2) {
-		auto last = suggestions.back();
-		suggestions.pop_back();
+		string last = *suggestions.rbegin();
+		suggestions.erase(last);
 		did_you_mean = StringUtil::Join(suggestions, ", ") + ", or " + last;
 	} else {
 		did_you_mean = StringUtil::Join(suggestions, " or ");
@@ -968,11 +973,15 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogEntryRetriever &retri
 			// skip if it is not an attached database
 			continue;
 		}
-		auto on_not_found = i + 1 == entries.size() ? if_not_found : OnEntryNotFound::RETURN_NULL;
+		const auto on_not_found = i + 1 == entries.size() ? if_not_found : OnEntryNotFound::RETURN_NULL;
 		auto result = catalog->GetSchema(retriever.GetContext(), schema_name, on_not_found, error_context);
 		if (result) {
 			return result;
 		}
+	}
+	// Catalog has not been found.
+	if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+		throw CatalogException(error_context, "Catalog with name %s does not exist!", catalog_name);
 	}
 	return nullptr;
 }
@@ -1071,6 +1080,10 @@ vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 
 optional_ptr<DependencyManager> Catalog::GetDependencyManager() {
 	return nullptr;
+}
+
+string Catalog::GetDefaultSchema() const {
+	return DEFAULT_SCHEMA;
 }
 
 //! Whether this catalog has a default table. Catalogs with a default table can be queries by their catalog name

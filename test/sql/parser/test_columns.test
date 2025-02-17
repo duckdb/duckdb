@@ -85,7 +85,7 @@ SELECT (SELECT COLUMNS(*)) FROM integers
 ----
 
 statement error
-SELECT columns([a, null]) FROM values (42) t(a);
+SELECT columns(['a', null]) FROM values (42) t(a);
 ----
 does not support NULL input parameters
 

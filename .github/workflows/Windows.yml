@@ -16,7 +16,6 @@ on:
         type: string
       skip_tests:
         type: string
-  repository_dispatch:
   push:
     branches-ignore:
       - 'main'
@@ -280,14 +279,26 @@ jobs:
      - uses: ./.github/actions/build_extensions
        with:
          vcpkg_target_triplet: x64-windows-static-md
-         deploy_as: windows_amd64
          treat_warn_as_error: 0
-         s3_id: ${{ secrets.S3_ID }}
-         s3_key: ${{ secrets.S3_KEY }}
-         signing_pk: ${{ secrets.DUCKDB_EXTENSION_SIGNING_PK }}
          run_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
          run_autoload_tests: ${{ inputs.skip_tests != 'true' && 1 || 0 }}
          unittest_script: python3 scripts/run_tests_one_by_one.py ./build/release/test/Release/unittest.exe
+
+     - uses: actions/upload-artifact@v4
+       with:
+         name: duckdb-extensions-windows_amd64
+         path: |
+           build/release/extension/*/*.duckdb_extension
+
+ upload-windows_amd64-extensions:
+    name: Upload windows_amd64 Extensions
+    needs: win-extensions-64
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    with:
+      extension_artifact_name: duckdb-extensions-windows_amd64
+      duckdb_arch: windows_amd64
+      duckdb_sha: ${{ github.sha }}
 
  win-packaged-upload:
    runs-on: windows-2019

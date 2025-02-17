@@ -161,7 +161,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 		if (expressions[expr_idx]->HasParameter()) {
 			continue;
 		}
-		MemoryStream stream;
+		MemoryStream stream(Allocator::Get(context));
 		// We are serializing a query plan
 		try {
 			BinarySerializer::Serialize(*expressions[expr_idx], stream);
@@ -215,7 +215,7 @@ vector<idx_t> LogicalOperator::GetTableIndex() const {
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
-	MemoryStream stream;
+	MemoryStream stream(Allocator::Get(context));
 	SerializationOptions options;
 	options.serialization_compatibility = SerializationCompatibility::Latest();
 	BinarySerializer serializer(stream, options);

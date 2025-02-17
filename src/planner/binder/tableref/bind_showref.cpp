@@ -99,26 +99,31 @@ unique_ptr<BoundTableRef> Binder::BindShowQuery(ShowRef &ref) {
 	for (idx_t column_idx = 0; column_idx < plan.types.size(); column_idx++) {
 		// check if we can trace the column to a base table so that we can figure out constraint information
 		auto result = FindBaseTableColumn(*plan.plan, column_idx);
+		idx_t row_index = output.size();
+		auto &alias = plan.names[column_idx];
 		if (result.table) {
 			// we can! emit the information from the base table directly
-			PragmaTableInfo::GetColumnInfo(*result.table, *result.column, output, output.size());
+			PragmaTableInfo::GetColumnInfo(*result.table, *result.column, output, row_index);
+			// Override the base column name with the alias if one is specified.
+			if (alias != result.column->Name()) {
+				output.SetValue(0, row_index, Value(alias));
+			}
 		} else {
 			// we cannot - read the type/name from the plan instead
 			auto type = plan.types[column_idx];
-			auto &name = plan.names[column_idx];
 
 			// "name", TypeId::VARCHAR
-			output.SetValue(0, output.size(), Value(name));
+			output.SetValue(0, row_index, Value(alias));
 			// "type", TypeId::VARCHAR
-			output.SetValue(1, output.size(), Value(type.ToString()));
+			output.SetValue(1, row_index, Value(type.ToString()));
 			// "null", TypeId::VARCHAR
-			output.SetValue(2, output.size(), Value("YES"));
+			output.SetValue(2, row_index, Value("YES"));
 			// "pk", TypeId::BOOL
-			output.SetValue(3, output.size(), Value());
+			output.SetValue(3, row_index, Value());
 			// "dflt_value", TypeId::VARCHAR
-			output.SetValue(4, output.size(), Value());
+			output.SetValue(4, row_index, Value());
 			// "extra", TypeId::VARCHAR
-			output.SetValue(5, output.size(), Value());
+			output.SetValue(5, row_index, Value());
 		}
 
 		output.SetCardinality(output.size() + 1);

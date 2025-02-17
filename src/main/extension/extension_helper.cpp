@@ -143,9 +143,9 @@ static const char *const auto_install[] = {"motherduck", "postgres_scanner", "my
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
-	auto lcase = StringUtil::Lower(extension);
+	auto extension_name = ApplyExtensionAlias(extension);
 	for (idx_t i = 0; auto_install[i]; i++) {
-		if (lcase == auto_install[i]) {
+		if (extension_name == auto_install[i]) {
 			return true;
 		}
 	}

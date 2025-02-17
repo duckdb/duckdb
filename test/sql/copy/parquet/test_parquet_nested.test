@@ -36,13 +36,6 @@ SELECT unnest(a) FROM parquet_scan('data/parquet-testing/arrow/nested_lists.snap
 [[a, b], [c, d], [e]]
 [NULL, [f]]
 
-
-# FIXME
-#query I
-#SELECT unnest(unnest(a)) FROM parquet_scan('data/parquet-testing/nested_lists.snappy.parquet')
-#----
-
-
 query II
 SELECT * FROM parquet_scan('data/parquet-testing/arrow/list_columns.parquet')
 ----
