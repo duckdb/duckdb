@@ -167,7 +167,7 @@ unique_ptr<ReservoirChunk> ReservoirSample::CreateNewSampleChunk(vector<LogicalT
 void ReservoirSample::Vacuum() {
 	Verify();
 	bool vacuum_yes = false;
-	if (!stats_sample && GetActiveSampleCount() <= GetReservoirChunkCapacity() * 0.8) {
+	if (!stats_sample && GetActiveSampleCount() <= static_cast<idx_t>(GetReservoirChunkCapacity() * 0.8)) {
 		vacuum_yes = true;
 	}
 	if (!vacuum_yes && (NumSamplesCollected() <= FIXED_SAMPLE_SIZE || !reservoir_chunk || destroyed)) {
