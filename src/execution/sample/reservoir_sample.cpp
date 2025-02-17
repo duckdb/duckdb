@@ -152,6 +152,9 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 
 unique_ptr<ReservoirChunk> ReservoirSample::CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const {
 	auto new_sample_chunk = make_uniq<ReservoirChunk>();
+	if (size == 0) {
+		auto break_here = 0;
+	}
 	new_sample_chunk->chunk.Initialize(Allocator::DefaultAllocator(), types, size);
 
 	// set the NULL columns correctly
@@ -166,7 +169,11 @@ unique_ptr<ReservoirChunk> ReservoirSample::CreateNewSampleChunk(vector<LogicalT
 
 void ReservoirSample::Vacuum() {
 	Verify();
-	if (NumSamplesCollected() <= FIXED_SAMPLE_SIZE || !reservoir_chunk || destroyed) {
+	bool vacuum_yes = false;
+	if (!stats_sample && GetActiveSampleCount() <= GetReservoirChunkCapacity() * 0.8) {
+		vacuum_yes = true;
+	}
+	if (!vacuum_yes && (NumSamplesCollected() <= FIXED_SAMPLE_SIZE || !reservoir_chunk || destroyed)) {
 		// sample is destroyed or too small to shrink
 		return;
 	}
@@ -694,9 +701,6 @@ void ReservoirSample::UpdateSampleAppend(DataChunk &this_, DataChunk &other, Sel
 		return;
 	}
 	D_ASSERT(this_.GetTypes() == other.GetTypes());
-
-	// UpdateSampleAppend(this_, other, other_sel, append_count);
-	D_ASSERT(this_.GetTypes() == other.GetTypes());
 	auto types = reservoir_chunk->chunk.GetTypes();
 
 	for (idx_t i = 0; i < reservoir_chunk->chunk.ColumnCount(); i++) {
@@ -714,6 +718,9 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 		return;
 	}
 
+	if (!reservoir_chunk && GetReservoirChunkCapacity() == 0) {
+		return;
+	}
 	idx_t tuples_consumed = FillReservoir(chunk);
 	base_reservoir_sample->num_entries_seen_total += tuples_consumed;
 	D_ASSERT(sample_count == 0 || reservoir_chunk->chunk.size() >= 1);
@@ -752,8 +759,10 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 		base_reservoir_sample->num_entries_seen_total += chunk.size();
 		return;
 	}
+
 	idx_t size = chunk_sel.size;
 	D_ASSERT(size <= chunk.size());
+	D_ASSERT(reservoir_chunk->chunk.size() < GetReservoirChunkCapacity());
 
 	UpdateSampleAppend(reservoir_chunk->chunk, chunk, chunk_sel.sel, size);
 
@@ -763,11 +772,12 @@ void ReservoirSample::AddToReservoir(DataChunk &chunk) {
 
 	Verify();
 
-	// if we are over the threshold, we ned to swith to slow sampling.
+	// if we are over the threshold, we ned to switch to slow sampling.
 	if (GetSamplingState() == SamplingState::RANDOM && GetTuplesSeen() >= FIXED_SAMPLE_SIZE * FAST_TO_SLOW_THRESHOLD) {
 		ConvertToReservoirSample();
 	}
-	if (reservoir_chunk->chunk.size() >= (GetReservoirChunkCapacity() - (static_cast<idx_t>(FIXED_SAMPLE_SIZE) * 3))) {
+	if (static_cast<int64_t>(reservoir_chunk->chunk.size()) >=
+	    (static_cast<int64_t>(GetReservoirChunkCapacity()) - (static_cast<int64_t>(FIXED_SAMPLE_SIZE) * 3))) {
 		Vacuum();
 	}
 }
