@@ -21,6 +21,14 @@ EXECUTE v1('animal');
 ----
 duck
 
+statement ok
+CREATE MACRO _(x) AS getvariable(x);
+
+query I
+SELECT _('animal')
+----
+duck
+
 # overwriting
 statement ok
 SET VARIABLE animal='bird'

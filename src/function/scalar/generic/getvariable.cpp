@@ -24,7 +24,7 @@ struct GetVariableBindData : FunctionData {
 
 static unique_ptr<FunctionData> GetVariableBind(ClientContext &context, ScalarFunction &function,
                                                 vector<unique_ptr<Expression>> &arguments) {
-	if (arguments[0]->HasParameter()) {
+	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
 		throw ParameterNotResolvedException();
 	}
 	if (!arguments[0]->IsFoldable()) {
