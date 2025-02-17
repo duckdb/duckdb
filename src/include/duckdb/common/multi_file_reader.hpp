@@ -324,7 +324,8 @@ public:
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options, MultiFileReaderOptions &file_options) {
+	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options,
+	                                   MultiFileReaderOptions &file_options) {
 		if (file_options.union_by_name) {
 			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options, file_options);
 		} else {

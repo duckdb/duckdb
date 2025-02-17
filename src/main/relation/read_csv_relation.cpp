@@ -52,7 +52,8 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 		vector<string> names;
 		auto result = make_uniq<ReadCSVData>();
 
-		multi_file_reader->BindUnionReader<CSVFileScan>(*context, types, names, multi_file_list, *result, csv_options, csv_options.file_options);
+		multi_file_reader->BindUnionReader<CSVFileScan>(*context, types, names, multi_file_list, *result, csv_options,
+		                                                csv_options.file_options);
 		if (result->union_readers.size() > 1) {
 			for (idx_t i = 0; i < result->union_readers.size(); i++) {
 				result->column_info.emplace_back(result->union_readers[i]->names, result->union_readers[i]->types);

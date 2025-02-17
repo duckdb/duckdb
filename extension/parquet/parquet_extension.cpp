@@ -53,7 +53,7 @@
 
 namespace duckdb {
 
-template<class OP>
+template <class OP>
 struct MultiFileBindData : public TableFunctionData {
 	unique_ptr<typename OP::BIND_DATA> bind_data;
 	shared_ptr<MultiFileList> file_list;
@@ -82,7 +82,6 @@ struct ParquetReadBindData : public TableFunctionData {
 	virtual_column_map_t virtual_columns;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
-
 
 	// These come from the initial_reader, but need to be stored in case the initial_reader is removed by a filter
 	idx_t initial_file_cardinality;
@@ -124,22 +123,30 @@ struct ParquetMultiFileInfo {
 	using BIND_DATA = ParquetReadBindData;
 	using SCAN_STATE = ParquetReaderScanState;
 
-	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values, ParquetOptions &options);
-	static bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileReaderOptions &file_options, ParquetOptions &options);
-	static unique_ptr<BIND_DATA> InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data, ParquetOptions &options);
+	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+	                            ParquetOptions &options);
+	static bool ParseOption(ClientContext &context, const string &key, const Value &val,
+	                        MultiFileReaderOptions &file_options, ParquetOptions &options);
+	static unique_ptr<BIND_DATA> InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
+	                                                ParquetOptions &options);
 	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState();
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
 	static shared_ptr<ParquetReader> CreateReader(ClientContext &context, ParquetUnionData &union_data);
-	static shared_ptr<ParquetReader> CreateReader(ClientContext &context, const string &filename, TableFunctionData &bind_data);
-	static void Scan(ClientContext &context, ParquetReader &reader, LocalTableFunctionState &local_state, DataChunk &chunk);
-	static bool TryInitializeScan(ClientContext &context, ParquetReader &reader, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
+	static shared_ptr<ParquetReader> CreateReader(ClientContext &context, const string &filename,
+	                                              TableFunctionData &bind_data);
+	static void Scan(ClientContext &context, ParquetReader &reader, LocalTableFunctionState &local_state,
+	                 DataChunk &chunk);
+	static bool TryInitializeScan(ClientContext &context, ParquetReader &reader, GlobalTableFunctionState &gstate,
+	                              LocalTableFunctionState &lstate);
 	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state);
 	static unique_ptr<NodeStatistics> GetCardinality(TableFunctionData &bind_data, idx_t file_count);
 };
 
-template<class OP>
-unique_ptr<FunctionData> MultiFileBindInternal(ClientContext &context, unique_ptr<MultiFileReader> multi_file_reader, shared_ptr<MultiFileList> multi_file_list,
-vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderOptions file_options, typename OP::OPTIONS options) {
+template <class OP>
+unique_ptr<FunctionData> MultiFileBindInternal(ClientContext &context, unique_ptr<MultiFileReader> multi_file_reader,
+                                               shared_ptr<MultiFileList> multi_file_list,
+                                               vector<LogicalType> &return_types, vector<string> &names,
+                                               MultiFileReaderOptions file_options, typename OP::OPTIONS options) {
 	auto result = make_uniq<MultiFileBindData<OP>>();
 	result->multi_file_reader = std::move(multi_file_reader);
 	result->file_list = std::move(multi_file_list);
@@ -150,7 +157,7 @@ vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderOptions
 	result->bind_data = OP::InitializeBindData(*result, options);
 
 	result->reader_bind = result->multi_file_reader->template BindReader<typename OP::READER>(
-		context, result->types, result->names, *result->file_list, *result, options, result->file_options);
+	    context, result->types, result->names, *result->file_list, *result, options, result->file_options);
 
 	if (return_types.empty()) {
 		// no expected types - just copy the types
@@ -160,8 +167,9 @@ vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderOptions
 		// We're deserializing from a previously successful bind call
 		// verify that the amount of columns still matches
 		if (return_types.size() != result->types.size()) {
-			auto file_string = !result->file_options.union_by_name ? result->file_list->GetFirstFile()
-												   : StringUtil::Join(result->file_list->GetPaths(), ",");
+			auto file_string = !result->file_options.union_by_name
+			                       ? result->file_list->GetFirstFile()
+			                       : StringUtil::Join(result->file_list->GetPaths(), ",");
 			string extended_error;
 			extended_error = "Table schema: ";
 			for (idx_t col_idx = 0; col_idx < return_types.size(); col_idx++) {
@@ -179,10 +187,10 @@ vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderOptions
 			}
 			extended_error += "\n\nPossible solutions:";
 			extended_error += "\n* Manually specify which columns to insert using \"INSERT INTO tbl SELECT ... "
-							  "FROM read_parquet(...)\"";
+			                  "FROM read_parquet(...)\"";
 			throw ConversionException(
-				"Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d\n%s",
-				file_string, return_types.size(), result->types.size(), extended_error);
+			    "Failed to read file(s) \"%s\" - column count mismatch: expected %d columns but found %d\n%s",
+			    file_string, return_types.size(), result->types.size(), extended_error);
 		}
 		// expected types - overwrite the types we want to read instead
 		result->types = return_types;
@@ -191,9 +199,9 @@ vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderOptions
 	return std::move(result);
 }
 
-template<class OP>
+template <class OP>
 unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
-	vector<LogicalType> &return_types, vector<string> &names) {
+                                       vector<LogicalType> &return_types, vector<string> &names) {
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 	MultiFileReaderOptions file_options;
@@ -212,13 +220,13 @@ unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBind
 		}
 		throw NotImplementedException("Unimplemented option %s", kv.first);
 	}
-	return MultiFileBindInternal<OP>(context, std::move(multi_file_reader), std::move(file_list), return_types, names, std::move(file_options), std::move(options));
+	return MultiFileBindInternal<OP>(context, std::move(multi_file_reader), std::move(file_list), return_types, names,
+	                                 std::move(file_options), std::move(options));
 }
 
-template<class OP>
-unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info,
-												vector<string> &expected_names,
-												vector<LogicalType> &expected_types) {
+template <class OP>
+unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
+                                           vector<LogicalType> &expected_types) {
 	typename OP::OPTIONS options(context);
 	MultiFileReaderOptions file_options;
 
@@ -236,10 +244,10 @@ unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &inf
 	auto file_list = multi_file_reader->CreateFileList(context, paths);
 
 	return MultiFileBindInternal<OP>(context, std::move(multi_file_reader), std::move(file_list), expected_types,
-	                               expected_names, std::move(file_options), std::move(options));
+	                                 expected_names, std::move(file_options), std::move(options));
 }
 
-template<class OP>
+template <class OP>
 struct MultiFileLocalState : public LocalTableFunctionState {
 	shared_ptr<typename OP::READER> reader;
 	bool is_parallel;
@@ -252,19 +260,20 @@ struct MultiFileLocalState : public LocalTableFunctionState {
 
 enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
 
-template<class OP>
+template <class OP>
 struct MultiFileFileReaderData {
 	// Create data for an unopened file
 	explicit MultiFileFileReaderData(const string &file_to_be_opened)
-		: reader(nullptr), file_state(MultiFileFileState::UNOPENED), file_mutex(make_uniq<mutex>()),
-		  file_to_be_opened(file_to_be_opened) {
+	    : reader(nullptr), file_state(MultiFileFileState::UNOPENED), file_mutex(make_uniq<mutex>()),
+	      file_to_be_opened(file_to_be_opened) {
 	}
 	// Create data for an existing reader
 	explicit MultiFileFileReaderData(shared_ptr<typename OP::READER> reader_p)
-		: reader(std::move(reader_p)), file_state(MultiFileFileState::OPEN), file_mutex(make_uniq<mutex>()) {
+	    : reader(std::move(reader_p)), file_state(MultiFileFileState::OPEN), file_mutex(make_uniq<mutex>()) {
 	}
 	// Create data for an existing reader
-	explicit MultiFileFileReaderData(unique_ptr<typename OP::UNION_DATA> union_data_p) : file_mutex(make_uniq<mutex>()) {
+	explicit MultiFileFileReaderData(unique_ptr<typename OP::UNION_DATA> union_data_p)
+	    : file_mutex(make_uniq<mutex>()) {
 		if (union_data_p->reader) {
 			reader = std::move(union_data_p->reader);
 			file_state = MultiFileFileState::OPEN;
@@ -287,12 +296,12 @@ struct MultiFileFileReaderData {
 	string file_to_be_opened;
 };
 
-template<class OP>
+template <class OP>
 struct MultiFileGlobalState : public GlobalTableFunctionState {
 	explicit MultiFileGlobalState(MultiFileList &file_list_p) : file_list(file_list_p) {
 	}
 	explicit MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_list_p)
-		: file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
+	    : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
 	}
 
 	//! The file list to scan
@@ -333,20 +342,20 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 };
 
 static unique_ptr<MultiFileList> MultiFileFilterPushdown(ClientContext &context,
-                                                              const MultiFileBindData<ParquetMultiFileInfo> &data,
-                                                              const vector<column_t> &column_ids,
-                                                              optional_ptr<TableFilterSet> filters) {
+                                                         const MultiFileBindData<ParquetMultiFileInfo> &data,
+                                                         const vector<column_t> &column_ids,
+                                                         optional_ptr<TableFilterSet> filters) {
 	if (!filters) {
 		return nullptr;
 	}
-	auto new_list = data.multi_file_reader->DynamicFilterPushdown(
-	    context, *data.file_list, data.file_options, data.names, data.types, column_ids, *filters);
+	auto new_list = data.multi_file_reader->DynamicFilterPushdown(context, *data.file_list, data.file_options,
+	                                                              data.names, data.types, column_ids, *filters);
 	return new_list;
 }
 
 // Queries the metadataprovider for another file to scan, updating the files/reader lists in the process.
 // Returns true if resized
-template<class OP>
+template <class OP>
 static bool ResizeFiles(MultiFileGlobalState<OP> &parallel_state) {
 	string scanned_file;
 	if (!parallel_state.file_list.Scan(parallel_state.file_list_scan, scanned_file)) {
@@ -359,11 +368,11 @@ static bool ResizeFiles(MultiFileGlobalState<OP> &parallel_state) {
 	return true;
 }
 
-template<class OP>
+template <class OP>
 static void InitializeReader(typename OP::READER &reader, const MultiFileBindData<OP> &bind_data,
-									const vector<ColumnIndex> &global_column_ids,
-									optional_ptr<TableFilterSet> table_filters, ClientContext &context,
-									optional_idx file_idx, optional_ptr<MultiFileReaderGlobalState> reader_state) {
+                             const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> table_filters,
+                             ClientContext &context, optional_idx file_idx,
+                             optional_ptr<MultiFileReaderGlobalState> reader_state) {
 	auto &reader_data = reader.reader_data;
 
 	// Mark the file in the file list we are scanning here
@@ -373,18 +382,17 @@ static void InitializeReader(typename OP::READER &reader, const MultiFileBindDat
 	// 1. The MultiFileReader::Bind call
 	// 2. The 'schema' parquet option
 	auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
-	bind_data.multi_file_reader->InitializeReader(reader, bind_data.file_options, bind_data.reader_bind,
-												  global_columns, global_column_ids, table_filters,
-												  bind_data.file_list->GetFirstFile(), context, reader_state);
+	bind_data.multi_file_reader->InitializeReader(reader, bind_data.file_options, bind_data.reader_bind, global_columns,
+	                                              global_column_ids, table_filters, bind_data.file_list->GetFirstFile(),
+	                                              context, reader_state);
 }
 
 //! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
-template<class OP>
+template <class OP>
 static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData<OP> &bind_data,
                             MultiFileLocalState<OP> &scan_data, MultiFileGlobalState<OP> &parallel_state,
                             unique_lock<mutex> &parallel_lock) {
-	const auto file_index_limit =
-	    parallel_state.file_index + TaskScheduler::GetScheduler(context).NumberOfThreads();
+	const auto file_index_limit = parallel_state.file_index + TaskScheduler::GetScheduler(context).NumberOfThreads();
 
 	for (idx_t i = parallel_state.file_index; i < file_index_limit; i++) {
 		// We check if we can resize files in this loop too otherwise we will only ever open 1 file ahead
@@ -411,8 +419,8 @@ static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData<OP> 
 				} else {
 					reader = OP::CreateReader(context, current_reader_data.file_to_be_opened, *bind_data.bind_data);
 				}
-				InitializeReader<OP>(*reader, bind_data, parallel_state.column_indexes, parallel_state.filters,
-				                        context, i, parallel_state.multi_file_reader_state);
+				InitializeReader<OP>(*reader, bind_data, parallel_state.column_indexes, parallel_state.filters, context,
+				                     i, parallel_state.multi_file_reader_state);
 			} catch (...) {
 				parallel_lock.lock();
 				parallel_state.error_opening_file = true;
@@ -432,9 +440,8 @@ static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData<OP> 
 }
 
 //! Wait for a file to become available. Parallel lock should be locked when calling.
-template<class OP>
-static void WaitForFile(idx_t file_index, MultiFileGlobalState<OP> &parallel_state,
-						unique_lock<mutex> &parallel_lock) {
+template <class OP>
+static void WaitForFile(idx_t file_index, MultiFileGlobalState<OP> &parallel_state, unique_lock<mutex> &parallel_lock) {
 	while (true) {
 		// Get pointer to file mutex before unlocking
 		auto &file_mutex = *parallel_state.readers[file_index]->file_mutex;
@@ -450,18 +457,18 @@ static void WaitForFile(idx_t file_index, MultiFileGlobalState<OP> &parallel_sta
 		// - the thread opening the file has failed
 		// - the file was somehow scanned till the end while we were waiting
 		if (parallel_state.file_index >= parallel_state.readers.size() ||
-			parallel_state.readers[parallel_state.file_index]->file_state != MultiFileFileState::OPENING ||
-			parallel_state.error_opening_file) {
+		    parallel_state.readers[parallel_state.file_index]->file_state != MultiFileFileState::OPENING ||
+		    parallel_state.error_opening_file) {
 			return;
-			}
+		}
 	}
 }
 
 // This function looks for the next available row group. If not available, it will open files from bind_data.files
 // until there is a row group available for scanning or the files runs out
-template<class OP>
+template <class OP>
 static bool TryInitializeNextBatch(ClientContext &context, const MultiFileBindData<OP> &bind_data,
-									 MultiFileLocalState<OP> &scan_data, MultiFileGlobalState<OP> &gstate) {
+                                   MultiFileLocalState<OP> &scan_data, MultiFileGlobalState<OP> &gstate) {
 	unique_lock<mutex> parallel_lock(gstate.lock);
 
 	while (true) {
@@ -475,7 +482,8 @@ static bool TryInitializeNextBatch(ClientContext &context, const MultiFileBindDa
 
 		auto &current_reader_data = *gstate.readers[gstate.file_index];
 		if (current_reader_data.file_state == MultiFileFileState::OPEN) {
-			if (OP::TryInitializeScan(context, *current_reader_data.reader, *gstate.global_state, *scan_data.local_state)) {
+			if (OP::TryInitializeScan(context, *current_reader_data.reader, *gstate.global_state,
+			                          *scan_data.local_state)) {
 				// The current reader has data left to be scanned
 				scan_data.reader = current_reader_data.reader;
 				scan_data.batch_index = gstate.batch_index++;
@@ -504,9 +512,9 @@ static bool TryInitializeNextBatch(ClientContext &context, const MultiFileBindDa
 	}
 }
 
-template<class OP>
-static unique_ptr<LocalTableFunctionState>
-MultiFileInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate_p) {
+template <class OP>
+static unique_ptr<LocalTableFunctionState> MultiFileInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
+                                                              GlobalTableFunctionState *gstate_p) {
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData<OP>>();
 	auto &gstate = gstate_p->Cast<MultiFileGlobalState<OP>>();
 
@@ -524,9 +532,8 @@ MultiFileInitLocal(ExecutionContext &context, TableFunctionInitInput &input, Glo
 	return std::move(result);
 }
 
-template<class OP>
-unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
-                                                                  TableFunctionInitInput &input) {
+template <class OP>
+unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData<ParquetMultiFileInfo>>();
 	unique_ptr<MultiFileGlobalState<OP>> result;
 
@@ -542,8 +549,7 @@ unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
 
 	auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
 	result->multi_file_reader_state = bind_data.multi_file_reader->InitializeGlobalState(
-	    context, bind_data.file_options, bind_data.reader_bind, file_list, global_columns,
-	    input.column_indexes);
+	    context, bind_data.file_options, bind_data.reader_bind, file_list, global_columns, input.column_indexes);
 
 	if (file_list.IsEmpty()) {
 		result->readers = {};
@@ -583,7 +589,7 @@ unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
 				throw InternalException("Mismatch in filename order and reader order in multi file scan");
 			}
 			InitializeReader<OP>(*reader_data->reader, bind_data, input.column_indexes, input.filters, context,
-			                        file_idx, result->multi_file_reader_state);
+			                     file_idx, result->multi_file_reader_state);
 		}
 	}
 
@@ -623,20 +629,18 @@ unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
 	return std::move(result);
 }
 
-template<class OP>
-static OperatorPartitionData MultiFileGetPartitionData(ClientContext &context,
-														 TableFunctionGetPartitionInput &input) {
+template <class OP>
+static OperatorPartitionData MultiFileGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
 	auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData<OP>>();
 	auto &data = input.local_state->Cast<MultiFileLocalState<OP>>();
 	auto &gstate = input.global_state->Cast<MultiFileGlobalState<OP>>();
 	OperatorPartitionData partition_data(data.batch_index);
 	bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, data.reader->reader_data,
-												  gstate.multi_file_reader_state, input.partition_info,
-												  partition_data);
+	                                              gstate.multi_file_reader_state, input.partition_info, partition_data);
 	return partition_data;
 }
 
-template<class OP>
+template <class OP>
 static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	if (!data_p.local_state) {
 		return;
@@ -652,13 +656,13 @@ static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, Da
 			OP::Scan(context, *data.reader, *data.local_state, data.all_columns);
 			rowgroup_finished = data.all_columns.size() == 0;
 			bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-													   data.all_columns, gstate.multi_file_reader_state);
+			                                           data.all_columns, gstate.multi_file_reader_state);
 			output.ReferenceColumns(data.all_columns, gstate.projection_ids);
 		} else {
 			OP::Scan(context, *data.reader, *data.local_state, output);
 			rowgroup_finished = output.size() == 0;
-			bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-													   output, gstate.multi_file_reader_state);
+			bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data, output,
+			                                           gstate.multi_file_reader_state);
 		}
 
 		if (output.size() > 0) {
@@ -670,8 +674,7 @@ static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, Da
 	} while (true);
 }
 
-
-template<class OP>
+template <class OP>
 static unique_ptr<NodeStatistics> MultiFileCardinality(ClientContext &context, const FunctionData *bind_data) {
 	auto &data = bind_data->Cast<MultiFileBindData<OP>>();
 	auto file_list_cardinality_estimate = data.file_list->GetCardinality(context);
@@ -679,6 +682,21 @@ static unique_ptr<NodeStatistics> MultiFileCardinality(ClientContext &context, c
 		return file_list_cardinality_estimate;
 	}
 	return OP::GetCardinality(*data.bind_data, data.file_list->GetTotalFileCount());
+}
+
+template <class OP>
+static void MultiFileComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
+                                           vector<unique_ptr<Expression>> &filters) {
+	auto &data = bind_data_p->Cast<MultiFileBindData<OP>>();
+
+	MultiFilePushdownInfo info(get);
+	auto new_list =
+	    data.multi_file_reader->ComplexFilterPushdown(context, *data.file_list, data.file_options, info, filters);
+
+	if (new_list) {
+		data.file_list = std::move(new_list);
+		MultiFileReader::PruneReaders(data, *data.file_list);
+	}
 }
 
 struct ParquetWriteBindData : public TableFunctionData {
@@ -724,7 +742,7 @@ struct ParquetWriteLocalState : public LocalFunctionData {
 	ColumnDataAppendState append_state;
 };
 
-template<class OP>
+template <class OP>
 BindInfo MultiFileGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
 	BindInfo bind_info(ScanType::EXTERNAL);
 	auto &bind_data = bind_data_p->Cast<MultiFileBindData<OP>>();
@@ -757,7 +775,8 @@ static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, Parquet
 }
 
 // static MultiFileReaderBindData BindSchema(ClientContext &context, vector<LogicalType> &return_types,
-//                                           vector<string> &names, ParquetReadBindData &result, ParquetOptions &options) {
+//                                           vector<string> &names, ParquetReadBindData &result, ParquetOptions
+//                                           &options) {
 // 	D_ASSERT(!options.schema.empty());
 //
 // 	options.file_options.AutoDetectHivePartitioning(*result.file_list, context);
@@ -835,13 +854,13 @@ static bool GetBooleanArgument(const string &key, const vector<Value> &option_va
 	return BooleanValue::Get(boolean_value);
 }
 
-template<class OP>
+template <class OP>
 TablePartitionInfo MultiFileGetPartitionInfo(ClientContext &context, TableFunctionPartitionInput &input) {
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData<OP>>();
 	return bind_data.multi_file_reader->GetPartitionInfo(context, bind_data.reader_bind, input);
 }
 
-template<class OP>
+template <class OP>
 virtual_column_map_t MultiFileGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data_p) {
 	auto &bind_data = bind_data_p->Cast<MultiFileBindData<OP>>();
 	virtual_column_map_t result;
@@ -853,10 +872,11 @@ virtual_column_map_t MultiFileGetVirtualColumns(ClientContext &context, optional
 class ParquetScanFunction {
 public:
 	static TableFunctionSet GetFunctionSet() {
-		TableFunction table_function("parquet_scan", {LogicalType::VARCHAR}, MultiFileScan<ParquetMultiFileInfo>, MultiFileBind<ParquetMultiFileInfo>,
-		                             MultiFileInitGlobal<ParquetMultiFileInfo>, MultiFileInitLocal<ParquetMultiFileInfo>);
+		TableFunction table_function("parquet_scan", {LogicalType::VARCHAR}, MultiFileScan<ParquetMultiFileInfo>,
+		                             MultiFileBind<ParquetMultiFileInfo>, MultiFileInitGlobal<ParquetMultiFileInfo>,
+		                             MultiFileInitLocal<ParquetMultiFileInfo>);
 		table_function.statistics = nullptr; // FIXME - ParquetScanStats;
-		table_function.cardinality = nullptr; // FIXME - ParquetCardinality;
+		table_function.cardinality = MultiFileCardinality<ParquetMultiFileInfo>;
 		table_function.table_scan_progress = nullptr; // FIXME - ParquetProgress;
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
@@ -873,7 +893,7 @@ public:
 		table_function.projection_pushdown = true;
 		table_function.filter_pushdown = true;
 		table_function.filter_prune = true;
-		table_function.pushdown_complex_filter = nullptr; // FIXME ParquetComplexFilterPushdown;
+		table_function.pushdown_complex_filter = MultiFileComplexFilterPushdown<ParquetMultiFileInfo>;
 		table_function.get_partition_info = MultiFileGetPartitionInfo<ParquetMultiFileInfo>;
 		table_function.get_virtual_columns = MultiFileGetVirtualColumns<ParquetMultiFileInfo>;
 
@@ -1006,24 +1026,10 @@ public:
 		// bind_data->Cast<ParquetReadBindData>().table_columns = std::move(table_columns);
 		// return bind_data;
 	}
-
-	// static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
-	//                                          vector<unique_ptr<Expression>> &filters) {
-	// 	auto &data = bind_data_p->Cast<ParquetReadBindData>();
-	//
-	// 	MultiFilePushdownInfo info(get);
-	// 	auto new_list = data.multi_file_reader->ComplexFilterPushdown(context, *data.file_list,
-	// 	                                                              data.parquet_options.file_options, info, filters);
-	//
-	// 	if (new_list) {
-	// 		data.file_list = std::move(new_list);
-	// 		MultiFileReader::PruneReaders(data, *data.file_list);
-	// 	}
-	// }
-
 };
 
-bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values, ParquetOptions &options) {
+bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
+                                           ParquetOptions &options) {
 	if (key == "compression" || key == "codec" || key == "row_group_size") {
 		// CODEC/COMPRESSION and ROW_GROUP_SIZE options have no effect on parquet read.
 		// These options are determined from the file.
@@ -1051,7 +1057,8 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 	return false;
 }
 
-bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileReaderOptions &file_options, ParquetOptions &parquet_options) {
+bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
+                                       MultiFileReaderOptions &file_options, ParquetOptions &parquet_options) {
 	if (key == "binary_as_string") {
 		parquet_options.binary_as_string = BooleanValue::Get(val);
 		return true;
@@ -1075,8 +1082,7 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key
 		}
 		parquet_options.schema.reserve(column_values.size());
 		for (idx_t i = 0; i < column_values.size(); i++) {
-			parquet_options.schema.emplace_back(
-				ParquetColumnDefinition::FromSchemaValue(context, column_values[i]));
+			parquet_options.schema.emplace_back(ParquetColumnDefinition::FromSchemaValue(context, column_values[i]));
 		}
 		file_options.auto_detect_hive_partitioning = false;
 		return true;
@@ -1092,7 +1098,9 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key
 	return false;
 }
 
-unique_ptr<ParquetReadBindData> ParquetMultiFileInfo::InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data, ParquetOptions &options) {
+unique_ptr<ParquetReadBindData>
+ParquetMultiFileInfo::InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
+                                         ParquetOptions &options) {
 	auto result = make_uniq<ParquetReadBindData>();
 	// Set the explicit cardinality if requested
 	if (options.explicit_cardinality) {
@@ -1108,15 +1116,15 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(TableFunctionDat
 	if (bind_data.explicit_cardinality) {
 		return make_uniq<NodeStatistics>(bind_data.explicit_cardinality);
 	}
-	return make_uniq<NodeStatistics>(MaxValue(bind_data.initial_file_cardinality, (idx_t)1) *
-									 file_count);
+	return make_uniq<NodeStatistics>(MaxValue(bind_data.initial_file_cardinality, (idx_t)1) * file_count);
 }
 
 shared_ptr<ParquetReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, ParquetUnionData &union_data) {
 	return make_shared_ptr<ParquetReader>(context, union_data.file_name, union_data.options, union_data.metadata);
 }
 
-shared_ptr<ParquetReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const string &filename, TableFunctionData &bind_data_p) {
+shared_ptr<ParquetReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
+                                                             TableFunctionData &bind_data_p) {
 	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
 	return make_shared_ptr<ParquetReader>(context, filename, bind_data.parquet_options);
 }
@@ -1129,7 +1137,8 @@ unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState()
 	return make_uniq<ParquetReadLocalState>();
 }
 
-bool ParquetMultiFileInfo::TryInitializeScan(ClientContext &context, ParquetReader &reader, GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
+bool ParquetMultiFileInfo::TryInitializeScan(ClientContext &context, ParquetReader &reader,
+                                             GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
 	if (gstate.row_group_index >= reader.NumRowGroups()) {
@@ -1141,7 +1150,6 @@ bool ParquetMultiFileInfo::TryInitializeScan(ClientContext &context, ParquetRead
 	reader.InitializeScan(context, lstate.scan_state, group_indexes);
 	gstate.row_group_index++;
 	return true;
-
 }
 
 void ParquetMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
@@ -1149,7 +1157,8 @@ void ParquetMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctio
 	gstate.row_group_index = 0;
 }
 
-void ParquetMultiFileInfo::Scan(ClientContext &context, ParquetReader &reader, LocalTableFunctionState &local_state_p, DataChunk &chunk) {
+void ParquetMultiFileInfo::Scan(ClientContext &context, ParquetReader &reader, LocalTableFunctionState &local_state_p,
+                                DataChunk &chunk) {
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	reader.Scan(local_state.scan_state, chunk);
 }
