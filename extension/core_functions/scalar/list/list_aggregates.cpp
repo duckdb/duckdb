@@ -217,7 +217,7 @@ static void ListAggregatesFunction(DataChunk &args, ExpressionState &state, Vect
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	auto &info = func_expr.bind_info->Cast<ListAggregatesBindData>();
 	auto &aggr = info.aggr_expr->Cast<BoundAggregateExpression>();
-	auto &allocator = state.Cast<ListAggregatesLocalState>().arena_allocator;
+	auto &allocator = ExecuteFunctionState::GetFunctionState(state)->Cast<ListAggregatesLocalState>().arena_allocator;
 	allocator.Reset();
 	AggregateInputData aggr_input_data(aggr.bind_info.get(), allocator);
 
@@ -522,8 +522,9 @@ static unique_ptr<FunctionData> ListUniqueBind(ClientContext &context, ScalarFun
 }
 
 ScalarFunction ListAggregateFun::GetFunction() {
-	auto result = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
-	                             ListAggregateFunction, ListAggregateBind);
+	auto result =
+	    ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::VARCHAR}, LogicalType::ANY,
+	                   ListAggregateFunction, ListAggregateBind, nullptr, nullptr, ListAggregatesInitLocalState);
 	BaseScalarFunction::SetReturnsError(result);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	result.varargs = LogicalType::ANY;
