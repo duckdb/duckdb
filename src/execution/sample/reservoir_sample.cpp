@@ -152,9 +152,6 @@ unique_ptr<DataChunk> ReservoirSample::GetChunk() {
 
 unique_ptr<ReservoirChunk> ReservoirSample::CreateNewSampleChunk(vector<LogicalType> &types, idx_t size) const {
 	auto new_sample_chunk = make_uniq<ReservoirChunk>();
-	if (size == 0) {
-		auto break_here = 0;
-	}
 	new_sample_chunk->chunk.Initialize(Allocator::DefaultAllocator(), types, size);
 
 	// set the NULL columns correctly
