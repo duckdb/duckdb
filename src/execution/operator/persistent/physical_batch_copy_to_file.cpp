@@ -434,8 +434,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 			} else {
 				// the collection is too large for a batch - we need to repartition
 				// create an empty collection
-				auto new_collection =
-				    make_uniq<ColumnDataCollection>(context, children[0]->types);
+				auto new_collection = make_uniq<ColumnDataCollection>(context, children[0]->types);
 				new_collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 				append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			}
