@@ -58,8 +58,6 @@ public:
 	vector<unique_ptr<RowGroupCollection>> optimistic_collections;
 	//! The main optimistic data writer associated with this table.
 	OptimisticDataWriter optimistic_writer;
-	//! The optimistic data writers associated with this table.
-	vector<unique_ptr<OptimisticDataWriter>> optimistic_writers;
 
 	//! Whether or not storage was merged
 	bool merged_storage = false;
@@ -86,9 +84,8 @@ public:
 	RowGroupCollection &GetOptimisticCollection(const PhysicalIndex collection_index);
 	//! Resets the optimistic row group collection corresponding to the index.
 	void ResetOptimisticCollection(const PhysicalIndex collection_index);
-	//! Create an optimistic writer for this table.
-	OptimisticDataWriter &CreateOptimisticWriter();
-	void FinalizeOptimisticWriter(OptimisticDataWriter &writer);
+	//! Returns the optimistic writer.
+	OptimisticDataWriter &GetOptimisticWriter();
 
 private:
 	mutex collections_lock;
@@ -152,9 +149,8 @@ public:
 	RowGroupCollection &GetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
 	//! Resets the optimistic row group collection corresponding to the index.
 	void ResetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
-	//! Create an optimistic writer for this table.
-	OptimisticDataWriter &CreateOptimisticWriter(DataTable &table);
-	void FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer);
+	//! Returns the optimistic writer.
+	OptimisticDataWriter &GetOptimisticWriter(DataTable &table);
 
 	//! Delete a set of rows from the local storage
 	idx_t Delete(DataTable &table, Vector &row_ids, idx_t count);

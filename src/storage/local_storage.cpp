@@ -55,8 +55,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_data
                                      const vector<StorageIndex> &bound_columns, Expression &cast_expr)
     : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows),
       optimistic_collections(std::move(parent.optimistic_collections)),
-      optimistic_writer(new_data_table, parent.optimistic_writer),
-      optimistic_writers(std::move(parent.optimistic_writers)), merged_storage(parent.merged_storage) {
+      optimistic_writer(new_data_table, parent.optimistic_writer), merged_storage(parent.merged_storage) {
 
 	// Alter the column type.
 	row_groups = parent.row_groups->AlterType(context, alter_column_index, target_type, bound_columns, cast_expr);
@@ -70,8 +69,7 @@ LocalTableStorage::LocalTableStorage(DataTable &new_data_table, LocalTableStorag
                                      const idx_t drop_column_index)
     : table_ref(new_data_table), allocator(Allocator::Get(new_data_table.db)), deleted_rows(parent.deleted_rows),
       optimistic_collections(std::move(parent.optimistic_collections)),
-      optimistic_writer(new_data_table, parent.optimistic_writer),
-      optimistic_writers(std::move(parent.optimistic_writers)), merged_storage(parent.merged_storage) {
+      optimistic_writer(new_data_table, parent.optimistic_writer), merged_storage(parent.merged_storage) {
 
 	// Remove the column from the previous table storage.
 	row_groups = parent.row_groups->RemoveColumn(drop_column_index);
@@ -85,8 +83,7 @@ LocalTableStorage::LocalTableStorage(ClientContext &context, DataTable &new_dt, 
                                      ColumnDefinition &new_column, ExpressionExecutor &default_executor)
     : table_ref(new_dt), allocator(Allocator::Get(new_dt.db)), deleted_rows(parent.deleted_rows),
       optimistic_collections(std::move(parent.optimistic_collections)),
-      optimistic_writer(new_dt, parent.optimistic_writer), optimistic_writers(std::move(parent.optimistic_writers)),
-      merged_storage(parent.merged_storage) {
+      optimistic_writer(new_dt, parent.optimistic_writer), merged_storage(parent.merged_storage) {
 
 	row_groups = parent.row_groups->AddColumn(context, new_column, default_executor);
 	parent.row_groups.reset();
@@ -250,33 +247,11 @@ void LocalTableStorage::ResetOptimisticCollection(const PhysicalIndex collection
 	optimistic_collections[collection_index.index].reset();
 }
 
-OptimisticDataWriter &LocalTableStorage::CreateOptimisticWriter() {
-	auto writer = make_uniq<OptimisticDataWriter>(table_ref.get());
-	optimistic_writers.push_back(std::move(writer));
-	return *optimistic_writers.back();
-}
-
-void LocalTableStorage::FinalizeOptimisticWriter(OptimisticDataWriter &writer) {
-	// remove the writer from the set of optimistic writers
-	unique_ptr<OptimisticDataWriter> owned_writer;
-	for (idx_t i = 0; i < optimistic_writers.size(); i++) {
-		if (optimistic_writers[i].get() == &writer) {
-			owned_writer = std::move(optimistic_writers[i]);
-			optimistic_writers.erase_at(i);
-			break;
-		}
-	}
-	if (!owned_writer) {
-		throw InternalException("Error in FinalizeOptimisticWriter - could not find writer");
-	}
-	optimistic_writer.Merge(*owned_writer);
+OptimisticDataWriter &LocalTableStorage::GetOptimisticWriter() {
+	return optimistic_writer;
 }
 
 void LocalTableStorage::Rollback() {
-	for (auto &writer : optimistic_writers) {
-		writer->Rollback();
-	}
-	optimistic_writers.clear();
 	optimistic_writer.Rollback();
 
 	for (auto &collection : optimistic_collections) {
@@ -489,14 +464,9 @@ void LocalStorage::ResetOptimisticCollection(DataTable &table, const PhysicalInd
 	storage.ResetOptimisticCollection(collection_index);
 }
 
-OptimisticDataWriter &LocalStorage::CreateOptimisticWriter(DataTable &table) {
+OptimisticDataWriter &LocalStorage::GetOptimisticWriter(DataTable &table) {
 	auto &storage = table_manager.GetOrCreateStorage(context, table);
-	return storage.CreateOptimisticWriter();
-}
-
-void LocalStorage::FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer) {
-	auto &storage = table_manager.GetOrCreateStorage(context, table);
-	storage.FinalizeOptimisticWriter(writer);
+	return storage.GetOptimisticWriter();
 }
 
 bool LocalStorage::ChangesMade() noexcept {

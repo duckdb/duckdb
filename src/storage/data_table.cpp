@@ -869,14 +869,9 @@ void DataTable::ResetOptimisticCollection(ClientContext &context, const Physical
 	local_storage.ResetOptimisticCollection(*this, collection_index);
 }
 
-OptimisticDataWriter &DataTable::CreateOptimisticWriter(ClientContext &context) {
+OptimisticDataWriter &DataTable::GetOptimisticWriter(ClientContext &context) {
 	auto &local_storage = LocalStorage::Get(context, db);
-	return local_storage.CreateOptimisticWriter(*this);
-}
-
-void DataTable::FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer) {
-	auto &local_storage = LocalStorage::Get(context, db);
-	local_storage.FinalizeOptimisticWriter(*this, writer);
+	return local_storage.GetOptimisticWriter(*this);
 }
 
 void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {

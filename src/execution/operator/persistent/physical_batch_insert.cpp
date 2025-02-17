@@ -193,7 +193,7 @@ public:
 	idx_t current_index;
 	TableAppendState current_append_state;
 	PhysicalIndex collection_index;
-	optional_ptr<OptimisticDataWriter> writer;
+	unique_ptr<OptimisticDataWriter> optimistic_writer;
 	unique_ptr<ConstraintState> constraint_state;
 
 	void CreateNewCollection(ClientContext &context, DuckTableEntry &table_entry,
@@ -230,10 +230,10 @@ public:
 		auto &l_state = l_state_p.Cast<BatchInsertLocalState>();
 
 		// Merge the collections.
-		if (!l_state.writer) {
-			l_state.writer = &g_state.table.GetStorage().CreateOptimisticWriter(context);
+		if (!l_state.optimistic_writer) {
+			l_state.optimistic_writer = make_uniq<OptimisticDataWriter>(g_state.table.GetStorage());
 		}
-		auto result_collection_index = g_state.MergeCollections(context, merge_collections, *l_state.writer);
+		auto result_collection_index = g_state.MergeCollections(context, merge_collections, *l_state.optimistic_writer);
 		merge_collections.clear();
 
 		lock_guard<mutex> l(g_state.lock);
@@ -474,7 +474,7 @@ SinkNextBatchType PhysicalBatchInsert::NextBatch(ExecutionContext &context, Oper
 		auto &collection = gstate.table.GetStorage().GetOptimisticCollection(context.client, lstate.collection_index);
 		collection.FinalizeAppend(tdata, lstate.current_append_state);
 		gstate.AddCollection(context.client, lstate.current_index, lstate.partition_info.min_batch_index.GetIndex(),
-		                     lstate.collection_index, lstate.writer);
+		                     lstate.collection_index, lstate.optimistic_writer);
 
 		bool any_unblocked;
 		{
@@ -530,8 +530,8 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 		lock_guard<mutex> l(gstate.lock);
 		// no collection yet: create a new one
 		lstate.CreateNewCollection(context.client, table, insert_types);
-		if (!lstate.writer) {
-			lstate.writer = &table.GetStorage().CreateOptimisticWriter(context.client);
+		if (!lstate.optimistic_writer) {
+			lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(table.GetStorage());
 		}
 	}
 
@@ -549,7 +549,7 @@ SinkResultType PhysicalBatchInsert::Sink(ExecutionContext &context, DataChunk &c
 	auto new_row_group = collection.Append(lstate.insert_chunk, lstate.current_append_state);
 	if (new_row_group) {
 		// we have already written to disk - flush the next row group as well
-		lstate.writer->WriteNewRowGroup(collection);
+		lstate.optimistic_writer->WriteNewRowGroup(collection);
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -577,9 +577,10 @@ SinkCombineResultType PhysicalBatchInsert::Combine(ExecutionContext &context, Op
 			lstate.collection_index = PhysicalIndex(DConstants::INVALID_INDEX);
 		}
 	}
-	if (lstate.writer) {
+	if (lstate.optimistic_writer) {
 		lock_guard<mutex> l(gstate.lock);
-		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
+		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);
+		optimistic_writer.Merge(*lstate.optimistic_writer);
 	}
 
 	// unblock any blocked tasks
@@ -636,9 +637,9 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 		// now that we have created all of the mergers, perform the actual merging
 		vector<PhysicalIndex> final_collections;
 		final_collections.reserve(mergers.size());
-		auto &writer = data_table.CreateOptimisticWriter(context);
+		auto writer = make_uniq<OptimisticDataWriter>(data_table);
 		for (auto &merger : mergers) {
-			final_collections.push_back(merger->Flush(writer));
+			final_collections.push_back(merger->Flush(*writer));
 		}
 
 		// finally, merge the row groups into the local storage
@@ -648,7 +649,8 @@ SinkFinalizeType PhysicalBatchInsert::Finalize(Pipeline &pipeline, Event &event,
 			data_table.ResetOptimisticCollection(context, collection_index);
 		}
 
-		data_table.FinalizeOptimisticWriter(context, writer);
+		auto &optimistic_writer = data_table.GetOptimisticWriter(context);
+		optimistic_writer.Merge(*writer);
 		memory_manager.FinalCheck();
 		return SinkFinalizeType::READY;
 	}

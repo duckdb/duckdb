@@ -29,7 +29,6 @@ class ColumnDataCollection;
 class ColumnDefinition;
 class DataTable;
 class DuckTransaction;
-class OptimisticDataWriter;
 class RowGroup;
 class StorageManager;
 class TableCatalogEntry;
@@ -122,9 +121,8 @@ public:
 	RowGroupCollection &GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index);
 	//! Resets the optimistic row group collection corresponding to the index.
 	void ResetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index);
-	//! Create an optimistic writer for this table. Used for optimistically writing parallel appends.
-	OptimisticDataWriter &CreateOptimisticWriter(ClientContext &context);
-	void FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer);
+	//! Returns the optimistic writer of the corresponding local table.
+	OptimisticDataWriter &GetOptimisticWriter(ClientContext &context);
 
 	unique_ptr<TableDeleteState> InitializeDelete(TableCatalogEntry &table, ClientContext &context,
 	                                              const vector<unique_ptr<BoundConstraint>> &bound_constraints);

@@ -665,7 +665,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 
 		gstate.insert_count += lstate.insert_chunk.size();
 		gstate.insert_count += updated_tuples;
-		if (!parallel && return_chunk) {
+		if (return_chunk) {
 			gstate.return_collection.Append(lstate.insert_chunk);
 		}
 		storage.LocalAppend(gstate.append_state, context.client, lstate.insert_chunk, true);
@@ -692,7 +692,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 		collection->InitializeAppend(lstate.local_append_state);
 
 		lock_guard<mutex> l(gstate.lock);
-		lstate.writer = data_table.CreateOptimisticWriter(context.client);
+		lstate.optimistic_writer = make_uniq<OptimisticDataWriter>(data_table);
 		lstate.collection_index = data_table.CreateOptimisticCollection(context.client, std::move(collection));
 	}
 
@@ -702,7 +702,7 @@ SinkResultType PhysicalInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 	auto &collection = data_table.GetOptimisticCollection(context.client, lstate.collection_index);
 	auto new_row_group = collection.Append(lstate.insert_chunk, lstate.local_append_state);
 	if (new_row_group) {
-		lstate.writer->WriteNewRowGroup(collection);
+		lstate.optimistic_writer->WriteNewRowGroup(collection);
 	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -743,10 +743,11 @@ SinkCombineResultType PhysicalInsert::Combine(ExecutionContext &context, Operato
 		storage.FinalizeLocalAppend(gstate.append_state);
 	} else {
 		// we have written rows to disk optimistically - merge directly into the transaction-local storage
-		lstate.writer->WriteLastRowGroup(collection);
-		lstate.writer->FinalFlush();
+		lstate.optimistic_writer->WriteLastRowGroup(collection);
+		lstate.optimistic_writer->FinalFlush();
 		gstate.table.GetStorage().LocalMerge(context.client, collection);
-		gstate.table.GetStorage().FinalizeOptimisticWriter(context.client, *lstate.writer);
+		auto &optimistic_writer = gstate.table.GetStorage().GetOptimisticWriter(context.client);
+		optimistic_writer.Merge(*lstate.optimistic_writer);
 	}
 
 	return SinkCombineResultType::FINISHED;
