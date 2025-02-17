@@ -480,7 +480,7 @@ MultiFileInitLocal(ExecutionContext &context, TableFunctionInitInput &input, Glo
 	result->local_state = OP::InitializeLocalState();
 
 	if (gstate.CanRemoveColumns()) {
-		throw InternalException("FIXME can remove columns");
+		result->all_columns.Initialize(context.client, gstate.scanned_types);
 	}
 	if (!TryInitializeNextBatch(context.client, bind_data, *result, gstate)) {
 		return nullptr;
@@ -568,6 +568,20 @@ unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
 		} else {
 			result->projection_ids.resize(input.column_indexes.size());
 			iota(begin(result->projection_ids), end(result->projection_ids), 0);
+		}
+
+		const auto table_types = bind_data.types;
+		for (const auto &col_idx : input.column_indexes) {
+			if (col_idx.IsRowIdColumn()) {
+				result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
+			} else {
+				result->scanned_types.push_back(table_types[col_idx.GetPrimaryIndex()]);
+			}
+		}
+	}
+	if (require_extra_columns) {
+		for (const auto &column_type : result->multi_file_reader_state->extra_columns) {
+			result->scanned_types.push_back(column_type);
 		}
 	}
 	return std::move(result);
