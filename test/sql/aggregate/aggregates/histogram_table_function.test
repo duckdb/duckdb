@@ -64,8 +64,10 @@ x <= 12	13
 statement ok
 INSERT INTO integers VALUES (99999999)
 
-statement ok
-SELECT * FROM histogram_values(integers, i, technique := 'equi-height')
+query II
+SELECT COUNT(*), AVG(count) FROM histogram_values(integers, i, technique := 'equi-height')
+----
+10	13
 
 # sample integers
 query II
