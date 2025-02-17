@@ -7,6 +7,7 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "include/icu-casts.hpp"
 #include "include/icu-datefunc.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
@@ -326,82 +327,81 @@ struct ICULocalTimeFunc : public ICUDateFunc {
 	}
 };
 
-struct ICUToTimeTZ : public ICUDateFunc {
-	static inline dtime_tz_t Operation(icu::Calendar *calendar, dtime_tz_t timetz) {
-		// Normalise to +00:00, add TZ offset, then set offset to TZ
-		auto time = Time::NormalizeTimeTZ(timetz);
+dtime_tz_t ICUToTimeTZ::Operation(icu::Calendar *calendar, dtime_tz_t timetz) {
+	// Normalise to +00:00, add TZ offset, then set offset to TZ
+	auto time = Time::NormalizeTimeTZ(timetz);
 
-		auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET);
-		offset += ExtractField(calendar, UCAL_DST_OFFSET);
-		offset /= Interval::MSECS_PER_SEC;
+	auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET);
+	offset += ExtractField(calendar, UCAL_DST_OFFSET);
+	offset /= Interval::MSECS_PER_SEC;
 
-		date_t date(0);
-		time = Interval::Add(time, {0, 0, offset * Interval::MICROS_PER_SEC}, date);
-		return dtime_tz_t(time, offset);
+	date_t date(0);
+	time = Interval::Add(time, {0, 0, offset * Interval::MICROS_PER_SEC}, date);
+	return dtime_tz_t(time, offset);
+}
+
+bool ICUToTimeTZ::ToTimeTZ(icu::Calendar *calendar, timestamp_t instant, dtime_tz_t &result) {
+	if (!ICUIsFinite(instant)) {
+		return false;
 	}
 
-	static inline bool ToTimeTZ(icu::Calendar *calendar, timestamp_t instant, dtime_tz_t &result) {
-		if (!ICUIsFinite(instant)) {
-			return false;
-		}
+	//	Time in current TZ
+	auto micros = int32_t(SetTime(calendar, instant));
+	const auto hour = ExtractField(calendar, UCAL_HOUR_OF_DAY);
+	const auto minute = ExtractField(calendar, UCAL_MINUTE);
+	const auto second = ExtractField(calendar, UCAL_SECOND);
+	const auto millis = ExtractField(calendar, UCAL_MILLISECOND);
+	micros += millis * int32_t(Interval::MICROS_PER_MSEC);
+	if (!Time::IsValidTime(hour, minute, second, micros)) {
+		return false;
+	}
+	const auto time = Time::FromTime(hour, minute, second, micros);
 
-		//	Time in current TZ
-		auto micros = int32_t(SetTime(calendar, instant));
-		const auto hour = ExtractField(calendar, UCAL_HOUR_OF_DAY);
-		const auto minute = ExtractField(calendar, UCAL_MINUTE);
-		const auto second = ExtractField(calendar, UCAL_SECOND);
-		const auto millis = ExtractField(calendar, UCAL_MILLISECOND);
-		micros += millis * int32_t(Interval::MICROS_PER_MSEC);
-		if (!Time::IsValidTime(hour, minute, second, micros)) {
-			return false;
-		}
-		const auto time = Time::FromTime(hour, minute, second, micros);
+	//	Offset in current TZ
+	auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET);
+	offset += ExtractField(calendar, UCAL_DST_OFFSET);
+	offset /= Interval::MSECS_PER_SEC;
 
-		//	Offset in current TZ
-		auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET);
-		offset += ExtractField(calendar, UCAL_DST_OFFSET);
-		offset /= Interval::MSECS_PER_SEC;
+	result = dtime_tz_t(time, offset);
+	return true;
+}
 
-		result = dtime_tz_t(time, offset);
-		return true;
+bool ICUToTimeTZ::CastToTimeTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
+	auto &cast_data = parameters.cast_data->Cast<CastData>();
+	auto &info = cast_data.info->Cast<BindData>();
+	CalendarPtr calendar(info.calendar->clone());
+
+	UnaryExecutor::ExecuteWithNulls<timestamp_t, dtime_tz_t>(source, result, count,
+	                                                         [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
+		                                                         dtime_tz_t output;
+		                                                         if (ToTimeTZ(calendar.get(), input, output)) {
+			                                                         return output;
+		                                                         } else {
+			                                                         mask.SetInvalid(idx);
+			                                                         return dtime_tz_t();
+		                                                         }
+	                                                         });
+	return true;
+}
+
+BoundCastInfo ICUToTimeTZ::BindCastToTimeTZ(BindCastInput &input, const LogicalType &source,
+                                            const LogicalType &target) {
+	if (!input.context) {
+		throw InternalException("Missing context for TIMESTAMPTZ to TIMETZ cast.");
 	}
 
-	static bool CastToTimeTZ(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
-		auto &cast_data = parameters.cast_data->Cast<CastData>();
-		auto &info = cast_data.info->Cast<BindData>();
-		CalendarPtr calendar(info.calendar->clone());
+	auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
 
-		UnaryExecutor::ExecuteWithNulls<timestamp_t, dtime_tz_t>(source, result, count,
-		                                                         [&](timestamp_t input, ValidityMask &mask, idx_t idx) {
-			                                                         dtime_tz_t output;
-			                                                         if (ToTimeTZ(calendar.get(), input, output)) {
-				                                                         return output;
-			                                                         } else {
-				                                                         mask.SetInvalid(idx);
-				                                                         return dtime_tz_t();
-			                                                         }
-		                                                         });
-		return true;
-	}
+	return BoundCastInfo(CastToTimeTZ, std::move(cast_data));
+}
 
-	static BoundCastInfo BindCastToTimeTZ(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
-		if (!input.context) {
-			throw InternalException("Missing context for TIMESTAMPTZ to TIMETZ cast.");
-		}
+void ICUToTimeTZ::AddCasts(DatabaseInstance &db) {
+	auto &config = DBConfig::GetConfig(db);
+	auto &casts = config.GetCastFunctions();
 
-		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
-
-		return BoundCastInfo(CastToTimeTZ, std::move(cast_data));
-	}
-
-	static void AddCasts(DatabaseInstance &db) {
-		auto &config = DBConfig::GetConfig(db);
-		auto &casts = config.GetCastFunctions();
-
-		const auto implicit_cost = CastRules::ImplicitCast(LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ);
-		casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ, BindCastToTimeTZ, implicit_cost);
-	}
-};
+	const auto implicit_cost = CastRules::ImplicitCast(LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ);
+	casts.RegisterCastFunction(LogicalType::TIMESTAMP_TZ, LogicalType::TIME_TZ, BindCastToTimeTZ, implicit_cost);
+}
 
 struct ICUTimeZoneFunc : public ICUDateFunc {
 	template <typename OP, typename T>

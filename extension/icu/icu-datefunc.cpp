@@ -72,7 +72,7 @@ unique_ptr<FunctionData> ICUDateFunc::Bind(ClientContext &context, ScalarFunctio
 }
 
 void ICUDateFunc::SetTimeZone(icu::Calendar *calendar, const string_t &tz_id) {
-	auto tz = icu_66::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id.GetString())));
+	auto tz = icu::TimeZone::createTimeZone(icu::UnicodeString::fromUTF8(icu::StringPiece(tz_id.GetString())));
 	if (*tz == icu::TimeZone::getUnknown()) {
 		delete tz;
 		throw NotImplementedException("Unknown TimeZone '%s'", tz_id.GetString());

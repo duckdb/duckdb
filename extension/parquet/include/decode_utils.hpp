@@ -58,6 +58,25 @@ public:
 		}
 	}
 
+	static void Skip(ByteBuffer &src, bitpacking_width_t &bitpack_pos, idx_t count, const bitpacking_width_t width) {
+		CheckWidth(width);
+		src.available(count * width / BITPACK_DLEN); // check if buffer has enough space available once
+		if (bitpack_pos == 0 && count >= BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
+			idx_t remainder = count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
+			idx_t aligned_count = count - remainder;
+			SkipAligned(src, aligned_count, width);
+			count = remainder;
+		}
+		// FIXME: we should be able to just do this in one go instead of having this loop
+		for (idx_t i = 0; i < count; i++) {
+			bitpack_pos += width;
+			while (bitpack_pos > BITPACK_DLEN) {
+				src.unsafe_inc(1);
+				bitpack_pos -= BITPACK_DLEN;
+			}
+		}
+	}
+
 	template <class T>
 	static void BitPackAligned(T *src, data_ptr_t dst, const idx_t count, const bitpacking_width_t width) {
 		D_ASSERT(width < BITPACK_MASKS_SIZE);
@@ -94,6 +113,16 @@ public:
 		const auto read_size = count * width / BITPACK_DLEN;
 		src.available(read_size); // check if buffer has enough space available once
 		BitUnpackAlignedInternal(src, dst, count, width);
+	}
+
+	static void SkipAligned(ByteBuffer &src, const idx_t count, const bitpacking_width_t width) {
+		CheckWidth(width);
+		if (count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE != 0) {
+			throw InvalidInputException("Aligned bitpacking count must be a multiple of %llu",
+			                            BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE);
+		}
+		const auto read_size = count * width / BITPACK_DLEN;
+		src.inc(read_size);
 	}
 
 	//===--------------------------------------------------------------------===//
@@ -157,12 +186,17 @@ public:
 		} while (val != 0);
 	}
 
-	template <class T>
+	template <class T, bool CHECKED = true>
 	static T VarintDecode(ByteBuffer &buf) {
 		T result = 0;
 		uint8_t shift = 0;
 		while (true) {
-			auto byte = buf.read<uint8_t>();
+			uint8_t byte;
+			if (CHECKED) {
+				byte = buf.read<uint8_t>();
+			} else {
+				byte = buf.unsafe_read<uint8_t>();
+			}
 			result |= T(byte & 127) << shift;
 			if ((byte & 128) == 0) {
 				break;

@@ -142,10 +142,10 @@ ColumnStatistics &TableStatistics::GetStats(TableStatisticsLock &lock, idx_t i) 
 	return *column_stats[i];
 }
 
-BlockingSample &TableStatistics::GetTableSampleRef(TableStatisticsLock &lock) {
-	D_ASSERT(table_sample);
-	return *table_sample;
-}
+// BlockingSample &TableStatistics::GetTableSampleRef(TableStatisticsLock &lock) {
+//	D_ASSERT(table_sample);
+//	return *table_sample;
+//}
 
 unique_ptr<BlockingSample> TableStatistics::GetTableSample(TableStatisticsLock &lock) {
 	return std::move(table_sample);

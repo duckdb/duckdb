@@ -727,6 +727,9 @@ function(add_library_unity NAME MODE)
     enable_unity_build(${NAME} SRCS)
   endif()
   add_library(${NAME} OBJECT ${SRCS})
+  if(MSVC)
+    target_compile_options(${NAME} PRIVATE /bigobj)
+  endif()
 endfunction()
 
 function(disable_target_warnings NAME)
@@ -1062,7 +1065,7 @@ endfunction()
 macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES LINKED_LIBS SUBMODULES EXTENSION_VERSION)
   include(FetchContent)
   if (${APPLY_PATCHES})
-    set(PATCH_COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+    set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
   endif()
   FETCHCONTENT_DECLARE(
           ${NAME}_extension_fc
@@ -1328,6 +1331,10 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   else()
     message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
   endif()
+
+  if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}" STREQUAL "")
+    remove_definitions(-DEXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")
+  endif()
 endforeach()
 
 # Output the extensions that we linked into DuckDB for some nice build logs
@@ -1382,7 +1389,7 @@ if(${EXTENSION_CONFIG_BUILD})
 
   add_custom_target(
           duckdb_merge_vcpkg_manifests ALL
-          COMMAND  python3 scripts/merge_vcpkg_deps.py ${VCPKG_PATHS} ${EXT_NAMES}
+          COMMAND  ${Python3_EXECUTABLE} scripts/merge_vcpkg_deps.py ${VCPKG_PATHS} ${EXT_NAMES}
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Generates a shared vcpkg manifest from the individual extensions)
   string(REPLACE ";"  ", " VCPKG_NAMES_COMMAS "${VCPKG_NAMES}")
@@ -1425,9 +1432,9 @@ if(BUILD_PYTHON)
     )
 
   if(PYTHON_EDITABLE_BUILD)
-    set(PIP_COMMAND ${PIP_COMMAND} python3 -m pip install --editable .)
+    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install --editable .)
   else()
-    set(PIP_COMMAND ${PIP_COMMAND} python3 -m pip install .)
+    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .)
   endif()
 
   if(USER_SPACE)

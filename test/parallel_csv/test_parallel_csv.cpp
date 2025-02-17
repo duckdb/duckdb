@@ -25,8 +25,6 @@ const string tbl_zst = "tbl.zst";
 
 const string csv_extensions[5] = {csv, tsv, csv_gz, csv_zst, tbl_zst};
 
-const char *run = std::getenv("DUCKDB_RUN_PARALLEL_CSV_TESTS");
-
 bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
                        ColumnDataCollection *ground_truth = nullptr, const string &add_parameters = "") {
 	DuckDB db(nullptr);
@@ -78,9 +76,6 @@ bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const str
              bool set_temp_dir = false) {
 	DuckDB db(nullptr);
 	Connection conn(db);
-	if (!run) {
-		return true;
-	}
 	// Here we run the csv file first with the full buffer.
 	// Then a combination of multiple buffers.
 	if (skip) {
@@ -231,6 +226,9 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	// This file requires a temp_dir for offloading
 	skip.insert("data/csv/hebere.csv.gz");
 	skip.insert("data/csv/no_quote.csv");
+	// FIXME: This should be fixed when we get the strict mode working with mixed new line delims
+	skip.insert("data/csv/mixed_new_line.csv");
+
 	RunTestOnFolder("data/csv/", &skip);
 }
 

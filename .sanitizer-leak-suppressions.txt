@@ -1,5 +1,7 @@
 # dsdgen extension global statics
 leak:load_dist
 leak:find_dist
+leak:read_dist
+leak:init_text_pool
 leak:makePermutation
 leak:init_params

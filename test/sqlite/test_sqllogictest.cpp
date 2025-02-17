@@ -73,6 +73,9 @@ static void testRunner() {
 	if (AUTO_SWITCH_TEST_DIR) {
 		TestChangeDirectory(prev_directory);
 	}
+
+	// clear test directory after running tests
+	ClearTestDirectory();
 }
 
 static string ParseGroupFromPath(string file) {

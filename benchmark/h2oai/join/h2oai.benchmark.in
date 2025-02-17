@@ -11,6 +11,8 @@ storage persistent
 
 cache h2oaijoin.duckdb
 
+retry load 5
+
 load benchmark/h2oai/join/queries/load.sql
 
 run benchmark/h2oai/join/queries/q${QUERY_NUMBER_PADDED}.sql
