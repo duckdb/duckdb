@@ -124,7 +124,8 @@ struct ParquetMultiFileInfo {
 	using BIND_DATA = ParquetReadBindData;
 	using SCAN_STATE = ParquetReaderScanState;
 
-	static bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileBindData<ParquetMultiFileInfo> &multi_file_data, ParquetOptions &options);
+	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values, ParquetOptions &options);
+	static bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileReaderOptions &file_options, ParquetOptions &options);
 	static unique_ptr<BIND_DATA> InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data, ParquetOptions &options);
 	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState();
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
@@ -136,27 +137,13 @@ struct ParquetMultiFileInfo {
 };
 
 template<class OP>
-unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
-	vector<LogicalType> &return_types, vector<string> &names) {
+unique_ptr<FunctionData> MultiFileBindInternal(ClientContext &context, unique_ptr<MultiFileReader> multi_file_reader, shared_ptr<MultiFileList> multi_file_list,
+vector<LogicalType> &return_types, vector<string> &names, MultiFileReaderOptions file_options, typename OP::OPTIONS options) {
 	auto result = make_uniq<MultiFileBindData<OP>>();
-	result->multi_file_reader = MultiFileReader::Create(input.table_function);
-	result->file_list = result->multi_file_reader->CreateFileList(context, input.inputs[0]);
-
-	typename OP::OPTIONS options(context);
-	for (auto &kv : input.named_parameters) {
-		if (kv.second.IsNull()) {
-			throw BinderException("Cannot use NULL as function argument");
-		}
-		auto loption = StringUtil::Lower(kv.first);
-		if (result->multi_file_reader->ParseOption(loption, kv.second, result->file_options, context)) {
-			continue;
-		}
-		if (OP::ParseOption(context, loption, kv.second, *result, options)) {
-			continue;
-		}
-		throw NotImplementedException("Unimplemented option %s", kv.first);
-	}
+	result->multi_file_reader = std::move(multi_file_reader);
+	result->file_list = std::move(multi_file_list);
 	// auto-detect hive partitioning
+	result->file_options = std::move(file_options);
 	result->file_options.AutoDetectHivePartitioning(*result->file_list, context);
 	// now bind the readers
 	result->bind_data = OP::InitializeBindData(*result, options);
@@ -201,6 +188,54 @@ unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBind
 	}
 	result->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 	return std::move(result);
+}
+
+template<class OP>
+unique_ptr<FunctionData> MultiFileBind(ClientContext &context, TableFunctionBindInput &input,
+	vector<LogicalType> &return_types, vector<string> &names) {
+	auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
+	MultiFileReaderOptions file_options;
+
+	typename OP::OPTIONS options(context);
+	for (auto &kv : input.named_parameters) {
+		if (kv.second.IsNull()) {
+			throw BinderException("Cannot use NULL as function argument");
+		}
+		auto loption = StringUtil::Lower(kv.first);
+		if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
+			continue;
+		}
+		if (OP::ParseOption(context, loption, kv.second, file_options, options)) {
+			continue;
+		}
+		throw NotImplementedException("Unimplemented option %s", kv.first);
+	}
+	return MultiFileBindInternal<OP>(context, std::move(multi_file_reader), std::move(file_list), return_types, names, std::move(file_options), std::move(options));
+}
+
+template<class OP>
+unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info,
+												vector<string> &expected_names,
+												vector<LogicalType> &expected_types) {
+	typename OP::OPTIONS options(context);
+	MultiFileReaderOptions file_options;
+
+	for (auto &option : info.options) {
+		auto loption = StringUtil::Lower(option.first);
+		if (OP::ParseCopyOption(context, loption, option.second, options)) {
+			continue;
+		}
+		throw NotImplementedException("Unsupported option for COPY FROM: %s", option.first);
+	}
+
+	// TODO: Allow overriding the MultiFileReader for COPY FROM?
+	auto multi_file_reader = MultiFileReader::CreateDefault("ParquetCopy");
+	vector<string> paths = {info.file_path};
+	auto file_list = multi_file_reader->CreateFileList(context, paths);
+
+	return MultiFileBindInternal<OP>(context, std::move(multi_file_reader), std::move(file_list), expected_types,
+	                               expected_names, std::move(file_options), std::move(options));
 }
 
 template<class OP>
@@ -775,15 +810,15 @@ static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, Parquet
 // 	return bind_data;
 // }
 
-static bool GetBooleanArgument(const pair<string, vector<Value>> &option) {
-	if (option.second.empty()) {
+static bool GetBooleanArgument(const string &key, const vector<Value> &option_values) {
+	if (option_values.empty()) {
 		return true;
 	}
 	Value boolean_value;
 	string error_message;
-	if (!option.second[0].DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
+	if (!option_values[0].DefaultTryCastAs(LogicalType::BOOLEAN, boolean_value, &error_message)) {
 		throw InvalidInputException("Unable to cast \"%s\" to BOOLEAN for Parquet option \"%s\"",
-		                            option.second[0].ToString(), option.first);
+		                            option_values[0].ToString(), key);
 	}
 	return BooleanValue::Get(boolean_value);
 }
@@ -835,43 +870,6 @@ public:
 		return MultiFileReader::CreateFunctionSet(table_function);
 	}
 
-	static unique_ptr<FunctionData> ParquetReadBind(ClientContext &context, CopyInfo &info,
-	                                                vector<string> &expected_names,
-	                                                vector<LogicalType> &expected_types) {
-		D_ASSERT(expected_names.size() == expected_types.size());
-		throw InternalException("ParquetReadBind");
-		// ParquetOptions parquet_options(context);
-		//
-		// for (auto &option : info.options) {
-		// 	auto loption = StringUtil::Lower(option.first);
-		// 	if (loption == "compression" || loption == "codec" || loption == "row_group_size") {
-		// 		// CODEC/COMPRESSION and ROW_GROUP_SIZE options have no effect on parquet read.
-		// 		// These options are determined from the file.
-		// 		continue;
-		// 	} else if (loption == "binary_as_string") {
-		// 		parquet_options.binary_as_string = GetBooleanArgument(option);
-		// 	} else if (loption == "file_row_number") {
-		// 		parquet_options.file_row_number = GetBooleanArgument(option);
-		// 	} else if (loption == "debug_use_openssl") {
-		// 		parquet_options.debug_use_openssl = GetBooleanArgument(option);
-		// 	} else if (loption == "encryption_config") {
-		// 		if (option.second.size() != 1) {
-		// 			throw BinderException("Parquet encryption_config cannot be empty!");
-		// 		}
-		// 		parquet_options.encryption_config = ParquetEncryptionConfig::Create(context, option.second[0]);
-		// 	} else {
-		// 		throw NotImplementedException("Unsupported option for COPY FROM parquet: %s", option.first);
-		// 	}
-		// }
-		//
-		// // TODO: Allow overriding the MultiFileReader for COPY FROM?
-		// auto multi_file_reader = MultiFileReader::CreateDefault("ParquetCopy");
-		// vector<string> paths = {info.file_path};
-		// auto file_list = multi_file_reader->CreateFileList(context, paths);
-		//
-		// return ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), expected_types,
-		//                                expected_names, parquet_options);
-	}
 	//
 	// static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
 	//                                                    column_t column_index) {
@@ -1027,7 +1025,35 @@ public:
 
 };
 
-bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileBindData<ParquetMultiFileInfo> &multi_file_data, ParquetOptions &parquet_options) {
+bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values, ParquetOptions &options) {
+	if (key == "compression" || key == "codec" || key == "row_group_size") {
+		// CODEC/COMPRESSION and ROW_GROUP_SIZE options have no effect on parquet read.
+		// These options are determined from the file.
+		return true;
+	}
+	if (key == "binary_as_string") {
+		options.binary_as_string = GetBooleanArgument(key, values);
+		return true;
+	}
+	if (key == "file_row_number") {
+		options.file_row_number = GetBooleanArgument(key, values);
+		return true;
+	}
+	if (key == "debug_use_openssl") {
+		options.debug_use_openssl = GetBooleanArgument(key, values);
+		return true;
+	}
+	if (key == "encryption_config") {
+		if (values.size() != 1) {
+			throw BinderException("Parquet encryption_config cannot be empty!");
+		}
+		options.encryption_config = ParquetEncryptionConfig::Create(context, values[0]);
+		return true;
+	}
+	return false;
+}
+
+bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileReaderOptions &file_options, ParquetOptions &parquet_options) {
 	if (key == "binary_as_string") {
 		parquet_options.binary_as_string = BooleanValue::Get(val);
 		return true;
@@ -1054,7 +1080,7 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key
 			parquet_options.schema.emplace_back(
 				ParquetColumnDefinition::FromSchemaValue(context, column_values[i]));
 		}
-		multi_file_data.file_options.auto_detect_hive_partitioning = false;
+		file_options.auto_detect_hive_partitioning = false;
 		return true;
 	}
 	if (key == "explicit_cardinality") {
@@ -1846,7 +1872,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.copy_to_combine = ParquetWriteCombine;
 	function.copy_to_finalize = ParquetWriteFinalize;
 	function.execution_mode = ParquetWriteExecutionMode;
-	function.copy_from_bind = ParquetScanFunction::ParquetReadBind;
+	function.copy_from_bind = MultiFileBindCopy<ParquetMultiFileInfo>;
 	function.copy_from_function = scan_fun.functions[0];
 	function.prepare_batch = ParquetWritePrepareBatch;
 	function.flush_batch = ParquetWriteFlushBatch;
