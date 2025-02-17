@@ -614,20 +614,28 @@ void BindContext::AddBinding(unique_ptr<Binding> binding) {
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                StandardEntry &entry, bool add_row_id) {
-	AddBinding(make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, add_row_id));
+	virtual_column_map_t virtual_columns;
+	if (add_row_id) {
+		virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
+	}
+	AddBinding(
+	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, std::move(virtual_columns)));
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                const string &table_name) {
+	virtual_column_map_t virtual_columns;
+	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
 	AddBinding(make_uniq<TableBinding>(alias.empty() ? table_name : alias, types, names, bound_column_ids, nullptr,
-	                                   index, true));
+	                                   index, std::move(virtual_columns)));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
                                    const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
-                                   optional_ptr<StandardEntry> entry) {
-	AddBinding(make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index));
+                                   optional_ptr<StandardEntry> entry, virtual_column_map_t virtual_columns) {
+	AddBinding(
+	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index, std::move(virtual_columns)));
 }
 
 static string AddColumnNameToBinding(const string &base_name, case_insensitive_set_t &current_names) {

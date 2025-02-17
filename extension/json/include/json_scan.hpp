@@ -360,6 +360,8 @@ public:
 	                      const TableFunction &function);
 	static unique_ptr<FunctionData> Deserialize(Deserializer &deserializer, TableFunction &function);
 
+	static virtual_column_map_t GetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data);
+
 	static void TableFunctionDefaults(TableFunction &table_function);
 };
 

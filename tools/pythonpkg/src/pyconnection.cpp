@@ -1852,7 +1852,7 @@ void DuckDBPyConnection::LoadExtension(const string &extension) {
 
 shared_ptr<DuckDBPyConnection> DefaultConnectionHolder::Get() {
 	lock_guard<mutex> guard(l);
-	if (!connection) {
+	if (!connection || connection->con.ConnectionIsClosed()) {
 		py::dict config_dict;
 		connection = DuckDBPyConnection::Connect(py::str(":memory:"), false, config_dict);
 	}

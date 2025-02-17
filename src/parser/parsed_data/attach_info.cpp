@@ -38,6 +38,8 @@ string AttachInfo::ToString() const {
 	result += "ATTACH";
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += " IF NOT EXISTS";
+	} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		result += " OR REPLACE";
 	}
 	result += " DATABASE";
 	result += KeywordHelper::WriteQuoted(path, '\'');

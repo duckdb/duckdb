@@ -187,7 +187,7 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 	return_types.emplace_back(LogicalType::BIGINT);
 }
 
-Value ConvertParquetStats(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele, bool stats_is_set,
+Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &schema_ele, bool stats_is_set,
                           const std::string &stats) {
 	if (!stats_is_set) {
 		return Value(LogicalType::VARCHAR);
@@ -199,34 +199,34 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
                                                        const string &file_path) {
 	collection.Reset();
 	ParquetOptions parquet_options(context);
-	auto reader = make_uniq<ParquetReader>(context, file_path, parquet_options);
+	ParquetReader reader(context, file_path, parquet_options);
 	idx_t count = 0;
 	DataChunk current_chunk;
 	current_chunk.Initialize(context, return_types);
-	auto meta_data = reader->GetFileMetadata();
-	vector<LogicalType> column_types;
-	vector<idx_t> schema_indexes;
+	auto meta_data = reader.GetFileMetadata();
+	vector<ParquetColumnSchema> column_schemas;
 	for (idx_t schema_idx = 0; schema_idx < meta_data->schema.size(); schema_idx++) {
 		auto &schema_element = meta_data->schema[schema_idx];
 		if (schema_element.num_children > 0) {
 			continue;
 		}
-		column_types.push_back(ParquetReader::DeriveLogicalType(schema_element, false));
-		schema_indexes.push_back(schema_idx);
+		ParquetColumnSchema column_schema;
+		column_schema.type = reader.DeriveLogicalType(schema_element, column_schema);
+		column_schemas.push_back(std::move(column_schema));
 	}
 
 	for (idx_t row_group_idx = 0; row_group_idx < meta_data->row_groups.size(); row_group_idx++) {
 		auto &row_group = meta_data->row_groups[row_group_idx];
 
-		if (row_group.columns.size() > column_types.size()) {
+		if (row_group.columns.size() > column_schemas.size()) {
 			throw InternalException("Too many column in row group: corrupt file?");
 		}
 		for (idx_t col_idx = 0; col_idx < row_group.columns.size(); col_idx++) {
 			auto &column = row_group.columns[col_idx];
+			auto &column_schema = column_schemas[col_idx];
 			auto &col_meta = column.meta_data;
 			auto &stats = col_meta.statistics;
-			auto &schema_element = meta_data->schema[schema_indexes[col_idx]];
-			auto &column_type = column_types[col_idx];
+			auto &column_type = column_schema.type;
 
 			// file_name, LogicalType::VARCHAR
 			current_chunk.SetValue(0, count, file_path);
@@ -260,11 +260,11 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 
 			// stats_min, LogicalType::VARCHAR
 			current_chunk.SetValue(10, count,
-			                       ConvertParquetStats(column_type, schema_element, stats.__isset.min, stats.min));
+			                       ConvertParquetStats(column_type, column_schema, stats.__isset.min, stats.min));
 
 			// stats_max, LogicalType::VARCHAR
 			current_chunk.SetValue(11, count,
-			                       ConvertParquetStats(column_type, schema_element, stats.__isset.max, stats.max));
+			                       ConvertParquetStats(column_type, column_schema, stats.__isset.max, stats.max));
 
 			// stats_null_count, LogicalType::BIGINT
 			current_chunk.SetValue(12, count, ParquetElementBigint(stats.null_count, stats.__isset.null_count));
@@ -274,11 +274,11 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 
 			// stats_min_value, LogicalType::VARCHAR
 			current_chunk.SetValue(
-			    14, count, ConvertParquetStats(column_type, schema_element, stats.__isset.min_value, stats.min_value));
+			    14, count, ConvertParquetStats(column_type, column_schema, stats.__isset.min_value, stats.min_value));
 
 			// stats_max_value, LogicalType::VARCHAR
 			current_chunk.SetValue(
-			    15, count, ConvertParquetStats(column_type, schema_element, stats.__isset.max_value, stats.max_value));
+			    15, count, ConvertParquetStats(column_type, column_schema, stats.__isset.max_value, stats.max_value));
 
 			// compression, LogicalType::VARCHAR
 			current_chunk.SetValue(16, count, ConvertParquetElementToString(col_meta.codec));

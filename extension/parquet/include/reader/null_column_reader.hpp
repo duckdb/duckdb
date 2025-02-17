@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// null_column_reader.hpp
+// reader/null_column_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -18,18 +18,15 @@ public:
 	static constexpr const PhysicalType TYPE = PhysicalType::INVALID;
 
 public:
-	NullColumnReader(ParquetReader &reader, LogicalType type_p, const SchemaElement &schema_p, idx_t schema_idx_p,
-	                 idx_t max_define_p, idx_t max_repeat_p)
-	    : ColumnReader(reader, std::move(type_p), schema_p, schema_idx_p, max_define_p, max_repeat_p) {};
+	NullColumnReader(ParquetReader &reader, const ParquetColumnSchema &schema) : ColumnReader(reader, schema) {};
 
 	shared_ptr<ResizeableBuffer> dict;
 
 public:
-	void Plain(shared_ptr<ByteBuffer> plain_data, uint8_t *defines, uint64_t num_values, parquet_filter_t *filter,
-	           idx_t result_offset, Vector &result) override {
+	void Plain(ByteBuffer &plain_data, uint8_t *defines, uint64_t num_values, idx_t result_offset,
+	           Vector &result) override {
 		(void)defines;
 		(void)plain_data;
-		(void)filter;
 
 		auto &result_mask = FlatVector::Validity(result);
 		for (idx_t row_idx = 0; row_idx < num_values; row_idx++) {

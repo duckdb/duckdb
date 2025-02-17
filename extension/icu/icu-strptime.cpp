@@ -11,10 +11,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/function_binder.hpp"
-#include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/main/extension_util.hpp"
 
 namespace duckdb {
@@ -75,13 +72,13 @@ struct ICUStrptime : public ICUDateFunc {
 		calendar->set(UCAL_HOUR_OF_DAY, parsed.data[3]);
 		calendar->set(UCAL_MINUTE, parsed.data[4]);
 		calendar->set(UCAL_SECOND, parsed.data[5]);
-		calendar->set(UCAL_MILLISECOND, micros / Interval::MICROS_PER_MSEC);
+		calendar->set(UCAL_MILLISECOND, UnsafeNumericCast<int32_t>(micros / Interval::MICROS_PER_MSEC));
 		micros %= Interval::MICROS_PER_MSEC;
 
 		// This overrides the TZ setting, so only use it if an offset was parsed.
 		// Note that we don't bother/worry about the DST setting because the two just combine.
 		if (format.HasFormatSpecifier(StrTimeSpecifier::UTC_OFFSET)) {
-			calendar->set(UCAL_ZONE_OFFSET, parsed.data[7] * Interval::MSECS_PER_SEC * Interval::SECS_PER_MINUTE);
+			calendar->set(UCAL_ZONE_OFFSET, UnsafeNumericCast<int32_t>(parsed.data[7] * Interval::MSECS_PER_SEC));
 		}
 
 		return micros;
@@ -375,11 +372,11 @@ struct ICUStrftime : public ICUDateFunc {
 		data[3] = ExtractField(calendar, UCAL_HOUR_OF_DAY);
 		data[4] = ExtractField(calendar, UCAL_MINUTE);
 		data[5] = ExtractField(calendar, UCAL_SECOND);
-		data[6] = ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros;
+		data[6] =
+		    UnsafeNumericCast<int32_t>(ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros);
 
 		data[7] = ExtractField(calendar, UCAL_ZONE_OFFSET) + ExtractField(calendar, UCAL_DST_OFFSET);
 		data[7] /= Interval::MSECS_PER_SEC;
-		data[7] /= Interval::SECS_PER_MINUTE;
 
 		const auto date = Date::FromDate(data[0], data[1], data[2]);
 		const auto time = Time::FromTime(data[3], data[4], data[5], data[6]);
@@ -461,7 +458,8 @@ struct ICUStrftime : public ICUDateFunc {
 		time_units[0] = ExtractField(calendar, UCAL_HOUR_OF_DAY);
 		time_units[1] = ExtractField(calendar, UCAL_MINUTE);
 		time_units[2] = ExtractField(calendar, UCAL_SECOND);
-		time_units[3] = ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros;
+		time_units[3] =
+		    UnsafeNumericCast<int32_t>(ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros);
 
 		idx_t year_length;
 		bool add_bc;

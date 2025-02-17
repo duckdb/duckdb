@@ -32,7 +32,8 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 
 	// check ATTACH IF NOT EXISTS
 	auto &db_manager = DatabaseManager::Get(context.client);
-	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
+	if (info->on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT ||
+	    info->on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
 		// constant-time lookup in the catalog for the db name
 		auto existing_db = db_manager.GetDatabase(context.client, name);
 		if (existing_db) {
@@ -48,7 +49,16 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 			if (!options.default_table.name.empty()) {
 				existing_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 			}
-			return SourceResultType::FINISHED;
+			if (info->on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+				// same path, name and type, DB does not need replacing
+				auto const db_type = options.db_type.empty() ? "duckdb" : options.db_type;
+				if (existing_db->GetCatalog().GetDBPath() == path &&
+				    existing_db->GetCatalog().GetCatalogType() == db_type) {
+					return SourceResultType::FINISHED;
+				}
+			} else {
+				return SourceResultType::FINISHED;
+			}
 		}
 	}
 

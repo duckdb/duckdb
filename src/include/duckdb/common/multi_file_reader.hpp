@@ -168,7 +168,7 @@ struct MultiFileFilterEntry {
 struct MultiFileConstantEntry {
 	MultiFileConstantEntry(idx_t column_id, Value value_p) : column_id(column_id), value(std::move(value_p)) {
 	}
-	//! The column id to apply the constant value to
+	//! The (global) column id to apply the constant value to
 	idx_t column_id;
 	//! The constant value
 	Value value;
@@ -200,6 +200,10 @@ struct MultiFileReaderData {
 
 //! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
 struct MultiFileReader {
+public:
+	static constexpr column_t COLUMN_IDENTIFIER_FILENAME = UINT64_C(9223372036854775808);
+
+public:
 	virtual ~MultiFileReader();
 
 	//! Create a MultiFileReader for a specific TableFunction, using its function name for errors
@@ -273,7 +277,7 @@ struct MultiFileReader {
 	                                      const string &initial_file, const MultiFileReaderBindData &options,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
 	//! Populated the filter_map
-	DUCKDB_API virtual void CreateFilterMap(const vector<MultiFileReaderColumnDefinition> &global_columns,
+	DUCKDB_API virtual void CreateFilterMap(const vector<ColumnIndex> &global_column_ids,
 	                                        optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
 	                                        optional_ptr<MultiFileReaderGlobalState> global_state);
 
@@ -288,6 +292,9 @@ struct MultiFileReader {
 	                                         optional_ptr<MultiFileReaderGlobalState> global_state,
 	                                         const OperatorPartitionInfo &partition_info,
 	                                         OperatorPartitionData &partition_data);
+
+	DUCKDB_API static void GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
+	                                         virtual_column_map_t &result);
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,

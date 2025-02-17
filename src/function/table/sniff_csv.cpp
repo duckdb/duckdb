@@ -165,19 +165,19 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	output.SetCardinality(1);
 
 	// 1. Delimiter
-	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter.GetValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter.FormatValue();
 	output.SetValue(0, 0, str_opt);
 	// 2. Quote
-	str_opt = sniffer_options.dialect_options.state_machine_options.quote.GetValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.quote.FormatValue();
 	output.SetValue(1, 0, str_opt);
 	// 3. Escape
-	str_opt = sniffer_options.dialect_options.state_machine_options.escape.GetValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.escape.FormatValue();
 	output.SetValue(2, 0, str_opt);
 	// 4. NewLine Delimiter
 	auto new_line_identifier = sniffer_options.NewLineIdentifierToString();
 	output.SetValue(3, 0, new_line_identifier);
 	// 5. Comment
-	str_opt = sniffer_options.dialect_options.state_machine_options.comment.GetValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.comment.FormatValue();
 	output.SetValue(4, 0, str_opt);
 	// 6. Skip Rows
 	output.SetValue(5, 0, Value::UINTEGER(NumericCast<uint32_t>(sniffer_options.dialect_options.skip_rows.GetValue())));
