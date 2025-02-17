@@ -13,6 +13,14 @@ SELECT GETVARIABLE('animal')
 ----
 duck
 
+statement ok
+PREPARE v1 AS SELECT GETVARIABLE($1);
+
+query I
+EXECUTE v1('animal');
+----
+duck
+
 # overwriting
 statement ok
 SET VARIABLE animal='bird'
