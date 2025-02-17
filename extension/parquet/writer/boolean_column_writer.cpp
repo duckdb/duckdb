@@ -52,14 +52,11 @@ void BooleanColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStat
 	const auto &mask = FlatVector::Validity(input_column);
 
 	const auto *const ptr = FlatVector::GetData<bool>(input_column);
-	if (mask.AllValid()) {
+	if (stats.max && !stats.min && mask.AllValid()) {
+		// Fast path: stats have already been set, and there's no NULLs
 		for (idx_t r = chunk_start; r < chunk_end; r++) {
 			const auto &val = ptr[r];
-
-			stats.max |= val;
-			stats.min &= val;
 			state.byte |= val << state.byte_pos;
-
 			if (++state.byte_pos == 8) {
 				temp_writer.Write(state.byte);
 				state.byte = 0;
