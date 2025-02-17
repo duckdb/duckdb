@@ -84,3 +84,17 @@ select [
 ]
 ----
 [[{'a': {'inner': '  test  '}}, {'a': {'inner': '\\  test  \\'}}], [{'a': {'inner': '  test  '}}, {'a': {'inner': '\\\\  test  \\\\'}}]]
+
+query III
+select [
+	row('test'),
+	$$(NULL)$$,
+	$$('null')$$,
+	$$('nUlL')$$,
+	$$(NuLl)$$,
+	$$("NULLz")$$,
+	$$("NULL")$$
+] a, a::VARCHAR::STRUCT(a VARCHAR)[] b, a == b
+----
+[(test), (NULL), ('null'), ('nUlL'), (NULL), (NULLz), ('NULL')]	[{'a': test}, {'a': NULL}, {'a': 'null'}, {'a': 'nUlL'}, {'a': NULL}, {'a': NULLz}, {'a': 'NULL'}]	true
+

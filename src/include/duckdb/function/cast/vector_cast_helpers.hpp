@@ -197,6 +197,9 @@ struct VectorCastHelpers {
 		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
 			needs_quotes = true;
 		}
+		if (base_length == 4 && StringUtil::CIEquals(std::string(string_data, string_data + base_length), "null")) {
+			needs_quotes = true;
+		}
 
 		const auto string_end = string_data + base_length;
 		auto res = std::find_first_of(string_data, string_end, special_chars, special_chars + special_chars_length);
@@ -240,6 +243,9 @@ struct VectorCastHelpers {
 		if (isspace(string_data[0])) {
 			needs_quotes = true;
 		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
+			needs_quotes = true;
+		}
+		if (base_length == 4 && StringUtil::CIEquals(std::string(string_data, string_data + base_length), "null")) {
 			needs_quotes = true;
 		}
 

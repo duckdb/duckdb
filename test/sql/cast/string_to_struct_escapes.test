@@ -256,3 +256,8 @@ query I
 SELECT $${@: "value", age: 30}$$::STRUCT("@" VARCHAR, age INT);
 ----
 {'@': value, 'age': 30}
+
+query III
+select $$[{'a': test}, {'a': NULL}, {'a': 'null'}, {'a': 'nUlL'}, {'a': NULL}, {'a': NULLz}, {'a': 'NULL'}]$$::STRUCT(a VARCHAR)[] a, a::VARCHAR::STRUCT(a VARCHAR)[] b, a == b
+----
+[{'a': test}, {'a': NULL}, {'a': 'null'}, {'a': 'nUlL'}, {'a': NULL}, {'a': NULLz}, {'a': 'NULL'}]	[{'a': test}, {'a': NULL}, {'a': 'null'}, {'a': 'nUlL'}, {'a': NULL}, {'a': NULLz}, {'a': 'NULL'}]	true

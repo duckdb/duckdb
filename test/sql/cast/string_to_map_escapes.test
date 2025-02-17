@@ -145,3 +145,13 @@ query I
 SELECT $${=value}$$::MAP(VARCHAR, VARCHAR);
 ----
 {=value}
+
+query III
+select $${'NULL'=true}$$::MAP(VARCHAR, VARCHAR) a, a::VARCHAR::MAP(VARCHAR, VARCHAR) b, a == b
+----
+{'NULL'=true}	{'NULL'=true}	true
+
+query III
+select $${'a'='NULL'}$$::MAP(VARCHAR, VARCHAR) a, a::VARCHAR::MAP(VARCHAR, VARCHAR) b, a == b
+----
+{a='NULL'}	{a='NULL'}	true
