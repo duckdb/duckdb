@@ -229,7 +229,7 @@ public:
 		auto &g_state = g_state_p.Cast<BatchInsertGlobalState>();
 		auto &l_state = l_state_p.Cast<BatchInsertLocalState>();
 
-        // Merge the collections.
+		// Merge the collections.
 		if (!l_state.writer) {
 			l_state.writer = &g_state.table.GetStorage().CreateOptimisticWriter(context);
 		}
