@@ -70,7 +70,7 @@ struct MultiFileBindData : public TableFunctionData {
 
 	void Initialize(shared_ptr<typename OP::READER> reader) {
 		initial_reader = std::move(reader);
-		bind_data->Initialize(*reader);
+		bind_data->Initialize(*initial_reader);
 	}
 	void Initialize(ClientContext &, unique_ptr<typename OP::UNION_DATA> &union_data) {
 		Initialize(std::move(union_data->reader));
