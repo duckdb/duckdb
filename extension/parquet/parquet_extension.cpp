@@ -141,6 +141,7 @@ struct ParquetMultiFileInfo {
 	                              LocalTableFunctionState &lstate);
 	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state);
 	static unique_ptr<NodeStatistics> GetCardinality(TableFunctionData &bind_data, idx_t file_count);
+	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, ParquetReader &reader, const string &name);
 };
 
 template <class OP>
@@ -680,6 +681,28 @@ static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, Da
 	} while (true);
 }
 
+
+template<class OP>
+static unique_ptr<BaseStatistics> MultiFileScanStats(ClientContext &context, const FunctionData *bind_data_p,
+												   column_t column_index) {
+	auto &bind_data = bind_data_p->Cast<MultiFileBindData<OP>>();
+
+	// NOTE: we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
+	if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+		// multiple files, no luck!
+		return nullptr;
+	}
+	if (!bind_data.initial_reader) {
+		// no reader
+		return nullptr;
+	}
+	// scanning single parquet file and we have the metadata read already
+	if (IsVirtualColumn(column_index)) {
+		return nullptr;
+	}
+	return OP::GetStatistics(context, *bind_data.initial_reader, bind_data.names[column_index]);
+}
+
 template <class OP>
 static unique_ptr<NodeStatistics> MultiFileCardinality(ClientContext &context, const FunctionData *bind_data) {
 	auto &data = bind_data->Cast<MultiFileBindData<OP>>();
@@ -882,7 +905,7 @@ public:
 		TableFunction table_function("parquet_scan", {LogicalType::VARCHAR}, MultiFileScan<ParquetMultiFileInfo>,
 		                             MultiFileBind<ParquetMultiFileInfo>, MultiFileInitGlobal<ParquetMultiFileInfo>,
 		                             MultiFileInitLocal<ParquetMultiFileInfo>);
-		table_function.statistics = nullptr; // FIXME - ParquetScanStats;
+		table_function.statistics = MultiFileScanStats<ParquetMultiFileInfo>;
 		table_function.cardinality = MultiFileCardinality<ParquetMultiFileInfo>;
 		table_function.table_scan_progress = nullptr; // FIXME - ParquetProgress;
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
@@ -908,30 +931,6 @@ public:
 
 		return MultiFileReader::CreateFunctionSet(table_function);
 	}
-
-	//
-	// static unique_ptr<BaseStatistics> ParquetScanStats(ClientContext &context, const FunctionData *bind_data_p,
-	//                                                    column_t column_index) {
-	// 	auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
-	//
-	// 	if (IsVirtualColumn(column_index)) {
-	// 		return nullptr;
-	// 	}
-	//
-	// 	// NOTE: we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
-	// 	if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-	// 		// multiple files, no luck!
-	// 		return nullptr;
-	// 	}
-	// 	if (!bind_data.initial_reader) {
-	// 		// no reader
-	// 		return nullptr;
-	// 	}
-	// 	// scanning single parquet file and we have the metadata read already
-	// 	return bind_data.initial_reader->ReadStatistics(bind_data.names[column_index]);
-	//
-	// 	return nullptr;
-	// }
 
 	static void VerifyParquetSchemaParameter(const Value &schema) {
 		LogicalType::MAP(LogicalType::BLOB, LogicalType::STRUCT({{{"name", LogicalType::VARCHAR},
@@ -1124,6 +1123,10 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(TableFunctionDat
 		return make_uniq<NodeStatistics>(bind_data.explicit_cardinality);
 	}
 	return make_uniq<NodeStatistics>(MaxValue(bind_data.initial_file_cardinality, (idx_t)1) * file_count);
+}
+
+unique_ptr<BaseStatistics> ParquetMultiFileInfo::GetStatistics(ClientContext &context, ParquetReader &reader, const string &name) {
+	return reader.ReadStatistics(name);
 }
 
 shared_ptr<ParquetReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, ParquetUnionData &union_data) {
