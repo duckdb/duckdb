@@ -160,7 +160,6 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
-	void AllocateCompressed(idx_t size);
 	void PrepareRead(parquet_filter_t &filter);
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
@@ -178,7 +177,6 @@ private:
 
 	shared_ptr<ResizeableBuffer> block;
 
-	ResizeableBuffer compressed_buffer;
 	ResizeableBuffer offset_buffer;
 
 	unique_ptr<RleBpDecoder> dict_decoder;
