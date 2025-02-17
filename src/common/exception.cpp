@@ -194,6 +194,17 @@ unordered_map<string, string> Exception::InitializeExtraInfo(optional_idx error_
 	return result;
 }
 
+bool Exception::IsExecutionError(ExceptionType type) {
+	switch (type) {
+	case ExceptionType::INVALID_INPUT:
+	case ExceptionType::OUT_OF_RANGE:
+	case ExceptionType::CONVERSION:
+		return true;
+	default:
+		return false;
+	}
+}
+
 unordered_map<string, string> Exception::InitializeExtraInfo(const string &subtype, optional_idx error_location) {
 	unordered_map<string, string> result;
 	result["error_subtype"] = subtype;
