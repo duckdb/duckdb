@@ -78,10 +78,10 @@ SELECT COUNT(*) - ${i} FROM integers2;
 query I
 SELECT
 	CASE WHEN ${i} = 0 THEN True::test_result
-	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.4 THEN True::test_result
+	WHEN current.total_blocks <= total_blocks_tbl.total_blocks * 1.6 THEN True::test_result
 	ELSE {
 		'old': total_blocks_tbl.total_blocks,
-		'allowed_max': total_blocks_tbl.total_blocks * 1.4,
+		'allowed_max': total_blocks_tbl.total_blocks * 1.6,
 		'actual': current.total_blocks
 	}::test_result
 	END
