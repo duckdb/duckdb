@@ -11,8 +11,6 @@ PRAGMA immediate_transaction_mode = True;
 statement ok
 CREATE TABLE tbl AS SELECT range AS i FROM range(100);
 
-mode skip
-
 # Trigger write-write conflict.
 
 statement ok con1
@@ -43,8 +41,6 @@ SELECT COUNT(*) FROM duckdb_indexes;
 statement ok
 DROP INDEX my_idx;
 
-mode unskip
-
 # Trigger early-out.
 
 statement ok
@@ -52,6 +48,11 @@ CREATE INDEX IF NOT EXISTS my_idx ON tbl(i);
 
 statement ok
 CREATE INDEX IF NOT EXISTS my_idx ON tbl(i);
+
+statement error
+CREATE INDEX my_idx ON tbl(i);
+----
+<REGEX>:Catalog Error.*already exists.*
 
 query I
 SELECT COUNT(*) FROM duckdb_indexes;

@@ -36,8 +36,6 @@ class CreateARTIndexGlobalSinkState : public GlobalSinkState {
 public:
 	//! We merge the local indexes into one global index.
 	unique_ptr<BoundIndex> global_index;
-	//! True, if CREATE IF NOT EXISTS and an index already exists.
-	bool finished;
 };
 
 class CreateARTIndexLocalSinkState : public LocalSinkState {
@@ -58,12 +56,6 @@ public:
 unique_ptr<GlobalSinkState> PhysicalCreateARTIndex::GetGlobalSinkState(ClientContext &context) const {
 	// Create the global sink state.
 	auto state = make_uniq<CreateARTIndexGlobalSinkState>();
-
-	// Eager catalog lookup to early-out, if the index already exists.
-	state->finished = VerifyIndexDoesNotExist(context);
-	if (state->finished) {
-		return (std::move(state));
-	}
 
 	// Create the global index.
 	auto &storage = table.GetStorage();
@@ -134,11 +126,6 @@ SinkResultType PhysicalCreateARTIndex::SinkSorted(OperatorSinkInput &input) cons
 
 SinkResultType PhysicalCreateARTIndex::Sink(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSinkInput &input) const {
-	auto &g_state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
-	if (g_state.finished) {
-		return SinkResultType::NEED_MORE_INPUT;
-	}
-
 	D_ASSERT(chunk.ColumnCount() >= 2);
 	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
 	l_state.arena_allocator.Reset();
@@ -167,9 +154,6 @@ SinkResultType PhysicalCreateARTIndex::Sink(ExecutionContext &context, DataChunk
 SinkCombineResultType PhysicalCreateARTIndex::Combine(ExecutionContext &context,
                                                       OperatorSinkCombineInput &input) const {
 	auto &g_state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
-	if (g_state.finished) {
-		return SinkCombineResultType::FINISHED;
-	}
 
 	// Merge the local index into the global index.
 	auto &l_state = input.local_state.Cast<CreateARTIndexLocalSinkState>();
@@ -183,10 +167,6 @@ SinkCombineResultType PhysicalCreateARTIndex::Combine(ExecutionContext &context,
 SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                   OperatorSinkFinalizeInput &input) const {
 	auto &g_state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
-	if (g_state.finished) {
-		return SinkFinalizeType::READY;
-	}
-
 	info->column_ids = storage_ids;
 
 	// Vacuum excess memory and verify.
@@ -201,14 +181,12 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 
 	// Throw, if we trigger a catalog exception.
 	auto finished = VerifyIndexDoesNotExist(context);
-
 	if (alter_table_info) {
 		auto &catalog = Catalog::GetCatalog(context, info->catalog);
 		catalog.Alter(context, *alter_table_info);
 		table.GetStorage().AddIndex(std::move(g_state.global_index));
 		return SinkFinalizeType::READY;
 	}
-
 	if (finished) {
 		return SinkFinalizeType::READY;
 	}
