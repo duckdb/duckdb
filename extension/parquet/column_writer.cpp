@@ -388,7 +388,7 @@ protected:
 	virtual unique_ptr<ColumnWriterStatistics> InitializeStatsState();
 
 	//! Initialize the writer for a specific page. Only used for scalar types.
-	virtual unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state);
+	virtual unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state, idx_t page_idx);
 
 	//! Flushes the writer for a specific page. Only used for scalar types.
 	virtual void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state);
@@ -427,7 +427,8 @@ void BasicColumnWriter::RegisterToRowGroup(duckdb_parquet::RowGroup &row_group) 
 	row_group.columns.push_back(std::move(column_chunk));
 }
 
-unique_ptr<ColumnWriterPageState> BasicColumnWriter::InitializePageState(BasicColumnWriterState &state) {
+unique_ptr<ColumnWriterPageState> BasicColumnWriter::InitializePageState(BasicColumnWriterState &state,
+                                                                         idx_t page_idx) {
 	return nullptr;
 }
 
@@ -502,7 +503,7 @@ void BasicColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		    MaxValue<idx_t>(NextPowerOfTwo(page_info.estimated_page_size), MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		write_info.write_count = page_info.empty_count;
 		write_info.max_write_count = page_info.row_count;
-		write_info.page_state = InitializePageState(state);
+		write_info.page_state = InitializePageState(state, page_idx);
 
 		write_info.compressed_size = 0;
 		write_info.compressed_data = nullptr;
@@ -1232,11 +1233,11 @@ public:
 		return std::move(result);
 	}
 
-	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p) override {
+	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state_p, idx_t page_idx) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
-
-		auto result = make_uniq<StandardWriterPageState<SRC, TGT>>(state.total_value_count, state.total_string_size,
-		                                                           state.encoding, state.dictionary);
+		const auto &page_info = state_p.page_info[page_idx];
+		auto result = make_uniq<StandardWriterPageState<SRC, TGT>>(
+		    page_info.row_count - page_info.empty_count, state.total_string_size, state.encoding, state.dictionary);
 		return std::move(result);
 	}
 
@@ -1586,7 +1587,7 @@ public:
 		}
 	}
 
-	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state) override {
+	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state, idx_t page_idx) override {
 		return make_uniq<BooleanWriterPageState>();
 	}
 
@@ -1828,7 +1829,7 @@ public:
 		}
 	}
 
-	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state) override {
+	unique_ptr<ColumnWriterPageState> InitializePageState(BasicColumnWriterState &state, idx_t page_idx) override {
 		return make_uniq<EnumWriterPageState>(bit_width);
 	}
 
