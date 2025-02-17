@@ -146,7 +146,7 @@ query I
 SELECT * FROM structs ORDER BY create_sort_key(s, 'ASC NULLS LAST')
 ----
 {'i': 42, 'v': hello}
-{'i': 42, 'v': hello\\0}
+{'i': 42, 'v': hello\0}
 {'i': 42, 'v': NULL}
 {'i': 43, 'v': }
 {'i': NULL, 'v': }
@@ -169,7 +169,7 @@ NULL
 {'i': NULL, 'v': }
 {'i': 43, 'v': }
 {'i': 42, 'v': NULL}
-{'i': 42, 'v': hello\\0}
+{'i': 42, 'v': hello\0}
 {'i': 42, 'v': hello}
 
 query II
@@ -205,7 +205,7 @@ SELECT * FROM list_of_structs ORDER BY create_sort_key(s, 'ASC NULLS LAST')
 []
 [{'i': 42, 'v': hello}]
 [{'i': 42, 'v': hello}, {'i': 84, 'v': }]
-[{'i': 42, 'v': hello}, {'i': 84, 'v': \\0}]
+[{'i': 42, 'v': hello}, {'i': 84, 'v': \0}]
 [{'i': 42, 'v': hello}, NULL, {'i': 84, 'v': }]
 [{'i': 42, 'v': NULL}]
 [{'i': 43, 'v': }]
@@ -222,7 +222,7 @@ NULL
 [{'i': 43, 'v': }]
 [{'i': 42, 'v': NULL}]
 [{'i': 42, 'v': hello}, NULL, {'i': 84, 'v': }]
-[{'i': 42, 'v': hello}, {'i': 84, 'v': \\0}]
+[{'i': 42, 'v': hello}, {'i': 84, 'v': \0}]
 [{'i': 42, 'v': hello}, {'i': 84, 'v': }]
 [{'i': 42, 'v': hello}]
 []

@@ -53,6 +53,8 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 
 		source_indexes.push_back(i);
 		target_indexes.push_back(target_idx);
+		//! FIXME: this will turn casts for VARCHAR into a No-op, so non-printable characters are not stringified by
+		//! this
 		auto child_cast = input.GetCastFunction(source_child.second, target_children[target_idx].second);
 		child_cast_info.push_back(std::move(child_cast));
 	}
@@ -150,21 +152,23 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NAME_SEP_LENGTH = 4;
 	static constexpr const idx_t NULL_LENGTH = 4;
-	static constexpr const char SPECIAL_CHARACTERS[] = "{}[]():\"',\\";
+	static constexpr char SPECIAL_CHARACTERS[] = {'{', '}', '[', ']', '(', ')', ':', '"', '\'', ',', '\\'};
 
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
+
+		//! Calculate the total length of the row
 		idx_t string_length = 2; // {}
 		for (idx_t c = 0; c < children.size(); c++) {
 			if (c > 0) {
 				string_length += SEP_LENGTH;
 			}
-			auto child_is_not_varchar = base_children[c]->GetType().id() != LogicalTypeId::VARCHAR;
-			auto string_length_func = child_is_not_varchar ? VectorCastHelpers::CalculateStringLength<true>
-			                                               : VectorCastHelpers::CalculateEscapedStringLength<true>;
+			auto add_escapes = !base_children[c]->GetType().IsNested();
+			auto string_length_func = add_escapes ? VectorCastHelpers::CalculateEscapedStringLength<true>
+			                                      : VectorCastHelpers::CalculateStringLength<true>;
 
 			children[c]->Flatten(count);
 			auto &child_validity = FlatVector::Validity(*children[c]);
@@ -181,8 +185,11 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				string_length += NULL_LENGTH;
 			}
 		}
+
 		result_data[i] = StringVector::EmptyString(result, string_length);
 		auto dataptr = result_data[i].GetDataWriteable();
+
+		//! Serialize the struct to the string
 		idx_t offset = 0;
 		dataptr[offset++] = is_unnamed ? '(' : '{';
 		for (idx_t c = 0; c < children.size(); c++) {
@@ -190,9 +197,9 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
 				offset += SEP_LENGTH;
 			}
-			auto child_is_not_varchar = base_children[c]->GetType().id() != LogicalTypeId::VARCHAR;
-			auto write_string_func = child_is_not_varchar ? VectorCastHelpers::WriteString<true>
-			                                              : VectorCastHelpers::WriteEscapedString<true>;
+			auto add_escapes = !base_children[c]->GetType().IsNested();
+			auto write_string_func =
+			    add_escapes ? VectorCastHelpers::WriteEscapedString<true> : VectorCastHelpers::WriteString<true>;
 
 			auto &child_validity = FlatVector::Validity(*children[c]);
 			auto data = FlatVector::GetData<string_t>(*children[c]);

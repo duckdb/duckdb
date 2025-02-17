@@ -59,12 +59,12 @@ goo\0se
 query I
 SELECT {'a': v} FROM null_byte
 ----
-{'a': goo\\0se}
+{'a': goo\0se}
 
 query I
 SELECT [v] FROM null_byte
 ----
-[goo\\0se]
+[goo\0se]
 
 query I
 SELECT LENGTH(v) FROM null_byte

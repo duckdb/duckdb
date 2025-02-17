@@ -13,7 +13,7 @@ SELECT * FROM a ORDER BY id
 ----
 0	[hello world, bananas]
 1	NULL
-2	[3\, 4\, 5\, 6, numbers]
+2	['3, 4, 5, 6', numbers]
 3	[NULL, not a number]
 
 # deletions

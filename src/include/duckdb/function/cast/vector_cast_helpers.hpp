@@ -261,7 +261,7 @@ struct VectorCastHelpers {
 			offset++;
 		}
 
-		static constexpr const char SPECIAL_CHARACTERS[] = "'\\";
+		static constexpr char SPECIAL_CHARACTERS[] = {'\'', '\\'};
 
 		while (string_data < string_end) {
 			auto res = std::find_first_of(string_data, string_end, SPECIAL_CHARACTERS,

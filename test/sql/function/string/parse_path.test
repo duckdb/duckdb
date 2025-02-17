@@ -37,7 +37,7 @@ SELECT parse_path('/path/to/file.csv', 'forward_slash');
 query T
 select parse_path('\path\to\file', 'forward_slash');
 ----
-[\\path\\to\\file]
+['\\path\\to\\file']
 
 # consecutive separators
 query T
@@ -49,7 +49,7 @@ SELECT parse_path('//path/to//file.csv', 'forward_slash');
 query T
 SELECT parse_path('p@th\t0\wh@t3ve%\42/12 ch,ars.sth', 'both_slash');
 ----
-[p@th, t0, wh@t3ve%, 42, 12 ch\,ars.sth]
+[p@th, t0, wh@t3ve%, 42, '12 ch,ars.sth']
 
 # custom separator
 query T

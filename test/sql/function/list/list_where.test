@@ -187,7 +187,7 @@ endloop
 query I
 SELECT list_where(['{a: 1}'::BLOB, '{a: 3}'::BLOB], [true, false])
 ----
-[{a: 1}]
+['{a: 1}']
 
 query I
 SELECT list_where([NULL::BLOB], [true])
