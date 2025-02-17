@@ -108,8 +108,9 @@ public:
 
 	void Initialize(ArenaAllocator &allocator, const idx_t capacity_p) {
 		capacity = capacity_p;
-		heap = reinterpret_cast<HeapEntry<T> *>(allocator.AllocateAligned(capacity * sizeof(HeapEntry<T>)));
-		memset(heap, 0, capacity * sizeof(HeapEntry<T>));
+		auto ptr = allocator.AllocateAligned(capacity * sizeof(HeapEntry<T>));
+		memset(ptr, 0, capacity * sizeof(HeapEntry<T>));
+		heap = reinterpret_cast<HeapEntry<T> *>(ptr);
 		size = 0;
 	}
 
@@ -179,8 +180,9 @@ public:
 
 	void Initialize(ArenaAllocator &allocator, const idx_t capacity_p) {
 		capacity = capacity_p;
-		heap = reinterpret_cast<STORAGE_TYPE *>(allocator.AllocateAligned(capacity * sizeof(STORAGE_TYPE)));
-		memset(heap, 0, capacity * sizeof(STORAGE_TYPE));
+		auto ptr = allocator.AllocateAligned(capacity * sizeof(STORAGE_TYPE));
+		memset(ptr, 0, capacity * sizeof(STORAGE_TYPE));
+		heap = reinterpret_cast<STORAGE_TYPE *>(ptr);
 		size = 0;
 	}
 
