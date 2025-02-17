@@ -79,7 +79,6 @@ struct MultiFileBindData : public TableFunctionData {
 };
 
 struct ParquetReadBindData : public TableFunctionData {
-	atomic<idx_t> chunk_count;
 	virtual_column_map_t virtual_columns;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
@@ -111,6 +110,10 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t row_group_index;
 	//! Batch index of the next row group to be scanned
 	idx_t batch_index;
+	//! How many rows have been read from this file
+	atomic<idx_t> rows_read;
+	//! The total number of rows present in this file
+	atomic<idx_t> total_rows;
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
@@ -135,13 +138,14 @@ struct ParquetMultiFileInfo {
 	static shared_ptr<ParquetReader> CreateReader(ClientContext &context, ParquetUnionData &union_data);
 	static shared_ptr<ParquetReader> CreateReader(ClientContext &context, const string &filename,
 	                                              TableFunctionData &bind_data);
-	static void Scan(ClientContext &context, ParquetReader &reader, LocalTableFunctionState &local_state,
+	static void Scan(ClientContext &context, ParquetReader &reader, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state,
 	                 DataChunk &chunk);
 	static bool TryInitializeScan(ClientContext &context, ParquetReader &reader, GlobalTableFunctionState &gstate,
 	                              LocalTableFunctionState &lstate);
 	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state);
 	static unique_ptr<NodeStatistics> GetCardinality(TableFunctionData &bind_data, idx_t file_count);
 	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, ParquetReader &reader, const string &name);
+	static double GetProgressInFile(ClientContext &context, GlobalTableFunctionState &gstate);
 };
 
 template <class OP>
@@ -660,13 +664,13 @@ static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, Da
 	do {
 		if (gstate.CanRemoveColumns()) {
 			data.all_columns.Reset();
-			OP::Scan(context, *data.reader, *data.local_state, data.all_columns);
+			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, data.all_columns);
 			rowgroup_finished = data.all_columns.size() == 0;
 			bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
 			                                           data.all_columns, gstate.multi_file_reader_state);
 			output.ReferenceColumns(data.all_columns, gstate.projection_ids);
 		} else {
-			OP::Scan(context, *data.reader, *data.local_state, output);
+			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, output);
 			rowgroup_finished = output.size() == 0;
 			bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data, output,
 			                                           gstate.multi_file_reader_state);
@@ -701,6 +705,21 @@ static unique_ptr<BaseStatistics> MultiFileScanStats(ClientContext &context, con
 		return nullptr;
 	}
 	return OP::GetStatistics(context, *bind_data.initial_reader, bind_data.names[column_index]);
+}
+
+template<class OP>
+double MultiFileProgress(ClientContext &context, const FunctionData *bind_data_p,
+							  const GlobalTableFunctionState *global_state) {
+	auto &bind_data = bind_data_p->Cast<MultiFileBindData<OP>>();
+	auto &gstate = global_state->Cast<MultiFileGlobalState<OP>>();
+
+	auto total_count = gstate.file_list.GetTotalFileCount();
+	if (total_count == 0) {
+		return 100.0;
+	}
+	// get the percentage WITHIN the current file from the currently active reader
+	auto progress_in_file = MinValue<double>(100.0, OP::GetProgressInFile(context, *gstate.global_state));
+	return (progress_in_file + 100.0 * static_cast<double>(gstate.file_index)) / static_cast<double>(total_count);
 }
 
 template <class OP>
@@ -907,7 +926,7 @@ public:
 		                             MultiFileInitLocal<ParquetMultiFileInfo>);
 		table_function.statistics = MultiFileScanStats<ParquetMultiFileInfo>;
 		table_function.cardinality = MultiFileCardinality<ParquetMultiFileInfo>;
-		table_function.table_scan_progress = nullptr; // FIXME - ParquetProgress;
+		table_function.table_scan_progress = MultiFileProgress<ParquetMultiFileInfo>;
 		table_function.named_parameters["binary_as_string"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["file_row_number"] = LogicalType::BOOLEAN;
 		table_function.named_parameters["debug_use_openssl"] = LogicalType::BOOLEAN;
@@ -977,23 +996,6 @@ public:
 			    LogicalTypeIdToString(key_type.id()));
 		}
 	}
-
-	// static double ParquetProgress(ClientContext &context, const FunctionData *bind_data_p,
-	//                               const GlobalTableFunctionState *global_state) {
-	// 	auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
-	// 	auto &gstate = global_state->Cast<ParquetReadGlobalState>();
-	//
-	// 	auto total_count = gstate.file_list.GetTotalFileCount();
-	// 	if (total_count == 0) {
-	// 		return 100.0;
-	// 	}
-	// 	if (bind_data.initial_file_cardinality == 0) {
-	// 		return (100.0 * (static_cast<double>(gstate.file_index) + 1.0)) / static_cast<double>(total_count);
-	// 	}
-	// 	auto percentage = MinValue<double>(100.0, (static_cast<double>(bind_data.chunk_count) * STANDARD_VECTOR_SIZE *
-	// 	                                           100.0 / static_cast<double>(bind_data.initial_file_cardinality)));
-	// 	return (percentage + 100.0 * static_cast<double>(gstate.file_index)) / static_cast<double>(total_count);
-	// }
 
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                 const TableFunction &function) {
@@ -1129,6 +1131,20 @@ unique_ptr<BaseStatistics> ParquetMultiFileInfo::GetStatistics(ClientContext &co
 	return reader.ReadStatistics(name);
 }
 
+double ParquetMultiFileInfo::GetProgressInFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
+	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
+	auto read_rows = gstate.rows_read.load();
+	auto total_rows = gstate.total_rows.load();
+	if (total_rows == 0) {
+		// not set yet
+		return 0;
+	}
+	if (read_rows >= total_rows) {
+		return 100;
+	}
+	return 100.0 * (static_cast<double>(read_rows) / static_cast<double>(total_rows));
+}
+
 shared_ptr<ParquetReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, ParquetUnionData &union_data) {
 	return make_shared_ptr<ParquetReader>(context, union_data.file_name, union_data.options, union_data.metadata);
 }
@@ -1151,6 +1167,9 @@ bool ParquetMultiFileInfo::TryInitializeScan(ClientContext &context, ParquetRead
                                              GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
+	if (gstate.total_rows == 0) {
+		gstate.total_rows = reader.NumRows();
+	}
 	if (gstate.row_group_index >= reader.NumRowGroups()) {
 		// scanned all row groups in this file
 		return false;
@@ -1165,12 +1184,16 @@ bool ParquetMultiFileInfo::TryInitializeScan(ClientContext &context, ParquetRead
 void ParquetMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	gstate.row_group_index = 0;
+	gstate.rows_read = 0;
+	gstate.total_rows = 0;
 }
 
-void ParquetMultiFileInfo::Scan(ClientContext &context, ParquetReader &reader, LocalTableFunctionState &local_state_p,
+void ParquetMultiFileInfo::Scan(ClientContext &context, ParquetReader &reader, GlobalTableFunctionState &gstate_p, LocalTableFunctionState &local_state_p,
                                 DataChunk &chunk) {
+	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	reader.Scan(local_state.scan_state, chunk);
+	gstate.rows_read += chunk.size();
 }
 
 static case_insensitive_map_t<LogicalType> GetChildNameToTypeMap(const LogicalType &type) {
