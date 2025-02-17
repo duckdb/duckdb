@@ -51,7 +51,7 @@ void PhysicalStreamingSample::BernoulliSample(DataChunk &input, DataChunk &resul
 }
 
 bool PhysicalStreamingSample::ParallelOperator() const {
-	return !sample_options->repeatable;
+	return !(sample_options->repeatable || sample_options->seed.IsValid());
 }
 
 unique_ptr<OperatorState> PhysicalStreamingSample::GetOperatorState(ExecutionContext &context) const {
