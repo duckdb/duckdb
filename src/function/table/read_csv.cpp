@@ -169,7 +169,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		                               result->reader_bind);
 	} else {
 		result->reader_bind = multi_file_reader->BindUnionReader<CSVFileScan>(context, return_types, names,
-		                                                                      *multi_file_list, *result, options);
+		                                                                      *multi_file_list, *result, options, options.file_options);
 		if (result->union_readers.size() > 1) {
 			for (idx_t i = 0; i < result->union_readers.size(); i++) {
 				result->column_info.emplace_back(result->union_readers[i]->names, result->union_readers[i]->types);

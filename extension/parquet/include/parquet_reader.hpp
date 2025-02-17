@@ -102,7 +102,6 @@ struct ParquetOptions {
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 	bool debug_use_openssl = true;
 
-	MultiFileReaderOptions file_options;
 	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
 

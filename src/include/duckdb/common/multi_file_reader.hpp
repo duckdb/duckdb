@@ -299,8 +299,8 @@ public:
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
 	                                        vector<string> &names, MultiFileList &files, RESULT_CLASS &result,
-	                                        OPTIONS_CLASS &options) {
-		D_ASSERT(options.file_options.union_by_name);
+	                                        OPTIONS_CLASS &options, MultiFileReaderOptions &file_options) {
+		D_ASSERT(file_options.union_by_name);
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
 
@@ -314,7 +314,7 @@ public:
 		std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
 		// perform the binding on the obtained set of names + types
 		MultiFileReaderBindData bind_data;
-		BindOptions(options.file_options, files, union_col_types, union_col_names, bind_data);
+		BindOptions(file_options, files, union_col_types, union_col_names, bind_data);
 		names = union_col_names;
 		return_types = union_col_types;
 		result.Initialize(context, result.union_readers[0]);
@@ -324,9 +324,9 @@ public:
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options) {
-		if (options.file_options.union_by_name) {
-			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options);
+	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options, MultiFileReaderOptions &file_options) {
+		if (file_options.union_by_name) {
+			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options, file_options);
 		} else {
 			shared_ptr<READER_CLASS> reader;
 			reader = make_shared_ptr<READER_CLASS>(context, files.GetFirstFile(), options);
@@ -337,7 +337,7 @@ public:
 			}
 			result.Initialize(std::move(reader));
 			MultiFileReaderBindData bind_data;
-			BindOptions(options.file_options, files, return_types, names, bind_data);
+			BindOptions(file_options, files, return_types, names, bind_data);
 			return bind_data;
 		}
 	}
