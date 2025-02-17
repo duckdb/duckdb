@@ -63,6 +63,7 @@ struct MultiFileBindData : public TableFunctionData {
 	MultiFileReaderOptions file_options;
 	vector<LogicalType> types;
 	vector<string> names;
+	virtual_column_map_t virtual_columns;
 	shared_ptr<typename OP::READER> initial_reader;
 	// The union readers are created (when parquet union_by_name option is on) during binding
 	// Those readers can be re-used during ParquetParallelStateNext
@@ -614,10 +615,15 @@ unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
 
 		const auto table_types = bind_data.types;
 		for (const auto &col_idx : input.column_indexes) {
-			if (col_idx.IsRowIdColumn()) {
-				result->scanned_types.emplace_back(LogicalType::ROW_TYPE);
+			auto column_id = col_idx.GetPrimaryIndex();
+			if (col_idx.IsVirtualColumn()) {
+				auto entry = bind_data.virtual_columns.find(column_id);
+				if (entry == bind_data.virtual_columns.end()) {
+					throw InternalException("Parquet - virtual column definition not found");
+				}
+				result->scanned_types.emplace_back(entry->second.type);
 			} else {
-				result->scanned_types.push_back(table_types[col_idx.GetPrimaryIndex()]);
+				result->scanned_types.push_back(table_types[column_id]);
 			}
 		}
 	}
@@ -866,6 +872,7 @@ virtual_column_map_t MultiFileGetVirtualColumns(ClientContext &context, optional
 	virtual_column_map_t result;
 	MultiFileReader::GetVirtualColumns(context, bind_data.reader_bind, result);
 	// FIXME: forward virtual columns
+	bind_data.virtual_columns = result;
 	return result;
 }
 
