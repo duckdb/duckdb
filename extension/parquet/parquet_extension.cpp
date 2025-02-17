@@ -134,6 +134,7 @@ struct ParquetMultiFileInfo {
 	static void Scan(ClientContext &context, ParquetReader &reader, LocalTableFunctionState &local_state, DataChunk &chunk);
 	static bool TryInitializeScan(ClientContext &context, ParquetReader &reader, GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
 	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state);
+	static unique_ptr<NodeStatistics> GetCardinality(TableFunctionData &bind_data, idx_t file_count);
 };
 
 template<class OP>
@@ -669,6 +670,17 @@ static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, Da
 	} while (true);
 }
 
+
+template<class OP>
+static unique_ptr<NodeStatistics> MultiFileCardinality(ClientContext &context, const FunctionData *bind_data) {
+	auto &data = bind_data->Cast<MultiFileBindData<OP>>();
+	auto file_list_cardinality_estimate = data.file_list->GetCardinality(context);
+	if (file_list_cardinality_estimate) {
+		return file_list_cardinality_estimate;
+	}
+	return OP::GetCardinality(*data.bind_data, data.file_list->GetTotalFileCount());
+}
+
 struct ParquetWriteBindData : public TableFunctionData {
 	vector<LogicalType> sql_types;
 	vector<string> column_names;
@@ -995,20 +1007,6 @@ public:
 		// return bind_data;
 	}
 
-	//
-	// static unique_ptr<NodeStatistics> ParquetCardinality(ClientContext &context, const FunctionData *bind_data) {
-	// 	auto &data = bind_data->Cast<ParquetReadBindData>();
-	// 	if (data.explicit_cardinality) {
-	// 		return make_uniq<NodeStatistics>(data.explicit_cardinality);
-	// 	}
-	// 	auto file_list_cardinality_estimate = data.file_list->GetCardinality(context);
-	// 	if (file_list_cardinality_estimate) {
-	// 		return file_list_cardinality_estimate;
-	// 	}
-	// 	return make_uniq<NodeStatistics>(MaxValue(data.initial_file_cardinality, (idx_t)1) *
-	// 	                                 data.file_list->GetTotalFileCount());
-	// }
-
 	// static void ParquetComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	//                                          vector<unique_ptr<Expression>> &filters) {
 	// 	auto &data = bind_data_p->Cast<ParquetReadBindData>();
@@ -1103,6 +1101,15 @@ unique_ptr<ParquetReadBindData> ParquetMultiFileInfo::InitializeBindData(MultiFi
 		result->initial_file_cardinality = result->explicit_cardinality / (file_count ? file_count : 1);
 	}
 	return result;
+}
+
+unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(TableFunctionData &bind_data_p, idx_t file_count) {
+	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
+	if (bind_data.explicit_cardinality) {
+		return make_uniq<NodeStatistics>(bind_data.explicit_cardinality);
+	}
+	return make_uniq<NodeStatistics>(MaxValue(bind_data.initial_file_cardinality, (idx_t)1) *
+									 file_count);
 }
 
 shared_ptr<ParquetReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, ParquetUnionData &union_data) {
