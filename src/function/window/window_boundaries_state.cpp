@@ -180,9 +180,9 @@ struct OperationCompare : public std::function<bool(T, T)> {
 };
 
 template <typename T, typename OP, bool FROM>
-static idx_t FindTypedRangeBound(WindowCursor &over, const idx_t order_begin, const idx_t order_end,
-                                 const WindowBoundary range, WindowInputExpression &boundary, const idx_t chunk_idx,
-                                 const FrameBounds &prev) {
+static idx_t FindTypedRangeBound(WindowCursor &range_lo, WindowCursor &range_hi, const idx_t order_begin,
+                                 const idx_t order_end, const WindowBoundary range, WindowInputExpression &boundary,
+                                 const idx_t chunk_idx, const FrameBounds &prev) {
 	D_ASSERT(!boundary.CellIsNull(chunk_idx));
 	const auto val = boundary.GetCell<T>(chunk_idx);
 
@@ -191,14 +191,14 @@ static idx_t FindTypedRangeBound(WindowCursor &over, const idx_t order_begin, co
 	// Check that the value we are searching for is in range.
 	if (range == WindowBoundary::EXPR_PRECEDING_RANGE) {
 		//	Preceding but value past the current value
-		const auto cur_val = over.GetCell<T>(0, order_end - 1);
+		const auto cur_val = range_hi.GetCell<T>(0, order_end - 1);
 		if (comp(cur_val, val)) {
 			throw OutOfRangeException("Invalid RANGE PRECEDING value");
 		}
 	} else {
 		//	Following but value before the current value
 		D_ASSERT(range == WindowBoundary::EXPR_FOLLOWING_RANGE);
-		const auto cur_val = over.GetCell<T>(0, order_begin);
+		const auto cur_val = range_lo.GetCell<T>(0, order_begin);
 		if (comp(val, cur_val)) {
 			throw OutOfRangeException("Invalid RANGE FOLLOWING value");
 		}
@@ -206,20 +206,28 @@ static idx_t FindTypedRangeBound(WindowCursor &over, const idx_t order_begin, co
 	//	Try to reuse the previous bounds to restrict the search.
 	//	This is only valid if the previous bounds were non-empty
 	//	Only inject the comparisons if the previous bounds are a strict subset.
-	WindowColumnIterator<T> begin(over, order_begin);
-	WindowColumnIterator<T> end(over, order_end);
+	WindowColumnIterator<T> begin(range_lo, order_begin);
+	WindowColumnIterator<T> end(range_hi, order_end);
 	if (prev.start < prev.end) {
 		if (order_begin < prev.start && prev.start < order_end) {
-			const auto first = over.GetCell<T>(0, prev.start);
-			if (!comp(val, first)) {
-				//	prev.first <= val, so we can start further forward
+			const auto first = range_lo.GetCell<T>(0, prev.start);
+			if (FROM && !comp(val, first)) {
+				// If prev.start == val and we are looking for a lower bound, then we are done
+				if (!comp(first, val)) {
+					return prev.start;
+				}
+				//	prev.start <= val, so we can start further forward
 				begin += UnsafeNumericCast<int64_t>(prev.start - order_begin);
 			}
 		}
 		if (order_begin < prev.end && prev.end < order_end) {
-			const auto second = over.GetCell<T>(0, prev.end - 1);
+			const auto second = range_hi.GetCell<T>(0, prev.end - 1);
 			if (!comp(second, val)) {
-				//	val <= prev.second, so we can end further back
+				//  If val == prev.end and we are looking for an upper bound, then we are done
+				if (!FROM && !comp(val, second)) {
+					return prev.end;
+				}
+				//	val <= prev.end, so we can end further back
 				// (prev.second is the largest peer)
 				end -= UnsafeNumericCast<int64_t>(order_end - prev.end - 1);
 			}
@@ -234,52 +242,65 @@ static idx_t FindTypedRangeBound(WindowCursor &over, const idx_t order_begin, co
 }
 
 template <typename OP, bool FROM>
-static idx_t FindRangeBound(WindowCursor &over, const idx_t order_begin, const idx_t order_end,
-                            const WindowBoundary range, WindowInputExpression &boundary, const idx_t chunk_idx,
-                            const FrameBounds &prev) {
+static idx_t FindRangeBound(WindowCursor &range_lo, WindowCursor &range_hi, const idx_t order_begin,
+                            const idx_t order_end, const WindowBoundary range, WindowInputExpression &boundary,
+                            const idx_t chunk_idx, const FrameBounds &prev) {
 	switch (boundary.InternalType()) {
 	case PhysicalType::INT8:
-		return FindTypedRangeBound<int8_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<int8_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                             chunk_idx, prev);
 	case PhysicalType::INT16:
-		return FindTypedRangeBound<int16_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<int16_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                              chunk_idx, prev);
 	case PhysicalType::INT32:
-		return FindTypedRangeBound<int32_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<int32_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                              chunk_idx, prev);
 	case PhysicalType::INT64:
-		return FindTypedRangeBound<int64_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<int64_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                              chunk_idx, prev);
 	case PhysicalType::UINT8:
-		return FindTypedRangeBound<uint8_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<uint8_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                              chunk_idx, prev);
 	case PhysicalType::UINT16:
-		return FindTypedRangeBound<uint16_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<uint16_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                               chunk_idx, prev);
 	case PhysicalType::UINT32:
-		return FindTypedRangeBound<uint32_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<uint32_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                               chunk_idx, prev);
 	case PhysicalType::UINT64:
-		return FindTypedRangeBound<uint64_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<uint64_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                               chunk_idx, prev);
 	case PhysicalType::INT128:
-		return FindTypedRangeBound<hugeint_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<hugeint_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                                chunk_idx, prev);
 	case PhysicalType::UINT128:
-		return FindTypedRangeBound<uhugeint_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx,
-		                                                 prev);
+		return FindTypedRangeBound<uhugeint_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                                 chunk_idx, prev);
 	case PhysicalType::FLOAT:
-		return FindTypedRangeBound<float, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<float, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                            chunk_idx, prev);
 	case PhysicalType::DOUBLE:
-		return FindTypedRangeBound<double, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindTypedRangeBound<double, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                             chunk_idx, prev);
 	case PhysicalType::INTERVAL:
-		return FindTypedRangeBound<interval_t, OP, FROM>(over, order_begin, order_end, range, boundary, chunk_idx,
-		                                                 prev);
+		return FindTypedRangeBound<interval_t, OP, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary,
+		                                                 chunk_idx, prev);
 	default:
 		throw InternalException("Unsupported column type for RANGE");
 	}
 }
 
 template <bool FROM>
-static idx_t FindOrderedRangeBound(WindowCursor &over, const OrderType range_sense, const idx_t order_begin,
-                                   const idx_t order_end, const WindowBoundary range, WindowInputExpression &boundary,
-                                   const idx_t chunk_idx, const FrameBounds &prev) {
+static idx_t FindOrderedRangeBound(WindowCursor &range_lo, WindowCursor &range_hi, const OrderType range_sense,
+                                   const idx_t order_begin, const idx_t order_end, const WindowBoundary range,
+                                   WindowInputExpression &boundary, const idx_t chunk_idx, const FrameBounds &prev) {
 	switch (range_sense) {
 	case OrderType::ASCENDING:
-		return FindRangeBound<LessThan, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindRangeBound<LessThan, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary, chunk_idx,
+		                                      prev);
 	case OrderType::DESCENDING:
-		return FindRangeBound<GreaterThan, FROM>(over, order_begin, order_end, range, boundary, chunk_idx, prev);
+		return FindRangeBound<GreaterThan, FROM>(range_lo, range_hi, order_begin, order_end, range, boundary, chunk_idx,
+		                                         prev);
 	default:
 		throw InternalException("Unsupported ORDER BY sense for RANGE");
 	}
@@ -718,6 +739,13 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 	prev.start = valid_begin_data[0];
 	prev.end = valid_end_data[0];
 
+	if (has_preceding_range || has_following_range) {
+		if (range_lo.get() != range.get()) {
+			range_lo = range.get();
+			range_hi = range_lo->Copy();
+		}
+	}
+
 	switch (start_boundary) {
 	case WindowBoundary::UNBOUNDED_PRECEDING:
 		bounds.data[FRAME_BEGIN].Reference(bounds.data[PARTITION_BEGIN]);
@@ -766,7 +794,12 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 			} else {
 				const auto valid_start = valid_begin_data[chunk_idx];
 				prev.end = valid_end_data[chunk_idx];
-				window_start = FindOrderedRangeBound<true>(*range, range_sense, valid_start, row_idx + 1,
+				const auto cur_partition = partition_begin_data[chunk_idx];
+				if (cur_partition != prev_partition) {
+					prev.start = valid_start;
+					prev_partition = cur_partition;
+				}
+				window_start = FindOrderedRangeBound<true>(*range_lo, *range_hi, range_sense, valid_start, row_idx + 1,
 				                                           start_boundary, boundary_begin, chunk_idx, prev);
 				prev.start = window_start;
 			}
@@ -785,8 +818,8 @@ void WindowBoundariesState::FrameBegin(DataChunk &bounds, idx_t row_idx, const i
 					prev.start = valid_begin_data[chunk_idx];
 					prev_partition = cur_partition;
 				}
-				window_start = FindOrderedRangeBound<true>(*range, range_sense, row_idx, valid_end, start_boundary,
-				                                           boundary_begin, chunk_idx, prev);
+				window_start = FindOrderedRangeBound<true>(*range_lo, *range_hi, range_sense, row_idx, valid_end,
+				                                           start_boundary, boundary_begin, chunk_idx, prev);
 				prev.start = window_start;
 			}
 			frame_begin_data[chunk_idx] = window_start;
@@ -862,6 +895,13 @@ void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx
 	prev.start = valid_begin_data[0];
 	prev.end = valid_end_data[0];
 
+	if (has_preceding_range || has_following_range) {
+		if (range_lo.get() != range.get()) {
+			range_lo = range.get();
+			range_hi = range_lo->Copy();
+		}
+	}
+
 	switch (end_boundary) {
 	case WindowBoundary::CURRENT_ROW_ROWS:
 		for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
@@ -911,8 +951,13 @@ void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx
 			} else {
 				const auto valid_start = valid_begin_data[chunk_idx];
 				prev.start = valid_start;
-				window_end = FindOrderedRangeBound<false>(*range, range_sense, valid_start, row_idx + 1, end_boundary,
-				                                          boundary_end, chunk_idx, prev);
+				const auto cur_partition = partition_begin_data[chunk_idx];
+				if (cur_partition != prev_partition) {
+					prev.end = valid_end;
+					prev_partition = cur_partition;
+				}
+				window_end = FindOrderedRangeBound<false>(*range_lo, *range_hi, range_sense, valid_start, row_idx + 1,
+				                                          end_boundary, boundary_end, chunk_idx, prev);
 				prev.end = window_end;
 			}
 			frame_end_data[chunk_idx] = window_end;
@@ -930,8 +975,8 @@ void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx
 					prev.end = valid_end;
 					prev_partition = cur_partition;
 				}
-				window_end = FindOrderedRangeBound<false>(*range, range_sense, row_idx, valid_end, end_boundary,
-				                                          boundary_end, chunk_idx, prev);
+				window_end = FindOrderedRangeBound<false>(*range_lo, *range_hi, range_sense, row_idx, valid_end,
+				                                          end_boundary, boundary_end, chunk_idx, prev);
 				prev.end = window_end;
 			}
 			frame_end_data[chunk_idx] = window_end;

@@ -33,9 +33,8 @@ public:
 	}
 
 	void FinishWrite(WriteStream &writer) {
-		D_ASSERT(stream->GetPosition() == total_string_size);
 		dbp_encoder.FinishWrite(writer);
-		writer.WriteData(buffer.get(), total_string_size);
+		writer.WriteData(buffer.get(), stream->GetPosition());
 	}
 
 private:
