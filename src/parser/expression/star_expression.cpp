@@ -5,7 +5,6 @@
 
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
-#include "helper.hpp"
 
 namespace duckdb {
 
