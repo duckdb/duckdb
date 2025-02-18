@@ -73,12 +73,6 @@ struct ParquetReadBindData : public TableFunctionData {
 	idx_t initial_file_row_groups;
 	idx_t explicit_cardinality = 0; // can be set to inject exterior cardinality knowledge (e.g. from a data lake)
 	ParquetOptions parquet_options;
-
-	void Initialize(ParquetReader &initial_reader) {
-		initial_file_cardinality = initial_reader.NumRows();
-		initial_file_row_groups = initial_reader.NumRowGroups();
-		parquet_options = initial_reader.parquet_options;
-	}
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
@@ -103,11 +97,10 @@ struct ParquetMultiFileInfo {
 	static bool ParseOption(ClientContext &context, const string &key, const Value &val,
 	                        MultiFileReaderOptions &file_options, BaseFileReaderOptions &options);
 	static void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                       MultiFileBindData<ParquetMultiFileInfo> &bind_data);
-	static unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
+	                       MultiFileBindData &bind_data);
+	static unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                        unique_ptr<BaseFileReaderOptions> options);
-	static void SetInitialReader(TableFunctionData &bind_data, BaseFileReader &reader);
-	static void FinalizeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data);
+	static void FinalizeBindData(MultiFileBindData &multi_file_data);
 	static void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
 	static idx_t MaxThreads(const TableFunctionData &bind_data_p);
 	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState();
@@ -140,7 +133,7 @@ static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, Parquet
 }
 
 static void BindSchema(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-                       MultiFileBindData<ParquetMultiFileInfo> &bind_data) {
+                       MultiFileBindData &bind_data) {
 	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
 	auto &options = parquet_bind.parquet_options;
 	D_ASSERT(!options.schema.empty());
@@ -204,7 +197,7 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 }
 
 void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-                                      MultiFileBindData<ParquetMultiFileInfo> &bind_data) {
+                                      MultiFileBindData &bind_data) {
 	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
 	auto &options = parquet_bind.parquet_options;
 	if (!options.schema.empty()) {
@@ -294,7 +287,7 @@ public:
 
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                 const TableFunction &function) {
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData<ParquetMultiFileInfo>>();
+		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 		auto &parquet_data = bind_data.bind_data->Cast<ParquetReadBindData>();
 
 		serializer.WriteProperty(100, "files", bind_data.file_list->GetAllFiles());
@@ -328,7 +321,7 @@ public:
 		auto bind_data = MultiFileReaderFunction<ParquetMultiFileInfo>::MultiFileBindInternal(
 		    context, std::move(multi_file_reader), std::move(file_list), types, names,
 		    std::move(serialization.file_options), std::move(parquet_options));
-		bind_data->Cast<MultiFileBindData<ParquetMultiFileInfo>>().table_columns = std::move(table_columns);
+		bind_data->Cast<MultiFileBindData>().table_columns = std::move(table_columns);
 		return bind_data;
 	}
 };
@@ -410,9 +403,8 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key
 	return false;
 }
 
-unique_ptr<TableFunctionData>
-ParquetMultiFileInfo::InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
-                                         unique_ptr<BaseFileReaderOptions> options_p) {
+unique_ptr<TableFunctionData> ParquetMultiFileInfo::InitializeBindData(MultiFileBindData &multi_file_data,
+                                                                       unique_ptr<BaseFileReaderOptions> options_p) {
 	auto result = make_uniq<ParquetReadBindData>();
 	// Set the explicit cardinality if requested
 	auto &options = options_p->Cast<ParquetFileReaderOptions>();
@@ -423,12 +415,6 @@ ParquetMultiFileInfo::InitializeBindData(MultiFileBindData<ParquetMultiFileInfo>
 		result->initial_file_cardinality = result->explicit_cardinality / (file_count ? file_count : 1);
 	}
 	return std::move(result);
-}
-
-void ParquetMultiFileInfo::SetInitialReader(TableFunctionData &bind_data_p, BaseFileReader &reader_p) {
-	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
-	auto &reader = reader_p.Cast<ParquetReader>();
-	bind_data.Initialize(reader);
 }
 
 void ParquetMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data_p, BindInfo &info) {
@@ -444,11 +430,17 @@ idx_t ParquetMultiFileInfo::MaxThreads(const TableFunctionData &bind_data_p) {
 	return MaxValue(bind_data.initial_file_row_groups, static_cast<idx_t>(1));
 }
 
-void ParquetMultiFileInfo::FinalizeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data) {
+void ParquetMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 	auto &bind_data = multi_file_data.bind_data->Cast<ParquetReadBindData>();
 	// Enable the parquet file_row_number on the parquet options if the file_row_number_idx was set
 	if (multi_file_data.reader_bind.file_row_number_idx != DConstants::INVALID_INDEX) {
 		bind_data.parquet_options.file_row_number = true;
+	}
+	if (multi_file_data.initial_reader) {
+		auto &initial_reader = multi_file_data.initial_reader->Cast<ParquetReader>();
+		bind_data.initial_file_cardinality = initial_reader.NumRows();
+		bind_data.initial_file_row_groups = initial_reader.NumRowGroups();
+		bind_data.parquet_options = initial_reader.parquet_options;
 	}
 }
 

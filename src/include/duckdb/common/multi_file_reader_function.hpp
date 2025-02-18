@@ -16,7 +16,6 @@ namespace duckdb {
 
 enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
 
-template <class OP>
 struct MultiFileBindData : public TableFunctionData {
 	unique_ptr<TableFunctionData> bind_data;
 	shared_ptr<MultiFileList> file_list;
@@ -36,14 +35,12 @@ struct MultiFileBindData : public TableFunctionData {
 
 	void Initialize(shared_ptr<BaseFileReader> reader) {
 		initial_reader = std::move(reader);
-		OP::SetInitialReader(*bind_data, *initial_reader);
 	}
 	void Initialize(ClientContext &, unique_ptr<BaseUnionData> &union_data) {
 		Initialize(std::move(union_data->reader));
 	}
 };
 
-template <class OP>
 struct MultiFileLocalState : public LocalTableFunctionState {
 	shared_ptr<BaseFileReader> reader;
 	bool is_parallel;
@@ -54,7 +51,6 @@ struct MultiFileLocalState : public LocalTableFunctionState {
 	DataChunk all_columns;
 };
 
-template <class OP>
 struct MultiFileFileReaderData {
 	// Create data for an unopened file
 	explicit MultiFileFileReaderData(const string &file_to_be_opened)
@@ -89,7 +85,6 @@ struct MultiFileFileReaderData {
 	string file_to_be_opened;
 };
 
-template <class OP>
 struct MultiFileGlobalState : public GlobalTableFunctionState {
 	explicit MultiFileGlobalState(MultiFileList &file_list_p) : file_list(file_list_p) {
 	}
@@ -113,7 +108,7 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	//! Index of file currently up for scanning
 	atomic<idx_t> file_index;
 	//! The current set of readers
-	vector<unique_ptr<MultiFileFileReaderData<OP>>> readers;
+	vector<unique_ptr<MultiFileFileReaderData>> readers;
 
 	idx_t batch_index = 0;
 
@@ -160,7 +155,7 @@ public:
 	                                                      vector<LogicalType> &return_types, vector<string> &names,
 	                                                      MultiFileReaderOptions file_options_p,
 	                                                      unique_ptr<BaseFileReaderOptions> options_p) {
-		auto result = make_uniq<MultiFileBindData<OP>>();
+		auto result = make_uniq<MultiFileBindData>();
 		result->multi_file_reader = std::move(multi_file_reader_p);
 		result->file_list = std::move(multi_file_list_p);
 		// auto-detect hive partitioning
@@ -270,7 +265,7 @@ public:
 		                             expected_names, std::move(file_options), std::move(options));
 	}
 
-	static unique_ptr<MultiFileList> MultiFileFilterPushdown(ClientContext &context, const MultiFileBindData<OP> &data,
+	static unique_ptr<MultiFileList> MultiFileFilterPushdown(ClientContext &context, const MultiFileBindData &data,
 	                                                         const vector<column_t> &column_ids,
 	                                                         optional_ptr<TableFilterSet> filters) {
 		if (!filters) {
@@ -283,19 +278,19 @@ public:
 
 	// Queries the metadataprovider for another file to scan, updating the files/reader lists in the process.
 	// Returns true if resized
-	static bool ResizeFiles(MultiFileGlobalState<OP> &parallel_state) {
+	static bool ResizeFiles(MultiFileGlobalState &parallel_state) {
 		string scanned_file;
 		if (!parallel_state.file_list.Scan(parallel_state.file_list_scan, scanned_file)) {
 			return false;
 		}
 
 		// Push the file in the reader data, to be opened later
-		parallel_state.readers.push_back(make_uniq<MultiFileFileReaderData<OP>>(scanned_file));
+		parallel_state.readers.push_back(make_uniq<MultiFileFileReaderData>(scanned_file));
 
 		return true;
 	}
 
-	static void InitializeReader(BaseFileReader &reader, const MultiFileBindData<OP> &bind_data,
+	static void InitializeReader(BaseFileReader &reader, const MultiFileBindData &bind_data,
 	                             const vector<ColumnIndex> &global_column_ids,
 	                             optional_ptr<TableFilterSet> table_filters, ClientContext &context,
 	                             optional_idx file_idx, optional_ptr<MultiFileReaderGlobalState> reader_state) {
@@ -315,8 +310,8 @@ public:
 	}
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
-	static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData<OP> &bind_data,
-	                            MultiFileLocalState<OP> &scan_data, MultiFileGlobalState<OP> &parallel_state,
+	static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData &bind_data,
+	                            MultiFileLocalState &scan_data, MultiFileGlobalState &parallel_state,
 	                            unique_lock<mutex> &parallel_lock) {
 		const auto file_index_limit =
 		    parallel_state.file_index + TaskScheduler::GetScheduler(context).NumberOfThreads();
@@ -367,8 +362,7 @@ public:
 	}
 
 	//! Wait for a file to become available. Parallel lock should be locked when calling.
-	static void WaitForFile(idx_t file_index, MultiFileGlobalState<OP> &parallel_state,
-	                        unique_lock<mutex> &parallel_lock) {
+	static void WaitForFile(idx_t file_index, MultiFileGlobalState &parallel_state, unique_lock<mutex> &parallel_lock) {
 		while (true) {
 			// Get pointer to file mutex before unlocking
 			auto &file_mutex = *parallel_state.readers[file_index]->file_mutex;
@@ -393,8 +387,8 @@ public:
 
 	// This function looks for the next available row group. If not available, it will open files from bind_data.files
 	// until there is a row group available for scanning or the files runs out
-	static bool TryInitializeNextBatch(ClientContext &context, const MultiFileBindData<OP> &bind_data,
-	                                   MultiFileLocalState<OP> &scan_data, MultiFileGlobalState<OP> &gstate) {
+	static bool TryInitializeNextBatch(ClientContext &context, const MultiFileBindData &bind_data,
+	                                   MultiFileLocalState &scan_data, MultiFileGlobalState &gstate) {
 		unique_lock<mutex> parallel_lock(gstate.lock);
 
 		while (true) {
@@ -440,10 +434,10 @@ public:
 
 	static unique_ptr<LocalTableFunctionState>
 	MultiFileInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate_p) {
-		auto &bind_data = input.bind_data->Cast<MultiFileBindData<OP>>();
-		auto &gstate = gstate_p->Cast<MultiFileGlobalState<OP>>();
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+		auto &gstate = gstate_p->Cast<MultiFileGlobalState>();
 
-		auto result = make_uniq<MultiFileLocalState<OP>>();
+		auto result = make_uniq<MultiFileLocalState>();
 		result->is_parallel = true;
 		result->batch_index = 0;
 		result->local_state = OP::InitializeLocalState();
@@ -459,15 +453,15 @@ public:
 
 	static unique_ptr<GlobalTableFunctionState> MultiFileInitGlobal(ClientContext &context,
 	                                                                TableFunctionInitInput &input) {
-		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData<OP>>();
-		unique_ptr<MultiFileGlobalState<OP>> result;
+		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
+		unique_ptr<MultiFileGlobalState> result;
 
 		// before instantiating a scan trigger a dynamic filter pushdown if possible
 		auto new_list = MultiFileFilterPushdown(context, bind_data, input.column_ids, input.filters);
 		if (new_list) {
-			result = make_uniq<MultiFileGlobalState<OP>>(std::move(new_list));
+			result = make_uniq<MultiFileGlobalState>(std::move(new_list));
 		} else {
-			result = make_uniq<MultiFileGlobalState<OP>>(*bind_data.file_list);
+			result = make_uniq<MultiFileGlobalState>(*bind_data.file_list);
 		}
 		auto &file_list = result->file_list;
 		file_list.InitializeScan(result->file_list_scan);
@@ -484,7 +478,7 @@ public:
 				if (!reader) {
 					break;
 				}
-				result->readers.push_back(make_uniq<MultiFileFileReaderData<OP>>(std::move(reader)));
+				result->readers.push_back(make_uniq<MultiFileFileReaderData>(std::move(reader)));
 			}
 			if (result->readers.size() != file_list.GetTotalFileCount()) {
 				// This case happens with recursive CTEs: the first execution the readers have already
@@ -495,7 +489,7 @@ public:
 		} else if (bind_data.initial_reader) {
 			// we can only use the initial reader if it was constructed from the first file
 			if (bind_data.initial_reader->file_name == file_list.GetFirstFile()) {
-				result->readers.push_back(make_uniq<MultiFileFileReaderData<OP>>(std::move(bind_data.initial_reader)));
+				result->readers.push_back(make_uniq<MultiFileFileReaderData>(std::move(bind_data.initial_reader)));
 			}
 		}
 
@@ -561,9 +555,9 @@ public:
 
 	static OperatorPartitionData MultiFileGetPartitionData(ClientContext &context,
 	                                                       TableFunctionGetPartitionInput &input) {
-		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData<OP>>();
-		auto &data = input.local_state->Cast<MultiFileLocalState<OP>>();
-		auto &gstate = input.global_state->Cast<MultiFileGlobalState<OP>>();
+		auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
+		auto &data = input.local_state->Cast<MultiFileLocalState>();
+		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
 		OperatorPartitionData partition_data(data.batch_index);
 		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, data.reader->reader_data,
 		                                              gstate.multi_file_reader_state, input.partition_info,
@@ -575,9 +569,9 @@ public:
 		if (!data_p.local_state) {
 			return;
 		}
-		auto &data = data_p.local_state->Cast<MultiFileLocalState<OP>>();
-		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState<OP>>();
-		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData<OP>>();
+		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
+		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
+		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
 
 		bool rowgroup_finished;
 		do {
@@ -606,7 +600,7 @@ public:
 
 	static unique_ptr<BaseStatistics> MultiFileScanStats(ClientContext &context, const FunctionData *bind_data_p,
 	                                                     column_t column_index) {
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData<OP>>();
+		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
 		// NOTE: we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
@@ -626,7 +620,7 @@ public:
 
 	static double MultiFileProgress(ClientContext &context, const FunctionData *bind_data_p,
 	                                const GlobalTableFunctionState *global_state) {
-		auto &gstate = global_state->Cast<MultiFileGlobalState<OP>>();
+		auto &gstate = global_state->Cast<MultiFileGlobalState>();
 
 		auto total_count = gstate.file_list.GetTotalFileCount();
 		if (total_count == 0) {
@@ -638,7 +632,7 @@ public:
 	}
 
 	static unique_ptr<NodeStatistics> MultiFileCardinality(ClientContext &context, const FunctionData *bind_data) {
-		auto &data = bind_data->Cast<MultiFileBindData<OP>>();
+		auto &data = bind_data->Cast<MultiFileBindData>();
 		auto file_list_cardinality_estimate = data.file_list->GetCardinality(context);
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
@@ -648,7 +642,7 @@ public:
 
 	static void MultiFileComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
 	                                           vector<unique_ptr<Expression>> &filters) {
-		auto &data = bind_data_p->Cast<MultiFileBindData<OP>>();
+		auto &data = bind_data_p->Cast<MultiFileBindData>();
 
 		MultiFilePushdownInfo info(get);
 		auto new_list =
@@ -662,7 +656,7 @@ public:
 
 	static BindInfo MultiFileGetBindInfo(const optional_ptr<FunctionData> bind_data_p) {
 		BindInfo bind_info(ScanType::EXTERNAL);
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData<OP>>();
+		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
 		vector<Value> file_path;
 		for (const auto &file : bind_data.file_list->Files()) {
@@ -678,13 +672,13 @@ public:
 	}
 
 	static TablePartitionInfo MultiFileGetPartitionInfo(ClientContext &context, TableFunctionPartitionInput &input) {
-		auto &bind_data = input.bind_data->Cast<MultiFileBindData<OP>>();
+		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 		return bind_data.multi_file_reader->GetPartitionInfo(context, bind_data.reader_bind, input);
 	}
 
 	static virtual_column_map_t MultiFileGetVirtualColumns(ClientContext &context,
 	                                                       optional_ptr<FunctionData> bind_data_p) {
-		auto &bind_data = bind_data_p->Cast<MultiFileBindData<OP>>();
+		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 		virtual_column_map_t result;
 		MultiFileReader::GetVirtualColumns(context, bind_data.reader_bind, result);
 		// FIXME: forward virtual columns
