@@ -458,9 +458,11 @@ public:
 			finalize_tasks.push_back(
 			    make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink, 0U, entry_count, sink.op));
 		} else {
+			// have 4 times more tasks than threads
+			const idx_t entries_per_task = entry_count / num_threads / 4;
 			// Parallel memset
-			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx += ENTRIES_PER_TASK) {
-				auto entry_idx_to = MinValue<idx_t>(entry_idx + ENTRIES_PER_TASK, entry_count);
+			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx += entries_per_task) {
+				auto entry_idx_to = MinValue<idx_t>(entry_idx + entries_per_task, entry_count);
 				finalize_tasks.push_back(make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink, entry_idx,
 				                                                          entry_idx_to, sink.op));
 			}
@@ -469,7 +471,6 @@ public:
 	}
 
 	static constexpr const idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
-	static constexpr const idx_t ENTRIES_PER_TASK = 131072;
 };
 
 class HashJoinFinalizeTask : public ExecutorTask {
