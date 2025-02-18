@@ -320,9 +320,12 @@ class TestExpression(object):
         col1 = ColumnExpression('a')
         col2 = ColumnExpression('b')
         expr = col1 - col2
-        rel = rel.select(expr)
-        res = rel.fetchall()
+        rel2 = rel.select(expr)
+        res = rel2.fetchall()
         assert res == [(2,)]
+
+        res = rel.select(1 - col1).fetchall()
+        assert res == [(-2,)]
 
     def test_multiply_expression(self):
         con = duckdb.connect()

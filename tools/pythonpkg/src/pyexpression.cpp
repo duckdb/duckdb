@@ -109,31 +109,31 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Else(const DuckDBPyExpression
 
 // Binary operators
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Add(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Add(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("+", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Subtract(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Subtract(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("-", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Multiply(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Multiply(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("*", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Division(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Division(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("/", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FloorDivision(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::FloorDivision(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("//", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Modulo(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Modulo(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("%", *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Power(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Power(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::BinaryOperator("**", *this, other);
 }
 
@@ -169,11 +169,11 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Not() {
 	return DuckDBPyExpression::InternalUnaryOperator(ExpressionType::OPERATOR_NOT, *this);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::And(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::And(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::InternalConjunction(ExpressionType::CONJUNCTION_AND, *this, other);
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Or(const DuckDBPyExpression &other) {
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::Or(const DuckDBPyExpression &other) const {
 	return DuckDBPyExpression::InternalConjunction(ExpressionType::CONJUNCTION_OR, *this, other);
 }
 

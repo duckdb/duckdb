@@ -58,7 +58,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 	)";
 
 	m.def("__add__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
-	m.def("__radd__", &DuckDBPyExpression::Add, py::arg("expr"), docs);
+	m.def(
+	    "__radd__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Add(a); }, docs);
 
 	docs = R"(
 		Negate the expression.
@@ -78,7 +79,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '-' expr
 	)";
 	m.def("__sub__", &DuckDBPyExpression::Subtract, docs);
-	m.def("__rsub__", &DuckDBPyExpression::Subtract, docs);
+	m.def(
+	    "__rsub__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Subtract(a); }, docs);
 
 	docs = R"(
 		Multiply self by expr
@@ -90,7 +92,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '*' expr
 	)";
 	m.def("__mul__", &DuckDBPyExpression::Multiply, docs);
-	m.def("__rmul__", &DuckDBPyExpression::Multiply, docs);
+	m.def(
+	    "__rmul__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Multiply(a); }, docs);
 
 	docs = R"(
 		Divide self by expr
@@ -102,10 +105,12 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '/' expr
 	)";
 	m.def("__div__", &DuckDBPyExpression::Division, docs);
-	m.def("__rdiv__", &DuckDBPyExpression::Division, docs);
+	m.def(
+	    "__rdiv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Division(a); }, docs);
 
 	m.def("__truediv__", &DuckDBPyExpression::Division, docs);
-	m.def("__rtruediv__", &DuckDBPyExpression::Division, docs);
+	m.def(
+	    "__rtruediv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Division(a); }, docs);
 
 	docs = R"(
 		(Floor) Divide self by expr
@@ -117,7 +122,9 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '//' expr
 	)";
 	m.def("__floordiv__", &DuckDBPyExpression::FloorDivision, docs);
-	m.def("__rfloordiv__", &DuckDBPyExpression::FloorDivision, docs);
+	m.def(
+	    "__rfloordiv__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.FloorDivision(a); },
+	    docs);
 
 	docs = R"(
 		Modulo self by expr
@@ -129,7 +136,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '%' expr
 	)";
 	m.def("__mod__", &DuckDBPyExpression::Modulo, docs);
-	m.def("__rmod__", &DuckDBPyExpression::Modulo, docs);
+	m.def(
+	    "__rmod__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Modulo(a); }, docs);
 
 	docs = R"(
 		Power self by expr
@@ -141,7 +149,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 			FunctionExpression: self '**' expr
 	)";
 	m.def("__pow__", &DuckDBPyExpression::Power, docs);
-	m.def("__rpow__", &DuckDBPyExpression::Power, docs);
+	m.def(
+	    "__rpow__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Power(a); }, docs);
 
 	docs = R"(
 		Create an equality expression between two expressions
@@ -250,7 +259,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: expr '&' self
 	)";
-	m.def("__rand__", &DuckDBPyExpression::And, docs);
+	m.def(
+	    "__rand__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.And(a); }, docs);
 
 	docs = R"(
 		Binary-or self together with expr
@@ -261,7 +271,8 @@ static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<Du
 		Returns:
 			FunctionExpression: expr '|' self
 	)";
-	m.def("__ror__", &DuckDBPyExpression::Or, docs);
+	m.def(
+	    "__ror__", [](const DuckDBPyExpression &a, const DuckDBPyExpression &b) { return b.Or(a); }, docs);
 }
 
 static void InitializeImplicitConversion(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {
