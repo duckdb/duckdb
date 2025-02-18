@@ -11,6 +11,7 @@
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/copy_function.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 namespace duckdb {
 
