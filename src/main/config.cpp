@@ -72,6 +72,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ArrowLargeBufferSizeSetting),
     DUCKDB_GLOBAL(ArrowLosslessConversionSetting),
     DUCKDB_GLOBAL(ArrowOutputListViewSetting),
+    DUCKDB_LOCAL(AsofLoopJoinThresholdSetting),
     DUCKDB_GLOBAL(AutoinstallExtensionRepositorySetting),
     DUCKDB_GLOBAL(AutoinstallKnownExtensionsSetting),
     DUCKDB_GLOBAL(AutoloadKnownExtensionsSetting),

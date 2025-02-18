@@ -50,6 +50,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/table/row_group.hpp"
 #include "duckdb/common/multi_file_reader_function.hpp"
+#include "duckdb/common/primitive_dictionary.hpp"
 #endif
 
 namespace duckdb {
@@ -675,7 +676,14 @@ struct ParquetWriteBindData : public TableFunctionData {
 	bool debug_use_openssl = true;
 
 	//! After how many distinct values should we abandon dictionary compression and bloom filters?
-	idx_t dictionary_size_limit = row_group_size / 100;
+	idx_t dictionary_size_limit = row_group_size / 20;
+
+	void SetToDefaultDictionarySizeLimit() {
+		// This depends on row group size so we should "reset" if the row group size is changed
+		dictionary_size_limit = row_group_size / 20;
+	}
+
+	idx_t string_dictionary_page_size_limit = 1048576;
 
 	//! What false positive rate are we willing to accept for bloom filters
 	double bloom_filter_false_positive_ratio = 0.01;
@@ -696,8 +704,8 @@ struct ParquetWriteGlobalState : public GlobalFunctionData {
 };
 
 struct ParquetWriteLocalState : public LocalFunctionData {
-	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
-	    : buffer(BufferAllocator::Get(context), types) {
+	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types) : buffer(context, types) {
+		buffer.SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 		buffer.InitializeAppend(append_state);
 	}
 
@@ -710,6 +718,7 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 	D_ASSERT(names.size() == sql_types.size());
 	bool row_group_size_bytes_set = false;
 	bool compression_level_set = false;
+	bool dictionary_size_limit_set = false;
 	auto bind_data = make_uniq<ParquetWriteBindData>();
 	for (auto &option : input.info.options) {
 		const auto loption = StringUtil::Lower(option.first);
@@ -719,6 +728,9 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 		}
 		if (loption == "row_group_size" || loption == "chunk_size") {
 			bind_data->row_group_size = option.second[0].GetValue<uint64_t>();
+			if (!dictionary_size_limit_set) {
+				bind_data->SetToDefaultDictionarySizeLimit();
+			}
 		} else if (loption == "row_group_size_bytes") {
 			auto roption = option.second[0];
 			if (roption.GetTypeMutable().id() == LogicalTypeId::VARCHAR) {
@@ -794,6 +806,14 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 				throw BinderException("dictionary_size_limit must be greater than 0 or 0 to disable");
 			}
 			bind_data->dictionary_size_limit = val;
+			dictionary_size_limit_set = true;
+		} else if (loption == "string_dictionary_page_size_limit") {
+			auto val = option.second[0].GetValue<uint64_t>();
+			if (val > PrimitiveDictionary<uint32_t>::MAXIMUM_POSSIBLE_SIZE) {
+				throw BinderException("string_dictionary_page_size_limit must be less than or equal to %llu",
+				                      PrimitiveDictionary<uint32_t>::MAXIMUM_POSSIBLE_SIZE);
+			}
+			bind_data->string_dictionary_page_size_limit = val;
 		} else if (loption == "bloom_filter_false_positive_ratio") {
 			auto val = option.second[0].GetValue<double>();
 			if (val <= 0) {
@@ -856,8 +876,9 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	global_state->writer = make_uniq<ParquetWriter>(
 	    context, fs, file_path, parquet_bind.sql_types, parquet_bind.column_names, parquet_bind.codec,
 	    parquet_bind.field_ids.Copy(), parquet_bind.kv_metadata, parquet_bind.encryption_config,
-	    parquet_bind.dictionary_size_limit, parquet_bind.bloom_filter_false_positive_ratio,
-	    parquet_bind.compression_level, parquet_bind.debug_use_openssl, parquet_bind.parquet_version);
+	    parquet_bind.dictionary_size_limit, parquet_bind.string_dictionary_page_size_limit,
+	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.debug_use_openssl,
+	    parquet_bind.parquet_version);
 	return std::move(global_state);
 }
 
@@ -1035,6 +1056,9 @@ static void ParquetCopySerialize(Serializer &serializer, const FunctionData &bin
 	                                    default_value.bloom_filter_false_positive_ratio);
 	serializer.WritePropertyWithDefault(114, "parquet_version", bind_data.parquet_version,
 	                                    default_value.parquet_version);
+	serializer.WritePropertyWithDefault(115, "string_dictionary_page_size_limit",
+	                                    bind_data.string_dictionary_page_size_limit,
+	                                    default_value.string_dictionary_page_size_limit);
 }
 
 static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserializer, CopyFunction &function) {
@@ -1065,6 +1089,8 @@ static unique_ptr<FunctionData> ParquetCopyDeserialize(Deserializer &deserialize
 	    113, "bloom_filter_false_positive_ratio", default_value.bloom_filter_false_positive_ratio);
 	data->parquet_version =
 	    deserializer.ReadPropertyWithExplicitDefault(114, "parquet_version", default_value.parquet_version);
+	data->string_dictionary_page_size_limit = deserializer.ReadPropertyWithExplicitDefault(
+	    115, "string_dictionary_page_size_limit", default_value.string_dictionary_page_size_limit);
 
 	return std::move(data);
 }
