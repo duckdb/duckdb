@@ -30,7 +30,6 @@ public:
 	}
 
 	void FinishWrite(WriteStream &writer) {
-		D_ASSERT(count == total_value_count);
 		writer.WriteData(buffer.get(), total_value_count * bit_width);
 	}
 
