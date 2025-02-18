@@ -28,7 +28,7 @@ public:
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats_p, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override;
 
-	unique_ptr<ColumnWriterPageState> InitializePageState(PrimitiveColumnWriterState &state) override;
+	unique_ptr<ColumnWriterPageState> InitializePageState(PrimitiveColumnWriterState &state, idx_t page_idx) override;
 
 	void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state_p) override;
 
