@@ -264,115 +264,11 @@ public:
 
 	void WriteVector(WriteStream &temp_writer, ColumnWriterStatistics *stats, ColumnWriterPageState *page_state_p,
 	                 Vector &input_column, idx_t chunk_start, idx_t chunk_end) override {
-		auto &page_state = page_state_p->Cast<StandardWriterPageState<SRC, TGT, OP>>();
-
 		const auto &mask = FlatVector::Validity(input_column);
-		const auto *data_ptr = FlatVector::GetData<SRC>(input_column);
-
-		switch (page_state.encoding) {
-		case duckdb_parquet::Encoding::RLE_DICTIONARY: {
-			idx_t r = chunk_start;
-			if (!page_state.dict_written_value) {
-				// find first non-null value
-				for (; r < chunk_end; r++) {
-					if (!mask.RowIsValid(r)) {
-						continue;
-					}
-					// write the bit-width as a one-byte entry and initialize writer
-					temp_writer.Write<uint8_t>(page_state.dict_bit_width);
-					page_state.dict_encoder.BeginWrite();
-					page_state.dict_written_value = true;
-					break;
-				}
-			}
-
-			for (; r < chunk_end; r++) {
-				if (!mask.RowIsValid(r)) {
-					continue;
-				}
-				const auto &src_value = data_ptr[r];
-				const auto value_index = page_state.dictionary.GetIndex(src_value);
-				page_state.dict_encoder.WriteValue(temp_writer, value_index);
-			}
-			break;
-		}
-		case duckdb_parquet::Encoding::DELTA_BINARY_PACKED: {
-			idx_t r = chunk_start;
-			if (!page_state.dbp_initialized) {
-				// find first non-null value
-				for (; r < chunk_end; r++) {
-					if (!mask.RowIsValid(r)) {
-						continue;
-					}
-					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-					OP::template HandleStats<SRC, TGT>(stats, target_value);
-					dbp_encoder::BeginWrite(page_state.dbp_encoder, temp_writer, target_value);
-					page_state.dbp_initialized = true;
-					r++; // skip over
-					break;
-				}
-			}
-
-			for (; r < chunk_end; r++) {
-				if (!mask.RowIsValid(r)) {
-					continue;
-				}
-				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-				OP::template HandleStats<SRC, TGT>(stats, target_value);
-				dbp_encoder::WriteValue(page_state.dbp_encoder, temp_writer, target_value);
-			}
-			break;
-		}
-		case duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY: {
-			idx_t r = chunk_start;
-			if (!page_state.dlba_initialized) {
-				// find first non-null value
-				for (; r < chunk_end; r++) {
-					if (!mask.RowIsValid(r)) {
-						continue;
-					}
-					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-					OP::template HandleStats<SRC, TGT>(stats, target_value);
-					dlba_encoder::BeginWrite(page_state.dlba_encoder, temp_writer, target_value);
-					page_state.dlba_initialized = true;
-					r++; // skip over
-					break;
-				}
-			}
-
-			for (; r < chunk_end; r++) {
-				if (!mask.RowIsValid(r)) {
-					continue;
-				}
-				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-				OP::template HandleStats<SRC, TGT>(stats, target_value);
-				dlba_encoder::WriteValue(page_state.dlba_encoder, temp_writer, target_value);
-			}
-			break;
-		}
-		case duckdb_parquet::Encoding::BYTE_STREAM_SPLIT: {
-			for (idx_t r = chunk_start; r < chunk_end; r++) {
-				if (!mask.RowIsValid(r)) {
-					continue;
-				}
-				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
-				OP::template HandleStats<SRC, TGT>(stats, target_value);
-				bss_encoder::WriteValue(page_state.bss_encoder, target_value);
-			}
-			break;
-		}
-		case duckdb_parquet::Encoding::PLAIN: {
-			D_ASSERT(page_state.encoding == duckdb_parquet::Encoding::PLAIN);
-			if (mask.AllValid()) {
-				TemplatedWritePlain<SRC, TGT, OP, true>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
-			} else {
-				TemplatedWritePlain<SRC, TGT, OP, false>(input_column, stats, chunk_start, chunk_end, mask,
-				                                         temp_writer);
-			}
-			break;
-		}
-		default:
-			throw InternalException("Unknown encoding");
+		if (mask.AllValid()) {
+			WriteVectorInternal<true>(temp_writer, stats, page_state_p, input_column, chunk_start, chunk_end);
+		} else {
+			WriteVectorInternal<false>(temp_writer, stats, page_state_p, input_column, chunk_start, chunk_end);
 		}
 	}
 
@@ -403,6 +299,123 @@ public:
 			return (state.key_bit_width + 7) / 8;
 		} else {
 			return OP::template GetRowSize<SRC, TGT>(vector, index);
+		}
+	}
+
+private:
+	template <bool ALL_VALID>
+	void WriteVectorInternal(WriteStream &temp_writer, ColumnWriterStatistics *stats,
+	                         ColumnWriterPageState *page_state_p, Vector &input_column, idx_t chunk_start,
+	                         idx_t chunk_end) {
+		auto &page_state = page_state_p->Cast<StandardWriterPageState<SRC, TGT, OP>>();
+
+		const auto &mask = FlatVector::Validity(input_column);
+		const auto *data_ptr = FlatVector::GetData<SRC>(input_column);
+
+		switch (page_state.encoding) {
+		case duckdb_parquet::Encoding::RLE_DICTIONARY: {
+			idx_t r = chunk_start;
+			if (!page_state.dict_written_value) {
+				// find first non-null value
+				for (; r < chunk_end; r++) {
+					if (!mask.RowIsValid(r)) {
+						continue;
+					}
+					// write the bit-width as a one-byte entry and initialize writer
+					temp_writer.Write<uint8_t>(page_state.dict_bit_width);
+					page_state.dict_encoder.BeginWrite();
+					page_state.dict_written_value = true;
+					break;
+				}
+			}
+
+			for (; r < chunk_end; r++) {
+				if (!ALL_VALID && !mask.RowIsValid(r)) {
+					continue;
+				}
+				const auto &src_value = data_ptr[r];
+				const auto value_index = page_state.dictionary.GetIndex(src_value);
+				page_state.dict_encoder.WriteValue(temp_writer, value_index);
+			}
+			break;
+		}
+		case duckdb_parquet::Encoding::DELTA_BINARY_PACKED: {
+			idx_t r = chunk_start;
+			if (!page_state.dbp_initialized) {
+				// find first non-null value
+				for (; r < chunk_end; r++) {
+					if (!mask.RowIsValid(r)) {
+						continue;
+					}
+					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+					OP::template HandleStats<SRC, TGT>(stats, target_value);
+					dbp_encoder::BeginWrite(page_state.dbp_encoder, temp_writer, target_value);
+					page_state.dbp_initialized = true;
+					r++; // skip over
+					break;
+				}
+			}
+
+			for (; r < chunk_end; r++) {
+				if (!ALL_VALID && !mask.RowIsValid(r)) {
+					continue;
+				}
+				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+				OP::template HandleStats<SRC, TGT>(stats, target_value);
+				dbp_encoder::WriteValue(page_state.dbp_encoder, temp_writer, target_value);
+			}
+			break;
+		}
+		case duckdb_parquet::Encoding::DELTA_LENGTH_BYTE_ARRAY: {
+			idx_t r = chunk_start;
+			if (!page_state.dlba_initialized) {
+				// find first non-null value
+				for (; r < chunk_end; r++) {
+					if (!mask.RowIsValid(r)) {
+						continue;
+					}
+					const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+					OP::template HandleStats<SRC, TGT>(stats, target_value);
+					dlba_encoder::BeginWrite(page_state.dlba_encoder, temp_writer, target_value);
+					page_state.dlba_initialized = true;
+					r++; // skip over
+					break;
+				}
+			}
+
+			for (; r < chunk_end; r++) {
+				if (!ALL_VALID && !mask.RowIsValid(r)) {
+					continue;
+				}
+				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+				OP::template HandleStats<SRC, TGT>(stats, target_value);
+				dlba_encoder::WriteValue(page_state.dlba_encoder, temp_writer, target_value);
+			}
+			break;
+		}
+		case duckdb_parquet::Encoding::BYTE_STREAM_SPLIT: {
+			for (idx_t r = chunk_start; r < chunk_end; r++) {
+				if (!ALL_VALID && !mask.RowIsValid(r)) {
+					continue;
+				}
+				const TGT target_value = OP::template Operation<SRC, TGT>(data_ptr[r]);
+				OP::template HandleStats<SRC, TGT>(stats, target_value);
+				bss_encoder::WriteValue(page_state.bss_encoder, target_value);
+			}
+			break;
+		}
+		case duckdb_parquet::Encoding::PLAIN: {
+			D_ASSERT(page_state.encoding == duckdb_parquet::Encoding::PLAIN);
+			if (mask.AllValid()) {
+				TemplatedWritePlain<SRC, TGT, OP, true>(input_column, stats, chunk_start, chunk_end, mask, temp_writer);
+			} else {
+				TemplatedWritePlain<SRC, TGT, OP, false>(input_column, stats, chunk_start, chunk_end, mask,
+				                                         temp_writer);
+			}
+			break;
+		}
+		default:
+			throw InternalException("Unknown encoding");
 		}
 	}
 };
