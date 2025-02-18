@@ -32,8 +32,6 @@ public:
 	//! Create an Expression
 	ParsedExpression(ExpressionType type, ExpressionClass expression_class) : BaseExpression(type, expression_class) {
 	}
-	virtual ~ParsedExpression() {
-	}
 
 public:
 	bool IsAggregate() const override;

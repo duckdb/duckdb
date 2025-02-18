@@ -23,8 +23,6 @@ public:
 
 public:
 	explicit StarExpression(string relation_name = string());
-	virtual ~StarExpression() {
-	}
 
 	//! The relation name in case of tbl.*, or empty if this is a normal *
 	string relation_name;
