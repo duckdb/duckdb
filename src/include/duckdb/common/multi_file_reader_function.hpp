@@ -518,7 +518,7 @@ public:
 		result->file_index = 0;
 		result->global_state = OP::InitializeGlobalState();
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-			result->max_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
+			result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 		} else {
 			result->max_threads = OP::MaxThreads(*bind_data.bind_data);
 		}
