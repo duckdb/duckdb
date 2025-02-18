@@ -87,7 +87,6 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 };
 
 struct ParquetMultiFileInfo {
-	using READER = ParquetReader;
 	using OPTIONS = ParquetOptions;
 	using UNION_DATA = ParquetUnionData;
 
@@ -99,22 +98,22 @@ struct ParquetMultiFileInfo {
 	                       MultiFileBindData<ParquetMultiFileInfo> &bind_data);
 	static unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
 	                                                        ParquetOptions options);
-	static void SetInitialReader(TableFunctionData &bind_data, ParquetReader &reader);
+	static void SetInitialReader(TableFunctionData &bind_data, BaseFileReader &reader);
 	static void FinalizeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data);
 	static void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
 	static idx_t MaxThreads(const TableFunctionData &bind_data_p);
 	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState();
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
-	static shared_ptr<ParquetReader> CreateReader(ClientContext &context, ParquetUnionData &union_data);
-	static shared_ptr<ParquetReader> CreateReader(ClientContext &context, const string &filename,
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, ParquetUnionData &union_data);
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
 	                                              TableFunctionData &bind_data);
-	static void Scan(ClientContext &context, ParquetReader &reader, GlobalTableFunctionState &global_state,
+	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk);
-	static bool TryInitializeScan(ClientContext &context, ParquetReader &reader, GlobalTableFunctionState &gstate,
+	static bool TryInitializeScan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &gstate,
 	                              LocalTableFunctionState &lstate);
 	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state);
 	static unique_ptr<NodeStatistics> GetCardinality(TableFunctionData &bind_data, idx_t file_count);
-	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, ParquetReader &reader, const string &name);
+	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, BaseFileReader &reader, const string &name);
 	static double GetProgressInFile(ClientContext &context, GlobalTableFunctionState &gstate);
 };
 
@@ -409,8 +408,9 @@ ParquetMultiFileInfo::InitializeBindData(MultiFileBindData<ParquetMultiFileInfo>
 	return std::move(result);
 }
 
-void ParquetMultiFileInfo::SetInitialReader(TableFunctionData &bind_data_p, ParquetReader &reader) {
+void ParquetMultiFileInfo::SetInitialReader(TableFunctionData &bind_data_p, BaseFileReader &reader_p) {
 	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
+	auto &reader = reader_p.Cast<ParquetReader>();
 	bind_data.Initialize(reader);
 }
 
@@ -443,8 +443,9 @@ unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(TableFunctionDat
 	return make_uniq<NodeStatistics>(MaxValue(bind_data.initial_file_cardinality, (idx_t)1) * file_count);
 }
 
-unique_ptr<BaseStatistics> ParquetMultiFileInfo::GetStatistics(ClientContext &context, ParquetReader &reader,
+unique_ptr<BaseStatistics> ParquetMultiFileInfo::GetStatistics(ClientContext &context, BaseFileReader &reader_p,
                                                                const string &name) {
+	auto &reader = reader_p.Cast<ParquetReader>();
 	return reader.ReadStatistics(name);
 }
 
@@ -462,11 +463,11 @@ double ParquetMultiFileInfo::GetProgressInFile(ClientContext &context, GlobalTab
 	return 100.0 * (static_cast<double>(read_rows) / static_cast<double>(total_rows));
 }
 
-shared_ptr<ParquetReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, ParquetUnionData &union_data) {
+shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, ParquetUnionData &union_data) {
 	return make_shared_ptr<ParquetReader>(context, union_data.file_name, union_data.options, union_data.metadata);
 }
 
-shared_ptr<ParquetReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
+shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
                                                              TableFunctionData &bind_data_p) {
 	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
 	return make_shared_ptr<ParquetReader>(context, filename, bind_data.parquet_options);
@@ -480,10 +481,11 @@ unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState()
 	return make_uniq<ParquetReadLocalState>();
 }
 
-bool ParquetMultiFileInfo::TryInitializeScan(ClientContext &context, ParquetReader &reader,
+bool ParquetMultiFileInfo::TryInitializeScan(ClientContext &context, BaseFileReader &reader_p,
                                              GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
+	auto &reader = reader_p.Cast<ParquetReader>();
 	if (gstate.total_rows == 0) {
 		gstate.total_rows = reader.NumRows();
 	}
@@ -505,10 +507,11 @@ void ParquetMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctio
 	gstate.total_rows = 0;
 }
 
-void ParquetMultiFileInfo::Scan(ClientContext &context, ParquetReader &reader, GlobalTableFunctionState &gstate_p,
+void ParquetMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader_p, GlobalTableFunctionState &gstate_p,
                                 LocalTableFunctionState &local_state_p, DataChunk &chunk) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
+	auto &reader = reader_p.Cast<ParquetReader>();
 	reader.Scan(local_state.scan_state, chunk);
 	gstate.rows_read += chunk.size();
 }

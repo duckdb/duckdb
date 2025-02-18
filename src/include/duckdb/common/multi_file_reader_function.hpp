@@ -29,12 +29,12 @@ struct MultiFileBindData : public TableFunctionData {
 	virtual_column_map_t virtual_columns;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
-	shared_ptr<typename OP::READER> initial_reader;
+	shared_ptr<BaseFileReader> initial_reader;
 	// The union readers are created (when parquet union_by_name option is on) during binding
 	// Those readers can be re-used during ParquetParallelStateNext
 	vector<unique_ptr<typename OP::UNION_DATA>> union_readers;
 
-	void Initialize(shared_ptr<typename OP::READER> reader) {
+	void Initialize(shared_ptr<BaseFileReader> reader) {
 		initial_reader = std::move(reader);
 		OP::SetInitialReader(*bind_data, *initial_reader);
 	}
@@ -45,7 +45,7 @@ struct MultiFileBindData : public TableFunctionData {
 
 template <class OP>
 struct MultiFileLocalState : public LocalTableFunctionState {
-	shared_ptr<typename OP::READER> reader;
+	shared_ptr<BaseFileReader> reader;
 	bool is_parallel;
 	idx_t batch_index;
 	idx_t file_index;
@@ -62,7 +62,7 @@ struct MultiFileFileReaderData {
 	      file_to_be_opened(file_to_be_opened) {
 	}
 	// Create data for an existing reader
-	explicit MultiFileFileReaderData(shared_ptr<typename OP::READER> reader_p)
+	explicit MultiFileFileReaderData(shared_ptr<BaseFileReader> reader_p)
 	    : reader(std::move(reader_p)), file_state(MultiFileFileState::OPEN), file_mutex(make_uniq<mutex>()) {
 	}
 	// Create data for an existing reader
@@ -78,7 +78,7 @@ struct MultiFileFileReaderData {
 	}
 
 	//! Currently opened reader for the file
-	shared_ptr<typename OP::READER> reader;
+	shared_ptr<BaseFileReader> reader;
 	//! Flag to indicate the file is being opened
 	MultiFileFileState file_state;
 	//! Mutexes to wait for the file when it is being opened
@@ -138,7 +138,7 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 template <class OP>
 class MultiFileReaderFunction : public TableFunction {
 public:
-	MultiFileReaderFunction(string name_p)
+	explicit MultiFileReaderFunction(string name_p)
 	    : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MultiFileScan, MultiFileBind, MultiFileInitGlobal,
 	                    MultiFileInitLocal) {
 		statistics = MultiFileScanStats;
@@ -296,7 +296,7 @@ public:
 		return true;
 	}
 
-	static void InitializeReader(typename OP::READER &reader, const MultiFileBindData<OP> &bind_data,
+	static void InitializeReader(BaseFileReader &reader, const MultiFileBindData<OP> &bind_data,
 	                             const vector<ColumnIndex> &global_column_ids,
 	                             optional_ptr<TableFilterSet> table_filters, ClientContext &context,
 	                             optional_idx file_idx, optional_ptr<MultiFileReaderGlobalState> reader_state) {
@@ -339,7 +339,7 @@ public:
 				parallel_lock.unlock();
 				unique_lock<mutex> file_lock(current_file_lock);
 
-				shared_ptr<typename OP::READER> reader;
+				shared_ptr<BaseFileReader> reader;
 				try {
 					if (current_reader_data.union_data) {
 						auto &union_data = *current_reader_data.union_data;

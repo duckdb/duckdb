@@ -12,7 +12,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/base_file_reader.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -135,27 +135,21 @@ struct ParquetUnionData {
 	}
 };
 
-class ParquetReader {
+class ParquetReader : public BaseFileReader {
 public:
 	using UNION_READER_DATA = unique_ptr<ParquetUnionData>;
 
 public:
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
-	~ParquetReader();
+	~ParquetReader() override;
 
 	FileSystem &fs;
 	Allocator &allocator;
-	string file_name;
-	vector<MultiFileReaderColumnDefinition> columns;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
-	MultiFileReaderData reader_data;
 	unique_ptr<ParquetColumnSchema> root_schema;
 	shared_ptr<EncryptionUtil> encryption_util;
-
-	//! Table column names - set when using COPY tbl FROM file.parquet
-	vector<string> table_columns;
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
@@ -198,14 +192,6 @@ public:
 
 	FileHandle &GetHandle() {
 		return *file_handle;
-	}
-
-	const string &GetFileName() {
-		return file_name;
-	}
-
-	const vector<MultiFileReaderColumnDefinition> &GetColumns() {
-		return columns;
 	}
 
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
