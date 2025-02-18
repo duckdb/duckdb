@@ -21,6 +21,11 @@ struct BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
+	static constexpr idx_t WriteSize(const TGT &input) {
+		return sizeof(TGT);
+	}
+
+	template <class SRC, class TGT>
 	static uint64_t XXHash64(const TGT &target_value) {
 		return duckdb_zstd::XXH64(&target_value, sizeof(target_value), 0);
 	}
@@ -100,6 +105,11 @@ struct ParquetStringOperator : public BaseParquetOperator {
 	}
 
 	template <class SRC, class TGT>
+	static idx_t WriteSize(const TGT &target_value) {
+		return sizeof(uint32_t) + target_value.GetSize();
+	}
+
+	template <class SRC, class TGT>
 	static uint64_t XXHash64(const TGT &target_value) {
 		return duckdb_zstd::XXH64(target_value.GetData(), target_value.GetSize(), 0);
 	}
@@ -118,7 +128,6 @@ struct ParquetIntervalTargetType {
 struct ParquetIntervalOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
-
 		if (input.days < 0 || input.months < 0 || input.micros < 0) {
 			throw IOException("Parquet files do not support negative intervals");
 		}
@@ -132,6 +141,11 @@ struct ParquetIntervalOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
 		ser.WriteData(target_value.bytes, ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE);
+	}
+
+	template <class SRC, class TGT>
+	static constexpr idx_t WriteSize(const TGT &target_value) {
+		return ParquetIntervalTargetType::PARQUET_INTERVAL_SIZE;
 	}
 
 	template <class SRC, class TGT>
@@ -165,6 +179,11 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static void WriteToStream(const TGT &target_value, WriteStream &ser) {
 		ser.WriteData(target_value.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+	}
+
+	template <class SRC, class TGT>
+	static constexpr idx_t WriteSize(const TGT &target_value) {
+		return ParquetUUIDTargetType::PARQUET_UUID_SIZE;
 	}
 
 	template <class SRC, class TGT>
