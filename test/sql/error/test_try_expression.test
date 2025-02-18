@@ -112,3 +112,31 @@ statement error
 select try(CAST((select 'ABC') as INTEGER))
 ----
 TRY can not be used in combination with a scalar subquery
+
+# Aggregates or plain column references are also not allowed.
+
+statement error
+with cte(x) as (
+	select 123 a
+)
+SELECT try(avg(x)) FROM cte;
+----
+TRY expression can not be used in combination with aggregate functions
+
+# column reference can be used just fine
+query I
+with cte(x) as (
+	select 123 a
+)
+SELECT TRY(x) FROM cte
+----
+123
+
+# Aggregate appearing in a deeper nested expression
+statement error
+with cte(x) as (
+	select 123 a
+)
+select TRY(2 + avg(x)) from cte
+----
+TRY expression can not be used in combination with aggregate functions

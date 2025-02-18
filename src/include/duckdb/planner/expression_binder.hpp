@@ -177,7 +177,7 @@ protected:
 	BindResult BindExpression(FunctionExpression &expr, idx_t depth, unique_ptr<ParsedExpression> &expr_ptr);
 	BindResult BindExpression(LambdaExpression &expr, idx_t depth, const LogicalType &list_child_type,
 	                          optional_ptr<bind_lambda_function_t> bind_lambda_function);
-	BindResult BindExpression(OperatorExpression &expr, idx_t depth);
+	virtual BindResult BindExpression(OperatorExpression &expr, idx_t depth);
 	BindResult BindExpression(ParameterExpression &expr, idx_t depth);
 	BindResult BindExpression(SubqueryExpression &expr, idx_t depth);
 	BindResult BindPositionalReference(unique_ptr<ParsedExpression> &expr, idx_t depth, bool root_expression);
