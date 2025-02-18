@@ -4,7 +4,7 @@
 
 require noforcestorage
 
-query IIIIIIII
+query IIIIIIIII
 from duckdb_logs
 ----
 
