@@ -68,15 +68,6 @@ struct ParquetReadBindData : public TableFunctionData {
 		initial_file_row_groups = initial_reader.NumRowGroups();
 		parquet_options = initial_reader.parquet_options;
 	}
-	idx_t MaxThreads() const {
-		return MaxValue(initial_file_row_groups, static_cast<idx_t>(1));
-	}
-	void GetBindInfo(BindInfo &info) const {
-		info.type = ScanType::PARQUET;
-		info.InsertOption("binary_as_string", Value::BOOLEAN(parquet_options.binary_as_string));
-		info.InsertOption("file_row_number", Value::BOOLEAN(parquet_options.file_row_number));
-		info.InsertOption("debug_use_openssl", Value::BOOLEAN(parquet_options.debug_use_openssl));
-	}
 };
 
 struct ParquetReadGlobalState : public GlobalTableFunctionState {
@@ -98,7 +89,6 @@ struct ParquetMultiFileInfo {
 	using READER = ParquetReader;
 	using OPTIONS = ParquetOptions;
 	using UNION_DATA = ParquetUnionData;
-	using BIND_DATA = ParquetReadBindData;
 
 	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
 	                            ParquetOptions &options);
@@ -106,9 +96,12 @@ struct ParquetMultiFileInfo {
 	                        MultiFileReaderOptions &file_options, ParquetOptions &options);
 	static void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
 	                       MultiFileBindData<ParquetMultiFileInfo> &bind_data);
-	static unique_ptr<BIND_DATA> InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
-	                                                ParquetOptions options);
+	static unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
+	                                                        ParquetOptions options);
+	static void SetInitialReader(TableFunctionData &bind_data, ParquetReader &reader);
 	static void FinalizeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data);
+	static void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
+	static idx_t MaxThreads(const TableFunctionData &bind_data_p);
 	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState();
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
 	static shared_ptr<ParquetReader> CreateReader(ClientContext &context, ParquetUnionData &union_data);
@@ -122,49 +115,6 @@ struct ParquetMultiFileInfo {
 	static unique_ptr<NodeStatistics> GetCardinality(TableFunctionData &bind_data, idx_t file_count);
 	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, ParquetReader &reader, const string &name);
 	static double GetProgressInFile(ClientContext &context, GlobalTableFunctionState &gstate);
-};
-
-struct ParquetWriteBindData : public TableFunctionData {
-	vector<LogicalType> sql_types;
-	vector<string> column_names;
-	duckdb_parquet::CompressionCodec::type codec = duckdb_parquet::CompressionCodec::SNAPPY;
-	vector<pair<string, string>> kv_metadata;
-	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
-	idx_t row_group_size_bytes = NumericLimits<idx_t>::Maximum();
-
-	//! How/Whether to encrypt the data
-	shared_ptr<ParquetEncryptionConfig> encryption_config;
-	bool debug_use_openssl = true;
-
-	//! After how many distinct values should we abandon dictionary compression and bloom filters?
-	idx_t dictionary_size_limit = row_group_size / 100;
-
-	//! What false positive rate are we willing to accept for bloom filters
-	double bloom_filter_false_positive_ratio = 0.01;
-
-	//! After how many row groups to rotate to a new file
-	optional_idx row_groups_per_file;
-
-	ChildFieldIDs field_ids;
-	//! The compression level, higher value is more
-	int64_t compression_level = ZStdFileSystem::DefaultCompressionLevel();
-
-	//! Which encodings to include when writing
-	ParquetVersion parquet_version = ParquetVersion::V1;
-};
-
-struct ParquetWriteGlobalState : public GlobalFunctionData {
-	unique_ptr<ParquetWriter> writer;
-};
-
-struct ParquetWriteLocalState : public LocalFunctionData {
-	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
-	    : buffer(BufferAllocator::Get(context), types) {
-		buffer.InitializeAppend(append_state);
-	}
-
-	ColumnDataCollection buffer;
-	ColumnDataAppendState append_state;
 };
 
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
@@ -444,7 +394,7 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key
 	return false;
 }
 
-unique_ptr<ParquetReadBindData>
+unique_ptr<TableFunctionData>
 ParquetMultiFileInfo::InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
                                          ParquetOptions options_p) {
 	auto result = make_uniq<ParquetReadBindData>();
@@ -455,7 +405,25 @@ ParquetMultiFileInfo::InitializeBindData(MultiFileBindData<ParquetMultiFileInfo>
 		result->explicit_cardinality = result->parquet_options.explicit_cardinality;
 		result->initial_file_cardinality = result->explicit_cardinality / (file_count ? file_count : 1);
 	}
-	return result;
+	return std::move(result);
+}
+
+void ParquetMultiFileInfo::SetInitialReader(TableFunctionData &bind_data_p, ParquetReader &reader) {
+	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
+	bind_data.Initialize(reader);
+}
+
+void ParquetMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data_p, BindInfo &info) {
+	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
+	info.type = ScanType::PARQUET;
+	info.InsertOption("binary_as_string", Value::BOOLEAN(bind_data.parquet_options.binary_as_string));
+	info.InsertOption("file_row_number", Value::BOOLEAN(bind_data.parquet_options.file_row_number));
+	info.InsertOption("debug_use_openssl", Value::BOOLEAN(bind_data.parquet_options.debug_use_openssl));
+}
+
+idx_t ParquetMultiFileInfo::MaxThreads(const TableFunctionData &bind_data_p) {
+	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
+	return MaxValue(bind_data.initial_file_row_groups, static_cast<idx_t>(1));
 }
 
 void ParquetMultiFileInfo::FinalizeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data) {
@@ -693,6 +661,49 @@ static void GetFieldIDs(const Value &field_ids_value, ChildFieldIDs &field_ids,
 		}
 	}
 }
+
+struct ParquetWriteBindData : public TableFunctionData {
+	vector<LogicalType> sql_types;
+	vector<string> column_names;
+	duckdb_parquet::CompressionCodec::type codec = duckdb_parquet::CompressionCodec::SNAPPY;
+	vector<pair<string, string>> kv_metadata;
+	idx_t row_group_size = DEFAULT_ROW_GROUP_SIZE;
+	idx_t row_group_size_bytes = NumericLimits<idx_t>::Maximum();
+
+	//! How/Whether to encrypt the data
+	shared_ptr<ParquetEncryptionConfig> encryption_config;
+	bool debug_use_openssl = true;
+
+	//! After how many distinct values should we abandon dictionary compression and bloom filters?
+	idx_t dictionary_size_limit = row_group_size / 100;
+
+	//! What false positive rate are we willing to accept for bloom filters
+	double bloom_filter_false_positive_ratio = 0.01;
+
+	//! After how many row groups to rotate to a new file
+	optional_idx row_groups_per_file;
+
+	ChildFieldIDs field_ids;
+	//! The compression level, higher value is more
+	int64_t compression_level = ZStdFileSystem::DefaultCompressionLevel();
+
+	//! Which encodings to include when writing
+	ParquetVersion parquet_version = ParquetVersion::V1;
+};
+
+struct ParquetWriteGlobalState : public GlobalFunctionData {
+	unique_ptr<ParquetWriter> writer;
+};
+
+struct ParquetWriteLocalState : public LocalFunctionData {
+	explicit ParquetWriteLocalState(ClientContext &context, const vector<LogicalType> &types)
+	    : buffer(BufferAllocator::Get(context), types) {
+		buffer.InitializeAppend(append_state);
+	}
+
+	ColumnDataCollection buffer;
+	ColumnDataAppendState append_state;
+};
 
 unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBindInput &input,
                                           const vector<string> &names, const vector<LogicalType> &sql_types) {

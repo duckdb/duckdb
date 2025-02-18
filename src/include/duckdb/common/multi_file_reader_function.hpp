@@ -18,7 +18,7 @@ enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
 
 template <class OP>
 struct MultiFileBindData : public TableFunctionData {
-	unique_ptr<typename OP::BIND_DATA> bind_data;
+	unique_ptr<TableFunctionData> bind_data;
 	shared_ptr<MultiFileList> file_list;
 	unique_ptr<MultiFileReader> multi_file_reader;
 	vector<MultiFileReaderColumnDefinition> columns;
@@ -36,7 +36,7 @@ struct MultiFileBindData : public TableFunctionData {
 
 	void Initialize(shared_ptr<typename OP::READER> reader) {
 		initial_reader = std::move(reader);
-		bind_data->Initialize(*initial_reader);
+		OP::SetInitialReader(*bind_data, *initial_reader);
 	}
 	void Initialize(ClientContext &, unique_ptr<typename OP::UNION_DATA> &union_data) {
 		Initialize(std::move(union_data->reader));
@@ -526,7 +526,7 @@ public:
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
 			result->max_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 		} else {
-			result->max_threads = bind_data.bind_data->MaxThreads();
+			result->max_threads = OP::MaxThreads(*bind_data.bind_data);
 		}
 		bool require_extra_columns =
 		    result->multi_file_reader_state && result->multi_file_reader_state->RequiresExtraColumns();
@@ -672,7 +672,7 @@ public:
 
 		// LCOV_EXCL_START
 		bind_info.InsertOption("file_path", Value::LIST(LogicalType::VARCHAR, file_path));
-		bind_data.bind_data->GetBindInfo(bind_info);
+		OP::GetBindInfo(*bind_data.bind_data, bind_info);
 		bind_data.file_options.AddBatchInfo(bind_info);
 		// LCOV_EXCL_STOP
 		return bind_info;
