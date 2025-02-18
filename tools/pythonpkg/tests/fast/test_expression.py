@@ -860,6 +860,20 @@ class TestExpression(object):
         assert len(res) == 2
         assert res == [(1, 'a'), (4, 'a')]
 
+    def test_empty_in(self, filter_rel):
+        expr = ColumnExpression("a")
+        with pytest.raises(
+            duckdb.InvalidInputException, match="Incorrect amount of parameters to 'isin', needs at least 1 parameter"
+        ):
+            expr = expr.isin()
+
+        expr = ColumnExpression("a")
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="Incorrect amount of parameters to 'isnotin', needs at least 1 parameter",
+        ):
+            expr = expr.isnotin()
+
     def test_filter_in(self, filter_rel):
         # IN expression
         expr = ColumnExpression("a")

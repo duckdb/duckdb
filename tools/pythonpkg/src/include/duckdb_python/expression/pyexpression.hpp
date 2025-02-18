@@ -79,6 +79,7 @@ public:
 
 	// IN / NOT IN
 
+	shared_ptr<DuckDBPyExpression> CreateCompareExpression(ExpressionType compare_type, const py::args &args);
 	shared_ptr<DuckDBPyExpression> In(const py::args &args);
 	shared_ptr<DuckDBPyExpression> NotIn(const py::args &args);
 
