@@ -166,69 +166,54 @@ SinkCombineResultType PhysicalCreateARTIndex::Combine(ExecutionContext &context,
 
 SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                                   OperatorSinkFinalizeInput &input) const {
-	auto &g_state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
-	info->column_ids = storage_ids;
+	auto &state = input.global_state.Cast<CreateARTIndexGlobalSinkState>();
 
 	// Vacuum excess memory and verify.
-	g_state.global_index->Vacuum();
-	D_ASSERT(!g_state.global_index->VerifyAndToString(true).empty());
-	g_state.global_index->VerifyAllocations();
+	state.global_index->Vacuum();
+	D_ASSERT(!state.global_index->VerifyAndToString(true).empty());
+	state.global_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
 	if (!storage.IsRoot()) {
 		throw TransactionException("cannot add an index to a table that has been altered");
 	}
 
-	// Throw, if we trigger a catalog exception.
-	auto finished = VerifyIndexDoesNotExist(context);
-	if (alter_table_info) {
-		auto &catalog = Catalog::GetCatalog(context, info->catalog);
-		catalog.Alter(context, *alter_table_info);
-		table.GetStorage().AddIndex(std::move(g_state.global_index));
-		return SinkFinalizeType::READY;
-	}
-	if (finished) {
-		return SinkFinalizeType::READY;
-	}
-
 	auto &schema = table.schema;
-	auto transaction = schema.GetCatalogTransaction(context);
-	auto index_entry = schema.CreateIndex(transaction, *info, table).get();
+	info->column_ids = storage_ids;
 
-	D_ASSERT(index_entry);
-	auto &index = index_entry->Cast<DuckIndexEntry>();
-	index.initial_index_size = g_state.global_index->GetInMemorySize();
-
-	// Add the index to the storage.
-	table.GetStorage().AddIndex(std::move(g_state.global_index));
-	return SinkFinalizeType::READY;
-}
-
-bool PhysicalCreateARTIndex::VerifyIndexDoesNotExist(ClientContext &context) const {
 	if (!alter_table_info) {
 		// Ensure that the index does not yet exist in the catalog.
-		auto &schema = table.schema;
 		auto entry = schema.GetEntry(schema.GetCatalogTransaction(context), CatalogType::INDEX_ENTRY, info->index_name);
 		if (entry) {
 			if (info->on_conflict != OnCreateConflict::IGNORE_ON_CONFLICT) {
 				throw CatalogException("Index with name \"%s\" already exists!", info->index_name);
 			}
 			// IF NOT EXISTS on existing index. We are done.
-			return true;
+			return SinkFinalizeType::READY;
 		}
-		return false;
+
+		auto index_entry = schema.CreateIndex(schema.GetCatalogTransaction(context), *info, table).get();
+		D_ASSERT(index_entry);
+		auto &index = index_entry->Cast<DuckIndexEntry>();
+		index.initial_index_size = state.global_index->GetInMemorySize();
+
+	} else {
+		// Ensure that there are no other indexes with that name on this table.
+		auto &indexes = storage.GetDataTableInfo()->GetIndexes();
+		indexes.Scan([&](Index &index) {
+			if (index.GetIndexName() == info->index_name) {
+				throw CatalogException("an index with that name already exists for this table: %s", info->index_name);
+			}
+			return false;
+		});
+
+		auto &catalog = Catalog::GetCatalog(context, info->catalog);
+		catalog.Alter(context, *alter_table_info);
 	}
 
-	// Ensure that there are no other indexes with that name on this table.
-	auto &storage = table.GetStorage();
-	auto &indexes = storage.GetDataTableInfo()->GetIndexes();
-	indexes.Scan([&](Index &index) {
-		if (index.GetIndexName() == info->index_name) {
-			throw CatalogException("an index with that name already exists for this table: %s", info->index_name);
-		}
-		return false;
-	});
-	return false;
+	// Add the index to the storage.
+	storage.AddIndex(std::move(state.global_index));
+	return SinkFinalizeType::READY;
 }
 
 //===--------------------------------------------------------------------===//
