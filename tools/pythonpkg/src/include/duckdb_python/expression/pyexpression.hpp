@@ -40,14 +40,14 @@ public:
 	string ToString() const;
 	string GetName() const;
 	void Print() const;
-	shared_ptr<DuckDBPyExpression> Add(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> Add(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Subtract(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Multiply(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Division(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> FloorDivision(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Modulo(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Power(const DuckDBPyExpression &other) const;
 	shared_ptr<DuckDBPyExpression> Negate();
-	shared_ptr<DuckDBPyExpression> Subtract(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> Multiply(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> Division(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> FloorDivision(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> Modulo(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> Power(const DuckDBPyExpression &other);
 
 	// Equality operations
 
@@ -69,8 +69,8 @@ public:
 	// AND, OR and NOT
 
 	shared_ptr<DuckDBPyExpression> Not();
-	shared_ptr<DuckDBPyExpression> And(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> Or(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> And(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Or(const DuckDBPyExpression &other) const;
 
 	// IS NULL / IS NOT NULL
 
