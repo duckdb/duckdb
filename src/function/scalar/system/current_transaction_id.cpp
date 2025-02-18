@@ -24,7 +24,7 @@ unique_ptr<FunctionData> CurrentTransactionIdBind(ClientContext &context, Scalar
                                                   vector<unique_ptr<Expression>> &arguments) {
 	Value transaction_id;
 	if (context.transaction.HasActiveTransaction()) {
-		transaction_id = Value::UBIGINT(context.transaction.ActiveTransaction().transaction_id);
+		transaction_id = Value::UBIGINT(context.transaction.ActiveTransaction().global_transaction_id);
 	} else {
 		transaction_id = Value();
 	}

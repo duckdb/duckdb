@@ -215,7 +215,8 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	// Refresh the logger to ensure we are in sync with global log settings
 	LoggingContext context(LogContextScope::CONNECTION);
 	context.connection_id = connection_id;
-	context.transaction_id = transaction.ActiveTransaction().transaction_id;
+	context.transaction_id = transaction.ActiveTransaction().global_transaction_id;
+	context.query_id = transaction.GetActiveQuery();
 	logger = db->GetLogManager().CreateLogger(context, true);
 	DUCKDB_LOG_INFO(*this, "duckdb.ClientContext.BeginQuery", query);
 }

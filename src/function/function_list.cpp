@@ -92,6 +92,7 @@ static const StaticFunctionDefinition function[] = {
 	DUCKDB_AGGREGATE_FUNCTION(CountStarFun),
 	DUCKDB_SCALAR_FUNCTION(CreateSortKeyFun),
 	DUCKDB_SCALAR_FUNCTION(CurrentConnectionId),
+	DUCKDB_SCALAR_FUNCTION(CurrentQueryId),
 	DUCKDB_SCALAR_FUNCTION(CurrentTransactionId),
 	DUCKDB_SCALAR_FUNCTION(CurrvalFun),
 	DUCKDB_SCALAR_FUNCTION_SET_ALIAS(DivideFun),

@@ -62,8 +62,6 @@ private:
 	unique_ptr<MetaTransaction> current_transaction;
 
 	TransactionContext(const TransactionContext &) = delete;
-
-	transaction_t current_transaction_id;
 };
 
 } // namespace duckdb

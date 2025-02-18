@@ -27,7 +27,6 @@ static const DefaultView internal_views[] = {
     {DEFAULT_SCHEMA, "duckdb_types", "SELECT * FROM duckdb_types()"},
     {DEFAULT_SCHEMA, "duckdb_views", "SELECT * FROM duckdb_views() WHERE NOT internal"},
 	{DEFAULT_SCHEMA, "duckdb_logs", "SELECT * exclude (l.context_id, c.context_id) FROM duckdb_logs() as l JOIN duckdb_log_contexts() as c ON l.context_id=c.context_id order by timestamp;"},
-	{DEFAULT_SCHEMA, "duckdb_logs_previous_transaction", "SELECT * FROM duckdb_logs WHERE transaction_id=current_transaction_id()-1 and connection_id=current_connection_id();"},
     {"pg_catalog", "pg_am", "SELECT 0 oid, 'art' amname, NULL amhandler, 'i' amtype"},
     {"pg_catalog", "pg_attribute", "SELECT table_oid attrelid, column_name attname, data_type_id atttypid, 0 attstattarget, NULL attlen, column_index attnum, 0 attndims, -1 attcacheoff, case when data_type ilike '%decimal%' then numeric_precision*1000+numeric_scale else -1 end atttypmod, false attbyval, NULL attstorage, NULL attalign, NOT is_nullable attnotnull, column_default IS NOT NULL atthasdef, false atthasmissing, '' attidentity, '' attgenerated, false attisdropped, true attislocal, 0 attinhcount, 0 attcollation, NULL attcompression, NULL attacl, NULL attoptions, NULL attfdwoptions, NULL attmissingval FROM duckdb_columns()"},
     {"pg_catalog", "pg_attrdef", "SELECT column_index oid, table_oid adrelid, column_index adnum, column_default adbin from duckdb_columns() where column_default is not null;"},

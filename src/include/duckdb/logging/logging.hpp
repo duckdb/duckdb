@@ -71,6 +71,7 @@ struct LoggingContext {
 	optional_idx thread;
 	optional_idx connection_id;
 	optional_idx transaction_id;
+	optional_idx query_id;
 };
 
 struct RegisteredLoggingContext {

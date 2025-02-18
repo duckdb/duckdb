@@ -30,9 +30,16 @@
     },
     {
         "name": "current_transaction_id",
-        "description": "Get the current (connection-local) transaction_id",
-        "example": "current_transaction_id('Hello')",
+        "description": "Get the current global transaction_id",
+        "example": "current_transaction_id()",
         "type": "scalar_function",
         "struct": "CurrentTransactionId"
+    },
+    {
+        "name": "current_query_id",
+        "description": "Get the current query_id",
+        "example": "current_transaction_id('Hello')",
+        "type": "scalar_function",
+        "struct": "CurrentQueryId"
     }
 ]

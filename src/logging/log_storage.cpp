@@ -72,6 +72,7 @@ InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
 	    LogicalType::VARCHAR, // scope TODO: enumify
 	    LogicalType::UBIGINT, // connection_id
 	    LogicalType::UBIGINT, // transaction_id
+	    LogicalType::UBIGINT, // query_id
 	    LogicalType::UBIGINT, // thread
 	};
 
@@ -158,11 +159,18 @@ void InMemoryLogStorage::WriteLoggingContext(const RegisteredLoggingContext &con
 	} else {
 		FlatVector::Validity(log_context_buffer->data[3]).SetInvalid(size);
 	}
-	if (context.context.thread.IsValid()) {
-		auto thread_data = FlatVector::GetData<idx_t>(log_context_buffer->data[4]);
-		thread_data[size] = context.context.thread.GetIndex();
+	if (context.context.query_id.IsValid()) {
+		auto client_context_data = FlatVector::GetData<idx_t>(log_context_buffer->data[4]);
+		client_context_data[size] = context.context.query_id.GetIndex();
 	} else {
 		FlatVector::Validity(log_context_buffer->data[4]).SetInvalid(size);
+	}
+
+	if (context.context.thread.IsValid()) {
+		auto thread_data = FlatVector::GetData<idx_t>(log_context_buffer->data[5]);
+		thread_data[size] = context.context.thread.GetIndex();
+	} else {
+		FlatVector::Validity(log_context_buffer->data[5]).SetInvalid(size);
 	}
 
 	log_context_buffer->SetCardinality(size + 1);
