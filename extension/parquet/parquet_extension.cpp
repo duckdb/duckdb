@@ -66,8 +66,6 @@ public:
 };
 
 struct ParquetReadBindData : public TableFunctionData {
-	virtual_column_map_t virtual_columns;
-
 	// These come from the initial_reader, but need to be stored in case the initial_reader is removed by a filter
 	idx_t initial_file_cardinality;
 	idx_t initial_file_row_groups;
