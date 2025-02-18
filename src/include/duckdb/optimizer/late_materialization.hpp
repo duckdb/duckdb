@@ -14,6 +14,7 @@
 namespace duckdb {
 class LogicalOperator;
 class LogicalGet;
+class LogicalLimit;
 class Optimizer;
 
 //! Transform
@@ -34,7 +35,7 @@ private:
 	void ReplaceTableReferences(Expression &expr, idx_t new_table_index);
 	unique_ptr<Expression> GetExpression(LogicalOperator &op, idx_t column_index);
 	void ReplaceExpressionReferences(LogicalOperator &next_op, unique_ptr<Expression> &expr);
-	bool OptimizeLargeLimit(LogicalOperator &child);
+	bool OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_val, bool has_offset);
 
 private:
 	Optimizer &optimizer;
