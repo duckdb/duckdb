@@ -55,6 +55,16 @@
 
 namespace duckdb {
 
+class ParquetFileReaderOptions : public BaseFileReaderOptions {
+public:
+	explicit ParquetFileReaderOptions(ParquetOptions options_p) : options(std::move(options_p)) {
+	}
+	explicit ParquetFileReaderOptions(ClientContext &context) : options(context) {
+	}
+
+	ParquetOptions options;
+};
+
 struct ParquetReadBindData : public TableFunctionData {
 	virtual_column_map_t virtual_columns;
 
@@ -87,16 +97,15 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 };
 
 struct ParquetMultiFileInfo {
-	using OPTIONS = ParquetOptions;
-
+	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context);
 	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-	                            ParquetOptions &options);
+	                            BaseFileReaderOptions &options);
 	static bool ParseOption(ClientContext &context, const string &key, const Value &val,
-	                        MultiFileReaderOptions &file_options, ParquetOptions &options);
+	                        MultiFileReaderOptions &file_options, BaseFileReaderOptions &options);
 	static void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
 	                       MultiFileBindData<ParquetMultiFileInfo> &bind_data);
 	static unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
-	                                                        ParquetOptions options);
+	                                                        unique_ptr<BaseFileReaderOptions> options);
 	static void SetInitialReader(TableFunctionData &bind_data, BaseFileReader &reader);
 	static void FinalizeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data);
 	static void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
@@ -105,7 +114,7 @@ struct ParquetMultiFileInfo {
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, BaseUnionData &union_data);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
-	                                              TableFunctionData &bind_data);
+	                                               TableFunctionData &bind_data);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk);
 	static bool TryInitializeScan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &gstate,
@@ -315,17 +324,23 @@ public:
 		auto multi_file_reader = MultiFileReader::Create(function);
 		auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
 		                                                   FileGlobOptions::DISALLOW_EMPTY);
-
+		auto parquet_options = make_uniq<ParquetFileReaderOptions>(std::move(serialization.parquet_options));
 		auto bind_data = MultiFileReaderFunction<ParquetMultiFileInfo>::MultiFileBindInternal(
 		    context, std::move(multi_file_reader), std::move(file_list), types, names,
-		    std::move(serialization.file_options), std::move(serialization.parquet_options));
+		    std::move(serialization.file_options), std::move(parquet_options));
 		bind_data->Cast<MultiFileBindData<ParquetMultiFileInfo>>().table_columns = std::move(table_columns);
 		return bind_data;
 	}
 };
 
+unique_ptr<BaseFileReaderOptions> ParquetMultiFileInfo::InitializeOptions(ClientContext &context) {
+	return make_uniq<ParquetFileReaderOptions>(context);
+}
+
 bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-                                           ParquetOptions &options) {
+                                           BaseFileReaderOptions &file_options) {
+	auto &parquet_options = file_options.Cast<ParquetFileReaderOptions>();
+	auto &options = parquet_options.options;
 	if (key == "compression" || key == "codec" || key == "row_group_size") {
 		// CODEC/COMPRESSION and ROW_GROUP_SIZE options have no effect on parquet read.
 		// These options are determined from the file.
@@ -354,17 +369,19 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 }
 
 bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
-                                       MultiFileReaderOptions &file_options, ParquetOptions &parquet_options) {
+                                       MultiFileReaderOptions &file_options, BaseFileReaderOptions &base_options) {
+	auto &parquet_options = base_options.Cast<ParquetFileReaderOptions>();
+	auto &options = parquet_options.options;
 	if (key == "binary_as_string") {
-		parquet_options.binary_as_string = BooleanValue::Get(val);
+		options.binary_as_string = BooleanValue::Get(val);
 		return true;
 	}
 	if (key == "file_row_number") {
-		parquet_options.file_row_number = BooleanValue::Get(val);
+		options.file_row_number = BooleanValue::Get(val);
 		return true;
 	}
 	if (key == "debug_use_openssl") {
-		parquet_options.debug_use_openssl = BooleanValue::Get(val);
+		options.debug_use_openssl = BooleanValue::Get(val);
 		return true;
 	}
 	if (key == "schema") {
@@ -375,19 +392,19 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key
 		if (column_values.empty()) {
 			throw BinderException("Parquet schema cannot be empty");
 		}
-		parquet_options.schema.reserve(column_values.size());
+		options.schema.reserve(column_values.size());
 		for (idx_t i = 0; i < column_values.size(); i++) {
-			parquet_options.schema.emplace_back(ParquetColumnDefinition::FromSchemaValue(context, column_values[i]));
+			options.schema.emplace_back(ParquetColumnDefinition::FromSchemaValue(context, column_values[i]));
 		}
 		file_options.auto_detect_hive_partitioning = false;
 		return true;
 	}
 	if (key == "explicit_cardinality") {
-		parquet_options.explicit_cardinality = UBigIntValue::Get(val);
+		options.explicit_cardinality = UBigIntValue::Get(val);
 		return true;
 	}
 	if (key == "encryption_config") {
-		parquet_options.encryption_config = ParquetEncryptionConfig::Create(context, val);
+		options.encryption_config = ParquetEncryptionConfig::Create(context, val);
 		return true;
 	}
 	return false;
@@ -395,10 +412,11 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key
 
 unique_ptr<TableFunctionData>
 ParquetMultiFileInfo::InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
-                                         ParquetOptions options_p) {
+                                         unique_ptr<BaseFileReaderOptions> options_p) {
 	auto result = make_uniq<ParquetReadBindData>();
 	// Set the explicit cardinality if requested
-	result->parquet_options = std::move(options_p);
+	auto &options = options_p->Cast<ParquetFileReaderOptions>();
+	result->parquet_options = std::move(options.options);
 	if (result->parquet_options.explicit_cardinality) {
 		auto file_count = multi_file_data.file_list->GetTotalFileCount();
 		result->explicit_cardinality = result->parquet_options.explicit_cardinality;
@@ -468,7 +486,7 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
-                                                             TableFunctionData &bind_data_p) {
+                                                              TableFunctionData &bind_data_p) {
 	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
 	return make_shared_ptr<ParquetReader>(context, filename, bind_data.parquet_options);
 }

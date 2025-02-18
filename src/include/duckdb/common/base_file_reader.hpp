@@ -134,10 +134,12 @@ struct MultiFileReaderData {
 	optional_idx file_list_idx;
 };
 
-//! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader interface
+//! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader
+//! interface
 class BaseFileReader {
 public:
-	explicit BaseFileReader(string file_name_p) : file_name(std::move(file_name_p)) {}
+	explicit BaseFileReader(string file_name_p) : file_name(std::move(file_name_p)) {
+	}
 	DUCKDB_API virtual ~BaseFileReader() = default;
 
 	string file_name;
@@ -167,11 +169,30 @@ public:
 	}
 };
 
+//! Parent class of file reader options
+class BaseFileReaderOptions {
+public:
+	DUCKDB_API virtual ~BaseFileReaderOptions() = default;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
+};
+
 //! Parent class of union data - used for the UNION BY NAME. This is effectively a cache that is kept around per file
 //! that can be used to speed up opening the same file again afterwards - to avoid doing double work.
 class BaseUnionData {
 public:
-	BaseUnionData(string file_name_p) : file_name(std::move(file_name_p)) {}
+	explicit BaseUnionData(string file_name_p) : file_name(std::move(file_name_p)) {
+	}
 	DUCKDB_API virtual ~BaseUnionData() = default;
 
 	string file_name;
@@ -193,6 +214,5 @@ public:
 		return reinterpret_cast<const TARGET &>(*this);
 	}
 };
-
 
 } // namespace duckdb

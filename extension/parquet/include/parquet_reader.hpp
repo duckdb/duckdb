@@ -121,7 +121,8 @@ public:
 };
 
 struct ParquetUnionData : public BaseUnionData {
-	explicit ParquetUnionData(string file_name_p) : BaseUnionData(std::move(file_name_p)) {}
+	explicit ParquetUnionData(string file_name_p) : BaseUnionData(std::move(file_name_p)) {
+	}
 	~ParquetUnionData() override;
 
 	vector<string> names;

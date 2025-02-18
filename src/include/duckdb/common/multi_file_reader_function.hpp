@@ -66,8 +66,7 @@ struct MultiFileFileReaderData {
 	    : reader(std::move(reader_p)), file_state(MultiFileFileState::OPEN), file_mutex(make_uniq<mutex>()) {
 	}
 	// Create data for an existing reader
-	explicit MultiFileFileReaderData(unique_ptr<BaseUnionData> union_data_p)
-	    : file_mutex(make_uniq<mutex>()) {
+	explicit MultiFileFileReaderData(unique_ptr<BaseUnionData> union_data_p) : file_mutex(make_uniq<mutex>()) {
 		if (union_data_p->reader) {
 			reader = std::move(union_data_p->reader);
 			file_state = MultiFileFileState::OPEN;
@@ -160,7 +159,7 @@ public:
 	                                                      shared_ptr<MultiFileList> multi_file_list_p,
 	                                                      vector<LogicalType> &return_types, vector<string> &names,
 	                                                      MultiFileReaderOptions file_options_p,
-	                                                      typename OP::OPTIONS options_p) {
+	                                                      unique_ptr<BaseFileReaderOptions> options_p) {
 		auto result = make_uniq<MultiFileBindData<OP>>();
 		result->multi_file_reader = std::move(multi_file_reader_p);
 		result->file_list = std::move(multi_file_list_p);
@@ -230,7 +229,7 @@ public:
 		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 		MultiFileReaderOptions file_options;
 
-		typename OP::OPTIONS options(context);
+		auto options = OP::InitializeOptions(context);
 		for (auto &kv : input.named_parameters) {
 			if (kv.second.IsNull()) {
 				throw BinderException("Cannot use NULL as function argument");
@@ -239,7 +238,7 @@ public:
 			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
 				continue;
 			}
-			if (OP::ParseOption(context, loption, kv.second, file_options, options)) {
+			if (OP::ParseOption(context, loption, kv.second, file_options, *options)) {
 				continue;
 			}
 			throw NotImplementedException("Unimplemented option %s", kv.first);
@@ -251,12 +250,12 @@ public:
 	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info,
 	                                                  vector<string> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
-		typename OP::OPTIONS options(context);
+		auto options = OP::InitializeOptions(context);
 		MultiFileReaderOptions file_options;
 
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
-			if (OP::ParseCopyOption(context, loption, option.second, options)) {
+			if (OP::ParseCopyOption(context, loption, option.second, *options)) {
 				continue;
 			}
 			throw NotImplementedException("Unsupported option for COPY FROM: %s", option.first);
