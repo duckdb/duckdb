@@ -33,3 +33,11 @@ SELECT count(*), message FROM duckdb_logs where starts_with(message, 'hi_') grou
 250000	hi_client
 250000	hi_file
 250000	hi_global
+
+statement ok
+pragma truncate_duckdb_logs;
+
+query I
+SELECT count(*) FROM duckdb_logs;
+----
+0

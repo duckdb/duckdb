@@ -149,6 +149,11 @@ void LogManager::SetLogStorage(DatabaseInstance &db, const string &storage_name)
 	config.storage = storage_name_to_lower;
 }
 
+void LogManager::TruncateLogStorage() {
+	unique_lock<mutex> lck(lock);
+	log_storage->Truncate();
+}
+
 LogConfig LogManager::GetConfig() {
 	unique_lock<mutex> lck(lock);
 	return config;

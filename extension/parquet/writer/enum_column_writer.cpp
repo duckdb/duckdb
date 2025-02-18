@@ -36,15 +36,12 @@ void EnumColumnWriter::WriteEnumInternal(WriteStream &temp_writer, Vector &input
 	for (idx_t r = chunk_start; r < chunk_end; r++) {
 		if (mask.RowIsValid(r)) {
 			if (!page_state.written_value) {
-				// first value
-				// write the bit-width as a one-byte entry
+				// first value: write the bit-width as a one-byte entry and initialize writer
 				temp_writer.Write<uint8_t>(bit_width);
-				// now begin writing the actual value
-				page_state.encoder.BeginWrite(temp_writer, ptr[r]);
+				page_state.encoder.BeginWrite();
 				page_state.written_value = true;
-			} else {
-				page_state.encoder.WriteValue(temp_writer, ptr[r]);
 			}
+			page_state.encoder.WriteValue(temp_writer, ptr[r]);
 		}
 	}
 }
@@ -68,7 +65,8 @@ void EnumColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStatist
 	}
 }
 
-unique_ptr<ColumnWriterPageState> EnumColumnWriter::InitializePageState(PrimitiveColumnWriterState &state) {
+unique_ptr<ColumnWriterPageState> EnumColumnWriter::InitializePageState(PrimitiveColumnWriterState &state,
+                                                                        idx_t page_idx) {
 	return make_uniq<EnumWriterPageState>(bit_width);
 }
 

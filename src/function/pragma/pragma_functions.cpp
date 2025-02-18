@@ -94,6 +94,10 @@ static void PragmaForceCheckpoint(ClientContext &context, const FunctionParamete
 	DBConfig::GetConfig(context).options.force_checkpoint = true;
 }
 
+static void PragmaTruncateDuckDBLogs(ClientContext &context, const FunctionParameters &parameters) {
+	context.db->GetLogManager().TruncateLogStorage();
+}
+
 static void PragmaDisableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).verify_parallelism = false;
 }
@@ -148,6 +152,8 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("truncate_duckdb_logs", PragmaTruncateDuckDBLogs));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_progress_bar", PragmaEnableProgressBar));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_progress_bar", PragmaDisableProgressBar));

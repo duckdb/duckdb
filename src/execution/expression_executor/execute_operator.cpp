@@ -124,13 +124,16 @@ void ExpressionExecutor::Execute(const BoundOperatorExpression &expr, Expression
 			}
 		}
 		SelectionVector selvec(1);
-		Vector intermediate(result.GetType(), 1);
+		DataChunk intermediate;
+		intermediate.Initialize(GetAllocator(), {result.GetType()}, 1);
 		for (idx_t i = 0; i < count; i++) {
+			intermediate.Reset();
+			intermediate.SetCardinality(1);
 			selvec.set_index(0, sel ? sel->get_index(i) : i);
 			Value val(result.GetType());
 			try {
-				Execute(*expr.children[0], &child_state, &selvec, 1, intermediate);
-				val = intermediate.GetValue(0);
+				Execute(*expr.children[0], &child_state, &selvec, 1, intermediate.data[0]);
+				val = intermediate.GetValue(0, 0);
 			} catch (std::exception &ex) {
 				ErrorData error(ex);
 				auto error_type = error.Type();
