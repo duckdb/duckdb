@@ -315,7 +315,7 @@ public:
 	                            MultiFileLocalState &scan_data, MultiFileGlobalState &parallel_state,
 	                            unique_lock<mutex> &parallel_lock) {
 		const auto file_index_limit =
-		    parallel_state.file_index + TaskScheduler::GetScheduler(context).NumberOfThreads();
+		    parallel_state.file_index + NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 
 		for (idx_t i = parallel_state.file_index; i < file_index_limit; i++) {
 			// We check if we can resize files in this loop too otherwise we will only ever open 1 file ahead
