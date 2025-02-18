@@ -1021,40 +1021,42 @@ public:
 
 	static void ParquetScanSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
 	                                 const TableFunction &function) {
-		throw NotImplementedException("FIXME: Serialize");
-		//
-		// serializer.WriteProperty(100, "files", bind_data.file_list->GetAllFiles());
-		// serializer.WriteProperty(101, "types", bind_data.types);
-		// serializer.WriteProperty(102, "names", bind_data.names);
-		// serializer.WriteProperty(103, "parquet_options", bind_data.parquet_options);
-		// if (serializer.ShouldSerialize(3)) {
-		// 	serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
-		// }
-		// auto &bind_data = bind_data_p->Cast<ParquetReadBindData>();
+		auto &bind_data = bind_data_p->Cast<MultiFileBindData<ParquetMultiFileInfo>>();
+		auto &parquet_data = bind_data.bind_data->Cast<ParquetReadBindData>();
+
+		serializer.WriteProperty(100, "files", bind_data.file_list->GetAllFiles());
+		serializer.WriteProperty(101, "types", bind_data.types);
+		serializer.WriteProperty(102, "names", bind_data.names);
+		ParquetOptionsSerialization serialization(parquet_data.parquet_options, bind_data.file_options);
+		serializer.WriteProperty(103, "parquet_options", serialization);
+		if (serializer.ShouldSerialize(3)) {
+			serializer.WriteProperty(104, "table_columns", bind_data.table_columns);
+		}
 	}
 
 	static unique_ptr<FunctionData> ParquetScanDeserialize(Deserializer &deserializer, TableFunction &function) {
-		throw NotImplementedException("FIXME: Deserialize");
-		// auto &context = deserializer.Get<ClientContext &>();
-		// auto files = deserializer.ReadProperty<vector<string>>(100, "files");
-		// auto types = deserializer.ReadProperty<vector<LogicalType>>(101, "types");
-		// auto names = deserializer.ReadProperty<vector<string>>(102, "names");
-		// auto parquet_options = deserializer.ReadProperty<ParquetOptions>(103, "parquet_options");
-		// auto table_columns =
-		//     deserializer.ReadPropertyWithExplicitDefault<vector<string>>(104, "table_columns", vector<string> {});
-		//
-		// vector<Value> file_path;
-		// for (auto &path : files) {
-		// 	file_path.emplace_back(path);
-		// }
-		//
-		// auto multi_file_reader = MultiFileReader::Create(function);
-		// auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
-		//                                                    FileGlobOptions::DISALLOW_EMPTY);
-		// auto bind_data = ParquetScanBindInternal(context, std::move(multi_file_reader), std::move(file_list), types,
-		//                                          names, parquet_options);
-		// bind_data->Cast<ParquetReadBindData>().table_columns = std::move(table_columns);
-		// return bind_data;
+		auto &context = deserializer.Get<ClientContext &>();
+		auto files = deserializer.ReadProperty<vector<string>>(100, "files");
+		auto types = deserializer.ReadProperty<vector<LogicalType>>(101, "types");
+		auto names = deserializer.ReadProperty<vector<string>>(102, "names");
+		auto serialization = deserializer.ReadProperty<ParquetOptionsSerialization>(103, "parquet_options");
+		auto table_columns =
+		    deserializer.ReadPropertyWithExplicitDefault<vector<string>>(104, "table_columns", vector<string> {});
+
+		vector<Value> file_path;
+		for (auto &path : files) {
+			file_path.emplace_back(path);
+		}
+
+		auto multi_file_reader = MultiFileReader::Create(function);
+		auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
+		                                                   FileGlobOptions::DISALLOW_EMPTY);
+
+		auto bind_data = MultiFileBindInternal<ParquetMultiFileInfo>(
+		    context, std::move(multi_file_reader), std::move(file_list), types, names,
+		    std::move(serialization.file_options), std::move(serialization.parquet_options));
+		bind_data->Cast<MultiFileBindData<ParquetMultiFileInfo>>().table_columns = std::move(table_columns);
+		return bind_data;
 	}
 };
 

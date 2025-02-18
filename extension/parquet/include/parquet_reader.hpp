@@ -104,10 +104,20 @@ struct ParquetOptions {
 
 	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
+};
+
+struct ParquetOptionsSerialization {
+	ParquetOptionsSerialization() = default;
+	ParquetOptionsSerialization(ParquetOptions parquet_options_p, MultiFileReaderOptions file_options_p)
+	    : parquet_options(std::move(parquet_options_p)), file_options(std::move(file_options_p)) {
+	}
+
+	ParquetOptions parquet_options;
+	MultiFileReaderOptions file_options;
 
 public:
 	void Serialize(Serializer &serializer) const;
-	static ParquetOptions Deserialize(Deserializer &deserializer);
+	static ParquetOptionsSerialization Deserialize(Deserializer &deserializer);
 };
 
 struct ParquetUnionData {
