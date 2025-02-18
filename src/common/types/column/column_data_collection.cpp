@@ -562,7 +562,7 @@ void ColumnDataCopy<string_t>(ColumnDataMetaData &meta_data, const UnifiedVector
 		offset += append_count;
 		remaining -= append_count;
 
-		if (vector_remaining - append_count == 0) {
+		if (remaining != 0 && vector_remaining - append_count == 0) {
 			// need to append more, check if we need to allocate a new vector or not
 			if (!current_segment.next_data.IsValid()) {
 				segment.AllocateVector(source.GetType(), meta_data.chunk_data, append_state, current_index);

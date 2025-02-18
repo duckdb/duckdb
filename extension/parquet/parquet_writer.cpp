@@ -320,11 +320,12 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
                              shared_ptr<ParquetEncryptionConfig> encryption_config_p, idx_t dictionary_size_limit_p,
-                             double bloom_filter_false_positive_ratio_p, int64_t compression_level_p,
-                             bool debug_use_openssl_p, ParquetVersion parquet_version)
+                             idx_t string_dictionary_page_size_limit_p, double bloom_filter_false_positive_ratio_p,
+                             int64_t compression_level_p, bool debug_use_openssl_p, ParquetVersion parquet_version)
     : context(context), file_name(std::move(file_name_p)), sql_types(std::move(types_p)),
       column_names(std::move(names_p)), codec(codec), field_ids(std::move(field_ids_p)),
       encryption_config(std::move(encryption_config_p)), dictionary_size_limit(dictionary_size_limit_p),
+      string_dictionary_page_size_limit(string_dictionary_page_size_limit_p),
       bloom_filter_false_positive_ratio(bloom_filter_false_positive_ratio_p), compression_level(compression_level_p),
       debug_use_openssl(debug_use_openssl_p), parquet_version(parquet_version) {
 
@@ -388,9 +389,8 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 	// We write 8 columns at a time so that iterating over ColumnDataCollection is more efficient
 	static constexpr idx_t COLUMNS_PER_PASS = 8;
 
-	// We want these to be in-memory/hybrid so we don't have to copy over strings to the dictionary
-	D_ASSERT(buffer.GetAllocatorType() == ColumnDataAllocatorType::IN_MEMORY_ALLOCATOR ||
-	         buffer.GetAllocatorType() == ColumnDataAllocatorType::HYBRID);
+	// We want these to be buffer-managed
+	D_ASSERT(buffer.GetAllocatorType() == ColumnDataAllocatorType::BUFFER_MANAGER_ALLOCATOR);
 
 	// set up a new row group for this chunk collection
 	auto &row_group = result.row_group;
@@ -450,7 +450,6 @@ void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGro
 			states.push_back(std::move(write_state));
 		}
 	}
-	result.heaps = buffer.GetHeapReferences();
 }
 
 // Validation code adapted from Impala
@@ -508,8 +507,6 @@ void ParquetWriter::FlushRowGroup(PreparedRowGroup &prepared) {
 	// append the row group to the file meta data
 	file_meta_data.row_groups.push_back(row_group);
 	file_meta_data.num_rows += row_group.num_rows;
-
-	prepared.heaps.clear();
 }
 
 void ParquetWriter::Flush(ColumnDataCollection &buffer) {

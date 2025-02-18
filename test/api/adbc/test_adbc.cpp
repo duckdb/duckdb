@@ -1364,8 +1364,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(1, 0).ToString() ==
-		         "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, "
-		         "'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]"));
+		         "[{'db_schema_name': main, 'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, "
+		         "'db_schema_tables': NULL}, {'db_schema_name': information_schema, 'db_schema_tables': NULL}]"));
 		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
