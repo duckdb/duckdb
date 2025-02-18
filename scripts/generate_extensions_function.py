@@ -312,7 +312,7 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
         select distinct
             function_name,
             function_type,
-            parameter_types,
+            list_reduce(parameter_types, (x, y) -> x || ', ' || y),
             return_type
         from duckdb_functions()
         ORDER BY function_name, function_type;
