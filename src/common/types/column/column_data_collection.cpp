@@ -417,12 +417,21 @@ static void TemplatedColumnDataCopy(ColumnDataMetaData &meta_data, const Unified
 			// initialize the validity mask to set all to valid
 			result_validity.SetAllValid(STANDARD_VECTOR_SIZE);
 		}
-		for (idx_t i = 0; i < append_count; i++) {
-			auto source_idx = source_data.sel->get_index(offset + i);
-			if (source_data.validity.RowIsValid(source_idx)) {
+		if (source_data.validity.AllValid()) {
+			// Fast path: all valid
+			for (idx_t i = 0; i < append_count; i++) {
+				auto source_idx = source_data.sel->get_index(offset + i);
 				OP::template Assign<OP>(meta_data, base_ptr, source_data.data, current_segment.count + i, source_idx);
-			} else {
-				result_validity.SetInvalid(current_segment.count + i);
+			}
+		} else {
+			for (idx_t i = 0; i < append_count; i++) {
+				auto source_idx = source_data.sel->get_index(offset + i);
+				if (source_data.validity.RowIsValid(source_idx)) {
+					OP::template Assign<OP>(meta_data, base_ptr, source_data.data, current_segment.count + i,
+					                        source_idx);
+				} else {
+					result_validity.SetInvalid(current_segment.count + i);
+				}
 			}
 		}
 		current_segment.count += append_count;
