@@ -430,13 +430,12 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
-		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
-			// filter is always true - no need to check it
-			// label the filter as always true so we don't need to check it anymore
-			filters.SetFilterAlwaysTrue(i);
-		}
 		if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
 			// these are only for row group checking, set as always true so we don't check it
+			filters.SetFilterAlwaysTrue(i);
+		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			// filter is always true - no need to check it
+			// label the filter as always true so we don't need to check it anymore
 			filters.SetFilterAlwaysTrue(i);
 		}
 	}
@@ -619,7 +618,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 							// We can just break out of the loop here.
 							approved_tuple_count = 0;
-							break;
+							continue;
 						}
 
 						// Generate row ids

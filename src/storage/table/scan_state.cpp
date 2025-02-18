@@ -96,6 +96,9 @@ void ScanFilterInfo::CheckAllFilters() {
 
 void ScanFilterInfo::SetFilterAlwaysTrue(idx_t filter_idx) {
 	auto &filter = filter_list[filter_idx];
+	if (filter.always_true) {
+		return;
+	}
 	filter.always_true = true;
 	column_has_filter[filter.scan_column_index] = false;
 	always_true_filters++;

@@ -28,7 +28,8 @@ void PrimitiveColumnWriter::RegisterToRowGroup(duckdb_parquet::RowGroup &row_gro
 	row_group.columns.push_back(std::move(column_chunk));
 }
 
-unique_ptr<ColumnWriterPageState> PrimitiveColumnWriter::InitializePageState(PrimitiveColumnWriterState &state) {
+unique_ptr<ColumnWriterPageState> PrimitiveColumnWriter::InitializePageState(PrimitiveColumnWriterState &state,
+                                                                             idx_t page_idx) {
 	return nullptr;
 }
 
@@ -114,7 +115,7 @@ void PrimitiveColumnWriter::BeginWrite(ColumnWriterState &state_p) {
 		    MaxValue<idx_t>(NextPowerOfTwo(page_info.estimated_page_size), MemoryStream::DEFAULT_INITIAL_CAPACITY));
 		write_info.write_count = page_info.empty_count;
 		write_info.max_write_count = page_info.row_count;
-		write_info.page_state = InitializePageState(state);
+		write_info.page_state = InitializePageState(state, page_idx);
 
 		write_info.compressed_size = 0;
 		write_info.compressed_data = nullptr;
