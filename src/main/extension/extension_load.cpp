@@ -71,15 +71,11 @@ struct ExtensionAccess {
 	static void SetError(duckdb_extension_info info, const char *error) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
-		if (error) {
-			load_state.has_error = true;
-			load_state.error_data = ErrorData(error);
-		} else {
-			load_state.has_error = true;
-			load_state.error_data = ErrorData(
-			    ExceptionType::UNKNOWN_TYPE,
-			    "Extension has indicated an error occured during initialization, but did not set an error message.");
-		}
+		load_state.has_error = true;
+		load_state.error_data =
+		    error ? ErrorData(error)
+		          : ErrorData(ExceptionType::UNKNOWN_TYPE, "Extension has indicated an error occured during "
+		                                                   "initialization, but did not set an error message.");
 	}
 
 	//! Called by the extension get a pointer to the database that is loading it
@@ -92,9 +88,11 @@ struct ExtensionAccess {
 			load_state.database_data->database = make_shared_ptr<DuckDB>(load_state.db);
 			return reinterpret_cast<duckdb_database *>(load_state.database_data.get());
 		} catch (std::exception &ex) {
+			load_state.has_error = true;
 			load_state.error_data = ErrorData(ex);
 			return nullptr;
 		} catch (...) {
+			load_state.has_error = true;
 			load_state.error_data =
 			    ErrorData(ExceptionType::UNKNOWN_TYPE, "Unknown error in GetDatabase when trying to load extension!");
 			return nullptr;
