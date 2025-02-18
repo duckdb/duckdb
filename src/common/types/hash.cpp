@@ -86,8 +86,9 @@ hash_t Hash(string_t val) {
 		hash_t h = 0xe17a1465U ^ (val.GetSize() * 0xc6a4a7935bd1e995U);
 
 		// Hash/combine the first 8-byte block
+		const bool not_an_empty_string = !val.Empty();
 		h ^= Load<hash_t>(const_data_ptr_cast(val.GetPrefix()));
-		h *= 0xd6e8feb86659fd93U;
+		h *= 0xd6e8feb86659fd93U * not_an_empty_string + (1 - not_an_empty_string);
 
 		// Load remaining 4 bytes
 		hash_t hr = 0;
@@ -99,10 +100,12 @@ hash_t Hash(string_t val) {
 		h ^= hr;
 		h *= 0xd6e8feb86659fd93U * not_a_nop + (1 - not_a_nop);
 
+		// Finalize
+		h = Hash(h);
+
 		// This is just an optimization. It should not change the result
 		// This property is important for verification (e.g., DUCKDB_DEBUG_NO_INLINE)
 		// We achieved this with the NOP trick above (and in HashBytes)
-		h = Hash(h);
 		D_ASSERT(h == Hash(val.GetData(), val.GetSize()));
 
 		return h;
