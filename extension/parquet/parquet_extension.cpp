@@ -363,6 +363,11 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key
                                        MultiFileReaderOptions &file_options, BaseFileReaderOptions &base_options) {
 	auto &parquet_options = base_options.Cast<ParquetFileReaderOptions>();
 	auto &options = parquet_options.options;
+	if (key == "compression") {
+		// COMPRESSION has no effect on parquet read.
+		// These options are determined from the file.
+		return true;
+	}
 	if (key == "binary_as_string") {
 		options.binary_as_string = BooleanValue::Get(val);
 		return true;
