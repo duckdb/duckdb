@@ -211,15 +211,23 @@ static idx_t FindTypedRangeBound(WindowCursor &range_lo, WindowCursor &range_hi,
 	if (prev.start < prev.end) {
 		if (order_begin < prev.start && prev.start < order_end) {
 			const auto first = range_lo.GetCell<T>(0, prev.start);
-			if (!comp(val, first)) {
-				//	prev.first <= val, so we can start further forward
+			if (FROM && !comp(val, first)) {
+				// If prev.start == val and we are looking for a lower bound, then we are done
+				if (!comp(first, val)) {
+					return prev.start;
+				}
+				//	prev.start <= val, so we can start further forward
 				begin += UnsafeNumericCast<int64_t>(prev.start - order_begin);
 			}
 		}
 		if (order_begin < prev.end && prev.end < order_end) {
 			const auto second = range_hi.GetCell<T>(0, prev.end - 1);
 			if (!comp(second, val)) {
-				//	val <= prev.second, so we can end further back
+				//  If val == prev.end and we are looking for an upper bound, then we are done
+				if (!FROM && !comp(val, second)) {
+					return prev.end;
+				}
+				//	val <= prev.end, so we can end further back
 				// (prev.second is the largest peer)
 				end -= UnsafeNumericCast<int64_t>(order_end - prev.end - 1);
 			}
@@ -943,6 +951,11 @@ void WindowBoundariesState::FrameEnd(DataChunk &bounds, idx_t row_idx, const idx
 			} else {
 				const auto valid_start = valid_begin_data[chunk_idx];
 				prev.start = valid_start;
+				const auto cur_partition = partition_begin_data[chunk_idx];
+				if (cur_partition != prev_partition) {
+					prev.end = valid_end;
+					prev_partition = cur_partition;
+				}
 				window_end = FindOrderedRangeBound<false>(*range_lo, *range_hi, range_sense, valid_start, row_idx + 1,
 				                                          end_boundary, boundary_end, chunk_idx, prev);
 				prev.end = window_end;
