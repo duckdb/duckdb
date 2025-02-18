@@ -88,7 +88,6 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 
 struct ParquetMultiFileInfo {
 	using OPTIONS = ParquetOptions;
-	using UNION_DATA = ParquetUnionData;
 
 	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
 	                            ParquetOptions &options);
@@ -104,7 +103,7 @@ struct ParquetMultiFileInfo {
 	static idx_t MaxThreads(const TableFunctionData &bind_data_p);
 	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState();
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, ParquetUnionData &union_data);
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, BaseUnionData &union_data);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
 	                                              TableFunctionData &bind_data);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
@@ -463,7 +462,8 @@ double ParquetMultiFileInfo::GetProgressInFile(ClientContext &context, GlobalTab
 	return 100.0 * (static_cast<double>(read_rows) / static_cast<double>(total_rows));
 }
 
-shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, ParquetUnionData &union_data) {
+shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, BaseUnionData &union_data_p) {
+	auto &union_data = union_data_p.Cast<ParquetUnionData>();
 	return make_shared_ptr<ParquetReader>(context, union_data.file_name, union_data.options, union_data.metadata);
 }
 

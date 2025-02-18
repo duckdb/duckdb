@@ -32,13 +32,13 @@ struct MultiFileBindData : public TableFunctionData {
 	shared_ptr<BaseFileReader> initial_reader;
 	// The union readers are created (when parquet union_by_name option is on) during binding
 	// Those readers can be re-used during ParquetParallelStateNext
-	vector<unique_ptr<typename OP::UNION_DATA>> union_readers;
+	vector<unique_ptr<BaseUnionData>> union_readers;
 
 	void Initialize(shared_ptr<BaseFileReader> reader) {
 		initial_reader = std::move(reader);
 		OP::SetInitialReader(*bind_data, *initial_reader);
 	}
-	void Initialize(ClientContext &, unique_ptr<typename OP::UNION_DATA> &union_data) {
+	void Initialize(ClientContext &, unique_ptr<BaseUnionData> &union_data) {
 		Initialize(std::move(union_data->reader));
 	}
 };
@@ -66,7 +66,7 @@ struct MultiFileFileReaderData {
 	    : reader(std::move(reader_p)), file_state(MultiFileFileState::OPEN), file_mutex(make_uniq<mutex>()) {
 	}
 	// Create data for an existing reader
-	explicit MultiFileFileReaderData(unique_ptr<typename OP::UNION_DATA> union_data_p)
+	explicit MultiFileFileReaderData(unique_ptr<BaseUnionData> union_data_p)
 	    : file_mutex(make_uniq<mutex>()) {
 		if (union_data_p->reader) {
 			reader = std::move(union_data_p->reader);
@@ -84,7 +84,7 @@ struct MultiFileFileReaderData {
 	//! Mutexes to wait for the file when it is being opened
 	unique_ptr<mutex> file_mutex;
 	//! Options for opening the file
-	unique_ptr<typename OP::UNION_DATA> union_data;
+	unique_ptr<BaseUnionData> union_data;
 
 	//! (only set when file_state is UNOPENED) the file to be opened
 	string file_to_be_opened;

@@ -120,19 +120,14 @@ public:
 	static ParquetOptionsSerialization Deserialize(Deserializer &deserializer);
 };
 
-struct ParquetUnionData {
-	~ParquetUnionData();
+struct ParquetUnionData : public BaseUnionData {
+	explicit ParquetUnionData(string file_name_p) : BaseUnionData(std::move(file_name_p)) {}
+	~ParquetUnionData() override;
 
-	string file_name;
 	vector<string> names;
 	vector<LogicalType> types;
 	ParquetOptions options;
 	shared_ptr<ParquetFileMetadataCache> metadata;
-	unique_ptr<ParquetReader> reader;
-
-	const string &GetFileName() {
-		return file_name;
-	}
 };
 
 class ParquetReader : public BaseFileReader {
@@ -156,8 +151,7 @@ public:
 	void Scan(ParquetReaderScanState &state, DataChunk &output);
 
 	static unique_ptr<ParquetUnionData> StoreUnionReader(unique_ptr<ParquetReader> reader_p, idx_t file_idx) {
-		auto result = make_uniq<ParquetUnionData>();
-		result->file_name = reader_p->file_name;
+		auto result = make_uniq<ParquetUnionData>(reader_p->file_name);
 		if (file_idx == 0) {
 			for (auto &column : reader_p->columns) {
 				result->names.push_back(column.name);
