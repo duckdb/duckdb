@@ -14,7 +14,7 @@ ThreadContext::ThreadContext(ClientContext &context) : profiler(context) {
 		log_context.query_id = context.transaction.GetActiveQuery();
 	}
 
-	log_context.thread = TaskScheduler::GetEstimatedCPUId();
+	log_context.thread_id = TaskScheduler::GetEstimatedCPUId();
 	if (context.transaction.HasActiveTransaction()) {
 		log_context.transaction_id = context.transaction.GetActiveQuery();
 	}

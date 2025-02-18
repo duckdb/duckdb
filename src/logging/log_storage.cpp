@@ -39,7 +39,7 @@ void StdOutLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, cons
 	    EnumUtil::ToString(level), log_message, EnumUtil::ToString(context.context.scope),
 	    context.context.connection_id.IsValid() ? to_string(context.context.connection_id.GetIndex()) : "NULL",
 	    context.context.transaction_id.IsValid() ? to_string(context.context.transaction_id.GetIndex()) : "NULL",
-	    context.context.thread.IsValid() ? to_string(context.context.thread.GetIndex()) : "NULL");
+	    context.context.thread_id.IsValid() ? to_string(context.context.thread_id.GetIndex()) : "NULL");
 }
 
 void StdOutLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
@@ -166,9 +166,9 @@ void InMemoryLogStorage::WriteLoggingContext(const RegisteredLoggingContext &con
 		FlatVector::Validity(log_context_buffer->data[4]).SetInvalid(size);
 	}
 
-	if (context.context.thread.IsValid()) {
+	if (context.context.thread_id.IsValid()) {
 		auto thread_data = FlatVector::GetData<idx_t>(log_context_buffer->data[5]);
-		thread_data[size] = context.context.thread.GetIndex();
+		thread_data[size] = context.context.thread_id.GetIndex();
 	} else {
 		FlatVector::Validity(log_context_buffer->data[5]).SetInvalid(size);
 	}

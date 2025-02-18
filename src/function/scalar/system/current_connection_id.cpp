@@ -8,15 +8,15 @@
 namespace duckdb {
 
 struct CurrentConnectionIdData : FunctionData {
-	explicit CurrentConnectionIdData(Value transaction_id_p) : transaction_id(transaction_id_p) {
+	explicit CurrentConnectionIdData(Value connection_id_p) : connection_id(connection_id_p) {
 	}
-	Value transaction_id;
+	Value connection_id;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<CurrentConnectionIdData>(this->transaction_id);
+		return make_uniq<CurrentConnectionIdData>(this->connection_id);
 	}
 	bool Equals(const FunctionData &other_p) const override {
-		return transaction_id == other_p.Cast<CurrentConnectionIdData>().transaction_id;
+		return connection_id == other_p.Cast<CurrentConnectionIdData>().connection_id;
 	}
 };
 
@@ -28,12 +28,12 @@ unique_ptr<FunctionData> CurrentConnectionIdBind(ClientContext &context, ScalarF
 static void CurrentConnectionIdFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 	const auto &info = func_expr.bind_info->Cast<CurrentConnectionIdData>();
-	result.Reference(info.transaction_id);
+	result.Reference(info.connection_id);
 }
 
 ScalarFunction CurrentConnectionId::GetFunction() {
 	return ScalarFunction({}, LogicalType::UBIGINT, CurrentConnectionIdFunction, CurrentConnectionIdBind, nullptr,
-	                      nullptr, nullptr, LogicalType::ANY, FunctionStability::VOLATILE);
+	                      nullptr, nullptr, LogicalType(LogicalTypeId::INVALID), FunctionStability::VOLATILE);
 }
 
 } // namespace duckdb

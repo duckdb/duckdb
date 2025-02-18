@@ -37,17 +37,17 @@ statement ok
 from duckdb_logs
 
 query IIII
-SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id, thread_id) FROM duckdb_logs where starts_with(message, 'hello from the') order by timestamp
+SELECT * EXCLUDE (timestamp, connection_id, transaction_id, query_id, thread_id) FROM duckdb_logs where starts_with(message, 'hello from the') order by query_id
 ----
-global_type	INFO	hello from the global log scope	DATABASE
-global_type	INFO	hello from the global log scope	DATABASE
-global_type	INFO	hello from the global log scope	DATABASE
 client_context_type	INFO	hello from the connection log scope	CONNECTION
 client_context_type	INFO	hello from the connection log scope	CONNECTION
 client_context_type	INFO	hello from the connection log scope	CONNECTION
 opener_type	INFO	hello from the file_opener log scope	CONNECTION
 opener_type	INFO	hello from the file_opener log scope	CONNECTION
 opener_type	INFO	hello from the file_opener log scope	CONNECTION
+global_type	INFO	hello from the global log scope	DATABASE
+global_type	INFO	hello from the global log scope	DATABASE
+global_type	INFO	hello from the global log scope	DATABASE
 
 query IIII
 SELECT
@@ -55,14 +55,14 @@ SELECT
     connection_id - getvariable('base_connection_id'),
     transaction_id - getvariable('base_transaction_id'),
     query_id - getvariable('base_query_id')
-FROM duckdb_logs where starts_with(message, 'hello from the') order by timestamp
+FROM duckdb_logs where starts_with(message, 'hello from the') order by query_id
 ----
-global_type	NULL	NULL	NULL
-global_type	NULL	NULL	NULL
-global_type	NULL	NULL	NULL
 client_context_type	0	1	1
 client_context_type	0	1	1
 client_context_type	0	1	1
 opener_type	0	2	2
 opener_type	0	2	2
 opener_type	0	2	2
+global_type	NULL	NULL	NULL
+global_type	NULL	NULL	NULL
+global_type	NULL	NULL	NULL
