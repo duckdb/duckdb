@@ -12,7 +12,7 @@
 namespace duckdb {
 
 TransactionContext::TransactionContext(ClientContext &context)
-    : context(context), auto_commit(true), current_transaction(nullptr) {
+    : context(context), auto_commit(true), current_transaction(nullptr), current_transaction_id(0) {
 }
 
 TransactionContext::~TransactionContext() {
@@ -29,7 +29,7 @@ void TransactionContext::BeginTransaction() {
 		throw TransactionException("cannot start a transaction within a transaction");
 	}
 	auto start_timestamp = Timestamp::GetCurrentTimestamp();
-	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp);
+	current_transaction = make_uniq<MetaTransaction>(context, start_timestamp, current_transaction_id++);
 
 	// Notify any registered state of transaction begin
 	for (auto &state : context.registered_state->States()) {

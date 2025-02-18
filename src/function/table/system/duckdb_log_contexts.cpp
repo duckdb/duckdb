@@ -31,7 +31,7 @@ static unique_ptr<FunctionData> DuckDBLogContextBind(ClientContext &context, Tab
 	names.emplace_back("scope");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("client_context");
+	names.emplace_back("connection_id");
 	return_types.emplace_back(LogicalType::UBIGINT);
 
 	names.emplace_back("transaction_id");

@@ -9,7 +9,7 @@ from duckdb_logs
 ----
 
 statement ok
-set enable_logging=true;
+pragma enable_logging;
 
 statement ok
 set logging_level='info';

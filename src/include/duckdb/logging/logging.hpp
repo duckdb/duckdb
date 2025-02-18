@@ -69,7 +69,7 @@ struct LoggingContext {
 	LogContextScope scope;
 
 	optional_idx thread;
-	optional_idx client_context;
+	optional_idx connection_id;
 	optional_idx transaction_id;
 };
 

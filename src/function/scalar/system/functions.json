@@ -20,5 +20,19 @@
         "example": "write_log('Hello')",
         "type": "scalar_function_set",
         "struct": "WriteLogFun"
+    },
+    {
+        "name": "current_connection_id",
+        "description": "Get the current connection_id",
+        "example": "current_connection_id()",
+        "type": "scalar_function",
+        "struct": "CurrentConnectionId"
+    },
+    {
+        "name": "current_transaction_id",
+        "description": "Get the current (connection-local) transaction_id",
+        "example": "current_transaction_id('Hello')",
+        "type": "scalar_function",
+        "struct": "CurrentTransactionId"
     }
 ]
