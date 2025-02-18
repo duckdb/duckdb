@@ -13,6 +13,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
