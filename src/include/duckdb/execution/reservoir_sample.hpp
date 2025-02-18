@@ -201,7 +201,7 @@ public:
 	void ConvertToReservoirSample();
 
 	//! Get the capactiy of the data chunk reserved for storing samples
- 	template <typename T>
+	template <typename T>
 	T GetReservoirChunkCapacity() const;
 
 	//! If for_serialization=true then the sample_chunk is not padded with extra spaces for

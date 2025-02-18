@@ -1,4 +1,4 @@
-# name: test/sql/sample/get_multiple_samples_small.test
+# name: test/sql/sample/get_multiple_samples_small.test_slow
 # description: Run a sample multiple times (internal#4236)
 # group: [sample]
 
