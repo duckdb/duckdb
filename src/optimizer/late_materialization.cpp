@@ -357,9 +357,22 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	return true;
 }
 
-bool LateMaterialization::OptimizeLargeLimit(LogicalOperator &child) {
-	// we only support large limits if the only
-	reference<LogicalOperator> current_op = child;
+bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_val, bool has_offset) {
+	auto &config = DBConfig::GetConfig(optimizer.context);
+	if (!has_offset && !config.options.preserve_insertion_order) {
+		// we avoid optimizing large limits if preserve insertion order is false
+		// since the limit is executed in parallel anyway
+		return false;
+	}
+	// we only perform this optimization until a certain amount of maximum values to reduce memory constraints
+	// since we still materialize the set of row-ids in the hash table this optimization can increase memory pressure
+	// FIXME: make this configurable as well
+	static constexpr const idx_t LIMIT_MAX_VAL = 1000000;
+	if (limit_val > LIMIT_MAX_VAL) {
+		return false;
+	}
+	// we only support large limits if they are directly below the source
+	reference<LogicalOperator> current_op = *limit.children[0];
 	while (current_op.get().type != LogicalOperatorType::LOGICAL_GET) {
 		if (current_op.get().type != LogicalOperatorType::LOGICAL_PROJECTION) {
 			return false;
@@ -376,11 +389,18 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 		if (limit.limit_val.Type() != LimitNodeType::CONSTANT_VALUE) {
 			break;
 		}
-		if (limit.limit_val.GetConstantValue() > max_row_count) {
+		auto limit_val = limit.limit_val.GetConstantValue();
+		bool has_offset = limit.offset_val.Type() != LimitNodeType::UNSET;
+		if (limit_val > max_row_count) {
 			// for large limits - we may still want to do this optimization if the limit is consecutive
 			// this is the case if there are only projections/get below the limit
 			// if the row-ids are not consecutive doing the join can worsen performance
-			if (!OptimizeLargeLimit(*limit.children[0])) {
+			if (!OptimizeLargeLimit(limit, limit_val, has_offset)) {
+				break;
+			}
+		} else {
+			// optimizing small limits really only makes sense if we have an offset
+			if (!has_offset) {
 				break;
 			}
 		}
