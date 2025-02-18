@@ -131,8 +131,11 @@ struct ParquetMultiFileInfo {
 	                            ParquetOptions &options);
 	static bool ParseOption(ClientContext &context, const string &key, const Value &val,
 	                        MultiFileReaderOptions &file_options, ParquetOptions &options);
+	static void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	                       MultiFileBindData<ParquetMultiFileInfo> &bind_data);
 	static unique_ptr<BIND_DATA> InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
-	                                                ParquetOptions &options);
+	                                                ParquetOptions options);
+	static void FinalizeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data);
 	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState();
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
 	static shared_ptr<ParquetReader> CreateReader(ClientContext &context, ParquetUnionData &union_data);
@@ -149,21 +152,31 @@ struct ParquetMultiFileInfo {
 };
 
 template <class OP>
-unique_ptr<FunctionData> MultiFileBindInternal(ClientContext &context, unique_ptr<MultiFileReader> multi_file_reader,
-                                               shared_ptr<MultiFileList> multi_file_list,
+unique_ptr<FunctionData> MultiFileBindInternal(ClientContext &context, unique_ptr<MultiFileReader> multi_file_reader_p,
+                                               shared_ptr<MultiFileList> multi_file_list_p,
                                                vector<LogicalType> &return_types, vector<string> &names,
-                                               MultiFileReaderOptions file_options, typename OP::OPTIONS options) {
+                                               MultiFileReaderOptions file_options_p, typename OP::OPTIONS options_p) {
 	auto result = make_uniq<MultiFileBindData<OP>>();
-	result->multi_file_reader = std::move(multi_file_reader);
-	result->file_list = std::move(multi_file_list);
+	result->multi_file_reader = std::move(multi_file_reader_p);
+	result->file_list = std::move(multi_file_list_p);
 	// auto-detect hive partitioning
-	result->file_options = std::move(file_options);
-	result->file_options.AutoDetectHivePartitioning(*result->file_list, context);
+	result->file_options = std::move(file_options_p);
+	result->bind_data = OP::InitializeBindData(*result, std::move(options_p));
 	// now bind the readers
-	result->bind_data = OP::InitializeBindData(*result, options);
-
-	result->reader_bind = result->multi_file_reader->template BindReader<typename OP::READER>(
-	    context, result->types, result->names, *result->file_list, *result, options, result->file_options);
+	// there are three ways of binding the readers
+	// (1) MultiFileReader::Bind -> custom bind, used only for certain lakehouse extensions
+	// (2) Schema bind ->
+	bool bound_on_first_file = true;
+	if (result->multi_file_reader->Bind(result->file_options, *result->file_list, result->types, result->names,
+	                                    result->reader_bind)) {
+		result->multi_file_reader->BindOptions(result->file_options, *result->file_list, result->types, result->names,
+		                                       result->reader_bind);
+		bound_on_first_file = false;
+	} else {
+		result->file_options.AutoDetectHivePartitioning(*result->file_list, context);
+		OP::BindReader(context, result->types, result->names, *result);
+	}
+	OP::FinalizeBindData(*result);
 
 	if (return_types.empty()) {
 		// no expected types - just copy the types
@@ -173,7 +186,7 @@ unique_ptr<FunctionData> MultiFileBindInternal(ClientContext &context, unique_pt
 		// We're deserializing from a previously successful bind call
 		// verify that the amount of columns still matches
 		if (return_types.size() != result->types.size()) {
-			auto file_string = !result->file_options.union_by_name
+			auto file_string = !result->file_options.union_by_name && bound_on_first_file
 			                       ? result->file_list->GetFirstFile()
 			                       : StringUtil::Join(result->file_list->GetPaths(), ",");
 			string extended_error;
@@ -822,72 +835,81 @@ static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, Parquet
 	}
 }
 
-// static MultiFileReaderBindData BindSchema(ClientContext &context, vector<LogicalType> &return_types,
-//                                           vector<string> &names, ParquetReadBindData &result, ParquetOptions
-//                                           &options) {
-// 	D_ASSERT(!options.schema.empty());
-//
-// 	options.file_options.AutoDetectHivePartitioning(*result.file_list, context);
-//
-// 	auto &file_options = options.file_options;
-// 	if (file_options.union_by_name || file_options.hive_partitioning) {
-// 		throw BinderException("Parquet schema cannot be combined with union_by_name=true or hive_partitioning=true");
-// 	}
-//
-// 	vector<string> schema_col_names;
-// 	vector<LogicalType> schema_col_types;
-// 	MultiFileReaderBindData bind_data;
-// 	schema_col_names.reserve(options.schema.size());
-// 	schema_col_types.reserve(options.schema.size());
-// 	bool match_by_field_id;
-// 	if (!options.schema.empty()) {
-// 		auto &column = options.schema[0];
-// 		if (column.identifier.type().id() == LogicalTypeId::INTEGER) {
-// 			match_by_field_id = true;
-// 		} else {
-// 			match_by_field_id = false;
-// 		}
-// 	} else {
-// 		match_by_field_id = false;
-// 	}
-//
-// 	for (idx_t i = 0; i < options.schema.size(); i++) {
-// 		const auto &column = options.schema[i];
-// 		schema_col_names.push_back(column.name);
-// 		schema_col_types.push_back(column.type);
-//
-// 		auto res = MultiFileReaderColumnDefinition(column.name, column.type);
-// 		res.identifier = column.identifier;
-// #ifdef DEBUG
-// 		if (match_by_field_id) {
-// 			D_ASSERT(res.identifier.type().id() == LogicalTypeId::INTEGER);
-// 		} else {
-// 			D_ASSERT(res.identifier.type().id() == LogicalTypeId::VARCHAR);
-// 		}
-// #endif
-//
-// 		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
-// 		bind_data.schema.emplace_back(std::move(res));
-// 	}
-//
-// 	if (match_by_field_id) {
-// 		bind_data.mapping = MultiFileReaderColumnMappingMode::BY_FIELD_ID;
-// 	} else {
-// 		bind_data.mapping = MultiFileReaderColumnMappingMode::BY_NAME;
-// 	}
-//
-// 	// perform the binding on the obtained set of names + types
-// 	result.multi_file_reader->BindOptions(options.file_options, *result.file_list, schema_col_types, schema_col_names,
-// 	                                      bind_data);
-//
-// 	names = schema_col_names;
-// 	return_types = schema_col_types;
-// 	D_ASSERT(names.size() == return_types.size());
-//
-// 	ParseFileRowNumberOption(bind_data, options, return_types, names);
-//
-// 	return bind_data;
-// }
+static void BindSchema(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+                       MultiFileBindData<ParquetMultiFileInfo> &bind_data) {
+	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
+	auto &options = parquet_bind.parquet_options;
+	D_ASSERT(!options.schema.empty());
+
+	auto &file_options = bind_data.file_options;
+	if (file_options.union_by_name || file_options.hive_partitioning) {
+		throw BinderException("Parquet schema cannot be combined with union_by_name=true or hive_partitioning=true");
+	}
+	auto &reader_bind = bind_data.reader_bind;
+
+	vector<string> schema_col_names;
+	vector<LogicalType> schema_col_types;
+	schema_col_names.reserve(options.schema.size());
+	schema_col_types.reserve(options.schema.size());
+	bool match_by_field_id;
+	if (!options.schema.empty()) {
+		auto &column = options.schema[0];
+		if (column.identifier.type().id() == LogicalTypeId::INTEGER) {
+			match_by_field_id = true;
+		} else {
+			match_by_field_id = false;
+		}
+	} else {
+		match_by_field_id = false;
+	}
+
+	for (idx_t i = 0; i < options.schema.size(); i++) {
+		const auto &column = options.schema[i];
+		schema_col_names.push_back(column.name);
+		schema_col_types.push_back(column.type);
+
+		auto res = MultiFileReaderColumnDefinition(column.name, column.type);
+		res.identifier = column.identifier;
+#ifdef DEBUG
+		if (match_by_field_id) {
+			D_ASSERT(res.identifier.type().id() == LogicalTypeId::INTEGER);
+		} else {
+			D_ASSERT(res.identifier.type().id() == LogicalTypeId::VARCHAR);
+		}
+#endif
+
+		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
+		reader_bind.schema.emplace_back(std::move(res));
+	}
+
+	if (match_by_field_id) {
+		reader_bind.mapping = MultiFileReaderColumnMappingMode::BY_FIELD_ID;
+	} else {
+		reader_bind.mapping = MultiFileReaderColumnMappingMode::BY_NAME;
+	}
+
+	// perform the binding on the obtained set of names + types
+	bind_data.multi_file_reader->BindOptions(file_options, *bind_data.file_list, schema_col_types, schema_col_names,
+	                                         reader_bind);
+
+	names = schema_col_names;
+	return_types = schema_col_types;
+	D_ASSERT(names.size() == return_types.size());
+
+	ParseFileRowNumberOption(reader_bind, options, return_types, names);
+}
+
+void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+                                      MultiFileBindData<ParquetMultiFileInfo> &bind_data) {
+	auto &parquet_bind = bind_data.bind_data->Cast<ParquetReadBindData>();
+	auto &options = parquet_bind.parquet_options;
+	if (!options.schema.empty()) {
+		BindSchema(context, return_types, names, bind_data);
+	} else {
+		bind_data.reader_bind = bind_data.multi_file_reader->BindReader<ParquetReader>(
+		    context, return_types, names, *bind_data.file_list, bind_data, options, bind_data.file_options);
+	}
+}
 
 static bool GetBooleanArgument(const string &key, const vector<Value> &option_values) {
 	if (option_values.empty()) {
@@ -1080,7 +1102,6 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key
 		return true;
 	}
 	if (key == "schema") {
-		throw InternalException("FIXME: handle Schema parameter");
 		// Argument is a map that defines the schema
 		const auto &schema_value = val;
 		ParquetScanFunction::VerifyParquetSchemaParameter(schema_value);
@@ -1108,15 +1129,24 @@ bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key
 
 unique_ptr<ParquetReadBindData>
 ParquetMultiFileInfo::InitializeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data,
-                                         ParquetOptions &options) {
+                                         ParquetOptions options_p) {
 	auto result = make_uniq<ParquetReadBindData>();
 	// Set the explicit cardinality if requested
-	if (options.explicit_cardinality) {
+	result->parquet_options = std::move(options_p);
+	if (result->parquet_options.explicit_cardinality) {
 		auto file_count = multi_file_data.file_list->GetTotalFileCount();
-		result->explicit_cardinality = options.explicit_cardinality;
+		result->explicit_cardinality = result->parquet_options.explicit_cardinality;
 		result->initial_file_cardinality = result->explicit_cardinality / (file_count ? file_count : 1);
 	}
 	return result;
+}
+
+void ParquetMultiFileInfo::FinalizeBindData(MultiFileBindData<ParquetMultiFileInfo> &multi_file_data) {
+	auto &bind_data = multi_file_data.bind_data->Cast<ParquetReadBindData>();
+	// Enable the parquet file_row_number on the parquet options if the file_row_number_idx was set
+	if (multi_file_data.reader_bind.file_row_number_idx != DConstants::INVALID_INDEX) {
+		bind_data.parquet_options.file_row_number = true;
+	}
 }
 
 unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(TableFunctionData &bind_data_p, idx_t file_count) {
@@ -1416,7 +1446,7 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 			}
 			auto values = StructValue::GetChildren(kv_struct);
 			for (idx_t i = 0; i < values.size(); i++) {
-				auto value = values[i];
+				auto &value = values[i];
 				auto key = StructType::GetChildName(kv_struct_type, i);
 				// If the value is a blob, write the raw blob bytes
 				// otherwise, cast to string
