@@ -107,8 +107,8 @@ jobs:
     name: Windows MingW static libs
     runs-on: windows-2019
     env:
-      ENABLE_EXTENSION_AUTOLOADING: ${{ inputs.build_static_lib_mode }}
-      ENABLE_EXTENSION_AUTOINSTALL: ${{ inputs.build_static_lib_mode }}
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
     steps:
       - uses: actions/checkout@v4
         with:
