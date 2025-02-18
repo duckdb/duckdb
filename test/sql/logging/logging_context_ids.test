@@ -2,6 +2,8 @@
 # description: Check the connection_id and transaction_id fields
 # group: [logging]
 
+require noforcestorage
+
 statement ok con1
 set enable_logging=true
 

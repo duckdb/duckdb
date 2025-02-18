@@ -1,5 +1,6 @@
 #include "duckdb/main/connection_manager.hpp"
 #include "duckdb/common/exception/transaction_exception.hpp"
+#include "duckdb/main/connection.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/planner/extension_callback.hpp"
 

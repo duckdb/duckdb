@@ -8,12 +8,12 @@
 namespace duckdb {
 
 struct CurrentConnectionIdData : FunctionData {
-	explicit CurrentConnectionIdData(Value connection_id_p) : connection_id(connection_id_p) {
+	explicit CurrentConnectionIdData(Value connection_id_p) : connection_id(std::move(connection_id_p)) {
 	}
 	Value connection_id;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<CurrentConnectionIdData>(this->connection_id);
+		return make_uniq<CurrentConnectionIdData>(connection_id);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		return connection_id == other_p.Cast<CurrentConnectionIdData>().connection_id;

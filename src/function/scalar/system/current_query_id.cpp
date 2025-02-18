@@ -8,12 +8,12 @@
 namespace duckdb {
 
 struct CurrentQueryIdData : FunctionData {
-	explicit CurrentQueryIdData(Value query_id_p) : query_id(query_id_p) {
+	explicit CurrentQueryIdData(Value query_id_p) : query_id(std::move(query_id_p)) {
 	}
 	Value query_id;
 
 	unique_ptr<FunctionData> Copy() const override {
-		return make_uniq<CurrentQueryIdData>(this->query_id);
+		return make_uniq<CurrentQueryIdData>(query_id);
 	}
 	bool Equals(const FunctionData &other_p) const override {
 		return query_id == other_p.Cast<CurrentQueryIdData>().query_id;
