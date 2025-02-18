@@ -25,6 +25,9 @@ bool LogStorage::ScanContexts(LogStorageScanState &state, DataChunk &result) con
 void LogStorage::InitializeScanContexts(LogStorageScanState &state) const {
 	throw NotImplementedException("Not implemented for this LogStorage: InitializeScanContexts");
 }
+void LogStorage::Truncate() {
+	throw NotImplementedException("Not implemented for this LogStorage: TruncateLogStorage");
+}
 
 StdOutLogStorage::StdOutLogStorage() {
 }
@@ -44,6 +47,10 @@ void StdOutLogStorage::WriteLogEntry(timestamp_t timestamp, LogLevel level, cons
 
 void StdOutLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) {
 	throw NotImplementedException("StdOutLogStorage::WriteLogEntries");
+}
+
+void StdOutLogStorage::Truncate() {
+	// NOP
 }
 
 void StdOutLogStorage::Flush() {
@@ -80,6 +87,16 @@ InMemoryLogStorage::InMemoryLogStorage(DatabaseInstance &db_p)
 	log_context_buffer->Initialize(Allocator::DefaultAllocator(), log_context_schema, max_buffer_size);
 	log_entries = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), log_entry_schema);
 	log_contexts = make_uniq<ColumnDataCollection>(db_p.GetBufferManager(), log_context_schema);
+}
+
+void InMemoryLogStorage::ResetBuffers() {
+	entry_buffer->Reset();
+	log_context_buffer->Reset();
+
+	log_entries->Reset();
+	log_contexts->Reset();
+
+	registered_contexts.clear();
 }
 
 InMemoryLogStorage::~InMemoryLogStorage() {
@@ -120,6 +137,11 @@ void InMemoryLogStorage::WriteLogEntries(DataChunk &chunk, const RegisteredLoggi
 void InMemoryLogStorage::Flush() {
 	unique_lock<mutex> lck(lock);
 	FlushInternal();
+}
+
+void InMemoryLogStorage::Truncate() {
+	unique_lock<mutex> lck(lock);
+	ResetBuffers();
 }
 
 void InMemoryLogStorage::FlushInternal() {
