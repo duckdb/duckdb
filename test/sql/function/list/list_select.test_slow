@@ -239,7 +239,7 @@ endloop
 query I
 SELECT list_select(['{a: 1}'::BLOB, '{a: 3}'::BLOB], [1,2])
 ----
-[{a: 1}, {a: 3}]
+['{a: 1}', '{a: 3}']
 
 query I
 SELECT list_select([NULL::BLOB], [1])

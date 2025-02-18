@@ -48,7 +48,7 @@ SELECT '[nothappy]'::MOOD[]
 query III
 SELECT CAST(LIST(date)::VARCHAR AS DATE[]) a, a::VARCHAR::DATE[] b, a == b FROM test_all_types();
 ----
-[5877642-06-25 (BC), 5881580-07-10, NULL]	[5877642-06-25 (BC), 5881580-07-10, NULL]	true
+['5877642-06-25 (BC)', 5881580-07-10, NULL]	['5877642-06-25 (BC)', 5881580-07-10, NULL]	true
 
 query I
 SELECT CAST(LIST(time)::VARCHAR AS TIME[]) FROM test_all_types();
@@ -78,7 +78,7 @@ SELECT CAST(LIST(timestamp_ns)::VARCHAR AS TIME[]) FROM test_all_types();
 query I
 SELECT CAST(LIST(blob)::VARCHAR AS BLOB[]) FROM test_all_types();
 ----
-[thisisalongblob\x00withnullbytes, \x00\x00\x00a, NULL]
+['thisisalongblob\\x00withnullbytes', '\\x00\\x00\\x00a', NULL]
 
 query I
 SELECT CAST(LIST(interval)::VARCHAR AS INTERVAL[]) FROM test_all_types();
@@ -142,62 +142,62 @@ SELECT '{a: nothappy}'::STRUCT(a MOOD)
 query I
 SELECT CAST(struct_pack(A=>date)::VARCHAR AS STRUCT(A DATE)) FROM test_all_types();
 ----
-{'A': 5877642-06-25 (BC)}
+{'A': '5877642-06-25 (BC)'}
 {'A': 5881580-07-10}
 {'A': NULL}
 
 query I
 SELECT CAST(struct_pack(A=>time)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
 ----
-{'A': 00:00:00}
-{'A': 24:00:00}
+{'A': '00:00:00'}
+{'A': '24:00:00'}
 {'A': NULL}
 
 query I
 SELECT CAST(struct_pack(A=>timestamp)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
 ----
-{'A': 00:00:00}
-{'A': 04:00:54.775806}
+{'A': '00:00:00'}
+{'A': '04:00:54.775806'}
 {'A': NULL}
 
 query I
 SELECT CAST(struct_pack(A=>timestamp_s)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
 ----
-{'A': 00:00:00}
-{'A': 04:00:54}
+{'A': '00:00:00'}
+{'A': '04:00:54'}
 {'A': NULL}
 
 query I
 SELECT CAST(struct_pack(A=>timestamp_ms)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
 ----
-{'A': 00:00:00}
-{'A': 04:00:54.775}
+{'A': '00:00:00'}
+{'A': '04:00:54.775'}
 {'A': NULL}
 
 query I
 SELECT CAST(struct_pack(A=>timestamp_ms)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
 ----
-{'A': 00:00:00}
-{'A': 04:00:54.775}
+{'A': '00:00:00'}
+{'A': '04:00:54.775'}
 {'A': NULL}
 
 query I
 SELECT CAST(struct_pack(A=>timestamp_ns)::VARCHAR AS STRUCT(A TIME)) FROM test_all_types();
 ----
-{'A': 00:00:00}
-{'A': 23:47:16.854775}
+{'A': '00:00:00'}
+{'A': '23:47:16.854775'}
 {'A': NULL}
 
 query I
 SELECT CAST(struct_pack(A=>blob)::VARCHAR AS STRUCT(A BLOB)) FROM test_all_types();
 ----
-{'A': thisisalongblob\x00withnullbytes}
-{'A': \x00\x00\x00a}
+{'A': 'thisisalongblob\\x00withnullbytes'}
+{'A': '\\x00\\x00\\x00a'}
 {'A': NULL}
 
 query I
 SELECT CAST(struct_pack(A=>interval)::VARCHAR AS STRUCT(A INTERVAL)) FROM test_all_types();
 ----
-{'A': 00:00:00}
-{'A': 83 years 3 months 999 days 00:16:39.999999}
+{'A': '00:00:00'}
+{'A': '83 years 3 months 999 days 00:16:39.999999'}
 {'A': NULL}

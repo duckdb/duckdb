@@ -162,11 +162,11 @@ MAP(VARCHAR, JSON)
 query I
 select * from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=1)
 ----
-{id=1, name=\"O Brother\, Where Art Thou?\"}
+{id=1, name='"O Brother, Where Art Thou?"'}
 {id=2}
-{id=3, name=\"The Firm\"}
+{id=3, name='"The Firm"'}
 {id=4}
-{id=5, name=\"Raising Arizona\"}
+{id=5, name='"Raising Arizona"'}
 
 # if we set it to 0.5 it should work already since "name" appears in 3/5 objects, which is greater than 0.5
 query II

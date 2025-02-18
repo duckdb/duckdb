@@ -63,26 +63,26 @@ query I
 SELECT arg_min_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
 FROM tbl;
 ----
-{'d': 1992-01-01, 'ts': 1992-01-01 23:20:11, 'i': 42, 'b': 0, 'f': 0.5}
+{'d': 1992-01-01, 'ts': '1992-01-01 23:20:11', 'i': 42, 'b': 0, 'f': 0.5}
 
 query I
 SELECT arg_max_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
 FROM tbl;
 ----
-{'d': 1993-01-01, 'ts': 1993-01-01 23:20:11, 'i': 8400, 'b': 999999999, 'f': 100.5}
+{'d': 1993-01-01, 'ts': '1993-01-01 23:20:11', 'i': 8400, 'b': 999999999, 'f': 100.5}
 
 # By Scalar
 query I
 SELECT arg_min_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
 FROM tbl;
 ----
-{'d': 1992-01-01, 'ts': 1992-01-01 23:20:11, 'i': 42, 'b': 0, 's': aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+{'d': 1992-01-01, 'ts': '1992-01-01 23:20:11', 'i': 42, 'b': 0, 's': aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 
 query I
 SELECT arg_max_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
 FROM tbl;
 ----
-{'d': 1993-01-01, 'ts': 1993-01-01 23:20:11, 'i': 8400, 'b': 999999999, 's': zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
+{'d': 1993-01-01, 'ts': '1993-01-01 23:20:11', 'i': 8400, 'b': 999999999, 's': zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
 
 #
 # Lists
@@ -166,26 +166,26 @@ query I
 SELECT arg_min_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
 FROM tbl;
 ----
-{'d': 1992-01-01, 'ts': 1992-01-01 23:20:11, 'i': 42, 'b': 0, 'f': 0.5}
+{'d': 1992-01-01, 'ts': '1992-01-01 23:20:11', 'i': 42, 'b': 0, 'f': 0.5}
 
 query I
 SELECT arg_max_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
 FROM tbl;
 ----
-{'d': 1993-01-01, 'ts': 1993-01-01 23:20:11, 'i': 8400, 'b': 999999999, 'f': 100.5}
+{'d': 1993-01-01, 'ts': '1993-01-01 23:20:11', 'i': 8400, 'b': 999999999, 'f': 100.5}
 
 # By Scalar
 query I
 SELECT arg_min_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
 FROM tbl;
 ----
-{'d': 1991-01-01, 'ts': 1991-01-01 23:20:11, 'i': 41, 'b': -1, 's': NULL}
+{'d': 1991-01-01, 'ts': '1991-01-01 23:20:11', 'i': 41, 'b': -1, 's': NULL}
 
 query I
 SELECT arg_max_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
 FROM tbl;
 ----
-{'d': 1993-01-01, 'ts': 1993-01-01 23:20:11, 'i': 8400, 'b': 999999999, 's': zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
+{'d': 1993-01-01, 'ts': '1993-01-01 23:20:11', 'i': 8400, 'b': 999999999, 's': zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
 
 #
 # Lists
@@ -270,26 +270,26 @@ query I
 SELECT arg_min_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
 FROM tbl;
 ----
-{'d': 1992-01-01, 'ts': 1992-01-01 23:20:11, 'i': 42, 'b': 0, 'f': 0.5}
+{'d': 1992-01-01, 'ts': '1992-01-01 23:20:11', 'i': 42, 'b': 0, 'f': 0.5}
 
 query I
 SELECT arg_max_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
 FROM tbl;
 ----
-{'d': 1993-01-01, 'ts': 1993-01-01 23:20:11, 'i': 8400, 'b': 999999999, 'f': 100.5}
+{'d': 1993-01-01, 'ts': '1993-01-01 23:20:11', 'i': 8400, 'b': 999999999, 'f': 100.5}
 
 # By Scalar
 query I
 SELECT arg_min_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
 FROM tbl;
 ----
-{'d': 1991-01-01, 'ts': 1991-01-01 23:20:11, 'i': 41, 'b': -1, 's': NULL}
+{'d': 1991-01-01, 'ts': '1991-01-01 23:20:11', 'i': 41, 'b': -1, 's': NULL}
 
 query I
 SELECT arg_max_null({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
 FROM tbl;
 ----
-{'d': 1994-01-01, 'ts': 1994-01-01 23:20:11, 'i': 9400, 'b': 9999999999, 's': NULL}
+{'d': 1994-01-01, 'ts': '1994-01-01 23:20:11', 'i': 9400, 'b': 9999999999, 's': NULL}
 
 #
 # Lists

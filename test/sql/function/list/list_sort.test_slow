@@ -341,7 +341,7 @@ endloop
 query I
 SELECT list_sort(['{a: 1}'::BLOB, '{a: 3}'::BLOB])
 ----
-[{a: 1}, {a: 3}]
+['{a: 1}', '{a: 3}']
 
 query I
 SELECT list_sort([NULL::BLOB])
