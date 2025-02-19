@@ -279,14 +279,14 @@ public:
 
 	// Queries the metadataprovider for another file to scan, updating the files/reader lists in the process.
 	// Returns true if resized
-	static bool ResizeFiles(MultiFileGlobalState &parallel_state) {
+	static bool ResizeFiles(MultiFileGlobalState &global_state) {
 		string scanned_file;
-		if (!parallel_state.file_list.Scan(parallel_state.file_list_scan, scanned_file)) {
+		if (!global_state.file_list.Scan(global_state.file_list_scan, scanned_file)) {
 			return false;
 		}
 
 		// Push the file in the reader data, to be opened later
-		parallel_state.readers.push_back(make_uniq<MultiFileFileReaderData>(scanned_file));
+		global_state.readers.push_back(make_uniq<MultiFileFileReaderData>(scanned_file));
 
 		return true;
 	}
@@ -312,18 +312,18 @@ public:
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
 	static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData &bind_data,
-	                            MultiFileLocalState &scan_data, MultiFileGlobalState &parallel_state,
+	                            MultiFileLocalState &scan_data, MultiFileGlobalState &global_state,
 	                            unique_lock<mutex> &parallel_lock) {
 		const auto file_index_limit =
-		    parallel_state.file_index + NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		    global_state.file_index + NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 
-		for (idx_t i = parallel_state.file_index; i < file_index_limit; i++) {
+		for (idx_t i = global_state.file_index; i < file_index_limit; i++) {
 			// We check if we can resize files in this loop too otherwise we will only ever open 1 file ahead
-			if (i >= parallel_state.readers.size() && !ResizeFiles(parallel_state)) {
+			if (i >= global_state.readers.size() && !ResizeFiles(global_state)) {
 				return false;
 			}
 
-			auto &current_reader_data = *parallel_state.readers[i];
+			auto &current_reader_data = *global_state.readers[i];
 			if (current_reader_data.file_state == MultiFileFileState::UNOPENED) {
 				current_reader_data.file_state = MultiFileFileState::OPENING;
 				// Get pointer to file mutex before unlocking
@@ -338,15 +338,16 @@ public:
 				try {
 					if (current_reader_data.union_data) {
 						auto &union_data = *current_reader_data.union_data;
-						reader = OP::CreateReader(context, union_data);
+						reader = OP::CreateReader(context, *global_state.global_state, union_data);
 					} else {
-						reader = OP::CreateReader(context, current_reader_data.file_to_be_opened, *bind_data.bind_data);
+						reader = OP::CreateReader(context, *global_state.global_state, current_reader_data.file_to_be_opened, *bind_data.bind_data);
 					}
-					InitializeReader(*reader, bind_data, parallel_state.column_indexes, parallel_state.filters, context,
-					                 i, parallel_state.multi_file_reader_state);
+					InitializeReader(*reader, bind_data, global_state.column_indexes, global_state.filters, context,
+					                 i, global_state.multi_file_reader_state);
+					OP::FinalizeReader(context, *reader);
 				} catch (...) {
 					parallel_lock.lock();
-					parallel_state.error_opening_file = true;
+					global_state.error_opening_file = true;
 					throw;
 				}
 
@@ -363,10 +364,10 @@ public:
 	}
 
 	//! Wait for a file to become available. Parallel lock should be locked when calling.
-	static void WaitForFile(idx_t file_index, MultiFileGlobalState &parallel_state, unique_lock<mutex> &parallel_lock) {
+	static void WaitForFile(idx_t file_index, MultiFileGlobalState &global_state, unique_lock<mutex> &parallel_lock) {
 		while (true) {
 			// Get pointer to file mutex before unlocking
-			auto &file_mutex = *parallel_state.readers[file_index]->file_mutex;
+			auto &file_mutex = *global_state.readers[file_index]->file_mutex;
 
 			// To get the file lock, we first need to release the parallel_lock to prevent deadlocking. Note that this
 			// requires getting the ref to the file mutex pointer with the lock stil held: readers get be resized
@@ -378,9 +379,9 @@ public:
 			// - the thread opening the file is done and the file is available
 			// - the thread opening the file has failed
 			// - the file was somehow scanned till the end while we were waiting
-			if (parallel_state.file_index >= parallel_state.readers.size() ||
-			    parallel_state.readers[parallel_state.file_index]->file_state != MultiFileFileState::OPENING ||
-			    parallel_state.error_opening_file) {
+			if (global_state.file_index >= global_state.readers.size() ||
+			    global_state.readers[global_state.file_index]->file_state != MultiFileFileState::OPENING ||
+			    global_state.error_opening_file) {
 				return;
 			}
 		}

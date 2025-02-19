@@ -5,8 +5,30 @@
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/main/appender.hpp"
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 
 namespace duckdb {
+
+// shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate, BaseUnionData &union_data) {
+//
+// }
+//
+// shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p, const string &filename,
+// 											   TableFunctionData &bind_data_p) {
+// 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
+// 	auto &bind_data = bind_data_p.Cast<ReadCSVData>();
+//
+// 	auto csv_file_scan =
+// 		make_uniq<CSVFileScan>(context, filename, bind_data.options, file_idx, csv_names, csv_types, column_ids,
+// 							   file_schema, single_threaded_scan, std::move(buffer_manager), fixed_schema);
+//
+// }
+
+void CSVMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader) {
+	auto &csv_file_scan = reader.Cast<CSVFileScan>();
+	csv_file_scan.InitializeFileNamesTypes();
+	csv_file_scan.SetStart();
+}
 
 unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool single_threaded_scan,
                                                        shared_ptr<CSVBufferManager> buffer_manager) {
@@ -14,9 +36,6 @@ unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool sing
 		throw InternalException("FIXME: this should have been handled before");
 	}
 	auto multi_file_reader = MultiFileReader::CreateDefault("CSV Scan");
-
-	auto global_columns =
-	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.return_names, bind_data.return_types);
 
 	auto &file_name = bind_data.files[file_idx];
 	auto options = bind_data.options;
@@ -44,8 +63,7 @@ unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool sing
 
 	multi_file_reader->InitializeReader(*csv_file_scan, bind_data.options.file_options, bind_data.reader_bind,
 	                                    global_columns, column_ids, nullptr, file_name, context, nullptr);
-	csv_file_scan->InitializeFileNamesTypes();
-	csv_file_scan->SetStart();
+	CSVMultiFileInfo::FinalizeReader(context, *csv_file_scan);
 	return csv_file_scan;
 }
 
@@ -54,6 +72,8 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
                                vector<ColumnIndex> column_ids_p, ReadCSVData &bind_data_p)
     : context(context_p), system_threads(system_threads_p), column_ids(std::move(column_ids_p)),
       sniffer_mismatch_error(options.sniffer_user_mismatch_error), bind_data(bind_data_p) {
+	global_columns =
+		MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.return_names, bind_data.return_types);
 
 	unique_ptr<CSVFileScan> initial_reader;
 	if (bind_data.initial_reader) {
