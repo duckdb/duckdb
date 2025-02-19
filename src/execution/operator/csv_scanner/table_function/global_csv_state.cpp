@@ -15,8 +15,8 @@ namespace duckdb {
 // }
 //
 // shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
-// const string &filename, 											   TableFunctionData &bind_data_p) { 	auto &gstate = gstate_p.Cast<CSVGlobalState>(); 	auto
-// &bind_data = bind_data_p.Cast<ReadCSVData>();
+// const string &filename, 											   TableFunctionData &bind_data_p) { 	auto &gstate =
+// gstate_p.Cast<CSVGlobalState>(); 	auto &bind_data = bind_data_p.Cast<ReadCSVData>();
 //
 // 	auto csv_file_scan =
 // 		make_uniq<CSVFileScan>(context, filename, bind_data.options, file_idx, csv_names, csv_types, column_ids,
@@ -58,8 +58,9 @@ unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool sing
 		options.auto_detect = false;
 	}
 	auto csv_file_scan =
-	    make_uniq<CSVFileScan>(context, file_name, std::move(options), file_idx, csv_names, csv_types, column_ids,
-	                           file_schema, single_threaded_scan, std::move(buffer_manager), fixed_schema);
+	    make_uniq<CSVFileScan>(context, file_name, std::move(options), csv_names, csv_types, column_ids, file_schema,
+	                           single_threaded_scan, std::move(buffer_manager), fixed_schema);
+	csv_file_scan->reader_data.file_list_idx = file_idx;
 
 	multi_file_reader->InitializeReader(*csv_file_scan, bind_data.options.file_options, bind_data.reader_bind,
 	                                    global_columns, column_ids, nullptr, file_name, context, nullptr);
@@ -144,7 +145,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 	if (previous_scanner) {
 		// We have to insert information for validation
 		lock_guard<mutex> parallel_lock(main_mutex);
-		validator.Insert(previous_scanner->csv_file_scan->file_idx, previous_scanner->scanner_idx,
+		validator.Insert(previous_scanner->csv_file_scan->GetFileIndex(), previous_scanner->scanner_idx,
 		                 previous_scanner->GetValidationLine());
 	}
 	if (single_threaded) {
@@ -206,10 +207,10 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
 	                                  current_file.error_handler, file_scans.back(), false, current_boundary);
-	threads_per_file[csv_scanner->csv_file_scan->file_idx]++;
+	threads_per_file[csv_scanner->csv_file_scan->GetFileIndex()]++;
 	if (previous_scanner) {
-		threads_per_file[previous_scanner->csv_file_scan->file_idx]--;
-		if (threads_per_file[previous_scanner->csv_file_scan->file_idx] == 0) {
+		threads_per_file[previous_scanner->csv_file_scan->GetFileIndex()]--;
+		if (threads_per_file[previous_scanner->csv_file_scan->GetFileIndex()] == 0) {
 			previous_scanner->buffer_tracker.reset();
 			previous_scanner->csv_file_scan->Finish();
 		}
@@ -220,7 +221,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 	if (!current_boundary.Next(*current_file.buffer_manager, bind_data.options)) {
 		// This means we are done scanning the current file
 		do {
-			auto current_file_idx = file_scans.back()->file_idx + 1;
+			auto current_file_idx = file_scans.back()->GetFileIndex() + 1;
 			if (current_file_idx < bind_data.files.size()) {
 				// If we have a next file we have to construct the file scan for that
 				file_scans.emplace_back(CreateFileScan(current_file_idx, false));

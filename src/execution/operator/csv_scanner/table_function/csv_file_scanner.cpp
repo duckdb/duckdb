@@ -7,10 +7,10 @@
 namespace duckdb {
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVReaderOptions options_p,
-                         idx_t file_idx_p, const vector<string> &names, const vector<LogicalType> &types,
+                         const vector<string> &names, const vector<LogicalType> &types,
                          const vector<ColumnIndex> &column_ids, CSVSchema &file_schema, bool per_file_single_threaded,
                          shared_ptr<CSVBufferManager> buffer_manager_p, bool fixed_schema)
-    : BaseFileReader(file_path_p), file_idx(file_idx_p), buffer_manager(std::move(buffer_manager_p)),
+    : BaseFileReader(file_path_p), buffer_manager(std::move(buffer_manager_p)),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(std::move(options_p)) {
 
@@ -76,9 +76,9 @@ void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<L
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options_p)
-    : BaseFileReader(file_name), file_idx(0),
-      error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
-	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_name, file_idx);
+    : BaseFileReader(file_name), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
+      options(options_p) {
+	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_name);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();
