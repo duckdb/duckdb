@@ -111,8 +111,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
 	case OperatorResultType::BLOCKED: {
 		auto guard = g_state.Lock();
-		g_state.BlockSource(guard, input.interrupt_state);
-		return SourceResultType::BLOCKED;
+		return g_state.BlockSource(guard, input.interrupt_state);
 	}
 	default:
 		// FIXME: Handling for other cases (such as NEED_MORE_INPUT) breaks current functionality and extensions that
