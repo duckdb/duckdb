@@ -309,6 +309,7 @@ struct PageInformation {
 	idx_t offset = 0;
 	idx_t row_count = 0;
 	idx_t empty_count = 0;
+	idx_t null_count;
 	idx_t estimated_page_size = 0;
 };
 
@@ -464,6 +465,8 @@ void BasicColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *p
 				state.page_info.push_back(new_info);
 				page_info_ref = state.page_info.back();
 			}
+		} else {
+			page_info.null_count++;
 		}
 		vector_index++;
 	}
@@ -1237,7 +1240,8 @@ public:
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC>>();
 		const auto &page_info = state_p.page_info[page_idx];
 		auto result = make_uniq<StandardWriterPageState<SRC, TGT>>(
-		    page_info.row_count - page_info.empty_count, state.total_string_size, state.encoding, state.dictionary);
+		    page_info.row_count - page_info.empty_count - page_info.null_count, state.total_string_size, state.encoding,
+		    state.dictionary);
 		return std::move(result);
 	}
 
