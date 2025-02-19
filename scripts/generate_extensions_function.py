@@ -324,7 +324,6 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
     functions = set()
     function_overloads = {}
     for x in results:
-        print(x)
         if x[-1] == ',':
             # Remove the trailing comma
             x = x[:-1]
@@ -519,12 +518,9 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
             for overload in overloads:
                 result += "\t{"
                 result += f'"{overload.name}", "{overload.extension}", {overload.type.value}, "'
-                signature = ""
-                for parameter in overload.parameters:
-                    if len(signature) != 0:
-                        signature += ","
-                    signature += parameter.type
-                signature += ">" + overload.return_type.type
+                signature = "["
+                signature += ", ".join([parameter.type for parameter in overload.parameters])
+                signature += "]>" + overload.return_type.type
                 result += signature
                 result += '"},\n'
         result += "}; // END_OF_EXTENSION_FUNCTION_OVERLOADS\n"
