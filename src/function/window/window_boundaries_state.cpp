@@ -205,11 +205,10 @@ static idx_t FindTypedRangeBound(WindowCursor &range_lo, WindowCursor &range_hi,
 	}
 	//	Try to reuse the previous bounds to restrict the search.
 	//	This is only valid if the previous bounds were non-empty
-	//	Only inject the comparisons if the previous bounds are a strict subset.
 	WindowColumnIterator<T> begin(range_lo, order_begin);
 	WindowColumnIterator<T> end(range_hi, order_end);
 	if (prev.start < prev.end) {
-		if (order_begin < prev.start && prev.start < order_end) {
+		if (order_begin <= prev.start && prev.start < order_end) {
 			const auto first = range_lo.GetCell<T>(0, prev.start);
 			if (FROM && !comp(val, first)) {
 				// If prev.start == val and we are looking for a lower bound, then we are done
