@@ -65,7 +65,8 @@ void EnumColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStatist
 	}
 }
 
-unique_ptr<ColumnWriterPageState> EnumColumnWriter::InitializePageState(PrimitiveColumnWriterState &state) {
+unique_ptr<ColumnWriterPageState> EnumColumnWriter::InitializePageState(PrimitiveColumnWriterState &state,
+                                                                        idx_t page_idx) {
 	return make_uniq<EnumWriterPageState>(bit_width);
 }
 

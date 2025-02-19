@@ -93,7 +93,7 @@ protected:
 	virtual unique_ptr<ColumnWriterStatistics> InitializeStatsState();
 
 	//! Initialize the writer for a specific page. Only used for scalar types.
-	virtual unique_ptr<ColumnWriterPageState> InitializePageState(PrimitiveColumnWriterState &state);
+	virtual unique_ptr<ColumnWriterPageState> InitializePageState(PrimitiveColumnWriterState &state, idx_t page_idx);
 
 	//! Flushes the writer for a specific page. Only used for scalar types.
 	virtual void FlushPageState(WriteStream &temp_writer, ColumnWriterPageState *state);

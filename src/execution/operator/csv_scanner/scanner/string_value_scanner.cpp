@@ -688,23 +688,29 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				    line_pos.GetGlobalPosition(result.requested_size), result.path);
 			}
 			break;
-		case CAST_ERROR:
+		case CAST_ERROR: {
+			string column_name;
+			LogicalTypeId type_id;
+			if (cur_error.col_idx < result.names.size()) {
+				column_name = result.names[cur_error.col_idx];
+			}
+			if (cur_error.col_idx < result.number_of_columns) {
+				type_id = result.parse_types[cur_error.chunk_idx].type_id;
+			}
 			if (result.current_line_position.begin == line_pos) {
 				csv_error = CSVError::CastError(
-				    result.state_machine.options, result.names[cur_error.col_idx], cur_error.error_message,
-				    cur_error.col_idx, borked_line, lines_per_batch,
+				    result.state_machine.options, column_name, cur_error.error_message, cur_error.col_idx, borked_line,
+				    lines_per_batch,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size, first_nl),
-				    result.parse_types[cur_error.chunk_idx].type_id, result.path);
+				    line_pos.GetGlobalPosition(result.requested_size, first_nl), type_id, result.path);
 			} else {
 				csv_error = CSVError::CastError(
-				    result.state_machine.options, result.names[cur_error.col_idx], cur_error.error_message,
-				    cur_error.col_idx, borked_line, lines_per_batch,
+				    result.state_machine.options, column_name, cur_error.error_message, cur_error.col_idx, borked_line,
+				    lines_per_batch,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size), result.parse_types[cur_error.chunk_idx].type_id,
-				    result.path);
+				    line_pos.GetGlobalPosition(result.requested_size), type_id, result.path);
 			}
-			break;
+		} break;
 		case MAXIMUM_LINE_SIZE:
 			csv_error = CSVError::LineSizeError(
 			    result.state_machine.options, lines_per_batch, borked_line,

@@ -1082,9 +1082,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 //===--------------------------------------------------------------------===//
 // CommitDrop
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::CommitDropColumn(idx_t index) {
+void RowGroupCollection::CommitDropColumn(const idx_t column_index) {
 	for (auto &row_group : row_groups->Segments()) {
-		row_group.CommitDropColumn(index);
+		row_group.CommitDropColumn(column_index);
 	}
 }
 

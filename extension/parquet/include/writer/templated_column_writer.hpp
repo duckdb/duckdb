@@ -126,11 +126,12 @@ public:
 		return std::move(result);
 	}
 
-	unique_ptr<ColumnWriterPageState> InitializePageState(PrimitiveColumnWriterState &state_p) override {
+	unique_ptr<ColumnWriterPageState> InitializePageState(PrimitiveColumnWriterState &state_p,
+	                                                      idx_t page_idx) override {
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
-
-		auto result = make_uniq<StandardWriterPageState<SRC, TGT, OP>>(state.total_value_count, state.total_string_size,
-		                                                               state.encoding, state.dictionary);
+		const auto &page_info = state_p.page_info[page_idx];
+		auto result = make_uniq<StandardWriterPageState<SRC, TGT, OP>>(
+		    page_info.row_count - page_info.empty_count, state.total_string_size, state.encoding, state.dictionary);
 		return std::move(result);
 	}
 

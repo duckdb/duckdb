@@ -83,7 +83,8 @@ void BooleanColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStat
 	}
 }
 
-unique_ptr<ColumnWriterPageState> BooleanColumnWriter::InitializePageState(PrimitiveColumnWriterState &state) {
+unique_ptr<ColumnWriterPageState> BooleanColumnWriter::InitializePageState(PrimitiveColumnWriterState &state,
+                                                                           idx_t page_idx) {
 	return make_uniq<BooleanWriterPageState>();
 }
 

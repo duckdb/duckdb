@@ -290,7 +290,6 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
-	void AllocateCompressed(idx_t size);
 	void PrepareRead(optional_ptr<const TableFilter> filter);
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
@@ -305,8 +304,6 @@ private:
 	idx_t chunk_read_offset;
 
 	shared_ptr<ResizeableBuffer> block;
-
-	ResizeableBuffer compressed_buffer;
 
 	ColumnEncoding encoding = ColumnEncoding::INVALID;
 	unique_ptr<RleBpDecoder> defined_decoder;
