@@ -831,8 +831,13 @@ def main():
         ),
         "duckdb_vector_assign_string_element_len": (
             "Cvoid",
-            ("duckdb_vector", "idx_t", "Ptr{UInt8}", "idx_t"), # Must be Ptr{UInt8} instead of Cstring to allow '\0' in the middle
-        )
+            (
+                "duckdb_vector",
+                "idx_t",
+                "Ptr{UInt8}",
+                "idx_t",
+            ),  # Must be Ptr{UInt8} instead of Cstring to allow '\0' in the middle
+        ),
     }
 
     with JuliaApiTarget(
