@@ -8,6 +8,7 @@ using Dates
 using Tables
 using UUIDs
 using FixedPointDecimals
+using JSON
 
 export DBInterface, DuckDBException
 
