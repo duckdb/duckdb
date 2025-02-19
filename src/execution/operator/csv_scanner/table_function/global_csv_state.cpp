@@ -9,10 +9,17 @@
 
 namespace duckdb {
 
-// shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
-// BaseUnionData &union_data) {
-//
-// }
+unique_ptr<CSVFileScan> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p, BaseUnionData &union_data_p, TableFunctionData &bind_data_p) {
+	auto &union_data = union_data_p.Cast<CSVUnionData>();
+	auto &gstate = gstate_p.Cast<CSVGlobalState>();
+	// union readers - use cached options
+	auto &csv_names = union_data.names;
+	auto &csv_types = union_data.types;
+	auto options = union_data.options;
+	options.auto_detect = false;
+	return make_uniq<CSVFileScan>(context, union_data.GetFileName(), std::move(options), csv_names, csv_types, gstate.file_schema,
+							   false, nullptr, false);
+}
 //
 // shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
 // const string &filename, 											   TableFunctionData &bind_data_p) { 	auto &gstate =
@@ -39,27 +46,30 @@ unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool sing
 
 	auto &file_name = bind_data.files[file_idx];
 	auto options = bind_data.options;
-	const_reference<vector<string>> csv_names = bind_data.csv_names;
-	const_reference<vector<LogicalType>> csv_types = bind_data.csv_types;
 	bool fixed_schema = false;
+	unique_ptr<CSVFileScan> csv_file_scan;
 	if (file_idx < bind_data.union_readers.size()) {
-		// union readers - use cached options
-		csv_names = bind_data.union_readers[file_idx]->names;
-		csv_types = bind_data.union_readers[file_idx]->types;
-		options = bind_data.union_readers[file_idx]->options;
-		options.auto_detect = false;
+		if (buffer_manager || single_threaded_scan) {
+			throw InternalException("buffer_manager / single threaded scan for union reader");
+		}
+		csv_file_scan = CSVMultiFileInfo::CreateReader(context, *this, *bind_data.union_readers[file_idx], bind_data);
 	} else if (file_idx < bind_data.column_info.size()) {
 		// Serialized union by name - sniff again
-		csv_names = bind_data.column_info[file_idx].names;
-		csv_types = bind_data.column_info[file_idx].types;
-		options.dialect_options.num_cols = csv_names.get().size();
+		auto &csv_names = bind_data.column_info[file_idx].names;
+		auto &csv_types = bind_data.column_info[file_idx].types;
+		options.dialect_options.num_cols = csv_names.size();
 		fixed_schema = true;
-	} else if (bind_data.files.size() == 1) {
-		options.auto_detect = false;
+		csv_file_scan =
+			make_uniq<CSVFileScan>(context, file_name, std::move(options), csv_names, csv_types, file_schema,
+								   single_threaded_scan, std::move(buffer_manager), fixed_schema);
+	} else {
+		if (bind_data.files.size() == 1) {
+			options.auto_detect = false;
+		}
+		csv_file_scan =
+			make_uniq<CSVFileScan>(context, file_name, std::move(options), bind_data.csv_names, bind_data.csv_types, file_schema,
+								   single_threaded_scan, std::move(buffer_manager), fixed_schema);
 	}
-	auto csv_file_scan =
-	    make_uniq<CSVFileScan>(context, file_name, std::move(options), csv_names, csv_types, column_ids, file_schema,
-	                           single_threaded_scan, std::move(buffer_manager), fixed_schema);
 	csv_file_scan->reader_data.file_list_idx = file_idx;
 
 	multi_file_reader->InitializeReader(*csv_file_scan, bind_data.options.file_options, bind_data.reader_bind,

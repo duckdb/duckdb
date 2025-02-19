@@ -7,9 +7,9 @@
 namespace duckdb {
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVReaderOptions options_p,
-                         const vector<string> &names, const vector<LogicalType> &types,
-                         const vector<ColumnIndex> &column_ids, CSVSchema &file_schema, bool per_file_single_threaded,
-                         shared_ptr<CSVBufferManager> buffer_manager_p, bool fixed_schema)
+                         const vector<string> &names, const vector<LogicalType> &types, CSVSchema &file_schema,
+                         bool per_file_single_threaded, shared_ptr<CSVBufferManager> buffer_manager_p,
+                         bool fixed_schema)
     : BaseFileReader(file_path_p), buffer_manager(std::move(buffer_manager_p)),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(std::move(options_p)) {

@@ -70,7 +70,7 @@ private:
 
 	bool finished = false;
 
-	const ReadCSVData &bind_data;
+	ReadCSVData &bind_data;
 
 	CSVSchema file_schema;
 
