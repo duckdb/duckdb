@@ -4573,7 +4573,7 @@ Assigns a string element in the vector at the specified location. You may also u
 # Arguments
 - `vector`: `duckdb_vector` The vector to alter
 - `index`: `idx_t` (1-based index) The row position in the vector to assign the string to
-- `str`: `Cstring` The string
+- `str`: `Ptr{UInt8}` The string
 - `str_len`: `idx_t` The length of the string (in bytes)
 
 Returns: `Nothing` 
@@ -4582,7 +4582,7 @@ function duckdb_vector_assign_string_element_len(vector, index, str, str_len)
     return ccall(
         (:duckdb_vector_assign_string_element_len, libduckdb),
         Cvoid,
-        (duckdb_vector, idx_t, Cstring, idx_t),
+        (duckdb_vector, idx_t, Ptr{UInt8}, idx_t),
         vector,
         index - 1,
         str,
