@@ -304,7 +304,7 @@ def transform_parameter(parameter) -> LogicalType:
 
 
 def transform_parameters(parameters) -> FunctionOverload:
-    parameters = parameters.split(', ')
+    parameters = parameters[1:-1].split(', ')
     return tuple(transform_parameter(param) for param in parameters)
 
 
