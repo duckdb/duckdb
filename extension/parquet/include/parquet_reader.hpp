@@ -12,7 +12,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/base_file_reader.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
@@ -102,59 +102,57 @@ struct ParquetOptions {
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 	bool debug_use_openssl = true;
 
-	MultiFileReaderOptions file_options;
 	vector<ParquetColumnDefinition> schema;
 	idx_t explicit_cardinality = 0;
+};
+
+struct ParquetOptionsSerialization {
+	ParquetOptionsSerialization() = default;
+	ParquetOptionsSerialization(ParquetOptions parquet_options_p, MultiFileReaderOptions file_options_p)
+	    : parquet_options(std::move(parquet_options_p)), file_options(std::move(file_options_p)) {
+	}
+
+	ParquetOptions parquet_options;
+	MultiFileReaderOptions file_options;
 
 public:
 	void Serialize(Serializer &serializer) const;
-	static ParquetOptions Deserialize(Deserializer &deserializer);
+	static ParquetOptionsSerialization Deserialize(Deserializer &deserializer);
 };
 
-struct ParquetUnionData {
-	~ParquetUnionData();
+struct ParquetUnionData : public BaseUnionData {
+	explicit ParquetUnionData(string file_name_p) : BaseUnionData(std::move(file_name_p)) {
+	}
+	~ParquetUnionData() override;
 
-	string file_name;
 	vector<string> names;
 	vector<LogicalType> types;
 	ParquetOptions options;
 	shared_ptr<ParquetFileMetadataCache> metadata;
-	unique_ptr<ParquetReader> reader;
-
-	const string &GetFileName() {
-		return file_name;
-	}
 };
 
-class ParquetReader {
+class ParquetReader : public BaseFileReader {
 public:
 	using UNION_READER_DATA = unique_ptr<ParquetUnionData>;
 
 public:
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
-	~ParquetReader();
+	~ParquetReader() override;
 
 	FileSystem &fs;
 	Allocator &allocator;
-	string file_name;
-	vector<MultiFileReaderColumnDefinition> columns;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
-	MultiFileReaderData reader_data;
 	unique_ptr<ParquetColumnSchema> root_schema;
 	shared_ptr<EncryptionUtil> encryption_util;
-
-	//! Table column names - set when using COPY tbl FROM file.parquet
-	vector<string> table_columns;
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
 	void Scan(ParquetReaderScanState &state, DataChunk &output);
 
 	static unique_ptr<ParquetUnionData> StoreUnionReader(unique_ptr<ParquetReader> reader_p, idx_t file_idx) {
-		auto result = make_uniq<ParquetUnionData>();
-		result->file_name = reader_p->file_name;
+		auto result = make_uniq<ParquetUnionData>(reader_p->file_name);
 		if (file_idx == 0) {
 			for (auto &column : reader_p->columns) {
 				result->names.push_back(column.name);
@@ -189,14 +187,6 @@ public:
 
 	FileHandle &GetHandle() {
 		return *file_handle;
-	}
-
-	const string &GetFileName() {
-		return file_name;
-	}
-
-	const vector<MultiFileReaderColumnDefinition> &GetColumns() {
-		return columns;
 	}
 
 	static unique_ptr<BaseStatistics> ReadStatistics(ClientContext &context, ParquetOptions parquet_options,
