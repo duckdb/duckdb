@@ -7,6 +7,7 @@ from typing import Set, Tuple, cast
 import pathlib
 from typing import NamedTuple
 from typing import List, Dict
+import json
 
 os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -287,9 +288,9 @@ def get_extension_names() -> List[str]:
 def get_query(sql_query, load_query) -> list:
     # Optionally perform a LOAD of an extension
     # Then perform a SQL query, fetch the output
-    query = f'{DUCKDB_PATH} -csv -unsigned -separator "{{" -c "{load_query}{sql_query}" '
+    query = f'{DUCKDB_PATH} -json -unsigned -c "{load_query}{sql_query}" '
     query_result = os.popen(query).read()
-    result = query_result.split("\n")[1:-1]
+    result = [x for x in query_result[1:-2].split("\n") if x != '']
     return result
 
 
@@ -303,7 +304,7 @@ def transform_parameter(parameter) -> LogicalType:
 
 
 def transform_parameters(parameters) -> FunctionOverload:
-    parameters = parameters[1 : len(parameters) - 1].split(', ')
+    parameters = parameters.split(', ')
     return tuple(transform_parameter(param) for param in parameters)
 
 
@@ -312,7 +313,7 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
         select distinct
             function_name,
             function_type,
-            list_reduce(parameter_types, (x, y) -> x || ', ' || y),
+            parameter_types,
             return_type
         from duckdb_functions()
         ORDER BY function_name, function_type;
@@ -323,8 +324,14 @@ def get_functions(load="") -> (Set[Function], Dict[Function, List[FunctionOverlo
     functions = set()
     function_overloads = {}
     for x in results:
-        function_name, function_type, parameters, return_type = [y.lower() for y in x.split('{')]
-        function_parameters = transform_parameters(parameters)
+        print(x)
+        if x[-1] == ',':
+            # Remove the trailing comma
+            x = x[:-1]
+        function_name, function_type, parameter_types, return_type = [
+            x.lower() if x else "null" for x in json.loads(x).values()
+        ]
+        function_parameters = transform_parameters(parameter_types)
         function_return = transform_parameter(return_type)
         function = Function(function_name, catalog_type_from_string(function_type))
         function_overload = FunctionOverload(
@@ -345,7 +352,15 @@ def get_settings(load="") -> Set[str]:
             name
         from duckdb_settings();
     """
-    return set(get_query(GET_SETTINGS_QUERY, load))
+    settings = set(get_query(GET_SETTINGS_QUERY, load))
+    res = set()
+    for x in settings:
+        if x[-1] == ',':
+            # Remove the trailing comma
+            x = x[:-1]
+        name = json.loads(x)['name']
+        res.add(name)
+    return res
 
 
 class ExtensionData:
@@ -592,10 +607,10 @@ struct ExtensionFunctionEntry {
 };
 
 struct ExtensionFunctionOverloadEntry {
-	char name[48];
-	char extension[48];
-	CatalogType type;
-	char signature[96];
+    char name[48];
+    char extension[48];
+    CatalogType type;
+    char signature[96];
 };
 """
 
