@@ -66,6 +66,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/multi_file_list.hpp"
+#include "duckdb/common/multi_file_reader_function.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
@@ -2416,6 +2417,26 @@ const char* EnumUtil::ToChars<MetricsType>(MetricsType value) {
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 49, "MetricsType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetMultiFileFileStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MultiFileFileState::UNOPENED), "UNOPENED" },
+		{ static_cast<uint32_t>(MultiFileFileState::OPENING), "OPENING" },
+		{ static_cast<uint32_t>(MultiFileFileState::OPEN), "OPEN" },
+		{ static_cast<uint32_t>(MultiFileFileState::CLOSED), "CLOSED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value) {
+	return StringUtil::EnumToString(GetMultiFileFileStateValues(), 4, "MultiFileFileState", static_cast<uint32_t>(value));
+}
+
+template<>
+MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value) {
+	return static_cast<MultiFileFileState>(StringUtil::StringToEnum(GetMultiFileFileStateValues(), 4, "MultiFileFileState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileReaderColumnMappingModeValues() {
