@@ -5,6 +5,7 @@
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/common/multi_file_reader_function.hpp"
 #include <sstream>
 
 namespace duckdb {
@@ -147,8 +148,8 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 }
 
 void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const idx_t file_idx, const idx_t scan_idx,
-                                       const CSVFileScan &file, CSVRejectsTable &rejects, const ReadCSVData &bind_data,
-                                       const idx_t limit) {
+                                       const CSVFileScan &file, CSVRejectsTable &rejects,
+                                       const MultiFileBindData &bind_data, const idx_t limit) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	// We first insert the file into the file scans table
 	for (auto &error : file.error_handler->errors) {
@@ -194,15 +195,15 @@ void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const 
 				errors_appender.Append(Value());
 				break;
 			case CSVErrorType::TOO_FEW_COLUMNS:
-				if (col_idx + 1 < bind_data.return_names.size()) {
-					errors_appender.Append(string_t(bind_data.return_names[col_idx + 1]));
+				if (col_idx + 1 < bind_data.names.size()) {
+					errors_appender.Append(string_t(bind_data.names[col_idx + 1]));
 				} else {
 					errors_appender.Append(Value());
 				}
 				break;
 			default:
-				if (col_idx < bind_data.return_names.size()) {
-					errors_appender.Append(string_t(bind_data.return_names[col_idx]));
+				if (col_idx < bind_data.names.size()) {
+					errors_appender.Append(string_t(bind_data.names[col_idx]));
 				} else {
 					errors_appender.Append(Value());
 				}

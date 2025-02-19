@@ -28,9 +28,9 @@ struct CSVMultiFileInfo {
 	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState();
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
 	// FIXME this needs to be a shared_ptr
-	static unique_ptr<CSVFileScan> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	static shared_ptr<CSVFileScan> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                            BaseUnionData &union_data, TableFunctionData &bind_data_p);
-	static unique_ptr<CSVFileScan> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	static shared_ptr<CSVFileScan> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                            const string &filename, TableFunctionData &bind_data);
 	static void FinalizeReader(ClientContext &context, BaseFileReader &reader);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,

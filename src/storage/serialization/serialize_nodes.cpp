@@ -30,7 +30,6 @@
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
-#include "duckdb/function/table/read_csv.hpp"
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
@@ -359,18 +358,6 @@ ColumnIndex ColumnIndex::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
-void ColumnInfo::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<vector<string>>(100, "names", names);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(101, "types", types);
-}
-
-ColumnInfo ColumnInfo::Deserialize(Deserializer &deserializer) {
-	ColumnInfo result;
-	deserializer.ReadPropertyWithDefault<vector<string>>(100, "names", result.names);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(101, "types", result.types);
-	return result;
-}
-
 void ColumnList::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<ColumnDefinition>>(100, "columns", columns);
 }
@@ -562,32 +549,6 @@ QualifiedColumnName QualifiedColumnName::Deserialize(Deserializer &deserializer)
 	deserializer.ReadPropertyWithDefault<string>(101, "schema", result.schema);
 	deserializer.ReadPropertyWithDefault<string>(102, "table", result.table);
 	deserializer.ReadPropertyWithDefault<string>(103, "column", result.column);
-	return result;
-}
-
-void ReadCSVData::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<vector<string>>(100, "files", files);
-	/* [Deleted] (vector<LogicalType>) "csv_types" */
-	/* [Deleted] (vector<string>) "csv_names" */
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(103, "return_types", return_types);
-	serializer.WritePropertyWithDefault<vector<string>>(104, "return_names", return_names);
-	serializer.WritePropertyWithDefault<idx_t>(105, "filename_col_idx", filename_col_idx);
-	serializer.WriteProperty<CSVReaderOptions>(106, "options", options);
-	serializer.WriteProperty<MultiFileReaderBindData>(107, "reader_bind", reader_bind);
-	serializer.WritePropertyWithDefault<vector<ColumnInfo>>(108, "column_info", column_info);
-}
-
-unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
-	auto result = duckdb::unique_ptr<ReadCSVData>(new ReadCSVData());
-	deserializer.ReadPropertyWithDefault<vector<string>>(100, "files", result->files);
-	deserializer.ReadDeletedProperty<vector<LogicalType>>(101, "csv_types");
-	deserializer.ReadDeletedProperty<vector<string>>(102, "csv_names");
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(103, "return_types", result->return_types);
-	deserializer.ReadPropertyWithDefault<vector<string>>(104, "return_names", result->return_names);
-	deserializer.ReadPropertyWithDefault<idx_t>(105, "filename_col_idx", result->filename_col_idx);
-	deserializer.ReadProperty<CSVReaderOptions>(106, "options", result->options);
-	deserializer.ReadProperty<MultiFileReaderBindData>(107, "reader_bind", result->reader_bind);
-	deserializer.ReadPropertyWithDefault<vector<ColumnInfo>>(108, "column_info", result->column_info);
 	return result;
 }
 

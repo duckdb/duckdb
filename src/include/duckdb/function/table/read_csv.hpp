@@ -81,28 +81,12 @@ struct ReadCSVData : public BaseCSVData {
 	ReadCSVData();
 	//! If the sql types from the file were manually set
 	vector<bool> manually_set;
-	//! The expected SQL types to be returned from the read - including added constants (e.g. filename, hive partitions)
-	vector<LogicalType> return_types;
-	//! The expected SQL names to be returned from the read - including added constants (e.g. filename, hive partitions)
-	vector<string> return_names;
 	//! The buffer manager (if any): this is used when automatic detection is used during binding.
 	//! In this case, some CSV buffers have already been read and can be reused.
 	shared_ptr<CSVBufferManager> buffer_manager;
-	unique_ptr<BaseFileReader> initial_reader;
-	//! The union readers are created (when csv union_by_name option is on) during binding
-	//! Those readers can be re-used during ReadCSVFunction
-	vector<unique_ptr<CSVUnionData>> union_readers;
-	//! Reader bind data
-	MultiFileReaderBindData reader_bind;
-
+	//! Column info (used for union reader serialization)
 	vector<ColumnInfo> column_info;
 
-	void Initialize(unique_ptr<BaseFileReader> &reader) {
-		this->initial_reader = std::move(reader);
-	}
-	void Initialize(ClientContext &, unique_ptr<CSVUnionData> &data) {
-		this->initial_reader = std::move(data->reader);
-	}
 	void FinalizeRead(ClientContext &context);
 
 	void Serialize(Serializer &serializer) const;

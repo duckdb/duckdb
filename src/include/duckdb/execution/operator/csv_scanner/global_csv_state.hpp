@@ -18,6 +18,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
 
 namespace duckdb {
+struct MultiFileBindData;
 
 //! CSV Global State is used in the CSV Reader Table Function, it controls what each thread
 struct CSVGlobalState : public GlobalTableFunctionState {
@@ -26,7 +27,7 @@ struct CSVGlobalState : public GlobalTableFunctionState {
 public:
 	CSVGlobalState(ClientContext &context, const shared_ptr<CSVBufferManager> &buffer_manager_p,
 	               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
-	               vector<ColumnIndex> column_ids_p, ReadCSVData &bind_data);
+	               vector<ColumnIndex> column_ids_p, MultiFileBindData &bind_data);
 
 	~CSVGlobalState() override {
 	}
@@ -70,7 +71,7 @@ private:
 
 	bool finished = false;
 
-	ReadCSVData &bind_data;
+	MultiFileBindData &bind_data;
 
 	CSVSchema file_schema;
 
@@ -88,7 +89,7 @@ private:
 	CSVValidator validator;
 
 private:
-	unique_ptr<CSVFileScan> CreateFileScan(idx_t file_idx, shared_ptr<CSVBufferManager> buffer_manager = nullptr);
+	shared_ptr<CSVFileScan> CreateFileScan(idx_t file_idx, shared_ptr<CSVBufferManager> buffer_manager = nullptr);
 };
 
 } // namespace duckdb

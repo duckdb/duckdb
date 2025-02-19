@@ -14,6 +14,8 @@
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/function/table/read_csv.hpp"
+#include "duckdb/common/multi_file_reader_function.hpp"
+
 namespace duckdb {
 
 void ReadCSVRelation::InitializeAlias(const vector<string> &input) {
@@ -50,15 +52,11 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
 		SimpleMultiFileList multi_file_list(files);
 		vector<LogicalType> types;
 		vector<string> names;
-		auto result = make_uniq<ReadCSVData>();
+		auto result = make_uniq<MultiFileBindData>();
+		auto csv_data = make_uniq<ReadCSVData>();
 
 		multi_file_reader->BindUnionReader<CSVFileScan>(*context, types, names, multi_file_list, *result, csv_options,
 		                                                csv_options.file_options);
-		if (result->union_readers.size() > 1) {
-			for (idx_t i = 0; i < result->union_readers.size(); i++) {
-				result->column_info.emplace_back(result->union_readers[i]->names, result->union_readers[i]->types);
-			}
-		}
 		if (!csv_options.sql_types_per_column.empty()) {
 			const auto exception = CSVError::ColumnTypesError(csv_options.sql_types_per_column, names);
 			if (!exception.error_message.empty()) {

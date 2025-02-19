@@ -17,6 +17,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/multi_file_reader_function.hpp"
 
 #include <limits>
 
@@ -229,14 +230,15 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
                                             vector<LogicalType> &expected_types) {
-	auto bind_data = make_uniq<ReadCSVData>();
-	bind_data->return_types = expected_types;
-	bind_data->return_names = expected_names;
+	auto bind_data = make_uniq<MultiFileBindData>();
+	auto csv_data = make_uniq<ReadCSVData>();
+	bind_data->types = expected_types;
+	bind_data->names = expected_names;
 
 	auto multi_file_reader = MultiFileReader::CreateDefault("CSVCopy");
-	bind_data->files = multi_file_reader->CreateFileList(context, Value(info.file_path))->GetAllFiles();
+	csv_data->files = multi_file_reader->CreateFileList(context, Value(info.file_path))->GetAllFiles();
 
-	auto &options = bind_data->options;
+	auto &options = csv_data->options;
 
 	// check all the options in the copy info
 	for (auto &option : info.options) {
@@ -255,7 +257,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	for (auto &option : info.options) {
 		options_map[option.first] = ConvertVectorToValue(std::move(option.second));
 	}
-	options.file_path = bind_data->files[0];
+	options.file_path = csv_data->files[0];
 	options.name_list = expected_names;
 	options.sql_type_list = expected_types;
 	options.columns_set = true;
@@ -264,12 +266,13 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	}
 
 	if (options.auto_detect) {
-		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, bind_data->files[0], 0);
+		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, csv_data->files[0], 0);
 		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context));
 		sniffer.SniffCSV();
 	}
-	bind_data->FinalizeRead(context);
+	csv_data->FinalizeRead(context);
 
+	bind_data->bind_data = std::move(csv_data);
 	return std::move(bind_data);
 }
 

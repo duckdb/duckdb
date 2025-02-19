@@ -27,6 +27,7 @@
 
 #include <limits>
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
+#include "duckdb/common/multi_file_reader_function.hpp"
 
 namespace duckdb {
 
@@ -134,9 +135,9 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
                                             vector<LogicalType> &return_types, vector<string> &names) {
-
-	auto result = make_uniq<ReadCSVData>();
-	auto &options = result->options;
+	auto result = make_uniq<MultiFileBindData>();
+	auto csv_data = make_uniq<ReadCSVData>();
+	auto &options = csv_data->options;
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	const auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 	if (multi_file_list->GetTotalFileCount() > 1) {
@@ -148,7 +149,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	options.Verify();
 	if (!options.file_options.union_by_name) {
 		if (options.auto_detect) {
-			SchemaDiscovery(context, *result, options, return_types, names, *multi_file_list);
+			SchemaDiscovery(context, *csv_data, options, return_types, names, *multi_file_list);
 		} else {
 			// If we are not running the sniffer, the columns must be set!
 			if (!options.columns_set) {
@@ -160,7 +161,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 			return_types = options.sql_type_list;
 		}
 		D_ASSERT(return_types.size() == names.size());
-		result->options.dialect_options.num_cols = names.size();
+		csv_data->options.dialect_options.num_cols = names.size();
 
 		multi_file_reader->BindOptions(options.file_options, *multi_file_list, return_types, names,
 		                               result->reader_bind);
@@ -169,7 +170,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		    context, return_types, names, *multi_file_list, *result, options, options.file_options);
 		if (result->union_readers.size() > 1) {
 			for (idx_t i = 0; i < result->union_readers.size(); i++) {
-				result->column_info.emplace_back(result->union_readers[i]->names, result->union_readers[i]->types);
+				auto &csv_union_data = result->union_readers[i]->Cast<CSVUnionData>();
+				csv_data->column_info.emplace_back(csv_union_data.names, csv_union_data.types);
 			}
 		}
 		if (!options.sql_types_per_column.empty()) {
@@ -184,10 +186,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 				}
 			}
 		}
+		result->initial_reader.reset();
 	}
 
-	result->return_types = return_types;
-	result->return_names = names;
+	result->types = return_types;
+	result->names = names;
 	if (!options.force_not_null_names.empty()) {
 		// Let's first check all column names match
 		duckdb::unordered_set<string> column_names;
@@ -211,8 +214,9 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	}
 
 	// TODO: make the CSV reader use MultiFileList throughout, instead of converting to vector<string>
-	result->files = multi_file_list->GetAllFiles();
-	result->Finalize();
+	csv_data->files = multi_file_list->GetAllFiles();
+	csv_data->Finalize();
+	result->bind_data = std::move(csv_data);
 	return std::move(result);
 }
 
@@ -233,20 +237,21 @@ public:
 // Read CSV Functions
 //===--------------------------------------------------------------------===//
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = input.bind_data->CastNoConst<ReadCSVData>();
+	auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
+	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 
 	// Create the temporary rejects table
-	if (bind_data.options.store_rejects.GetValue()) {
-		CSVRejectsTable::GetOrCreate(context, bind_data.options.rejects_scan_name.GetValue(),
-		                             bind_data.options.rejects_table_name.GetValue())
-		    ->InitializeTable(context, bind_data);
+	if (csv_data.options.store_rejects.GetValue()) {
+		CSVRejectsTable::GetOrCreate(context, csv_data.options.rejects_scan_name.GetValue(),
+		                             csv_data.options.rejects_table_name.GetValue())
+		    ->InitializeTable(context, csv_data);
 	}
-	if (bind_data.files.empty()) {
+	if (csv_data.files.empty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
 		return nullptr;
 	}
-	return make_uniq<CSVGlobalState>(context, bind_data.buffer_manager, bind_data.options,
-	                                 context.db->NumberOfThreads(), bind_data.files, input.column_indexes, bind_data);
+	return make_uniq<CSVGlobalState>(context, csv_data.buffer_manager, csv_data.options, context.db->NumberOfThreads(),
+	                                 csv_data.files, input.column_indexes, bind_data);
 }
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
@@ -267,7 +272,7 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 }
 
 static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = data_p.bind_data->Cast<ReadCSVData>();
+	auto &bind_data = data_p.bind_data->Cast<MultiFileBindData>();
 	if (!data_p.global_state) {
 		return;
 	}
@@ -355,62 +360,60 @@ double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p
 	if (!global_state) {
 		return 0;
 	}
-	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
+	auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
+	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 	auto &data = global_state->Cast<CSVGlobalState>();
-	return data.GetProgress(bind_data);
+	return data.GetProgress(csv_data);
 }
 
 void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
                               vector<unique_ptr<Expression>> &filters) {
-	auto &data = bind_data_p->Cast<ReadCSVData>();
-	SimpleMultiFileList file_list(data.files);
+	auto &data = bind_data_p->Cast<MultiFileBindData>();
+	auto &csv_data = data.bind_data->Cast<ReadCSVData>();
+	SimpleMultiFileList file_list(csv_data.files);
 	MultiFilePushdownInfo info(get);
 	auto filtered_list =
-	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, info, filters);
+	    MultiFileReader().ComplexFilterPushdown(context, file_list, csv_data.options.file_options, info, filters);
 	if (filtered_list) {
-		data.files = filtered_list->GetAllFiles();
-		SimpleMultiFileList simple_filtered_list(data.files);
+		csv_data.files = filtered_list->GetAllFiles();
+		SimpleMultiFileList simple_filtered_list(csv_data.files);
 		MultiFileReader::PruneReaders(data, simple_filtered_list);
 	} else {
-		data.files = file_list.GetAllFiles();
+		csv_data.files = file_list.GetAllFiles();
 	}
 }
 
 unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const FunctionData *bind_data_p) {
-	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
+	auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
+	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 	// determined through the scientific method as the average amount of rows in a CSV file
 	idx_t per_file_cardinality = 42;
-	if (bind_data.buffer_manager && bind_data.buffer_manager->file_handle) {
-		auto estimated_row_width = (bind_data.return_types.size() * 5);
-		per_file_cardinality = bind_data.buffer_manager->file_handle->FileSize() / estimated_row_width;
+	if (csv_data.buffer_manager && csv_data.buffer_manager->file_handle) {
+		auto estimated_row_width = (bind_data.types.size() * 5);
+		per_file_cardinality = csv_data.buffer_manager->file_handle->FileSize() / estimated_row_width;
 	}
-	return make_uniq<NodeStatistics>(bind_data.files.size() * per_file_cardinality);
+	return make_uniq<NodeStatistics>(csv_data.files.size() * per_file_cardinality);
 }
 
 static void CSVReaderSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                const TableFunction &function) {
-	auto &bind_data = bind_data_p->Cast<ReadCSVData>();
-	serializer.WriteProperty(100, "extra_info", function.extra_info);
-	serializer.WriteProperty(101, "csv_data", &bind_data);
+	throw NotImplementedException("CSVReaderSerialize not implemented");
 }
 
 static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer, TableFunction &function) {
-	unique_ptr<ReadCSVData> result;
-	deserializer.ReadProperty(100, "extra_info", function.extra_info);
-	deserializer.ReadProperty(101, "csv_data", result);
-	return std::move(result);
+	throw NotImplementedException("CSVReaderDeserialize not implemented");
 }
 
 void PushdownTypeToCSVScanner(ClientContext &context, optional_ptr<FunctionData> bind_data,
                               const unordered_map<idx_t, LogicalType> &new_column_types) {
-	auto &csv_bind = bind_data->Cast<ReadCSVData>();
+	auto &csv_bind = bind_data->Cast<MultiFileBindData>();
 	for (auto &type : new_column_types) {
-		csv_bind.return_types[type.first] = type.second;
+		csv_bind.types[type.first] = type.second;
 	}
 }
 
 virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
-	auto &csv_bind = bind_data->Cast<ReadCSVData>();
+	auto &csv_bind = bind_data->Cast<MultiFileBindData>();
 	virtual_column_map_t result;
 	MultiFileReader::GetVirtualColumns(context, csv_bind.reader_bind, result);
 	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
