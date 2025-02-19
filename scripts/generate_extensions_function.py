@@ -88,6 +88,46 @@ def catalog_type_from_string(catalog_type: str) -> CatalogType:
     return TYPE_MAP[catalog_type]
 
 
+def parse_records(text):
+    records = []  # Will hold all parsed records
+    current_record = []  # Holds items for the current record
+    current_item = []  # Accumulates characters for the current item
+    in_quote = False  # True if we're inside a double-quoted string
+    inside_braces = False  # True if we're inside a { ... } block
+
+    for char in text:
+        if char == '"':
+            # Toggle the quote state and always include the quote.
+            in_quote = not in_quote
+        elif char == '{' and not in_quote:
+            # Start of a new record.
+            inside_braces = True
+            # Reset any previous record state.
+            current_record = []
+            current_item = []
+        elif char == '}' and not in_quote and inside_braces:
+            # End of the current record.
+            token = ''.join(current_item).strip()
+            if token:
+                current_record.append(token)
+            records.append(current_record)
+            # Reset state for subsequent records.
+            current_record = []
+            current_item = []
+            inside_braces = False
+        elif char == ',' and not in_quote and inside_braces:
+            # A comma outside quotes indicates the end of the current item.
+            token = ''.join(current_item).strip()
+            if token:
+                current_record.append(token)
+            current_item = []
+        else:
+            # Otherwise, just add the character if we're inside braces.
+            if inside_braces:
+                current_item.append(char)
+    return records
+
+
 class LogicalType(NamedTuple):
     type: str
 
@@ -120,7 +160,7 @@ class ExtensionFunctionOverload(NamedTuple):
             signature = x[3]
             splits = signature.split('>')
             return_type = LogicalType(splits[1])
-            parameters = [LogicalType(param) for param in splits[0].split(',')]
+            parameters = [LogicalType(param) for param in splits[0][1:-1].split(',')]
             extension_function = ExtensionFunctionOverload(x[1], function.name, function.type, parameters, return_type)
             if function not in output:
                 output[function] = []
@@ -187,49 +227,36 @@ class ParsedEntries:
         self.types = {}
         self.copy_functions = {}
 
-        def parse_contents(input) -> list:
-            # Split the string by comma and remove any leading or trailing spaces
-            elements = input.split(", ")
-            # Strip any leading or trailing spaces and surrounding double quotes from each element
-            elements = [element.strip().strip('"') for element in elements]
-            return elements
-
         file = open(file_path, 'r')
-        pattern = re.compile("{(.*(?:, )?)}[,}\n]")
         file_blob = file.read()
 
         # Get the extension functions
         ext_functions_file_blob = get_slice_of_file("EXTENSION_FUNCTIONS", file_blob)
-        res = pattern.findall(ext_functions_file_blob)
-        res = [parse_contents(x) for x in res]
+        res = parse_records(ext_functions_file_blob)
         res = [(x[0], x[1], x[2]) for x in res]
         self.functions = ExtensionFunction.create_map(res)
 
         # Get the extension function overloads
         ext_function_overloads_file_blob = get_slice_of_file("EXTENSION_FUNCTION_OVERLOADS", file_blob)
-        res = pattern.findall(ext_function_overloads_file_blob)
-        res = [parse_contents(x) for x in res]
+        res = parse_records(ext_function_overloads_file_blob)
         res = [(x[0], x[1], x[2], x[3]) for x in res]
         self.function_overloads = ExtensionFunctionOverload.create_map(res)
 
         # Get the extension settings
         ext_settings_file_blob = get_slice_of_file("EXTENSION_SETTINGS", file_blob)
-        res = pattern.findall(ext_settings_file_blob)
-        res = [parse_contents(x) for x in res]
+        res = parse_records(ext_settings_file_blob)
         res = [(x[0], x[1]) for x in res]
         self.settings = ExtensionSetting.create_map(res)
 
         # Get the extension types
         ext_copy_functions_blob = get_slice_of_file("EXTENSION_COPY_FUNCTIONS", file_blob)
-        res = pattern.findall(ext_copy_functions_blob)
-        res = [parse_contents(x) for x in res]
+        res = parse_records(ext_copy_functions_blob)
         res = [(x[0], x[1]) for x in res]
         self.copy_functions = ExtensionCopyFunction.create_map(res)
 
         # Get the extension types
         ext_types_file_blob = get_slice_of_file("EXTENSION_TYPES", file_blob)
-        res = pattern.findall(ext_types_file_blob)
-        res = [parse_contents(x) for x in res]
+        res = parse_records(ext_types_file_blob)
         res = [(x[0], x[1]) for x in res]
         self.types = ExtensionType.create_map(res)
 
@@ -519,7 +546,7 @@ static constexpr ExtensionFunctionOverloadEntry EXTENSION_FUNCTION_OVERLOADS[] =
                 result += "\t{"
                 result += f'"{overload.name}", "{overload.extension}", {overload.type.value}, "'
                 signature = "["
-                signature += ", ".join([parameter.type for parameter in overload.parameters])
+                signature += ",".join([parameter.type for parameter in overload.parameters])
                 signature += "]>" + overload.return_type.type
                 result += signature
                 result += '"},\n'
@@ -778,13 +805,13 @@ def main():
     parsed_entries = ParsedEntries(HEADER_PATH)
     parsed_entries.filter_entries(extension_names)
 
+    # Add the entries we parsed from the HEADER_PATH
+    extension_data.add_entries(parsed_entries)
+
     for extension_name in extension_names:
         print(extension_name)
         # For every extension, add the functions/settings added by the extension
         extension_data.add_extension(extension_name)
-
-    # Add the entries we initially parsed from the HEADER_PATH
-    extension_data.add_entries(parsed_entries)
 
     # Add hardcoded extension entries (
     for key, value in HARDCODED_EXTENSION_FUNCTIONS.items():
