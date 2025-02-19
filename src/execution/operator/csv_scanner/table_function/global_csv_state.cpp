@@ -8,9 +8,22 @@
 
 namespace duckdb {
 
-unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool single_threaded_scan, shared_ptr<CSVBufferManager> buffer_manager) {
-	return make_uniq<CSVFileScan>(context, bind_data.files[file_idx], bind_data.options, file_idx, bind_data,
-												   column_ids, file_schema, single_threaded_scan, std::move(buffer_manager));
+unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool single_threaded_scan,
+                                                       shared_ptr<CSVBufferManager> buffer_manager) {
+	auto multi_file_reader = MultiFileReader::CreateDefault("CSV Scan");
+
+	auto global_columns =
+	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.return_names, bind_data.return_types);
+
+	auto &file_name = bind_data.files[file_idx];
+	auto csv_file_scan = make_uniq<CSVFileScan>(context, file_name, bind_data.options, file_idx, bind_data, column_ids,
+	                                            file_schema, single_threaded_scan, std::move(buffer_manager));
+
+	multi_file_reader->InitializeReader(*csv_file_scan, bind_data.options.file_options, bind_data.reader_bind,
+	                                    global_columns, column_ids, nullptr, file_name, context, nullptr);
+	csv_file_scan->InitializeFileNamesTypes();
+	csv_file_scan->SetStart();
+	return csv_file_scan;
 }
 
 CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBufferManager> &buffer_manager,

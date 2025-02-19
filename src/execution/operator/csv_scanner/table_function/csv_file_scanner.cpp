@@ -12,11 +12,6 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
                          shared_ptr<CSVBufferManager> buffer_manager_p)
     : BaseFileReader(file_path_p), file_idx(file_idx_p), buffer_manager(std::move(buffer_manager_p)),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
-	auto multi_file_reader = MultiFileReader::CreateDefault("CSV Scan");
-
-	auto global_columns =
-	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.return_names, bind_data.return_types);
-
 	if (file_idx == 0 && bind_data.initial_reader) {
 		throw InternalException("FIXME: this should have been handled before");
 	}
@@ -50,11 +45,6 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		}
 		state_machine = make_shared_ptr<CSVStateMachine>(
 		    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
-
-		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, global_columns,
-		                                    column_ids, nullptr, file_name, context, nullptr);
-		InitializeFileNamesTypes();
-		SetStart();
 		return;
 	}
 	// Sniff it!
@@ -80,10 +70,6 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	}
 	state_machine = make_shared_ptr<CSVStateMachine>(
 	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
-	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, global_columns, column_ids,
-	                                    nullptr, file_name, context, nullptr);
-	InitializeFileNamesTypes();
-	SetStart();
 }
 
 CSVUnionData::~CSVUnionData() {
