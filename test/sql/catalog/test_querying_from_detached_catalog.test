@@ -45,6 +45,10 @@ FROM db2.main.tbl;
 1	2
 3	4
 
+# creating a new table in db2 works
+statement ok con1
+CREATE TABLE db2.tbl2 AS SELECT 42;
+
 # error message should say that the table does not exist
 statement error con1
 FROM db2.non_existent_table;
