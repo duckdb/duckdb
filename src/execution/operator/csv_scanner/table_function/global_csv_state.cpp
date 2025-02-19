@@ -8,6 +8,11 @@
 
 namespace duckdb {
 
+unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool single_threaded_scan, shared_ptr<CSVBufferManager> buffer_manager) {
+	return make_uniq<CSVFileScan>(context, bind_data.files[file_idx], bind_data.options, file_idx, bind_data,
+												   column_ids, file_schema, single_threaded_scan, std::move(buffer_manager));
+}
+
 CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBufferManager> &buffer_manager,
                                const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
                                vector<ColumnIndex> column_ids_p, ReadCSVData &bind_data_p)
@@ -19,19 +24,16 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 		initial_reader = unique_ptr_cast<BaseFileReader, CSVFileScan>(std::move(bind_data_p.initial_reader));
 	} else if (buffer_manager && buffer_manager->GetFilePath() == files[0]) {
 		// If we already have a buffer manager, we don't need to reconstruct it to the first file
-		initial_reader = make_uniq<CSVFileScan>(context, files[0], options, 0U, bind_data, column_ids, file_schema,
-		                                        false, buffer_manager);
+		initial_reader = CreateFileScan(0, false, buffer_manager);
 	} else {
 		// If not we need to construct it for the first file
-		initial_reader =
-		    make_uniq<CSVFileScan>(context, files[0], options, 0U, bind_data, column_ids, file_schema, false);
+		initial_reader = CreateFileScan(0, false);
 	}
 	file_scans.emplace_back(std::move(initial_reader));
 	idx_t cur_file_idx = 0;
 	while (file_scans.back()->start_iterator.done && file_scans.size() < files.size()) {
 		cur_file_idx++;
-		file_scans.emplace_back(make_uniq<CSVFileScan>(context, files[cur_file_idx], options, cur_file_idx, bind_data,
-		                                               column_ids, file_schema, false));
+		file_scans.emplace_back(CreateFileScan(cur_file_idx, false));
 	}
 	// There are situations where we only support single threaded scanning
 	bool many_csv_files = files.size() > 1 && files.size() > system_threads * 2;
@@ -117,8 +119,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 					                                     current_file, false, current_boundary);
 				}
 			}
-			auto file_scan = make_shared_ptr<CSVFileScan>(context, bind_data.files[cur_idx], bind_data.options, cur_idx,
-			                                              bind_data, column_ids, file_schema, true);
+			auto file_scan = CreateFileScan(cur_idx, true);
 			empty_file = file_scan->file_size == 0;
 
 			if (!empty_file) {
@@ -166,9 +167,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			auto current_file_idx = file_scans.back()->file_idx + 1;
 			if (current_file_idx < bind_data.files.size()) {
 				// If we have a next file we have to construct the file scan for that
-				file_scans.emplace_back(make_shared_ptr<CSVFileScan>(context, bind_data.files[current_file_idx],
-				                                                     bind_data.options, current_file_idx, bind_data,
-				                                                     column_ids, file_schema, false));
+				file_scans.emplace_back(CreateFileScan(current_file_idx, false));
 				// And re-start the boundary-iterator
 				current_boundary = file_scans.back()->start_iterator;
 				current_boundary.SetCurrentBoundaryToPosition(single_threaded, bind_data.options);
