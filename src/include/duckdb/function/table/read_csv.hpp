@@ -92,7 +92,7 @@ struct ReadCSVData : public BaseCSVData {
 	//! The buffer manager (if any): this is used when automatic detection is used during binding.
 	//! In this case, some CSV buffers have already been read and can be reused.
 	shared_ptr<CSVBufferManager> buffer_manager;
-	unique_ptr<CSVFileScan> initial_reader;
+	unique_ptr<BaseFileReader> initial_reader;
 	//! The union readers are created (when csv union_by_name option is on) during binding
 	//! Those readers can be re-used during ReadCSVFunction
 	vector<unique_ptr<CSVUnionData>> union_readers;
@@ -101,7 +101,7 @@ struct ReadCSVData : public BaseCSVData {
 
 	vector<ColumnInfo> column_info;
 
-	void Initialize(unique_ptr<CSVFileScan> &reader) {
+	void Initialize(unique_ptr<BaseFileReader> &reader) {
 		this->initial_reader = std::move(reader);
 	}
 	void Initialize(ClientContext &, unique_ptr<CSVUnionData> &data) {

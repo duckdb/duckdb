@@ -21,7 +21,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 
 	auto multi_file_reader = MultiFileReader::CreateDefault("CSV Scan");
 	if (bind_data.initial_reader.get()) {
-		auto &union_reader = *bind_data.initial_reader;
+		auto &union_reader = bind_data.initial_reader->Cast<CSVFileScan>();
 		SetNamesAndTypes(union_reader.GetNames(), union_reader.GetTypes());
 		options = union_reader.options;
 		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, global_columns,
@@ -77,7 +77,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.return_names, bind_data.return_types);
 
 	if (file_idx == 0 && bind_data.initial_reader) {
-		auto &union_reader = *bind_data.initial_reader;
+		auto &union_reader = bind_data.initial_reader->Cast<CSVFileScan>();
 		// Initialize Buffer Manager
 		buffer_manager = union_reader.buffer_manager;
 		// Initialize On Disk and Size of file

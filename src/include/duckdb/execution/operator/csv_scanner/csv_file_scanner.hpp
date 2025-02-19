@@ -19,18 +19,14 @@ namespace duckdb {
 struct ReadCSVData;
 class CSVFileScan;
 
-struct CSVUnionData {
-	~CSVUnionData();
+struct CSVUnionData : public BaseUnionData {
+	explicit CSVUnionData(string file_name_p) : BaseUnionData(std::move(file_name_p)) {
+	}
+	~CSVUnionData() override;
 
-	string file_name;
 	vector<string> names;
 	vector<LogicalType> types;
 	CSVReaderOptions options;
-	unique_ptr<CSVFileScan> reader;
-
-	const string &GetFileName() {
-		return file_name;
-	}
 };
 
 //! Struct holding information over a CSV File we will scan
@@ -63,15 +59,13 @@ public:
 	void Finish();
 
 	static unique_ptr<CSVUnionData> StoreUnionReader(unique_ptr<CSVFileScan> scan_p, idx_t file_idx) {
-		auto data = make_uniq<CSVUnionData>();
+		auto data = make_uniq<CSVUnionData>(scan_p->GetFileName());
 		if (file_idx == 0) {
-			data->file_name = scan_p->GetFileName();
 			data->options = scan_p->options;
 			data->names = scan_p->names;
 			data->types = scan_p->types;
 			data->reader = std::move(scan_p);
 		} else {
-			data->file_name = scan_p->GetFileName();
 			data->options = std::move(scan_p->options);
 			data->names = std::move(scan_p->names);
 			data->types = std::move(scan_p->types);
