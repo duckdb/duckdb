@@ -88,8 +88,7 @@ private:
 	CSVValidator validator;
 
 private:
-	unique_ptr<CSVFileScan> CreateFileScan(idx_t file_idx, bool single_threaded_scan,
-	                                       shared_ptr<CSVBufferManager> buffer_manager = nullptr);
+	unique_ptr<CSVFileScan> CreateFileScan(idx_t file_idx, shared_ptr<CSVBufferManager> buffer_manager = nullptr);
 };
 
 } // namespace duckdb

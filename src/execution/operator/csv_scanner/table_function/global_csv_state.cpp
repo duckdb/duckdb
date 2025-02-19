@@ -9,7 +9,8 @@
 
 namespace duckdb {
 
-unique_ptr<CSVFileScan> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p, BaseUnionData &union_data_p, TableFunctionData &bind_data_p) {
+unique_ptr<CSVFileScan> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                                       BaseUnionData &union_data_p, TableFunctionData &bind_data_p) {
 	auto &union_data = union_data_p.Cast<CSVUnionData>();
 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
 	// union readers - use cached options
@@ -17,13 +18,13 @@ unique_ptr<CSVFileScan> CSVMultiFileInfo::CreateReader(ClientContext &context, G
 	auto &csv_types = union_data.types;
 	auto options = union_data.options;
 	options.auto_detect = false;
-	return make_uniq<CSVFileScan>(context, union_data.GetFileName(), std::move(options), csv_names, csv_types, gstate.file_schema,
-							   false, nullptr, false);
+	return make_uniq<CSVFileScan>(context, union_data.GetFileName(), std::move(options), csv_names, csv_types,
+	                              gstate.file_schema, gstate.single_threaded, nullptr, false);
 }
 //
 // shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
-// const string &filename, 											   TableFunctionData &bind_data_p) { 	auto &gstate =
-// gstate_p.Cast<CSVGlobalState>(); 	auto &bind_data = bind_data_p.Cast<ReadCSVData>();
+// const string &filename, 											   TableFunctionData &bind_data_p) { 	auto &gstate
+// = gstate_p.Cast<CSVGlobalState>(); 	auto &bind_data = bind_data_p.Cast<ReadCSVData>();
 //
 // 	auto csv_file_scan =
 // 		make_uniq<CSVFileScan>(context, filename, bind_data.options, file_idx, csv_names, csv_types, column_ids,
@@ -37,8 +38,7 @@ void CSVMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &re
 	csv_file_scan.SetStart();
 }
 
-unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool single_threaded_scan,
-                                                       shared_ptr<CSVBufferManager> buffer_manager) {
+unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, shared_ptr<CSVBufferManager> buffer_manager) {
 	if (file_idx == 0 && bind_data.initial_reader) {
 		throw InternalException("FIXME: this should have been handled before");
 	}
@@ -49,7 +49,7 @@ unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool sing
 	bool fixed_schema = false;
 	unique_ptr<CSVFileScan> csv_file_scan;
 	if (file_idx < bind_data.union_readers.size()) {
-		if (buffer_manager || single_threaded_scan) {
+		if (buffer_manager) {
 			throw InternalException("buffer_manager / single threaded scan for union reader");
 		}
 		csv_file_scan = CSVMultiFileInfo::CreateReader(context, *this, *bind_data.union_readers[file_idx], bind_data);
@@ -59,16 +59,15 @@ unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool sing
 		auto &csv_types = bind_data.column_info[file_idx].types;
 		options.dialect_options.num_cols = csv_names.size();
 		fixed_schema = true;
-		csv_file_scan =
-			make_uniq<CSVFileScan>(context, file_name, std::move(options), csv_names, csv_types, file_schema,
-								   single_threaded_scan, std::move(buffer_manager), fixed_schema);
+		csv_file_scan = make_uniq<CSVFileScan>(context, file_name, std::move(options), csv_names, csv_types,
+		                                       file_schema, single_threaded, std::move(buffer_manager), fixed_schema);
 	} else {
 		if (bind_data.files.size() == 1) {
 			options.auto_detect = false;
 		}
 		csv_file_scan =
-			make_uniq<CSVFileScan>(context, file_name, std::move(options), bind_data.csv_names, bind_data.csv_types, file_schema,
-								   single_threaded_scan, std::move(buffer_manager), fixed_schema);
+		    make_uniq<CSVFileScan>(context, file_name, std::move(options), bind_data.csv_names, bind_data.csv_types,
+		                           file_schema, single_threaded, std::move(buffer_manager), fixed_schema);
 	}
 	csv_file_scan->reader_data.file_list_idx = file_idx;
 
@@ -91,16 +90,16 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 		initial_reader = unique_ptr_cast<BaseFileReader, CSVFileScan>(std::move(bind_data_p.initial_reader));
 	} else if (buffer_manager && buffer_manager->GetFilePath() == files[0]) {
 		// If we already have a buffer manager, we don't need to reconstruct it to the first file
-		initial_reader = CreateFileScan(0, false, buffer_manager);
+		initial_reader = CreateFileScan(0, buffer_manager);
 	} else {
 		// If not we need to construct it for the first file
-		initial_reader = CreateFileScan(0, false);
+		initial_reader = CreateFileScan(0);
 	}
 	file_scans.emplace_back(std::move(initial_reader));
 	idx_t cur_file_idx = 0;
 	while (file_scans.back()->start_iterator.done && file_scans.size() < files.size()) {
 		cur_file_idx++;
-		file_scans.emplace_back(CreateFileScan(cur_file_idx, false));
+		file_scans.emplace_back(CreateFileScan(cur_file_idx));
 	}
 	// There are situations where we only support single threaded scanning
 	bool many_csv_files = files.size() > 1 && files.size() > system_threads * 2;
@@ -186,7 +185,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 					                                     current_file, false, current_boundary);
 				}
 			}
-			auto file_scan = CreateFileScan(cur_idx, true);
+			auto file_scan = CreateFileScan(cur_idx);
 			empty_file = file_scan->file_size == 0;
 
 			if (!empty_file) {
@@ -234,7 +233,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			auto current_file_idx = file_scans.back()->GetFileIndex() + 1;
 			if (current_file_idx < bind_data.files.size()) {
 				// If we have a next file we have to construct the file scan for that
-				file_scans.emplace_back(CreateFileScan(current_file_idx, false));
+				file_scans.emplace_back(CreateFileScan(current_file_idx));
 				// And re-start the boundary-iterator
 				current_boundary = file_scans.back()->start_iterator;
 				current_boundary.SetCurrentBoundaryToPosition(single_threaded, bind_data.options);
