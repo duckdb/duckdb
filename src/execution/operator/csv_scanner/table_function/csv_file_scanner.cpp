@@ -11,7 +11,7 @@ CSVUnionData::~CSVUnionData() {
 CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> buffer_manager_p,
                          shared_ptr<CSVStateMachine> state_machine_p, const CSVReaderOptions &options_p,
                          const ReadCSVData &bind_data, const vector<ColumnIndex> &column_ids, CSVSchema &file_schema)
-    : file_path(options_p.file_path), file_idx(0), buffer_manager(std::move(buffer_manager_p)),
+    : BaseFileReader(options_p.file_path), file_idx(0), buffer_manager(std::move(buffer_manager_p)),
       state_machine(std::move(state_machine_p)), file_size(buffer_manager->file_handle->FileSize()),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       on_disk_file(buffer_manager->file_handle->OnDiskFile()), options(options_p) {
@@ -25,7 +25,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 		SetNamesAndTypes(union_reader.GetNames(), union_reader.GetTypes());
 		options = union_reader.options;
 		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, global_columns,
-		                                    column_ids, nullptr, file_path, context, nullptr);
+		                                    column_ids, nullptr, file_name, context, nullptr);
 		InitializeFileNamesTypes();
 		return;
 	}
@@ -33,15 +33,15 @@ CSVFileScan::CSVFileScan(ClientContext &context, shared_ptr<CSVBufferManager> bu
 		// Serialized Union By name
 		SetNamesAndTypes(bind_data.column_info[0].names, bind_data.column_info[0].types);
 		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, global_columns,
-		                                    column_ids, nullptr, file_path, context, nullptr);
+		                                    column_ids, nullptr, file_name, context, nullptr);
 		InitializeFileNamesTypes();
 		return;
 	}
 	SetNamesAndTypes(bind_data.csv_names, bind_data.csv_types);
 
-	file_schema.Initialize(names, types, file_path);
+	file_schema.Initialize(names, types, file_name);
 	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, global_columns, column_ids,
-	                                    nullptr, file_path, context, nullptr);
+	                                    nullptr, file_name, context, nullptr);
 
 	InitializeFileNamesTypes();
 	SetStart();
@@ -69,7 +69,7 @@ void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<L
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
                          idx_t file_idx_p, const ReadCSVData &bind_data, const vector<ColumnIndex> &column_ids,
                          CSVSchema &file_schema, bool per_file_single_threaded)
-    : file_path(file_path_p), file_idx(file_idx_p),
+    : BaseFileReader(file_path_p), file_idx(file_idx_p),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
 	auto multi_file_reader = MultiFileReader::CreateDefault("CSV Scan");
 
@@ -87,7 +87,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		SetNamesAndTypes(union_reader.GetNames(), union_reader.GetTypes());
 		state_machine = union_reader.state_machine;
 		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, global_columns,
-		                                    column_ids, nullptr, file_path, context, nullptr);
+		                                    column_ids, nullptr, file_name, context, nullptr);
 
 		InitializeFileNamesTypes();
 		SetStart();
@@ -95,7 +95,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	}
 
 	// Initialize Buffer Manager
-	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_path, file_idx, per_file_single_threaded);
+	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_name, file_idx, per_file_single_threaded);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();
@@ -122,7 +122,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 		    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 
 		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, global_columns,
-		                                    column_ids, nullptr, file_path, context, nullptr);
+		                                    column_ids, nullptr, file_name, context, nullptr);
 		InitializeFileNamesTypes();
 		SetStart();
 		return;
@@ -135,7 +135,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 			auto result = sniffer.SniffCSV();
 			file_schema.Initialize(bind_data.csv_names, bind_data.csv_types, options.file_path);
 		} else if (file_idx > 0 && buffer_manager->file_handle->FileSize() > 0) {
-			options.file_path = file_path;
+			options.file_path = file_name;
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache, false);
 			auto result = sniffer.AdaptiveSniff(file_schema);
 			SetNamesAndTypes(result.names, result.return_types);
@@ -151,15 +151,15 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	state_machine = make_shared_ptr<CSVStateMachine>(
 	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 	multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, global_columns, column_ids,
-	                                    nullptr, file_path, context, nullptr);
+	                                    nullptr, file_name, context, nullptr);
 	InitializeFileNamesTypes();
 	SetStart();
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options_p)
-    : file_path(file_name), file_idx(0),
+    : BaseFileReader(file_name), file_idx(0),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
-	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_path, file_idx);
+	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_name, file_idx);
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
 	file_size = buffer_manager->file_handle->FileSize();
@@ -223,18 +223,11 @@ void CSVFileScan::InitializeFileNamesTypes() {
 	file_types = sorted_types;
 }
 
-const string &CSVFileScan::GetFileName() const {
-	return file_path;
-}
 const vector<string> &CSVFileScan::GetNames() {
 	return names;
 }
 const vector<LogicalType> &CSVFileScan::GetTypes() {
 	return types;
-}
-const vector<MultiFileReaderColumnDefinition> &CSVFileScan::GetColumns() {
-	D_ASSERT(types.size() == columns.size());
-	return columns;
 }
 
 void CSVFileScan::InitializeProjection() {

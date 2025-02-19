@@ -13,6 +13,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
+#include "duckdb/common/base_file_reader.hpp"
 
 namespace duckdb {
 struct ReadCSVData;
@@ -33,7 +34,7 @@ struct CSVUnionData {
 };
 
 //! Struct holding information over a CSV File we will scan
-class CSVFileScan {
+class CSVFileScan : public BaseFileReader {
 public:
 	using UNION_READER_DATA = unique_ptr<CSVUnionData>;
 
@@ -56,23 +57,21 @@ public:
 	void SetNamesAndTypes(const vector<string> &names, const vector<LogicalType> &types);
 
 public:
-	const string &GetFileName() const;
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
-	const vector<MultiFileReaderColumnDefinition> &GetColumns();
 	void InitializeProjection();
 	void Finish();
 
 	static unique_ptr<CSVUnionData> StoreUnionReader(unique_ptr<CSVFileScan> scan_p, idx_t file_idx) {
 		auto data = make_uniq<CSVUnionData>();
 		if (file_idx == 0) {
-			data->file_name = scan_p->file_path;
+			data->file_name = scan_p->GetFileName();
 			data->options = scan_p->options;
 			data->names = scan_p->names;
 			data->types = scan_p->types;
 			data->reader = std::move(scan_p);
 		} else {
-			data->file_name = scan_p->file_path;
+			data->file_name = scan_p->GetFileName();
 			data->options = std::move(scan_p->options);
 			data->names = std::move(scan_p->names);
 			data->types = std::move(scan_p->types);
@@ -85,7 +84,6 @@ public:
 	void InitializeFileNamesTypes();
 
 public:
-	const string file_path;
 	//! File Index
 	idx_t file_idx;
 	//! Buffer Manager for the CSV File
@@ -101,8 +99,6 @@ public:
 	//! Whether or not this is an on-disk file
 	bool on_disk_file = true;
 
-	MultiFileReaderData reader_data;
-
 	vector<LogicalType> file_types;
 
 	//! Variables to handle projection pushdown
@@ -117,6 +113,5 @@ public:
 private:
 	vector<string> names;
 	vector<LogicalType> types;
-	vector<MultiFileReaderColumnDefinition> columns;
 };
 } // namespace duckdb

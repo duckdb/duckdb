@@ -149,7 +149,7 @@ public:
 	vector<string> table_columns;
 
 public:
-	const vector<MultiFileReaderColumnDefinition> &GetColumns() {
+	const vector<MultiFileReaderColumnDefinition> &GetColumns() const {
 		return columns;
 	}
 	const string &GetFileName() {

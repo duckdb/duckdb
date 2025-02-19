@@ -226,7 +226,7 @@ void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t f
 	// 2. File Idx
 	scan_appender.Append(file_idx);
 	// 3. File Path
-	scan_appender.Append(string_t(file.file_path));
+	scan_appender.Append(string_t(file.GetFileName()));
 	// 4. Delimiter
 	scan_appender.Append(string_t(options.dialect_options.state_machine_options.delimiter.FormatValue()));
 	// 5. Quote
@@ -295,7 +295,6 @@ void CSVGlobalState::FillRejectsTable() const {
 		idx_t scan_idx = context.transaction.GetActiveQuery();
 		for (auto &file : file_scans) {
 			const idx_t file_idx = rejects->GetCurrentFileIndex(scan_idx);
-			auto file_name = file->file_path;
 			file->error_handler->FillRejectsTable(errors_appender, file_idx, scan_idx, *file, *rejects, bind_data,
 			                                      limit);
 			if (rejects->count != 0) {
