@@ -120,4 +120,24 @@ idx_t WindowTokenTree::Rank(const idx_t lower, const idx_t upper, const idx_t ro
 	}
 }
 
+template <typename TREE>
+static idx_t NextPeer(const TREE &tree, const idx_t lower, const idx_t upper, const idx_t row_idx) {
+	// We return an index, not a relative position
+	idx_t idx = lower;
+	// Because tokens are dense, we can find the next peer by adding 1 to the probed token value
+	const auto needle = tree.LowestLevel()[row_idx] + 1;
+	tree.AggregateLowerBound(lower, upper, needle, [&](idx_t level, const idx_t run_begin, const idx_t run_pos) {
+		idx += run_pos - run_begin;
+	});
+	return idx;
+}
+
+idx_t WindowTokenTree::PeerEnd(const idx_t lower, const idx_t upper, const idx_t row_idx) const {
+	if (mst64) {
+		return NextPeer(*mst64, lower, upper, row_idx);
+	} else {
+		return NextPeer(*mst32, lower, upper, row_idx);
+	}
+}
+
 } // namespace duckdb

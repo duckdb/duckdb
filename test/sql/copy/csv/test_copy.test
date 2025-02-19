@@ -287,7 +287,7 @@ statement ok
 CREATE TABLE unterminated (a VARCHAR);
 
 statement error
-COPY unterminated FROM 'data/csv/test/unterminated.csv' (HEADER 0, AUTO_DETECT FALSE);
+COPY unterminated FROM 'data/csv/test/unterminated.csv' (HEADER 0, AUTO_DETECT FALSE, strict_mode TRUE);
 ----
 Value with unterminated quote found.
 

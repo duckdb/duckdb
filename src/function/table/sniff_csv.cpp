@@ -38,9 +38,15 @@ static unique_ptr<GlobalTableFunctionState> CSVSniffInitGlobal(ClientContext &co
 static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
 	auto result = make_uniq<CSVSniffFunctionData>();
+	if (input.inputs[0].IsNull()) {
+		throw BinderException("sniff_csv cannot take NULL as a file path parameter");
+	}
 	result->path = input.inputs[0].ToString();
 	auto it = input.named_parameters.find("auto_detect");
 	if (it != input.named_parameters.end()) {
+		if (it->second.IsNull()) {
+			throw BinderException("\"%s\" expects a non-null boolean value (e.g. TRUE or 1)", it->first);
+		}
 		if (!it->second.GetValue<bool>()) {
 			throw InvalidInputException("sniff_csv function does not accept auto_detect variable set to false");
 		}
@@ -146,30 +152,37 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 	CSVSniffer sniffer(sniffer_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(data.force_match);
+	if (sniffer.EmptyOrOnlyHeader()) {
+		for (auto &type : sniffer_result.return_types) {
+			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
+			// we default to varchar if all files are empty or only have a header after all the sniffing
+			type = LogicalType::VARCHAR;
+		}
+	}
 	string str_opt;
 	string separator = ", ";
 	// Set output
 	output.SetCardinality(1);
 
 	// 1. Delimiter
-	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter.GetValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.delimiter.FormatValue();
 	output.SetValue(0, 0, str_opt);
 	// 2. Quote
-	str_opt = sniffer_options.dialect_options.state_machine_options.quote.GetValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.quote.FormatValue();
 	output.SetValue(1, 0, str_opt);
 	// 3. Escape
-	str_opt = sniffer_options.dialect_options.state_machine_options.escape.GetValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.escape.FormatValue();
 	output.SetValue(2, 0, str_opt);
 	// 4. NewLine Delimiter
 	auto new_line_identifier = sniffer_options.NewLineIdentifierToString();
 	output.SetValue(3, 0, new_line_identifier);
 	// 5. Comment
-	str_opt = sniffer_options.dialect_options.state_machine_options.comment.GetValue();
+	str_opt = sniffer_options.dialect_options.state_machine_options.comment.FormatValue();
 	output.SetValue(4, 0, str_opt);
 	// 6. Skip Rows
 	output.SetValue(5, 0, Value::UINTEGER(NumericCast<uint32_t>(sniffer_options.dialect_options.skip_rows.GetValue())));
 	// 7. Has Header
-	auto has_header = Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue()).ToString();
+	auto has_header = Value::BOOLEAN(sniffer_options.dialect_options.header.GetValue());
 	output.SetValue(6, 0, has_header);
 	// 8. List<Struct<Column-Name:Types>> {'col1': 'INTEGER', 'col2': 'VARCHAR'}
 	vector<Value> values;

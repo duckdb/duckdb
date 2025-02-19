@@ -79,6 +79,10 @@ void WindowRowNumberLocalState::Finalize(WindowExecutorGlobalState &gstate, Coll
 WindowRowNumberExecutor::WindowRowNumberExecutor(BoundWindowExpression &wexpr, ClientContext &context,
                                                  WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, context, shared) {
+
+	for (const auto &order : wexpr.arg_orders) {
+		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
+	}
 }
 
 unique_ptr<WindowExecutorGlobalState> WindowRowNumberExecutor::GetGlobalState(const idx_t payload_count,
@@ -97,18 +101,19 @@ void WindowRowNumberExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate
                                                idx_t row_idx) const {
 	auto &grstate = gstate.Cast<WindowRowNumberGlobalState>();
 	auto &lrstate = lstate.Cast<WindowRowNumberLocalState>();
-	auto partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_BEGIN]);
 	auto rdata = FlatVector::GetData<uint64_t>(result);
 
 	if (grstate.token_tree) {
-		auto partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_END]);
+		auto frame_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
+		auto frame_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_END]);
 		for (idx_t i = 0; i < count; ++i, ++row_idx) {
 			// Row numbers are unique ranks
-			rdata[i] = grstate.token_tree->Rank(partition_begin[i], partition_end[i], row_idx);
+			rdata[i] = grstate.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
 		}
 		return;
 	}
 
+	auto partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_BEGIN]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		rdata[i] = row_idx - partition_begin[i] + 1;
 	}
@@ -131,6 +136,11 @@ void WindowNtileExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, Wi
 	auto &lrstate = lstate.Cast<WindowRowNumberLocalState>();
 	auto partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_BEGIN]);
 	auto partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[PARTITION_END]);
+	if (grstate.token_tree) {
+		// With secondary sorts, we restrict to the frame boundaries, but everything else should compute the same.
+		partition_begin = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_BEGIN]);
+		partition_end = FlatVector::GetData<const idx_t>(lrstate.bounds.data[FRAME_END]);
+	}
 	auto rdata = FlatVector::GetData<int64_t>(result);
 	WindowInputExpression ntile_col(eval_chunk, ntile_idx);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {

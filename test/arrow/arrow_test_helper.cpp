@@ -32,9 +32,10 @@ int ArrowTestFactory::ArrowArrayStreamGetSchema(struct ArrowArrayStream *stream,
 static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientProperties properties,
                                 struct ArrowArray *out) {
 	auto &types = res.types;
+	unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
 	if (big) {
 		// Combine all chunks into a single ArrowArray
-		ArrowAppender appender(types, STANDARD_VECTOR_SIZE, properties);
+		ArrowAppender appender(types, STANDARD_VECTOR_SIZE, properties, extension_type_cast);
 		idx_t count = 0;
 		while (true) {
 			auto chunk = res.Fetch();
@@ -52,7 +53,7 @@ static int NextFromMaterialized(MaterializedQueryResult &res, bool big, ClientPr
 		if (!chunk || chunk->size() == 0) {
 			return 0;
 		}
-		ArrowConverter::ToArrowArray(*chunk, out, properties);
+		ArrowConverter::ToArrowArray(*chunk, out, properties, extension_type_cast);
 	}
 	return 0;
 }
@@ -231,7 +232,7 @@ bool ArrowTestHelper::RunArrowComparison(Connection &con, const string &query, b
 	auto names = initial_result->names;
 	// We create an "arrow object" that consists of the arrays from our ArrowQueryResult
 	ArrowTestFactory factory(std::move(types), std::move(names), std::move(initial_result), big_result,
-	                         client_properties);
+	                         client_properties, *con.context);
 	// And construct a `arrow_scan` to read the created "arrow object"
 	auto params = ConstructArrowScan(factory);
 

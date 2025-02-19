@@ -191,6 +191,10 @@ public:
 		ra_buffer.merge_set.clear();
 	}
 
+	void Skip(idx_t skip_count) {
+		location += skip_count;
+	}
+
 	void SetLocation(idx_t location_p) {
 		location = location_p;
 	}

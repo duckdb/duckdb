@@ -141,7 +141,7 @@ private:
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class OPWRAPPER, class OP>
 	static inline void ExecuteStandard(Vector &input, Vector &result, idx_t count, void *dataptr, bool adds_nulls,
-	                                   FunctionErrors errors = FunctionErrors::CAN_THROW_ERROR) {
+	                                   FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 		switch (input.GetVectorType()) {
 		case VectorType::CONSTANT_VECTOR: {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -219,7 +219,7 @@ public:
 
 	template <class INPUT_TYPE, class RESULT_TYPE, class FUNC = std::function<RESULT_TYPE(INPUT_TYPE)>>
 	static void Execute(Vector &input, Vector &result, idx_t count, FUNC fun,
-	                    FunctionErrors errors = FunctionErrors::CAN_THROW_ERROR) {
+	                    FunctionErrors errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR) {
 		ExecuteStandard<INPUT_TYPE, RESULT_TYPE, UnaryLambdaWrapper, FUNC>(
 		    input, result, count, reinterpret_cast<void *>(&fun), false, errors);
 	}

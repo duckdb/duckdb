@@ -418,6 +418,60 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
 }
 
+class HashJoinTableInitTask : public ExecutorTask {
+public:
+	HashJoinTableInitTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,
+	                      idx_t entry_idx_from_p, idx_t entry_idx_to_p, const PhysicalOperator &op_p)
+	    : ExecutorTask(context, std::move(event_p), op_p), sink(sink_p), entry_idx_from(entry_idx_from_p),
+	      entry_idx_to(entry_idx_to_p) {
+	}
+
+	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
+		sink.hash_table->InitializePointerTable(entry_idx_from, entry_idx_to);
+		event->FinishTask();
+		return TaskExecutionResult::TASK_FINISHED;
+	}
+
+private:
+	HashJoinGlobalSinkState &sink;
+	idx_t entry_idx_from;
+	idx_t entry_idx_to;
+};
+
+class HashJoinTableInitEvent : public BasePipelineEvent {
+public:
+	HashJoinTableInitEvent(Pipeline &pipeline_p, HashJoinGlobalSinkState &sink)
+	    : BasePipelineEvent(pipeline_p), sink(sink) {
+	}
+
+	HashJoinGlobalSinkState &sink;
+
+public:
+	void Schedule() override {
+		auto &context = pipeline->GetClientContext();
+		vector<shared_ptr<Task>> finalize_tasks;
+		auto &ht = *sink.hash_table;
+		const auto entry_count = ht.capacity;
+		auto num_threads = NumericCast<idx_t>(sink.num_threads);
+		if (num_threads == 1 || (entry_count < PARALLEL_CONSTRUCT_THRESHOLD && !context.config.verify_parallelism)) {
+			// Single-threaded memset
+			finalize_tasks.push_back(
+			    make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink, 0U, entry_count, sink.op));
+		} else {
+			// Parallel memset
+			for (idx_t entry_idx = 0; entry_idx < entry_count; entry_idx += ENTRIES_PER_TASK) {
+				auto entry_idx_to = MinValue<idx_t>(entry_idx + ENTRIES_PER_TASK, entry_count);
+				finalize_tasks.push_back(make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink, entry_idx,
+				                                                          entry_idx_to, sink.op));
+			}
+		}
+		SetTasks(std::move(finalize_tasks));
+	}
+
+	static constexpr const idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
+	static constexpr const idx_t ENTRIES_PER_TASK = 131072;
+};
+
 class HashJoinFinalizeTask : public ExecutorTask {
 public:
 	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,
@@ -463,7 +517,7 @@ public:
 		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
 		const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
 
-		if (num_threads == 1 || (ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD && skew > SKEW_SINGLE_THREADED_THRESHOLD &&
+		if (num_threads == 1 || ((ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD || skew > SKEW_SINGLE_THREADED_THRESHOLD) &&
 		                         !context.config.verify_parallelism)) {
 			// Single-threaded finalize
 			finalize_tasks.push_back(
@@ -495,9 +549,13 @@ void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event)
 		hash_table->finalized = true;
 		return;
 	}
-	hash_table->InitializePointerTable();
-	auto new_event = make_shared_ptr<HashJoinFinalizeEvent>(pipeline, *this);
-	event.InsertEvent(std::move(new_event));
+	hash_table->AllocatePointerTable();
+
+	auto new_init_event = make_shared_ptr<HashJoinTableInitEvent>(pipeline, *this);
+	event.InsertEvent(new_init_event);
+
+	auto new_finalize_event = make_shared_ptr<HashJoinFinalizeEvent>(pipeline, *this);
+	new_init_event->InsertEvent(std::move(new_finalize_event));
 }
 
 void HashJoinGlobalSinkState::InitializeProbeSpill() {
@@ -637,11 +695,13 @@ void JoinFilterPushdownInfo::PushInFilter(const JoinFilterPushdownFilter &info, 
 	}
 
 	// generate the OR filter
-	auto or_filter = make_uniq<InFilter>(std::move(in_list));
+	auto in_filter = make_uniq<InFilter>(std::move(in_list));
+
 	// we push the OR filter as an OptionalFilter so that we can use it for zonemap pruning only
 	// the IN-list is expensive to execute otherwise
-	auto filter = make_uniq<OptionalFilter>(std::move(or_filter));
+	auto filter = make_uniq<OptionalFilter>(std::move(in_filter));
 	info.dynamic_filters->PushFilter(op, filter_col_idx, std::move(filter));
+	return;
 }
 
 unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, JoinHashTable &ht,
@@ -1099,7 +1159,8 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 		}
 	}
 
-	ht.InitializePointerTable();
+	ht.AllocatePointerTable();
+	ht.InitializePointerTable(0, ht.capacity);
 
 	global_stage = HashJoinSourceStage::BUILD;
 }

@@ -32,6 +32,9 @@ optional_ptr<AttachedDatabase> DatabaseManager::GetDatabase(ClientContext &conte
 	if (StringUtil::Lower(name) == TEMP_CATALOG) {
 		return context.client_data->temporary_objects.get();
 	}
+	if (StringUtil::Lower(name) == SYSTEM_CATALOG) {
+		return system;
+	}
 	return reinterpret_cast<AttachedDatabase *>(databases->GetEntry(context, name).get());
 }
 
@@ -56,6 +59,9 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 	}
 
 	// and add it to the databases catalog set
+	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
+	}
 	if (!databases->CreateEntry(context, name, std::move(attached_db), dependencies)) {
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}

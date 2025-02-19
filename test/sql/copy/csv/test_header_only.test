@@ -1,0 +1,32 @@
+# name: test/sql/copy/csv/test_header_only.test
+# description: Test CSV Parser on an header only CSV file
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT columns from sniff_csv('data/csv/header_only.csv', header=True, ignore_errors=True)
+----
+[{'name': abs_file_name, 'type': VARCHAR}]
+
+
+query I
+SELECT abs_file_name FROM read_csv('data/csv/header_only.csv', header=True, ignore_errors=True)
+----
+
+query I
+SELECT REGEXP_MATCHES(abs_file_name, 'foo')
+  FROM ( SELECT abs_file_name FROM read_csv('data/csv/header_only.csv', header=True, ignore_errors=True))
+----
+
+query I
+SELECT REGEXP_MATCHES(abs_file_name, 'foo')
+  FROM ( SELECT abs_file_name FROM read_csv(['data/csv/header_only.csv','data/csv/header_only.csv'], header=True, ignore_errors=True))
+----
+
+statement error
+SELECT REGEXP_MATCHES(abs_file_name, 'foo')
+  FROM ( SELECT abs_file_name FROM read_csv(['data/csv/header_only.csv','data/csv/bool.csv','data/csv/header_only.csv'], header=True, ignore_errors=True))
+----
+No function matches the given name and argument types 'regexp_matches(BOOLEAN, STRING_LITERAL)'. You might need to add explicit type casts.

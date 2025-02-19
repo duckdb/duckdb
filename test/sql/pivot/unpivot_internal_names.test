@@ -1,0 +1,19 @@
+# name: test/sql/pivot/unpivot_internal_names.test
+# description: Test unpivoting on a table with names used internally by the unpivot operator
+# group: [pivot]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE unpivot_names(unpivot_names VARCHAR, unpivot_list VARCHAR, unpivot_list_2 VARCHAR, col1 INT, col2 INT, col3 INT);
+
+statement ok
+INSERT INTO unpivot_names VALUES ('unpivot_names', 'unpivot_list', 'unpivot_list_2', 1, 2, 3);
+
+query IIIII
+UNPIVOT unpivot_names ON COLUMNS('col*')
+----
+unpivot_names	unpivot_list	unpivot_list_2	col1	1
+unpivot_names	unpivot_list	unpivot_list_2	col2	2
+unpivot_names	unpivot_list	unpivot_list_2	col3	3

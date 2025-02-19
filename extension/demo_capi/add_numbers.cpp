@@ -1,5 +1,6 @@
-#include "duckdb_extension.h"
 #include "add_numbers.h"
+
+#include "duckdb_extension.h"
 
 DUCKDB_EXTENSION_EXTERN
 

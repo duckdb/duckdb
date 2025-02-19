@@ -4,6 +4,8 @@
 
 # https://github.com/sqlalchemy/sqlalchemy/blob/master/lib/sqlalchemy/dialects/postgresql/base.py
 
+require noforcestorage
+
 statement ok
 CREATE TYPE greeting AS ENUM('hi', 'bonjour', 'konnichiwa', 'howdy')
 

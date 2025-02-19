@@ -51,7 +51,19 @@ string DialectCandidates::Print() {
 		auto escape_candidate = escape_candidates_map[i];
 		for (idx_t j = 0; j < quote_candidate.size(); j++) {
 			for (idx_t k = 0; k < escape_candidate.size(); k++) {
-				search_space << "[\'" << quote_candidate[j] << "\',\'" << escape_candidate[k] << "\']";
+				search_space << "[\'";
+				if (quote_candidate[j] == '\0') {
+					search_space << "(no quote)";
+				} else {
+					search_space << quote_candidate[j];
+				}
+				search_space << "\',\'";
+				if (escape_candidate[k] == '\0') {
+					search_space << "(no escape)";
+				} else {
+					search_space << escape_candidate[k];
+				}
+				search_space << "\']";
 				if (k < escape_candidate.size() - 1) {
 					search_space << ",";
 				}
@@ -144,11 +156,6 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	} else {
 		new_line_id = DetectNewLineDelimiter(*buffer_manager);
 	}
-	// We only sniff RFC 4180 rules, unless manually set by user.
-	bool rfc_4180 = true;
-	if (options.dialect_options.state_machine_options.rfc_4180.IsSetByUser()) {
-		rfc_4180 = options.dialect_options.state_machine_options.rfc_4180.GetValue();
-	}
 	CSVIterator first_iterator;
 	bool iterator_set = false;
 	for (const auto quote_rule : dialect_candidates.quote_rule_candidates) {
@@ -160,8 +167,9 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 				for (const auto &escape : escape_candidates) {
 					for (const auto &comment : dialect_candidates.comment_candidates) {
 						D_ASSERT(buffer_manager);
-						CSVStateMachineOptions state_machine_options(delimiter, quote, escape, comment, new_line_id,
-						                                             rfc_4180);
+						CSVStateMachineOptions state_machine_options(
+						    delimiter, quote, escape, comment, new_line_id,
+						    options.dialect_options.state_machine_options.strict_mode.GetValue());
 						auto sniffing_state_machine =
 						    make_shared_ptr<CSVStateMachine>(options, state_machine_options, state_machine_cache);
 						if (options.dialect_options.skip_rows.IsSetByUser()) {
@@ -362,7 +370,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	    (single_column_before || ((more_values || more_columns) && !require_more_padding) ||
 	     (more_than_one_column && require_less_padding) || quoted) &&
 	    !invalid_padding && comments_are_acceptable) {
-		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size()) {
+		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size() &&
+		    consistent_rows <= best_consistent_rows) {
 			// We have a candidate that fits our requirements better
 			if (candidates.front()->ever_quoted || !scanner->ever_quoted) {
 				return;

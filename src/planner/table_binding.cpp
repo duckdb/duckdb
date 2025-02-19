@@ -114,12 +114,23 @@ optional_ptr<StandardEntry> EntryBinding::GetStandardEntry() {
 
 TableBinding::TableBinding(const string &alias, vector<LogicalType> types_p, vector<string> names_p,
                            vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
-                           bool add_row_id)
+                           virtual_column_map_t virtual_columns_p)
     : Binding(BindingType::TABLE, GetAlias(alias, entry), std::move(types_p), std::move(names_p), index),
-      bound_column_ids(bound_column_ids), entry(entry) {
-	if (add_row_id) {
-		if (name_map.find("rowid") == name_map.end()) {
-			name_map["rowid"] = COLUMN_IDENTIFIER_ROW_ID;
+      bound_column_ids(bound_column_ids), entry(entry), virtual_columns(std::move(virtual_columns_p)) {
+	for (auto &ventry : virtual_columns) {
+		auto idx = ventry.first;
+		auto &name = ventry.second.name;
+		if (idx < VIRTUAL_COLUMN_START) {
+			throw BinderException(
+			    "Virtual column index must be larger than VIRTUAL_COLUMN_START - found %d for column \"%s\"", idx,
+			    name);
+		}
+		if (idx == COLUMN_IDENTIFIER_EMPTY) {
+			// the empty column cannot be queried by the user
+			continue;
+		}
+		if (name_map.find(name) == name_map.end()) {
+			name_map[name] = idx;
 		}
 	}
 }
@@ -237,8 +248,10 @@ BindResult TableBinding::Bind(ColumnRefExpression &colref, idx_t depth) {
 	}
 	// fetch the type of the column
 	LogicalType col_type;
-	if (column_index == COLUMN_IDENTIFIER_ROW_ID) {
-		col_type = LogicalType::ROW_TYPE;
+	auto ventry = virtual_columns.find(column_index);
+	if (ventry != virtual_columns.end()) {
+		// virtual column - fetch type from there
+		col_type = ventry->second.type;
 	} else {
 		// normal column: fetch type from base column
 		col_type = types[column_index];

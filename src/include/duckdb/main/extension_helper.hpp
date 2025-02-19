@@ -123,6 +123,10 @@ public:
 	static string ExtensionDirectory(ClientContext &context);
 	static string ExtensionDirectory(DatabaseInstance &db, FileSystem &fs);
 
+	// Get the extension directory path
+	static string GetExtensionDirectoryPath(ClientContext &context);
+	static string GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
+
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
 	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
@@ -232,6 +236,7 @@ public:
 
 	static bool IsRelease(const string &version_tag);
 	static bool CreateSuggestions(const string &extension_name, string &message);
+	static string ExtensionInstallDocumentationLink(const string &extension_name);
 
 private:
 	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,

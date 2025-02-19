@@ -17,6 +17,12 @@ SELECT renamed_col FROM (SELECT * RENAME i AS renamed_col FROM integers)
 ----
 1
 
+# rename with COLUMNS
+query I
+SELECT renamed_col FROM (SELECT COLUMNS(* RENAME i AS renamed_col) FROM integers)
+----
+1
+
 # qualified
 query I
 SELECT renamed_col FROM (SELECT * RENAME integers.i AS renamed_col FROM integers)

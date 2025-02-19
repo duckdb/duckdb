@@ -141,6 +141,7 @@ SWITCH_CODE_FORMAT = '''\tswitch ({switch_variable}) {{
 SET_DESERIALIZE_PARAMETER_FORMAT = '\tdeserializer.Set<{property_type}>({property_name});\n'
 UNSET_DESERIALIZE_PARAMETER_FORMAT = '\tdeserializer.Unset<{property_type}>();\n'
 GET_DESERIALIZE_PARAMETER_FORMAT = 'deserializer.Get<{property_type}>()'
+TRY_GET_DESERIALIZE_PARAMETER_FORMAT = 'deserializer.TryGet<{property_type}>()'
 
 SWITCH_HEADER_FORMAT = '\tcase {enum_type}::{enum_value}:\n'
 
@@ -166,7 +167,7 @@ MOVE_LIST = [
     'BoundLimitNode',
 ]
 
-REFERENCE_LIST = ['ClientContext', 'bound_parameter_map_t']
+REFERENCE_LIST = ['ClientContext', 'bound_parameter_map_t', 'Catalog']
 
 
 def is_container(type):
@@ -560,6 +561,8 @@ def generate_base_class_code(base_class):
         base_class_deserialize += UNSET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type)
 
     for entry in assign_entries:
+        if entry.deleted:
+            continue
         move = False
         if entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type):
             move = True
@@ -619,13 +622,19 @@ def generate_class_code(class_entry):
                         constructor_parameters += entry.deserialize_property
                     found = True
                     break
-            if constructor_entry.startswith('$'):
+            if constructor_entry.startswith('$') or constructor_entry.startswith('?'):
                 if len(constructor_parameters) > 0:
                     constructor_parameters += ", "
-                param_type = constructor_entry.replace('$', '')
-                if param_type in REFERENCE_LIST:
-                    param_type += ' &'
-                constructor_parameters += GET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=param_type)
+                is_optional = constructor_entry.startswith('?')
+                if is_optional:
+                    param_type = constructor_entry.replace('?', '')
+                    get_format = TRY_GET_DESERIALIZE_PARAMETER_FORMAT
+                else:
+                    param_type = constructor_entry.replace('$', '')
+                    get_format = GET_DESERIALIZE_PARAMETER_FORMAT
+                    if param_type in REFERENCE_LIST:
+                        param_type += ' &'
+                constructor_parameters += get_format.format(property_type=param_type)
                 found = True
             if class_entry.base_object is not None:
                 for entry in class_entry.base_object.set_parameters:

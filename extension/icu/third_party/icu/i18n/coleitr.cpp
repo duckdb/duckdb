@@ -137,13 +137,13 @@ int32_t CollationElementIterator::next(UErrorCode& status)
     return firstHalf;
 }
 
-UBool CollationElementIterator::operator!=(
+bool CollationElementIterator::operator!=(
                                   const CollationElementIterator& other) const
 {
     return !(*this == other);
 }
 
-UBool CollationElementIterator::operator==(
+bool CollationElementIterator::operator==(
                                     const CollationElementIterator& that) const
 {
     if (this == &that) {

@@ -109,6 +109,8 @@ FROM sql_auto_complete('CREATE TABLE SC') LIMIT 1;
 ----
 "SCHEMA".	13
 
+require skip_reload
+
 # suggest a catalog
 statement ok
 ATTACH ':memory:' AS attached_in_memory;

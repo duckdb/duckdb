@@ -104,6 +104,16 @@ option (WASM_ENABLED "Are DuckDB-Wasm extensions build enabled" FALSE)
 if (DEFINED ENV{WASM_EXTENSIONS})
      set(WASM_ENABLED "$ENV{WASM_EXTENSIONS}")
 endif()
+option (MUSL_ENABLED "Are Musl extensions build enabled" FALSE)
+if (DEFINED ENV{DUCKDB_PLATFORM})
+     if ("$ENV{DUCKDB_PLATFORM}" STREQUAL "linux_amd64_musl")
+          set(MUSL_ENABLED ON)
+     endif()
+endif()
+
+if (MUSL_ENABLED)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__MUSL_ENABLED__")
+endif()
 
 set(M32_FLAG "")
 if(FORCE_32_BIT)
@@ -218,6 +228,11 @@ endif()
 option(EXPLICIT_EXCEPTIONS "Explicitly enable C++ exceptions." FALSE)
 if(${EXPLICIT_EXCEPTIONS})
   set(CXX_EXTRA "${CXX_EXTRA} -fexceptions")
+endif()
+
+option(EXPORT_DYNAMIC_SYMBOLS "Export dynamic symbols." FALSE)
+if(${EXPORT_DYNAMIC_SYMBOLS})
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rdynamic")
 endif()
 
 if (UNSAFE_NUMERIC_CAST)
@@ -407,6 +422,7 @@ option(EXPORT_DLL_SYMBOLS "Export dll symbols on Windows, else import" TRUE)
 option(BUILD_RDTSC "Enable the rdtsc instruction." FALSE)
 option(TEST_REMOTE_INSTALL "Test installation of specific extensions." FALSE)
 option(SMALLER_BINARY "Produce a smaller binary by trimming specialized code paths. This can negatively affect performance." FALSE)
+option(NATIVE_ARCH "Compile targeting the native architecture" FALSE)
 
 if(${BUILD_RDTSC})
   add_compile_definitions(RDTSC)
@@ -432,6 +448,10 @@ endif()
 
 if(TREAT_WARNINGS_AS_ERRORS)
   message("Treating warnings as errors.")
+endif()
+
+if(NATIVE_ARCH)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 endif()
 
 if(CRASH_ON_ASSERT)
@@ -707,6 +727,9 @@ function(add_library_unity NAME MODE)
     enable_unity_build(${NAME} SRCS)
   endif()
   add_library(${NAME} OBJECT ${SRCS})
+  if(MSVC)
+    target_compile_options(${NAME} PRIVATE /bigobj)
+  endif()
 endfunction()
 
 function(disable_target_warnings NAME)
@@ -1042,7 +1065,7 @@ endfunction()
 macro(register_external_extension NAME URL COMMIT DONT_LINK DONT_BUILD LOAD_TESTS PATH INCLUDE_PATH TEST_PATH APPLY_PATCHES LINKED_LIBS SUBMODULES EXTENSION_VERSION)
   include(FetchContent)
   if (${APPLY_PATCHES})
-    set(PATCH_COMMAND python3 ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
+    set(PATCH_COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/apply_extension_patches.py ${CMAKE_SOURCE_DIR}/.github/patches/extensions/${NAME}/)
   endif()
   FETCHCONTENT_DECLARE(
           ${NAME}_extension_fc
@@ -1308,6 +1331,10 @@ foreach(EXT_NAME IN LISTS DUCKDB_EXTENSION_NAMES)
   else()
     message(FATAL_ERROR "No path found for registered extension '${EXT_NAME}'")
   endif()
+
+  if (NOT "${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}" STREQUAL "")
+    remove_definitions(-DEXT_VERSION_${EXT_NAME_UPPERCASE}="${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_EXT_VERSION}")
+  endif()
 endforeach()
 
 # Output the extensions that we linked into DuckDB for some nice build logs
@@ -1362,7 +1389,7 @@ if(${EXTENSION_CONFIG_BUILD})
 
   add_custom_target(
           duckdb_merge_vcpkg_manifests ALL
-          COMMAND  python3 scripts/merge_vcpkg_deps.py ${VCPKG_PATHS} ${EXT_NAMES}
+          COMMAND  ${Python3_EXECUTABLE} scripts/merge_vcpkg_deps.py ${VCPKG_PATHS} ${EXT_NAMES}
           WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
           COMMENT Generates a shared vcpkg manifest from the individual extensions)
   string(REPLACE ";"  ", " VCPKG_NAMES_COMMAS "${VCPKG_NAMES}")
@@ -1393,6 +1420,15 @@ if(BUILD_PYTHON)
     set(ALL_COMPILE_FLAGS "${CMAKE_CXX_FLAGS}")
   endif()
 
+  # Check for MSVC compiler and set the correct C++ standard flag
+  if(MSVC)
+    # MSVC does not support `-std=c++11` or `-std=c++14`, use `/std:c++14`
+    set(ALL_COMPILE_FLAGS "${ALL_COMPILE_FLAGS} /std:c++14")
+  else()
+    # For non-MSVC compilers, use the `-std=c++11`
+    set(ALL_COMPILE_FLAGS "${ALL_COMPILE_FLAGS} -std=c++11")
+  endif()
+
   get_target_property(duckdb_libs duckdb LINK_LIBRARIES)
 
   set(PIP_COMMAND
@@ -1405,9 +1441,9 @@ if(BUILD_PYTHON)
     )
 
   if(PYTHON_EDITABLE_BUILD)
-    set(PIP_COMMAND ${PIP_COMMAND} python3 -m pip install --editable .)
+    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install --editable .)
   else()
-    set(PIP_COMMAND ${PIP_COMMAND} python3 -m pip install .)
+    set(PIP_COMMAND ${PIP_COMMAND} ${Python3_EXECUTABLE} -m pip install .)
   endif()
 
   if(USER_SPACE)
