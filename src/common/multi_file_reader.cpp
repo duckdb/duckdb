@@ -448,6 +448,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 				reader_data.column_mapping.push_back(i);
 				// FIXME: this needs a more extensible solution
 				reader_data.column_ids.push_back(field_id_map.size());
+				reader_data.column_indexes.emplace_back(field_id_map.size());
 			} else {
 				throw InternalException("Unexpected generated column");
 			}
