@@ -101,7 +101,7 @@ private:
 	idx_t rle_count;
 
 	//! BP stuff
-	static constexpr idx_t BP_BLOCK_SIZE = STANDARD_VECTOR_SIZE;
+	static constexpr idx_t BP_BLOCK_SIZE = 256;
 	static_assert(BP_BLOCK_SIZE % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0,
 	              "BP_BLOCK_SIZE must be divisible by BITPACKING_ALGORITHM_GROUP_SIZE");
 	uint32_t bp_block[BP_BLOCK_SIZE] = {0};

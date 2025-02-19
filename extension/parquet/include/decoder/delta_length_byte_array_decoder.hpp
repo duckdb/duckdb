@@ -27,6 +27,11 @@ public:
 	void Skip(uint8_t *defines, idx_t skip_count);
 
 private:
+	template <bool HAS_DEFINES>
+	void ReadInternal(shared_ptr<ResizeableBuffer> &block, uint8_t *defines, idx_t read_count, Vector &result,
+	                  idx_t result_offset);
+
+private:
 	ColumnReader &reader;
 	ResizeableBuffer &length_buffer;
 	idx_t byte_array_count = 0;
