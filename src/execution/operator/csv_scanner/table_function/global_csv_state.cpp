@@ -14,17 +14,17 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
     : context(context_p), system_threads(system_threads_p), column_ids(std::move(column_ids_p)),
       sniffer_mismatch_error(options.sniffer_user_mismatch_error), bind_data(bind_data_p) {
 
+	unique_ptr<CSVFileScan> initial_reader;
 	if (buffer_manager && buffer_manager->GetFilePath() == files[0]) {
-		auto state_machine = make_shared_ptr<CSVStateMachine>(
-		    CSVStateMachineCache::Get(context).Get(options.dialect_options.state_machine_options), options);
 		// If we already have a buffer manager, we don't need to reconstruct it to the first file
-		file_scans.emplace_back(make_uniq<CSVFileScan>(context, buffer_manager, state_machine, options, bind_data,
-		                                               column_ids, file_schema));
+		initial_reader = make_uniq<CSVFileScan>(context, files[0], options, 0U, bind_data, column_ids, file_schema,
+		                                        false, buffer_manager);
 	} else {
 		// If not we need to construct it for the first file
-		file_scans.emplace_back(
-		    make_uniq<CSVFileScan>(context, files[0], options, 0U, bind_data, column_ids, file_schema, false));
+		initial_reader =
+		    make_uniq<CSVFileScan>(context, files[0], options, 0U, bind_data, column_ids, file_schema, false);
 	}
+	file_scans.emplace_back(std::move(initial_reader));
 	idx_t cur_file_idx = 0;
 	while (file_scans.back()->start_iterator.done && file_scans.size() < files.size()) {
 		cur_file_idx++;
