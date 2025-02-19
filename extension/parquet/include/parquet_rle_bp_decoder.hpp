@@ -27,15 +27,18 @@ public:
 		max_val = (uint64_t(1) << bit_width_) - 1;
 	}
 
-	bool HasRepeatedBatch(const uint32_t batch_size) {
-		return repeat_count_ >= batch_size;
+	template <class T>
+	bool HasRepeatedBatch(const uint32_t batch_size, const T value) {
+		if (repeat_count_ == 0 && literal_count_ == 0) {
+			NextCounts();
+		}
+		return repeat_count_ >= batch_size && current_value_ == static_cast<uint64_t>(value);
 	}
 
 	template <typename T>
-	T GetRepeatedBatch(const uint32_t batch_size) {
-		D_ASSERT(HasRepeatedBatch(batch_size));
+	void GetRepeatedBatch(const uint32_t batch_size, const T value) {
+		D_ASSERT(repeat_count_ >= batch_size && current_value_ == static_cast<uint64_t>(value));
 		repeat_count_ -= batch_size;
-		return static_cast<T>(current_value_);
 	}
 
 	template <typename T>

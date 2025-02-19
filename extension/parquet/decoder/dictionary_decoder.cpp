@@ -177,14 +177,14 @@ bool DictionaryDecoder::CanFilter(const TableFilter &filter) {
 	return true;
 }
 
-void DictionaryDecoder::Filter(uint8_t *defines, idx_t read_count, Vector &result, const TableFilter &filter,
+void DictionaryDecoder::Filter(uint8_t *defines, const idx_t read_count, Vector &result, const TableFilter &filter,
                                SelectionVector &sel, idx_t &approved_tuple_count) {
 	if (!dictionary || dictionary_size < 0) {
 		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
 	}
 	D_ASSERT(filter_count > 0);
 	// read the dictionary values
-	auto valid_count = Read(defines, read_count, result, 0);
+	const auto valid_count = Read(defines, read_count, result, 0);
 
 	// apply the filter by checking the dictionary offsets directly
 	uint32_t *offsets;
@@ -197,7 +197,7 @@ void DictionaryDecoder::Filter(uint8_t *defines, idx_t read_count, Vector &resul
 	SelectionVector new_sel(valid_count);
 	approved_tuple_count = 0;
 	for (idx_t idx = 0; idx < valid_count; idx++) {
-		auto row_idx = valid_sel.get_index(idx);
+		auto row_idx = valid_count == read_count ? idx : valid_sel.get_index(idx);
 		auto offset = offsets[idx];
 		if (!filter_result[offset]) {
 			// does not pass the filter

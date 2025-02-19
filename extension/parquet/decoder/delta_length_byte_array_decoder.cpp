@@ -40,7 +40,7 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 
 	if (!HAS_DEFINES) {
 		// Fast path: take this out of the loop below
-		if (length_idx + read_count >= byte_array_count) {
+		if (length_idx + read_count > byte_array_count) {
 			throw IOException(
 			    "DELTA_LENGTH_BYTE_ARRAY - length mismatch between values and byte array lengths (attempted "
 			    "read of %d from %d entries) - corrupt file?",
