@@ -137,6 +137,8 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_SQLNULL = 36,
 	// STRING_LITERAL type
 	DUCKDB_TYPE_STRING_LITERAL = 37,
+	// INTEGER_LITERAL type
+	DUCKDB_TYPE_INTEGER_LITERAL = 38,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;

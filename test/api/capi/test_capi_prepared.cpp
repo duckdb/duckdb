@@ -528,11 +528,12 @@ TEST_CASE("Test STRING LITERAL parameter type", "[capi]") {
 
 	REQUIRE(duckdb_open("", &db) == DuckDBSuccess);
 	REQUIRE(duckdb_connect(db, &conn) == DuckDBSuccess);
+
 	REQUIRE(duckdb_prepare(conn, "SELECT ?", &stmt) == DuckDBSuccess);
 	REQUIRE(duckdb_bind_varchar(stmt, 1, "a") == DuckDBSuccess);
 	REQUIRE(duckdb_param_type(stmt, 1) == DUCKDB_TYPE_STRING_LITERAL);
-
 	duckdb_destroy_prepare(&stmt);
+
 	duckdb_disconnect(&conn);
 	duckdb_close(&db);
 }

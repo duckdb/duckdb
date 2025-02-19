@@ -80,6 +80,8 @@ LogicalTypeId ConvertCTypeToCPP(duckdb_type c_type) {
 		return LogicalTypeId::SQLNULL;
 	case DUCKDB_TYPE_STRING_LITERAL:
 		return LogicalTypeId::STRING_LITERAL;
+	case DUCKDB_TYPE_INTEGER_LITERAL:
+		return LogicalTypeId::INTEGER_LITERAL;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return LogicalTypeId::INVALID;
@@ -164,6 +166,8 @@ duckdb_type ConvertCPPTypeToC(const LogicalType &sql_type) {
 		return DUCKDB_TYPE_SQLNULL;
 	case LogicalTypeId::STRING_LITERAL:
 		return DUCKDB_TYPE_STRING_LITERAL;
+	case LogicalTypeId::INTEGER_LITERAL:
+		return DUCKDB_TYPE_INTEGER_LITERAL;
 	default: // LCOV_EXCL_START
 		D_ASSERT(0);
 		return DUCKDB_TYPE_INVALID;
