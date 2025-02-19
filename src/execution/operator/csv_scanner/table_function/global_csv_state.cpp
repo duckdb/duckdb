@@ -10,14 +10,37 @@ namespace duckdb {
 
 unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, bool single_threaded_scan,
                                                        shared_ptr<CSVBufferManager> buffer_manager) {
+	if (file_idx == 0 && bind_data.initial_reader) {
+		throw InternalException("FIXME: this should have been handled before");
+	}
 	auto multi_file_reader = MultiFileReader::CreateDefault("CSV Scan");
 
 	auto global_columns =
 	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.return_names, bind_data.return_types);
 
 	auto &file_name = bind_data.files[file_idx];
-	auto csv_file_scan = make_uniq<CSVFileScan>(context, file_name, bind_data.options, file_idx, bind_data, column_ids,
-	                                            file_schema, single_threaded_scan, std::move(buffer_manager));
+	auto options = bind_data.options;
+	const_reference<vector<string>> csv_names = bind_data.csv_names;
+	const_reference<vector<LogicalType>> csv_types = bind_data.csv_types;
+	bool fixed_schema = false;
+	if (file_idx < bind_data.union_readers.size()) {
+		// union readers - use cached options
+		csv_names = bind_data.union_readers[file_idx]->names;
+		csv_types = bind_data.union_readers[file_idx]->types;
+		options = bind_data.union_readers[file_idx]->options;
+		options.auto_detect = false;
+	} else if (file_idx < bind_data.column_info.size()) {
+		// Serialized union by name - sniff again
+		csv_names = bind_data.column_info[file_idx].names;
+		csv_types = bind_data.column_info[file_idx].types;
+		options.dialect_options.num_cols = csv_names.get().size();
+		fixed_schema = true;
+	} else if (bind_data.files.size() == 1) {
+		options.auto_detect = false;
+	}
+	auto csv_file_scan =
+	    make_uniq<CSVFileScan>(context, file_name, std::move(options), file_idx, csv_names, csv_types, column_ids,
+	                           file_schema, single_threaded_scan, std::move(buffer_manager), fixed_schema);
 
 	multi_file_reader->InitializeReader(*csv_file_scan, bind_data.options.file_options, bind_data.reader_bind,
 	                                    global_columns, column_ids, nullptr, file_name, context, nullptr);

@@ -6,15 +6,13 @@
 
 namespace duckdb {
 
-CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, const CSVReaderOptions &options_p,
-                         idx_t file_idx_p, const ReadCSVData &bind_data, const vector<ColumnIndex> &column_ids,
-                         CSVSchema &file_schema, bool per_file_single_threaded,
-                         shared_ptr<CSVBufferManager> buffer_manager_p)
+CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVReaderOptions options_p,
+                         idx_t file_idx_p, const vector<string> &names, const vector<LogicalType> &types,
+                         const vector<ColumnIndex> &column_ids, CSVSchema &file_schema, bool per_file_single_threaded,
+                         shared_ptr<CSVBufferManager> buffer_manager_p, bool fixed_schema)
     : BaseFileReader(file_path_p), file_idx(file_idx_p), buffer_manager(std::move(buffer_manager_p)),
-      error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())), options(options_p) {
-	if (file_idx == 0 && bind_data.initial_reader) {
-		throw InternalException("FIXME: this should have been handled before");
-	}
+      error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
+      options(std::move(options_p)) {
 
 	// Initialize Buffer Manager
 	if (!buffer_manager) {
@@ -27,33 +25,17 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	// Initialize State Machine
 	auto &state_machine_cache = CSVStateMachineCache::Get(context);
 
-	if (file_idx < bind_data.column_info.size()) {
-		// (Serialized) Union By name
-		SetNamesAndTypes(bind_data.column_info[file_idx].names, bind_data.column_info[file_idx].types);
-		if (file_idx < bind_data.union_readers.size()) {
-			// union readers - use cached options
-			D_ASSERT(names == bind_data.union_readers[file_idx]->names);
-			D_ASSERT(types == bind_data.union_readers[file_idx]->types);
-			options = bind_data.union_readers[file_idx]->options;
-		} else {
-			// Serialized union by name - sniff again
-			options.dialect_options.num_cols = names.size();
-			if (options.auto_detect) {
-				CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
-				sniffer.SniffCSV();
-			}
-		}
-		state_machine = make_shared_ptr<CSVStateMachine>(
-		    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
-		return;
-	}
-	// Sniff it!
-	SetNamesAndTypes(bind_data.csv_names, bind_data.csv_types);
-	if (options.auto_detect && bind_data.files.size() > 1) {
-		if (file_schema.Empty()) {
+	SetNamesAndTypes(names, types);
+	if (options.auto_detect) {
+		if (fixed_schema) {
+			// schema of the file is fixed - only run the sniffer
+			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+			sniffer.SniffCSV();
+		} else if (file_schema.Empty()) {
+			// no schema yet - run the sniffer and initialize the schema
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 			auto result = sniffer.SniffCSV();
-			file_schema.Initialize(bind_data.csv_names, bind_data.csv_types, options.file_path);
+			file_schema.Initialize(names, types, options.file_path);
 		} else if (file_idx > 0 && buffer_manager->file_handle->FileSize() > 0) {
 			options.file_path = file_name;
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache, false);
