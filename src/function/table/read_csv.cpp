@@ -48,8 +48,9 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 }
 
 //! Function to do schema discovery over one CSV file or a list/glob of CSV files
-void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptions &options, const MultiFileReaderOptions &file_options,
-                     vector<LogicalType> &return_types, vector<string> &names, MultiFileList &multi_file_list) {
+void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptions &options,
+                     const MultiFileReaderOptions &file_options, vector<LogicalType> &return_types,
+                     vector<string> &names, MultiFileList &multi_file_list) {
 	vector<CSVSchema> schemas;
 	const auto option_og = options;
 
@@ -144,7 +145,14 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	if (multi_file_list->GetTotalFileCount() > 1) {
 		options.multi_file_reader = true;
 	}
-	options.FromNamedParameters(input.named_parameters, context, result->file_options);
+
+	for (auto &kv : input.named_parameters) {
+		auto loption = StringUtil::Lower(kv.first);
+		if (multi_file_reader->ParseOption(loption, kv.second, result->file_options, context)) {
+			continue;
+		}
+		options.ParseOption(context, kv.first, kv.second);
+	}
 
 	result->file_options.AutoDetectHivePartitioning(*multi_file_list, context);
 	options.Verify(result->file_options);

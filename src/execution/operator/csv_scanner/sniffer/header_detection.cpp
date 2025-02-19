@@ -98,8 +98,8 @@ static string NormalizeColumnName(const string &col_name) {
 
 static void ReplaceNames(vector<string> &detected_names, CSVStateMachine &state_machine,
                          unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-                         CSVReaderOptions &options, const MultiFileReaderOptions &file_options, const vector<HeaderValue> &best_header_row,
-                         CSVErrorHandler &error_handler) {
+                         CSVReaderOptions &options, const MultiFileReaderOptions &file_options,
+                         const vector<HeaderValue> &best_header_row, CSVErrorHandler &error_handler) {
 	auto &dialect_options = state_machine.dialect_options;
 	if (!options.columns_set) {
 		if (file_options.hive_partitioning || file_options.union_by_name || options.multi_file_reader) {
@@ -211,11 +211,10 @@ bool EmptyHeader(const string &col_name, bool is_null, bool normalize) {
 	return true;
 }
 
-vector<string>
-CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row,
-                                 CSVStateMachine &state_machine, const SetColumns &set_columns,
-                                 unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-                                 CSVReaderOptions &options, const MultiFileReaderOptions &file_options, CSVErrorHandler &error_handler) {
+vector<string> CSVSniffer::DetectHeaderInternal(
+    ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
+    const SetColumns &set_columns, unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
+    CSVReaderOptions &options, const MultiFileReaderOptions &file_options, CSVErrorHandler &error_handler) {
 	vector<string> detected_names;
 	auto &dialect_options = state_machine.dialect_options;
 	dialect_options.num_cols = best_sql_types_candidates_per_column_idx.size();
@@ -225,8 +224,8 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 			detected_names.push_back(GenerateColumnName(dialect_options.num_cols, col));
 		}
 		// If the user provided names, we must replace our header with the user provided names
-		ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options, file_options,best_header_row,
-		             error_handler);
+		ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options, file_options,
+		             best_header_row, error_handler);
 		return detected_names;
 	}
 	// information for header detection
@@ -333,8 +332,8 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 	}
 
 	// If the user provided names, we must replace our header with the user provided names
-	ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options, file_options, best_header_row,
-	             error_handler);
+	ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options, file_options,
+	             best_header_row, error_handler);
 	return detected_names;
 }
 void CSVSniffer::DetectHeader() {

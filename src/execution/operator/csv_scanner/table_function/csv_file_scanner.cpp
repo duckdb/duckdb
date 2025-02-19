@@ -12,14 +12,14 @@ MultiFileReaderOptions HackyGetFileOptions() {
 	return options;
 }
 
-
-CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options) : CSVFileScan(context, file_name, options, HackyGetFileOptions()) {}
+CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options)
+    : CSVFileScan(context, file_name, options, HackyGetFileOptions()) {
+}
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVReaderOptions options_p,
-                         const MultiFileReaderOptions &file_options,
-                         const vector<string> &names, const vector<LogicalType> &types, CSVSchema &file_schema,
-                         bool per_file_single_threaded, shared_ptr<CSVBufferManager> buffer_manager_p,
-                         bool fixed_schema)
+                         const MultiFileReaderOptions &file_options, const vector<string> &names,
+                         const vector<LogicalType> &types, CSVSchema &file_schema, bool per_file_single_threaded,
+                         shared_ptr<CSVBufferManager> buffer_manager_p, bool fixed_schema)
     : BaseFileReader(file_path_p), buffer_manager(std::move(buffer_manager_p)),
       error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(std::move(options_p)) {
@@ -85,7 +85,8 @@ void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<L
 	columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(names, types);
 }
 
-CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options_p, const MultiFileReaderOptions &file_options)
+CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options_p,
+                         const MultiFileReaderOptions &file_options)
     : BaseFileReader(file_name), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(options_p) {
 	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_name);

@@ -449,7 +449,8 @@ void ParquetMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) 
 	}
 }
 
-unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data_p, idx_t file_count) {
+unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data_p,
+                                                                idx_t file_count) {
 	auto &bind_data = bind_data_p.bind_data->Cast<ParquetReadBindData>();
 	if (bind_data.explicit_cardinality) {
 		return make_uniq<NodeStatistics>(bind_data.explicit_cardinality);

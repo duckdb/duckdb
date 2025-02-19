@@ -31,19 +31,21 @@ shared_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, shared_pt
 		auto &csv_types = csv_data.column_info[file_idx].types;
 		options.dialect_options.num_cols = csv_names.size();
 		fixed_schema = true;
-		csv_file_scan = make_uniq<CSVFileScan>(context, file_name, std::move(options), bind_data.file_options, csv_names, csv_types,
-		                                       file_schema, single_threaded, std::move(buffer_manager), fixed_schema);
+		csv_file_scan =
+		    make_uniq<CSVFileScan>(context, file_name, std::move(options), bind_data.file_options, csv_names, csv_types,
+		                           file_schema, single_threaded, std::move(buffer_manager), fixed_schema);
 	} else {
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE) {
 			options.auto_detect = false;
 		}
-		csv_file_scan = make_uniq<CSVFileScan>(context, file_name, std::move(options), bind_data.file_options, bind_data.names, bind_data.types,
-		                                       file_schema, single_threaded, std::move(buffer_manager), fixed_schema);
+		csv_file_scan = make_uniq<CSVFileScan>(context, file_name, std::move(options), bind_data.file_options,
+		                                       bind_data.names, bind_data.types, file_schema, single_threaded,
+		                                       std::move(buffer_manager), fixed_schema);
 	}
 	csv_file_scan->reader_data.file_list_idx = file_idx;
 
-	multi_file_reader->InitializeReader(*csv_file_scan, bind_data.file_options, bind_data.reader_bind,
-	                                    global_columns, column_ids, nullptr, file_name, context, nullptr);
+	multi_file_reader->InitializeReader(*csv_file_scan, bind_data.file_options, bind_data.reader_bind, global_columns,
+	                                    column_ids, nullptr, file_name, context, nullptr);
 	CSVMultiFileInfo::FinalizeReader(context, *csv_file_scan);
 	return shared_ptr_cast<BaseFileReader, CSVFileScan>(std::move(csv_file_scan));
 }
