@@ -1,0 +1,11 @@
+# name: test/sql/copy/csv/test_sniffer_hang.test
+# description: Test csv files with hanging behavior
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+FROM read_csv('data/csv/bad_csv_file_2047.csv', sample_size = -1)
+----
+Error when sniffing file

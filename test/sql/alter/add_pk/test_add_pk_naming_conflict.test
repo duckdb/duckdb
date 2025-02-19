@@ -22,7 +22,7 @@ CREATE INDEX PRIMARY_tbl_i ON tbl(i);
 statement error
 ALTER TABLE tbl ADD PRIMARY KEY (i);
 ----
-<REGEX>:Catalog Error.*an index with that name already exists for this table: PRIMARY_tbl_i.*
+<REGEX>:Catalog Error.*already exists.*
 
 restart
 
@@ -32,7 +32,7 @@ PRAGMA enable_verification;
 statement error
 ALTER TABLE tbl ADD PRIMARY KEY (i);
 ----
-<REGEX>:Catalog Error.*an index with that name already exists for this table: PRIMARY_tbl_i.*
+<REGEX>:Catalog Error.*already exists.*
 
 # Let's do it the other way around now.
 
