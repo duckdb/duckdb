@@ -30,6 +30,12 @@ create table trades("when" timestamp, symbol int);
 statement ok
 insert into trades values ('2020-01-01 00:00:03', 1);
 
+# Compare NLJ optimisation to operator
+foreach threshold 0 32
+
+statement ok
+PRAGMA asof_loop_join_threshold = ${threshold};
+
 query III
 SELECT t.*, p.price
 FROM trades t ASOF JOIN prices p 
@@ -68,13 +74,13 @@ SELECT
       s1.starts as s1_starts,
       s2.starts as s2_starts,
 FROM samples AS s1 ASOF JOIN samples as s2 ON s2.ends >= (s1.ends - 5)
-WHERE s1_starts <> s2_starts;
+WHERE s1_starts <> s2_starts
+ORDER BY ALL
 ----
-21 	14
 10	5
+21 	14
 
-# Use an ASOF join inside of a correlated subquery
-
+endloop
 
 #
 #  Errors

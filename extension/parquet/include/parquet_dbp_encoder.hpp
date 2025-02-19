@@ -176,4 +176,58 @@ private:
 	data_t data_packed[NUMBER_OF_VALUES_IN_A_MINIBLOCK * sizeof(int64_t)];
 };
 
+namespace dbp_encoder {
+
+template <class T>
+void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const T &first_value) {
+	throw InternalException("Can't write type to DELTA_BINARY_PACKED column");
+}
+
+template <>
+void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const int64_t &first_value) {
+	encoder.BeginWrite(writer, first_value);
+}
+
+template <>
+void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const int32_t &first_value) {
+	BeginWrite(encoder, writer, UnsafeNumericCast<int64_t>(first_value));
+}
+
+template <>
+void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const uint64_t &first_value) {
+	encoder.BeginWrite(writer, UnsafeNumericCast<int64_t>(first_value));
+}
+
+template <>
+void BeginWrite(DbpEncoder &encoder, WriteStream &writer, const uint32_t &first_value) {
+	BeginWrite(encoder, writer, UnsafeNumericCast<int64_t>(first_value));
+}
+
+template <class T>
+void WriteValue(DbpEncoder &encoder, WriteStream &writer, const T &value) {
+	throw InternalException("Can't write type to DELTA_BINARY_PACKED column");
+}
+
+template <>
+void WriteValue(DbpEncoder &encoder, WriteStream &writer, const int64_t &value) {
+	encoder.WriteValue(writer, value);
+}
+
+template <>
+void WriteValue(DbpEncoder &encoder, WriteStream &writer, const int32_t &value) {
+	WriteValue(encoder, writer, UnsafeNumericCast<int64_t>(value));
+}
+
+template <>
+void WriteValue(DbpEncoder &encoder, WriteStream &writer, const uint64_t &value) {
+	encoder.WriteValue(writer, UnsafeNumericCast<int64_t>(value));
+}
+
+template <>
+void WriteValue(DbpEncoder &encoder, WriteStream &writer, const uint32_t &value) {
+	WriteValue(encoder, writer, UnsafeNumericCast<int64_t>(value));
+}
+
+} // namespace dbp_encoder
+
 } // namespace duckdb

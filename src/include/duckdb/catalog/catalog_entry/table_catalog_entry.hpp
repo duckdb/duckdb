@@ -18,6 +18,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
+#include "duckdb/common/table_column.hpp"
 
 namespace duckdb {
 
@@ -117,10 +118,8 @@ public:
 	//! Returns true, if the table has a primary key, else false.
 	bool HasPrimaryKey() const;
 
-	//! Returns the rowid type of this table
-	virtual LogicalType GetRowIdType() const {
-		return LogicalType::ROW_TYPE;
-	}
+	//! Returns the virtual columns for this table
+	virtual virtual_column_map_t GetVirtualColumns() const;
 
 protected:
 	//! A list of columns that are part of this table
