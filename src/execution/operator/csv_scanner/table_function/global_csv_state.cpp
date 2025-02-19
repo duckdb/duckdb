@@ -10,12 +10,14 @@ namespace duckdb {
 
 CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBufferManager> &buffer_manager,
                                const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
-                               vector<ColumnIndex> column_ids_p, const ReadCSVData &bind_data_p)
+                               vector<ColumnIndex> column_ids_p, ReadCSVData &bind_data_p)
     : context(context_p), system_threads(system_threads_p), column_ids(std::move(column_ids_p)),
       sniffer_mismatch_error(options.sniffer_user_mismatch_error), bind_data(bind_data_p) {
 
 	unique_ptr<CSVFileScan> initial_reader;
-	if (buffer_manager && buffer_manager->GetFilePath() == files[0]) {
+	if (bind_data.initial_reader) {
+		initial_reader = unique_ptr_cast<BaseFileReader, CSVFileScan>(std::move(bind_data_p.initial_reader));
+	} else if (buffer_manager && buffer_manager->GetFilePath() == files[0]) {
 		// If we already have a buffer manager, we don't need to reconstruct it to the first file
 		initial_reader = make_uniq<CSVFileScan>(context, files[0], options, 0U, bind_data, column_ids, file_schema,
 		                                        false, buffer_manager);

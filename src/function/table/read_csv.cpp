@@ -238,7 +238,7 @@ public:
 // Read CSV Functions
 //===--------------------------------------------------------------------===//
 static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = input.bind_data->Cast<ReadCSVData>();
+	auto &bind_data = input.bind_data->CastNoConst<ReadCSVData>();
 
 	// Create the temporary rejects table
 	if (bind_data.options.store_rejects.GetValue()) {

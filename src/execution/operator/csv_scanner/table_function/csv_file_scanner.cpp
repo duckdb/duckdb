@@ -18,21 +18,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, cons
 	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.return_names, bind_data.return_types);
 
 	if (file_idx == 0 && bind_data.initial_reader) {
-		auto &union_reader = bind_data.initial_reader->Cast<CSVFileScan>();
-		// Initialize Buffer Manager
-		buffer_manager = union_reader.buffer_manager;
-		// Initialize On Disk and Size of file
-		on_disk_file = union_reader.on_disk_file;
-		file_size = union_reader.file_size;
-		options = union_reader.options;
-		SetNamesAndTypes(union_reader.GetNames(), union_reader.GetTypes());
-		state_machine = union_reader.state_machine;
-		multi_file_reader->InitializeReader(*this, options.file_options, bind_data.reader_bind, global_columns,
-		                                    column_ids, nullptr, file_name, context, nullptr);
-
-		InitializeFileNamesTypes();
-		SetStart();
-		return;
+		throw InternalException("FIXME: this should have been handled before");
 	}
 
 	// Initialize Buffer Manager

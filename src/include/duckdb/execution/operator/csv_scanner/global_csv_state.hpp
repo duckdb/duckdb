@@ -23,7 +23,7 @@ namespace duckdb {
 struct CSVGlobalState : public GlobalTableFunctionState {
 	CSVGlobalState(ClientContext &context, const shared_ptr<CSVBufferManager> &buffer_manager_p,
 	               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
-	               vector<ColumnIndex> column_ids_p, const ReadCSVData &bind_data);
+	               vector<ColumnIndex> column_ids_p, ReadCSVData &bind_data);
 
 	~CSVGlobalState() override {
 	}
