@@ -1,0 +1,32 @@
+diff --git a/duckdb b/duckdb
+index 0024e5d..3c695d7 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit 0024e5d4beba0185733df68642775e3f38e089cb
++Subproject commit 3c695d7ba94d95d9facee48d395f46ed0bd72b46
+diff --git a/test/sql/geometry/st_dump.test b/test/sql/geometry/st_dump.test
+index 3346f5f..c181720 100644
+--- a/test/sql/geometry/st_dump.test
++++ b/test/sql/geometry/st_dump.test
+@@ -25,7 +25,7 @@ SElECT ST_Dump(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY'));
+ query I
+ SElECT ST_Dump(ST_GeomFromText('GEOMETRYCOLLECTION (POINT (0 0))'));
+ ----
+-[{'geom': POINT (0 0), 'path': [1]}]
++[{'geom': 'POINT (0 0)', 'path': [1]}]
+ 
+ # Test with multipoint
+ query II
+@@ -69,9 +69,9 @@ FROM (VALUES
+     (ST_GeomFromText('GEOMETRYCOLLECTION (POINT (1 1), GEOMETRYCOLLECTION(POINT (3 3)), POINT (2 2))'))
+ ) as t(geom)
+ ----
+-[{'geom': POINT (1 1), 'path': [1]}, {'geom': POINT (2 2), 'path': [2]}, {'geom': POINT (3 3), 'path': [3, 1]}]
++[{'geom': 'POINT (1 1)', 'path': [1]}, {'geom': 'POINT (2 2)', 'path': [2]}, {'geom': 'POINT (3 3)', 'path': [3, 1]}]
+ NULL
+-[{'geom': POINT (1 1), 'path': [1]}, {'geom': POINT (3 3), 'path': [2, 1]}, {'geom': POINT (2 2), 'path': [3]}]
++[{'geom': 'POINT (1 1)', 'path': [1]}, {'geom': 'POINT (3 3)', 'path': [2, 1]}, {'geom': 'POINT (2 2)', 'path': [3]}]
+ 
+ 
+ # With Z and M
