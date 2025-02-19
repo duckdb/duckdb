@@ -16,8 +16,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVR
 
 	// Initialize Buffer Manager
 	if (!buffer_manager) {
-		buffer_manager =
-		    make_shared_ptr<CSVBufferManager>(context, options, file_name, file_idx, per_file_single_threaded);
+		buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_name, per_file_single_threaded);
 	}
 	// Initialize On Disk and Size of file
 	on_disk_file = buffer_manager->file_handle->OnDiskFile();
@@ -36,7 +35,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVR
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
 			auto result = sniffer.SniffCSV();
 			file_schema.Initialize(names, types, options.file_path);
-		} else if (file_idx > 0 && buffer_manager->file_handle->FileSize() > 0) {
+		} else if (buffer_manager->file_handle->FileSize() > 0) {
 			options.file_path = file_name;
 			CSVSniffer sniffer(options, buffer_manager, state_machine_cache, false);
 			auto result = sniffer.AdaptiveSniff(file_schema);

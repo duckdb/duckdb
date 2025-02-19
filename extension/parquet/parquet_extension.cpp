@@ -103,9 +103,10 @@ struct ParquetMultiFileInfo {
 	static idx_t MaxThreads(const TableFunctionData &bind_data_p);
 	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState();
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate, BaseUnionData &union_data);
-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate, const string &filename,
-	                                               TableFunctionData &bind_data);
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                               BaseUnionData &union_data);
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                               const string &filename, TableFunctionData &bind_data);
 	static void FinalizeReader(ClientContext &context, BaseFileReader &reader);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk);
@@ -476,13 +477,14 @@ double ParquetMultiFileInfo::GetProgressInFile(ClientContext &context, GlobalTab
 	return 100.0 * (static_cast<double>(read_rows) / static_cast<double>(total_rows));
 }
 
-shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &, BaseUnionData &union_data_p) {
+shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &,
+                                                              BaseUnionData &union_data_p) {
 	auto &union_data = union_data_p.Cast<ParquetUnionData>();
 	return make_shared_ptr<ParquetReader>(context, union_data.file_name, union_data.options, union_data.metadata);
 }
 
-shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &, const string &filename,
-                                                              TableFunctionData &bind_data_p) {
+shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &,
+                                                              const string &filename, TableFunctionData &bind_data_p) {
 	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
 	return make_shared_ptr<ParquetReader>(context, filename, bind_data.parquet_options);
 }

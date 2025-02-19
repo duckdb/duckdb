@@ -340,10 +340,11 @@ public:
 						auto &union_data = *current_reader_data.union_data;
 						reader = OP::CreateReader(context, *global_state.global_state, union_data);
 					} else {
-						reader = OP::CreateReader(context, *global_state.global_state, current_reader_data.file_to_be_opened, *bind_data.bind_data);
+						reader = OP::CreateReader(context, *global_state.global_state,
+						                          current_reader_data.file_to_be_opened, *bind_data.bind_data);
 					}
-					InitializeReader(*reader, bind_data, global_state.column_indexes, global_state.filters, context,
-					                 i, global_state.multi_file_reader_state);
+					InitializeReader(*reader, bind_data, global_state.column_indexes, global_state.filters, context, i,
+					                 global_state.multi_file_reader_state);
 					OP::FinalizeReader(context, *reader);
 				} catch (...) {
 					parallel_lock.lock();

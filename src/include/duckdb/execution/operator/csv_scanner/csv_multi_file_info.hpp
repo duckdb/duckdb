@@ -27,9 +27,10 @@ struct CSVMultiFileInfo {
 	static idx_t MaxThreads(const TableFunctionData &bind_data_p);
 	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState();
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate, BaseUnionData &union_data);
-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate, const string &filename,
-	                                               TableFunctionData &bind_data);
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                               BaseUnionData &union_data);
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	                                               const string &filename, TableFunctionData &bind_data);
 	static void FinalizeReader(ClientContext &context, BaseFileReader &reader);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk);

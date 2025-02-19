@@ -9,14 +9,14 @@
 
 namespace duckdb {
 
-// shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate, BaseUnionData &union_data) {
+// shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+// BaseUnionData &union_data) {
 //
 // }
 //
-// shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p, const string &filename,
-// 											   TableFunctionData &bind_data_p) {
-// 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
-// 	auto &bind_data = bind_data_p.Cast<ReadCSVData>();
+// shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
+// const string &filename, 											   TableFunctionData &bind_data_p) { 	auto &gstate = gstate_p.Cast<CSVGlobalState>(); 	auto
+// &bind_data = bind_data_p.Cast<ReadCSVData>();
 //
 // 	auto csv_file_scan =
 // 		make_uniq<CSVFileScan>(context, filename, bind_data.options, file_idx, csv_names, csv_types, column_ids,
@@ -73,7 +73,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
     : context(context_p), system_threads(system_threads_p), column_ids(std::move(column_ids_p)),
       sniffer_mismatch_error(options.sniffer_user_mismatch_error), bind_data(bind_data_p) {
 	global_columns =
-		MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.return_names, bind_data.return_types);
+	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.return_names, bind_data.return_types);
 
 	unique_ptr<CSVFileScan> initial_reader;
 	if (bind_data.initial_reader) {

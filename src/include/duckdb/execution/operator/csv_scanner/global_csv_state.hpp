@@ -22,6 +22,7 @@ namespace duckdb {
 //! CSV Global State is used in the CSV Reader Table Function, it controls what each thread
 struct CSVGlobalState : public GlobalTableFunctionState {
 	friend struct CSVMultiFileInfo;
+
 public:
 	CSVGlobalState(ClientContext &context, const shared_ptr<CSVBufferManager> &buffer_manager_p,
 	               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
