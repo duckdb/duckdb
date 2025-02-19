@@ -27,10 +27,9 @@ struct CSVMultiFileInfo {
 	static idx_t MaxThreads(const TableFunctionData &bind_data_p);
 	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState();
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
-	// FIXME this needs to be a shared_ptr
-	static shared_ptr<CSVFileScan> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                            BaseUnionData &union_data, TableFunctionData &bind_data_p);
-	static shared_ptr<CSVFileScan> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                            const string &filename, TableFunctionData &bind_data);
 	static void FinalizeReader(ClientContext &context, BaseFileReader &reader);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
@@ -38,7 +37,7 @@ struct CSVMultiFileInfo {
 	static bool TryInitializeScan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &gstate,
 	                              LocalTableFunctionState &lstate);
 	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state);
-	static unique_ptr<NodeStatistics> GetCardinality(TableFunctionData &bind_data, idx_t file_count);
+	static unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count);
 	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, BaseFileReader &reader, const string &name);
 	static double GetProgressInFile(ClientContext &context, GlobalTableFunctionState &gstate);
 };

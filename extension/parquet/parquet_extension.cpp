@@ -113,7 +113,7 @@ struct ParquetMultiFileInfo {
 	static bool TryInitializeScan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &gstate,
 	                              LocalTableFunctionState &lstate);
 	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state);
-	static unique_ptr<NodeStatistics> GetCardinality(TableFunctionData &bind_data, idx_t file_count);
+	static unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count);
 	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, BaseFileReader &reader, const string &name);
 	static double GetProgressInFile(ClientContext &context, GlobalTableFunctionState &gstate);
 };
@@ -449,8 +449,8 @@ void ParquetMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) 
 	}
 }
 
-unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(TableFunctionData &bind_data_p, idx_t file_count) {
-	auto &bind_data = bind_data_p.Cast<ParquetReadBindData>();
+unique_ptr<NodeStatistics> ParquetMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data_p, idx_t file_count) {
+	auto &bind_data = bind_data_p.bind_data->Cast<ParquetReadBindData>();
 	if (bind_data.explicit_cardinality) {
 		return make_uniq<NodeStatistics>(bind_data.explicit_cardinality);
 	}

@@ -30,8 +30,6 @@ public:
 };
 
 struct BaseCSVData : public TableFunctionData {
-	//! The file path of the CSV file to read or write
-	vector<string> files;
 	//! The CSV reader options
 	CSVReaderOptions options;
 	//! Offsets for generated columns
@@ -51,6 +49,8 @@ struct WriteCSVData : public BaseCSVData {
 		}
 	}
 
+	//! The file path of the CSV file to read or write
+	vector<string> files;
 	//! The SQL types to write
 	vector<LogicalType> sql_types;
 	//! The newline string to write

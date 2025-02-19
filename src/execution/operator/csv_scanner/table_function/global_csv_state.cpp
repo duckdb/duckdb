@@ -9,35 +9,6 @@
 
 namespace duckdb {
 
-shared_ptr<CSVFileScan> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                                                       BaseUnionData &union_data_p, TableFunctionData &bind_data_p) {
-	auto &union_data = union_data_p.Cast<CSVUnionData>();
-	auto &gstate = gstate_p.Cast<CSVGlobalState>();
-	// union readers - use cached options
-	auto &csv_names = union_data.names;
-	auto &csv_types = union_data.types;
-	auto options = union_data.options;
-	options.auto_detect = false;
-	return make_uniq<CSVFileScan>(context, union_data.GetFileName(), std::move(options), csv_names, csv_types,
-	                              gstate.file_schema, gstate.single_threaded, nullptr, false);
-}
-//
-// shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
-// const string &filename, 											   TableFunctionData &bind_data_p) { 	auto &gstate
-// = gstate_p.Cast<CSVGlobalState>(); 	auto &bind_data = bind_data_p.Cast<ReadCSVData>();
-//
-// 	auto csv_file_scan =
-// 		make_uniq<CSVFileScan>(context, filename, bind_data.options, file_idx, csv_names, csv_types, column_ids,
-// 							   file_schema, single_threaded_scan, std::move(buffer_manager), fixed_schema);
-//
-// }
-
-void CSVMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader) {
-	auto &csv_file_scan = reader.Cast<CSVFileScan>();
-	csv_file_scan.InitializeFileNamesTypes();
-	csv_file_scan.SetStart();
-}
-
 shared_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, shared_ptr<CSVBufferManager> buffer_manager) {
 	if (file_idx == 0 && bind_data.initial_reader) {
 		throw InternalException("FIXME: this should have been handled before");
@@ -45,10 +16,10 @@ shared_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, shared_pt
 	auto multi_file_reader = MultiFileReader::CreateDefault("CSV Scan");
 
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
-	auto &file_name = csv_data.files[file_idx];
+	auto &file_name = files[file_idx];
 	auto options = csv_data.options;
 	bool fixed_schema = false;
-	shared_ptr<CSVFileScan> csv_file_scan;
+	shared_ptr<BaseFileReader> csv_file_scan;
 	if (file_idx < bind_data.union_readers.size()) {
 		if (buffer_manager) {
 			throw InternalException("buffer_manager / single threaded scan for union reader");
@@ -63,7 +34,7 @@ shared_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, shared_pt
 		csv_file_scan = make_uniq<CSVFileScan>(context, file_name, std::move(options), csv_names, csv_types,
 		                                       file_schema, single_threaded, std::move(buffer_manager), fixed_schema);
 	} else {
-		if (csv_data.files.size() == 1) {
+		if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE) {
 			options.auto_detect = false;
 		}
 		csv_file_scan = make_uniq<CSVFileScan>(context, file_name, std::move(options), bind_data.names, bind_data.types,
@@ -74,13 +45,13 @@ shared_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, shared_pt
 	multi_file_reader->InitializeReader(*csv_file_scan, csv_data.options.file_options, bind_data.reader_bind,
 	                                    global_columns, column_ids, nullptr, file_name, context, nullptr);
 	CSVMultiFileInfo::FinalizeReader(context, *csv_file_scan);
-	return csv_file_scan;
+	return shared_ptr_cast<BaseFileReader, CSVFileScan>(std::move(csv_file_scan));
 }
 
 CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBufferManager> &buffer_manager,
-                               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files,
+                               const CSVReaderOptions &options, idx_t system_threads_p, const vector<string> &files_p,
                                vector<ColumnIndex> column_ids_p, MultiFileBindData &bind_data_p)
-    : context(context_p), system_threads(system_threads_p), column_ids(std::move(column_ids_p)),
+    : context(context_p), files(files_p), system_threads(system_threads_p), column_ids(std::move(column_ids_p)),
       sniffer_mismatch_error(options.sniffer_user_mismatch_error), bind_data(bind_data_p) {
 	global_columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
 
@@ -122,8 +93,7 @@ bool CSVGlobalState::IsDone() const {
 
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	lock_guard<mutex> parallel_lock(main_mutex);
-	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
-	idx_t total_files = csv_data.files.size();
+	idx_t total_files = files.size();
 	// get the progress WITHIN the current file
 	double percentage = 0;
 	if (file_scans.front()->file_size == 0) {
@@ -172,9 +142,8 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 		do {
 			{
 				lock_guard<mutex> parallel_lock(main_mutex);
-				auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 				cur_idx = last_file_idx++;
-				if (cur_idx >= csv_data.files.size()) {
+				if (cur_idx >= files.size()) {
 					// No more files to scan
 					return nullptr;
 				}
@@ -234,7 +203,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 		// This means we are done scanning the current file
 		do {
 			auto current_file_idx = file_scans.back()->GetFileIndex() + 1;
-			if (current_file_idx < csv_data.files.size()) {
+			if (current_file_idx < files.size()) {
 				// If we have a next file we have to construct the file scan for that
 				file_scans.emplace_back(CreateFileScan(current_file_idx));
 				// And re-start the boundary-iterator

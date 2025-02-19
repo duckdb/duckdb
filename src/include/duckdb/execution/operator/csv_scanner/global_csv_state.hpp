@@ -52,6 +52,7 @@ private:
 	//! Reference to the client context that created this scan
 	ClientContext &context;
 
+	vector<string> files;
 	vector<shared_ptr<CSVFileScan>> file_scans;
 
 	//! Mutex to lock when getting next batch of bytes (Parallel Only)

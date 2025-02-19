@@ -236,7 +236,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	bind_data->names = expected_names;
 
 	auto multi_file_reader = MultiFileReader::CreateDefault("CSVCopy");
-	csv_data->files = multi_file_reader->CreateFileList(context, Value(info.file_path))->GetAllFiles();
+	bind_data->file_list = multi_file_reader->CreateFileList(context, Value(info.file_path));
 
 	auto &options = csv_data->options;
 
@@ -257,7 +257,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	for (auto &option : info.options) {
 		options_map[option.first] = ConvertVectorToValue(std::move(option.second));
 	}
-	options.file_path = csv_data->files[0];
+	options.file_path = bind_data->file_list->GetFirstFile();
 	options.name_list = expected_names;
 	options.sql_type_list = expected_types;
 	options.columns_set = true;
@@ -266,12 +266,12 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &in
 	}
 
 	if (options.auto_detect) {
-		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, csv_data->files[0], 0);
+		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, 0);
 		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context));
 		sniffer.SniffCSV();
 	}
 	csv_data->FinalizeRead(context);
-
+	bind_data->multi_file_reader = std::move(multi_file_reader);
 	bind_data->bind_data = std::move(csv_data);
 	return std::move(bind_data);
 }
