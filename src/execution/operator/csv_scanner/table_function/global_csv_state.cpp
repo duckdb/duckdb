@@ -314,7 +314,8 @@ void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t f
 	if (options.user_defined_parameters.empty()) {
 		scan_appender.Append(Value());
 	} else {
-		scan_appender.Append(string_t(options.user_defined_parameters));
+		auto parameters = options.GetUserDefinedParameters();
+		scan_appender.Append(string_t(parameters));
 	}
 	// Finish the row to the rejects table
 	scan_appender.EndRow();

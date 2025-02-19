@@ -586,8 +586,18 @@ bool GetBooleanValue(const pair<const string, Value> &option) {
 	return BooleanValue::Get(option.second);
 }
 
+string CSVReaderOptions::GetUserDefinedParameters() const {
+	string result;
+	for (auto &udf_parameter : user_defined_parameters) {
+		if (!result.empty()) {
+			result += ", ";
+		}
+		result += udf_parameter.first + "=" + udf_parameter.second;
+	}
+	return result;
+}
+
 void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context, MultiFileReaderOptions &file_options) {
-	map<string, string> ordered_user_defined_parameters;
 	for (auto &kv : in) {
 		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
 			continue;
@@ -595,7 +605,7 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 		auto loption = StringUtil::Lower(kv.first);
 		// skip variables that are specific to auto-detection
 		if (StoreUserDefinedParameter(loption)) {
-			ordered_user_defined_parameters[loption] = kv.second.ToSQLString();
+			user_defined_parameters[loption] = kv.second.ToSQLString();
 		}
 		if (loption == "columns") {
 			if (!name_list.empty()) {
@@ -724,12 +734,6 @@ void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, Clie
 		} else {
 			SetReadOption(loption, kv.second, name_list);
 		}
-	}
-	for (auto &udf_parameter : ordered_user_defined_parameters) {
-		user_defined_parameters += udf_parameter.first + "=" + udf_parameter.second + ", ";
-	}
-	if (user_defined_parameters.size() >= 2) {
-		user_defined_parameters.erase(user_defined_parameters.size() - 2);
 	}
 }
 //! This function is used to remember options set by the sniffer, for use in ReadCSVRelation

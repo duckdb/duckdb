@@ -15,6 +15,7 @@ bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key
 
 bool CSVMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
                  MultiFileReaderOptions &file_options, BaseFileReaderOptions &options) {
+
 	throw InternalException("Unimplemented CSVMultiFileInfo method");
 }
 

@@ -118,8 +118,11 @@ struct CSVReaderOptions {
 
 	//! By default, our encoding is always UTF-8
 	string encoding = "utf-8";
-	//! User defined parameters for the csv function concatenated on a string
-	string user_defined_parameters;
+	//! User defined parameters
+	map<string, string> user_defined_parameters;
+
+	//! Returns a list of user-defined parameters in string format
+	string GetUserDefinedParameters() const;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions

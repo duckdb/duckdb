@@ -231,7 +231,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (data.options.user_defined_parameters.empty()) {
 		output.SetValue(10, 0, Value());
 	} else {
-		output.SetValue(10, 0, Value(data.options.user_defined_parameters));
+		output.SetValue(10, 0, Value(data.options.GetUserDefinedParameters()));
 	}
 
 	// 12. csv_read string
@@ -311,7 +311,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	}
 	// 11.11 User Arguments
 	if (!data.options.user_defined_parameters.empty()) {
-		csv_read << separator << data.options.user_defined_parameters;
+		csv_read << separator << data.options.GetUserDefinedParameters();
 	}
 	csv_read << ");";
 	output.SetValue(11, 0, csv_read.str());
