@@ -79,10 +79,6 @@ struct ColumnInfo {
 
 struct ReadCSVData : public BaseCSVData {
 	ReadCSVData();
-	//! The expected SQL types to read from the file
-	vector<LogicalType> csv_types;
-	//! The expected SQL names to be read from the file
-	vector<string> csv_names;
 	//! If the sql types from the file were manually set
 	vector<bool> manually_set;
 	//! The expected SQL types to be returned from the read - including added constants (e.g. filename, hive partitions)

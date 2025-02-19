@@ -567,8 +567,8 @@ QualifiedColumnName QualifiedColumnName::Deserialize(Deserializer &deserializer)
 
 void ReadCSVData::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<vector<string>>(100, "files", files);
-	serializer.WritePropertyWithDefault<vector<LogicalType>>(101, "csv_types", csv_types);
-	serializer.WritePropertyWithDefault<vector<string>>(102, "csv_names", csv_names);
+	/* [Deleted] (vector<LogicalType>) "csv_types" */
+	/* [Deleted] (vector<string>) "csv_names" */
 	serializer.WritePropertyWithDefault<vector<LogicalType>>(103, "return_types", return_types);
 	serializer.WritePropertyWithDefault<vector<string>>(104, "return_names", return_names);
 	serializer.WritePropertyWithDefault<idx_t>(105, "filename_col_idx", filename_col_idx);
@@ -580,8 +580,8 @@ void ReadCSVData::Serialize(Serializer &serializer) const {
 unique_ptr<ReadCSVData> ReadCSVData::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<ReadCSVData>(new ReadCSVData());
 	deserializer.ReadPropertyWithDefault<vector<string>>(100, "files", result->files);
-	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(101, "csv_types", result->csv_types);
-	deserializer.ReadPropertyWithDefault<vector<string>>(102, "csv_names", result->csv_names);
+	deserializer.ReadDeletedProperty<vector<LogicalType>>(101, "csv_types");
+	deserializer.ReadDeletedProperty<vector<string>>(102, "csv_names");
 	deserializer.ReadPropertyWithDefault<vector<LogicalType>>(103, "return_types", result->return_types);
 	deserializer.ReadPropertyWithDefault<vector<string>>(104, "return_names", result->return_names);
 	deserializer.ReadPropertyWithDefault<idx_t>(105, "filename_col_idx", result->filename_col_idx);

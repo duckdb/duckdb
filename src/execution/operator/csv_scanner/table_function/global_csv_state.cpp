@@ -65,9 +65,9 @@ unique_ptr<CSVFileScan> CSVGlobalState::CreateFileScan(idx_t file_idx, shared_pt
 		if (bind_data.files.size() == 1) {
 			options.auto_detect = false;
 		}
-		csv_file_scan =
-		    make_uniq<CSVFileScan>(context, file_name, std::move(options), bind_data.csv_names, bind_data.csv_types,
-		                           file_schema, single_threaded, std::move(buffer_manager), fixed_schema);
+		csv_file_scan = make_uniq<CSVFileScan>(context, file_name, std::move(options), bind_data.return_names,
+		                                       bind_data.return_types, file_schema, single_threaded,
+		                                       std::move(buffer_manager), fixed_schema);
 	}
 	csv_file_scan->reader_data.file_list_idx = file_idx;
 

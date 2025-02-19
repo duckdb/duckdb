@@ -230,8 +230,6 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
                                             vector<LogicalType> &expected_types) {
 	auto bind_data = make_uniq<ReadCSVData>();
-	bind_data->csv_types = expected_types;
-	bind_data->csv_names = expected_names;
 	bind_data->return_types = expected_types;
 	bind_data->return_names = expected_names;
 

@@ -130,8 +130,6 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 			type = LogicalType::VARCHAR;
 		}
 	}
-	result.csv_types = return_types;
-	result.csv_names = names;
 }
 
 static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctionBindInput &input,
@@ -188,8 +186,6 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		}
 	}
 
-	result->csv_types = return_types;
-	result->csv_names = names;
 	result->return_types = return_types;
 	result->return_names = names;
 	if (!options.force_not_null_names.empty()) {
@@ -385,7 +381,7 @@ unique_ptr<NodeStatistics> CSVReaderCardinality(ClientContext &context, const Fu
 	// determined through the scientific method as the average amount of rows in a CSV file
 	idx_t per_file_cardinality = 42;
 	if (bind_data.buffer_manager && bind_data.buffer_manager->file_handle) {
-		auto estimated_row_width = (bind_data.csv_types.size() * 5);
+		auto estimated_row_width = (bind_data.return_types.size() * 5);
 		per_file_cardinality = bind_data.buffer_manager->file_handle->FileSize() / estimated_row_width;
 	}
 	return make_uniq<NodeStatistics>(bind_data.files.size() * per_file_cardinality);
@@ -409,7 +405,6 @@ void PushdownTypeToCSVScanner(ClientContext &context, optional_ptr<FunctionData>
                               const unordered_map<idx_t, LogicalType> &new_column_types) {
 	auto &csv_bind = bind_data->Cast<ReadCSVData>();
 	for (auto &type : new_column_types) {
-		csv_bind.csv_types[type.first] = type.second;
 		csv_bind.return_types[type.first] = type.second;
 	}
 }

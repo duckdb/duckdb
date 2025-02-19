@@ -876,11 +876,13 @@
       {
         "id": 101,
         "name": "csv_types",
+        "deleted": true,
         "type": "vector<LogicalType>"
       },
       {
         "id": 102,
         "name": "csv_names",
+        "deleted":  true,
         "type": "vector<string>"
       },
       {
