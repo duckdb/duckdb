@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/fast_mem.hpp"
 #include "duckdb/common/bitpacking.hpp"
 #include "resizable_buffer.hpp"
 
@@ -86,14 +87,22 @@ public:
 
 	template <class T>
 	static void BitUnpackAlignedInternal(ByteBuffer &src, T *dst, const idx_t count, const bitpacking_width_t width) {
+		D_ASSERT(count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE == 0);
+		if (cast_pointer_to_uint64(src.ptr) % sizeof(T) == 0) {
+			// Fast path: aligned
+			BitpackingPrimitives::UnPackBuffer<T>(data_ptr_cast(dst), src.ptr, count, width);
+			src.unsafe_inc(count * width / BITPACK_DLEN);
+			return;
+		}
+
 		for (idx_t i = 0; i < count; i += BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) {
-			const auto next_read = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE * width / 8;
+			const auto next_read = BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE * width / BITPACK_DLEN;
 
 			// Buffer for alignment
 			T aligned_data[BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE];
 
 			// Copy over to aligned buffer
-			memcpy(aligned_data, src.ptr, next_read);
+			FastMemcpy(aligned_data, src.ptr, next_read);
 
 			// Unpack
 			BitpackingPrimitives::UnPackBlock<T>(data_ptr_cast(dst), data_ptr_cast(aligned_data), width, true);

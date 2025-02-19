@@ -98,10 +98,12 @@ idx_t DictionaryDecoder::Read(uint8_t *defines, idx_t read_count, Vector &result
 		// all values are valid - we can directly decompress the offsets into the selection vector
 		dict_decoder->GetBatch<uint32_t>(data_ptr_cast(dictionary_selection_vector.data()), valid_count);
 		// we do still need to verify the offsets though
+		uint32_t max_index = 0;
 		for (idx_t idx = 0; idx < valid_count; idx++) {
-			if (dictionary_selection_vector.get_index(idx) >= dictionary_size) {
-				throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
-			}
+			max_index = MaxValue(max_index, dictionary_selection_vector[idx]);
+		}
+		if (max_index >= dictionary_size) {
+			throw std::runtime_error("Parquet file is likely corrupted, dictionary offset out of range");
 		}
 	} else if (valid_count > 0) {
 		// for the valid entries - decode the offsets

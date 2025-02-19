@@ -501,7 +501,7 @@ idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilt
 	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
 }
 
-void ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset) {
+bool ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset) {
 	D_ASSERT(block);
 
 	D_ASSERT(read_now + result_offset <= STANDARD_VECTOR_SIZE);
@@ -514,8 +514,19 @@ void ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t
 
 	if (HasDefines()) {
 		D_ASSERT(defined_decoder);
-		defined_decoder->GetBatch<uint8_t>(define_out + result_offset, read_now);
+		if (defined_decoder->HasRepeatedBatch(read_now)) {
+			const auto repeated_value = defined_decoder->GetRepeatedBatch<uint8_t>(read_now);
+			if (repeated_value == MaxDefine()) {
+				return true; // Fast path: all values are valid
+			}
+			std::fill_n(define_out + result_offset, read_now, repeated_value);
+		} else {
+			defined_decoder->GetBatch<uint8_t>(repeat_out + result_offset, read_now);
+		}
+		return false;
 	}
+
+	return true; // No defines, so everything is valid
 }
 
 void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
@@ -535,9 +546,9 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		return;
 	}
 	// read the defines/repeats
-	PrepareRead(read_now, define_out, repeat_out, result_offset);
+	const auto all_valid = PrepareRead(read_now, define_out, repeat_out, result_offset);
 	// read the data according to the encoder
-	auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
+	const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
 	switch (encoding) {
 	case ColumnEncoding::DICTIONARY:
 		dictionary_decoder.Read(define_ptr, read_now, result, result_offset);
@@ -558,7 +569,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);
 		break;
 	default:
-		Plain(block, define_out, read_now, result_offset, result);
+		Plain(block, define_ptr, read_now, result_offset, result);
 		break;
 	}
 	page_rows_available -= read_now;
