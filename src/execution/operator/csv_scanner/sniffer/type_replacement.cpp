@@ -22,7 +22,7 @@ void CSVSniffer::ReplaceTypes() {
 				found++;
 			}
 		}
-		if (!sniffing_state_machine.options.file_options.union_by_name &&
+		if (!file_options.union_by_name &&
 		    found < sniffing_state_machine.options.sql_types_per_column.size()) {
 			auto error_msg = CSVError::ColumnTypesError(options.sql_types_per_column, names);
 			error_handler->Error(error_msg);

@@ -710,7 +710,8 @@
       },
       {"id": 115,
         "name": "file_options",
-        "type": "MultiFileReaderOptions"
+        "type": "MultiFileReaderOptions",
+        "deleted": true
       },
       {"id": 116,
         "name": "force_quote",

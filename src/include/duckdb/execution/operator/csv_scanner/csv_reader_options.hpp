@@ -107,8 +107,6 @@ struct CSVReaderOptions {
 	bool auto_detect = true;
 	//! The file path of the CSV file to read
 	string file_path;
-	//! Multi-file reader options
-	MultiFileReaderOptions file_options;
 	//! Buffer Size (Parallel Scan)
 	CSVOption<idx_t> buffer_size_option = CSVBuffer::ROWS_PER_BUFFER * max_line_size_default;
 	//! Decimal separator when reading as numeric
@@ -184,9 +182,9 @@ struct CSVReaderOptions {
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 	void ToNamedParameters(named_parameter_map_t &out) const;
-	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context);
+	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context, MultiFileReaderOptions &file_options);
 	//! Verify options are not conflicting
-	void Verify();
+	void Verify(MultiFileReaderOptions &file_options);
 
 	string ToString(const string &current_file_path) const;
 	//! If the type for column with idx i was manually set

@@ -742,7 +742,7 @@ LogicalType MultiFileReaderOptions::GetHiveLogicalType(const string &hive_partit
 	return LogicalType::VARCHAR;
 }
 
-bool MultiFileReaderOptions::AnySet() {
+bool MultiFileReaderOptions::AnySet() const {
 	return filename || hive_partitioning || union_by_name;
 }
 

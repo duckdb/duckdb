@@ -49,7 +49,7 @@ unique_ptr<LocalTableFunctionState> CSVMultiFileInfo::InitializeLocalState() {
 }
 
 shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
-													   BaseUnionData &union_data_p, TableFunctionData &bind_data_p) {
+													   BaseUnionData &union_data_p, MultiFileBindData &bind_data) {
 	auto &union_data = union_data_p.Cast<CSVUnionData>();
 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
 	// union readers - use cached options
@@ -57,7 +57,7 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 	auto &csv_types = union_data.types;
 	auto options = union_data.options;
 	options.auto_detect = false;
-	return make_uniq<CSVFileScan>(context, union_data.GetFileName(), std::move(options), csv_names, csv_types,
+	return make_uniq<CSVFileScan>(context, union_data.GetFileName(), std::move(options), bind_data.file_options, csv_names, csv_types,
 								  gstate.file_schema, gstate.single_threaded, nullptr, false);
 }
 

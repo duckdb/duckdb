@@ -183,7 +183,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(112, "decimal_separator", decimal_separator);
 	serializer.WritePropertyWithDefault<bool>(113, "null_padding", null_padding);
 	/* [Deleted] (idx_t) "buffer_size" */
-	serializer.WriteProperty<MultiFileReaderOptions>(115, "file_options", file_options);
+	/* [Deleted] (MultiFileReaderOptions) "file_options" */
 	serializer.WritePropertyWithDefault<vector<bool>>(116, "force_quote", force_quote);
 	serializer.WritePropertyWithDefault<string>(117, "rejects_table_name", rejects_table_name, "reject_errors");
 	serializer.WritePropertyWithDefault<idx_t>(118, "rejects_limit", rejects_limit);
@@ -230,7 +230,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	auto decimal_separator = deserializer.ReadPropertyWithDefault<string>(112, "decimal_separator");
 	auto null_padding = deserializer.ReadPropertyWithDefault<bool>(113, "null_padding");
 	deserializer.ReadDeletedProperty<idx_t>(114, "buffer_size");
-	auto file_options = deserializer.ReadProperty<MultiFileReaderOptions>(115, "file_options");
+	deserializer.ReadDeletedProperty<MultiFileReaderOptions>(115, "file_options");
 	auto force_quote = deserializer.ReadPropertyWithDefault<vector<bool>>(116, "force_quote");
 	auto rejects_table_name = deserializer.ReadPropertyWithExplicitDefault<string>(117, "rejects_table_name", "reject_errors");
 	auto rejects_limit = deserializer.ReadPropertyWithDefault<idx_t>(118, "rejects_limit");
@@ -272,7 +272,6 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	result.file_path = std::move(file_path);
 	result.decimal_separator = std::move(decimal_separator);
 	result.null_padding = null_padding;
-	result.file_options = file_options;
 	result.force_quote = std::move(force_quote);
 	result.rejects_table_name = std::move(rejects_table_name);
 	result.rejects_limit = rejects_limit;

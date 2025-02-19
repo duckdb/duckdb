@@ -37,11 +37,13 @@ public:
 public:
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
-	CSVFileScan(ClientContext &context, const string &file_path, CSVReaderOptions options, const vector<string> &names,
+	CSVFileScan(ClientContext &context, const string &file_path, CSVReaderOptions options,  const MultiFileReaderOptions &file_options, const vector<string> &names,
 	            const vector<LogicalType> &types, CSVSchema &file_schema, bool per_file_single_threaded,
 	            shared_ptr<CSVBufferManager> buffer_manager = nullptr, bool fixed_schema = false);
 
+	//! FIXME: temporary patch for union by name
 	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options);
+	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options, const MultiFileReaderOptions &file_options);
 
 public:
 	void SetStart();

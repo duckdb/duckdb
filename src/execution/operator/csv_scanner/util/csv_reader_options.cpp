@@ -539,7 +539,7 @@ bool StoreUserDefinedParameter(const string &option) {
 	return true;
 }
 
-void CSVReaderOptions::Verify() {
+void CSVReaderOptions::Verify(MultiFileReaderOptions &file_options) {
 	if (rejects_table_name.IsSetByUser() && !store_rejects.GetValue() && store_rejects.IsSetByUser()) {
 		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
 	}
@@ -586,7 +586,7 @@ bool GetBooleanValue(const pair<const string, Value> &option) {
 	return BooleanValue::Get(option.second);
 }
 
-void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context) {
+void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context, MultiFileReaderOptions &file_options) {
 	map<string, string> ordered_user_defined_parameters;
 	for (auto &kv : in) {
 		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {

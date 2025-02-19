@@ -6,7 +6,17 @@
 
 namespace duckdb {
 
+MultiFileReaderOptions HackyGetFileOptions() {
+	MultiFileReaderOptions options;
+	options.union_by_name = true;
+	return options;
+}
+
+
+CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options) : CSVFileScan(context, file_name, options, HackyGetFileOptions()) {}
+
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVReaderOptions options_p,
+                         const MultiFileReaderOptions &file_options,
                          const vector<string> &names, const vector<LogicalType> &types, CSVSchema &file_schema,
                          bool per_file_single_threaded, shared_ptr<CSVBufferManager> buffer_manager_p,
                          bool fixed_schema)
@@ -28,16 +38,16 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVR
 	if (options.auto_detect) {
 		if (fixed_schema) {
 			// schema of the file is fixed - only run the sniffer
-			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+			CSVSniffer sniffer(options, file_options, buffer_manager, state_machine_cache);
 			sniffer.SniffCSV();
 		} else if (file_schema.Empty()) {
 			// no schema yet - run the sniffer and initialize the schema
-			CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+			CSVSniffer sniffer(options, file_options, buffer_manager, state_machine_cache);
 			auto result = sniffer.SniffCSV();
 			file_schema.Initialize(names, types, options.file_path);
 		} else if (buffer_manager->file_handle->FileSize() > 0) {
 			options.file_path = file_name;
-			CSVSniffer sniffer(options, buffer_manager, state_machine_cache, false);
+			CSVSniffer sniffer(options, file_options, buffer_manager, state_machine_cache, false);
 			auto result = sniffer.AdaptiveSniff(file_schema);
 			SetNamesAndTypes(result.names, result.return_types);
 		}
@@ -75,7 +85,7 @@ void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<L
 	columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(names, types);
 }
 
-CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options_p)
+CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options_p, const MultiFileReaderOptions &file_options)
     : BaseFileReader(file_name), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(options_p) {
 	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_name);
@@ -86,8 +96,8 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const 
 	// error out during scanning)
 	auto &state_machine_cache = CSVStateMachineCache::Get(context);
 	// We sniff file if it has not been sniffed yet and either auto-detect is on, or union by name is on
-	if ((options.auto_detect || options.file_options.union_by_name) && options.dialect_options.num_cols == 0) {
-		CSVSniffer sniffer(options, buffer_manager, state_machine_cache);
+	if ((options.auto_detect || file_options.union_by_name) && options.dialect_options.num_cols == 0) {
+		CSVSniffer sniffer(options, file_options, buffer_manager, state_machine_cache);
 		auto sniffer_result = sniffer.SniffCSV();
 		if (names.empty()) {
 			SetNamesAndTypes(sniffer_result.names, sniffer_result.return_types);

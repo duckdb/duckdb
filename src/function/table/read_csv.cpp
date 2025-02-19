@@ -48,7 +48,7 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 }
 
 //! Function to do schema discovery over one CSV file or a list/glob of CSV files
-void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptions &options,
+void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptions &options, const MultiFileReaderOptions &file_options,
                      vector<LogicalType> &return_types, vector<string> &names, MultiFileList &multi_file_list) {
 	vector<CSVSchema> schemas;
 	const auto option_og = options;
@@ -67,7 +67,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 	idx_t only_header_or_empty_files = 0;
 
 	{
-		CSVSniffer sniffer(options, result.buffer_manager, CSVStateMachineCache::Get(context));
+		CSVSniffer sniffer(options, file_options, result.buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
 		idx_t rows_read = sniffer.LinesSniffed() -
 		                  (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
@@ -90,7 +90,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, option_copy, option_copy.file_path, false);
 		// TODO: We could cache the sniffer to be reused during scanning. Currently that's an exercise left to the
 		// reader
-		CSVSniffer sniffer(option_copy, buffer_manager, CSVStateMachineCache::Get(context));
+		CSVSniffer sniffer(option_copy, file_options, buffer_manager, CSVStateMachineCache::Get(context));
 		auto sniffer_result = sniffer.SniffCSV();
 		idx_t rows_read = sniffer.LinesSniffed() - (option_copy.dialect_options.skip_rows.GetValue() +
 		                                            option_copy.dialect_options.header.GetValue());
@@ -144,13 +144,13 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 	if (multi_file_list->GetTotalFileCount() > 1) {
 		options.multi_file_reader = true;
 	}
-	options.FromNamedParameters(input.named_parameters, context);
+	options.FromNamedParameters(input.named_parameters, context, result->file_options);
 
-	options.file_options.AutoDetectHivePartitioning(*multi_file_list, context);
-	options.Verify();
-	if (!options.file_options.union_by_name) {
+	result->file_options.AutoDetectHivePartitioning(*multi_file_list, context);
+	options.Verify(result->file_options);
+	if (!result->file_options.union_by_name) {
 		if (options.auto_detect) {
-			SchemaDiscovery(context, *csv_data, options, return_types, names, *multi_file_list);
+			SchemaDiscovery(context, *csv_data, options, result->file_options, return_types, names, *multi_file_list);
 		} else {
 			// If we are not running the sniffer, the columns must be set!
 			if (!options.columns_set) {
@@ -164,11 +164,11 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		D_ASSERT(return_types.size() == names.size());
 		csv_data->options.dialect_options.num_cols = names.size();
 
-		multi_file_reader->BindOptions(options.file_options, *multi_file_list, return_types, names,
+		multi_file_reader->BindOptions(result->file_options, *multi_file_list, return_types, names,
 		                               result->reader_bind);
 	} else {
 		result->reader_bind = multi_file_reader->BindUnionReader<CSVFileScan>(
-		    context, return_types, names, *multi_file_list, *result, options, options.file_options);
+		    context, return_types, names, *multi_file_list, *result, options, result->file_options);
 		if (result->union_readers.size() > 1) {
 			for (idx_t i = 0; i < result->union_readers.size(); i++) {
 				auto &csv_union_data = result->union_readers[i]->Cast<CSVUnionData>();
