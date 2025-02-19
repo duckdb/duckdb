@@ -38,4 +38,8 @@ std::string ShellExtension::Name() {
 	return "shell";
 }
 
+std::string ShellExtension::Version() const {
+	return DefaultVersion();
+}
+
 } // namespace duckdb

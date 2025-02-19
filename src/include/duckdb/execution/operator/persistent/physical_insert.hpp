@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/optimistic_data_writer.hpp"
 
 namespace duckdb {
 
@@ -38,7 +39,7 @@ public:
 class InsertLocalState : public LocalSinkState {
 public:
 public:
-	InsertLocalState(ClientContext &context, const vector<LogicalType> &types_p,
+	InsertLocalState(ClientContext &context, const vector<LogicalType> &types,
 	                 const vector<unique_ptr<Expression>> &bound_defaults,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 
@@ -47,18 +48,15 @@ public:
 	TableDeleteState &GetDeleteState(DataTable &table, TableCatalogEntry &table_ref, ClientContext &context);
 
 public:
-	//! The to-be-inserted chunk.
-	//! We initialize it lazily, as we need to know which columns will be references and which will be set to their
-	//! default values.
+	//! The chunk that ends up getting inserted
 	DataChunk insert_chunk;
-	bool init_insert_chunk = true;
-	vector<LogicalType> types;
 	//! The chunk containing the tuples that become an update (if DO UPDATE)
 	DataChunk update_chunk;
 	ExpressionExecutor default_executor;
 	TableAppendState local_append_state;
-	unique_ptr<RowGroupCollection> local_collection;
-	optional_ptr<OptimisticDataWriter> writer;
+	//! An index to the optimistic row group collection vector of the local table storage for this transaction.
+	PhysicalIndex collection_index;
+	unique_ptr<OptimisticDataWriter> optimistic_writer;
 	// Rows that have been updated by a DO UPDATE conflict
 	unordered_set<row_t> updated_rows;
 	idx_t update_count = 0;
@@ -174,7 +172,8 @@ protected:
 	//! Returns the amount of updated tuples
 	void CreateUpdateChunk(ExecutionContext &context, DataChunk &chunk, TableCatalogEntry &table, Vector &row_ids,
 	                       DataChunk &result) const;
-	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertLocalState &lstate) const;
+	idx_t OnConflictHandling(TableCatalogEntry &table, ExecutionContext &context, InsertGlobalState &gstate,
+	                         InsertLocalState &lstate) const;
 };
 
 } // namespace duckdb

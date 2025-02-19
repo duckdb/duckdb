@@ -328,6 +328,14 @@ void InterpretedBenchmark::LoadBenchmark() {
 			} else {
 				ReadResultFromReader(reader, splits[1]);
 			}
+		} else if (splits[0] == "retry") {
+			if (splits.size() != 3) {
+				throw std::runtime_error(reader.FormatException(splits[0] + " requires two parameters"));
+			}
+			if (splits[1] != "load") {
+				throw std::runtime_error("Only retry load is supported");
+			}
+			retry_load = std::stoull(splits[2]);
 		} else if (splits[0] == "template") {
 			// template: update the path to read
 			benchmark_path = splits[1];
@@ -356,6 +364,17 @@ void InterpretedBenchmark::LoadBenchmark() {
 	}
 	run_query = queries["run"];
 	is_loaded = true;
+}
+
+unique_ptr<QueryResult> InterpretedBenchmark::RunLoadQuery(InterpretedBenchmarkState &state, const string &load_query) {
+	auto result = state.con.Query(load_query);
+	for (idx_t i = 0; i < retry_load; i++) {
+		if (!result->HasError()) {
+			break;
+		}
+		result = state.con.Query(load_query);
+	}
+	return unique_ptr_cast<MaterializedQueryResult, QueryResult>(std::move(result));
 }
 
 unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfiguration &config) {
@@ -403,11 +422,11 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		auto fs = FileSystem::CreateLocal();
 		if (!fs->FileExists(fs->JoinPath(BenchmarkRunner::DUCKDB_BENCHMARK_DIRECTORY, cache_file))) {
 			// no cache or db_path specified: just run the initialization code
-			result = state->con.Query(load_query);
+			result = RunLoadQuery(*state, load_query);
 		}
 	} else if (cache_db.empty() && cache_db.compare(DEFAULT_DB_PATH) != 0) {
 		// no cache or db_path specified: just run the initialization code
-		result = state->con.Query(load_query);
+		result = RunLoadQuery(*state, load_query);
 	} else {
 		// cache or db_path is specified: try to load from one of them
 		bool in_memory_db_has_data = false;
@@ -425,7 +444,7 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 		}
 		if (!in_memory_db_has_data) {
 			// failed to load: write the cache
-			result = state->con.Query(load_query);
+			result = RunLoadQuery(*state, load_query);
 		}
 	}
 	while (result) {

@@ -15,7 +15,8 @@ DeserializedStatementVerifier::Create(const SQLStatement &statement,
                                       optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters) {
 
 	auto &select_stmt = statement.Cast<SelectStatement>();
-	MemoryStream stream;
+	Allocator allocator;
+	MemoryStream stream(allocator);
 	BinarySerializer::Serialize(select_stmt, stream);
 	stream.Rewind();
 	auto result = BinaryDeserializer::Deserialize<SelectStatement>(stream);

@@ -124,7 +124,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 		names = best_schema.GetNames();
 		return_types = best_schema.GetTypes();
 	}
-	if (only_header_or_empty_files == current_file) {
+	if (only_header_or_empty_files == current_file && !options.columns_set) {
 		for (auto &type : return_types) {
 			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
 			// we default to varchar if all files are empty or only have a header after all the sniffing
@@ -140,7 +140,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	auto result = make_uniq<ReadCSVData>();
 	auto &options = result->options;
-	const auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	const auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 	if (multi_file_list->GetTotalFileCount() > 1) {
 		options.multi_file_reader = true;
@@ -350,7 +350,7 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	table_function.named_parameters["column_names"] = LogicalType::LIST(LogicalType::VARCHAR);
 	table_function.named_parameters["comment"] = LogicalType::VARCHAR;
 	table_function.named_parameters["encoding"] = LogicalType::VARCHAR;
-	table_function.named_parameters["rfc_4180"] = LogicalType::BOOLEAN;
+	table_function.named_parameters["strict_mode"] = LogicalType::BOOLEAN;
 
 	MultiFileReader::AddParameters(table_function);
 }
@@ -374,7 +374,8 @@ void CSVComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionD
 	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, info, filters);
 	if (filtered_list) {
 		data.files = filtered_list->GetAllFiles();
-		MultiFileReader::PruneReaders(data, file_list);
+		SimpleMultiFileList simple_filtered_list(data.files);
+		MultiFileReader::PruneReaders(data, simple_filtered_list);
 	} else {
 		data.files = file_list.GetAllFiles();
 	}
@@ -414,6 +415,14 @@ void PushdownTypeToCSVScanner(ClientContext &context, optional_ptr<FunctionData>
 	}
 }
 
+virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+	auto &csv_bind = bind_data->Cast<ReadCSVData>();
+	virtual_column_map_t result;
+	MultiFileReader::GetVirtualColumns(context, csv_bind.reader_bind, result);
+	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
+	return result;
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInitGlobal,
 	                       ReadCSVInitLocal);
@@ -425,6 +434,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	read_csv.cardinality = CSVReaderCardinality;
 	read_csv.projection_pushdown = true;
 	read_csv.type_pushdown = PushdownTypeToCSVScanner;
+	read_csv.get_virtual_columns = ReadCSVGetVirtualColumns;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
 }

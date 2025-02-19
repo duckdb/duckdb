@@ -96,6 +96,7 @@ unique_ptr<ParsedExpression> Transformer::TransformStarExpression(duckdb_libpgqu
 			result->relation_name = child_star.relation_name;
 			result->exclude_list = std::move(child_star.exclude_list);
 			result->replace_list = std::move(child_star.replace_list);
+			result->rename_list = std::move(child_star.rename_list);
 			result->expr.reset();
 		} else if (result->expr->GetExpressionType() == ExpressionType::LAMBDA) {
 			vector<unique_ptr<ParsedExpression>> children;

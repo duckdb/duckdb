@@ -12,8 +12,7 @@ namespace duckdb {
 class UnnestOperatorState : public OperatorState {
 public:
 	UnnestOperatorState(ClientContext &context, const vector<unique_ptr<Expression>> &select_list)
-	    : current_row(0), list_position(0), longest_list_length(DConstants::INVALID_INDEX), first_fetch(true),
-	      executor(context) {
+	    : current_row(0), list_position(0), first_fetch(true), input_sel(STANDARD_VECTOR_SIZE), executor(context) {
 
 		// for each UNNEST in the select_list, we add the child expression to the expression executor
 		// and set the return type in the list_data chunk, which will contain the evaluated expression results
@@ -23,7 +22,11 @@ public:
 			auto &bue = exp->Cast<BoundUnnestExpression>();
 			list_data_types.push_back(bue.child->return_type);
 			executor.AddExpression(*bue.child.get());
+
+			unnest_sels.emplace_back(STANDARD_VECTOR_SIZE);
+			null_sels.emplace_back(STANDARD_VECTOR_SIZE);
 		}
+		null_counts.resize(list_data_types.size());
 
 		auto &allocator = Allocator::Get(context);
 		list_data.Initialize(allocator, list_data_types);
@@ -34,8 +37,12 @@ public:
 
 	idx_t current_row;
 	idx_t list_position;
-	idx_t longest_list_length;
+	unsafe_vector<idx_t> unnest_lengths;
 	bool first_fetch;
+	SelectionVector input_sel;
+	vector<SelectionVector> unnest_sels;
+	vector<SelectionVector> null_sels;
+	vector<idx_t> null_counts;
 
 	ExpressionExecutor executor;
 	DataChunk list_data;
@@ -45,34 +52,14 @@ public:
 public:
 	//! Reset the fields of the unnest operator state
 	void Reset();
-	//! Set the longest list's length for the current row
-	void SetLongestListLength();
+	//! Prepare the input for the next unnest
+	void PrepareInput(DataChunk &input, const vector<unique_ptr<Expression>> &select_list);
 };
 
 void UnnestOperatorState::Reset() {
 	current_row = 0;
 	list_position = 0;
-	longest_list_length = DConstants::INVALID_INDEX;
 	first_fetch = true;
-}
-
-void UnnestOperatorState::SetLongestListLength() {
-	longest_list_length = 0;
-	for (idx_t col_idx = 0; col_idx < list_data.ColumnCount(); col_idx++) {
-
-		auto &vector_data = list_vector_data[col_idx];
-		auto current_idx = vector_data.sel->get_index(current_row);
-
-		if (vector_data.validity.RowIsValid(current_idx)) {
-
-			// check if this list is longer
-			auto list_data_entries = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
-			auto list_entry = list_data_entries[current_idx];
-			if (list_entry.length > longest_list_length) {
-				longest_list_length = list_entry.length;
-			}
-		}
-	}
 }
 
 PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
@@ -81,188 +68,60 @@ PhysicalUnnest::PhysicalUnnest(vector<LogicalType> types, vector<unique_ptr<Expr
 	D_ASSERT(!this->select_list.empty());
 }
 
-static void UnnestNull(idx_t start, idx_t end, Vector &result) {
-
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto &validity = FlatVector::Validity(result);
-	for (idx_t i = start; i < end; i++) {
-		validity.SetInvalid(i);
-	}
-
-	const auto &logical_type = result.GetType();
-	if (logical_type.InternalType() == PhysicalType::STRUCT) {
-		const auto &struct_children = StructVector::GetEntries(result);
-		for (auto &child : struct_children) {
-			UnnestNull(start, end, *child);
-		}
-	} else if (logical_type.InternalType() == PhysicalType::ARRAY) {
-		auto &array_child = ArrayVector::GetEntry(result);
-		auto array_size = ArrayType::GetSize(logical_type);
-		UnnestNull(start * array_size, end * array_size, array_child);
-	}
-}
-
-template <class T>
-static void TemplatedUnnest(UnifiedVectorFormat &vector_data, idx_t start, idx_t end, Vector &result) {
-
-	auto source_data = UnifiedVectorFormat::GetData<T>(vector_data);
-	auto &source_mask = vector_data.validity;
-
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<T>(result);
-	auto &result_mask = FlatVector::Validity(result);
-
-	for (idx_t i = start; i < end; i++) {
-		auto source_idx = vector_data.sel->get_index(i);
-		auto target_idx = i - start;
-		if (source_mask.RowIsValid(source_idx)) {
-			result_data[target_idx] = source_data[source_idx];
-			result_mask.SetValid(target_idx);
-		} else {
-			result_mask.SetInvalid(target_idx);
-		}
-	}
-}
-
-static void UnnestValidity(UnifiedVectorFormat &vector_data, idx_t start, idx_t end, Vector &result) {
-
-	auto &source_mask = vector_data.validity;
-	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
-	auto &result_mask = FlatVector::Validity(result);
-
-	for (idx_t i = start; i < end; i++) {
-		auto source_idx = vector_data.sel->get_index(i);
-		auto target_idx = i - start;
-		result_mask.Set(target_idx, source_mask.RowIsValid(source_idx));
-	}
-}
-
-static void UnnestVector(UnifiedVectorFormat &child_vector_data, Vector &child_vector, idx_t list_size, idx_t start,
-                         idx_t end, Vector &result) {
-
-	D_ASSERT(child_vector.GetType() == result.GetType());
-	switch (result.GetType().InternalType()) {
-	case PhysicalType::BOOL:
-	case PhysicalType::INT8:
-		TemplatedUnnest<int8_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::INT16:
-		TemplatedUnnest<int16_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::INT32:
-		TemplatedUnnest<int32_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::INT64:
-		TemplatedUnnest<int64_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::INT128:
-		TemplatedUnnest<hugeint_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::UINT8:
-		TemplatedUnnest<uint8_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::UINT16:
-		TemplatedUnnest<uint16_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::UINT32:
-		TemplatedUnnest<uint32_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::UINT64:
-		TemplatedUnnest<uint64_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::UINT128:
-		TemplatedUnnest<uhugeint_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::FLOAT:
-		TemplatedUnnest<float>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::DOUBLE:
-		TemplatedUnnest<double>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::INTERVAL:
-		TemplatedUnnest<interval_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::VARCHAR:
-		TemplatedUnnest<string_t>(child_vector_data, start, end, result);
-		break;
-	case PhysicalType::LIST: {
-		// the child vector of result now references the child vector source
-		// FIXME: only reference relevant children (start - end) instead of all
-		auto &target = ListVector::GetEntry(result);
-		target.Reference(ListVector::GetEntry(child_vector));
-		ListVector::SetListSize(result, ListVector::GetListSize(child_vector));
-		// unnest
-		TemplatedUnnest<list_entry_t>(child_vector_data, start, end, result);
-		break;
-	}
-	case PhysicalType::STRUCT: {
-		auto &child_vector_entries = StructVector::GetEntries(child_vector);
-		auto &result_entries = StructVector::GetEntries(result);
-
-		// set the validity mask for the 'outer' struct vector before unnesting its children
-		UnnestValidity(child_vector_data, start, end, result);
-
-		for (idx_t i = 0; i < child_vector_entries.size(); i++) {
-			UnifiedVectorFormat child_vector_entries_data;
-			child_vector_entries[i]->ToUnifiedFormat(list_size, child_vector_entries_data);
-			UnnestVector(child_vector_entries_data, *child_vector_entries[i], list_size, start, end,
-			             *result_entries[i]);
-		}
-		break;
-	}
-	case PhysicalType::ARRAY: {
-		auto array_size = ArrayType::GetSize(child_vector.GetType());
-		auto &source_array = ArrayVector::GetEntry(child_vector);
-		auto &target_array = ArrayVector::GetEntry(result);
-
-		UnnestValidity(child_vector_data, start, end, result);
-
-		UnifiedVectorFormat child_array_data;
-		source_array.ToUnifiedFormat(list_size * array_size, child_array_data);
-		UnnestVector(child_array_data, source_array, list_size * array_size, start * array_size, end * array_size,
-		             target_array);
-		break;
-	}
-	default:
-		throw InternalException("Unimplemented type for UNNEST.");
-	}
-}
-
-static void PrepareInput(UnnestOperatorState &state, DataChunk &input,
-                         const vector<unique_ptr<Expression>> &select_list) {
-
-	state.list_data.Reset();
+void UnnestOperatorState::PrepareInput(DataChunk &input, const vector<unique_ptr<Expression>> &select_list) {
+	list_data.Reset();
 	// execute the expressions inside each UNNEST in the select_list to get the list data
-	// execution results (lists) are kept in state.list_data chunk
-	state.executor.Execute(input, state.list_data);
+	// execution results (lists) are kept in list_data chunk
+	executor.Execute(input, list_data);
 
 	// verify incoming lists
-	state.list_data.Verify();
-	D_ASSERT(input.size() == state.list_data.size());
-	D_ASSERT(state.list_data.ColumnCount() == select_list.size());
-	D_ASSERT(state.list_vector_data.size() == state.list_data.ColumnCount());
-	D_ASSERT(state.list_child_data.size() == state.list_data.ColumnCount());
+	list_data.Verify();
+	D_ASSERT(input.size() == list_data.size());
+	D_ASSERT(list_data.ColumnCount() == select_list.size());
+	D_ASSERT(list_vector_data.size() == list_data.ColumnCount());
+	D_ASSERT(list_child_data.size() == list_data.ColumnCount());
 
 	// get the UnifiedVectorFormat of each list_data vector (LIST vectors for the different UNNESTs)
 	// both for the vector itself and its child vector
-	for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
-
-		auto &list_vector = state.list_data.data[col_idx];
-		list_vector.ToUnifiedFormat(state.list_data.size(), state.list_vector_data[col_idx]);
+	for (idx_t col_idx = 0; col_idx < list_data.ColumnCount(); col_idx++) {
+		auto &list_vector = list_data.data[col_idx];
+		list_vector.ToUnifiedFormat(list_data.size(), list_vector_data[col_idx]);
 
 		if (list_vector.GetType() == LogicalType::SQLNULL) {
 			// UNNEST(NULL): SQLNULL vectors don't have child vectors, but we need to point to the child vector of
 			// each vector, so we just get the UnifiedVectorFormat of the vector itself
 			auto &child_vector = list_vector;
-			child_vector.ToUnifiedFormat(0, state.list_child_data[col_idx]);
+			child_vector.ToUnifiedFormat(0, list_child_data[col_idx]);
 		} else {
 			auto list_size = ListVector::GetListSize(list_vector);
 			auto &child_vector = ListVector::GetEntry(list_vector);
-			child_vector.ToUnifiedFormat(list_size, state.list_child_data[col_idx]);
+			child_vector.ToUnifiedFormat(list_size, list_child_data[col_idx]);
+		}
+	}
+	// get the unnest lengths
+	if (list_data.size() > unnest_lengths.size()) {
+		unnest_lengths.resize(list_data.size());
+	}
+	for (idx_t r = 0; r < list_data.size(); r++) {
+		unnest_lengths[r] = 0;
+	}
+	for (idx_t col_idx = 0; col_idx < list_data.ColumnCount(); col_idx++) {
+		auto &vector_data = list_vector_data[col_idx];
+		for (idx_t r = 0; r < list_data.size(); r++) {
+			auto current_idx = vector_data.sel->get_index(r);
+			if (!vector_data.validity.RowIsValid(current_idx)) {
+				continue;
+			}
+			// check if this list is longer than the current unnest length
+			auto list_data_entries = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
+			auto list_entry = list_data_entries[current_idx];
+			if (list_entry.length > unnest_lengths[r]) {
+				unnest_lengths[r] = list_entry.length;
+			}
 		}
 	}
 
-	state.first_fetch = false;
+	first_fetch = false;
 }
 
 unique_ptr<OperatorState> PhysicalUnnest::GetOperatorState(ExecutionContext &context) const {
@@ -282,15 +141,10 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 	auto &state = state_p.Cast<UnnestOperatorState>();
 
 	do {
-		// reset validities, if previous loop iteration contained UNNEST(NULL)
-		if (include_input) {
-			chunk.Reset();
-		}
-
 		// prepare the input data by executing any expressions and getting the
 		// UnifiedVectorFormat of each LIST vector (list_vector_data) and its child vector (list_child_data)
 		if (state.first_fetch) {
-			PrepareInput(state, input, select_list);
+			state.PrepareInput(input, select_list);
 		}
 
 		// finished with all rows of this input chunk, reset
@@ -299,82 +153,106 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
 
-		// each UNNEST in the select_list contains a list (or NULL) for this row, find the longest list
-		// because this length determines how many times we need to repeat for the current row
-		if (state.longest_list_length == DConstants::INVALID_INDEX) {
-			state.SetLongestListLength();
+		// we essentially create two different SelectionVectors to slice
+		// one is for the input (if include_input is set)
+		// the other is for the list we are unnesting
+		// construct these
+		idx_t result_length = 0;
+		idx_t unnest_list_count = 0;
+		auto initial_row = state.current_row;
+		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
+			state.null_counts[col_idx] = 0;
 		}
-		D_ASSERT(state.longest_list_length != DConstants::INVALID_INDEX);
+		while (result_length < STANDARD_VECTOR_SIZE && state.current_row < input.size()) {
+			auto current_row_length = MinValue<idx_t>(STANDARD_VECTOR_SIZE - result_length,
+			                                          state.unnest_lengths[state.current_row] - state.list_position);
 
-		// we emit chunks of either STANDARD_VECTOR_SIZE or smaller
-		auto this_chunk_len = MinValue<idx_t>(STANDARD_VECTOR_SIZE, state.longest_list_length - state.list_position);
-		chunk.SetCardinality(this_chunk_len);
+			if (current_row_length > 0) {
+				// set up the selection vectors
+				if (include_input) {
+					for (idx_t r = 0; r < current_row_length; r++) {
+						state.input_sel.set_index(result_length + r, state.current_row);
+					}
+				}
+				for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
+					auto &vector_data = state.list_vector_data[col_idx];
+					auto current_idx = vector_data.sel->get_index(state.current_row);
+					idx_t list_length = 0;
+					idx_t list_offset = 0;
+					if (vector_data.validity.RowIsValid(current_idx)) {
+						auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
+						auto list_entry = list_data[current_idx];
+						list_length = list_entry.length;
+						list_offset = list_entry.offset;
+					}
+					// unnest any entries we can
+					idx_t unnest_length = MinValue<idx_t>(list_length - state.list_position, current_row_length);
+					auto &unnest_sel = state.unnest_sels[col_idx];
+					for (idx_t r = 0; r < unnest_length; r++) {
+						unnest_sel.set_index(result_length + r, list_offset + state.list_position + r);
+					}
+					// for any remaining entries (if any) - set them in the null selection
+					auto &null_sel = state.null_sels[col_idx];
+					for (idx_t r = unnest_length; r < current_row_length; r++) {
+						// we unnest the first row in the child list
+						// this is chosen arbitrarily - we will override it with `NULL` afterwards
+						// FIXME if the child list has a `NULL` entry we can directly unnest that and avoid having
+						// to override it - this is a potential optimization we could do in the future
+						unnest_sel.set_index(result_length + r, 0);
+						null_sel.set_index(state.null_counts[col_idx]++, result_length + r);
+					}
+				}
 
-		// if we include other projection input columns, e.g. SELECT 1, UNNEST([1, 2]);, then
-		// we need to add them as a constant vector to the resulting chunk
-		// FIXME: emit multiple unnested rows. Currently, we never emit a chunk containing multiple unnested input rows,
-		//  so setting a constant vector for the value at state.current_row is fine
+				// move to the next row
+				result_length += current_row_length;
+				state.list_position += current_row_length;
+			}
+			unnest_list_count++;
+			if (state.list_position == state.unnest_lengths[state.current_row]) {
+				state.current_row++;
+				state.list_position = 0;
+			}
+		}
 		idx_t col_offset = 0;
+		chunk.SetCardinality(result_length);
 		if (include_input) {
 			for (idx_t col_idx = 0; col_idx < input.ColumnCount(); col_idx++) {
-				ConstantVector::Reference(chunk.data[col_idx], input.data[col_idx], state.current_row, input.size());
+				if (unnest_list_count == 1) {
+					// everything belongs to the same row - we can do a constant reference
+					ConstantVector::Reference(chunk.data[col_idx], input.data[col_idx], initial_row, input.size());
+				} else {
+					// input values come from different rows - we need to slice
+					chunk.data[col_idx].Slice(input.data[col_idx], state.input_sel, result_length);
+				}
 			}
 			col_offset = input.ColumnCount();
 		}
-
-		// unnest the lists
 		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
-
-			auto &result_vector = chunk.data[col_idx + col_offset];
-
 			if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL) {
 				// UNNEST(NULL)
 				chunk.SetCardinality(0);
 				break;
 			}
-
-			auto &vector_data = state.list_vector_data[col_idx];
-			auto current_idx = vector_data.sel->get_index(state.current_row);
-
-			if (!vector_data.validity.RowIsValid(current_idx)) {
-				UnnestNull(0, this_chunk_len, result_vector);
+			auto &list_vector = state.list_data.data[col_idx];
+			auto &result_vector = chunk.data[col_offset + col_idx];
+			if (ListVector::GetListSize(list_vector) == 0) {
+				// we cannot slice empty lists - but if our child list is empty we can only return NULL anyway
+				result_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+				ConstantVector::SetNull(result_vector, true);
 				continue;
 			}
-
-			auto list_data = UnifiedVectorFormat::GetData<list_entry_t>(vector_data);
-			auto list_entry = list_data[current_idx];
-
-			idx_t list_count = 0;
-			if (state.list_position < list_entry.length) {
-				// there are still list_count elements to unnest
-				list_count = MinValue<idx_t>(this_chunk_len, list_entry.length - state.list_position);
-
-				auto &list_vector = state.list_data.data[col_idx];
-				auto &child_vector = ListVector::GetEntry(list_vector);
-				auto list_size = ListVector::GetListSize(list_vector);
-				auto &child_vector_data = state.list_child_data[col_idx];
-
-				auto base_offset = list_entry.offset + state.list_position;
-				UnnestVector(child_vector_data, child_vector, list_size, base_offset, base_offset + list_count,
-				             result_vector);
-			}
-
-			// fill the rest with NULLs
-			if (list_count != this_chunk_len) {
-				UnnestNull(list_count, this_chunk_len, result_vector);
+			auto &child_vector = ListVector::GetEntry(list_vector);
+			result_vector.Slice(child_vector, state.unnest_sels[col_idx], result_length);
+			if (state.null_counts[col_idx] > 0) {
+				// we have NULL values that we need to set - flatten
+				result_vector.Flatten(result_length);
+				auto &null_sel = state.null_sels[col_idx];
+				for (idx_t idx = 0; idx < state.null_counts[col_idx]; idx++) {
+					auto null_index = null_sel.get_index(idx);
+					FlatVector::SetNull(result_vector, null_index, true);
+				}
 			}
 		}
-
-		chunk.Verify();
-
-		state.list_position += this_chunk_len;
-		if (state.list_position == state.longest_list_length) {
-			state.current_row++;
-			state.longest_list_length = DConstants::INVALID_INDEX;
-			state.list_position = 0;
-		}
-
-		// we only emit one unnested row (that contains data) at a time
 	} while (chunk.size() == 0);
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }

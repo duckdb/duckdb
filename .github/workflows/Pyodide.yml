@@ -52,6 +52,9 @@ jobs:
           - python: "3.12"
             pyodide-build: "0.26.1"
             node: "20"
+          - python: "3.12"
+            pyodide-build: "0.27.2"
+            node: "20"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -108,7 +111,7 @@ jobs:
       - name: install deps into environment
         run: |
           source .venv-pyodide/bin/activate
-          pip install pytest numpy pandas mypy
+          pip install pytest numpy pandas 'mypy<=1.13'
 
       - name: install duckdb wasm wheel into environment
         run: |
@@ -121,7 +124,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pyodide-python${{ matrix.version.python }}
+          name: pyodide-python${{ matrix.version.pyodide-build }}
           if-no-files-found: error
           path: |
             ./tools/pythonpkg/dist/*.whl

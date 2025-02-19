@@ -34,27 +34,40 @@ public:
 
 		while (values_read < batch_size) {
 			if (repeat_count_ > 0) {
-				int repeat_batch = MinValue(batch_size - values_read, static_cast<uint32_t>(repeat_count_));
+				auto repeat_batch = MinValue<uint32_t>(batch_size - values_read, repeat_count_);
 				std::fill_n(values + values_read, repeat_batch, static_cast<T>(current_value_));
 				repeat_count_ -= repeat_batch;
 				values_read += repeat_batch;
 			} else if (literal_count_ > 0) {
-				uint32_t literal_batch = MinValue(batch_size - values_read, static_cast<uint32_t>(literal_count_));
+				auto literal_batch = MinValue<uint32_t>(batch_size - values_read, literal_count_);
 				ParquetDecodeUtils::BitUnpack<T>(buffer_, bitpack_pos, values + values_read, literal_batch, bit_width_);
 				literal_count_ -= literal_batch;
 				values_read += literal_batch;
 			} else {
-				if (!NextCounts<T>()) {
-					if (values_read != batch_size) {
-						throw std::runtime_error("RLE decode did not find enough values");
-					}
-					return;
-				}
+				NextCounts();
 			}
 		}
-		if (values_read != batch_size) {
-			throw std::runtime_error("RLE decode did not find enough values");
+		D_ASSERT(values_read == batch_size);
+	}
+
+	void Skip(uint32_t batch_size) {
+		uint32_t values_skipped = 0;
+
+		while (values_skipped < batch_size) {
+			if (repeat_count_ > 0) {
+				auto repeat_batch = MinValue<uint32_t>(batch_size - values_skipped, repeat_count_);
+				repeat_count_ -= repeat_batch;
+				values_skipped += repeat_batch;
+			} else if (literal_count_ > 0) {
+				auto literal_batch = MinValue<uint32_t>(batch_size - values_skipped, literal_count_);
+				ParquetDecodeUtils::Skip(buffer_, bitpack_pos, literal_batch, bit_width_);
+				literal_count_ -= literal_batch;
+				values_skipped += literal_batch;
+			} else {
+				NextCounts();
+			}
 		}
+		D_ASSERT(values_skipped == batch_size);
 	}
 
 	static uint8_t ComputeBitWidth(idx_t val) {
@@ -83,15 +96,19 @@ private:
 
 	/// Fills literal_count_ and repeat_count_ with next values. Returns false if there
 	/// are no more.
-	template <typename T>
-	bool NextCounts() {
+	template <bool CHECKED>
+	void NextCountsTemplated() {
 		// Read the next run's indicator int, it could be a literal or repeated run.
 		// The int is encoded as a vlq-encoded value.
 		if (bitpack_pos != 0) {
-			buffer_.inc(1);
+			if (CHECKED) {
+				buffer_.inc(1);
+			} else {
+				buffer_.unsafe_inc(1);
+			}
 			bitpack_pos = 0;
 		}
-		auto indicator_value = ParquetDecodeUtils::VarintDecode<uint32_t>(buffer_);
+		auto indicator_value = ParquetDecodeUtils::VarintDecode<uint32_t, CHECKED>(buffer_);
 
 		// lsb indicates if it is a literal run or repeated run
 		bool is_literal = indicator_value & 1;
@@ -101,16 +118,27 @@ private:
 			repeat_count_ = indicator_value >> 1;
 			// (ARROW-4018) this is not big-endian compatible, lol
 			current_value_ = 0;
-			for (auto i = 0; i < byte_encoded_len; i++) {
-				current_value_ |= (buffer_.read<uint8_t>() << (i * 8));
+			if (CHECKED) {
+				buffer_.available(byte_encoded_len);
 			}
+			for (auto i = 0; i < byte_encoded_len; i++) {
+				auto next_byte = Load<uint8_t>(buffer_.ptr + i);
+				current_value_ |= (next_byte << (i * 8));
+			}
+			buffer_.unsafe_inc(byte_encoded_len);
 			// sanity check
 			if (repeat_count_ > 0 && current_value_ > max_val) {
 				throw std::runtime_error("Payload value bigger than allowed. Corrupted file?");
 			}
 		}
-		// TODO complain if we run out of buffer
-		return true;
+	}
+
+	void NextCounts() {
+		if (buffer_.check_available(byte_encoded_len + sizeof(uint32_t) + 2)) {
+			NextCountsTemplated<false>();
+		} else {
+			NextCountsTemplated<true>();
+		}
 	}
 };
 } // namespace duckdb

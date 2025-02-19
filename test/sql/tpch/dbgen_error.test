@@ -1,0 +1,18 @@
+# name: test/sql/tpch/dbgen_error.test
+# description: Test error thrown during dbgen
+# group: [tpch]
+
+require tpch
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET memory_limit = '100MB';
+
+statement ok
+SET temp_directory = '.unrecognized_folder/folder2'
+
+statement error
+CALL dbgen(sf=1);
+----

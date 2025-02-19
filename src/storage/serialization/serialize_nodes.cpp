@@ -209,7 +209,7 @@ void CSVReaderOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<CSVOption<char>>(137, "comment", dialect_options.state_machine_options.comment, CSVOption<char>('\0'));
 	serializer.WritePropertyWithDefault<idx_t>(138, "rows_until_header", dialect_options.rows_until_header);
 	serializer.WritePropertyWithDefault<string>(139, "encoding", encoding);
-	serializer.WriteProperty<CSVOption<bool>>(140, "rfc_4180", dialect_options.state_machine_options.rfc_4180);
+	serializer.WriteProperty<CSVOption<bool>>(140, "strict_mode", dialect_options.state_machine_options.strict_mode);
 	serializer.WriteProperty<CSVOption<string>>(141, "multi_byte_delimiter", GetMultiByteDelimiter());
 	serializer.WritePropertyWithDefault<bool>(142, "multi_file_reader", multi_file_reader);
 	serializer.WriteProperty<CSVOption<idx_t>>(143, "buffer_size_option", buffer_size_option);
@@ -256,7 +256,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	auto dialect_options_state_machine_options_comment = deserializer.ReadPropertyWithExplicitDefault<CSVOption<char>>(137, "comment", CSVOption<char>('\0'));
 	auto dialect_options_rows_until_header = deserializer.ReadPropertyWithDefault<idx_t>(138, "rows_until_header");
 	auto encoding = deserializer.ReadPropertyWithDefault<string>(139, "encoding");
-	auto dialect_options_state_machine_options_rfc_4180 = deserializer.ReadProperty<CSVOption<bool>>(140, "rfc_4180");
+	auto dialect_options_state_machine_options_strict_mode = deserializer.ReadProperty<CSVOption<bool>>(140, "strict_mode");
 	auto multi_byte_delimiter = deserializer.ReadProperty<CSVOption<string>>(141, "multi_byte_delimiter");
 	CSVReaderOptions result(dialect_options_state_machine_options_delimiter, multi_byte_delimiter);
 	result.ignore_errors = ignore_errors;
@@ -295,7 +295,7 @@ CSVReaderOptions CSVReaderOptions::Deserialize(Deserializer &deserializer) {
 	result.dialect_options.state_machine_options.comment = dialect_options_state_machine_options_comment;
 	result.dialect_options.rows_until_header = dialect_options_rows_until_header;
 	result.encoding = std::move(encoding);
-	result.dialect_options.state_machine_options.rfc_4180 = dialect_options_state_machine_options_rfc_4180;
+	result.dialect_options.state_machine_options.strict_mode = dialect_options_state_machine_options_strict_mode;
 	deserializer.ReadPropertyWithDefault<bool>(142, "multi_file_reader", result.multi_file_reader);
 	deserializer.ReadProperty<CSVOption<idx_t>>(143, "buffer_size_option", result.buffer_size_option);
 	return result;
@@ -647,12 +647,12 @@ StrpTimeFormat StrpTimeFormat::Deserialize(Deserializer &deserializer) {
 }
 
 void TableFilterSet::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<unordered_map<idx_t, unique_ptr<TableFilter>>>(100, "filters", filters);
+	serializer.WritePropertyWithDefault<map<idx_t, unique_ptr<TableFilter>>>(100, "filters", filters);
 }
 
 TableFilterSet TableFilterSet::Deserialize(Deserializer &deserializer) {
 	TableFilterSet result;
-	deserializer.ReadPropertyWithDefault<unordered_map<idx_t, unique_ptr<TableFilter>>>(100, "filters", result.filters);
+	deserializer.ReadPropertyWithDefault<map<idx_t, unique_ptr<TableFilter>>>(100, "filters", result.filters);
 	return result;
 }
 
