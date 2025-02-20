@@ -3,6 +3,7 @@
 #include "column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "reader/string_column_reader.hpp"
+#include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
@@ -18,6 +19,16 @@ void DeltaLengthByteArrayDecoder::InitializePage() {
 	auto &block = *reader.block;
 	auto &allocator = reader.reader.allocator;
 	DeltaByteArrayDecoder::ReadDbpData(allocator, block, length_buffer, byte_array_count);
+
+	// Verify that the sum of DBP string lengths match up with the available string data and check if valid UTF-8
+	idx_t total_string_length = 0;
+	const auto length_data = reinterpret_cast<uint32_t *>(length_buffer.ptr);
+	for (idx_t i = 0; i < byte_array_count; i++) {
+		total_string_length += length_data[i];
+	}
+	block.available(total_string_length);
+	reader.Cast<StringColumnReader>().VerifyString(char_ptr_cast(block.ptr), total_string_length);
+
 	length_idx = 0;
 }
 
@@ -46,11 +57,6 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 			    "read of %d from %d entries) - corrupt file?",
 			    length_idx + read_count, byte_array_count);
 		}
-		idx_t total_string_length = 0;
-		for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
-			total_string_length += length_data[length_idx + row_idx];
-		}
-		block.available(total_string_length);
 	}
 
 	for (idx_t row_idx = 0; row_idx < read_count; row_idx++) {
@@ -66,7 +72,6 @@ void DeltaLengthByteArrayDecoder::ReadInternal(shared_ptr<ResizeableBuffer> &blo
 				    "read of %d from %d entries) - corrupt file?",
 				    length_idx, byte_array_count);
 			}
-			block.available(length_data[length_idx]);
 		}
 		const auto &str_len = length_data[length_idx++];
 		result_data[result_idx] = string_t(char_ptr_cast(block.ptr), str_len);
