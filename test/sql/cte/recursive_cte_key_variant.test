@@ -370,3 +370,21 @@ query II
 WITH RECURSIVE tbl(a, b) USING KEY (a) AS (SELECT 'string', 1 UNION SELECT a, b + 1 FROM tbl WHERE b < 5) SELECT * FROM tbl
 ----
 string	5
+
+query III
+select  *
+  from    range(1, 4) as _(l),
+  lateral (
+    with recursive cte(a, b) using key (a) as (
+      select 1, 0
+        union
+      select a, b + 1
+      from   recurring.cte
+      where  b < l
+    )
+    table cte
+  ) ORDER BY l
+----
+1	1	1
+2	1	2
+3	1	3
