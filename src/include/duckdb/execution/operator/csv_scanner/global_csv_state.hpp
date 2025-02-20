@@ -37,9 +37,9 @@ public:
 	//! In case it returns a nullptr it means we are done reading these files.
 	unique_ptr<StringValueScanner> Next(optional_ptr<StringValueScanner> previous_scanner);
 
-	void FillRejectsTable() const;
+	void FillRejectsTable(CSVFileScan &scan) const;
 
-	void DecrementThread();
+	void FinishFile(CSVFileScan &scan);
 
 	//! Returns Current Progress of this CSV Read
 	double GetProgress(const ReadCSVData &bind_data) const;
@@ -84,11 +84,8 @@ private:
 	atomic<idx_t> last_file_idx;
 	shared_ptr<CSVBufferUsage> current_buffer_in_use;
 
-	unordered_map<idx_t, idx_t> threads_per_file;
 	//! We hold information on the current scanner boundary
 	CSVIterator current_boundary;
-
-	CSVValidator validator;
 
 private:
 	shared_ptr<CSVFileScan> CreateFileScan(idx_t file_idx, shared_ptr<CSVBufferManager> buffer_manager = nullptr);

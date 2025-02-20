@@ -120,8 +120,18 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 	if (previous_scanner) {
 		// We have to insert information for validation
 		lock_guard<mutex> parallel_lock(main_mutex);
-		validator.Insert(previous_scanner->csv_file_scan->GetFileIndex(), previous_scanner->scanner_idx,
-		                 previous_scanner->GetValidationLine());
+		auto &file = *previous_scanner->csv_file_scan;
+		file.validator.Insert(previous_scanner->scanner_idx, previous_scanner->GetValidationLine());
+		auto finished_tasks = ++file.finished_tasks;
+		if (file.finished_scan && finished_tasks == file.started_tasks) {
+			// all scans finished for this file
+			previous_scanner->buffer_tracker.reset();
+			if (RefersToSameObject(current_buffer_in_use->buffer_manager, *previous_scanner->csv_file_scan->buffer_manager)) {
+				current_buffer_in_use.reset();
+			}
+			previous_scanner->csv_file_scan->Finish();
+			FinishFile(file);
+		}
 	}
 	if (single_threaded) {
 		{
@@ -134,8 +144,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			}
 		}
 		idx_t cur_idx;
-		bool empty_file = false;
-		do {
+		while (true) {
 			{
 				lock_guard<mutex> parallel_lock(main_mutex);
 				cur_idx = last_file_idx++;
@@ -146,13 +155,14 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 				if (cur_idx == 0) {
 					D_ASSERT(!previous_scanner);
 					auto current_file = file_scans.front();
+					++current_file->started_tasks;
 					return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager,
 					                                     current_file->state_machine, current_file->error_handler,
 					                                     current_file, false, current_boundary);
 				}
 			}
 			auto file_scan = CreateFileScan(cur_idx);
-			empty_file = file_scan->file_size == 0;
+			bool empty_file = file_scan->file_size == 0;
 
 			if (!empty_file) {
 				lock_guard<mutex> parallel_lock(main_mutex);
@@ -163,12 +173,12 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 				current_boundary.SetCurrentBoundaryToPosition(single_threaded, csv_data.options);
 				current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager,
 				                                                        current_boundary.GetBufferIdx());
-
+				++current_file->started_tasks;
 				return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager,
 				                                     current_file->state_machine, current_file->error_handler,
 				                                     current_file, false, current_boundary);
 			}
-		} while (empty_file);
+		}
 	}
 	lock_guard<mutex> parallel_lock(main_mutex);
 	if (finished) {
@@ -183,20 +193,13 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
 	                                  current_file.error_handler, file_scans.back(), false, current_boundary);
-	threads_per_file[csv_scanner->csv_file_scan->GetFileIndex()]++;
-	if (previous_scanner) {
-		threads_per_file[previous_scanner->csv_file_scan->GetFileIndex()]--;
-		if (threads_per_file[previous_scanner->csv_file_scan->GetFileIndex()] == 0) {
-			previous_scanner->buffer_tracker.reset();
-			previous_scanner->csv_file_scan->Finish();
-		}
-	}
 	csv_scanner->buffer_tracker = current_buffer_in_use;
 
 	// We then produce the next boundary
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 	if (!current_boundary.Next(*current_file.buffer_manager, csv_data.options)) {
 		// This means we are done scanning the current file
+		current_file.finished_scan = true;
 		do {
 			auto current_file_idx = file_scans.back()->GetFileIndex() + 1;
 			if (current_file_idx < files.size()) {
@@ -214,42 +217,36 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			}
 		} while (current_boundary.done);
 	}
+	++current_file.started_tasks;
 	// We initialize the scan
 	return csv_scanner;
 }
 
 idx_t CSVGlobalState::MaxThreads() const {
-       // We initialize max one thread per our set bytes per thread limit
-       if (single_threaded || !file_scans.front()->on_disk_file) {
-               return system_threads;
-       }
-       const idx_t bytes_per_thread = CSVIterator::BytesPerThread(file_scans.front()->options);
-       const idx_t total_threads = file_scans.front()->file_size / bytes_per_thread + 1;
-       if (total_threads < system_threads) {
-               return total_threads;
-       }
-       return system_threads;
+	// We initialize max one thread per our set bytes per thread limit
+	if (single_threaded || !file_scans.front()->on_disk_file) {
+		return system_threads;
+	}
+	const idx_t bytes_per_thread = CSVIterator::BytesPerThread(file_scans.front()->options);
+	const idx_t total_threads = file_scans.front()->file_size / bytes_per_thread + 1;
+	if (total_threads < system_threads) {
+		return total_threads;
+	}
+	return system_threads;
 }
 
-void CSVGlobalState::DecrementThread() {
-	lock_guard<mutex> parallel_lock(main_mutex);
+void CSVGlobalState::FinishFile(CSVFileScan &scan) {
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
-	D_ASSERT(running_threads > 0);
-	running_threads--;
-	if (running_threads == 0) {
-		const bool ignore_or_store_errors =
-		    csv_data.options.ignore_errors.GetValue() || csv_data.options.store_rejects.GetValue();
-		if (!single_threaded && !ignore_or_store_errors) {
-			// If we are running multithreaded and not ignoring errors, we must run the validator
-			validator.Verify();
-		}
-		for (const auto &file : file_scans) {
-			file->error_handler->ErrorIfNeeded();
-		}
-		FillRejectsTable();
-		if (context.client_data->debug_set_max_line_length) {
-			context.client_data->debug_max_line_length = file_scans[0]->error_handler->GetMaxLineLength();
-		}
+	const bool ignore_or_store_errors =
+	    csv_data.options.ignore_errors.GetValue() || csv_data.options.store_rejects.GetValue();
+	if (!single_threaded && !ignore_or_store_errors) {
+		// If we are running multithreaded and not ignoring errors, we must run the validator
+		scan.validator.Verify();
+	}
+	scan.error_handler->ErrorIfNeeded();
+	FillRejectsTable(scan);
+	if (context.client_data->debug_set_max_line_length) {
+		context.client_data->debug_max_line_length = scan.error_handler->GetMaxLineLength();
 	}
 }
 
@@ -317,32 +314,31 @@ void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t f
 	scan_appender.EndRow();
 }
 
-void CSVGlobalState::FillRejectsTable() const {
+void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) const {
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 	auto &options = csv_data.options;
 
-	if (options.store_rejects.GetValue()) {
-		auto limit = options.rejects_limit;
-		auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_scan_name.GetValue(),
-		                                            options.rejects_table_name.GetValue());
-		lock_guard<mutex> lock(rejects->write_lock);
-		auto &errors_table = rejects->GetErrorsTable(context);
-		auto &scans_table = rejects->GetScansTable(context);
-		InternalAppender errors_appender(context, errors_table);
-		InternalAppender scans_appender(context, scans_table);
-		idx_t scan_idx = context.transaction.GetActiveQuery();
-		for (auto &file : file_scans) {
-			const idx_t file_idx = rejects->GetCurrentFileIndex(scan_idx);
-			file->error_handler->FillRejectsTable(errors_appender, file_idx, scan_idx, *file, *rejects, bind_data,
-			                                      limit);
-			if (rejects->count != 0) {
-				rejects->count = 0;
-				FillScanErrorTable(scans_appender, scan_idx, file_idx, *file);
-			}
-		}
-		errors_appender.Close();
-		scans_appender.Close();
+	if (!options.store_rejects.GetValue()) {
+		return;
 	}
+	auto limit = options.rejects_limit;
+	auto rejects = CSVRejectsTable::GetOrCreate(context, options.rejects_scan_name.GetValue(),
+	                                            options.rejects_table_name.GetValue());
+	lock_guard<mutex> lock(rejects->write_lock);
+	auto &errors_table = rejects->GetErrorsTable(context);
+	auto &scans_table = rejects->GetScansTable(context);
+	InternalAppender errors_appender(context, errors_table);
+	InternalAppender scans_appender(context, scans_table);
+	idx_t scan_idx = context.transaction.GetActiveQuery();
+
+	const idx_t file_idx = rejects->GetCurrentFileIndex(scan_idx);
+	scan.error_handler->FillRejectsTable(errors_appender, file_idx, scan_idx, scan, *rejects, bind_data, limit);
+	if (rejects->count != 0) {
+		rejects->count = 0;
+		FillScanErrorTable(scans_appender, scan_idx, file_idx, scan);
+	}
+	errors_appender.Close();
+	scans_appender.Close();
 }
 
 } // namespace duckdb

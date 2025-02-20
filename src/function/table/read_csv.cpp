@@ -63,9 +63,9 @@ public:
 //===--------------------------------------------------------------------===//
 // Read CSV Functions
 //===--------------------------------------------------------------------===//
-// static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
-// 	auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
-// 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
+// static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input)
+// { 	auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>(); 	auto &csv_data =
+// bind_data.bind_data->Cast<ReadCSVData>();
 //
 // 	// Create the temporary rejects table
 // 	if (csv_data.options.store_rejects.GetValue()) {
@@ -96,9 +96,6 @@ unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, 
 		return nullptr;
 	}
 	auto csv_scanner = global_state.Next(nullptr);
-	if (!csv_scanner) {
-		global_state.DecrementThread();
-	}
 	return make_uniq<CSVLocalState>(std::move(csv_scanner));
 }
 
@@ -130,7 +127,6 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 		if (csv_local_state.csv_reader->FinishedIterator()) {
 			csv_local_state.csv_reader = csv_global_state.Next(csv_local_state.csv_reader.get());
 			if (!csv_local_state.csv_reader) {
-				csv_global_state.DecrementThread();
 				break;
 			}
 		}
@@ -229,8 +225,8 @@ virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_p
 
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction,
-	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBind, MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitGlobal,
-	                       ReadCSVInitLocal);
+	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBind,
+	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitGlobal, ReadCSVInitLocal);
 	read_csv.table_scan_progress = CSVReaderProgress;
 	read_csv.pushdown_complex_filter = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;

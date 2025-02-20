@@ -13,6 +13,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_state_machine.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
 #include "duckdb/common/base_file_reader.hpp"
 
 namespace duckdb {
@@ -103,6 +104,12 @@ public:
 	CSVReaderOptions options;
 
 	CSVIterator start_iterator;
+
+	CSVValidator validator;
+
+	atomic<idx_t> started_tasks {0};
+	atomic<idx_t> finished_tasks {0};
+	atomic<bool> finished_scan {false};
 
 private:
 	vector<string> names;

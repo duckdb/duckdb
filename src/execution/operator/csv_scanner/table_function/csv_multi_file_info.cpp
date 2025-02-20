@@ -205,7 +205,8 @@ void CSVMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data, BindInfo 
 	throw InternalException("Unimplemented CSVMultiFileInfo method");
 }
 
-optional_idx CSVMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state, FileExpandResult expand_result) {
+optional_idx CSVMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state,
+                                          FileExpandResult expand_result) {
 	if (!global_state.global_state) {
 		return 1;
 	}
@@ -213,18 +214,20 @@ optional_idx CSVMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, co
 	return gstate.MaxThreads();
 }
 
-unique_ptr<GlobalTableFunctionState> CSVMultiFileInfo::InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state) {
+unique_ptr<GlobalTableFunctionState> CSVMultiFileInfo::InitializeGlobalState(ClientContext &context,
+                                                                             MultiFileBindData &bind_data,
+                                                                             MultiFileGlobalState &global_state) {
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 
 	// Create the temporary rejects table
 	if (csv_data.options.store_rejects.GetValue()) {
 		CSVRejectsTable::GetOrCreate(context, csv_data.options.rejects_scan_name.GetValue(),
-									 csv_data.options.rejects_table_name.GetValue())
-			->InitializeTable(context, csv_data);
+		                             csv_data.options.rejects_table_name.GetValue())
+		    ->InitializeTable(context, csv_data);
 	}
 	// FIXME - this is not necessary once we switch to the readers
 	if (global_state.readers.size() == bind_data.union_readers.size()) {
-		for(idx_t reader_idx = 0; reader_idx < global_state.readers.size(); reader_idx++) {
+		for (idx_t reader_idx = 0; reader_idx < global_state.readers.size(); reader_idx++) {
 			bind_data.union_readers[reader_idx] = std::move(global_state.readers[reader_idx]->union_data);
 		}
 	}
@@ -233,7 +236,7 @@ unique_ptr<GlobalTableFunctionState> CSVMultiFileInfo::InitializeGlobalState(Cli
 		return nullptr;
 	}
 	return make_uniq<CSVGlobalState>(context, csv_data.buffer_manager, csv_data.options, context.db->NumberOfThreads(),
-									 bind_data.file_list->GetAllFiles(), global_state.column_indexes, bind_data);
+	                                 bind_data.file_list->GetAllFiles(), global_state.column_indexes, bind_data);
 }
 
 unique_ptr<LocalTableFunctionState> CSVMultiFileInfo::InitializeLocalState() {

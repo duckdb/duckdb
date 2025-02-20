@@ -100,8 +100,10 @@ struct ParquetMultiFileInfo {
 	                                                        unique_ptr<BaseFileReaderOptions> options);
 	static void FinalizeBindData(MultiFileBindData &multi_file_data);
 	static void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
-	static optional_idx MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state, FileExpandResult expand_result);
-	static unique_ptr<GlobalTableFunctionState> InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state);
+	static optional_idx MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state,
+	                               FileExpandResult expand_result);
+	static unique_ptr<GlobalTableFunctionState>
+	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state);
 	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               BaseUnionData &union_data);
@@ -435,7 +437,9 @@ void ParquetMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data_p, Bin
 	info.InsertOption("debug_use_openssl", Value::BOOLEAN(bind_data.parquet_options.debug_use_openssl));
 }
 
-optional_idx ParquetMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state, FileExpandResult expand_result) {
+optional_idx ParquetMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data_p,
+                                              const MultiFileGlobalState &global_state,
+                                              FileExpandResult expand_result) {
 	auto &bind_data = bind_data_p.bind_data->Cast<ParquetReadBindData>();
 	return MaxValue(bind_data.initial_file_row_groups, static_cast<idx_t>(1));
 }
@@ -499,7 +503,8 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
 void ParquetMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader) {
 }
 
-unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState(ClientContext &, MultiFileBindData &, MultiFileGlobalState &) {
+unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState(ClientContext &, MultiFileBindData &,
+                                                                                 MultiFileGlobalState &) {
 	return make_uniq<ParquetReadGlobalState>();
 }
 
