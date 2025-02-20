@@ -499,7 +499,7 @@ idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilt
 	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
 }
 
-void ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset) {
+bool ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset) {
 	D_ASSERT(block);
 
 	D_ASSERT(read_now + result_offset <= STANDARD_VECTOR_SIZE);
@@ -512,8 +512,17 @@ void ColumnReader::PrepareRead(idx_t read_now, data_ptr_t define_out, data_ptr_t
 
 	if (HasDefines()) {
 		D_ASSERT(defined_decoder);
+		const auto max_define = NumericCast<uint8_t>(MaxDefine());
+		if (!HasRepeats() && defined_decoder->HasRepeatedBatch<uint8_t>(read_now, max_define)) {
+			// Fast path: no repeats and all valid
+			defined_decoder->GetRepeatedBatch<uint8_t>(read_now, max_define);
+			return true;
+		}
 		defined_decoder->GetBatch<uint8_t>(define_out + result_offset, read_now);
+		return false;
 	}
+
+	return true; // No defines, so everything is valid
 }
 
 void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
@@ -533,9 +542,9 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		return;
 	}
 	// read the defines/repeats
-	PrepareRead(read_now, define_out, repeat_out, result_offset);
+	const auto all_valid = PrepareRead(read_now, define_out, repeat_out, result_offset);
 	// read the data according to the encoder
-	auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
+	const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
 	switch (encoding) {
 	case ColumnEncoding::DICTIONARY:
 		dictionary_decoder.Read(define_ptr, read_now, result, result_offset);
@@ -556,7 +565,7 @@ void ColumnReader::ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t re
 		byte_stream_split_decoder.Read(define_ptr, read_now, result, result_offset);
 		break;
 	default:
-		Plain(block, define_out, read_now, result_offset, result);
+		Plain(block, define_ptr, read_now, result_offset, result);
 		break;
 	}
 	page_rows_available -= read_now;
@@ -611,9 +620,9 @@ void ColumnReader::DirectSelect(uint64_t num_values, data_ptr_t define_out, data
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (read_now == to_read && encoding == ColumnEncoding::PLAIN) {
-		PrepareRead(read_now, define_out, repeat_out, 0);
-
-		PlainSelect(block, define_out, read_now, result, sel, approved_tuple_count);
+		const auto all_valid = PrepareRead(read_now, define_out, repeat_out, 0);
+		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
+		PlainSelect(block, define_ptr, read_now, result, sel, approved_tuple_count);
 
 		page_rows_available -= read_now;
 		FinishRead(num_values);
@@ -650,8 +659,8 @@ void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data
 		} else {
 			// Push filter into dictionary directly
 			// read the defines/repeats
-			PrepareRead(read_now, define_out, repeat_out, 0);
-			auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
+			const auto all_valid = PrepareRead(read_now, define_out, repeat_out, 0);
+			const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
 			dictionary_decoder.Filter(define_ptr, read_now, result, filter, sel, approved_tuple_count);
 		}
 		page_rows_available -= read_now;
@@ -687,9 +696,9 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 
 	while (to_skip > 0) {
 		auto skip_now = ReadPageHeaders(to_skip);
-		PrepareRead(skip_now, define_out, repeat_out, 0);
+		const auto all_valid = PrepareRead(skip_now, define_out, repeat_out, 0);
 
-		auto define_ptr = HasDefines() ? static_cast<uint8_t *>(define_out) : nullptr;
+		const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
 		switch (encoding) {
 		case ColumnEncoding::DICTIONARY:
 			dictionary_decoder.Skip(define_ptr, skip_now);
@@ -710,7 +719,7 @@ void ColumnReader::ApplyPendingSkips(data_ptr_t define_out, data_ptr_t repeat_ou
 			byte_stream_split_decoder.Skip(define_ptr, skip_now);
 			break;
 		default:
-			PlainSkip(*block, define_out, skip_now);
+			PlainSkip(*block, define_ptr, skip_now);
 			break;
 		}
 		page_rows_available -= skip_now;
