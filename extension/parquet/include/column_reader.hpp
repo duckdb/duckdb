@@ -185,8 +185,9 @@ private:
 	void FinishRead(idx_t read_count);
 	idx_t ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter = nullptr);
 	idx_t ReadInternal(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result);
-	//! Prepare a read of up to "max_read" rows and read the defines/repeats. Returns how many rows are available.
-	void PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
+	//! Prepare a read of up to "max_read" rows and read the defines/repeats.
+	//! Returns whether all values are valid (i.e., not NULL)
+	bool PrepareRead(idx_t read_count, data_ptr_t define_out, data_ptr_t repeat_out, idx_t result_offset);
 	void ReadData(idx_t read_now, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result, idx_t result_offset);
 
 	template <class VALUE_TYPE, class CONVERSION, bool HAS_DEFINES, bool CHECKED>
@@ -289,7 +290,6 @@ protected:
 
 private:
 	void AllocateBlock(idx_t size);
-	void AllocateCompressed(idx_t size);
 	void PrepareRead(optional_ptr<const TableFilter> filter);
 	void PreparePage(PageHeader &page_hdr);
 	void PrepareDataPage(PageHeader &page_hdr);
@@ -304,8 +304,6 @@ private:
 	idx_t chunk_read_offset;
 
 	shared_ptr<ResizeableBuffer> block;
-
-	ResizeableBuffer compressed_buffer;
 
 	ColumnEncoding encoding = ColumnEncoding::INVALID;
 	unique_ptr<RleBpDecoder> defined_decoder;

@@ -33,9 +33,8 @@ public:
 	}
 
 	void FinishWrite(WriteStream &writer) {
-		D_ASSERT(stream->GetPosition() == total_string_size);
 		dbp_encoder.FinishWrite(writer);
-		writer.WriteData(buffer.get(), total_string_size);
+		writer.WriteData(buffer.get(), stream->GetPosition());
 	}
 
 private:
@@ -69,7 +68,7 @@ void WriteValue(DlbaEncoder &encoder, WriteStream &writer, const string_t &value
 
 // helpers to get size from strings
 template <class SRC>
-static idx_t GetDlbaStringSize(const SRC &src_value) {
+static idx_t GetDlbaStringSize(const SRC &) {
 	return 0;
 }
 

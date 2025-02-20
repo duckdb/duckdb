@@ -194,6 +194,19 @@ TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
 	REQUIRE(db.QueryAndCheck("SELECT l_partkey, l_comment FROM lineitem WHERE l_orderkey=1 ORDER BY l_linenumber"));
 }
 
+TEST_CASE("ADBC - Pivot", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+
+	auto input_data = db.QueryArrow("SELECT * FROM read_csv_auto(\'data/csv/flights.csv\')");
+
+	db.CreateTable("flights", input_data);
+
+	REQUIRE(db.QueryAndCheck("PIVOT flights ON UniqueCarrier USING COUNT(1) GROUP BY OriginCityName;"));
+}
+
 TEST_CASE("Test Null Error/Database", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -1364,8 +1377,8 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 		REQUIRE((res->ColumnCount() == 2));
 		REQUIRE((res->RowCount() == 3));
 		REQUIRE((res->GetValue(1, 0).ToString() ==
-		         "[{'db_schema_name': information_schema, 'db_schema_tables': NULL}, {'db_schema_name': main, "
-		         "'db_schema_tables': NULL}, {'db_schema_name': pg_catalog, 'db_schema_tables': NULL}]"));
+		         "[{'db_schema_name': pg_catalog, 'db_schema_tables': NULL}, {'db_schema_name': information_schema, "
+		         "'db_schema_tables': NULL}, {'db_schema_name': main, 'db_schema_tables': NULL}]"));
 		db.Query("Drop table result;");
 
 		AdbcConnectionGetObjects(&db.adbc_connection, ADBC_OBJECT_DEPTH_COLUMNS, nullptr, nullptr, nullptr, nullptr,
