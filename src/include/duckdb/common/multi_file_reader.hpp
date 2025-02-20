@@ -201,7 +201,7 @@ public:
 		BindOptions(file_options, files, union_col_types, union_col_names, bind_data);
 		names = union_col_names;
 		return_types = union_col_types;
-		result.Initialize(context, result.union_readers[0]);
+		result.Initialize(context, *result.union_readers[0]);
 		D_ASSERT(names.size() == return_types.size());
 		return bind_data;
 	}

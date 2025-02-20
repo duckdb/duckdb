@@ -30,15 +30,14 @@ struct MultiFileBindData : public TableFunctionData {
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
 	shared_ptr<BaseFileReader> initial_reader;
-	// The union readers are created (when parquet union_by_name option is on) during binding
-	// Those readers can be re-used during ParquetParallelStateNext
-	vector<unique_ptr<BaseUnionData>> union_readers;
+	// The union readers are created (when the union_by_name option is on) during binding
+	vector<shared_ptr<BaseUnionData>> union_readers;
 
 	void Initialize(shared_ptr<BaseFileReader> reader) {
 		initial_reader = std::move(reader);
 	}
-	void Initialize(ClientContext &, unique_ptr<BaseUnionData> &union_data) {
-		Initialize(std::move(union_data->reader));
+	void Initialize(ClientContext &, BaseUnionData &union_data) {
+		Initialize(std::move(union_data.reader));
 	}
 };
 
@@ -63,7 +62,7 @@ struct MultiFileFileReaderData {
 	    : reader(std::move(reader_p)), file_state(MultiFileFileState::OPEN), file_mutex(make_uniq<mutex>()) {
 	}
 	// Create data for an existing reader
-	explicit MultiFileFileReaderData(unique_ptr<BaseUnionData> union_data_p) : file_mutex(make_uniq<mutex>()) {
+	explicit MultiFileFileReaderData(shared_ptr<BaseUnionData> union_data_p) : file_mutex(make_uniq<mutex>()) {
 		if (union_data_p->reader) {
 			reader = std::move(union_data_p->reader);
 			file_state = MultiFileFileState::OPEN;
@@ -80,7 +79,7 @@ struct MultiFileFileReaderData {
 	//! Mutexes to wait for the file when it is being opened
 	unique_ptr<mutex> file_mutex;
 	//! Options for opening the file
-	unique_ptr<BaseUnionData> union_data;
+	shared_ptr<BaseUnionData> union_data;
 
 	//! (only set when file_state is UNOPENED) the file to be opened
 	string file_to_be_opened;
@@ -256,7 +255,7 @@ public:
 		OP::FinalizeCopyBind(context, *options, expected_names, expected_types);
 
 		// TODO: Allow overriding the MultiFileReader for COPY FROM?
-		auto multi_file_reader = MultiFileReader::CreateDefault("ParquetCopy");
+		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
 		vector<string> paths = {info.file_path};
 		auto file_list = multi_file_reader->CreateFileList(context, paths);
 
@@ -479,15 +478,9 @@ public:
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
 			for (auto &reader : bind_data.union_readers) {
-				if (!reader) {
-					break;
-				}
-				result->readers.push_back(make_uniq<MultiFileFileReaderData>(std::move(reader)));
+				result->readers.push_back(make_uniq<MultiFileFileReaderData>(reader));
 			}
 			if (result->readers.size() != file_list.GetTotalFileCount()) {
-				// This case happens with recursive CTEs: the first execution the readers have already
-				// been moved out of the bind data.
-				// FIXME: clean up this process and make it more explicit
 				result->readers = {};
 			}
 		} else if (bind_data.initial_reader) {
@@ -542,7 +535,7 @@ public:
 				if (col_idx.IsVirtualColumn()) {
 					auto entry = bind_data.virtual_columns.find(column_id);
 					if (entry == bind_data.virtual_columns.end()) {
-						throw InternalException("Parquet - virtual column definition not found");
+						throw InternalException("MultiFileReader - virtual column definition not found");
 					}
 					result->scanned_types.emplace_back(entry->second.type);
 				} else {
@@ -607,7 +600,7 @@ public:
 	                                                     column_t column_index) {
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
-		// NOTE: we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
+		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
 			// multiple files, no luck!
 			return nullptr;
@@ -616,7 +609,7 @@ public:
 			// no reader
 			return nullptr;
 		}
-		// scanning single parquet file and we have the metadata read already
+		// scanning single file and we have the metadata read already
 		if (IsVirtualColumn(column_index)) {
 			return nullptr;
 		}
