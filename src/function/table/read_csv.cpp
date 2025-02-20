@@ -111,14 +111,6 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 	throw NotImplementedException("CSVReaderDeserialize not implemented");
 }
 
-void PushdownTypeToCSVScanner(ClientContext &context, optional_ptr<FunctionData> bind_data,
-                              const unordered_map<idx_t, LogicalType> &new_column_types) {
-	auto &csv_bind = bind_data->Cast<MultiFileBindData>();
-	for (auto &type : new_column_types) {
-		csv_bind.types[type.first] = type.second;
-	}
-}
-
 virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
 	auto &csv_bind = bind_data->Cast<MultiFileBindData>();
 	virtual_column_map_t result;
@@ -139,7 +131,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	read_csv.get_partition_data = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileGetPartitionData;
 	read_csv.cardinality = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileCardinality;
 	read_csv.projection_pushdown = true;
-	read_csv.type_pushdown = PushdownTypeToCSVScanner;
+	read_csv.type_pushdown = MultiFileReaderFunction<CSVMultiFileInfo>::PushdownType;
 	read_csv.get_virtual_columns = ReadCSVGetVirtualColumns;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;

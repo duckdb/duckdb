@@ -29,6 +29,19 @@ bool CSVMultiFileInfo::ParseOption(ClientContext &context, const string &key, co
 	return true;
 }
 
+void CSVMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
+                                        const vector<string> &expected_names,
+                                        const vector<LogicalType> &expected_types) {
+	auto &options = options_p.Cast<CSVFileReaderOptions>();
+	auto &csv_options = options.options;
+	csv_options.name_list = expected_names;
+	csv_options.sql_type_list = expected_types;
+	csv_options.columns_set = true;
+	for (idx_t i = 0; i < expected_types.size(); i++) {
+		csv_options.sql_types_per_column[expected_names[i]] = i;
+	}
+}
+
 unique_ptr<TableFunctionData> CSVMultiFileInfo::InitializeBindData(MultiFileBindData &multi_file_data,
                                                                    unique_ptr<BaseFileReaderOptions> options_p) {
 	auto &options = options_p->Cast<CSVFileReaderOptions>();

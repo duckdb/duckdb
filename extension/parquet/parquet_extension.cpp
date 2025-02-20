@@ -95,6 +95,8 @@ struct ParquetMultiFileInfo {
 	                            vector<LogicalType> &expected_types);
 	static bool ParseOption(ClientContext &context, const string &key, const Value &val,
 	                        MultiFileReaderOptions &file_options, BaseFileReaderOptions &options);
+	static void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
+	                             const vector<string> &expected_names, const vector<LogicalType> &expected_types);
 	static void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
 	                       MultiFileBindData &bind_data);
 	static unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
@@ -364,6 +366,11 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 		return true;
 	}
 	return false;
+}
+
+void ParquetMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
+                                            const vector<string> &expected_names,
+                                            const vector<LogicalType> &expected_types) {
 }
 
 bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &original_key, const Value &val,

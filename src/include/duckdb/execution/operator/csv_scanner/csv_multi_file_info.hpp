@@ -19,6 +19,8 @@ struct CSVMultiFileInfo {
 	                            vector<LogicalType> &expected_types);
 	static bool ParseOption(ClientContext &context, const string &key, const Value &val,
 	                        MultiFileReaderOptions &file_options, BaseFileReaderOptions &options);
+	static void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
+	                             const vector<string> &expected_names, const vector<LogicalType> &expected_types);
 	static unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                        unique_ptr<BaseFileReaderOptions> options);
 	static void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,

@@ -253,6 +253,7 @@ public:
 			}
 			throw NotImplementedException("Unsupported option for COPY FROM: %s", option.first);
 		}
+		OP::FinalizeCopyBind(context, *options, expected_names, expected_types);
 
 		// TODO: Allow overriding the MultiFileReader for COPY FROM?
 		auto multi_file_reader = MultiFileReader::CreateDefault("ParquetCopy");
@@ -688,6 +689,15 @@ public:
 		// FIXME: forward virtual columns
 		bind_data.virtual_columns = result;
 		return result;
+	}
+
+	static void PushdownType(ClientContext &context, optional_ptr<FunctionData> bind_data_p,
+				      const unordered_map<idx_t, LogicalType> &new_column_types) {
+		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
+		for (auto &type : new_column_types) {
+			bind_data.types[type.first] = type.second;
+			bind_data.columns[type.first].type = type.second;
+		}
 	}
 };
 
