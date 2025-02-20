@@ -43,7 +43,7 @@ PropertyGraphTable::PropertyGraphTable(string table_name_p, string table_name_al
 }
 
 string PropertyGraphTable::ToString() const {
-	string result = (catalog_name.empty() ? "" : catalog_name + ".") + schema_name + "."
+	string result = (catalog_name.empty() ? "" : catalog_name + ".") + (schema_name.empty() ? "" : schema_name + ".")
 	+ table_name + " " + (table_name_alias.empty() ? "" : "AS " + table_name_alias);
 	if (!is_vertex_table) {
 		result += " SOURCE KEY (";
