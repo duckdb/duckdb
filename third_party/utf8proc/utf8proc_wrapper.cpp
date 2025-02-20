@@ -75,11 +75,11 @@ static inline UnicodeType UTF8ExtraByteLoop(const int first_pos_seq, int utf8cha
 UnicodeType Utf8Proc::Analyze(const char *s, size_t len, UnicodeInvalidReason *invalid_reason, size_t *invalid_pos) {
 	UnicodeType type = UnicodeType::ASCII;
 
-	static constexpr uint64_t MASK = 0x8080808080808080;
+	static constexpr uint64_t MASK = 0x8080808080808080U;
 	for (size_t i = 0; i < len; i++) {
 		// Check 8 bytes at a time until we hit non-ASCII
-		for (; i + sizeof(MASK) < len; i += sizeof(MASK)) {
-			if (DUCKDB_UNLIKELY((Load<uint64_t>(const_data_ptr_cast(s + i)) & MASK) != 0)) {
+		for (; i + sizeof(uint64_t) < len; i += sizeof(uint64_t)) {
+			if ((Load<uint64_t>(const_data_ptr_cast(s + i)) & MASK)) {
 				break; // Non-ASCII in the next 8 bytes
 			}
 		}

@@ -6,11 +6,12 @@
 namespace duckdb {
 
 bool IsAscii(const char *input, idx_t n) {
+	static constexpr uint64_t MASK = 0x8080808080808080U;
+
 	// Check 8 bytes at a time
-	static constexpr uint64_t MASK = 0x8080808080808080;
 	idx_t i = 0;
-	for (; i + sizeof(MASK) <= n; i += sizeof(MASK)) {
-		if (DUCKDB_UNLIKELY(Load<uint64_t>(const_data_ptr_cast(input + i)) & MASK)) {
+	for (; i + sizeof(uint64_t) <= n; i += sizeof(uint64_t)) {
+		if ((Load<uint64_t>(const_data_ptr_cast(input + i)) & MASK)) {
 			// non-ascii character in the next 8 bytes
 			return false;
 		}
