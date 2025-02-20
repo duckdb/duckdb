@@ -270,13 +270,6 @@ def get_return_value(pointer_type, class_name):
     return POINTER_RETURN_FORMAT.format(pointer=pointer_type, class_name=class_name)
 
 
-def generate_constructor(pointer_type, class_name, constructor_parameters):
-    if pointer_type == 'none':
-        params = '' if len(constructor_parameters) == 0 else '(' + constructor_parameters + ')'
-        return f'\t{class_name} result{params};\n'
-    return f'\tauto result = duckdb::{pointer_type}<{class_name}>(new {class_name}({constructor_parameters}));\n'
-
-
 def generate_return(class_entry):
     if class_entry.base is None:
         return '\treturn result;'
@@ -506,6 +499,15 @@ class SerializableClass:
             return result
         return serialization_code
 
+    def generate_constructor(self, constructor_parameters: List[str]):
+        parameters = ", ".join(constructor_parameters)
+
+        if self.pointer_type == 'none':
+            if parameters != '':
+                parameters = f'({parameters})'
+            return f'\t{self.return_class} result{parameters};\n'
+        return f'\tauto result = duckdb::{self.pointer_type}<{self.return_class}>(new {self.return_class}({parameters}));\n'
+
 
 def generate_base_class_code(base_class: SerializableClass):
     base_class_serialize = ''
@@ -601,7 +603,7 @@ def generate_class_code(class_entry: SerializableClass):
     class_serialize = ''
     class_deserialize = ''
 
-    constructor_parameters = ''
+    constructor_parameters: List[str] = []
     constructor_entries = {}
     last_constructor_index = -1
     if class_entry.constructor is not None:
@@ -621,19 +623,15 @@ def generate_class_code(class_entry: SerializableClass):
                 if entry.name == constructor_entry:
                     if entry_idx > last_constructor_index:
                         last_constructor_index = entry_idx
-                    if len(constructor_parameters) > 0:
-                        constructor_parameters += ", "
                     type_name = replace_pointer(entry.type)
                     entry.deserialize_property = entry.deserialize_property.replace('.', '_')
                     if requires_move(type_name) and not is_reference:
-                        constructor_parameters += 'std::move(' + entry.deserialize_property + ')'
+                        constructor_parameters.append(f'std::move({entry.deserialize_property})')
                     else:
-                        constructor_parameters += entry.deserialize_property
+                        constructor_parameters.append(entry.deserialize_property)
                     found = True
                     break
             if constructor_entry.startswith('$') or constructor_entry.startswith('?'):
-                if len(constructor_parameters) > 0:
-                    constructor_parameters += ", "
                 is_optional = constructor_entry.startswith('?')
                 if is_optional:
                     param_type = constructor_entry.replace('?', '')
@@ -643,14 +641,12 @@ def generate_class_code(class_entry: SerializableClass):
                     get_format = GET_DESERIALIZE_PARAMETER_FORMAT
                     if param_type in REFERENCE_LIST:
                         param_type += ' &'
-                constructor_parameters += get_format.format(property_type=param_type)
+                constructor_parameters.append(get_format.format(property_type=param_type))
                 found = True
             if class_entry.base_object is not None:
                 for entry in class_entry.base_object.set_parameters:
                     if entry.name == constructor_entry:
-                        if len(constructor_parameters) > 0:
-                            constructor_parameters += ", "
-                        constructor_parameters += GET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type)
+                        constructor_parameters.append(GET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type))
                         found = True
                         break
             if not found:
@@ -662,9 +658,7 @@ def generate_class_code(class_entry: SerializableClass):
         entry = class_entry.members[entry_idx]
         class_deserialize += class_entry.get_deserialize_element(entry, base=entry.base, pointer_type='unique_ptr')
 
-    class_deserialize += generate_constructor(
-        class_entry.pointer_type, class_entry.return_class, constructor_parameters
-    )
+    class_deserialize += class_entry.generate_constructor(constructor_parameters)
     if class_entry.members is None:
         return None
     for entry_idx in range(len(class_entry.members)):
