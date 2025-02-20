@@ -153,7 +153,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NAME_SEP_LENGTH = 4;
 	static constexpr const idx_t NULL_LENGTH = 4;
-	static constexpr char SPECIAL_CHARACTERS[] = {'{', '}', '[', ']', '(', ')', ':', '"', '\'', ',', '\\'};
+	static constexpr char SPECIAL_CHARACTERS[] = {'\\', '{', '}', '[', ']', '(', ')', ':', '"', '\'', ','};
 
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
@@ -181,7 +181,8 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				string_length += NAME_SEP_LENGTH; // "'{name}': "
 			}
 			if (child_validity.RowIsValid(i)) {
-				string_length += string_length_func(data[i], SPECIAL_CHARACTERS, sizeof(SPECIAL_CHARACTERS));
+				//! Skip the `\`, not a special character outside quotes
+				string_length += string_length_func(data[i], SPECIAL_CHARACTERS + 1, sizeof(SPECIAL_CHARACTERS) - 1);
 			} else {
 				string_length += NULL_LENGTH;
 			}
@@ -216,7 +217,9 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			}
 			// value
 			if (child_validity.RowIsValid(i)) {
-				offset += write_string_func(dataptr + offset, data[i], SPECIAL_CHARACTERS, sizeof(SPECIAL_CHARACTERS));
+				//! Skip the `\`, not a special character outside quotes
+				offset += write_string_func(dataptr + offset, data[i], SPECIAL_CHARACTERS + 1,
+				                            sizeof(SPECIAL_CHARACTERS) - 1);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;

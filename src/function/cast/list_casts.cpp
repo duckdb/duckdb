@@ -94,7 +94,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto child_data = FlatVector::GetData<string_t>(child);
 	auto &child_validity = FlatVector::Validity(child);
 
-	constexpr char SPECIAL_CHARACTERS[] = {'{', '}', '[', ']', '(', ')', '"', '\'', ',', '\\'};
+	constexpr char SPECIAL_CHARACTERS[] = {'{', '}', '[', ']', '(', ')', '"', '\'', ','};
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	static constexpr const idx_t SEP_LENGTH = 2;

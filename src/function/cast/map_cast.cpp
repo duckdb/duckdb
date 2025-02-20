@@ -45,7 +45,7 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	static constexpr const idx_t KEY_VALUE_SEP_LENGTH = 1;
 	static constexpr const idx_t NULL_LENGTH = 4;
 	static constexpr const idx_t INVALID_LENGTH = 7;
-	static constexpr char SPECIAL_CHARACTERS[] = {'{', '}', '[', ']', '(', ')', '=', '"', '\'', ',', '\\'};
+	static constexpr char SPECIAL_CHARACTERS[] = {'{', '}', '[', ']', '(', ')', '=', '"', '\'', ','};
 
 	auto &key_vec = MapVector::GetKeys(source);
 	auto &value_vec = MapVector::GetValues(source);
