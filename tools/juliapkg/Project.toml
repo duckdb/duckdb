@@ -15,7 +15,7 @@ WeakRefStrings = "ea10d353-3f73-51f8-a26c-33c1cb351aa5"
 [compat]
 DBInterface = "2.5"
 DuckDB_jll = "1.2.0"
-FixedPointDecimals = "0.4, 0.5"
+FixedPointDecimals = "0.4, 0.5, 0.6"
 Tables = "1.7"
 WeakRefStrings = "1.4"
 julia = "1.6"
