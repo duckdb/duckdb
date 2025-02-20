@@ -249,10 +249,6 @@ unique_ptr<GlobalTableFunctionState> CSVMultiFileInfo::InitializeGlobalState(Cli
 		                             csv_data.options.rejects_table_name.GetValue())
 		    ->InitializeTable(context, csv_data);
 	}
-	if (bind_data.file_list->IsEmpty()) {
-		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
-		return nullptr;
-	}
 	return make_uniq<CSVGlobalState>(context, csv_data.options, bind_data.file_list->GetTotalFileCount(), bind_data);
 }
 
