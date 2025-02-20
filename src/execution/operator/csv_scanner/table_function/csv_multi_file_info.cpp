@@ -226,13 +226,31 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 	auto &csv_types = union_data.types;
 	auto options = union_data.options;
 	options.auto_detect = false;
-	return make_uniq<CSVFileScan>(context, union_data.GetFileName(), std::move(options), bind_data.file_options,
-	                              csv_names, csv_types, gstate.file_schema, gstate.single_threaded, nullptr, false);
+	return make_shared_ptr<CSVFileScan>(context, union_data.GetFileName(), std::move(options), bind_data.file_options,
+	                                    csv_names, csv_types, gstate.file_schema, gstate.single_threaded, nullptr,
+	                                    false);
 }
 
-shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
-                                                          const string &filename, TableFunctionData &bind_data) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
+shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
+                                                          const string &filename, idx_t file_idx,
+                                                          const MultiFileBindData &bind_data) {
+	auto &gstate = gstate_p.Cast<CSVGlobalState>();
+	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
+
+	auto options = csv_data.options;
+	if (bind_data.file_list->GetExpandResult() == FileExpandResult::SINGLE_FILE) {
+		options.auto_detect = false;
+	}
+	shared_ptr<CSVBufferManager> buffer_manager;
+	if (file_idx == 0) {
+		buffer_manager = csv_data.buffer_manager;
+		if (buffer_manager && buffer_manager->GetFilePath() != filename) {
+			buffer_manager.reset();
+		}
+	}
+	return make_shared_ptr<CSVFileScan>(context, filename, std::move(options), bind_data.file_options, bind_data.names,
+	                                    bind_data.types, gstate.file_schema, gstate.single_threaded,
+	                                    std::move(buffer_manager), false);
 }
 
 void CSVMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader) {
