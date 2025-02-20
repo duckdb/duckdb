@@ -47,6 +47,12 @@ public:
 
 	unique_ptr<ParsedExpression> Copy() const override;
 
+	static unique_ptr<ParsedExpression>
+	StarExpressionConstructor(string &&relation_name, const case_insensitive_set_t &exclude_list,
+	                          case_insensitive_map_t<unique_ptr<ParsedExpression>> &&replace_list, bool columns,
+	                          unique_ptr<ParsedExpression> expr, bool unpacked,
+	                          const qualified_column_set_t &qualified_exclude_list,
+	                          qualified_column_map_t<string> &&rename_list);
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<ParsedExpression> Deserialize(Deserializer &deserializer);
 

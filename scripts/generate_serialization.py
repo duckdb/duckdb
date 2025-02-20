@@ -271,7 +271,7 @@ def get_return_value(pointer_type, class_name):
 
 
 def generate_return(class_entry):
-    if class_entry.base is None:
+    if class_entry.base is None or class_entry.constructor_method is not None:
         return '\treturn result;'
     else:
         return '\treturn std::move(result);'
@@ -389,7 +389,8 @@ class SerializableClass:
         self.set_parameter_names = []
         self.set_parameters = []
         self.pointer_type = 'unique_ptr'
-        self.constructor = None
+        self.constructor: Optional[List[str]] = None
+        self.constructor_method = None
         self.members: Optional[List[MemberVariable]] = None
         self.custom_implementation = False
         self.custom_switch_code = None
@@ -408,6 +409,16 @@ class SerializableClass:
             self.return_type = self.base
         if 'constructor' in entry:
             self.constructor = entry['constructor']
+            if not isinstance(self.constructor, list):
+                print(f"constructor for {self.name}, must be of type [], but is of type {str(type(self.constructor))}")
+                exit(1)
+        if 'constructor_method' in entry:
+            self.constructor_method = entry['constructor_method']
+            if self.constructor is not None:
+                print(
+                    "Not allowed to mix 'constructor_method' and 'constructor', 'constructor_method' will implicitly receive all parameters"
+                )
+                exit(1)
         if 'custom_implementation' in entry and entry['custom_implementation']:
             self.custom_implementation = True
         if 'custom_switch_code' in entry:
@@ -502,6 +513,8 @@ class SerializableClass:
     def generate_constructor(self, constructor_parameters: List[str]):
         parameters = ", ".join(constructor_parameters)
 
+        if self.constructor_method is not None:
+            return f'\tauto result = {self.constructor_method}({parameters});\n'
         if self.pointer_type == 'none':
             if parameters != '':
                 parameters = f'({parameters})'
@@ -604,11 +617,9 @@ def generate_class_code(class_entry: SerializableClass):
     class_deserialize = ''
 
     constructor_parameters: List[str] = []
-    constructor_entries = {}
+    constructor_entries = set()
     last_constructor_index = -1
     if class_entry.constructor is not None:
-        if type(class_entry.constructor) != type([]):
-            raise Exception(f"constructor must be of type [], but is of type {str(type(class_entry.constructor))}")
         for constructor_entry_ in class_entry.constructor:
             if constructor_entry_.endswith('&'):
                 constructor_entry = constructor_entry_[:-1]
@@ -616,10 +627,9 @@ def generate_class_code(class_entry: SerializableClass):
             else:
                 constructor_entry = constructor_entry_
                 is_reference = False
-            constructor_entries[constructor_entry] = True
+            constructor_entries.add(constructor_entry)
             found = False
-            for entry_idx in range(len(class_entry.members)):
-                entry = class_entry.members[entry_idx]
+            for entry_idx, entry in enumerate(class_entry.members):
                 if entry.name == constructor_entry:
                     if entry_idx > last_constructor_index:
                         last_constructor_index = entry_idx
@@ -631,6 +641,7 @@ def generate_class_code(class_entry: SerializableClass):
                         constructor_parameters.append(entry.deserialize_property)
                     found = True
                     break
+
             if constructor_entry.startswith('$') or constructor_entry.startswith('?'):
                 is_optional = constructor_entry.startswith('?')
                 if is_optional:
@@ -643,6 +654,7 @@ def generate_class_code(class_entry: SerializableClass):
                         param_type += ' &'
                 constructor_parameters.append(get_format.format(property_type=param_type))
                 found = True
+
             if class_entry.base_object is not None:
                 for entry in class_entry.base_object.set_parameters:
                     if entry.name == constructor_entry:
@@ -650,7 +662,19 @@ def generate_class_code(class_entry: SerializableClass):
                         found = True
                         break
             if not found:
-                raise Exception(f"Constructor member \"{constructor_entry}\" was not found in members list")
+                print(f"Constructor member \"{constructor_entry}\" was not found in members list")
+                exit(1)
+    elif class_entry.constructor_method is not None:
+        for entry_idx, entry in enumerate(class_entry.members):
+            if entry_idx > last_constructor_index:
+                last_constructor_index = entry_idx
+            constructor_entries.add(entry.name)
+            type_name = replace_pointer(entry.type)
+            entry.deserialize_property = entry.deserialize_property.replace('.', '_')
+            if requires_move(type_name):
+                constructor_parameters.append(f'std::move({entry.deserialize_property})')
+            else:
+                constructor_parameters.append(entry.deserialize_property)
 
     if class_entry.base is not None:
         class_serialize += BASE_SERIALIZE_FORMAT.format(base_class_name=class_entry.base)
@@ -661,8 +685,7 @@ def generate_class_code(class_entry: SerializableClass):
     class_deserialize += class_entry.generate_constructor(constructor_parameters)
     if class_entry.members is None:
         return None
-    for entry_idx in range(len(class_entry.members)):
-        entry = class_entry.members[entry_idx]
+    for entry_idx, entry in enumerate(class_entry.members):
         write_property_name = entry.serialize_property
         deserialize_template_str = DESERIALIZE_ELEMENT_CLASS_FORMAT
         if entry.base:

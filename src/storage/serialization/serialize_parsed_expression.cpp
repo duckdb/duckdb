@@ -305,13 +305,9 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deseriali
 	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr");
 	auto unpacked = deserializer.ReadPropertyWithExplicitDefault<bool>(205, "unpacked", false);
 	auto qualified_exclude_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_set_t>(206, "qualified_exclude_list", qualified_column_set_t());
-	auto result = duckdb::unique_ptr<StarExpression>(new StarExpression(exclude_list, qualified_exclude_list));
-	result->relation_name = std::move(relation_name);
-	result->replace_list = std::move(replace_list);
-	result->columns = columns;
-	result->expr = std::move(expr);
-	deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<string>>(207, "rename_list", result->rename_list, qualified_column_map_t<string>());
-	return std::move(result);
+	auto rename_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<string>>(207, "rename_list", qualified_column_map_t<string>());
+	auto result = StarExpression::StarExpressionConstructor(std::move(relation_name), exclude_list, std::move(replace_list), columns, std::move(expr), unpacked, qualified_exclude_list, std::move(rename_list));
+	return result;
 }
 
 void SubqueryExpression::Serialize(Serializer &serializer) const {

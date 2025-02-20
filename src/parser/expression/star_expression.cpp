@@ -117,6 +117,28 @@ bool StarExpression::IsColumnsUnpacked(const ParsedExpression &a) {
 	return true;
 }
 
+unique_ptr<ParsedExpression>
+StarExpression::StarExpressionConstructor(string &&relation_name, const case_insensitive_set_t &exclude_list,
+                                          case_insensitive_map_t<unique_ptr<ParsedExpression>> &&replace_list,
+                                          bool columns, unique_ptr<ParsedExpression> expr, bool unpacked,
+                                          const qualified_column_set_t &qualified_exclude_list,
+                                          qualified_column_map_t<string> &&rename_list) {
+	auto result = duckdb::unique_ptr<StarExpression>(new StarExpression(exclude_list, qualified_exclude_list));
+	result->relation_name = std::move(relation_name);
+	result->replace_list = std::move(replace_list);
+	result->columns = columns;
+	result->expr = std::move(expr);
+	result->rename_list = std::move(rename_list);
+	if (unpacked) {
+		//! This was previously a member of StarExpression, but not anymore
+		//! We wrap it into an OPERATOR_UNPACK instead
+		vector<unique_ptr<ParsedExpression>> unpack_children;
+		unpack_children.push_back(std::move(result));
+		return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK, std::move(unpack_children));
+	}
+	return std::move(result);
+}
+
 unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	auto copy = make_uniq<StarExpression>(relation_name);
 	copy->exclude_list = exclude_list;
