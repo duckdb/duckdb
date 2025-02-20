@@ -540,7 +540,6 @@ void ParquetMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunc
 
 void ParquetMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader_p, GlobalTableFunctionState &gstate_p,
                                 LocalTableFunctionState &local_state_p, DataChunk &chunk) {
-	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	auto &reader = reader_p.Cast<ParquetReader>();
 	reader.Scan(local_state.scan_state, chunk);

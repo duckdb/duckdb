@@ -296,7 +296,6 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 			buffer_manager.reset();
 		}
 	}
-	D_ASSERT(!csv_data.csv_schema.Empty());
 	return make_shared_ptr<CSVFileScan>(context, filename, std::move(options), bind_data.file_options, bind_data.names,
 	                                    bind_data.types, csv_data.csv_schema, gstate.single_threaded,
 	                                    std::move(buffer_manager), false);
@@ -364,13 +363,14 @@ double CSVMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFil
 	auto &csv_scan = reader.Cast<CSVFileScan>();
 
 	double file_progress;
-	if (!csv_scan.buffer_manager) {
+	auto buffer_manager = csv_scan.buffer_manager;
+	if (!buffer_manager) {
 		// We are done with this file, so it's 100%
 		file_progress = 1.0;
-	} else if (csv_scan.buffer_manager->file_handle->compression_type == FileCompressionType::GZIP ||
-	           csv_scan.buffer_manager->file_handle->compression_type == FileCompressionType::ZSTD) {
+	} else if (buffer_manager->file_handle->compression_type == FileCompressionType::GZIP ||
+	           buffer_manager->file_handle->compression_type == FileCompressionType::ZSTD) {
 		// This file is not done, and is a compressed file
-		file_progress = csv_scan.buffer_manager->file_handle->GetProgress() / static_cast<double>(csv_scan.file_size);
+		file_progress = buffer_manager->file_handle->GetProgress() / static_cast<double>(csv_scan.file_size);
 	} else {
 		file_progress = static_cast<double>(csv_scan.bytes_read) / static_cast<double>(csv_scan.file_size);
 	}
