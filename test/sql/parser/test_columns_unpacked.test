@@ -197,7 +197,7 @@ with integers as (
 		(1337, 7331)
 	) as t(a, b)
 )
-select [(*(a + COLUMNS(['a', 'b'])))] from integers
+select [(UNPACK(a + COLUMNS(['a', 'b'])))] from integers
 ----
 [42, 63]
 [2674, 8668]
@@ -207,8 +207,8 @@ select [(*(a + COLUMNS(['a', 'b'])))] from integers
 statement error
 select
 	[
-		*([
-			*(COLUMNS(*)),
+		UNPACK([
+			UNPACK(COLUMNS(*)),
 			a + b
 		])
 	]
@@ -221,7 +221,7 @@ UNPACK can only be used in combination with a STAR (*) expression or COLUMNS exp
 # Cast every column to VARCHAR before unpacking into the list
 query I
 select
-	[*(COLUMNS(*)::VARCHAR)]
+	[UNPACK(COLUMNS(*)::VARCHAR)]
 from (
 	select
 		21::INTEGER a,

@@ -62,7 +62,7 @@ public:
 			return "(" + in_child + op_type + child_list + ")";
 		}
 		case ExpressionType::OPERATOR_UNPACK: {
-			return StringUtil::Format("*(%s)", entry.children[0]->ToString());
+			return StringUtil::Format("UNPACK(%s)", entry.children[0]->ToString());
 		}
 		case ExpressionType::OPERATOR_TRY: {
 			return StringUtil::Format("TRY(%s)", entry.children[0]->ToString());
