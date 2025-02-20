@@ -1,10 +1,3 @@
-diff --git a/duckdb b/duckdb
-index 0024e5d..3c695d7 160000
---- a/duckdb
-+++ b/duckdb
-@@ -1 +1 @@
--Subproject commit 0024e5d4beba0185733df68642775e3f38e089cb
-+Subproject commit 3c695d7ba94d95d9facee48d395f46ed0bd72b46
 diff --git a/test/sql/geometry/st_dump.test b/test/sql/geometry/st_dump.test
 index 3346f5f..c181720 100644
 --- a/test/sql/geometry/st_dump.test
