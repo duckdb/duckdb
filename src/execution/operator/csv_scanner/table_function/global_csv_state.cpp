@@ -20,11 +20,6 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const CSVReaderOptions 
 	initialized = false;
 }
 
-bool CSVGlobalState::IsDone() const {
-	lock_guard<mutex> parallel_lock(main_mutex);
-	return current_boundary.done;
-}
-
 double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	return 0;
 	// lock_guard<mutex> parallel_lock(main_mutex);
@@ -66,7 +61,6 @@ void CSVGlobalState::FinishTask(CSVFileScan &scan) {
 unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &current_file_ptr,
                                                     unique_ptr<StringValueScanner> previous_scanner) {
 	auto &current_file = *current_file_ptr;
-	lock_guard<mutex> parallel_lock(main_mutex);
 	if (previous_scanner) {
 		// We have to insert information for validation
 		auto previous_file = previous_scanner->csv_file_scan;
@@ -104,7 +98,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &cur
 }
 
 void CSVGlobalState::FinishLaunchingTasks(CSVFileScan &file) {
-	lock_guard<mutex> parallel_lock(main_mutex);
 	initialized = false;
 	current_buffer_in_use.reset();
 	// we are finished scanning this file - finish it

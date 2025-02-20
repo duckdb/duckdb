@@ -43,15 +43,10 @@ public:
 	//! Returns Current Progress of this CSV Read
 	double GetProgress(const ReadCSVData &bind_data) const;
 
-	bool IsDone() const;
-
 private:
 	//! Reference to the client context that created this scan
 	ClientContext &context;
 	const MultiFileBindData &bind_data;
-
-	//! Mutex to lock when getting next batch of bytes (Parallel Only)
-	mutable mutex main_mutex;
 
 	string sniffer_mismatch_error;
 
