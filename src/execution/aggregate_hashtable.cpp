@@ -851,4 +851,38 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	Verify();
 }
 
+void GroupedAggregateHashTable::InitializeScan(AggregateHTScanState &scan_state) {
+	scan_state.partition_idx = 0;
+	vector<idx_t> group_indexes(layout.ColumnCount() - 1);
+	for (idx_t i = 0; i < group_indexes.size(); i++) {
+		group_indexes[i] = i;
+	}
+
+	auto &partition = partitioned_data->GetPartitions()[scan_state.partition_idx];
+	partition->InitializeScan(scan_state.scan_states, group_indexes);
+}
+
+bool GroupedAggregateHashTable::Scan(AggregateHTScanState &scan_state, DataChunk &distinct_rows,
+                                     DataChunk &payload_rows) {
+	if (scan_state.partition_idx >= partitioned_data->PartitionCount()) {
+		return false;
+	}
+
+	payload_rows.Reset();
+	distinct_rows.Reset();
+	auto &current_partition = partitioned_data->GetPartitions()[scan_state.partition_idx];
+
+	if (current_partition->Scan(scan_state.scan_states, distinct_rows)) {
+		FetchAggregates(distinct_rows, payload_rows);
+		return true;
+	} else {
+		if (++(scan_state.partition_idx) >= partitioned_data->PartitionCount()) {
+			return false;
+		} else {
+			auto &new_partition = partitioned_data->GetPartitions()[scan_state.partition_idx];
+			new_partition->InitializeScan(scan_state.scan_states);
+			return true;
+		}
+	}
+}
 } // namespace duckdb
