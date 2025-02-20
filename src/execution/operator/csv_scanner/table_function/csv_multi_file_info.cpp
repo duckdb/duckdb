@@ -1,6 +1,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
+#include "duckdb/common/bind_helpers.hpp"
 
 namespace duckdb {
 
@@ -14,8 +15,11 @@ unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientCont
 }
 
 bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-                                       BaseFileReaderOptions &options) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
+BaseFileReaderOptions &options_p, vector<string> &expected_names,
+			   vector<LogicalType> &expected_types) {
+	auto &options = options_p.Cast<CSVFileReaderOptions>();
+	options.options.SetReadOption(StringUtil::Lower(key), ConvertVectorToValue(values), expected_names);
+	return true;
 }
 
 bool CSVMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
@@ -225,26 +229,25 @@ unique_ptr<GlobalTableFunctionState> CSVMultiFileInfo::InitializeGlobalState(Cli
 		                             csv_data.options.rejects_table_name.GetValue())
 		    ->InitializeTable(context, csv_data);
 	}
-	// FIXME - this is not necessary once we switch to the readers
-	if (global_state.readers.size() == bind_data.union_readers.size()) {
-		for (idx_t reader_idx = 0; reader_idx < global_state.readers.size(); reader_idx++) {
-			bind_data.union_readers[reader_idx] = std::move(global_state.readers[reader_idx]->union_data);
-		}
-	}
 	if (bind_data.file_list->IsEmpty()) {
 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
 		return nullptr;
 	}
-	return make_uniq<CSVGlobalState>(context, csv_data.buffer_manager, csv_data.options, context.db->NumberOfThreads(),
-	                                 bind_data.file_list->GetAllFiles(), global_state.column_indexes, bind_data);
+	return make_uniq<CSVGlobalState>(context, csv_data.options, bind_data.file_list->GetTotalFileCount(), bind_data);
 }
 
+struct CSVLocalState : public LocalTableFunctionState {
+public:
+	unique_ptr<StringValueScanner> csv_reader;
+	bool done = false;
+};
+
 unique_ptr<LocalTableFunctionState> CSVMultiFileInfo::InitializeLocalState() {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
+	return make_uniq<CSVLocalState>();
 }
 
 shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                                                          BaseUnionData &union_data_p, MultiFileBindData &bind_data) {
+                                                          BaseUnionData &union_data_p, const MultiFileBindData &bind_data) {
 	auto &union_data = union_data_p.Cast<CSVUnionData>();
 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
 	// union readers - use cached options
@@ -285,18 +288,31 @@ void CSVMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &re
 	csv_file_scan.SetStart();
 }
 
+bool CSVMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
+										 GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
+	auto &gstate = gstate_p.Cast<CSVGlobalState>();
+	auto &lstate = lstate_p.Cast<CSVLocalState>();
+	auto csv_reader_ptr = shared_ptr_cast<BaseFileReader, CSVFileScan>(reader);
+	lstate.csv_reader = gstate.Next(csv_reader_ptr, std::move(lstate.csv_reader));
+	if (!lstate.csv_reader) {
+		// exhausted the scan
+		return false;
+	}
+	return true;
+}
+
 void CSVMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
                             LocalTableFunctionState &local_state, DataChunk &chunk) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
+	auto &lstate = local_state.Cast<CSVLocalState>();
+	if (lstate.csv_reader->FinishedIterator()) {
+		return;
+	}
+	lstate.csv_reader->Flush(chunk);
 }
 
-bool CSVMultiFileInfo::TryInitializeScan(ClientContext &context, BaseFileReader &reader,
-                                         GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
-}
-
-void CSVMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
+void CSVMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state, BaseFileReader &reader) {
+	auto &gstate = global_state.Cast<CSVGlobalState>();
+	gstate.FinishLaunchingTasks(reader.Cast<CSVFileScan>());
 }
 
 unique_ptr<NodeStatistics> CSVMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {

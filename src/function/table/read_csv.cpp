@@ -47,102 +47,6 @@ void ReadCSVData::FinalizeRead(ClientContext &context) {
 	BaseCSVData::Finalize();
 }
 
-//===--------------------------------------------------------------------===//
-// Read CSV Local State
-//===--------------------------------------------------------------------===//
-struct CSVLocalState : public LocalTableFunctionState {
-public:
-	explicit CSVLocalState(unique_ptr<StringValueScanner> csv_reader_p) : csv_reader(std::move(csv_reader_p)) {
-	}
-
-	//! The CSV reader
-	unique_ptr<StringValueScanner> csv_reader;
-	bool done = false;
-};
-
-//===--------------------------------------------------------------------===//
-// Read CSV Functions
-//===--------------------------------------------------------------------===//
-// static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input)
-// { 	auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>(); 	auto &csv_data =
-// bind_data.bind_data->Cast<ReadCSVData>();
-//
-// 	// Create the temporary rejects table
-// 	if (csv_data.options.store_rejects.GetValue()) {
-// 		CSVRejectsTable::GetOrCreate(context, csv_data.options.rejects_scan_name.GetValue(),
-// 		                             csv_data.options.rejects_table_name.GetValue())
-// 		    ->InitializeTable(context, csv_data);
-// 	}
-// 	if (bind_data.file_list->IsEmpty()) {
-// 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
-// 		return nullptr;
-// 	}
-// 	return make_uniq<CSVGlobalState>(context, csv_data.buffer_manager, csv_data.options, context.db->NumberOfThreads(),
-// 	                                 bind_data.file_list->GetAllFiles(), input.column_indexes, bind_data);
-// }
-
-unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
-                                                     GlobalTableFunctionState *global_state_p) {
-	if (!global_state_p) {
-		return nullptr;
-	}
-	auto &gstate = global_state_p->Cast<MultiFileGlobalState>();
-	if (!gstate.global_state) {
-		return nullptr;
-	}
-	auto &global_state = gstate.global_state->Cast<CSVGlobalState>();
-	if (global_state.IsDone()) {
-		// nothing to do
-		return nullptr;
-	}
-	auto csv_scanner = global_state.Next(nullptr);
-	return make_uniq<CSVLocalState>(std::move(csv_scanner));
-}
-
-static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &bind_data = data_p.bind_data->Cast<MultiFileBindData>();
-	if (!data_p.global_state) {
-		return;
-	}
-	auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
-	if (!gstate.global_state) {
-		return;
-	}
-	auto &csv_global_state = gstate.global_state->Cast<CSVGlobalState>();
-	if (!data_p.local_state) {
-		return;
-	}
-	auto &csv_local_state = data_p.local_state->Cast<CSVLocalState>();
-
-	if (!csv_local_state.csv_reader) {
-		// no csv_reader was set, this can happen when a filename-based filter has filtered out all possible files
-		return;
-	}
-	do {
-		if (output.size() != 0) {
-			MultiFileReader().FinalizeChunk(context, bind_data.reader_bind,
-			                                csv_local_state.csv_reader->csv_file_scan->reader_data, output, nullptr);
-			break;
-		}
-		if (csv_local_state.csv_reader->FinishedIterator()) {
-			csv_local_state.csv_reader = csv_global_state.Next(std::move(csv_local_state.csv_reader));
-			if (!csv_local_state.csv_reader) {
-				break;
-			}
-		}
-		csv_local_state.csv_reader->Flush(output);
-
-	} while (true);
-}
-
-static OperatorPartitionData CSVReaderGetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input) {
-	if (input.partition_info.RequiresPartitionColumns()) {
-		throw InternalException("CSVReader::GetPartitionData: partition columns not supported");
-	}
-	auto &data = input.local_state->Cast<CSVLocalState>();
-	return OperatorPartitionData(data.csv_reader->scanner_idx);
-}
-
 void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_function) {
 	table_function.named_parameters["sep"] = LogicalType::VARCHAR;
 	table_function.named_parameters["delim"] = LogicalType::VARCHAR;
@@ -224,14 +128,14 @@ virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_p
 }
 
 TableFunction ReadCSVTableFunction::GetFunction() {
-	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction,
+	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileScan,
 	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBind,
-	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitGlobal, ReadCSVInitLocal);
+	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitGlobal, MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitLocal);
 	read_csv.table_scan_progress = CSVReaderProgress;
 	read_csv.pushdown_complex_filter = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.get_partition_data = CSVReaderGetPartitionData;
+	read_csv.get_partition_data = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileGetPartitionData;
 	read_csv.cardinality = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileCardinality;
 	read_csv.projection_pushdown = true;
 	read_csv.type_pushdown = PushdownTypeToCSVScanner;

@@ -248,7 +248,7 @@ public:
 
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
-			if (OP::ParseCopyOption(context, loption, option.second, *options)) {
+			if (OP::ParseCopyOption(context, loption, option.second, *options, expected_names, expected_types)) {
 				continue;
 			}
 			throw NotImplementedException("Unsupported option for COPY FROM: %s", option.first);
@@ -335,7 +335,7 @@ public:
 				try {
 					if (current_reader_data.union_data) {
 						auto &union_data = *current_reader_data.union_data;
-						reader = OP::CreateReader(context, *global_state.global_state, union_data);
+						reader = OP::CreateReader(context, *global_state.global_state, union_data, bind_data);
 					} else {
 						reader = OP::CreateReader(context, *global_state.global_state,
 						                          current_reader_data.file_to_be_opened, i, bind_data);
@@ -402,8 +402,11 @@ public:
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
-				if (OP::TryInitializeScan(context, *current_reader_data.reader, *gstate.global_state,
+				if (OP::TryInitializeScan(context, current_reader_data.reader, *gstate.global_state,
 				                          *scan_data.local_state)) {
+					if (!current_reader_data.reader) {
+						throw InternalException("MultiFileReader was moved");
+					}
 					// The current reader has data left to be scanned
 					scan_data.reader = current_reader_data.reader;
 					scan_data.batch_index = gstate.batch_index++;
@@ -411,12 +414,12 @@ public:
 					return true;
 				} else {
 					// Close current file
+					OP::FinishFile(context, *gstate.global_state, *current_reader_data.reader);
 					current_reader_data.file_state = MultiFileFileState::CLOSED;
 					current_reader_data.reader = nullptr;
 
 					// Set state to the next file
 					++gstate.file_index;
-					OP::FinishFile(context, *gstate.global_state);
 					continue;
 				}
 			}
@@ -574,18 +577,18 @@ public:
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
 
-		bool rowgroup_finished;
+		bool batch_finished;
 		do {
 			if (gstate.CanRemoveColumns()) {
 				data.all_columns.Reset();
 				OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, data.all_columns);
-				rowgroup_finished = data.all_columns.size() == 0;
+				batch_finished = data.all_columns.size() == 0;
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
 				                                           data.all_columns, gstate.multi_file_reader_state);
 				output.ReferenceColumns(data.all_columns, gstate.projection_ids);
 			} else {
 				OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, output);
-				rowgroup_finished = output.size() == 0;
+				batch_finished = output.size() == 0;
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
 				                                           output, gstate.multi_file_reader_state);
 			}
@@ -593,7 +596,7 @@ public:
 			if (output.size() > 0) {
 				return;
 			}
-			if (rowgroup_finished && !TryInitializeNextBatch(context, bind_data, data, gstate)) {
+			if (batch_finished && !TryInitializeNextBatch(context, bind_data, data, gstate)) {
 				return;
 			}
 		} while (true);
