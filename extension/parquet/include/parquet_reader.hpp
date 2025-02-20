@@ -146,6 +146,8 @@ public:
 	ParquetOptions parquet_options;
 	unique_ptr<ParquetColumnSchema> root_schema;
 	shared_ptr<EncryptionUtil> encryption_util;
+	//! How many rows have been read from this file
+	atomic<idx_t> rows_read;
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
@@ -174,10 +176,10 @@ public:
 		return result;
 	}
 
-	idx_t NumRows();
-	idx_t NumRowGroups();
+	idx_t NumRows() const;
+	idx_t NumRowGroups() const;
 
-	const duckdb_parquet::FileMetaData *GetFileMetadata();
+	const duckdb_parquet::FileMetaData *GetFileMetadata() const;
 
 	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
 	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,

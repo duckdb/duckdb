@@ -74,6 +74,8 @@ struct MultiFileFileReaderData {
 
 	//! Currently opened reader for the file
 	shared_ptr<BaseFileReader> reader;
+	//! The file reader after we have started all scans to the file
+	weak_ptr<BaseFileReader> closed_reader;
 	//! Flag to indicate the file is being opened
 	MultiFileFileState file_state;
 	//! Mutexes to wait for the file when it is being opened
@@ -101,12 +103,14 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	//! Reader state
 	unique_ptr<MultiFileReaderGlobalState> multi_file_reader_state;
 	//! Lock
-	mutex lock;
+	mutable mutex lock;
 	//! Signal to other threads that a file failed to open, letting every thread abort.
 	bool error_opening_file = false;
 
 	//! Index of file currently up for scanning
 	atomic<idx_t> file_index;
+	//! Index of the lowest file we know we have completely read
+	mutable idx_t completed_file_index = 0;
 	//! The current set of readers
 	vector<unique_ptr<MultiFileFileReaderData>> readers;
 
@@ -417,6 +421,7 @@ public:
 					// Close current file
 					OP::FinishFile(context, *gstate.global_state, *current_reader_data.reader);
 					current_reader_data.file_state = MultiFileFileState::CLOSED;
+					current_reader_data.closed_reader = current_reader_data.reader;
 					current_reader_data.reader = nullptr;
 
 					// Set state to the next file
@@ -624,9 +629,47 @@ public:
 		if (total_count == 0) {
 			return 100.0;
 		}
-		// get the percentage WITHIN the current file from the currently active reader
-		auto progress_in_file = MinValue<double>(100.0, OP::GetProgressInFile(context, *gstate.global_state));
-		return (progress_in_file + 100.0 * static_cast<double>(gstate.file_index)) / static_cast<double>(total_count);
+		unique_lock<mutex> parallel_lock(gstate.lock);
+		double total_progress = 100.0 * static_cast<double>(gstate.completed_file_index);
+		// iterate over the files we haven't completed yet
+		for (idx_t i = gstate.completed_file_index; i <= gstate.file_index && i < gstate.readers.size(); i++) {
+			auto &reader_data_ptr = gstate.readers[i];
+			if (!reader_data_ptr) {
+				continue;
+			}
+			auto &reader_data = *reader_data_ptr;
+			parallel_lock.unlock();
+			double progress_in_file;
+			{
+				lock_guard<mutex> l(*reader_data.file_mutex);
+				if (reader_data.file_state == MultiFileFileState::OPEN) {
+					// file is currently open - get the progress within the file
+					progress_in_file = OP::GetProgressInFile(context, *reader_data.reader);
+				} else if (reader_data.file_state == MultiFileFileState::CLOSED) {
+					// file has been closed - check if the reader is still in use
+					auto reader = reader_data.closed_reader.lock();
+					if (!reader) {
+						// reader has been destroyed - we are done with this file
+						progress_in_file = 100.0;
+					} else {
+						// file is still being read
+						progress_in_file = OP::GetProgressInFile(context, *reader);
+					}
+				} else {
+					// file has not been opened yet - progress in this file is zero
+					progress_in_file = 0;
+				}
+			}
+			parallel_lock.lock();
+			progress_in_file = MaxValue<double>(0.0, MinValue<double>(100.0, progress_in_file));
+			total_progress += progress_in_file;
+			if (i == gstate.completed_file_index && progress_in_file >= 100) {
+				// if the progress in this file is 100, we have completed the file
+				// we don't need to check anymore in the next iteration
+				gstate.completed_file_index++;
+			}
+		}
+		return total_progress / static_cast<double>(total_count);
 	}
 
 	static unique_ptr<NodeStatistics> MultiFileCardinality(ClientContext &context, const FunctionData *bind_data) {

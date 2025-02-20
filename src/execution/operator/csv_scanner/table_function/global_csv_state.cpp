@@ -20,36 +20,6 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const CSVReaderOptions 
 	initialized = false;
 }
 
-double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
-	return 0;
-	// lock_guard<mutex> parallel_lock(main_mutex);
-	// idx_t total_files = files.size();
-	// // get the progress WITHIN the current file
-	// double percentage = 0;
-	// if (file_scans.front()->file_size == 0) {
-	// 	percentage = 1.0;
-	// } else {
-	// 	// for compressed files, read bytes may greater than files size.
-	// 	for (auto &file : file_scans) {
-	// 		double file_progress;
-	// 		if (!file->buffer_manager) {
-	// 			// We are done with this file, so it's 100%
-	// 			file_progress = 1.0;
-	// 		} else if (file->buffer_manager->file_handle->compression_type == FileCompressionType::GZIP ||
-	// 		           file->buffer_manager->file_handle->compression_type == FileCompressionType::ZSTD) {
-	// 			// This file is not done, and is a compressed file
-	// 			file_progress = file->buffer_manager->file_handle->GetProgress();
-	// 		} else {
-	// 			file_progress = static_cast<double>(file->bytes_read);
-	// 		}
-	// 		// This file is an uncompressed file, so we use the more price bytes_read from the scanner
-	// 		percentage += (static_cast<double>(1) / static_cast<double>(total_files)) *
-	// 		              std::min(1.0, file_progress / static_cast<double>(file->file_size));
-	// 	}
-	// }
-	// return percentage * 100;
-}
-
 void CSVGlobalState::FinishTask(CSVFileScan &scan) {
 	auto started_tasks = scan.started_tasks.load();
 	auto finished_tasks = ++scan.finished_tasks;

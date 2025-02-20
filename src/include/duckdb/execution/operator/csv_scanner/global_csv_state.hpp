@@ -41,9 +41,6 @@ public:
 	void FinishTask(CSVFileScan &scan);
 	void FinishFile(CSVFileScan &scan);
 
-	//! Returns Current Progress of this CSV Read
-	double GetProgress(const ReadCSVData &bind_data) const;
-
 private:
 	//! Reference to the client context that created this scan
 	ClientContext &context;

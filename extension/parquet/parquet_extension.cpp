@@ -78,10 +78,6 @@ struct ParquetReadGlobalState : public GlobalTableFunctionState {
 	idx_t row_group_index;
 	//! Batch index of the next row group to be scanned
 	idx_t batch_index;
-	//! How many rows have been read from this file
-	atomic<idx_t> rows_read;
-	//! The total number of rows present in this file
-	atomic<idx_t> total_rows;
 };
 
 struct ParquetReadLocalState : public LocalTableFunctionState {
@@ -123,7 +119,7 @@ struct ParquetMultiFileInfo {
 	                          LocalTableFunctionState &local_state);
 	static unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count);
 	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, BaseFileReader &reader, const string &name);
-	static double GetProgressInFile(ClientContext &context, GlobalTableFunctionState &gstate);
+	static double GetProgressInFile(ClientContext &context, const BaseFileReader &reader);
 };
 
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
@@ -484,18 +480,10 @@ unique_ptr<BaseStatistics> ParquetMultiFileInfo::GetStatistics(ClientContext &co
 	return reader.ReadStatistics(name);
 }
 
-double ParquetMultiFileInfo::GetProgressInFile(ClientContext &context, GlobalTableFunctionState &gstate_p) {
-	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
-	auto read_rows = gstate.rows_read.load();
-	auto total_rows = gstate.total_rows.load();
-	if (total_rows == 0) {
-		// not set yet
-		return 0;
-	}
-	if (read_rows >= total_rows) {
-		return 100;
-	}
-	return 100.0 * (static_cast<double>(read_rows) / static_cast<double>(total_rows));
+double ParquetMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFileReader &reader) {
+	auto &parquet_reader = reader.Cast<ParquetReader>();
+	auto read_rows = parquet_reader.rows_read.load();
+	return 100.0 * (static_cast<double>(read_rows) / static_cast<double>(parquet_reader.NumRows()));
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &,
@@ -529,9 +517,6 @@ bool ParquetMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	auto &lstate = lstate_p.Cast<ParquetReadLocalState>();
 	auto &reader = reader_p->Cast<ParquetReader>();
-	if (gstate.total_rows == 0) {
-		gstate.total_rows = reader.NumRows();
-	}
 	if (gstate.row_group_index >= reader.NumRowGroups()) {
 		// scanned all row groups in this file
 		return false;
@@ -547,8 +532,6 @@ void ParquetMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctio
                                       BaseFileReader &reader) {
 	auto &gstate = gstate_p.Cast<ParquetReadGlobalState>();
 	gstate.row_group_index = 0;
-	gstate.rows_read = 0;
-	gstate.total_rows = 0;
 }
 
 void ParquetMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
@@ -561,7 +544,6 @@ void ParquetMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader_p
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	auto &reader = reader_p.Cast<ParquetReader>();
 	reader.Scan(local_state.scan_state, chunk);
-	gstate.rows_read += chunk.size();
 }
 
 static case_insensitive_map_t<LogicalType> GetChildNameToTypeMap(const LogicalType &type) {

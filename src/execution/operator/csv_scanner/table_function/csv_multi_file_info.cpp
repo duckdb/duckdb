@@ -360,8 +360,21 @@ unique_ptr<BaseStatistics> CSVMultiFileInfo::GetStatistics(ClientContext &contex
 	throw InternalException("Unimplemented CSVMultiFileInfo method");
 }
 
-double CSVMultiFileInfo::GetProgressInFile(ClientContext &context, GlobalTableFunctionState &gstate) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
+double CSVMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFileReader &reader) {
+	auto &csv_scan = reader.Cast<CSVFileScan>();
+
+	double file_progress;
+	if (!csv_scan.buffer_manager) {
+		// We are done with this file, so it's 100%
+		file_progress = 1.0;
+	} else if (csv_scan.buffer_manager->file_handle->compression_type == FileCompressionType::GZIP ||
+	           csv_scan.buffer_manager->file_handle->compression_type == FileCompressionType::ZSTD) {
+		// This file is not done, and is a compressed file
+		file_progress = csv_scan.buffer_manager->file_handle->GetProgress() / static_cast<double>(csv_scan.file_size);
+	} else {
+		file_progress = static_cast<double>(csv_scan.bytes_read) / static_cast<double>(csv_scan.file_size);
+	}
+	return file_progress * 100.0;
 }
 
 } // namespace duckdb

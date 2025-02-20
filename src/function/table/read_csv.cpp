@@ -90,18 +90,6 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 	MultiFileReader::AddParameters(table_function);
 }
 
-double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
-                         const GlobalTableFunctionState *global_state) {
-	auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
-	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
-	auto &gstate = global_state->Cast<MultiFileGlobalState>();
-	if (!gstate.global_state) {
-		return 0;
-	}
-	auto &data = gstate.global_state->Cast<CSVGlobalState>();
-	return data.GetProgress(csv_data);
-}
-
 static void CSVReaderSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                const TableFunction &function) {
 	throw NotImplementedException("CSVReaderSerialize not implemented");
@@ -124,7 +112,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBind,
 	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitGlobal,
 	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitLocal);
-	read_csv.table_scan_progress = CSVReaderProgress;
+	read_csv.table_scan_progress = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileProgress;
 	read_csv.pushdown_complex_filter = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
