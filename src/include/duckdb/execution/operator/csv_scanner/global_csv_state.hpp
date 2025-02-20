@@ -19,6 +19,7 @@
 
 namespace duckdb {
 struct MultiFileBindData;
+struct MultiFileGlobalState;
 
 //! CSV Global State is used in the CSV Reader Table Function, it controls what each thread
 struct CSVGlobalState : public GlobalTableFunctionState {

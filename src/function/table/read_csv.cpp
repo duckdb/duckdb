@@ -63,30 +63,34 @@ public:
 //===--------------------------------------------------------------------===//
 // Read CSV Functions
 //===--------------------------------------------------------------------===//
-static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
-	auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
-	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
-
-	// Create the temporary rejects table
-	if (csv_data.options.store_rejects.GetValue()) {
-		CSVRejectsTable::GetOrCreate(context, csv_data.options.rejects_scan_name.GetValue(),
-		                             csv_data.options.rejects_table_name.GetValue())
-		    ->InitializeTable(context, csv_data);
-	}
-	if (bind_data.file_list->IsEmpty()) {
-		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
-		return nullptr;
-	}
-	return make_uniq<CSVGlobalState>(context, csv_data.buffer_manager, csv_data.options, context.db->NumberOfThreads(),
-	                                 bind_data.file_list->GetAllFiles(), input.column_indexes, bind_data);
-}
+// static unique_ptr<GlobalTableFunctionState> ReadCSVInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
+// 	auto &bind_data = input.bind_data->CastNoConst<MultiFileBindData>();
+// 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
+//
+// 	// Create the temporary rejects table
+// 	if (csv_data.options.store_rejects.GetValue()) {
+// 		CSVRejectsTable::GetOrCreate(context, csv_data.options.rejects_scan_name.GetValue(),
+// 		                             csv_data.options.rejects_table_name.GetValue())
+// 		    ->InitializeTable(context, csv_data);
+// 	}
+// 	if (bind_data.file_list->IsEmpty()) {
+// 		// This can happen when a filename based filter pushdown has eliminated all possible files for this scan.
+// 		return nullptr;
+// 	}
+// 	return make_uniq<CSVGlobalState>(context, csv_data.buffer_manager, csv_data.options, context.db->NumberOfThreads(),
+// 	                                 bind_data.file_list->GetAllFiles(), input.column_indexes, bind_data);
+// }
 
 unique_ptr<LocalTableFunctionState> ReadCSVInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
                                                      GlobalTableFunctionState *global_state_p) {
 	if (!global_state_p) {
 		return nullptr;
 	}
-	auto &global_state = global_state_p->Cast<CSVGlobalState>();
+	auto &gstate = global_state_p->Cast<MultiFileGlobalState>();
+	if (!gstate.global_state) {
+		return nullptr;
+	}
+	auto &global_state = gstate.global_state->Cast<CSVGlobalState>();
 	if (global_state.IsDone()) {
 		// nothing to do
 		return nullptr;
@@ -103,7 +107,11 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 	if (!data_p.global_state) {
 		return;
 	}
-	auto &csv_global_state = data_p.global_state->Cast<CSVGlobalState>();
+	auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
+	if (!gstate.global_state) {
+		return;
+	}
+	auto &csv_global_state = gstate.global_state->Cast<CSVGlobalState>();
 	if (!data_p.local_state) {
 		return;
 	}
@@ -184,12 +192,13 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 
 double CSVReaderProgress(ClientContext &context, const FunctionData *bind_data_p,
                          const GlobalTableFunctionState *global_state) {
-	if (!global_state) {
-		return 0;
-	}
 	auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
-	auto &data = global_state->Cast<CSVGlobalState>();
+	auto &gstate = global_state->Cast<MultiFileGlobalState>();
+	if (!gstate.global_state) {
+		return 0;
+	}
+	auto &data = gstate.global_state->Cast<CSVGlobalState>();
 	return data.GetProgress(csv_data);
 }
 
@@ -220,7 +229,7 @@ virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_p
 
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction,
-	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBind, ReadCSVInitGlobal,
+	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBind, MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitGlobal,
 	                       ReadCSVInitLocal);
 	read_csv.table_scan_progress = CSVReaderProgress;
 	read_csv.pushdown_complex_filter = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileComplexFilterPushdown;

@@ -61,6 +61,7 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const shared_ptr<CSVBuf
 		initial_reader = CreateFileScan(0);
 	}
 	file_scans.emplace_back(std::move(initial_reader));
+
 	idx_t cur_file_idx = 0;
 	while (file_scans.back()->start_iterator.done && file_scans.size() < files.size()) {
 		cur_file_idx++;
@@ -173,12 +174,12 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 	if (finished) {
 		return nullptr;
 	}
+	auto &current_file = *file_scans.back();
 	if (current_buffer_in_use->buffer_idx != current_boundary.GetBufferIdx()) {
 		current_buffer_in_use =
-		    make_shared_ptr<CSVBufferUsage>(*file_scans.back()->buffer_manager, current_boundary.GetBufferIdx());
+		    make_shared_ptr<CSVBufferUsage>(*current_file.buffer_manager, current_boundary.GetBufferIdx());
 	}
 	// We first create the scanner for the current boundary
-	auto &current_file = *file_scans.back();
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
 	                                  current_file.error_handler, file_scans.back(), false, current_boundary);
@@ -218,16 +219,16 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 }
 
 idx_t CSVGlobalState::MaxThreads() const {
-	// We initialize max one thread per our set bytes per thread limit
-	if (single_threaded || !file_scans.front()->on_disk_file) {
-		return system_threads;
-	}
-	const idx_t bytes_per_thread = CSVIterator::BytesPerThread(file_scans.front()->options);
-	const idx_t total_threads = file_scans.front()->file_size / bytes_per_thread + 1;
-	if (total_threads < system_threads) {
-		return total_threads;
-	}
-	return system_threads;
+       // We initialize max one thread per our set bytes per thread limit
+       if (single_threaded || !file_scans.front()->on_disk_file) {
+               return system_threads;
+       }
+       const idx_t bytes_per_thread = CSVIterator::BytesPerThread(file_scans.front()->options);
+       const idx_t total_threads = file_scans.front()->file_size / bytes_per_thread + 1;
+       if (total_threads < system_threads) {
+               return total_threads;
+       }
+       return system_threads;
 }
 
 void CSVGlobalState::DecrementThread() {

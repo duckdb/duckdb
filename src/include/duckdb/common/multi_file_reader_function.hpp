@@ -515,11 +515,12 @@ public:
 		result->column_indexes = input.column_indexes;
 		result->filters = input.filters.get();
 		result->file_index = 0;
-		result->global_state = OP::InitializeGlobalState();
-		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-			result->max_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
-		} else {
-			result->max_threads = OP::MaxThreads(*bind_data.bind_data);
+		result->global_state = OP::InitializeGlobalState(context, bind_data, *result);
+		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		auto expand_result = bind_data.file_list->GetExpandResult();
+		auto max_threads = OP::MaxThreads(bind_data, *result, expand_result);
+		if (max_threads.IsValid()) {
+			result->max_threads = MinValue<idx_t>(result->max_threads, max_threads.GetIndex());
 		}
 		bool require_extra_columns =
 		    result->multi_file_reader_state && result->multi_file_reader_state->RequiresExtraColumns();
