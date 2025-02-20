@@ -78,7 +78,6 @@ void CSVErrorHandler::ErrorIfAny() {
 		throw InternalException("Failed to get error information for boundary index");
 	}
 	ThrowError(errors[0]);
-
 }
 
 void CSVErrorHandler::ErrorIfTypeExists(CSVErrorType error_type) {

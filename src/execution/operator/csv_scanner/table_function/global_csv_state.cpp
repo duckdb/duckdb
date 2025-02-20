@@ -117,53 +117,41 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 }
 
 unique_ptr<StringValueScanner> CSVGlobalState::Next(unique_ptr<StringValueScanner> previous_scanner) {
+	unique_lock<mutex> parallel_lock(main_mutex);
 	if (previous_scanner) {
 		// We have to insert information for validation
-		lock_guard<mutex> parallel_lock(main_mutex);
 		auto &file = *previous_scanner->csv_file_scan;
 		file.validator.Insert(previous_scanner->scanner_idx, previous_scanner->GetValidationLine());
-		if (!single_threaded) {
-			previous_scanner.reset();
-			auto finished_tasks = ++file.finished_tasks;
-			if (file.finished_scan && finished_tasks == file.started_tasks) {
-				// all scans finished for this file
-				FinishFile(file);
-			}
+		previous_scanner.reset();
+		auto finished_tasks = ++file.finished_tasks;
+		if (file.finished_scan && finished_tasks == file.started_tasks) {
+			// all scans finished for this file
+			FinishFile(file);
 		}
 	}
 	if (single_threaded) {
-		{
-			lock_guard<mutex> parallel_lock(main_mutex);
-			if (previous_scanner) {
-				// Cleanup previous scanner.
-				previous_scanner->buffer_tracker.reset();
-				current_buffer_in_use.reset();
-				previous_scanner->csv_file_scan->Finish();
-			}
-		}
 		idx_t cur_idx;
 		while (true) {
-			{
-				lock_guard<mutex> parallel_lock(main_mutex);
-				cur_idx = last_file_idx++;
-				if (cur_idx >= files.size()) {
-					// No more files to scan
-					return nullptr;
-				}
-				if (cur_idx == 0) {
-					D_ASSERT(!previous_scanner);
-					auto current_file = file_scans.front();
-					++current_file->started_tasks;
-					return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager,
-					                                     current_file->state_machine, current_file->error_handler,
-					                                     current_file, false, current_boundary);
-				}
+			cur_idx = last_file_idx++;
+			if (cur_idx >= files.size()) {
+				// No more files to scan
+				return nullptr;
 			}
+			if (cur_idx == 0) {
+				D_ASSERT(!previous_scanner);
+				auto current_file = file_scans.front();
+				++current_file->started_tasks;
+				return make_uniq<StringValueScanner>(scanner_idx++, current_file->buffer_manager,
+				                                     current_file->state_machine, current_file->error_handler,
+				                                     current_file, false, current_boundary);
+			}
+			current_buffer_in_use.reset();
+			parallel_lock.unlock();
 			auto file_scan = CreateFileScan(cur_idx);
+			parallel_lock.lock();
 			bool empty_file = file_scan->file_size == 0;
 
 			if (!empty_file) {
-				lock_guard<mutex> parallel_lock(main_mutex);
 				auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 				file_scans.emplace_back(std::move(file_scan));
 				auto current_file = file_scans.back();
@@ -178,7 +166,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(unique_ptr<StringValueScanne
 			}
 		}
 	}
-	lock_guard<mutex> parallel_lock(main_mutex);
 	if (finished) {
 		return nullptr;
 	}
@@ -234,7 +221,7 @@ idx_t CSVGlobalState::MaxThreads() const {
 }
 
 void CSVGlobalState::FinishFile(CSVFileScan &scan) {
-	if (RefersToSameObject(current_buffer_in_use->buffer_manager, *scan.buffer_manager)) {
+	if (current_buffer_in_use && RefersToSameObject(current_buffer_in_use->buffer_manager, *scan.buffer_manager)) {
 		current_buffer_in_use.reset();
 	}
 	scan.Finish();
