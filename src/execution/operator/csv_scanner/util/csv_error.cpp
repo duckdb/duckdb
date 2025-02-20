@@ -68,6 +68,19 @@ void CSVErrorHandler::ErrorIfNeeded() {
 	}
 }
 
+void CSVErrorHandler::ErrorIfAny() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (ignore_errors || errors.empty()) {
+		// Nothing to error
+		return;
+	}
+	if (!CanGetLine(errors[0].error_info.boundary_idx)) {
+		throw InternalException("Failed to get error information for boundary index");
+	}
+	ThrowError(errors[0]);
+
+}
+
 void CSVErrorHandler::ErrorIfTypeExists(CSVErrorType error_type) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	for (auto &error : errors) {

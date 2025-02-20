@@ -116,21 +116,19 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	return percentage * 100;
 }
 
-unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScanner> previous_scanner) {
+unique_ptr<StringValueScanner> CSVGlobalState::Next(unique_ptr<StringValueScanner> previous_scanner) {
 	if (previous_scanner) {
 		// We have to insert information for validation
 		lock_guard<mutex> parallel_lock(main_mutex);
 		auto &file = *previous_scanner->csv_file_scan;
 		file.validator.Insert(previous_scanner->scanner_idx, previous_scanner->GetValidationLine());
-		auto finished_tasks = ++file.finished_tasks;
-		if (file.finished_scan && finished_tasks == file.started_tasks) {
-			// all scans finished for this file
-			previous_scanner->buffer_tracker.reset();
-			if (RefersToSameObject(current_buffer_in_use->buffer_manager, *previous_scanner->csv_file_scan->buffer_manager)) {
-				current_buffer_in_use.reset();
+		if (!single_threaded) {
+			previous_scanner.reset();
+			auto finished_tasks = ++file.finished_tasks;
+			if (file.finished_scan && finished_tasks == file.started_tasks) {
+				// all scans finished for this file
+				FinishFile(file);
 			}
-			previous_scanner->csv_file_scan->Finish();
-			FinishFile(file);
 		}
 	}
 	if (single_threaded) {
@@ -197,6 +195,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 
 	// We then produce the next boundary
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
+	++current_file.started_tasks;
 	if (!current_boundary.Next(*current_file.buffer_manager, csv_data.options)) {
 		// This means we are done scanning the current file
 		current_file.finished_scan = true;
@@ -217,7 +216,6 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(optional_ptr<StringValueScan
 			}
 		} while (current_boundary.done);
 	}
-	++current_file.started_tasks;
 	// We initialize the scan
 	return csv_scanner;
 }
@@ -236,6 +234,10 @@ idx_t CSVGlobalState::MaxThreads() const {
 }
 
 void CSVGlobalState::FinishFile(CSVFileScan &scan) {
+	if (RefersToSameObject(current_buffer_in_use->buffer_manager, *scan.buffer_manager)) {
+		current_buffer_in_use.reset();
+	}
+	scan.Finish();
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 	const bool ignore_or_store_errors =
 	    csv_data.options.ignore_errors.GetValue() || csv_data.options.store_rejects.GetValue();
@@ -243,7 +245,7 @@ void CSVGlobalState::FinishFile(CSVFileScan &scan) {
 		// If we are running multithreaded and not ignoring errors, we must run the validator
 		scan.validator.Verify();
 	}
-	scan.error_handler->ErrorIfNeeded();
+	scan.error_handler->ErrorIfAny();
 	FillRejectsTable(scan);
 	if (context.client_data->debug_set_max_line_length) {
 		context.client_data->debug_max_line_length = scan.error_handler->GetMaxLineLength();

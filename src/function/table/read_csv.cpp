@@ -125,7 +125,7 @@ static void ReadCSVFunction(ClientContext &context, TableFunctionInput &data_p, 
 			break;
 		}
 		if (csv_local_state.csv_reader->FinishedIterator()) {
-			csv_local_state.csv_reader = csv_global_state.Next(csv_local_state.csv_reader.get());
+			csv_local_state.csv_reader = csv_global_state.Next(std::move(csv_local_state.csv_reader));
 			if (!csv_local_state.csv_reader) {
 				break;
 			}

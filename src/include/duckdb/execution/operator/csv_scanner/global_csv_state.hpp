@@ -35,7 +35,7 @@ public:
 
 	//! Generates a CSV Scanner, with information regarding the piece of buffer it should be read.
 	//! In case it returns a nullptr it means we are done reading these files.
-	unique_ptr<StringValueScanner> Next(optional_ptr<StringValueScanner> previous_scanner);
+	unique_ptr<StringValueScanner> Next(unique_ptr<StringValueScanner> previous_scanner);
 
 	void FillRejectsTable(CSVFileScan &scan) const;
 

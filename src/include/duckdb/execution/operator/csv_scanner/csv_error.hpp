@@ -121,6 +121,8 @@ public:
 	void Error(const CSVError &csv_error, bool force_error = false);
 	//! If we have a cached error, and we can now error, we error.
 	void ErrorIfNeeded();
+	//! Throw an error if there are any
+	void ErrorIfAny();
 	//! Throws an error if a given type exists
 	void ErrorIfTypeExists(CSVErrorType error_type);
 	//! Inserts a finished error info
