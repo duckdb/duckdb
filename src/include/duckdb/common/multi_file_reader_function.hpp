@@ -163,9 +163,9 @@ public:
 		result->file_options = std::move(file_options_p);
 		result->bind_data = OP::InitializeBindData(*result, std::move(options_p));
 		// now bind the readers
-		// there are three ways of binding the readers
+		// there are two ways of binding the readers
 		// (1) MultiFileReader::Bind -> custom bind, used only for certain lakehouse extensions
-		// (2) Schema bind ->
+		// (2) OP::BindReader
 		bool bound_on_first_file = true;
 		if (result->multi_file_reader->Bind(result->file_options, *result->file_list, result->types, result->names,
 		                                    result->reader_bind)) {
@@ -227,14 +227,11 @@ public:
 
 		auto options = OP::InitializeOptions(context);
 		for (auto &kv : input.named_parameters) {
-			if (kv.second.IsNull()) {
-				throw BinderException("Cannot use NULL as function argument");
-			}
 			auto loption = StringUtil::Lower(kv.first);
 			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
 				continue;
 			}
-			if (OP::ParseOption(context, loption, kv.second, file_options, *options)) {
+			if (OP::ParseOption(context, kv.first, kv.second, file_options, *options)) {
 				continue;
 			}
 			throw NotImplementedException("Unimplemented option %s", kv.first);

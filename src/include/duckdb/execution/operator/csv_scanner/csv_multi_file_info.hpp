@@ -18,10 +18,10 @@ struct CSVMultiFileInfo {
 	                            BaseFileReaderOptions &options);
 	static bool ParseOption(ClientContext &context, const string &key, const Value &val,
 	                        MultiFileReaderOptions &file_options, BaseFileReaderOptions &options);
-	static void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                       MultiFileBindData &bind_data);
 	static unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
 	                                                        unique_ptr<BaseFileReaderOptions> options);
+	static void BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+	                       MultiFileBindData &bind_data);
 	static void FinalizeBindData(MultiFileBindData &multi_file_data);
 	static void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
 	static idx_t MaxThreads(const TableFunctionData &bind_data_p);

@@ -4,8 +4,13 @@
 
 namespace duckdb {
 
+class CSVFileReaderOptions : public BaseFileReaderOptions {
+public:
+	CSVReaderOptions options;
+};
+
 unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientContext &context) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
+	return make_uniq<CSVFileReaderOptions>();
 }
 
 bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
@@ -14,23 +19,186 @@ bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key
 }
 
 bool CSVMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
-                                   MultiFileReaderOptions &file_options, BaseFileReaderOptions &options) {
+                                   MultiFileReaderOptions &file_options, BaseFileReaderOptions &options_p) {
+	auto &options = options_p.Cast<CSVFileReaderOptions>();
+	options.options.ParseOption(context, key, val);
+	return true;
+}
 
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
+unique_ptr<TableFunctionData> CSVMultiFileInfo::InitializeBindData(MultiFileBindData &multi_file_data,
+                                                                   unique_ptr<BaseFileReaderOptions> options_p) {
+	auto &options = options_p->Cast<CSVFileReaderOptions>();
+	auto csv_data = make_uniq<ReadCSVData>();
+	csv_data->options = std::move(options.options);
+	if (multi_file_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
+		csv_data->options.multi_file_reader = true;
+	}
+	csv_data->options.Verify(multi_file_data.file_options);
+	return std::move(csv_data);
+}
+
+//! Function to do schema discovery over one CSV file or a list/glob of CSV files
+void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptions &options,
+                     const MultiFileReaderOptions &file_options, vector<LogicalType> &return_types,
+                     vector<string> &names, MultiFileList &multi_file_list) {
+	vector<CSVSchema> schemas;
+	const auto option_og = options;
+
+	const auto file_paths = multi_file_list.GetAllFiles();
+
+	// Here what we want to do is to sniff a given number of lines, if we have many files, we might go through them
+	// to reach the number of lines.
+	const idx_t required_number_of_lines = options.sniff_size * options.sample_size_chunks;
+
+	idx_t total_number_of_rows = 0;
+	idx_t current_file = 0;
+	options.file_path = file_paths[current_file];
+
+	result.buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, options.file_path, false);
+	idx_t only_header_or_empty_files = 0;
+
+	{
+		CSVSniffer sniffer(options, file_options, result.buffer_manager, CSVStateMachineCache::Get(context));
+		auto sniffer_result = sniffer.SniffCSV();
+		idx_t rows_read = sniffer.LinesSniffed() -
+		                  (options.dialect_options.skip_rows.GetValue() + options.dialect_options.header.GetValue());
+
+		schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, file_paths[0], rows_read,
+		                     result.buffer_manager->GetBuffer(0)->actual_size == 0);
+		total_number_of_rows += sniffer.LinesSniffed();
+		current_file++;
+		if (sniffer.EmptyOrOnlyHeader()) {
+			only_header_or_empty_files++;
+		}
+	}
+
+	// We do a copy of the options to not pollute the options of the first file.
+	constexpr idx_t max_files_to_sniff = 10;
+	idx_t files_to_sniff = file_paths.size() > max_files_to_sniff ? max_files_to_sniff : file_paths.size();
+	while (total_number_of_rows < required_number_of_lines && current_file < files_to_sniff) {
+		auto option_copy = option_og;
+		option_copy.file_path = file_paths[current_file];
+		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, option_copy, option_copy.file_path, false);
+		// TODO: We could cache the sniffer to be reused during scanning. Currently that's an exercise left to the
+		// reader
+		CSVSniffer sniffer(option_copy, file_options, buffer_manager, CSVStateMachineCache::Get(context));
+		auto sniffer_result = sniffer.SniffCSV();
+		idx_t rows_read = sniffer.LinesSniffed() - (option_copy.dialect_options.skip_rows.GetValue() +
+		                                            option_copy.dialect_options.header.GetValue());
+		if (buffer_manager->GetBuffer(0)->actual_size == 0) {
+			schemas.emplace_back(true);
+		} else {
+			schemas.emplace_back(sniffer_result.names, sniffer_result.return_types, option_copy.file_path, rows_read);
+		}
+		total_number_of_rows += sniffer.LinesSniffed();
+		if (sniffer.EmptyOrOnlyHeader()) {
+			only_header_or_empty_files++;
+		}
+		current_file++;
+	}
+
+	// We might now have multiple schemas, we need to go through them to define the one true schema
+	CSVSchema best_schema;
+	for (auto &schema : schemas) {
+		if (best_schema.Empty()) {
+			// A schema is bettah than no schema
+			best_schema = schema;
+		} else if (best_schema.GetRowsRead() == 0) {
+			// If the best-schema has no data-rows, that's easy, we just take the new schema
+			best_schema = schema;
+		} else if (schema.GetRowsRead() != 0) {
+			// We might have conflicting-schemas, we must merge them
+			best_schema.MergeSchemas(schema, options.null_padding);
+		}
+	}
+
+	if (names.empty()) {
+		names = best_schema.GetNames();
+		return_types = best_schema.GetTypes();
+	}
+	if (only_header_or_empty_files == current_file && !options.columns_set) {
+		for (auto &type : return_types) {
+			D_ASSERT(type.id() == LogicalTypeId::BOOLEAN);
+			// we default to varchar if all files are empty or only have a header after all the sniffing
+			type = LogicalType::VARCHAR;
+		}
+	}
 }
 
 void CSVMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
                                   MultiFileBindData &bind_data) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
-}
+	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
+	auto &multi_file_list = *bind_data.file_list;
+	auto &options = csv_data.options;
+	if (!bind_data.file_options.union_by_name) {
+		if (options.auto_detect) {
+			SchemaDiscovery(context, csv_data, options, bind_data.file_options, return_types, names, multi_file_list);
+		} else {
+			// If we are not running the sniffer, the columns must be set!
+			if (!options.columns_set) {
+				throw BinderException("read_csv requires columns to be specified through the 'columns' option. Use "
+				                      "read_csv_auto or set read_csv(..., "
+				                      "AUTO_DETECT=TRUE) to automatically guess columns.");
+			}
+			names = options.name_list;
+			return_types = options.sql_type_list;
+		}
+		D_ASSERT(return_types.size() == names.size());
+		csv_data.options.dialect_options.num_cols = names.size();
 
-unique_ptr<TableFunctionData> CSVMultiFileInfo::InitializeBindData(MultiFileBindData &multi_file_data,
-                                                                   unique_ptr<BaseFileReaderOptions> options) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
+		bind_data.multi_file_reader->BindOptions(bind_data.file_options, multi_file_list, return_types, names,
+		                                         bind_data.reader_bind);
+	} else {
+		bind_data.reader_bind = bind_data.multi_file_reader->BindUnionReader<CSVFileScan>(
+		    context, return_types, names, multi_file_list, bind_data, options, bind_data.file_options);
+		if (bind_data.union_readers.size() > 1) {
+			for (idx_t i = 0; i < bind_data.union_readers.size(); i++) {
+				auto &csv_union_data = bind_data.union_readers[i]->Cast<CSVUnionData>();
+				csv_data.column_info.emplace_back(csv_union_data.names, csv_union_data.types);
+			}
+		}
+		if (!options.sql_types_per_column.empty()) {
+			const auto exception = CSVError::ColumnTypesError(options.sql_types_per_column, names);
+			if (!exception.error_message.empty()) {
+				throw BinderException(exception.error_message);
+			}
+			for (idx_t i = 0; i < names.size(); i++) {
+				auto it = options.sql_types_per_column.find(names[i]);
+				if (it != options.sql_types_per_column.end()) {
+					return_types[i] = options.sql_type_list[it->second];
+				}
+			}
+		}
+		bind_data.initial_reader.reset();
+	}
 }
 
 void CSVMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
+	auto &csv_data = multi_file_data.bind_data->Cast<ReadCSVData>();
+	auto &names = multi_file_data.names;
+	auto &options = csv_data.options;
+	if (!options.force_not_null_names.empty()) {
+		// Let's first check all column names match
+		duckdb::unordered_set<string> column_names;
+		for (auto &name : names) {
+			column_names.insert(name);
+		}
+		for (auto &force_name : options.force_not_null_names) {
+			if (column_names.find(force_name) == column_names.end()) {
+				throw BinderException("\"force_not_null\" expected to find %s, but it was not found in the table",
+				                      force_name);
+			}
+		}
+		D_ASSERT(options.force_not_null.empty());
+		for (idx_t i = 0; i < names.size(); i++) {
+			if (options.force_not_null_names.find(names[i]) != options.force_not_null_names.end()) {
+				options.force_not_null.push_back(true);
+			} else {
+				options.force_not_null.push_back(false);
+			}
+		}
+	}
+	csv_data.Finalize();
 }
 
 void CSVMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data, BindInfo &info) {

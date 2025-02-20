@@ -187,7 +187,7 @@ struct CSVReaderOptions {
 	void ToNamedParameters(named_parameter_map_t &out) const;
 	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context,
 	                         MultiFileReaderOptions &file_options);
-	void ParseOption(ClientContext &context, const string &loption, const Value &val);
+	void ParseOption(ClientContext &context, const string &key, const Value &val);
 	//! Verify options are not conflicting
 	void Verify(MultiFileReaderOptions &file_options);
 

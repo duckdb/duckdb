@@ -361,10 +361,14 @@ bool ParquetMultiFileInfo::ParseCopyOption(ClientContext &context, const string 
 	return false;
 }
 
-bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
+bool ParquetMultiFileInfo::ParseOption(ClientContext &context, const string &original_key, const Value &val,
                                        MultiFileReaderOptions &file_options, BaseFileReaderOptions &base_options) {
 	auto &parquet_options = base_options.Cast<ParquetFileReaderOptions>();
 	auto &options = parquet_options.options;
+	auto key = StringUtil::Lower(original_key);
+	if (val.IsNull()) {
+		throw BinderException("Cannot use NULL as argument to %s", original_key);
+	}
 	if (key == "compression") {
 		// COMPRESSION has no effect on parquet read.
 		// These options are determined from the file.
