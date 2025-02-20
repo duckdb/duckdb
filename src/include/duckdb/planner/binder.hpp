@@ -29,6 +29,11 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/tableref/bound_delimgetref.hpp"
 
+//! fwd declare
+namespace duckdb_re2 {
+class RE2;
+} // namespace duckdb_re2
+
 namespace duckdb {
 class BoundResultModifier;
 class BoundSelectNode;
@@ -222,7 +227,8 @@ public:
 
 	StatementProperties &GetStatementProperties();
 	static void ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_ptr<ParsedExpression> &replacement);
-	static string ReplaceColumnsAlias(const string &alias, const string &column_name, void *regex);
+	static string ReplaceColumnsAlias(const string &alias, const string &column_name,
+	                                  optional_ptr<duckdb_re2::RE2> regex);
 
 private:
 	//! The parent binder (if any)
@@ -415,7 +421,7 @@ private:
 	                                      bool in_columns);
 	void ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr,
 	                                   vector<unique_ptr<ParsedExpression>> &replacements, StarExpression &star,
-	                                   void *regex);
+	                                   optional_ptr<duckdb_re2::RE2> regex);
 	void BindWhereStarExpression(unique_ptr<ParsedExpression> &expr);
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name

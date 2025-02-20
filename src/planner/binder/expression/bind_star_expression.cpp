@@ -112,8 +112,8 @@ void Binder::ReplaceStarExpression(unique_ptr<ParsedExpression> &expr, unique_pt
 	    *expr, [&](unique_ptr<ParsedExpression> &child_expr) { ReplaceStarExpression(child_expr, replacement); });
 }
 
-string Binder::ReplaceColumnsAlias(const string &alias, const string &column_name, void *regex_p) {
-	optional_ptr<duckdb_re2::RE2> regex((duckdb_re2::RE2 *)regex_p); // NOLINT
+string Binder::ReplaceColumnsAlias(const string &alias, const string &column_name,
+                                   optional_ptr<duckdb_re2::RE2> regex) {
 	string result;
 	result.reserve(alias.size());
 	for (idx_t c = 0; c < alias.size(); c++) {

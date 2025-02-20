@@ -9,7 +9,7 @@ namespace duckdb {
 using expression_list_t = vector<unique_ptr<ParsedExpression>>;
 
 static void AddChild(unique_ptr<ParsedExpression> &child, expression_list_t &new_children,
-                     expression_list_t &replacements, StarExpression &star, void *regex) {
+                     expression_list_t &replacements, StarExpression &star, optional_ptr<duckdb_re2::RE2> regex) {
 	if (!StarExpression::IsColumnsUnpacked(*child)) {
 		// Just add the child directly
 		new_children.push_back(std::move(child));
@@ -41,7 +41,7 @@ static void AddChild(unique_ptr<ParsedExpression> &child, expression_list_t &new
 }
 
 static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list, StarExpression &star,
-                              void *regex) {
+                              optional_ptr<duckdb_re2::RE2> regex) {
 	auto &function_expr = expr->Cast<FunctionExpression>();
 
 	// Replace children
@@ -68,7 +68,7 @@ static void ReplaceInFunction(unique_ptr<ParsedExpression> &expr, expression_lis
 }
 
 static void ReplaceInOperator(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list, StarExpression &star,
-                              void *regex) {
+                              optional_ptr<duckdb_re2::RE2> regex) {
 	auto &operator_expr = expr->Cast<OperatorExpression>();
 
 	vector<ExpressionType> allowed_types({
@@ -97,7 +97,7 @@ static void ReplaceInOperator(unique_ptr<ParsedExpression> &expr, expression_lis
 }
 
 void Binder::ReplaceUnpackedStarExpression(unique_ptr<ParsedExpression> &expr, expression_list_t &star_list,
-                                           StarExpression &star, void *regex) {
+                                           StarExpression &star, optional_ptr<duckdb_re2::RE2> regex) {
 	D_ASSERT(expr);
 	auto expression_class = expr->GetExpressionClass();
 	// Replace *COLUMNS(...) in the supported places
