@@ -15,8 +15,8 @@ unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientCont
 }
 
 bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-BaseFileReaderOptions &options_p, vector<string> &expected_names,
-			   vector<LogicalType> &expected_types) {
+                                       BaseFileReaderOptions &options_p, vector<string> &expected_names,
+                                       vector<LogicalType> &expected_types) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
 	options.options.SetReadOption(StringUtil::Lower(key), ConvertVectorToValue(values), expected_names);
 	return true;
@@ -247,7 +247,8 @@ unique_ptr<LocalTableFunctionState> CSVMultiFileInfo::InitializeLocalState() {
 }
 
 shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
-                                                          BaseUnionData &union_data_p, const MultiFileBindData &bind_data) {
+                                                          BaseUnionData &union_data_p,
+                                                          const MultiFileBindData &bind_data) {
 	auto &union_data = union_data_p.Cast<CSVUnionData>();
 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
 	// union readers - use cached options
@@ -289,7 +290,7 @@ void CSVMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &re
 }
 
 bool CSVMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
-										 GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
+                                         GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
 	auto &lstate = lstate_p.Cast<CSVLocalState>();
 	auto csv_reader_ptr = shared_ptr_cast<BaseFileReader, CSVFileScan>(reader);
@@ -310,7 +311,8 @@ void CSVMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader, Glob
 	lstate.csv_reader->Flush(chunk);
 }
 
-void CSVMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state, BaseFileReader &reader) {
+void CSVMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state,
+                                  BaseFileReader &reader) {
 	auto &gstate = global_state.Cast<CSVGlobalState>();
 	gstate.FinishLaunchingTasks(reader.Cast<CSVFileScan>());
 }

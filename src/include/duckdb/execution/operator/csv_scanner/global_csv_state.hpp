@@ -25,7 +25,8 @@ struct CSVGlobalState : public GlobalTableFunctionState {
 	friend struct CSVMultiFileInfo;
 
 public:
-	CSVGlobalState(ClientContext &context_p, const CSVReaderOptions &options, idx_t total_file_count, const MultiFileBindData &bind_data);
+	CSVGlobalState(ClientContext &context_p, const CSVReaderOptions &options, idx_t total_file_count,
+	               const MultiFileBindData &bind_data);
 
 	~CSVGlobalState() override {
 	}
@@ -36,7 +37,7 @@ public:
 	void FinishLaunchingTasks(CSVFileScan &scan);
 
 	void FillRejectsTable(CSVFileScan &scan) const;
-
+	void FinishTask(CSVFileScan &scan);
 	void FinishFile(CSVFileScan &scan);
 
 	//! Returns Current Progress of this CSV Read

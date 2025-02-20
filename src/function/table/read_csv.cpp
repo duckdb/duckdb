@@ -130,7 +130,8 @@ virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_p
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileScan,
 	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBind,
-	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitGlobal, MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitLocal);
+	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitGlobal,
+	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitLocal);
 	read_csv.table_scan_progress = CSVReaderProgress;
 	read_csv.pushdown_complex_filter = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileComplexFilterPushdown;
 	read_csv.serialize = CSVReaderSerialize;

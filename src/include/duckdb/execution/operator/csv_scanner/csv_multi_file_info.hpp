@@ -15,8 +15,8 @@ namespace duckdb {
 struct CSVMultiFileInfo {
 	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context);
 	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-	BaseFileReaderOptions &options, vector<string> &expected_names,
-			      vector<LogicalType> &expected_types);
+	                            BaseFileReaderOptions &options, vector<string> &expected_names,
+	                            vector<LogicalType> &expected_types);
 	static bool ParseOption(ClientContext &context, const string &key, const Value &val,
 	                        MultiFileReaderOptions &file_options, BaseFileReaderOptions &options);
 	static unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
@@ -36,8 +36,8 @@ struct CSVMultiFileInfo {
 	                                               const string &filename, idx_t file_idx,
 	                                               const MultiFileBindData &bind_data);
 	static void FinalizeReader(ClientContext &context, BaseFileReader &reader);
-	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader, GlobalTableFunctionState &gstate,
-				      LocalTableFunctionState &lstate);
+	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
+	                              GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk);
 	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state, BaseFileReader &reader);

@@ -107,9 +107,11 @@ public:
 
 	CSVValidator validator;
 
-	atomic<idx_t> started_tasks {0};
+	//! The started tasks and finished tasks allow us to track if all reads of the CSV file have completed
+	//! Note that the "started_tasks" starts at one - this is so we can track when the scheduling of all tasks for this
+	//! file has completed When the scheduling is finished we increment `finished_tasks` by one as well
+	atomic<idx_t> started_tasks {1};
 	atomic<idx_t> finished_tasks {0};
-	atomic<bool> finished_scan {false};
 
 private:
 	vector<string> names;

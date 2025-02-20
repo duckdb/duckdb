@@ -9,8 +9,9 @@
 
 namespace duckdb {
 
-CSVGlobalState::CSVGlobalState(ClientContext &context_p, const CSVReaderOptions &options, idx_t total_file_count, const MultiFileBindData &bind_data)
-    : context(context_p),  bind_data(bind_data), sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
+CSVGlobalState::CSVGlobalState(ClientContext &context_p, const CSVReaderOptions &options, idx_t total_file_count,
+                               const MultiFileBindData &bind_data)
+    : context(context_p), bind_data(bind_data), sniffer_mismatch_error(options.sniffer_user_mismatch_error) {
 	// There are situations where we only support single threaded scanning
 	auto system_threads = context.db->NumberOfThreads();
 	bool many_csv_files = total_file_count > 1 && total_file_count > system_threads * 2;
@@ -54,26 +55,31 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 	// return percentage * 100;
 }
 
-unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &current_file_ptr, unique_ptr<StringValueScanner> previous_scanner) {
+void CSVGlobalState::FinishTask(CSVFileScan &scan) {
+	auto finished_tasks = ++scan.finished_tasks;
+	if (finished_tasks == scan.started_tasks) {
+		// all scans finished for this file
+		FinishFile(scan);
+	}
+}
+
+unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &current_file_ptr,
+                                                    unique_ptr<StringValueScanner> previous_scanner) {
 	auto &current_file = *current_file_ptr;
-	unique_lock<mutex> parallel_lock(main_mutex);
+	lock_guard<mutex> parallel_lock(main_mutex);
 	if (previous_scanner) {
 		// We have to insert information for validation
 		auto previous_file = previous_scanner->csv_file_scan;
 		previous_file->validator.Insert(previous_scanner->scanner_idx, previous_scanner->GetValidationLine());
 		previous_scanner.reset();
-		auto finished_tasks = ++previous_file->finished_tasks;
-		if (previous_file->finished_scan && finished_tasks == previous_file->started_tasks) {
-			// all scans finished for this file
-			FinishFile(*previous_file);
-		}
+		FinishTask(*previous_file);
 	}
 	if (!initialized) {
 		// initialize the boundary for this file
 		current_boundary = current_file.start_iterator;
 		current_boundary.SetCurrentBoundaryToPosition(single_threaded, current_file.options);
-		current_buffer_in_use = make_shared_ptr<CSVBufferUsage>(*current_file.buffer_manager,
-																current_boundary.GetBufferIdx());
+		current_buffer_in_use =
+		    make_shared_ptr<CSVBufferUsage>(*current_file.buffer_manager, current_boundary.GetBufferIdx());
 		initialized = true;
 	} else {
 		// produce the next boundary for this file
@@ -87,6 +93,7 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &cur
 		current_buffer_in_use =
 		    make_shared_ptr<CSVBufferUsage>(*current_file.buffer_manager, current_boundary.GetBufferIdx());
 	}
+	++current_file.started_tasks;
 	// We first create the scanner for the current boundary
 	auto csv_scanner =
 	    make_uniq<StringValueScanner>(scanner_idx++, current_file.buffer_manager, current_file.state_machine,
@@ -97,9 +104,11 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &cur
 }
 
 void CSVGlobalState::FinishLaunchingTasks(CSVFileScan &file) {
-	file.finished_scan = true;
+	lock_guard<mutex> parallel_lock(main_mutex);
 	initialized = false;
 	current_buffer_in_use.reset();
+	// we are finished scanning this file - finish it
+	FinishTask(file);
 }
 
 void CSVGlobalState::FinishFile(CSVFileScan &scan) {
