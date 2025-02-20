@@ -14,7 +14,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
-
+#include "duckdb/common/complex_json.hpp"
 #include <cstring>
 
 namespace duckdb {
@@ -300,6 +300,9 @@ public:
 	//! NOTE: this method is used in Exception construction - as such it does NOT throw on invalid JSON, instead an
 	//! empty map is returned
 	DUCKDB_API static unordered_map<string, string> ParseJSONMap(const string &json);
+
+	//! Parses complex (i.e., nested) Json maps, it also parses invalid JSONs, as a pure string.
+	DUCKDB_API static ComplexJSON ParseComplexJSONMap(const string &json);
 	//! JSON method that constructs a { string: value } JSON map
 	//! This is the inverse of ParseJSONMap
 	//! NOTE: this method is not efficient

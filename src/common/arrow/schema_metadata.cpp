@@ -28,10 +28,10 @@ ArrowSchemaMetadata::ArrowSchemaMetadata(const char *metadata) {
 			// Read the value
 			const std::string value(metadata, static_cast<idx_t>(value_length));
 			metadata += value_length;
-			schema_metadata_map[key] = value;
+			schema_metadata_map[key] = ComplexJSONValue(value);
 		}
 	}
-	extension_metadata_map = StringUtil::ParseJSONMap(schema_metadata_map[ARROW_METADATA_KEY]);
+	extension_metadata_map = StringUtil::ParseJSONMap(schema_metadata_map[ARROW_METADATA_KEY], true);
 }
 
 void ArrowSchemaMetadata::AddOption(const string &key, const string &value) {
