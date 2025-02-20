@@ -86,6 +86,8 @@ struct ReadCSVData : public BaseCSVData {
 	shared_ptr<CSVBufferManager> buffer_manager;
 	//! Column info (used for union reader serialization)
 	vector<ColumnInfo> column_info;
+	//! The CSV schema, in case there is a unified schema that all files must read
+	CSVSchema csv_schema;
 
 	void FinalizeRead(ClientContext &context);
 

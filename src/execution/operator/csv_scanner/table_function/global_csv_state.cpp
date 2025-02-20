@@ -51,23 +51,30 @@ double CSVGlobalState::GetProgress(const ReadCSVData &bind_data_p) const {
 }
 
 void CSVGlobalState::FinishTask(CSVFileScan &scan) {
+	auto started_tasks = scan.started_tasks.load();
 	auto finished_tasks = ++scan.finished_tasks;
-	if (finished_tasks == scan.started_tasks) {
+	// Printer::PrintF("Finish tasks %d/%d of file %s", finished_tasks, started_tasks, scan.file_name);
+	if (finished_tasks == started_tasks) {
 		// all scans finished for this file
 		FinishFile(scan);
+	} else if (finished_tasks > scan.started_tasks) {
+		throw InternalException("Finished more tasks than were started for this file");
 	}
 }
 
-unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &current_file_ptr,
-                                                    unique_ptr<StringValueScanner> previous_scanner) {
-	auto &current_file = *current_file_ptr;
-	if (previous_scanner) {
-		// We have to insert information for validation
-		auto previous_file = previous_scanner->csv_file_scan;
-		previous_file->validator.Insert(previous_scanner->scanner_idx, previous_scanner->GetValidationLine());
-		previous_scanner.reset();
-		FinishTask(*previous_file);
+void CSVGlobalState::FinishScan(unique_ptr<StringValueScanner> scanner) {
+	if (!scanner) {
+		return;
 	}
+	// We have to insert information for validation
+	auto previous_file = scanner->csv_file_scan;
+	previous_file->validator.Insert(scanner->scanner_idx, scanner->GetValidationLine());
+	scanner.reset();
+	FinishTask(*previous_file);
+}
+
+unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &current_file_ptr) {
+	auto &current_file = *current_file_ptr;
 	if (!initialized) {
 		// initialize the boundary for this file
 		current_boundary = current_file.start_iterator;

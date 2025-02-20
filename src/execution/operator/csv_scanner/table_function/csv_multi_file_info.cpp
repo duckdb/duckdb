@@ -140,6 +140,7 @@ void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptio
 			type = LogicalType::VARCHAR;
 		}
 	}
+	result.csv_schema = best_schema;
 }
 
 void CSVMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
@@ -224,11 +225,17 @@ void CSVMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data, BindInfo 
 
 optional_idx CSVMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state,
                                           FileExpandResult expand_result) {
-	if (!global_state.global_state) {
-		return 1;
+	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
+	if (!csv_data.buffer_manager) {
+		return optional_idx();
 	}
-	auto &gstate = global_state.global_state->Cast<CSVGlobalState>();
-	return gstate.MaxThreads();
+	if (expand_result == FileExpandResult::MULTIPLE_FILES) {
+		// always launch max threads if we are reading multiple files
+		return optional_idx();
+	}
+	const idx_t bytes_per_thread = CSVIterator::BytesPerThread(csv_data.options);
+	const idx_t file_size = csv_data.buffer_manager->file_handle->FileSize();
+	return file_size / bytes_per_thread + 1;
 }
 
 unique_ptr<GlobalTableFunctionState> CSVMultiFileInfo::InitializeGlobalState(ClientContext &context,
@@ -264,13 +271,15 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
                                                           const MultiFileBindData &bind_data) {
 	auto &union_data = union_data_p.Cast<CSVUnionData>();
 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
+	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 	// union readers - use cached options
 	auto &csv_names = union_data.names;
 	auto &csv_types = union_data.types;
 	auto options = union_data.options;
 	options.auto_detect = false;
+	D_ASSERT(csv_data.csv_schema.Empty());
 	return make_shared_ptr<CSVFileScan>(context, union_data.GetFileName(), std::move(options), bind_data.file_options,
-	                                    csv_names, csv_types, gstate.file_schema, gstate.single_threaded, nullptr,
+	                                    csv_names, csv_types, csv_data.csv_schema, gstate.single_threaded, nullptr,
 	                                    false);
 }
 
@@ -291,8 +300,9 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 			buffer_manager.reset();
 		}
 	}
+	D_ASSERT(!csv_data.csv_schema.Empty());
 	return make_shared_ptr<CSVFileScan>(context, filename, std::move(options), bind_data.file_options, bind_data.names,
-	                                    bind_data.types, gstate.file_schema, gstate.single_threaded,
+	                                    bind_data.types, csv_data.csv_schema, gstate.single_threaded,
 	                                    std::move(buffer_manager), false);
 }
 
@@ -307,7 +317,8 @@ bool CSVMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<Base
 	auto &gstate = gstate_p.Cast<CSVGlobalState>();
 	auto &lstate = lstate_p.Cast<CSVLocalState>();
 	auto csv_reader_ptr = shared_ptr_cast<BaseFileReader, CSVFileScan>(reader);
-	lstate.csv_reader = gstate.Next(csv_reader_ptr, std::move(lstate.csv_reader));
+	gstate.FinishScan(std::move(lstate.csv_reader));
+	lstate.csv_reader = gstate.Next(csv_reader_ptr);
 	if (!lstate.csv_reader) {
 		// exhausted the scan
 		return false;
@@ -328,6 +339,13 @@ void CSVMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionSta
                                   BaseFileReader &reader) {
 	auto &gstate = global_state.Cast<CSVGlobalState>();
 	gstate.FinishLaunchingTasks(reader.Cast<CSVFileScan>());
+}
+
+void CSVMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
+                                     LocalTableFunctionState &local_state) {
+	auto &gstate = global_state.Cast<CSVGlobalState>();
+	auto &lstate = local_state.Cast<CSVLocalState>();
+	gstate.FinishScan(std::move(lstate.csv_reader));
 }
 
 unique_ptr<NodeStatistics> CSVMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {

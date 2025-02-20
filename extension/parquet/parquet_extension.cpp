@@ -119,6 +119,8 @@ struct ParquetMultiFileInfo {
 	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
 	                              GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
 	static void FinishFile(ClientContext &context, GlobalTableFunctionState &global_state, BaseFileReader &reader);
+	static void FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
+	                          LocalTableFunctionState &local_state);
 	static unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count);
 	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, BaseFileReader &reader, const string &name);
 	static double GetProgressInFile(ClientContext &context, GlobalTableFunctionState &gstate);
@@ -547,6 +549,10 @@ void ParquetMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctio
 	gstate.row_group_index = 0;
 	gstate.rows_read = 0;
 	gstate.total_rows = 0;
+}
+
+void ParquetMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
+                                         LocalTableFunctionState &local_state) {
 }
 
 void ParquetMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader_p, GlobalTableFunctionState &gstate_p,

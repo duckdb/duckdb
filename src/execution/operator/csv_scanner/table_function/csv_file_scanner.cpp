@@ -41,10 +41,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVR
 			CSVSniffer sniffer(options, file_options, buffer_manager, state_machine_cache);
 			sniffer.SniffCSV();
 		} else if (file_schema.Empty()) {
-			// no schema yet - run the sniffer and initialize the schema
-			CSVSniffer sniffer(options, file_options, buffer_manager, state_machine_cache);
-			auto result = sniffer.SniffCSV();
-			file_schema.Initialize(names, types, options.file_path);
+			throw InternalException("CSV File Scanner cannot be created without a schema");
 		} else if (buffer_manager->file_handle->FileSize() > 0) {
 			options.file_path = file_name;
 			CSVSniffer sniffer(options, file_options, buffer_manager, state_machine_cache, false);

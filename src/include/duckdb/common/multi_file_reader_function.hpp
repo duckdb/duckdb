@@ -398,6 +398,7 @@ public:
 			}
 
 			if (gstate.file_index >= gstate.readers.size() && !ResizeFiles(gstate)) {
+				OP::FinishReading(context, *gstate.global_state, *scan_data.local_state);
 				return false;
 			}
 
@@ -477,7 +478,6 @@ public:
 		if (file_list.IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
-			// TODO: confirm we are not changing behaviour by modifying the order here?
 			for (auto &reader : bind_data.union_readers) {
 				if (!reader) {
 					break;
@@ -692,7 +692,7 @@ public:
 	}
 
 	static void PushdownType(ClientContext &context, optional_ptr<FunctionData> bind_data_p,
-				      const unordered_map<idx_t, LogicalType> &new_column_types) {
+	                         const unordered_map<idx_t, LogicalType> &new_column_types) {
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 		for (auto &type : new_column_types) {
 			bind_data.types[type.first] = type.second;
