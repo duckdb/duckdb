@@ -230,3 +230,58 @@ from (
 )
 ----
 [21, true, 0.1234]
+
+# Two different COLUMNS inside an UNPACK (could be supported in the future)
+statement error
+select
+	[
+		UNPACK(
+			[
+				COLUMNS(['a', 'b']),
+				COLUMNS(['c'])
+			]
+		)
+	]
+from (select 21 a, 42 b, 1337 c)
+----
+Multiple different STAR/COLUMNS in the same expression are not supported
+
+# An UNPACK without a COLUMNS inside of it
+statement error
+select
+	[
+		UNPACK(
+			[
+				'test'
+			]
+		)
+	]
+from (select 21 a, 42 b, 1337 c)
+----
+UNPACK can only be used in combination with a STAR (*) expression or COLUMNS expression
+
+statement error
+select
+	[
+		UNPACK(
+			[
+				COLUMNS([]::VARCHAR[])
+			]
+		)
+	]
+from (select 21 a, 42 b, 1337 c)
+----
+Star expression "COLUMNS(CAST(main.list_value() AS VARCHAR[]))" resulted in an empty set of columns
+
+statement error
+select
+	[
+		UNPACK(
+			[
+				COLUMNS(['d'])
+			]
+		)
+	]
+from (select 21 a, 42 b, 1337 c)
+----
+Column "d" was selected but was not found in the FROM clause
