@@ -37,7 +37,7 @@ public:
 	unique_ptr<StringValueScanner> Next(shared_ptr<CSVFileScan> &file);
 	void FinishLaunchingTasks(CSVFileScan &scan);
 
-	void FillRejectsTable(CSVFileScan &scan) const;
+	void FillRejectsTable(CSVFileScan &scan);
 	void FinishTask(CSVFileScan &scan);
 	void FinishFile(CSVFileScan &scan);
 
@@ -61,6 +61,8 @@ private:
 
 	//! We hold information on the current scanner boundary
 	CSVIterator current_boundary;
+
+	vector<idx_t> rejects_file_indexes;
 };
 
 } // namespace duckdb

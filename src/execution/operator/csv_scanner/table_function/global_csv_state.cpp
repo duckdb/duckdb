@@ -194,7 +194,7 @@ void FillScanErrorTable(InternalAppender &scan_appender, idx_t scan_idx, idx_t f
 	scan_appender.EndRow();
 }
 
-void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) const {
+void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) {
 	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
 	auto &options = csv_data.options;
 
@@ -211,11 +211,18 @@ void CSVGlobalState::FillRejectsTable(CSVFileScan &scan) const {
 	InternalAppender scans_appender(context, scans_table);
 	idx_t scan_idx = context.transaction.GetActiveQuery();
 
-	const idx_t file_idx = rejects->GetCurrentFileIndex(scan_idx);
-	scan.error_handler->FillRejectsTable(errors_appender, file_idx, scan_idx, scan, *rejects, bind_data, limit);
+	// get the file indexes for the rejects table
+	// we store these so that they are deterministic (i.e. file index 0 always gets the lowest rejects index)
+	// otherwise parallelism can result in out-of-order file indexes
+	auto file_idx = scan.GetFileIndex();
+	for (idx_t i = rejects_file_indexes.size(); i <= file_idx; i++) {
+		rejects_file_indexes.push_back(rejects->GetCurrentFileIndex(scan_idx));
+	}
+	const idx_t rejects_file_idx = rejects_file_indexes[file_idx];
+	scan.error_handler->FillRejectsTable(errors_appender, rejects_file_idx, scan_idx, scan, *rejects, bind_data, limit);
 	if (rejects->count != 0) {
 		rejects->count = 0;
-		FillScanErrorTable(scans_appender, scan_idx, file_idx, scan);
+		FillScanErrorTable(scans_appender, scan_idx, rejects_file_idx, scan);
 	}
 	errors_appender.Close();
 	scans_appender.Close();
