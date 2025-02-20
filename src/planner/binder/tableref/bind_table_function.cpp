@@ -126,8 +126,7 @@ bool Binder::BindTableFunctionParameters(TableFunctionCatalogEntry &table_functi
 		    child->GetExpressionType() == ExpressionType::SUBQUERY) {
 			D_ASSERT(table_function.functions.Size() == 1);
 			auto fun = table_function.functions.GetFunctionByOffset(0);
-			if (table_function.functions.Size() != 1 || fun.arguments.empty() ||
-			    fun.arguments[0].id() != LogicalTypeId::TABLE) {
+			if (table_function.functions.Size() != 1 || fun.arguments.empty()) {
 				throw BinderException(
 				    "Only table-in-out functions can have subquery parameters - %s only accepts constant parameters",
 				    fun.name);
@@ -204,8 +203,12 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		if (table_function.bind_replace) {
 			auto new_plan = table_function.bind_replace(context, bind_input);
 			if (new_plan) {
-				new_plan->alias = ref.alias;
-				new_plan->column_name_alias = ref.column_name_alias;
+				if (!ref.alias.empty()) {
+					new_plan->alias = ref.alias;
+				}
+				if (!ref.column_name_alias.empty()) {
+					new_plan->column_name_alias = ref.column_name_alias;
+				}
 				return CreatePlan(*Bind(*new_plan));
 			} else if (!table_function.bind) {
 				throw BinderException("Failed to bind \"%s\": nullptr returned from bind_replace without bind function",
@@ -233,8 +236,13 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			return_names[i] = "C" + to_string(i);
 		}
 	}
+	virtual_column_map_t virtual_columns;
+	if (table_function.get_virtual_columns) {
+		virtual_columns = table_function.get_virtual_columns(context, bind_data.get());
+	}
 
-	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names);
+	auto get = make_uniq<LogicalGet>(bind_index, table_function, std::move(bind_data), return_types, return_names,
+	                                 virtual_columns);
 	get->parameters = parameters;
 	get->named_parameters = named_parameters;
 	get->input_table_types = input_table_types;
@@ -246,7 +254,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 	}
 	// now add the table function to the bind context so its columns can be bound
 	bind_context.AddTableFunction(bind_index, function_name, return_names, return_types, get->GetMutableColumnIds(),
-	                              get->GetTable().get());
+	                              get->GetTable().get(), std::move(virtual_columns));
 	return std::move(get);
 }
 

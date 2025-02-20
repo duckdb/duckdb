@@ -401,6 +401,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				// only right has correlation: push into right
 				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
 				                                                  parent_propagate_null_values, lateral_depth);
+				delim_offset += plan->children[0]->GetColumnBindings().size();
 				// Remove the correlated columns coming from outside for current join node
 				return plan;
 			}
@@ -419,6 +420,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				// only right has correlation: push into right
 				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
 				                                                  parent_propagate_null_values, lateral_depth);
+				delim_offset += plan->children[0]->GetColumnBindings().size();
 				return plan;
 			}
 		} else if (join.join_type == JoinType::MARK) {

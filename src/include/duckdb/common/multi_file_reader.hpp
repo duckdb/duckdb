@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/union_by_name.hpp"
+#include "duckdb/common/base_file_reader.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 
 namespace duckdb {
@@ -34,85 +35,6 @@ struct HivePartitioningIndex {
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &deserializer);
-};
-
-struct MultiFileReaderColumnDefinition {
-public:
-	MultiFileReaderColumnDefinition(const string &name, const LogicalType &type) : name(name), type(type) {
-	}
-
-	MultiFileReaderColumnDefinition(const MultiFileReaderColumnDefinition &other)
-	    : name(other.name), type(other.type), children(other.children),
-	      default_expression(other.default_expression ? other.default_expression->Copy() : nullptr),
-	      identifier(other.identifier) {
-	}
-
-	MultiFileReaderColumnDefinition &operator=(const MultiFileReaderColumnDefinition &other) {
-		if (this != &other) {
-			name = other.name;
-			type = other.type;
-			children = other.children;
-			default_expression = other.default_expression ? other.default_expression->Copy() : nullptr;
-			identifier = other.identifier;
-		}
-		return *this;
-	}
-
-public:
-	static vector<MultiFileReaderColumnDefinition> ColumnsFromNamesAndTypes(const vector<string> &names,
-	                                                                        const vector<LogicalType> &types) {
-		vector<MultiFileReaderColumnDefinition> columns;
-		D_ASSERT(names.size() == types.size());
-		for (idx_t i = 0; i < names.size(); i++) {
-			auto &name = names[i];
-			auto &type = types[i];
-			columns.emplace_back(name, type);
-		}
-		return columns;
-	}
-
-	static void ExtractNamesAndTypes(const vector<MultiFileReaderColumnDefinition> &columns, vector<string> &names,
-	                                 vector<LogicalType> &types) {
-		D_ASSERT(names.empty());
-		D_ASSERT(types.empty());
-		for (auto &column : columns) {
-			names.push_back(column.name);
-			types.push_back(column.type);
-		}
-	}
-
-	int32_t GetIdentifierFieldId() const {
-		D_ASSERT(!identifier.IsNull());
-		D_ASSERT(identifier.type().id() == LogicalTypeId::INTEGER);
-		return identifier.GetValue<int32_t>();
-	}
-
-	string GetIdentifierName() const {
-		if (identifier.IsNull()) {
-			// No identifier was provided, assume the name as the identifier
-			return name;
-		}
-		D_ASSERT(identifier.type().id() == LogicalTypeId::VARCHAR);
-		return identifier.GetValue<string>();
-	}
-
-	Value GetDefaultValue() const {
-		D_ASSERT(default_expression);
-		if (default_expression->type != ExpressionType::VALUE_CONSTANT) {
-			throw NotImplementedException("Default expression that isn't constant is not supported yet");
-		}
-		auto &constant_expr = default_expression->Cast<ConstantExpression>();
-		return constant_expr.value;
-	}
-
-public:
-	string name;
-	LogicalType type;
-	vector<MultiFileReaderColumnDefinition> children;
-	unique_ptr<ParsedExpression> default_expression;
-
-	//! Either the field_id or the name to map on
-	Value identifier;
 };
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
@@ -160,46 +82,12 @@ struct MultiFileReaderGlobalState {
 	}
 };
 
-struct MultiFileFilterEntry {
-	idx_t index = DConstants::INVALID_INDEX;
-	bool is_constant = false;
-};
-
-struct MultiFileConstantEntry {
-	MultiFileConstantEntry(idx_t column_id, Value value_p) : column_id(column_id), value(std::move(value_p)) {
-	}
-	//! The column id to apply the constant value to
-	idx_t column_id;
-	//! The constant value
-	Value value;
-};
-
-struct MultiFileReaderData {
-	//! The column ids to read from the file
-	vector<idx_t> column_ids;
-	//! The column indexes to read from the file
-	vector<ColumnIndex> column_indexes;
-	//! The mapping of column id -> result column id
-	//! The result chunk will be filled as follows: chunk.data[column_mapping[i]] = ReadColumn(column_ids[i]);
-	vector<idx_t> column_mapping;
-	//! Whether or not there are no columns to read. This can happen when a file only consists of constants
-	bool empty_columns = false;
-	//! Filters can point to either (1) local columns in the file, or (2) constant values in the `constant_map`
-	//! This map specifies where the to-be-filtered value can be found
-	vector<MultiFileFilterEntry> filter_map;
-	//! The set of table filters
-	optional_ptr<TableFilterSet> filters;
-	//! The constants that should be applied at the various positions
-	vector<MultiFileConstantEntry> constant_map;
-	//! Map of column_id -> cast, used when reading multiple files when files have diverging types
-	//! for the same column
-	unordered_map<column_t, LogicalType> cast_map;
-	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
-	optional_idx file_list_idx;
-};
-
 //! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
 struct MultiFileReader {
+public:
+	static constexpr column_t COLUMN_IDENTIFIER_FILENAME = UINT64_C(9223372036854775808);
+
+public:
 	virtual ~MultiFileReader();
 
 	//! Create a MultiFileReader for a specific TableFunction, using its function name for errors
@@ -273,7 +161,7 @@ struct MultiFileReader {
 	                                      const string &initial_file, const MultiFileReaderBindData &options,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
 	//! Populated the filter_map
-	DUCKDB_API virtual void CreateFilterMap(const vector<MultiFileReaderColumnDefinition> &global_columns,
+	DUCKDB_API virtual void CreateFilterMap(const vector<ColumnIndex> &global_column_ids,
 	                                        optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
 	                                        optional_ptr<MultiFileReaderGlobalState> global_state);
 
@@ -289,11 +177,14 @@ struct MultiFileReader {
 	                                         const OperatorPartitionInfo &partition_info,
 	                                         OperatorPartitionData &partition_data);
 
+	DUCKDB_API static void GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
+	                                         virtual_column_map_t &result);
+
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
 	                                        vector<string> &names, MultiFileList &files, RESULT_CLASS &result,
-	                                        OPTIONS_CLASS &options) {
-		D_ASSERT(options.file_options.union_by_name);
+	                                        OPTIONS_CLASS &options, MultiFileReaderOptions &file_options) {
+		D_ASSERT(file_options.union_by_name);
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
 
@@ -307,7 +198,7 @@ struct MultiFileReader {
 		std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
 		// perform the binding on the obtained set of names + types
 		MultiFileReaderBindData bind_data;
-		BindOptions(options.file_options, files, union_col_types, union_col_names, bind_data);
+		BindOptions(file_options, files, union_col_types, union_col_names, bind_data);
 		names = union_col_names;
 		return_types = union_col_types;
 		result.Initialize(context, result.union_readers[0]);
@@ -317,9 +208,10 @@ struct MultiFileReader {
 
 	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
 	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options) {
-		if (options.file_options.union_by_name) {
-			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options);
+	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options,
+	                                   MultiFileReaderOptions &file_options) {
+		if (file_options.union_by_name) {
+			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options, file_options);
 		} else {
 			shared_ptr<READER_CLASS> reader;
 			reader = make_shared_ptr<READER_CLASS>(context, files.GetFirstFile(), options);
@@ -330,7 +222,7 @@ struct MultiFileReader {
 			}
 			result.Initialize(std::move(reader));
 			MultiFileReaderBindData bind_data;
-			BindOptions(options.file_options, files, return_types, names, bind_data);
+			BindOptions(file_options, files, return_types, names, bind_data);
 			return bind_data;
 		}
 	}

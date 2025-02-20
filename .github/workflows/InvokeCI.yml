@@ -1,5 +1,6 @@
 name: InvokeCI
 on:
+  repository_dispatch:
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -7,6 +8,8 @@ on:
       git_ref:
         type: string
       skip_tests:
+        type: string
+      run_all:
         type: string
 
 concurrency:
@@ -45,6 +48,7 @@ jobs:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
 
   pyodide:
     uses: ./.github/workflows/Pyodide.yml
@@ -56,6 +60,22 @@ jobs:
 
   R:
     uses: ./.github/workflows/R.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+
+  Wasm:
+    uses: ./.github/workflows/Wasm.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+
+  static-libraries:
+    uses: ./.github/workflows/BundleStaticLibs.yml
     secrets: inherit
     with:
       override_git_describe: ${{ inputs.override_git_describe }}

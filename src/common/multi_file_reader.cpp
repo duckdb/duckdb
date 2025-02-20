@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILENAME;
+
 MultiFileReaderGlobalState::~MultiFileReaderGlobalState() {
 }
 
@@ -235,6 +237,14 @@ void MultiFileReader::BindOptions(MultiFileReaderOptions &options, MultiFileList
 	}
 }
 
+void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
+                                        virtual_column_map_t &result) {
+	if (bind_data.filename_idx == DConstants::INVALID_INDEX || bind_data.filename_idx == COLUMN_IDENTIFIER_FILENAME) {
+		bind_data.filename_idx = COLUMN_IDENTIFIER_FILENAME;
+		result.insert(make_pair(COLUMN_IDENTIFIER_FILENAME, TableColumn("filename", LogicalType::VARCHAR)));
+	}
+}
+
 void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
                                    const string &filename, const vector<MultiFileReaderColumnDefinition> &local_columns,
                                    const vector<MultiFileReaderColumnDefinition> &global_columns,
@@ -251,15 +261,13 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		auto &col_idx = global_column_ids[i];
-		if (col_idx.IsRowIdColumn()) {
-			// row-id
-			reader_data.constant_map.emplace_back(i, Value::BIGINT(42));
-			continue;
-		}
 		auto column_id = col_idx.GetPrimaryIndex();
 		if (column_id == options.filename_idx) {
 			// filename
 			reader_data.constant_map.emplace_back(i, Value(filename));
+			continue;
+		}
+		if (IsVirtualColumn(column_id)) {
 			continue;
 		}
 		if (!options.hive_partitioning_indexes.empty()) {
@@ -335,6 +343,10 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		// not constant - look up the column in the name map
 		auto &global_idx = global_column_ids[i];
 		auto global_id = global_idx.GetPrimaryIndex();
+		if (IsVirtualColumn(global_id)) {
+			// virtual column - these are emitted for every file
+			continue;
+		}
 		if (global_id >= global_columns.size()) {
 			throw InternalException(
 			    "MultiFileReader::CreateColumnMappingByName - global_id is out of range in global_types for this file");
@@ -436,6 +448,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 				reader_data.column_mapping.push_back(i);
 				// FIXME: this needs a more extensible solution
 				reader_data.column_ids.push_back(field_id_map.size());
+				reader_data.column_indexes.emplace_back(field_id_map.size());
 			} else {
 				throw InternalException("Unexpected generated column");
 			}
@@ -508,14 +521,14 @@ void MultiFileReader::CreateMapping(const string &file_name,
 	// copy global columns and inject any different defaults
 	CreateColumnMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
 	                    initial_file, global_state);
-	CreateFilterMap(global_columns, filters, reader_data, global_state);
+	CreateFilterMap(global_column_ids, filters, reader_data, global_state);
 }
 
-void MultiFileReader::CreateFilterMap(const vector<MultiFileReaderColumnDefinition> &global_columns,
+void MultiFileReader::CreateFilterMap(const vector<ColumnIndex> &global_column_ids,
                                       optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
                                       optional_ptr<MultiFileReaderGlobalState> global_state) {
 	if (filters) {
-		auto filter_map_size = global_columns.size();
+		auto filter_map_size = global_column_ids.size();
 		if (global_state) {
 			filter_map_size += global_state->extra_columns.size();
 		}
@@ -590,7 +603,7 @@ TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, con
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
 	TableFunctionSet function_set(table_function.name);
 	function_set.AddFunction(table_function);
-	D_ASSERT(table_function.arguments.size() >= 1 && table_function.arguments[0] == LogicalType::VARCHAR);
+	D_ASSERT(!table_function.arguments.empty() && table_function.arguments[0] == LogicalType::VARCHAR);
 	table_function.arguments[0] = LogicalType::LIST(LogicalType::VARCHAR);
 	function_set.AddFunction(std::move(table_function));
 	return function_set;

@@ -217,6 +217,8 @@ public:
 	//! (i.e., non-comment) line.
 	bool first_line_is_comment = false;
 
+	bool ignore_empty_values = true;
+
 	//! Specialized code for quoted values, makes sure to remove quotes and escapes
 	static inline void AddQuotedValue(StringValueResult &result, const idx_t buffer_pos);
 	//! Specialized code for possibly escaped values, makes sure to remove escapes

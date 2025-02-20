@@ -1,6 +1,13 @@
 # name: test/sql/sample/table_samples/basic_sample_tests.test
 # group: [table_samples]
 
+mode skip
+
+# currently require fixed vector size since the "randomness" of the sample depends on
+# the vector size. If the vector size decreases, the randomness of the sample decreases
+# This is especially noticeable for small tables and their samples
+require vector_size 2048
+
 statement ok
 PRAGMA enable_verification
 

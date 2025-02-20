@@ -1,5 +1,5 @@
 numpy>=1.14
-pybind11>=2.6.0
+pybind11>=2.9.0
 setuptools_scm>=6.3
 setuptools>=58
 pytest

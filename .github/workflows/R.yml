@@ -16,7 +16,6 @@ on:
         type: string
       skip_tests:
         type: string
-  repository_dispatch:
   push:
     branches-ignore:
       - 'main'
@@ -32,7 +31,7 @@ on:
       - '!.github/workflows/R.yml'
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  group: r-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
   cancel-in-progress: true
 
 env:
@@ -62,7 +61,6 @@ jobs:
 
       - uses: ./.github/actions/build_extensions
         with:
-          deploy_as: windows_amd64_mingw
           duckdb_arch: windows_amd64_mingw
           vcpkg_target_triplet: x64-mingw-static
           treat_warn_as_error: 0
@@ -75,7 +73,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: windows_amd64_mingw-extensions
+          name: duckdb-extensions-windows_amd64_mingw
           path: |
             build/release/extension/*/*.duckdb_extension
 
@@ -85,7 +83,7 @@ jobs:
     uses: ./.github/workflows/_sign_deploy_extensions.yml
     secrets: inherit
     with:
-      extension_artifact_name: windows_amd64_mingw-extensions
+      extension_artifact_name: duckdb-extensions-windows_amd64_mingw
       duckdb_arch: windows_amd64_mingw
       duckdb_sha: ${{ github.sha }}
 

@@ -29,7 +29,6 @@ class ColumnDataCollection;
 class ColumnDefinition;
 class DataTable;
 class DuckTransaction;
-class OptimisticDataWriter;
 class RowGroup;
 class StorageManager;
 class TableCatalogEntry;
@@ -107,17 +106,23 @@ public:
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints, Vector &row_ids,
 	                 DataChunk &delete_chunk);
 	//! Append a chunk to the transaction-local storage of this table.
-	void LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
-	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints);
+	void LocalWALAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+	                    const vector<unique_ptr<BoundConstraint>> &bound_constraints);
 	//! Append a column data collection with default values to the transaction-local storage of this table.
 	void LocalAppend(TableCatalogEntry &table, ClientContext &context, ColumnDataCollection &collection,
 	                 const vector<unique_ptr<BoundConstraint>> &bound_constraints,
 	                 optional_ptr<const vector<LogicalIndex>> column_ids);
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
-	//! Creates an optimistic writer for this table - used for optimistically writing parallel appends
-	OptimisticDataWriter &CreateOptimisticWriter(ClientContext &context);
-	void FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer);
+	//! Create an optimistic row group collection for this table. Used for optimistically writing parallel appends.
+	//! Returns the index into the optimistic_collections vector for newly created collection.
+	PhysicalIndex CreateOptimisticCollection(ClientContext &context, unique_ptr<RowGroupCollection> collection);
+	//! Returns the optimistic row group collection corresponding to the index.
+	RowGroupCollection &GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index);
+	//! Resets the optimistic row group collection corresponding to the index.
+	void ResetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index);
+	//! Returns the optimistic writer of the corresponding local table.
+	OptimisticDataWriter &GetOptimisticWriter(ClientContext &context);
 
 	unique_ptr<TableDeleteState> InitializeDelete(TableCatalogEntry &table, ClientContext &context,
 	                                              const vector<unique_ptr<BoundConstraint>> &bound_constraints);
@@ -167,9 +172,10 @@ public:
 
 	//! Append a chunk with the row ids [row_start, ..., row_start + chunk.size()] to all indexes of the table.
 	//! Returns empty ErrorData, if the append was successful.
-	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start);
+	ErrorData AppendToIndexes(optional_ptr<TableIndexList> delete_indexes, DataChunk &chunk, row_t row_start,
+	                          const IndexAppendMode index_append_mode);
 	static ErrorData AppendToIndexes(TableIndexList &indexes, optional_ptr<TableIndexList> delete_indexes,
-	                                 DataChunk &chunk, row_t row_start);
+	                                 DataChunk &chunk, row_t row_start, const IndexAppendMode index_append_mode);
 	//! Remove a chunk with the row ids [row_start, ..., row_start + chunk.size()] from all indexes of the table
 	void RemoveFromIndexes(TableAppendState &state, DataChunk &chunk, row_t row_start);
 	//! Remove the chunk with the specified set of row identifiers from all indexes of the table
@@ -200,7 +206,7 @@ public:
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
 	void CommitDropTable();
-	void CommitDropColumn(idx_t index);
+	void CommitDropColumn(const idx_t column_index);
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;

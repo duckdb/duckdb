@@ -135,6 +135,8 @@ public:
 	//! Returns a relation that produces a table from this connection
 	DUCKDB_API shared_ptr<Relation> Table(const string &tname);
 	DUCKDB_API shared_ptr<Relation> Table(const string &schema_name, const string &table_name);
+	DUCKDB_API shared_ptr<Relation> Table(const string &catalog_name, const string &schema_name,
+	                                      const string &table_name);
 	//! Returns a relation that produces a view from this connection
 	DUCKDB_API shared_ptr<Relation> View(const string &tname);
 	DUCKDB_API shared_ptr<Relation> View(const string &schema_name, const string &table_name);

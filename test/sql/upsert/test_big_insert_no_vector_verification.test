@@ -1,0 +1,32 @@
+# name: test/sql/upsert/test_big_insert_no_vector_verification.test
+# description: Test ON CONFLICT statement on the same conflicting row.
+# group: [upsert]
+
+# The constant operator verification ensures that we have only one row per data chunk.
+# Thus, the below insert succeeds, as we no longer see the same row within a chunk.
+require no_vector_verification
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+SET preserve_insertion_order = false;
+
+statement ok
+CREATE TABLE integers(
+	i INT UNIQUE,
+	j INT DEFAULT 0,
+	k INT DEFAULT 0
+);
+
+statement ok
+INSERT INTO integers(i) SELECT i FROM range(5000) tbl(i);
+
+statement error
+INSERT INTO integers(i, j)
+SELECT i % 5, i
+FROM range(5000) tbl(i) ON CONFLICT DO UPDATE SET
+	j = excluded.j,
+	k = excluded.i;
+----
+<REGEX>:Invalid Input Error:.*ON CONFLICT DO UPDATE can not update the same row twice in the same command.*

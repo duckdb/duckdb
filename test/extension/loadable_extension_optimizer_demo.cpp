@@ -101,7 +101,8 @@ public:
 			throw IOException("Failed to connect socket %s", string(strerror(errno)));
 		}
 
-		MemoryStream stream;
+		Allocator allocator;
+		MemoryStream stream(allocator);
 		BinarySerializer serializer(stream);
 		serializer.Begin();
 		plan->Serialize(serializer);

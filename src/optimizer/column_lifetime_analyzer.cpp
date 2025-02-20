@@ -102,10 +102,16 @@ void ColumnLifetimeAnalyzer::VisitOperator(LogicalOperator &op) {
 		GenerateProjectionMap(op.children[1]->GetColumnBindings(), rhs_unused, comp_join.right_projection_map);
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
+	case LogicalOperatorType::LOGICAL_INSERT:
+	case LogicalOperatorType::LOGICAL_UPDATE:
+	case LogicalOperatorType::LOGICAL_DELETE:
+		//! When RETURNING is used, a PROJECTION is the top level operator for INSERTS, UPDATES, and DELETES
+		//! We still need to project all values from these operators so the projection
+		//! on top of them can select from only the table values being inserted.
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE:
 	case LogicalOperatorType::LOGICAL_MATERIALIZED_CTE: {
 		// for set operations/materialized CTEs we don't remove anything, just recursively visit the children
 		// FIXME: for UNION we can remove unreferenced columns as long as everything_referenced is false (i.e. we

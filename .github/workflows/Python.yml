@@ -8,6 +8,8 @@ on:
         type: string
       skip_tests:
         type: string
+      run_all:
+        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -16,7 +18,8 @@ on:
         type: string
       skip_tests:
         type: string
-  repository_dispatch:
+      run_all:
+        type: string
   push:
     branches-ignore:
       - 'main'
@@ -146,7 +149,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: manylinux-extensions-x64
+          name: duckdb-extensions-${{ matrix.duckdb_arch }}
           path: |
             build/release/extension/*/*.duckdb_extension
 
@@ -154,11 +157,14 @@ jobs:
     ## TODO: Add a if: github.ref == main, for now this is explicitly missing to be able to test on PR, expected is this should fail due to missing secrets
     name: Upload Linux Extensions (gcc4)
     needs: manylinux-extensions-x64
+    strategy:
+      matrix:
+        duckdb_arch: [linux_amd64_gcc4]
     uses: ./.github/workflows/_sign_deploy_extensions.yml
     secrets: inherit
     with:
-      extension_artifact_name: manylinux-extensions-x64
-      duckdb_arch: linux_amd64_gcc4
+      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
+      duckdb_arch: ${{ matrix.duckdb_arch }}
       duckdb_sha: ${{ github.sha }}
 
   linux-python3:
@@ -168,11 +174,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        duckdb_arch: [linux_amd64_gcc4]
         arch: [x86_64, aarch64]
         python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         manylinux: [manylinux2014, manylinux_2_28]
         isRelease:
-          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
         exclude:
           # For now we don't distribute the 2_28 wheels on x64
           - arch: x86_64
@@ -239,7 +246,7 @@ jobs:
     - uses: actions/download-artifact@v4
       if: ${{ matrix.arch == 'x86_64' }}
       with:
-        name: manylinux-extensions-x64
+        name: duckdb-extensions-${{ matrix.duckdb_arch }}
         path: tools/pythonpkg
 
     - name: List extensions to be tested
@@ -279,7 +286,7 @@ jobs:
         ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
 
   osx-python3:
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true'
       name: Python 3 OSX
       needs: linux-python3-10
       runs-on: macos-latest
@@ -356,7 +363,7 @@ jobs:
        matrix:
         python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         isRelease:
-          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
         exclude:
           - isRelease: false
             python_build: 'cp39-*'

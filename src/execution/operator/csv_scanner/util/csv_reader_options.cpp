@@ -210,15 +210,18 @@ string CSVReaderOptions::GetMultiByteDelimiter() const {
 
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
 	string error;
-	if (read_format) {
-		StrpTimeFormat strpformat;
-		error = StrTimeFormat::ParseFormatSpecifier(format, strpformat);
-		dialect_options.date_format[type].Set(strpformat);
-	} else {
-		write_date_format[type] = Value(format);
-	}
-	if (!error.empty()) {
-		throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+	const string auto_format = StringUtil::Lower(format);
+	if (auto_format != "auto") {
+		if (read_format) {
+			StrpTimeFormat strpformat;
+			error = StrTimeFormat::ParseFormatSpecifier(format, strpformat);
+			dialect_options.date_format[type].Set(strpformat);
+		} else {
+			write_date_format[type] = Value(format);
+		}
+		if (!error.empty()) {
+			throw InvalidInputException("Could not parse DATEFORMAT: %s", error.c_str());
+		}
 	}
 }
 
@@ -251,6 +254,10 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 			throw BinderException("Invalid value for MAX_LINE_SIZE parameter: it cannot be smaller than 0");
 		}
 		maximum_line_size.Set(NumericCast<idx_t>(line_size));
+		if (buffer_size_option.IsSetByUser() && maximum_line_size.GetValue() > buffer_size_option.GetValue()) {
+			throw InvalidInputException("Buffer Size of %d must be a higher value than the maximum line size %d",
+			                            buffer_size_option.GetValue(), maximum_line_size.GetValue());
+		}
 	} else if (loption == "date_format" || loption == "dateformat") {
 		string format = ParseString(value, loption);
 		SetDateFormat(LogicalTypeId::DATE, format, true);
@@ -263,6 +270,12 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		buffer_size_option.Set(NumericCast<idx_t>(ParseInteger(value, loption)));
 		if (buffer_size_option == 0) {
 			throw InvalidInputException("Buffer Size option must be higher than 0");
+		}
+		if (maximum_line_size.IsSetByUser() && maximum_line_size.GetValue() > buffer_size_option.GetValue()) {
+			throw InvalidInputException("Buffer Size of %d must be a higher value than the maximum line size %d",
+			                            buffer_size_option.GetValue(), maximum_line_size.GetValue());
+		} else {
+			maximum_line_size.Set(buffer_size_option.GetValue(), false);
 		}
 	} else if (loption == "decimal_separator") {
 		decimal_separator = ParseString(value, loption);
@@ -298,12 +311,18 @@ void CSVReaderOptions::SetReadOption(const string &loption, const Value &value, 
 		if (table_name.empty()) {
 			throw BinderException("REJECTS_TABLE option cannot be empty");
 		}
+		if (KeywordHelper::RequiresQuotes(table_name)) {
+			throw BinderException("rejects_scan option: %s requires quotes to be used as an identifier", table_name);
+		}
 		rejects_table_name.Set(table_name);
 	} else if (loption == "rejects_scan") {
 		// skip, handled in SetRejectsOptions
 		auto table_name = ParseString(value, loption);
 		if (table_name.empty()) {
 			throw BinderException("rejects_scan option cannot be empty");
+		}
+		if (KeywordHelper::RequiresQuotes(table_name)) {
+			throw BinderException("rejects_scan option: %s requires quotes to be used as an identifier", table_name);
 		}
 		rejects_scan_name.Set(table_name);
 	} else if (loption == "rejects_limit") {
@@ -494,13 +513,13 @@ static Value StringVectorToValue(const vector<string> &vec) {
 static uint8_t GetCandidateSpecificity(const LogicalType &candidate_type) {
 	//! Const ht with accepted auto_types and their weights in specificity
 	const duckdb::unordered_map<uint8_t, uint8_t> auto_type_candidates_specificity {
-	    {static_cast<uint8_t>(LogicalTypeId::VARCHAR), 0},   {static_cast<uint8_t>(LogicalTypeId::DOUBLE), 1},
-	    {static_cast<uint8_t>(LogicalTypeId::FLOAT), 2},     {static_cast<uint8_t>(LogicalTypeId::DECIMAL), 3},
-	    {static_cast<uint8_t>(LogicalTypeId::BIGINT), 4},    {static_cast<uint8_t>(LogicalTypeId::INTEGER), 5},
-	    {static_cast<uint8_t>(LogicalTypeId::SMALLINT), 6},  {static_cast<uint8_t>(LogicalTypeId::TINYINT), 7},
-	    {static_cast<uint8_t>(LogicalTypeId::TIMESTAMP), 8}, {static_cast<uint8_t>(LogicalTypeId::DATE), 9},
-	    {static_cast<uint8_t>(LogicalTypeId::TIME), 10},     {static_cast<uint8_t>(LogicalTypeId::BOOLEAN), 11},
-	    {static_cast<uint8_t>(LogicalTypeId::SQLNULL), 12}};
+	    {static_cast<uint8_t>(LogicalTypeId::VARCHAR), 0},      {static_cast<uint8_t>(LogicalTypeId::DOUBLE), 1},
+	    {static_cast<uint8_t>(LogicalTypeId::FLOAT), 2},        {static_cast<uint8_t>(LogicalTypeId::DECIMAL), 3},
+	    {static_cast<uint8_t>(LogicalTypeId::BIGINT), 4},       {static_cast<uint8_t>(LogicalTypeId::INTEGER), 5},
+	    {static_cast<uint8_t>(LogicalTypeId::SMALLINT), 6},     {static_cast<uint8_t>(LogicalTypeId::TINYINT), 7},
+	    {static_cast<uint8_t>(LogicalTypeId::TIMESTAMP_TZ), 8}, {static_cast<uint8_t>(LogicalTypeId::TIMESTAMP), 9},
+	    {static_cast<uint8_t>(LogicalTypeId::DATE), 10},        {static_cast<uint8_t>(LogicalTypeId::TIME), 11},
+	    {static_cast<uint8_t>(LogicalTypeId::BOOLEAN), 12},     {static_cast<uint8_t>(LogicalTypeId::SQLNULL), 13}};
 
 	auto id = static_cast<uint8_t>(candidate_type.id());
 	auto it = auto_type_candidates_specificity.find(id);
