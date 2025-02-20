@@ -706,7 +706,7 @@
       {"id": 114,
         "name": "buffer_size",
         "type": "idx_t",
-        "deleted": true
+        "status": "deleted"
       },
       {"id": 115,
         "name": "file_options",
@@ -728,12 +728,12 @@
       {"id": 119,
         "name": "rejects_recovery_columns",
         "type": "vector<string>",
-        "deleted": true
+        "status": "deleted"
       },
       {"id": 120,
         "name": "rejects_recovery_column_ids",
         "type": "vector<idx_t>",
-        "deleted": true
+        "status": "deleted"
       },
       {"id": 121,
         "name": "delimiter",

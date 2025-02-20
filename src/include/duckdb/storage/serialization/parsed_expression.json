@@ -302,7 +302,55 @@
     "class": "StarExpression",
     "base": "ParsedExpression",
     "enum": "STAR",
-    "custom_implementation": true
+    "members": [
+      {
+        "id": 200,
+        "name": "relation_name",
+        "type": "string"
+      },
+      {
+        "id": 201,
+        "name": "exclude_list",
+        "type": "case_insensitive_set_t",
+        "serialize_property": "SerializedExcludeList()"
+      },
+      {
+        "id": 202,
+        "name": "replace_list",
+        "type": "case_insensitive_map_t<ParsedExpression*>"
+      },
+      {
+        "id": 203,
+        "name": "columns",
+        "type": "bool"
+      },
+      {
+        "id": 204,
+        "name": "expr",
+        "type": "ParsedExpression*"
+      },
+      {
+        "id": 205,
+        "name": "unpacked",
+        "type": "bool",
+        "default": "false",
+        "status": "read_only"
+      },
+      {
+        "id": 206,
+        "name": "qualified_exclude_list",
+        "type": "qualified_column_set_t",
+        "default": "qualified_column_set_t()",
+        "serialize_property": "SerializedQualifiedExcludeList()"
+      },
+      {
+        "id": 207,
+        "name": "rename_list",
+        "type": "qualified_column_map_t<string>",
+        "default": "qualified_column_map_t<string>()"
+      }
+    ],
+    "constructor": ["exclude_list", "qualified_exclude_list"]
   },
   {
     "class": "SubqueryExpression",
