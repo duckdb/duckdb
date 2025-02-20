@@ -350,7 +350,7 @@
         "default": "qualified_column_map_t<string>()"
       }
     ],
-    "constructor_method": "StarExpression::StarExpressionConstructor"
+    "constructor_method": "StarExpression::DeserializeStarExpression"
   },
   {
     "class": "SubqueryExpression",
