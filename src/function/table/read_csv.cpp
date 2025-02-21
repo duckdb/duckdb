@@ -141,30 +141,13 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 	// return bind_data;
 }
 
-virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
-	auto &csv_bind = bind_data->Cast<MultiFileBindData>();
-	virtual_column_map_t result;
-	MultiFileReader::GetVirtualColumns(context, csv_bind.reader_bind, result);
-	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
-	return result;
-}
-
 TableFunction ReadCSVTableFunction::GetFunction() {
-	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileScan,
-	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBind,
-	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitGlobal,
-	                       MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileInitLocal);
-	read_csv.table_scan_progress = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileProgress;
-	read_csv.pushdown_complex_filter = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileComplexFilterPushdown;
+	MultiFileReaderFunction<CSVMultiFileInfo> read_csv("read_csv");
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.get_partition_data = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileGetPartitionData;
-	read_csv.cardinality = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileCardinality;
-	read_csv.projection_pushdown = true;
 	read_csv.type_pushdown = MultiFileReaderFunction<CSVMultiFileInfo>::PushdownType;
-	read_csv.get_virtual_columns = ReadCSVGetVirtualColumns;
 	ReadCSVAddNamedParameters(read_csv);
-	return read_csv;
+	return static_cast<TableFunction>(read_csv);
 }
 
 TableFunction ReadCSVTableFunction::GetAutoFunction() {

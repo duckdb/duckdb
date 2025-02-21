@@ -120,6 +120,7 @@ struct ParquetMultiFileInfo {
 	static unique_ptr<NodeStatistics> GetCardinality(const MultiFileBindData &bind_data, idx_t file_count);
 	static unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, BaseFileReader &reader, const string &name);
 	static double GetProgressInFile(ClientContext &context, const BaseFileReader &reader);
+	static void GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result);
 };
 
 static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, ParquetOptions &options,
@@ -237,8 +238,11 @@ public:
 		table_function.named_parameters["schema"] = LogicalTypeId::ANY;
 		table_function.named_parameters["encryption_config"] = LogicalTypeId::ANY;
 		table_function.named_parameters["parquet_version"] = LogicalType::VARCHAR;
+		table_function.statistics = MultiFileReaderFunction<ParquetMultiFileInfo>::MultiFileScanStats;
 		table_function.serialize = ParquetScanSerialize;
 		table_function.deserialize = ParquetScanDeserialize;
+		table_function.filter_pushdown = true;
+		table_function.filter_prune = true;
 
 		return MultiFileReader::CreateFunctionSet(static_cast<TableFunction>(table_function));
 	}
@@ -484,6 +488,9 @@ double ParquetMultiFileInfo::GetProgressInFile(ClientContext &context, const Bas
 	auto &parquet_reader = reader.Cast<ParquetReader>();
 	auto read_rows = parquet_reader.rows_read.load();
 	return 100.0 * (static_cast<double>(read_rows) / static_cast<double>(parquet_reader.NumRows()));
+}
+
+void ParquetMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &) {
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &,

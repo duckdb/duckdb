@@ -139,14 +139,11 @@ public:
 	explicit MultiFileReaderFunction(string name_p)
 	    : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MultiFileScan, MultiFileBind, MultiFileInitGlobal,
 	                    MultiFileInitLocal) {
-		statistics = MultiFileScanStats;
 		cardinality = MultiFileCardinality;
 		table_scan_progress = MultiFileProgress;
 		get_partition_data = MultiFileGetPartitionData;
 		get_bind_info = MultiFileGetBindInfo;
 		projection_pushdown = true;
-		filter_pushdown = true;
-		filter_prune = true;
 		pushdown_complex_filter = MultiFileComplexFilterPushdown;
 		get_partition_info = MultiFileGetPartitionInfo;
 		get_virtual_columns = MultiFileGetVirtualColumns;
@@ -719,7 +716,9 @@ public:
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 		virtual_column_map_t result;
 		MultiFileReader::GetVirtualColumns(context, bind_data.reader_bind, result);
-		// FIXME: forward virtual columns
+
+		OP::GetVirtualColumns(context, bind_data, result);
+
 		bind_data.virtual_columns = result;
 		return result;
 	}

@@ -215,7 +215,6 @@ void CSVMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 }
 
 void CSVMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data, BindInfo &info) {
-	throw InternalException("Unimplemented CSVMultiFileInfo method");
 }
 
 optional_idx CSVMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state,
@@ -370,6 +369,10 @@ double CSVMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFil
 		file_progress = static_cast<double>(csv_scan.bytes_read) / static_cast<double>(csv_scan.file_size);
 	}
 	return file_progress * 100.0;
+}
+
+void CSVMultiFileInfo::GetVirtualColumns(ClientContext &, MultiFileBindData &, virtual_column_map_t &result) {
+	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
 }
 
 } // namespace duckdb
