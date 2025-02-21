@@ -12,7 +12,7 @@
 		"args": [
 			{
 				"name": "filesystem",
-				"type": "str"
+				"type": "fsspec.AbstractFileSystem"
 			}
 		],
 		"return": "None"
@@ -108,7 +108,11 @@
 		"return": "DuckDBPyConnection"
 	},
 	{
-		"name": ["sqltype", "dtype", "type"],
+		"name": [
+			"sqltype",
+			"dtype",
+			"type"
+		],
 		"function": "Type",
 		"docs": "Create a type object by parsing the 'type_str' string",
 		"args": [
@@ -212,7 +216,10 @@
 		"return": "DuckDBPyType"
 	},
 	{
-		"name": ["struct_type", "row_type"],
+		"name": [
+			"struct_type",
+			"row_type"
+		],
 		"function": "StructType",
 		"docs": "Create a struct type object from 'fields'",
 		"args": [
@@ -325,7 +332,11 @@
 		"return": "dict"
 	},
 	{
-		"name": ["fetchdf", "fetch_df", "df"],
+		"name": [
+			"fetchdf",
+			"fetch_df",
+			"df"
+		],
 		"function": "FetchDF",
 		"docs": "Fetch a result as DataFrame following execute()",
 		"kwargs": [
@@ -371,7 +382,10 @@
 		"return": "polars.DataFrame"
 	},
 	{
-		"name": ["fetch_arrow_table", "arrow"],
+		"name": [
+			"fetch_arrow_table",
+			"arrow"
+		],
 		"function": "FetchArrow",
 		"docs": "Fetch a result as Arrow table following execute()",
 		"args": [
@@ -658,7 +672,11 @@
 		"return": "List[Statement]"
 	},
 	{
-		"name": ["sql", "query", "from_query"],
+		"name": [
+			"sql",
+			"query",
+			"from_query"
+		],
 		"function": "RunQuery",
 		"docs": "Run a SQL query. If it is a SELECT statement, create a relation object from the given SQL query, otherwise run the query as-is.",
 		"args": [
@@ -682,7 +700,10 @@
 		"return": "DuckDBPyRelation"
 	},
 	{
-		"name": ["read_csv", "from_csv_auto"],
+		"name": [
+			"read_csv",
+			"from_csv_auto"
+		],
 		"function": "ReadCSV",
 		"docs": "Create a relation object from the CSV file in 'name'",
 		"args": [
@@ -901,7 +922,10 @@
 		"return": "DuckDBPyRelation"
 	},
 	{
-		"name": ["from_parquet", "read_parquet"],
+		"name": [
+			"from_parquet",
+			"read_parquet"
+		],
 		"function": "FromParquet",
 		"docs": "Create a relation object from the Parquet files in file_glob",
 		"args": [
@@ -945,7 +969,10 @@
 		"return": "DuckDBPyRelation"
 	},
 	{
-		"name": ["from_parquet", "read_parquet"],
+		"name": [
+			"from_parquet",
+			"read_parquet"
+		],
 		"function": "FromParquets",
 		"docs": "Create a relation object from the Parquet files in file_globs",
 		"args": [

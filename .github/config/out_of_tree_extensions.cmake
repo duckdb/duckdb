@@ -64,7 +64,7 @@ endif()
 duckdb_extension_load(excel
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-excel
-    GIT_TAG e243577956f36a898d5485189e5288839c2c4b73
+    GIT_TAG 67a851738ec80e1f19148a3b37a25a83a5068195
     INCLUDE_DIR src/excel/include
     )
 
@@ -110,7 +110,7 @@ if (NOT MINGW)
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-spatial
-    GIT_TAG 79bf2b6f55db3bf7201f375662616663b4b0954a
+    GIT_TAG 919c69fe47443b4eafbd883e2fcac0b2ec448725
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
     )

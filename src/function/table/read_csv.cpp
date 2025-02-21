@@ -140,7 +140,7 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 
 	auto result = make_uniq<ReadCSVData>();
 	auto &options = result->options;
-	const auto multi_file_reader = MultiFileReader::Create(input.table_function);
+	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	const auto multi_file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 	if (multi_file_list->GetTotalFileCount() > 1) {
 		options.multi_file_reader = true;
@@ -168,8 +168,8 @@ static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, TableFunctio
 		multi_file_reader->BindOptions(options.file_options, *multi_file_list, return_types, names,
 		                               result->reader_bind);
 	} else {
-		result->reader_bind = multi_file_reader->BindUnionReader<CSVFileScan>(context, return_types, names,
-		                                                                      *multi_file_list, *result, options);
+		result->reader_bind = multi_file_reader->BindUnionReader<CSVFileScan>(
+		    context, return_types, names, *multi_file_list, *result, options, options.file_options);
 		if (result->union_readers.size() > 1) {
 			for (idx_t i = 0; i < result->union_readers.size(); i++) {
 				result->column_info.emplace_back(result->union_readers[i]->names, result->union_readers[i]->types);
@@ -415,6 +415,14 @@ void PushdownTypeToCSVScanner(ClientContext &context, optional_ptr<FunctionData>
 	}
 }
 
+virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+	auto &csv_bind = bind_data->Cast<ReadCSVData>();
+	virtual_column_map_t result;
+	MultiFileReader::GetVirtualColumns(context, csv_bind.reader_bind, result);
+	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
+	return result;
+}
+
 TableFunction ReadCSVTableFunction::GetFunction() {
 	TableFunction read_csv("read_csv", {LogicalType::VARCHAR}, ReadCSVFunction, ReadCSVBind, ReadCSVInitGlobal,
 	                       ReadCSVInitLocal);
@@ -426,6 +434,7 @@ TableFunction ReadCSVTableFunction::GetFunction() {
 	read_csv.cardinality = CSVReaderCardinality;
 	read_csv.projection_pushdown = true;
 	read_csv.type_pushdown = PushdownTypeToCSVScanner;
+	read_csv.get_virtual_columns = ReadCSVGetVirtualColumns;
 	ReadCSVAddNamedParameters(read_csv);
 	return read_csv;
 }

@@ -57,7 +57,7 @@
     ]
   },
   {
-    "class": "ParquetOptions",
+    "class": "ParquetOptionsSerialization",
     "includes": [
       "parquet_reader.hpp"
     ],
@@ -65,12 +65,14 @@
       {
         "id": 100,
         "name": "binary_as_string",
-        "type": "bool"
+        "type": "bool",
+        "property": "parquet_options.binary_as_string"
       },
       {
         "id": 101,
         "name": "file_row_number",
-        "type": "bool"
+        "type": "bool",
+        "property": "parquet_options.file_row_number"
       },
       {
         "id": 102,
@@ -80,25 +82,29 @@
       {
         "id": 103,
         "name": "schema",
-        "type": "vector<ParquetColumnDefinition>"
+        "type": "vector<ParquetColumnDefinition>",
+        "property": "parquet_options.schema"
       },
       {
         "id": 104,
         "name": "encryption_config",
         "type": "shared_ptr<ParquetEncryptionConfig>",
-        "default": "nullptr"
+        "default": "nullptr",
+        "property": "parquet_options.encryption_config"
       },
       {
         "id": 105,
         "name": "debug_use_openssl",
         "type": "bool",
-        "default": "true"
+        "default": "true",
+        "property": "parquet_options.debug_use_openssl"
       },
       {
         "id": 106,
         "name": "explicit_cardinality",
         "type": "idx_t",
-        "default": "0"
+        "default": "0",
+        "property": "parquet_options.explicit_cardinality"
       }
     ],
     "pointer_type": "none"

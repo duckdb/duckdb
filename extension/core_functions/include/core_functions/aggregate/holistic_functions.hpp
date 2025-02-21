@@ -36,7 +36,7 @@ struct MadFun {
 struct MedianFun {
 	static constexpr const char *Name = "median";
 	static constexpr const char *Parameters = "x";
-	static constexpr const char *Description = "Returns the middle value of the set. NULL values are ignored. For even value counts, quantitative values are averaged and ordinal values return the lower value.";
+	static constexpr const char *Description = "Returns the middle value of the set. NULL values are ignored. For even value counts, interpolate-able types (numeric, date/time) return the average of the two middle values. Non-interpolate-able types (everything else) return the lower of the two middle values.";
 	static constexpr const char *Example = "median(x)";
 
 	static AggregateFunctionSet GetFunctions();
