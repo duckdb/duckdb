@@ -374,6 +374,45 @@ SinkCombineResultType PhysicalHashJoin::Combine(ExecutionContext &context, Opera
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
+
+static constexpr idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
+static constexpr double SKEW_SINGLE_THREADED_THRESHOLD = 0.33;
+
+//! If the data is very skewed (many of the exact same key), our finalize will become slow,
+//! due to completely slamming the same atomic using compare-and-swaps.
+//! We can detect this because we partition the data, and go for a single-threaded finalize instead.
+static bool KeysAreSkewed(const HashJoinGlobalSinkState &sink) {
+	const auto max_partition_ht_size =
+	    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
+	const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
+	return skew > SKEW_SINGLE_THREADED_THRESHOLD;
+}
+
+//! If we have only one thread, always finalize single-threaded. Otherwise, we finalize in parallel if we
+//! have more than 1M rows or if we want to verify parallelism.
+static bool FinalizeSingleThreaded(const HashJoinGlobalSinkState &sink, const bool consider_skew) {
+
+	// if only one thread, finalize single-threaded
+	const auto num_threads = NumericCast<idx_t>(sink.num_threads);
+	if (num_threads == 1) {
+		return true;
+	}
+
+	// if we want to verify parallelism, finalize parallel
+	if (sink.context.config.verify_parallelism) {
+		return false;
+	}
+
+	// finalize single-threaded if we have less than 1M rows
+	const auto &ht = *sink.hash_table;
+	const bool ht_is_small = ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD;
+
+	if (consider_skew) {
+		return ht_is_small || KeysAreSkewed(sink);
+	}
+	return ht_is_small;
+}
+
 static idx_t GetTupleWidth(const vector<LogicalType> &types, bool &all_constant) {
 	idx_t tuple_width = 0;
 	all_constant = true;
@@ -453,7 +492,9 @@ public:
 		auto &ht = *sink.hash_table;
 		const auto entry_count = ht.capacity;
 		auto num_threads = NumericCast<idx_t>(sink.num_threads);
-		if (num_threads == 1 || (entry_count < PARALLEL_CONSTRUCT_THRESHOLD && !context.config.verify_parallelism)) {
+
+		// we don't have to check whether it is too skewed here, as we only initialize the pointer table
+		if (FinalizeSingleThreaded(sink, false)) {
 			// Single-threaded memset
 			finalize_tasks.push_back(
 			    make_uniq<HashJoinTableInitTask>(shared_from_this(), context, sink, 0U, entry_count, sink.op));
@@ -469,8 +510,6 @@ public:
 		}
 		SetTasks(std::move(finalize_tasks));
 	}
-
-	static constexpr const idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
 	static constexpr const idx_t MINIMUM_ENTRIES_PER_TASK = 131072;
 };
 
@@ -510,17 +549,9 @@ public:
 		vector<shared_ptr<Task>> finalize_tasks;
 		auto &ht = *sink.hash_table;
 		const auto chunk_count = ht.GetDataCollection().ChunkCount();
-		const auto num_threads = NumericCast<idx_t>(sink.num_threads);
 
-		// If the data is very skewed (many of the exact same key), our finalize will become slow,
-		// due to completely slamming the same atomic using compare-and-swaps.
-		// We can detect this because we partition the data, and go for a single-threaded finalize instead.
-		const auto max_partition_ht_size =
-		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
-		const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
-
-		if (num_threads == 1 || ((ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD || skew > SKEW_SINGLE_THREADED_THRESHOLD) &&
-		                         !context.config.verify_parallelism)) {
+		// if the keys are too skewed, we finalize single-threaded
+		if (FinalizeSingleThreaded(sink, true)) {
 			// Single-threaded finalize
 			finalize_tasks.push_back(
 			    make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count, false, sink.op));
@@ -541,9 +572,7 @@ public:
 		sink.hash_table->finalized = true;
 	}
 
-	static constexpr idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
 	static constexpr idx_t CHUNKS_PER_TASK = 64;
-	static constexpr double SKEW_SINGLE_THREADED_THRESHOLD = 0.33;
 };
 
 void HashJoinGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event) {
@@ -1149,11 +1178,8 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	if (sink.context.config.verify_parallelism) {
 		build_chunks_per_thread = 1;
 	} else {
-		const auto max_partition_ht_size =
-		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
-		const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
 
-		if (skew > HashJoinFinalizeEvent::SKEW_SINGLE_THREADED_THRESHOLD) {
+		if (KeysAreSkewed(sink)) {
 			build_chunks_per_thread = build_chunk_count; // This forces single-threaded building
 		} else {
 			build_chunks_per_thread = // Same task size as in HashJoinFinalizeEvent
