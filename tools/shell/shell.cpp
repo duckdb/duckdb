@@ -3237,7 +3237,7 @@ MetadataResult SetColumnRendering(ShellState &state, const char **azArg, idx_t n
 }
 
 MetadataResult SetRowRendering(ShellState &state, const char **azArg, idx_t nArg) {
-	state.columns = 1;
+	state.columns = 0;
 	return MetadataResult::SUCCESS;
 }
 
