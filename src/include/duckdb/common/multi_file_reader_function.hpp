@@ -507,7 +507,9 @@ public:
 				result->projection_ids = input.projection_ids;
 			} else {
 				result->projection_ids.resize(input.column_indexes.size());
-				iota(begin(result->projection_ids), end(result->projection_ids), 0);
+				for (idx_t i = 0; i < input.column_indexes.size(); i++) {
+					result->projection_ids[i] = i;
+				}
 			}
 
 			const auto table_types = bind_data.types;

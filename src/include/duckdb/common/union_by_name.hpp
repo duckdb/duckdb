@@ -14,6 +14,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 #include "duckdb/common/base_file_reader.hpp"
+#include "duckdb/common/multi_file_reader_options.hpp"
 
 namespace duckdb {
 
