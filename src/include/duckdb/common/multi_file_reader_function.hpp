@@ -575,27 +575,24 @@ public:
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
+		auto remove_columns = gstate.CanRemoveColumns();
+		if (remove_columns) {
+			data.all_columns.Reset();
+		}
 
-		bool batch_finished;
 		do {
-			if (gstate.CanRemoveColumns()) {
-				data.all_columns.Reset();
-				OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, data.all_columns);
-				batch_finished = data.all_columns.size() == 0;
+			auto &scan_chunk = remove_columns ? data.all_columns : output;
+			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, scan_chunk);
+			if (scan_chunk.size() > 0) {
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           data.all_columns, gstate.multi_file_reader_state);
-				output.ReferenceColumns(data.all_columns, gstate.projection_ids);
-			} else {
-				OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, output);
-				batch_finished = output.size() == 0;
-				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           output, gstate.multi_file_reader_state);
-			}
-
-			if (output.size() > 0) {
+				                                           scan_chunk, gstate.multi_file_reader_state);
+				if (remove_columns) {
+					output.ReferenceColumns(data.all_columns, gstate.projection_ids);
+				}
 				return;
 			}
-			if (batch_finished && !TryInitializeNextBatch(context, bind_data, data, gstate)) {
+			scan_chunk.Reset();
+			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
 				return;
 			}
 		} while (true);

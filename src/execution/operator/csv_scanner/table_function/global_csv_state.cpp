@@ -23,7 +23,6 @@ CSVGlobalState::CSVGlobalState(ClientContext &context_p, const CSVReaderOptions 
 void CSVGlobalState::FinishTask(CSVFileScan &scan) {
 	auto started_tasks = scan.started_tasks.load();
 	auto finished_tasks = ++scan.finished_tasks;
-	// Printer::PrintF("Finish tasks %d/%d of file %s", finished_tasks, started_tasks, scan.file_name);
 	if (finished_tasks == started_tasks) {
 		// all scans finished for this file
 		FinishFile(scan);
