@@ -22,8 +22,6 @@ struct MultiFileBindData;
 
 //! CSV Global State is used in the CSV Reader Table Function, it controls what each thread
 struct CSVGlobalState : public GlobalTableFunctionState {
-	friend struct CSVMultiFileInfo;
-
 public:
 	CSVGlobalState(ClientContext &context_p, const CSVReaderOptions &options, idx_t total_file_count,
 	               const MultiFileBindData &bind_data);
@@ -40,6 +38,11 @@ public:
 	void FillRejectsTable(CSVFileScan &scan);
 	void FinishTask(CSVFileScan &scan);
 	void FinishFile(CSVFileScan &scan);
+
+	//! Whether or not to read individual CSV files single-threaded
+	bool SingleThreadedRead() const {
+		return single_threaded;
+	}
 
 private:
 	//! Reference to the client context that created this scan

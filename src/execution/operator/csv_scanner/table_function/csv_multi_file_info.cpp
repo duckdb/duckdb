@@ -272,7 +272,7 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 	options.auto_detect = false;
 	D_ASSERT(csv_data.csv_schema.Empty());
 	return make_shared_ptr<CSVFileScan>(context, union_data.GetFileName(), std::move(options), bind_data.file_options,
-	                                    csv_names, csv_types, csv_data.csv_schema, gstate.single_threaded, nullptr,
+	                                    csv_names, csv_types, csv_data.csv_schema, gstate.SingleThreadedRead(), nullptr,
 	                                    false);
 }
 
@@ -294,7 +294,7 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 		}
 	}
 	return make_shared_ptr<CSVFileScan>(context, filename, std::move(options), bind_data.file_options, bind_data.names,
-	                                    bind_data.types, csv_data.csv_schema, gstate.single_threaded,
+	                                    bind_data.types, csv_data.csv_schema, gstate.SingleThreadedRead(),
 	                                    std::move(buffer_manager), false);
 }
 
