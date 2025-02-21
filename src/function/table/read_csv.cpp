@@ -102,45 +102,43 @@ void ReadCSVTableFunction::ReadCSVAddNamedParameters(TableFunction &table_functi
 
 static void CSVReaderSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                const TableFunction &function) {
-	auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
-	auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
-	serializer.WriteProperty(100, "extra_info", function.extra_info);
-	// generate the serialized data
-	SerializedReadCSVData serialized_data;
-	serialized_data.return_types = serialized_data.csv_types = bind_data.types;
-	serialized_data.return_names = serialized_data.csv_names = bind_data.names;
-	serialized_data.files = bind_data.file_list->GetAllFiles();
-	serialized_data.filename_col_idx = csv_data.filename_col_idx;
-	serialized_data.options.options = csv_data.options;
-	serialized_data.options.file_options = bind_data.file_options;
-	serialized_data.reader_bind = bind_data.reader_bind;
-	serializer.WriteProperty(101, "csv_data", serialized_data);
+	throw NotImplementedException("CSVReaderSerialize not implemented");
+	// auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
+	// auto &csv_data = bind_data.bind_data->Cast<ReadCSVData>();
+	// serializer.WriteProperty(100, "extra_info", function.extra_info);
+	// // generate the serialized data
+	// SerializedReadCSVData serialized_data;
+	// serialized_data.return_types = serialized_data.csv_types = bind_data.types;
+	// serialized_data.return_names = serialized_data.csv_names = bind_data.names;
+	// serialized_data.files = bind_data.file_list->GetAllFiles();
+	// serialized_data.filename_col_idx = csv_data.filename_col_idx;
+	// serialized_data.options.options = csv_data.options;
+	// serialized_data.options.file_options = bind_data.file_options;
+	// serialized_data.reader_bind = bind_data.reader_bind;
+	// serializer.WriteProperty(101, "csv_data", serialized_data);
 }
 
 static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer, TableFunction &function) {
-	auto &context = deserializer.Get<ClientContext &>();
-	auto result = make_uniq<MultiFileBindData>();
-	auto csv_data = make_uniq<ReadCSVData>();
-	SerializedReadCSVData serialized_data;
-	deserializer.ReadProperty(100, "extra_info", function.extra_info);
-	deserializer.ReadProperty(101, "csv_data", serialized_data);
-	result->reader_bind = std::move(serialized_data.reader_bind);
-
-	vector<Value> file_path;
-	for (auto &path : serialized_data.files) {
-		file_path.emplace_back(path);
-	}
-	csv_data->filename_col_idx = serialized_data.filename_col_idx;
-
-	auto multi_file_reader = MultiFileReader::Create(function);
-	auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
-	                                                   FileGlobOptions::DISALLOW_EMPTY);
-	auto csv_options = make_uniq<CSVFileReaderOptions>();
-	csv_options->options = std::move(serialized_data.options.options);
-	auto bind_data = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBindInternal(
-	    context, std::move(multi_file_reader), std::move(file_list), serialized_data.return_types,
-	    serialized_data.return_names, std::move(serialized_data.options.file_options), std::move(csv_options));
-	return bind_data;
+	throw NotImplementedException("CSVReaderDeserialize not implemented");
+	// auto &context = deserializer.Get<ClientContext &>();
+	// SerializedReadCSVData serialized_data;
+	// deserializer.ReadProperty(100, "extra_info", function.extra_info);
+	// deserializer.ReadProperty(101, "csv_data", serialized_data);
+	//
+	// vector<Value> file_path;
+	// for (auto &path : serialized_data.files) {
+	// 	file_path.emplace_back(path);
+	// }
+	// auto multi_file_reader = MultiFileReader::Create(function);
+	// auto file_list = multi_file_reader->CreateFileList(context, Value::LIST(LogicalType::VARCHAR, file_path),
+	//                                                    FileGlobOptions::ALLOW_EMPTY);
+	// auto csv_options = make_uniq<CSVFileReaderOptions>();
+	// csv_options->options = std::move(serialized_data.options.options);
+	//
+	// auto bind_data = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBindInternal(
+	//     context, std::move(multi_file_reader), std::move(file_list), serialized_data.return_types,
+	//     serialized_data.return_names, std::move(serialized_data.options.file_options), std::move(csv_options));
+	// return bind_data;
 }
 
 virtual_column_map_t ReadCSVGetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {

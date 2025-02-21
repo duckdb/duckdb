@@ -722,7 +722,9 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(MultiFileList &files, C
 	}
 }
 void MultiFileReaderOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context) {
-	D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
+	if (files.GetExpandResult() == FileExpandResult::NO_FILES) {
+		return;
+	}
 	const bool hp_explicitly_disabled = !auto_detect_hive_partitioning && !hive_partitioning;
 	const bool ht_enabled = !hive_types_schema.empty();
 	if (hp_explicitly_disabled && ht_enabled) {
