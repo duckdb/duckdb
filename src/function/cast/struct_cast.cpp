@@ -54,8 +54,6 @@ unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastIn
 
 		source_indexes.push_back(i);
 		target_indexes.push_back(target_idx);
-		//! FIXME: this will turn casts for VARCHAR into a No-op, so non-printable characters are not stringified by
-		//! this
 		auto child_cast = input.GetCastFunction(source_child.second, target_children[target_idx].second);
 		child_cast_info.push_back(std::move(child_cast));
 	}
