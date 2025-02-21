@@ -101,6 +101,9 @@ shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context
 bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
                                   ClientContext &context) {
 	auto loption = StringUtil::Lower(key);
+	if (val.IsNull()) {
+		throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+	}
 	if (loption == "filename") {
 		if (val.type() == LogicalType::VARCHAR) {
 			// If not, we interpret it as the name of the column containing the filename

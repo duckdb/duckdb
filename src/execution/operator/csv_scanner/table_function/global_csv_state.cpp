@@ -76,7 +76,8 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &cur
 void CSVGlobalState::FinishLaunchingTasks(CSVFileScan &file) {
 	initialized = false;
 	current_buffer_in_use.reset();
-	// we are finished scanning this file - finish it
+	// we are finished launching tasks for this file
+	// finish a task to indicate we can begin cleanup once all scans are done
 	FinishTask(file);
 }
 
