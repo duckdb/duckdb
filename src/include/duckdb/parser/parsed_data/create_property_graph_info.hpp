@@ -99,24 +99,39 @@ public:
 		return d[len1][len2];
 	}
 
-	shared_ptr<PropertyGraphTable> GetTableByName(const string &table_name, bool error_not_found = true, bool is_vertex_table = true) {
+	shared_ptr<PropertyGraphTable> GetTableByName(const string &catalog_name, const string &schema_name, const string &table_name, bool error_not_found = true, bool is_vertex_table = true) {
 		if (is_vertex_table) {
 			// search vertex tables
 			for (const auto &vertex_table : vertex_tables) {
-				if (vertex_table->table_name == table_name) {
-					return vertex_table;
+				if (vertex_table->catalog_name != catalog_name) {
+					continue;
 				}
+				if (vertex_table->schema_name != schema_name) {
+					continue;
+				}
+				if (vertex_table->table_name != table_name) {
+					continue;
+				}
+				return vertex_table;
 			}
 		} else {
 			// Search edge tables
 			for (const auto &edge_table : edge_tables) {
-				if (edge_table->table_name == table_name) {
-					return edge_table;
+				if (edge_table->catalog_name != catalog_name) {
+					continue;
 				}
+				if (edge_table->schema_name != schema_name) {
+					continue;
+				}
+				if (edge_table->table_name != table_name) {
+					continue;
+				}
+				return edge_table;
 			}
 		}
 		if (error_not_found) {
-			throw Exception(ExceptionType::INVALID, "Table '" + table_name + "' not found in the property graph " + property_graph_name + ".");
+			string full_table_name = (catalog_name.empty() ? "" : catalog_name + ".") + (schema_name.empty() ? "" : schema_name + ".") + table_name;
+			throw Exception(ExceptionType::INVALID, "Table '" + full_table_name + "' not found in the property graph " + property_graph_name + ".");
 		}
 		return nullptr; // Return nullptr if no match is found and error_not_found is false
 	}

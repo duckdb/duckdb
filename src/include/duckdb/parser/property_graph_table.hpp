@@ -55,6 +55,8 @@ public:
 
 	vector<string> source_pk;
 
+	string source_catalog;
+	string source_schema;
 	string source_reference;
 
 	shared_ptr<PropertyGraphTable> source_pg_table;
@@ -63,6 +65,8 @@ public:
 
 	vector<string> destination_pk;
 
+	string destination_catalog;
+	string destination_schema;
 	string destination_reference;
 
 	shared_ptr<PropertyGraphTable> destination_pg_table;
@@ -79,6 +83,13 @@ public:
 
 	bool hasTableNameAlias() const {
 		return !table_name_alias.empty();
+	}
+
+	string FullTableName() const {
+		string full_table_name = catalog_name.empty() ? "" : catalog_name + ".";
+		full_table_name += schema_name.empty() ? "" : schema_name + ".";
+		full_table_name += table_name;
+		return full_table_name;
 	}
 
 	unique_ptr<BaseTableRef> CreateBaseTableRef(const string &alias = "") const {
