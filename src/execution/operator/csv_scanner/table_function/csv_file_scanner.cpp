@@ -50,28 +50,6 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVR
 	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 }
 
-CSVUnionData::~CSVUnionData() {
-}
-
-void CSVFileScan::SetStart() {
-	idx_t rows_to_skip = options.GetSkipRows() + state_machine->dialect_options.header.GetValue();
-	rows_to_skip = std::max(rows_to_skip, state_machine->dialect_options.rows_until_header +
-	                                          state_machine->dialect_options.header.GetValue());
-	if (rows_to_skip == 0) {
-		start_iterator.first_one = true;
-		return;
-	}
-	SkipScanner skip_scanner(buffer_manager, state_machine, error_handler, rows_to_skip);
-	skip_scanner.ParseChunk();
-	start_iterator = skip_scanner.GetIterator();
-}
-
-void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<LogicalType> &types_p) {
-	names = names_p;
-	types = types_p;
-	columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(names, types);
-}
-
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options_p,
                          const MultiFileReaderOptions &file_options)
     : BaseFileReader(file_name), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
@@ -99,6 +77,28 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const 
 	state_machine = make_shared_ptr<CSVStateMachine>(
 	    state_machine_cache.Get(options.dialect_options.state_machine_options), options);
 	SetStart();
+}
+
+CSVUnionData::~CSVUnionData() {
+}
+
+void CSVFileScan::SetStart() {
+	idx_t rows_to_skip = options.GetSkipRows() + state_machine->dialect_options.header.GetValue();
+	rows_to_skip = std::max(rows_to_skip, state_machine->dialect_options.rows_until_header +
+	                                          state_machine->dialect_options.header.GetValue());
+	if (rows_to_skip == 0) {
+		start_iterator.first_one = true;
+		return;
+	}
+	SkipScanner skip_scanner(buffer_manager, state_machine, error_handler, rows_to_skip);
+	skip_scanner.ParseChunk();
+	start_iterator = skip_scanner.GetIterator();
+}
+
+void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<LogicalType> &types_p) {
+	names = names_p;
+	types = types_p;
+	columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(names, types);
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {

@@ -12,6 +12,7 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include <numeric>
 
 namespace duckdb {
 
@@ -391,14 +392,16 @@ public:
 					scan_data.file_index = gstate.file_index;
 					return true;
 				} else {
-					// Close current file
-					OP::FinishFile(context, *gstate.global_state, *current_reader_data.reader);
-					current_reader_data.file_state = MultiFileFileState::CLOSED;
-					current_reader_data.closed_reader = current_reader_data.reader;
-					current_reader_data.reader = nullptr;
-
 					// Set state to the next file
 					++gstate.file_index;
+
+					// Close current file
+					current_reader_data.file_state = MultiFileFileState::CLOSED;
+
+					//! Finish processing the file
+					OP::FinishFile(context, *gstate.global_state, *current_reader_data.reader);
+					current_reader_data.closed_reader = current_reader_data.reader;
+					current_reader_data.reader = nullptr;
 					continue;
 				}
 			}

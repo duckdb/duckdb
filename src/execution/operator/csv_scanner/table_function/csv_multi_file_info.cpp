@@ -382,18 +382,21 @@ unique_ptr<BaseStatistics> CSVMultiFileInfo::GetStatistics(ClientContext &contex
 double CSVMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFileReader &reader) {
 	auto &csv_scan = reader.Cast<CSVFileScan>();
 
-	double file_progress;
 	auto buffer_manager = csv_scan.buffer_manager;
 	if (!buffer_manager) {
 		// We are done with this file, so it's 100%
-		file_progress = 1.0;
-	} else if (buffer_manager->file_handle->compression_type == FileCompressionType::GZIP ||
-	           buffer_manager->file_handle->compression_type == FileCompressionType::ZSTD) {
-		// This file is not done, and is a compressed file
-		file_progress = buffer_manager->file_handle->GetProgress() / static_cast<double>(csv_scan.file_size);
-	} else {
-		file_progress = static_cast<double>(csv_scan.bytes_read) / static_cast<double>(csv_scan.file_size);
+		return 100.0;
 	}
+	double bytes_read;
+	if (buffer_manager->file_handle->compression_type == FileCompressionType::GZIP ||
+	    buffer_manager->file_handle->compression_type == FileCompressionType::ZSTD) {
+		// compressed file: we care about the progress made in the *underlying* file handle
+		// the bytes read from the uncompressed file are skewed
+		bytes_read = buffer_manager->file_handle->GetProgress();
+	} else {
+		bytes_read = static_cast<double>(csv_scan.bytes_read);
+	}
+	double file_progress = bytes_read / static_cast<double>(csv_scan.file_size);
 	return file_progress * 100.0;
 }
 
