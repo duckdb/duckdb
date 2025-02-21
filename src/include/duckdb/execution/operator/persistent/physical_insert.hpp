@@ -16,6 +16,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
 #include "duckdb/storage/table/delete_state.hpp"
+#include "duckdb/storage/optimistic_data_writer.hpp"
 
 namespace duckdb {
 
@@ -53,8 +54,9 @@ public:
 	DataChunk update_chunk;
 	ExpressionExecutor default_executor;
 	TableAppendState local_append_state;
-	unique_ptr<RowGroupCollection> local_collection;
-	optional_ptr<OptimisticDataWriter> writer;
+	//! An index to the optimistic row group collection vector of the local table storage for this transaction.
+	PhysicalIndex collection_index;
+	unique_ptr<OptimisticDataWriter> optimistic_writer;
 	// Rows that have been updated by a DO UPDATE conflict
 	unordered_set<row_t> updated_rows;
 	idx_t update_count = 0;

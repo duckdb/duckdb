@@ -29,7 +29,6 @@ class ColumnDataCollection;
 class ColumnDefinition;
 class DataTable;
 class DuckTransaction;
-class OptimisticDataWriter;
 class RowGroup;
 class StorageManager;
 class TableCatalogEntry;
@@ -115,9 +114,15 @@ public:
 	                 optional_ptr<const vector<LogicalIndex>> column_ids);
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(ClientContext &context, RowGroupCollection &collection);
-	//! Creates an optimistic writer for this table - used for optimistically writing parallel appends
-	OptimisticDataWriter &CreateOptimisticWriter(ClientContext &context);
-	void FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer);
+	//! Create an optimistic row group collection for this table. Used for optimistically writing parallel appends.
+	//! Returns the index into the optimistic_collections vector for newly created collection.
+	PhysicalIndex CreateOptimisticCollection(ClientContext &context, unique_ptr<RowGroupCollection> collection);
+	//! Returns the optimistic row group collection corresponding to the index.
+	RowGroupCollection &GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index);
+	//! Resets the optimistic row group collection corresponding to the index.
+	void ResetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index);
+	//! Returns the optimistic writer of the corresponding local table.
+	OptimisticDataWriter &GetOptimisticWriter(ClientContext &context);
 
 	unique_ptr<TableDeleteState> InitializeDelete(TableCatalogEntry &table, ClientContext &context,
 	                                              const vector<unique_ptr<BoundConstraint>> &bound_constraints);
@@ -201,7 +206,7 @@ public:
 	//! Checkpoint the table to the specified table data writer
 	void Checkpoint(TableDataWriter &writer, Serializer &serializer);
 	void CommitDropTable();
-	void CommitDropColumn(idx_t index);
+	void CommitDropColumn(const idx_t column_index);
 
 	idx_t ColumnCount() const;
 	idx_t GetTotalRows() const;

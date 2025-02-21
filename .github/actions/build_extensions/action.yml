@@ -60,6 +60,9 @@ inputs:
   build_out_of_tree_extensions:
     description: 'Build out-of-tree extensions'
     default: 1
+  bundle_static_lib_mode:
+    description: 'Build the default bundled extensions to publish the static libs'
+    default: 0
   osx_universal:
     description: 'Build Universal Binary for OSX'
     default: 0
@@ -91,6 +94,7 @@ runs:
     - name: Setup DuckDB extension build config
       shell: bash
       run: |
+        export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.bundle_static_lib_mode == 1 && '.github/config/bundled_extensions.cmake' || ''}}"
         export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_in_tree_extensions == 1 && '.github/config/in_tree_extensions.cmake' || ''}}"
         export EXTENSION_CONFIGS="$EXTENSION_CONFIGS;${{ inputs.build_out_of_tree_extensions == 1 && '.github/config/out_of_tree_extensions.cmake' || '' }}"
         echo "EXTENSION_CONFIGS=$EXTENSION_CONFIGS" >> $GITHUB_ENV
