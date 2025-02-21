@@ -214,9 +214,9 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
 	    LossyNumericCast<idx_t>(static_cast<double>(config.sink_capacity) / GroupedAggregateHashTable::LOAD_FACTOR);
 	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetMaximumSinkRadixBits());
 	auto count_per_partition = ht_count / num_partitions;
-	auto blocks_per_partition = (count_per_partition + tuples_per_block) / tuples_per_block + 1;
+	auto blocks_per_partition = (count_per_partition + tuples_per_block) / tuples_per_block;
 	if (!radix_ht.GetLayout().AllConstant()) {
-		blocks_per_partition += 2;
+		blocks_per_partition += 1;
 	}
 	auto ht_size = num_partitions * blocks_per_partition * block_alloc_size + config.sink_capacity * sizeof(ht_entry_t);
 
