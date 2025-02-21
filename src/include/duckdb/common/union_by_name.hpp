@@ -13,29 +13,32 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/common/base_file_reader.hpp"
 
 namespace duckdb {
 
-template <class READER_TYPE, class OPTION_TYPE>
+template <class OP, class OPTIONS_TYPE>
 class UnionByReaderTask : public BaseExecutorTask {
 public:
 	UnionByReaderTask(TaskExecutor &executor, ClientContext &context, const string &file, idx_t file_idx,
-	                  vector<typename READER_TYPE::UNION_READER_DATA> &readers, OPTION_TYPE &options)
+	                  vector<shared_ptr<BaseUnionData>> &readers, OPTIONS_TYPE &options,
+	                  MultiFileReaderOptions &file_options)
 	    : BaseExecutorTask(executor), context(context), file_name(file), file_idx(file_idx), readers(readers),
-	      options(options) {
+	      options(options), file_options(file_options) {
 	}
 
 	void ExecuteTask() override {
-		auto reader = make_uniq<READER_TYPE>(context, file_name, options);
-		readers[file_idx] = READER_TYPE::StoreUnionReader(std::move(reader), file_idx);
+		auto reader = OP::CreateReader(context, file_name, options, file_options);
+		readers[file_idx] = OP::GetUnionData(std::move(reader), file_idx);
 	}
 
 private:
 	ClientContext &context;
 	const string &file_name;
 	idx_t file_idx;
-	vector<typename READER_TYPE::UNION_READER_DATA> &readers;
-	OPTION_TYPE &options;
+	vector<shared_ptr<BaseUnionData>> &readers;
+	OPTIONS_TYPE &options;
+	MultiFileReaderOptions &file_options;
 };
 
 class UnionByName {
@@ -45,18 +48,18 @@ public:
 	                              case_insensitive_map_t<idx_t> &union_names_map);
 
 	//! Union all files(readers) by their col names
-	template <class READER_TYPE, class OPTION_TYPE>
-	static vector<typename READER_TYPE::UNION_READER_DATA>
+	template <class OP, class OPTIONS_TYPE>
+	static vector<shared_ptr<BaseUnionData>>
 	UnionCols(ClientContext &context, const vector<string> &files, vector<LogicalType> &union_col_types,
-	          vector<string> &union_col_names, OPTION_TYPE &options) {
-		vector<typename READER_TYPE::UNION_READER_DATA> union_readers;
+	          vector<string> &union_col_names, OPTIONS_TYPE &options, MultiFileReaderOptions &file_options) {
+		vector<shared_ptr<BaseUnionData>> union_readers;
 		union_readers.resize(files.size());
 
 		TaskExecutor executor(context);
 		// schedule tasks for all files
 		for (idx_t file_idx = 0; file_idx < files.size(); ++file_idx) {
-			auto task = make_uniq<UnionByReaderTask<READER_TYPE, OPTION_TYPE>>(executor, context, files[file_idx],
-			                                                                   file_idx, union_readers, options);
+			auto task = make_uniq<UnionByReaderTask<OP, OPTIONS_TYPE>>(executor, context, files[file_idx], file_idx,
+			                                                           union_readers, options, file_options);
 			executor.ScheduleTask(std::move(task));
 		}
 		// complete all tasks

@@ -25,16 +25,11 @@ struct CSVUnionData : public BaseUnionData {
 	}
 	~CSVUnionData() override;
 
-	vector<string> names;
-	vector<LogicalType> types;
 	CSVReaderOptions options;
 };
 
 //! Struct holding information over a CSV File we will scan
 class CSVFileScan : public BaseFileReader {
-public:
-	using UNION_READER_DATA = unique_ptr<CSVUnionData>;
-
 public:
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
@@ -43,8 +38,6 @@ public:
 	            const vector<LogicalType> &types, CSVSchema &file_schema, bool per_file_single_threaded,
 	            shared_ptr<CSVBufferManager> buffer_manager = nullptr, bool fixed_schema = false);
 
-	//! FIXME: temporary patch for union by name
-	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options);
 	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options,
 	            const MultiFileReaderOptions &file_options);
 
@@ -60,22 +53,6 @@ public:
 	const vector<LogicalType> &GetTypes();
 	void InitializeProjection();
 	void Finish();
-
-	static unique_ptr<CSVUnionData> StoreUnionReader(unique_ptr<CSVFileScan> scan_p, idx_t file_idx) {
-		auto data = make_uniq<CSVUnionData>(scan_p->GetFileName());
-		if (file_idx == 0) {
-			data->options = scan_p->options;
-			data->names = scan_p->names;
-			data->types = scan_p->types;
-			data->reader = std::move(scan_p);
-		} else {
-			data->options = std::move(scan_p->options);
-			data->names = std::move(scan_p->names);
-			data->types = std::move(scan_p->types);
-		}
-		data->options.auto_detect = false;
-		return data;
-	}
 
 	//! Initialize the actual names and types to be scanned from the file
 	void InitializeFileNamesTypes();

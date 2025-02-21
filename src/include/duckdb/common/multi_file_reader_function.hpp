@@ -17,30 +17,6 @@ namespace duckdb {
 
 enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
 
-struct MultiFileBindData : public TableFunctionData {
-	unique_ptr<TableFunctionData> bind_data;
-	shared_ptr<MultiFileList> file_list;
-	unique_ptr<MultiFileReader> multi_file_reader;
-	vector<MultiFileReaderColumnDefinition> columns;
-	MultiFileReaderBindData reader_bind;
-	MultiFileReaderOptions file_options;
-	vector<LogicalType> types;
-	vector<string> names;
-	virtual_column_map_t virtual_columns;
-	//! Table column names - set when using COPY tbl FROM file.parquet
-	vector<string> table_columns;
-	shared_ptr<BaseFileReader> initial_reader;
-	// The union readers are created (when the union_by_name option is on) during binding
-	vector<shared_ptr<BaseUnionData>> union_readers;
-
-	void Initialize(shared_ptr<BaseFileReader> reader) {
-		initial_reader = std::move(reader);
-	}
-	void Initialize(ClientContext &, BaseUnionData &union_data) {
-		Initialize(std::move(union_data.reader));
-	}
-};
-
 struct MultiFileLocalState : public LocalTableFunctionState {
 	shared_ptr<BaseFileReader> reader;
 	bool is_parallel;

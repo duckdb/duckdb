@@ -165,7 +165,7 @@ void CSVMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &r
 		bind_data.multi_file_reader->BindOptions(bind_data.file_options, multi_file_list, return_types, names,
 		                                         bind_data.reader_bind);
 	} else {
-		bind_data.reader_bind = bind_data.multi_file_reader->BindUnionReader<CSVFileScan>(
+		bind_data.reader_bind = bind_data.multi_file_reader->BindUnionReader<CSVMultiFileInfo>(
 		    context, return_types, names, multi_file_list, bind_data, options, bind_data.file_options);
 		if (bind_data.union_readers.size() > 1) {
 			for (idx_t i = 0; i < bind_data.union_readers.size(); i++) {
@@ -296,6 +296,29 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 	return make_shared_ptr<CSVFileScan>(context, filename, std::move(options), bind_data.file_options, bind_data.names,
 	                                    bind_data.types, csv_data.csv_schema, gstate.SingleThreadedRead(),
 	                                    std::move(buffer_manager), false);
+}
+
+shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
+                                                          CSVReaderOptions &options,
+                                                          const MultiFileReaderOptions &file_options) {
+	return make_shared_ptr<CSVFileScan>(context, filename, options, file_options);
+}
+
+shared_ptr<BaseUnionData> CSVMultiFileInfo::GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx) {
+	auto &scan = scan_p->Cast<CSVFileScan>();
+	auto data = make_shared_ptr<CSVUnionData>(scan_p->GetFileName());
+	if (file_idx == 0) {
+		data->options = scan.options;
+		data->names = scan.GetNames();
+		data->types = scan.GetTypes();
+		data->reader = std::move(scan_p);
+	} else {
+		data->options = std::move(scan.options);
+		data->names = scan.GetNames();
+		data->types = scan.GetTypes();
+	}
+	data->options.auto_detect = false;
+	return data;
 }
 
 void CSVMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader) {

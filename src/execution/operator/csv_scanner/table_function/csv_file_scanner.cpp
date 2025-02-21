@@ -6,16 +6,6 @@
 
 namespace duckdb {
 
-MultiFileReaderOptions HackyGetFileOptions() {
-	MultiFileReaderOptions options;
-	options.union_by_name = true;
-	return options;
-}
-
-CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options)
-    : CSVFileScan(context, file_name, options, HackyGetFileOptions()) {
-}
-
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVReaderOptions options_p,
                          const MultiFileReaderOptions &file_options, const vector<string> &names,
                          const vector<LogicalType> &types, CSVSchema &file_schema, bool per_file_single_threaded,

@@ -43,6 +43,10 @@ struct CSVMultiFileInfo {
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               const string &filename, idx_t file_idx,
 	                                               const MultiFileBindData &bind_data);
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
+	                                               CSVReaderOptions &options,
+	                                               const MultiFileReaderOptions &file_options);
+	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
 	static void FinalizeReader(ClientContext &context, BaseFileReader &reader);
 	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
 	                              GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
