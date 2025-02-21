@@ -190,6 +190,12 @@ bool PropertyGraphTable::Equals(const PropertyGraphTable *other_p) const {
 			return false;
 		}
 	}
+	if (source_catalog != other->source_catalog) {
+		return false;
+	}
+	if (source_schema != other->source_schema) {
+		return false;
+	}
 	if (source_reference != other->source_reference) {
 		return false;
 	}
@@ -215,10 +221,15 @@ bool PropertyGraphTable::Equals(const PropertyGraphTable *other_p) const {
 			return false;
 		}
 	}
+	if (destination_catalog != other->destination_catalog) {
+		return false;
+	}
+	if (destination_schema != other->destination_schema) {
+		return false;
+	}
 	if (destination_reference != other->destination_reference) {
 		return false;
 	}
-
 	if (destination_pg_table != other->destination_pg_table) {
 		return false;
 	}
@@ -246,14 +257,19 @@ void PropertyGraphTable::Serialize(Serializer &serializer) const {
 	if (!is_vertex_table) {
 		serializer.WriteProperty(112, "source_pk", source_pk);
 		serializer.WriteProperty(113, "source_fk", source_fk);
-		serializer.WriteProperty(114, "source_reference", source_reference);
+		serializer.WriteProperty(114, "source_catalog", source_catalog);
+		serializer.WriteProperty(115, "source_schema", source_schema);
+		serializer.WriteProperty(116, "source_reference", source_reference);
 
-		serializer.WriteProperty(115, "destination_pk", destination_pk);
-		serializer.WriteProperty(116, "destination_fk", destination_fk);
-		serializer.WriteProperty(117, "destination_reference", destination_reference);
+		serializer.WriteProperty(117, "destination_pk", destination_pk);
+		serializer.WriteProperty(118, "destination_fk", destination_fk);
+		serializer.WriteProperty(119, "destination_catalog", destination_catalog);
+		serializer.WriteProperty(120, "destination_schema", destination_schema);
+		serializer.WriteProperty(121, "destination_reference", destination_reference);
 
-		serializer.WriteProperty(118, "source_pg_table", source_pg_table);
-		serializer.WriteProperty(119, "destination_pg_table", destination_pg_table);
+		serializer.WriteProperty(122, "source_pg_table", source_pg_table);
+		serializer.WriteProperty(123, "destination_pg_table", destination_pg_table);
+
 	}
 }
 
@@ -277,14 +293,18 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Deserialize(Deserializer &des
 	if (!pg_table->is_vertex_table) {
 		deserializer.ReadProperty(112, "source_pk", pg_table->source_pk);
 		deserializer.ReadProperty(113, "source_fk", pg_table->source_fk);
-		deserializer.ReadProperty(114, "source_reference", pg_table->source_reference);
+		deserializer.ReadProperty(114, "source_catalog", pg_table->source_catalog);
+		deserializer.ReadProperty(115, "source_schema", pg_table->source_schema);
+		deserializer.ReadProperty(116, "source_reference", pg_table->source_reference);
 
-		deserializer.ReadProperty(115, "destination_pk", pg_table->destination_pk);
-		deserializer.ReadProperty(116, "destination_fk", pg_table->destination_fk);
-		deserializer.ReadProperty(117, "destination_reference", pg_table->destination_reference);
+		deserializer.ReadProperty(117, "destination_pk", pg_table->destination_pk);
+		deserializer.ReadProperty(118, "destination_fk", pg_table->destination_fk);
+		deserializer.ReadProperty(119, "destination_catalog", pg_table->destination_catalog);
+		deserializer.ReadProperty(120, "destination_schema", pg_table->destination_schema);
+		deserializer.ReadProperty(121, "destination_reference", pg_table->destination_reference);
 
-		deserializer.ReadProperty(118, "source_pg_table", pg_table->source_pg_table);
-		deserializer.ReadProperty(119, "destination_pg_table", pg_table->destination_pg_table);
+		deserializer.ReadProperty(122, "source_pg_table", pg_table->source_pg_table);
+		deserializer.ReadProperty(123, "destination_pg_table", pg_table->destination_pg_table);
 	}
 	return pg_table;
 }
@@ -315,6 +335,8 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 	result->no_columns = no_columns;
 	result->discriminator = discriminator;
 
+	result->source_catalog = source_catalog;
+	result->source_schema = source_schema;
 	result->source_reference = source_reference;
 	result->source_pg_table = source_pg_table;
 
@@ -326,6 +348,8 @@ shared_ptr<PropertyGraphTable> PropertyGraphTable::Copy() const {
 		result->source_pk.push_back(key);
 	}
 
+	result->destination_catalog = destination_catalog;
+	result->destination_schema = destination_schema;
 	result->destination_reference = destination_reference;
 	result->destination_pg_table = destination_pg_table;
 

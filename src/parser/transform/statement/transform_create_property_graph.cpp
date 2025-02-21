@@ -94,6 +94,8 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		} else {
 			pg_table->source_reference = possible_src_alias->second;
 		}
+		pg_table->source_catalog = src_name.catalog;
+		pg_table->source_schema = src_name.schema;
 		D_ASSERT(graph_table->dst_name);
 		auto dst_name = TransformQualifiedName(*graph_table->dst_name);
 		auto possible_dst_alias = table_alias_map.find(dst_name.name);
@@ -102,6 +104,8 @@ Transformer::TransformPropertyGraphTable(duckdb_libpgquery::PGPropertyGraphTable
 		} else {
 			pg_table->destination_reference = possible_dst_alias->second;
 		}
+		pg_table->destination_catalog = dst_name.catalog;
+		pg_table->destination_schema = dst_name.schema;
 
 		if (graph_table->src_pk) {
 			for (auto &src_key = graph_table->src_pk->head; src_key != nullptr; src_key = lnext(src_key)) {
@@ -173,9 +177,9 @@ Transformer::TransformCreatePropertyGraph(duckdb_libpgquery::PGCreatePropertyGra
 				info->label_map[label] = pg_table;
 			}
 			info->label_map[pg_table->main_label] = pg_table;
-			pg_table->source_pg_table = info->GetTableByName(pg_table->source_reference);
+			pg_table->source_pg_table = info->GetTableByName(pg_table->source_catalog, pg_table->source_schema, pg_table->source_reference);
 			D_ASSERT(pg_table->source_pg_table);
-			pg_table->destination_pg_table = info->GetTableByName(pg_table->destination_reference);
+			pg_table->destination_pg_table = info->GetTableByName(pg_table->destination_catalog, pg_table->destination_schema, pg_table->destination_reference);
 			D_ASSERT(pg_table->destination_pg_table);
 			info->edge_tables.push_back(std::move(pg_table));
 		}
