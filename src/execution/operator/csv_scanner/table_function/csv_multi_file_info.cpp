@@ -5,11 +5,6 @@
 
 namespace duckdb {
 
-class CSVFileReaderOptions : public BaseFileReaderOptions {
-public:
-	CSVReaderOptions options;
-};
-
 unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientContext &context) {
 	return make_uniq<CSVFileReaderOptions>();
 }

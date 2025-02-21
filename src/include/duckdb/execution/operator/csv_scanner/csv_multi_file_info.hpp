@@ -12,6 +12,11 @@
 
 namespace duckdb {
 
+class CSVFileReaderOptions : public BaseFileReaderOptions {
+public:
+	CSVReaderOptions options;
+};
+
 struct CSVMultiFileInfo {
 	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context);
 	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,

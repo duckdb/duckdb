@@ -35,7 +35,8 @@ struct DialectOptions {
 };
 
 struct CSVReaderOptions {
-	CSVReaderOptions() {};
+	CSVReaderOptions() {
+	}
 	CSVReaderOptions(CSVOption<char> single_byte_delimiter, const CSVOption<string> &multi_byte_delimiter);
 	//===--------------------------------------------------------------------===//
 	// CommonCSVOptions
@@ -141,9 +142,6 @@ struct CSVReaderOptions {
 	//! If this reader is a multifile reader
 	bool multi_file_reader = false;
 
-	void Serialize(Serializer &serializer) const;
-	static CSVReaderOptions Deserialize(Deserializer &deserializer);
-
 	void SetCompression(const string &compression);
 
 	bool GetHeader() const;
@@ -171,8 +169,8 @@ struct CSVReaderOptions {
 	bool GetRFC4180() const;
 	void SetRFC4180(bool rfc4180);
 
-	char GetSingleByteDelimiter() const;
-	string GetMultiByteDelimiter() const;
+	CSVOption<char> GetSingleByteDelimiter() const;
+	CSVOption<string> GetMultiByteDelimiter() const;
 
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods

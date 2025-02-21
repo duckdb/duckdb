@@ -200,12 +200,13 @@ bool CSVReaderOptions::IgnoreErrors() const {
 	return ignore_errors.GetValue() && !store_rejects.GetValue();
 }
 
-char CSVReaderOptions::GetSingleByteDelimiter() const {
-	return dialect_options.state_machine_options.delimiter.GetValue()[0];
+CSVOption<char> CSVReaderOptions::GetSingleByteDelimiter() const {
+	auto &delim = dialect_options.state_machine_options.delimiter;
+	return CSVOption<char>(delim.GetValue()[0], delim.IsSetByUser());
 }
 
-string CSVReaderOptions::GetMultiByteDelimiter() const {
-	return dialect_options.state_machine_options.delimiter.GetValue();
+CSVOption<string> CSVReaderOptions::GetMultiByteDelimiter() const {
+	return dialect_options.state_machine_options.delimiter;
 }
 
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {

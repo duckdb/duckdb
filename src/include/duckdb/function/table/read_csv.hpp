@@ -90,9 +90,33 @@ struct ReadCSVData : public BaseCSVData {
 	CSVSchema csv_schema;
 
 	void FinalizeRead(ClientContext &context);
+};
+
+struct SerializedCSVReaderOptions {
+	SerializedCSVReaderOptions() = default;
+	SerializedCSVReaderOptions(CSVReaderOptions options, MultiFileReaderOptions file_options);
+	SerializedCSVReaderOptions(CSVOption<char> single_byte_delimiter, const CSVOption<string> &multi_byte_delimiter);
+
+	CSVReaderOptions options;
+	MultiFileReaderOptions file_options;
 
 	void Serialize(Serializer &serializer) const;
-	static unique_ptr<ReadCSVData> Deserialize(Deserializer &deserializer);
+	static SerializedCSVReaderOptions Deserialize(Deserializer &deserializer);
+};
+
+struct SerializedReadCSVData {
+	vector<string> files;
+	vector<LogicalType> csv_types;
+	vector<string> csv_names;
+	vector<LogicalType> return_types;
+	vector<string> return_names;
+	idx_t filename_col_idx;
+	SerializedCSVReaderOptions options;
+	MultiFileReaderBindData reader_bind;
+	vector<ColumnInfo> column_info;
+
+	void Serialize(Serializer &serializer) const;
+	static SerializedReadCSVData Deserialize(Deserializer &deserializer);
 };
 
 struct CSVCopyFunction {
