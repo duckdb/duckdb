@@ -79,10 +79,11 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 
 	auto &child_vec = ListVector::GetEntry(source);
 	auto add_escapes = !child_vec.GetType().IsNested();
-	auto string_length_func = add_escapes ? VectorCastHelpers::CalculateEscapedStringLength<true>
-	                                      : VectorCastHelpers::CalculateStringLength<true>;
-	auto write_string_func =
-	    add_escapes ? VectorCastHelpers::WriteEscapedString<true> : VectorCastHelpers::WriteString<true>;
+	auto string_length_func = add_escapes
+	                              ? VectorCastHelpers::CalculateEscapedStringLength<NestedToVarcharCast::LIST_VALUE>
+	                              : VectorCastHelpers::CalculateStringLength;
+	auto write_string_func = add_escapes ? VectorCastHelpers::WriteEscapedString<NestedToVarcharCast::LIST_VALUE>
+	                                     : VectorCastHelpers::WriteString;
 
 	// now construct the actual varchar vector
 	varchar_list.Flatten(count);
@@ -93,8 +94,6 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	child.Flatten(ListVector::GetListSize(varchar_list));
 	auto child_data = FlatVector::GetData<string_t>(child);
 	auto &child_validity = FlatVector::Validity(child);
-
-	constexpr char SPECIAL_CHARACTERS[] = {'{', '}', '[', ']', '(', ')', '"', '\'', ','};
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	static constexpr const idx_t SEP_LENGTH = 2;
@@ -114,7 +113,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 			}
 			// string length, or "NULL"
 			if (child_validity.RowIsValid(idx)) {
-				list_length += string_length_func(child_data[idx], SPECIAL_CHARACTERS, sizeof(SPECIAL_CHARACTERS));
+				list_length += string_length_func(child_data[idx]);
 			} else {
 				list_length += NULL_LENGTH;
 			}
@@ -130,8 +129,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 				offset += SEP_LENGTH;
 			}
 			if (child_validity.RowIsValid(idx)) {
-				offset += write_string_func(dataptr + offset, child_data[idx], SPECIAL_CHARACTERS,
-				                            sizeof(SPECIAL_CHARACTERS));
+				offset += write_string_func(dataptr + offset, child_data[idx]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;

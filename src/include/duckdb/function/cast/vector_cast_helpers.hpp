@@ -14,6 +14,7 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/function/cast/nested_to_varchar_cast.hpp"
 
 namespace duckdb {
 
@@ -181,14 +182,14 @@ struct VectorCastHelpers {
 		}
 	}
 
-	template <bool WRITE_QUOTES = true>
-	static idx_t CalculateEscapedStringLength(const string_t &string, const char *special_chars,
-	                                          idx_t special_chars_length) {
+	template <uint8_t CONTEXT>
+	static idx_t CalculateEscapedStringLength(const string_t &string) {
 		auto base_length = string.GetSize();
 		idx_t length = 0;
 		auto string_data = string.GetData();
 		if (base_length == 0) {
-			return 0;
+			//! Empty quotes
+			return 2;
 		}
 
 		bool needs_quotes = false;
@@ -196,15 +197,15 @@ struct VectorCastHelpers {
 			needs_quotes = true;
 		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
 			needs_quotes = true;
-		}
-		if (base_length == 4 && StringUtil::CIEquals(std::string(string_data, string_data + base_length), "null")) {
+		} else if (StringUtil::CIEquals(string_data, base_length, "null", 4)) {
 			needs_quotes = true;
-		}
-
-		const auto string_end = string_data + base_length;
-		auto res = std::find_first_of(string_data, string_end, special_chars, special_chars + special_chars_length);
-		if (res != string_end) {
-			needs_quotes = true;
+		} else {
+			uint8_t needs_quotes_flags = 0;
+			const uint8_t *table = NestedToVarcharCast::LookupTable;
+			for (idx_t i = 0; i < base_length; i++) {
+				needs_quotes_flags |= table[(uint8_t)string_data[i]];
+			}
+			needs_quotes = needs_quotes_flags & CONTEXT;
 		}
 
 		if (!needs_quotes) {
@@ -212,28 +213,25 @@ struct VectorCastHelpers {
 		}
 
 		for (idx_t i = 0; i < base_length; i++) {
-			if (string_data[i] == '\'' || string_data[i] == '\\') {
-				length++;
-			}
-			length++;
+			length += 1 + (string_data[i] == '\'' || string_data[i] == '\\');
 		}
-		if (WRITE_QUOTES) {
+		if (CONTEXT != NestedToVarcharCast::STRUCT_KEY) {
+			//! For the added quotes
 			length += 2;
 		}
 		return length;
 	}
 
-	template <bool WRITE_QUOTES = false>
-	static idx_t CalculateStringLength(const string_t &string, const char *special_chars, idx_t special_chars_length) {
+	static idx_t CalculateStringLength(const string_t &string) {
 		return string.GetSize();
 	}
 
-	template <bool WRITE_QUOTES = false>
-	static idx_t WriteEscapedString(void *dest, const string_t &string, const char *special_chars,
-	                                idx_t special_chars_length) {
+	template <uint8_t CONTEXT>
+	static idx_t WriteEscapedString(void *dest, const string_t &string) {
 		auto base_length = string.GetSize();
 		if (base_length == 0) {
-			return 0;
+			memcpy(dest, "''", 2);
+			return 2;
 		}
 
 		auto string_start = string.GetData();
@@ -244,15 +242,16 @@ struct VectorCastHelpers {
 			needs_quotes = true;
 		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
 			needs_quotes = true;
-		}
-		if (base_length == 4 && StringUtil::CIEquals(std::string(string_data, string_data + base_length), "null")) {
+		} else if (base_length == 4 &&
+		           StringUtil::CIEquals(std::string(string_data, string_data + base_length), "null")) {
 			needs_quotes = true;
-		}
-
-		const auto string_end = string_data + base_length;
-		auto res = std::find_first_of(string_data, string_end, special_chars, special_chars + special_chars_length);
-		if (res != string_end) {
-			needs_quotes = true;
+		} else {
+			//! FIXME: save whether quotes were needed for this row, when calculating the length
+			uint8_t needs_quotes_flags = 0;
+			for (idx_t i = 0; i < base_length; i++) {
+				needs_quotes_flags |= NestedToVarcharCast::LookupTable[(uint8_t)string_data[i]];
+			}
+			needs_quotes = needs_quotes_flags & CONTEXT;
 		}
 
 		auto destination = reinterpret_cast<char *>(dest);
@@ -262,42 +261,26 @@ struct VectorCastHelpers {
 		}
 
 		idx_t offset = 0;
-		if (WRITE_QUOTES) {
+		if (CONTEXT != NestedToVarcharCast::STRUCT_KEY) {
 			memset(reinterpret_cast<char *>(dest) + offset, '\'', 1);
 			offset++;
 		}
 
-		static constexpr char SPECIAL_CHARACTERS[] = {'\'', '\\'};
-
-		while (string_data < string_end) {
-			auto res = std::find_first_of(string_data, string_end, SPECIAL_CHARACTERS,
-			                              SPECIAL_CHARACTERS + sizeof(SPECIAL_CHARACTERS));
-
-			if (res == string_end) {
-				auto distance = UnsafeNumericCast<size_t>(res - string_data);
-				memcpy(reinterpret_cast<char *>(dest) + offset, string_data, distance);
-				offset += distance;
-				break;
-			}
-
-			auto length = UnsafeNumericCast<size_t>(res - string_data);
-			memcpy(reinterpret_cast<char *>(dest) + offset, string_data, length);
-			memset(reinterpret_cast<char *>(dest) + offset + length, '\\', 1);
-			memcpy(reinterpret_cast<char *>(dest) + offset + length + 1, res, 1);
-			offset += length + 2;
-			string_data = res + 1;
+		for (idx_t i = 0; i < base_length; i++) {
+			const bool needs_quote = string_data[i] == '\\' || string_data[i] == '\'';
+			destination[offset] = '\\';
+			destination[offset + needs_quote] = string_data[i];
+			offset += 1 + needs_quote;
 		}
 
-		if (WRITE_QUOTES) {
+		if (CONTEXT != NestedToVarcharCast::STRUCT_KEY) {
 			memset(reinterpret_cast<char *>(dest) + offset, '\'', 1);
 			offset++;
 		}
 		return offset;
 	}
 
-	template <bool WRITE_QUOTES = false>
-	static idx_t WriteString(void *dest, const string_t &string, const char *special_chars,
-	                         idx_t special_chars_length) {
+	static idx_t WriteString(void *dest, const string_t &string) {
 		auto len = string.GetSize();
 		memcpy(dest, string.GetData(), len);
 		return len;

@@ -96,13 +96,13 @@ SELECT $${key = "value\with\backslash"}$$::MAP(VARCHAR, VARCHAR);
 query II
 SELECT $${key=with=equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key'];
 ----
-{key='with=equals = value'}	with=equals = value
+{key=with=equals = value}	with=equals = value
 
 # Valid: key/value contains unescaped equal sign
 query II
 SELECT $${"key\=with" = equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key=with'];
 ----
-{'key=with'='equals = value'}	equals = value
+{'key=with'=equals = value}	equals = value
 
 # Valid: key/value contains unescaped equal sign
 query II
@@ -120,7 +120,7 @@ SELECT $${}$$::MAP(VARCHAR, VARCHAR);
 query I
 SELECT $${=}$$::MAP(VARCHAR, VARCHAR);
 ----
-{=}
+{''=''}
 
 # Edge Case: MAP with special characters only (escaped)
 statement error
@@ -138,13 +138,13 @@ SELECT $${"\{escaped\brace\}" = "\}escaped\brace\\"}$$::MAP(VARCHAR, VARCHAR);
 query I
 SELECT $${key=}$$::MAP(VARCHAR, VARCHAR);
 ----
-{key=}
+{key=''}
 
 # Valid: MAP with an empty key
 query I
 SELECT $${=value}$$::MAP(VARCHAR, VARCHAR);
 ----
-{=value}
+{''=value}
 
 query III
 select $${'NULL'=true}$$::MAP(VARCHAR, VARCHAR) a, a::VARCHAR::MAP(VARCHAR, VARCHAR) b, a == b

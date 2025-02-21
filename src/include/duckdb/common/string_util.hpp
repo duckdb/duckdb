@@ -218,6 +218,9 @@ public:
 	//! Case insensitive equals
 	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);
 
+	//! Case insensitive equals (null-terminated strings)
+	DUCKDB_API static bool CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l2_size);
+
 	//! Case insensitive compare
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
 

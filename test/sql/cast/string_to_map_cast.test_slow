@@ -31,7 +31,7 @@ SELECT '{greetings=[Hello World!, Hello DuckDB, Howdy], farewells=[Bye World, By
 query I
 SELECT '{"key=A"=Duck, "key=B"="hello=world"}'::MAP(VARCHAR, VARCHAR)
 ----
-{'key=A'=Duck, 'key=B'='hello=world'}
+{'key=A'=Duck, 'key=B'=hello=world}
 
 statement error
 SELECT '{a=1, b=2, a=3}'::MAP(VARCHAR, INT)

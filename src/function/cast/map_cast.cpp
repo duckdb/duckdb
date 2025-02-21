@@ -45,7 +45,6 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	static constexpr const idx_t KEY_VALUE_SEP_LENGTH = 1;
 	static constexpr const idx_t NULL_LENGTH = 4;
 	static constexpr const idx_t INVALID_LENGTH = 7;
-	static constexpr char SPECIAL_CHARACTERS[] = {'{', '}', '[', ']', '(', ')', '=', '"', '\'', ','};
 
 	auto &key_vec = MapVector::GetKeys(source);
 	auto &value_vec = MapVector::GetValues(source);
@@ -53,15 +52,18 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto key_is_not_varchar = key_vec.GetType().id() != LogicalTypeId::VARCHAR;
 	auto value_is_not_varchar = value_vec.GetType().id() != LogicalTypeId::VARCHAR;
 
-	auto key_strlen_func = key_is_not_varchar ? VectorCastHelpers::CalculateStringLength<true>
-	                                          : VectorCastHelpers::CalculateEscapedStringLength<true>;
-	auto key_write_func =
-	    key_is_not_varchar ? VectorCastHelpers::WriteString<true> : VectorCastHelpers::WriteEscapedString<true>;
+	auto key_strlen_func = key_is_not_varchar
+	                           ? VectorCastHelpers::CalculateStringLength
+	                           : VectorCastHelpers::CalculateEscapedStringLength<NestedToVarcharCast::MAP_KEY>;
+	auto key_write_func = key_is_not_varchar ? VectorCastHelpers::WriteString
+	                                         : VectorCastHelpers::WriteEscapedString<NestedToVarcharCast::MAP_KEY>;
 
-	auto value_strlen_func = value_is_not_varchar ? VectorCastHelpers::CalculateStringLength<true>
-	                                              : VectorCastHelpers::CalculateEscapedStringLength<true>;
-	auto value_write_func =
-	    value_is_not_varchar ? VectorCastHelpers::WriteString<true> : VectorCastHelpers::WriteEscapedString<true>;
+	auto value_strlen_func = value_is_not_varchar
+	                             ? VectorCastHelpers::CalculateStringLength
+	                             : VectorCastHelpers::CalculateEscapedStringLength<NestedToVarcharCast::MAP_VALUE>;
+	auto value_write_func = value_is_not_varchar
+	                            ? VectorCastHelpers::WriteString
+	                            : VectorCastHelpers::WriteEscapedString<NestedToVarcharCast::MAP_VALUE>;
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < count; i++) {
@@ -88,10 +90,10 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 				string_length += INVALID_LENGTH;
 				continue;
 			}
-			string_length += key_strlen_func(key_data[idx], SPECIAL_CHARACTERS, sizeof(SPECIAL_CHARACTERS));
+			string_length += key_strlen_func(key_data[idx]);
 			string_length += KEY_VALUE_SEP_LENGTH;
 			if (val_validity.RowIsValid(idx)) {
-				string_length += value_strlen_func(val_data[idx], SPECIAL_CHARACTERS, sizeof(SPECIAL_CHARACTERS));
+				string_length += value_strlen_func(val_data[idx]);
 			} else {
 				string_length += NULL_LENGTH;
 			}
@@ -119,11 +121,10 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 				offset += INVALID_LENGTH;
 				continue;
 			}
-			offset += key_write_func(dataptr + offset, key_data[idx], SPECIAL_CHARACTERS, sizeof(SPECIAL_CHARACTERS));
+			offset += key_write_func(dataptr + offset, key_data[idx]);
 			dataptr[offset++] = '=';
 			if (val_validity.RowIsValid(idx)) {
-				offset +=
-				    value_write_func(dataptr + offset, val_data[idx], SPECIAL_CHARACTERS, sizeof(SPECIAL_CHARACTERS));
+				offset += value_write_func(dataptr + offset, val_data[idx]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;

@@ -34,7 +34,12 @@ SELECT $$["hello\,", test]$$::VARCHAR[];
 query I
 SELECT $$[hello\,, test]$$::VARCHAR[];
 ----
-[hello\, , test]
+[hello\, '', test]
+
+query III
+SELECT $$['']$$::VARCHAR[] a, a::VARCHAR::VARCHAR[] b, a == b;
+----
+['']	['']	true
 
 query I
 SELECT $$[hello\"quoted\"text, more]$$::VARCHAR[];
@@ -216,7 +221,7 @@ SELECT $$[]$$::VARCHAR[];  -- Empty list
 query I
 SELECT $$[""]$$::VARCHAR[]; -- List with empty string
 ----
-[]
+['']
 
 query I
 SELECT $$[" "]$$::VARCHAR[]; -- List with whitespace string
@@ -236,7 +241,7 @@ SELECT $$["\""]$$::VARCHAR[]; -- List with only a quote
 query I
 SELECT $$[\,]$$::VARCHAR[]; -- List with only a comma (not quoted)
 ----
-[\, ]
+[\, '']
 
 query I
 SELECT $$["\,"]$$::VARCHAR[]; -- List with only a comma
