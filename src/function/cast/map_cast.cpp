@@ -66,6 +66,9 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	                            : VectorCastHelpers::WriteEscapedString<NestedToVarcharCast::MAP_VALUE>;
 
 	auto result_data = FlatVector::GetData<string_t>(result);
+	unsafe_unique_array<bool> key_needs_quotes;
+	unsafe_unique_array<bool> value_needs_quotes;
+	idx_t needs_quotes_length;
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
@@ -74,6 +77,12 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 
 		idx_t string_length = 2; // {}
 		auto list = list_data[i];
+
+		if (!key_needs_quotes || list.length > needs_quotes_length) {
+			key_needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(list.length);
+			value_needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(list.length);
+			needs_quotes_length = list.length;
+		}
 		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 			if (list_idx > 0) {
 				string_length += SEP_LENGTH;
@@ -90,10 +99,10 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 				string_length += INVALID_LENGTH;
 				continue;
 			}
-			string_length += key_strlen_func(key_data[idx]);
+			string_length += key_strlen_func(key_data[idx], key_needs_quotes[list_idx]);
 			string_length += KEY_VALUE_SEP_LENGTH;
 			if (val_validity.RowIsValid(idx)) {
-				string_length += value_strlen_func(val_data[idx]);
+				string_length += value_strlen_func(val_data[idx], value_needs_quotes[list_idx]);
 			} else {
 				string_length += NULL_LENGTH;
 			}
@@ -121,10 +130,10 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 				offset += INVALID_LENGTH;
 				continue;
 			}
-			offset += key_write_func(dataptr + offset, key_data[idx]);
+			offset += key_write_func(dataptr + offset, key_data[idx], key_needs_quotes[list_idx]);
 			dataptr[offset++] = '=';
 			if (val_validity.RowIsValid(idx)) {
-				offset += value_write_func(dataptr + offset, val_data[idx]);
+				offset += value_write_func(dataptr + offset, val_data[idx], value_needs_quotes[list_idx]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;

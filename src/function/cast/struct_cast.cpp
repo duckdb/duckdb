@@ -153,6 +153,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NAME_SEP_LENGTH = 4;
 	static constexpr const idx_t NULL_LENGTH = 4;
+	auto needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(children.size());
 
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
@@ -176,12 +177,15 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			auto data = FlatVector::GetData<string_t>(*children[c]);
 			auto &name = child_types[c].first;
 			if (!is_unnamed) {
-				string_length += VectorCastHelpers::CalculateEscapedStringLength<NestedToVarcharCast::STRUCT_KEY>(name);
+				bool unused_needs_quotes;
+				string_length += VectorCastHelpers::CalculateEscapedStringLength<NestedToVarcharCast::STRUCT_KEY>(
+				    name, unused_needs_quotes);
+				D_ASSERT(unused_needs_quotes == true);
 				string_length += NAME_SEP_LENGTH; // "'{name}': "
 			}
 			if (child_validity.RowIsValid(i)) {
 				//! Skip the `\`, not a special character outside quotes
-				string_length += string_length_func(data[i]);
+				string_length += string_length_func(data[i], needs_quotes[c]);
 			} else {
 				string_length += NULL_LENGTH;
 			}
@@ -209,8 +213,8 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				auto &name = child_types[c].first;
 				// "{'name': <value>}"
 				dataptr[offset++] = '\'';
-				offset +=
-				    VectorCastHelpers::WriteEscapedString<NestedToVarcharCast::STRUCT_KEY>(dataptr + offset, name);
+				offset += VectorCastHelpers::WriteEscapedString<NestedToVarcharCast::STRUCT_KEY>(dataptr + offset, name,
+				                                                                                 true);
 				dataptr[offset++] = '\'';
 				dataptr[offset++] = ':';
 				dataptr[offset++] = ' ';
@@ -218,7 +222,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 			// value
 			if (child_validity.RowIsValid(i)) {
 				//! Skip the `\`, not a special character outside quotes
-				offset += write_string_func(dataptr + offset, data[i]);
+				offset += write_string_func(dataptr + offset, data[i], needs_quotes[c]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;

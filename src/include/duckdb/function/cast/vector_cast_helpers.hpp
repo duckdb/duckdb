@@ -183,29 +183,36 @@ struct VectorCastHelpers {
 	}
 
 	template <uint8_t CONTEXT>
-	static idx_t CalculateEscapedStringLength(const string_t &string) {
+	static idx_t CalculateEscapedStringLength(const string_t &string, bool &needs_quotes) {
 		auto base_length = string.GetSize();
 		idx_t length = 0;
 		auto string_data = string.GetData();
+		needs_quotes = false;
+
 		if (base_length == 0) {
 			//! Empty quotes
+			needs_quotes = true;
 			return 2;
 		}
 
-		bool needs_quotes = false;
-		if (isspace(string_data[0])) {
-			needs_quotes = true;
-		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
-			needs_quotes = true;
-		} else if (StringUtil::CIEquals(string_data, base_length, "null", 4)) {
+		if (CONTEXT == NestedToVarcharCast::STRUCT_KEY) {
+			//! The struct key is always quoted
 			needs_quotes = true;
 		} else {
-			uint8_t needs_quotes_flags = 0;
-			const uint8_t *table = NestedToVarcharCast::LookupTable;
-			for (idx_t i = 0; i < base_length; i++) {
-				needs_quotes_flags |= table[(uint8_t)string_data[i]];
+			if (isspace(string_data[0])) {
+				needs_quotes = true;
+			} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
+				needs_quotes = true;
+			} else if (StringUtil::CIEquals(string_data, base_length, "null", 4)) {
+				needs_quotes = true;
+			} else {
+				uint8_t needs_quotes_flags = 0;
+				const uint8_t *table = NestedToVarcharCast::LookupTable;
+				for (idx_t i = 0; i < base_length; i++) {
+					needs_quotes_flags |= table[(uint8_t)string_data[i]];
+				}
+				needs_quotes = needs_quotes_flags & CONTEXT;
 			}
-			needs_quotes = needs_quotes_flags & CONTEXT;
 		}
 
 		if (!needs_quotes) {
@@ -222,37 +229,25 @@ struct VectorCastHelpers {
 		return length;
 	}
 
-	static idx_t CalculateStringLength(const string_t &string) {
+	static idx_t CalculateStringLength(const string_t &string, bool &needs_quotes) {
+		needs_quotes = false;
 		return string.GetSize();
 	}
 
 	template <uint8_t CONTEXT>
-	static idx_t WriteEscapedString(void *dest, const string_t &string) {
+	static idx_t WriteEscapedString(void *dest, const string_t &string, bool needs_quotes) {
 		auto base_length = string.GetSize();
 		if (base_length == 0) {
+			D_ASSERT(needs_quotes);
+			if (CONTEXT == NestedToVarcharCast::STRUCT_KEY) {
+				return 0;
+			}
 			memcpy(dest, "''", 2);
 			return 2;
 		}
 
 		auto string_start = string.GetData();
 		auto string_data = string_start;
-
-		bool needs_quotes = false;
-		if (isspace(string_data[0])) {
-			needs_quotes = true;
-		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
-			needs_quotes = true;
-		} else if (base_length == 4 &&
-		           StringUtil::CIEquals(std::string(string_data, string_data + base_length), "null")) {
-			needs_quotes = true;
-		} else {
-			//! FIXME: save whether quotes were needed for this row, when calculating the length
-			uint8_t needs_quotes_flags = 0;
-			for (idx_t i = 0; i < base_length; i++) {
-				needs_quotes_flags |= NestedToVarcharCast::LookupTable[(uint8_t)string_data[i]];
-			}
-			needs_quotes = needs_quotes_flags & CONTEXT;
-		}
 
 		auto destination = reinterpret_cast<char *>(dest);
 		if (!needs_quotes) {
@@ -280,7 +275,8 @@ struct VectorCastHelpers {
 		return offset;
 	}
 
-	static idx_t WriteString(void *dest, const string_t &string) {
+	static idx_t WriteString(void *dest, const string_t &string, bool needs_quotes) {
+		D_ASSERT(needs_quotes == false);
 		auto len = string.GetSize();
 		memcpy(dest, string.GetData(), len);
 		return len;

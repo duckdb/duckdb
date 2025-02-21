@@ -98,6 +98,9 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	auto result_data = FlatVector::GetData<string_t>(result);
 	static constexpr const idx_t SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
+	unsafe_unique_array<bool> needs_quotes;
+	idx_t needs_quotes_length;
+
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
@@ -106,6 +109,10 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 		auto list = list_data[i];
 		// figure out how long the result needs to be
 		idx_t list_length = 2; // "[" and "]"
+		if (!needs_quotes || list.length > needs_quotes_length) {
+			needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(list.length);
+			needs_quotes_length = list.length;
+		}
 		for (idx_t list_idx = 0; list_idx < list.length; list_idx++) {
 			auto idx = list.offset + list_idx;
 			if (list_idx > 0) {
@@ -113,7 +120,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 			}
 			// string length, or "NULL"
 			if (child_validity.RowIsValid(idx)) {
-				list_length += string_length_func(child_data[idx]);
+				list_length += string_length_func(child_data[idx], needs_quotes[list_idx]);
 			} else {
 				list_length += NULL_LENGTH;
 			}
@@ -129,7 +136,7 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 				offset += SEP_LENGTH;
 			}
 			if (child_validity.RowIsValid(idx)) {
-				offset += write_string_func(dataptr + offset, child_data[idx]);
+				offset += write_string_func(dataptr + offset, child_data[idx], needs_quotes[list_idx]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;
