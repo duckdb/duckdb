@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        config: [ { runner: ubuntu-latest, arch: amd64, image: x86_64}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64}]
+        config: [ { runner: ubuntu-latest, arch: amd64, image: x86_64, duckdb_arch: linux_amd64_gcc4}, {runner: ubuntu-24.04-arm, arch: arm64, image: aarch64, duckdb_arch: linux_arm64}]
 
     name: Linux CLI (${{ matrix.config.arch }})
     runs-on: ${{ matrix.config.runner }}
@@ -84,6 +84,7 @@ jobs:
         -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
         -e BUILD_BENCHMARK=1                                                   \
         -e FORCE_WARN_UNUSED=1                                                 \
+        -e DUCKDB_PLATFORM=${{ matrix.config.duckdb_arch }}                    \
         quay.io/pypa/manylinux2014_${{ matrix.config.image }}                  \
         bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make -C $PWD"
 
