@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/multi_file_reader_function.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
 namespace duckdb {
 
