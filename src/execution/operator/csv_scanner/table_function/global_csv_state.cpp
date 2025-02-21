@@ -48,6 +48,10 @@ unique_ptr<StringValueScanner> CSVGlobalState::Next(shared_ptr<CSVFileScan> &cur
 		// initialize the boundary for this file
 		current_boundary = current_file.start_iterator;
 		current_boundary.SetCurrentBoundaryToPosition(single_threaded, current_file.options);
+		if (current_boundary.done && context.client_data->debug_set_max_line_length) {
+			context.client_data->debug_max_line_length =
+			    MaxValue<idx_t>(context.client_data->debug_max_line_length, current_boundary.pos.buffer_pos);
+		}
 		current_buffer_in_use =
 		    make_shared_ptr<CSVBufferUsage>(*current_file.buffer_manager, current_boundary.GetBufferIdx());
 		initialized = true;
@@ -96,7 +100,8 @@ void CSVGlobalState::FinishFile(CSVFileScan &scan) {
 	scan.error_handler->ErrorIfAny();
 	FillRejectsTable(scan);
 	if (context.client_data->debug_set_max_line_length) {
-		context.client_data->debug_max_line_length = scan.error_handler->GetMaxLineLength();
+		context.client_data->debug_max_line_length =
+		    MaxValue<idx_t>(context.client_data->debug_max_line_length, scan.error_handler->GetMaxLineLength());
 	}
 }
 
