@@ -657,10 +657,10 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 				// Evaluate Bloom-filters after table filters.
 				auto &bloom_filter_list = filter_info.GetBloomFilterList();
-				if (approved_tuple_count > 0 && bloom_filter_list.size() > 0) {
+				if (bloom_filter_list.size() > 0) {
 					// Load columns if they are used by a Bloom-filter and have not been loaded as part of table filters yet.
 					for (idx_t i = 0; i < column_ids.size(); i++) {
-						if (filter_info.ColumnHasBloomFilters(i) && !filter_info.ColumnHasFilters(i)) {
+						if (filter_info.ColumnHasBloomFilters(i) && !filter_info.ColumnHasFilters(i)) { // TODO: what if the same column is used by multiple bloom filters?
 							auto &column = column_ids[i];
 							if (column.IsRowIdColumn()) {
 								D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
@@ -680,6 +680,9 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 					// Evaluate Bloom-filters
 					if (true){
 					for (auto &bf : bloom_filter_list) {
+						if (approved_tuple_count == 0) {
+							break;
+						}
 						if (!bf->ShouldStopProbing()) {
 							Vector hashes(LogicalType::HASH);
 							// TODO: Can we directly put the keys and hashes into the hash join's state so that we don't have to perform hashing twice?
@@ -689,10 +692,6 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 							p.End();
 							bf->hash_time += p.Elapsed();
 							approved_tuple_count = bf->ProbeWithPrecomputedHashes(hashes, sel, approved_tuple_count);
-						}
-
-						if (approved_tuple_count == 0) {
-							break;
 						}
 					}
 					}
