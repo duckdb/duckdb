@@ -257,8 +257,7 @@ struct VectorCastHelpers {
 
 		idx_t offset = 0;
 		if (CONTEXT != NestedToVarcharCast::STRUCT_KEY) {
-			memset(reinterpret_cast<char *>(dest) + offset, '\'', 1);
-			offset++;
+			destination[offset++] = '\'';
 		}
 
 		for (idx_t i = 0; i < base_length; i++) {
@@ -269,8 +268,7 @@ struct VectorCastHelpers {
 		}
 
 		if (CONTEXT != NestedToVarcharCast::STRUCT_KEY) {
-			memset(reinterpret_cast<char *>(dest) + offset, '\'', 1);
-			offset++;
+			destination[offset++] = '\'';
 		}
 		return offset;
 	}
