@@ -4542,6 +4542,10 @@ Destroys the cast function object.
 */
 DUCKDB_API void duckdb_destroy_cast_function(duckdb_cast_function *cast_function);
 
+typedef void (*duckdb_progress_callback_t)(duckdb_query_progress_type progress);
+
+DUCKDB_API void duckdb_set_progress_callback(duckdb_connection connection, duckdb_progress_callback_t callback);
+
 #endif
 
 #ifdef __cplusplus

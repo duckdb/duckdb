@@ -129,6 +129,23 @@ duckdb_query_progress_type duckdb_query_progress(duckdb_connection connection) {
 	return query_progress_type;
 }
 
+void duckdb_set_progress_callback(duckdb_connection connection, duckdb_progress_callback_t callback) {
+    if (!connection) {
+        return;
+    }
+
+    Connection* conn = reinterpret_cast<Connection *>(connection);
+
+    if (!callback) {
+        // Remove callback if nullptr is passed
+		conn->context->progress_callback = nullptr;
+        return;
+    }
+
+    // Store the callback and user data
+	conn->context->progress_callback = callback;
+}
+
 void duckdb_disconnect(duckdb_connection *connection) {
 	if (connection && *connection) {
 		Connection *conn = reinterpret_cast<Connection *>(*connection);

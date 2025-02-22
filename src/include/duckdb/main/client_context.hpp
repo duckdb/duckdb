@@ -89,6 +89,8 @@ public:
 	//! Data for the currently running transaction
 	TransactionContext transaction;
 
+	duckdb_progress_callback_t progress_callback = nullptr;
+
 public:
 	MetaTransaction &ActiveTransaction() {
 		return transaction.ActiveTransaction();
