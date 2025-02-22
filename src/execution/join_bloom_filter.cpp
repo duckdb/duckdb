@@ -248,8 +248,8 @@ bool JoinBloomFilter::ShouldDiscardAfterBuild() const {
         // only use bloom filter for probing if it's false-positive-rate is low enough (<=1.3%)
         return GetScarcity() > 0.34;
     }
-
-    return GetScarcity() > 0.34;
+    return false;
+    //return GetScarcity() > 0.34;
 }
 
 bool JoinBloomFilter::ShouldStopProbing() const {
