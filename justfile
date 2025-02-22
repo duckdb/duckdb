@@ -14,3 +14,5 @@ plot:
     conda activate duckdb
     python python plot_bloom_filter.py
 
+dingleimdb:
+    build/debug/duckdb -init benchmark/imdb_plan_cost/queries/09b.sql -no-stdin duckdb_benchmark_data/imdb.duckdb
