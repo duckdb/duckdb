@@ -187,7 +187,7 @@ typedef enum duckdb_statement_type {
 	DUCKDB_STATEMENT_TYPE_DETACH = 26,
 	DUCKDB_STATEMENT_TYPE_MULTI = 27,
 } duckdb_statement_type;
-//! An enum over DuckDB's different result types.
+//! An enum over DuckDB's different error types.
 typedef enum duckdb_error_type {
 	DUCKDB_ERROR_INVALID = 0,
 	DUCKDB_ERROR_OUT_OF_RANGE = 1,
@@ -247,7 +247,7 @@ typedef uint64_t idx_t;
 //! bind data (if any), init data (if any), extra data for replacement scans (if any)
 typedef void (*duckdb_delete_callback_t)(void *data);
 
-//! Used for threading, contains a task state. Must be destroyed with `duckdb_destroy_state`.
+//! Used for threading, contains a task state. Must be destroyed with `duckdb_destroy_task_state`.
 typedef void *duckdb_task_state;
 
 //===--------------------------------------------------------------------===//
@@ -879,7 +879,7 @@ query fails, otherwise the error stored within the result will not be freed corr
 DUCKDB_API duckdb_state duckdb_query(duckdb_connection connection, const char *query, duckdb_result *out_result);
 
 /*!
-Closes the result and de-allocates all memory allocated for that connection.
+Closes the result and de-allocates all memory allocated for that result.
 
 * @param result The result to destroy.
 */
@@ -3111,8 +3111,7 @@ duckdb_scalar_function_add_parameter.
 DUCKDB_API void duckdb_scalar_function_set_varargs(duckdb_scalar_function scalar_function, duckdb_logical_type type);
 
 /*!
-Sets the parameters of the given scalar function to varargs. Does not require adding parameters with
-duckdb_scalar_function_add_parameter.
+Sets the scalar function's null-handling behavior to special.
 
 * @param scalar_function The scalar function.
 */
@@ -3148,7 +3147,7 @@ Assigns extra information to the scalar function that can be fetched during bind
 
 * @param scalar_function The scalar function
 * @param extra_info The extra information
-* @param destroy The callback that will be called to destroy the bind data (if any)
+* @param destroy The callback that will be called to destroy the extra information (if any)
 */
 DUCKDB_API void duckdb_scalar_function_set_extra_info(duckdb_scalar_function scalar_function, void *extra_info,
                                                       duckdb_delete_callback_t destroy);
@@ -3326,7 +3325,7 @@ Assigns extra information to the scalar function that can be fetched during bind
 
 * @param aggregate_function The aggregate function
 * @param extra_info The extra information
-* @param destroy The callback that will be called to destroy the bind data (if any)
+* @param destroy The callback that will be called to destroy the extra information (if any)
 */
 DUCKDB_API void duckdb_aggregate_function_set_extra_info(duckdb_aggregate_function aggregate_function, void *extra_info,
                                                          duckdb_delete_callback_t destroy);
@@ -3438,7 +3437,7 @@ Assigns extra information to the table function that can be fetched during bindi
 
 * @param table_function The table function
 * @param extra_info The extra information
-* @param destroy The callback that will be called to destroy the bind data (if any)
+* @param destroy The callback that will be called to destroy the extra information (if any)
 */
 DUCKDB_API void duckdb_table_function_set_extra_info(duckdb_table_function table_function, void *extra_info,
                                                      duckdb_delete_callback_t destroy);
