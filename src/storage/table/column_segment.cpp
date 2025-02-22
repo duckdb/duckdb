@@ -95,7 +95,7 @@ ColumnSegment::~ColumnSegment() {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void ColumnSegment::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &) {
+void ColumnSegment::InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &) const {
 	if (!block || block->BlockId() >= MAXIMUM_BLOCK) {
 		// not an on-disk block
 		return;
@@ -107,12 +107,12 @@ void ColumnSegment::InitializePrefetch(PrefetchState &prefetch_state, ColumnScan
 	}
 }
 
-void ColumnSegment::InitializeScan(ColumnScanState &state) {
+void ColumnSegment::InitializeScan(ColumnScanState &state) const {
 	state.scan_state = function.get().init_scan(*this);
 }
 
 void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset,
-                         ScanVectorType scan_type) {
+                         ScanVectorType scan_type) const {
 	if (scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR) {
 		D_ASSERT(result_offset == 0);
 		Scan(state, scan_count, result);
@@ -124,7 +124,7 @@ void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &resul
 }
 
 void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &result, const SelectionVector &sel,
-                           idx_t sel_count) {
+                           idx_t sel_count) const {
 	if (!function.get().select) {
 		throw InternalException("ColumnSegment::Select not implemented for this compression method");
 	}
@@ -132,30 +132,30 @@ void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &res
 }
 
 void ColumnSegment::Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel,
-                           idx_t &sel_count, const TableFilter &filter) {
+                           idx_t &sel_count, const TableFilter &filter) const {
 	if (!function.get().filter) {
 		throw InternalException("ColumnSegment::Filter not implemented for this compression method");
 	}
 	function.get().filter(*this, state, scan_count, result, sel, sel_count, filter);
 }
 
-void ColumnSegment::Skip(ColumnScanState &state) {
+void ColumnSegment::Skip(ColumnScanState &state) const {
 	function.get().skip(*this, state, state.row_index - state.internal_index);
 	state.internal_index = state.row_index;
 }
 
-void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result) {
+void ColumnSegment::Scan(ColumnScanState &state, idx_t scan_count, Vector &result) const {
 	function.get().scan_vector(*this, state, scan_count, result);
 }
 
-void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) {
+void ColumnSegment::ScanPartial(ColumnScanState &state, idx_t scan_count, Vector &result, idx_t result_offset) const {
 	function.get().scan_partial(*this, state, scan_count, result, result_offset);
 }
 
 //===--------------------------------------------------------------------===//
 // Fetch
 //===--------------------------------------------------------------------===//
-void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) {
+void ColumnSegment::FetchRow(ColumnFetchState &state, row_t row_id, Vector &result, idx_t result_idx) const {
 	function.get().fetch_row(*this, state, UnsafeNumericCast<int64_t>(UnsafeNumericCast<idx_t>(row_id) - this->start),
 	                         result, result_idx);
 }
@@ -554,7 +554,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	}
 }
 
-const CompressionFunction &ColumnSegment::GetCompressionFunction() {
+const CompressionFunction &ColumnSegment::GetCompressionFunction() const {
 	return function.get();
 }
 

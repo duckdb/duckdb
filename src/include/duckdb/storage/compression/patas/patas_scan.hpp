@@ -1,15 +1,12 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/storage/compression/chimp/chimp_scan.hpp
+// duckdb/common/storage/compression/patas/patas_scan.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
-
-#include "duckdb/storage/compression/chimp/chimp.hpp"
-#include "duckdb/storage/compression/chimp/algorithm/chimp_utils.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/null_value.hpp"
@@ -22,6 +19,11 @@
 #include "duckdb/storage/table/column_segment.hpp"
 #include "duckdb/common/operator/subtract.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
+
+#include "duckdb/storage/compression/patas/algorithm/patas.hpp"
+#include "duckdb/storage/compression/patas/shared.hpp"
+#include "duckdb/storage/compression/chimp/algorithm/byte_reader.hpp"
+#include "duckdb/storage/compression/patas/patas.hpp"
 
 namespace duckdb {
 
@@ -89,7 +91,7 @@ struct PatasScanState : public SegmentScanState {
 public:
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
-	explicit PatasScanState(ColumnSegment &segment) : segment(segment), count(segment.count) {
+	explicit PatasScanState(const ColumnSegment &segment) : segment(segment), count(segment.count) {
 		auto &buffer_manager = BufferManager::GetBufferManager(segment.db);
 
 		handle = buffer_manager.Pin(segment.block);
@@ -106,7 +108,7 @@ public:
 	idx_t total_value_count = 0;
 	PatasGroupState<EXACT_TYPE> group_state;
 
-	ColumnSegment &segment;
+	const ColumnSegment &segment;
 	idx_t count;
 
 	idx_t LeftInGroup() const {
@@ -173,7 +175,7 @@ public:
 
 public:
 	//! Skip the next 'skip_count' values, we don't store the values
-	void Skip(ColumnSegment &segment, idx_t skip_count) {
+	void Skip(const ColumnSegment &segment, idx_t skip_count) {
 		using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 
 		if (total_value_count != 0 && !GroupFinished()) {
@@ -199,7 +201,7 @@ public:
 };
 
 template <class T>
-unique_ptr<SegmentScanState> PatasInitScan(ColumnSegment &segment) {
+unique_ptr<SegmentScanState> PatasInitScan(const ColumnSegment &segment) {
 	auto result = make_uniq_base<SegmentScanState, PatasScanState<T>>(segment);
 	return result;
 }
@@ -208,7 +210,7 @@ unique_ptr<SegmentScanState> PatasInitScan(ColumnSegment &segment) {
 // Scan base data
 //===--------------------------------------------------------------------===//
 template <class T>
-void PatasScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
+void PatasScanPartial(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result,
                       idx_t result_offset) {
 	using EXACT_TYPE = typename FloatingToExact<T>::TYPE;
 	auto &scan_state = (PatasScanState<T> &)*state.scan_state;
@@ -229,13 +231,13 @@ void PatasScanPartial(ColumnSegment &segment, ColumnScanState &state, idx_t scan
 }
 
 template <class T>
-void PatasSkip(ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
+void PatasSkip(const ColumnSegment &segment, ColumnScanState &state, idx_t skip_count) {
 	auto &scan_state = (PatasScanState<T> &)*state.scan_state;
 	scan_state.Skip(segment, skip_count);
 }
 
 template <class T>
-void PatasScan(ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
+void PatasScan(const ColumnSegment &segment, ColumnScanState &state, idx_t scan_count, Vector &result) {
 	PatasScanPartial<T>(segment, state, scan_count, result, 0);
 }
 

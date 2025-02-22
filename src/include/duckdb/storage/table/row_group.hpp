@@ -80,19 +80,23 @@ private:
 	//! The RowGroupCollection this row-group is a part of
 	reference<RowGroupCollection> collection;
 	//! The version info of the row_group (inserted and deleted tuple info)
-	atomic<optional_ptr<RowVersionManager>> version_info;
+	mutable atomic<optional_ptr<RowVersionManager>> version_info;
 	//! The owned version info of the row_group (inserted and deleted tuple info)
-	shared_ptr<RowVersionManager> owned_version_info;
+	mutable shared_ptr<RowVersionManager> owned_version_info;
 	//! The column data of the row_group
-	vector<shared_ptr<ColumnData>> columns;
+	mutable vector<shared_ptr<ColumnData>> columns;
 
 public:
 	void MoveToCollection(RowGroupCollection &collection, idx_t new_start);
 	RowGroupCollection &GetCollection() {
 		return collection.get();
 	}
-	BlockManager &GetBlockManager();
+	const RowGroupCollection &GetCollection() const {
+		return collection.get();
+	}
+	BlockManager &GetBlockManager() const;
 	DataTableInfo &GetTableInfo();
+	const DataTableInfo &GetTableInfo() const;
 
 	unique_ptr<RowGroup> AlterType(RowGroupCollection &collection, const LogicalType &target_type, idx_t changed_idx,
 	                               ExpressionExecutor &executor, CollectionScanState &scan_state,
@@ -107,20 +111,21 @@ public:
 	void InitializeEmpty(const vector<LogicalType> &types);
 
 	//! Initialize a scan over this row_group
-	bool InitializeScan(CollectionScanState &state);
-	bool InitializeScanWithOffset(CollectionScanState &state, idx_t vector_offset);
+	bool InitializeScan(CollectionScanState &state) const;
+	bool InitializeScanWithOffset(CollectionScanState &state, idx_t vector_offset) const;
 	//! Checks the given set of table filters against the row-group statistics. Returns false if the entire row group
 	//! can be skipped.
-	bool CheckZonemap(ScanFilterInfo &filters);
+	bool CheckZonemap(ScanFilterInfo &filters) const;
 	//! Checks the given set of table filters against the per-segment statistics. Returns false if any segments were
 	//! skipped.
-	bool CheckZonemapSegments(CollectionScanState &state);
-	void Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
-	void ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type);
+	bool CheckZonemapSegments(CollectionScanState &state) const;
+	void Scan(TransactionData transaction, CollectionScanState &state, DataChunk &result) const;
+	void ScanCommitted(CollectionScanState &state, DataChunk &result, TableScanType type) const;
 
-	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector, idx_t max_count);
+	idx_t GetSelVector(TransactionData transaction, idx_t vector_idx, SelectionVector &sel_vector,
+	                   idx_t max_count) const;
 	idx_t GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
-	                            SelectionVector &sel_vector, idx_t max_count);
+	                            SelectionVector &sel_vector, idx_t max_count) const;
 
 	//! For a specific row, returns true if it should be used for the transaction and false otherwise.
 	bool Fetch(TransactionData transaction, idx_t row);
@@ -172,7 +177,7 @@ public:
 
 	void Verify();
 
-	void NextVector(CollectionScanState &state);
+	void NextVector(CollectionScanState &state) const;
 
 	idx_t DeleteRows(idx_t vector_idx, transaction_t transaction_id, row_t rows[], idx_t count);
 	RowVersionManager &GetOrCreateVersionInfo();
@@ -184,29 +189,31 @@ public:
 	idx_t GetRowGroupSize() const;
 
 private:
-	optional_ptr<RowVersionManager> GetVersionInfo();
+	optional_ptr<RowVersionManager> GetVersionInfo() const;
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoPtr();
 	shared_ptr<RowVersionManager> GetOrCreateVersionInfoInternal();
-	void SetVersionInfo(shared_ptr<RowVersionManager> version);
+	void SetVersionInfo(shared_ptr<RowVersionManager> version) const;
 
+	const ColumnData &GetColumn(storage_t c) const;
+	const ColumnData &GetColumn(const StorageIndex &c) const;
 	ColumnData &GetColumn(storage_t c);
 	ColumnData &GetColumn(const StorageIndex &c);
 	idx_t GetColumnCount() const;
 	vector<shared_ptr<ColumnData>> &GetColumns();
 
 	template <TableScanType TYPE>
-	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result);
+	void TemplatedScan(TransactionData transaction, CollectionScanState &state, DataChunk &result) const;
 
 	vector<MetaBlockPointer> CheckpointDeletes(MetadataManager &manager);
 
 	bool HasUnloadedDeletes() const;
 
 private:
-	mutex row_group_lock;
+	mutable mutex row_group_lock;
 	vector<MetaBlockPointer> column_pointers;
 	unique_ptr<atomic<bool>[]> is_loaded;
 	vector<MetaBlockPointer> deletes_pointers;
-	atomic<bool> deletes_is_loaded;
+	mutable atomic<bool> deletes_is_loaded;
 	idx_t allocation_size;
 };
 

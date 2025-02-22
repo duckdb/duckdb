@@ -21,7 +21,7 @@ idx_t DictionaryCompression::RequiredSpace(idx_t current_count, idx_t index_coun
 	return used_space;
 }
 
-StringDictionaryContainer DictionaryCompression::GetDictionary(ColumnSegment &segment, BufferHandle &handle) {
+StringDictionaryContainer DictionaryCompression::GetDictionary(const ColumnSegment &segment, BufferHandle &handle) {
 	auto header_ptr = reinterpret_cast<dictionary_compression_header_t *>(handle.Ptr() + segment.GetBlockOffset());
 	StringDictionaryContainer container;
 	container.size = Load<uint32_t>(data_ptr_cast(&header_ptr->dict_size));

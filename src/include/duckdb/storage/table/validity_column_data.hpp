@@ -17,11 +17,11 @@ class ValidityColumnData : public ColumnData {
 	friend class StandardColumnData;
 
 public:
-	ValidityColumnData(BlockManager &block_manager, DataTableInfo &info, idx_t column_index, idx_t start_row,
+	ValidityColumnData(BlockManager &block_manager, const DataTableInfo &info, idx_t column_index, idx_t start_row,
 	                   ColumnData &parent);
 
 public:
-	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) override;
+	FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter) const override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;
 };
 

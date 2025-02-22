@@ -38,7 +38,7 @@ idx_t RowVersionManager::GetCommittedDeletedCount(idx_t count) {
 	return deleted_count;
 }
 
-optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) {
+optional_ptr<ChunkInfo> RowVersionManager::GetChunkInfo(idx_t vector_idx) const {
 	if (vector_idx >= vector_info.size()) {
 		return nullptr;
 	}
@@ -56,7 +56,7 @@ idx_t RowVersionManager::GetSelVector(TransactionData transaction, idx_t vector_
 }
 
 idx_t RowVersionManager::GetCommittedSelVector(transaction_t start_time, transaction_t transaction_id, idx_t vector_idx,
-                                               SelectionVector &sel_vector, idx_t max_count) {
+                                               SelectionVector &sel_vector, idx_t max_count) const {
 	lock_guard<mutex> l(version_lock);
 	auto info = GetChunkInfo(vector_idx);
 	if (!info) {
