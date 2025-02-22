@@ -592,12 +592,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 		}
 
 		if (progress_callback) {
-			duckdb_query_progress_type progress;
-			progress.percentage = query_progress.GetPercentage();
-			progress.rows_processed = query_progress.GetRowsProcesseed();
-			progress.total_rows_to_process = query_progress.GetTotalRowsToProcess();
-
-			progress_callback(progress);
+			progress_callback(query_progress);
 		}
 
 		return query_result;
