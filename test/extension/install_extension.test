@@ -36,7 +36,7 @@ Failed to download extension "will_never_exist" at URL "http://community-extensi
 statement error
 INSTALL will_never_exist FROM 'core';
 ----
-IO Error: Failed to copy local extension "will_never_exist" at PATH 
+IO Error: Failed to install local extension "will_never_exist", no access to the file at PATH
 
 # Error message should point to extensions troubleshooting page
 statement error

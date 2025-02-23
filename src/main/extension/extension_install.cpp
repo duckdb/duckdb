@@ -319,7 +319,8 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 	// Throw error on failure
 	if (!exists) {
 		if (!fs.IsRemoteFile(file)) {
-			throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
+			throw IOException("Failed to install local extension \"%s\", no access to the file at PATH \"%s\"\n",
+			                  extension_name, file);
 		}
 		if (StringUtil::StartsWith(file, "https://")) {
 			throw IOException("Failed to install remote extension \"%s\" from url \"%s\"", extension_name, file);
