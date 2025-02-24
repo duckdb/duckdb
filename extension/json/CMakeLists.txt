@@ -11,6 +11,7 @@ set(JSON_EXTENSION_FILES
     json_common.cpp
     json_enums.cpp
     json_functions.cpp
+    json_multi_file_info.cpp
     json_scan.cpp
     json_serializer.cpp
     json_deserializer.cpp

@@ -7,6 +7,7 @@
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
+#include "json_multi_file_info.hpp"
 
 namespace duckdb {
 
@@ -16,10 +17,10 @@ JSONScanData::JSONScanData() {
 void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	auto &info = input.info->Cast<JSONScanInfo>();
 	type = info.type;
-	options.format = info.format;
-	options.record_type = info.record_type;
-	options.auto_detect = info.auto_detect;
-
+	JSONFileReaderOptions reader_options;
+	reader_options.options.format = info.format;
+	reader_options.options.record_type = info.record_type;
+	reader_options.options.auto_detect = info.auto_detect;
 	for (auto &kv : input.named_parameters) {
 		if (kv.second.IsNull()) {
 			throw BinderException("Cannot use NULL as function argument");
@@ -27,136 +28,13 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
 			continue;
 		}
-		auto loption = StringUtil::Lower(kv.first);
-		if (loption == "ignore_errors") {
-			options.ignore_errors = BooleanValue::Get(kv.second);
-		} else if (loption == "maximum_object_size") {
-			options.maximum_object_size = MaxValue<idx_t>(UIntegerValue::Get(kv.second), options.maximum_object_size);
-		} else if (loption == "format") {
-			auto arg = StringUtil::Lower(StringValue::Get(kv.second));
-			static const auto FORMAT_OPTIONS =
-			    case_insensitive_map_t<JSONFormat> {{"auto", JSONFormat::AUTO_DETECT},
-			                                        {"unstructured", JSONFormat::UNSTRUCTURED},
-			                                        {"newline_delimited", JSONFormat::NEWLINE_DELIMITED},
-			                                        {"nd", JSONFormat::NEWLINE_DELIMITED},
-			                                        {"array", JSONFormat::ARRAY}};
-			auto lookup = FORMAT_OPTIONS.find(arg);
-			if (lookup == FORMAT_OPTIONS.end()) {
-				vector<string> valid_options;
-				for (auto &pair : FORMAT_OPTIONS) {
-					valid_options.push_back(StringUtil::Format("'%s'", pair.first));
-				}
-				throw BinderException("format must be one of [%s], not '%s'", StringUtil::Join(valid_options, ", "),
-				                      arg);
-			}
-			options.format = lookup->second;
-		} else if (loption == "compression") {
-			SetCompression(StringUtil::Lower(StringValue::Get(kv.second)));
-		} else if (loption == "columns") {
-			auto &child_type = kv.second.type();
-			if (child_type.id() != LogicalTypeId::STRUCT) {
-				throw BinderException("read_json \"columns\" parameter requires a struct as input.");
-			}
-			auto &struct_children = StructValue::GetChildren(kv.second);
-			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
-			for (idx_t i = 0; i < struct_children.size(); i++) {
-				auto &name = StructType::GetChildName(child_type, i);
-				auto &val = struct_children[i];
-				options.name_list.push_back(name);
-				if (val.type().id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("read_json \"columns\" parameter type specification must be VARCHAR.");
-				}
-				options.sql_type_list.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
-			}
-			D_ASSERT(options.name_list.size() == options.sql_type_list.size());
-			if (options.name_list.empty()) {
-				throw BinderException("read_json \"columns\" parameter needs at least one column.");
-			}
-		} else if (loption == "auto_detect") {
-			options.auto_detect = BooleanValue::Get(kv.second);
-		} else if (loption == "sample_size") {
-			auto arg = BigIntValue::Get(kv.second);
-			if (arg == -1) {
-				options.sample_size = NumericLimits<idx_t>::Maximum();
-			} else if (arg > 0) {
-				options.sample_size = arg;
-			} else {
-				throw BinderException("read_json \"sample_size\" parameter must be positive, or -1 to sample all input "
-				                      "files entirely, up to \"maximum_sample_files\" files.");
-			}
-		} else if (loption == "maximum_depth") {
-			auto arg = BigIntValue::Get(kv.second);
-			if (arg == -1) {
-				options.max_depth = NumericLimits<idx_t>::Maximum();
-			} else {
-				options.max_depth = arg;
-			}
-		} else if (loption == "field_appearance_threshold") {
-			auto arg = DoubleValue::Get(kv.second);
-			if (arg < 0 || arg > 1) {
-				throw BinderException(
-				    "read_json_auto \"field_appearance_threshold\" parameter must be between 0 and 1");
-			}
-			options.field_appearance_threshold = arg;
-		} else if (loption == "map_inference_threshold") {
-			auto arg = BigIntValue::Get(kv.second);
-			if (arg == -1) {
-				options.map_inference_threshold = NumericLimits<idx_t>::Maximum();
-			} else if (arg >= 0) {
-				options.map_inference_threshold = arg;
-			} else {
-				throw BinderException("read_json_auto \"map_inference_threshold\" parameter must be 0 or positive, "
-				                      "or -1 to disable map inference for consistent objects.");
-			}
-		} else if (loption == "dateformat" || loption == "date_format") {
-			auto format_string = StringValue::Get(kv.second);
-			if (StringUtil::Lower(format_string) == "iso") {
-				format_string = "%Y-%m-%d";
-			}
-			options.date_format = format_string;
-
-			StrpTimeFormat format;
-			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
-			if (!error.empty()) {
-				throw BinderException("read_json could not parse \"dateformat\": '%s'.", error.c_str());
-			}
-		} else if (loption == "timestampformat" || loption == "timestamp_format") {
-			auto format_string = StringValue::Get(kv.second);
-			if (StringUtil::Lower(format_string) == "iso") {
-				format_string = "%Y-%m-%dT%H:%M:%S.%fZ";
-			}
-			options.timestamp_format = format_string;
-
-			StrpTimeFormat format;
-			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
-			if (!error.empty()) {
-				throw BinderException("read_json could not parse \"timestampformat\": '%s'.", error.c_str());
-			}
-		} else if (loption == "records") {
-			auto arg = StringValue::Get(kv.second);
-			if (arg == "auto") {
-				options.record_type = JSONRecordType::AUTO_DETECT;
-			} else if (arg == "true") {
-				options.record_type = JSONRecordType::RECORDS;
-			} else if (arg == "false") {
-				options.record_type = JSONRecordType::VALUES;
-			} else {
-				throw BinderException("read_json requires \"records\" to be one of ['auto', 'true', 'false'].");
-			}
-		} else if (loption == "maximum_sample_files") {
-			auto arg = BigIntValue::Get(kv.second);
-			if (arg == -1) {
-				options.maximum_sample_files = NumericLimits<idx_t>::Maximum();
-			} else if (arg > 0) {
-				options.maximum_sample_files = arg;
-			} else {
-				throw BinderException("read_json \"maximum_sample_files\" parameter must be positive, or -1 to remove "
-				                      "the limit on the number of files used to sample \"sample_size\" rows.");
-			}
-		} else if (loption == "convert_strings_to_integers") {
-			options.convert_strings_to_integers = BooleanValue::Get(kv.second);
+		if (JSONMultiFileInfo::ParseOption(context, kv.first, kv.second, file_options, reader_options)) {
+			continue;
 		}
+		throw NotImplementedException("Unsupported option \"%s\" for JSON reader", kv.first);
 	}
+	options = std::move(reader_options.options);
+
 
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
@@ -212,10 +90,6 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 			}
 		}
 	}
-}
-
-void JSONScanData::SetCompression(const string &compression) {
-	options.compression = EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(compression));
 }
 
 string JSONScanData::GetDateFormat() const {

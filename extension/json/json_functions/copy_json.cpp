@@ -148,7 +148,7 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 			if (kv.second.size() != 1) {
 				ThrowJSONCopyParameterException(loption);
 			}
-			bind_data->SetCompression(StringValue::Get(kv.second.back()));
+			options.compression = EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(StringValue::Get(kv.second.back())));
 		} else if (loption == "array") {
 			if (kv.second.empty()) {
 				options.format = JSONFormat::ARRAY;

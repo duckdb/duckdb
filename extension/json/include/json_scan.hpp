@@ -50,7 +50,6 @@ public:
 	void InitializeReaders(ClientContext &context);
 	void InitializeFormats();
 	void InitializeFormats(bool auto_detect);
-	void SetCompression(const string &compression);
 
 public:
 	//! Scan type

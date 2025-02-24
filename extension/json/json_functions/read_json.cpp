@@ -4,6 +4,7 @@
 #include "json_scan.hpp"
 #include "json_structure.hpp"
 #include "json_transform.hpp"
+#include "json_multi_file_info.hpp"
 #include "duckdb/parallel/task_executor.hpp"
 
 namespace duckdb {
