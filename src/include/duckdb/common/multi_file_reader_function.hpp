@@ -12,35 +12,11 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include <numeric>
 
 namespace duckdb {
 
 enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
-
-struct MultiFileBindData : public TableFunctionData {
-	unique_ptr<TableFunctionData> bind_data;
-	shared_ptr<MultiFileList> file_list;
-	unique_ptr<MultiFileReader> multi_file_reader;
-	vector<MultiFileReaderColumnDefinition> columns;
-	MultiFileReaderBindData reader_bind;
-	MultiFileReaderOptions file_options;
-	vector<LogicalType> types;
-	vector<string> names;
-	virtual_column_map_t virtual_columns;
-	//! Table column names - set when using COPY tbl FROM file.parquet
-	vector<string> table_columns;
-	shared_ptr<BaseFileReader> initial_reader;
-	// The union readers are created (when parquet union_by_name option is on) during binding
-	// Those readers can be re-used during ParquetParallelStateNext
-	vector<unique_ptr<BaseUnionData>> union_readers;
-
-	void Initialize(shared_ptr<BaseFileReader> reader) {
-		initial_reader = std::move(reader);
-	}
-	void Initialize(ClientContext &, unique_ptr<BaseUnionData> &union_data) {
-		Initialize(std::move(union_data->reader));
-	}
-};
 
 struct MultiFileLocalState : public LocalTableFunctionState {
 	shared_ptr<BaseFileReader> reader;
@@ -63,7 +39,7 @@ struct MultiFileFileReaderData {
 	    : reader(std::move(reader_p)), file_state(MultiFileFileState::OPEN), file_mutex(make_uniq<mutex>()) {
 	}
 	// Create data for an existing reader
-	explicit MultiFileFileReaderData(unique_ptr<BaseUnionData> union_data_p) : file_mutex(make_uniq<mutex>()) {
+	explicit MultiFileFileReaderData(shared_ptr<BaseUnionData> union_data_p) : file_mutex(make_uniq<mutex>()) {
 		if (union_data_p->reader) {
 			reader = std::move(union_data_p->reader);
 			file_state = MultiFileFileState::OPEN;
@@ -75,12 +51,14 @@ struct MultiFileFileReaderData {
 
 	//! Currently opened reader for the file
 	shared_ptr<BaseFileReader> reader;
+	//! The file reader after we have started all scans to the file
+	weak_ptr<BaseFileReader> closed_reader;
 	//! Flag to indicate the file is being opened
 	MultiFileFileState file_state;
 	//! Mutexes to wait for the file when it is being opened
 	unique_ptr<mutex> file_mutex;
 	//! Options for opening the file
-	unique_ptr<BaseUnionData> union_data;
+	shared_ptr<BaseUnionData> union_data;
 
 	//! (only set when file_state is UNOPENED) the file to be opened
 	string file_to_be_opened;
@@ -102,12 +80,14 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	//! Reader state
 	unique_ptr<MultiFileReaderGlobalState> multi_file_reader_state;
 	//! Lock
-	mutex lock;
+	mutable mutex lock;
 	//! Signal to other threads that a file failed to open, letting every thread abort.
 	bool error_opening_file = false;
 
 	//! Index of file currently up for scanning
 	atomic<idx_t> file_index;
+	//! Index of the lowest file we know we have completely read
+	mutable idx_t completed_file_index = 0;
 	//! The current set of readers
 	vector<unique_ptr<MultiFileFileReaderData>> readers;
 
@@ -136,14 +116,11 @@ public:
 	explicit MultiFileReaderFunction(string name_p)
 	    : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MultiFileScan, MultiFileBind, MultiFileInitGlobal,
 	                    MultiFileInitLocal) {
-		statistics = MultiFileScanStats;
 		cardinality = MultiFileCardinality;
 		table_scan_progress = MultiFileProgress;
 		get_partition_data = MultiFileGetPartitionData;
 		get_bind_info = MultiFileGetBindInfo;
 		projection_pushdown = true;
-		filter_pushdown = true;
-		filter_prune = true;
 		pushdown_complex_filter = MultiFileComplexFilterPushdown;
 		get_partition_info = MultiFileGetPartitionInfo;
 		get_virtual_columns = MultiFileGetVirtualColumns;
@@ -163,9 +140,9 @@ public:
 		result->file_options = std::move(file_options_p);
 		result->bind_data = OP::InitializeBindData(*result, std::move(options_p));
 		// now bind the readers
-		// there are three ways of binding the readers
+		// there are two ways of binding the readers
 		// (1) MultiFileReader::Bind -> custom bind, used only for certain lakehouse extensions
-		// (2) Schema bind ->
+		// (2) OP::BindReader
 		bool bound_on_first_file = true;
 		if (result->multi_file_reader->Bind(result->file_options, *result->file_list, result->types, result->names,
 		                                    result->reader_bind)) {
@@ -227,14 +204,11 @@ public:
 
 		auto options = OP::InitializeOptions(context);
 		for (auto &kv : input.named_parameters) {
-			if (kv.second.IsNull()) {
-				throw BinderException("Cannot use NULL as function argument");
-			}
 			auto loption = StringUtil::Lower(kv.first);
 			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
 				continue;
 			}
-			if (OP::ParseOption(context, loption, kv.second, file_options, *options)) {
+			if (OP::ParseOption(context, kv.first, kv.second, file_options, *options)) {
 				continue;
 			}
 			throw NotImplementedException("Unimplemented option %s", kv.first);
@@ -251,14 +225,15 @@ public:
 
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
-			if (OP::ParseCopyOption(context, loption, option.second, *options)) {
+			if (OP::ParseCopyOption(context, loption, option.second, *options, expected_names, expected_types)) {
 				continue;
 			}
 			throw NotImplementedException("Unsupported option for COPY FROM: %s", option.first);
 		}
+		OP::FinalizeCopyBind(context, *options, expected_names, expected_types);
 
 		// TODO: Allow overriding the MultiFileReader for COPY FROM?
-		auto multi_file_reader = MultiFileReader::CreateDefault("ParquetCopy");
+		auto multi_file_reader = MultiFileReader::CreateDefault("COPY");
 		vector<string> paths = {info.file_path};
 		auto file_list = multi_file_reader->CreateFileList(context, paths);
 
@@ -279,14 +254,14 @@ public:
 
 	// Queries the metadataprovider for another file to scan, updating the files/reader lists in the process.
 	// Returns true if resized
-	static bool ResizeFiles(MultiFileGlobalState &parallel_state) {
+	static bool ResizeFiles(MultiFileGlobalState &global_state) {
 		string scanned_file;
-		if (!parallel_state.file_list.Scan(parallel_state.file_list_scan, scanned_file)) {
+		if (!global_state.file_list.Scan(global_state.file_list_scan, scanned_file)) {
 			return false;
 		}
 
 		// Push the file in the reader data, to be opened later
-		parallel_state.readers.push_back(make_uniq<MultiFileFileReaderData>(scanned_file));
+		global_state.readers.push_back(make_uniq<MultiFileFileReaderData>(scanned_file));
 
 		return true;
 	}
@@ -312,18 +287,18 @@ public:
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
 	static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData &bind_data,
-	                            MultiFileLocalState &scan_data, MultiFileGlobalState &parallel_state,
+	                            MultiFileLocalState &scan_data, MultiFileGlobalState &global_state,
 	                            unique_lock<mutex> &parallel_lock) {
 		const auto file_index_limit =
-		    parallel_state.file_index + NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		    global_state.file_index + NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 
-		for (idx_t i = parallel_state.file_index; i < file_index_limit; i++) {
+		for (idx_t i = global_state.file_index; i < file_index_limit; i++) {
 			// We check if we can resize files in this loop too otherwise we will only ever open 1 file ahead
-			if (i >= parallel_state.readers.size() && !ResizeFiles(parallel_state)) {
+			if (i >= global_state.readers.size() && !ResizeFiles(global_state)) {
 				return false;
 			}
 
-			auto &current_reader_data = *parallel_state.readers[i];
+			auto &current_reader_data = *global_state.readers[i];
 			if (current_reader_data.file_state == MultiFileFileState::UNOPENED) {
 				current_reader_data.file_state = MultiFileFileState::OPENING;
 				// Get pointer to file mutex before unlocking
@@ -338,15 +313,17 @@ public:
 				try {
 					if (current_reader_data.union_data) {
 						auto &union_data = *current_reader_data.union_data;
-						reader = OP::CreateReader(context, union_data);
+						reader = OP::CreateReader(context, *global_state.global_state, union_data, bind_data);
 					} else {
-						reader = OP::CreateReader(context, current_reader_data.file_to_be_opened, *bind_data.bind_data);
+						reader = OP::CreateReader(context, *global_state.global_state,
+						                          current_reader_data.file_to_be_opened, i, bind_data);
 					}
-					InitializeReader(*reader, bind_data, parallel_state.column_indexes, parallel_state.filters, context,
-					                 i, parallel_state.multi_file_reader_state);
+					InitializeReader(*reader, bind_data, global_state.column_indexes, global_state.filters, context, i,
+					                 global_state.multi_file_reader_state);
+					OP::FinalizeReader(context, *reader);
 				} catch (...) {
 					parallel_lock.lock();
-					parallel_state.error_opening_file = true;
+					global_state.error_opening_file = true;
 					throw;
 				}
 
@@ -363,10 +340,10 @@ public:
 	}
 
 	//! Wait for a file to become available. Parallel lock should be locked when calling.
-	static void WaitForFile(idx_t file_index, MultiFileGlobalState &parallel_state, unique_lock<mutex> &parallel_lock) {
+	static void WaitForFile(idx_t file_index, MultiFileGlobalState &global_state, unique_lock<mutex> &parallel_lock) {
 		while (true) {
 			// Get pointer to file mutex before unlocking
-			auto &file_mutex = *parallel_state.readers[file_index]->file_mutex;
+			auto &file_mutex = *global_state.readers[file_index]->file_mutex;
 
 			// To get the file lock, we first need to release the parallel_lock to prevent deadlocking. Note that this
 			// requires getting the ref to the file mutex pointer with the lock stil held: readers get be resized
@@ -378,9 +355,9 @@ public:
 			// - the thread opening the file is done and the file is available
 			// - the thread opening the file has failed
 			// - the file was somehow scanned till the end while we were waiting
-			if (parallel_state.file_index >= parallel_state.readers.size() ||
-			    parallel_state.readers[parallel_state.file_index]->file_state != MultiFileFileState::OPENING ||
-			    parallel_state.error_opening_file) {
+			if (global_state.file_index >= global_state.readers.size() ||
+			    global_state.readers[global_state.file_index]->file_state != MultiFileFileState::OPENING ||
+			    global_state.error_opening_file) {
 				return;
 			}
 		}
@@ -398,26 +375,33 @@ public:
 			}
 
 			if (gstate.file_index >= gstate.readers.size() && !ResizeFiles(gstate)) {
+				OP::FinishReading(context, *gstate.global_state, *scan_data.local_state);
 				return false;
 			}
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
-				if (OP::TryInitializeScan(context, *current_reader_data.reader, *gstate.global_state,
+				if (OP::TryInitializeScan(context, current_reader_data.reader, *gstate.global_state,
 				                          *scan_data.local_state)) {
+					if (!current_reader_data.reader) {
+						throw InternalException("MultiFileReader was moved");
+					}
 					// The current reader has data left to be scanned
 					scan_data.reader = current_reader_data.reader;
 					scan_data.batch_index = gstate.batch_index++;
 					scan_data.file_index = gstate.file_index;
 					return true;
 				} else {
-					// Close current file
-					current_reader_data.file_state = MultiFileFileState::CLOSED;
-					current_reader_data.reader = nullptr;
-
 					// Set state to the next file
 					++gstate.file_index;
-					OP::FinishFile(context, *gstate.global_state);
+
+					// Close current file
+					current_reader_data.file_state = MultiFileFileState::CLOSED;
+
+					//! Finish processing the file
+					OP::FinishFile(context, *gstate.global_state, *current_reader_data.reader);
+					current_reader_data.closed_reader = current_reader_data.reader;
+					current_reader_data.reader = nullptr;
 					continue;
 				}
 			}
@@ -474,17 +458,10 @@ public:
 		if (file_list.IsEmpty()) {
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
-			// TODO: confirm we are not changing behaviour by modifying the order here?
 			for (auto &reader : bind_data.union_readers) {
-				if (!reader) {
-					break;
-				}
-				result->readers.push_back(make_uniq<MultiFileFileReaderData>(std::move(reader)));
+				result->readers.push_back(make_uniq<MultiFileFileReaderData>(reader));
 			}
 			if (result->readers.size() != file_list.GetTotalFileCount()) {
-				// This case happens with recursive CTEs: the first execution the readers have already
-				// been moved out of the bind data.
-				// FIXME: clean up this process and make it more explicit
 				result->readers = {};
 			}
 		} else if (bind_data.initial_reader) {
@@ -516,11 +493,12 @@ public:
 		result->column_indexes = input.column_indexes;
 		result->filters = input.filters.get();
 		result->file_index = 0;
-		result->global_state = OP::InitializeGlobalState();
-		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
-			result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
-		} else {
-			result->max_threads = OP::MaxThreads(*bind_data.bind_data);
+		result->global_state = OP::InitializeGlobalState(context, bind_data, *result);
+		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		auto expand_result = bind_data.file_list->GetExpandResult();
+		auto max_threads = OP::MaxThreads(bind_data, *result, expand_result);
+		if (max_threads.IsValid()) {
+			result->max_threads = MinValue<idx_t>(result->max_threads, max_threads.GetIndex());
 		}
 		bool require_extra_columns =
 		    result->multi_file_reader_state && result->multi_file_reader_state->RequiresExtraColumns();
@@ -529,7 +507,9 @@ public:
 				result->projection_ids = input.projection_ids;
 			} else {
 				result->projection_ids.resize(input.column_indexes.size());
-				iota(begin(result->projection_ids), end(result->projection_ids), 0);
+				for (idx_t i = 0; i < input.column_indexes.size(); i++) {
+					result->projection_ids[i] = i;
+				}
 			}
 
 			const auto table_types = bind_data.types;
@@ -538,7 +518,7 @@ public:
 				if (col_idx.IsVirtualColumn()) {
 					auto entry = bind_data.virtual_columns.find(column_id);
 					if (entry == bind_data.virtual_columns.end()) {
-						throw InternalException("Parquet - virtual column definition not found");
+						throw InternalException("MultiFileReader - virtual column definition not found");
 					}
 					result->scanned_types.emplace_back(entry->second.type);
 				} else {
@@ -573,27 +553,24 @@ public:
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
+		auto remove_columns = gstate.CanRemoveColumns();
+		if (remove_columns) {
+			data.all_columns.Reset();
+		}
 
-		bool rowgroup_finished;
 		do {
-			if (gstate.CanRemoveColumns()) {
-				data.all_columns.Reset();
-				OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, data.all_columns);
-				rowgroup_finished = data.all_columns.size() == 0;
+			auto &scan_chunk = remove_columns ? data.all_columns : output;
+			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, scan_chunk);
+			if (scan_chunk.size() > 0) {
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           data.all_columns, gstate.multi_file_reader_state);
-				output.ReferenceColumns(data.all_columns, gstate.projection_ids);
-			} else {
-				OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, output);
-				rowgroup_finished = output.size() == 0;
-				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           output, gstate.multi_file_reader_state);
-			}
-
-			if (output.size() > 0) {
+				                                           scan_chunk, gstate.multi_file_reader_state);
+				if (remove_columns) {
+					output.ReferenceColumns(data.all_columns, gstate.projection_ids);
+				}
 				return;
 			}
-			if (rowgroup_finished && !TryInitializeNextBatch(context, bind_data, data, gstate)) {
+			scan_chunk.Reset();
+			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
 				return;
 			}
 		} while (true);
@@ -603,7 +580,7 @@ public:
 	                                                     column_t column_index) {
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 
-		// NOTE: we do not want to parse the Parquet metadata for the sole purpose of getting column statistics
+		// NOTE: we do not want to parse the file metadata for the sole purpose of getting column statistics
 		if (bind_data.file_list->GetExpandResult() == FileExpandResult::MULTIPLE_FILES) {
 			// multiple files, no luck!
 			return nullptr;
@@ -612,7 +589,7 @@ public:
 			// no reader
 			return nullptr;
 		}
-		// scanning single parquet file and we have the metadata read already
+		// scanning single file and we have the metadata read already
 		if (IsVirtualColumn(column_index)) {
 			return nullptr;
 		}
@@ -627,9 +604,47 @@ public:
 		if (total_count == 0) {
 			return 100.0;
 		}
-		// get the percentage WITHIN the current file from the currently active reader
-		auto progress_in_file = MinValue<double>(100.0, OP::GetProgressInFile(context, *gstate.global_state));
-		return (progress_in_file + 100.0 * static_cast<double>(gstate.file_index)) / static_cast<double>(total_count);
+		unique_lock<mutex> parallel_lock(gstate.lock);
+		double total_progress = 100.0 * static_cast<double>(gstate.completed_file_index);
+		// iterate over the files we haven't completed yet
+		for (idx_t i = gstate.completed_file_index; i <= gstate.file_index && i < gstate.readers.size(); i++) {
+			auto &reader_data_ptr = gstate.readers[i];
+			if (!reader_data_ptr) {
+				continue;
+			}
+			auto &reader_data = *reader_data_ptr;
+			parallel_lock.unlock();
+			double progress_in_file;
+			{
+				lock_guard<mutex> l(*reader_data.file_mutex);
+				if (reader_data.file_state == MultiFileFileState::OPEN) {
+					// file is currently open - get the progress within the file
+					progress_in_file = OP::GetProgressInFile(context, *reader_data.reader);
+				} else if (reader_data.file_state == MultiFileFileState::CLOSED) {
+					// file has been closed - check if the reader is still in use
+					auto reader = reader_data.closed_reader.lock();
+					if (!reader) {
+						// reader has been destroyed - we are done with this file
+						progress_in_file = 100.0;
+					} else {
+						// file is still being read
+						progress_in_file = OP::GetProgressInFile(context, *reader);
+					}
+				} else {
+					// file has not been opened yet - progress in this file is zero
+					progress_in_file = 0;
+				}
+			}
+			parallel_lock.lock();
+			progress_in_file = MaxValue<double>(0.0, MinValue<double>(100.0, progress_in_file));
+			total_progress += progress_in_file;
+			if (i == gstate.completed_file_index && progress_in_file >= 100) {
+				// if the progress in this file is 100, we have completed the file
+				// we don't need to check anymore in the next iteration
+				gstate.completed_file_index++;
+			}
+		}
+		return total_progress / static_cast<double>(total_count);
 	}
 
 	static unique_ptr<NodeStatistics> MultiFileCardinality(ClientContext &context, const FunctionData *bind_data) {
@@ -638,7 +653,7 @@ public:
 		if (file_list_cardinality_estimate) {
 			return file_list_cardinality_estimate;
 		}
-		return OP::GetCardinality(*data.bind_data, data.file_list->GetTotalFileCount());
+		return OP::GetCardinality(data, data.file_list->GetTotalFileCount());
 	}
 
 	static void MultiFileComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
@@ -682,9 +697,20 @@ public:
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 		virtual_column_map_t result;
 		MultiFileReader::GetVirtualColumns(context, bind_data.reader_bind, result);
-		// FIXME: forward virtual columns
+
+		OP::GetVirtualColumns(context, bind_data, result);
+
 		bind_data.virtual_columns = result;
 		return result;
+	}
+
+	static void PushdownType(ClientContext &context, optional_ptr<FunctionData> bind_data_p,
+	                         const unordered_map<idx_t, LogicalType> &new_column_types) {
+		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
+		for (auto &type : new_column_types) {
+			bind_data.types[type.first] = type.second;
+			bind_data.columns[type.first].type = type.second;
+		}
 	}
 };
 
