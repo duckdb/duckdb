@@ -127,7 +127,9 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, Parquet
 	}
 	schema.parquet_type = s_ele.type;
 	if (s_ele.__isset.logicalType) {
-		if (s_ele.logicalType.__isset.UUID) {
+		if (s_ele.logicalType.__isset.UNKNOWN) {
+			return LogicalType::SQLNULL;
+		} else if (s_ele.logicalType.__isset.UUID) {
 			if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY) {
 				return LogicalType::UUID;
 			}
