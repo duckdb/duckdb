@@ -52,6 +52,109 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 			options.format = lookup->second;
 		} else if (loption == "compression") {
 			SetCompression(StringUtil::Lower(StringValue::Get(kv.second)));
+		} else if (loption == "columns") {
+			auto &child_type = kv.second.type();
+			if (child_type.id() != LogicalTypeId::STRUCT) {
+				throw BinderException("read_json \"columns\" parameter requires a struct as input.");
+			}
+			auto &struct_children = StructValue::GetChildren(kv.second);
+			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
+			for (idx_t i = 0; i < struct_children.size(); i++) {
+				auto &name = StructType::GetChildName(child_type, i);
+				auto &val = struct_children[i];
+				options.name_list.push_back(name);
+				if (val.type().id() != LogicalTypeId::VARCHAR) {
+					throw BinderException("read_json \"columns\" parameter type specification must be VARCHAR.");
+				}
+				options.sql_type_list.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
+			}
+			D_ASSERT(options.name_list.size() == options.sql_type_list.size());
+			if (options.name_list.empty()) {
+				throw BinderException("read_json \"columns\" parameter needs at least one column.");
+			}
+		} else if (loption == "auto_detect") {
+			options.auto_detect = BooleanValue::Get(kv.second);
+		} else if (loption == "sample_size") {
+			auto arg = BigIntValue::Get(kv.second);
+			if (arg == -1) {
+				options.sample_size = NumericLimits<idx_t>::Maximum();
+			} else if (arg > 0) {
+				options.sample_size = arg;
+			} else {
+				throw BinderException("read_json \"sample_size\" parameter must be positive, or -1 to sample all input "
+				                      "files entirely, up to \"maximum_sample_files\" files.");
+			}
+		} else if (loption == "maximum_depth") {
+			auto arg = BigIntValue::Get(kv.second);
+			if (arg == -1) {
+				options.max_depth = NumericLimits<idx_t>::Maximum();
+			} else {
+				options.max_depth = arg;
+			}
+		} else if (loption == "field_appearance_threshold") {
+			auto arg = DoubleValue::Get(kv.second);
+			if (arg < 0 || arg > 1) {
+				throw BinderException(
+				    "read_json_auto \"field_appearance_threshold\" parameter must be between 0 and 1");
+			}
+			options.field_appearance_threshold = arg;
+		} else if (loption == "map_inference_threshold") {
+			auto arg = BigIntValue::Get(kv.second);
+			if (arg == -1) {
+				options.map_inference_threshold = NumericLimits<idx_t>::Maximum();
+			} else if (arg >= 0) {
+				options.map_inference_threshold = arg;
+			} else {
+				throw BinderException("read_json_auto \"map_inference_threshold\" parameter must be 0 or positive, "
+				                      "or -1 to disable map inference for consistent objects.");
+			}
+		} else if (loption == "dateformat" || loption == "date_format") {
+			auto format_string = StringValue::Get(kv.second);
+			if (StringUtil::Lower(format_string) == "iso") {
+				format_string = "%Y-%m-%d";
+			}
+			options.date_format = format_string;
+
+			StrpTimeFormat format;
+			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+			if (!error.empty()) {
+				throw BinderException("read_json could not parse \"dateformat\": '%s'.", error.c_str());
+			}
+		} else if (loption == "timestampformat" || loption == "timestamp_format") {
+			auto format_string = StringValue::Get(kv.second);
+			if (StringUtil::Lower(format_string) == "iso") {
+				format_string = "%Y-%m-%dT%H:%M:%S.%fZ";
+			}
+			options.timestamp_format = format_string;
+
+			StrpTimeFormat format;
+			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
+			if (!error.empty()) {
+				throw BinderException("read_json could not parse \"timestampformat\": '%s'.", error.c_str());
+			}
+		} else if (loption == "records") {
+			auto arg = StringValue::Get(kv.second);
+			if (arg == "auto") {
+				options.record_type = JSONRecordType::AUTO_DETECT;
+			} else if (arg == "true") {
+				options.record_type = JSONRecordType::RECORDS;
+			} else if (arg == "false") {
+				options.record_type = JSONRecordType::VALUES;
+			} else {
+				throw BinderException("read_json requires \"records\" to be one of ['auto', 'true', 'false'].");
+			}
+		} else if (loption == "maximum_sample_files") {
+			auto arg = BigIntValue::Get(kv.second);
+			if (arg == -1) {
+				options.maximum_sample_files = NumericLimits<idx_t>::Maximum();
+			} else if (arg > 0) {
+				options.maximum_sample_files = arg;
+			} else {
+				throw BinderException("read_json \"maximum_sample_files\" parameter must be positive, or -1 to remove "
+				                      "the limit on the number of files used to sample \"sample_size\" rows.");
+			}
+		} else if (loption == "convert_strings_to_integers") {
+			options.convert_strings_to_integers = BooleanValue::Get(kv.second);
 		}
 	}
 
@@ -177,12 +280,12 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 			continue;
 		}
 
-		gstate.names.push_back(bind_data.options.names[col_id]);
+		gstate.names.push_back(bind_data.names[col_id]);
 		gstate.column_ids.push_back(col_idx);
 		gstate.column_indices.push_back(input.column_indexes[col_idx]);
 	}
 
-	if (gstate.names.size() < bind_data.options.names.size() || bind_data.file_options.union_by_name) {
+	if (gstate.names.size() < bind_data.names.size() || bind_data.file_options.union_by_name) {
 		// If we are auto-detecting, but don't need all columns present in the file,
 		// then we don't need to throw an error if we encounter an unseen column
 		gstate.transform_options.error_unknown_key = false;
@@ -198,11 +301,11 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 		gstate.json_readers.emplace_back(reader.get());
 	}
 
-	vector<LogicalType> dummy_global_types(bind_data.options.names.size(), LogicalType::ANY);
+	vector<LogicalType> dummy_global_types(bind_data.names.size(), LogicalType::ANY);
 	vector<LogicalType> dummy_local_types(gstate.names.size(), LogicalType::ANY);
 	auto local_columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(gstate.names, dummy_local_types);
 	auto global_columns =
-	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.options.names, dummy_global_types);
+	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, dummy_global_types);
 	for (auto &reader : gstate.json_readers) {
 		MultiFileReader().FinalizeBind(bind_data.file_options, gstate.bind_data.reader_bind,
 		                               reader->GetFileName(), local_columns, global_columns, input.column_indexes,

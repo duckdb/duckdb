@@ -119,7 +119,7 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 	bind_data->options.format = JSONFormat::NEWLINE_DELIMITED;
 
 	bind_data->files.emplace_back(info.file_path);
-	bind_data->options.names = expected_names;
+	bind_data->names = expected_names;
 
 	auto &options = bind_data->options;
 

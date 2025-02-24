@@ -10,9 +10,9 @@ unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFuncti
 	auto bind_data = make_uniq<JSONScanData>();
 	bind_data->Bind(context, input);
 
-	bind_data->options.names.emplace_back("json");
 	return_types.push_back(LogicalType::JSON());
 	names.emplace_back("json");
+	bind_data->names = names;
 
 	SimpleMultiFileList file_list(std::move(bind_data->files));
 	MultiFileReader().BindOptions(bind_data->file_options, file_list, return_types, names,

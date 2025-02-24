@@ -196,121 +196,8 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	bind_data->Bind(context, input);
 
 	auto &options = bind_data->options;
-	for (auto &kv : input.named_parameters) {
-		if (kv.second.IsNull()) {
-			throw BinderException("Cannot use NULL as function argument");
-		}
-		auto loption = StringUtil::Lower(kv.first);
-		if (kv.second.IsNull()) {
-			throw BinderException("read_json parameter \"%s\" cannot be NULL.", loption);
-		}
-		if (loption == "columns") {
-			auto &child_type = kv.second.type();
-			if (child_type.id() != LogicalTypeId::STRUCT) {
-				throw BinderException("read_json \"columns\" parameter requires a struct as input.");
-			}
-			auto &struct_children = StructValue::GetChildren(kv.second);
-			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
-			for (idx_t i = 0; i < struct_children.size(); i++) {
-				auto &name = StructType::GetChildName(child_type, i);
-				auto &val = struct_children[i];
-				names.push_back(name);
-				if (val.type().id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("read_json \"columns\" parameter type specification must be VARCHAR.");
-				}
-				return_types.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
-			}
-			D_ASSERT(names.size() == return_types.size());
-			if (names.empty()) {
-				throw BinderException("read_json \"columns\" parameter needs at least one column.");
-			}
-			options.names = names;
-		} else if (loption == "auto_detect") {
-			options.auto_detect = BooleanValue::Get(kv.second);
-		} else if (loption == "sample_size") {
-			auto arg = BigIntValue::Get(kv.second);
-			if (arg == -1) {
-				options.sample_size = NumericLimits<idx_t>::Maximum();
-			} else if (arg > 0) {
-				options.sample_size = arg;
-			} else {
-				throw BinderException("read_json \"sample_size\" parameter must be positive, or -1 to sample all input "
-				                      "files entirely, up to \"maximum_sample_files\" files.");
-			}
-		} else if (loption == "maximum_depth") {
-			auto arg = BigIntValue::Get(kv.second);
-			if (arg == -1) {
-				options.max_depth = NumericLimits<idx_t>::Maximum();
-			} else {
-				options.max_depth = arg;
-			}
-		} else if (loption == "field_appearance_threshold") {
-			auto arg = DoubleValue::Get(kv.second);
-			if (arg < 0 || arg > 1) {
-				throw BinderException(
-				    "read_json_auto \"field_appearance_threshold\" parameter must be between 0 and 1");
-			}
-			options.field_appearance_threshold = arg;
-		} else if (loption == "map_inference_threshold") {
-			auto arg = BigIntValue::Get(kv.second);
-			if (arg == -1) {
-				options.map_inference_threshold = NumericLimits<idx_t>::Maximum();
-			} else if (arg >= 0) {
-				options.map_inference_threshold = arg;
-			} else {
-				throw BinderException("read_json_auto \"map_inference_threshold\" parameter must be 0 or positive, "
-				                      "or -1 to disable map inference for consistent objects.");
-			}
-		} else if (loption == "dateformat" || loption == "date_format") {
-			auto format_string = StringValue::Get(kv.second);
-			if (StringUtil::Lower(format_string) == "iso") {
-				format_string = "%Y-%m-%d";
-			}
-			options.date_format = format_string;
-
-			StrpTimeFormat format;
-			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
-			if (!error.empty()) {
-				throw BinderException("read_json could not parse \"dateformat\": '%s'.", error.c_str());
-			}
-		} else if (loption == "timestampformat" || loption == "timestamp_format") {
-			auto format_string = StringValue::Get(kv.second);
-			if (StringUtil::Lower(format_string) == "iso") {
-				format_string = "%Y-%m-%dT%H:%M:%S.%fZ";
-			}
-			options.timestamp_format = format_string;
-
-			StrpTimeFormat format;
-			auto error = StrTimeFormat::ParseFormatSpecifier(format_string, format);
-			if (!error.empty()) {
-				throw BinderException("read_json could not parse \"timestampformat\": '%s'.", error.c_str());
-			}
-		} else if (loption == "records") {
-			auto arg = StringValue::Get(kv.second);
-			if (arg == "auto") {
-				options.record_type = JSONRecordType::AUTO_DETECT;
-			} else if (arg == "true") {
-				options.record_type = JSONRecordType::RECORDS;
-			} else if (arg == "false") {
-				options.record_type = JSONRecordType::VALUES;
-			} else {
-				throw BinderException("read_json requires \"records\" to be one of ['auto', 'true', 'false'].");
-			}
-		} else if (loption == "maximum_sample_files") {
-			auto arg = BigIntValue::Get(kv.second);
-			if (arg == -1) {
-				options.maximum_sample_files = NumericLimits<idx_t>::Maximum();
-			} else if (arg > 0) {
-				options.maximum_sample_files = arg;
-			} else {
-				throw BinderException("read_json \"maximum_sample_files\" parameter must be positive, or -1 to remove "
-				                      "the limit on the number of files used to sample \"sample_size\" rows.");
-			}
-		} else if (loption == "convert_strings_to_integers") {
-			options.convert_strings_to_integers = BooleanValue::Get(kv.second);
-		}
-	}
-
+	names = options.name_list;
+	return_types = options.sql_type_list;
 	if (options.record_type == JSONRecordType::AUTO_DETECT && return_types.size() > 1) {
 		// More than one specified column implies records
 		options.record_type = JSONRecordType::RECORDS;
@@ -338,7 +225,6 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 
 	if (options.auto_detect || options.record_type == JSONRecordType::AUTO_DETECT) {
 		JSONScan::AutoDetect(context, *bind_data, return_types, names);
-		options.names = names;
 		D_ASSERT(return_types.size() == names.size());
 	}
 
@@ -346,6 +232,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	MultiFileReader().BindOptions(bind_data->file_options, file_list, return_types, names,
 	                              bind_data->reader_bind);
 	bind_data->files = file_list.GetAllFiles();
+	bind_data->names = names;
 
 	auto &transform_options = bind_data->transform_options;
 	transform_options.strict_cast = !options.ignore_errors;

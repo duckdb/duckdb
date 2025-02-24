@@ -66,6 +66,7 @@ public:
 	//! The readers
 	vector<unique_ptr<BufferedJSONReader>> union_readers;
 
+	vector<string> names;
 	//! JSON reader options
 	JSONReaderOptions options;
 	//! Multi-file reader options
