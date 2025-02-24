@@ -304,3 +304,19 @@ class TestCanonicalExtensionTypes(object):
         )
         tbl = duckdb_cursor.sql("""SELECT geometry as wkt FROM geo_table;""").arrow()
         assert pa.types.is_binary(tbl.schema[0].type)
+
+        field = pa.field(
+            "varint_value",
+            pa.binary(),
+            metadata={
+                "ARROW:extension:name": "arrow.opaque",
+                "ARROW:extension:metadata": '{"vendor_name":"DuckDB","type_name":"varint","key": {"complex": "value"}}',
+            },
+        )
+        schema = pa.schema([field])
+        varint_table = pa.table(
+            [pa.array([], pa.binary())],
+            schema=schema,
+        )
+        assert duckdb_cursor.sql("""DESCRIBE FROM varint_table;""").fetchone() == ('varint_value', 'VARINT', 'YES', None, None, None) 
+        
