@@ -436,28 +436,19 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	    !require_more_padding && !invalid_padding && num_cols == max_columns_found && comments_are_acceptable) {
 		auto &sniffing_state_machine = scanner->GetStateMachine();
 
-		bool same_quote_is_candidate = false;
-		for (const auto &candidate : candidates) {
-			if (sniffing_state_machine.dialect_options.state_machine_options.quote ==
-			    candidate->GetStateMachine().dialect_options.state_machine_options.quote) {
-				same_quote_is_candidate = true;
+		if (options.dialect_options.skip_rows.IsSetByUser()) {
+			// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
+			// ignore_errors is set
+			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
+				return;
 			}
+			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
+		} else if (!options.null_padding) {
+			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
 		}
-		if (!same_quote_is_candidate) {
-			if (options.dialect_options.skip_rows.IsSetByUser()) {
-				// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
-				// ignore_errors is set
-				if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
-					return;
-				}
-				sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
-			} else if (!options.null_padding) {
-				sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
-			}
-			sniffing_state_machine.dialect_options.num_cols = num_cols;
-			lines_sniffed = sniffed_column_counts.result_position;
-			candidates.emplace_back(std::move(scanner));
-		}
+		sniffing_state_machine.dialect_options.num_cols = num_cols;
+		lines_sniffed = sniffed_column_counts.result_position;
+		candidates.emplace_back(std::move(scanner));
 	}
 }
 
