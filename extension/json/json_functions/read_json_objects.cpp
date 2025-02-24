@@ -7,16 +7,20 @@ namespace duckdb {
 
 unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFunctionBindInput &input,
                                              vector<LogicalType> &return_types, vector<string> &names) {
-	auto bind_data = make_uniq<JSONScanData>();
-	bind_data->Bind(context, input);
+	auto bind_data = make_uniq<MultiFileBindData>();
+	auto json_bind_data = make_uniq<JSONScanData>();
+	auto &json_data = *json_bind_data;
+	bind_data->bind_data = std::move(json_bind_data);
+
+	json_data.Bind(context, *bind_data, input);
 
 	return_types.push_back(LogicalType::JSON());
 	names.emplace_back("json");
 	bind_data->names = names;
 
-	SimpleMultiFileList file_list(std::move(bind_data->files));
+	SimpleMultiFileList file_list(std::move(json_data.files));
 	MultiFileReader().BindOptions(bind_data->file_options, file_list, return_types, names, bind_data->reader_bind);
-	bind_data->files = file_list.GetAllFiles();
+	json_data.files = file_list.GetAllFiles();
 
 	return std::move(bind_data);
 }

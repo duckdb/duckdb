@@ -45,9 +45,9 @@ struct JSONScanData : public TableFunctionData {
 public:
 	JSONScanData();
 
-	void Bind(ClientContext &context, TableFunctionBindInput &input);
+	void Bind(ClientContext &context, MultiFileBindData &bind_data, TableFunctionBindInput &input);
 
-	void InitializeReaders(ClientContext &context);
+	void InitializeReaders(ClientContext &context, MultiFileBindData &bind_data);
 	void InitializeFormats();
 	void InitializeFormats(bool auto_detect);
 
@@ -55,21 +55,11 @@ public:
 	//! Scan type
 	JSONScanType type;
 
-	//! Multi-file reader stuff
-	MultiFileReaderBindData reader_bind;
-
 	//! The files we're reading
 	vector<string> files;
-	//! Initial file reader
-	unique_ptr<BufferedJSONReader> initial_reader;
-	//! The readers
-	vector<unique_ptr<BufferedJSONReader>> union_readers;
 
-	vector<string> names;
 	//! JSON reader options
 	JSONReaderOptions options;
-	//! Multi-file reader options
-	MultiFileReaderOptions file_options;
 
 	//! Options when transforming the JSON to columnar data
 	JSONTransformOptions transform_options;
@@ -97,11 +87,12 @@ public:
 
 struct JSONScanGlobalState {
 public:
-	JSONScanGlobalState(ClientContext &context, const JSONScanData &bind_data);
+	JSONScanGlobalState(ClientContext &context, const MultiFileBindData &bind_data);
 
 public:
 	//! Bound data
-	const JSONScanData &bind_data;
+	const MultiFileBindData &bind_data;
+	const JSONScanData &json_data;
 	//! Options when transforming the JSON to columnar data
 	JSONTransformOptions transform_options;
 
@@ -183,7 +174,8 @@ private:
 
 private:
 	//! Bind data
-	const JSONScanData &bind_data;
+	const MultiFileBindData &bind_data;
+	const JSONScanData &json_data;
 	//! Thread-local allocator
 	JSONAllocator allocator;
 
@@ -233,7 +225,7 @@ public:
 
 struct JSONScan {
 public:
-	static void AutoDetect(ClientContext &context, JSONScanData &bind_data, vector<LogicalType> &return_types,
+	static void AutoDetect(ClientContext &context, MultiFileBindData &bind_data, vector<LogicalType> &return_types,
 	                       vector<string> &names);
 
 	static double ScanProgress(ClientContext &context, const FunctionData *bind_data_p,

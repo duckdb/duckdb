@@ -114,10 +114,13 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 
 static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
                                                  vector<LogicalType> &expected_types) {
-	auto bind_data = make_uniq<JSONScanData>();
-	bind_data->type = JSONScanType::READ_JSON;
+	auto bind_data = make_uniq<MultiFileBindData>();
+	auto json_bind_data = make_uniq<JSONScanData>();
+	auto &json_data = *json_bind_data;
+	bind_data->bind_data = std::move(json_bind_data);
+	json_data.type = JSONScanType::READ_JSON;
 
-	bind_data->files.emplace_back(info.file_path);
+	json_data.files.emplace_back(info.file_path);
 	bind_data->names = expected_names;
 
 	JSONFileReaderOptions reader_options;
@@ -130,25 +133,24 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 		}
 		throw BinderException("Unknown option for COPY ... FROM ... (FORMAT JSON): \"%s\".", kv.first);
 	}
-	bind_data->options = std::move(reader_options.options);
+	json_data.options = std::move(reader_options.options);
 
-	auto &options = bind_data->options;
+	auto &options = json_data.options;
 
-	bind_data->InitializeFormats(options.auto_detect);
+	json_data.InitializeFormats(options.auto_detect);
 	if (options.auto_detect && options.format != JSONFormat::ARRAY) {
 		options.format = JSONFormat::AUTO_DETECT;
 	}
 
-	bind_data->transform_options = JSONTransformOptions(true, true, true, true);
-	bind_data->transform_options.delay_error = true;
+	json_data.transform_options = JSONTransformOptions(true, true, true, true);
+	json_data.transform_options.delay_error = true;
 
-	bind_data->InitializeReaders(context);
+	json_data.InitializeReaders(context, *bind_data);
 	if (options.auto_detect) {
 		JSONScan::AutoDetect(context, *bind_data, expected_types, expected_names);
 	}
 
-	bind_data->transform_options.date_format_map = &options.date_format_map;
-
+	json_data.transform_options.date_format_map = &options.date_format_map;
 	return std::move(bind_data);
 }
 
