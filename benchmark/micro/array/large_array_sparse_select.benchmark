@@ -1,0 +1,15 @@
+# name: benchmark/micro/array/large_array_sparse_select.benchmark
+# description: Array Sparse Select: select only one out of every 2000 large arrays
+# group: [array]
+
+name Large Array Sparse Select
+group array
+
+load
+CREATE TABLE arrays AS SELECT i%2000 as id, [i + x for x in range(1024)]::INT[1024] arr FROM range(10000000) tbl(i);
+
+run
+SELECT SUM(LIST_SUM(arr)) FROM arrays WHERE id=88;
+
+result I
+25597949440000
