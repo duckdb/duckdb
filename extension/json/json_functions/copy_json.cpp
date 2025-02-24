@@ -9,6 +9,7 @@
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
+#include "json_multi_file_info.hpp"
 
 namespace duckdb {
 
@@ -115,64 +116,35 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
                                                  vector<LogicalType> &expected_types) {
 	auto bind_data = make_uniq<JSONScanData>();
 	bind_data->type = JSONScanType::READ_JSON;
-	bind_data->options.record_type = JSONRecordType::RECORDS;
-	bind_data->options.format = JSONFormat::NEWLINE_DELIMITED;
 
 	bind_data->files.emplace_back(info.file_path);
 	bind_data->names = expected_names;
 
+	JSONFileReaderOptions reader_options;
+	reader_options.options.record_type = JSONRecordType::RECORDS;
+	reader_options.options.format = JSONFormat::NEWLINE_DELIMITED;
+	for (auto &kv : info.options) {
+		if (JSONMultiFileInfo::ParseCopyOption(context, kv.first, kv.second, reader_options, expected_names,
+		                                       expected_types)) {
+			continue;
+		}
+		throw BinderException("Unknown option for COPY ... FROM ... (FORMAT JSON): \"%s\".", kv.first);
+	}
+	bind_data->options = std::move(reader_options.options);
+
 	auto &options = bind_data->options;
 
-	bool auto_detect = false;
-	for (auto &kv : info.options) {
-		const auto &loption = StringUtil::Lower(kv.first);
-		if (loption == "dateformat" || loption == "date_format") {
-			if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			}
-			options.date_format = StringValue::Get(kv.second.back());
-		} else if (loption == "timestampformat" || loption == "timestamp_format") {
-			if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			}
-			options.timestamp_format = StringValue::Get(kv.second.back());
-		} else if (loption == "auto_detect") {
-			if (kv.second.empty()) {
-				auto_detect = true;
-			} else if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			} else {
-				auto_detect = BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
-			}
-		} else if (loption == "compression") {
-			if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			}
-			options.compression = EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(StringValue::Get(kv.second.back())));
-		} else if (loption == "array") {
-			if (kv.second.empty()) {
-				options.format = JSONFormat::ARRAY;
-			} else if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			} else if (BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
-				options.format = JSONFormat::ARRAY;
-			}
-		} else {
-			throw BinderException("Unknown option for COPY ... FROM ... (FORMAT JSON): \"%s\".", loption);
-		}
-	}
-	bind_data->InitializeFormats(auto_detect);
-	if (auto_detect && bind_data->options.format != JSONFormat::ARRAY) {
-		bind_data->options.format = JSONFormat::AUTO_DETECT;
+	bind_data->InitializeFormats(options.auto_detect);
+	if (options.auto_detect && options.format != JSONFormat::ARRAY) {
+		options.format = JSONFormat::AUTO_DETECT;
 	}
 
 	bind_data->transform_options = JSONTransformOptions(true, true, true, true);
 	bind_data->transform_options.delay_error = true;
 
 	bind_data->InitializeReaders(context);
-	if (auto_detect) {
+	if (options.auto_detect) {
 		JSONScan::AutoDetect(context, *bind_data, expected_types, expected_names);
-		options.auto_detect = true;
 	}
 
 	bind_data->transform_options.date_format_map = &options.date_format_map;

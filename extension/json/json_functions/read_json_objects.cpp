@@ -15,8 +15,7 @@ unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFuncti
 	bind_data->names = names;
 
 	SimpleMultiFileList file_list(std::move(bind_data->files));
-	MultiFileReader().BindOptions(bind_data->file_options, file_list, return_types, names,
-	                              bind_data->reader_bind);
+	MultiFileReader().BindOptions(bind_data->file_options, file_list, return_types, names, bind_data->reader_bind);
 	bind_data->files = file_list.GetAllFiles();
 
 	return std::move(bind_data);

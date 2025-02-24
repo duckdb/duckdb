@@ -163,7 +163,8 @@ void JSONScan::AutoDetect(ClientContext &context, JSONScanData &bind_data, vecto
 		}
 	}
 
-	if (!options.auto_detect) {
+	if (!names.empty()) {
+		// COPY - we already have names/types
 		return;
 	}
 
@@ -230,8 +231,7 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	}
 
 	SimpleMultiFileList file_list(std::move(bind_data->files));
-	MultiFileReader().BindOptions(bind_data->file_options, file_list, return_types, names,
-	                              bind_data->reader_bind);
+	MultiFileReader().BindOptions(bind_data->file_options, file_list, return_types, names, bind_data->reader_bind);
 	bind_data->files = file_list.GetAllFiles();
 	bind_data->names = names;
 

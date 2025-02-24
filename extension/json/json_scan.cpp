@@ -35,7 +35,6 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	}
 	options = std::move(reader_options.options);
 
-
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 	file_options.AutoDetectHivePartitioning(*file_list, context);
@@ -181,9 +180,9 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	auto global_columns =
 	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, dummy_global_types);
 	for (auto &reader : gstate.json_readers) {
-		MultiFileReader().FinalizeBind(bind_data.file_options, gstate.bind_data.reader_bind,
-		                               reader->GetFileName(), local_columns, global_columns, input.column_indexes,
-		                               reader->reader_data, context, nullptr);
+		MultiFileReader().FinalizeBind(bind_data.file_options, gstate.bind_data.reader_bind, reader->GetFileName(),
+		                               local_columns, global_columns, input.column_indexes, reader->reader_data,
+		                               context, nullptr);
 	}
 
 	return std::move(result);
@@ -197,8 +196,8 @@ idx_t JSONGlobalTableFunctionState::MaxThreads() const {
 		auto &reader = *state.json_readers[0];
 		if (bind_data.options.format == JSONFormat::NEWLINE_DELIMITED ||
 		    reader.GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
-			return MaxValue<idx_t>(state.json_readers[0]->GetFileHandle().FileSize() / bind_data.options.maximum_object_size,
-			                       1);
+			return MaxValue<idx_t>(
+			    state.json_readers[0]->GetFileHandle().FileSize() / bind_data.options.maximum_object_size, 1);
 		}
 	}
 
@@ -970,8 +969,7 @@ void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, Fu
 	SimpleMultiFileList file_list(std::move(data.files));
 
 	MultiFilePushdownInfo info(get);
-	auto filtered_list =
-	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.file_options, info, filters);
+	auto filtered_list = MultiFileReader().ComplexFilterPushdown(context, file_list, data.file_options, info, filters);
 	if (filtered_list) {
 		MultiFileReader().PruneReaders(data, *filtered_list);
 		data.files = filtered_list->GetAllFiles();
