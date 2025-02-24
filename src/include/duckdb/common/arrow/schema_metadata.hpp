@@ -44,7 +44,7 @@ public:
 
 private:
 	//! The unordered map that holds the metadata
-	unordered_map<string, string>  schema_metadata_map;
+	unordered_map<string, string> schema_metadata_map;
 	//! The extension metadata map, currently only used for internal types in arrow.opaque
 	ComplexJSON extension_metadata_map;
 };

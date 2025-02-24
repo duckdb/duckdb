@@ -611,12 +611,7 @@ unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
 	return result;
 }
 
-string ToJsonMapInternal(const unordered_map<string, string> &map, yyjson_mut_doc *doc, yyjson_mut_val *root) {
-	for (auto &entry : map) {
-		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
-		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
-		yyjson_mut_obj_add(root, key, value);
-	}
+string WriteJsonToString(yyjson_mut_doc *doc) {
 	yyjson_write_err err;
 	size_t len;
 	constexpr yyjson_write_flag flags = YYJSON_WRITE_ALLOW_INVALID_UNICODE;
@@ -635,12 +630,53 @@ string ToJsonMapInternal(const unordered_map<string, string> &map, yyjson_mut_do
 	// Return the result
 	return result;
 }
+
+string ToJsonMapInternal(const unordered_map<string, string> &map, yyjson_mut_doc *doc, yyjson_mut_val *root) {
+	for (auto &entry : map) {
+		auto key = yyjson_mut_strncpy(doc, entry.first.c_str(), entry.first.size());
+		auto value = yyjson_mut_strncpy(doc, entry.second.c_str(), entry.second.size());
+		yyjson_mut_obj_add(root, key, value);
+	}
+	return WriteJsonToString(doc);
+}
 string StringUtil::ToJSONMap(const unordered_map<string, string> &map) {
 	yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
 	yyjson_mut_val *root = yyjson_mut_obj(doc);
 	yyjson_mut_doc_set_root(doc, root);
 
 	return ToJsonMapInternal(map, doc, root);
+}
+
+string ComplexJSON::GetValue(const string &key) const {
+	if (is_object) {
+		if (obj_value.find(key) != obj_value.end()) {
+			return GetValueRecursive(obj_value.at(key));
+		}
+	}
+	// Object either doesn't exist or this is just a string
+	return "";
+}
+
+string ComplexJSON::GetValueRecursive(const ComplexJSON &child) {
+	if (child.is_object) {
+		// We have to construct the nested json
+		yyjson_mut_doc *doc = yyjson_mut_doc_new(nullptr);
+		yyjson_mut_val *root = yyjson_mut_obj(doc);
+		yyjson_mut_doc_set_root(doc, root);
+		for (const auto &object : child.obj_value) {
+			auto key = yyjson_mut_strncpy(doc, object.first.c_str(), object.first.size());
+			auto value_str = GetValueRecursive(object.second);
+			auto value = yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
+			yyjson_mut_obj_add(root, key, value);
+		}
+		return WriteJsonToString(doc);
+	} else {
+		// simple string we can just write
+		return child.str_value;
+	}
+}
+string StringUtil::ToComplexJSONMap(const ComplexJSON &complex_json) {
+	return ComplexJSON::GetValueRecursive(complex_json);
 }
 
 string StringUtil::ExceptionToJSONMap(ExceptionType type, const string &message,

@@ -309,7 +309,10 @@ public:
 	DUCKDB_API static string ExceptionToJSONMap(ExceptionType type, const string &message,
 	                                            const unordered_map<string, string> &map);
 
+	//! Transforms an unordered map to a JSON string
 	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map);
+	//! Transforms an complex JSON to a JSON string
+	DUCKDB_API static string ToComplexJSONMap(const ComplexJSON &complex_json);
 
 	DUCKDB_API static string GetFileName(const string &file_path);
 	DUCKDB_API static string GetFileExtension(const string &file_name);

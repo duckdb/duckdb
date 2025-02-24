@@ -58,9 +58,9 @@ ArrowSchemaMetadata ArrowSchemaMetadata::NonCanonicalType(const string &type_nam
 	ArrowSchemaMetadata metadata;
 	metadata.AddOption(ARROW_EXTENSION_NAME, ArrowExtensionMetadata::ARROW_EXTENSION_NON_CANONICAL);
 	// We have to set the metadata key with type_name and vendor_name.
-	metadata.extension_metadata_map["vendor_name"] = vendor_name;
-	metadata.extension_metadata_map["type_name"] = type_name;
-	metadata.AddOption(ARROW_METADATA_KEY, StringUtil::ToJSONMap(metadata.extension_metadata_map));
+	metadata.extension_metadata_map.AddObject("vendor_name", ComplexJSON(vendor_name));
+	metadata.extension_metadata_map.AddObject("type_name", ComplexJSON(type_name));
+	metadata.AddOption(ARROW_METADATA_KEY, StringUtil::ToComplexJSONMap(metadata.extension_metadata_map));
 	return metadata;
 }
 
@@ -70,8 +70,9 @@ bool ArrowSchemaMetadata::HasExtension() const {
 }
 
 ArrowExtensionMetadata ArrowSchemaMetadata::GetExtensionInfo(string format) {
-	return {schema_metadata_map[ARROW_EXTENSION_NAME], extension_metadata_map["vendor_name"],
-	        extension_metadata_map["type_name"], std::move(format)};
+
+	return {schema_metadata_map[ARROW_EXTENSION_NAME], extension_metadata_map.GetValue("vendor_name"),
+	        extension_metadata_map.GetValue("type_name"), std::move(format)};
 }
 
 unsafe_unique_array<char> ArrowSchemaMetadata::SerializeMetadata() const {

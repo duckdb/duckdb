@@ -8,7 +8,13 @@
 
 #pragma once
 
+namespace duckdb_yyjson {
+struct yyjson_mut_doc;
+struct yyjson_mut_val;
+} // namespace duckdb_yyjson
+
 namespace duckdb {
+
 //! Custom struct to handle both strings and nested JSON objects
 struct ComplexJSON {
 	//! Constructor for string values
@@ -22,15 +28,24 @@ struct ComplexJSON {
 	ComplexJSON() : is_object(false) {};
 
 	//! Adds Object
-	void AddObject(const string &key, const ComplexJSON object) {
+	void AddObject(const string &key, const ComplexJSON &object) {
 		is_object = true;
 		obj_value[key] = object;
 	}
 	ComplexJSON GetObject(const string &key) {
 		if (is_object) {
+			if (obj_value.find(key) == obj_value.end()) {
+				return ComplexJSON();
+			}
 			return obj_value[key];
+		} else {
+			throw InvalidInputException("ComplexJson is not an object");
 		}
 	}
+	string GetValue(const string &key) const;
+	static string GetValueRecursive(const ComplexJSON &child);
+
+private:
 	string str_value;
 	unordered_map<string, ComplexJSON> obj_value;
 	bool is_object;
