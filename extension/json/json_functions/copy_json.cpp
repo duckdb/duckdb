@@ -119,7 +119,9 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 	bind_data->options.format = JSONFormat::NEWLINE_DELIMITED;
 
 	bind_data->files.emplace_back(info.file_path);
-	bind_data->names = expected_names;
+	bind_data->options.names = expected_names;
+
+	auto &options = bind_data->options;
 
 	bool auto_detect = false;
 	for (auto &kv : info.options) {
@@ -128,12 +130,12 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 			if (kv.second.size() != 1) {
 				ThrowJSONCopyParameterException(loption);
 			}
-			bind_data->date_format = StringValue::Get(kv.second.back());
+			options.date_format = StringValue::Get(kv.second.back());
 		} else if (loption == "timestampformat" || loption == "timestamp_format") {
 			if (kv.second.size() != 1) {
 				ThrowJSONCopyParameterException(loption);
 			}
-			bind_data->timestamp_format = StringValue::Get(kv.second.back());
+			options.timestamp_format = StringValue::Get(kv.second.back());
 		} else if (loption == "auto_detect") {
 			if (kv.second.empty()) {
 				auto_detect = true;
@@ -149,11 +151,11 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 			bind_data->SetCompression(StringValue::Get(kv.second.back()));
 		} else if (loption == "array") {
 			if (kv.second.empty()) {
-				bind_data->options.format = JSONFormat::ARRAY;
+				options.format = JSONFormat::ARRAY;
 			} else if (kv.second.size() != 1) {
 				ThrowJSONCopyParameterException(loption);
 			} else if (BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
-				bind_data->options.format = JSONFormat::ARRAY;
+				options.format = JSONFormat::ARRAY;
 			}
 		} else {
 			throw BinderException("Unknown option for COPY ... FROM ... (FORMAT JSON): \"%s\".", loption);
@@ -170,10 +172,10 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 	bind_data->InitializeReaders(context);
 	if (auto_detect) {
 		JSONScan::AutoDetect(context, *bind_data, expected_types, expected_names);
-		bind_data->auto_detect = true;
+		options.auto_detect = true;
 	}
 
-	bind_data->transform_options.date_format_map = &bind_data->date_format_map;
+	bind_data->transform_options.date_format_map = &options.date_format_map;
 
 	return std::move(bind_data);
 }

@@ -193,7 +193,7 @@ idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, idx_t &position
 	return read_size;
 }
 
-BufferedJSONReader::BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options_p, string file_name_p)
+BufferedJSONReader::BufferedJSONReader(ClientContext &context, JSONReaderOptions options_p, string file_name_p)
     : context(context), options(std::move(options_p)), file_name(std::move(file_name_p)), buffer_index(0),
       thrown(false) {
 }
@@ -228,7 +228,7 @@ bool BufferedJSONReader::IsOpen() const {
 	return false;
 }
 
-BufferedJSONReaderOptions &BufferedJSONReader::GetOptions() {
+JSONReaderOptions &BufferedJSONReader::GetOptions() {
 	return options;
 }
 

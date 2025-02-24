@@ -13,33 +13,25 @@ namespace duckdb {
 JSONScanData::JSONScanData() {
 }
 
-JSONScanData::JSONScanData(ClientContext &context, vector<string> files_p, string date_format_p,
-                           string timestamp_format_p)
-    : files(std::move(files_p)), date_format(std::move(date_format_p)),
-      timestamp_format(std::move(timestamp_format_p)) {
-	InitializeReaders(context);
-	InitializeFormats();
-}
-
 void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 	auto &info = input.info->Cast<JSONScanInfo>();
 	type = info.type;
 	options.format = info.format;
 	options.record_type = info.record_type;
-	auto_detect = info.auto_detect;
+	options.auto_detect = info.auto_detect;
 
 	for (auto &kv : input.named_parameters) {
 		if (kv.second.IsNull()) {
 			throw BinderException("Cannot use NULL as function argument");
 		}
-		if (MultiFileReader().ParseOption(kv.first, kv.second, options.file_options, context)) {
+		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
 			continue;
 		}
 		auto loption = StringUtil::Lower(kv.first);
 		if (loption == "ignore_errors") {
-			ignore_errors = BooleanValue::Get(kv.second);
+			options.ignore_errors = BooleanValue::Get(kv.second);
 		} else if (loption == "maximum_object_size") {
-			maximum_object_size = MaxValue<idx_t>(UIntegerValue::Get(kv.second), maximum_object_size);
+			options.maximum_object_size = MaxValue<idx_t>(UIntegerValue::Get(kv.second), options.maximum_object_size);
 		} else if (loption == "format") {
 			auto arg = StringUtil::Lower(StringValue::Get(kv.second));
 			static const auto FORMAT_OPTIONS =
@@ -65,7 +57,7 @@ void JSONScanData::Bind(ClientContext &context, TableFunctionBindInput &input) {
 
 	auto multi_file_reader = MultiFileReader::Create(input.table_function);
 	auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
-	options.file_options.AutoDetectHivePartitioning(*file_list, context);
+	file_options.AutoDetectHivePartitioning(*file_list, context);
 
 	// TODO: store the MultiFilelist instead
 	files = file_list->GetAllFiles();
@@ -85,16 +77,16 @@ void JSONScanData::InitializeReaders(ClientContext &context) {
 }
 
 void JSONScanData::InitializeFormats() {
-	InitializeFormats(auto_detect);
+	InitializeFormats(options.auto_detect);
 }
 
 void JSONScanData::InitializeFormats(bool auto_detect_p) {
 	// Initialize date_format_map if anything was specified
-	if (!date_format.empty()) {
-		date_format_map.AddFormat(LogicalTypeId::DATE, date_format);
+	if (!options.date_format.empty()) {
+		options.date_format_map.AddFormat(LogicalTypeId::DATE, options.date_format);
 	}
-	if (!timestamp_format.empty()) {
-		date_format_map.AddFormat(LogicalTypeId::TIMESTAMP, timestamp_format);
+	if (!options.timestamp_format.empty()) {
+		options.date_format_map.AddFormat(LogicalTypeId::TIMESTAMP, options.timestamp_format);
 	}
 
 	if (auto_detect_p) {
@@ -108,12 +100,12 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 		// Populate possible date/timestamp formats, assume this is consistent across columns
 		for (auto &kv : FORMAT_TEMPLATES) {
 			const auto &logical_type = kv.first;
-			if (date_format_map.HasFormats(logical_type)) {
+			if (options.date_format_map.HasFormats(logical_type)) {
 				continue; // Already populated
 			}
 			const auto &format_strings = kv.second;
 			for (auto &format_string : format_strings) {
-				date_format_map.AddFormat(logical_type, format_string);
+				options.date_format_map.AddFormat(logical_type, format_string);
 			}
 		}
 	}
@@ -124,20 +116,20 @@ void JSONScanData::SetCompression(const string &compression) {
 }
 
 string JSONScanData::GetDateFormat() const {
-	if (!date_format.empty()) {
-		return date_format;
-	} else if (date_format_map.HasFormats(LogicalTypeId::DATE)) {
-		return date_format_map.GetFormat(LogicalTypeId::DATE).format_specifier;
+	if (!options.date_format.empty()) {
+		return options.date_format;
+	} else if (options.date_format_map.HasFormats(LogicalTypeId::DATE)) {
+		return options.date_format_map.GetFormat(LogicalTypeId::DATE).format_specifier;
 	} else {
 		return string();
 	}
 }
 
 string JSONScanData::GetTimestampFormat() const {
-	if (!timestamp_format.empty()) {
-		return timestamp_format;
-	} else if (date_format_map.HasFormats(LogicalTypeId::TIMESTAMP)) {
-		return date_format_map.GetFormat(LogicalTypeId::TIMESTAMP).format_specifier;
+	if (!options.timestamp_format.empty()) {
+		return options.timestamp_format;
+	} else if (options.date_format_map.HasFormats(LogicalTypeId::TIMESTAMP)) {
+		return options.date_format_map.GetFormat(LogicalTypeId::TIMESTAMP).format_specifier;
 	} else {
 		return string();
 	}
@@ -145,7 +137,7 @@ string JSONScanData::GetTimestampFormat() const {
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const JSONScanData &bind_data_p)
     : bind_data(bind_data_p), transform_options(bind_data.transform_options), allocator(BufferAllocator::Get(context)),
-      buffer_capacity(bind_data.maximum_object_size * 2), file_index(0), batch_index(0),
+      buffer_capacity(bind_data.options.maximum_object_size * 2), file_index(0), batch_index(0),
       system_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
       enable_parallel_scans(bind_data.files.size() < system_threads) {
 }
@@ -185,12 +177,12 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 			continue;
 		}
 
-		gstate.names.push_back(bind_data.names[col_id]);
+		gstate.names.push_back(bind_data.options.names[col_id]);
 		gstate.column_ids.push_back(col_idx);
 		gstate.column_indices.push_back(input.column_indexes[col_idx]);
 	}
 
-	if (gstate.names.size() < bind_data.names.size() || bind_data.options.file_options.union_by_name) {
+	if (gstate.names.size() < bind_data.options.names.size() || bind_data.file_options.union_by_name) {
 		// If we are auto-detecting, but don't need all columns present in the file,
 		// then we don't need to throw an error if we encounter an unseen column
 		gstate.transform_options.error_unknown_key = false;
@@ -206,13 +198,13 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 		gstate.json_readers.emplace_back(reader.get());
 	}
 
-	vector<LogicalType> dummy_global_types(bind_data.names.size(), LogicalType::ANY);
+	vector<LogicalType> dummy_global_types(bind_data.options.names.size(), LogicalType::ANY);
 	vector<LogicalType> dummy_local_types(gstate.names.size(), LogicalType::ANY);
 	auto local_columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(gstate.names, dummy_local_types);
 	auto global_columns =
-	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, dummy_global_types);
+	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.options.names, dummy_global_types);
 	for (auto &reader : gstate.json_readers) {
-		MultiFileReader().FinalizeBind(reader->GetOptions().file_options, gstate.bind_data.reader_bind,
+		MultiFileReader().FinalizeBind(bind_data.file_options, gstate.bind_data.reader_bind,
 		                               reader->GetFileName(), local_columns, global_columns, input.column_indexes,
 		                               reader->reader_data, context, nullptr);
 	}
@@ -228,7 +220,7 @@ idx_t JSONGlobalTableFunctionState::MaxThreads() const {
 		auto &reader = *state.json_readers[0];
 		if (bind_data.options.format == JSONFormat::NEWLINE_DELIMITED ||
 		    reader.GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
-			return MaxValue<idx_t>(state.json_readers[0]->GetFileHandle().FileSize() / bind_data.maximum_object_size,
+			return MaxValue<idx_t>(state.json_readers[0]->GetFileHandle().FileSize() / bind_data.options.maximum_object_size,
 			                       1);
 		}
 	}
@@ -253,7 +245,7 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
 	auto result = make_uniq<JSONLocalTableFunctionState>(context.client, gstate.state);
 
 	// Copy the transform options / date format map because we need to do thread-local stuff
-	result->state.date_format_map = gstate.state.bind_data.date_format_map.Copy();
+	result->state.date_format_map = gstate.state.bind_data.options.date_format_map.Copy();
 	result->state.transform_options = gstate.state.transform_options;
 	result->state.transform_options.date_format_map = &result->state.date_format_map;
 
@@ -395,11 +387,11 @@ void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size
 		                                     &err);
 	}
 	if (err.code != YYJSON_READ_SUCCESS) {
-		auto can_ignore_this_error = bind_data.ignore_errors;
+		auto can_ignore_this_error = bind_data.options.ignore_errors;
 		string extra;
 		if (current_reader->GetFormat() != JSONFormat::NEWLINE_DELIMITED) {
 			can_ignore_this_error = false;
-			extra = bind_data.ignore_errors
+			extra = bind_data.options.ignore_errors
 			            ? "Parse errors cannot be ignored for JSON formats other than 'newline_delimited'"
 			            : "";
 		}
@@ -418,7 +410,7 @@ void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size
 		err.pos = json_size;
 		current_reader->ThrowParseError(current_buffer_handle->buffer_index, lines_or_objects_in_buffer, err,
 		                                "Try auto-detecting the JSON format");
-	} else if (!bind_data.ignore_errors && read_size < json_size) {
+	} else if (!bind_data.options.ignore_errors && read_size < json_size) {
 		idx_t off = read_size;
 		idx_t rem = json_size;
 		SkipWhitespace(json_start, off, rem);
@@ -447,7 +439,7 @@ void JSONScanLocalState::ThrowObjectSizeError(const idx_t object_size) {
 	throw InvalidInputException(
 	    "\"maximum_object_size\" of %llu bytes exceeded while reading file \"%s\" (>%llu bytes)."
 	    "\n Try increasing \"maximum_object_size\".",
-	    bind_data.maximum_object_size, current_reader->GetFileName(), object_size);
+	    bind_data.options.maximum_object_size, current_reader->GetFileName(), object_size);
 }
 
 void JSONScanLocalState::TryIncrementFileIndex(JSONScanGlobalState &gstate) const {
@@ -689,7 +681,7 @@ void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, Allocate
 		SkipOverArrayStart();
 	}
 
-	if (!bind_data.ignore_errors && bind_data.options.record_type == JSONRecordType::RECORDS &&
+	if (!bind_data.options.ignore_errors && bind_data.options.record_type == JSONRecordType::RECORDS &&
 	    current_reader->GetRecordType() != JSONRecordType::RECORDS) {
 		current_reader->ThrowTransformError(buffer_index.GetIndex(), 0,
 		                                    "Expected records, detected non-record JSON instead.");
@@ -881,7 +873,7 @@ bool JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
 		idx_t part2_size = line_end - buffer_ptr;
 
 		line_size += part2_size;
-		if (line_size > bind_data.maximum_object_size) {
+		if (line_size > bind_data.options.maximum_object_size) {
 			ThrowObjectSizeError(line_size);
 		}
 
@@ -915,7 +907,7 @@ void JSONScanLocalState::ParseNextChunk(JSONScanGlobalState &gstate) {
 			if (!is_last) {
 				// Last bit of data belongs to the next batch
 				if (format != JSONFormat::NEWLINE_DELIMITED) {
-					if (remaining > bind_data.maximum_object_size) {
+					if (remaining > bind_data.options.maximum_object_size) {
 						ThrowObjectSizeError(remaining);
 					}
 					memcpy(GetReconstructBuffer(gstate), json_start, remaining);
@@ -1002,7 +994,7 @@ void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, Fu
 
 	MultiFilePushdownInfo info(get);
 	auto filtered_list =
-	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.options.file_options, info, filters);
+	    MultiFileReader().ComplexFilterPushdown(context, file_list, data.file_options, info, filters);
 	if (filtered_list) {
 		MultiFileReader().PruneReaders(data, *filtered_list);
 		data.files = filtered_list->GetAllFiles();
@@ -1012,17 +1004,11 @@ void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, Fu
 }
 
 void JSONScan::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &) {
-	auto &bind_data = bind_data_p->Cast<JSONScanData>();
-	serializer.WriteProperty(100, "scan_data", &bind_data);
+	throw NotImplementedException("JSONScan Serialize not implemented");
 }
 
 unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, TableFunction &) {
-	unique_ptr<JSONScanData> result;
-	deserializer.ReadProperty(100, "scan_data", result);
-	result->InitializeReaders(deserializer.Get<ClientContext &>());
-	result->InitializeFormats();
-	result->transform_options.date_format_map = &result->date_format_map;
-	return std::move(result);
+	throw NotImplementedException("JSONScan Deserialize not implemented");
 }
 
 virtual_column_map_t JSONScan::GetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {

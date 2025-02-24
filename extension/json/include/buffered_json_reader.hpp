@@ -13,27 +13,12 @@
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
+#include "json_reader_options.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "json_common.hpp"
 #include "json_enums.hpp"
 
 namespace duckdb {
-
-struct BufferedJSONReaderOptions {
-public:
-	//! The format of the JSON
-	JSONFormat format = JSONFormat::AUTO_DETECT;
-	//! Whether record types in the JSON
-	JSONRecordType record_type = JSONRecordType::AUTO_DETECT;
-	//! Whether file is compressed or not, and if so which compression type
-	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
-	//! Multi-file reader options
-	MultiFileReaderOptions file_options;
-
-public:
-	void Serialize(Serializer &serializer) const;
-	static BufferedJSONReaderOptions Deserialize(Deserializer &deserializer);
-};
 
 struct JSONBufferHandle {
 public:
@@ -103,7 +88,7 @@ private:
 
 class BufferedJSONReader {
 public:
-	BufferedJSONReader(ClientContext &context, BufferedJSONReaderOptions options, string file_name);
+	BufferedJSONReader(ClientContext &context, JSONReaderOptions options, string file_name);
 
 	void OpenJSONFile();
 	void Reset();
@@ -111,7 +96,7 @@ public:
 	bool HasFileHandle() const;
 	bool IsOpen() const;
 
-	BufferedJSONReaderOptions &GetOptions();
+	JSONReaderOptions &GetOptions();
 
 	JSONFormat GetFormat() const;
 	void SetFormat(JSONFormat format);
@@ -147,7 +132,7 @@ private:
 
 private:
 	ClientContext &context;
-	BufferedJSONReaderOptions options;
+	JSONReaderOptions options;
 
 	//! File name
 	const string file_name;
