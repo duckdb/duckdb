@@ -12,6 +12,7 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "duckdb/common/base_file_reader.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "json_reader_options.hpp"
 #include "duckdb/common/mutex.hpp"
@@ -86,7 +87,7 @@ private:
 	idx_t cached_size;
 };
 
-class BufferedJSONReader {
+class BufferedJSONReader : public BaseFileReader {
 public:
 	BufferedJSONReader(ClientContext &context, JSONReaderOptions options, string file_name);
 
@@ -134,8 +135,6 @@ private:
 	ClientContext &context;
 	JSONReaderOptions options;
 
-	//! File name
-	const string file_name;
 	//! File handle
 	unique_ptr<JSONFileHandle> file_handle;
 
@@ -151,7 +150,6 @@ private:
 
 public:
 	mutable mutex lock;
-	MultiFileReaderData reader_data;
 };
 
 } // namespace duckdb
