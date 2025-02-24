@@ -120,7 +120,9 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 	bind_data->bind_data = std::move(json_bind_data);
 	json_data.type = JSONScanType::READ_JSON;
 
-	json_data.files.emplace_back(info.file_path);
+	bind_data->multi_file_reader = MultiFileReader::CreateDefault("COPY");
+	vector<string> paths = {info.file_path};
+	bind_data->file_list = bind_data->multi_file_reader->CreateFileList(context, paths);
 	bind_data->names = expected_names;
 
 	JSONFileReaderOptions reader_options;

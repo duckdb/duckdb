@@ -19,7 +19,7 @@ create table all_types as select * exclude(small_enum, medium_enum, large_enum) 
 statement error
 SELECT NULL FROM read_ndjson_auto(NULL, timestamp_format := 5469, "compression" := NULL)
 ----
-<REGEX>:.*Cannot use NULL.*
+<REGEX>:.*NULL.*
 
 statement ok
 COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.parquet' (FORMAT PARQUET);

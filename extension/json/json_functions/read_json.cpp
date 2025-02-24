@@ -121,10 +121,11 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 
 	JSONStructureNode node;
 	auto &options = json_data.options;
+	auto file_count = bind_data.file_list->GetTotalFileCount();
 	if (bind_data.file_options.union_by_name) {
 		const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
-		const auto files_per_task = (json_data.files.size() + num_threads - 1) / num_threads;
-		const auto num_tasks = json_data.files.size() / files_per_task;
+		const auto files_per_task = (file_count + num_threads - 1) / num_threads;
+		const auto num_tasks = file_count / files_per_task;
 		vector<JSONStructureNode> task_nodes(num_tasks);
 
 		// Same idea as in union_by_name.hpp
@@ -145,7 +146,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 		ArenaAllocator allocator(BufferAllocator::Get(context));
 		Vector string_vector(LogicalType::VARCHAR);
 		idx_t remaining = options.sample_size;
-		for (idx_t file_idx = 0; file_idx < json_data.files.size(); file_idx++) {
+		for (idx_t file_idx = 0; file_idx < file_count; file_idx++) {
 			remaining = JSONSchemaTask::ExecuteInternal(context, bind_data, node, file_idx, allocator, string_vector,
 			                                            remaining);
 			if (remaining == 0 || file_idx == options.maximum_sample_files - 1) {
@@ -205,6 +206,8 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 	auto json_bind_data = make_uniq<JSONScanData>();
 	auto &json_data = *json_bind_data;
 	bind_data->bind_data = std::move(json_bind_data);
+	bind_data->multi_file_reader = MultiFileReader::Create(input.table_function);
+	bind_data->file_list = bind_data->multi_file_reader->CreateFileList(context, input.inputs[0]);
 	json_data.Bind(context, *bind_data, input);
 
 	auto &options = json_data.options;
@@ -240,9 +243,8 @@ unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindI
 		D_ASSERT(return_types.size() == names.size());
 	}
 
-	SimpleMultiFileList file_list(std::move(json_data.files));
-	MultiFileReader().BindOptions(bind_data->file_options, file_list, return_types, names, bind_data->reader_bind);
-	json_data.files = file_list.GetAllFiles();
+	MultiFileReader().BindOptions(bind_data->file_options, *bind_data->file_list, return_types, names,
+	                              bind_data->reader_bind);
 	bind_data->names = names;
 	bind_data->types = return_types;
 

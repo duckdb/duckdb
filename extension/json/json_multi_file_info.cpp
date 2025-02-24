@@ -4,7 +4,7 @@
 namespace duckdb {
 
 bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &value,
-						MultiFileReaderOptions &, BaseFileReaderOptions &options_p) {
+                                    MultiFileReaderOptions &, BaseFileReaderOptions &options_p) {
 	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
 	auto &options = reader_options.options;
 	auto loption = StringUtil::Lower(key);
@@ -30,8 +30,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 			for (auto &pair : FORMAT_OPTIONS) {
 				valid_options.push_back(StringUtil::Format("'%s'", pair.first));
 			}
-			throw BinderException("format must be one of [%s], not '%s'", StringUtil::Join(valid_options, ", "),
-			                      arg);
+			throw BinderException("format must be one of [%s], not '%s'", StringUtil::Join(valid_options, ", "), arg);
 		}
 		options.format = lookup->second;
 		return true;
@@ -90,8 +89,7 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 	if (loption == "field_appearance_threshold") {
 		auto arg = DoubleValue::Get(value);
 		if (arg < 0 || arg > 1) {
-			throw BinderException(
-			    "read_json_auto \"field_appearance_threshold\" parameter must be between 0 and 1");
+			throw BinderException("read_json_auto \"field_appearance_threshold\" parameter must be between 0 and 1");
 		}
 		options.field_appearance_threshold = arg;
 		return true;
@@ -176,8 +174,8 @@ static void JSONCheckSingleParameter(const string &key, const vector<Value> &val
 }
 
 bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
-							BaseFileReaderOptions &options_p, vector<string> &expected_names,
-							vector<LogicalType> &expected_types) {
+                                        BaseFileReaderOptions &options_p, vector<string> &expected_names,
+                                        vector<LogicalType> &expected_types) {
 	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
 	auto &options = reader_options.options;
 	const auto &loption = StringUtil::Lower(key);
@@ -202,7 +200,8 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 	}
 	if (loption == "compression") {
 		JSONCheckSingleParameter(key, values);
-		options.compression = EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(StringValue::Get(values.back())));
+		options.compression =
+		    EnumUtil::FromString<FileCompressionType>(StringUtil::Upper(StringValue::Get(values.back())));
 		return true;
 	}
 	if (loption == "array") {
@@ -219,8 +218,9 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 	return false;
 }
 
-void JSONMultiFileInfo::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data, virtual_column_map_t &result) {
+void JSONMultiFileInfo::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
+                                          virtual_column_map_t &result) {
 	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
 }
 
-}
+} // namespace duckdb

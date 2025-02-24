@@ -55,9 +55,6 @@ public:
 	//! Scan type
 	JSONScanType type;
 
-	//! The files we're reading
-	vector<string> files;
-
 	//! JSON reader options
 	JSONReaderOptions options;
 
@@ -174,7 +171,6 @@ private:
 
 private:
 	//! Bind data
-	const MultiFileBindData &bind_data;
 	const JSONScanData &json_data;
 	//! Thread-local allocator
 	JSONAllocator allocator;
@@ -232,8 +228,6 @@ public:
 	                           const GlobalTableFunctionState *global_state);
 	static OperatorPartitionData GetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 	static unique_ptr<NodeStatistics> Cardinality(ClientContext &context, const FunctionData *bind_data);
-	static void ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
-	                                  vector<unique_ptr<Expression>> &filters);
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
 	                      const TableFunction &function);

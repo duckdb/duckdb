@@ -11,6 +11,8 @@ unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFuncti
 	auto json_bind_data = make_uniq<JSONScanData>();
 	auto &json_data = *json_bind_data;
 	bind_data->bind_data = std::move(json_bind_data);
+	bind_data->multi_file_reader = MultiFileReader::Create(input.table_function);
+	bind_data->file_list = bind_data->multi_file_reader->CreateFileList(context, input.inputs[0]);
 
 	json_data.Bind(context, *bind_data, input);
 
@@ -18,10 +20,8 @@ unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFuncti
 	names.emplace_back("json");
 	bind_data->names = names;
 
-	SimpleMultiFileList file_list(std::move(json_data.files));
-	MultiFileReader().BindOptions(bind_data->file_options, file_list, return_types, names, bind_data->reader_bind);
-	json_data.files = file_list.GetAllFiles();
-
+	MultiFileReader().BindOptions(bind_data->file_options, *bind_data->file_list, return_types, names,
+	                              bind_data->reader_bind);
 	return std::move(bind_data);
 }
 

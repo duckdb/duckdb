@@ -40,13 +40,11 @@ void JSONScanData::Bind(ClientContext &context, MultiFileBindData &bind_data, Ta
 	auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 	file_options.AutoDetectHivePartitioning(*file_list, context);
 
-	// TODO: store the MultiFilelist instead
-	files = file_list->GetAllFiles();
-
 	InitializeReaders(context, bind_data);
 }
 
 void JSONScanData::InitializeReaders(ClientContext &context, MultiFileBindData &bind_data) {
+	auto files = bind_data.file_list->GetAllFiles();
 	bind_data.union_readers.resize(files.empty() ? 0 : files.size() - 1);
 	for (idx_t file_idx = 0; file_idx < files.size(); file_idx++) {
 		if (file_idx == 0) {
@@ -119,14 +117,13 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const MultiFile
       transform_options(json_data.transform_options), allocator(BufferAllocator::Get(context)),
       buffer_capacity(json_data.options.maximum_object_size * 2), file_index(0), batch_index(0),
       system_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
-      enable_parallel_scans(json_data.files.size() < system_threads) {
+      enable_parallel_scans(bind_data.file_list->GetTotalFileCount() < system_threads) {
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
     : scan_count(0), batch_index(DConstants::INVALID_INDEX), total_read_size(0), total_tuple_count(0),
-      bind_data(gstate.bind_data), json_data(gstate.json_data), allocator(BufferAllocator::Get(context)),
-      is_last(false), fs(FileSystem::GetFileSystem(context)), buffer_size(0), buffer_offset(0),
-      prev_buffer_remainder(0) {
+      json_data(gstate.json_data), allocator(BufferAllocator::Get(context)), is_last(false),
+      fs(FileSystem::GetFileSystem(context)), buffer_size(0), buffer_offset(0), prev_buffer_remainder(0) {
 }
 
 JSONGlobalTableFunctionState::JSONGlobalTableFunctionState(ClientContext &context, TableFunctionInitInput &input)
@@ -214,7 +211,7 @@ idx_t JSONGlobalTableFunctionState::MaxThreads() const {
 	}
 
 	// One reader per file
-	return bind_data.files.size();
+	return state.bind_data.file_list->GetTotalFileCount();
 }
 
 JSONLocalTableFunctionState::JSONLocalTableFunctionState(ClientContext &context, JSONScanGlobalState &gstate)
@@ -433,7 +430,7 @@ void JSONScanLocalState::TryIncrementFileIndex(JSONScanGlobalState &gstate) cons
 }
 
 bool JSONScanLocalState::IsParallel(JSONScanGlobalState &gstate) const {
-	if (json_data.files.size() >= gstate.system_threads) {
+	if (gstate.bind_data.file_list->GetTotalFileCount() >= gstate.system_threads) {
 		return false; // More files than threads, just parallelize over the files
 	}
 
@@ -971,23 +968,7 @@ unique_ptr<NodeStatistics> JSONScan::Cardinality(ClientContext &, const Function
 		}
 	} else {
 	}
-	return make_uniq<NodeStatistics>(per_file_cardinality * json_data.files.size());
-}
-
-void JSONScan::ComplexFilterPushdown(ClientContext &context, LogicalGet &get, FunctionData *bind_data_p,
-                                     vector<unique_ptr<Expression>> &filters) {
-	auto &data = bind_data_p->Cast<MultiFileBindData>();
-	auto &json_data = data.bind_data->Cast<JSONScanData>();
-	SimpleMultiFileList file_list(std::move(json_data.files));
-
-	MultiFilePushdownInfo info(get);
-	auto filtered_list = MultiFileReader().ComplexFilterPushdown(context, file_list, data.file_options, info, filters);
-	if (filtered_list) {
-		MultiFileReader().PruneReaders(data, *filtered_list);
-		json_data.files = filtered_list->GetAllFiles();
-	} else {
-		json_data.files = file_list.GetAllFiles();
-	}
+	return make_uniq<NodeStatistics>(per_file_cardinality * data.file_list->GetTotalFileCount());
 }
 
 void JSONScan::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &) {
@@ -1017,7 +998,7 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	table_function.projection_pushdown = true;
 	table_function.filter_pushdown = false;
 	table_function.filter_prune = false;
-	table_function.pushdown_complex_filter = ComplexFilterPushdown;
+	table_function.pushdown_complex_filter = MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileComplexFilterPushdown;
 }
 
 } // namespace duckdb
