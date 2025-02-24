@@ -49,13 +49,13 @@ inline double PGTimestampRound(const double &j) {
 template <>
 bool TryMultiplyOperator::Operation(interval_t left, double right, interval_t &result) {
 	double d = left.months * right;
-	if (isnan(d) || d < NumericLimits<int32_t>::Minimum() || d > NumericLimits<int32_t>::Maximum()) {
+	if (std::isnan(d) || d < NumericLimits<int32_t>::Minimum() || d > NumericLimits<int32_t>::Maximum()) {
 		return false;
 	}
 	result.months = LossyNumericCast<int32_t>(d);
 
 	d = left.days * right;
-	if (isnan(d) || d < NumericLimits<int32_t>::Minimum() || d > NumericLimits<int32_t>::Maximum()) {
+	if (std::isnan(d) || d < NumericLimits<int32_t>::Minimum() || d > NumericLimits<int32_t>::Maximum()) {
 		return false;
 	}
 	result.days = LossyNumericCast<int32_t>(d);
@@ -90,7 +90,7 @@ bool TryMultiplyOperator::Operation(interval_t left, double right, interval_t &r
 	 * cascade from months and days.  It might still be >24 if the combination
 	 * of cascade and the seconds factor operation itself.
 	 */
-	if (abs(sec_remainder) >= Interval::SECS_PER_DAY) {
+	if (std::fabs(sec_remainder) >= Interval::SECS_PER_DAY) {
 		result.days += LossyNumericCast<int32_t>(sec_remainder / Interval::SECS_PER_DAY);
 		sec_remainder -= LossyNumericCast<int32_t>(sec_remainder / Interval::SECS_PER_DAY) * Interval::SECS_PER_DAY;
 	}
@@ -101,7 +101,7 @@ bool TryMultiplyOperator::Operation(interval_t left, double right, interval_t &r
 		return false;
 	}
 	d = std::nearbyint(d * right + sec_remainder * Interval::MICROS_PER_SEC);
-	if (isnan(d) || !TryCast::Operation<double, int64_t>(d, result.micros)) {
+	if (std::isnan(d) || !TryCast::Operation<double, int64_t>(d, result.micros)) {
 		return false;
 	}
 
