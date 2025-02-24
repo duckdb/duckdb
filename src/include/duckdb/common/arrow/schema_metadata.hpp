@@ -44,8 +44,8 @@ public:
 
 private:
 	//! The unordered map that holds the metadata
-	ComplexJson schema_metadata_map;
+	unordered_map<string, string>  schema_metadata_map;
 	//! The extension metadata map, currently only used for internal types in arrow.opaque
-	unordered_map<string, string> extension_metadata_map;
+	ComplexJSON extension_metadata_map;
 };
 } // namespace duckdb

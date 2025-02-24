@@ -270,3 +270,40 @@ class TestCanonicalExtensionTypes(object):
         res_arrow_table = pa.Table.from_arrays([res_bool8_array], names=['bool8'])
 
         assert result_table.equals(res_arrow_table)
+
+
+import duckdb
+import pyarrow as pa
+
+# field = pa.field(
+#     "geometry",
+#     pa.binary(),
+#     metadata={
+#         "ARROW:extension:name": "foofyfoo",
+#         "ARROW:extension:metadata": 'this is not valid json',
+#     },
+# )
+# schema = pa.schema([field])
+# geo_table = pa.table(
+#     [pa.array([], pa.binary())],
+#     schema=schema,
+# )
+
+# duckdb.sql("""SELECT geometry as wkt FROM geo_table;""")
+# > SerializationException: Serialization Error: Failed to parse JSON string: this is not valid json
+
+field = pa.field(
+    "geometry",
+    pa.binary(),
+    metadata={
+        "ARROW:extension:name": "foofyfoo",
+        "ARROW:extension:metadata": '{"key": {"complex": "value"}}',
+    },
+)
+schema = pa.schema([field])
+geo_table = pa.table(
+    [pa.array([], pa.binary())],
+    schema=schema,
+)
+duckdb.sql("""SELECT sgeometry as wkt FROM geo_table;""")
+# #> SerializationException: Serialization Error: Failed to parse JSON string: {"key": {"complex": "value"}}

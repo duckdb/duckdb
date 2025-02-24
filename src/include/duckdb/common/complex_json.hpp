@@ -19,10 +19,17 @@ struct ComplexJSON {
 	explicit ComplexJSON(const unordered_map<string, ComplexJSON> &obj) : obj_value(obj), is_object(true) {
 	}
 
+	ComplexJSON() : is_object(false) {};
+
 	//! Adds Object
-	void AddObject(string key, ComplexJSON object) {
+	void AddObject(const string &key, const ComplexJSON object) {
 		is_object = true;
 		obj_value[key] = object;
+	}
+	ComplexJSON GetObject(const string &key) {
+		if (is_object) {
+			return obj_value[key];
+		}
 	}
 	string str_value;
 	unordered_map<string, ComplexJSON> obj_value;
