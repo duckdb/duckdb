@@ -59,13 +59,13 @@ statement error
 SET s3_region='eu-west-1';
 ----
 Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'httpfs':
-Failed to copy local extension
+Failed to install local extension
 
 statement error
 select * from read_json_auto('data/json/example_n.ndjson');
 ----
 Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'json':
-Failed to copy local extension
+Failed to install local extension
 
 # Now override with non-existent remote repo
 statement ok

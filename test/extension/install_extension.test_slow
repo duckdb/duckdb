@@ -39,7 +39,7 @@ restart
 statement maybe
 FORCE INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_DEMO.duckdb_extension';
 ----
-IO Error: Failed to copy local extension
+IO Error: Failed to install local extension
 
 statement ok
 FORCE INSTALL '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
