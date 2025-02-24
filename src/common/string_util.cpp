@@ -552,25 +552,33 @@ ComplexJSON StringUtil::ParseComplexJSONMap(const string &json) {
 	yyjson_val *key, *value;
 	while ((key = yyjson_obj_iter_next(&iter))) {
 		value = yyjson_obj_iter_get_val(key);
-		if (yyjson_get_type(value) != YYJSON_TYPE_OBJ) {
-			// We recurse
-			// This must be a string, hence we just add the value
-			const auto key_val = yyjson_get_str(key);
-			const auto key_len = yyjson_get_len(key);
-			const auto value_val = yyjson_get_str(value);
-			const auto value_len = yyjson_get_len(value);
-			result.AddObject(string(key_val, key_len), ParseComplexJSONMap(string(value_val, value_len)));
-		} else if (yyjson_get_type(value) != YYJSON_TYPE_STR) {
-			// Invalid Json
-			yyjson_doc_free(doc);
-			throw SerializationException("Failed to parse JSON string: %s", json);
-		} else {
-			// This must be a string, hence we just add the value
+		auto type = yyjson_get_type(value);
+		if (type == YYJSON_TYPE_STR) {
+			// Since this is a string, we can directly add the value
 			const auto key_val = yyjson_get_str(key);
 			const auto key_len = yyjson_get_len(key);
 			const auto value_val = yyjson_get_str(value);
 			const auto value_len = yyjson_get_len(value);
 			result.AddObject(string(key_val, key_len), ComplexJSON(string(value_val, value_len)));
+		} else if (type == YYJSON_TYPE_OBJ) {
+			// We recurse, this is a complex json
+			const auto key_val = yyjson_get_str(key);
+			const auto key_len = yyjson_get_len(key);
+			// Convert the object value to a JSON string and recurse
+			size_t json_str_len;
+			char *json_str = yyjson_val_write(value, 0, &json_str_len);
+			if (json_str) {
+				ComplexJSON nested_result = ParseComplexJSONMap(string(json_str, json_str_len));
+				result.AddObject(string(key_val, key_len), nested_result);
+				free(json_str); // Clean up the allocated string
+			} else {
+				yyjson_doc_free(doc);
+				throw SerializationException("Failed to stringify nested JSON object");
+			}
+		} else {
+			// Anything else is invalid.
+			yyjson_doc_free(doc);
+			throw SerializationException("Failed to parse JSON string: %s", json);
 		}
 	}
 	yyjson_doc_free(doc);

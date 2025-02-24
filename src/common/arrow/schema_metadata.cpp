@@ -70,7 +70,6 @@ bool ArrowSchemaMetadata::HasExtension() const {
 }
 
 ArrowExtensionMetadata ArrowSchemaMetadata::GetExtensionInfo(string format) {
-
 	return {schema_metadata_map[ARROW_EXTENSION_NAME], extension_metadata_map.GetValue("vendor_name"),
 	        extension_metadata_map.GetValue("type_name"), std::move(format)};
 }
