@@ -998,14 +998,6 @@ unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, Table
 	throw NotImplementedException("JSONScan Deserialize not implemented");
 }
 
-virtual_column_map_t JSONScan::GetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
-	auto &csv_bind = bind_data->Cast<MultiFileBindData>();
-	virtual_column_map_t result;
-	MultiFileReader::GetVirtualColumns(context, csv_bind.reader_bind, result);
-	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
-	return result;
-}
-
 void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	MultiFileReader().AddParameters(table_function);
 
@@ -1020,7 +1012,7 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 
 	table_function.serialize = Serialize;
 	table_function.deserialize = Deserialize;
-	table_function.get_virtual_columns = GetVirtualColumns;
+	table_function.get_virtual_columns = MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileGetVirtualColumns;
 
 	table_function.projection_pushdown = true;
 	table_function.filter_pushdown = false;
