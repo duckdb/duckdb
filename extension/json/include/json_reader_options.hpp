@@ -16,58 +16,57 @@
 namespace duckdb {
 
 struct DateFormatMap {
-public:
-	DateFormatMap() {
-	}
-
-	DateFormatMap(DateFormatMap &&other) noexcept {
-		candidate_formats = other.candidate_formats;
-	}
-	DateFormatMap(const DateFormatMap &other) {
-		candidate_formats = other.candidate_formats;
-	}
-
-	DateFormatMap &operator=(DateFormatMap &&other) noexcept {
-		candidate_formats = other.candidate_formats;
-		return *this;
-	}
+	friend class MutableDateFormatMap;
 
 public:
-	void Initialize(const type_id_map_t<vector<const char *>> &format_templates) {
-		for (const auto &entry : format_templates) {
-			const auto &type = entry.first;
-			for (const auto &format_string : entry.second) {
-				AddFormat(type, format_string);
-			}
-		}
+	explicit DateFormatMap(type_id_map_t<vector<StrpTimeFormat>> candidate_formats_p)
+	    : candidate_formats(std::move(candidate_formats_p)) {
 	}
 
-	DateFormatMap Copy() const {
-		DateFormatMap result;
-		result.candidate_formats = candidate_formats;
-		return result;
+	bool HasFormats(LogicalTypeId type) const {
+		return HasFormats(candidate_formats, type);
 	}
 
-	void AddFormat(LogicalTypeId type, const string &format_string) {
+	const StrpTimeFormat &GetFormat(LogicalTypeId type) const {
+		D_ASSERT(candidate_formats.find(type) != candidate_formats.end());
+		return candidate_formats.find(type)->second.back();
+	}
+
+public:
+	static void AddFormat(type_id_map_t<vector<StrpTimeFormat>> &candidate_formats, LogicalTypeId type,
+	                      const string &format_string) {
 		auto &formats = candidate_formats[type];
 		formats.emplace_back();
 		formats.back().format_specifier = format_string;
 		StrpTimeFormat::ParseFormatSpecifier(formats.back().format_specifier, formats.back());
 	}
 
-	bool HasFormats(LogicalTypeId type) const {
-		lock_guard<mutex> guard(lock);
+	static bool HasFormats(const type_id_map_t<vector<StrpTimeFormat>> &candidate_formats, LogicalTypeId type) {
 		return candidate_formats.find(type) != candidate_formats.end();
 	}
 
+private:
+	type_id_map_t<vector<StrpTimeFormat>> candidate_formats;
+};
+
+class MutableDateFormatMap {
+public:
+	explicit MutableDateFormatMap(DateFormatMap &date_format_map) : date_format_map(date_format_map) {
+	}
+
+	bool HasFormats(LogicalTypeId type) {
+		lock_guard<mutex> lock(format_lock);
+		return date_format_map.HasFormats(type);
+	}
+
 	idx_t NumberOfFormats(LogicalTypeId type) {
-		lock_guard<mutex> guard(lock);
-		return candidate_formats[type].size();
+		lock_guard<mutex> lock(format_lock);
+		return date_format_map.candidate_formats.at(type).size();
 	}
 
 	bool GetFormatAtIndex(LogicalTypeId type, idx_t index, StrpTimeFormat &format) {
-		lock_guard<mutex> guard(lock);
-		auto &formats = candidate_formats[type];
+		lock_guard<mutex> lock(format_lock);
+		auto &formats = date_format_map.candidate_formats.at(type);
 		if (index >= formats.size()) {
 			return false;
 		}
@@ -76,28 +75,16 @@ public:
 	}
 
 	void ShrinkFormatsToSize(LogicalTypeId type, idx_t size) {
-		lock_guard<mutex> guard(lock);
-		auto &formats = candidate_formats[type];
+		lock_guard<mutex> lock(format_lock);
+		auto &formats = date_format_map.candidate_formats[type];
 		while (formats.size() > size) {
 			formats.pop_back();
 		}
 	}
 
-	StrpTimeFormat &GetFormat(LogicalTypeId type) {
-		lock_guard<mutex> guard(lock);
-		D_ASSERT(candidate_formats.find(type) != candidate_formats.end());
-		return candidate_formats.find(type)->second.back();
-	}
-
-	const StrpTimeFormat &GetFormat(LogicalTypeId type) const {
-		lock_guard<mutex> guard(lock);
-		D_ASSERT(candidate_formats.find(type) != candidate_formats.end());
-		return candidate_formats.find(type)->second.back();
-	}
-
 private:
-	mutable mutex lock;
-	type_id_map_t<vector<StrpTimeFormat>> candidate_formats;
+	mutex format_lock;
+	DateFormatMap &date_format_map;
 };
 
 struct JSONReaderOptions {
@@ -137,8 +124,6 @@ struct JSONReaderOptions {
 	//! Forced date/timestamp formats
 	string date_format;
 	string timestamp_format;
-	//! Candidate date formats
-	DateFormatMap date_format_map;
 };
 
 } // namespace duckdb

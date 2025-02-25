@@ -41,15 +41,16 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 class JSONSchemaTask : public BaseExecutorTask {
 public:
 	JSONSchemaTask(TaskExecutor &executor, ClientContext &context_p, MultiFileBindData &bind_data_p,
-	               JSONStructureNode &node_p, const idx_t file_idx_start_p, const idx_t file_idx_end_p)
-	    : BaseExecutorTask(executor), context(context_p), bind_data(bind_data_p), node(node_p),
-	      file_idx_start(file_idx_start_p), file_idx_end(file_idx_end_p), allocator(BufferAllocator::Get(context)),
-	      string_vector(LogicalType::VARCHAR) {
+	               MutableDateFormatMap &date_format_map, JSONStructureNode &node_p, const idx_t file_idx_start_p,
+	               const idx_t file_idx_end_p)
+	    : BaseExecutorTask(executor), context(context_p), bind_data(bind_data_p), date_format_map(date_format_map),
+	      node(node_p), file_idx_start(file_idx_start_p), file_idx_end(file_idx_end_p),
+	      allocator(BufferAllocator::Get(context)), string_vector(LogicalType::VARCHAR) {
 	}
 
 	static idx_t ExecuteInternal(ClientContext &context, MultiFileBindData &bind_data, JSONStructureNode &node,
 	                             const idx_t file_idx, ArenaAllocator &allocator, Vector &string_vector,
-	                             idx_t remaining) {
+	                             idx_t remaining, MutableDateFormatMap &date_format_map) {
 		JSONScanGlobalState gstate(context, bind_data);
 		JSONScanLocalState lstate(context, gstate);
 		optional_ptr<BufferedJSONReader> reader;
@@ -83,7 +84,7 @@ public:
 				continue;
 			}
 			node.InitializeCandidateTypes(options.max_depth, options.convert_strings_to_integers);
-			node.RefineCandidateTypes(lstate.values, next, string_vector, allocator, options.date_format_map);
+			node.RefineCandidateTypes(lstate.values, next, string_vector, allocator, date_format_map);
 			remaining -= next;
 		}
 
@@ -98,13 +99,15 @@ public:
 		auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 		auto &options = json_data.options;
 		for (idx_t file_idx = file_idx_start; file_idx < file_idx_end; file_idx++) {
-			ExecuteInternal(context, bind_data, node, file_idx, allocator, string_vector, options.sample_size);
+			ExecuteInternal(context, bind_data, node, file_idx, allocator, string_vector, options.sample_size,
+			                date_format_map);
 		}
 	}
 
 private:
 	ClientContext &context;
 	MultiFileBindData &bind_data;
+	MutableDateFormatMap &date_format_map;
 	JSONStructureNode &node;
 	const idx_t file_idx_start;
 	const idx_t file_idx_end;
@@ -120,6 +123,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	D_ASSERT(json_data.options.type == JSONScanType::READ_JSON);
 	json_data.options.type = JSONScanType::SAMPLE;
 
+	MutableDateFormatMap date_format_map(*json_data.date_format_map);
 	JSONStructureNode node;
 	auto &options = json_data.options;
 	auto file_count = bind_data.file_list->GetTotalFileCount();
@@ -133,8 +137,8 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 		TaskExecutor executor(context);
 		for (idx_t task_idx = 0; task_idx < num_tasks; task_idx++) {
 			const auto file_idx_start = task_idx * files_per_task;
-			auto task = make_uniq<JSONSchemaTask>(executor, context, bind_data, task_nodes[task_idx], file_idx_start,
-			                                      file_idx_start + files_per_task);
+			auto task = make_uniq<JSONSchemaTask>(executor, context, bind_data, date_format_map, task_nodes[task_idx],
+			                                      file_idx_start, file_idx_start + files_per_task);
 			executor.ScheduleTask(std::move(task));
 		}
 		executor.WorkOnTasks();
@@ -149,7 +153,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 		idx_t remaining = options.sample_size;
 		for (idx_t file_idx = 0; file_idx < file_count; file_idx++) {
 			remaining = JSONSchemaTask::ExecuteInternal(context, bind_data, node, file_idx, allocator, string_vector,
-			                                            remaining);
+			                                            remaining, date_format_map);
 			if (remaining == 0 || file_idx == options.maximum_sample_files - 1) {
 				break; // We sample sample_size in total (across the first maximum_sample_files files)
 			}
@@ -176,8 +180,6 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 		// COPY - we already have names/types
 		return;
 	}
-
-	json_data.transform_options.date_format_map = &options.date_format_map;
 
 	// Auto-detect columns
 	if (json_data.options.record_type == JSONRecordType::RECORDS) {

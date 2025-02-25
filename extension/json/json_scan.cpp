@@ -33,12 +33,13 @@ void JSONScanData::InitializeFormats() {
 }
 
 void JSONScanData::InitializeFormats(bool auto_detect_p) {
+	type_id_map_t<vector<StrpTimeFormat>> candidate_formats;
 	// Initialize date_format_map if anything was specified
 	if (!options.date_format.empty()) {
-		options.date_format_map.AddFormat(LogicalTypeId::DATE, options.date_format);
+		DateFormatMap::AddFormat(candidate_formats, LogicalTypeId::DATE, options.date_format);
 	}
 	if (!options.timestamp_format.empty()) {
-		options.date_format_map.AddFormat(LogicalTypeId::TIMESTAMP, options.timestamp_format);
+		DateFormatMap::AddFormat(candidate_formats, LogicalTypeId::TIMESTAMP, options.timestamp_format);
 	}
 
 	if (auto_detect_p) {
@@ -52,35 +53,16 @@ void JSONScanData::InitializeFormats(bool auto_detect_p) {
 		// Populate possible date/timestamp formats, assume this is consistent across columns
 		for (auto &kv : FORMAT_TEMPLATES) {
 			const auto &logical_type = kv.first;
-			if (options.date_format_map.HasFormats(logical_type)) {
+			if (DateFormatMap::HasFormats(candidate_formats, logical_type)) {
 				continue; // Already populated
 			}
 			const auto &format_strings = kv.second;
 			for (auto &format_string : format_strings) {
-				options.date_format_map.AddFormat(logical_type, format_string);
+				DateFormatMap::AddFormat(candidate_formats, logical_type, format_string);
 			}
 		}
 	}
-}
-
-string JSONScanData::GetDateFormat() const {
-	if (!options.date_format.empty()) {
-		return options.date_format;
-	} else if (options.date_format_map.HasFormats(LogicalTypeId::DATE)) {
-		return options.date_format_map.GetFormat(LogicalTypeId::DATE).format_specifier;
-	} else {
-		return string();
-	}
-}
-
-string JSONScanData::GetTimestampFormat() const {
-	if (!options.timestamp_format.empty()) {
-		return options.timestamp_format;
-	} else if (options.date_format_map.HasFormats(LogicalTypeId::TIMESTAMP)) {
-		return options.date_format_map.GetFormat(LogicalTypeId::TIMESTAMP).format_specifier;
-	} else {
-		return string();
-	}
+	date_format_map = make_uniq<DateFormatMap>(std::move(candidate_formats));
 }
 
 JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const MultiFileBindData &bind_data_p)
@@ -197,9 +179,7 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
 	auto result = make_uniq<JSONLocalTableFunctionState>(context.client, gstate.state);
 
 	// Copy the transform options / date format map because we need to do thread-local stuff
-	result->state.date_format_map = gstate.state.json_data.options.date_format_map.Copy();
 	result->state.transform_options = gstate.state.transform_options;
-	result->state.transform_options.date_format_map = &result->state.date_format_map;
 
 	return std::move(result);
 }

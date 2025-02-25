@@ -56,15 +56,13 @@ public:
 	//! The set of keys to extract (case sensitive)
 	vector<string> key_names;
 
+	//! The date format map
+	unique_ptr<DateFormatMap> date_format_map;
 	//! Options when transforming the JSON to columnar data
 	JSONTransformOptions transform_options;
 
 	//! The inferred avg tuple size
 	idx_t avg_tuple_size = 420;
-
-private:
-	string GetDateFormat() const;
-	string GetTimestampFormat() const;
 };
 
 struct JSONScanInfo : public TableFunctionInfo {
@@ -135,7 +133,6 @@ public:
 	idx_t batch_index;
 
 	//! Options when transforming the JSON to columnar data
-	DateFormatMap date_format_map;
 	JSONTransformOptions transform_options;
 
 	//! For determining average tuple size
