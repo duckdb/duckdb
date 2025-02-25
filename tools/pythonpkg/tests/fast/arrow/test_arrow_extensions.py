@@ -293,6 +293,22 @@ class TestCanonicalExtensionTypes(object):
             "geometry",
             pa.binary(),
             metadata={
+                "ARROW:extension:name": "arrow.opaque",
+                "ARROW:extension:metadata": 'this is not valid json',
+            },
+        )
+        schema = pa.schema([field])
+        geo_table = pa.table(
+            [pa.array([], pa.binary())],
+            schema=schema,
+        )
+        with pytest.raises(duckdb.SerializationException, match="Failed to parse JSON string"):
+            tbl = duckdb_cursor.sql("""SELECT geometry as wkt FROM geo_table;""").arrow()
+
+        field = pa.field(
+            "geometry",
+            pa.binary(),
+            metadata={
                 "ARROW:extension:name": "foofyfoo",
                 "ARROW:extension:metadata": '{"key": {"complex": "value"}}',
             },

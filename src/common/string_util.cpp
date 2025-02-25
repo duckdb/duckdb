@@ -532,20 +532,26 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
 	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
 }
 
-ComplexJSON StringUtil::ParseComplexJSONMap(const string &json) {
-	ComplexJSON result(json);
+ComplexJSON StringUtil::ParseComplexJSONMap(const string &json, bool ignore_errors) {
+	ComplexJSON result(json, ignore_errors);
 	if (json.empty()) {
 		return result;
 	}
 	yyjson_read_flag flags = YYJSON_READ_ALLOW_INVALID_UNICODE;
 	yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), flags);
 	if (!doc) {
-		return result;
+		if (ignore_errors) {
+			return result;
+		}
+		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
 	yyjson_val *root = yyjson_doc_get_root(doc);
 	if (!root || yyjson_get_type(root) != YYJSON_TYPE_OBJ) {
 		yyjson_doc_free(doc);
-		return result;
+		if (ignore_errors) {
+			return result;
+		}
+		throw SerializationException("Failed to parse JSON string: %s", json);
 	}
 	yyjson_obj_iter iter;
 	yyjson_obj_iter_init(root, &iter);
@@ -559,7 +565,7 @@ ComplexJSON StringUtil::ParseComplexJSONMap(const string &json) {
 			const auto key_len = yyjson_get_len(key);
 			const auto value_val = yyjson_get_str(value);
 			const auto value_len = yyjson_get_len(value);
-			result.AddObject(string(key_val, key_len), ComplexJSON(string(value_val, value_len)));
+			result.AddObject(string(key_val, key_len), ComplexJSON(string(value_val, value_len), ignore_errors));
 		} else if (type == YYJSON_TYPE_OBJ) {
 			// We recurse, this is a complex json
 			const auto key_val = yyjson_get_str(key);
@@ -568,16 +574,22 @@ ComplexJSON StringUtil::ParseComplexJSONMap(const string &json) {
 			size_t json_str_len;
 			char *json_str = yyjson_val_write(value, 0, &json_str_len);
 			if (json_str) {
-				ComplexJSON nested_result = ParseComplexJSONMap(string(json_str, json_str_len));
+				ComplexJSON nested_result = ParseComplexJSONMap(string(json_str, json_str_len), ignore_errors);
 				result.AddObject(string(key_val, key_len), nested_result);
 				free(json_str); // Clean up the allocated string
 			} else {
 				yyjson_doc_free(doc);
+				if (ignore_errors) {
+					return result;
+				}
 				throw SerializationException("Failed to stringify nested JSON object");
 			}
 		} else {
 			// Anything else is invalid.
 			yyjson_doc_free(doc);
+			if (ignore_errors) {
+				return result;
+			}
 			throw SerializationException("Failed to parse JSON string: %s", json);
 		}
 	}

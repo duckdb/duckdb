@@ -302,7 +302,7 @@ public:
 	DUCKDB_API static unordered_map<string, string> ParseJSONMap(const string &json);
 
 	//! Parses complex (i.e., nested) Json maps, it also parses invalid JSONs, as a pure string.
-	DUCKDB_API static ComplexJSON ParseComplexJSONMap(const string &json);
+	DUCKDB_API static ComplexJSON ParseComplexJSONMap(const string &json, bool ignore_errors);
 	//! JSON method that constructs a { string: value } JSON map
 	//! This is the inverse of ParseJSONMap
 	//! NOTE: this method is not efficient

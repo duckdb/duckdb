@@ -31,7 +31,10 @@ ArrowSchemaMetadata::ArrowSchemaMetadata(const char *metadata) {
 			schema_metadata_map[key] = value;
 		}
 	}
-	extension_metadata_map = StringUtil::ParseComplexJSONMap(schema_metadata_map[ARROW_METADATA_KEY]);
+	// We ignore errors of the metadata parsing if the extension is different from arrow.opaque
+	const bool ignore_errors =
+	    schema_metadata_map[ARROW_EXTENSION_NAME] != ArrowExtensionMetadata::ARROW_EXTENSION_NON_CANONICAL;
+	extension_metadata_map = StringUtil::ParseComplexJSONMap(schema_metadata_map[ARROW_METADATA_KEY], ignore_errors);
 }
 
 void ArrowSchemaMetadata::AddOption(const string &key, const string &value) {
@@ -58,8 +61,8 @@ ArrowSchemaMetadata ArrowSchemaMetadata::NonCanonicalType(const string &type_nam
 	ArrowSchemaMetadata metadata;
 	metadata.AddOption(ARROW_EXTENSION_NAME, ArrowExtensionMetadata::ARROW_EXTENSION_NON_CANONICAL);
 	// We have to set the metadata key with type_name and vendor_name.
-	metadata.extension_metadata_map.AddObject("vendor_name", ComplexJSON(vendor_name));
-	metadata.extension_metadata_map.AddObject("type_name", ComplexJSON(type_name));
+	metadata.extension_metadata_map.AddObject("vendor_name", ComplexJSON(vendor_name, true));
+	metadata.extension_metadata_map.AddObject("type_name", ComplexJSON(type_name, true));
 	metadata.AddOption(ARROW_METADATA_KEY, StringUtil::ToComplexJSONMap(metadata.extension_metadata_map));
 	return metadata;
 }

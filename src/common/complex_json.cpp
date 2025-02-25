@@ -1,15 +1,15 @@
 #include "duckdb/common/complex_json.hpp"
 
 namespace duckdb {
-//! Constructor for string values
-ComplexJSON::ComplexJSON(const string &str) : str_value(str), is_object(false) {
+ComplexJSON::ComplexJSON(const string &str, bool ignore_errors)
+    : str_value(str), is_object(false), ignore_errors(ignore_errors) {
 }
 
-//! Constructor for nested object values
-ComplexJSON::ComplexJSON(const unordered_map<string, ComplexJSON> &obj) : obj_value(obj), is_object(true) {
+ComplexJSON::ComplexJSON(const unordered_map<string, ComplexJSON> &obj, bool ignore_errors)
+    : obj_value(obj), is_object(true), ignore_errors(ignore_errors) {
 }
 
-ComplexJSON::ComplexJSON() : is_object(false) {};
+ComplexJSON::ComplexJSON() : is_object(false), ignore_errors(false) {};
 
 //! Adds Object
 void ComplexJSON::AddObject(const string &key, const ComplexJSON &object) {
