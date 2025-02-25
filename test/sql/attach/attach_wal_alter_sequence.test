@@ -2,6 +2,8 @@
 # description: Test binding of a WAL with a sequence entry in it
 # group: [attach]
 
+require skip_reload
+
 statement ok
 PRAGMA disable_checkpoint_on_shutdown
 
