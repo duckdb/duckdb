@@ -121,7 +121,7 @@ with cte(x) as (
 )
 SELECT try(avg(x)) FROM cte;
 ----
-TRY expression can not be used in combination with aggregate functions
+aggregates are not allowed inside the TRY expression
 
 # column reference can be used just fine
 query I
@@ -139,4 +139,4 @@ with cte(x) as (
 )
 select TRY(2 + avg(x)) from cte
 ----
-TRY expression can not be used in combination with aggregate functions
+aggregates are not allowed inside the TRY expression

@@ -8,6 +8,7 @@
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/planner/expression/bound_parameter_expression.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/planner/expression_binder/operator_binder.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 
@@ -95,11 +96,12 @@ BindResult ExpressionBinder::BindExpression(OperatorExpression &op, idx_t depth)
 		return BindGroupingFunction(op, depth);
 	}
 
+	OperatorBinder operator_binder(binder, context, op.GetExpressionType());
 	// Bind the children of the operator expression. We already create bound expressions.
 	// Only those children that trigger an error are not yet bound.
 	ErrorData error;
 	for (idx_t i = 0; i < op.children.size(); i++) {
-		BindChild(op.children[i], depth, error);
+		operator_binder.BindChild(op.children[i], depth, error);
 	}
 	if (error.HasError()) {
 		return BindResult(std::move(error));

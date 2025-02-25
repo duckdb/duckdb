@@ -13,48 +13,11 @@
 #include "duckdb/planner/query_node/bound_select_node.hpp"
 #include "duckdb/planner/expression_binder/select_bind_state.hpp"
 
-#include "duckdb/planner/expression_iterator.hpp"
-
 namespace duckdb {
 
 BaseSelectBinder::BaseSelectBinder(Binder &binder, ClientContext &context, BoundSelectNode &node,
                                    BoundGroupInformation &info)
     : ExpressionBinder(binder, context), inside_window(false), node(node), info(info) {
-}
-
-BindResult BaseSelectBinder::BindExpression(OperatorExpression &op, idx_t depth) {
-	do {
-		if (op.type != ExpressionType::OPERATOR_TRY) {
-			break;
-		}
-		auto child_copy = op.children[0]->Copy();
-		ErrorData error;
-		BindChild(child_copy, depth, error);
-		if (error.HasError()) {
-			break;
-		}
-
-		auto &node = this->node;
-		auto &expr = BoundExpression::GetExpression(*child_copy);
-
-		bool bind_error = false;
-		ExpressionIterator::EnumerateExpression(expr, [&node, &bind_error](Expression &child) {
-			if (bind_error != false) {
-				return;
-			}
-
-			if (child.GetExpressionType() != ExpressionType::BOUND_COLUMN_REF) {
-				return;
-			}
-			auto &bound_column_ref = child.Cast<BoundColumnRefExpression>();
-			auto &binding = bound_column_ref.binding;
-			if (node.aggregate_index == binding.table_index) {
-				throw BinderException("TRY expression can not be used in combination with aggregate functions");
-			}
-		});
-	} while (false);
-
-	return ExpressionBinder::BindExpression(op, depth);
 }
 
 BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
