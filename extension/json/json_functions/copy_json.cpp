@@ -124,6 +124,7 @@ static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInf
 	vector<string> paths = {info.file_path};
 	bind_data->file_list = bind_data->multi_file_reader->CreateFileList(context, paths);
 	bind_data->names = expected_names;
+	json_data.key_names = expected_names;
 
 	JSONFileReaderOptions reader_options;
 	reader_options.options.record_type = JSONRecordType::RECORDS;

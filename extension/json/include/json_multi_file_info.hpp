@@ -19,7 +19,7 @@ public:
 };
 
 struct JSONMultiFileInfo {
-	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context);
+	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context, optional_ptr<TableFunctionInfo> info);
 	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
 	                            BaseFileReaderOptions &options, vector<string> &expected_names,
 	                            vector<LogicalType> &expected_types);

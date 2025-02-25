@@ -133,6 +133,7 @@ JSONGlobalTableFunctionState::JSONGlobalTableFunctionState(ClientContext &contex
 unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientContext &context,
                                                                         TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
+	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 	auto result = make_uniq<JSONGlobalTableFunctionState>(context, input);
 	auto &gstate = result->state;
 
@@ -155,12 +156,12 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 			continue;
 		}
 
-		gstate.names.push_back(bind_data.names[col_id]);
+		gstate.names.push_back(json_data.key_names[col_id]);
 		gstate.column_ids.push_back(col_idx);
 		gstate.column_indices.push_back(input.column_indexes[col_idx]);
 	}
 
-	if (gstate.names.size() < bind_data.names.size() || bind_data.file_options.union_by_name) {
+	if (gstate.names.size() < json_data.key_names.size() || bind_data.file_options.union_by_name) {
 		// If we are auto-detecting, but don't need all columns present in the file,
 		// then we don't need to throw an error if we encounter an unseen column
 		gstate.transform_options.error_unknown_key = false;

@@ -1,7 +1,23 @@
 #include "json_multi_file_info.hpp"
+#include "json_scan.hpp"
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
+
+unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientContext &context, optional_ptr<TableFunctionInfo> info) {
+	auto reader_options = make_uniq<JSONFileReaderOptions>();
+	if (info) {
+		auto &scan_info = info->Cast<JSONScanInfo>();
+		reader_options->options.format = scan_info.format;
+		reader_options->options.record_type = scan_info.record_type;
+		reader_options->options.auto_detect = scan_info.auto_detect;
+	} else {
+		// COPY
+		reader_options->options.record_type = JSONRecordType::RECORDS;
+		reader_options->options.format = JSONFormat::NEWLINE_DELIMITED;
+	}
+	return std::move(reader_options);
+}
 
 bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &value,
                                     MultiFileReaderOptions &, BaseFileReaderOptions &options_p) {
@@ -216,6 +232,82 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 		return true;
 	}
 	return false;
+}
+
+unique_ptr<TableFunctionData> JSONMultiFileInfo::InitializeBindData(MultiFileBindData &multi_file_data,
+														unique_ptr<BaseFileReaderOptions> options) {
+	auto &reader_options = options->Cast<JSONFileReaderOptions>();
+	auto json_data = make_uniq<JSONScanData>();
+	json_data->options = std::move(reader_options.options);
+	return std::move(json_data);
+}
+
+void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
+					   MultiFileBindData &bind_data) {
+	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
+	json_data.InitializeReaders(context, bind_data);
+
+	auto &options = json_data.options;
+	names = options.name_list;
+	return_types = options.sql_type_list;
+	if (options.record_type == JSONRecordType::AUTO_DETECT && return_types.size() > 1) {
+		// More than one specified column implies records
+		options.record_type = JSONRecordType::RECORDS;
+	}
+
+	// Specifying column names overrides auto-detect
+	if (!return_types.empty()) {
+		options.auto_detect = false;
+	}
+
+	if (!options.auto_detect) {
+		// Need to specify columns if RECORDS and not auto-detecting
+		if (return_types.empty()) {
+			throw BinderException("When auto_detect=false, read_json requires columns to be specified through the "
+			                      "\"columns\" parameter.");
+		}
+		// If we are reading VALUES, we can only have one column
+		if (json_data.options.record_type == JSONRecordType::VALUES && return_types.size() != 1) {
+			throw BinderException("read_json requires a single column to be specified through the \"columns\" "
+			                      "parameter when \"records\" is set to 'false'.");
+		}
+	}
+
+	json_data.InitializeFormats();
+
+	if (options.auto_detect || options.record_type == JSONRecordType::AUTO_DETECT) {
+		JSONScan::AutoDetect(context, bind_data, return_types, names);
+		D_ASSERT(return_types.size() == names.size());
+	}
+	json_data.key_names = names;
+
+	bind_data.multi_file_reader->BindOptions(bind_data.file_options, *bind_data.file_list, return_types, names,
+	                              bind_data.reader_bind);
+
+	auto &transform_options = json_data.transform_options;
+	transform_options.strict_cast = !options.ignore_errors;
+	transform_options.error_duplicate_key = !options.ignore_errors;
+	transform_options.error_missing_key = false;
+	transform_options.error_unknown_key = options.auto_detect && !options.ignore_errors;
+	transform_options.delay_error = true;
+
+	if (options.auto_detect) {
+		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
+		// We rename them so we can parse the file anyway. Note that we can't change json_data.key_names,
+		// because the JSON reader gets columns by exact name, not position
+		case_insensitive_map_t<idx_t> name_collision_count;
+		for (auto &col_name : names) {
+			// Taken from CSV header_detection.cpp
+			while (name_collision_count.find(col_name) != name_collision_count.end()) {
+				name_collision_count[col_name] += 1;
+				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
+			}
+			name_collision_count[col_name] = 0;
+		}
+	}
+}
+
+void JSONMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
 }
 
 void JSONMultiFileInfo::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,

@@ -202,7 +202,7 @@ public:
 		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
 		MultiFileReaderOptions file_options;
 
-		auto options = OP::InitializeOptions(context);
+		auto options = OP::InitializeOptions(context, input.info);
 		for (auto &kv : input.named_parameters) {
 			auto loption = StringUtil::Lower(kv.first);
 			if (multi_file_reader->ParseOption(loption, kv.second, file_options, context)) {
@@ -220,7 +220,7 @@ public:
 	static unique_ptr<FunctionData> MultiFileBindCopy(ClientContext &context, CopyInfo &info,
 	                                                  vector<string> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
-		auto options = OP::InitializeOptions(context);
+		auto options = OP::InitializeOptions(context, nullptr);
 		MultiFileReaderOptions file_options;
 
 		for (auto &option : info.options) {

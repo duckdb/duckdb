@@ -19,6 +19,7 @@ unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFuncti
 	return_types.push_back(LogicalType::JSON());
 	names.emplace_back("json");
 	bind_data->names = names;
+	json_data.key_names = names;
 
 	MultiFileReader().BindOptions(bind_data->file_options, *bind_data->file_list, return_types, names,
 	                              bind_data->reader_bind);

@@ -58,6 +58,9 @@ public:
 	//! JSON reader options
 	JSONReaderOptions options;
 
+	//! The set of keys to extract (case sensitive)
+	vector<string> key_names;
+
 	//! Options when transforming the JSON to columnar data
 	JSONTransformOptions transform_options;
 
