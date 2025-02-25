@@ -9,7 +9,7 @@
 #pragma once
 
 #ifndef DUCKDB_API
-#if defined(_WIN32) && !defined(__MINGW32__)
+#ifdef _WIN32
 #ifdef DUCKDB_STATIC_BUILD
 #define DUCKDB_API
 #else
