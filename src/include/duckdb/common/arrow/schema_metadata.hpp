@@ -20,7 +20,7 @@ public:
 	//! Constructor used to read a metadata schema, used when importing an arrow object
 	explicit ArrowSchemaMetadata(const char *metadata);
 	//! Constructor used to create a metadata schema, used when exporting an arrow object
-	ArrowSchemaMetadata() {};
+	ArrowSchemaMetadata();
 	//! Adds an option to the metadata
 	void AddOption(const string &key, const string &value);
 	//! Gets an option from the metadata, returns an empty string if it does not exist.
@@ -46,6 +46,6 @@ private:
 	//! The unordered map that holds the metadata
 	unordered_map<string, string> schema_metadata_map;
 	//! The extension metadata map, currently only used for internal types in arrow.opaque
-	ComplexJSON extension_metadata_map;
+	unique_ptr<ComplexJSON> extension_metadata_map;
 };
 } // namespace duckdb

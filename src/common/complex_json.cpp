@@ -5,25 +5,20 @@ ComplexJSON::ComplexJSON(const string &str, bool ignore_errors)
     : str_value(str), is_object(false), ignore_errors(ignore_errors) {
 }
 
-ComplexJSON::ComplexJSON(const unordered_map<string, ComplexJSON> &obj, bool ignore_errors)
-    : obj_value(obj), is_object(true), ignore_errors(ignore_errors) {
-}
-
 ComplexJSON::ComplexJSON() : is_object(false), ignore_errors(false) {};
 
-//! Adds Object
-void ComplexJSON::AddObject(const string &key, const ComplexJSON &object) {
+void ComplexJSON::AddObject(const string &key, unique_ptr<ComplexJSON> object) {
 	is_object = true;
-	obj_value[key] = object;
+	obj_value[key] = std::move(object);
 }
-ComplexJSON ComplexJSON::GetObject(const string &key) {
+
+ComplexJSON &ComplexJSON::GetObject(const string &key) {
 	if (is_object) {
 		if (obj_value.find(key) == obj_value.end()) {
-			return ComplexJSON();
+			throw InvalidInputException("Complex JSON Key not found");
 		}
-		return obj_value[key];
-	} else {
-		throw InvalidInputException("ComplexJson is not an object");
+		return *obj_value[key];
 	}
+	throw InvalidInputException("ComplexJson is not an object");
 }
 } // namespace duckdb

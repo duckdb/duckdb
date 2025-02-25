@@ -532,8 +532,8 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
 	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
 }
 
-ComplexJSON StringUtil::ParseComplexJSONMap(const string &json, bool ignore_errors) {
-	ComplexJSON result(json, ignore_errors);
+unique_ptr<ComplexJSON> StringUtil::ParseComplexJSONMap(const string &json, bool ignore_errors) {
+	auto result = make_uniq<ComplexJSON>(json, ignore_errors);
 	if (json.empty()) {
 		return result;
 	}
@@ -565,7 +565,8 @@ ComplexJSON StringUtil::ParseComplexJSONMap(const string &json, bool ignore_erro
 			const auto key_len = yyjson_get_len(key);
 			const auto value_val = yyjson_get_str(value);
 			const auto value_len = yyjson_get_len(value);
-			result.AddObject(string(key_val, key_len), ComplexJSON(string(value_val, value_len), ignore_errors));
+			result->AddObject(string(key_val, key_len),
+			                  make_uniq<ComplexJSON>(string(value_val, value_len), ignore_errors));
 		} else if (type == YYJSON_TYPE_OBJ) {
 			// We recurse, this is a complex json
 			const auto key_val = yyjson_get_str(key);
@@ -574,8 +575,8 @@ ComplexJSON StringUtil::ParseComplexJSONMap(const string &json, bool ignore_erro
 			size_t json_str_len;
 			char *json_str = yyjson_val_write(value, 0, &json_str_len);
 			if (json_str) {
-				ComplexJSON nested_result = ParseComplexJSONMap(string(json_str, json_str_len), ignore_errors);
-				result.AddObject(string(key_val, key_len), nested_result);
+				auto nested_result = ParseComplexJSONMap(string(json_str, json_str_len), ignore_errors);
+				result->AddObject(string(key_val, key_len), std::move(nested_result));
 				free(json_str); // Clean up the allocated string
 			} else {
 				yyjson_doc_free(doc);
@@ -670,7 +671,7 @@ string StringUtil::ToJSONMap(const unordered_map<string, string> &map) {
 string ComplexJSON::GetValue(const string &key) const {
 	if (is_object) {
 		if (obj_value.find(key) != obj_value.end()) {
-			return GetValueRecursive(obj_value.at(key));
+			return GetValueRecursive(*obj_value.at(key));
 		}
 	}
 	// Object either doesn't exist or this is just a string
@@ -685,7 +686,7 @@ string ComplexJSON::GetValueRecursive(const ComplexJSON &child) {
 		yyjson_mut_doc_set_root(doc, root);
 		for (const auto &object : child.obj_value) {
 			auto key = yyjson_mut_strncpy(doc, object.first.c_str(), object.first.size());
-			auto value_str = GetValueRecursive(object.second);
+			auto value_str = GetValueRecursive(*object.second);
 			auto value = yyjson_mut_strncpy(doc, value_str.c_str(), value_str.size());
 			yyjson_mut_obj_add(root, key, value);
 		}
