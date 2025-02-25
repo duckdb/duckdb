@@ -105,14 +105,14 @@ DUCKDB_API bool TryCastToVarInt::Operation(string_t input_value, string_t &resul
 
 struct VarIntCastToVarchar {
 	template <class SRC>
-	DUCKDB_API static inline string_t Operation(SRC input, Vector &result) {
+	static inline string_t Operation(SRC input, Vector &result) {
 		return StringVector::AddStringOrBlob(result, Varint::VarIntToVarchar(input));
 	}
 };
 
 struct VarintToDoubleCast {
 	template <class SRC, class DST>
-	DUCKDB_API static inline bool Operation(SRC input, DST &result, bool strict = false) {
+	static inline bool Operation(SRC input, DST &result, bool strict = false) {
 		return Varint::VarintToDouble(input, result, strict);
 	}
 };

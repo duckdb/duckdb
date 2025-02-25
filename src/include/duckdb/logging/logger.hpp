@@ -56,7 +56,7 @@ class ExecutionContext;
 //! Main logging interface
 class Logger {
 public:
-	DUCKDB_API explicit Logger(LogManager &manager) : manager(manager) {
+	explicit Logger(LogManager &manager) : manager(manager) {
 	}
 
 	DUCKDB_API virtual ~Logger() = default;

@@ -34,7 +34,7 @@ public:
 class EncryptionUtil {
 
 public:
-	DUCKDB_API explicit EncryptionUtil() {};
+	explicit EncryptionUtil() {}
 
 public:
 	virtual shared_ptr<EncryptionState> CreateEncryptionState() const {

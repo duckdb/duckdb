@@ -79,7 +79,7 @@ struct CatalogEntryLookup {
 	optional_ptr<CatalogEntry> entry;
 	ErrorData error;
 
-	DUCKDB_API bool Found() const {
+	bool Found() const {
 		return entry;
 	}
 };
@@ -125,7 +125,7 @@ public:
 	//! If there are transaction-local changes, the version returned is >= TRANSACTION_START, o.w. it is a simple number
 	//! starting at 0 that is incremented at each commit that has had catalog changes.
 	//! If the catalog does not support versioning, no index is returned.
-	DUCKDB_API virtual optional_idx GetCatalogVersion(ClientContext &context) {
+	virtual optional_idx GetCatalogVersion(ClientContext &context) {
 		return {}; // don't return anything by default
 	}
 
@@ -217,7 +217,7 @@ public:
 	                                                      OnEntryNotFound if_not_found,
 	                                                      QueryErrorContext error_context = QueryErrorContext());
 	//! Overloadable method for giving warnings on ambiguous naming id.tab due to a database and schema with name id
-	DUCKDB_API virtual bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &name) {
+	virtual bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &name) {
 		return !!GetSchema(context, name, OnEntryNotFound::RETURN_NULL);
 	}
 	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const string &name,
@@ -311,7 +311,7 @@ public:
 	virtual string GetDBPath() = 0;
 
 	//! Whether or not this catalog should search a specific type with the standard priority
-	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
+	virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
 		return CatalogLookupBehavior::STANDARD;
 	}
 

@@ -36,67 +36,67 @@ struct NumericValueUnion {
 };
 
 template <>
-DUCKDB_API inline bool &NumericValueUnion::GetReferenceUnsafe() {
+inline bool &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.boolean;
 }
 
 template <>
-DUCKDB_API inline int8_t &NumericValueUnion::GetReferenceUnsafe() {
+inline int8_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.tinyint;
 }
 
 template <>
-DUCKDB_API inline int16_t &NumericValueUnion::GetReferenceUnsafe() {
+inline int16_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.smallint;
 }
 
 template <>
-DUCKDB_API inline int32_t &NumericValueUnion::GetReferenceUnsafe() {
+inline int32_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.integer;
 }
 
 template <>
-DUCKDB_API inline int64_t &NumericValueUnion::GetReferenceUnsafe() {
+inline int64_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.bigint;
 }
 
 template <>
-DUCKDB_API inline hugeint_t &NumericValueUnion::GetReferenceUnsafe() {
+inline hugeint_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.hugeint;
 }
 
 template <>
-DUCKDB_API inline uhugeint_t &NumericValueUnion::GetReferenceUnsafe() {
+inline uhugeint_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.uhugeint;
 }
 
 template <>
-DUCKDB_API inline uint8_t &NumericValueUnion::GetReferenceUnsafe() {
+inline uint8_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.utinyint;
 }
 
 template <>
-DUCKDB_API inline uint16_t &NumericValueUnion::GetReferenceUnsafe() {
+inline uint16_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.usmallint;
 }
 
 template <>
-DUCKDB_API inline uint32_t &NumericValueUnion::GetReferenceUnsafe() {
+inline uint32_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.uinteger;
 }
 
 template <>
-DUCKDB_API inline uint64_t &NumericValueUnion::GetReferenceUnsafe() {
+inline uint64_t &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.ubigint;
 }
 
 template <>
-DUCKDB_API inline float &NumericValueUnion::GetReferenceUnsafe() {
+inline float &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.float_;
 }
 
 template <>
-DUCKDB_API inline double &NumericValueUnion::GetReferenceUnsafe() {
+inline double &NumericValueUnion::GetReferenceUnsafe() {
 	return value_.double_;
 }
 
