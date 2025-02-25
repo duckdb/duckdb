@@ -56,10 +56,10 @@ class ExecutionContext;
 //! Main logging interface
 class Logger {
 public:
-	explicit Logger(LogManager &manager) : manager(manager) {
+	DUCKDB_API explicit Logger(LogManager &manager) : manager(manager) {
 	}
 
-	virtual ~Logger() = default;
+	DUCKDB_API virtual ~Logger() = default;
 
 	// Main Logging interface. In most cases the macros above should be used instead of calling these directly
 	DUCKDB_API virtual bool ShouldLog(const char *log_type, LogLevel log_level) = 0;
@@ -93,10 +93,10 @@ public:
 	}
 
 	DUCKDB_API virtual bool IsThreadSafe() = 0;
-	virtual bool IsMutable() {
+	DUCKDB_API virtual bool IsMutable() {
 		return false;
-	}
-	virtual void UpdateConfig(LogConfig &new_config) {
+	};
+	DUCKDB_API virtual void UpdateConfig(LogConfig &new_config) {
 		throw InternalException("Cannot update the config of this logger!");
 	}
 	DUCKDB_API virtual const LogConfig &GetConfig() const = 0;

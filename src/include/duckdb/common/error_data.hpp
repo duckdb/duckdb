@@ -32,10 +32,10 @@ public:
 	//! Get the internal exception type of the error
 	DUCKDB_API const ExceptionType &Type() const;
 	//! Used in clients like C-API, creates the final message and returns a reference to it
-	const string &Message() const {
+	DUCKDB_API const string &Message() const {
 		return final_message;
 	}
-	const string &RawMessage() const {
+	DUCKDB_API const string &RawMessage() const {
 		return raw_message;
 	}
 	DUCKDB_API bool operator==(const ErrorData &other) const;

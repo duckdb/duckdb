@@ -41,9 +41,9 @@ public:
 // Interface for writing log entries
 class LogStorage {
 public:
-	explicit LogStorage() {
+	DUCKDB_API explicit LogStorage() {
 	}
-	virtual ~LogStorage() = default;
+	DUCKDB_API virtual ~LogStorage() = default;
 
 	//! WRITING
 	DUCKDB_API virtual void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
@@ -52,7 +52,7 @@ public:
 	DUCKDB_API virtual void Flush() = 0;
 
 	//! READING (OPTIONAL)
-	virtual bool CanScan() {
+	DUCKDB_API virtual bool CanScan() {
 		return false;
 	}
 	DUCKDB_API virtual unique_ptr<LogStorageScanState> CreateScanEntriesState() const;
