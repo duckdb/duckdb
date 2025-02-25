@@ -59,7 +59,7 @@ public:
 	explicit Logger(LogManager &manager) : manager(manager) {
 	}
 
-	DUCKDB_API virtual ~Logger() = default;
+	virtual ~Logger() = default;
 
 	// Main Logging interface. In most cases the macros above should be used instead of calling these directly
 	DUCKDB_API virtual bool ShouldLog(const char *log_type, LogLevel log_level) = 0;

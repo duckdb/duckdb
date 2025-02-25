@@ -43,7 +43,7 @@ class LogStorage {
 public:
 	explicit LogStorage() {
 	}
-	DUCKDB_API virtual ~LogStorage() = default;
+	virtual ~LogStorage() = default;
 
 	//! WRITING
 	DUCKDB_API virtual void WriteLogEntry(timestamp_t timestamp, LogLevel level, const string &log_type,
