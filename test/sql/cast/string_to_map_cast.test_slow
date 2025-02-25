@@ -31,7 +31,7 @@ SELECT '{greetings=[Hello World!, Hello DuckDB, Howdy], farewells=[Bye World, By
 query I
 SELECT '{"key=A"=Duck, "key=B"="hello=world"}'::MAP(VARCHAR, VARCHAR)
 ----
-{'key=A'=Duck, 'key=B'=hello=world}
+{'key=A'=Duck, 'key=B'='hello=world'}
 
 statement error
 SELECT '{a=1, b=2, a=3}'::MAP(VARCHAR, INT)
@@ -244,7 +244,7 @@ SELECT CAST('{A={a:[12,13,14], b:"🦆", c:0.12}, B={a:[12,13,14], b:DuckDuck, c
 query I
 SELECT CAST('{{a:Meow=Meow}={a:12, b:0.8, c:MeowMeow}, {a:Quack}={a:13, b:3.2, c:QuackQuack}}' AS MAP(STRUCT(a VARCHAR), STRUCT(a INT, b DOUBLE, c VARCHAR)));
 ----
-{{'a': Meow=Meow}={'a': 12, 'b': 0.8, 'c': MeowMeow}, {'a': Quack}={'a': 13, 'b': 3.2, 'c': QuackQuack}}
+{{'a': 'Meow=Meow'}={'a': 12, 'b': 0.8, 'c': MeowMeow}, {'a': Quack}={'a': 13, 'b': 3.2, 'c': QuackQuack}}
 
 query I
 SELECT CAST('{{A:AAA}={a:[12,13,14], b:"🦆", c:{a:[[a], [b, c]], b:[123]}}}' AS MAP(STRUCT(A VARCHAR), STRUCT(a INT[], b VARCHAR, c STRUCT(a VARCHAR[][], b INT[]))));

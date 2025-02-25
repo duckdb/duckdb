@@ -182,7 +182,7 @@ struct VectorCastHelpers {
 		}
 	}
 
-	template <uint8_t CONTEXT>
+	template <bool STRUCT_KEY>
 	static idx_t CalculateEscapedStringLength(const string_t &string, bool &needs_quotes) {
 		auto base_length = string.GetSize();
 		idx_t length = 0;
@@ -195,23 +195,18 @@ struct VectorCastHelpers {
 			return 2;
 		}
 
-		if (CONTEXT == NestedToVarcharCast::STRUCT_KEY) {
-			//! The struct key is always quoted
+		if (STRUCT_KEY) {
+			needs_quotes = true;
+		} else if (isspace(string_data[0])) {
+			needs_quotes = true;
+		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
+			needs_quotes = true;
+		} else if (StringUtil::CIEquals(string_data, base_length, "null", 4)) {
 			needs_quotes = true;
 		} else {
-			if (isspace(string_data[0])) {
-				needs_quotes = true;
-			} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
-				needs_quotes = true;
-			} else if (StringUtil::CIEquals(string_data, base_length, "null", 4)) {
-				needs_quotes = true;
-			} else {
-				uint8_t needs_quotes_flags = 0;
-				const uint8_t *table = NestedToVarcharCast::LookupTable;
-				for (idx_t i = 0; i < base_length; i++) {
-					needs_quotes_flags |= table[(uint8_t)string_data[i]];
-				}
-				needs_quotes = needs_quotes_flags & CONTEXT;
+			const bool *table = NestedToVarcharCast::LOOKUP_TABLE;
+			for (idx_t i = 0; i < base_length; i++) {
+				needs_quotes |= table[(uint8_t)string_data[i]];
 			}
 		}
 
@@ -222,10 +217,7 @@ struct VectorCastHelpers {
 		for (idx_t i = 0; i < base_length; i++) {
 			length += 1 + (string_data[i] == '\'' || string_data[i] == '\\');
 		}
-		if (CONTEXT != NestedToVarcharCast::STRUCT_KEY) {
-			//! For the added quotes
-			length += 2;
-		}
+		length += 2;
 		return length;
 	}
 
@@ -234,14 +226,11 @@ struct VectorCastHelpers {
 		return string.GetSize();
 	}
 
-	template <uint8_t CONTEXT>
+	template <bool STRUCT_KEY>
 	static idx_t WriteEscapedString(void *dest, const string_t &string, bool needs_quotes) {
 		auto base_length = string.GetSize();
 		if (base_length == 0) {
 			D_ASSERT(needs_quotes);
-			if (CONTEXT == NestedToVarcharCast::STRUCT_KEY) {
-				return 0;
-			}
 			memcpy(dest, "''", 2);
 			return 2;
 		}
@@ -256,9 +245,7 @@ struct VectorCastHelpers {
 		}
 
 		idx_t offset = 0;
-		if (CONTEXT != NestedToVarcharCast::STRUCT_KEY) {
-			destination[offset++] = '\'';
-		}
+		destination[offset++] = '\'';
 
 		for (idx_t i = 0; i < base_length; i++) {
 			const bool needs_quote = string_data[i] == '\\' || string_data[i] == '\'';
@@ -267,9 +254,7 @@ struct VectorCastHelpers {
 			offset += 1 + needs_quote;
 		}
 
-		if (CONTEXT != NestedToVarcharCast::STRUCT_KEY) {
-			destination[offset++] = '\'';
-		}
+		destination[offset++] = '\'';
 		return offset;
 	}
 

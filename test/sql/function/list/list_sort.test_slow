@@ -283,43 +283,43 @@ SELECT list_sort(['2021-08-20'::DATE])
 query I
 SELECT list_sort(['14:59:37'::TIME])
 ----
-[14:59:37]
+['14:59:37']
 
 # timestamp
 query I
 SELECT list_sort(['2021-08-20'::TIMESTAMP])
 ----
-[2021-08-20 00:00:00]
+['2021-08-20 00:00:00']
 
 # timestamp s
 query I
 SELECT list_sort(['2021-08-20'::TIMESTAMP_S])
 ----
-[2021-08-20 00:00:00]
+['2021-08-20 00:00:00']
 
 # timestamp ms
 query I
 SELECT list_sort(['2021-08-20 00:00:00.123'::TIMESTAMP_MS])
 ----
-[2021-08-20 00:00:00.123]
+['2021-08-20 00:00:00.123']
 
 # timestamp ns
 query I
 SELECT list_sort(['2021-08-20 00:00:00.123456'::TIMESTAMP_NS])
 ----
-[2021-08-20 00:00:00.123456]
+['2021-08-20 00:00:00.123456']
 
 # time with time zone
 query I
 SELECT list_sort(['14:59:37'::TIMETZ])
 ----
-[14:59:37+00]
+['14:59:37+00']
 
 # timestamp with time zone
 query I
 SELECT list_sort(['2021-08-20'::TIMESTAMPTZ])
 ----
-[2021-08-20 00:00:00+00]
+['2021-08-20 00:00:00+00']
 
 # interval
 query I

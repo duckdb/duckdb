@@ -49,21 +49,17 @@ static bool MapToVarcharCast(Vector &source, Vector &result, idx_t count, CastPa
 	auto &key_vec = MapVector::GetKeys(source);
 	auto &value_vec = MapVector::GetValues(source);
 
-	auto key_is_not_varchar = key_vec.GetType().id() != LogicalTypeId::VARCHAR;
-	auto value_is_not_varchar = value_vec.GetType().id() != LogicalTypeId::VARCHAR;
+	auto key_is_nested = key_vec.GetType().IsNested();
+	auto value_is_nested = value_vec.GetType().IsNested();
 
-	auto key_strlen_func = key_is_not_varchar
-	                           ? VectorCastHelpers::CalculateStringLength
-	                           : VectorCastHelpers::CalculateEscapedStringLength<NestedToVarcharCast::MAP_KEY>;
-	auto key_write_func = key_is_not_varchar ? VectorCastHelpers::WriteString
-	                                         : VectorCastHelpers::WriteEscapedString<NestedToVarcharCast::MAP_KEY>;
+	auto key_strlen_func = key_is_nested ? VectorCastHelpers::CalculateStringLength
+	                                     : VectorCastHelpers::CalculateEscapedStringLength<false>;
+	auto key_write_func = key_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
 
-	auto value_strlen_func = value_is_not_varchar
-	                             ? VectorCastHelpers::CalculateStringLength
-	                             : VectorCastHelpers::CalculateEscapedStringLength<NestedToVarcharCast::MAP_VALUE>;
-	auto value_write_func = value_is_not_varchar
-	                            ? VectorCastHelpers::WriteString
-	                            : VectorCastHelpers::WriteEscapedString<NestedToVarcharCast::MAP_VALUE>;
+	auto value_strlen_func = value_is_nested ? VectorCastHelpers::CalculateStringLength
+	                                         : VectorCastHelpers::CalculateEscapedStringLength<false>;
+	auto value_write_func =
+	    value_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
 
 	auto result_data = FlatVector::GetData<string_t>(result);
 	unsafe_unique_array<bool> key_needs_quotes;

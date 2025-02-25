@@ -29,7 +29,7 @@ SELECT $${"key\ with\, comma" = "value\ with\, comma"}$$::MAP(VARCHAR, VARCHAR);
 query I
 SELECT $${"key\ with\ colon\:" = "value\ with\ colon\:"}$$::MAP(VARCHAR, VARCHAR);
 ----
-{key with colon:=value with colon:}
+{'key with colon:'='value with colon:'}
 
 ## FIXME: not sure what to do here, maybe we shouldn't "respect scopes" if the child type is not nested
 ## Valid: key and value with parentheses
@@ -96,13 +96,13 @@ SELECT $${key = "value\with\backslash"}$$::MAP(VARCHAR, VARCHAR);
 query II
 SELECT $${key=with=equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key'];
 ----
-{key=with=equals = value}	with=equals = value
+{key='with=equals = value'}	with=equals = value
 
 # Valid: key/value contains unescaped equal sign
 query II
 SELECT $${"key\=with" = equals = value}$$::MAP(VARCHAR, VARCHAR) a, a['key=with'];
 ----
-{'key=with'=equals = value}	equals = value
+{'key=with'='equals = value'}	equals = value
 
 # Valid: key/value contains unescaped equal sign
 query II

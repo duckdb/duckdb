@@ -78,12 +78,11 @@ static bool ListToVarcharCast(Vector &source, Vector &result, idx_t count, CastP
 	ListCast::ListToListCast(source, varchar_list, count, parameters);
 
 	auto &child_vec = ListVector::GetEntry(source);
-	auto add_escapes = !child_vec.GetType().IsNested();
-	auto string_length_func = add_escapes
-	                              ? VectorCastHelpers::CalculateEscapedStringLength<NestedToVarcharCast::LIST_VALUE>
-	                              : VectorCastHelpers::CalculateStringLength;
-	auto write_string_func = add_escapes ? VectorCastHelpers::WriteEscapedString<NestedToVarcharCast::LIST_VALUE>
-	                                     : VectorCastHelpers::WriteString;
+	auto child_is_nested = child_vec.GetType().IsNested();
+	auto string_length_func = child_is_nested ? VectorCastHelpers::CalculateStringLength
+	                                          : VectorCastHelpers::CalculateEscapedStringLength<false>;
+	auto write_string_func =
+	    child_is_nested ? VectorCastHelpers::WriteString : VectorCastHelpers::WriteEscapedString<false>;
 
 	// now construct the actual varchar vector
 	varchar_list.Flatten(count);
