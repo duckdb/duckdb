@@ -626,7 +626,7 @@ void ParquetMetaDataOperatorData::ExecuteBloomProbe(ClientContext &context, cons
 	}
 
 	auto &allocator = Allocator::DefaultAllocator();
-	auto transport = std::make_shared<ThriftFileTransport>(allocator, reader->GetHandle(), false);
+	auto transport = std::make_shared<ThriftFileTransport>(reader->GetHandle(), false);
 	auto protocol =
 	    make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 

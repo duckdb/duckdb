@@ -56,7 +56,7 @@ struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
 	idx_t group_offset;
-	unique_ptr<FileHandle> file_handle;
+	unique_ptr<CachingFileHandle> file_handle;
 	unique_ptr<ColumnReader> root_reader;
 	std::unique_ptr<duckdb_apache::thrift::protocol::TProtocol> thrift_file_proto;
 
@@ -140,7 +140,7 @@ public:
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
 	~ParquetReader() override;
 
-	FileSystem &fs;
+	CachingFileSystem &fs;
 	Allocator &allocator;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 	ParquetOptions parquet_options;
@@ -185,7 +185,7 @@ public:
 
 	unique_ptr<BaseStatistics> ReadStatistics(const string &name);
 
-	FileHandle &GetHandle() {
+	CachingFileHandle &GetHandle() {
 		return *file_handle;
 	}
 
@@ -221,7 +221,7 @@ private:
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
 
 private:
-	unique_ptr<FileHandle> file_handle;
+	unique_ptr<CachingFileHandle> file_handle;
 };
 
 } // namespace duckdb
