@@ -87,7 +87,15 @@ WITH RECURSIVE tbl(a,b,c) USING KEY (a,b,c) AS (SELECT * FROM (VALUES (1, 2, 3),
 
 # Reference the recurring table more than once
 query III
-WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (SELECT 1, NULL, NULL UNION SELECT tbl.a+1, rec1.a, rec2.b FROM tbl, recurring.tbl AS rec1, recurring.tbl AS rec2 WHERE tbl.a < 5) SELECT * FROM tbl;
+WITH RECURSIVE tbl(a,b,c) USING KEY (a) AS (
+	SELECT 1, NULL, NULL
+	UNION
+	(SELECT DISTINCT ON (tbl.a) tbl.a+1, rec1.a, rec2.b
+	FROM tbl, recurring.tbl AS rec1, recurring.tbl AS rec2
+	WHERE tbl.a < 5
+	ORDER BY tbl.a ASC, rec1.a DESC NULLS LAST, rec2.b DESC NULLS LAST
+	)
+) SELECT * FROM tbl;
 ----
 1	NULL	NULL
 2	1	NULL
@@ -213,11 +221,11 @@ WITH RECURSIVE bellman(knode, distance) USING KEY (knode) AS (
          CASE WHEN n.node = 'v0' THEN 0 ELSE 50000000 END AS distance
   FROM   nodes AS n
   UNION
-  (SELECT rec.knode AS knode, n.distance + e.length AS distance
+  (SELECT DISTINCT ON (knode) rec.knode AS knode, n.distance + e.length AS distance
   FROM   bellman AS n, edges AS e, recurring.bellman AS rec
   WHERE  (e.here, e.there) = (n.knode, rec.knode)
   AND    rec.distance > n.distance + e.length
-  ORDER BY distance DESC)
+  ORDER BY distance)
 )
 SELECT n.knode || CASE WHEN n.knode = 'v0' THEN ' (source)' ELSE '' END AS node,
        n.distance
@@ -289,7 +297,7 @@ WITH RECURSIVE tbl(a, b) USING KEY (b) AS (
 			UNION
 		SELECT a + 1, b
 		FROM tbl2
-		WHERE a < 5) SELECT * FROM tbl2))
+		WHERE a < 5) SELECT * FROM tbl2 ORDER BY a))
 SELECT * FROM tbl
 ----
 1	1
@@ -307,7 +315,7 @@ WITH RECURSIVE tbl(a, b) USING KEY (b) AS (
 			UNION
 		SELECT a + 1, b
 		FROM tbl2
-		WHERE a < 5) SELECT * FROM tbl2)))
+		WHERE a < 5) SELECT * FROM tbl2 ORDER BY a, b)))
 SELECT * FROM tbl
 ----
 1	1
