@@ -101,42 +101,42 @@ private:
 };
 
 struct JSONReaderOptions {
-  //! The format of the JSON
-  JSONFormat format = JSONFormat::AUTO_DETECT;
-  //! Whether record types in the JSON
-  JSONRecordType record_type = JSONRecordType::AUTO_DETECT;
-  //! Whether file is compressed or not, and if so which compression type
-  FileCompressionType compression = FileCompressionType::AUTO_DETECT;
-  //! Whether or not we should ignore malformed JSON (default to NULL)
-  bool ignore_errors = false;
-  //! Maximum JSON object size (defaults to 16MB minimum)
-  idx_t maximum_object_size = 16777216;
-  //! Whether we auto-detect a schema
-  bool auto_detect = false;
-  //! Sample size for detecting schema
-  idx_t sample_size = idx_t(STANDARD_VECTOR_SIZE) * 10;
-  //! Max depth we go to detect nested JSON schema (defaults to unlimited)
-  idx_t max_depth = NumericLimits<idx_t>::Maximum();
-  //! We divide the number of appearances of each JSON field by the auto-detection sample size
-  //! If the average over the fields of an object is less than this threshold,
-  //! we default to the MAP type with value type of merged field types
-  double field_appearance_threshold = 0.1;
-  //! The maximum number of files we sample to sample sample_size rows
-  idx_t maximum_sample_files = 32;
-  //! Whether we auto-detect and convert JSON strings to integers
-  bool convert_strings_to_integers = false;
-  //! If a struct contains more fields than this threshold with at least 80% similar types,
-  //! we infer it as MAP type
-  idx_t map_inference_threshold = 200;
-  //! User-provided list of names (in order)
-  vector<string> name_list;
-  //! User-provided list of types (in order)
-  vector<LogicalType> sql_type_list;
-  //! Forced date/timestamp formats
-  string date_format;
-  string timestamp_format;
-  //! Candidate date formats
-  DateFormatMap date_format_map;
+	//! The format of the JSON
+	JSONFormat format = JSONFormat::AUTO_DETECT;
+	//! Whether record types in the JSON
+	JSONRecordType record_type = JSONRecordType::AUTO_DETECT;
+	//! Whether file is compressed or not, and if so which compression type
+	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
+	//! Whether or not we should ignore malformed JSON (default to NULL)
+	bool ignore_errors = false;
+	//! Maximum JSON object size (defaults to 16MB minimum)
+	idx_t maximum_object_size = 16777216;
+	//! Whether we auto-detect a schema
+	bool auto_detect = false;
+	//! Sample size for detecting schema
+	idx_t sample_size = idx_t(STANDARD_VECTOR_SIZE) * 10;
+	//! Max depth we go to detect nested JSON schema (defaults to unlimited)
+	idx_t max_depth = NumericLimits<idx_t>::Maximum();
+	//! We divide the number of appearances of each JSON field by the auto-detection sample size
+	//! If the average over the fields of an object is less than this threshold,
+	//! we default to the MAP type with value type of merged field types
+	double field_appearance_threshold = 0.1;
+	//! The maximum number of files we sample to sample sample_size rows
+	idx_t maximum_sample_files = 32;
+	//! Whether we auto-detect and convert JSON strings to integers
+	bool convert_strings_to_integers = false;
+	//! If a struct contains more fields than this threshold with at least 80% similar types,
+	//! we infer it as MAP type
+	idx_t map_inference_threshold = 200;
+	//! User-provided list of names (in order)
+	vector<string> name_list;
+	//! User-provided list of types (in order)
+	vector<LogicalType> sql_type_list;
+	//! Forced date/timestamp formats
+	string date_format;
+	string timestamp_format;
+	//! Candidate date formats
+	DateFormatMap date_format_map;
 };
 
 } // namespace duckdb

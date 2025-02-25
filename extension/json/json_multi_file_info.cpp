@@ -4,7 +4,8 @@
 
 namespace duckdb {
 
-unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientContext &context, optional_ptr<TableFunctionInfo> info) {
+unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientContext &context,
+                                                                       optional_ptr<TableFunctionInfo> info) {
 	auto reader_options = make_uniq<JSONFileReaderOptions>();
 	if (info) {
 		auto &scan_info = info->Cast<JSONScanInfo>();
@@ -235,7 +236,7 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 }
 
 unique_ptr<TableFunctionData> JSONMultiFileInfo::InitializeBindData(MultiFileBindData &multi_file_data,
-														unique_ptr<BaseFileReaderOptions> options) {
+                                                                    unique_ptr<BaseFileReaderOptions> options) {
 	auto &reader_options = options->Cast<JSONFileReaderOptions>();
 	auto json_data = make_uniq<JSONScanData>();
 	json_data->options = std::move(reader_options.options);
@@ -243,7 +244,7 @@ unique_ptr<TableFunctionData> JSONMultiFileInfo::InitializeBindData(MultiFileBin
 }
 
 void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-					   MultiFileBindData &bind_data) {
+                                   MultiFileBindData &bind_data) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 	json_data.InitializeReaders(context, bind_data);
 
@@ -282,7 +283,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 	json_data.key_names = names;
 
 	bind_data.multi_file_reader->BindOptions(bind_data.file_options, *bind_data.file_list, return_types, names,
-	                              bind_data.reader_bind);
+	                                         bind_data.reader_bind);
 
 	auto &transform_options = json_data.transform_options;
 	transform_options.strict_cast = !options.ignore_errors;
@@ -308,6 +309,18 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 }
 
 void JSONMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
+}
+
+void JSONMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options_p,
+                                         const vector<string> &expected_names,
+                                         const vector<LogicalType> &expected_types) {
+	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
+	auto &options = reader_options.options;
+	options.name_list = expected_names;
+	options.sql_type_list = expected_types;
+	if (options.auto_detect && options.format != JSONFormat::ARRAY) {
+		options.format = JSONFormat::AUTO_DETECT;
+	}
 }
 
 void JSONMultiFileInfo::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,

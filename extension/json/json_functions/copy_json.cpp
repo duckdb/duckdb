@@ -112,58 +112,13 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	return binder.Bind(*stmt_copy);
 }
 
-static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
-                                                 vector<LogicalType> &expected_types) {
-	auto bind_data = make_uniq<MultiFileBindData>();
-	auto json_bind_data = make_uniq<JSONScanData>();
-	auto &json_data = *json_bind_data;
-	bind_data->bind_data = std::move(json_bind_data);
-	json_data.type = JSONScanType::READ_JSON;
-
-	bind_data->multi_file_reader = MultiFileReader::CreateDefault("COPY");
-	vector<string> paths = {info.file_path};
-	bind_data->file_list = bind_data->multi_file_reader->CreateFileList(context, paths);
-	bind_data->names = expected_names;
-	json_data.key_names = expected_names;
-
-	JSONFileReaderOptions reader_options;
-	reader_options.options.record_type = JSONRecordType::RECORDS;
-	reader_options.options.format = JSONFormat::NEWLINE_DELIMITED;
-	for (auto &kv : info.options) {
-		if (JSONMultiFileInfo::ParseCopyOption(context, kv.first, kv.second, reader_options, expected_names,
-		                                       expected_types)) {
-			continue;
-		}
-		throw BinderException("Unknown option for COPY ... FROM ... (FORMAT JSON): \"%s\".", kv.first);
-	}
-	json_data.options = std::move(reader_options.options);
-
-	auto &options = json_data.options;
-
-	json_data.InitializeFormats(options.auto_detect);
-	if (options.auto_detect && options.format != JSONFormat::ARRAY) {
-		options.format = JSONFormat::AUTO_DETECT;
-	}
-
-	json_data.transform_options = JSONTransformOptions(true, true, true, true);
-	json_data.transform_options.delay_error = true;
-
-	json_data.InitializeReaders(context, *bind_data);
-	if (options.auto_detect) {
-		JSONScan::AutoDetect(context, *bind_data, expected_types, expected_names);
-	}
-
-	json_data.transform_options.date_format_map = &options.date_format_map;
-	return std::move(bind_data);
-}
-
 CopyFunction JSONFunctions::GetJSONCopyFunction() {
 	CopyFunction function("json");
 	function.extension = "json";
 
 	function.plan = CopyToJSONPlan;
 
-	function.copy_from_bind = CopyFromJSONBind;
+	function.copy_from_bind = MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileBindCopy;
 	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
 	    JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::RECORDS, false));
 

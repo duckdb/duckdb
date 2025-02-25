@@ -319,7 +319,8 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 }
 
 TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info) {
-	TableFunction table_function({LogicalType::VARCHAR}, ReadJSONFunction, MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileBind,
+	TableFunction table_function({LogicalType::VARCHAR}, ReadJSONFunction,
+	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileBind,
 	                             JSONGlobalTableFunctionState::Init, JSONLocalTableFunctionState::Init);
 	table_function.name = "read_json";
 
