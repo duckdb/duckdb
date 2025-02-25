@@ -13,7 +13,6 @@
 
 #pragma once
 
-//! duplicate of duckdb/main/winapi.hpp
 #ifndef DUCKDB_C_API
 #ifdef _WIN32
 #ifdef DUCKDB_STATIC_BUILD
