@@ -21,26 +21,6 @@
 
 namespace duckdb {
 
-struct JSONString {
-public:
-	JSONString() {
-	}
-	JSONString(const char *pointer_p, idx_t size_p) : pointer(pointer_p), size(size_p) {
-	}
-
-	const char *pointer;
-	idx_t size;
-
-public:
-	string ToString() {
-		return string(pointer, size);
-	}
-
-	const char &operator[](size_t i) const {
-		return pointer[i];
-	}
-};
-
 struct JSONScanData : public TableFunctionData {
 public:
 	JSONScanData();
@@ -120,15 +100,13 @@ public:
 	idx_t ReadNext(JSONScanGlobalState &gstate);
 	void ThrowTransformError(idx_t object_index, const string &error_message);
 
-	yyjson_alc *GetAllocator();
 	const MultiFileReaderData &GetReaderData() const;
 
-public:
-	//! Current scan data
-	idx_t scan_count;
-	JSONString units[STANDARD_VECTOR_SIZE];
-	yyjson_val *values[STANDARD_VECTOR_SIZE];
+	JSONReaderScanState &GetScanState() {
+		return scan_state;
+	}
 
+public:
 	//! Batch index for order-preserving parallelism
 	idx_t batch_index;
 
@@ -148,7 +126,6 @@ private:
 	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
 	                          bool &file_done);
 	AllocatedData AllocateBuffer(JSONScanGlobalState &gstate);
-	data_ptr_t GetReconstructBuffer(JSONScanGlobalState &gstate);
 
 	void SkipOverArrayStart();
 
@@ -158,7 +135,6 @@ private:
 	void ParseNextChunk(JSONScanGlobalState &gstate);
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
-	void ThrowObjectSizeError(const idx_t object_size);
 
 	//! Must hold the lock
 	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
@@ -167,30 +143,18 @@ private:
 private:
 	//! Bind data
 	const JSONScanData &json_data;
-	//! Thread-local allocator
-	JSONAllocator allocator;
+
+	//! Scan state
+	JSONReaderScanState scan_state;
 
 	//! Current reader and buffer handle
 	optional_ptr<BufferedJSONReader> current_reader;
-	optional_ptr<JSONBufferHandle> current_buffer_handle;
-	//! Whether this is the last batch of the file
-	bool is_last;
 
 	//! The current main filesystem
 	FileSystem &fs;
 
 	//! For some filesystems (e.g. S3), using a filehandle per thread increases performance
 	unique_ptr<FileHandle> thread_local_filehandle;
-
-	//! Current buffer read info
-	char *buffer_ptr;
-	idx_t buffer_size;
-	idx_t buffer_offset;
-	idx_t prev_buffer_remainder;
-	idx_t lines_or_objects_in_buffer;
-
-	//! Buffer to reconstruct split values
-	AllocatedData reconstruct_buffer;
 };
 
 struct JSONGlobalTableFunctionState : public GlobalTableFunctionState {

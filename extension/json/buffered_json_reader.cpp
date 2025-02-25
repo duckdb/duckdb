@@ -351,4 +351,441 @@ double BufferedJSONReader::GetProgress() const {
 	}
 }
 
+static inline void TrimWhitespace(JSONString &line) {
+	while (line.size != 0 && StringUtil::CharacterIsSpace(line[0])) {
+		line.pointer++;
+		line.size--;
+	}
+	while (line.size != 0 && StringUtil::CharacterIsSpace(line[line.size - 1])) {
+		line.size--;
+	}
+}
+
+JSONReaderScanState::JSONReaderScanState(ClientContext &context, Allocator &global_allocator, idx_t buffer_capacity)
+    : global_allocator(global_allocator), allocator(BufferAllocator::Get(context)),
+      reconstruct_buffer_capacity(buffer_capacity) {
+}
+
+void JSONReaderScanState::Reset() {
+	allocator.Reset();
+	scan_count = 0;
+}
+
+data_ptr_t JSONReaderScanState::GetReconstructBuffer() {
+	if (!reconstruct_buffer.IsSet()) {
+		reconstruct_buffer = global_allocator.Allocate(reconstruct_buffer_capacity);
+	}
+	return reconstruct_buffer.get();
+}
+
+static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, const idx_t &buffer_size) {
+	for (; buffer_offset != buffer_size; buffer_offset++) {
+		if (!StringUtil::CharacterIsSpace(buffer_ptr[buffer_offset])) {
+			break;
+		}
+	}
+}
+
+static inline const char *NextNewline(const char *ptr, const idx_t size) {
+	return const_char_ptr_cast(memchr(ptr, '\n', size));
+}
+
+static inline const char *PreviousNewline(const char *ptr, const idx_t size) {
+	const auto end = ptr - size;
+	for (ptr--; ptr != end; ptr--) {
+		if (*ptr == '\n') {
+			break;
+		}
+	}
+	return ptr;
+}
+
+static inline const char *NextJSONDefault(const char *ptr, const char *const end) {
+	idx_t parents = 0;
+	while (ptr != end) {
+		switch (*ptr++) {
+		case '{':
+		case '[':
+			parents++;
+			continue;
+		case '}':
+		case ']':
+			parents--;
+			break;
+		case '"':
+			while (ptr != end) {
+				auto string_char = *ptr++;
+				if (string_char == '"') {
+					break;
+				} else if (string_char == '\\') {
+					if (ptr != end) {
+						ptr++; // Skip the escaped char
+					}
+				}
+			}
+			break;
+		default:
+			continue;
+		}
+
+		if (parents == 0) {
+			break;
+		}
+	}
+
+	return ptr;
+}
+
+static inline const char *NextJSON(const char *ptr, const idx_t size) {
+	D_ASSERT(!StringUtil::CharacterIsSpace(*ptr)); // Should be handled before
+
+	const char *const end = ptr + size;
+	switch (*ptr) {
+	case '{':
+	case '[':
+	case '"':
+		ptr = NextJSONDefault(ptr, end);
+		break;
+	default:
+		// Special case: JSON array containing JSON without clear "parents", i.e., not obj/arr/str
+		while (ptr != end) {
+			switch (*ptr++) {
+			case ',':
+			case ']':
+				ptr--;
+				break;
+			default:
+				continue;
+			}
+			break;
+		}
+	}
+
+	return ptr == end ? nullptr : ptr;
+}
+
+void BufferedJSONReader::SkipOverArrayStart(JSONReaderScanState &scan_state) {
+	// First read of this buffer, check if it's actually an array and skip over the bytes
+	auto &buffer_ptr = scan_state.buffer_ptr;
+	auto &buffer_offset = scan_state.buffer_offset;
+	auto &buffer_size = scan_state.buffer_size;
+	SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
+	if (buffer_offset == buffer_size) {
+		return; // Empty file
+	}
+	if (buffer_ptr[buffer_offset] != '[') {
+		throw InvalidInputException(
+		    "Expected top-level JSON array with format='array', but first character is '%c' in file \"%s\"."
+		    "\n Try setting format='auto' or format='newline_delimited'.",
+		    buffer_ptr[buffer_offset], GetFileName());
+	}
+	SkipWhitespace(buffer_ptr, ++buffer_offset, buffer_size);
+	if (buffer_offset >= buffer_size) {
+		throw InvalidInputException("Missing closing brace ']' in JSON array with format='array' in file \"%s\"",
+		                            GetFileName());
+	}
+	if (buffer_ptr[buffer_offset] == ']') {
+		// Empty array
+		SkipWhitespace(buffer_ptr, ++buffer_offset, buffer_size);
+		if (buffer_offset != buffer_size) {
+			throw InvalidInputException(
+			    "Empty array with trailing data when parsing JSON array with format='array' in file \"%s\"",
+			    GetFileName());
+		}
+	}
+}
+
+void BufferedJSONReader::ThrowTransformError(JSONReaderScanState &scan_state, idx_t object_index,
+                                             const string &error_message) {
+	D_ASSERT(scan_state.current_buffer_handle);
+	D_ASSERT(object_index != DConstants::INVALID_INDEX);
+	auto line_or_object_in_buffer = scan_state.lines_or_objects_in_buffer - scan_state.scan_count + object_index;
+	ThrowTransformError(scan_state.current_buffer_handle->buffer_index, line_or_object_in_buffer, error_message);
+}
+
+static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(char *const buffer_ptr, const idx_t buffer_size,
+                                                                  yyjson_alc *alc) {
+	// First we do the easy check whether it's NEWLINE_DELIMITED
+	auto line_end = NextNewline(buffer_ptr, buffer_size);
+	if (line_end != nullptr) {
+		idx_t line_size = line_end - buffer_ptr;
+		SkipWhitespace(buffer_ptr, line_size, buffer_size);
+
+		yyjson_read_err error;
+		auto doc = JSONCommon::ReadDocumentUnsafe(buffer_ptr, line_size, JSONCommon::READ_FLAG, alc, &error);
+		if (error.code == YYJSON_READ_SUCCESS) { // We successfully read the line
+			if (yyjson_is_arr(doc->root) && line_size == buffer_size) {
+				// It's just one array, let's actually assume ARRAY, not NEWLINE_DELIMITED
+				if (yyjson_arr_size(doc->root) == 0 || yyjson_is_obj(yyjson_arr_get(doc->root, 0))) {
+					// Either an empty array (assume records), or an array of objects
+					return make_pair(JSONFormat::ARRAY, JSONRecordType::RECORDS);
+				} else {
+					return make_pair(JSONFormat::ARRAY, JSONRecordType::VALUES);
+				}
+			} else if (yyjson_is_obj(doc->root)) {
+				return make_pair(JSONFormat::NEWLINE_DELIMITED, JSONRecordType::RECORDS);
+			} else {
+				return make_pair(JSONFormat::NEWLINE_DELIMITED, JSONRecordType::VALUES);
+			}
+		}
+	}
+
+	// Skip whitespace
+	idx_t buffer_offset = 0;
+	SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
+	auto remaining = buffer_size - buffer_offset;
+
+	// We know it's not NEWLINE_DELIMITED at this point, if there's a '{', we know it's not ARRAY either
+	// Also if it's fully whitespace we just return something because we don't know
+	if (remaining == 0 || buffer_ptr[buffer_offset] == '{') {
+		return make_pair(JSONFormat::UNSTRUCTURED, JSONRecordType::RECORDS);
+	}
+
+	// We know it's not top-level records, if it's not '[', it's not ARRAY either
+	if (buffer_ptr[buffer_offset] != '[') {
+		return make_pair(JSONFormat::UNSTRUCTURED, JSONRecordType::VALUES);
+	}
+
+	// It's definitely an ARRAY, but now we have to figure out if there's more than one top-level array
+	yyjson_read_err error;
+	auto doc =
+	    JSONCommon::ReadDocumentUnsafe(buffer_ptr + buffer_offset, remaining, JSONCommon::READ_STOP_FLAG, alc, &error);
+	if (error.code == YYJSON_READ_SUCCESS) {
+		D_ASSERT(yyjson_is_arr(doc->root));
+
+		// We successfully read something!
+		buffer_offset += yyjson_doc_get_read_size(doc);
+		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
+		remaining = buffer_size - buffer_offset;
+
+		if (remaining != 0) { // There's more
+			return make_pair(JSONFormat::UNSTRUCTURED, JSONRecordType::VALUES);
+		}
+
+		// Just one array, check what's in there
+		if (yyjson_arr_size(doc->root) == 0 || yyjson_is_obj(yyjson_arr_get(doc->root, 0))) {
+			// Either an empty array (assume records), or an array of objects
+			return make_pair(JSONFormat::ARRAY, JSONRecordType::RECORDS);
+		} else {
+			return make_pair(JSONFormat::ARRAY, JSONRecordType::VALUES);
+		}
+	}
+
+	// We weren't able to parse an array, could be broken or an array larger than our buffer size, let's skip over '['
+	SkipWhitespace(buffer_ptr, ++buffer_offset, --remaining);
+	remaining = buffer_size - buffer_offset;
+
+	// If it's '{' we know there's RECORDS in the ARRAY, else it's VALUES
+	if (remaining == 0 || buffer_ptr[buffer_offset] == '{') {
+		return make_pair(JSONFormat::ARRAY, JSONRecordType::RECORDS);
+	}
+
+	// It's not RECORDS, so it must be VALUES
+	return make_pair(JSONFormat::ARRAY, JSONRecordType::VALUES);
+}
+
+void BufferedJSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
+                                   const idx_t remaining) {
+	yyjson_doc *doc;
+	yyjson_read_err err;
+	if (options.type == JSONScanType::READ_JSON_OBJECTS) { // If we return strings, we cannot parse INSITU
+		doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, JSONCommon::READ_STOP_FLAG,
+		                                     scan_state.allocator.GetYYAlc(), &err);
+	} else {
+		doc = JSONCommon::ReadDocumentUnsafe(json_start, remaining, JSONCommon::READ_INSITU_FLAG,
+		                                     scan_state.allocator.GetYYAlc(), &err);
+	}
+	if (err.code != YYJSON_READ_SUCCESS) {
+		auto can_ignore_this_error = options.ignore_errors;
+		string extra;
+		if (GetFormat() != JSONFormat::NEWLINE_DELIMITED) {
+			can_ignore_this_error = false;
+			extra = options.ignore_errors
+			            ? "Parse errors cannot be ignored for JSON formats other than 'newline_delimited'"
+			            : "";
+		}
+		if (!can_ignore_this_error) {
+			ThrowParseError(scan_state.current_buffer_handle->buffer_index, scan_state.lines_or_objects_in_buffer, err,
+			                extra);
+		}
+	}
+
+	// We parse with YYJSON_STOP_WHEN_DONE, so we need to check this by hand
+	const auto read_size = yyjson_doc_get_read_size(doc);
+	if (read_size > json_size) {
+		// Can't go past the boundary, even with ignore_errors
+		err.code = YYJSON_READ_ERROR_UNEXPECTED_END;
+		err.msg = "unexpected end of data";
+		err.pos = json_size;
+		ThrowParseError(scan_state.current_buffer_handle->buffer_index, scan_state.lines_or_objects_in_buffer, err,
+		                "Try auto-detecting the JSON format");
+	} else if (!options.ignore_errors && read_size < json_size) {
+		idx_t off = read_size;
+		idx_t rem = json_size;
+		SkipWhitespace(json_start, off, rem);
+		if (off != rem) { // Between end of document and boundary should be whitespace only
+			err.code = YYJSON_READ_ERROR_UNEXPECTED_CONTENT;
+			err.msg = "unexpected content after document";
+			err.pos = read_size;
+			ThrowParseError(scan_state.current_buffer_handle->buffer_index, scan_state.lines_or_objects_in_buffer, err,
+			                "Try auto-detecting the JSON format");
+		}
+	}
+
+	scan_state.lines_or_objects_in_buffer++;
+	if (!doc) {
+		scan_state.values[scan_state.scan_count] = nullptr;
+		return;
+	}
+
+	// Set the JSONLine and trim
+	scan_state.units[scan_state.scan_count] = JSONString(json_start, json_size);
+	TrimWhitespace(scan_state.units[scan_state.scan_count]);
+	scan_state.values[scan_state.scan_count] = doc->root;
+}
+
+void BufferedJSONReader::AutoDetect(JSONReaderScanState &scan_state, optional_idx buffer_index) {
+	if (scan_state.buffer_size == 0) {
+		return;
+	}
+
+	auto format_and_record_type =
+	    DetectFormatAndRecordType(scan_state.buffer_ptr, scan_state.buffer_size, scan_state.allocator.GetYYAlc());
+	if (GetFormat() == JSONFormat::AUTO_DETECT) {
+		SetFormat(format_and_record_type.first);
+	}
+	if (GetRecordType() == JSONRecordType::AUTO_DETECT) {
+		SetRecordType(format_and_record_type.second);
+	}
+	if (GetFormat() == JSONFormat::ARRAY) {
+		SkipOverArrayStart(scan_state);
+	}
+
+	if (!options.ignore_errors && options.record_type == JSONRecordType::RECORDS &&
+	    GetRecordType() != JSONRecordType::RECORDS) {
+		ThrowTransformError(buffer_index.GetIndex(), 0, "Expected records, detected non-record JSON instead.");
+	}
+}
+
+void BufferedJSONReader::ThrowObjectSizeError(const idx_t object_size) {
+	throw InvalidInputException(
+	    "\"maximum_object_size\" of %llu bytes exceeded while reading file \"%s\" (>%llu bytes)."
+	    "\n Try increasing \"maximum_object_size\".",
+	    options.maximum_object_size, GetFileName(), object_size);
+}
+
+bool BufferedJSONReader::ReconstructFirstObject(JSONReaderScanState &scan_state) {
+
+	D_ASSERT(scan_state.current_buffer_handle->buffer_index != 0);
+	D_ASSERT(GetFormat() == JSONFormat::NEWLINE_DELIMITED);
+
+	// Spinlock until the previous batch index has also read its buffer
+	optional_ptr<JSONBufferHandle> previous_buffer_handle;
+	while (!previous_buffer_handle) {
+		if (HasThrown()) {
+			return false;
+		}
+		previous_buffer_handle = GetBuffer(scan_state.current_buffer_handle->buffer_index - 1);
+	}
+
+	// First we find the newline in the previous block
+	auto prev_buffer_ptr = char_ptr_cast(previous_buffer_handle->buffer.get()) + previous_buffer_handle->buffer_size;
+	auto part1_ptr = PreviousNewline(prev_buffer_ptr, previous_buffer_handle->buffer_size);
+	auto part1_size = prev_buffer_ptr - part1_ptr;
+
+	// Now copy the data to our reconstruct buffer
+	const auto reconstruct_ptr = scan_state.GetReconstructBuffer();
+	memcpy(reconstruct_ptr, part1_ptr, part1_size);
+
+	// We copied the object, so we are no longer reading the previous buffer
+	if (--previous_buffer_handle->readers == 0) {
+		RemoveBuffer(*previous_buffer_handle);
+	}
+
+	if (part1_size == 1) {
+		// Just a newline
+		return false;
+	}
+
+	idx_t line_size = part1_size;
+	if (scan_state.buffer_size != 0) {
+		// Now find the newline in the current block
+		auto line_end = NextNewline(scan_state.buffer_ptr, scan_state.buffer_size);
+		if (line_end == nullptr) {
+			ThrowObjectSizeError(scan_state.buffer_size - scan_state.buffer_offset);
+		} else {
+			line_end++;
+		}
+		idx_t part2_size = line_end - scan_state.buffer_ptr;
+
+		line_size += part2_size;
+		if (line_size > options.maximum_object_size) {
+			ThrowObjectSizeError(line_size);
+		}
+
+		// And copy the remainder of the line to the reconstruct buffer
+		memcpy(reconstruct_ptr + part1_size, scan_state.buffer_ptr, part2_size);
+		memset(reconstruct_ptr + line_size, 0, YYJSON_PADDING_SIZE);
+		scan_state.buffer_offset += part2_size;
+	}
+
+	ParseJSON(scan_state, char_ptr_cast(reconstruct_ptr), line_size, line_size);
+
+	return true;
+}
+
+void BufferedJSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
+	const auto format = GetFormat();
+	auto &buffer_ptr = scan_state.buffer_ptr;
+	auto &buffer_offset = scan_state.buffer_offset;
+	auto &buffer_size = scan_state.buffer_size;
+	auto &scan_count = scan_state.scan_count;
+	for (; scan_count < STANDARD_VECTOR_SIZE; scan_count++) {
+		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
+		auto json_start = buffer_ptr + buffer_offset;
+		idx_t remaining = buffer_size - buffer_offset;
+		if (remaining == 0) {
+			break;
+		}
+		D_ASSERT(format != JSONFormat::AUTO_DETECT);
+		const char *json_end = format == JSONFormat::NEWLINE_DELIMITED ? NextNewline(json_start, remaining)
+		                                                               : NextJSON(json_start, remaining);
+		if (json_end == nullptr) {
+			// We reached the end of the buffer
+			if (!scan_state.is_last) {
+				// Last bit of data belongs to the next batch
+				if (format != JSONFormat::NEWLINE_DELIMITED) {
+					if (remaining > options.maximum_object_size) {
+						ThrowObjectSizeError(remaining);
+					}
+					memcpy(scan_state.GetReconstructBuffer(), json_start, remaining);
+					scan_state.prev_buffer_remainder = remaining;
+				}
+				buffer_offset = buffer_size;
+				break;
+			}
+			json_end = json_start + remaining;
+		}
+
+		idx_t json_size = json_end - json_start;
+		ParseJSON(scan_state, json_start, json_size, remaining);
+		buffer_offset += json_size;
+
+		if (format == JSONFormat::ARRAY) {
+			SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
+			if (buffer_ptr[buffer_offset] == ',' || buffer_ptr[buffer_offset] == ']') {
+				buffer_offset++;
+			} else { // We can't ignore this error, even with 'ignore_errors'
+				yyjson_read_err err;
+				err.code = YYJSON_READ_ERROR_UNEXPECTED_CHARACTER;
+				err.msg = "unexpected character";
+				err.pos = json_size;
+				ThrowParseError(scan_state.current_buffer_handle->buffer_index, scan_state.lines_or_objects_in_buffer,
+				                err);
+			}
+		}
+		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);
+	}
+}
+
 } // namespace duckdb

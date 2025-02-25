@@ -73,9 +73,10 @@ public:
 				break;
 			}
 
+			auto &scan_state = lstate.GetScanState();
 			const auto next = MinValue<idx_t>(read_count, remaining);
 			for (idx_t i = 0; i < next; i++) {
-				const auto &val = lstate.values[i];
+				const auto &val = scan_state.values[i];
 				if (val) {
 					JSONStructure::ExtractStructure(val, node, true);
 				}
@@ -84,7 +85,7 @@ public:
 				continue;
 			}
 			node.InitializeCandidateTypes(options.max_depth, options.convert_strings_to_integers);
-			node.RefineCandidateTypes(lstate.values, next, string_vector, allocator, date_format_map);
+			node.RefineCandidateTypes(scan_state.values, next, string_vector, allocator, date_format_map);
 			remaining -= next;
 		}
 
@@ -207,7 +208,8 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 	auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
 
 	const auto count = lstate.ReadNext(gstate);
-	yyjson_val **values = lstate.values;
+	auto &scan_state = lstate.GetScanState();
+	yyjson_val **values = scan_state.values;
 	output.SetCardinality(count);
 
 	if (!gstate.names.empty()) {
@@ -220,12 +222,12 @@ static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p,
 		D_ASSERT(gstate.json_data.options.record_type != JSONRecordType::AUTO_DETECT);
 		bool success;
 		if (gstate.json_data.options.record_type == JSONRecordType::RECORDS) {
-			success = JSONTransform::TransformObject(values, lstate.GetAllocator(), count, gstate.names, result_vectors,
-			                                         lstate.transform_options, gstate.column_indices,
+			success = JSONTransform::TransformObject(values, scan_state.allocator.GetYYAlc(), count, gstate.names,
+			                                         result_vectors, lstate.transform_options, gstate.column_indices,
 			                                         lstate.transform_options.error_unknown_key);
 		} else {
 			D_ASSERT(gstate.json_data.options.record_type == JSONRecordType::VALUES);
-			success = JSONTransform::Transform(values, lstate.GetAllocator(), *result_vectors[0], count,
+			success = JSONTransform::Transform(values, scan_state.allocator.GetYYAlc(), *result_vectors[0], count,
 			                                   lstate.transform_options, gstate.column_indices[0]);
 		}
 

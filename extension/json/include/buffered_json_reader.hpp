@@ -87,6 +87,55 @@ private:
 	idx_t cached_size;
 };
 
+struct JSONString {
+public:
+	JSONString() {
+	}
+	JSONString(const char *pointer_p, idx_t size_p) : pointer(pointer_p), size(size_p) {
+	}
+
+	const char *pointer;
+	idx_t size;
+
+public:
+	string ToString() {
+		return string(pointer, size);
+	}
+
+	const char &operator[](size_t i) const {
+		return pointer[i];
+	}
+};
+
+struct JSONReaderScanState {
+	explicit JSONReaderScanState(ClientContext &context, Allocator &global_allocator,
+	                             idx_t reconstruct_buffer_capacity);
+
+	Allocator &global_allocator;
+	//! Thread-local allocator
+	JSONAllocator allocator;
+	idx_t reconstruct_buffer_capacity;
+	//! Current scan data
+	idx_t scan_count = 0;
+	JSONString units[STANDARD_VECTOR_SIZE];
+	yyjson_val *values[STANDARD_VECTOR_SIZE];
+	optional_ptr<JSONBufferHandle> current_buffer_handle;
+	//! Current buffer read info
+	char *buffer_ptr = nullptr;
+	idx_t buffer_size = 0;
+	idx_t buffer_offset = 0;
+	idx_t prev_buffer_remainder = 0;
+	idx_t lines_or_objects_in_buffer = 0;
+	//! Whether this is the last batch of the file
+	bool is_last = false;
+	//! Buffer to reconstruct split values
+	AllocatedData reconstruct_buffer;
+
+public:
+	data_ptr_t GetReconstructBuffer();
+	void Reset();
+};
+
 class BufferedJSONReader : public BaseFileReader {
 public:
 	BufferedJSONReader(ClientContext &context, JSONReaderOptions options, string file_name);
@@ -124,6 +173,15 @@ public:
 	void ThrowTransformError(idx_t buf_index, idx_t line_or_object_in_buf, const string &error_message);
 	//! Whether this reader has thrown if an error has occurred
 	bool HasThrown();
+
+	void ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
+	               const idx_t remaining);
+	void SkipOverArrayStart(JSONReaderScanState &scan_state);
+	void ThrowTransformError(JSONReaderScanState &scan_state, idx_t object_index, const string &error_message);
+	void AutoDetect(JSONReaderScanState &scan_state, optional_idx buffer_index);
+	bool ReconstructFirstObject(JSONReaderScanState &scan_state);
+	void ParseNextChunk(JSONReaderScanState &scan_state);
+	void ThrowObjectSizeError(const idx_t object_size);
 
 	//! Scan progress
 	double GetProgress() const;

@@ -12,8 +12,9 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 
 	// Fetch next lines
 	const auto count = lstate.ReadNext(gstate);
-	const auto units = lstate.units;
-	const auto objects = lstate.values;
+	auto &scan_state = lstate.GetScanState();
+	const auto units = scan_state.units;
+	const auto objects = scan_state.values;
 
 	if (!gstate.names.empty()) {
 		// Create the strings without copying them
