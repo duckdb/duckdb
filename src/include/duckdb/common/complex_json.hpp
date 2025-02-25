@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <string>
 #include "duckdb/common/exception.hpp"
+#include <memory>
 
 namespace duckdb {
 
