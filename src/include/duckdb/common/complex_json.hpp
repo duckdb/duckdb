@@ -8,12 +8,9 @@
 
 #pragma once
 
-namespace duckdb_yyjson {
-struct yyjson_mut_doc;
-struct yyjson_mut_val;
-} // namespace duckdb_yyjson
-
 namespace duckdb {
+
+struct ComplexJSON;
 
 //! Custom struct to handle both strings and nested JSON objects
 struct ComplexJSON {

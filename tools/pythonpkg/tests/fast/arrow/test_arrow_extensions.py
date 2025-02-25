@@ -318,5 +318,11 @@ class TestCanonicalExtensionTypes(object):
             [pa.array([], pa.binary())],
             schema=schema,
         )
-        assert duckdb_cursor.sql("""DESCRIBE FROM varint_table;""").fetchone() == ('varint_value', 'VARINT', 'YES', None, None, None) 
-        
+        assert duckdb_cursor.sql("""DESCRIBE FROM varint_table;""").fetchone() == (
+            'varint_value',
+            'VARINT',
+            'YES',
+            None,
+            None,
+            None,
+        )
