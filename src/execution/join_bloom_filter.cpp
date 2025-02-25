@@ -111,6 +111,20 @@ JoinBloomFilter::JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_fu
 JoinBloomFilter::~JoinBloomFilter() {
 }
 
+void JoinBloomFilter::Merge(const JoinBloomFilter &other) {
+    D_ASSERT(bloom_filter_size == other.bloom_filter_size);
+    D_ASSERT(num_hash_functions == other.num_hash_functions);
+
+    for (size_t i = 0; i< bloom_data_buffer.size(); i++) {
+        bloom_data_buffer[i] |= other.bloom_data_buffer[i];
+    }
+    //for (size_t i = 0; i < bloom_filter_size; i++) {
+    //    bloom_filter_bits.Set(i, bloom_filter_bits.RowIsValid(i) || other.bloom_filter_bits.RowIsValid(i));
+    //}
+    num_inserted_keys += other.num_inserted_keys;
+    build_time += other.build_time;
+}
+
 inline void JoinBloomFilter::SetBloomBitsForHashes(size_t fni, Vector &hashes, const SelectionVector &sel, idx_t count) {
     D_ASSERT(hashes.GetType().id() == LogicalType::HASH);
     D_ASSERT(probing_started == false);

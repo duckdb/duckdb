@@ -18,9 +18,9 @@ TableScanState::~TableScanState() {
 	auto &info = GetFilterInfo();
 	auto &bfs = info.GetBloomFilterList();
 	
-	std::cout << "    \"num_bloom_filters_in_scan\": " << bfs.size() << "," << std::endl;
+	//std::cout << "    \"num_bloom_filters_in_scan\": " << bfs.size() << "," << std::endl;
 	for (auto &bf : bfs) {
-		bf->PrintProbeStats();
+		//bf->PrintProbeStats();
 	}		
 }
 

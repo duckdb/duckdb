@@ -14,10 +14,14 @@ namespace duckdb {
 
 class JoinBloomFilter {
 public:
-	JoinBloomFilter(size_t expected_cardinality, vector<column_t> column_ids) : JoinBloomFilter(expected_cardinality, /*desired_false_positive_rate*/0.01, std::move(column_ids)) {};
+	JoinBloomFilter(size_t expected_cardinality, vector<column_t> column_ids) : JoinBloomFilter(expected_cardinality, /*desired_false_positive_rate=*/0.01, std::move(column_ids)) {};
+	JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate) : JoinBloomFilter(expected_cardinality, desired_false_positive_rate, /*column_ids=*/{}) {};
 	JoinBloomFilter(size_t expected_cardinality, double desired_false_positive_rate, vector<column_t> column_ids);
 	JoinBloomFilter(vector<column_t> column_ids, size_t num_hash_functions, size_t bloom_filter_size);
 	~JoinBloomFilter();
+
+	//! Merge another Bloom-filter into this one
+	void Merge(const JoinBloomFilter &other);
 
 	//! Builds the Bloom-filter with pre-computed key-hashes.
 	void BuildWithPrecomputedHashes(Vector &hashes, const SelectionVector &sel, idx_t count);

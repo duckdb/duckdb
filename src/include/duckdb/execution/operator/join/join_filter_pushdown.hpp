@@ -31,8 +31,11 @@ struct JoinFilterGlobalState {
 
 	//! Global Min/Max aggregates for filter pushdown
 	unique_ptr<GlobalUngroupedAggregateState> global_aggregate_state;
-	//! The Bloom-filter for sideways information passing in hash joins.
-	JoinBloomFilter *bloom_filter = nullptr;
+
+	//! Whether or not Bloom-filters for sideways-information-passing should be built
+	bool should_build_bloom_filter = false;
+	//! Bloom-filters built by each thread
+	vector<unique_ptr<JoinBloomFilter>> local_ht_bloom_filters;
 };
 
 struct JoinFilterLocalState {

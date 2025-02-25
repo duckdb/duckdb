@@ -714,7 +714,7 @@ void JoinHashTable::InitializePointerTable() {
 	bitmask = capacity - 1;
 }
 
-void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel, JoinBloomFilter *bloom_filter) {
+void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel, optional_ptr<JoinBloomFilter> bloom_filter) {
 	// Pointer table should be allocated
 	D_ASSERT(hash_map.get());
 

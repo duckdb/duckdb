@@ -14,7 +14,7 @@ cache imdb.duckdb
 load benchmark/imdb/init/load.sql
 
 init
-set threads=1;
+set threads to 42;
 set hash_join_bloom_filter=true;
 
 run benchmark/imdb_plan_cost/queries/${QUERY_NUMBER_PADDED}.sql

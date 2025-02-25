@@ -48,7 +48,10 @@ def remove_faulty_runs(df):
 # Sum array values in a column, or set to 0 if no array is present
 def sum_array_values(df, column_name):
     # If the column contains lists (arrays), sum them, otherwise set to 0
-    return df[column_name].apply(lambda x: sum(x) if isinstance(x, list) else 0)
+    if column_name in df:
+        return df[column_name].apply(lambda x: sum(x) if isinstance(x, list) else 0)
+    else:
+        return 0
 
 # Calculate median execution times for each query and filter out queries with no valid runtime
 def calculate_medians(df, query_column, time_column):

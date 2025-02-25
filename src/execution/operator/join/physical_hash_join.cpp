@@ -205,8 +205,6 @@ public:
 
 	bool skip_filter_pushdown = false;
 	unique_ptr<JoinFilterGlobalState> global_filter_state;
-
-	bool build_bloom_fitler = false;
 };
 
 unique_ptr<JoinFilterLocalState> JoinFilterPushdownInfo::GetLocalState(JoinFilterGlobalState &gstate) const {
@@ -425,39 +423,20 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 class HashJoinFinalizeTask : public ExecutorTask {
 public:
 	HashJoinFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, HashJoinGlobalSinkState &sink_p,
-	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p, bool parallel_p, const PhysicalOperator &op_p)
-	    : ExecutorTask(context, std::move(event_p), op_p), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
+	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p, bool parallel_p, const PhysicalOperator &op_p, optional_ptr<JoinBloomFilter> bloom_filter_p)
+	    : ExecutorTask(context, std::move(event_p), op_p), sink(sink_p), bloom_filter(bloom_filter_p), chunk_idx_from(chunk_idx_from_p),
 	      chunk_idx_to(chunk_idx_to_p), parallel(parallel_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		// TODO: why does one hash join has multiple probe infos? can we just copy the bloom filter between them?
-		if (sink.hash_table->should_build_bloom_filter) {
-			vector<column_t> column_ids;
-			size_t approx_ndv = sink.hash_table->build_side_hll.Count();
-			auto bf = make_uniq<JoinBloomFilter>(approx_ndv, 0.01, std::move(column_ids));
-
-			sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel, bf.get());
-
-			bf->PrintBuildStats();
-
-			for (auto &info : sink.op.filter_pushdown->probe_info) {
-				vector<column_t> column_ids;
-				auto bf_c = bf->Copy();
-				std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(bf->GetColumnIds()), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
-				if (!bf->ShouldDiscardAfterBuild()) {
-					info.dynamic_filters->PushBloomFilter(*op.get(), std::move(bf));
-				}
-			}
-		} else {
-			sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel);
-		}
+		sink.hash_table->Finalize(chunk_idx_from, chunk_idx_to, parallel, bloom_filter);
 		event->FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
 private:
 	HashJoinGlobalSinkState &sink;
+	optional_ptr<JoinBloomFilter> bloom_filter;
 	idx_t chunk_idx_from;
 	idx_t chunk_idx_to;
 	bool parallel;
@@ -486,19 +465,33 @@ public:
 		const auto max_partition_ht_size =
 		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
 		const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
+		const auto approx_ndv = ht.build_side_hll.Count();
 
 		if (num_threads == 1 || (ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD && skew > SKEW_SINGLE_THREADED_THRESHOLD &&
 		                         !context.config.verify_parallelism)) {
 			// Single-threaded finalize
+			optional_ptr<JoinBloomFilter> bf = nullptr;
+			if (sink.global_filter_state && sink.global_filter_state->should_build_bloom_filter) {
+				sink.global_filter_state->local_ht_bloom_filters.push_back(make_uniq<JoinBloomFilter>(approx_ndv, 0.01));
+				bf = sink.global_filter_state->local_ht_bloom_filters.back();
+			}
+
 			finalize_tasks.push_back(
-			    make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count, false, sink.op));
+			    make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, 0U, chunk_count, false, sink.op, bf));
 		} else {
 			// Parallel finalize
 			const idx_t chunks_per_task = context.config.verify_parallelism ? 1 : CHUNKS_PER_TASK;
 			for (idx_t chunk_idx = 0; chunk_idx < chunk_count; chunk_idx += chunks_per_task) {
 				auto chunk_idx_to = MinValue<idx_t>(chunk_idx + chunks_per_task, chunk_count);
+				
+				optional_ptr<JoinBloomFilter> bf = nullptr;
+				if (sink.global_filter_state && sink.global_filter_state->should_build_bloom_filter) {
+					sink.global_filter_state->local_ht_bloom_filters.push_back(make_uniq<JoinBloomFilter>(approx_ndv, 0.01));
+					bf = sink.global_filter_state->local_ht_bloom_filters.back();
+				}
+
 				finalize_tasks.push_back(make_uniq<HashJoinFinalizeTask>(shared_from_this(), context, sink, chunk_idx,
-				                                                         chunk_idx_to, true, sink.op));
+				                                                         chunk_idx_to, true, sink.op, bf));
 			}
 		}
 		SetTasks(std::move(finalize_tasks));
@@ -507,6 +500,28 @@ public:
 	void FinishEvent() override {
 		sink.hash_table->GetDataCollection().VerifyEverythingPinned();
 		sink.hash_table->finalized = true;
+
+		if (sink.global_filter_state) {
+			auto &local_bfs = sink.global_filter_state->local_ht_bloom_filters;
+			if (local_bfs.size() > 0) {
+				// Combine local Bloom-filters and push the resulting Bloom-filter as a table filter.
+				// Merge everything into the first BF so that we don't have a needless copy if there is just one.
+				for (idx_t i = 1; i < local_bfs.size(); i++) {
+					local_bfs[0]->Merge(*local_bfs[i]);
+				}
+				//local_bfs[0]->PrintBuildStats();
+
+				if (!local_bfs[0]->ShouldDiscardAfterBuild()) {
+					for (auto &info : sink.op.filter_pushdown->probe_info) {
+						auto bf_c = make_uniq<JoinBloomFilter>(local_bfs[0]->Copy());
+						// TODO: bf_c should be moved, but currently throws an error in debug mode. fix that because this will lead to problems if a pipeline has more than one probe_info
+						std::transform(info.columns.cbegin(), info.columns.cend(), std::back_inserter(local_bfs[0]->GetColumnIds()), [&](const JoinFilterPushdownColumn &i) {return i.probe_column_index.column_index;});
+						info.dynamic_filters->PushBloomFilter(sink.op, std::move(local_bfs[0]));
+					}
+				}
+				local_bfs.clear();
+			}
+		}
 
 		// Hash table is finished. Now we can build the Bloom-filter based on the hash table keys.
 		/*
@@ -805,7 +820,7 @@ unique_ptr<DataChunk> JoinFilterPushdownInfo::Finalize(ClientContext &context, J
 		*/
 
 		if (ht.Count() > dynamic_or_filter_threshold) {
-			ht.should_build_bloom_filter = true;
+			gstate.should_build_bloom_filter = true;
 
 			//for (auto &info : probe_info) {
 				//vector<column_t> column_ids;
@@ -1346,7 +1361,7 @@ void HashJoinLocalSourceState::ExternalBuild(HashJoinGlobalSinkState &sink, Hash
 	D_ASSERT(local_stage == HashJoinSourceStage::BUILD);
 
 	auto &ht = *sink.hash_table;
-	ht.Finalize(build_chunk_idx_from, build_chunk_idx_to, true, sink.global_filter_state->bloom_filter);
+	ht.Finalize(build_chunk_idx_from, build_chunk_idx_to, true); // TODO
 
 	auto guard = gstate.Lock();
 	gstate.build_chunk_done += build_chunk_idx_to - build_chunk_idx_from;
