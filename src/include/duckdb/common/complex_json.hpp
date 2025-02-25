@@ -8,9 +8,11 @@
 
 #pragma once
 
-namespace duckdb {
+#include <unordered_map>
+#include <string>
+#include "duckdb/common/exception.hpp"
 
-struct ComplexJSON;
+namespace duckdb {
 
 //! Custom struct to handle both strings and nested JSON objects
 struct ComplexJSON {
