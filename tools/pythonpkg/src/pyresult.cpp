@@ -171,15 +171,18 @@ py::dict DuckDBPyResult::FetchNumpy() {
 
 void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name) {
 	if (result->types[col_idx].id() == LogicalTypeId::ENUM) {
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		auto pandas_categorical = import_cache.pandas.Categorical();
+		auto categorical_dtype = import_cache.pandas.CategoricalDtype();
+
 		// first we (might) need to create the categorical type
 		if (categories_type.find(col_idx) == categories_type.end()) {
 			// Equivalent to: pandas.CategoricalDtype(['a', 'b'], ordered=True)
-			categories_type[col_idx] = py::module::import("pandas").attr("CategoricalDtype")(categories[col_idx], true);
+			categories_type[col_idx] = categorical_dtype(categories[col_idx], true);
 		}
 		// Equivalent to: pandas.Categorical.from_codes(codes=[0, 1, 0, 1], dtype=dtype)
-		res[name] = py::module::import("pandas")
-		                .attr("Categorical")
-		                .attr("from_codes")(conversion.ToArray(col_idx), py::arg("dtype") = categories_type[col_idx]);
+		res[name] = pandas_categorical.attr("from_codes")(conversion.ToArray(col_idx),
+		                                                  py::arg("dtype") = categories_type[col_idx]);
 		if (!conversion.ToPandas()) {
 			res[name] = res[name].attr("to_numpy")();
 		}

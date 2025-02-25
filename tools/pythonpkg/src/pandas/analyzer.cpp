@@ -467,11 +467,10 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, i
 	if (rows == 0) {
 		return LogicalType::SQLNULL;
 	}
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto pandas_series = import_cache.pandas.Series();
 
 	// Keys are not guaranteed to start at 0 for Series, use the internal __array__ instead
-	auto pandas_module = py::module::import("pandas");
-	auto pandas_series = pandas_module.attr("core").attr("series").attr("Series");
-
 	if (py::isinstance(column, pandas_series)) {
 		// TODO: check if '_values' is more portable, and behaves the same as '__array__()'
 		column = column.attr("__array__")();
