@@ -25,6 +25,9 @@ void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<
 	if (table_sampling) {
 		sampling_info.do_system_sample = table_sampling->method == SampleMethod::SYSTEM_SAMPLE;
 		sampling_info.sample_rate = table_sampling->sample_size.GetValue<double>() / 100.0;
+		if (table_sampling->seed.IsValid()) {
+			table_state.random.SetSeed(table_sampling->seed.GetIndex());
+		}
 	}
 }
 
