@@ -403,7 +403,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		if (max_columns_found > 1 && num_cols > max_columns_found && consistent_rows < best_consistent_rows / 2 &&
 		    options.null_padding) {
 			// When null_padding is true, we only give preference to a max number of columns if null padding is at least
-			// 25% as consistent as the best case scenario
+			// 50% as consistent as the best case scenario
 			return;
 		}
 		if (quoted && num_cols < max_columns_found) {
