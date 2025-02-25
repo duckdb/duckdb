@@ -21,7 +21,7 @@ public:
 
 	DUCKDB_API virtual void Load(DuckDB &db) = 0;
 	DUCKDB_API virtual std::string Name() = 0;
-	DUCKDB_API virtual std::string Version() const {
+	virtual std::string Version() const {
 		return "";
 	}
 	DUCKDB_API static const char *DefaultVersion();

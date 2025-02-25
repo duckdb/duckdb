@@ -93,10 +93,10 @@ public:
 	}
 
 	DUCKDB_API virtual bool IsThreadSafe() = 0;
-	DUCKDB_API virtual bool IsMutable() {
+	virtual bool IsMutable() {
 		return false;
-	};
-	DUCKDB_API virtual void UpdateConfig(LogConfig &new_config) {
+	}
+	virtual void UpdateConfig(LogConfig &new_config) {
 		throw InternalException("Cannot update the config of this logger!");
 	}
 	DUCKDB_API virtual const LogConfig &GetConfig() const = 0;
