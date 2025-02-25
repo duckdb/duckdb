@@ -14,12 +14,15 @@
 #include "reader/null_column_reader.hpp"
 #include "parquet_reader.hpp"
 #include "parquet_timestamp.hpp"
+#include "parquet_float16.hpp"
+
 #include "reader/row_number_column_reader.hpp"
 #include "snappy.h"
 #include "reader/string_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "reader/templated_column_reader.hpp"
 #include "reader/uuid_column_reader.hpp"
+
 #include "zstd.h"
 
 #include "duckdb/storage/table/column_segment.hpp"
@@ -766,6 +769,9 @@ unique_ptr<ColumnReader> ColumnReader::CreateReader(ParquetReader &reader, const
 	case LogicalTypeId::BIGINT:
 		return make_uniq<TemplatedColumnReader<int64_t, TemplatedParquetValueConversion<int64_t>>>(reader, schema);
 	case LogicalTypeId::FLOAT:
+		if (schema.type_info == ParquetExtraTypeInfo::FLOAT16) {
+			return make_uniq<CallbackColumnReader<uint16_t, float, Float16ToFloat32>>(reader, schema);
+		}
 		return make_uniq<TemplatedColumnReader<float, TemplatedParquetValueConversion<float>>>(reader, schema);
 	case LogicalTypeId::DOUBLE:
 		if (schema.type_info == ParquetExtraTypeInfo::DECIMAL_BYTE_ARRAY) {
