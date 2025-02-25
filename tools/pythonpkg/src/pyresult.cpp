@@ -174,6 +174,9 @@ void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversi
 		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		auto pandas_categorical = import_cache.pandas.Categorical();
 		auto categorical_dtype = import_cache.pandas.CategoricalDtype();
+		if (!pandas_categorical || !categorical_dtype) {
+			throw InvalidInputException("'pandas' is required for this operation but it was not installed");
+		}
 
 		// first we (might) need to create the categorical type
 		if (categories_type.find(col_idx) == categories_type.end()) {
@@ -300,6 +303,10 @@ static py::object ConvertNumpyDtype(py::handle numpy_array) {
 	if (!py::isinstance(numpy_array, import_cache.numpy.ma.masked_array())) {
 		return dtype;
 	}
+	if (!import_cache.pandas(false)) {
+		//! No pandas installed, can't upgrade to Pandas nullable dtypes
+		return dtype;
+	}
 
 	auto numpy_type = ConvertNumpyType(dtype);
 	switch (numpy_type.type) {
@@ -342,6 +349,9 @@ PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::ha
 	D_ASSERT(py::gil_check());
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	auto pandas = import_cache.pandas();
+	if (!pandas) {
+		throw InvalidInputException("'pandas' is required for this operation but it was not installed");
+	}
 
 	py::object items = o.attr("items")();
 	for (const py::handle &item : items) {

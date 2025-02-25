@@ -468,10 +468,10 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, i
 		return LogicalType::SQLNULL;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto pandas_series = import_cache.pandas.Series();
+	auto pandas_series = import_cache.pandas.Series(false);
 
 	// Keys are not guaranteed to start at 0 for Series, use the internal __array__ instead
-	if (py::isinstance(column, pandas_series)) {
+	if (pandas_series && py::isinstance(column, pandas_series)) {
 		// TODO: check if '_values' is more portable, and behaves the same as '__array__()'
 		column = column.attr("__array__")();
 	}
@@ -502,6 +502,13 @@ bool PandasAnalyzer::Analyze(py::object column) {
 	if (sample_size == 0) {
 		return false;
 	}
+	auto &import_cache = *DuckDBPyConnection::ImportCache();
+	auto pandas = import_cache.pandas(false);
+	if (!pandas) {
+		//! Pandas is not installed, no need to analyze
+		return false;
+	}
+
 	bool can_convert = true;
 	idx_t increment = GetSampleIncrement(py::len(column));
 	LogicalType type = InnerAnalyze(column, can_convert, increment);
