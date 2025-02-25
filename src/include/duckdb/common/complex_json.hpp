@@ -17,36 +17,27 @@ namespace duckdb {
 //! Custom struct to handle both strings and nested JSON objects
 struct ComplexJSON {
 	//! Constructor for string values
-	explicit ComplexJSON(const string &str) : str_value(str), is_object(false) {
-	}
-
+	explicit ComplexJSON(const string &str);
 	//! Constructor for nested object values
-	explicit ComplexJSON(const unordered_map<string, ComplexJSON> &obj) : obj_value(obj), is_object(true) {
-	}
+	explicit ComplexJSON(const unordered_map<string, ComplexJSON> &obj);
+	//! Basic empty constructor
+	ComplexJSON();
 
-	ComplexJSON() : is_object(false) {};
-
-	//! Adds Object
-	void AddObject(const string &key, const ComplexJSON &object) {
-		is_object = true;
-		obj_value[key] = object;
-	}
-	ComplexJSON GetObject(const string &key) {
-		if (is_object) {
-			if (obj_value.find(key) == obj_value.end()) {
-				return ComplexJSON();
-			}
-			return obj_value[key];
-		} else {
-			throw InvalidInputException("ComplexJson is not an object");
-		}
-	}
+	//! Adds Object to the underlying map, also sets the is_object flag to True
+	void AddObject(const string &key, const ComplexJSON &object);
+	//! Gets a ComplexJSON object from the map
+	ComplexJSON GetObject(const string &key);
+	//! Gets a stringified version of the underlying ComplexJSON object from the map
 	string GetValue(const string &key) const;
+	//! Recursive function for GetValue
 	static string GetValueRecursive(const ComplexJSON &child);
 
 private:
+	//! Basic string value, in case this is the last value of a nested json
 	string str_value;
+	//! If this is a complex json a map of key/value
 	unordered_map<string, ComplexJSON> obj_value;
+	//! If this json is an object (i.e., map or not)
 	bool is_object;
 };
 
