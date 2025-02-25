@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "duckdb/common/atomic.hpp"
+#include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
@@ -15,6 +17,7 @@
 
 namespace duckdb {
 
+class ClientContext;
 class DatabaseInstance;
 class BlockHandle;
 class BufferHandle;
@@ -73,13 +76,12 @@ class CachingFileSystem {
 	};
 
 public:
-	static constexpr idx_t MINIMUM_READ_SIZE = 16384;
-
-	explicit CachingFileSystem(DatabaseInstance &db);
-
-	DUCKDB_API static CachingFileSystem &Get(ClientContext &context);
+	explicit CachingFileSystem(DatabaseInstance &db, bool enable);
 
 public:
+	void SetEnabled(bool enable);
+	DUCKDB_API static CachingFileSystem &Get(DatabaseInstance &db);
+	DUCKDB_API static CachingFileSystem &Get(ClientContext &context);
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const string &path, FileOpenFlags flags);
 
 private:
@@ -92,7 +94,7 @@ private:
 	//! The BufferManager used to cache files
 	BufferManager &buffer_manager;
 	//! Whether or not file caching is enabled
-	bool enabled;
+	bool enable;
 	//! Whether or not to check whether cached files are invalidated (due to modifying the file)
 	bool check_cached_file_invalidation;
 	//! Mapping from file path to cached file with cached ranges
@@ -117,15 +119,15 @@ public:
 	DUCKDB_API BufferHandle Read(data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
-	DUCKDB_API idx_t GetFileSize() const;
-	DUCKDB_API time_t GetLastModifiedTime() const;
-	DUCKDB_API bool CanSeek() const;
-	DUCKDB_API bool OnDiskFile() const;
+	DUCKDB_API idx_t GetFileSize();
+	DUCKDB_API time_t GetLastModifiedTime();
+	DUCKDB_API bool CanSeek();
+	DUCKDB_API bool OnDiskFile();
 
 private:
-	//! Whether the range is still valid given the TODO
+	//! Whether the range is still valid given the last modified time
 	bool RangeIsValid(const CachedFileRange &range);
-	//! TODO
+	//! Try to read from cache, return an invalid BufferHandle if it fails
 	BufferHandle TryReadFromFileRange(CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
 
 private:
@@ -135,8 +137,11 @@ private:
 	CachedFile &cached_file;
 	//! Flags used to open the file
 	FileOpenFlags flags;
+
 	//! The underlying FileHandle (optional)
 	unique_ptr<FileHandle> file_handle;
+	//! Last modified time (if FileHandle is opened)
+	time_t last_modified;
 };
 
 } // namespace duckdb

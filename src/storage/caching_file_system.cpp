@@ -1,9 +1,11 @@
 #include "duckdb/storage/caching_file_system.hpp"
 
+#include "duckdb/common/file_system.hpp"
+#include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-
-#include <ctime>
+#include "duckdb/storage/buffer_manager.hpp"
+#include "duckdb/storage/buffer/block_handle.hpp"
 
 namespace duckdb {
 
@@ -69,13 +71,25 @@ void CachingFileSystem::CachedFile::Verify() {
 #endif
 }
 
-CachingFileSystem::CachingFileSystem(DatabaseInstance &db)
-    : file_system(FileSystem::GetFileSystem(db)), buffer_manager(BufferManager::GetBufferManager(db)), enabled(true),
-      check_cached_file_invalidation(true) {
+CachingFileSystem::CachingFileSystem(DatabaseInstance &db, bool enable_p)
+    : file_system(FileSystem::GetFileSystem(db)), buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p),
+      check_cached_file_invalidation(true) { // TODO: this defaults to "true" for now
+}
+
+void CachingFileSystem::SetEnabled(bool enable_p) {
+	enable = enable_p;
+	if (!enable) {
+		lock_guard<mutex> guard(lock);
+		cached_files.clear();
+	}
+}
+
+CachingFileSystem &CachingFileSystem::Get(DatabaseInstance &db) {
+	return db.GetCachingFileSystem();
 }
 
 CachingFileSystem &CachingFileSystem::Get(ClientContext &context) {
-	return context.db->GetCachingFileSystem();
+	return Get(*context.db);
 }
 
 CachingFileSystem::CachedFile &CachingFileSystem::GetOrCreateCachedFile(const string &path) {
@@ -94,7 +108,7 @@ unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const string &path, Fi
 CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, CachedFile &cached_file_p,
                                      FileOpenFlags flags_p)
     : caching_file_system(caching_file_system_p), cached_file(cached_file_p), flags(flags_p) {
-	if (!caching_file_system.enabled || caching_file_system.check_cached_file_invalidation) {
+	if (!caching_file_system.enable || caching_file_system.check_cached_file_invalidation) {
 		// If caching is disabled, or if we must check cache invalidation, we always have to open the file
 		GetFileHandle();
 		return;
@@ -109,9 +123,10 @@ CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, C
 FileHandle &CachingFileHandle::GetFileHandle() {
 	if (!file_handle) {
 		file_handle = caching_file_system.file_system.OpenFile(cached_file.path, flags);
+		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
 
 		cached_file.file_size = file_handle->GetFileSize();
-		cached_file.last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
+		cached_file.last_modified = last_modified;
 		cached_file.can_seek = file_handle->CanSeek();
 		cached_file.on_disk_file = file_handle->OnDiskFile();
 	}
@@ -120,8 +135,8 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
 	BufferHandle result;
-	if (!caching_file_system.enabled) {
-		result = caching_file_system.buffer_manager.Allocate(MemoryTag::PARQUET_READER, nr_bytes); // TODO: MemoryTag
+	if (!caching_file_system.enable) {
+		result = caching_file_system.buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		buffer = result.Ptr();
 		GetFileHandle().Read(buffer, nr_bytes, location);
 		return result;
@@ -129,7 +144,6 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 
 	// Get lock for cached ranges
 	unique_lock<mutex> lock(cached_file.lock);
-	// Printer::PrintF("%llu", nr_bytes);
 
 	// First, try to see if we've read from the exact same location before
 	auto it = cached_file.ranges.find(location);
@@ -184,8 +198,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	lock.unlock();
 
 	// Finally, if we weren't able to find the file range in the cache, we have to create a new file range
-	result = caching_file_system.buffer_manager.Allocate(MemoryTag::PARQUET_READER, nr_bytes); // TODO: MemoryTag
-	const auto last_modified = caching_file_system.file_system.GetLastModifiedTime(GetFileHandle());
+	result = caching_file_system.buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 	auto new_file_range = make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), nr_bytes, location, last_modified);
 	buffer = result.Ptr();
 
@@ -252,15 +265,20 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 			}
 		}
 		// Check if the new range overlaps with a cached one
+		bool break_loop = false;
 		switch (new_file_range->GetOverlap(*it->second)) {
 		case CachedFileRangeOverlap::NONE:
-			return result; // We iterated past potential overlaps
+			break_loop = true; // We iterated past potential overlaps
+			break;
 		case CachedFileRangeOverlap::PARTIAL:
-			break; // The newly created range does not fully contain this, so this is still useful
+			break; // The newly created range does not fully contain this range, so it is still useful
 		case CachedFileRangeOverlap::FULL:
 			// Full overlap, this range will be obsolete when we insert the current one
 			it = cached_file.ranges.erase(it);
 			continue;
+		}
+		if (break_loop) {
+			break;
 		}
 		it++;
 	}
@@ -277,31 +295,40 @@ string CachingFileHandle::GetPath() const {
 	return cached_file.path;
 }
 
-idx_t CachingFileHandle::GetFileSize() const {
-	return caching_file_system.check_cached_file_invalidation ? file_handle->GetFileSize()
-	                                                          : cached_file.file_size.load();
+idx_t CachingFileHandle::GetFileSize() {
+	if (file_handle || caching_file_system.check_cached_file_invalidation) {
+		return GetFileHandle().GetFileSize();
+	}
+	return cached_file.file_size;
 }
 
-time_t CachingFileHandle::GetLastModifiedTime() const {
-	return caching_file_system.check_cached_file_invalidation
-	           ? caching_file_system.file_system.GetLastModifiedTime(*file_handle)
-	           : cached_file.last_modified.load();
+time_t CachingFileHandle::GetLastModifiedTime() {
+	if (file_handle || caching_file_system.check_cached_file_invalidation) {
+		GetFileHandle();
+		return last_modified;
+	}
+	return cached_file.last_modified;
 }
 
-bool CachingFileHandle::CanSeek() const {
-	return caching_file_system.check_cached_file_invalidation ? file_handle->CanSeek() : cached_file.can_seek.load();
+bool CachingFileHandle::CanSeek() {
+	if (file_handle || caching_file_system.check_cached_file_invalidation) {
+		return GetFileHandle().CanSeek();
+	}
+	return cached_file.can_seek;
 }
 
-bool CachingFileHandle::OnDiskFile() const {
-	return caching_file_system.check_cached_file_invalidation ? file_handle->OnDiskFile()
-	                                                          : cached_file.on_disk_file.load();
+bool CachingFileHandle::OnDiskFile() {
+	if (file_handle || caching_file_system.check_cached_file_invalidation) {
+		return GetFileHandle().OnDiskFile();
+	}
+	return cached_file.on_disk_file.load();
 }
 
 bool CachingFileHandle::RangeIsValid(const CachedFileRange &range) {
 	if (!caching_file_system.check_cached_file_invalidation) {
 		return true;
 	}
-	return caching_file_system.file_system.GetLastModifiedTime(GetFileHandle()) < range.last_modified;
+	return GetLastModifiedTime() == range.last_modified;
 }
 
 BufferHandle CachingFileHandle::TryReadFromFileRange(CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes,

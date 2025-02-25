@@ -505,6 +505,16 @@ struct EnableExternalAccessSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct EnableExternalFileCacheSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "enable_external_file_cache";
+	static constexpr const char *Description = "Allow the database to cache external files (e.g., Parquet) in memory.";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct EnableFSSTVectorsSetting {
 	using RETURN_TYPE = bool;
 	static constexpr const char *Name = "enable_fsst_vectors";

@@ -25,6 +25,7 @@
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/expression_binder.hpp"
+#include "duckdb/storage/caching_file_system.hpp"
 #include "duckdb/storage/buffer/buffer_pool.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/storage_manager.hpp"
@@ -654,6 +655,28 @@ bool EnableExternalAccessSetting::OnGlobalReset(DatabaseInstance *db, DBConfig &
 		throw InvalidInputException("Cannot change enable_external_access setting while database is running");
 	}
 	return true;
+}
+
+//===----------------------------------------------------------------------===//
+// Enable External File Cache
+//===----------------------------------------------------------------------===//
+void EnableExternalFileCacheSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	config.options.enable_external_file_cache = input.GetValue<bool>();
+	if (db) {
+		CachingFileSystem::Get(*db).SetEnabled(config.options.enable_external_file_cache);
+	}
+}
+
+void EnableExternalFileCacheSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.enable_external_file_cache = DBConfig().options.enable_external_file_cache;
+	if (db) {
+		CachingFileSystem::Get(*db).SetEnabled(config.options.enable_external_file_cache);
+	}
+}
+
+Value EnableExternalFileCacheSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	return Value(config.options.enable_external_file_cache);
 }
 
 //===----------------------------------------------------------------------===//

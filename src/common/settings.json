@@ -325,6 +325,13 @@
         ]
     },
     {
+        "name": "enable_external_file_cache",
+        "description": "Allow the database to cache external files (e.g., Parquet) in memory.",
+        "type": "BOOLEAN",
+        "scope": "global",
+        "custom_implementation": true
+    },
+    {
         "name": "enable_fsst_vectors",
         "description": "Allow scans on FSST compressed segments to emit compressed vectors to utilize late decompression",
         "type": "BOOLEAN",

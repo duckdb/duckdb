@@ -299,7 +299,7 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	log_manager = make_shared_ptr<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
 
-	caching_file_system = make_uniq<CachingFileSystem>(*this);
+	caching_file_system = make_uniq<CachingFileSystem>(*this, config.options.enable_external_file_cache);
 
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();

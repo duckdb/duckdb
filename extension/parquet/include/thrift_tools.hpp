@@ -149,12 +149,9 @@ public:
 			auto prefetch_buffer_fallback = ra_buffer.GetReadHead(location);
 			D_ASSERT(location - prefetch_buffer_fallback->location + len <= prefetch_buffer_fallback->size);
 			memcpy(buf, prefetch_buffer_fallback->buffer_ptr + location - prefetch_buffer_fallback->location, len);
-		} else if (len < CachingFileSystem::MINIMUM_READ_SIZE) {
-			file_handle.GetFileHandle().Read(buf, len, location);
 		} else {
-			data_ptr_t temp_buffer_ptr;
-			auto temp_buffer_handle = file_handle.Read(temp_buffer_ptr, len, location);
-			memcpy(buf, temp_buffer_ptr, len);
+			// No prefetch, do a regular (non-caching) read
+			file_handle.GetFileHandle().Read(buf, len, location);
 		}
 
 		location += len;

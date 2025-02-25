@@ -942,8 +942,11 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 		Value prefetch_all_files = false;
 		context.TryGetCurrentSetting("disable_parquet_prefetching", disable_prefetch);
 		context.TryGetCurrentSetting("prefetch_all_parquet_files", prefetch_all_files);
-		bool should_prefetch =
-		    !file_handle->OnDiskFile() || prefetch_all_files.GetValue<bool>() || !reader_data.filters;
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+		bool should_prefetch = true;
+#else
+		bool should_prefetch = !file_handle->OnDiskFile() || prefetch_all_files.GetValue<bool>();
+#endif
 		bool can_prefetch = file_handle->CanSeek() && !disable_prefetch.GetValue<bool>();
 
 		if (should_prefetch && can_prefetch) {
