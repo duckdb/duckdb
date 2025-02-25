@@ -101,6 +101,8 @@ private:
 };
 
 struct JSONReaderOptions {
+	//! Scan type
+	JSONScanType type = JSONScanType::READ_JSON;
 	//! The format of the JSON
 	JSONFormat format = JSONFormat::AUTO_DETECT;
 	//! Whether record types in the JSON

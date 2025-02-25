@@ -45,16 +45,11 @@ struct JSONScanData : public TableFunctionData {
 public:
 	JSONScanData();
 
-	void Bind(ClientContext &context, MultiFileBindData &bind_data, TableFunctionBindInput &input);
-
 	void InitializeReaders(ClientContext &context, MultiFileBindData &bind_data);
 	void InitializeFormats();
 	void InitializeFormats(bool auto_detect);
 
 public:
-	//! Scan type
-	JSONScanType type;
-
 	//! JSON reader options
 	JSONReaderOptions options;
 

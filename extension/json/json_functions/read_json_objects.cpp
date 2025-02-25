@@ -2,29 +2,9 @@
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "duckdb/common/helper.hpp"
+#include "json_multi_file_info.hpp"
 
 namespace duckdb {
-
-unique_ptr<FunctionData> ReadJSONObjectsBind(ClientContext &context, TableFunctionBindInput &input,
-                                             vector<LogicalType> &return_types, vector<string> &names) {
-	auto bind_data = make_uniq<MultiFileBindData>();
-	auto json_bind_data = make_uniq<JSONScanData>();
-	auto &json_data = *json_bind_data;
-	bind_data->bind_data = std::move(json_bind_data);
-	bind_data->multi_file_reader = MultiFileReader::Create(input.table_function);
-	bind_data->file_list = bind_data->multi_file_reader->CreateFileList(context, input.inputs[0]);
-
-	json_data.Bind(context, *bind_data, input);
-
-	return_types.push_back(LogicalType::JSON());
-	names.emplace_back("json");
-	bind_data->names = names;
-	json_data.key_names = names;
-
-	MultiFileReader().BindOptions(bind_data->file_options, *bind_data->file_list, return_types, names,
-	                              bind_data->reader_bind);
-	return std::move(bind_data);
-}
 
 static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
@@ -58,7 +38,8 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 
 TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
 	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
-	TableFunction table_function({parameter}, ReadJSONObjectsFunction, ReadJSONObjectsBind,
+	TableFunction table_function({parameter}, ReadJSONObjectsFunction,
+	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileBind,
 	                             JSONGlobalTableFunctionState::Init, JSONLocalTableFunctionState::Init);
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.function_info = std::move(function_info);

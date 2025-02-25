@@ -117,7 +117,8 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
                           vector<string> &names) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 	// Change scan type during detection
-	json_data.type = JSONScanType::SAMPLE;
+	D_ASSERT(json_data.options.type == JSONScanType::READ_JSON);
+	json_data.options.type = JSONScanType::SAMPLE;
 
 	JSONStructureNode node;
 	auto &options = json_data.options;
@@ -156,7 +157,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	}
 
 	// Restore the scan type
-	json_data.type = JSONScanType::READ_JSON;
+	json_data.options.type = JSONScanType::READ_JSON;
 
 	// Convert structure to logical type
 	auto type = JSONStructure::StructureToType(context, node, options.max_depth, options.field_appearance_threshold,
@@ -197,80 +198,6 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 		return_types.emplace_back(RemoveDuplicateStructKeys(type, options.ignore_errors));
 		names.emplace_back("json");
 	}
-}
-
-unique_ptr<FunctionData> ReadJSONBind(ClientContext &context, TableFunctionBindInput &input,
-                                      vector<LogicalType> &return_types, vector<string> &names) {
-	// First bind default params
-	auto bind_data = make_uniq<MultiFileBindData>();
-	auto json_bind_data = make_uniq<JSONScanData>();
-	auto &json_data = *json_bind_data;
-	bind_data->bind_data = std::move(json_bind_data);
-	bind_data->multi_file_reader = MultiFileReader::Create(input.table_function);
-	bind_data->file_list = bind_data->multi_file_reader->CreateFileList(context, input.inputs[0]);
-	json_data.Bind(context, *bind_data, input);
-
-	auto &options = json_data.options;
-	names = options.name_list;
-	return_types = options.sql_type_list;
-	if (options.record_type == JSONRecordType::AUTO_DETECT && return_types.size() > 1) {
-		// More than one specified column implies records
-		options.record_type = JSONRecordType::RECORDS;
-	}
-
-	// Specifying column names overrides auto-detect
-	if (!return_types.empty()) {
-		options.auto_detect = false;
-	}
-
-	if (!options.auto_detect) {
-		// Need to specify columns if RECORDS and not auto-detecting
-		if (return_types.empty()) {
-			throw BinderException("When auto_detect=false, read_json requires columns to be specified through the "
-			                      "\"columns\" parameter.");
-		}
-		// If we are reading VALUES, we can only have one column
-		if (json_data.options.record_type == JSONRecordType::VALUES && return_types.size() != 1) {
-			throw BinderException("read_json requires a single column to be specified through the \"columns\" "
-			                      "parameter when \"records\" is set to 'false'.");
-		}
-	}
-
-	json_data.InitializeFormats();
-
-	if (options.auto_detect || options.record_type == JSONRecordType::AUTO_DETECT) {
-		JSONScan::AutoDetect(context, *bind_data, return_types, names);
-		D_ASSERT(return_types.size() == names.size());
-	}
-
-	MultiFileReader().BindOptions(bind_data->file_options, *bind_data->file_list, return_types, names,
-	                              bind_data->reader_bind);
-	bind_data->names = names;
-	bind_data->types = return_types;
-
-	auto &transform_options = json_data.transform_options;
-	transform_options.strict_cast = !options.ignore_errors;
-	transform_options.error_duplicate_key = !options.ignore_errors;
-	transform_options.error_missing_key = false;
-	transform_options.error_unknown_key = options.auto_detect && !options.ignore_errors;
-	transform_options.delay_error = true;
-
-	if (options.auto_detect) {
-		// JSON may contain columns such as "id" and "Id", which are duplicates for us due to case-insensitivity
-		// We rename them so we can parse the file anyway. Note that we can't change bind_data->names,
-		// because the JSON reader gets columns by exact name, not position
-		case_insensitive_map_t<idx_t> name_collision_count;
-		for (auto &col_name : names) {
-			// Taken from CSV header_detection.cpp
-			while (name_collision_count.find(col_name) != name_collision_count.end()) {
-				name_collision_count[col_name] += 1;
-				col_name = col_name + "_" + to_string(name_collision_count[col_name]);
-			}
-			name_collision_count[col_name] = 0;
-		}
-	}
-
-	return std::move(bind_data);
 }
 
 static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {

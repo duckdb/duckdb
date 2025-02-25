@@ -14,35 +14,6 @@ namespace duckdb {
 JSONScanData::JSONScanData() {
 }
 
-void JSONScanData::Bind(ClientContext &context, MultiFileBindData &bind_data, TableFunctionBindInput &input) {
-	auto &info = input.info->Cast<JSONScanInfo>();
-	auto &file_options = bind_data.file_options;
-	type = info.type;
-	JSONFileReaderOptions reader_options;
-	reader_options.options.format = info.format;
-	reader_options.options.record_type = info.record_type;
-	reader_options.options.auto_detect = info.auto_detect;
-	for (auto &kv : input.named_parameters) {
-		if (kv.second.IsNull()) {
-			throw BinderException("Cannot use NULL as function argument");
-		}
-		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
-			continue;
-		}
-		if (JSONMultiFileInfo::ParseOption(context, kv.first, kv.second, file_options, reader_options)) {
-			continue;
-		}
-		throw NotImplementedException("Unsupported option \"%s\" for JSON reader", kv.first);
-	}
-	options = std::move(reader_options.options);
-
-	auto multi_file_reader = MultiFileReader::Create(input.table_function);
-	auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
-	file_options.AutoDetectHivePartitioning(*file_list, context);
-
-	InitializeReaders(context, bind_data);
-}
-
 void JSONScanData::InitializeReaders(ClientContext &context, MultiFileBindData &bind_data) {
 	auto files = bind_data.file_list->GetAllFiles();
 	bind_data.union_readers.resize(files.empty() ? 0 : files.size() - 1);
@@ -360,7 +331,7 @@ static inline void TrimWhitespace(JSONString &line) {
 void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining) {
 	yyjson_doc *doc;
 	yyjson_read_err err;
-	if (json_data.type == JSONScanType::READ_JSON_OBJECTS) { // If we return strings, we cannot parse INSITU
+	if (json_data.options.type == JSONScanType::READ_JSON_OBJECTS) { // If we return strings, we cannot parse INSITU
 		doc = JSONCommon::ReadDocumentUnsafe(json_start, json_size, JSONCommon::READ_STOP_FLAG, allocator.GetYYAlc(),
 		                                     &err);
 	} else {
@@ -730,7 +701,7 @@ bool JSONScanLocalState::ReadNextBufferSeek(JSONScanGlobalState &gstate, Allocat
 
 	// Now read the file lock-free!
 	file_handle.ReadAtPosition(buffer_ptr + prev_buffer_remainder, read_size, read_position, file_done,
-	                           gstate.json_data.type == JSONScanType::SAMPLE, thread_local_filehandle);
+	                           gstate.json_data.options.type == JSONScanType::SAMPLE, thread_local_filehandle);
 
 	return true;
 }
@@ -753,7 +724,7 @@ bool JSONScanLocalState::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, Alloc
 			buffer = AllocateBuffer(gstate);
 		}
 		if (!file_handle.Read(buffer_ptr + prev_buffer_remainder, read_size, request_size, file_done,
-		                      gstate.json_data.type == JSONScanType::SAMPLE)) {
+		                      gstate.json_data.options.type == JSONScanType::SAMPLE)) {
 			return false; // Couldn't read anything
 		}
 		buffer_index = current_reader->GetBufferIndex();

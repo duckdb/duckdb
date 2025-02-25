@@ -7,15 +7,22 @@ namespace duckdb {
 unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientContext &context,
                                                                        optional_ptr<TableFunctionInfo> info) {
 	auto reader_options = make_uniq<JSONFileReaderOptions>();
+	auto &options = reader_options->options;
 	if (info) {
 		auto &scan_info = info->Cast<JSONScanInfo>();
-		reader_options->options.format = scan_info.format;
-		reader_options->options.record_type = scan_info.record_type;
-		reader_options->options.auto_detect = scan_info.auto_detect;
+		options.type = scan_info.type;
+		options.format = scan_info.format;
+		options.record_type = scan_info.record_type;
+		options.auto_detect = scan_info.auto_detect;
+		if (scan_info.type == JSONScanType::READ_JSON_OBJECTS) {
+			// read_json_objects always emits a single JSON column called "json"
+			options.sql_type_list.push_back(LogicalType::JSON());
+			options.name_list.emplace_back("json");
+		}
 	} else {
 		// COPY
-		reader_options->options.record_type = JSONRecordType::RECORDS;
-		reader_options->options.format = JSONFormat::NEWLINE_DELIMITED;
+		options.record_type = JSONRecordType::RECORDS;
+		options.format = JSONFormat::NEWLINE_DELIMITED;
 	}
 	return std::move(reader_options);
 }
