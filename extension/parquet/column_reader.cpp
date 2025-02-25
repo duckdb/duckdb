@@ -275,7 +275,6 @@ void ColumnReader::ResetPage() {
 
 void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 	D_ASSERT(page_hdr.type == PageType::DATA_PAGE_V2);
-	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
 
 	AllocateBlock(page_hdr.uncompressed_page_size + 1);
 	bool uncompressed = false;
@@ -300,7 +299,7 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 		throw std::runtime_error("Page header inconsistency, uncompressed_page_size needs to be larger than "
 		                         "repetition_levels_byte_length + definition_levels_byte_length");
 	}
-	trans.read(block->ptr, uncompressed_bytes);
+	reader.ReadData(*protocol, block->ptr, uncompressed_bytes);
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
