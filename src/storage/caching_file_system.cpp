@@ -211,10 +211,10 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 		if (remaining_bytes == 0) {
 			break; // All requested bytes were read
 		}
-		const auto buffer_offset = nr_bytes - remaining_bytes;
 
 		if (overlapping_range->location > current_location) {
 			// We need to read from the file until we're at the location of the current overlapping file range
+			const auto buffer_offset = nr_bytes - remaining_bytes;
 			const auto bytes_to_read = overlapping_range->location - current_location;
 			D_ASSERT(bytes_to_read < remaining_bytes);
 			GetFileHandle().Read(buffer + buffer_offset, bytes_to_read, current_location);
@@ -235,10 +235,13 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 
 		// Finally, we can copy the data over
 		D_ASSERT(current_location >= overlapping_range->location);
+		const auto buffer_offset = nr_bytes - remaining_bytes;
 		const auto overlapping_range_offset = current_location - overlapping_range->location;
 		D_ASSERT(overlapping_range->nr_bytes > overlapping_range_offset);
 		const auto bytes_to_read = MinValue(overlapping_range->nr_bytes - overlapping_range_offset, remaining_bytes);
 		memcpy(buffer + buffer_offset, overlapping_file_range_pin.Ptr() + overlapping_range_offset, bytes_to_read);
+		current_location += bytes_to_read;
+		remaining_bytes -= bytes_to_read;
 	}
 
 	// Read the remaining bytes (if any)
