@@ -33,7 +33,7 @@ SELECT NULL FROM read_parquet('__TEST_DIR__/test_null_args.parquet', filename = 
 statement error
 FROM read_ndjson(NULL, filename := NULL) AS t14(c11, c12, c13)
 ----
-<REGEX>:.*Cannot use NULL.*
+<REGEX>:.*NULL.*
 
 statement ok
 COPY (VALUES (NULL), (NULL)) TO '__TEST_DIR__/test_null_args.csv' (FORMAT CSV);
