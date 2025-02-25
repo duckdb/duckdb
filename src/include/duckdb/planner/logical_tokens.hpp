@@ -19,6 +19,7 @@ class LogicalComparisonJoin;
 class LogicalCopyDatabase;
 class LogicalCopyToFile;
 class LogicalCreate;
+class LogicalCreateBF;
 class LogicalCreateTable;
 class LogicalCreateIndex;
 class LogicalCreateTable;
@@ -56,6 +57,7 @@ class LogicalReset;
 class LogicalTopN;
 class LogicalUnnest;
 class LogicalUpdate;
+class LogicalUseBF;
 class LogicalWindow;
 
 } // namespace duckdb

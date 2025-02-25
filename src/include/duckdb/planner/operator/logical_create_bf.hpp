@@ -1,0 +1,26 @@
+#pragma once
+
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
+
+namespace duckdb {
+class LogicalCreateBF : public LogicalOperator {
+public:
+	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CREATE_BF;
+
+	PhysicalCreateBF *physical = nullptr;
+
+public:
+	explicit LogicalCreateBF(vector<shared_ptr<BlockedBloomFilter>> temp_result);
+
+	vector<shared_ptr<BlockedBloomFilter>> bf_to_create;
+
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
+
+public:
+	vector<ColumnBinding> GetColumnBindings() override;
+
+protected:
+	void ResolveTypes() override;
+};
+} // namespace duckdb
