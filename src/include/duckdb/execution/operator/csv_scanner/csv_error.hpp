@@ -21,6 +21,7 @@ class InternalAppender;
 class CSVFileScan;
 class CSVRejectsTable;
 struct ReadCSVData;
+struct MultiFileBindData;
 
 //! Object that holds information on how many lines each csv batch read.
 class LinesPerBoundary {
@@ -120,6 +121,8 @@ public:
 	void Error(const CSVError &csv_error, bool force_error = false);
 	//! If we have a cached error, and we can now error, we error.
 	void ErrorIfNeeded();
+	//! Throw an error if there are any
+	void ErrorIfAny();
 	//! Throws an error if a given type exists
 	void ErrorIfTypeExists(CSVErrorType error_type);
 	//! Inserts a finished error info
@@ -137,7 +140,7 @@ public:
 	idx_t GetSize();
 
 	void FillRejectsTable(InternalAppender &errors_appender, idx_t file_idx, idx_t scan_idx, const CSVFileScan &file,
-	                      CSVRejectsTable &rejects, const ReadCSVData &bind_data, idx_t limit);
+	                      CSVRejectsTable &rejects, const MultiFileBindData &bind_data, idx_t limit);
 
 private:
 	//! Private methods should always be locked by parent method.

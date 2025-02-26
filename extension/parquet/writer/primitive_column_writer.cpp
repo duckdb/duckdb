@@ -49,7 +49,7 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 
 	idx_t vector_index = 0;
 	reference<PageInformation> page_info_ref = state.page_info.back();
-	col_chunk.meta_data.num_values += vcount;
+	col_chunk.meta_data.num_values += NumericCast<int64_t>(vcount);
 
 	const bool check_parent_empty = parent && !parent->is_empty.empty();
 	if (!check_parent_empty && validity.AllValid() && TypeIsConstantSize(vector.GetType().InternalType()) &&

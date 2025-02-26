@@ -37,8 +37,6 @@ jobs:
  linux-debug:
     name: Linux Debug (${{ matrix.tag }})
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    outputs:
-      git_describe: ${{ steps.describe_step.outputs.git_describe }}
     runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
@@ -59,8 +57,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
@@ -106,8 +102,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
 
     - name: Install
       shell: bash
@@ -132,7 +126,6 @@ jobs:
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-20.04
     env:
-      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
@@ -171,7 +164,6 @@ jobs:
     runs-on: ubuntu-20.04
     needs: force-storage
     env:
-      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
@@ -209,7 +201,6 @@ jobs:
     runs-on: ubuntu-20.04
     needs: force-storage
     env:
-      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       DISABLE_SANITIZER: 1

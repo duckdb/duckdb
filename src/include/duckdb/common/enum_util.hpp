@@ -330,6 +330,8 @@ enum class SinkResultType : uint8_t;
 
 enum class SourceResultType : uint8_t;
 
+enum class StarExpressionType : uint8_t;
+
 enum class StatementReturnType : uint8_t;
 
 enum class StatementType : uint8_t;
@@ -839,6 +841,9 @@ const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value);
 
 template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
+
+template<>
+const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value);
 
 template<>
 const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value);
@@ -1380,6 +1385,9 @@ SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);
+
+template<>
+StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value);
 
 template<>
 StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value);

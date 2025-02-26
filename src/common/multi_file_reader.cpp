@@ -102,6 +102,9 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
                                   ClientContext &context) {
 	auto loption = StringUtil::Lower(key);
 	if (loption == "filename") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
 		if (val.type() == LogicalType::VARCHAR) {
 			// If not, we interpret it as the name of the column containing the filename
 			options.filename = true;
@@ -115,13 +118,25 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 			}
 		}
 	} else if (loption == "hive_partitioning") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
 	} else if (loption == "union_by_name") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
 		options.hive_types_autocast = BooleanValue::Get(val);
 	} else if (loption == "hive_types" || loption == "hive_type") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(
 			    "'hive_types' only accepts a STRUCT('name':VARCHAR, ...), but '%s' was provided",
@@ -708,7 +723,9 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(MultiFileList &files, C
 	}
 }
 void MultiFileReaderOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context) {
-	D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
+	if (files.GetExpandResult() == FileExpandResult::NO_FILES) {
+		return;
+	}
 	const bool hp_explicitly_disabled = !auto_detect_hive_partitioning && !hive_partitioning;
 	const bool ht_enabled = !hive_types_schema.empty();
 	if (hp_explicitly_disabled && ht_enabled) {
@@ -743,7 +760,7 @@ LogicalType MultiFileReaderOptions::GetHiveLogicalType(const string &hive_partit
 	return LogicalType::VARCHAR;
 }
 
-bool MultiFileReaderOptions::AnySet() {
+bool MultiFileReaderOptions::AnySet() const {
 	return filename || hive_partitioning || union_by_name;
 }
 

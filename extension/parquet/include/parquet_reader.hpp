@@ -125,16 +125,11 @@ struct ParquetUnionData : public BaseUnionData {
 	}
 	~ParquetUnionData() override;
 
-	vector<string> names;
-	vector<LogicalType> types;
 	ParquetOptions options;
 	shared_ptr<ParquetFileMetadataCache> metadata;
 };
 
 class ParquetReader : public BaseFileReader {
-public:
-	using UNION_READER_DATA = unique_ptr<ParquetUnionData>;
-
 public:
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
@@ -146,38 +141,17 @@ public:
 	ParquetOptions parquet_options;
 	unique_ptr<ParquetColumnSchema> root_schema;
 	shared_ptr<EncryptionUtil> encryption_util;
+	//! How many rows have been read from this file
+	atomic<idx_t> rows_read;
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
 	void Scan(ParquetReaderScanState &state, DataChunk &output);
 
-	static unique_ptr<ParquetUnionData> StoreUnionReader(unique_ptr<ParquetReader> reader_p, idx_t file_idx) {
-		auto result = make_uniq<ParquetUnionData>(reader_p->file_name);
-		if (file_idx == 0) {
-			for (auto &column : reader_p->columns) {
-				result->names.push_back(column.name);
-				result->types.push_back(column.type);
-			}
-			result->options = reader_p->parquet_options;
-			result->metadata = reader_p->metadata;
-			result->reader = std::move(reader_p);
-		} else {
-			for (auto &column : reader_p->columns) {
-				result->names.push_back(column.name);
-				result->types.push_back(column.type);
-			}
-			reader_p->columns.clear();
-			result->options = std::move(reader_p->parquet_options);
-			result->metadata = std::move(reader_p->metadata);
-		}
+	idx_t NumRows() const;
+	idx_t NumRowGroups() const;
 
-		return result;
-	}
-
-	idx_t NumRows();
-	idx_t NumRowGroups();
-
-	const duckdb_parquet::FileMetaData *GetFileMetadata();
+	const duckdb_parquet::FileMetaData *GetFileMetadata() const;
 
 	uint32_t Read(duckdb_apache::thrift::TBase &object, TProtocol &iprot);
 	uint32_t ReadData(duckdb_apache::thrift::protocol::TProtocol &iprot, const data_ptr_t buffer,

@@ -2620,15 +2620,6 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
-			| '*' COLUMNS '(' a_expr ')'
-				{
-					PGAStar *star = makeNode(PGAStar);
-					star->expr = $4;
-					star->columns = true;
-					star->unpacked = true;
-					star->location = @1;
-					$$ = (PGNode *) star;
-				}
 			| COLUMNS '(' a_expr ')'
 				{
 					PGAStar *star = makeNode(PGAStar);
@@ -2636,6 +2627,21 @@ a_expr:		c_expr									{ $$ = $1; }
 					star->columns = true;
 					star->location = @1;
 					$$ = (PGNode *) star;
+				}
+			| UNPACK '(' a_expr ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("unpack"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| '*' COLUMNS '(' a_expr ')'
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->expr = $4;
+					star->columns = true;
+					star->location = @1;
+
+					PGFuncCall *n = makeFuncCall(SystemFuncName("unpack"), list_make1((PGNode *)star), @1);
+					$$ = (PGNode *) n;
 				}
 			| '*' opt_except_list opt_replace_list opt_rename_list
 				{
