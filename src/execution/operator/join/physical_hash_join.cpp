@@ -410,7 +410,7 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	gstate.probe_side_requirement =
 	    GetPartitioningSpaceRequirement(context, children[0]->types, ht.GetRadixBits(), gstate.num_threads);
 	const auto max_partition_ht_size =
-	    gstate.max_partition_size + JoinHashTable::PointerTableSize(gstate.max_partition_count);
+	    gstate.max_partition_size + gstate.hash_table->PointerTableSize(gstate.max_partition_count);
 	gstate.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + gstate.probe_side_requirement);
 
 	bool all_constant;
@@ -460,7 +460,7 @@ public:
 		// due to completely slamming the same atomic using compare-and-swaps.
 		// We can detect this because we partition the data, and go for a single-threaded finalize instead.
 		const auto max_partition_ht_size =
-		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
+		    sink.max_partition_size + sink.hash_table->PointerTableSize(sink.max_partition_count);
 		const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
 
 		if (num_threads == 1 || (ht.Count() < PARALLEL_CONSTRUCT_THRESHOLD && skew > SKEW_SINGLE_THREADED_THRESHOLD &&
@@ -590,7 +590,7 @@ public:
 		    GetPartitioningSpaceRequirement(sink.context, op.types, sink.hash_table->GetRadixBits(), sink.num_threads);
 
 		sink.temporary_memory_state->SetMinimumReservation(sink.max_partition_size +
-		                                                   JoinHashTable::PointerTableSize(sink.max_partition_count) +
+		                                                   sink.hash_table->PointerTableSize(sink.max_partition_count) +
 		                                                   sink.probe_side_requirement);
 		sink.temporary_memory_state->UpdateReservation(executor.context);
 
@@ -711,11 +711,31 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	sink.temporary_memory_state->UpdateReservation(context);
 	sink.external = sink.temporary_memory_state->GetReservation() < sink.total_size;
 	if (sink.external) {
+		// For external join we reduce the load factor, this may even prevent the external join altogether
+		ht.load_factor = JoinHashTable::EXTERNAL_LOAD_FACTOR;
+
+		idx_t temp_max_partition_size;
+		idx_t temp_max_partition_count;
+		idx_t temp_total_size =
+		    ht.GetTotalSize(sink.local_hash_tables, temp_max_partition_size, temp_max_partition_count);
+
+		if (temp_total_size < sink.temporary_memory_state->GetReservation()) {
+			// We prevented the external join by reducing the load factor. Update the state accordingly
+			sink.temporary_memory_state->SetMinimumReservation(temp_total_size);
+			sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context, temp_total_size);
+
+			sink.total_size = temp_total_size;
+			sink.max_partition_size = temp_max_partition_size;
+			sink.max_partition_count = temp_max_partition_count;
+
+			sink.external = false;
+		}
+	}
+	if (sink.external) {
 		// External Hash Join
 		sink.perfect_join_executor.reset();
 
-		const auto max_partition_ht_size =
-		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
+		const auto max_partition_ht_size = sink.max_partition_size + ht.PointerTableSize(sink.max_partition_count);
 		const auto very_very_skewed = // No point in repartitioning if it's this skewed
 		    static_cast<double>(max_partition_ht_size) >= 0.8 * static_cast<double>(sink.total_size);
 		if (!very_very_skewed &&
@@ -1090,7 +1110,7 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 		build_chunks_per_thread = 1;
 	} else {
 		const auto max_partition_ht_size =
-		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
+		    sink.max_partition_size + sink.hash_table->PointerTableSize(sink.max_partition_count);
 		const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
 
 		if (skew > HashJoinFinalizeEvent::SKEW_SINGLE_THREADED_THRESHOLD) {

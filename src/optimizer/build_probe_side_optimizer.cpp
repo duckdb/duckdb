@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -137,9 +138,8 @@ double BuildProbeSideOptimizer::GetBuildSize(vector<LogicalType> types, const id
 		});
 	}
 
-	// There is also a cost of NextPowerOfTwo(count * 2) * sizeof(data_ptr_t) per tuple in the hash table
-	// This is a not a smooth cost function, so instead we do the average, which is ~3 * sizeof(data_ptr_t)
-	row_width += 3 * sizeof(data_ptr_t);
+	// There is also a cost of ~2 * sizeof(ht_entry_t) per tuple in the hash table
+	row_width += 2 * sizeof(ht_entry_t);
 
 	return static_cast<double>(row_width * cardinality);
 }
