@@ -395,7 +395,11 @@ bool CachingFileHandle::RangeIsValid(const CachedFileRange &range, const unique_
 	if (!caching_file_system.check_cached_file_invalidation) {
 		return true;
 	}
-	return GetVersionTag(guard) == range.version_tag;
+	const auto this_version_tag = GetVersionTag(guard);
+	if (this_version_tag.empty() || range.version_tag.empty()) {
+		return false;
+	}
+	return this_version_tag == range.version_tag;
 }
 
 BufferHandle CachingFileHandle::TryReadFromFileRange(CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes,

@@ -69,6 +69,13 @@ select nr_bytes, location, loaded from duckdb_external_file_cache() order by loc
 3045982	4	true
 1986	18281732	true
 
+# shows up in duckdb_memory under its own tag
+# this is slightly higher than the sum of nr_bytes above due buffers having a header and are rounded up to sector size
+query I
+select memory_usage_bytes from duckdb_memory() where tag = 'EXTERNAL_FILE_CACHE';
+----
+3051520
+
 # set the memory so low that the ~3MB entry should be unloaded
 statement ok
 set memory_limit='100kb';
