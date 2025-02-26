@@ -520,10 +520,10 @@ struct PythonValueConversion {
 		result = Value(val).DefaultCastAs(cast_as);
 	}
 	static void HandleLongAsDouble(Value &result, const LogicalType &target_type, double val) {
-		result = Value::DOUBLE(val);
+		result = Value::DOUBLE(val).DefaultCastAs(target_type);
 	}
 	static void HandleUnsignedBigint(Value &result, const LogicalType &target_type, uint64_t val) {
-		result = Value::UBIGINT(val);
+		result = Value::UBIGINT(val).DefaultCastAs(target_type);
 	}
 	static void HandleBigint(Value &res, const LogicalType &target_type, int64_t value) {
 		switch (target_type.id()) {
