@@ -421,6 +421,11 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SQLExpression(const string &s
 	} catch (std::runtime_error &e) {
 		throw;
 	}
+
+	if (expressions.size() != 1) {
+		throw InvalidInputException("Please provide only a single expression to SQLExpression, found %d expressions in the parsed string", expressions.size());
+	}
+
 	return make_shared_ptr<DuckDBPyExpression>(std::move(expressions[0]));
 }
 
