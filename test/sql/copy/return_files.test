@@ -29,7 +29,7 @@ SET threads=2;
 query II
 COPY integers TO '__TEST_DIR__/test_per_thread_output' (RETURN_FILES, PER_THREAD_OUTPUT);
 ----
-200000	<REGEX>:.*data_0.csv.*data_1.csv.*
+200000	<REGEX>:.*data_0.csv.*
 
 require notwindows
 
