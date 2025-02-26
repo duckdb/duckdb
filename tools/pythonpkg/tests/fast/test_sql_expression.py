@@ -98,7 +98,10 @@ class TestSQLExpression(object):
             SQLExpression("SELECT *")
 
         # Test multiple expressions
-        with pytest.raises(duckdb.InvalidInputException, match="Please provide only a single expression to SQLExpression, found 2 expressions in the parsed string"):
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match="Please provide only a single expression to SQLExpression, found 2 expressions in the parsed string",
+        ):
             SQLExpression("1, 2")
 
     def test_sql_expression_alias(self, duckdb_cursor):
