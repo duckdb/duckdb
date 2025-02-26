@@ -489,147 +489,230 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 	}
 }
 
-Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool nan_as_null) {
-	auto object_type = GetPythonObjectType(ele);
-
-	switch (object_type) {
-	case PythonObjectType::None:
-		return Value();
-	case PythonObjectType::Bool:
-		return Value::BOOLEAN(ele.cast<bool>());
-	case PythonObjectType::Integer: {
-		Value integer;
-		if (!TryTransformPythonNumeric(integer, ele, target_type)) {
-			throw InvalidInputException("An error occurred attempting to convert a python integer");
-		}
-		return integer;
+struct PythonValueConversion {
+	static void HandleNull(Value &result, const LogicalType &target_type) {
+		result = Value();
 	}
-	case PythonObjectType::Float:
-		if (nan_as_null && std::isnan(PyFloat_AsDouble(ele.ptr()))) {
-			return Value();
-		}
+	static void HandleBoolean(Value &result, const LogicalType &target_type, bool val) {
+		result = Value::BOOLEAN(val);
+	}
+	static void HandleDouble(Value &result, const LogicalType &target_type, double val) {
 		switch (target_type.id()) {
 		case LogicalTypeId::UNKNOWN:
 		case LogicalTypeId::DOUBLE: {
-			return Value::DOUBLE(ele.cast<double>());
+			result = Value::DOUBLE(val);
+			break;
 		}
 		case LogicalTypeId::FLOAT: {
-			return Value::FLOAT(ele.cast<float>());
+			result = Value::FLOAT(static_cast<float>(val));
+			break;
 		}
 		case LogicalTypeId::DECIMAL: {
 			throw ConversionException("Can't losslessly convert from object of float to type %s",
-			                          target_type.ToString());
+									  target_type.ToString());
 		}
 		default:
 			throw ConversionException("Could not convert 'float' to type %s", target_type.ToString());
 		}
-	case PythonObjectType::Decimal: {
-		PyDecimal decimal(ele);
-		return decimal.ToDuckValue();
 	}
-	case PythonObjectType::Uuid: {
-		auto string_val = py::str(ele).cast<string>();
-		return Value::UUID(string_val);
-	}
-	case PythonObjectType::Datetime: {
-		auto &import_cache = *DuckDBPyConnection::ImportCache();
-		bool is_nat = false;
-		if (import_cache.pandas.isnull(false)) {
-			auto isnull_result = import_cache.pandas.isnull()(ele);
-			is_nat = string(py::str(isnull_result)) == "True";
+	static Value HandleObjectInternal(py::handle ele, PythonObjectType object_type, const LogicalType &target_type, bool nan_as_null) {
+		switch (object_type) {
+		case PythonObjectType::Integer: {
+			Value integer;
+			if (!TryTransformPythonNumeric(integer, ele, target_type)) {
+				throw InvalidInputException("An error occurred attempting to convert a python integer");
+			}
+			return integer;
 		}
-		if (is_nat) {
-			return Value();
+		case PythonObjectType::Decimal: {
+			PyDecimal decimal(ele);
+			return decimal.ToDuckValue();
 		}
-		auto datetime = PyDateTime(ele);
-		return datetime.ToDuckValue(target_type);
-	}
-	case PythonObjectType::Time: {
-		auto time = PyTime(ele);
-		return time.ToDuckValue();
-	}
-	case PythonObjectType::Date: {
-		auto date = PyDate(ele);
-		return date.ToDuckValue();
-	}
-	case PythonObjectType::Timedelta: {
-		auto timedelta = PyTimeDelta(ele);
-		return Value::INTERVAL(timedelta.ToInterval());
-	}
-	case PythonObjectType::String: {
-		auto stringified = ele.cast<string>();
-		if (target_type.id() == LogicalTypeId::UNKNOWN) {
-			return Value(stringified);
+		case PythonObjectType::Uuid: {
+			auto string_val = py::str(ele).cast<string>();
+			return Value::UUID(string_val);
 		}
-		return Value(stringified).DefaultCastAs(target_type);
-	}
-	case PythonObjectType::ByteArray: {
-		auto byte_array = ele;
-		const_data_ptr_t bytes = const_data_ptr_cast(PyByteArray_AsString(byte_array.ptr())); // NOLINT
-		idx_t byte_length = PyUtil::PyByteArrayGetSize(byte_array);                           // NOLINT
-		return Value::BLOB(bytes, byte_length);
-	}
-	case PythonObjectType::MemoryView: {
-		py::memoryview py_view = ele.cast<py::memoryview>();
-		Py_buffer *py_buf = PyUtil::PyMemoryViewGetBuffer(py_view); // NOLINT
-		return Value::BLOB(const_data_ptr_t(py_buf->buf), idx_t(py_buf->len));
-	}
-	case PythonObjectType::Bytes: {
-		const string &ele_string = ele.cast<string>();
-		switch (target_type.id()) {
-		case LogicalTypeId::UNKNOWN:
-		case LogicalTypeId::BLOB:
-			return Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size());
-		case LogicalTypeId::BIT: {
-			return Value::BIT(ele_string);
+		case PythonObjectType::Datetime: {
+			auto &import_cache = *DuckDBPyConnection::ImportCache();
+			bool is_nat = false;
+			if (import_cache.pandas.isnull(false)) {
+				auto isnull_result = import_cache.pandas.isnull()(ele);
+				is_nat = string(py::str(isnull_result)) == "True";
+			}
+			if (is_nat) {
+				return Value();
+			}
+			auto datetime = PyDateTime(ele);
+			return datetime.ToDuckValue(target_type);
+		}
+		case PythonObjectType::Time: {
+			auto time = PyTime(ele);
+			return time.ToDuckValue();
+		}
+		case PythonObjectType::Date: {
+			auto date = PyDate(ele);
+			return date.ToDuckValue();
+		}
+		case PythonObjectType::Timedelta: {
+			auto timedelta = PyTimeDelta(ele);
+			return Value::INTERVAL(timedelta.ToInterval());
+		}
+		case PythonObjectType::String: {
+			auto stringified = ele.cast<string>();
+			if (target_type.id() == LogicalTypeId::UNKNOWN) {
+				return Value(stringified);
+			}
+			return Value(stringified).DefaultCastAs(target_type);
+		}
+		case PythonObjectType::ByteArray: {
+			auto byte_array = ele;
+			const_data_ptr_t bytes = const_data_ptr_cast(PyByteArray_AsString(byte_array.ptr())); // NOLINT
+			idx_t byte_length = PyUtil::PyByteArrayGetSize(byte_array);                           // NOLINT
+			return Value::BLOB(bytes, byte_length);
+		}
+		case PythonObjectType::MemoryView: {
+			py::memoryview py_view = ele.cast<py::memoryview>();
+			Py_buffer *py_buf = PyUtil::PyMemoryViewGetBuffer(py_view); // NOLINT
+			return Value::BLOB(const_data_ptr_t(py_buf->buf), idx_t(py_buf->len));
+		}
+		case PythonObjectType::Bytes: {
+			const string &ele_string = ele.cast<string>();
+			switch (target_type.id()) {
+			case LogicalTypeId::UNKNOWN:
+			case LogicalTypeId::BLOB:
+				return Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size());
+			case LogicalTypeId::BIT: {
+				return Value::BIT(ele_string);
+			default:
+				throw ConversionException("Could not convert 'bytes' to type %s", target_type.ToString());
+			}
+			}
+		}
+		case PythonObjectType::List:
+			if (target_type.id() == LogicalTypeId::ARRAY) {
+				return TransformArrayValue(ele, target_type);
+			} else {
+				return TransformListValue(ele, target_type);
+			}
+		case PythonObjectType::Dict: {
+			PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
+			switch (target_type.id()) {
+			case LogicalTypeId::STRUCT:
+				return TransformDictionaryToStruct(dict, target_type);
+			case LogicalTypeId::MAP:
+				return TransformDictionaryToMap(dict, target_type);
+			default:
+				return TransformDictionary(dict);
+			}
+		}
+		case PythonObjectType::Tuple: {
+			switch (target_type.id()) {
+			case LogicalTypeId::STRUCT:
+				return TransformTupleToStruct(ele, target_type);
+			case LogicalTypeId::UNKNOWN:
+			case LogicalTypeId::LIST:
+				return TransformListValue(ele, target_type);
+			case LogicalTypeId::ARRAY:
+				return TransformArrayValue(ele, target_type);
+			default:
+				throw InvalidInputException("Can't convert tuple to a Value of type %s", target_type.ToString());
+			}
+		}
+		case PythonObjectType::NdArray:
+		case PythonObjectType::NdDatetime:
+			return TransformPythonValue(ele.attr("tolist")(), target_type, nan_as_null);
+		case PythonObjectType::Value: {
+			// Extract the internal object and the type from the Value instance
+			auto object = ele.attr("object");
+			auto type = ele.attr("type");
+			shared_ptr<DuckDBPyType> internal_type;
+			if (!py::try_cast<shared_ptr<DuckDBPyType>>(type, internal_type)) {
+				string actual_type = py::str(type.get_type());
+				throw InvalidInputException("The 'type' of a Value should be of type DuckDBPyType, not '%s'", actual_type);
+			}
+			return TransformPythonValue(object, internal_type->Type());
+		}
 		default:
-			throw ConversionException("Could not convert 'bytes' to type %s", target_type.ToString());
-		}
+			throw InternalException("Unsupported fallback");
 		}
 	}
+	static void HandleObject(py::handle ele, PythonObjectType object_type, Value &result, const LogicalType &target_type,
+						   bool nan_as_null) {
+		result = HandleObjectInternal(ele, object_type, target_type, nan_as_null);
+	}
+};
+
+struct PythonVectorConversion {
+	static void HandleNull(Vector &result, const idx_t &result_offset) {
+		FlatVector::SetNull(result, result_offset, true);
+	}
+	static void HandleBoolean(Vector &result, const idx_t &result_offset, bool val) {
+		if (result.GetType().id() != LogicalTypeId::BOOLEAN) {
+			throw TypeMismatchException(LogicalType::BOOLEAN, result.GetType(), "Python Conversion Failure: Expected a value of type %s, but got a value of type boolean");
+		}
+		FlatVector::GetData<bool>(result)[result_offset] = val;
+	}
+	static void HandleDouble(Vector &result, const idx_t &result_offset, double val) {
+		switch (result.GetType().id()) {
+		case LogicalTypeId::DOUBLE: {
+			FlatVector::GetData<double>(result)[result_offset] = val;
+			break;
+		}
+		case LogicalTypeId::FLOAT: {
+			FlatVector::GetData<float>(result)[result_offset] = static_cast<float>(val);
+			break;
+		}
+		default:
+			throw TypeMismatchException(LogicalType::DOUBLE, result.GetType(), "Python Conversion Failure: Expected a value of type %s, but got a value of type double");
+		}
+	}
+	static void HandleObject(py::handle ele, PythonObjectType object_type, Vector &result, const idx_t &result_offset,
+						   bool nan_as_null) {
+		Value result_val;
+		PythonValueConversion::HandleObject(ele, object_type, result_val, result.GetType(), nan_as_null);
+		result.SetValue(result_offset, result_val);
+	}
+};
+
+
+template<class OP, class A, class B>
+void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
+						   bool nan_as_null) {
+	auto object_type = GetPythonObjectType(ele);
+
+	switch (object_type) {
+	case PythonObjectType::None:
+		OP::HandleNull(result, param);
+		break;
+	case PythonObjectType::Bool:
+		OP::HandleBoolean(result, param, ele.cast<bool>());
+		break;
+	case PythonObjectType::Float:
+		if (nan_as_null && std::isnan(PyFloat_AsDouble(ele.ptr()))) {
+			OP::HandleNull(result, param);
+			break;
+		}
+		OP::HandleDouble(result, param, ele.cast<double>());
+		break;
+	case PythonObjectType::Uuid:
+	case PythonObjectType::Datetime:
+	case PythonObjectType::Time:
+	case PythonObjectType::Date:
+	case PythonObjectType::Timedelta:
+	case PythonObjectType::String:
+	case PythonObjectType::ByteArray:
+	case PythonObjectType::MemoryView:
+	case PythonObjectType::Bytes:
 	case PythonObjectType::List:
-		if (target_type.id() == LogicalTypeId::ARRAY) {
-			return TransformArrayValue(ele, target_type);
-		} else {
-			return TransformListValue(ele, target_type);
-		}
-	case PythonObjectType::Dict: {
-		PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
-		switch (target_type.id()) {
-		case LogicalTypeId::STRUCT:
-			return TransformDictionaryToStruct(dict, target_type);
-		case LogicalTypeId::MAP:
-			return TransformDictionaryToMap(dict, target_type);
-		default:
-			return TransformDictionary(dict);
-		}
-	}
-	case PythonObjectType::Tuple: {
-		switch (target_type.id()) {
-		case LogicalTypeId::STRUCT:
-			return TransformTupleToStruct(ele, target_type);
-		case LogicalTypeId::UNKNOWN:
-		case LogicalTypeId::LIST:
-			return TransformListValue(ele, target_type);
-		case LogicalTypeId::ARRAY:
-			return TransformArrayValue(ele, target_type);
-		default:
-			throw InvalidInputException("Can't convert tuple to a Value of type %s", target_type.ToString());
-		}
-	}
+	case PythonObjectType::Dict:
+	case PythonObjectType::Tuple:
 	case PythonObjectType::NdArray:
 	case PythonObjectType::NdDatetime:
-		return TransformPythonValue(ele.attr("tolist")(), target_type, nan_as_null);
-	case PythonObjectType::Value: {
-		// Extract the internal object and the type from the Value instance
-		auto object = ele.attr("object");
-		auto type = ele.attr("type");
-		shared_ptr<DuckDBPyType> internal_type;
-		if (!py::try_cast<shared_ptr<DuckDBPyType>>(type, internal_type)) {
-			string actual_type = py::str(type.get_type());
-			throw InvalidInputException("The 'type' of a Value should be of type DuckDBPyType, not '%s'", actual_type);
-		}
-		return TransformPythonValue(object, internal_type->Type());
+	case PythonObjectType::Value:
+	case PythonObjectType::Decimal:
+	case PythonObjectType::Integer: {
+		OP::HandleObject(ele, object_type, result, param, nan_as_null);
+		break;
 	}
 	case PythonObjectType::Other:
 		throw NotImplementedException("Unable to transform python value of type '%s' to DuckDB LogicalType",
@@ -637,6 +720,17 @@ Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool 
 	default:
 		throw InternalException("Object type recognized but not implemented!");
 	}
+}
+
+void TransformPythonObject(py::handle ele, Vector &vector, idx_t result_offset,
+						   bool nan_as_null) {
+	TransformPythonObjectInternal<PythonVectorConversion>(ele, vector, result_offset, nan_as_null);
+}
+
+Value TransformPythonValue(py::handle ele, const LogicalType &target_type, bool nan_as_null) {
+	Value result;
+	TransformPythonObjectInternal<PythonValueConversion>(ele, result, target_type, nan_as_null);
+	return result;
 }
 
 } // namespace duckdb
