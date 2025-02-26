@@ -74,8 +74,7 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const MultiFile
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
-    : total_read_size(0), total_tuple_count(0),
-      scan_state(context, gstate.allocator, gstate.buffer_capacity) {
+    : total_read_size(0), total_tuple_count(0), scan_state(context, gstate.allocator, gstate.buffer_capacity) {
 }
 
 JSONGlobalTableFunctionState::JSONGlobalTableFunctionState(ClientContext &context, TableFunctionInitInput &input)
@@ -196,12 +195,6 @@ idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 			if (!ReadNextBuffer(gstate)) {
 				break;
 			}
-			if (scan_state.current_buffer_handle->buffer_index != 0 &&
-			    current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
-				if (ReconstructFirstObject(gstate)) {
-					scan_state.scan_count++;
-				}
-			}
 		}
 
 		ParseNextChunk(gstate);
@@ -306,29 +299,12 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 
 		break;
 	}
-	D_ASSERT(buffer_index.IsValid());
-
-	idx_t readers = 1;
-	if (current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
-		readers = scan_state.is_last ? 1 : 2;
-	}
-
-	// Create an entry and insert it into the map
-	auto json_buffer_handle =
-	    make_uniq<JSONBufferHandle>(buffer_index.GetIndex(), readers, std::move(buffer), scan_state.buffer_size);
-	scan_state.current_buffer_handle = json_buffer_handle.get();
-	current_reader->InsertBuffer(buffer_index.GetIndex(), std::move(json_buffer_handle));
-
-	scan_state.prev_buffer_remainder = 0;
-	scan_state.lines_or_objects_in_buffer = 0;
-
-	// YYJSON needs this
-	memset(scan_state.buffer_ptr + scan_state.buffer_size, 0, YYJSON_PADDING_SIZE);
-
+	current_reader->FinalizeBufferInternal(scan_state, buffer, buffer_index.GetIndex());
 	return true;
 }
 
-void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index, bool &file_done) {
+void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer,
+                                           optional_idx &buffer_index, bool &file_done) {
 	// We have to detect the JSON format - hold the gstate lock while we do this
 	if (!current_reader->ReadNextBufferInternal(gstate, scan_state, buffer, buffer_index, file_done)) {
 		return;
