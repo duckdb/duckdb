@@ -557,6 +557,10 @@ struct PythonValueConversion {
 		result = time.ToDuckValue();
 	}
 
+	static void HandleDate(Value &result, const LogicalType &target_type, PyDate &date) {
+		result = date.ToDuckValue();
+	}
+
 	static void HandleDateTime(Value &result, const LogicalType &target_type, PyDateTime &datetime) {
 		result = datetime.ToDuckValue(target_type);
 	}
@@ -595,10 +599,6 @@ struct PythonValueConversion {
 		case PythonObjectType::Uuid: {
 			auto string_val = py::str(ele).cast<string>();
 			return Value::UUID(string_val);
-		}
-		case PythonObjectType::Date: {
-			auto date = PyDate(ele);
-			return date.ToDuckValue();
 		}
 		case PythonObjectType::Timedelta: {
 			auto timedelta = PyTimeDelta(ele);
@@ -814,6 +814,20 @@ struct PythonVectorConversion {
 		FallbackValueConversion(result, result_offset, std::move(result_val));
 	}
 
+	static void HandleDate(Vector &result, const idx_t &result_offset, PyDate &date) {
+		auto &result_type = result.GetType();
+		switch(result_type.id()) {
+		case LogicalTypeId::DATE:
+			FlatVector::GetData<date_t>(result)[result_offset] = date.ToDate();
+			break;
+		default: {
+			auto value = date.ToDuckValue();
+			result.SetValue(result_offset, value);
+			break;
+		}
+		}
+	}
+
 	static void HandleTime(Vector &result, const idx_t &result_offset, PyTime &time) {
 		auto &result_type = result.GetType();
 		switch(result_type.id()) {
@@ -979,8 +993,12 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 		OP::HandleTime(result, param, time);
 		break;
 	}
+	case PythonObjectType::Date: {
+		PyDate date(ele);
+		OP::HandleDate(result, param, date);
+		break;
+	}
 	case PythonObjectType::Uuid:
-	case PythonObjectType::Date:
 	case PythonObjectType::Timedelta:
 	case PythonObjectType::ByteArray:
 	case PythonObjectType::MemoryView:
