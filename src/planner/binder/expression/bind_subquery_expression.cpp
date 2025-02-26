@@ -153,7 +153,7 @@ BindResult ExpressionBinder::BindExpression(SubqueryExpression &expr, idx_t dept
 			}
 			child = BoundCastExpression::AddCastToType(context, std::move(child), compare_type);
 			result->child_types.push_back(subquery_type);
-			result->child_target = compare_type;
+			result->child_targets.push_back(compare_type);
 			result->children.push_back(std::move(child));
 		}
 	}

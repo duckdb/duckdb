@@ -1038,9 +1038,11 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	}
 	case VerifyExistenceType::DELETE_FK: {
 		// DELETE_FK that still exists in a FK table, i.e., not a valid delete.
-		return StringUtil::Format("Violates foreign key constraint because key \"%s\" is still referenced by a foreign "
-		                          "key in a different table",
-		                          key_name);
+		return StringUtil::Format(
+		    "Violates foreign key constraint because key \"%s\" is still referenced by a foreign "
+		    "key in a different table. If this is an unexpected constraint violation, please refer to our "
+		    "foreign key limitations in the documentation",
+		    key_name);
 	}
 	default:
 		throw NotImplementedException("Type not implemented for VerifyExistenceType");
@@ -1091,16 +1093,27 @@ void ART::VerifyLeaf(const Node &leaf, const ARTKey &key, optional_ptr<ART> dele
 		return;
 	}
 
+	// Fast path for FOREIGN KEY constraints.
+	// Up to here, the above code paths work implicitly for FKs, as the leaf is inlined.
 	// FIXME: proper foreign key + delete ART support.
-	// This implicitly works for foreign keys, as we do not have to consider the actual row IDs.
-	// We only need to know that there are conflicts (for now), as we still perform over-eager constraint checking.
+	if (index_constraint_type == IndexConstraintType::FOREIGN) {
+		D_ASSERT(!deleted_leaf);
+		// We don't handle FK conflicts in UPSERT, so the row ID should not matter.
+		if (manager.AddHit(i, MAX_ROW_ID)) {
+			conflict_idx = i;
+		}
+		return;
+	}
 
 	// Scan the two row IDs in the leaf.
 	Iterator it(*this);
 	it.FindMinimum(leaf);
 	ARTKey empty_key = ARTKey();
 	unsafe_vector<row_t> row_ids;
-	it.Scan(empty_key, 2, row_ids, false);
+	auto success = it.Scan(empty_key, 2, row_ids, false);
+	if (!success || row_ids.size() != 2) {
+		throw InternalException("VerifyLeaf expects exactly two row IDs to be scanned");
+	}
 
 	if (!deleted_leaf) {
 		if (manager.AddHit(i, row_ids[0]) || manager.AddHit(i, row_ids[1])) {

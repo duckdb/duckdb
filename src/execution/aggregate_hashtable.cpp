@@ -329,7 +329,7 @@ optional_idx GroupedAggregateHashTable::TryAddDictionaryGroups(DataChunk &groups
 	if (dictionary_id.empty()) {
 		// dictionary has no id, we can't cache across vectors
 		// only use dictionary compression if there are fewer entries than groups
-		if (dict_size >= groups.size() * DICTIONARY_THRESHOLD) {
+		if (dict_size * DICTIONARY_THRESHOLD >= groups.size()) {
 			// dictionary is too large - use regular aggregation
 			return optional_idx();
 		}

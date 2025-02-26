@@ -651,13 +651,15 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"st_zmax", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_zmflag", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"st_zmin", "spatial", CatalogType::SCALAR_FUNCTION_ENTRY},
-    {"start_ui", "motherduck", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"start_ui", "ui", CatalogType::TABLE_FUNCTION_ENTRY},
+    {"start_ui_server", "ui", CatalogType::TABLE_FUNCTION_ENTRY},
     {"starts_with", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"stats", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"stddev", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"stddev_pop", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"stddev_samp", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"stem", "fts", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"stop_ui_server", "ui", CatalogType::TABLE_FUNCTION_ENTRY},
     {"string_agg", "core_functions", CatalogType::AGGREGATE_FUNCTION_ENTRY},
     {"strpos", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"struct_insert", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -701,6 +703,7 @@ static constexpr ExtensionFunctionEntry EXTENSION_FUNCTIONS[] = {
     {"trunc", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"txid_current", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"typeof", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
+    {"ui_is_started", "ui", CatalogType::TABLE_FUNCTION_ENTRY},
     {"unbin", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"unhex", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
     {"unicode", "core_functions", CatalogType::SCALAR_FUNCTION_ENTRY},
@@ -989,6 +992,9 @@ static constexpr ExtensionEntry EXTENSION_SETTINGS[] = {
     {"sqlite_all_varchar", "sqlite_scanner"},
     {"sqlite_debug_show_queries", "sqlite_scanner"},
     {"timezone", "icu"},
+    {"ui_local_port", "ui"},
+    {"ui_polling_interval", "ui"},
+    {"ui_remote_url", "ui"},
     {"unsafe_enable_version_guessing", "iceberg"},
 }; // END_OF_EXTENSION_SETTINGS
 
@@ -1076,10 +1082,16 @@ static constexpr ExtensionEntry EXTENSION_SECRET_PROVIDERS[] = {
     {"mysql/config", "mysql_scanner"},
     {"postgres/config", "postgres_scanner"}}; // EXTENSION_SECRET_PROVIDERS
 
-static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {
-    "aws",        "azure",         "autocomplete", "core_functions", "delta",    "excel",
-    "fts",        "httpfs",        "iceberg",      "inet",           "icu",      "json",
-    "motherduck", "mysql_scanner", "parquet",      "sqlite_scanner", "sqlsmith", "postgres_scanner",
-    "tpcds",      "tpch",          "uc_catalog"}; // END_OF_AUTOLOADABLE_EXTENSIONS
+static constexpr const char *AUTOLOADABLE_EXTENSIONS[] = {"aws",          "azure",
+                                                          "autocomplete", "core_functions",
+                                                          "delta",        "excel",
+                                                          "fts",          "httpfs",
+                                                          "iceberg",      "inet",
+                                                          "icu",          "json",
+                                                          "motherduck",   "mysql_scanner",
+                                                          "parquet",      "sqlite_scanner",
+                                                          "sqlsmith",     "postgres_scanner",
+                                                          "tpcds",        "tpch",
+                                                          "uc_catalog",   "ui"}; // END_OF_AUTOLOADABLE_EXTENSIONS
 
 } // namespace duckdb

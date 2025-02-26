@@ -20,6 +20,7 @@ struct PageInformation {
 	idx_t row_count = 0;
 	idx_t empty_count = 0;
 	idx_t estimated_page_size = 0;
+	idx_t null_count = 0;
 };
 
 struct PageWriteInformation {
