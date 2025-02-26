@@ -468,7 +468,7 @@ LogicalType PandasAnalyzer::InnerAnalyze(py::object column, bool &can_convert, i
 		return LogicalType::SQLNULL;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto pandas_series = import_cache.pandas.Series(false);
+	auto pandas_series = import_cache.pandas.Series();
 
 	// Keys are not guaranteed to start at 0 for Series, use the internal __array__ instead
 	if (pandas_series && py::isinstance(column, pandas_series)) {
@@ -503,7 +503,7 @@ bool PandasAnalyzer::Analyze(py::object column) {
 		return false;
 	}
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
-	auto pandas = import_cache.pandas(false);
+	auto pandas = import_cache.pandas();
 	if (!pandas) {
 		//! Pandas is not installed, no need to analyze
 		return false;
