@@ -542,6 +542,15 @@ struct PythonValueConversion {
 			break;
 		}
 	}
+
+	static void HandleString(Value &result, const LogicalType &target_type, const string &value) {
+		if (target_type.id() == LogicalTypeId::UNKNOWN || target_type.id() == LogicalTypeId::VARCHAR) {
+			result = Value(value);
+		} else {
+			result = Value(value).DefaultCastAs(target_type);
+		}
+	}
+
 	static void HandleList(Value &result, const LogicalType &target_type, py::handle ele, idx_t list_size) {
 		vector<Value> values;
 		values.reserve(list_size);
@@ -566,6 +575,7 @@ struct PythonValueConversion {
 			result = Value::LIST(element_type, std::move(values));
 		}
 	}
+
 	static Value HandleObjectInternal(py::handle ele, PythonObjectType object_type, const LogicalType &target_type, bool nan_as_null) {
 		switch (object_type) {
 		case PythonObjectType::Decimal: {
@@ -600,13 +610,6 @@ struct PythonValueConversion {
 		case PythonObjectType::Timedelta: {
 			auto timedelta = PyTimeDelta(ele);
 			return Value::INTERVAL(timedelta.ToInterval());
-		}
-		case PythonObjectType::String: {
-			auto stringified = ele.cast<string>();
-			if (target_type.id() == LogicalTypeId::UNKNOWN) {
-				return Value(stringified);
-			}
-			return Value(stringified).DefaultCastAs(target_type);
 		}
 		case PythonObjectType::ByteArray: {
 			auto byte_array = ele;
@@ -807,6 +810,17 @@ struct PythonVectorConversion {
 		}
 	}
 
+	static void HandleString(Vector &result, const idx_t &result_offset, const string &value) {
+		auto &result_type = result.GetType();
+		if (result_type.id() == LogicalTypeId::VARCHAR) {
+			FlatVector::GetData<string_t>(result)[result_offset] = StringVector::AddString(result, value);
+			return;
+		}
+		Value result_val;
+		PythonValueConversion::HandleString(result_val, result_type, value);
+		FallbackValueConversion(result, result_offset, std::move(result_val));
+	}
+
 	static void HandleList(Vector &result, const idx_t &result_offset, py::handle ele, idx_t list_size) {
 		auto &result_type = result.GetType();
 		if (result_type.id() == LogicalTypeId::ARRAY) {
@@ -913,12 +927,16 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 		OP::HandleList(result, param, ele, list_size);
 		break;
 	}
+	case PythonObjectType::String: {
+		auto stringified = ele.cast<string>();
+		OP::HandleString(result, param, stringified);
+		break;
+	}
 	case PythonObjectType::Uuid:
 	case PythonObjectType::Datetime:
 	case PythonObjectType::Time:
 	case PythonObjectType::Date:
 	case PythonObjectType::Timedelta:
-	case PythonObjectType::String:
 	case PythonObjectType::ByteArray:
 	case PythonObjectType::MemoryView:
 	case PythonObjectType::Bytes:
