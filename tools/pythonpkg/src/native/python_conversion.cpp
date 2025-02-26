@@ -232,6 +232,152 @@ Value TransformTupleToStruct(py::handle ele, const LogicalType &target_type = Lo
 	return result;
 }
 
+bool TryTransformPythonIntegerToDouble(Value &res, py::handle ele) {
+	double number = PyLong_AsDouble(ele.ptr());
+	if (number == -1.0 && PyErr_Occurred()) {
+		PyErr_Clear();
+		return false;
+	}
+	res = Value::DOUBLE(number);
+	return true;
+}
+
+void TransformPythonUnsigned(uint64_t value, Value &res) {
+	if (value > (uint64_t)std::numeric_limits<uint32_t>::max()) {
+		res = Value::UBIGINT(value);
+	} else if (value > (int64_t)std::numeric_limits<uint16_t>::max()) {
+		res = Value::UINTEGER(value);
+	} else if (value > (int64_t)std::numeric_limits<uint16_t>::max()) {
+		res = Value::USMALLINT(value);
+	} else {
+		res = Value::UTINYINT(value);
+	}
+}
+
+bool TrySniffPythonNumeric(Value &res, int64_t value) {
+	if (value < (int64_t)std::numeric_limits<int32_t>::min() || value > (int64_t)std::numeric_limits<int32_t>::max()) {
+		res = Value::BIGINT(value);
+	} else {
+		// To match default duckdb behavior, numeric values without a specified type should not become a smaller type
+		// than INT32
+		res = Value::INTEGER(value);
+	}
+	return true;
+}
+
+// TODO: add support for HUGEINT
+bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &target_type) {
+	auto ptr = ele.ptr();
+
+	int overflow;
+	int64_t value = PyLong_AsLongLongAndOverflow(ptr, &overflow);
+	if (overflow == -1) {
+		PyErr_Clear();
+		if (target_type.id() == LogicalTypeId::BIGINT) {
+			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
+			                                               std::string(pybind11::str(ele))));
+		}
+		auto cast_as = target_type.id() == LogicalTypeId::UNKNOWN ? LogicalType::HUGEINT : target_type;
+		auto numeric_string = std::string(py::str(ele));
+		res = Value(numeric_string).DefaultCastAs(cast_as);
+		return true;
+	} else if (overflow == 1) {
+		if (target_type.InternalType() == PhysicalType::INT64) {
+			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
+			                                               std::string(pybind11::str(ele))));
+		}
+		uint64_t unsigned_value = PyLong_AsUnsignedLongLong(ptr);
+		if (PyErr_Occurred()) {
+			PyErr_Clear();
+			return TryTransformPythonIntegerToDouble(res, ele);
+		} else {
+			TransformPythonUnsigned(unsigned_value, res);
+		}
+		PyErr_Clear();
+		return true;
+	} else if (value == -1 && PyErr_Occurred()) {
+		return false;
+	}
+
+	// The value is int64_t or smaller
+
+	switch (target_type.id()) {
+	case LogicalTypeId::UNKNOWN:
+		return TrySniffPythonNumeric(res, value);
+	case LogicalTypeId::HUGEINT: {
+		res = Value::HUGEINT(value);
+		return true;
+	}
+	case LogicalTypeId::UHUGEINT: {
+		if (value < 0) {
+			return false;
+		}
+		res = Value::UHUGEINT(value);
+		return true;
+	}
+	case LogicalTypeId::BIGINT: {
+		res = Value::BIGINT(value);
+		return true;
+	}
+	case LogicalTypeId::INTEGER: {
+		if (value < NumericLimits<int32_t>::Minimum() || value > NumericLimits<int32_t>::Maximum()) {
+			return false;
+		}
+		res = Value::INTEGER(value);
+		return true;
+	}
+	case LogicalTypeId::SMALLINT: {
+		if (value < NumericLimits<int16_t>::Minimum() || value > NumericLimits<int16_t>::Maximum()) {
+			return false;
+		}
+		res = Value::SMALLINT(value);
+		return true;
+	}
+	case LogicalTypeId::TINYINT: {
+		if (value < NumericLimits<int8_t>::Minimum() || value > NumericLimits<int8_t>::Maximum()) {
+			return false;
+		}
+		res = Value::TINYINT(value);
+		return true;
+	}
+	case LogicalTypeId::UBIGINT: {
+		if (value < 0) {
+			return false;
+		}
+		res = Value::UBIGINT(value);
+		return true;
+	}
+	case LogicalTypeId::UINTEGER: {
+		if (value < 0 || value > (int64_t)NumericLimits<uint32_t>::Maximum()) {
+			return false;
+		}
+		res = Value::UINTEGER(value);
+		return true;
+	}
+	case LogicalTypeId::USMALLINT: {
+		if (value < 0 || value > (int64_t)NumericLimits<uint16_t>::Maximum()) {
+			return false;
+		}
+		res = Value::USMALLINT(value);
+		return true;
+	}
+	case LogicalTypeId::UTINYINT: {
+		if (value < 0 || value > (int64_t)NumericLimits<uint8_t>::Maximum()) {
+			return false;
+		}
+		res = Value::UTINYINT(value);
+		return true;
+	}
+	default: {
+		if (!TrySniffPythonNumeric(res, value)) {
+			return false;
+		}
+		res = res.DefaultCastAs(target_type, true);
+		return true;
+	}
+	}
+}
+
 Value TransformListValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
 	auto size = py::len(ele);
 
@@ -661,8 +807,6 @@ struct PythonVectorConversion {
 		}
 	}
 
-//	void TransformPythonObject(py::handle ele, Vector &vector, idx_t result_offset,
-//							   bool nan_as_null) {
 	static void HandleList(Vector &result, const idx_t &result_offset, py::handle ele, idx_t list_size) {
 		auto &result_type = result.GetType();
 		if (result_type.id() == LogicalTypeId::ARRAY) {
