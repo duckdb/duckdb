@@ -490,6 +490,10 @@ PythonObjectType GetPythonObjectType(py::handle &ele) {
 }
 
 struct PythonValueConversion {
+	static const LogicalType &ConversionTarget(Value &result, const LogicalType &target_type) {
+		return target_type;
+	}
+
 	static void HandleNull(Value &result, const LogicalType &target_type) {
 		result = Value();
 	}
@@ -514,10 +518,6 @@ struct PythonValueConversion {
 		default:
 			throw ConversionException("Could not convert 'float' to type %s", target_type.ToString());
 		}
-	}
-	static void HandleLargeLong(Value &result, const LogicalType &target_type, const string &val) {
-		auto cast_as = target_type.id() == LogicalTypeId::UNKNOWN ? LogicalType::HUGEINT : target_type;
-		result = Value(val).DefaultCastAs(cast_as);
 	}
 	static void HandleLongAsDouble(Value &result, const LogicalType &target_type, double val) {
 		auto cast_as = target_type.id() == LogicalTypeId::UNKNOWN ? LogicalType::DOUBLE : target_type;
@@ -546,7 +546,7 @@ struct PythonValueConversion {
 	}
 
 	static void HandleString(Value &result, const LogicalType &target_type, const string &value) {
-		if (target_type.id() == LogicalTypeId::UNKNOWN || target_type.id() == LogicalTypeId::VARCHAR) {
+		if (target_type.id() == LogicalTypeId::UNKNOWN || (target_type.id() == LogicalTypeId::VARCHAR && !target_type.HasAlias())) {
 			result = Value(value);
 		} else {
 			result = Value(value).DefaultCastAs(target_type);
@@ -572,7 +572,7 @@ struct PythonValueConversion {
 			result = Value::BLOB(blob, blob_size);
 			break;
 		case LogicalTypeId::BIT:
-			result = Value::BIT(blob, blob_size);
+			result = Value::BIT(string(const_char_ptr_cast(blob), blob_size));
 			break;
 		default:
 			throw ConversionException("Could not convert 'bytes' to type %s", target_type.ToString());
@@ -667,6 +667,9 @@ struct PythonValueConversion {
 };
 
 struct PythonVectorConversion {
+	static const LogicalType &ConversionTarget(Vector &result, const idx_t &result_offset) {
+		return result.GetType();
+	}
 	static void HandleNull(Vector &result, const idx_t &result_offset) {
 		FlatVector::SetNull(result, result_offset, true);
 	}
@@ -690,9 +693,6 @@ struct PythonVectorConversion {
 			throw TypeMismatchException(LogicalType::DOUBLE, result.GetType(), "Python Conversion Failure: Expected a value of type %s, but got a value of type double");
 		}
 	}
-	static void HandleLargeLong(Vector &result, const idx_t &result_offset, const string &val) {
-		FallbackValueConversion(result, result_offset, Value(val));
-	}
 	static void HandleLongAsDouble(Vector &result, const idx_t &result_offset, double val) {
 		FallbackValueConversion(result, result_offset, Value::DOUBLE(val));
 	}
@@ -708,14 +708,6 @@ struct PythonVectorConversion {
 		case LogicalTypeId::UBIGINT:
 			FlatVector::GetData<uint64_t>(result)[result_offset] = value;
 			break;
-		case LogicalTypeId::BIGINT:
-		case LogicalTypeId::INTEGER:
-		case LogicalTypeId::SMALLINT:
-		case LogicalTypeId::TINYINT:
-		case LogicalTypeId::UINTEGER:
-		case LogicalTypeId::USMALLINT:
-		case LogicalTypeId::UTINYINT:
-			throw InvalidInputException("Python Conversion Failure: Value out of range for type %s", result.GetType());
 		default:
 			FallbackValueConversion(result, result_offset, Value::UBIGINT(value));
 			break;
@@ -942,23 +934,39 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 		int overflow;
 		int64_t value = PyLong_AsLongLongAndOverflow(ptr, &overflow);
 
-		if (overflow == -1) {
+		if (overflow != 0) {
 			PyErr_Clear();
-			OP::HandleLargeLong(result, param, py::str(ele));
-		} else if (overflow == 1) {
-			uint64_t unsigned_value = PyLong_AsUnsignedLongLong(ptr);
-			if (PyErr_Occurred()) {
-				PyErr_Clear();
-				double number = PyLong_AsDouble(ele.ptr());
-				if (number == -1.0 && PyErr_Occurred()) {
-					PyErr_Clear();
-					throw InvalidInputException("An error occurred attempting to convert a python integer");
-				}
-				OP::HandleLongAsDouble(result, param, unsigned_value);
-			} else {
-				// value does not fit within an int64, but it fits within a uint64
-				OP::HandleUnsignedBigint(result, param, unsigned_value);
+			auto &conversion_target = OP::ConversionTarget(result, param);
+			switch(conversion_target.id()) {
+			case LogicalTypeId::BIGINT:
+			case LogicalTypeId::INTEGER:
+			case LogicalTypeId::SMALLINT:
+			case LogicalTypeId::TINYINT:
+			case LogicalTypeId::UINTEGER:
+			case LogicalTypeId::USMALLINT:
+			case LogicalTypeId::UTINYINT:
+				throw InvalidInputException("Python Conversion Failure: Value out of range for type %s", conversion_target);
+			default:
+				break;
 			}
+			if (overflow == 1) {
+				uint64_t unsigned_value = PyLong_AsUnsignedLongLong(ptr);
+				if (!PyErr_Occurred()) {
+					// value does not fit within an int64, but it fits within a uint64
+					OP::HandleUnsignedBigint(result, param, unsigned_value);
+					break;
+				}
+				if (conversion_target.id() == LogicalTypeId::UBIGINT) {
+					throw InvalidInputException("Python Conversion Failure: Value out of range for type %s", conversion_target);
+				}
+				PyErr_Clear();
+			}
+			double number = PyLong_AsDouble(ele.ptr());
+			if (number == -1.0 && PyErr_Occurred()) {
+				PyErr_Clear();
+				throw InvalidInputException("An error occurred attempting to convert a python integer");
+			}
+			OP::HandleLongAsDouble(result, param, number);
 		} else if (value == -1 && PyErr_Occurred()) {
 			throw InvalidInputException("An error occurred attempting to convert a python integer");
 		} else {
