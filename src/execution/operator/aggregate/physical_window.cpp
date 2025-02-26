@@ -575,6 +575,11 @@ public:
 
 	explicit WindowLocalSourceState(WindowGlobalSourceState &gsource);
 
+	void ReleaseLocalStates() {
+		auto &local_states = window_hash_group->thread_states.at(task->thread_idx);
+		local_states.clear();
+	}
+
 	//! Does the task have more work to do?
 	bool TaskFinished() const {
 		return !task || task->begin_idx == task->end_idx;
@@ -792,6 +797,12 @@ void WindowGlobalSourceState::FinishTask(TaskPtr task) {
 }
 
 bool WindowLocalSourceState::TryAssignTask() {
+	D_ASSERT(TaskFinished());
+	if (task && task->stage == WindowGroupStage::GETDATA) {
+		// If this state completed the last block in the previous iteration,
+		// release out local state memory.
+		ReleaseLocalStates();
+	}
 	// Because downstream operators may be using our internal buffers,
 	// we can't "finish" a task until we are about to get the next one.
 
@@ -888,10 +899,6 @@ void WindowLocalSourceState::GetData(DataChunk &result) {
 		++task->begin_idx;
 	}
 
-	// If that was the last block, release out local state memory.
-	if (TaskFinished()) {
-		local_states.clear();
-	}
 	result.Verify();
 }
 

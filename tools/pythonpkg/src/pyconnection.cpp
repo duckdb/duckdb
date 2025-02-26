@@ -1554,7 +1554,8 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::Table(const string &tname) {
 		qualified_name.schema = DEFAULT_SCHEMA;
 	}
 	try {
-		return make_uniq<DuckDBPyRelation>(connection.Table(qualified_name.schema, qualified_name.name));
+		return make_uniq<DuckDBPyRelation>(
+		    connection.Table(qualified_name.catalog, qualified_name.schema, qualified_name.name));
 	} catch (const CatalogException &) {
 		// CatalogException will be of the type '... is not a table'
 		// Not a table in the database, make a query relation that can perform replacement scans

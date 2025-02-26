@@ -66,6 +66,7 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/multi_file_list.hpp"
+#include "duckdb/common/multi_file_reader_function.hpp"
 #include "duckdb/common/multi_file_reader_options.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
@@ -2418,6 +2419,26 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 49, "MetricsType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetMultiFileFileStateValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MultiFileFileState::UNOPENED), "UNOPENED" },
+		{ static_cast<uint32_t>(MultiFileFileState::OPENING), "OPENING" },
+		{ static_cast<uint32_t>(MultiFileFileState::OPEN), "OPEN" },
+		{ static_cast<uint32_t>(MultiFileFileState::CLOSED), "CLOSED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value) {
+	return StringUtil::EnumToString(GetMultiFileFileStateValues(), 4, "MultiFileFileState", static_cast<uint32_t>(value));
+}
+
+template<>
+MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value) {
+	return static_cast<MultiFileFileState>(StringUtil::StringToEnum(GetMultiFileFileStateValues(), 4, "MultiFileFileState", value));
+}
+
 const StringUtil::EnumStringLiteral *GetMultiFileReaderColumnMappingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MultiFileReaderColumnMappingMode::BY_NAME), "BY_NAME" },
@@ -2866,6 +2887,7 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(PhysicalOperatorType::COLUMN_DATA_SCAN), "COLUMN_DATA_SCAN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::CHUNK_SCAN), "CHUNK_SCAN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_CTE_SCAN), "RECURSIVE_CTE_SCAN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN), "RECURSIVE_RECURRING_CTE_SCAN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::CTE_SCAN), "CTE_SCAN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::DELIM_SCAN), "DELIM_SCAN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::EXPRESSION_SCAN), "EXPRESSION_SCAN" },
@@ -2882,6 +2904,7 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(PhysicalOperatorType::ASOF_JOIN), "ASOF_JOIN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::UNION), "UNION" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_CTE), "RECURSIVE_CTE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_KEY_CTE), "RECURSIVE_KEY_CTE" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::CTE), "CTE" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::INSERT), "INSERT" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::BATCH_INSERT), "BATCH_INSERT" },
@@ -2925,12 +2948,12 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) {
-	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 79, "PhysicalOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 81, "PhysicalOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value) {
-	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 79, "PhysicalOperatorType", value));
+	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 81, "PhysicalOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPhysicalTypeValues() {

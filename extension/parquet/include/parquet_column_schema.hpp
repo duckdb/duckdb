@@ -23,7 +23,8 @@ enum class ParquetExtraTypeInfo {
 	UNIT_MICROS,
 	DECIMAL_BYTE_ARRAY,
 	DECIMAL_INT32,
-	DECIMAL_INT64
+	DECIMAL_INT64,
+	FLOAT16
 };
 
 struct ParquetColumnSchema {

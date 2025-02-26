@@ -102,6 +102,9 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
                                   ClientContext &context) {
 	auto loption = StringUtil::Lower(key);
 	if (loption == "filename") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
 		if (val.type() == LogicalType::VARCHAR) {
 			// If not, we interpret it as the name of the column containing the filename
 			options.filename = true;
@@ -115,13 +118,25 @@ bool MultiFileReader::ParseOption(const string &key, const Value &val, MultiFile
 			}
 		}
 	} else if (loption == "hive_partitioning") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
 		options.hive_partitioning = BooleanValue::Get(val);
 		options.auto_detect_hive_partitioning = false;
 	} else if (loption == "union_by_name") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
 		options.union_by_name = BooleanValue::Get(val);
 	} else if (loption == "hive_types_autocast" || loption == "hive_type_autocast") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
 		options.hive_types_autocast = BooleanValue::Get(val);
 	} else if (loption == "hive_types" || loption == "hive_type") {
+		if (val.IsNull()) {
+			throw InvalidInputException("Cannot use NULL as argument for \"%s\"", key);
+		}
 		if (val.type().id() != LogicalTypeId::STRUCT) {
 			throw InvalidInputException(
 			    "'hive_types' only accepts a STRUCT('name':VARCHAR, ...), but '%s' was provided",
@@ -448,6 +463,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 				reader_data.column_mapping.push_back(i);
 				// FIXME: this needs a more extensible solution
 				reader_data.column_ids.push_back(field_id_map.size());
+				reader_data.column_indexes.emplace_back(field_id_map.size());
 			} else {
 				throw InternalException("Unexpected generated column");
 			}
@@ -602,7 +618,7 @@ TablePartitionInfo MultiFileReader::GetPartitionInfo(ClientContext &context, con
 TableFunctionSet MultiFileReader::CreateFunctionSet(TableFunction table_function) {
 	TableFunctionSet function_set(table_function.name);
 	function_set.AddFunction(table_function);
-	D_ASSERT(table_function.arguments.size() >= 1 && table_function.arguments[0] == LogicalType::VARCHAR);
+	D_ASSERT(!table_function.arguments.empty() && table_function.arguments[0] == LogicalType::VARCHAR);
 	table_function.arguments[0] = LogicalType::LIST(LogicalType::VARCHAR);
 	function_set.AddFunction(std::move(table_function));
 	return function_set;
@@ -707,7 +723,9 @@ void MultiFileReaderOptions::AutoDetectHiveTypesInternal(MultiFileList &files, C
 	}
 }
 void MultiFileReaderOptions::AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context) {
-	D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
+	if (files.GetExpandResult() == FileExpandResult::NO_FILES) {
+		return;
+	}
 	const bool hp_explicitly_disabled = !auto_detect_hive_partitioning && !hive_partitioning;
 	const bool ht_enabled = !hive_types_schema.empty();
 	if (hp_explicitly_disabled && ht_enabled) {
@@ -742,7 +760,7 @@ LogicalType MultiFileReaderOptions::GetHiveLogicalType(const string &hive_partit
 	return LogicalType::VARCHAR;
 }
 
-bool MultiFileReaderOptions::AnySet() {
+bool MultiFileReaderOptions::AnySet() const {
 	return filename || hive_partitioning || union_by_name;
 }
 

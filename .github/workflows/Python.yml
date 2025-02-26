@@ -328,19 +328,12 @@ jobs:
         shell: bash
         run: pip install 'cibuildwheel>=2.16.2' build
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}-${{ matrix.python_build }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
       - name: Build
         shell: bash
         run: |
           cd tools/pythonpkg
           pyproject-build . --sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
             export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'

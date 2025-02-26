@@ -72,7 +72,7 @@ bool RunVariableBuffer(const string &path, idx_t buffer_size, bool set_temp_dir,
 	return true;
 }
 
-bool RunFull(std::string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "",
+bool RunFull(const std::string &path, std::set<std::string> *skip = nullptr, const string &add_parameters = "",
              bool set_temp_dir = false) {
 	DuckDB db(nullptr);
 	Connection conn(db);

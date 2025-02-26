@@ -73,9 +73,9 @@ idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &sta
 	return scan_count;
 }
 
-idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
-	auto scan_count = ColumnData::ScanCount(state, result, count);
-	validity.ScanCount(state.child_states[0], result, count);
+idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
+	auto scan_count = ColumnData::ScanCount(state, result, count, result_offset);
+	validity.ScanCount(state.child_states[0], result, count, result_offset);
 	return scan_count;
 }
 
