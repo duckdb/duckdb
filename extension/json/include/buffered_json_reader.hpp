@@ -189,6 +189,7 @@ public:
 	void ParseNextChunk(JSONReaderScanState &scan_state);
 	void ThrowObjectSizeError(const idx_t object_size);
 	bool ReadNextBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer, optional_idx &buffer_index, bool &file_done);
+	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer, optional_idx &buffer_index, bool &file_done);
 
 	//! Scan progress
 	double GetProgress() const;

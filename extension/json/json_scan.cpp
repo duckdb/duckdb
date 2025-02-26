@@ -240,14 +240,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		if (current_reader) {
 			// Try to read (if we were not the last read in the previous iteration)
 			bool file_done = false;
-			bool read_success = ReadNextBufferInternal(gstate, buffer, buffer_index, file_done);
-			if (!scan_state.is_last && read_success) {
-				// We read something
-				if (buffer_index.GetIndex() == 0 && current_reader->GetFormat() == JSONFormat::ARRAY) {
-					SkipOverArrayStart();
-				}
-			}
-
+			bool read_success = current_reader->ReadNextBuffer(gstate, scan_state, buffer, buffer_index, file_done);
 			if (file_done) {
 				lock_guard<mutex> guard(gstate.lock);
 				TryIncrementFileIndex(gstate);
@@ -337,18 +330,11 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 
 void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index, bool &file_done) {
 	// We have to detect the JSON format - hold the gstate lock while we do this
-	if (!ReadNextBufferInternal(gstate, buffer, buffer_index, file_done)) {
+	if (!current_reader->ReadNextBufferInternal(gstate, scan_state, buffer, buffer_index, file_done)) {
 		return;
 	}
 
 	current_reader->AutoDetect(scan_state, buffer_index);
-}
-
-bool JSONScanLocalState::ReadNextBufferInternal(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index, bool &file_done) {
-	if (!current_reader->ReadNextBuffer(gstate, scan_state, buffer, buffer_index, file_done)) {
-		return false;
-	}
-	return true;
 }
 
 AllocatedData JSONScanLocalState::AllocateBuffer(JSONScanGlobalState &gstate) {

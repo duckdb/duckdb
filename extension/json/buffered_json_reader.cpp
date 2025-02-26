@@ -789,6 +789,19 @@ void BufferedJSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 }
 
 bool BufferedJSONReader::ReadNextBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer, optional_idx &buffer_index, bool &file_done) {
+	if (!ReadNextBufferInternal(gstate, scan_state, buffer, buffer_index, file_done)) {
+		return false;
+	}
+	if (!scan_state.is_last) {
+		// We read something
+		if (buffer_index.GetIndex() == 0 && GetFormat() == JSONFormat::ARRAY) {
+			SkipOverArrayStart(scan_state);
+		}
+	}
+	return true;
+}
+
+bool BufferedJSONReader::ReadNextBufferInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer, optional_idx &buffer_index, bool &file_done) {
 	// Try to re-use a buffer that was used before
 	if (scan_state.current_buffer_handle) {
 		SetBufferLineOrObjectCount(*scan_state.current_buffer_handle,
