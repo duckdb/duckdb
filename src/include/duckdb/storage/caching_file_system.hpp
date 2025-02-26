@@ -14,6 +14,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
+#include "duckdb/storage/buffer/temporary_file_information.hpp"
 
 namespace duckdb {
 
@@ -63,7 +64,7 @@ class CachingFileSystem {
 		explicit CachedFile(string path_p);
 
 		//! Verifies that none of the ranges fully overlap
-		void Verify();
+		void Verify() const;
 
 		string path;
 		map<idx_t, shared_ptr<CachedFileRange>> ranges;
@@ -80,8 +81,11 @@ public:
 
 public:
 	void SetEnabled(bool enable);
+	vector<CachedFileInformation> GetCachedFileInformation() const;
+
 	DUCKDB_API static CachingFileSystem &Get(DatabaseInstance &db);
 	DUCKDB_API static CachingFileSystem &Get(ClientContext &context);
+
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const string &path, FileOpenFlags flags);
 
 private:
@@ -100,7 +104,7 @@ private:
 	//! Mapping from file path to cached file with cached ranges
 	unordered_map<string, unique_ptr<CachedFile>> cached_files;
 	//! Lock for accessing the cached files
-	mutex lock;
+	mutable mutex lock;
 };
 
 struct CachingFileHandle {

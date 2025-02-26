@@ -1,0 +1,94 @@
+# name: test/sql/storage/external_file_cache/external_file_cache_parquet.test_slow
+# description: Test the external file cache for Parquet
+# group: [external_file_cache]
+
+require tpch
+
+require parquet
+
+# we first export lineitem sf0.1 to a Parquet file with a single row group
+statement ok
+create schema my_temporary_schema;
+
+statement ok
+call dbgen(sf=0.1, schema='my_temporary_schema');
+
+statement ok
+copy my_temporary_schema.lineitem to '__TEST_DIR__/lineitem.parquet' (row_group_size 1_000_000);
+
+statement ok
+drop schema my_temporary_schema cascade;
+
+# this is empty since we didn't query anything yet
+query III
+select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+----
+
+
+# for now, caching is only triggered when prefetching (used for remote files), so let's force it
+statement ok
+set prefetch_all_parquet_files=true;
+
+statement ok
+create view lineitem as from '__TEST_DIR__/lineitem.parquet';
+
+# creating the view has loaded the footer
+query III
+select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+----
+1986	18281732	true
+
+# select the first column
+statement ok
+select l_orderkey from lineitem;
+
+query III
+select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+----
+935292	4	true
+1986	18281732	true
+
+# select the third column (not contiguous with the first column so it should have two cache entries)
+statement ok
+select l_suppkey from lineitem;
+
+query III
+select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+----
+935292	4	true
+757153	2144704	true
+1986	18281732	true
+
+# select the first four columns (contiguous, and supersede the previous two cache entries, should merge into one entry)
+statement ok
+select l_orderkey, l_partkey, l_suppkey, l_linenumber from lineitem;
+
+query III
+select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+----
+3045982	4	true
+1986	18281732	true
+
+# set the memory so low that the entries should be unloaded
+statement ok
+set memory_limit = '15kb';
+
+# set it back to something reasonable so we can actually do the following queries
+statement ok
+set memory_limit = '500mb';
+
+# loaded should now be "false"
+query III
+select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+----
+3045982	4	false
+1986	18281732	false
+
+# disabling the file cache should empty it
+statement ok
+set enable_external_file_cache=false;
+
+query III
+select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+----
+

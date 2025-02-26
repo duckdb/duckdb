@@ -58,7 +58,7 @@ void CachingFileSystem::CachedFileRange::VerifyCheckSum() {
 CachingFileSystem::CachedFile::CachedFile(string path_p) : path(std::move(path_p)) {
 }
 
-void CachingFileSystem::CachedFile::Verify() {
+void CachingFileSystem::CachedFile::Verify() const {
 #ifdef DEBUG
 	for (const auto &range1 : ranges) {
 		for (const auto &range2 : ranges) {
@@ -77,11 +77,24 @@ CachingFileSystem::CachingFileSystem(DatabaseInstance &db, bool enable_p)
 }
 
 void CachingFileSystem::SetEnabled(bool enable_p) {
+	lock_guard<mutex> guard(lock);
 	enable = enable_p;
 	if (!enable) {
-		lock_guard<mutex> guard(lock);
 		cached_files.clear();
 	}
+}
+
+vector<CachedFileInformation> CachingFileSystem::GetCachedFileInformation() const {
+	lock_guard<mutex> guard(lock);
+	vector<CachedFileInformation> result;
+	for (const auto &file : cached_files) {
+		for (const auto &range_entry : file.second->ranges) {
+			const auto &range = *range_entry.second;
+			result.push_back(
+			    {file.first, range.nr_bytes, range.location, range.last_modified, !range.block_handle->IsUnloaded()});
+		}
+	}
+	return result;
 }
 
 CachingFileSystem &CachingFileSystem::Get(DatabaseInstance &db) {
