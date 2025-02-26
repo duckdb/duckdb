@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/planner/expression_binder/operator_binder.hpp
+// duckdb/planner/expression_binder/try_operator_binder.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,17 +12,15 @@
 
 namespace duckdb {
 
-class OperatorBinder : public ExpressionBinder {
+//! This binder is used for the TRY expression
+class TryOperatorBinder : public ExpressionBinder {
 	friend class SelectBinder;
 
 public:
-	OperatorBinder(Binder &binder, ClientContext &context, ExpressionType operator_type);
+	TryOperatorBinder(Binder &binder, ClientContext &context);
 
 protected:
 	BindResult BindAggregate(FunctionExpression &expr, AggregateFunctionCatalogEntry &function, idx_t depth) override;
-
-private:
-	ExpressionType operator_type;
 };
 
 } // namespace duckdb
