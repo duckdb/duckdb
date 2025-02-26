@@ -106,10 +106,11 @@ public:
 		return scan_state;
 	}
 
-public:
-	//! Batch index for order-preserving parallelism
-	idx_t batch_index;
+	const JSONReaderScanState &GetScanState() const {
+		return scan_state;
+	}
 
+public:
 	//! Options when transforming the JSON to columnar data
 	JSONTransformOptions transform_options;
 
@@ -121,10 +122,6 @@ private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
 	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
 	                            bool &file_done);
-	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
-	                        bool &file_done);
-	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
-	                          bool &file_done);
 	AllocatedData AllocateBuffer(JSONScanGlobalState &gstate);
 
 	void SkipOverArrayStart();
@@ -141,20 +138,11 @@ private:
 	bool IsParallel(JSONScanGlobalState &gstate) const;
 
 private:
-	//! Bind data
-	const JSONScanData &json_data;
-
 	//! Scan state
 	JSONReaderScanState scan_state;
 
 	//! Current reader and buffer handle
 	optional_ptr<BufferedJSONReader> current_reader;
-
-	//! The current main filesystem
-	FileSystem &fs;
-
-	//! For some filesystems (e.g. S3), using a filehandle per thread increases performance
-	unique_ptr<FileHandle> thread_local_filehandle;
 };
 
 struct JSONGlobalTableFunctionState : public GlobalTableFunctionState {

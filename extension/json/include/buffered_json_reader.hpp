@@ -20,6 +20,7 @@
 #include "json_enums.hpp"
 
 namespace duckdb {
+class JSONScanGlobalState;
 
 struct JSONBufferHandle {
 public:
@@ -111,10 +112,11 @@ struct JSONReaderScanState {
 	explicit JSONReaderScanState(ClientContext &context, Allocator &global_allocator,
 	                             idx_t reconstruct_buffer_capacity);
 
+	FileSystem &fs;
 	Allocator &global_allocator;
 	//! Thread-local allocator
 	JSONAllocator allocator;
-	idx_t reconstruct_buffer_capacity;
+	idx_t buffer_capacity;
 	//! Current scan data
 	idx_t scan_count = 0;
 	JSONString units[STANDARD_VECTOR_SIZE];
@@ -130,6 +132,10 @@ struct JSONReaderScanState {
 	bool is_last = false;
 	//! Buffer to reconstruct split values
 	AllocatedData reconstruct_buffer;
+	optional_idx batch_index;
+
+	//! For some filesystems (e.g. S3), using a filehandle per thread increases performance
+	unique_ptr<FileHandle> thread_local_filehandle;
 
 public:
 	data_ptr_t GetReconstructBuffer();
@@ -182,9 +188,14 @@ public:
 	bool ReconstructFirstObject(JSONReaderScanState &scan_state);
 	void ParseNextChunk(JSONReaderScanState &scan_state);
 	void ThrowObjectSizeError(const idx_t object_size);
+	bool ReadNextBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer, optional_idx &buffer_index, bool &file_done);
 
 	//! Scan progress
 	double GetProgress() const;
+
+private:
+	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer, optional_idx &buffer_index, bool &file_done);
+	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer, optional_idx &buffer_index, bool &file_done);
 
 private:
 	idx_t GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf);
