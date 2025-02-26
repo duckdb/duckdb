@@ -42,6 +42,11 @@
         "id": 102,
         "name": "materialized",
         "type": "CTEMaterialize"
+      },
+      {
+        "id": 103,
+        "name": "key_targets",
+        "type": "vector<ParsedExpression*>"
       }
     ]
   },
@@ -641,72 +646,86 @@
     "pointer_type": "none"
   },
   {
-    "class": "CSVReaderOptions",
+    "class": "SerializedCSVReaderOptions",
     "includes": [
-      "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+      "duckdb/function/table/read_csv.hpp"
     ],
     "members": [
       {"id": 100,
         "name": "ignore_errors",
         "type": "bool",
-        "default": "false"
+        "default": "false",
+        "property": "options.ignore_errors"
       },
       {"id": 101,
         "name": "buffer_sample_size",
-        "type": "idx_t"
+        "type": "idx_t",
+        "property": "options.buffer_sample_size"
       },
       {"id": 102,
         "name": "null_str",
-        "type": "vector<string>"
+        "type": "vector<string>",
+        "property": "options.null_str"
       },
       {"id": 103,
         "name": "compression",
-        "type": "FileCompressionType"
+        "type": "FileCompressionType",
+        "property": "options.compression"
       },
       {"id": 104,
         "name": "allow_quoted_nulls",
-        "type": "bool"
+        "type": "bool",
+        "property": "options.allow_quoted_nulls"
       },
       {"id": 105,
         "name": "maximum_line_size",
-        "type": "CSVOption<idx_t>"
+        "type": "CSVOption<idx_t>",
+        "property": "options.maximum_line_size"
       },
       {"id": 106,
         "name": "normalize_names",
-        "type": "bool"
+        "type": "bool",
+        "property": "options.normalize_names"
       },
       {"id": 107,
         "name": "force_not_null",
-        "type": "vector<bool>"
+        "type": "vector<bool>",
+        "property": "options.force_not_null"
       },
       {"id": 108,
         "name": "all_varchar",
-        "type": "bool"
+        "type": "bool",
+        "property": "options.all_varchar"
       },
       {"id": 109,
         "name": "sample_size_chunks",
-        "type": "idx_t"
+        "type": "idx_t",
+        "property": "options.sample_size_chunks"
       },
       {"id": 110,
         "name": "auto_detect",
-        "type": "bool"
+        "type": "bool",
+        "property": "options.auto_detect"
       },
       {"id": 111,
         "name": "file_path",
-        "type": "string"
+        "type": "string",
+        "property": "options.file_path"
       },
       {"id": 112,
         "name": "decimal_separator",
-        "type": "string"
+        "type": "string",
+        "property": "options.decimal_separator"
       },
       {"id": 113,
         "name": "null_padding",
-        "type": "bool"
+        "type": "bool",
+        "property": "options.null_padding"
       },
       {"id": 114,
         "name": "buffer_size",
         "type": "idx_t",
-        "deleted": true
+        "status": "deleted"
       },
       {"id": 115,
         "name": "file_options",
@@ -714,134 +733,149 @@
       },
       {"id": 116,
         "name": "force_quote",
-        "type": "vector<bool>"
+        "type": "vector<bool>",
+        "property": "options.force_quote"
       },
       {"id": 117,
         "name": "rejects_table_name",
         "type": "string",
-        "default": "\"reject_errors\""
+        "default": "\"reject_errors\"",
+        "property": "options.rejects_table_name"
       },
       {"id": 118,
         "name": "rejects_limit",
-        "type": "idx_t"
+        "type": "idx_t",
+        "property": "options.rejects_limit"
       },
       {"id": 119,
         "name": "rejects_recovery_columns",
         "type": "vector<string>",
-        "deleted": true
+        "status": "deleted"
       },
       {"id": 120,
         "name": "rejects_recovery_column_ids",
         "type": "vector<idx_t>",
-        "deleted": true
+        "status": "deleted"
       },
       {"id": 121,
         "name": "delimiter",
-        "property": "dialect_options.state_machine_options.delimiter",
         "type": "CSVOption<char>",
-        "serialize_property": "GetSingleByteDelimiter()"
+        "serialize_property": "options.GetSingleByteDelimiter()",
+        "deserialize_property": "options.dialect_options.state_machine_options.delimiter"
       },
       {"id": 122,
         "name": "quote",
-        "property": "dialect_options.state_machine_options.quote",
+        "property": "options.dialect_options.state_machine_options.quote",
         "type": "CSVOption<char>"
       },
       {"id": 123,
         "name": "escape",
-        "property": "dialect_options.state_machine_options.escape",
+        "property": "options.dialect_options.state_machine_options.escape",
         "type": "CSVOption<char>"
       },
       {"id": 124,
         "name": "header",
-        "property": "dialect_options.header",
+        "property": "options.dialect_options.header",
         "type": "CSVOption<bool>"
       },
       {"id": 125,
         "name": "num_cols",
-        "property": "dialect_options.num_cols",
+        "property": "options.dialect_options.num_cols",
         "type": "idx_t"
       },
       {"id": 126,
         "name": "new_line",
-        "property": "dialect_options.state_machine_options.new_line",
+        "property": "options.dialect_options.state_machine_options.new_line",
         "type": "CSVOption<NewLineIdentifier>"
       },
       {"id": 127,
         "name": "skip_rows",
-        "property": "dialect_options.skip_rows",
+        "property": "options.dialect_options.skip_rows",
         "type": "CSVOption<idx_t>"
       },
       {"id": 128,
         "name": "date_format",
-        "property": "dialect_options.date_format",
+        "property": "options.dialect_options.date_format",
         "type": "map<LogicalTypeId, CSVOption<StrpTimeFormat>>"
       },
       {"id": 129,
         "name": "sniffer_user_mismatch_error",
-        "type": "string"
+        "type": "string",
+        "property": "options.sniffer_user_mismatch_error"
       },
       {"id": 130,
         "name": "parallel",
-        "type": "bool"
+        "type": "bool",
+        "property": "options.parallel"
       },
       {"id": 131,
         "name": "was_type_manually_set",
-        "type": "vector<bool>"
+        "type": "vector<bool>",
+        "property": "options.was_type_manually_set"
       },
       {"id": 132,
         "name": "rejects_scan_name",
         "type": "CSVOption<string>",
-        "default": "{\"reject_scans\"}"
+        "default": "{\"reject_scans\"}",
+        "property": "options.rejects_scan_name"
       },
       {"id": 133,
         "name": "name_list",
-        "type": "vector<string>"
+        "type": "vector<string>",
+        "property": "options.name_list"
       },
       {"id": 134,
         "name": "sql_type_list",
-        "type": "vector<LogicalType>"
+        "type": "vector<LogicalType>",
+        "property": "options.sql_type_list"
       },
       {"id": 135,
         "name": "sql_types_per_column",
-        "type": "case_insensitive_map_t<idx_t>"
+        "type": "case_insensitive_map_t<idx_t>",
+        "property": "options.sql_types_per_column"
       },
       {"id": 136,
         "name": "columns_set",
         "type": "bool",
-        "default": "false"
+        "default": "false",
+        "property": "options.columns_set"
       },
       {"id": 137,
         "name": "comment",
-        "property": "dialect_options.state_machine_options.comment",
+        "property": "options.dialect_options.state_machine_options.comment",
         "type": "CSVOption<char>",
         "default": "CSVOption<char>('\\0')"
       },
       {"id": 138,
         "name": "rows_until_header",
-        "property": "dialect_options.rows_until_header",
+        "property": "options.dialect_options.rows_until_header",
         "type": "idx_t"
       },
       {"id": 139,
         "name": "encoding",
-        "type": "string"
+        "type": "string",
+        "property": "options.encoding"
       },
       {"id": 140,
         "name": "strict_mode",
-        "property": "dialect_options.state_machine_options.strict_mode",
+        "property": "options.dialect_options.state_machine_options.strict_mode",
         "type": "CSVOption<bool>"
       },
       {"id": 141,
         "name": "multi_byte_delimiter",
         "type": "CSVOption<string>",
-        "serialize_property": "GetMultiByteDelimiter()"
+        "serialize_property": "options.GetMultiByteDelimiter()",
+        "deserialize_property": "options.multi_byte_delimiter"
       },
       {"id": 142,
         "name": "multi_file_reader",
-        "type": "bool"
+        "type": "bool",
+        "property": "options.multi_file_reader"
       },
       {"id": 143,
         "name": "buffer_size_option",
-        "type": "CSVOption<idx_t>"
+        "type": "CSVOption<idx_t>",
+        "property": "options.buffer_size_option"
       }
     ],
     "constructor": ["delimiter", "multi_byte_delimiter"],
@@ -863,7 +897,7 @@
     "pointer_type": "none"
   },
   {
-    "class": "ReadCSVData",
+    "class": "SerializedReadCSVData",
     "includes": [
       "duckdb/function/table/read_csv.hpp"
     ],
@@ -901,7 +935,7 @@
       {
         "id": 106,
         "name": "options",
-        "type": "CSVReaderOptions"
+        "type": "SerializedCSVReaderOptions"
       },
       {
         "id": 107,
@@ -913,7 +947,8 @@
         "name": "column_info",
         "type": "vector<ColumnInfo>"
       }
-    ]
+    ],
+    "pointer_type": "none"
   },
   {
     "class": "ColumnInfo",

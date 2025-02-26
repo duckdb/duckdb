@@ -149,7 +149,7 @@ public:
 	vector<string> table_columns;
 
 public:
-	const vector<MultiFileReaderColumnDefinition> &GetColumns() {
+	const vector<MultiFileReaderColumnDefinition> &GetColumns() const {
 		return columns;
 	}
 	const string &GetFileName() {
@@ -196,7 +196,9 @@ public:
 	DUCKDB_API virtual ~BaseUnionData() = default;
 
 	string file_name;
-	unique_ptr<BaseFileReader> reader;
+	shared_ptr<BaseFileReader> reader;
+	vector<string> names;
+	vector<LogicalType> types;
 
 	const string &GetFileName() {
 		return file_name;

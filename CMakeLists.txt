@@ -235,6 +235,19 @@ if(${EXPORT_DYNAMIC_SYMBOLS})
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rdynamic")
 endif()
 
+set(VERSIONING_TAG_MATCH "v*.*.*")
+######
+# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
+# - CMakeLists.txt
+# - scripts/amalgamation.py
+# - scripts/package_build.py
+# - tools/pythonpkg/setup.py
+######
+option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
+if(${MAIN_BRANCH_VERSIONING})
+  set(VERSIONING_TAG_MATCH "v*.*.0")
+endif()
+
 if (UNSAFE_NUMERIC_CAST)
   message(status "UNSAFE_NUMERIC_CAST")
   add_definitions(-DUNSAFE_NUMERIC_CAST=1)
@@ -311,7 +324,7 @@ else()
     endif()
     endif()
     execute_process(
-          COMMAND ${GIT_EXECUTABLE} describe --tags --long
+          COMMAND ${GIT_EXECUTABLE} describe --tags --long --match "${VERSIONING_TAG_MATCH}"
           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
           RESULT_VARIABLE GIT_RESULT
           OUTPUT_VARIABLE GIT_DESCRIBE
@@ -352,7 +365,11 @@ elseif(DUCKDB_DEV_ITERATION EQUAL 0)
   set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}")
 else()
   # not on a tag, increment the patch version by one and add a -devX suffix
-  math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
+  if(${MAIN_BRANCH_VERSIONING})
+    math(EXPR DUCKDB_MINOR_VERSION "${DUCKDB_MINOR_VERSION}+1")
+  else()
+    math(EXPR DUCKDB_PATCH_VERSION "${DUCKDB_PATCH_VERSION}+1")
+  endif()
   set(DUCKDB_VERSION "v${DUCKDB_MAJOR_VERSION}.${DUCKDB_MINOR_VERSION}.${DUCKDB_PATCH_VERSION}-dev${DUCKDB_DEV_ITERATION}")
 endif()
 
@@ -1126,7 +1143,7 @@ function(duckdb_extension_generate_version OUTPUT_VAR WORKING_DIR)
       message(FATAL_ERROR "git is available (at ${GIT_EXECUTABLE}) but has failed to execute 'log -1 --format=%h'.")
     endif()
     execute_process(
-            COMMAND ${GIT_EXECUTABLE} describe --tags --always
+            COMMAND ${GIT_EXECUTABLE} describe --tags --always --match '${VERSIONING_TAG_MATCH}'
             WORKING_DIRECTORY ${WORKING_DIR}
             RESULT_VARIABLE GIT_RESULT
             OUTPUT_VARIABLE GIT_DESCRIBE

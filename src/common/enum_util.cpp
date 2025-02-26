@@ -118,6 +118,7 @@
 #include "duckdb/parallel/task.hpp"
 #include "duckdb/parser/constraint.hpp"
 #include "duckdb/parser/expression/parameter_expression.hpp"
+#include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_data/alter_info.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
@@ -1408,6 +1409,7 @@ const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {
 		{ static_cast<uint32_t>(ExpressionType::OPERATOR_NOT), "OPERATOR_NOT" },
 		{ static_cast<uint32_t>(ExpressionType::OPERATOR_IS_NULL), "OPERATOR_IS_NULL" },
 		{ static_cast<uint32_t>(ExpressionType::OPERATOR_IS_NOT_NULL), "OPERATOR_IS_NOT_NULL" },
+		{ static_cast<uint32_t>(ExpressionType::OPERATOR_UNPACK), "OPERATOR_UNPACK" },
 		{ static_cast<uint32_t>(ExpressionType::COMPARE_EQUAL), "COMPARE_EQUAL" },
 		{ static_cast<uint32_t>(ExpressionType::COMPARE_NOTEQUAL), "COMPARE_NOTEQUAL" },
 		{ static_cast<uint32_t>(ExpressionType::COMPARE_LESSTHAN), "COMPARE_LESSTHAN" },
@@ -1479,12 +1481,12 @@ const StringUtil::EnumStringLiteral *GetExpressionTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<ExpressionType>(ExpressionType value) {
-	return StringUtil::EnumToString(GetExpressionTypeValues(), 70, "ExpressionType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetExpressionTypeValues(), 71, "ExpressionType", static_cast<uint32_t>(value));
 }
 
 template<>
 ExpressionType EnumUtil::FromString<ExpressionType>(const char *value) {
-	return static_cast<ExpressionType>(StringUtil::StringToEnum(GetExpressionTypeValues(), 70, "ExpressionType", value));
+	return static_cast<ExpressionType>(StringUtil::StringToEnum(GetExpressionTypeValues(), 71, "ExpressionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetExtensionABITypeValues() {
@@ -2887,6 +2889,7 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(PhysicalOperatorType::COLUMN_DATA_SCAN), "COLUMN_DATA_SCAN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::CHUNK_SCAN), "CHUNK_SCAN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_CTE_SCAN), "RECURSIVE_CTE_SCAN" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN), "RECURSIVE_RECURRING_CTE_SCAN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::CTE_SCAN), "CTE_SCAN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::DELIM_SCAN), "DELIM_SCAN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::EXPRESSION_SCAN), "EXPRESSION_SCAN" },
@@ -2903,6 +2906,7 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(PhysicalOperatorType::ASOF_JOIN), "ASOF_JOIN" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::UNION), "UNION" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_CTE), "RECURSIVE_CTE" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::RECURSIVE_KEY_CTE), "RECURSIVE_KEY_CTE" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::CTE), "CTE" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::INSERT), "INSERT" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::BATCH_INSERT), "BATCH_INSERT" },
@@ -2946,12 +2950,12 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) {
-	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 79, "PhysicalOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 81, "PhysicalOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value) {
-	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 79, "PhysicalOperatorType", value));
+	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 81, "PhysicalOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPhysicalTypeValues() {
@@ -3597,6 +3601,26 @@ const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value) {
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value) {
 	return static_cast<SourceResultType>(StringUtil::StringToEnum(GetSourceResultTypeValues(), 3, "SourceResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetStarExpressionTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(StarExpressionType::STAR), "STAR" },
+		{ static_cast<uint32_t>(StarExpressionType::COLUMNS), "COLUMNS" },
+		{ static_cast<uint32_t>(StarExpressionType::UNPACKED), "UNPACKED" },
+		{ static_cast<uint32_t>(StarExpressionType::NONE), "NONE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value) {
+	return StringUtil::EnumToString(GetStarExpressionTypeValues(), 4, "StarExpressionType", static_cast<uint32_t>(value));
+}
+
+template<>
+StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value) {
+	return static_cast<StarExpressionType>(StringUtil::StringToEnum(GetStarExpressionTypeValues(), 4, "StarExpressionType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetStatementReturnTypeValues() {
