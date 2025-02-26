@@ -10,7 +10,7 @@ on:
         type: string
       run_all:
         type: string
-      twine_upload:
+      override_twine_upload:
         type: string
   workflow_dispatch:
     inputs:
@@ -22,7 +22,7 @@ on:
         type: string
       run_all:
         type: string
-      twine_upload:
+      override_twine_upload:
         type: string
   push:
     branches-ignore:
@@ -469,8 +469,10 @@ jobs:
       - win-python3
       - linux-python3
     # Note that want to run this by default ONLY if no override_git_describe is provided
-    # This means we are not staging a release
-    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.twine_upload == 'true' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
+    # This means we are not staging a release, or we explicitly set `twine_upload`
+    # Why? If present, it means we are staging releases, and we want to do the upload manually
+    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.override_twine_upload == 'true' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
     uses: ./.github/workflows/TwineUpload.yml
     secrets: inherit
-    # Why? If present, it means we are staging releases, and we want to do the upload manually
+    with:
+      twine_upload: 'true'
