@@ -817,7 +817,7 @@ struct PythonVectorConversion {
 			auto &child_array = ArrayVector::GetEntry(result);
 			idx_t start_offset = result_offset * array_size;
 			for(idx_t i = 0; i < list_size; i++) {
-				auto child_ele = ele.attr("__getitem__")(i);
+				auto child_ele = PyList_GetItem(ele.ptr(), i);
 				TransformPythonObject(child_ele, child_array, start_offset + i);
 			}
 			return;
@@ -835,7 +835,7 @@ struct PythonVectorConversion {
 			// convert the child elements
 			auto &child_vector = ListVector::GetEntry(result);
 			for(idx_t i = 0; i < list_size; i++) {
-				auto child_ele = ele.attr("__getitem__")(i);
+				auto child_ele = PyList_GetItem(ele.ptr(), i);
 				TransformPythonObject(child_ele, child_vector, start_offset + i);
 			}
 			ListVector::SetListSize(result, start_offset + list_size);
