@@ -303,10 +303,6 @@ static py::object ConvertNumpyDtype(py::handle numpy_array) {
 	if (!py::isinstance(numpy_array, import_cache.numpy.ma.masked_array())) {
 		return dtype;
 	}
-	if (!import_cache.pandas(false)) {
-		//! No pandas installed, can't upgrade to Pandas nullable dtypes
-		return dtype;
-	}
 
 	auto numpy_type = ConvertNumpyType(dtype);
 	switch (numpy_type.type) {
