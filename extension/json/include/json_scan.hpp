@@ -120,15 +120,6 @@ public:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
-	                            bool &file_done);
-	AllocatedData AllocateBuffer(JSONScanGlobalState &gstate);
-
-	void SkipOverArrayStart();
-
-	void ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer, optional_idx &buffer_index,
-	                       bool &file_done);
-	bool ReconstructFirstObject(JSONScanGlobalState &gstate);
 	void ParseNextChunk(JSONScanGlobalState &gstate);
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);

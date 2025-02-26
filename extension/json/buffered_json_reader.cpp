@@ -788,6 +788,22 @@ void BufferedJSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 	}
 }
 
+void BufferedJSONReader::InitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
+                                        AllocatedData &buffer, optional_idx &buffer_index, bool &file_done) {
+	// Open the file if it is not yet open
+	if (!IsOpen()) {
+		OpenJSONFile();
+	}
+	// Auto-detect if we haven't yet done this during the bind
+	if (options.record_type == JSONRecordType::AUTO_DETECT || GetFormat() == JSONFormat::AUTO_DETECT) {
+		// We have to detect the JSON format - hold the gstate lock while we do this
+		if (!ReadNextBufferInternal(gstate, scan_state, buffer, buffer_index, file_done)) {
+			return;
+		}
+		AutoDetect(scan_state, buffer_index);
+	}
+}
+
 bool BufferedJSONReader::ReadNextBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
                                         AllocatedData &buffer, optional_idx &buffer_index, bool &file_done) {
 	if (!ReadNextBufferInternal(gstate, scan_state, buffer, buffer_index, file_done)) {

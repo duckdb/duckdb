@@ -268,21 +268,12 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			guard.unlock();
 		}
 
-		// Open the file if it is not yet open
-		if (!current_reader->IsOpen()) {
-			current_reader->OpenJSONFile();
-		}
-
-		// Auto-detect if we haven't yet done this during the bind
-		if (gstate.json_data.options.record_type == JSONRecordType::AUTO_DETECT ||
-		    current_reader->GetFormat() == JSONFormat::AUTO_DETECT) {
-			bool file_done = false;
-			ReadAndAutoDetect(gstate, buffer, buffer_index, file_done);
-			if (file_done) {
-				TryIncrementFileIndex(gstate);
-				lock_guard<mutex> reader_guard(current_reader->lock);
-				current_reader->GetFileHandle().Close();
-			}
+		bool file_done = false;
+		current_reader->InitializeScan(gstate, scan_state, buffer, buffer_index, file_done);
+		if (file_done) {
+			TryIncrementFileIndex(gstate);
+			lock_guard<mutex> reader_guard(current_reader->lock);
+			current_reader->GetFileHandle().Close();
 		}
 
 		if (gstate.enable_parallel_scans) {
@@ -301,30 +292,6 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 	}
 	current_reader->FinalizeBufferInternal(scan_state, buffer, buffer_index.GetIndex());
 	return true;
-}
-
-void JSONScanLocalState::ReadAndAutoDetect(JSONScanGlobalState &gstate, AllocatedData &buffer,
-                                           optional_idx &buffer_index, bool &file_done) {
-	// We have to detect the JSON format - hold the gstate lock while we do this
-	if (!current_reader->ReadNextBufferInternal(gstate, scan_state, buffer, buffer_index, file_done)) {
-		return;
-	}
-
-	current_reader->AutoDetect(scan_state, buffer_index);
-}
-
-AllocatedData JSONScanLocalState::AllocateBuffer(JSONScanGlobalState &gstate) {
-	auto buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
-	scan_state.buffer_ptr = char_ptr_cast(buffer.get());
-	return buffer;
-}
-
-void JSONScanLocalState::SkipOverArrayStart() {
-	current_reader->SkipOverArrayStart(scan_state);
-}
-
-bool JSONScanLocalState::ReconstructFirstObject(JSONScanGlobalState &gstate) {
-	return current_reader->ReconstructFirstObject(scan_state);
 }
 
 void JSONScanLocalState::ParseNextChunk(JSONScanGlobalState &gstate) {
