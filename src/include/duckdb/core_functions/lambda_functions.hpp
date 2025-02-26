@@ -19,8 +19,8 @@ namespace duckdb {
 
 struct ListLambdaBindData : public FunctionData {
 public:
-	ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr, const bool has_index = false)
-	    : return_type(return_type), lambda_expr(std::move(lambda_expr)), has_index(has_index) {};
+	ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr, const bool has_index = false, const bool has_initial = false)
+	    : return_type(return_type), lambda_expr(std::move(lambda_expr)), has_index(has_index), has_initial(has_initial) {};
 
 	//! Return type of the scalar function
 	LogicalType return_type;
@@ -28,6 +28,7 @@ public:
 	unique_ptr<Expression> lambda_expr;
 	//! True, if the last parameter in a lambda parameter list represents the index of the current list element
 	bool has_index;
+	bool has_initial;
 
 public:
 	bool Equals(const FunctionData &other_p) const override;
@@ -100,6 +101,7 @@ public:
 			lambda_expr = bind_info.lambda_expr;
 			is_volatile = lambda_expr->IsVolatile();
 			has_index = bind_info.has_index;
+			has_initial = bind_info.has_initial;
 
 			// get the list column entries
 			list_column.ToUnifiedFormat(row_count, list_column_format);
@@ -121,6 +123,7 @@ public:
 
 		const idx_t row_count;
 		bool has_index;
+		bool has_initial;
 		bool is_volatile;
 		const bool is_all_constant;
 	};

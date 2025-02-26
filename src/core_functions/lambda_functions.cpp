@@ -227,13 +227,13 @@ void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &
 
 unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
 	auto lambda_expr_copy = lambda_expr ? lambda_expr->Copy() : nullptr;
-	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr_copy), has_index);
+	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr_copy), has_index, has_initial);
 }
 
 bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<ListLambdaBindData>();
 	return Expression::Equals(lambda_expr, other.lambda_expr) && return_type == other.return_type &&
-	       has_index == other.has_index;
+	       has_index == other.has_index && has_initial == other.has_initial;
 }
 
 void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
