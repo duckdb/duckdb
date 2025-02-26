@@ -1,0 +1,215 @@
+import duckdb
+import pytest
+from duckdb import (
+    ColumnExpression,
+    ConstantExpression,
+    SQLExpression,
+)
+
+
+class TestSQLExpression(object):
+    def test_sql_expression_basic(self):
+        con = duckdb.connect()
+
+        # Test simple constant expressions
+        expr = SQLExpression("42")
+        rel = con.sql("SELECT 1").select(expr)
+        assert rel.fetchall() == [(42,)]
+
+        expr = SQLExpression("'hello'")
+        rel = con.sql("SELECT 1").select(expr)
+        assert rel.fetchall() == [('hello',)]
+
+        expr = SQLExpression("NULL")
+        rel = con.sql("SELECT 1").select(expr)
+        assert rel.fetchall() == [(None,)]
+
+        # Test arithmetic expressions
+        expr = SQLExpression("5 + 3")
+        rel = con.sql("SELECT 1").select(expr)
+        assert rel.fetchall() == [(8,)]
+
+        expr = SQLExpression("10 - 4")
+        rel = con.sql("SELECT 1").select(expr)
+        assert rel.fetchall() == [(6,)]
+
+        expr = SQLExpression("3 * 7")
+        rel = con.sql("SELECT 1").select(expr)
+        assert rel.fetchall() == [(21,)]
+
+        expr = SQLExpression("20 / 4")
+        rel = con.sql("SELECT 1").select(expr)
+        assert rel.fetchall() == [(5.0,)]
+
+        # Test function calls
+        expr = SQLExpression("UPPER('test')")
+        rel = con.sql("SELECT 1").select(expr)
+        assert rel.fetchall() == [('TEST',)]
+
+        expr = SQLExpression("CONCAT('hello', ' ', 'world')")
+        rel = con.sql("SELECT 1").select(expr)
+        assert rel.fetchall() == [('hello world',)]
+
+    def test_sql_expression_with_columns(self):
+        con = duckdb.connect()
+
+        # Create a test table
+        con.execute(
+            """
+            CREATE TABLE test_table(a INTEGER, b VARCHAR, c DOUBLE);
+            INSERT INTO test_table VALUES
+                (1, 'one', 1.1),
+                (2, 'two', 2.2),
+                (3, 'three', 3.3);
+        """
+        )
+
+        # Test column references
+        rel = con.table("test_table")
+        expr = SQLExpression("a")
+        rel2 = rel.select(expr)
+        assert rel2.fetchall() == [(1,), (2,), (3,)]
+
+        # Test expressions with column references
+        expr = SQLExpression("a * 10")
+        rel2 = rel.select(expr)
+        assert rel2.fetchall() == [(10,), (20,), (30,)]
+
+        expr = SQLExpression("UPPER(b)")
+        rel2 = rel.select(expr)
+        assert rel2.fetchall() == [('ONE',), ('TWO',), ('THREE',)]
+
+        # Test complex expressions
+        expr = SQLExpression("CASE WHEN a > 1 THEN b ELSE 'default' END")
+        rel2 = rel.select(expr)
+        assert rel2.fetchall() == [('default',), ('two',), ('three',)]
+
+        # Test combining with other expression types
+        expr1 = SQLExpression("a + 5")
+        expr2 = ColumnExpression("c")
+        rel2 = rel.select(expr1, expr2)
+        assert rel2.fetchall() == [(6, 1.1), (7, 2.2), (8, 3.3)]
+
+    def test_sql_expression_errors(self):
+        con = duckdb.connect()
+
+        # Test empty string
+        with pytest.raises(duckdb.ParserException, match="SELECT clause without selection list"):
+            SQLExpression("")
+
+        # Test invalid SQL
+        with pytest.raises(duckdb.ParserException, match='Parser Error: syntax error at or near "SELECT"'):
+            SQLExpression("SELECT *")
+
+        # Test multiple expressions
+        with pytest.raises(duckdb.InvalidInputException, match="More than one expression"):
+            SQLExpression("1, 2")
+
+    def test_sql_expression_alias(self):
+        con = duckdb.connect()
+
+        # Test aliasing
+        expr = SQLExpression("42").alias("my_column")
+        rel = con.sql("SELECT 1").select(expr)
+        assert rel.fetchall() == [(42,)]
+        assert rel.columns[0] == "my_column"
+
+        # Test with table
+        con.execute(
+            """
+            CREATE TABLE test_alias(a INTEGER, b VARCHAR);
+            INSERT INTO test_alias VALUES(1, 'one'), (2, 'two');
+        """
+        )
+
+        rel = con.table("test_alias")
+        expr = SQLExpression("a + 10").alias("a_plus_10")
+        rel2 = rel.select(expr, "b")
+        assert rel2.fetchall() == [(11, 'one'), (12, 'two')]
+        assert rel2.columns == ['a_plus_10', 'b']
+
+    def test_sql_expression_in_filter(self):
+        con = duckdb.connect()
+
+        con.execute(
+            """
+            CREATE TABLE filter_test(a INTEGER, b VARCHAR);
+            INSERT INTO filter_test VALUES
+                (1, 'one'),
+                (2, 'two'),
+                (3, 'three'),
+                (4, 'four');
+        """
+        )
+
+        rel = con.table("filter_test")
+
+        # Test filter with SQL expression
+        expr = SQLExpression("a > 2")
+        rel2 = rel.filter(expr)
+        assert rel2.fetchall() == [(3, 'three'), (4, 'four')]
+
+        # Test complex filter
+        expr = SQLExpression("a % 2 = 0 AND b LIKE '%o%'")
+        rel2 = rel.filter(expr)
+        assert rel2.fetchall() == [(2, 'two'), (4, 'four')]
+
+        # Test combining with other expression types
+        expr1 = SQLExpression("a > 1")
+        expr2 = ColumnExpression("b") == ConstantExpression("four")
+        rel2 = rel.filter(expr1 & expr2)
+        assert rel2.fetchall() == [(4, 'four')]
+
+    def test_sql_expression_in_aggregates(self):
+        con = duckdb.connect()
+
+        con.execute(
+            """
+            CREATE TABLE agg_test(a INTEGER, b VARCHAR, c INTEGER);
+            INSERT INTO agg_test VALUES
+                (1, 'group1', 10),
+                (2, 'group1', 20),
+                (3, 'group2', 30),
+                (4, 'group2', 40);
+        """
+        )
+
+        rel = con.table("agg_test")
+
+        # Test simple aggregation
+        expr = SQLExpression("SUM(a)")
+        rel2 = rel.aggregate([expr])
+        assert rel2.fetchall() == [(10,)]
+
+        # Test aggregation with group by
+        expr = SQLExpression("SUM(c)")
+        rel2 = rel.aggregate([expr, "b"]).sort('b')
+        result = rel2.fetchall()
+        assert result == [(30, 'group1'), (70, 'group2')]
+
+        # Test multiple aggregations
+        expr1 = SQLExpression("SUM(a)").alias("sum_a")
+        expr2 = SQLExpression("AVG(c)").alias("avg_c")
+        rel2 = rel.aggregate([expr1, expr2], "b").sort('sum_a', 'avg_c')
+        result = rel2.fetchall()
+        result.sort()
+        assert result == [(3, 15.0), (7, 35.0)]
+
+    def test_sql_expression_with_conn(self):
+        con = duckdb.connect()
+
+        con.execute(
+            """
+            create table tbl as select 21 a, 42 b
+        """
+        )
+        # ParserOptions are attached to the ClientContext,
+        # so the SQLExpresion has an optional `connection` kwarg to use a specific connection
+        expr = SQLExpression('(b / 2) + a', connection=con)
+        res = con.table('tbl').select(expr).fetchall()
+        assert res == [(42,)]
+
+        con.close()
+        # This now fails, because it can't look up the connection
+        with pytest.raises(duckdb.ConnectionException, match='Connection already closed!'):
+            expr = SQLExpression('(b / 2) + a', connection=con)

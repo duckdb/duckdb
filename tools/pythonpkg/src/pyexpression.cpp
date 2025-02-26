@@ -9,6 +9,8 @@
 #include "duckdb/parser/expression/operator_expression.hpp"
 #include "duckdb/parser/expression/default_expression.hpp"
 #include "duckdb/parser/expression/collate_expression.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/parser/parser.hpp"
 
 namespace duckdb {
 
@@ -405,6 +407,24 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LambdaExpression(const py::ob
 	}
 	auto lambda_expression = make_uniq<duckdb::LambdaExpression>(std::move(lhs), rhs.GetExpression().Copy());
 	return make_shared_ptr<DuckDBPyExpression>(std::move(lambda_expression));
+}
+
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SQLExpression(const string &sql,
+                                                                 shared_ptr<DuckDBPyConnection> conn) {
+	if (!conn) {
+		conn = DuckDBPyConnection::DefaultConnection();
+	}
+	auto &context = *conn->con.GetConnection().context;
+	auto expressions = Parser::ParseExpressionList(sql, context.GetParserOptions());
+
+	if (expressions.empty()) {
+		throw InvalidInputException("No expressions were parsed from the provided SQL string");
+	}
+	if (expressions.size() > 1) {
+		throw InvalidInputException("More than one expression was parsed from the provided SQL string");
+	}
+
+	return make_shared_ptr<DuckDBPyExpression>(std::move(expressions[0]));
 }
 
 // Private methods
