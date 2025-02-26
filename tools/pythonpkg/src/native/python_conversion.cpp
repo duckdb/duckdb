@@ -289,152 +289,6 @@ Value TransformDictionary(const PyDictionary &dict) {
 	return TransformDictionaryToStruct(dict);
 }
 
-bool TryTransformPythonIntegerToDouble(Value &res, py::handle ele) {
-	double number = PyLong_AsDouble(ele.ptr());
-	if (number == -1.0 && PyErr_Occurred()) {
-		PyErr_Clear();
-		return false;
-	}
-	res = Value::DOUBLE(number);
-	return true;
-}
-
-void TransformPythonUnsigned(uint64_t value, Value &res) {
-	if (value > (uint64_t)std::numeric_limits<uint32_t>::max()) {
-		res = Value::UBIGINT(value);
-	} else if (value > (int64_t)std::numeric_limits<uint16_t>::max()) {
-		res = Value::UINTEGER(value);
-	} else if (value > (int64_t)std::numeric_limits<uint16_t>::max()) {
-		res = Value::USMALLINT(value);
-	} else {
-		res = Value::UTINYINT(value);
-	}
-}
-
-bool TrySniffPythonNumeric(Value &res, int64_t value) {
-	if (value < (int64_t)std::numeric_limits<int32_t>::min() || value > (int64_t)std::numeric_limits<int32_t>::max()) {
-		res = Value::BIGINT(value);
-	} else {
-		// To match default duckdb behavior, numeric values without a specified type should not become a smaller type
-		// than INT32
-		res = Value::INTEGER(value);
-	}
-	return true;
-}
-
-// TODO: add support for HUGEINT
-bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &target_type) {
-	auto ptr = ele.ptr();
-
-	int overflow;
-	int64_t value = PyLong_AsLongLongAndOverflow(ptr, &overflow);
-	if (overflow == -1) {
-		PyErr_Clear();
-		if (target_type.id() == LogicalTypeId::BIGINT) {
-			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
-			                                               std::string(pybind11::str(ele))));
-		}
-		auto cast_as = target_type.id() == LogicalTypeId::UNKNOWN ? LogicalType::HUGEINT : target_type;
-		auto numeric_string = std::string(py::str(ele));
-		res = Value(numeric_string).DefaultCastAs(cast_as);
-		return true;
-	} else if (overflow == 1) {
-		if (target_type.InternalType() == PhysicalType::INT64) {
-			throw InvalidInputException(StringUtil::Format("Failed to cast value: Python value '%s' to INT64",
-			                                               std::string(pybind11::str(ele))));
-		}
-		uint64_t unsigned_value = PyLong_AsUnsignedLongLong(ptr);
-		if (PyErr_Occurred()) {
-			PyErr_Clear();
-			return TryTransformPythonIntegerToDouble(res, ele);
-		} else {
-			TransformPythonUnsigned(unsigned_value, res);
-		}
-		PyErr_Clear();
-		return true;
-	} else if (value == -1 && PyErr_Occurred()) {
-		return false;
-	}
-
-	// The value is int64_t or smaller
-
-	switch (target_type.id()) {
-	case LogicalTypeId::UNKNOWN:
-		return TrySniffPythonNumeric(res, value);
-	case LogicalTypeId::HUGEINT: {
-		res = Value::HUGEINT(value);
-		return true;
-	}
-	case LogicalTypeId::UHUGEINT: {
-		if (value < 0) {
-			return false;
-		}
-		res = Value::UHUGEINT(value);
-		return true;
-	}
-	case LogicalTypeId::BIGINT: {
-		res = Value::BIGINT(value);
-		return true;
-	}
-	case LogicalTypeId::INTEGER: {
-		if (value < NumericLimits<int32_t>::Minimum() || value > NumericLimits<int32_t>::Maximum()) {
-			return false;
-		}
-		res = Value::INTEGER(value);
-		return true;
-	}
-	case LogicalTypeId::SMALLINT: {
-		if (value < NumericLimits<int16_t>::Minimum() || value > NumericLimits<int16_t>::Maximum()) {
-			return false;
-		}
-		res = Value::SMALLINT(value);
-		return true;
-	}
-	case LogicalTypeId::TINYINT: {
-		if (value < NumericLimits<int8_t>::Minimum() || value > NumericLimits<int8_t>::Maximum()) {
-			return false;
-		}
-		res = Value::TINYINT(value);
-		return true;
-	}
-	case LogicalTypeId::UBIGINT: {
-		if (value < 0) {
-			return false;
-		}
-		res = Value::UBIGINT(value);
-		return true;
-	}
-	case LogicalTypeId::UINTEGER: {
-		if (value < 0 || value > (int64_t)NumericLimits<uint32_t>::Maximum()) {
-			return false;
-		}
-		res = Value::UINTEGER(value);
-		return true;
-	}
-	case LogicalTypeId::USMALLINT: {
-		if (value < 0 || value > (int64_t)NumericLimits<uint16_t>::Maximum()) {
-			return false;
-		}
-		res = Value::USMALLINT(value);
-		return true;
-	}
-	case LogicalTypeId::UTINYINT: {
-		if (value < 0 || value > (int64_t)NumericLimits<uint8_t>::Maximum()) {
-			return false;
-		}
-		res = Value::UTINYINT(value);
-		return true;
-	}
-	default: {
-		if (!TrySniffPythonNumeric(res, value)) {
-			return false;
-		}
-		res = res.DefaultCastAs(target_type, true);
-		return true;
-	}
-	}
-}
-
 PythonObjectType GetPythonObjectType(py::handle &ele) {
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 
@@ -515,15 +369,35 @@ struct PythonValueConversion {
 			throw ConversionException("Could not convert 'float' to type %s", target_type.ToString());
 		}
 	}
+	static void HandleLargeLong(Value &result, const LogicalType &target_type, const string &val) {
+		auto cast_as = target_type.id() == LogicalTypeId::UNKNOWN ? LogicalType::HUGEINT : target_type;
+		result = Value(val).DefaultCastAs(cast_as);
+	}
+	static void HandleLongAsDouble(Value &result, const LogicalType &target_type, double val) {
+		result = Value::DOUBLE(val);
+	}
+	static void HandleUnsignedBigint(Value &result, const LogicalType &target_type, uint64_t val) {
+		result = Value::UBIGINT(val);
+	}
+	static void HandleBigint(Value &res, const LogicalType &target_type, int64_t value) {
+		switch (target_type.id()) {
+		case LogicalTypeId::UNKNOWN: {
+			if (value < (int64_t)std::numeric_limits<int32_t>::min() || value > (int64_t)std::numeric_limits<int32_t>::max()) {
+				res = Value::BIGINT(value);
+			} else {
+				// To match default duckdb behavior, numeric values without a specified type should not become a smaller type
+				// than INT32
+				res = Value::INTEGER(value);
+			}
+			break;
+		}
+		default:
+			res = Value::BIGINT(value).DefaultCastAs(target_type);
+			break;
+		}
+	}
 	static Value HandleObjectInternal(py::handle ele, PythonObjectType object_type, const LogicalType &target_type, bool nan_as_null) {
 		switch (object_type) {
-		case PythonObjectType::Integer: {
-			Value integer;
-			if (!TryTransformPythonNumeric(integer, ele, target_type)) {
-				throw InvalidInputException("An error occurred attempting to convert a python integer");
-			}
-			return integer;
-		}
 		case PythonObjectType::Decimal: {
 			PyDecimal decimal(ele);
 			return decimal.ToDuckValue();
@@ -666,6 +540,111 @@ struct PythonVectorConversion {
 			throw TypeMismatchException(LogicalType::DOUBLE, result.GetType(), "Python Conversion Failure: Expected a value of type %s, but got a value of type double");
 		}
 	}
+	static void HandleLargeLong(Vector &result, const idx_t &result_offset, const string &val) {
+		FallbackValueConversion(result, result_offset, Value(val));
+	}
+	static void HandleLongAsDouble(Vector &result, const idx_t &result_offset, double val) {
+		FallbackValueConversion(result, result_offset, Value::DOUBLE(val));
+	}
+	static void HandleUnsignedBigint(Vector &result, const idx_t &result_offset, uint64_t value) {
+		// this code path is only called for values in the range of [INT64_MAX...UINT64_MAX]
+		switch (result.GetType().id()) {
+		case LogicalTypeId::HUGEINT:
+			FlatVector::GetData<hugeint_t>(result)[result_offset] = Hugeint::Convert(value);
+			break;
+		case LogicalTypeId::UHUGEINT:
+			FlatVector::GetData<uhugeint_t>(result)[result_offset] = Uhugeint::Convert(value);
+			break;
+		case LogicalTypeId::UBIGINT:
+			FlatVector::GetData<uint64_t>(result)[result_offset] = value;
+			break;
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::UINTEGER:
+		case LogicalTypeId::USMALLINT:
+		case LogicalTypeId::UTINYINT:
+			throw InvalidInputException("Python Conversion Failure: Value out of range for type %s", result.GetType());
+		default:
+			FallbackValueConversion(result, result_offset, Value::UBIGINT(value));
+			break;
+		}
+	}
+	static void HandleBigint(Vector &result, const idx_t &result_offset, int64_t value) {
+		switch (result.GetType().id()) {
+		case LogicalTypeId::HUGEINT: {
+			FlatVector::GetData<hugeint_t>(result)[result_offset] = Hugeint::Convert(value);
+			break;
+		}
+		case LogicalTypeId::UHUGEINT: {
+			if (value < 0) {
+				throw InvalidInputException("Python Conversion Failure: Value out of range for type UHUGEINT");
+			}
+			FlatVector::GetData<uhugeint_t>(result)[result_offset] = Uhugeint::Convert(value);
+			break;
+		}
+		case LogicalTypeId::BIGINT: {
+			FlatVector::GetData<int64_t>(result)[result_offset] = value;
+			break;
+		}
+		case LogicalTypeId::INTEGER: {
+			if (value < NumericLimits<int32_t>::Minimum() || value > NumericLimits<int32_t>::Maximum()) {
+				throw InvalidInputException("Python Conversion Failure: Value out of range for type INT");
+			}
+			FlatVector::GetData<int32_t>(result)[result_offset] = static_cast<int32_t>(value);
+			break;
+		}
+		case LogicalTypeId::SMALLINT: {
+			if (value < NumericLimits<int16_t>::Minimum() || value > NumericLimits<int16_t>::Maximum()) {
+				throw InvalidInputException("Python Conversion Failure: Value out of range for type SMALLINT");
+			}
+			FlatVector::GetData<int16_t>(result)[result_offset] = static_cast<int16_t>(value);
+			break;
+		}
+		case LogicalTypeId::TINYINT: {
+			if (value < NumericLimits<int8_t>::Minimum() || value > NumericLimits<int8_t>::Maximum()) {
+				throw InvalidInputException("Python Conversion Failure: Value out of range for type TINYINT");
+			}
+			FlatVector::GetData<int8_t>(result)[result_offset] = static_cast<int8_t>(value);
+			break;
+		}
+		case LogicalTypeId::UBIGINT: {
+			if (value < 0) {
+				throw InvalidInputException("Python Conversion Failure: Value out of range for type UBIGINT");
+			}
+			FlatVector::GetData<uint64_t>(result)[result_offset] = static_cast<uint64_t>(value);
+			break;
+		}
+		case LogicalTypeId::UINTEGER: {
+			if (value < 0 || value > (int64_t)NumericLimits<uint32_t>::Maximum()) {
+				throw InvalidInputException("Python Conversion Failure: Value out of range for type UINTEGER");
+			}
+			FlatVector::GetData<uint32_t>(result)[result_offset] = static_cast<uint32_t>(value);
+			break;
+		}
+		case LogicalTypeId::USMALLINT: {
+			if (value < 0 || value > (int64_t)NumericLimits<uint16_t>::Maximum()) {
+				throw InvalidInputException("Python Conversion Failure: Value out of range for type USMALLINT");
+			}
+			FlatVector::GetData<uint16_t>(result)[result_offset] = static_cast<uint16_t>(value);
+			break;
+		}
+		case LogicalTypeId::UTINYINT: {
+			if (value < 0 || value > (int64_t)NumericLimits<uint8_t>::Maximum()) {
+				throw InvalidInputException("Python Conversion Failure: Value out of range for type UTINYINT");
+			}
+			FlatVector::GetData<uint8_t>(result)[result_offset] = static_cast<uint8_t>(value);
+			break;
+		}
+		default:
+			FallbackValueConversion(result, result_offset, Value::BIGINT(value));
+			break;
+		}
+	}
+	static void FallbackValueConversion(Vector &result, const idx_t &result_offset, Value val) {
+		result.SetValue(result_offset, val);
+	}
 	static void HandleObject(py::handle ele, PythonObjectType object_type, Vector &result, const idx_t &result_offset,
 						   bool nan_as_null) {
 		Value result_val;
@@ -694,6 +673,37 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 		}
 		OP::HandleDouble(result, param, ele.cast<double>());
 		break;
+	case PythonObjectType::Integer: {
+		auto ptr = ele.ptr();
+
+		int overflow;
+		int64_t value = PyLong_AsLongLongAndOverflow(ptr, &overflow);
+
+		if (overflow == -1) {
+			PyErr_Clear();
+			OP::HandleLargeLong(result, param, py::str(ele));
+		} else if (overflow == 1) {
+			uint64_t unsigned_value = PyLong_AsUnsignedLongLong(ptr);
+			if (PyErr_Occurred()) {
+				PyErr_Clear();
+				double number = PyLong_AsDouble(ele.ptr());
+				if (number == -1.0 && PyErr_Occurred()) {
+					PyErr_Clear();
+					throw InvalidInputException("An error occurred attempting to convert a python integer");
+				}
+				OP::HandleLongAsDouble(result, param, unsigned_value);
+			} else {
+				// value does not fit within an int64, but it fits within a uint64
+				OP::HandleUnsignedBigint(result, param, unsigned_value);
+			}
+		} else if (value == -1 && PyErr_Occurred()) {
+			throw InvalidInputException("An error occurred attempting to convert a python integer");
+		} else {
+			// value fits within an int64
+			OP::HandleBigint(result, param, value);
+		}
+		break;
+	}
 	case PythonObjectType::Uuid:
 	case PythonObjectType::Datetime:
 	case PythonObjectType::Time:
@@ -709,8 +719,7 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 	case PythonObjectType::NdArray:
 	case PythonObjectType::NdDatetime:
 	case PythonObjectType::Value:
-	case PythonObjectType::Decimal:
-	case PythonObjectType::Integer: {
+	case PythonObjectType::Decimal:{
 		OP::HandleObject(ele, object_type, result, param, nan_as_null);
 		break;
 	}
