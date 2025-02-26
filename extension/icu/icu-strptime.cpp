@@ -11,9 +11,7 @@
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
-#include "duckdb/function/function_binder.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/main/extension_util.hpp"
 
@@ -60,14 +58,7 @@ struct ICUStrptime : public ICUDateFunc {
 	}
 
 	static uint64_t ToMicros(icu::Calendar *calendar, const ParseResult &parsed, const StrpTimeFormat &format) {
-		// Set TZ first, if any.
-		// Note that empty TZ names are not allowed,
-		// but unknown names will map to GMT.
-		if (!parsed.tz.empty()) {
-			SetTimeZone(calendar, parsed.tz);
-		}
-
-		// Now get the parts in the given time zone
+		// Get the parts in the current time zone
 		uint64_t micros = parsed.GetMicros();
 		calendar->set(UCAL_EXTENDED_YEAR, parsed.data[0]); // strptime doesn't understand eras
 		calendar->set(UCAL_MONTH, parsed.data[1] - 1);
@@ -110,6 +101,11 @@ struct ICUStrptime : public ICUDateFunc {
 						if (parsed.is_special) {
 							return parsed.ToTimestamp();
 						} else {
+							// Set TZ first, if any.
+							if (!parsed.tz.empty()) {
+								SetTimeZone(calendar, parsed.tz);
+							}
+
 							return GetTime(calendar, ToMicros(calendar, parsed, format));
 						}
 					}
@@ -143,7 +139,7 @@ struct ICUStrptime : public ICUDateFunc {
 					    if (format.Parse(input, parsed)) {
 						    if (parsed.is_special) {
 							    return parsed.ToTimestamp();
-						    } else {
+						    } else if (parsed.tz.empty() || TrySetTimeZone(calendar, parsed.tz)) {
 							    timestamp_t result;
 							    if (TryGetTime(calendar, ToMicros(calendar, parsed, format), result)) {
 								    return result;
