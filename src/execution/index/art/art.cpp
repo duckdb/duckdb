@@ -1038,9 +1038,11 @@ string ART::GenerateConstraintErrorMessage(VerifyExistenceType verify_type, cons
 	}
 	case VerifyExistenceType::DELETE_FK: {
 		// DELETE_FK that still exists in a FK table, i.e., not a valid delete.
-		return StringUtil::Format("Violates foreign key constraint because key \"%s\" is still referenced by a foreign "
-		                          "key in a different table",
-		                          key_name);
+		return StringUtil::Format(
+		    "Violates foreign key constraint because key \"%s\" is still referenced by a foreign "
+		    "key in a different table. If this is an unexpected constraint violation, please refer to our "
+		    "foreign key limitations in the documentation",
+		    key_name);
 	}
 	default:
 		throw NotImplementedException("Type not implemented for VerifyExistenceType");
