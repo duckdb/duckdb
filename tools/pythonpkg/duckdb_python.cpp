@@ -1024,10 +1024,10 @@ PYBIND11_MODULE(DUCKDB_PYTHON_LIB_NAME, m) { // NOLINT
 
 	DuckDBPyTyping::Initialize(m);
 	DuckDBPyFunctional::Initialize(m);
+	DuckDBPyExpression::Initialize(m);
 	DuckDBPyStatement::Initialize(m);
 	DuckDBPyRelation::Initialize(m);
 	DuckDBPyConnection::Initialize(m);
-	DuckDBPyExpression::Initialize(m);
 	PythonObject::Initialize();
 
 	py::options pybind_opts;

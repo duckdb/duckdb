@@ -45,8 +45,7 @@ void InitializeStaticMethods(py::module_ &m) {
 
 	// SQL Expression
 	docs = "";
-	m.def("SQLExpression", &DuckDBPyExpression::SQLExpression, docs, py::arg("expression"), py::kw_only(),
-	      py::arg("connection") = py::none());
+	m.def("SQLExpression", &DuckDBPyExpression::SQLExpression, docs, py::arg("expression"));
 }
 
 static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {

@@ -11,7 +11,6 @@
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser.hpp"
-#include "duckdb_python/pybind11/conversions/pyconnection_default.hpp"
 
 namespace duckdb {
 
@@ -410,11 +409,8 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LambdaExpression(const py::ob
 	return make_shared_ptr<DuckDBPyExpression>(std::move(lambda_expression));
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SQLExpression(string sql,
-                                                                 shared_ptr<DuckDBPyConnection> conn) {
-	if (!conn) {
-		conn = DuckDBPyConnection::DefaultConnection();
-	}
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SQLExpression(string sql) {
+	auto conn = DuckDBPyConnection::DefaultConnection();
 	auto &context = *conn->con.GetConnection().context;
 	vector<unique_ptr<ParsedExpression>> expressions;
 	try {

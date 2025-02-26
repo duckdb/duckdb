@@ -184,20 +184,3 @@ class TestSQLExpression(object):
         result = rel2.fetchall()
         result.sort()
         assert result == [(3, 15.0), (7, 35.0)]
-
-    def test_sql_expression_with_conn(self, duckdb_cursor):
-        duckdb_cursor.execute(
-            """
-            create table tbl as select 21 a, 42 b
-        """
-        )
-        # ParserOptions are attached to the ClientContext,
-        # so the SQLExpresion has an optional `connection` kwarg to use a specific connection
-        expr = SQLExpression('(b / 2) + a', connection=duckdb_cursor)
-        res = duckdb_cursor.table('tbl').select(expr).fetchall()
-        assert res == [(42,)]
-
-        duckdb_cursor.close()
-        # This now fails, because it can't look up the connection
-        with pytest.raises(duckdb.ConnectionException, match='Connection already closed!'):
-            expr = SQLExpression('(b / 2) + a', connection=duckdb_cursor)
