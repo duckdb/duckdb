@@ -958,7 +958,17 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 	}
 	case PythonObjectType::Tuple: {
 		auto list_size = py::len(ele);
-		OP::HandleTuple(result, param, ele, list_size);
+		auto &conversion_target = OP::ConversionTarget(result, param);
+		switch (conversion_target.id()) {
+		case LogicalTypeId::STRUCT:
+		case LogicalTypeId::UNKNOWN:
+		case LogicalTypeId::LIST:
+		case LogicalTypeId::ARRAY:
+			OP::HandleTuple(result, param, ele, list_size);
+			break;
+		default:
+			throw InvalidInputException("Can't convert tuple to a Value of type %s", conversion_target);
+		}
 		break;
 	}
 	case PythonObjectType::String: {
