@@ -565,6 +565,20 @@ struct PythonValueConversion {
 		result = datetime.ToDuckValue(target_type);
 	}
 
+	static void HandleBlob(Value &result, const LogicalType &target_type, const_data_ptr_t blob, idx_t blob_size) {
+		switch (target_type.id()) {
+		case LogicalTypeId::UNKNOWN:
+		case LogicalTypeId::BLOB:
+			result = Value::BLOB(blob, blob_size);
+			break;
+		case LogicalTypeId::BIT:
+			result = Value::BIT(blob, blob_size);
+			break;
+		default:
+			throw ConversionException("Could not convert 'bytes' to type %s", target_type.ToString());
+		}
+	}
+
 	static void HandleList(Value &result, const LogicalType &target_type, py::handle ele, idx_t list_size) {
 		vector<Value> values;
 		values.reserve(list_size);
@@ -603,30 +617,6 @@ struct PythonValueConversion {
 		case PythonObjectType::Timedelta: {
 			auto timedelta = PyTimeDelta(ele);
 			return Value::INTERVAL(timedelta.ToInterval());
-		}
-		case PythonObjectType::ByteArray: {
-			auto byte_array = ele;
-			const_data_ptr_t bytes = const_data_ptr_cast(PyByteArray_AsString(byte_array.ptr())); // NOLINT
-			idx_t byte_length = PyUtil::PyByteArrayGetSize(byte_array);                           // NOLINT
-			return Value::BLOB(bytes, byte_length);
-		}
-		case PythonObjectType::MemoryView: {
-			py::memoryview py_view = ele.cast<py::memoryview>();
-			Py_buffer *py_buf = PyUtil::PyMemoryViewGetBuffer(py_view); // NOLINT
-			return Value::BLOB(const_data_ptr_t(py_buf->buf), idx_t(py_buf->len));
-		}
-		case PythonObjectType::Bytes: {
-			const string &ele_string = ele.cast<string>();
-			switch (target_type.id()) {
-			case LogicalTypeId::UNKNOWN:
-			case LogicalTypeId::BLOB:
-				return Value::BLOB(const_data_ptr_t(ele_string.data()), ele_string.size());
-			case LogicalTypeId::BIT: {
-				return Value::BIT(ele_string);
-			default:
-				throw ConversionException("Could not convert 'bytes' to type %s", target_type.ToString());
-			}
-			}
 		}
 		case PythonObjectType::Dict: {
 			PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
@@ -842,6 +832,20 @@ struct PythonVectorConversion {
 		}
 	}
 
+	static void HandleBlob(Vector &result, const idx_t &result_offset, const_data_ptr_t blob, idx_t blob_size) {
+		auto &result_type = result.GetType();
+		switch(result_type.id()) {
+		case LogicalTypeId::BLOB:
+			FlatVector::GetData<string_t>(result)[result_offset] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(blob), blob_size);
+			break;
+		default: {
+			auto value = Value::BLOB(blob, blob_size);
+			result.SetValue(result_offset, value);
+			break;
+		}
+		}
+	}
+
 	static void HandleDateTime(Vector &result, const idx_t &result_offset, PyDateTime &datetime) {
 		auto &result_type = result.GetType();
 		switch(result_type.id()) {
@@ -998,11 +1002,26 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 		OP::HandleDate(result, param, date);
 		break;
 	}
+	case PythonObjectType::ByteArray: {
+		auto byte_array = ele;
+		const_data_ptr_t bytes = const_data_ptr_cast(PyByteArray_AsString(byte_array.ptr())); // NOLINT
+		idx_t byte_length = PyUtil::PyByteArrayGetSize(byte_array);                           // NOLINT
+		OP::HandleBlob(result, param, bytes, byte_length);
+		break;
+	}
+	case PythonObjectType::MemoryView: {
+		py::memoryview py_view = ele.cast<py::memoryview>();
+		Py_buffer *py_buf = PyUtil::PyMemoryViewGetBuffer(py_view); // NOLINT
+		OP::HandleBlob(result, param, const_data_ptr_t(py_buf->buf), idx_t(py_buf->len));
+		break;
+	}
+	case PythonObjectType::Bytes: {
+		const string &ele_string = ele.cast<string>();
+		OP::HandleBlob(result, param, const_data_ptr_t(ele_string.data()), ele_string.size());
+		break;
+	}
 	case PythonObjectType::Uuid:
 	case PythonObjectType::Timedelta:
-	case PythonObjectType::ByteArray:
-	case PythonObjectType::MemoryView:
-	case PythonObjectType::Bytes:
 	case PythonObjectType::Dict:
 	case PythonObjectType::Tuple:
 	case PythonObjectType::NdArray:
