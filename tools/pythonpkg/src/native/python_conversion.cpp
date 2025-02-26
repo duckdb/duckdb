@@ -553,6 +553,10 @@ struct PythonValueConversion {
 		}
 	}
 
+	static void HandleDateTime(Value &result, const LogicalType &target_type, PyDateTime &datetime) {
+		result = datetime.ToDuckValue(target_type);
+	}
+
 	static void HandleList(Value &result, const LogicalType &target_type, py::handle ele, idx_t list_size) {
 		vector<Value> values;
 		values.reserve(list_size);
@@ -587,19 +591,6 @@ struct PythonValueConversion {
 		case PythonObjectType::Uuid: {
 			auto string_val = py::str(ele).cast<string>();
 			return Value::UUID(string_val);
-		}
-		case PythonObjectType::Datetime: {
-			auto &import_cache = *DuckDBPyConnection::ImportCache();
-			bool is_nat = false;
-			if (import_cache.pandas.isnull(false)) {
-				auto isnull_result = import_cache.pandas.isnull()(ele);
-				is_nat = string(py::str(isnull_result)) == "True";
-			}
-			if (is_nat) {
-				return Value();
-			}
-			auto datetime = PyDateTime(ele);
-			return datetime.ToDuckValue(target_type);
 		}
 		case PythonObjectType::Time: {
 			auto time = PyTime(ele);
@@ -823,6 +814,26 @@ struct PythonVectorConversion {
 		FallbackValueConversion(result, result_offset, std::move(result_val));
 	}
 
+	static void HandleDateTime(Vector &result, const idx_t &result_offset, PyDateTime &datetime) {
+		auto &result_type = result.GetType();
+		switch(result_type.id()) {
+		case LogicalTypeId::TIMESTAMP:
+			FlatVector::GetData<timestamp_t>(result)[result_offset] = datetime.ToTimestamp();
+			break;
+		case LogicalTypeId::TIME:
+			FlatVector::GetData<dtime_t>(result)[result_offset] = datetime.ToDuckTime();
+			break;
+		case LogicalTypeId::DATE:
+			FlatVector::GetData<date_t>(result)[result_offset] = datetime.ToDate();
+			break;
+		default: {
+			auto value = datetime.ToDuckValue(result_type);
+			result.SetValue(result_offset, value);
+			break;
+		}
+		}
+	}
+
 	static void HandleList(Vector &result, const idx_t &result_offset, py::handle ele, idx_t list_size) {
 		auto &result_type = result.GetType();
 		if (result_type.id() == LogicalTypeId::ARRAY) {
@@ -934,8 +945,22 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 		OP::HandleString(result, param, stringified);
 		break;
 	}
+	case PythonObjectType::Datetime: {
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		bool is_nat = false;
+		if (import_cache.pandas.isnull(false)) {
+			auto isnull_result = import_cache.pandas.isnull()(ele);
+			is_nat = string(py::str(isnull_result)) == "True";
+		}
+		if (is_nat) {
+			OP::HandleNull(result, param);
+			break;
+		}
+		PyDateTime datetime(ele);
+		OP::HandleDateTime(result, param, datetime);
+		break;
+	}
 	case PythonObjectType::Uuid:
-	case PythonObjectType::Datetime:
 	case PythonObjectType::Time:
 	case PythonObjectType::Date:
 	case PythonObjectType::Timedelta:
