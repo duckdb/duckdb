@@ -13,8 +13,6 @@
 
 namespace duckdb {
 
-Value TransformListValue(py::handle ele);
-
 static Value EmptyMapValue() {
 	auto map_type = LogicalType::MAP(LogicalType::SQLNULL, LogicalType::SQLNULL);
 	return Value::MAP(ListType::GetChildType(map_type), vector<Value>());
@@ -378,44 +376,6 @@ bool TryTransformPythonNumeric(Value &res, py::handle ele, const LogicalType &ta
 	}
 }
 
-Value TransformListValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
-	auto size = py::len(ele);
-
-	vector<Value> values;
-	values.reserve(size);
-
-	bool list_target = target_type.id() == LogicalTypeId::LIST;
-
-	LogicalType element_type = LogicalType::SQLNULL;
-	for (idx_t i = 0; i < size; i++) {
-		auto &child_type = list_target ? ListType::GetChildType(target_type) : LogicalType::UNKNOWN;
-		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i), child_type);
-		element_type = LogicalType::ForceMaxLogicalType(element_type, new_value.type());
-		values.push_back(std::move(new_value));
-	}
-
-	return Value::LIST(element_type, values);
-}
-
-Value TransformArrayValue(py::handle ele, const LogicalType &target_type = LogicalType::UNKNOWN) {
-	auto size = py::len(ele);
-
-	vector<Value> values;
-	values.reserve(size);
-
-	bool array_target = target_type.id() == LogicalTypeId::ARRAY;
-	auto &child_type = array_target ? ArrayType::GetChildType(target_type) : LogicalType::UNKNOWN;
-
-	LogicalType element_type = LogicalType::SQLNULL;
-	for (idx_t i = 0; i < size; i++) {
-		Value new_value = TransformPythonValue(ele.attr("__getitem__")(i), child_type);
-		element_type = LogicalType::ForceMaxLogicalType(element_type, new_value.type());
-		values.push_back(std::move(new_value));
-	}
-
-	return Value::ARRAY(element_type, std::move(values));
-}
-
 Value TransformDictionary(const PyDictionary &dict) {
 	//! DICT -> MAP FORMAT
 	// keys() = [key, value]
@@ -604,6 +564,14 @@ struct PythonValueConversion {
 		}
 	}
 
+	static void HandleTuple(Value &result, const LogicalType &target_type, py::handle ele, idx_t list_size) {
+		if (target_type.id() == LogicalTypeId::STRUCT) {
+			result = TransformTupleToStruct(ele, target_type);
+			return;
+		}
+		HandleList(result, target_type, ele, list_size);
+	}
+
 	static Value HandleObjectInternal(py::handle ele, PythonObjectType object_type, const LogicalType &target_type, bool nan_as_null) {
 		switch (object_type) {
 		case PythonObjectType::Decimal: {
@@ -627,19 +595,6 @@ struct PythonValueConversion {
 				return TransformDictionaryToMap(dict, target_type);
 			default:
 				return TransformDictionary(dict);
-			}
-		}
-		case PythonObjectType::Tuple: {
-			switch (target_type.id()) {
-			case LogicalTypeId::STRUCT:
-				return TransformTupleToStruct(ele, target_type);
-			case LogicalTypeId::UNKNOWN:
-			case LogicalTypeId::LIST:
-				return TransformListValue(ele, target_type);
-			case LogicalTypeId::ARRAY:
-				return TransformArrayValue(ele, target_type);
-			default:
-				throw InvalidInputException("Can't convert tuple to a Value of type %s", target_type.ToString());
 			}
 		}
 		case PythonObjectType::NdArray:
@@ -858,7 +813,8 @@ struct PythonVectorConversion {
 		}
 	}
 
-	static void HandleList(Vector &result, const idx_t &result_offset, py::handle ele, idx_t list_size) {
+	template<bool IS_LIST>
+	static void HandleListFast(Vector &result, const idx_t &result_offset, py::handle ele, idx_t list_size) {
 		auto &result_type = result.GetType();
 		if (result_type.id() == LogicalTypeId::ARRAY) {
 			idx_t array_size = ArrayType::GetSize(result_type);
@@ -868,7 +824,7 @@ struct PythonVectorConversion {
 			auto &child_array = ArrayVector::GetEntry(result);
 			idx_t start_offset = result_offset * array_size;
 			for(idx_t i = 0; i < list_size; i++) {
-				auto child_ele = PyList_GetItem(ele.ptr(), i);
+				auto child_ele = IS_LIST ? PyList_GetItem(ele.ptr(), i) : PyTuple_GetItem(ele.ptr(), i);
 				TransformPythonObject(child_ele, child_array, start_offset + i);
 			}
 			return;
@@ -886,10 +842,19 @@ struct PythonVectorConversion {
 			// convert the child elements
 			auto &child_vector = ListVector::GetEntry(result);
 			for(idx_t i = 0; i < list_size; i++) {
-				auto child_ele = PyList_GetItem(ele.ptr(), i);
+				auto child_ele = IS_LIST ? PyList_GetItem(ele.ptr(), i) : PyTuple_GetItem(ele.ptr(), i);
 				TransformPythonObject(child_ele, child_vector, start_offset + i);
 			}
 			ListVector::SetListSize(result, start_offset + list_size);
+			return;
+		}
+		throw InternalException("Unsupported type for HandleListFast");
+	}
+
+	static void HandleList(Vector &result, const idx_t &result_offset, py::handle ele, idx_t list_size) {
+		auto &result_type = result.GetType();
+		if (result_type.id() == LogicalTypeId::ARRAY || result_type.id() == LogicalTypeId::LIST) {
+			HandleListFast<true>(result, result_offset, ele, list_size);
 			return;
 		}
 		// fallback to value conversion
@@ -897,6 +862,17 @@ struct PythonVectorConversion {
 		PythonValueConversion::HandleList(result_val, result_type, ele, list_size);
 		FallbackValueConversion(result, result_offset, std::move(result_val));
 	}
+	static void HandleTuple(Vector &result, const idx_t &result_offset, py::handle ele, idx_t list_size) {
+		auto &result_type = result.GetType();
+		if (result_type.id() == LogicalTypeId::ARRAY || result_type.id() == LogicalTypeId::LIST) {
+			HandleListFast<false>(result, result_offset, ele, list_size);
+			return;
+		}
+		Value result_val;
+		PythonValueConversion::HandleTuple(result_val, result_type, ele, list_size);
+		FallbackValueConversion(result, result_offset, std::move(result_val));
+	}
+
 	static void FallbackValueConversion(Vector &result, const idx_t &result_offset, Value val) {
 		result.SetValue(result_offset, val);
 	}
@@ -980,6 +956,11 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 		OP::HandleList(result, param, ele, list_size);
 		break;
 	}
+	case PythonObjectType::Tuple: {
+		auto list_size = py::len(ele);
+		OP::HandleTuple(result, param, ele, list_size);
+		break;
+	}
 	case PythonObjectType::String: {
 		auto stringified = ele.cast<string>();
 		OP::HandleString(result, param, stringified);
@@ -1031,7 +1012,6 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 	case PythonObjectType::Uuid:
 	case PythonObjectType::Timedelta:
 	case PythonObjectType::Dict:
-	case PythonObjectType::Tuple:
 	case PythonObjectType::NdArray:
 	case PythonObjectType::NdDatetime:
 	case PythonObjectType::Value:
