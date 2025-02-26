@@ -8,6 +8,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/common/vector_operations/vector_operations.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/table/read_csv.hpp"
@@ -17,6 +18,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/multi_file_reader_function.hpp"
 
 #include <limits>
 
@@ -224,54 +226,6 @@ static unique_ptr<FunctionData> WriteCSVBind(ClientContext &context, CopyFunctio
 	if (!bind_data->options.write_newline.empty()) {
 		bind_data->newline = TransformNewLine(bind_data->options.write_newline);
 	}
-	return std::move(bind_data);
-}
-
-static unique_ptr<FunctionData> ReadCSVBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
-                                            vector<LogicalType> &expected_types) {
-	auto bind_data = make_uniq<ReadCSVData>();
-	bind_data->csv_types = expected_types;
-	bind_data->csv_names = expected_names;
-	bind_data->return_types = expected_types;
-	bind_data->return_names = expected_names;
-
-	auto multi_file_reader = MultiFileReader::CreateDefault("CSVCopy");
-	bind_data->files = multi_file_reader->CreateFileList(context, Value(info.file_path))->GetAllFiles();
-
-	auto &options = bind_data->options;
-
-	// check all the options in the copy info
-	for (auto &option : info.options) {
-		auto loption = StringUtil::Lower(option.first);
-		auto &set = option.second;
-		options.SetReadOption(loption, ConvertVectorToValue(set), expected_names);
-	}
-	// verify the parsed options
-	if (options.force_not_null.empty()) {
-		// no FORCE_QUOTE specified: initialize to false
-		options.force_not_null.resize(expected_types.size(), false);
-	}
-
-	// Look for rejects table options last
-	named_parameter_map_t options_map;
-	for (auto &option : info.options) {
-		options_map[option.first] = ConvertVectorToValue(std::move(option.second));
-	}
-	options.file_path = bind_data->files[0];
-	options.name_list = expected_names;
-	options.sql_type_list = expected_types;
-	options.columns_set = true;
-	for (idx_t i = 0; i < expected_types.size(); i++) {
-		options.sql_types_per_column[expected_names[i]] = i;
-	}
-
-	if (options.auto_detect) {
-		auto buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, bind_data->files[0], 0);
-		CSVSniffer sniffer(options, buffer_manager, CSVStateMachineCache::Get(context));
-		sniffer.SniffCSV();
-	}
-	bind_data->FinalizeRead(context);
-
 	return std::move(bind_data);
 }
 
@@ -652,7 +606,7 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.rotate_files = WriteCSVRotateFiles;
 	info.rotate_next_file = WriteCSVRotateNextFile;
 
-	info.copy_from_bind = ReadCSVBind;
+	info.copy_from_bind = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBindCopy;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();
 
 	info.extension = "csv";

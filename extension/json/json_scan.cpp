@@ -171,7 +171,7 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 		const auto &col_id = input.column_ids[col_idx];
 
 		// Skip any multi-file reader / row id stuff
-		if (col_id == bind_data.reader_bind.filename_idx || IsRowIdColumnId(col_id)) {
+		if (col_id == bind_data.reader_bind.filename_idx || IsVirtualColumn(col_id)) {
 			continue;
 		}
 		bool skip = false;
@@ -1025,6 +1025,14 @@ unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, Table
 	return std::move(result);
 }
 
+virtual_column_map_t JSONScan::GetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+	auto &csv_bind = bind_data->Cast<JSONScanData>();
+	virtual_column_map_t result;
+	MultiFileReader::GetVirtualColumns(context, csv_bind.reader_bind, result);
+	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
+	return result;
+}
+
 void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	MultiFileReader().AddParameters(table_function);
 
@@ -1039,6 +1047,7 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 
 	table_function.serialize = Serialize;
 	table_function.deserialize = Deserialize;
+	table_function.get_virtual_columns = GetVirtualColumns;
 
 	table_function.projection_pushdown = true;
 	table_function.filter_pushdown = false;

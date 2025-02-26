@@ -16,7 +16,6 @@ on:
         type: string
       skip_tests:
         type: string
-  repository_dispatch:
   push:
     branches-ignore:
       - 'main'
@@ -106,6 +105,9 @@ jobs:
   bundle-mingw-static-lib:
     name: Windows MingW static libs
     runs-on: windows-2019
+    env:
+      ENABLE_EXTENSION_AUTOLOADING: 1
+      ENABLE_EXTENSION_AUTOINSTALL: 1
     steps:
       - uses: actions/checkout@v4
         with:
@@ -130,9 +132,12 @@ jobs:
           override_cc: gcc
           override_cxx: g++
           vcpkg_build: 1
-          no_static_linking: 1
+          no_static_linking: 0
           run_tests: 0
           run_autoload_tests: 0
+          build_in_tree_extensions: 0
+          build_out_of_tree_extensions: 0
+          bundle_static_lib_mode: 1
 
       - name: Bundle static library
         shell: bash
@@ -219,7 +224,6 @@ jobs:
           -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
           -e BUILD_BENCHMARK=1                                                   \
           -e FORCE_WARN_UNUSED=1                                                 \
-          -e DUCKDB_RUN_PARALLEL_CSV_TESTS=1                                     \
           quay.io/pypa/manylinux2014_x86_64                                      \
           bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make bundle-library -C $PWD"
       - name: Print platform

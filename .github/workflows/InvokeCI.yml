@@ -1,5 +1,6 @@
 name: InvokeCI
 on:
+  repository_dispatch:
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -67,6 +68,14 @@ jobs:
 
   Wasm:
     uses: ./.github/workflows/Wasm.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+
+  static-libraries:
+    uses: ./.github/workflows/BundleStaticLibs.yml
     secrets: inherit
     with:
       override_git_describe: ${{ inputs.override_git_describe }}

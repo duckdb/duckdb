@@ -1,6 +1,9 @@
 #include "duckdb/optimizer/expression_heuristics.hpp"
 
 #include "duckdb/planner/expression/list.hpp"
+#include "duckdb/planner/filter/conjunction_filter.hpp"
+#include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/planner/filter/struct_filter.hpp"
 
 namespace duckdb {
 
@@ -29,7 +32,6 @@ unique_ptr<Expression> ExpressionHeuristics::VisitReplace(BoundConjunctionExpres
 }
 
 void ExpressionHeuristics::ReorderExpressions(vector<unique_ptr<Expression>> &expressions) {
-
 	struct ExpressionCosts {
 		unique_ptr<Expression> expr;
 		idx_t cost;
@@ -112,6 +114,13 @@ idx_t ExpressionHeuristics::ExpressionCost(BoundConjunctionExpression &expr) {
 }
 
 idx_t ExpressionHeuristics::ExpressionCost(BoundFunctionExpression &expr) {
+	unordered_map<std::string, idx_t> function_costs = {
+	    {"+", 5},       {"-", 5},    {"&", 5},          {"#", 5},
+	    {">>", 5},      {"<<", 5},   {"abs", 5},        {"*", 10},
+	    {"%", 10},      {"/", 15},   {"date_part", 20}, {"year", 20},
+	    {"round", 100}, {"~~", 200}, {"!~~", 200},      {"regexp_matches", 200},
+	    {"||", 200}};
+
 	idx_t cost_children = 0;
 	for (auto &child : expr.children) {
 		cost_children += Cost(*child);
@@ -211,6 +220,73 @@ idx_t ExpressionHeuristics::Cost(Expression &expr) {
 
 	// return a very high value if nothing matches
 	return 1000;
+}
+
+idx_t ExpressionHeuristics::Cost(TableFilter &filter) {
+	switch (filter.filter_type) {
+	case TableFilterType::DYNAMIC_FILTER:
+	case TableFilterType::OPTIONAL_FILTER:
+		return 0;
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &conjunction_and = filter.Cast<ConjunctionOrFilter>();
+		idx_t cost = 5;
+		for (auto &child_filter : conjunction_and.child_filters) {
+			cost += Cost(*child_filter);
+		}
+		return cost;
+	}
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
+		idx_t cost = 5;
+		for (auto &child_filter : conjunction_and.child_filters) {
+			cost += Cost(*child_filter);
+		}
+		return cost;
+	}
+	case TableFilterType::CONSTANT_COMPARISON: {
+		auto &constant_filter = filter.Cast<ConstantFilter>();
+		return ExpressionCost(constant_filter.constant.type().InternalType(), 1);
+	}
+	case TableFilterType::IS_NULL:
+	case TableFilterType::IS_NOT_NULL:
+		return 5;
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = filter.Cast<StructFilter>();
+		return Cost(*struct_filter.child_filter);
+	}
+	default:
+		return 1000;
+	}
+}
+
+vector<idx_t> ExpressionHeuristics::GetInitialOrder(const TableFilterSet &table_filters) {
+	struct FilterCost {
+		idx_t index;
+		idx_t cost;
+
+		bool operator==(const FilterCost &p) const {
+			return cost == p.cost;
+		}
+		bool operator<(const FilterCost &p) const {
+			return cost < p.cost;
+		}
+	};
+	vector<FilterCost> filter_costs;
+	idx_t filter_index = 0;
+	for (auto &entry : table_filters.filters) {
+		FilterCost cost;
+		cost.index = filter_index;
+		cost.cost = Cost(*entry.second);
+		filter_costs.push_back(cost);
+		filter_index++;
+	}
+	// sort by cost and put back in place
+	sort(filter_costs.begin(), filter_costs.end());
+	vector<idx_t> initial_permutation;
+	for (idx_t i = 0; i < filter_costs.size(); i++) {
+		initial_permutation.push_back(filter_costs[i].index);
+	}
+	return initial_permutation;
 }
 
 } // namespace duckdb

@@ -20,7 +20,6 @@ on:
         type: string
       run_all:
         type: string
-  repository_dispatch:
   push:
     branches-ignore:
       - 'main'
@@ -150,7 +149,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: manylinux-extensions-x64
+          name: duckdb-extensions-${{ matrix.duckdb_arch }}
           path: |
             build/release/extension/*/*.duckdb_extension
 
@@ -158,11 +157,14 @@ jobs:
     ## TODO: Add a if: github.ref == main, for now this is explicitly missing to be able to test on PR, expected is this should fail due to missing secrets
     name: Upload Linux Extensions (gcc4)
     needs: manylinux-extensions-x64
+    strategy:
+      matrix:
+        duckdb_arch: [linux_amd64_gcc4]
     uses: ./.github/workflows/_sign_deploy_extensions.yml
     secrets: inherit
     with:
-      extension_artifact_name: manylinux-extensions-x64
-      duckdb_arch: linux_amd64_gcc4
+      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
+      duckdb_arch: ${{ matrix.duckdb_arch }}
       duckdb_sha: ${{ github.sha }}
 
   linux-python3:
@@ -172,6 +174,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        duckdb_arch: [linux_amd64_gcc4]
         arch: [x86_64, aarch64]
         python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         manylinux: [manylinux2014, manylinux_2_28]
@@ -243,7 +246,7 @@ jobs:
     - uses: actions/download-artifact@v4
       if: ${{ matrix.arch == 'x86_64' }}
       with:
-        name: manylinux-extensions-x64
+        name: duckdb-extensions-${{ matrix.duckdb_arch }}
         path: tools/pythonpkg
 
     - name: List extensions to be tested
@@ -325,19 +328,12 @@ jobs:
         shell: bash
         run: pip install 'cibuildwheel>=2.16.2' build
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}-${{ matrix.python_build }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
       - name: Build
         shell: bash
         run: |
           cd tools/pythonpkg
           pyproject-build . --sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
             export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
