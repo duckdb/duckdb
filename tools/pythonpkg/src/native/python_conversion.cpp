@@ -473,7 +473,7 @@ struct PythonValueConversion {
 		}
 		case LogicalTypeId::DECIMAL: {
 			throw ConversionException("Can't losslessly convert from object of float to type %s",
-									  target_type.ToString());
+			                          target_type.ToString());
 		}
 		default:
 			throw ConversionException("Could not convert 'float' to type %s", target_type.ToString());
@@ -490,11 +490,12 @@ struct PythonValueConversion {
 	static void HandleBigint(Value &res, const LogicalType &target_type, int64_t value) {
 		switch (target_type.id()) {
 		case LogicalTypeId::UNKNOWN: {
-			if (value < (int64_t)std::numeric_limits<int32_t>::min() || value > (int64_t)std::numeric_limits<int32_t>::max()) {
+			if (value < (int64_t)std::numeric_limits<int32_t>::min() ||
+			    value > (int64_t)std::numeric_limits<int32_t>::max()) {
 				res = Value::BIGINT(value);
 			} else {
-				// To match default duckdb behavior, numeric values without a specified type should not become a smaller type
-				// than INT32
+				// To match default duckdb behavior, numeric values without a specified type should not become a smaller
+				// type than INT32
 				res = Value::INTEGER(value);
 			}
 			break;
@@ -506,7 +507,8 @@ struct PythonValueConversion {
 	}
 
 	static void HandleString(Value &result, const LogicalType &target_type, const string &value) {
-		if (target_type.id() == LogicalTypeId::UNKNOWN || (target_type.id() == LogicalTypeId::VARCHAR && !target_type.HasAlias())) {
+		if (target_type.id() == LogicalTypeId::UNKNOWN ||
+		    (target_type.id() == LogicalTypeId::VARCHAR && !target_type.HasAlias())) {
 			result = Value(value);
 		} else {
 			result = Value(value).DefaultCastAs(target_type);
@@ -572,7 +574,8 @@ struct PythonValueConversion {
 		HandleList(result, target_type, ele, list_size);
 	}
 
-	static Value HandleObjectInternal(py::handle ele, PythonObjectType object_type, const LogicalType &target_type, bool nan_as_null) {
+	static Value HandleObjectInternal(py::handle ele, PythonObjectType object_type, const LogicalType &target_type,
+	                                  bool nan_as_null) {
 		switch (object_type) {
 		case PythonObjectType::Decimal: {
 			PyDecimal decimal(ele);
@@ -597,9 +600,6 @@ struct PythonValueConversion {
 				return TransformDictionary(dict);
 			}
 		}
-		case PythonObjectType::NdArray:
-		case PythonObjectType::NdDatetime:
-			return TransformPythonValue(ele.attr("tolist")(), target_type, nan_as_null);
 		case PythonObjectType::Value: {
 			// Extract the internal object and the type from the Value instance
 			auto object = ele.attr("object");
@@ -607,7 +607,8 @@ struct PythonValueConversion {
 			shared_ptr<DuckDBPyType> internal_type;
 			if (!py::try_cast<shared_ptr<DuckDBPyType>>(type, internal_type)) {
 				string actual_type = py::str(type.get_type());
-				throw InvalidInputException("The 'type' of a Value should be of type DuckDBPyType, not '%s'", actual_type);
+				throw InvalidInputException("The 'type' of a Value should be of type DuckDBPyType, not '%s'",
+				                            actual_type);
 			}
 			return TransformPythonValue(object, internal_type->Type());
 		}
@@ -615,8 +616,8 @@ struct PythonValueConversion {
 			throw InternalException("Unsupported fallback");
 		}
 	}
-	static void HandleObject(py::handle ele, PythonObjectType object_type, Value &result, const LogicalType &target_type,
-						   bool nan_as_null) {
+	static void HandleObject(py::handle ele, PythonObjectType object_type, Value &result,
+	                         const LogicalType &target_type, bool nan_as_null) {
 		result = HandleObjectInternal(ele, object_type, target_type, nan_as_null);
 	}
 };
@@ -630,7 +631,9 @@ struct PythonVectorConversion {
 	}
 	static void HandleBoolean(Vector &result, const idx_t &result_offset, bool val) {
 		if (result.GetType().id() != LogicalTypeId::BOOLEAN) {
-			throw TypeMismatchException(LogicalType::BOOLEAN, result.GetType(), "Python Conversion Failure: Expected a value of type %s, but got a value of type boolean");
+			throw TypeMismatchException(
+			    LogicalType::BOOLEAN, result.GetType(),
+			    "Python Conversion Failure: Expected a value of type %s, but got a value of type boolean");
 		}
 		FlatVector::GetData<bool>(result)[result_offset] = val;
 	}
@@ -645,7 +648,9 @@ struct PythonVectorConversion {
 			break;
 		}
 		default:
-			throw TypeMismatchException(LogicalType::DOUBLE, result.GetType(), "Python Conversion Failure: Expected a value of type %s, but got a value of type double");
+			throw TypeMismatchException(
+			    LogicalType::DOUBLE, result.GetType(),
+			    "Python Conversion Failure: Expected a value of type %s, but got a value of type double");
 		}
 	}
 	static void HandleLongAsDouble(Vector &result, const idx_t &result_offset, double val) {
@@ -753,7 +758,7 @@ struct PythonVectorConversion {
 
 	static void HandleDate(Vector &result, const idx_t &result_offset, PyDate &date) {
 		auto &result_type = result.GetType();
-		switch(result_type.id()) {
+		switch (result_type.id()) {
 		case LogicalTypeId::DATE:
 			FlatVector::GetData<date_t>(result)[result_offset] = date.ToDate();
 			break;
@@ -767,7 +772,7 @@ struct PythonVectorConversion {
 
 	static void HandleTime(Vector &result, const idx_t &result_offset, PyTime &time) {
 		auto &result_type = result.GetType();
-		switch(result_type.id()) {
+		switch (result_type.id()) {
 		case LogicalTypeId::TIME:
 			FlatVector::GetData<dtime_t>(result)[result_offset] = time.ToDuckTime();
 			break;
@@ -781,9 +786,10 @@ struct PythonVectorConversion {
 
 	static void HandleBlob(Vector &result, const idx_t &result_offset, const_data_ptr_t blob, idx_t blob_size) {
 		auto &result_type = result.GetType();
-		switch(result_type.id()) {
+		switch (result_type.id()) {
 		case LogicalTypeId::BLOB:
-			FlatVector::GetData<string_t>(result)[result_offset] = StringVector::AddStringOrBlob(result, const_char_ptr_cast(blob), blob_size);
+			FlatVector::GetData<string_t>(result)[result_offset] =
+			    StringVector::AddStringOrBlob(result, const_char_ptr_cast(blob), blob_size);
 			break;
 		default: {
 			auto value = Value::BLOB(blob, blob_size);
@@ -795,7 +801,7 @@ struct PythonVectorConversion {
 
 	static void HandleDateTime(Vector &result, const idx_t &result_offset, PyDateTime &datetime) {
 		auto &result_type = result.GetType();
-		switch(result_type.id()) {
+		switch (result_type.id()) {
 		case LogicalTypeId::TIMESTAMP:
 			FlatVector::GetData<timestamp_t>(result)[result_offset] = datetime.ToTimestamp();
 			break;
@@ -813,17 +819,19 @@ struct PythonVectorConversion {
 		}
 	}
 
-	template<bool IS_LIST>
+	template <bool IS_LIST>
 	static void HandleListFast(Vector &result, const idx_t &result_offset, py::handle ele, idx_t list_size) {
 		auto &result_type = result.GetType();
 		if (result_type.id() == LogicalTypeId::ARRAY) {
 			idx_t array_size = ArrayType::GetSize(result_type);
 			if (list_size != array_size) {
-				throw InvalidInputException("Python Conversion Failure: Array size mismatch - expected an array of size %d, but got a list of size %d", array_size, list_size);
+				throw InvalidInputException("Python Conversion Failure: Array size mismatch - expected an array of "
+				                            "size %d, but got a list of size %d",
+				                            array_size, list_size);
 			}
 			auto &child_array = ArrayVector::GetEntry(result);
 			idx_t start_offset = result_offset * array_size;
-			for(idx_t i = 0; i < list_size; i++) {
+			for (idx_t i = 0; i < list_size; i++) {
 				auto child_ele = IS_LIST ? PyList_GetItem(ele.ptr(), i) : PyTuple_GetItem(ele.ptr(), i);
 				TransformPythonObject(child_ele, child_array, start_offset + i);
 			}
@@ -841,7 +849,7 @@ struct PythonVectorConversion {
 
 			// convert the child elements
 			auto &child_vector = ListVector::GetEntry(result);
-			for(idx_t i = 0; i < list_size; i++) {
+			for (idx_t i = 0; i < list_size; i++) {
 				auto child_ele = IS_LIST ? PyList_GetItem(ele.ptr(), i) : PyTuple_GetItem(ele.ptr(), i);
 				TransformPythonObject(child_ele, child_vector, start_offset + i);
 			}
@@ -868,8 +876,8 @@ struct PythonVectorConversion {
 		auto child_count = child_types.size();
 		if (size != child_count) {
 			throw InvalidInputException("Tried to create a STRUCT value from a tuple containing %d elements, but the "
-										"STRUCT consists of %d children",
-										size, child_count);
+			                            "STRUCT consists of %d children",
+			                            size, child_count);
 		}
 
 		auto &struct_children = StructVector::GetEntries(result);
@@ -881,7 +889,7 @@ struct PythonVectorConversion {
 
 	static void HandleTuple(Vector &result, const idx_t &result_offset, py::handle ele, idx_t tuple_size) {
 		auto &result_type = result.GetType();
-		switch(result_type.id()) {
+		switch (result_type.id()) {
 		case LogicalTypeId::STRUCT:
 			ConvertTupleToStruct(result, result_offset, ele, tuple_size);
 			break;
@@ -898,17 +906,15 @@ struct PythonVectorConversion {
 		result.SetValue(result_offset, val);
 	}
 	static void HandleObject(py::handle ele, PythonObjectType object_type, Vector &result, const idx_t &result_offset,
-						   bool nan_as_null) {
+	                         bool nan_as_null) {
 		Value result_val;
 		PythonValueConversion::HandleObject(ele, object_type, result_val, result.GetType(), nan_as_null);
 		result.SetValue(result_offset, result_val);
 	}
 };
 
-
-template<class OP, class A, class B>
-void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
-						   bool nan_as_null) {
+template <class OP, class A, class B>
+void TransformPythonObjectInternal(py::handle ele, A &result, const B &param, bool nan_as_null) {
 	auto object_type = GetPythonObjectType(ele);
 
 	switch (object_type) {
@@ -934,7 +940,7 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 		if (overflow != 0) {
 			PyErr_Clear();
 			auto &conversion_target = OP::ConversionTarget(result, param);
-			switch(conversion_target.id()) {
+			switch (conversion_target.id()) {
 			case LogicalTypeId::BIGINT:
 			case LogicalTypeId::INTEGER:
 			case LogicalTypeId::SMALLINT:
@@ -942,7 +948,8 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 			case LogicalTypeId::UINTEGER:
 			case LogicalTypeId::USMALLINT:
 			case LogicalTypeId::UTINYINT:
-				throw InvalidInputException("Python Conversion Failure: Value out of range for type %s", conversion_target);
+				throw InvalidInputException("Python Conversion Failure: Value out of range for type %s",
+				                            conversion_target);
 			default:
 				break;
 			}
@@ -954,7 +961,8 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 					break;
 				}
 				if (conversion_target.id() == LogicalTypeId::UBIGINT) {
-					throw InvalidInputException("Python Conversion Failure: Value out of range for type %s", conversion_target);
+					throw InvalidInputException("Python Conversion Failure: Value out of range for type %s",
+					                            conversion_target);
 				}
 				PyErr_Clear();
 			}
@@ -1040,13 +1048,15 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 		OP::HandleBlob(result, param, const_data_ptr_t(ele_string.data()), ele_string.size());
 		break;
 	}
+	case PythonObjectType::NdArray:
+	case PythonObjectType::NdDatetime:
+		TransformPythonObjectInternal<OP>(ele.attr("tolist")(), result, param, nan_as_null);
+		break;
 	case PythonObjectType::Uuid:
 	case PythonObjectType::Timedelta:
 	case PythonObjectType::Dict:
-	case PythonObjectType::NdArray:
-	case PythonObjectType::NdDatetime:
 	case PythonObjectType::Value:
-	case PythonObjectType::Decimal:{
+	case PythonObjectType::Decimal: {
 		OP::HandleObject(ele, object_type, result, param, nan_as_null);
 		break;
 	}
@@ -1058,8 +1068,7 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 	}
 }
 
-void TransformPythonObject(py::handle ele, Vector &vector, idx_t result_offset,
-						   bool nan_as_null) {
+void TransformPythonObject(py::handle ele, Vector &vector, idx_t result_offset, bool nan_as_null) {
 	TransformPythonObjectInternal<PythonVectorConversion>(ele, vector, result_offset, nan_as_null);
 }
 
