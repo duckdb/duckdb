@@ -396,6 +396,30 @@ struct PythonValueConversion {
 			break;
 		}
 	}
+	static void HandleList(Value &result, const LogicalType &target_type, py::handle ele, idx_t list_size) {
+		vector<Value> values;
+		values.reserve(list_size);
+
+		LogicalType child_type = LogicalType::UNKNOWN;
+		bool is_array = false;
+		if (target_type.id() == LogicalTypeId::ARRAY) {
+			child_type = ArrayType::GetChildType(target_type);
+			is_array = true;
+		} else if (target_type.id() == LogicalTypeId::LIST) {
+			child_type = ListType::GetChildType(target_type);
+		}
+		LogicalType element_type = LogicalType::SQLNULL;
+		for (idx_t i = 0; i < list_size; i++) {
+			Value new_value = TransformPythonValue(ele.attr("__getitem__")(i), child_type);
+			element_type = LogicalType::ForceMaxLogicalType(element_type, new_value.type());
+			values.push_back(std::move(new_value));
+		}
+		if (is_array) {
+			result = Value::ARRAY(element_type, std::move(values));
+		} else {
+			result = Value::LIST(element_type, std::move(values));
+		}
+	}
 	static Value HandleObjectInternal(py::handle ele, PythonObjectType object_type, const LogicalType &target_type, bool nan_as_null) {
 		switch (object_type) {
 		case PythonObjectType::Decimal: {
@@ -462,12 +486,6 @@ struct PythonValueConversion {
 			}
 			}
 		}
-		case PythonObjectType::List:
-			if (target_type.id() == LogicalTypeId::ARRAY) {
-				return TransformArrayValue(ele, target_type);
-			} else {
-				return TransformListValue(ele, target_type);
-			}
 		case PythonObjectType::Dict: {
 			PyDictionary dict = PyDictionary(py::reinterpret_borrow<py::object>(ele));
 			switch (target_type.id()) {
@@ -642,6 +660,48 @@ struct PythonVectorConversion {
 			break;
 		}
 	}
+
+//	void TransformPythonObject(py::handle ele, Vector &vector, idx_t result_offset,
+//							   bool nan_as_null) {
+	static void HandleList(Vector &result, const idx_t &result_offset, py::handle ele, idx_t list_size) {
+		auto &result_type = result.GetType();
+		if (result_type.id() == LogicalTypeId::ARRAY) {
+			idx_t array_size = ArrayType::GetSize(result_type);
+			if (list_size != array_size) {
+				throw InvalidInputException("Python Conversion Failure: Array size mismatch - expected an array of size %d, but got a list of size %d", array_size, list_size);
+			}
+			auto &child_array = ArrayVector::GetEntry(result);
+			idx_t start_offset = result_offset * array_size;
+			for(idx_t i = 0; i < list_size; i++) {
+				auto child_ele = ele.attr("__getitem__")(i);
+				TransformPythonObject(child_ele, child_array, start_offset + i);
+			}
+			return;
+		}
+		if (result_type.id() == LogicalTypeId::LIST) {
+			// reserve space for the objects we are about to convert
+			auto start_offset = ListVector::GetListSize(result);
+			ListVector::Reserve(result, start_offset + list_size);
+
+			// set up the list entry
+			auto &list_entry = FlatVector::GetData<list_entry_t>(result)[result_offset];
+			list_entry.offset = start_offset;
+			list_entry.length = list_size;
+
+			// convert the child elements
+			auto &child_vector = ListVector::GetEntry(result);
+			for(idx_t i = 0; i < list_size; i++) {
+				auto child_ele = ele.attr("__getitem__")(i);
+				TransformPythonObject(child_ele, child_vector, start_offset + i);
+			}
+			ListVector::SetListSize(result, start_offset + list_size);
+			return;
+		}
+		// fallback to value conversion
+		Value result_val;
+		PythonValueConversion::HandleList(result_val, result_type, ele, list_size);
+		FallbackValueConversion(result, result_offset, std::move(result_val));
+	}
 	static void FallbackValueConversion(Vector &result, const idx_t &result_offset, Value val) {
 		result.SetValue(result_offset, val);
 	}
@@ -704,6 +764,11 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 		}
 		break;
 	}
+	case PythonObjectType::List: {
+		auto list_size = py::len(ele);
+		OP::HandleList(result, param, ele, list_size);
+		break;
+	}
 	case PythonObjectType::Uuid:
 	case PythonObjectType::Datetime:
 	case PythonObjectType::Time:
@@ -713,7 +778,6 @@ void TransformPythonObjectInternal(py::handle ele, A &result, const B &param,
 	case PythonObjectType::ByteArray:
 	case PythonObjectType::MemoryView:
 	case PythonObjectType::Bytes:
-	case PythonObjectType::List:
 	case PythonObjectType::Dict:
 	case PythonObjectType::Tuple:
 	case PythonObjectType::NdArray:
