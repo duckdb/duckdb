@@ -862,15 +862,36 @@ struct PythonVectorConversion {
 		PythonValueConversion::HandleList(result_val, result_type, ele, list_size);
 		FallbackValueConversion(result, result_offset, std::move(result_val));
 	}
-	static void HandleTuple(Vector &result, const idx_t &result_offset, py::handle ele, idx_t list_size) {
-		auto &result_type = result.GetType();
-		if (result_type.id() == LogicalTypeId::ARRAY || result_type.id() == LogicalTypeId::LIST) {
-			HandleListFast<false>(result, result_offset, ele, list_size);
-			return;
+
+	static void ConvertTupleToStruct(Vector &result, const idx_t &result_offset, py::handle ele, idx_t size) {
+		auto &child_types = StructType::GetChildTypes(result.GetType());
+		auto child_count = child_types.size();
+		if (size != child_count) {
+			throw InvalidInputException("Tried to create a STRUCT value from a tuple containing %d elements, but the "
+										"STRUCT consists of %d children",
+										size, child_count);
 		}
-		Value result_val;
-		PythonValueConversion::HandleTuple(result_val, result_type, ele, list_size);
-		FallbackValueConversion(result, result_offset, std::move(result_val));
+
+		auto &struct_children = StructVector::GetEntries(result);
+		for (idx_t i = 0; i < child_count; i++) {
+			auto child_ele = PyTuple_GetItem(ele.ptr(), i);
+			TransformPythonObject(child_ele, *struct_children[i], result_offset);
+		}
+	}
+
+	static void HandleTuple(Vector &result, const idx_t &result_offset, py::handle ele, idx_t tuple_size) {
+		auto &result_type = result.GetType();
+		switch(result_type.id()) {
+		case LogicalTypeId::STRUCT:
+			ConvertTupleToStruct(result, result_offset, ele, tuple_size);
+			break;
+		case LogicalTypeId::ARRAY:
+		case LogicalTypeId::LIST:
+			HandleListFast<false>(result, result_offset, ele, tuple_size);
+			break;
+		default:
+			throw InternalException("Unsupported type for HandleTuple");
+		}
 	}
 
 	static void FallbackValueConversion(Vector &result, const idx_t &result_offset, Value val) {
