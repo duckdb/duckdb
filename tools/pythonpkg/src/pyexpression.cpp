@@ -415,12 +415,15 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SQLExpression(const string &s
 		conn = DuckDBPyConnection::DefaultConnection();
 	}
 	auto &context = *conn->con.GetConnection().context;
-	auto expressions = Parser::ParseExpressionList(sql, context.GetParserOptions());
-
-	if (expressions.empty()) {
-		throw InvalidInputException("No expressions were parsed from the provided SQL string");
+	vector<unique_ptr<ParsedExpression>> expressions;
+	try {
+		expressions = Parser::ParseExpressionList(sql, context.GetParserOptions());
+	} catch (std::runtime_error &e) {
+		throw;
 	}
-	if (expressions.size() > 1) {
+
+	//! Think this is already handled by ParseExpressionList, just here for completeness
+	if (DUCKDB_UNLIKELY(expressions.size() > 1)) {
 		throw InvalidInputException("More than one expression was parsed from the provided SQL string");
 	}
 
