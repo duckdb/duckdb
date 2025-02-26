@@ -26,20 +26,20 @@ void ReadCSVRelation::InitializeAlias(const vector<string> &input) {
 }
 
 CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, const vector<string> &input,
-                                     named_parameter_map_t &options, vector<ColumnDefinition> &columns) {
+                                     named_parameter_map_t &options, vector<ColumnDefinition> &columns,
+                                     MultiFileReaderOptions &file_options) {
 	auto file_list = MultiFileReader::CreateValueFromFileList(input);
 
 	auto multi_file_reader = MultiFileReader::CreateDefault("ReadCSVRelation");
 	vector<string> files;
 	files = multi_file_reader->CreateFileList(*context, file_list)->GetAllFiles();
-	;
+
 	D_ASSERT(!files.empty());
 
 	auto &file_name = files[0];
 	CSVReaderOptions csv_options;
 	csv_options.file_path = file_name;
 	vector<string> empty;
-	MultiFileReaderOptions file_options;
 	csv_options.FromNamedParameters(options, *context, file_options);
 
 	// Run the auto-detect, populating the options with the detected settings
@@ -73,7 +73,7 @@ CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, c
 		if (csv_options.auto_detect) {
 			shared_ptr<CSVBufferManager> buffer_manager;
 			buffer_manager = make_shared_ptr<CSVBufferManager>(*context, csv_options, files[0], 0);
-			CSVSniffer sniffer(csv_options,file_options,  buffer_manager, CSVStateMachineCache::Get(*context));
+			CSVSniffer sniffer(csv_options, file_options, buffer_manager, CSVStateMachineCache::Get(*context));
 			auto sniffer_result = sniffer.SniffCSV();
 			auto &types = sniffer_result.return_types;
 			auto &names = sniffer_result.names;
@@ -102,10 +102,12 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
     : TableFunctionRelation(context, "read_csv_auto", {MultiFileReader::CreateValueFromFileList(input)}, nullptr,
                             false),
       alias(std::move(alias_p)) {
+	MultiFileReaderOptions file_options;
 
 	InitializeAlias(input);
 	CSVReaderOptions csv_options;
-	context->RunFunctionInTransaction([&]() { csv_options = ReadCSVRelationBind(context, input, options, columns); });
+	context->RunFunctionInTransaction(
+	    [&]() { csv_options = ReadCSVRelationBind(context, input, options, columns, file_options); });
 
 	// Capture the options potentially set/altered by the auto-detection phase
 	csv_options.ToNamedParameters(options);
