@@ -236,6 +236,13 @@ if(${EXPORT_DYNAMIC_SYMBOLS})
 endif()
 
 set(VERSIONING_TAG_MATCH "v*.*.*")
+######
+# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
+# - CMakeLists.txt
+# - scripts/amalgamation.py
+# - scripts/package_build.py
+# - tools/pythonpkg/setup.py
+######
 option(MAIN_BRANCH_VERSIONING "Versioning scheme for main branch" TRUE)
 if(${MAIN_BRANCH_VERSIONING})
   set(VERSIONING_TAG_MATCH "v*.*.0")

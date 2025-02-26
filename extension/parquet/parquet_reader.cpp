@@ -127,9 +127,16 @@ LogicalType ParquetReader::DeriveLogicalType(const SchemaElement &s_ele, Parquet
 	}
 	schema.parquet_type = s_ele.type;
 	if (s_ele.__isset.logicalType) {
-		if (s_ele.logicalType.__isset.UUID) {
+		if (s_ele.logicalType.__isset.UNKNOWN) {
+			return LogicalType::SQLNULL;
+		} else if (s_ele.logicalType.__isset.UUID) {
 			if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY) {
 				return LogicalType::UUID;
+			}
+		} else if (s_ele.logicalType.__isset.FLOAT16) {
+			if (s_ele.type == Type::FIXED_LEN_BYTE_ARRAY && s_ele.type_length == 2) {
+				schema.type_info = ParquetExtraTypeInfo::FLOAT16;
+				return LogicalType::FLOAT;
 			}
 		} else if (s_ele.logicalType.__isset.TIMESTAMP) {
 			if (s_ele.logicalType.TIMESTAMP.unit.__isset.MILLIS) {
@@ -704,14 +711,14 @@ ParquetUnionData::~ParquetUnionData() {
 ParquetReader::ParquetReader(ClientContext &context_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
     : BaseFileReader(string()), fs(CachingFileSystem::Get(context_p)), allocator(BufferAllocator::Get(context_p)),
-      metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)) {
+      metadata(std::move(metadata_p)), parquet_options(std::move(parquet_options_p)), rows_read(0) {
 	InitializeSchema(context_p);
 }
 
 ParquetReader::~ParquetReader() {
 }
 
-const FileMetaData *ParquetReader::GetFileMetadata() {
+const FileMetaData *ParquetReader::GetFileMetadata() const {
 	D_ASSERT(metadata);
 	D_ASSERT(metadata->metadata);
 	return metadata->metadata.get();
@@ -920,11 +927,11 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t c
 	                                  *state.thrift_file_proto);
 }
 
-idx_t ParquetReader::NumRows() {
+idx_t ParquetReader::NumRows() const {
 	return GetFileMetadata()->num_rows;
 }
 
-idx_t ParquetReader::NumRowGroups() {
+idx_t ParquetReader::NumRowGroups() const {
 	return GetFileMetadata()->row_groups.size();
 }
 
@@ -1121,8 +1128,9 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
 			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count);
 		}
-
-		result.Slice(state.sel, filter_count);
+		if (scan_count != filter_count) {
+			result.Slice(state.sel, filter_count);
+		}
 	} else {
 		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
 			auto file_col_idx = reader_data.column_ids[col_idx];
@@ -1136,6 +1144,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		}
 	}
 
+	rows_read += scan_count;
 	state.group_offset += scan_count;
 	return true;
 }

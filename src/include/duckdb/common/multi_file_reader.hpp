@@ -82,6 +82,30 @@ struct MultiFileReaderGlobalState {
 	}
 };
 
+struct MultiFileBindData : public TableFunctionData {
+	unique_ptr<TableFunctionData> bind_data;
+	shared_ptr<MultiFileList> file_list;
+	unique_ptr<MultiFileReader> multi_file_reader;
+	vector<MultiFileReaderColumnDefinition> columns;
+	MultiFileReaderBindData reader_bind;
+	MultiFileReaderOptions file_options;
+	vector<LogicalType> types;
+	vector<string> names;
+	virtual_column_map_t virtual_columns;
+	//! Table column names - set when using COPY tbl FROM file.parquet
+	vector<string> table_columns;
+	shared_ptr<BaseFileReader> initial_reader;
+	// The union readers are created (when the union_by_name option is on) during binding
+	vector<shared_ptr<BaseUnionData>> union_readers;
+
+	void Initialize(shared_ptr<BaseFileReader> reader) {
+		initial_reader = std::move(reader);
+	}
+	void Initialize(ClientContext &, BaseUnionData &union_data) {
+		Initialize(std::move(union_data.reader));
+	}
+};
+
 //! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
 struct MultiFileReader {
 public:
@@ -180,10 +204,10 @@ public:
 	DUCKDB_API static void GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
 	                                         virtual_column_map_t &result);
 
-	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
+	template <class OP, class OPTIONS_TYPE>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
-	                                        vector<string> &names, MultiFileList &files, RESULT_CLASS &result,
-	                                        OPTIONS_CLASS &options, MultiFileReaderOptions &file_options) {
+	                                        vector<string> &names, MultiFileList &files, MultiFileBindData &result,
+	                                        OPTIONS_TYPE &options, MultiFileReaderOptions &file_options) {
 		D_ASSERT(file_options.union_by_name);
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
@@ -192,8 +216,8 @@ public:
 		// note that this requires opening readers for each file and reading the metadata of each file
 		// note also that it requires fully expanding the MultiFileList
 		auto materialized_file_list = files.GetAllFiles();
-		auto union_readers = UnionByName::UnionCols<READER_CLASS>(context, materialized_file_list, union_col_types,
-		                                                          union_col_names, options);
+		auto union_readers = UnionByName::UnionCols<OP>(context, materialized_file_list, union_col_types,
+		                                                union_col_names, options, file_options);
 
 		std::move(union_readers.begin(), union_readers.end(), std::back_inserter(result.union_readers));
 		// perform the binding on the obtained set of names + types
@@ -201,20 +225,20 @@ public:
 		BindOptions(file_options, files, union_col_types, union_col_names, bind_data);
 		names = union_col_names;
 		return_types = union_col_types;
-		result.Initialize(context, result.union_readers[0]);
+		result.Initialize(context, *result.union_readers[0]);
 		D_ASSERT(names.size() == return_types.size());
 		return bind_data;
 	}
 
-	template <class READER_CLASS, class RESULT_CLASS, class OPTIONS_CLASS>
+	template <class OP, class OPTIONS_TYPE>
 	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
-	                                   MultiFileList &files, RESULT_CLASS &result, OPTIONS_CLASS &options,
+	                                   MultiFileList &files, MultiFileBindData &result, OPTIONS_TYPE &options,
 	                                   MultiFileReaderOptions &file_options) {
 		if (file_options.union_by_name) {
-			return BindUnionReader<READER_CLASS>(context, return_types, names, files, result, options, file_options);
+			return BindUnionReader<OP>(context, return_types, names, files, result, options, file_options);
 		} else {
-			shared_ptr<READER_CLASS> reader;
-			reader = make_shared_ptr<READER_CLASS>(context, files.GetFirstFile(), options);
+			shared_ptr<BaseFileReader> reader;
+			reader = OP::CreateReader(context, files.GetFirstFile(), options, file_options);
 			auto &columns = reader->GetColumns();
 			for (auto &column : columns) {
 				return_types.emplace_back(column.type);

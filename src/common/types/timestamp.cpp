@@ -17,7 +17,7 @@ namespace duckdb {
 static_assert(sizeof(timestamp_t) == sizeof(int64_t), "timestamp_t was padded");
 
 // Temporal values need to round down when changing precision,
-// but C/C++ rounds towrds 0 when you simply divide.
+// but C/C++ rounds towards 0 when you simply divide.
 // This piece of bit banging solves that problem.
 template <typename T>
 static inline T TemporalRound(T value, T scale) {

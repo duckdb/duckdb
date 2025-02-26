@@ -138,13 +138,12 @@ struct DebugClientContextState : public ClientContextState {
 #endif
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(std::move(database)), interrupted(false), transaction(*this) {
+    : db(std::move(database)), interrupted(false), transaction(*this), connection_id(DConstants::INVALID_INDEX) {
 	registered_state = make_uniq<RegisteredStateManager>();
 #ifdef DEBUG
 	registered_state->GetOrCreate<DebugClientContextState>("debug_client_context_state");
 #endif
 	LoggingContext context(LogContextScope::CONNECTION);
-	context.client_context = reinterpret_cast<idx_t>(this);
 	logger = db->GetLogManager().CreateLogger(context, true);
 	client_data = make_uniq<ClientData>(*this);
 }
@@ -215,8 +214,9 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 
 	// Refresh the logger to ensure we are in sync with global log settings
 	LoggingContext context(LogContextScope::CONNECTION);
-	context.client_context = reinterpret_cast<idx_t>(this);
-	context.transaction_id = transaction.GetActiveQuery();
+	context.connection_id = connection_id;
+	context.transaction_id = transaction.ActiveTransaction().global_transaction_id;
+	context.query_id = transaction.GetActiveQuery();
 	logger = db->GetLogManager().CreateLogger(context, true);
 	DUCKDB_LOG_INFO(*this, "duckdb.ClientContext.BeginQuery", query);
 }
@@ -260,7 +260,7 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 	// Refresh the logger
 	logger->Flush();
 	LoggingContext context(LogContextScope::CONNECTION);
-	context.client_context = reinterpret_cast<idx_t>(this);
+	context.connection_id = reinterpret_cast<idx_t>(this);
 	logger = db->GetLogManager().CreateLogger(context, true);
 
 	// Notify any registered state of query end
@@ -314,6 +314,10 @@ Logger &ClientContext::GetLogger() const {
 const string &ClientContext::GetCurrentQuery() {
 	D_ASSERT(active_query);
 	return active_query->query;
+}
+
+connection_t ClientContext::GetConnectionId() const {
+	return connection_id;
 }
 
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending) {

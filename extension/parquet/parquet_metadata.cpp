@@ -424,6 +424,9 @@ Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool i
 	if (type.__isset.UUID) {
 		return Value(PrintParquetElementToString(type.UUID));
 	}
+	if (type.__isset.FLOAT16) {
+		return Value(PrintParquetElementToString(type.FLOAT16));
+	}
 	return Value();
 }
 
