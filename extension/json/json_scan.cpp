@@ -16,15 +16,11 @@ JSONScanData::JSONScanData() {
 
 void JSONScanData::InitializeReaders(ClientContext &context, MultiFileBindData &bind_data) {
 	auto files = bind_data.file_list->GetAllFiles();
-	bind_data.union_readers.resize(files.empty() ? 0 : files.size() - 1);
+	bind_data.union_readers.resize(files.empty() ? 0 : files.size());
 	for (idx_t file_idx = 0; file_idx < files.size(); file_idx++) {
-		if (file_idx == 0) {
-			bind_data.initial_reader = make_uniq<BufferedJSONReader>(context, options, files[0]);
-		} else {
-			auto union_data = make_uniq<BaseUnionData>(files[file_idx]);
-			union_data->reader = make_uniq<BufferedJSONReader>(context, options, files[file_idx]);
-			bind_data.union_readers[file_idx - 1] = std::move(union_data);
-		}
+		auto union_data = make_uniq<BaseUnionData>(files[file_idx]);
+		union_data->reader = make_uniq<BufferedJSONReader>(context, options, files[file_idx]);
+		bind_data.union_readers[file_idx] = std::move(union_data);
 	}
 }
 
@@ -119,11 +115,6 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	}
 
 	// Place readers where they belong
-	if (bind_data.initial_reader) {
-		auto &initial_reader = bind_data.initial_reader->Cast<BufferedJSONReader>();
-		initial_reader.Reset();
-		gstate.json_readers.emplace_back(&initial_reader);
-	}
 	for (const auto &reader : bind_data.union_readers) {
 		auto &union_reader = reader->reader->Cast<BufferedJSONReader>();
 		union_reader.Reset();

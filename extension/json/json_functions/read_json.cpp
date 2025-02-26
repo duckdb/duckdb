@@ -54,12 +54,8 @@ public:
 		JSONScanGlobalState gstate(context, bind_data);
 		JSONScanLocalState lstate(context, gstate);
 		optional_ptr<BufferedJSONReader> reader;
-		if (file_idx == 0) {
-			if (bind_data.initial_reader) {
-				reader = &bind_data.initial_reader->Cast<BufferedJSONReader>();
-			}
-		} else if (bind_data.union_readers[file_idx - 1]) {
-			reader = &bind_data.union_readers[file_idx - 1]->reader->Cast<BufferedJSONReader>();
+		if (bind_data.union_readers[file_idx]) {
+			reader = &bind_data.union_readers[file_idx]->reader->Cast<BufferedJSONReader>();
 		}
 		gstate.json_readers.emplace_back(reader.get());
 
