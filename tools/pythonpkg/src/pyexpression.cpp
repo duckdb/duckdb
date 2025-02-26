@@ -11,6 +11,7 @@
 #include "duckdb/parser/expression/collate_expression.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/parser/parser.hpp"
+#include "duckdb_python/pybind11/conversions/pyconnection_default.hpp"
 
 namespace duckdb {
 
