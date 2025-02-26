@@ -26,6 +26,8 @@ COPY integers TO '__TEST_DIR__/test_batch_copy_to_file.parquet' (RETURN_FILES TR
 statement ok
 SET threads=2;
 
+# as mentioned in per_thread_output.test, the number of files do not necessarily match the number of threads
+# here, we check if the number of rows are correct and at least one file has been written.
 query II
 COPY integers TO '__TEST_DIR__/test_per_thread_output' (RETURN_FILES, PER_THREAD_OUTPUT);
 ----
