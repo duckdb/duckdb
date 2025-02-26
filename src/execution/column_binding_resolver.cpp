@@ -10,6 +10,8 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/planner/operator/logical_recursive_cte.hpp"
+#include "duckdb/planner/operator/logical_create_bf.hpp"
+#include "duckdb/planner/operator/logical_use_bf.hpp"
 
 namespace duckdb {
 
@@ -18,6 +20,44 @@ ColumnBindingResolver::ColumnBindingResolver(bool verify_only) : verify_only(ver
 
 void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_CREATE_BF: {
+		VisitOperatorChildren(op);
+		auto &create_bf = op.Cast<LogicalCreateBF>();
+		for (auto &bf : create_bf.bf_to_create) {
+			for (auto &col_bind : bf->GetColBuilt()) {
+				for (idx_t i = 0; i < bindings.size(); i++) {
+					if (col_bind == bindings[i]) {
+						bf->BoundColsBuilt.emplace_back(i);
+						break;
+					}
+				}
+			}
+			if (bf->BoundColsBuilt.size() == 0) {
+				throw InternalException("No bound column found!");
+			}
+		}
+		bindings = op.GetColumnBindings();
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_USE_BF: {
+		VisitOperatorChildren(op);
+		auto &use_bf = op.Cast<LogicalUseBF>();
+		for (auto bf : use_bf.bf_to_use) {
+			for (auto &col_bind : bf->GetColApplied()) {
+				for (idx_t i = 0; i < bindings.size(); i++) {
+					if (col_bind == bindings[i]) {
+						bf->BoundColsApplied.emplace_back(i);
+						break;
+					}
+				}
+			}
+			if (bf->BoundColsApplied.size() == 0) {
+				throw InternalException("No bound column found!");
+			}
+		}
+		bindings = op.GetColumnBindings();
+		return;
+	}
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		// special case: comparison join

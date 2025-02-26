@@ -287,6 +287,22 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		return;
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		auto &filter = op.Cast<LogicalFilter>();
+		if (!filter.projection_map.empty()) {
+			// if we have any entries in the filter projection map don't prune any columns
+			// FIXME: we can do something more clever here
+			everything_referenced = true;
+		}
+		break;
+	}
+		// Comment the below code for TPC-H Q21 to decrease the scanning time of lineitem(s)
+	case LogicalOperatorType::LOGICAL_CREATE_BF:
+	case LogicalOperatorType::LOGICAL_USE_BF: {
+		// TODO: we can do something more clever here
+		// everything_referenced = true;
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_DISTINCT: {
 		auto &distinct = op.Cast<LogicalDistinct>();
 		if (distinct.distinct_type == DistinctType::DISTINCT_ON) {
@@ -341,6 +357,29 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		comp_join.conditions = std::move(unique_conditions);
+	}
+
+	if (op.type == LogicalOperatorType::LOGICAL_CREATE_BF) {
+		auto &create_bf = op.Cast<LogicalCreateBF>();
+		for (auto cell : create_bf.bf_to_create) {
+			for (auto &v : cell->column_bindings_built_) {
+				if (column_references.find(v) != column_references.end()) {
+					auto exprs = column_references[v];
+					v = exprs.bindings[0].get().binding;
+				}
+			}
+		}
+	}
+	if (op.type == LogicalOperatorType::LOGICAL_USE_BF) {
+		auto &use_bf = op.Cast<LogicalUseBF>();
+		for (auto cell : use_bf.bf_to_use) {
+			for (auto &v : cell->column_bindings_applied_) {
+				if (column_references.find(v) != column_references.end()) {
+					auto exprs = column_references[v];
+					v = exprs.bindings[0].get().binding;
+				}
+			}
+		}
 	}
 }
 

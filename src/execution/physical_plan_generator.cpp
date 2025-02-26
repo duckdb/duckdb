@@ -10,6 +10,8 @@
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/list.hpp"
 #include "duckdb/execution/operator/helper/physical_verify_vector.hpp"
+#include "duckdb/planner/operator/logical_create_bf.hpp"
+#include "duckdb/planner/operator/logical_use_bf.hpp"
 
 namespace duckdb {
 
@@ -191,6 +193,12 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOperator &
 		break;
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
 		plan = CreatePlan(op.Cast<LogicalSimple>());
+		break;
+	case LogicalOperatorType::LOGICAL_CREATE_BF:
+		plan = CreatePlan(op.Cast<LogicalCreateBF>());
+		break;
+	case LogicalOperatorType::LOGICAL_USE_BF:
+		plan = CreatePlan(op.Cast<LogicalUseBF>());
 		break;
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR:
 		plan = op.Cast<LogicalExtensionOperator>().CreatePlan(context, *this);

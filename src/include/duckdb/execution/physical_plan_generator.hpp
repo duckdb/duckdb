@@ -18,6 +18,7 @@
 #include "duckdb/common/unordered_set.hpp"
 
 namespace duckdb {
+class PhysicalCreateBF;
 class ClientContext;
 class ColumnDataCollection;
 
@@ -56,6 +57,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCopyDatabase &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreate &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateBF &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateTable &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateIndex &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCreateSecret &op);
@@ -79,6 +81,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExplain &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalSetOperation &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalUpdate &op);
+	unique_ptr<PhysicalOperator> CreatePlan(LogicalUseBF &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPrepare &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalWindow &expr);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalExecute &op);
@@ -94,6 +97,7 @@ protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalCTERef &op);
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalPivot &op);
 
+	PhysicalCreateBF *CreatePlanFromRelated(LogicalCreateBF &op);
 	unique_ptr<PhysicalOperator> PlanAsOfJoin(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> PlanComparisonJoin(LogicalComparisonJoin &op);
 	unique_ptr<PhysicalOperator> PlanDelimJoin(LogicalComparisonJoin &op);

@@ -5,6 +5,10 @@ namespace duckdb {
 // LCOV_EXCL_START
 string PhysicalOperatorToString(PhysicalOperatorType type) {
 	switch (type) {
+	case PhysicalOperatorType::CREATE_BF:
+		return "CREATE_BF";
+	case PhysicalOperatorType::USE_BF:
+		return "USE_BF";
 	case PhysicalOperatorType::TABLE_SCAN:
 		return "TABLE_SCAN";
 	case PhysicalOperatorType::DUMMY_SCAN:
