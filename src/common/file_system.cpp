@@ -400,7 +400,10 @@ time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 }
 
 string FileSystem::GetVersionTag(FileHandle &handle) {
-	throw NotImplementedException("%s: GetVersionTag is not implemented!", GetName());
+	// Used to check cache invalidation in CachingFileSystem
+	// Returning an empty string here makes it so that caching is not used by default
+	// We implement this function in LocalFileSystem and httpfs so we can cache files there
+	return "";
 }
 
 FileType FileSystem::GetFileType(FileHandle &handle) {
