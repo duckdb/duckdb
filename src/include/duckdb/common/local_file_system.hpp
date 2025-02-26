@@ -38,6 +38,8 @@ public:
 	int64_t GetFileSize(FileHandle &handle) override;
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
 	time_t GetLastModifiedTime(FileHandle &handle) override;
+	//! Returns a tag that uniquely identifies the version of the file
+	string GetVersionTag(FileHandle &handle) override;
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
 	FileType GetFileType(FileHandle &handle) override;
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of

@@ -69,20 +69,19 @@ select nr_bytes, location, loaded from duckdb_external_file_cache() order by loc
 3045982	4	true
 1986	18281732	true
 
-# set the memory so low that the entries should be unloaded
+# set the memory so low that the ~3MB entry should be unloaded
 statement ok
-set memory_limit = '15kb';
+set memory_limit='100kb';
 
 # set it back to something reasonable so we can actually do the following queries
 statement ok
-set memory_limit = '500mb';
+set memory_limit='500mb';
 
-# loaded should now be "false"
+# loaded should now be "false" for the large buffer
 query III
-select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+select nr_bytes, location, loaded from duckdb_external_file_cache() where location = 4
 ----
 3045982	4	false
-1986	18281732	false
 
 # disabling the file cache should empty it
 statement ok
@@ -92,3 +91,19 @@ query III
 select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
 ----
 
+
+# test that we notice cache invalidation by rapidly overwriting
+statement ok
+set enable_external_file_cache=true;
+
+loop i 0 100
+
+statement ok
+copy (select ${i} i) to '__TEST_DIR__/i.parquet';
+
+query I
+select i = ${i} from '__TEST_DIR__/i.parquet';
+----
+true
+
+endloop

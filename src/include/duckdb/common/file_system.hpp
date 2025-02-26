@@ -140,6 +140,8 @@ public:
 	DUCKDB_API virtual int64_t GetFileSize(FileHandle &handle);
 	//! Returns the file last modified time of a file handle, returns timespec with zero on all attributes on error
 	DUCKDB_API virtual time_t GetLastModifiedTime(FileHandle &handle);
+	//! Returns a tag that uniquely identifies the version of the file
+	DUCKDB_API virtual string GetVersionTag(FileHandle &handle);
 	//! Returns the file type of the attached handle
 	DUCKDB_API virtual FileType GetFileType(FileHandle &handle);
 	//! Truncate a file to a maximum size of new_size, new_size should be smaller than or equal to the current size of

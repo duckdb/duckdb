@@ -28,7 +28,6 @@ struct CachedFileInformation {
 	string path;
 	idx_t nr_bytes;
 	idx_t location;
-	time_t last_modified;
 	bool loaded;
 };
 

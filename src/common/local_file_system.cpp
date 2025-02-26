@@ -565,6 +565,20 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return s.st_mtime;
 }
 
+string LocalFileSystem::GetVersionTag(FileHandle &handle) {
+	int fd = handle.Cast<UnixFileHandle>().fd;
+	struct stat s;
+	if (fstat(fd, &s) == -1) {
+		throw IOException("Failed to get file identifier for file \"%s\": %s", {{"errno", std::to_string(errno)}},
+		                  handle.path, strerror(errno));
+	}
+#if defined(__DARWIN__) || defined(__APPLE__)
+	return std::to_string(s.st_mtimespec.tv_nsec);
+#else // Assume POSIX
+	return std::to_string(s.st_mtim.tv_nsec);
+#endif
+}
+
 FileType LocalFileSystem::GetFileType(FileHandle &handle) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	return GetFileTypeInternal(fd);
@@ -1044,6 +1058,24 @@ time_t LocalFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	const auto SEC_TO_UNIX_EPOCH = 11644473600LL;
 	time_t result = (fileTime64 / WINDOWS_TICK - SEC_TO_UNIX_EPOCH);
 	return result;
+}
+
+string LocalFileSystem::GetVersionTag(FileHandle &handle) {
+	// Taken from GetLastModifiedTime above
+	HANDLE hFile = handle.Cast<WindowsFileHandle>().fd;
+
+	FILETIME last_write;
+	if (GetFileTime(hFile, nullptr, nullptr, &last_write) == 0) {
+		auto error = LocalFileSystem::GetLastErrorAsString();
+		throw IOException("Failed to get last modified time for file \"%s\": %s", handle.path, error);
+	}
+
+	ULARGE_INTEGER ul;
+	ul.LowPart = last_write.dwLowDateTime;
+	ul.HighPart = last_write.dwHighDateTime;
+	int64_t fileTime64 = ul.QuadPart;
+
+	return std::to_string(fileTime64);
 }
 
 void LocalFileSystem::Truncate(FileHandle &handle, int64_t new_size) {

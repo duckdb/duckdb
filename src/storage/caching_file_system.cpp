@@ -10,9 +10,9 @@
 namespace duckdb {
 
 CachingFileSystem::CachedFileRange::CachedFileRange(shared_ptr<BlockHandle> block_handle_p, idx_t nr_bytes_p,
-                                                    idx_t location_p, time_t last_modified_p)
+                                                    idx_t location_p, string version_tag_p)
     : block_handle(std::move(block_handle_p)), nr_bytes(nr_bytes_p), location(location_p),
-      last_modified(last_modified_p) {
+      version_tag(std::move(version_tag_p)) {
 }
 
 CachingFileSystem::CachedFileRange::~CachedFileRange() {
@@ -58,8 +58,9 @@ void CachingFileSystem::CachedFileRange::VerifyCheckSum() {
 CachingFileSystem::CachedFile::CachedFile(string path_p) : path(std::move(path_p)) {
 }
 
-void CachingFileSystem::CachedFile::Verify() const {
+void CachingFileSystem::CachedFile::Verify(const unique_lock<mutex> &guard) const {
 #ifdef DEBUG
+	VerifyLock(guard);
 	for (const auto &range1 : ranges) {
 		for (const auto &range2 : ranges) {
 			if (range1 == range2) {
@@ -69,6 +70,41 @@ void CachingFileSystem::CachedFile::Verify() const {
 		}
 	}
 #endif
+}
+
+idx_t &CachingFileSystem::CachedFile::FileSize(const unique_lock<mutex> &guard) {
+	VerifyLock(guard);
+	return file_size;
+}
+
+time_t &CachingFileSystem::CachedFile::LastModified(const unique_lock<mutex> &guard) {
+	VerifyLock(guard);
+	return last_modified;
+}
+
+string &CachingFileSystem::CachedFile::VersionTag(const unique_lock<mutex> &guard) {
+	VerifyLock(guard);
+	return version_tag;
+}
+
+bool &CachingFileSystem::CachedFile::CanSeek(const unique_lock<mutex> &guard) {
+	VerifyLock(guard);
+	return can_seek;
+}
+
+bool &CachingFileSystem::CachedFile::OnDiskFile(const unique_lock<mutex> &guard) {
+	VerifyLock(guard);
+	return on_disk_file;
+}
+
+map<idx_t, shared_ptr<CachingFileSystem::CachedFileRange>> &
+CachingFileSystem::CachedFile::Ranges(const unique_lock<mutex> &guard) {
+	VerifyLock(guard);
+	return ranges;
+}
+
+void CachingFileSystem::CachedFile::VerifyLock(const unique_lock<mutex> &guard) const {
+	D_ASSERT(guard.mutex() == &lock || guard.owns_lock());
 }
 
 CachingFileSystem::CachingFileSystem(DatabaseInstance &db, bool enable_p)
@@ -85,13 +121,12 @@ void CachingFileSystem::SetEnabled(bool enable_p) {
 }
 
 vector<CachedFileInformation> CachingFileSystem::GetCachedFileInformation() const {
-	lock_guard<mutex> guard(lock);
+	unique_lock<mutex> guard(lock);
 	vector<CachedFileInformation> result;
 	for (const auto &file : cached_files) {
-		for (const auto &range_entry : file.second->ranges) {
+		for (const auto &range_entry : file.second->Ranges(guard)) {
 			const auto &range = *range_entry.second;
-			result.push_back(
-			    {file.first, range.nr_bytes, range.location, range.last_modified, !range.block_handle->IsUnloaded()});
+			result.push_back({file.first, range.nr_bytes, range.location, !range.block_handle->IsUnloaded()});
 		}
 	}
 	return result;
@@ -127,8 +162,8 @@ CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, C
 		return;
 	}
 	// If we don't have any cached file ranges, we must also open the file
-	lock_guard<mutex> guard(cached_file.lock);
-	if (cached_file.ranges.empty()) {
+	unique_lock<mutex> guard(cached_file.lock);
+	if (cached_file.Ranges(guard).empty()) {
 		GetFileHandle();
 	}
 }
@@ -137,11 +172,14 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 	if (!file_handle) {
 		file_handle = caching_file_system.file_system.OpenFile(cached_file.path, flags);
 		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
+		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
-		cached_file.file_size = file_handle->GetFileSize();
-		cached_file.last_modified = last_modified;
-		cached_file.can_seek = file_handle->CanSeek();
-		cached_file.on_disk_file = file_handle->OnDiskFile();
+		unique_lock<mutex> guard(cached_file.lock);
+		cached_file.FileSize(guard) = file_handle->GetFileSize();
+		cached_file.LastModified(guard) = last_modified;
+		cached_file.VersionTag(guard) = version_tag;
+		cached_file.CanSeek(guard) = file_handle->CanSeek();
+		cached_file.OnDiskFile(guard) = file_handle->OnDiskFile();
 	}
 	return *file_handle;
 }
@@ -156,15 +194,16 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	}
 
 	// Get lock for cached ranges
-	unique_lock<mutex> lock(cached_file.lock);
+	unique_lock<mutex> guard(cached_file.lock);
+	auto &ranges = cached_file.Ranges(guard);
 
 	// First, try to see if we've read from the exact same location before
-	auto it = cached_file.ranges.find(location);
-	if (it != cached_file.ranges.end()) {
+	auto it = ranges.find(location);
+	if (it != ranges.end()) {
 		// We have read from the exact same location before
-		if (!RangeIsValid(*it->second)) {
+		if (!RangeIsValid(*it->second, guard)) {
 			// The range is no longer valid: erase it
-			it = cached_file.ranges.erase(it);
+			it = ranges.erase(it);
 		} else if (it->second->GetOverlap(nr_bytes, location) == CachedFileRangeOverlap::FULL) {
 			// The file range contains the requested file range
 			result = TryReadFromFileRange(*it->second, buffer, nr_bytes, location);
@@ -177,14 +216,14 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	// Second, loop through file ranges (ordered by location) to see if any contain the requested file range
 	const auto this_end = location + nr_bytes;
 	vector<shared_ptr<CachedFileRange>> overlapping_ranges;
-	for (it = cached_file.ranges.begin(); it != cached_file.ranges.end();) {
+	for (it = ranges.begin(); it != ranges.end();) {
 		if (it->second->location >= this_end) {
 			// We're past the requested location
 			break;
 		}
-		if (!RangeIsValid(*it->second)) {
+		if (!RangeIsValid(*it->second, guard)) {
 			// The range is no longer valid: erase it
-			it = cached_file.ranges.erase(it);
+			it = ranges.erase(it);
 			continue;
 		}
 		// Check if the cached range overlaps the requested one
@@ -208,11 +247,11 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	}
 
 	// We can unlock now because we copied over the ranges to local
-	lock.unlock();
+	guard.unlock();
 
 	// Finally, if we weren't able to find the file range in the cache, we have to create a new file range
 	result = caching_file_system.buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
-	auto new_file_range = make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), nr_bytes, location, last_modified);
+	auto new_file_range = make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), nr_bytes, location, version_tag);
 	buffer = result.Ptr();
 
 	// Interleave reading and copying from cached buffers
@@ -264,13 +303,13 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	}
 
 	// Grab the lock again to insert the newly created buffer into the ranges
-	lock.lock();
+	guard.lock();
 
 	// Start at lower_bound (first range with a location not less than the location of the newly create range)
-	for (it = cached_file.ranges.lower_bound(location); it != cached_file.ranges.end();) {
-		if (!RangeIsValid(*it->second)) {
+	for (it = ranges.lower_bound(location); it != ranges.end();) {
+		if (!RangeIsValid(*it->second, guard)) {
 			// The range is no longer valid: erase it
-			it = cached_file.ranges.erase(it);
+			it = ranges.erase(it);
 			continue;
 		}
 		if (it->second->GetOverlap(*new_file_range) == CachedFileRangeOverlap::FULL) {
@@ -290,7 +329,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 			break; // The newly created range does not fully contain this range, so it is still useful
 		case CachedFileRangeOverlap::FULL:
 			// Full overlap, this range will be obsolete when we insert the current one
-			it = cached_file.ranges.erase(it);
+			it = ranges.erase(it);
 			continue;
 		}
 		if (break_loop) {
@@ -301,8 +340,8 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 
 	// Finally, insert newly created buffer into the map
 	new_file_range->AddCheckSum();
-	cached_file.ranges[location] = std::move(new_file_range);
-	cached_file.Verify();
+	ranges[location] = std::move(new_file_range);
+	cached_file.Verify(guard);
 
 	return result;
 }
@@ -315,7 +354,8 @@ idx_t CachingFileHandle::GetFileSize() {
 	if (file_handle || caching_file_system.check_cached_file_invalidation) {
 		return GetFileHandle().GetFileSize();
 	}
-	return cached_file.file_size;
+	unique_lock<mutex> guard(cached_file.lock);
+	return cached_file.FileSize(guard);
 }
 
 time_t CachingFileHandle::GetLastModifiedTime() {
@@ -323,28 +363,39 @@ time_t CachingFileHandle::GetLastModifiedTime() {
 		GetFileHandle();
 		return last_modified;
 	}
-	return cached_file.last_modified;
+	unique_lock<mutex> guard(cached_file.lock);
+	return cached_file.LastModified(guard);
 }
 
 bool CachingFileHandle::CanSeek() {
 	if (file_handle || caching_file_system.check_cached_file_invalidation) {
 		return GetFileHandle().CanSeek();
 	}
-	return cached_file.can_seek;
+	unique_lock<mutex> guard(cached_file.lock);
+	return cached_file.CanSeek(guard);
 }
 
 bool CachingFileHandle::OnDiskFile() {
 	if (file_handle || caching_file_system.check_cached_file_invalidation) {
 		return GetFileHandle().OnDiskFile();
 	}
-	return cached_file.on_disk_file.load();
+	unique_lock<mutex> guard(cached_file.lock);
+	return cached_file.OnDiskFile(guard);
 }
 
-bool CachingFileHandle::RangeIsValid(const CachedFileRange &range) {
+const string &CachingFileHandle::GetVersionTag(const unique_lock<mutex> &guard) {
+	if (file_handle || caching_file_system.check_cached_file_invalidation) {
+		GetFileHandle();
+		return version_tag;
+	}
+	return cached_file.VersionTag(guard);
+}
+
+bool CachingFileHandle::RangeIsValid(const CachedFileRange &range, const unique_lock<mutex> &guard) {
 	if (!caching_file_system.check_cached_file_invalidation) {
 		return true;
 	}
-	return GetLastModifiedTime() == range.last_modified;
+	return GetVersionTag(guard) == range.version_tag;
 }
 
 BufferHandle CachingFileHandle::TryReadFromFileRange(CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes,

@@ -22,9 +22,6 @@ static unique_ptr<FunctionData> DuckDBExternalFileCacheBind(ClientContext &conte
 	names.emplace_back("location");
 	return_types.emplace_back(LogicalType::BIGINT);
 
-	names.emplace_back("last_modified");
-	return_types.emplace_back(LogicalType::TIMESTAMP_TZ);
-
 	names.emplace_back("loaded");
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
@@ -57,9 +54,6 @@ void DuckDBExternalFileCacheFunction(ClientContext &context, TableFunctionInput 
 		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.nr_bytes)));
 		// location, BIGINT
 		output.SetValue(col++, count, Value::BIGINT(NumericCast<int64_t>(entry.location)));
-		// last_modified, TIMESTAMP_TZ
-		output.SetValue(col++, count,
-		                Value::TIMESTAMPTZ(timestamp_tz_t(Timestamp::FromEpochSeconds(entry.last_modified))));
 		// loaded, BOOLEAN
 		output.SetValue(col++, count, entry.loaded);
 		count++;

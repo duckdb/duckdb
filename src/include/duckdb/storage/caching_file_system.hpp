@@ -39,9 +39,11 @@ class CachingFileSystem {
 
 	//! Cached reads (immutable)
 	struct CachedFileRange {
-		CachedFileRange(shared_ptr<BlockHandle> block_handle, idx_t nr_bytes, idx_t location, time_t last_modified);
+	public:
+		CachedFileRange(shared_ptr<BlockHandle> block_handle, idx_t nr_bytes, idx_t location, string version_tag);
 		~CachedFileRange();
 
+	public:
 		//! Gets the overlap between this file range and another
 		CachedFileRangeOverlap GetOverlap(idx_t other_nr_bytes, idx_t other_location) const;
 		CachedFileRangeOverlap GetOverlap(const CachedFileRange &other) const;
@@ -50,10 +52,11 @@ class CachingFileSystem {
 		void AddCheckSum();
 		void VerifyCheckSum();
 
+	public:
 		shared_ptr<BlockHandle> block_handle;
 		const idx_t nr_bytes;
 		const idx_t location;
-		const time_t last_modified;
+		const string version_tag;
 #ifdef DEBUG
 		hash_t checksum = 0;
 #endif
@@ -61,19 +64,36 @@ class CachingFileSystem {
 
 	//! Cached files
 	struct CachedFile {
+	public:
 		explicit CachedFile(string path_p);
 
-		//! Verifies that none of the ranges fully overlap
-		void Verify() const;
+	public:
+		//! Verifies that none of the ranges fully overlap (must hold the lock)
+		void Verify(const unique_lock<mutex> &guard) const;
 
-		string path;
-		map<idx_t, shared_ptr<CachedFileRange>> ranges;
+		//! Get reference to properties (must hold the lock)
+		idx_t &FileSize(const unique_lock<mutex> &guard);
+		time_t &LastModified(const unique_lock<mutex> &guard);
+		string &VersionTag(const unique_lock<mutex> &guard);
+		bool &CanSeek(const unique_lock<mutex> &guard);
+		bool &OnDiskFile(const unique_lock<mutex> &guard);
+		map<idx_t, shared_ptr<CachedFileRange>> &Ranges(const unique_lock<mutex> &guard);
+
+	private:
+		void VerifyLock(const unique_lock<mutex> &guard) const;
+
+	public:
+		const string path;
 		mutex lock;
 
-		atomic<idx_t> file_size;
-		atomic<time_t> last_modified;
-		atomic<bool> can_seek;
-		atomic<bool> on_disk_file;
+	private:
+		map<idx_t, shared_ptr<CachedFileRange>> ranges;
+
+		idx_t file_size;
+		time_t last_modified;
+		string version_tag;
+		bool can_seek;
+		bool on_disk_file;
 	};
 
 public:
@@ -129,8 +149,10 @@ public:
 	DUCKDB_API bool OnDiskFile();
 
 private:
+	//! Get the version tag of the file (for checking cache invalidation)
+	const string &GetVersionTag(const unique_lock<mutex> &guard);
 	//! Whether the range is still valid given the last modified time
-	bool RangeIsValid(const CachedFileRange &range);
+	bool RangeIsValid(const CachedFileRange &range, const unique_lock<mutex> &guard);
 	//! Try to read from cache, return an invalid BufferHandle if it fails
 	BufferHandle TryReadFromFileRange(CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
 
@@ -144,8 +166,9 @@ private:
 
 	//! The underlying FileHandle (optional)
 	unique_ptr<FileHandle> file_handle;
-	//! Last modified time (if FileHandle is opened)
+	//! Last modified time and version tag (if FileHandle is opened)
 	time_t last_modified;
+	string version_tag;
 };
 
 } // namespace duckdb
