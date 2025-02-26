@@ -421,12 +421,6 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SQLExpression(const string &s
 	} catch (std::runtime_error &e) {
 		throw;
 	}
-
-	//! Think this is already handled by ParseExpressionList, just here for completeness
-	if (DUCKDB_UNLIKELY(expressions.size() > 1)) {
-		throw InvalidInputException("More than one expression was parsed from the provided SQL string");
-	}
-
 	return make_shared_ptr<DuckDBPyExpression>(std::move(expressions[0]));
 }
 
