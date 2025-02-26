@@ -107,8 +107,7 @@ public:
 	                                                     const DuckDBPyExpression &value);
 	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name, const py::args &args);
 	static shared_ptr<DuckDBPyExpression> Coalesce(const py::args &args);
-	static shared_ptr<DuckDBPyExpression> SQLExpression(const string &sql,
-	                                                    shared_ptr<DuckDBPyConnection> conn = nullptr);
+	static shared_ptr<DuckDBPyExpression> SQLExpression(string sql, shared_ptr<DuckDBPyConnection> conn = nullptr);
 
 public:
 	// Internal functions (not exposed to Python)

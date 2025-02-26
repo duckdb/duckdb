@@ -409,7 +409,7 @@ shared_ptr<DuckDBPyExpression> DuckDBPyExpression::LambdaExpression(const py::ob
 	return make_shared_ptr<DuckDBPyExpression>(std::move(lambda_expression));
 }
 
-shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SQLExpression(const string &sql,
+shared_ptr<DuckDBPyExpression> DuckDBPyExpression::SQLExpression(string sql,
                                                                  shared_ptr<DuckDBPyConnection> conn) {
 	if (!conn) {
 		conn = DuckDBPyConnection::DefaultConnection();
