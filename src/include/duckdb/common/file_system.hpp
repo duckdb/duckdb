@@ -219,7 +219,8 @@ public:
 	//! Unregister a sub-filesystem by name
 	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
 
-	// !Extract a sub-filesystem by name, with ownership transfered, return nullptr if not registered.
+	// !Extract a sub-filesystem by name, with ownership transfered, return nullptr if not registered or the subsystem
+	// has been disabled.
 	DUCKDB_API virtual unique_ptr<FileSystem> ExtractSubSystem(const string &name);
 
 	//! List registered sub-filesystems, including builtin ones

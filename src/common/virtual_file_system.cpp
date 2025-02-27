@@ -140,22 +140,23 @@ void VirtualFileSystem::RegisterSubSystem(FileCompressionType compression_type, 
 }
 
 unique_ptr<FileSystem> VirtualFileSystem::ExtractSubSystem(const string &name) {
+	// If the subsystem has been disabled, we don't allow extraction and return nullptr here.
+	if (disabled_file_systems.find(name) != disabled_file_systems.end()) {
+		return nullptr;
+	}
+
 	unique_ptr<FileSystem> extracted_filesystem;
 	for (auto iter = sub_systems.begin(); iter != sub_systems.end(); ++iter) {
 		auto &cur_filesystem = *iter;
 		if (cur_filesystem->GetName() == name) {
 			extracted_filesystem = std::move(cur_filesystem);
 			sub_systems.erase(iter);
-			break;
+			return extracted_filesystem;
 		}
 	}
 
-	// If found, also remove from disabled filesystem set.
-	if (extracted_filesystem != nullptr) {
-		disabled_file_systems.erase(name);
-	}
-
-	return extracted_filesystem;
+	// Requested subfilesystem is not registered.
+	return nullptr;
 }
 
 vector<string> VirtualFileSystem::ListSubSystems() {
