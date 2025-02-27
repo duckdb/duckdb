@@ -168,7 +168,8 @@ static unique_ptr<Expression> PlanUncorrelatedSubquery(Binder &binder, BoundSubq
 			cond.left = std::move(expr.children[child_idx]);
 			auto &child_type = expr.child_types[child_idx];
 			cond.right = BoundCastExpression::AddDefaultCastToType(
-			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), expr.child_target);
+			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]),
+			    expr.child_targets[child_idx]);
 			cond.comparison = expr.comparison_type;
 			join->conditions.push_back(std::move(cond));
 		}
@@ -371,7 +372,8 @@ static unique_ptr<Expression> PlanCorrelatedSubquery(Binder &binder, BoundSubque
 			compare_cond.left = std::move(expr.children[child_idx]);
 			auto &child_type = expr.child_types[child_idx];
 			compare_cond.right = BoundCastExpression::AddDefaultCastToType(
-			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]), expr.child_target);
+			    make_uniq<BoundColumnRefExpression>(child_type, plan_columns[child_idx]),
+			    expr.child_targets[child_idx]);
 			compare_cond.comparison = expr.comparison_type;
 			delim_join->conditions.push_back(std::move(compare_cond));
 		}
