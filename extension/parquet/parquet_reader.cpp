@@ -954,7 +954,9 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 		if (should_prefetch && can_prefetch) {
 			state.prefetch_mode = true;
-			flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+			if (!file_handle->OnDiskFile()) {
+				flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+			}
 		} else {
 			state.prefetch_mode = false;
 		}
