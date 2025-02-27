@@ -233,7 +233,8 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			}
 
 			if (read_success) {
-				break;
+				current_reader->FinalizeBufferInternal(scan_state, buffer, buffer_index.GetIndex());
+				return true;
 			}
 
 			// We were the last reader last time, or we didn't read anything this time
@@ -279,10 +280,9 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			continue;
 		}
 
-		break;
+		current_reader->FinalizeBufferInternal(scan_state, buffer, buffer_index.GetIndex());
+		return true;
 	}
-	current_reader->FinalizeBufferInternal(scan_state, buffer, buffer_index.GetIndex());
-	return true;
 }
 
 void JSONScanLocalState::ParseNextChunk(JSONScanGlobalState &gstate) {
