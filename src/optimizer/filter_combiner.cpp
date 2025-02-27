@@ -529,10 +529,6 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 
-		if (const_val->value.type().IsTemporal()) {
-			// pushdown on temporal types not supported (why?)
-			return FilterPushdownResult::NO_PUSHDOWN;
-		}
 		auto comparison_type = invert ? FlipComparisonExpression(comp.GetExpressionType()) : comp.GetExpressionType();
 		if (const_val->value.IsNull()) {
 			switch (comparison_type) {
