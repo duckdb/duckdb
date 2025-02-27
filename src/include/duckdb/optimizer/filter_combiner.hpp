@@ -24,6 +24,7 @@ class Optimizer;
 
 enum class ValueComparisonResult { PRUNE_LEFT, PRUNE_RIGHT, UNSATISFIABLE_CONDITION, PRUNE_NOTHING };
 enum class FilterResult { UNSATISFIABLE, SUCCESS, UNSUPPORTED };
+enum class FilterPushdownResult { NO_PUSHDOWN, PUSHED_DOWN_PARTIALLY, PUSHED_DOWN_FULLY };
 
 //! The FilterCombiner combines several filters and generates a logically equivalent set that is more efficient
 //! Amongst others:
@@ -63,10 +64,14 @@ private:
 	idx_t GetEquivalenceSet(Expression &expr);
 	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);
 
-	bool TryGenerateConstantFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
-	                               column_t column_id, vector<ExpressionValueInformation> &info_list);
-	bool TryGeneratePrefixFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
-	                             Expression &expr);
+	FilterPushdownResult TryGenerateConstantFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                                               column_t column_id, vector<ExpressionValueInformation> &info_list);
+	FilterPushdownResult TryPushdownExpression(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                                           Expression &expr);
+	FilterPushdownResult TryGeneratePrefixFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                                             Expression &expr);
+	FilterPushdownResult TryGenerateLikeFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                                           Expression &expr);
 
 private:
 	vector<unique_ptr<Expression>> remaining_filters;
