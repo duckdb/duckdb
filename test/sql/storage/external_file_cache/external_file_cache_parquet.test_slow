@@ -2,22 +2,16 @@
 # description: Test the external file cache for Parquet
 # group: [external_file_cache]
 
-require tpch
-
 require parquet
 
-# we first export lineitem sf0.1 to a Parquet file with a single row group
 statement ok
-create schema my_temporary_schema;
-
-statement ok
-call dbgen(sf=0.1, schema='my_temporary_schema');
-
-statement ok
-copy my_temporary_schema.lineitem to '__TEST_DIR__/lineitem.parquet' (row_group_size 1_000_000);
-
-statement ok
-drop schema my_temporary_schema cascade;
+copy (
+    select range % 1500000 l_orderkey,
+    range % 200000 l_partkey,
+    range % 10000 l_suppkey,
+    range % 7 l_linenumber,
+    from range(6_000_000)
+) to '__TEST_DIR__/lineitem.parquet' (row_group_size 6_000_000);
 
 # this is empty since we didn't query anything yet
 query II
@@ -33,48 +27,45 @@ statement ok
 create view lineitem as from '__TEST_DIR__/lineitem.parquet';
 
 # creating the view has loaded the footer
-query II
-select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() order by location;
+query I
+select loaded from duckdb_external_file_cache() order by location;
 ----
-1.9 KiB	true
+true
 
 # select the first column
 statement ok
 select l_orderkey from lineitem;
 
 query II
-select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() order by location;
+select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() where nr_bytes > 1000;
 ----
-913.3 KiB	1
-1.9 KiB	1
+22.8 MiB	true
 
 # select the third column (not contiguous with the first column so it should have two cache entries)
 statement ok
 select l_suppkey from lineitem;
 
 query II
-select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() order by location;
+select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() where nr_bytes > 1000 order by location;
 ----
-913.3 KiB	true
-739.4 KiB	true
-1.9 KiB	true
+22.8 MiB	1
+9.9 MiB	1
 
 # select the first four columns (contiguous, and supersede the previous two cache entries, should merge into one entry)
 statement ok
 select l_orderkey, l_partkey, l_suppkey, l_linenumber from lineitem;
 
 query II
-select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() order by location;
+select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() where nr_bytes > 1000 order by location;
 ----
-2.9 MiB	1
-1.9 KiB	1
+46.5 MiB	1
 
 # shows up in duckdb_memory under its own tag
 # this is slightly higher than the sum of nr_bytes above due buffers having a header and are rounded up to sector size
 query I
-select memory_usage_bytes from duckdb_memory() where tag = 'EXTERNAL_FILE_CACHE';
+select format_bytes(memory_usage_bytes) from duckdb_memory() where tag = 'EXTERNAL_FILE_CACHE';
 ----
-3051520
+46.6 MiB
 
 # set the memory so low that the ~3MB entry should be unloaded
 statement ok
@@ -88,7 +79,7 @@ set memory_limit='500mb';
 query II
 select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() where location = 4;
 ----
-2.9 MiB	0
+46.5 MiB	0
 
 # disabling the file cache should empty it
 statement ok
