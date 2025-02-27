@@ -51,9 +51,8 @@ idx_t NodesManager::GetScalarTableIndex(LogicalOperator *op) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		return op->GetTableIndex()[1];
 	}
-	default: {
+	default:
 		return -1;
-	}
 	}
 }
 
@@ -98,6 +97,15 @@ idx_t NodesManager::GetNodeOrder(const LogicalOperator *node) {
 		}
 	}
 	return -1; // fallback if not found
+}
+
+LogicalOperator *NodesManager::GetNode(idx_t table_binding) {
+	auto itr = nodes.find(table_binding);
+	if (itr == nodes.end()) {
+		return nullptr;
+	}
+
+	return itr->second;
 }
 
 static bool OperatorNeedsRelation(LogicalOperatorType op_type) {

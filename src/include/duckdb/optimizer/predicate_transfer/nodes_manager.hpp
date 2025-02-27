@@ -18,14 +18,7 @@ public:
 
 	idx_t GetNodeOrder(const LogicalOperator *node);
 
-	LogicalOperator *GetNode(idx_t table_binding) {
-		auto itr = nodes.find(table_binding);
-		if (itr == nodes.end()) {
-			return nullptr;
-		}
-
-		return itr->second;
-	}
+	LogicalOperator *GetNode(idx_t table_binding);
 
 	unordered_map<idx_t, LogicalOperator *> &GetNodes() {
 		return nodes;
