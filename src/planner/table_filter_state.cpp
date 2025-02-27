@@ -15,10 +15,11 @@ SelectionVector &CachedSelectionVector::Get(idx_t count) {
 	return sel;
 }
 
-LeafFilterState::LeafFilterState() {}
+LeafFilterState::LeafFilterState() {
+}
 
 unique_ptr<TableFilterState> TableFilterState::Initialize(const TableFilter &filter) {
-	switch(filter.filter_type) {
+	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL_FILTER:
 		// optional filter is not executed - create an empty filter state
 		return make_uniq<TableFilterState>();
@@ -29,7 +30,7 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(const TableFilter &fil
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &conj_filter = filter.Cast<ConjunctionOrFilter>();
 		auto result = make_uniq<ConjunctionOrFilterState>();
-		for(auto &child_filter : conj_filter.child_filters) {
+		for (auto &child_filter : conj_filter.child_filters) {
 			result->child_states.push_back(Initialize(*child_filter));
 		}
 		return std::move(result);
@@ -37,7 +38,7 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(const TableFilter &fil
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conj_filter = filter.Cast<ConjunctionAndFilter>();
 		auto result = make_uniq<ConjunctionAndFilterState>();
-		for(auto &child_filter : conj_filter.child_filters) {
+		for (auto &child_filter : conj_filter.child_filters) {
 			result->child_states.push_back(Initialize(*child_filter));
 		}
 		return std::move(result);
@@ -51,4 +52,4 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(const TableFilter &fil
 	}
 }
 
-}
+} // namespace duckdb

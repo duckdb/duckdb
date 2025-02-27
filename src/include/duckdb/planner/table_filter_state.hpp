@@ -62,5 +62,4 @@ public:
 	CachedSelectionVector sel_data;
 };
 
-
 } // namespace duckdb

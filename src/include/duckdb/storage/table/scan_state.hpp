@@ -259,7 +259,8 @@ public:
 	ScanSamplingInfo sampling_info;
 
 public:
-	void Initialize(vector<StorageIndex> column_ids, optional_ptr<ClientContext> context = nullptr, optional_ptr<TableFilterSet> table_filters = nullptr,
+	void Initialize(vector<StorageIndex> column_ids, optional_ptr<ClientContext> context = nullptr,
+	                optional_ptr<TableFilterSet> table_filters = nullptr,
 	                optional_ptr<SampleOptions> table_sampling = nullptr);
 
 	const vector<StorageIndex> &GetColumnIds();

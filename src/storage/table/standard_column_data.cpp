@@ -80,7 +80,8 @@ idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_
 }
 
 void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                                SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state) {
+                                SelectionVector &sel, idx_t &count, const TableFilter &filter,
+                                TableFilterState &filter_state) {
 	// check if we can do a specialized select
 	// the compression functions need to support this
 	auto compression = GetCompressionFunction();

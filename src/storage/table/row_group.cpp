@@ -641,8 +641,8 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						// Now apply the filter
 						UnifiedVectorFormat vdata;
 						result_vector.ToUnifiedFormat(approved_tuple_count, vdata);
-						ColumnSegment::FilterSelection(sel, result_vector, vdata, filter.filter, table_filter_state, approved_tuple_count,
-						                               approved_tuple_count);
+						ColumnSegment::FilterSelection(sel, result_vector, vdata, filter.filter, table_filter_state,
+						                               approved_tuple_count, approved_tuple_count);
 
 					} else {
 						auto &col_data = GetColumn(filter.table_column_index);
