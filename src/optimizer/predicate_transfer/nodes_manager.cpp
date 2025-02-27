@@ -13,20 +13,47 @@
 #include <pthread.h>
 
 namespace duckdb {
+void NodesManager::Reset() {
+	can_add_mark = true;
+	nodes.clear();
+	duplicate_nodes.clear();
+	sort_nodes.clear();
+	rename_cols.clear();
+}
+
 idx_t NodesManager::NumNodes() {
 	return nodes.size();
 }
 
-idx_t NodesManager::GetTableIndexinFilter(LogicalOperator *op) {
-	if (op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
-		return op->children[0]->Cast<LogicalGet>().GetTableIndex()[0];
-	} else if (op->children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-		// For In-Clause optimization
-		return op->children[0]->children[0]->Cast<LogicalGet>().GetTableIndex()[0];
-	} else if (op->children[0]->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
-		return op->children[0]->Cast<LogicalAggregate>().GetTableIndex()[0];
-	} else {
+idx_t NodesManager::GetScalarTableIndex(LogicalOperator *op) {
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_GET:
+	case LogicalOperatorType::LOGICAL_DELIM_GET:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		return op->GetTableIndex()[0];
+	}
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_GET) {
+			return op->children[0]->Cast<LogicalGet>().GetTableIndex()[0];
+		}
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
+			// For In-Clause optimization
+			return op->children[0]->children[0]->Cast<LogicalGet>().GetTableIndex()[0];
+		}
+		if (op->children[0]->type == LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY) {
+			return op->children[0]->Cast<LogicalAggregate>().GetTableIndex()[0];
+		}
 		return op->Cast<LogicalGet>().GetTableIndex()[0];
+	}
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		return op->GetTableIndex()[1];
+	}
+	default: {
+		return -1;
+	}
 	}
 }
 
@@ -44,52 +71,20 @@ ColumnBinding NodesManager::FindRename(ColumnBinding col) {
 
 void NodesManager::AddNode(LogicalOperator *op) {
 	op->estimated_cardinality = op->EstimateCardinality(context);
-	switch (op->type) {
-	case LogicalOperatorType::LOGICAL_GET:
-	case LogicalOperatorType::LOGICAL_DELIM_GET:
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-	case LogicalOperatorType::LOGICAL_UNION:
-	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT: {
-		auto id = op->GetTableIndex()[0];
-		if (nodes.find(id) == nodes.end()) {
-			nodes[id] = op;
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		auto id = GetTableIndexinFilter(op);
-		if (nodes.find(id) == nodes.end()) {
-			nodes[id] = op;
-		}
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		auto id = op->GetTableIndex()[1];
-		if (nodes.find(id) == nodes.end()) {
-			nodes[id] = op;
-		}
-		break;
-	}
-	default: {
-		break;
-	}
+
+	idx_t table_idx = GetScalarTableIndex(op);
+	if (table_idx != -1 && nodes.find(table_idx) == nodes.end()) {
+		nodes[table_idx] = op;
 	}
 }
 
 void NodesManager::SortNodes() {
-	for (auto &node : nodes) {
-		sort_nodes.emplace_back(node.second);
-	}
-	sort(sort_nodes.begin(), sort_nodes.end(), NodesManager::nodesCmp);
-}
-
-void NodesManager::ReSortNodes() {
 	sort_nodes.clear();
 	for (auto &node : nodes) {
 		sort_nodes.emplace_back(node.second);
 	}
-	sort(sort_nodes.begin(), sort_nodes.end(), NodesManager::nodesCmp);
+	sort(sort_nodes.begin(), sort_nodes.end(),
+	     [&](LogicalOperator *a, LogicalOperator *b) { return a->estimated_cardinality < b->estimated_cardinality; });
 }
 
 static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
@@ -107,12 +102,9 @@ static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 }
 
 void NodesManager::EraseNode(idx_t key) {
-	auto itr = nodes.erase(key);
+	nodes.erase(key);
 }
 
-bool can_add_mark = true;
-
-/* Extract All the vertex nodes */
 void NodesManager::ExtractNodes(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
 	LogicalOperator *op = &plan;
 
@@ -199,9 +191,5 @@ void NodesManager::ExtractNodes(LogicalOperator &plan, vector<reference<LogicalO
 			ExtractNodes(*child, joins);
 		}
 	}
-}
-
-int NodesManager::nodesCmp(LogicalOperator *a, LogicalOperator *b) {
-	return a->estimated_cardinality < b->estimated_cardinality;
 }
 } // namespace duckdb

@@ -10,10 +10,11 @@ namespace duckdb {
 
 /* Build DAG according to the query plan */
 bool DAGManager::Build(LogicalOperator &plan) {
-	vector<reference<LogicalOperator>> filter_operators;
+	nodes_manager.Reset();
 
-	// Extract All the vertex nodes
-	nodes_manager.ExtractNodes(plan, filter_operators);
+	// Extract all the vertex nodes (and joins)
+	vector<reference<LogicalOperator>> joins;
+	nodes_manager.ExtractNodes(plan, joins);
 	nodes_manager.DuplicateNodes();
 	if (nodes_manager.NumNodes() < 2) {
 		return false;
@@ -21,7 +22,7 @@ bool DAGManager::Build(LogicalOperator &plan) {
 	nodes_manager.SortNodes();
 
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
-	ExtractEdges(plan, filter_operators);
+	ExtractEdges(plan, joins);
 	if (filters_and_bindings_.size() == 0) {
 		return false;
 	}
@@ -31,7 +32,7 @@ bool DAGManager::Build(LogicalOperator &plan) {
 	return true;
 }
 
-vector<LogicalOperator *> &DAGManager::getExecOrder() {
+vector<LogicalOperator *> &DAGManager::GetExecutionOrder() {
 	// The root as first
 	return ExecOrder;
 }
@@ -262,58 +263,17 @@ void DAGManager::CreateDAG() {
 	while (nodes_manager.GetNodes().size() > 0) {
 		auto &sorted_nodes = nodes_manager.getSortedNodes();
 		LargestRoot(sorted_nodes);
-		nodes_manager.ReSortNodes();
+		nodes_manager.SortNodes();
 	}
 	nodes_manager.RecoverNodes();
 
 	for (auto &filter_and_binding : selected_filters_and_bindings_) {
 		if (filter_and_binding) {
-			idx_t large;
-			switch (filter_and_binding->large_.type) {
-			case LogicalOperatorType::LOGICAL_GET:
-			case LogicalOperatorType::LOGICAL_DELIM_GET:
-			case LogicalOperatorType::LOGICAL_PROJECTION:
-			case LogicalOperatorType::LOGICAL_UNION:
-			case LogicalOperatorType::LOGICAL_EXCEPT:
-			case LogicalOperatorType::LOGICAL_INTERSECT: {
-				large = filter_and_binding->large_.GetTableIndex()[0];
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_FILTER: {
-				large = NodesManager::GetTableIndexinFilter(&filter_and_binding->large_);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-				large = filter_and_binding->large_.GetTableIndex()[1];
-				break;
-			}
-			default: {
-				break;
-			}
-			}
-			idx_t small;
-			switch (filter_and_binding->small_.type) {
-			case LogicalOperatorType::LOGICAL_GET:
-			case LogicalOperatorType::LOGICAL_DELIM_GET:
-			case LogicalOperatorType::LOGICAL_PROJECTION:
-			case LogicalOperatorType::LOGICAL_UNION:
-			case LogicalOperatorType::LOGICAL_EXCEPT:
-			case LogicalOperatorType::LOGICAL_INTERSECT: {
-				small = filter_and_binding->small_.GetTableIndex()[0];
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_FILTER: {
-				small = NodesManager::GetTableIndexinFilter(&filter_and_binding->small_);
-				break;
-			}
-			case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-				small = filter_and_binding->small_.GetTableIndex()[1];
-				break;
-			}
-			default: {
-				break;
-			}
-			}
+			idx_t large = NodesManager::GetScalarTableIndex(&filter_and_binding->large_);
+			idx_t small = NodesManager::GetScalarTableIndex(&filter_and_binding->small_);
+
+			D_ASSERT(large != -1 && small != -1);
+
 			auto small_node = graph[small].get();
 			auto large_node = graph[large].get();
 			// smaller one has higher priority
@@ -354,63 +314,17 @@ vector<GraphNode *> DAGManager::GetNeighbors(idx_t node_id) {
 		for (auto &edge : filter_and_binding.second) {
 			if (&edge->large_ == nodes_manager.GetNode(node_id)) {
 				auto &op = edge->small_;
-				idx_t another_node_id;
-				switch (op.type) {
-				case LogicalOperatorType::LOGICAL_GET:
-				case LogicalOperatorType::LOGICAL_DELIM_GET:
-				case LogicalOperatorType::LOGICAL_PROJECTION:
-				case LogicalOperatorType::LOGICAL_UNION:
-				case LogicalOperatorType::LOGICAL_EXCEPT:
-				case LogicalOperatorType::LOGICAL_INTERSECT: {
-					another_node_id = op.GetTableIndex()[0];
-					break;
-				}
-				case LogicalOperatorType::LOGICAL_FILTER: {
-					another_node_id = NodesManager::GetTableIndexinFilter(&op);
-					break;
-				}
-				case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-					another_node_id = op.GetTableIndex()[1];
-					break;
-				}
-				default: {
-					break;
-				}
-				}
+				int64_t another_node_id = NodesManager::GetScalarTableIndex(&op);
+				D_ASSERT(another_node_id != -1);
 				result.emplace_back(graph[another_node_id].get());
 			} else if (&edge->small_ == nodes_manager.GetNode(node_id)) {
 				auto &op = edge->large_;
-				idx_t another_node_id;
-				switch (op.type) {
-				case LogicalOperatorType::LOGICAL_GET:
-				case LogicalOperatorType::LOGICAL_DELIM_GET:
-				case LogicalOperatorType::LOGICAL_PROJECTION:
-				case LogicalOperatorType::LOGICAL_UNION:
-				case LogicalOperatorType::LOGICAL_EXCEPT:
-				case LogicalOperatorType::LOGICAL_INTERSECT: {
-					another_node_id = op.GetTableIndex()[0];
-					break;
-				}
-				case LogicalOperatorType::LOGICAL_FILTER: {
-					another_node_id = NodesManager::GetTableIndexinFilter(&op);
-					break;
-				}
-				case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-					another_node_id = op.GetTableIndex()[1];
-					break;
-				}
-				default: {
-					break;
-				}
-				}
+				int64_t another_node_id = NodesManager::GetScalarTableIndex(&op);
+				D_ASSERT(another_node_id != -1);
 				result.emplace_back(graph[another_node_id].get());
 			}
 		}
 	}
 	return result;
-}
-
-int DAGManager::DAGNodesCmp(GraphNode *a, GraphNode *b) {
-	return a->est_cardinality > b->est_cardinality;
 }
 } // namespace duckdb

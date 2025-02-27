@@ -8,24 +8,21 @@ public:
 	explicit NodesManager(ClientContext &context) : context(context) {
 	}
 
+	void Reset();
+
 	idx_t NumNodes();
 
 	void AddNode(LogicalOperator *op);
 
 	void SortNodes();
 
-	void ReSortNodes();
-
-	const vector<RelationStats> GetRelationStats();
-
 	LogicalOperator *GetNode(idx_t table_binding) {
 		auto itr = nodes.find(table_binding);
 		if (itr == nodes.end()) {
 			return nullptr;
-			throw InternalException("table binding is not found!");
-		} else {
-			return itr->second;
 		}
+
+		return itr->second;
 	}
 
 	unordered_map<idx_t, LogicalOperator *> &GetNodes() {
@@ -46,21 +43,14 @@ public:
 		return sort_nodes;
 	}
 
+	//! Extract All the vertex nodes
 	void ExtractNodes(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins);
 
 	ColumnBinding FindRename(ColumnBinding col);
 
+	static idx_t GetScalarTableIndex(LogicalOperator *op);
+
 private:
-	ClientContext &context;
-
-	unordered_map<idx_t, LogicalOperator *> nodes;
-	unordered_map<idx_t, LogicalOperator *> duplicate_nodes;
-
-	//! sorted
-	vector<LogicalOperator *> sort_nodes;
-
-	static int nodesCmp(LogicalOperator *a, LogicalOperator *b);
-
 	struct HashFunc {
 		size_t operator()(const ColumnBinding &key) const {
 			return std::hash<uint64_t>()(key.table_index) ^ std::hash<uint64_t>()(key.column_index);
@@ -73,9 +63,14 @@ private:
 		}
 	};
 
-	unordered_map<ColumnBinding, ColumnBinding, HashFunc, CmpFunc> rename_cols;
+private:
+	ClientContext &context;
 
-public:
-	static idx_t GetTableIndexinFilter(LogicalOperator *op);
+	bool can_add_mark = true;
+
+	unordered_map<idx_t, LogicalOperator *> nodes;
+	unordered_map<idx_t, LogicalOperator *> duplicate_nodes;
+	vector<LogicalOperator *> sort_nodes;
+	unordered_map<ColumnBinding, ColumnBinding, HashFunc, CmpFunc> rename_cols;
 };
 } // namespace duckdb

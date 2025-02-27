@@ -26,10 +26,9 @@ public:
 	explicit DAGManager(ClientContext &context) : nodes_manager(context), context(context) {
 	}
 
-	//! Extract the join relations, optimizing non-reoderable relations when encountered
 	bool Build(LogicalOperator &op);
 
-	vector<LogicalOperator *> &getExecOrder();
+	vector<LogicalOperator *> &GetExecutionOrder();
 
 	void Add(idx_t create_table, shared_ptr<BlockedBloomFilter> use_bf, bool reverse);
 
@@ -68,7 +67,5 @@ private:
 	pair<int, int> FindEdge(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set);
 
 	vector<GraphNode *> GetNeighbors(idx_t node_id);
-
-	static int DAGNodesCmp(GraphNode *a, GraphNode *b);
 };
 } // namespace duckdb

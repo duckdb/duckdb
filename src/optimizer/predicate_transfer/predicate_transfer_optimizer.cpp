@@ -5,6 +5,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/catalog/catalog_entry/duck_table_entry.hpp"
+#include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_data.hpp"
@@ -12,12 +13,12 @@
 namespace duckdb {
 
 unique_ptr<LogicalOperator> PredicateTransferOptimizer::PreOptimize(unique_ptr<LogicalOperator> plan) {
-	dag_manager.Build(*plan);
+	graph_manager.Build(*plan);
 	return plan;
 }
 
 unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	auto &ordered_nodes = dag_manager.getExecOrder();
+	auto &ordered_nodes = graph_manager.GetExecutionOrder();
 
 	// Forward
 	for (int i = ordered_nodes.size() - 1; i >= 0; i--) {
@@ -30,7 +31,7 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<Logi
 			// Add the Bloom Filter to its corresponding edge
 			// Need to check whether the Bloom Filter needs to transfer
 			// Such as, the column not involved in the predicate
-			dag_manager.Add(BF.first, BF.second, false);
+			graph_manager.Add(BF.first, BF.second, false);
 		}
 	}
 
@@ -39,7 +40,7 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<Logi
 		auto &current_node = ordered_nodes[i];
 		auto BFs = CreateBloomFilter(*current_node, true);
 		for (auto &BF : BFs) {
-			dag_manager.Add(BF.first, BF.second, true);
+			graph_manager.Add(BF.first, BF.second, true);
 		}
 	}
 	auto result = InsertTransferOperators(std::move(plan));
@@ -82,8 +83,8 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 	BloomFilters bfs_to_use;
 	BloomFilters bfs_to_create;
 
-	idx_t node_id = GetNodeId(node);
-	if (dag_manager.graph.find(node_id) == dag_manager.graph.end()) {
+	idx_t node_id = NodesManager::GetScalarTableIndex(&node);
+	if (node_id == -1 || graph_manager.graph.find(node_id) == graph_manager.graph.end()) {
 		return result;
 	}
 
@@ -98,17 +99,14 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 
 	if (!bfs_to_use.empty() && !bfs_to_create.empty()) {
 		auto last_use_bf = BuildUseBFOperator(node, bfs_to_use, parent_nodes, reverse);
-
 		auto create_bf = BuildCreateBFOperator(node, bfs_to_create);
 		for (auto &filter : create_bf->bf_to_create) {
 			result.emplace_back(make_pair(node_id, filter));
 		}
-
 		create_bf->AddChild(unique_ptr_cast<LogicalUseBF, LogicalOperator>(std::move(last_use_bf)));
 		replace_map[&node] = std::move(create_bf);
 	} else if (!bfs_to_use.empty()) {
 		auto last_use_bf = BuildUseBFOperator(node, bfs_to_use, parent_nodes, reverse);
-
 		replace_map[&node] = std::move(last_use_bf);
 	} else if (!bfs_to_create.empty()) {
 		if (!PossibleFilterAny(node, reverse)) {
@@ -119,7 +117,6 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 		for (auto &filter : create_bf->bf_to_create) {
 			result.emplace_back(make_pair(node_id, filter));
 		}
-
 		replace_map[&node] = std::move(create_bf);
 	}
 
@@ -128,7 +125,7 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 
 void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, BloomFilters &bfs_to_use,
                                                 vector<idx_t> &parent_nodes, bool reverse) {
-	auto &node = dag_manager.graph[cur_node_id];
+	auto &node = graph_manager.graph[cur_node_id];
 	auto &edges = reverse ? node->backward_in_ : node->forward_in_;
 
 	for (auto &edge : edges) {
@@ -143,7 +140,7 @@ void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, BloomFilters 
 }
 
 void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id, BloomFilters &bfs_to_create, bool reverse) {
-	auto &node = dag_manager.graph[cur_node_id];
+	auto &node = graph_manager.graph[cur_node_id];
 	auto &edges = reverse ? node->backward_out_ : node->forward_out_;
 
 	for (auto &edge : edges) {
@@ -155,8 +152,8 @@ void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id, BloomFilte
 			GetColumnBindingExpression(*expr, expressions);
 			D_ASSERT(expressions.size() == 2);
 
-			auto binding0 = dag_manager.nodes_manager.FindRename(expressions[0]->binding);
-			auto binding1 = dag_manager.nodes_manager.FindRename(expressions[1]->binding);
+			auto binding0 = graph_manager.nodes_manager.FindRename(expressions[0]->binding);
+			auto binding1 = graph_manager.nodes_manager.FindRename(expressions[1]->binding);
 
 			if (binding0.table_index == cur_node_id) {
 				cur_filter->AddColumnBindingApplied(binding1);
@@ -193,7 +190,7 @@ unique_ptr<LogicalUseBF> PredicateTransferOptimizer::BuildUseBFOperator(LogicalO
 		use_bf_operator->SetEstimatedCardinality(node.estimated_cardinality);
 
 		auto node_id = parent_nodes[i];
-		auto base_node = dag_manager.nodes_manager.GetNode(node_id);
+		auto base_node = graph_manager.nodes_manager.GetNode(node_id);
 		auto related_bf_create = replace_map[base_node].get();
 
 		D_ASSERT(related_bf_create->type == LogicalOperatorType::LOGICAL_CREATE_BF);
@@ -233,32 +230,5 @@ void PredicateTransferOptimizer::GetColumnBindingExpression(Expression &expr,
 		ExpressionIterator::EnumerateChildren(
 		    expr, [&](unique_ptr<Expression> &child) { GetColumnBindingExpression(*child, expressions); });
 	}
-}
-
-idx_t PredicateTransferOptimizer::GetNodeId(LogicalOperator &node) {
-	idx_t res = -1;
-	switch (node.type) {
-	case LogicalOperatorType::LOGICAL_GET:
-	case LogicalOperatorType::LOGICAL_DELIM_GET:
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-	case LogicalOperatorType::LOGICAL_UNION:
-	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT: {
-		res = node.GetTableIndex()[0];
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		res = NodesManager::GetTableIndexinFilter(&node);
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		res = node.GetTableIndex()[1];
-		break;
-	}
-	default: {
-		break;
-	}
-	}
-	return res;
 }
 } // namespace duckdb

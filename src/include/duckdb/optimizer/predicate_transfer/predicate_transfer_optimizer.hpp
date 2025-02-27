@@ -9,7 +9,7 @@ using BloomFilters = vector<shared_ptr<BlockedBloomFilter>>;
 
 class PredicateTransferOptimizer {
 public:
-	explicit PredicateTransferOptimizer(ClientContext &context) : context(context), dag_manager(context) {
+	explicit PredicateTransferOptimizer(ClientContext &context) : context(context), graph_manager(context) {
 	}
 
 	unique_ptr<LogicalOperator> PreOptimize(unique_ptr<LogicalOperator> plan);
@@ -31,11 +31,10 @@ private:
 
 	//! which column(s) involved in this expression
 	static void GetColumnBindingExpression(Expression &expr, vector<BoundColumnRefExpression *> &expressions);
-	static idx_t GetNodeId(LogicalOperator &node);
 
 private:
 	ClientContext &context;
-	DAGManager dag_manager;
+	DAGManager graph_manager;
 
 	//! we use a map to record how to modify/update the operators in the query plan.
 	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> modify_map_forward;
