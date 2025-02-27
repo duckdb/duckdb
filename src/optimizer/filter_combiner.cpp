@@ -430,10 +430,6 @@ FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_f
 	}
 	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
 	auto &column_index = column_ids[column_ref.binding.column_index];
-	if (column_index.IsRowIdColumn()) {
-		// no pushdown on row-ids supported (why?)
-		return FilterPushdownResult::NO_PUSHDOWN;
-	}
 	//! check if all children are const expr
 	bool children_constant = true;
 	for (size_t i {1}; i < func.children.size(); i++) {
@@ -498,9 +494,13 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 	if (conj.GetExpressionType() != ExpressionType::CONJUNCTION_OR) {
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
-	optional_idx column_id;
 	auto conj_filter = make_uniq<ConjunctionOrFilter>();
-	for (auto &child : conj.children) {
+	if (conj.children.empty()) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	idx_t column_id = 0;
+	for (idx_t i = 0; i < conj.children.size(); i++) {
+		auto &child = conj.children[i];
 		if (child->GetExpressionClass() != ExpressionClass::BOUND_COMPARISON) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
@@ -522,14 +522,10 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 
-		if (!column_id.IsValid()) {
+		if (i == 0) {
 			auto &col_id = column_ids[column_ref->binding.column_index];
-			if (col_id.IsRowIdColumn()) {
-				// pushdown on row-id not supported (why?)
-				return FilterPushdownResult::NO_PUSHDOWN;
-			}
 			column_id = col_id.GetPrimaryIndex();
-		} else if (column_id.GetIndex() != column_ids[column_ref->binding.column_index].GetPrimaryIndex()) {
+		} else if (column_id != column_ids[column_ref->binding.column_index].GetPrimaryIndex()) {
 			return FilterPushdownResult::NO_PUSHDOWN;
 		}
 
@@ -560,12 +556,9 @@ FilterPushdownResult FilterCombiner::TryPushdownOrClause(TableFilterSet &table_f
 			conj_filter->child_filters.push_back(std::move(const_filter));
 		}
 	}
-	if (!column_id.IsValid()) {
-		return FilterPushdownResult::NO_PUSHDOWN;
-	}
 	auto optional_filter = make_uniq<OptionalFilter>();
 	optional_filter->child_filter = std::move(conj_filter);
-	table_filters.PushFilter(ColumnIndex(column_id.GetIndex()), std::move(optional_filter));
+	table_filters.PushFilter(ColumnIndex(column_id), std::move(optional_filter));
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
