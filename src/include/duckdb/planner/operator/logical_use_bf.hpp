@@ -9,7 +9,8 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_USE_BF;
 
 public:
-	explicit LogicalUseBF(vector<shared_ptr<BlockedBloomFilter>> temp_result);
+	explicit LogicalUseBF(vector<shared_ptr<BlockedBloomFilter>> bloom_filters);
+	explicit LogicalUseBF(shared_ptr<BlockedBloomFilter> bloom_filter);
 
 	vector<shared_ptr<BlockedBloomFilter>> bf_to_use;
 	vector<LogicalCreateBF *> related_create_bf;

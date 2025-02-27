@@ -27,8 +27,8 @@ private:
 	static unique_ptr<LogicalCreateBF>
 	BuildCreateBFOperator(LogicalOperator &node, vector<shared_ptr<BlockedBloomFilter>> &bloom_filters);
 
-	unique_ptr<LogicalUseBF> BuildUseOperator(LogicalOperator &node,
-	                                          vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_use,
+	unique_ptr<LogicalUseBF> BuildUseBFOperator(LogicalOperator &node,
+	                                          vector<shared_ptr<BlockedBloomFilter>> &bf_for_use,
 	                                          vector<idx_t> &depend_nodes, bool reverse);
 
 	unique_ptr<LogicalCreateBF> BuildCreateUsePair(LogicalOperator &node,
