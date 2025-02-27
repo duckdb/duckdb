@@ -123,8 +123,9 @@ struct ExtensionAccess {
 			load_state.has_error = true;
 			load_state.error_data =
 			    ErrorData(ExceptionType::UNKNOWN_TYPE,
-			              StringUtil::Format("Unknown ABI Type '%s' found when loading extension '%s'",
-			                                 load_state.init_result.abi_type, load_state.init_result.filename));
+			              StringUtil::Format("Unknown ABI Type of value '%d' found when loading extension '%s'",
+			                                 static_cast<uint8_t>(load_state.init_result.abi_type),
+			                                 load_state.init_result.filename));
 			return nullptr;
 		}
 
@@ -588,7 +589,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		return;
 	}
 
-	throw IOException("Unknown ABI type '%s' for extension '%s'", extension_init_result.abi_type, extension);
+	throw IOException("Unknown ABI type of value '%s' for extension '%s'",
+	                  static_cast<uint8_t>(extension_init_result.abi_type), extension);
 #endif
 }
 

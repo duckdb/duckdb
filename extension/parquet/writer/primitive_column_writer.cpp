@@ -75,6 +75,8 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 					state.page_info.push_back(new_info);
 					page_info_ref = state.page_info.back();
 				}
+			} else {
+				page_info.null_count++;
 			}
 			vector_index++;
 		}

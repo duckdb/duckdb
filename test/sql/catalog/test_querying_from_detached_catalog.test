@@ -1,0 +1,72 @@
+# name: test/sql/catalog/test_querying_from_detached_catalog.test
+# description: Test switching from detached catalog to another catalog
+# group: [catalog]
+
+require skip_reload
+
+statement ok con1
+ATTACH ':memory:' AS db1;
+
+statement ok con1
+ATTACH ':memory:' AS db2;
+
+statement ok con1
+CREATE TABLE db2.tbl (i INTEGER, j INTEGER);
+
+statement ok con1
+INSERT INTO db2.tbl VALUES (1, 2), (3,4);
+
+statement ok con1
+USE db1;
+
+query I con1
+SELECT CURRENT_SETTING('search_path');
+----
+db1.main
+
+statement ok con2
+USE db2;
+
+# drop catalog db1, which con1 is using
+statement ok con2
+DETACH db1;
+
+# querying to an attached catalog should work (with non-fully qualified name)
+query II con1
+FROM db2.tbl;
+----
+1	2
+3	4
+
+# querying to an attached catalog should work (with fully qualified name)
+query II con1
+FROM db2.main.tbl;
+----
+1	2
+3	4
+
+# creating a new table in db2 works
+statement ok con1
+CREATE TABLE db2.tbl2 AS SELECT 42;
+
+# error message should say that the table does not exist
+statement error con1
+FROM db2.non_existent_table;
+----
+Catalog Error: Table with name non_existent_table does not exist!
+
+# querying within the detached catalog fails
+statement error con1
+SHOW TABLES;
+----
+Binder Error: Catalog "db1" does not exist!
+
+# swithcing to another catalog should work
+statement ok con1
+USE db2;
+
+query I con1
+SELECT CURRENT_SETTING('search_path');
+----
+db2.main
+
