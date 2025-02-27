@@ -1,7 +1,6 @@
 #include "duckdb/optimizer/predicate_transfer/predicate_transfer_optimizer.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_use_bf.hpp"
-#include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/main/prepared_statement_data.hpp"
@@ -10,10 +9,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_data.hpp"
 
-#include <set>
-
 namespace duckdb {
-std::unordered_map<std::string, int> PredicateTransferOptimizer::table_exists;
 
 unique_ptr<LogicalOperator> PredicateTransferOptimizer::PreOptimize(unique_ptr<LogicalOperator> plan,
                                                                     optional_ptr<RelationStats> stats) {
@@ -48,33 +44,48 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<Logi
 			dag_manager.Add(BF.first, BF.second, true);
 		}
 	}
-	auto result = InsertCreateBFOperator(std::move(plan));
+	auto result = InsertTransferOperators(std::move(plan));
 	return result;
 }
 
-/* which column(s) involved in this expression */
-void PredicateTransferOptimizer::GetColumnBindingExpression(Expression &expr,
-                                                            vector<BoundColumnRefExpression *> &expressions) {
-	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
-		Expression *expr_ptr = &expr;
-		BoundColumnRefExpression *colref = static_cast<BoundColumnRefExpression *>(expr_ptr);
-		D_ASSERT(colref->depth == 0);
-		expressions.emplace_back(colref);
-	} else {
-		ExpressionIterator::EnumerateChildren(
-		    expr, [&](unique_ptr<Expression> &child) { GetColumnBindingExpression(*child, expressions); });
+unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(unique_ptr<LogicalOperator> plan) {
+	for (auto &child : plan->children) {
+		child = InsertTransferOperators(std::move(child));
 	}
+
+	auto *operator_ptr = plan.get();
+	auto itr = modify_map_forward.find(operator_ptr);
+	if (itr != modify_map_forward.end()) {
+		auto ptr = itr->second.get();
+		while (ptr->children.size() != 0) {
+			ptr = ptr->children[0].get();
+		}
+		ptr->AddChild(std::move(plan));
+		plan = std::move(itr->second);
+	}
+
+	D_ASSERT(operator_ptr != nullptr);
+	auto itr_next = modify_map_backward.find(operator_ptr);
+	if (itr_next != modify_map_backward.end()) {
+		auto ptr_next = itr_next->second.get();
+		while (ptr_next->children.size() != 0) {
+			ptr_next = ptr_next->children[0].get();
+		}
+		ptr_next->AddChild(std::move(plan));
+		plan = std::move(itr_next->second);
+	}
+
+	return plan;
 }
 
-/* Create Bloom filter and use existing Bloom filter for the given scan or filter node */
 vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::CreateBloomFilter(LogicalOperator &node,
                                                                                                   bool reverse) {
 	vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> result;
-	vector<shared_ptr<BlockedBloomFilter>> bfs_to_use;
-	vector<shared_ptr<BlockedBloomFilter>> bfs_to_create;
+	BloomFilters bfs_to_use;
+	BloomFilters bfs_to_create;
 
 	idx_t node_id = GetNodeId(node);
-	if (dag_manager.nodes.find(node_id) == dag_manager.nodes.end()) {
+	if (dag_manager.graph.find(node_id) == dag_manager.graph.end()) {
 		return result;
 	}
 
@@ -85,7 +96,7 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 	// Create Bloom Filter
 	GetAllBFsToCreate(node_id, bfs_to_create, reverse);
 
-	auto &operators = reverse ? replace_map_backward : replace_map_forward;
+	auto &replace_map = reverse ? modify_map_backward : modify_map_forward;
 
 	if (!bfs_to_use.empty() && !bfs_to_create.empty()) {
 		auto last_use_bf = BuildUseBFOperator(node, bfs_to_use, parent_nodes, reverse);
@@ -96,11 +107,11 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 		}
 
 		create_bf->AddChild(unique_ptr_cast<LogicalUseBF, LogicalOperator>(std::move(last_use_bf)));
-		operators[&node] = std::move(create_bf);
+		replace_map[&node] = std::move(create_bf);
 	} else if (!bfs_to_use.empty()) {
 		auto last_use_bf = BuildUseBFOperator(node, bfs_to_use, parent_nodes, reverse);
 
-		operators[&node] = std::move(last_use_bf);
+		replace_map[&node] = std::move(last_use_bf);
 	} else if (!bfs_to_create.empty()) {
 		if (!PossibleFilterAny(node, reverse)) {
 			return result;
@@ -111,42 +122,15 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 			result.emplace_back(make_pair(node_id, filter));
 		}
 
-		operators[&node] = std::move(create_bf);
+		replace_map[&node] = std::move(create_bf);
 	}
 
 	return result;
 }
 
-idx_t PredicateTransferOptimizer::GetNodeId(LogicalOperator &node) {
-	idx_t res = -1;
-	switch (node.type) {
-	case LogicalOperatorType::LOGICAL_GET:
-	case LogicalOperatorType::LOGICAL_DELIM_GET:
-	case LogicalOperatorType::LOGICAL_PROJECTION:
-	case LogicalOperatorType::LOGICAL_UNION:
-	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT: {
-		res = node.GetTableIndex()[0];
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		res = NodesManager::GetTableIndexinFilter(&node);
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
-		res = node.GetTableIndex()[1];
-		break;
-	}
-	default: {
-		break;
-	}
-	}
-	return res;
-}
-
-void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, vector<shared_ptr<BlockedBloomFilter>> &bfs_to_use,
+void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, BloomFilters &bfs_to_use,
                                                 vector<idx_t> &parent_nodes, bool reverse) {
-	auto &node = dag_manager.nodes[cur_node_id];
+	auto &node = dag_manager.graph[cur_node_id];
 	auto &edges = reverse ? node->backward_in_ : node->forward_in_;
 
 	for (auto &edge : edges) {
@@ -160,10 +144,8 @@ void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, vector<shared
 	}
 }
 
-void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id,
-                                                   vector<shared_ptr<BlockedBloomFilter>> &bfs_to_create,
-                                                   bool reverse) {
-	auto &node = dag_manager.nodes[cur_node_id];
+void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id, BloomFilters &bfs_to_create, bool reverse) {
+	auto &node = dag_manager.graph[cur_node_id];
 	auto &edges = reverse ? node->backward_out_ : node->forward_out_;
 
 	for (auto &edge : edges) {
@@ -194,20 +176,18 @@ void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id,
 	}
 }
 
-unique_ptr<LogicalCreateBF>
-PredicateTransferOptimizer::BuildCreateBFOperator(LogicalOperator &node,
-                                                  vector<shared_ptr<BlockedBloomFilter>> &bloom_filters) {
+unique_ptr<LogicalCreateBF> PredicateTransferOptimizer::BuildCreateBFOperator(LogicalOperator &node,
+                                                                              BloomFilters &bloom_filters) {
 	auto create_bf = make_uniq<LogicalCreateBF>(bloom_filters);
 	create_bf->SetEstimatedCardinality(node.estimated_cardinality);
 	return create_bf;
 }
 
-unique_ptr<LogicalUseBF>
-PredicateTransferOptimizer::BuildUseBFOperator(LogicalOperator &node,
-                                               vector<shared_ptr<BlockedBloomFilter>> &bloom_filters,
-                                               vector<idx_t> &parent_nodes, bool reverse) {
+unique_ptr<LogicalUseBF> PredicateTransferOptimizer::BuildUseBFOperator(LogicalOperator &node,
+                                                                        BloomFilters &bloom_filters,
+                                                                        vector<idx_t> &parent_nodes, bool reverse) {
 	unique_ptr<LogicalUseBF> last_operator;
-	auto &operators = reverse ? replace_map_backward : replace_map_forward;
+	auto &replace_map = reverse ? modify_map_backward : modify_map_forward;
 
 	// This is important for performance, not use (int i = 0; i < temp_result_to_use.size(); i++)
 	for (int i = bloom_filters.size() - 1; i >= 0; i--) {
@@ -216,7 +196,7 @@ PredicateTransferOptimizer::BuildUseBFOperator(LogicalOperator &node,
 
 		auto node_id = parent_nodes[i];
 		auto base_node = dag_manager.nodes_manager.GetNode(node_id);
-		auto related_bf_create = operators[base_node].get();
+		auto related_bf_create = replace_map[base_node].get();
 
 		D_ASSERT(related_bf_create->type == LogicalOperatorType::LOGICAL_CREATE_BF);
 		use_bf_operator->AddDownStreamOperator(static_cast<LogicalCreateBF *>(related_bf_create));
@@ -229,43 +209,8 @@ PredicateTransferOptimizer::BuildUseBFOperator(LogicalOperator &node,
 	return last_operator;
 }
 
-unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertCreateBFOperator(unique_ptr<LogicalOperator> plan) {
-	for (auto &child : plan->children) {
-		child = InsertCreateBFOperator(std::move(child));
-	}
-	void *plan_ptr = plan.get();
-	auto itr = replace_map_forward.find(plan_ptr);
-	bool insert_create_table = false;
-	if (itr != replace_map_forward.end()) {
-		insert_create_table = true;
-		auto ptr = itr->second.get();
-		while (ptr->children.size() != 0) {
-			ptr = ptr->children[0].get();
-		}
-		ptr->AddChild(std::move(plan));
-		plan = std::move(itr->second);
-	}
-	auto itr_next = replace_map_backward.find(plan_ptr);
-	if (itr_next != replace_map_backward.end()) {
-		insert_create_table = true;
-		auto ptr_next = itr_next->second.get();
-		while (ptr_next->children.size() != 0) {
-			ptr_next = ptr_next->children[0].get();
-		}
-		ptr_next->AddChild(std::move(plan));
-		plan = std::move(itr_next->second);
-	}
-	/*
-	if (insert_create_table) {
-	    plan = InsertCreateTable(std::move(plan), (LogicalOperator*)plan_ptr);
-	}
-	*/
-	return plan;
-}
-
-/* Will this node be filtered? */
 bool PredicateTransferOptimizer::PossibleFilterAny(LogicalOperator &node, bool reverse) {
-	if (!reverse || (replace_map_forward.find(&node) == replace_map_forward.end())) {
+	if (!reverse || (modify_map_forward.find(&node) == modify_map_forward.end())) {
 		if (node.type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = node.Cast<LogicalGet>();
 			if (get.table_filters.filters.size() == 0) {
@@ -277,5 +222,45 @@ bool PredicateTransferOptimizer::PossibleFilterAny(LogicalOperator &node, bool r
 	}
 
 	return true;
+}
+
+void PredicateTransferOptimizer::GetColumnBindingExpression(Expression &expr,
+                                                            vector<BoundColumnRefExpression *> &expressions) {
+	if (expr.type == ExpressionType::BOUND_COLUMN_REF) {
+		Expression *expr_ptr = &expr;
+		BoundColumnRefExpression *col_ref = static_cast<BoundColumnRefExpression *>(expr_ptr);
+		D_ASSERT(col_ref->depth == 0);
+		expressions.emplace_back(col_ref);
+	} else {
+		ExpressionIterator::EnumerateChildren(
+		    expr, [&](unique_ptr<Expression> &child) { GetColumnBindingExpression(*child, expressions); });
+	}
+}
+
+idx_t PredicateTransferOptimizer::GetNodeId(LogicalOperator &node) {
+	idx_t res = -1;
+	switch (node.type) {
+	case LogicalOperatorType::LOGICAL_GET:
+	case LogicalOperatorType::LOGICAL_DELIM_GET:
+	case LogicalOperatorType::LOGICAL_PROJECTION:
+	case LogicalOperatorType::LOGICAL_UNION:
+	case LogicalOperatorType::LOGICAL_EXCEPT:
+	case LogicalOperatorType::LOGICAL_INTERSECT: {
+		res = node.GetTableIndex()[0];
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_FILTER: {
+		res = NodesManager::GetTableIndexinFilter(&node);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		res = node.GetTableIndex()[1];
+		break;
+	}
+	default: {
+		break;
+	}
+	}
+	return res;
 }
 } // namespace duckdb

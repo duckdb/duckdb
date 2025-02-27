@@ -35,7 +35,7 @@ public:
 
 	NodesManager nodes_manager;
 	ClientContext &context;
-	DAG nodes;
+	DAG graph;
 
 private:
 	std::mt19937 g;

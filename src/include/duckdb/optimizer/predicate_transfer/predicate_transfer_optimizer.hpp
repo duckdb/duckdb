@@ -5,6 +5,8 @@
 #include "duckdb/planner/operator/logical_use_bf.hpp"
 
 namespace duckdb {
+using BloomFilters = vector<shared_ptr<BlockedBloomFilter>>;
+
 class PredicateTransferOptimizer {
 public:
 	explicit PredicateTransferOptimizer(ClientContext &context) : context(context), dag_manager(context) {
@@ -13,23 +15,22 @@ public:
 	unique_ptr<LogicalOperator> PreOptimize(unique_ptr<LogicalOperator> plan,
 	                                        optional_ptr<RelationStats> stats = nullptr);
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan, optional_ptr<RelationStats> stats = nullptr);
-	unique_ptr<LogicalOperator> InsertCreateBFOperator(unique_ptr<LogicalOperator> plan);
+	unique_ptr<LogicalOperator> InsertTransferOperators(unique_ptr<LogicalOperator> plan);
 
 private:
+	//! Create Bloom filter and use existing Bloom filter for the given scan or filter node
 	vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> CreateBloomFilter(LogicalOperator &node, bool reverse);
 
-	void GetAllBFsToUse(idx_t cur_node_id, vector<shared_ptr<BlockedBloomFilter>> &bfs_to_use,
-	                    vector<idx_t> &parent_nodes, bool reverse);
-	void GetAllBFsToCreate(idx_t cur_node_id, vector<shared_ptr<BlockedBloomFilter>> &bfs_to_create, bool reverse);
-
-	unique_ptr<LogicalCreateBF> BuildCreateBFOperator(LogicalOperator &node,
-	                                                  vector<shared_ptr<BlockedBloomFilter>> &bloom_filters);
-	unique_ptr<LogicalUseBF> BuildUseBFOperator(LogicalOperator &node,
-	                                            vector<shared_ptr<BlockedBloomFilter>> &bloom_filters,
+	void GetAllBFsToUse(idx_t cur_node_id, BloomFilters &bfs_to_use, vector<idx_t> &parent_nodes, bool reverse);
+	void GetAllBFsToCreate(idx_t cur_node_id, BloomFilters &bfs_to_create, bool reverse);
+	unique_ptr<LogicalCreateBF> BuildCreateBFOperator(LogicalOperator &node, BloomFilters &bloom_filters);
+	unique_ptr<LogicalUseBF> BuildUseBFOperator(LogicalOperator &node, BloomFilters &bloom_filters,
 	                                            vector<idx_t> &parent_nodes, bool reverse);
 
+	//! Will this node be filtered?
 	bool PossibleFilterAny(LogicalOperator &node, bool reverse);
 
+	//! which column(s) involved in this expression
 	static void GetColumnBindingExpression(Expression &expr, vector<BoundColumnRefExpression *> &expressions);
 	static idx_t GetNodeId(LogicalOperator &node);
 
@@ -37,8 +38,8 @@ private:
 	ClientContext &context;
 	DAGManager dag_manager;
 
-	std::unordered_map<void *, unique_ptr<LogicalOperator>> replace_map_forward;
-	std::unordered_map<void *, unique_ptr<LogicalOperator>> replace_map_backward;
-	static std::unordered_map<std::string, int> table_exists;
+	//! we use a map to record how to modify/update the operators in the query plan.
+	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> modify_map_forward;
+	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> modify_map_backward;
 };
 } // namespace duckdb

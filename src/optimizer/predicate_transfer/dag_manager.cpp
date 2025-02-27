@@ -39,10 +39,10 @@ vector<LogicalOperator *> &DAGManager::getExecOrder() {
 void DAGManager::Add(idx_t create_table, shared_ptr<BlockedBloomFilter> use_bf, bool reverse) {
 	if (!reverse) {
 		auto in = use_bf->GetColApplied()[0].table_index;
-		nodes[in]->AddIn(create_table, use_bf, true);
+		graph[in]->AddIn(create_table, use_bf, true);
 	} else {
 		auto out = use_bf->GetColApplied()[0].table_index;
-		nodes[out]->AddIn(create_table, use_bf, false);
+		graph[out]->AddIn(create_table, use_bf, false);
 	}
 }
 
@@ -227,12 +227,12 @@ void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 			auto node = make_uniq<GraphNode>(vertex.first, vertex.second->estimated_cardinality, true);
 			node->priority = prior_flag--;
 			constructed_set.emplace(vertex.first);
-			nodes[vertex.first] = std::move(node);
+			graph[vertex.first] = std::move(node);
 			root = vertex.first;
 		} else {
 			auto node = make_uniq<GraphNode>(vertex.first, vertex.second->estimated_cardinality, false);
 			unconstructed_set.emplace(vertex.first);
-			nodes[vertex.first] = std::move(node);
+			graph[vertex.first] = std::move(node);
 		}
 	}
 	// delete root
@@ -249,7 +249,7 @@ void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 				selected_filters_and_bindings_.emplace_back(std::move(v));
 			}
 		}
-		auto node = nodes[selected_edge.second].get();
+		auto node = graph[selected_edge.second].get();
 		node->priority = prior_flag--;
 		ExecOrder.emplace_back(nodes_manager.GetNode(node->id));
 		nodes_manager.EraseNode(node->id);
@@ -314,8 +314,8 @@ void DAGManager::CreateDAG() {
 				break;
 			}
 			}
-			auto small_node = nodes[small].get();
-			auto large_node = nodes[large].get();
+			auto small_node = graph[small].get();
+			auto large_node = graph[large].get();
 			// smaller one has higher priority
 			if (small_node->priority > large_node->priority) {
 				if (!filter_and_binding->large_protect && !filter_and_binding->small_protect) {
@@ -377,7 +377,7 @@ vector<GraphNode *> DAGManager::GetNeighbors(idx_t node_id) {
 					break;
 				}
 				}
-				result.emplace_back(nodes[another_node_id].get());
+				result.emplace_back(graph[another_node_id].get());
 			} else if (&edge->small_ == nodes_manager.GetNode(node_id)) {
 				auto &op = edge->large_;
 				idx_t another_node_id;
@@ -403,7 +403,7 @@ vector<GraphNode *> DAGManager::GetNeighbors(idx_t node_id) {
 					break;
 				}
 				}
-				result.emplace_back(nodes[another_node_id].get());
+				result.emplace_back(graph[another_node_id].get());
 			}
 		}
 	}
