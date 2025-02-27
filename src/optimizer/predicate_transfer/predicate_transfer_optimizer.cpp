@@ -121,7 +121,7 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 	vector<shared_ptr<BlockedBloomFilter>> temp_result_to_use;
 	vector<shared_ptr<BlockedBloomFilter>> temp_result_to_create;
 	idx_t cur = GetNodeId(node);
-	if (dag_manager.nodes.nodes.find(cur) == dag_manager.nodes.nodes.end()) {
+	if (dag_manager.nodes.find(cur) == dag_manager.nodes.end()) {
 		return result;
 	}
 	// Use Bloom Filter
@@ -203,7 +203,7 @@ idx_t PredicateTransferOptimizer::GetNodeId(LogicalOperator &node) {
 void PredicateTransferOptimizer::GetAllBFUsed(idx_t cur, vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_use,
                                               vector<idx_t> &depend_nodes, bool reverse) {
 	if (!reverse) {
-		for (auto &edge : dag_manager.nodes.nodes[cur]->forward_in_) {
+		for (auto &edge : dag_manager.nodes[cur]->forward_in_) {
 			for (auto bloom_filter : edge->bloom_filters) {
 				if (!bloom_filter->isUsed()) {
 					bloom_filter->setUsed();
@@ -214,7 +214,7 @@ void PredicateTransferOptimizer::GetAllBFUsed(idx_t cur, vector<shared_ptr<Block
 		}
 	} else {
 		/* Further to do, remove the duplicate blooom filter */
-		for (auto &edge : dag_manager.nodes.nodes[cur]->backward_in_) {
+		for (auto &edge : dag_manager.nodes[cur]->backward_in_) {
 			for (auto bloom_filter : edge->bloom_filters) {
 				if (!bloom_filter->isUsed()) {
 					bloom_filter->setUsed();
@@ -230,7 +230,7 @@ void PredicateTransferOptimizer::GetAllBFCreate(idx_t cur,
                                                 vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_create,
                                                 bool reverse) {
 	if (!reverse) {
-		for (auto &edge : dag_manager.nodes.nodes[cur]->forward_out_) {
+		for (auto &edge : dag_manager.nodes[cur]->forward_out_) {
 			auto cur_filter = make_shared_ptr<BlockedBloomFilter>();
 
 			// Each Expression leads to a bloom filter on a column on this table
@@ -252,7 +252,7 @@ void PredicateTransferOptimizer::GetAllBFCreate(idx_t cur,
 			}
 		}
 	} else {
-		for (auto &edge : dag_manager.nodes.nodes[cur]->backward_out_) {
+		for (auto &edge : dag_manager.nodes[cur]->backward_out_) {
 			auto cur_filter = make_shared_ptr<BlockedBloomFilter>();
 
 			// Each Expression leads to a bloom filter on a column on this table

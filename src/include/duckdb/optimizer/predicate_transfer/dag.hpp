@@ -50,8 +50,5 @@ public:
 	vector<shared_ptr<BlockedBloomFilter>> bloom_filters;
 };
 
-class DAG {
-public:
-	unordered_map<idx_t, unique_ptr<DAGNode>> nodes;
-};
+using DAG = unordered_map<idx_t, unique_ptr<DAGNode>>;
 } // namespace duckdb

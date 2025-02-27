@@ -39,10 +39,10 @@ vector<LogicalOperator *> &DAGManager::getExecOrder() {
 void DAGManager::Add(idx_t create_table, shared_ptr<BlockedBloomFilter> use_bf, bool reverse) {
 	if (!reverse) {
 		auto in = use_bf->GetColApplied()[0].table_index;
-		nodes.nodes[in]->AddIn(create_table, use_bf, true);
+		nodes[in]->AddIn(create_table, use_bf, true);
 	} else {
 		auto out = use_bf->GetColApplied()[0].table_index;
-		nodes.nodes[out]->AddIn(create_table, use_bf, false);
+		nodes[out]->AddIn(create_table, use_bf, false);
 	}
 }
 
@@ -215,33 +215,6 @@ pair<int, int> DAGManager::FindEdge(unordered_set<int> &constructed_set, unorder
 	return result;
 }
 
-pair<int, int> DAGManager::FindEdgeRandom(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set,
-                                          std::uniform_int_distribution<idx_t> &dist) {
-	idx_t max_weight = 0;
-	idx_t max_card = 0;
-	auto result = make_pair(-1, -1);
-	for (int i : unconstructed_set) {
-		for (int j : constructed_set) {
-			auto key = make_pair(j, i);
-			if (filters_and_bindings_.find(key) != filters_and_bindings_.end()) {
-				auto card = dist(g);
-				auto weight = filters_and_bindings_[key].size();
-				if (weight > max_weight) {
-					max_weight = weight;
-					max_card = card;
-					result = key;
-				} else if (weight == max_weight) {
-					if (card > max_card) {
-						max_card = card;
-						result = key;
-					}
-				}
-			}
-		}
-	}
-	return result;
-}
-
 void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 	unordered_set<int> constructed_set;
 	unordered_set<int> unconstructed_set;
@@ -254,12 +227,12 @@ void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 			auto node = make_uniq<DAGNode>(vertex.first, vertex.second->estimated_cardinality, true);
 			node->priority = prior_flag--;
 			constructed_set.emplace(vertex.first);
-			nodes.nodes[vertex.first] = std::move(node);
+			nodes[vertex.first] = std::move(node);
 			root = vertex.first;
 		} else {
 			auto node = make_uniq<DAGNode>(vertex.first, vertex.second->estimated_cardinality, false);
 			unconstructed_set.emplace(vertex.first);
-			nodes.nodes[vertex.first] = std::move(node);
+			nodes[vertex.first] = std::move(node);
 		}
 	}
 	// delete root
@@ -276,80 +249,7 @@ void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 				selected_filters_and_bindings_.emplace_back(std::move(v));
 			}
 		}
-		auto node = nodes.nodes[selected_edge.second].get();
-		node->priority = prior_flag--;
-		ExecOrder.emplace_back(nodes_manager.GetNode(node->id));
-		nodes_manager.EraseNode(node->id);
-		unconstructed_set.erase(selected_edge.second);
-		constructed_set.emplace(selected_edge.second);
-	}
-}
-
-void DAGManager::Small2Large(vector<LogicalOperator *> &sorted_nodes) {
-	// Create Vertices
-	for (auto &vertex : nodes_manager.GetNodes()) {
-		// Set the last operator as root
-		if (vertex.second == sorted_nodes.back()) {
-			auto node = make_uniq<DAGNode>(vertex.first, vertex.second->estimated_cardinality, true);
-			node->priority = sorted_nodes.size() - 1;
-			nodes.nodes[vertex.first] = std::move(node);
-		} else {
-			auto node = make_uniq<DAGNode>(vertex.first, vertex.second->estimated_cardinality, false);
-			for (int i = 0; i < sorted_nodes.size(); i++) {
-				if (sorted_nodes[i] == vertex.second) {
-					node->priority = i;
-					break;
-				}
-			}
-			nodes.nodes[vertex.first] = std::move(node);
-		}
-	}
-	for (int i = sorted_nodes.size() - 1; i >= 0; i--) {
-		ExecOrder.emplace_back(sorted_nodes[i]);
-	}
-	for (auto v1 : filters_and_bindings_) {
-		for (auto v2 : v1.second) {
-			selected_filters_and_bindings_.emplace_back(v2);
-		}
-	}
-}
-
-void DAGManager::RandomRoot(vector<LogicalOperator *> &sorted_nodes) {
-	unordered_set<int> constructed_set;
-	unordered_set<int> unconstructed_set;
-	std::uniform_int_distribution<idx_t> dist(0, 99999999999);
-	int prior_flag = nodes_manager.NumNodes() - 1;
-	int root = -1;
-	// Create Vertices
-	for (auto &vertex : nodes_manager.GetNodes()) {
-		// Set the last operator as root
-		if (vertex.second == sorted_nodes.back()) {
-			auto node = make_uniq<DAGNode>(vertex.first, vertex.second->estimated_cardinality, true);
-			node->priority = prior_flag--;
-			constructed_set.emplace(vertex.first);
-			nodes.nodes[vertex.first] = std::move(node);
-			root = vertex.first;
-		} else {
-			auto node = make_uniq<DAGNode>(vertex.first, vertex.second->estimated_cardinality, false);
-			unconstructed_set.emplace(vertex.first);
-			nodes.nodes[vertex.first] = std::move(node);
-		}
-	}
-	// delete root
-	ExecOrder.emplace_back(nodes_manager.GetNode(root));
-	nodes_manager.EraseNode(root);
-	while (!unconstructed_set.empty()) {
-		// Old node at first, new add node at second
-		auto selected_edge = FindEdgeRandom(constructed_set, unconstructed_set, dist);
-		if (selected_edge.first == -1 && selected_edge.second == -1) {
-			break;
-		}
-		if (filters_and_bindings_.find(selected_edge) != filters_and_bindings_.end()) {
-			for (auto &v : filters_and_bindings_[selected_edge]) {
-				selected_filters_and_bindings_.emplace_back(std::move(v));
-			}
-		}
-		auto node = nodes.nodes[selected_edge.second].get();
+		auto node = nodes[selected_edge.second].get();
 		node->priority = prior_flag--;
 		ExecOrder.emplace_back(nodes_manager.GetNode(node->id));
 		nodes_manager.EraseNode(node->id);
@@ -359,18 +259,13 @@ void DAGManager::RandomRoot(vector<LogicalOperator *> &sorted_nodes) {
 }
 
 void DAGManager::CreateDAG() {
-#ifdef SmalltoLarge
-	auto &sorted_nodes = nodes_manager.getSortedNodes();
-	Small2Large(sorted_nodes);
-#else
 	while (nodes_manager.GetNodes().size() > 0) {
 		auto &sorted_nodes = nodes_manager.getSortedNodes();
 		LargestRoot(sorted_nodes);
-		// RandomRoot(sorted_nodes);
 		nodes_manager.ReSortNodes();
 	}
 	nodes_manager.RecoverNodes();
-#endif
+
 	for (auto &filter_and_binding : selected_filters_and_bindings_) {
 		if (filter_and_binding) {
 			idx_t large;
@@ -419,8 +314,8 @@ void DAGManager::CreateDAG() {
 				break;
 			}
 			}
-			auto small_node = nodes.nodes[small].get();
-			auto large_node = nodes.nodes[large].get();
+			auto small_node = nodes[small].get();
+			auto large_node = nodes[large].get();
 			// smaller one has higher priority
 			if (small_node->priority > large_node->priority) {
 				if (!filter_and_binding->large_protect && !filter_and_binding->small_protect) {
@@ -482,7 +377,7 @@ vector<DAGNode *> DAGManager::GetNeighbors(idx_t node_id) {
 					break;
 				}
 				}
-				result.emplace_back(nodes.nodes[another_node_id].get());
+				result.emplace_back(nodes[another_node_id].get());
 			} else if (&edge->small_ == nodes_manager.GetNode(node_id)) {
 				auto &op = edge->large_;
 				idx_t another_node_id;
@@ -508,7 +403,7 @@ vector<DAGNode *> DAGManager::GetNeighbors(idx_t node_id) {
 					break;
 				}
 				}
-				result.emplace_back(nodes.nodes[another_node_id].get());
+				result.emplace_back(nodes[another_node_id].get());
 			}
 		}
 	}

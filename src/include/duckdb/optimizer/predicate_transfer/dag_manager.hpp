@@ -62,19 +62,12 @@ private:
 	void ExtractEdges(LogicalOperator &op, vector<reference<LogicalOperator>> &join_operators);
 
 	void LargestRoot(vector<LogicalOperator *> &sorted_nodes);
-	void Small2Large(vector<LogicalOperator *> &sorted_nodes);
-	void RandomRoot(vector<LogicalOperator *> &sorted_nodes);
 
 	void CreateDAG();
 
 	pair<int, int> FindEdge(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set);
 
-	pair<int, int> FindEdgeRandom(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set,
-	                              std::uniform_int_distribution<idx_t> &dist);
-
 	vector<DAGNode *> GetNeighbors(idx_t node_id);
-
-	void AddEdge(DAGNode &node, vector<DAGEdgeInfo *> &neighbors);
 
 	static int DAGNodesCmp(DAGNode *a, DAGNode *b);
 };
