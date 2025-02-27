@@ -48,6 +48,9 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+  AZURE_CODESIGN_ENDPOINT: https://eus.codesigning.azure.net/
+  AZURE_CODESIGN_ACCOUNT: duckdb-signing-2
+  AZURE_CODESIGN_PROFILE: duckdb-certificate-profile
 
 jobs:
  win-release-64:
@@ -98,6 +101,23 @@ jobs:
         python -m pip install pytest
         python -m pytest tools/shell/tests --shell-binary Release/duckdb.exe
         tools/sqlite3_api_wrapper/Release/test_sqlite3_api_wrapper.exe
+
+    - name: Sign files with Azure Trusted Signing (TM)
+      if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
+      uses: azure/trusted-signing-action@v0
+      with:
+        azure-tenant-id:              ${{ secrets.AZURE_CODESIGN_TENANT_ID }}
+        azure-client-id:              ${{ secrets.AZURE_CODESIGN_CLIENT_ID }}
+        azure-client-secret:          ${{ secrets.AZURE_CODESIGN_CLIENT_SECRET }}
+        endpoint:                     ${{ env.AZURE_CODESIGN_ENDPOINT }}
+        trusted-signing-account-name: ${{ env.AZURE_CODESIGN_ACCOUNT }}
+        certificate-profile-name:     ${{ env.AZURE_CODESIGN_PROFILE }}
+        files-folder:                 ${{ github.workspace }}
+        files-folder-filter:          exe,dll
+        files-folder-recurse:         true
+        file-digest:                  SHA256
+        timestamp-rfc3161:            http://timestamp.acs.microsoft.com
+        timestamp-digest:             SHA256
 
     - name: Deploy
       shell: bash
@@ -190,6 +210,23 @@ jobs:
        run: |
          cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_GENERATOR_PLATFORM=ARM64 -DDUCKDB_EXTENSION_CONFIGS="${GITHUB_WORKSPACE}/.github/config/bundled_extensions.cmake" -DOVERRIDE_GIT_DESCRIBE="$OVERRIDE_GIT_DESCRIBE" -DDUCKDB_EXPLICIT_PLATFORM=windows_arm64 -DDUCKDB_CUSTOM_PLATFORM=windows_arm64 -DBUILD_UNITTESTS=FALSE
          cmake --build . --config Release --parallel
+
+     - name: Sign files with Azure Trusted Signing (TM)
+       if: github.repository == 'duckdb/duckdb' && github.event_name != 'pull_request'
+       uses: azure/trusted-signing-action@v0
+       with:
+         azure-tenant-id:              ${{ secrets.AZURE_CODESIGN_TENANT_ID }}
+         azure-client-id:              ${{ secrets.AZURE_CODESIGN_CLIENT_ID }}
+         azure-client-secret:          ${{ secrets.AZURE_CODESIGN_CLIENT_SECRET }}
+         endpoint:                     ${{ env.AZURE_CODESIGN_ENDPOINT }}
+         trusted-signing-account-name: ${{ env.AZURE_CODESIGN_ACCOUNT }}
+         certificate-profile-name:     ${{ env.AZURE_CODESIGN_PROFILE }}
+         files-folder:                 ${{ github.workspace }}
+         files-folder-filter:          exe,dll
+         files-folder-recurse:         true
+         file-digest:                  SHA256
+         timestamp-rfc3161:            http://timestamp.acs.microsoft.com
+         timestamp-digest:             SHA256
 
      - name: Deploy
        shell: bash
