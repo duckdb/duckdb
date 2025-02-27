@@ -216,7 +216,6 @@ bool JSONScanLocalState::IsParallel(JSONScanGlobalState &gstate) const {
 
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 	// First we make sure we have a buffer to read into
-	AllocatedData buffer;
 
 	optional_idx buffer_index;
 	while (true) {
@@ -224,6 +223,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		if (current_reader) {
 			// Try to read (if we were not the last read in the previous iteration)
 			bool file_done = false;
+			AllocatedData buffer;
 			bool read_success = current_reader->ReadNextBuffer(gstate, scan_state, buffer, buffer_index, file_done);
 			if (file_done) {
 				lock_guard<mutex> guard(gstate.lock);
@@ -261,7 +261,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		}
 
 		bool file_done = false;
-		current_reader->InitializeScan(gstate, scan_state, buffer, buffer_index, file_done);
+		current_reader->InitializeScan(gstate, scan_state, buffer_index, file_done);
 		if (file_done) {
 			TryIncrementFileIndex(gstate);
 			lock_guard<mutex> reader_guard(current_reader->lock);
@@ -280,7 +280,6 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			continue;
 		}
 
-		current_reader->FinalizeBufferInternal(scan_state, buffer, buffer_index.GetIndex());
 		return true;
 	}
 }
