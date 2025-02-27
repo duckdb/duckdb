@@ -104,6 +104,7 @@ public:
 	void Combine(TupleDataCollection &other_data, optional_ptr<atomic<double>> progress = nullptr);
 
 private:
+	ClientContext &context;
 	//! Efficiently matches groups
 	RowMatcher row_matcher;
 

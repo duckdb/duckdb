@@ -210,6 +210,7 @@ public:
 		return null_values_are_equal[col_idx];
 	}
 
+	ClientContext &context;
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The join conditions
