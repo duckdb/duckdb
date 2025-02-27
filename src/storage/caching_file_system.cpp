@@ -176,6 +176,10 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
 		unique_lock<mutex> guard(cached_file.lock);
+		if (caching_file_system.check_cached_file_invalidation &&
+		    (version_tag.empty() || cached_file.VersionTag(guard) != version_tag)) {
+			cached_file.Ranges(guard).clear(); // Invalidate entire cache
+		}
 		cached_file.FileSize(guard) = file_handle->GetFileSize();
 		cached_file.LastModified(guard) = last_modified;
 		cached_file.VersionTag(guard) = version_tag;
