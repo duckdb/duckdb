@@ -22,7 +22,7 @@ bool DAGManager::Build(LogicalOperator &plan) {
 	nodes_manager.SortNodes();
 
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
-	ExtractEdges(plan, joins);
+	ExtractEdges(joins);
 	if (edges.size() == 0) {
 		return false;
 	}
@@ -48,140 +48,100 @@ void DAGManager::Add(idx_t create_table, shared_ptr<BlockedBloomFilter> use_bf, 
 }
 
 // extract the edges of the hypergraph, creating a list of filters and their associated bindings.
-void DAGManager::ExtractEdges(LogicalOperator &op, vector<reference<LogicalOperator>> &join_operators) {
-	auto &sorted_nodes = nodes_manager.getSortedNodes();
-	expression_set_t filter_set;
+void DAGManager::ExtractEdges(vector<reference<LogicalOperator>> &join_operators) {
+	// Track processed comparisons to avoid duplicates.
+	expression_set_t conditions;
+
 	for (auto &join_op : join_operators) {
 		auto &j_op = join_op.get();
-		if (j_op.type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
-		    j_op.type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
-			auto &join = j_op.Cast<LogicalComparisonJoin>();
-			D_ASSERT(join.expressions.empty());
-			for (auto &cond : join.conditions) {
-				if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
-					continue;
-				}
-				auto comparison =
-				    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy());
-				if (filter_set.find(*comparison) == filter_set.end()) {
-					filter_set.insert(*comparison);
-					ColumnBinding left_binding;
-					if (comparison->left->type == ExpressionType::BOUND_COLUMN_REF) {
-						auto &colref = comparison->left->Cast<BoundColumnRefExpression>();
-						left_binding = colref.binding;
-					}
-					ColumnBinding right_binding;
-					if (comparison->right->type == ExpressionType::BOUND_COLUMN_REF) {
-						auto &colref = comparison->right->Cast<BoundColumnRefExpression>();
-						right_binding = colref.binding;
-					}
-					idx_t left_table = nodes_manager.FindRename(left_binding).table_index;
-					idx_t right_table = nodes_manager.FindRename(right_binding).table_index;
-					auto left_node = nodes_manager.GetNode(left_table);
-					if (left_node == nullptr) {
-						continue;
-					}
-					auto right_node = nodes_manager.GetNode(right_table);
-					if (right_node == nullptr) {
-						continue;
-					}
-					idx_t left_node_in_order = 0;
-					for (idx_t i = 0; i < sorted_nodes.size(); i++) {
-						if (sorted_nodes[i] == left_node) {
-							left_node_in_order = i;
-							break;
-						}
-					}
-					idx_t right_node_in_order = 0;
-					for (idx_t i = 0; i < sorted_nodes.size(); i++) {
-						if (sorted_nodes[i] == right_node) {
-							right_node_in_order = i;
-							break;
-						}
-					}
-					if (join.join_type == JoinType::INNER || join.join_type == JoinType::SEMI ||
-					    join.join_type == JoinType::RIGHT_SEMI || join.join_type == JoinType::MARK) {
-						if (left_node_in_order > right_node_in_order) {
-							auto filter_info =
-							    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *left_node, *right_node);
-							auto key1 = make_pair(right_table, left_table);
-							auto key2 = make_pair(left_table, right_table);
-							if (edges.find(key1) == edges.end()) {
-								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
-							}
-							edges[key1].emplace_back(filter_info);
-							edges[key2].emplace_back(filter_info);
-						} else {
-							auto filter_info =
-							    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *right_node, *left_node);
-							auto key1 = make_pair(right_table, left_table);
-							auto key2 = make_pair(left_table, right_table);
-							if (edges.find(key1) == edges.end()) {
-								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
-							}
-							edges[key1].emplace_back(filter_info);
-							edges[key2].emplace_back(filter_info);
-						}
-					} else if (join.join_type == JoinType::LEFT) {
-						if (left_node_in_order > right_node_in_order) {
-							auto filter_info =
-							    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *left_node, *right_node);
-							filter_info->large_protect = true;
-							auto key1 = make_pair(right_table, left_table);
-							auto key2 = make_pair(left_table, right_table);
-							if (edges.find(key1) == edges.end()) {
-								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
-							}
-							edges[key1].emplace_back(filter_info);
-							edges[key2].emplace_back(filter_info);
-						} else {
-							auto filter_info =
-							    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *right_node, *left_node);
-							filter_info->small_protect = true;
-							auto key1 = make_pair(right_table, left_table);
-							auto key2 = make_pair(left_table, right_table);
-							if (edges.find(key1) == edges.end()) {
-								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
-							}
-							edges[key1].emplace_back(filter_info);
-							edges[key2].emplace_back(filter_info);
-						}
-					} else if (join.join_type == JoinType::RIGHT) {
-						if (left_node_in_order > right_node_in_order) {
-							auto filter_info =
-							    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *left_node, *right_node);
-							filter_info->small_protect = true;
-							auto key1 = make_pair(right_table, left_table);
-							auto key2 = make_pair(left_table, right_table);
-							if (edges.find(key1) == edges.end()) {
-								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
-							}
-							edges[key1].emplace_back(filter_info);
-							edges[key2].emplace_back(filter_info);
-						} else {
-							auto filter_info =
-							    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *right_node, *left_node);
-							filter_info->large_protect = true;
-							auto key1 = make_pair(right_table, left_table);
-							auto key2 = make_pair(left_table, right_table);
-							if (edges.find(key1) == edges.end()) {
-								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
-							}
-							edges[key1].emplace_back(filter_info);
-							edges[key2].emplace_back(filter_info);
-						}
-					}
-				}
+
+		// Only process comparison or delim joins.
+		if (j_op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+		    j_op.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+			continue;
+		}
+
+		auto &join = j_op.Cast<LogicalComparisonJoin>();
+		D_ASSERT(join.expressions.empty());
+
+		for (auto &cond : join.conditions) {
+			// Only consider equality comparisons.
+			if (cond.comparison != ExpressionType::COMPARE_EQUAL)
+				continue;
+
+			// Create a unique comparison expression.
+			auto comparison =
+			    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy());
+			if (conditions.find(*comparison) != conditions.end())
+				continue;
+			conditions.insert(*comparison);
+
+			// Extract column bindings from the left and right expressions.
+			ColumnBinding left_binding, right_binding;
+			if (comparison->left->type == ExpressionType::BOUND_COLUMN_REF) {
+				left_binding = comparison->left->Cast<BoundColumnRefExpression>().binding;
 			}
+			if (comparison->right->type == ExpressionType::BOUND_COLUMN_REF) {
+				right_binding = comparison->right->Cast<BoundColumnRefExpression>().binding;
+			}
+
+			// Determine table indices and corresponding nodes.
+			idx_t left_table = nodes_manager.FindRename(left_binding).table_index;
+			idx_t right_table = nodes_manager.FindRename(right_binding).table_index;
+			auto left_node = nodes_manager.GetNode(left_table);
+			auto right_node = nodes_manager.GetNode(right_table);
+			if (!left_node || !right_node)
+				continue;
+
+			// Determine the order of the nodes.
+			auto left_order = nodes_manager.GetNodeOrder(left_node);
+			auto right_order = nodes_manager.GetNodeOrder(right_node);
+			bool swap_order = left_order > right_order;
+
+			// Use swap_order to determine effective ordering.
+			auto effective_left = (swap_order ? left_node : right_node);
+			auto effective_right = (swap_order ? right_node : left_node);
+
+			// Create the edge using the effective node order.
+			shared_ptr<DAGEdgeInfo> edge =
+			    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *effective_left, *effective_right);
+
+			// Set protection flags based on join type.
+			switch (join.join_type) {
+			case JoinType::INNER:
+			case JoinType::SEMI:
+			case JoinType::RIGHT_SEMI:
+			case JoinType::MARK:
+				// No protection flags needed.
+				break;
+			case JoinType::LEFT:
+				if (swap_order)
+					edge->large_protect = true;
+				else
+					edge->small_protect = true;
+				break;
+			case JoinType::RIGHT:
+				if (swap_order)
+					edge->small_protect = true;
+				else
+					edge->large_protect = true;
+				break;
+			default:
+				// Unsupported join type; skip.
+				continue;
+			}
+
+			// Insert the edge info into the map for both key orders.
+			auto key1 = make_pair(right_table, left_table);
+			auto key2 = make_pair(left_table, right_table);
+			if (edges.find(key1) == edges.end()) {
+				edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
+				edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
+			}
+			edges[key1].emplace_back(edge);
+			edges[key2].emplace_back(edge);
 		}
 	}
-	return;
 }
 
 struct DAGNodeCompare {

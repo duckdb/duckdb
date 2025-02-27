@@ -37,7 +37,7 @@ public:
 	GraphNodes nodes;
 
 private:
-	void ExtractEdges(LogicalOperator &op, vector<reference<LogicalOperator>> &join_operators);
+	void ExtractEdges(vector<reference<LogicalOperator>> &join_operators);
 
 	void LargestRoot(vector<LogicalOperator *> &sorted_nodes);
 

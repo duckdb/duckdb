@@ -87,6 +87,19 @@ void NodesManager::SortNodes() {
 	     [&](LogicalOperator *a, LogicalOperator *b) { return a->estimated_cardinality < b->estimated_cardinality; });
 }
 
+idx_t NodesManager::GetNodeOrder(const LogicalOperator *node) {
+	if (sorted_nodes.empty()) {
+		SortNodes();
+	}
+
+	for (idx_t i = 0; i < sorted_nodes.size(); i++) {
+		if (sorted_nodes[i] == node) {
+			return i;
+		}
+	}
+	return -1; // fallback if not found
+}
+
 static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 	switch (op_type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:

@@ -16,6 +16,8 @@ public:
 
 	void SortNodes();
 
+	idx_t GetNodeOrder(const LogicalOperator *node);
+
 	LogicalOperator *GetNode(idx_t table_binding) {
 		auto itr = nodes.find(table_binding);
 		if (itr == nodes.end()) {
