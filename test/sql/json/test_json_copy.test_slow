@@ -1,5 +1,5 @@
 # name: test/sql/json/test_json_copy.test_slow
-# description: Test JSON COPY using TPC-H
+# description: Test JSON COPY
 # group: [json]
 
 require json

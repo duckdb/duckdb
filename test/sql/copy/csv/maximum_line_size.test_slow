@@ -39,4 +39,4 @@ Be sure that the maximum line size is set to an appropriate value
 statement error
 select * from read_csv_auto('data/csv/issue_8320_3.csv.gz', max_line_size = 2097152, buffer_size = 10);
 ----
-BUFFER_SIZE option was set to 10, while MAX_LINE_SIZE was set to 2097152. BUFFER_SIZE must have always be set to value bigger than MAX_LINE_SIZE
+Buffer Size of 10 must be a higher value than the maximum line size 2097152

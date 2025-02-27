@@ -688,23 +688,29 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				    line_pos.GetGlobalPosition(result.requested_size), result.path);
 			}
 			break;
-		case CAST_ERROR:
+		case CAST_ERROR: {
+			string column_name;
+			LogicalTypeId type_id;
+			if (cur_error.col_idx < result.names.size()) {
+				column_name = result.names[cur_error.col_idx];
+			}
+			if (cur_error.col_idx < result.number_of_columns) {
+				type_id = result.parse_types[cur_error.chunk_idx].type_id;
+			}
 			if (result.current_line_position.begin == line_pos) {
 				csv_error = CSVError::CastError(
-				    result.state_machine.options, result.names[cur_error.col_idx], cur_error.error_message,
-				    cur_error.col_idx, borked_line, lines_per_batch,
+				    result.state_machine.options, column_name, cur_error.error_message, cur_error.col_idx, borked_line,
+				    lines_per_batch,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size, first_nl),
-				    result.parse_types[cur_error.chunk_idx].type_id, result.path);
+				    line_pos.GetGlobalPosition(result.requested_size, first_nl), type_id, result.path);
 			} else {
 				csv_error = CSVError::CastError(
-				    result.state_machine.options, result.names[cur_error.col_idx], cur_error.error_message,
-				    cur_error.col_idx, borked_line, lines_per_batch,
+				    result.state_machine.options, column_name, cur_error.error_message, cur_error.col_idx, borked_line,
+				    lines_per_batch,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size), result.parse_types[cur_error.chunk_idx].type_id,
-				    result.path);
+				    line_pos.GetGlobalPosition(result.requested_size), type_id, result.path);
 			}
-			break;
+		} break;
 		case MAXIMUM_LINE_SIZE:
 			csv_error = CSVError::LineSizeError(
 			    result.state_machine.options, lines_per_batch, borked_line,
@@ -980,7 +986,8 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
 
-unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
+unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options,
+                                                                 const MultiFileReaderOptions &file_options) {
 	auto state_machine = make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options,
 	                                                      CSVStateMachineCache::Get(context));
 
@@ -993,7 +1000,7 @@ unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &
 	auto it = BaseScanner::SkipCSVRows(buffer_manager, state_machine, rows_to_skip);
 	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(),
 	                                             STANDARD_VECTOR_SIZE, it);
-	scanner->csv_file_scan = make_shared_ptr<CSVFileScan>(context, options.file_path, options);
+	scanner->csv_file_scan = make_shared_ptr<CSVFileScan>(context, options.file_path, options, file_options);
 	scanner->csv_file_scan->InitializeProjection();
 	return scanner;
 }

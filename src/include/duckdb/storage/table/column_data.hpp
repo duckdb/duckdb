@@ -120,7 +120,7 @@ public:
 	                            idx_t scan_count);
 
 	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
-	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count);
+	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0);
 
 	//! Select
 	virtual void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -196,7 +196,8 @@ protected:
 
 	void BeginScanVectorInternal(ColumnScanState &state);
 	//! Scans a base vector from the column
-	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type);
+	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type,
+	                 idx_t result_offset = 0);
 	//! Scans a vector from the column merged with any potential updates
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                 idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode);

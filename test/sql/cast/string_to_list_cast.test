@@ -16,7 +16,7 @@ SELECT '[12,13,14]'::INT[];
 query I
 SELECT '["hello", "world", "!"]'::VARCHAR[];
 ----
-["hello", "world", "!"]
+[hello, world, !]
 
 query I
 SELECT CAST('[Hello World!]' AS VARCHAR[]);
@@ -110,8 +110,8 @@ INSERT INTO stringList VALUES ('["hello","world","!"]'), ('["Amazing","text"]'),
 query I
 SELECT col1::VARCHAR[] FROM stringList;
 ----
-["hello", "world", "!"]
-["Amazing", "text"]
+[hello, world, !]
+[Amazing, text]
 [Hello World!]
 
 # ---------------------------------------------------
@@ -124,8 +124,8 @@ INSERT INTO nestedStrings VALUES ('[["hello"], ["world"],["!"]]'), ('[["Amazing"
 query I
 SELECT col1::VARCHAR[][] FROM nestedStrings;
 ----
-[["hello"], ["world"], ["!"]]
-[["Amazing"], ["text"]]
+[[hello], [world], [!]]
+[[Amazing], [text]]
 [[Hello World!]]
 
 # ---------------------------------------------------
@@ -138,8 +138,8 @@ INSERT INTO superNestedStrings VALUES ('[[[[["hello"]]], [[["world"],["!"]]]]]')
 query I
 SELECT col1::VARCHAR[][][][][] FROM superNestedStrings;
 ----
-[[[[["hello"]]], [[["world"], ["!"]]]]]
-[[[[["Amazing"]], [["text"]]]]]
+[[[[[hello]]], [[[world], [!]]]]]
+[[[[[Amazing]], [[text]]]]]
 [[[[[Hello World!]]]]]
 
 # ---------------------------------------------------
@@ -201,39 +201,39 @@ SELECT col1::INT[][][][][][] FROM crazyNested;
 #               Quote handling
 # ---------------------------------------------------
 query I
-SELECT CAST('[''hello'',''world'', ''!'']' AS VARCHAR[]);
+SELECT CAST($$['hello','world', '!']$$ AS VARCHAR[]);
+----
+[hello, world, !]
+
+query I
+SELECT CAST($$[\'hello\',\'world\', \'!\']$$ AS VARCHAR[]);
 ----
 ['hello', 'world', '!']
 
 query I
-SELECT CAST('[''''hello'''',''''world'''', ''''!'''']' AS VARCHAR[]);
+SELECT CAST($$[[ ['🦆, 🦆, 🦆']], [[duck, db, '🦆'] ]]$$ AS VARCHAR[][][]);
 ----
-[''hello'', ''world'', ''!'']
+[[[🦆, 🦆, 🦆]], [[duck, db, 🦆]]]
 
 query I
-SELECT CAST('[[ [''🦆, 🦆, 🦆'']], [[duck, db, ''🦆''] ]]' AS VARCHAR[][][]);
-----
-[[['🦆, 🦆, 🦆']], [[duck, db, '🦆']]]
-
-query I
-SELECT CAST('["can''t", "you''re", "i''m"]' AS VARCHAR[]);
-----
-["can't", "you're", "i'm"]
-
-query I
-SELECT CAST('[can''t, you''re, i''m]' AS VARCHAR[]);
+SELECT CAST($$[can\'t, you\'re, i\'m]$$ AS VARCHAR[]);
 ----
 [can't, you're, i'm]
 
 query I
-SELECT CAST('["]", "hello", "world"]' AS VARCHAR[]);
+SELECT CAST($$[can\'t, you\'re, i\'m]$$ AS VARCHAR[]);
 ----
-["]", "hello", "world"]
+[can't, you're, i'm]
 
 query I
-SELECT CAST('['']'', "hello", "world"]' AS VARCHAR[]);
+SELECT CAST($$["]", "hello", "world"]$$ AS VARCHAR[]);
 ----
-[']', "hello", "world"]
+[], hello, world]
+
+query I
+SELECT CAST($$[']', "hello", "world"]$$ AS VARCHAR[]);
+----
+[], hello, world]
 
 
 #               Test for whitespaces
@@ -249,9 +249,9 @@ SELECT CAST('[          [ [12,     13,14], [8, 9         ]  ],[[ 4    ]   ],    
 [[[12, 13, 14], [8, 9]], [[4]], [[2, 1, 0]]]
 
 query I
-SELECT CAST('["   hello","          ''  world", "!         "]' AS VARCHAR[]);
+SELECT CAST($$["   hello","          \"'  world", "!         "]$$ AS VARCHAR[]);
 ----
-["   hello", "          '  world", "!         "]
+[   hello,           "'  world, !         ]
 
 query I
 SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);     
@@ -259,9 +259,9 @@ SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);
 [hello, world, !]
 
 query I
-SELECT CAST('[    [ "   hello"]  ,["            world"        ],[ "!        "           ]      ]' AS VARCHAR[][]);
+SELECT CAST($$[    [ "   hello"]  ,["            world"        ],[ "!        "           ]      ]$$ AS VARCHAR[][]);
 ----
-[["   hello"], ["            world"], ["!        "]]
+[[   hello], [            world], [!        ]]
 
 
 #               Empty list
@@ -488,7 +488,7 @@ statement ok
 CREATE TABLE assorted_lists(col1 INT[], col2 VARCHAR[], col3 DATE[]);
 
 statement ok
-COPY (SELECT [8,7,6], '[hello, Duck''DB]', '[2022-12-2, 1929-01-25]') TO '__TEST_DIR__/assorted_lists.csv' (Header 0);
+COPY (SELECT [8,7,6], $$[hello, Duck\\'DB]$$, '[2022-12-2, 1929-01-25]') TO '__TEST_DIR__/assorted_lists.csv' (Header 0);
 
 statement ok
 COPY assorted_lists FROM '__TEST_DIR__/assorted_lists.csv';
@@ -507,19 +507,34 @@ select '[{"bar":"\""}]'::VARCHAR[];
 ----
 [{"bar":"\""}]
 
-# escaped '\', does not count as an escape for "
 statement error
 select '[{"bar":"\\""}]'::VARCHAR[];
 ----
 
+# Unescaped doublequote ends the quote early, leaving an uneven amount of `"`, causing an error
+statement error
+select '[{"bar":"\\""}]'::STRUCT(bar VARCHAR)[];
+----
+can't be cast to the destination type STRUCT(bar VARCHAR)[]
+
 # uneven amount of escapes does escape the "
 query I
-select '[{"bar":"\\\""}]'::VARCHAR[];
+select '[{"bar":"\\\""}]'::STRUCT(bar VARCHAR)[];
 ----
-[{"bar":"\\\""}]
+[{'bar': \"}]
 
 # all are escaped except for the last one
 query I
-select '[{"bar":"\"\"\\\"\"\"\\"}]'::VARCHAR[];
+select '[{"bar":"\"\"\\\"\"\"\\"}]'::STRUCT(bar VARCHAR)[];
 ----
-[{"bar":"\"\"\\\"\"\"\\"}]
+[{'bar': ""\"""\}]
+
+query III
+select $$[\  \\abc\\ \ , def, ghi]$$::VARCHAR[] a, a[1], len(a[1])
+----
+[\  \\abc\\ \, def, ghi]	\  \\abc\\ \	12
+
+query III
+select $$["\  \\abc\\ \ ", def, ghi]$$::VARCHAR[] a, a[1], len(a[1])
+----
+[  \abc\  , def, ghi]	  \abc\  	9

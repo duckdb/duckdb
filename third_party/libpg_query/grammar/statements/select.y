@@ -458,17 +458,33 @@ cte_list:
 		| cte_list ',' common_table_expr		{ $$ = lappend($1, $3); }
 		;
 
-common_table_expr:  name opt_name_list AS opt_materialized '(' PreparableStmt ')'
+common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' PreparableStmt ')'
 			{
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->ctematerialized = $4;
-				n->ctequery = $6;
+				n->recursive_keys = $3;
+				n->ctematerialized = $5;
+				n->ctequery = $7;
 				n->location = @1;
 				$$ = (PGNode *) n;
 			}
 		;
+
+opt_on_key:
+		USING KEY '(' column_ref_list_opt_comma ')' 				{ $$ = $4; }
+		| /*EMPTY*/												{ $$ = list_make1(NIL); }
+		;
+
+column_ref_list_opt_comma:
+		column_ref_list	 						{ $$ = $1; }
+		| column_ref_list ','					{ $$ = $1; }
+		;
+
+column_ref_list:
+		columnref								{ $$ = list_make1($1); }
+        | column_ref_list ',' columnref		{ $$ = lappend($1, $3); }
+        ;
 
 opt_materialized:
 		MATERIALIZED							{ $$ = PGCTEMaterializeAlways; }
@@ -2604,15 +2620,6 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
-			| '*' COLUMNS '(' a_expr ')'
-				{
-					PGAStar *star = makeNode(PGAStar);
-					star->expr = $4;
-					star->columns = true;
-					star->unpacked = true;
-					star->location = @1;
-					$$ = (PGNode *) star;
-				}
 			| COLUMNS '(' a_expr ')'
 				{
 					PGAStar *star = makeNode(PGAStar);
@@ -2620,6 +2627,21 @@ a_expr:		c_expr									{ $$ = $1; }
 					star->columns = true;
 					star->location = @1;
 					$$ = (PGNode *) star;
+				}
+			| UNPACK '(' a_expr ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("unpack"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| '*' COLUMNS '(' a_expr ')'
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->expr = $4;
+					star->columns = true;
+					star->location = @1;
+
+					PGFuncCall *n = makeFuncCall(SystemFuncName("unpack"), list_make1((PGNode *)star), @1);
+					$$ = (PGNode *) n;
 				}
 			| '*' opt_except_list opt_replace_list opt_rename_list
 				{

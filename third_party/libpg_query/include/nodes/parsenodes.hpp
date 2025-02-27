@@ -319,7 +319,6 @@ typedef struct PGAStar {
 	PGList *replace_list; /* optional: REPLACE list */
 	PGList *rename_list;  /* optional: RENAME list */
 	bool columns;         /* whether or not this is a columns list */
-	bool unpacked;        /* whether or not the columns list is unpacked */
 	int location;
 } PGAStar;
 
@@ -1096,6 +1095,7 @@ typedef struct PGCommonTableExpr {
 	int location;     /* token location, or -1 if unknown */
 	/* These fields are set during parse analysis: */
 	bool cterecursive;        /* is this CTE actually recursive? */
+	PGList *recursive_keys;
 	int cterefcount;          /* number of RTEs referencing this CTE
 								 * (excluding internal self-references) */
 	PGList *ctecolnames;      /* list of output column names */

@@ -54,6 +54,8 @@ struct StringStats {
 
 	//! Resets the max string length so HasMaxStringLength() is false
 	DUCKDB_API static void ResetMaxStringLength(BaseStatistics &stats);
+	//! Sets the max string length
+	DUCKDB_API static void SetMaxStringLength(BaseStatistics &stats, uint32_t length);
 	//! FIXME: make this part of Set on statistics
 	DUCKDB_API static void SetContainsUnicode(BaseStatistics &stats);
 

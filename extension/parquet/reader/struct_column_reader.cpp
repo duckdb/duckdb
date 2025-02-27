@@ -36,6 +36,10 @@ idx_t StructColumnReader::Read(uint64_t num_values, data_ptr_t define_out, data_
 		throw InternalException("StructColumnReader cannot have pending skips");
 	}
 
+	// If the child reader values are all valid, "define_out" may not be initialized at all
+	// So, we just initialize them to all be valid beforehand
+	std::fill_n(define_out, num_values, MaxDefine());
+
 	optional_idx read_count;
 	for (idx_t i = 0; i < child_readers.size(); i++) {
 		auto &child = child_readers[i];

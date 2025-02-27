@@ -166,7 +166,8 @@ void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 	D_ASSERT(state.current->type == type);
 }
 
-idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) {
+idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type,
+                             idx_t base_result_offset) {
 	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");
 	}
@@ -176,7 +177,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		D_ASSERT(state.row_index >= state.current->start &&
 		         state.row_index <= state.current->start + state.current->count);
 		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - state.row_index);
-		idx_t result_offset = initial_remaining - remaining;
+		idx_t result_offset = base_result_offset + initial_remaining - remaining;
 		if (scan_count > 0) {
 			if (state.scan_options && state.scan_options->force_fetch_row) {
 				for (idx_t i = 0; i < scan_count; i++) {
@@ -335,13 +336,13 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
 	}
 }
 
-idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_count) {
+idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_count, idx_t result_offset) {
 	if (scan_count == 0) {
 		return 0;
 	}
 	// ScanCount can only be used if there are no updates
 	D_ASSERT(!HasUpdates());
-	return ScanVector(state, result, scan_count, ScanVectorType::SCAN_FLAT_VECTOR);
+	return ScanVector(state, result, scan_count, ScanVectorType::SCAN_FLAT_VECTOR, result_offset);
 }
 
 void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,

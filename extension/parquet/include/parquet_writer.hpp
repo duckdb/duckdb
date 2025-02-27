@@ -36,7 +36,6 @@ class Deserializer;
 struct PreparedRowGroup {
 	duckdb_parquet::RowGroup row_group;
 	vector<unique_ptr<ColumnWriterState>> states;
-	vector<shared_ptr<StringHeap>> heaps;
 };
 
 struct FieldID;
@@ -79,8 +78,8 @@ public:
 	              vector<string> names, duckdb_parquet::CompressionCodec::type codec, ChildFieldIDs field_ids,
 	              const vector<pair<string, string>> &kv_metadata,
 	              shared_ptr<ParquetEncryptionConfig> encryption_config, idx_t dictionary_size_limit,
-	              double bloom_filter_false_positive_ratio, int64_t compression_level, bool debug_use_openssl,
-	              ParquetVersion parquet_version);
+	              idx_t string_dictionary_page_size_limit, double bloom_filter_false_positive_ratio,
+	              int64_t compression_level, bool debug_use_openssl, ParquetVersion parquet_version);
 
 public:
 	void PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result);
@@ -116,6 +115,9 @@ public:
 	idx_t DictionarySizeLimit() const {
 		return dictionary_size_limit;
 	}
+	idx_t StringDictionaryPageSizeLimit() const {
+		return string_dictionary_page_size_limit;
+	}
 	double BloomFilterFalsePositiveRatio() const {
 		return bloom_filter_false_positive_ratio;
 	}
@@ -149,6 +151,7 @@ private:
 	ChildFieldIDs field_ids;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 	idx_t dictionary_size_limit;
+	idx_t string_dictionary_page_size_limit;
 	double bloom_filter_false_positive_ratio;
 	int64_t compression_level;
 	bool debug_use_openssl;
