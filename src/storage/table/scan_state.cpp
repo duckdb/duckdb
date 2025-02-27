@@ -61,7 +61,7 @@ void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
 	filter_list.reserve(filters.filters.size());
 	for (auto &entry : filters.filters) {
 		filter_list.emplace_back(entry.first, column_ids, *entry.second);
-		filter_states.emplace_back(TableFilterState::Initialize(*entry.second));
+		filter_states.emplace_back(TableFilterState::Initialize(context, *entry.second));
 	}
 	column_has_filter.reserve(column_ids.size());
 	for (idx_t col_idx = 0; col_idx < column_ids.size(); col_idx++) {

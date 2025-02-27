@@ -51,10 +51,18 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	PushFilters();
 
 	//! We generate the table filters that will be executed during the table scan
-	//! Right now this only executes simple AND filters
-	get.table_filters = combiner.GenerateTableScanFilters(get.GetColumnIds());
+	get.table_filters = combiner.GenerateTableScanFilters(get);
 
 	GenerateFilters();
+
+	// for any filters we did not manage to push into specialized table filters - try to push them as a generic
+	// expression
+	for (idx_t i = 0; i < filters.size(); ++i) {
+		auto pushdown_result = combiner.TryPushdownGenericExpression(get, *filters[i]->filter);
+		if (pushdown_result == FilterPushdownResult::PUSHED_DOWN_FULLY) {
+			filters.erase_at(i--);
+		}
+	}
 
 	//! Now we try to pushdown the remaining filters to perform zonemap checking
 	return FinishPushdown(std::move(op));

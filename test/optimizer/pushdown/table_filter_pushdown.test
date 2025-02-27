@@ -26,9 +26,45 @@ EXPLAIN SELECT k FROM integers where j=5
 ----
 logical_opt	<!REGEX>:.*FILTER.*
 
+query I
+SELECT k FROM integers where j%5=0
+----
+5
+10
+
+# simple filter is pushed down: no filter remaining
+query II
+EXPLAIN SELECT k FROM integers where j%5=0
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
 # multiple filters pushed down
 query II
 EXPLAIN SELECT k FROM integers where j = 5 and i = 10
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+# we can push down arbitrary expressions
+query I
+SELECT k FROM integers where j%5=0
+----
+5
+10
+
+# simple filter is pushed down: no filter remaining
+query II
+EXPLAIN SELECT k FROM integers where j%5=0
+----
+logical_opt	<!REGEX>:.*FILTER.*
+
+query I
+SELECT k FROM integers where j%50=j
+----
+5
+10
+
+query II
+EXPLAIN SELECT k FROM integers where j%50=j
 ----
 logical_opt	<!REGEX>:.*FILTER.*
 
@@ -105,21 +141,21 @@ EXPLAIN SELECT i FROM tablinho where i <= 'bla'
 ----
 logical_opt	<!REGEX>:.*FILTER.*
 
-# more complex filters cannot be pushed down
+# more complex filters can be pushed down as long as they only involve one column
 query II
 EXPLAIN SELECT i FROM tablinho where i like 'bl_a%'
 ----
-logical_opt	<REGEX>:.*FILTER.*
+logical_opt	<!REGEX>:.*FILTER.*
 
 query II
 EXPLAIN SELECT i FROM tablinho where i like '%bla'
 ----
-logical_opt	<REGEX>:.*FILTER.*
+logical_opt	<!REGEX>:.*FILTER.*
 
 query II
 EXPLAIN SELECT i FROM tablinho where i like '_bla'
 ----
-logical_opt	<REGEX>:.*FILTER.*
+logical_opt	<!REGEX>:.*FILTER.*
 
 # test Q6 pushdown
 statement ok

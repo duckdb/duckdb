@@ -10,6 +10,7 @@
 
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
@@ -29,7 +30,7 @@ public:
 	virtual ~TableFilterState() = default;
 
 public:
-	static unique_ptr<TableFilterState> Initialize(const TableFilter &filter);
+	static unique_ptr<TableFilterState> Initialize(ClientContext &context, const TableFilter &filter);
 
 public:
 	template <class TARGET>
@@ -60,6 +61,13 @@ public:
 	LeafFilterState();
 
 	CachedSelectionVector sel_data;
+};
+
+struct ExpressionFilterState : public TableFilterState {
+public:
+	ExpressionFilterState(ClientContext &context, const Expression &expression);
+
+	ExpressionExecutor executor;
 };
 
 } // namespace duckdb

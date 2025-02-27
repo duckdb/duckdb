@@ -23,9 +23,8 @@ static void ReplaceExpressionRecursive(unique_ptr<Expression> &expr, const Expre
 		expr = column.Copy();
 		return;
 	}
-	ExpressionIterator::EnumerateChildren(*expr, [&](unique_ptr<Expression> &child) {
-		ReplaceExpressionRecursive(child, column);
-	});
+	ExpressionIterator::EnumerateChildren(
+	    *expr, [&](unique_ptr<Expression> &child) { ReplaceExpressionRecursive(child, column); });
 }
 
 unique_ptr<Expression> ExpressionFilter::ToExpression(const Expression &column) const {
@@ -46,4 +45,4 @@ unique_ptr<TableFilter> ExpressionFilter::Copy() const {
 	return make_uniq<ExpressionFilter>(expr->Copy());
 }
 
-}
+} // namespace duckdb
