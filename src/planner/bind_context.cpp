@@ -570,10 +570,15 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			}
 		}
 	}
+
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+		//! We only care about extracting the names of the referenced columns
+		//! remove the exclude + replace lists
 		expr.exclude_list.clear();
 		expr.replace_list.clear();
 	}
+
+	//! Verify correctness of the exclude list
 	for (auto &excluded : expr.exclude_list) {
 		if (exclusion_info.excluded_qualified_columns.find(excluded) ==
 		    exclusion_info.excluded_qualified_columns.end()) {
@@ -581,6 +586,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			                      expr.relation_name.empty() ? "FROM clause" : expr.relation_name.c_str());
 		}
 	}
+
+	//! Verify correctness of the replace list
 	for (auto &entry : expr.replace_list) {
 		if (exclusion_info.excluded_columns.find(entry.first) == exclusion_info.excluded_columns.end()) {
 			throw BinderException("Column \"%s\" in REPLACE list not found in %s", entry.first,
