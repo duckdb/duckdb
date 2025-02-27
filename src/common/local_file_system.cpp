@@ -573,9 +573,9 @@ string LocalFileSystem::GetVersionTag(FileHandle &handle) {
 		                  handle.path, strerror(errno));
 	}
 #if defined(__DARWIN__) || defined(__APPLE__)
-	return std::to_string(s.st_mtimespec.tv_nsec);
-#else // Assume POSIX
-	return std::to_string(s.st_mtim.tv_nsec);
+	return std::to_string(s.st_mtimespec.tv_sec) + std::to_string(s.st_mtimespec.tv_nsec);
+#else
+	return std::to_string(s.st_mtim.tv_sec) + std::to_string(s.st_mtim.tv_nsec);
 #endif
 }
 

@@ -26,10 +26,9 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
+#include "duckdb/storage/caching_file_system.hpp"
 #include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/logging/logger.hpp"
-
-#include <duckdb/storage/caching_file_system.hpp>
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"

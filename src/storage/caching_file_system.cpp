@@ -1,5 +1,6 @@
 #include "duckdb/storage/caching_file_system.hpp"
 
+#include "duckdb/common/chrono.hpp"
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/enums/memory_tag.hpp"
 #include "duckdb/main/client_context.hpp"
@@ -203,7 +204,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 		// We have read from the exact same location before
 		if (!RangeIsValid(*it->second, guard)) {
 			// The range is no longer valid: erase it
-			it = ranges.erase(it);
+			ranges.erase(it);
 		} else if (it->second->GetOverlap(nr_bytes, location) == CachedFileRangeOverlap::FULL) {
 			// The file range contains the requested file range
 			result = TryReadFromFileRange(*it->second, buffer, nr_bytes, location);
@@ -241,7 +242,8 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 			if (result.IsValid()) {
 				return result;
 			}
-			break;
+			it = ranges.erase(it);
+			continue;
 		}
 		it++;
 	}
@@ -258,7 +260,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	idx_t current_location = location;
 	idx_t remaining_bytes = nr_bytes;
 	for (auto &overlapping_range : overlapping_ranges) {
-		D_ASSERT(new_file_range->GetOverlap(*overlapping_range) == CachedFileRangeOverlap::PARTIAL);
+		D_ASSERT(new_file_range->GetOverlap(*overlapping_range) == CachedFileRangeOverlap::FULL);
 
 		if (remaining_bytes == 0) {
 			break; // All requested bytes were read
@@ -318,6 +320,8 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 			if (result.IsValid()) {
 				return result;
 			}
+			it = ranges.erase(it);
+			continue;
 		}
 		// Check if the new range overlaps with a cached one
 		bool break_loop = false;
