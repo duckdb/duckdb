@@ -76,59 +76,42 @@ void PredicateTransferOptimizer::GetColumnBindingExpression(Expression &expr,
 vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::CreateBloomFilter(LogicalOperator &node,
                                                                                                   bool reverse) {
 	vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> result;
-	vector<shared_ptr<BlockedBloomFilter>> temp_result_to_use;
-	vector<shared_ptr<BlockedBloomFilter>> temp_result_to_create;
+	vector<shared_ptr<BlockedBloomFilter>> bf_for_use;
+	vector<shared_ptr<BlockedBloomFilter>> bf_for_create;
 	idx_t cur = GetNodeId(node);
 	if (dag_manager.nodes.find(cur) == dag_manager.nodes.end()) {
 		return result;
 	}
 	// Use Bloom Filter
 	vector<idx_t> depend_nodes;
-	GetAllBFUsed(cur, temp_result_to_use, depend_nodes, reverse);
+	GetAllBFUsed(cur, bf_for_use, depend_nodes, reverse);
 
 	// Create Bloom Filter
-	GetAllBFCreate(cur, temp_result_to_create, reverse);
+	GetAllBFCreate(cur, bf_for_create, reverse);
 
-	if (temp_result_to_use.size() == 0) {
-		if (temp_result_to_create.size() == 0) {
-			return result;
-		} else {
-			if (!PossibleFilterAny(node, reverse)) {
-				return result;
-			}
-			auto create_bf = BuildSingleCreateOperator(node, temp_result_to_create);
-			for (auto &filter : create_bf->bf_to_create) {
-				result.emplace_back(make_pair(cur, filter));
-			}
-			if (!reverse) {
-				replace_map_forward[&node] = std::move(create_bf);
-			} else {
-				replace_map_backward[&node] = std::move(create_bf);
-			}
+	auto &operators = reverse ? replace_map_backward : replace_map_forward;
+
+	if (!bf_for_use.empty() && !bf_for_create.empty()) {
+		auto create_bf = BuildCreateUsePair(node, bf_for_use, bf_for_create, depend_nodes, reverse);
+		for (auto &filter : create_bf->bf_to_create) {
+			result.emplace_back(make_pair(cur, filter));
+		}
+		operators[&node] = std::move(create_bf);
+	} else if (!bf_for_use.empty()) {
+		auto use_bf = BuildUseOperator(node, bf_for_use, depend_nodes, reverse);
+		operators[&node] = std::move(use_bf);
+	} else if (!bf_for_create.empty()) {
+		if (!PossibleFilterAny(node, reverse)) {
 			return result;
 		}
-	} else {
-		if (temp_result_to_create.size() == 0) {
-			auto use_bf = BuildUseOperator(node, temp_result_to_use, depend_nodes, reverse);
-			if (!reverse) {
-				replace_map_forward[&node] = std::move(use_bf);
-			} else {
-				replace_map_backward[&node] = std::move(use_bf);
-			}
-			return result;
-		} else {
-			auto create_bf = BuildCreateUsePair(node, temp_result_to_use, temp_result_to_create, depend_nodes, reverse);
-			for (auto &filter : create_bf->bf_to_create) {
-				result.emplace_back(make_pair(cur, filter));
-			}
-			if (!reverse) {
-				replace_map_forward[&node] = std::move(create_bf);
-			} else {
-				replace_map_backward[&node] = std::move(create_bf);
-			}
-			return result;
+		auto create_bf = BuildCreateBFOperator(node, bf_for_create);
+		for (auto &filter : create_bf->bf_to_create) {
+			result.emplace_back(make_pair(cur, filter));
 		}
+		operators[&node] = std::move(create_bf);
 	}
+
+	return result;
 }
 
 idx_t PredicateTransferOptimizer::GetNodeId(LogicalOperator &node) {
@@ -160,25 +143,15 @@ idx_t PredicateTransferOptimizer::GetNodeId(LogicalOperator &node) {
 
 void PredicateTransferOptimizer::GetAllBFUsed(idx_t cur, vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_use,
                                               vector<idx_t> &depend_nodes, bool reverse) {
-	if (!reverse) {
-		for (auto &edge : dag_manager.nodes[cur]->forward_in_) {
-			for (auto bloom_filter : edge->bloom_filters) {
-				if (!bloom_filter->isUsed()) {
-					bloom_filter->setUsed();
-					temp_result_to_use.emplace_back(bloom_filter);
-					depend_nodes.emplace_back(edge->dest_);
-				}
-			}
-		}
-	} else {
-		/* Further to do, remove the duplicate blooom filter */
-		for (auto &edge : dag_manager.nodes[cur]->backward_in_) {
-			for (auto bloom_filter : edge->bloom_filters) {
-				if (!bloom_filter->isUsed()) {
-					bloom_filter->setUsed();
-					temp_result_to_use.emplace_back(bloom_filter);
-					depend_nodes.emplace_back(edge->dest_);
-				}
+	auto &node = dag_manager.nodes[cur];
+	auto &edges = reverse ? node->backward_in_ : node->forward_in_;
+
+	for (auto &edge : edges) {
+		for (auto bloom_filter : edge->bloom_filters) {
+			if (!bloom_filter->isUsed()) {
+				bloom_filter->setUsed();
+				temp_result_to_use.emplace_back(bloom_filter);
+				depend_nodes.emplace_back(edge->destination);
 			}
 		}
 	}
@@ -236,9 +209,9 @@ void PredicateTransferOptimizer::GetAllBFCreate(idx_t cur,
 }
 
 unique_ptr<LogicalCreateBF>
-PredicateTransferOptimizer::BuildSingleCreateOperator(LogicalOperator &node,
-                                                      vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_create) {
-	auto create_bf = make_uniq<LogicalCreateBF>(temp_result_to_create);
+PredicateTransferOptimizer::BuildCreateBFOperator(LogicalOperator &node,
+                                                  vector<shared_ptr<BlockedBloomFilter>> &bloom_filters) {
+	auto create_bf = make_uniq<LogicalCreateBF>(bloom_filters);
 	create_bf->has_estimated_cardinality = true;
 	create_bf->estimated_cardinality = node.estimated_cardinality;
 	return create_bf;

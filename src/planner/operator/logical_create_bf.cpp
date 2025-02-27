@@ -1,8 +1,10 @@
+#include <utility>
+
 #include "duckdb/planner/operator/logical_create_bf.hpp"
 
 namespace duckdb {
-LogicalCreateBF::LogicalCreateBF(vector<shared_ptr<BlockedBloomFilter>> bf)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_BF), bf_to_create(bf) {};
+LogicalCreateBF::LogicalCreateBF(vector<shared_ptr<BlockedBloomFilter>> bloom_filters)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_BF), bf_to_create(std::move(bloom_filters)) {};
 
 InsertionOrderPreservingMap<string> LogicalCreateBF::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;

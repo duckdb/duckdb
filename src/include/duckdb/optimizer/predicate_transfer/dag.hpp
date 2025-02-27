@@ -30,7 +30,7 @@ public:
 
 class GraphEdge {
 public:
-	explicit GraphEdge(idx_t id) : dest_(id) {
+	explicit GraphEdge(idx_t id) : destination(id) {
 	}
 
 	void Push(Expression *filter) {
@@ -42,10 +42,10 @@ public:
 	}
 
 	idx_t GetDest() const {
-		return dest_;
+		return destination;
 	}
 
-	idx_t dest_;
+	idx_t destination;
 	vector<Expression *> filters;
 	vector<shared_ptr<BlockedBloomFilter>> bloom_filters;
 };

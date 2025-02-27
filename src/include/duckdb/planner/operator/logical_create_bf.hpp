@@ -11,7 +11,7 @@ public:
 	PhysicalCreateBF *physical = nullptr;
 
 public:
-	explicit LogicalCreateBF(vector<shared_ptr<BlockedBloomFilter>> temp_result);
+	explicit LogicalCreateBF(vector<shared_ptr<BlockedBloomFilter>> bloom_filters);
 
 	vector<shared_ptr<BlockedBloomFilter>> bf_to_create;
 
