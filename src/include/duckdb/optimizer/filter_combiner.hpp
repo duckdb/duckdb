@@ -64,14 +64,16 @@ private:
 	idx_t GetEquivalenceSet(Expression &expr);
 	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);
 
-	FilterPushdownResult TryGenerateConstantFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	FilterPushdownResult TryPushdownConstantFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
 	                                               column_t column_id, vector<ExpressionValueInformation> &info_list);
 	FilterPushdownResult TryPushdownExpression(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
 	                                           Expression &expr);
-	FilterPushdownResult TryGeneratePrefixFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	FilterPushdownResult TryPushdownPrefixFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
 	                                             Expression &expr);
-	FilterPushdownResult TryGenerateLikeFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	FilterPushdownResult TryPushdownLikeFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
 	                                           Expression &expr);
+	FilterPushdownResult TryPushdownInFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                                         Expression &expr);
 
 private:
 	vector<unique_ptr<Expression>> remaining_filters;

@@ -275,7 +275,17 @@ static bool SupportedFilterComparison(ExpressionType expression_type) {
 	}
 }
 
-FilterPushdownResult FilterCombiner::TryGenerateConstantFilter(TableFilterSet &table_filters,
+bool TypeSupportsConstantFilter(const LogicalType &type) {
+	if (TypeIsNumeric(type.InternalType())) {
+		return true;
+	}
+	if (type.InternalType() == PhysicalType::VARCHAR || type.InternalType() == PhysicalType::BOOL) {
+		return true;
+	}
+	return false;
+}
+
+FilterPushdownResult FilterCombiner::TryPushdownConstantFilter(TableFilterSet &table_filters,
                                                                const vector<ColumnIndex> &column_ids,
                                                                column_t column_id,
                                                                vector<ExpressionValueInformation> &info_list) {
@@ -285,10 +295,8 @@ FilterPushdownResult FilterCombiner::TryGenerateConstantFilter(TableFilterSet &t
 	}
 	auto filter_exp = equivalence_map.end();
 	auto &constant_info = info_list[0];
-	auto physical_type = constant_info.constant.type().InternalType();
 	// check if the type is supported
-	if (!TypeIsNumeric(physical_type) && physical_type != PhysicalType::VARCHAR &&
-	    physical_type != PhysicalType::BOOL) {
+	if (!TypeSupportsConstantFilter(constant_info.constant.type())) {
 		// not supported
 		return FilterPushdownResult::NO_PUSHDOWN;
 	}
@@ -321,7 +329,7 @@ FilterPushdownResult FilterCombiner::TryGenerateConstantFilter(TableFilterSet &t
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 
-FilterPushdownResult FilterCombiner::TryGeneratePrefixFilter(TableFilterSet &table_filters,
+FilterPushdownResult FilterCombiner::TryPushdownPrefixFilter(TableFilterSet &table_filters,
                                                              const vector<ColumnIndex> &column_ids, Expression &expr) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -352,7 +360,7 @@ FilterPushdownResult FilterCombiner::TryGeneratePrefixFilter(TableFilterSet &tab
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 
-FilterPushdownResult FilterCombiner::TryGenerateLikeFilter(TableFilterSet &table_filters,
+FilterPushdownResult FilterCombiner::TryPushdownLikeFilter(TableFilterSet &table_filters,
                                                            const vector<ColumnIndex> &column_ids, Expression &expr) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -409,13 +417,89 @@ FilterPushdownResult FilterCombiner::TryGenerateLikeFilter(TableFilterSet &table
 	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
 }
 
+FilterPushdownResult FilterCombiner::TryPushdownInFilter(TableFilterSet &table_filters,
+                                                         const vector<ColumnIndex> &column_ids, Expression &expr) {
+	if (expr.GetExpressionType() != ExpressionType::COMPARE_IN) {
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	auto &func = expr.Cast<BoundOperatorExpression>();
+	D_ASSERT(func.children.size() > 1);
+	if (func.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
+		// we need col IN (...) to be able to push this down
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
+	auto &column_index = column_ids[column_ref.binding.column_index];
+	if (column_index.IsRowIdColumn()) {
+		// no pushdown on row-ids supported (why?)
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	//! check if all children are const expr
+	bool children_constant = true;
+	for (size_t i {1}; i < func.children.size(); i++) {
+		if (func.children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+			children_constant = false;
+			break;
+		}
+		auto &const_value_expr = func.children[i]->Cast<BoundConstantExpression>();
+		if (const_value_expr.value.IsNull()) {
+			// cannot simplify NULL values
+			children_constant = false;
+			break;
+		}
+	}
+	if (!children_constant) {
+		// all children must be constant
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
+	auto &fst_const_value_expr = func.children[1]->Cast<BoundConstantExpression>();
+	auto &type = fst_const_value_expr.value.type();
+
+	if (func.children.size() == 2 && TypeSupportsConstantFilter(type)) {
+		// col IN (literal) is equivalent to an equality comparison - push that down
+		auto bound_eq_comparison = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
+		table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
+		return FilterPushdownResult::PUSHED_DOWN_FULLY;
+	}
+
+	//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
+	// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
+	vector<Value> in_list;
+	for (idx_t i = 1; i < func.children.size(); i++) {
+		auto &const_value_expr = func.children[i]->Cast<BoundConstantExpression>();
+		D_ASSERT(!const_value_expr.value.IsNull());
+		in_list.push_back(const_value_expr.value);
+	}
+	if (type.IsIntegral() && IsDenseRange(in_list)) {
+		// dense range! turn this into x >= min AND x <= max
+		// IsDenseRange sorts in_list, so the front element is the min and the back element is the max
+		auto lower_bound =
+		    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(in_list.front()));
+		auto upper_bound =
+		    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(in_list.back()));
+		table_filters.PushFilter(column_index, std::move(lower_bound));
+		table_filters.PushFilter(column_index, std::move(upper_bound));
+		return FilterPushdownResult::PUSHED_DOWN_FULLY;
+	}
+	// if this is not a dense range we can push an optional filter for zone-map pruning
+	auto optional_filter = make_uniq<OptionalFilter>();
+	auto in_filter = make_uniq<InFilter>(std::move(in_list));
+	optional_filter->child_filter = std::move(in_filter);
+	table_filters.PushFilter(column_index, std::move(optional_filter));
+	return FilterPushdownResult::PUSHED_DOWN_PARTIALLY;
+}
+
 FilterPushdownResult FilterCombiner::TryPushdownExpression(TableFilterSet &table_filters,
                                                            const vector<ColumnIndex> &column_ids, Expression &expr) {
-	auto pushdown_result = TryGeneratePrefixFilter(table_filters, column_ids, expr);
+	auto pushdown_result = TryPushdownPrefixFilter(table_filters, column_ids, expr);
 	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
 		return pushdown_result;
 	}
-	pushdown_result = TryGenerateLikeFilter(table_filters, column_ids, expr);
+	pushdown_result = TryPushdownLikeFilter(table_filters, column_ids, expr);
+	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
+		return pushdown_result;
+	}
+	pushdown_result = TryPushdownInFilter(table_filters, column_ids, expr);
 	if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
 		return pushdown_result;
 	}
@@ -426,85 +510,15 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 	TableFilterSet table_filters;
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
 	for (auto &constant_value : constant_values) {
-		TryGenerateConstantFilter(table_filters, column_ids, constant_value.first, constant_value.second);
+		TryPushdownConstantFilter(table_filters, column_ids, constant_value.first, constant_value.second);
 	}
 	//! Here we look for LIKE or IN filters
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
 		auto pushdown_result = TryPushdownExpression(table_filters, column_ids, *remaining_filter);
-		if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
-			if (pushdown_result == FilterPushdownResult::PUSHED_DOWN_FULLY) {
-				// the filter has been pushed down entirely - we can prune it
-				remaining_filters.erase_at(rem_fil_idx--);
-			}
-			continue;
-		}
-		if (remaining_filter->GetExpressionType() == ExpressionType::COMPARE_IN) {
-			auto &func = remaining_filter->Cast<BoundOperatorExpression>();
-			D_ASSERT(func.children.size() > 1);
-			if (func.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
-				continue;
-			}
-			auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
-			auto &column_index = column_ids[column_ref.binding.column_index];
-			if (column_index.IsRowIdColumn()) {
-				break;
-			}
-			//! check if all children are const expr
-			bool children_constant = true;
-			for (size_t i {1}; i < func.children.size(); i++) {
-				if (func.children[i]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
-					children_constant = false;
-					break;
-				}
-				auto &const_value_expr = func.children[i]->Cast<BoundConstantExpression>();
-				if (const_value_expr.value.IsNull()) {
-					// cannot simplify NULL values
-					children_constant = false;
-					break;
-				}
-			}
-			if (!children_constant) {
-				continue;
-			}
-			auto &fst_const_value_expr = func.children[1]->Cast<BoundConstantExpression>();
-			auto &type = fst_const_value_expr.value.type();
-
-			if ((type.IsNumeric() || type.id() == LogicalTypeId::VARCHAR || type.id() == LogicalTypeId::BOOLEAN) &&
-			    func.children.size() == 2) {
-				auto bound_eq_comparison =
-				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, fst_const_value_expr.value);
-				table_filters.PushFilter(column_index, std::move(bound_eq_comparison));
-				remaining_filters.erase_at(rem_fil_idx--); // decrement to stay on the same idx next iteration
-				continue;
-			}
-
-			//! Check if values are consecutive, if yes transform them to >= <= (only for integers)
-			// e.g. if we have x IN (1, 2, 3, 4, 5) we transform this into x >= 1 AND x <= 5
-			vector<Value> in_list;
-			for (idx_t i = 1; i < func.children.size(); i++) {
-				auto &const_value_expr = func.children[i]->Cast<BoundConstantExpression>();
-				D_ASSERT(!const_value_expr.value.IsNull());
-				in_list.push_back(const_value_expr.value);
-			}
-			if (type.IsIntegral() && IsDenseRange(in_list)) {
-				// dense range! turn this into x >= min AND x <= max
-				// IsDenseRange sorts in_list, so the front element is the min and the back element is the max
-				auto lower_bound =
-				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(in_list.front()));
-				auto upper_bound =
-				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(in_list.back()));
-				table_filters.PushFilter(column_index, std::move(lower_bound));
-				table_filters.PushFilter(column_index, std::move(upper_bound));
-
-				remaining_filters.erase_at(rem_fil_idx--); // decrement to stay on the same idx next iteration
-			} else {
-				// if this is not a dense range we can push a zone-map filter
-				auto optional_filter = make_uniq<OptionalFilter>();
-				auto in_filter = make_uniq<InFilter>(std::move(in_list));
-				optional_filter->child_filter = std::move(in_filter);
-				table_filters.PushFilter(column_index, std::move(optional_filter));
-			}
+		if (pushdown_result == FilterPushdownResult::PUSHED_DOWN_FULLY) {
+			// the filter has been pushed down entirely - we can prune it
+			remaining_filters.erase_at(rem_fil_idx--);
 		}
 	}
 
