@@ -17,7 +17,7 @@ void NodesManager::Reset() {
 	can_add_mark = true;
 	nodes.clear();
 	duplicate_nodes.clear();
-	sort_nodes.clear();
+	sorted_nodes.clear();
 	rename_cols.clear();
 }
 
@@ -79,11 +79,11 @@ void NodesManager::AddNode(LogicalOperator *op) {
 }
 
 void NodesManager::SortNodes() {
-	sort_nodes.clear();
+	sorted_nodes.clear();
 	for (auto &node : nodes) {
-		sort_nodes.emplace_back(node.second);
+		sorted_nodes.emplace_back(node.second);
 	}
-	sort(sort_nodes.begin(), sort_nodes.end(),
+	sort(sorted_nodes.begin(), sorted_nodes.end(),
 	     [&](LogicalOperator *a, LogicalOperator *b) { return a->estimated_cardinality < b->estimated_cardinality; });
 }
 

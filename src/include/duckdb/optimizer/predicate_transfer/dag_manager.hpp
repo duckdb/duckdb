@@ -34,13 +34,20 @@ public:
 
 	NodesManager nodes_manager;
 	ClientContext &context;
-	DAG graph;
+	GraphNodes nodes;
 
 private:
-	std::mt19937 g;
+	void ExtractEdges(LogicalOperator &op, vector<reference<LogicalOperator>> &join_operators);
 
-	vector<LogicalOperator *> ExecOrder;
+	void LargestRoot(vector<LogicalOperator *> &sorted_nodes);
 
+	void CreateDAG();
+
+	pair<int, int> FindEdge(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set);
+
+	vector<GraphNode *> GetNeighbors(idx_t node_id);
+
+private:
 	struct PairHash {
 		std::size_t operator()(const pair<int, int> &m) const {
 			std::hash<int> hashVal;
@@ -55,17 +62,8 @@ private:
 	};
 
 	// (small table, large table), (large table, small table) are both valid
-	unordered_map<pair<int, int>, vector<shared_ptr<DAGEdgeInfo>>, PairHash, PairEqual> filters_and_bindings_;
-	vector<shared_ptr<DAGEdgeInfo>> selected_filters_and_bindings_;
-
-	void ExtractEdges(LogicalOperator &op, vector<reference<LogicalOperator>> &join_operators);
-
-	void LargestRoot(vector<LogicalOperator *> &sorted_nodes);
-
-	void CreateDAG();
-
-	pair<int, int> FindEdge(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set);
-
-	vector<GraphNode *> GetNeighbors(idx_t node_id);
+	unordered_map<pair<int, int>, vector<shared_ptr<DAGEdgeInfo>>, PairHash, PairEqual> edges;
+	vector<shared_ptr<DAGEdgeInfo>> selected_edges;
+	vector<LogicalOperator *> TransferOrder;
 };
 } // namespace duckdb

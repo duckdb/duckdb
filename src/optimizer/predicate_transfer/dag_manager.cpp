@@ -23,7 +23,7 @@ bool DAGManager::Build(LogicalOperator &plan) {
 
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
 	ExtractEdges(plan, joins);
-	if (filters_and_bindings_.size() == 0) {
+	if (edges.size() == 0) {
 		return false;
 	}
 
@@ -34,16 +34,16 @@ bool DAGManager::Build(LogicalOperator &plan) {
 
 vector<LogicalOperator *> &DAGManager::GetExecutionOrder() {
 	// The root as first
-	return ExecOrder;
+	return TransferOrder;
 }
 
 void DAGManager::Add(idx_t create_table, shared_ptr<BlockedBloomFilter> use_bf, bool reverse) {
 	if (!reverse) {
 		auto in = use_bf->GetColApplied()[0].table_index;
-		graph[in]->AddIn(create_table, use_bf, true);
+		nodes[in]->AddIn(create_table, use_bf, true);
 	} else {
 		auto out = use_bf->GetColApplied()[0].table_index;
-		graph[out]->AddIn(create_table, use_bf, false);
+		nodes[out]->AddIn(create_table, use_bf, false);
 	}
 }
 
@@ -106,23 +106,23 @@ void DAGManager::ExtractEdges(LogicalOperator &op, vector<reference<LogicalOpera
 							    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *left_node, *right_node);
 							auto key1 = make_pair(right_table, left_table);
 							auto key2 = make_pair(left_table, right_table);
-							if (filters_and_bindings_.find(key1) == filters_and_bindings_.end()) {
-								filters_and_bindings_[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								filters_and_bindings_[key2] = vector<shared_ptr<DAGEdgeInfo>>();
+							if (edges.find(key1) == edges.end()) {
+								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
+								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
 							}
-							filters_and_bindings_[key1].emplace_back(filter_info);
-							filters_and_bindings_[key2].emplace_back(filter_info);
+							edges[key1].emplace_back(filter_info);
+							edges[key2].emplace_back(filter_info);
 						} else {
 							auto filter_info =
 							    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *right_node, *left_node);
 							auto key1 = make_pair(right_table, left_table);
 							auto key2 = make_pair(left_table, right_table);
-							if (filters_and_bindings_.find(key1) == filters_and_bindings_.end()) {
-								filters_and_bindings_[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								filters_and_bindings_[key2] = vector<shared_ptr<DAGEdgeInfo>>();
+							if (edges.find(key1) == edges.end()) {
+								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
+								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
 							}
-							filters_and_bindings_[key1].emplace_back(filter_info);
-							filters_and_bindings_[key2].emplace_back(filter_info);
+							edges[key1].emplace_back(filter_info);
+							edges[key2].emplace_back(filter_info);
 						}
 					} else if (join.join_type == JoinType::LEFT) {
 						if (left_node_in_order > right_node_in_order) {
@@ -131,24 +131,24 @@ void DAGManager::ExtractEdges(LogicalOperator &op, vector<reference<LogicalOpera
 							filter_info->large_protect = true;
 							auto key1 = make_pair(right_table, left_table);
 							auto key2 = make_pair(left_table, right_table);
-							if (filters_and_bindings_.find(key1) == filters_and_bindings_.end()) {
-								filters_and_bindings_[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								filters_and_bindings_[key2] = vector<shared_ptr<DAGEdgeInfo>>();
+							if (edges.find(key1) == edges.end()) {
+								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
+								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
 							}
-							filters_and_bindings_[key1].emplace_back(filter_info);
-							filters_and_bindings_[key2].emplace_back(filter_info);
+							edges[key1].emplace_back(filter_info);
+							edges[key2].emplace_back(filter_info);
 						} else {
 							auto filter_info =
 							    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *right_node, *left_node);
 							filter_info->small_protect = true;
 							auto key1 = make_pair(right_table, left_table);
 							auto key2 = make_pair(left_table, right_table);
-							if (filters_and_bindings_.find(key1) == filters_and_bindings_.end()) {
-								filters_and_bindings_[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								filters_and_bindings_[key2] = vector<shared_ptr<DAGEdgeInfo>>();
+							if (edges.find(key1) == edges.end()) {
+								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
+								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
 							}
-							filters_and_bindings_[key1].emplace_back(filter_info);
-							filters_and_bindings_[key2].emplace_back(filter_info);
+							edges[key1].emplace_back(filter_info);
+							edges[key2].emplace_back(filter_info);
 						}
 					} else if (join.join_type == JoinType::RIGHT) {
 						if (left_node_in_order > right_node_in_order) {
@@ -157,24 +157,24 @@ void DAGManager::ExtractEdges(LogicalOperator &op, vector<reference<LogicalOpera
 							filter_info->small_protect = true;
 							auto key1 = make_pair(right_table, left_table);
 							auto key2 = make_pair(left_table, right_table);
-							if (filters_and_bindings_.find(key1) == filters_and_bindings_.end()) {
-								filters_and_bindings_[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								filters_and_bindings_[key2] = vector<shared_ptr<DAGEdgeInfo>>();
+							if (edges.find(key1) == edges.end()) {
+								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
+								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
 							}
-							filters_and_bindings_[key1].emplace_back(filter_info);
-							filters_and_bindings_[key2].emplace_back(filter_info);
+							edges[key1].emplace_back(filter_info);
+							edges[key2].emplace_back(filter_info);
 						} else {
 							auto filter_info =
 							    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *right_node, *left_node);
 							filter_info->large_protect = true;
 							auto key1 = make_pair(right_table, left_table);
 							auto key2 = make_pair(left_table, right_table);
-							if (filters_and_bindings_.find(key1) == filters_and_bindings_.end()) {
-								filters_and_bindings_[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-								filters_and_bindings_[key2] = vector<shared_ptr<DAGEdgeInfo>>();
+							if (edges.find(key1) == edges.end()) {
+								edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
+								edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
 							}
-							filters_and_bindings_[key1].emplace_back(filter_info);
-							filters_and_bindings_[key2].emplace_back(filter_info);
+							edges[key1].emplace_back(filter_info);
+							edges[key2].emplace_back(filter_info);
 						}
 					}
 				}
@@ -197,9 +197,9 @@ pair<int, int> DAGManager::FindEdge(unordered_set<int> &constructed_set, unorder
 	for (int i : unconstructed_set) {
 		for (int j : constructed_set) {
 			auto key = make_pair(j, i);
-			if (filters_and_bindings_.find(key) != filters_and_bindings_.end()) {
+			if (edges.find(key) != edges.end()) {
 				auto card = nodes_manager.GetNode(i)->estimated_cardinality;
-				auto weight = filters_and_bindings_[key].size();
+				auto weight = edges[key].size();
 				if (weight > max_weight) {
 					max_weight = weight;
 					max_card = card;
@@ -228,16 +228,16 @@ void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 			auto node = make_uniq<GraphNode>(vertex.first, vertex.second->estimated_cardinality, true);
 			node->priority = prior_flag--;
 			constructed_set.emplace(vertex.first);
-			graph[vertex.first] = std::move(node);
+			nodes[vertex.first] = std::move(node);
 			root = vertex.first;
 		} else {
 			auto node = make_uniq<GraphNode>(vertex.first, vertex.second->estimated_cardinality, false);
 			unconstructed_set.emplace(vertex.first);
-			graph[vertex.first] = std::move(node);
+			nodes[vertex.first] = std::move(node);
 		}
 	}
 	// delete root
-	ExecOrder.emplace_back(nodes_manager.GetNode(root));
+	TransferOrder.emplace_back(nodes_manager.GetNode(root));
 	nodes_manager.EraseNode(root);
 	while (!unconstructed_set.empty()) {
 		// Old node at first, new add node at second
@@ -245,14 +245,14 @@ void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 		if (selected_edge.first == -1 && selected_edge.second == -1) {
 			break;
 		}
-		if (filters_and_bindings_.find(selected_edge) != filters_and_bindings_.end()) {
-			for (auto &v : filters_and_bindings_[selected_edge]) {
-				selected_filters_and_bindings_.emplace_back(std::move(v));
+		if (edges.find(selected_edge) != edges.end()) {
+			for (auto &v : edges[selected_edge]) {
+				selected_edges.emplace_back(std::move(v));
 			}
 		}
-		auto node = graph[selected_edge.second].get();
+		auto node = nodes[selected_edge.second].get();
 		node->priority = prior_flag--;
-		ExecOrder.emplace_back(nodes_manager.GetNode(node->id));
+		TransferOrder.emplace_back(nodes_manager.GetNode(node->id));
 		nodes_manager.EraseNode(node->id);
 		unconstructed_set.erase(selected_edge.second);
 		constructed_set.emplace(selected_edge.second);
@@ -267,15 +267,15 @@ void DAGManager::CreateDAG() {
 	}
 	nodes_manager.RecoverNodes();
 
-	for (auto &filter_and_binding : selected_filters_and_bindings_) {
+	for (auto &filter_and_binding : selected_edges) {
 		if (filter_and_binding) {
 			idx_t large = NodesManager::GetScalarTableIndex(&filter_and_binding->large_);
 			idx_t small = NodesManager::GetScalarTableIndex(&filter_and_binding->small_);
 
 			D_ASSERT(large != -1 && small != -1);
 
-			auto small_node = graph[small].get();
-			auto large_node = graph[large].get();
+			auto small_node = nodes[small].get();
+			auto large_node = nodes[large].get();
 			// smaller one has higher priority
 			if (small_node->priority > large_node->priority) {
 				if (!filter_and_binding->large_protect && !filter_and_binding->small_protect) {
@@ -310,18 +310,18 @@ void DAGManager::CreateDAG() {
 
 vector<GraphNode *> DAGManager::GetNeighbors(idx_t node_id) {
 	vector<GraphNode *> result;
-	for (auto &filter_and_binding : filters_and_bindings_) {
+	for (auto &filter_and_binding : edges) {
 		for (auto &edge : filter_and_binding.second) {
 			if (&edge->large_ == nodes_manager.GetNode(node_id)) {
 				auto &op = edge->small_;
 				int64_t another_node_id = NodesManager::GetScalarTableIndex(&op);
 				D_ASSERT(another_node_id != -1);
-				result.emplace_back(graph[another_node_id].get());
+				result.emplace_back(nodes[another_node_id].get());
 			} else if (&edge->small_ == nodes_manager.GetNode(node_id)) {
 				auto &op = edge->large_;
 				int64_t another_node_id = NodesManager::GetScalarTableIndex(&op);
 				D_ASSERT(another_node_id != -1);
-				result.emplace_back(graph[another_node_id].get());
+				result.emplace_back(nodes[another_node_id].get());
 			}
 		}
 	}

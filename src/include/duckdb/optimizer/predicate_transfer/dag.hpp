@@ -50,5 +50,5 @@ public:
 	vector<shared_ptr<BlockedBloomFilter>> bloom_filters;
 };
 
-using DAG = unordered_map<idx_t, unique_ptr<GraphNode>>;
+using GraphNodes = unordered_map<idx_t, unique_ptr<GraphNode>>;
 } // namespace duckdb

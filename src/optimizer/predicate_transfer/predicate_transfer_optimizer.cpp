@@ -84,7 +84,7 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 	BloomFilters bfs_to_create;
 
 	idx_t node_id = NodesManager::GetScalarTableIndex(&node);
-	if (node_id == -1 || graph_manager.graph.find(node_id) == graph_manager.graph.end()) {
+	if (node_id == -1 || graph_manager.nodes.find(node_id) == graph_manager.nodes.end()) {
 		return result;
 	}
 
@@ -125,7 +125,7 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 
 void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, BloomFilters &bfs_to_use,
                                                 vector<idx_t> &parent_nodes, bool reverse) {
-	auto &node = graph_manager.graph[cur_node_id];
+	auto &node = graph_manager.nodes[cur_node_id];
 	auto &edges = reverse ? node->backward_in_ : node->forward_in_;
 
 	for (auto &edge : edges) {
@@ -140,7 +140,7 @@ void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, BloomFilters 
 }
 
 void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id, BloomFilters &bfs_to_create, bool reverse) {
-	auto &node = graph_manager.graph[cur_node_id];
+	auto &node = graph_manager.nodes[cur_node_id];
 	auto &edges = reverse ? node->backward_out_ : node->forward_out_;
 
 	for (auto &edge : edges) {

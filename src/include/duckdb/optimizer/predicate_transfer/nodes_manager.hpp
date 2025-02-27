@@ -40,7 +40,7 @@ public:
 	}
 
 	vector<LogicalOperator *> &getSortedNodes() {
-		return sort_nodes;
+		return sorted_nodes;
 	}
 
 	//! Extract All the vertex nodes
@@ -70,7 +70,7 @@ private:
 
 	unordered_map<idx_t, LogicalOperator *> nodes;
 	unordered_map<idx_t, LogicalOperator *> duplicate_nodes;
-	vector<LogicalOperator *> sort_nodes;
+	vector<LogicalOperator *> sorted_nodes;
 	unordered_map<ColumnBinding, ColumnBinding, HashFunc, CmpFunc> rename_cols;
 };
 } // namespace duckdb
