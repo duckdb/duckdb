@@ -12,23 +12,22 @@ public:
 	explicit PredicateTransferOptimizer(ClientContext &context) : context(context), dag_manager(context) {
 	}
 
-	unique_ptr<LogicalOperator> PreOptimize(unique_ptr<LogicalOperator> plan,
-	                                        optional_ptr<RelationStats> stats = nullptr);
-	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan, optional_ptr<RelationStats> stats = nullptr);
+	unique_ptr<LogicalOperator> PreOptimize(unique_ptr<LogicalOperator> plan);
+	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 	unique_ptr<LogicalOperator> InsertTransferOperators(unique_ptr<LogicalOperator> plan);
 
 private:
 	//! Create Bloom filter and use existing Bloom filter for the given scan or filter node
-	vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> CreateBloomFilter(LogicalOperator &node, bool reverse);
+	vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> CreateBloomFilter(LogicalOperator &node, bool reverse = false);
 
-	void GetAllBFsToUse(idx_t cur_node_id, BloomFilters &bfs_to_use, vector<idx_t> &parent_nodes, bool reverse);
-	void GetAllBFsToCreate(idx_t cur_node_id, BloomFilters &bfs_to_create, bool reverse);
+	void GetAllBFsToUse(idx_t cur_node_id, BloomFilters &bfs_to_use, vector<idx_t> &parent_nodes, bool reverse = false);
+	void GetAllBFsToCreate(idx_t cur_node_id, BloomFilters &bfs_to_create, bool reverse = false);
 	unique_ptr<LogicalCreateBF> BuildCreateBFOperator(LogicalOperator &node, BloomFilters &bloom_filters);
 	unique_ptr<LogicalUseBF> BuildUseBFOperator(LogicalOperator &node, BloomFilters &bloom_filters,
-	                                            vector<idx_t> &parent_nodes, bool reverse);
+	                                            vector<idx_t> &parent_nodes, bool reverse = false);
 
 	//! Will this node be filtered?
-	bool PossibleFilterAny(LogicalOperator &node, bool reverse);
+	bool PossibleFilterAny(LogicalOperator &node, bool reverse = false);
 
 	//! which column(s) involved in this expression
 	static void GetColumnBindingExpression(Expression &expr, vector<BoundColumnRefExpression *> &expressions);

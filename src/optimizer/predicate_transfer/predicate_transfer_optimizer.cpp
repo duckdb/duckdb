@@ -11,14 +11,12 @@
 
 namespace duckdb {
 
-unique_ptr<LogicalOperator> PredicateTransferOptimizer::PreOptimize(unique_ptr<LogicalOperator> plan,
-                                                                    optional_ptr<RelationStats> stats) {
+unique_ptr<LogicalOperator> PredicateTransferOptimizer::PreOptimize(unique_ptr<LogicalOperator> plan) {
 	dag_manager.Build(*plan);
 	return plan;
 }
 
-unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<LogicalOperator> plan,
-                                                                 optional_ptr<RelationStats> stats) {
+unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	auto &ordered_nodes = dag_manager.getExecOrder();
 
 	// Forward
