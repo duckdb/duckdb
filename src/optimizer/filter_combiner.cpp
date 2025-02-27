@@ -181,7 +181,6 @@ bool FilterCombiner::HasFilters() {
 	return has_filters;
 }
 
-
 // Try to extract a column index from a bound column ref expression, or a column ref recursively nested
 // inside of a struct_extract call. If the expression is not a column ref (or nested column ref), return false.
 static bool TryGetBoundColumnIndex(const vector<ColumnIndex> &column_ids, const Expression &expr, ColumnIndex &result) {
@@ -263,7 +262,7 @@ bool FilterCombiner::IsDenseRange(vector<Value> &in_list) {
 }
 
 static bool SupportedFilterComparison(ExpressionType expression_type) {
-	switch(expression_type) {
+	switch (expression_type) {
 	case ExpressionType::COMPARE_EQUAL:
 	case ExpressionType::COMPARE_GREATERTHAN:
 	case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
@@ -272,11 +271,12 @@ static bool SupportedFilterComparison(ExpressionType expression_type) {
 	case ExpressionType::COMPARE_NOTEQUAL:
 		return true;
 	default:
-			return false;
+		return false;
 	}
 }
 
-bool FilterCombiner::TryGenerateConstantFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids, column_t column_id, vector<ExpressionValueInformation> &info_list) {
+bool FilterCombiner::TryGenerateConstantFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+                                               column_t column_id, vector<ExpressionValueInformation> &info_list) {
 	if (info_list.empty()) {
 		// no constants - already removed
 		return false;
@@ -285,7 +285,8 @@ bool FilterCombiner::TryGenerateConstantFilter(TableFilterSet &table_filters, co
 	auto &constant_info = info_list[0];
 	auto physical_type = constant_info.constant.type().InternalType();
 	// check if the type is supported
-	if (!TypeIsNumeric(physical_type) && physical_type != PhysicalType::VARCHAR && physical_type != PhysicalType::BOOL) {
+	if (!TypeIsNumeric(physical_type) && physical_type != PhysicalType::VARCHAR &&
+	    physical_type != PhysicalType::BOOL) {
 		// not supported
 		return false;
 	}
@@ -311,11 +312,41 @@ bool FilterCombiner::TryGenerateConstantFilter(TableFilterSet &table_filters, co
 
 	auto &constant_list = constant_values.find(equiv_set)->second;
 	for (auto &constant_cmp : constant_list) {
-		auto constant_filter =
-			make_uniq<ConstantFilter>(constant_cmp.comparison_type, constant_cmp.constant);
+		auto constant_filter = make_uniq<ConstantFilter>(constant_cmp.comparison_type, constant_cmp.constant);
 		table_filters.PushFilter(column_index, PushDownFilterIntoExpr(expr, std::move(constant_filter)));
 	}
 	equivalence_map.erase(filter_exp);
+	return true;
+}
+
+bool FilterCombiner::TryGeneratePrefixFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+                                             Expression &expr) {
+	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
+		return false;
+	}
+	auto &func = expr.Cast<BoundFunctionExpression>();
+	if (func.function.name != "prefix") {
+		return false;
+	}
+	if (func.children[0]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF ||
+	    func.children[1]->GetExpressionType() != ExpressionType::VALUE_CONSTANT) {
+		// we need prefix(col, 'literal') in order to push this down
+		return false;
+	}
+	auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
+	auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
+	auto prefix_string = StringValue::Get(constant_value_expr.value);
+	if (prefix_string.empty()) {
+		// empty prefix - skip
+		return false;
+	}
+	auto &column_index = column_ids[column_ref.binding.column_index];
+	//! Replace prefix with a set of comparisons
+	auto lower_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(prefix_string));
+	prefix_string[prefix_string.size() - 1]++;
+	auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(prefix_string));
+	table_filters.PushFilter(column_index, std::move(lower_bound));
+	table_filters.PushFilter(column_index, std::move(upper_bound));
 	return true;
 }
 
@@ -328,27 +359,13 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const vector<ColumnIndex
 	//! Here we look for LIKE or IN filters
 	for (idx_t rem_fil_idx = 0; rem_fil_idx < remaining_filters.size(); rem_fil_idx++) {
 		auto &remaining_filter = remaining_filters[rem_fil_idx];
+		if (TryGeneratePrefixFilter(table_filters, column_ids, *remaining_filter)) {
+			// successfully replaced the filter with a set of comparisons
+			remaining_filters.erase_at(rem_fil_idx--);
+			continue;
+		}
 		if (remaining_filter->GetExpressionClass() == ExpressionClass::BOUND_FUNCTION) {
 			auto &func = remaining_filter->Cast<BoundFunctionExpression>();
-			if (func.function.name == "prefix" &&
-			    func.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-			    func.children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {
-				//! This is a like function.
-				auto &column_ref = func.children[0]->Cast<BoundColumnRefExpression>();
-				auto &constant_value_expr = func.children[1]->Cast<BoundConstantExpression>();
-				auto like_string = StringValue::Get(constant_value_expr.value);
-				if (like_string.empty()) {
-					continue;
-				}
-				auto &column_index = column_ids[column_ref.binding.column_index];
-				//! Here the like must be transformed to a BOUND COMPARISON geq le
-				auto lower_bound =
-				    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, Value(like_string));
-				like_string[like_string.size() - 1]++;
-				auto upper_bound = make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHAN, Value(like_string));
-				table_filters.PushFilter(column_index, std::move(lower_bound));
-				table_filters.PushFilter(column_index, std::move(upper_bound));
-			}
 			if (func.function.name == "~~" &&
 			    func.children[0]->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
 			    func.children[1]->GetExpressionType() == ExpressionType::VALUE_CONSTANT) {

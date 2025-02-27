@@ -63,7 +63,10 @@ private:
 	idx_t GetEquivalenceSet(Expression &expr);
 	FilterResult AddConstantComparison(vector<ExpressionValueInformation> &info_list, ExpressionValueInformation info);
 
-	bool TryGenerateConstantFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids, column_t column_id, vector<ExpressionValueInformation> &info_list);
+	bool TryGenerateConstantFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                               column_t column_id, vector<ExpressionValueInformation> &info_list);
+	bool TryGeneratePrefixFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                             Expression &expr);
 
 private:
 	vector<unique_ptr<Expression>> remaining_filters;
