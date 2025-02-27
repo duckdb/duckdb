@@ -184,7 +184,7 @@ void DAGManager::ExtractEdges(LogicalOperator &op, vector<reference<LogicalOpera
 }
 
 struct DAGNodeCompare {
-	bool operator()(const DAGNode *lhs, const DAGNode *rhs) const {
+	bool operator()(const GraphNode *lhs, const GraphNode *rhs) const {
 		return lhs->est_cardinality < rhs->est_cardinality;
 	}
 };
@@ -224,13 +224,13 @@ void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 	for (auto &vertex : nodes_manager.GetNodes()) {
 		// Set the last operator as root
 		if (vertex.second == sorted_nodes.back()) {
-			auto node = make_uniq<DAGNode>(vertex.first, vertex.second->estimated_cardinality, true);
+			auto node = make_uniq<GraphNode>(vertex.first, vertex.second->estimated_cardinality, true);
 			node->priority = prior_flag--;
 			constructed_set.emplace(vertex.first);
 			nodes[vertex.first] = std::move(node);
 			root = vertex.first;
 		} else {
-			auto node = make_uniq<DAGNode>(vertex.first, vertex.second->estimated_cardinality, false);
+			auto node = make_uniq<GraphNode>(vertex.first, vertex.second->estimated_cardinality, false);
 			unconstructed_set.emplace(vertex.first);
 			nodes[vertex.first] = std::move(node);
 		}
@@ -348,8 +348,8 @@ void DAGManager::CreateDAG() {
 	}
 }
 
-vector<DAGNode *> DAGManager::GetNeighbors(idx_t node_id) {
-	vector<DAGNode *> result;
+vector<GraphNode *> DAGManager::GetNeighbors(idx_t node_id) {
+	vector<GraphNode *> result;
 	for (auto &filter_and_binding : filters_and_bindings_) {
 		for (auto &edge : filter_and_binding.second) {
 			if (&edge->large_ == nodes_manager.GetNode(node_id)) {
@@ -410,7 +410,7 @@ vector<DAGNode *> DAGManager::GetNeighbors(idx_t node_id) {
 	return result;
 }
 
-int DAGManager::DAGNodesCmp(DAGNode *a, DAGNode *b) {
+int DAGManager::DAGNodesCmp(GraphNode *a, GraphNode *b) {
 	return a->est_cardinality > b->est_cardinality;
 }
 } // namespace duckdb

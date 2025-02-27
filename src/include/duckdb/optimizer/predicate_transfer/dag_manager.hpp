@@ -67,8 +67,8 @@ private:
 
 	pair<int, int> FindEdge(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set);
 
-	vector<DAGNode *> GetNeighbors(idx_t node_id);
+	vector<GraphNode *> GetNeighbors(idx_t node_id);
 
-	static int DAGNodesCmp(DAGNode *a, DAGNode *b);
+	static int DAGNodesCmp(GraphNode *a, GraphNode *b);
 };
 } // namespace duckdb

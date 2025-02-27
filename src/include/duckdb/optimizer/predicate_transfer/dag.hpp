@@ -4,11 +4,11 @@
 #include "duckdb/optimizer/predicate_transfer/bloom_filter/bloom_filter.hpp"
 
 namespace duckdb {
-class DAGEdge;
+class GraphEdge;
 
-class DAGNode {
+class GraphNode {
 public:
-	DAGNode(idx_t id, idx_t est_cardinality, bool is_root)
+	GraphNode(idx_t id, idx_t est_cardinality, bool is_root)
 	    : id(id), is_root(is_root), est_cardinality(est_cardinality) {
 	}
 
@@ -17,10 +17,10 @@ public:
 	int priority = -1;
 	idx_t est_cardinality;
 
-	vector<unique_ptr<DAGEdge>> forward_in_;
-	vector<unique_ptr<DAGEdge>> backward_in_;
-	vector<unique_ptr<DAGEdge>> forward_out_;
-	vector<unique_ptr<DAGEdge>> backward_out_;
+	vector<unique_ptr<GraphEdge>> forward_in_;
+	vector<unique_ptr<GraphEdge>> backward_in_;
+	vector<unique_ptr<GraphEdge>> forward_out_;
+	vector<unique_ptr<GraphEdge>> backward_out_;
 
 	void AddIn(idx_t from, Expression *filter, bool forward);
 	void AddIn(idx_t from, shared_ptr<BlockedBloomFilter> bloom_filter, bool forward);
@@ -28,9 +28,9 @@ public:
 	void AddOut(idx_t to, shared_ptr<BlockedBloomFilter> bloom_filter, bool forward);
 };
 
-class DAGEdge {
+class GraphEdge {
 public:
-	explicit DAGEdge(idx_t id) : dest_(id) {
+	explicit GraphEdge(idx_t id) : dest_(id) {
 	}
 
 	void Push(Expression *filter) {
@@ -50,5 +50,5 @@ public:
 	vector<shared_ptr<BlockedBloomFilter>> bloom_filters;
 };
 
-using DAG = unordered_map<idx_t, unique_ptr<DAGNode>>;
+using DAG = unordered_map<idx_t, unique_ptr<GraphNode>>;
 } // namespace duckdb

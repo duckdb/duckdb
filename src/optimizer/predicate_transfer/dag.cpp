@@ -1,7 +1,7 @@
 #include "duckdb/optimizer/predicate_transfer/dag.hpp"
 
 namespace duckdb {
-void DAGNode::AddIn(idx_t from, Expression *filter, bool forward) {
+void GraphNode::AddIn(idx_t from, Expression *filter, bool forward) {
 	if (forward) {
 		for (auto &node : forward_in_) {
 			if (node->GetDest() == from) {
@@ -9,7 +9,7 @@ void DAGNode::AddIn(idx_t from, Expression *filter, bool forward) {
 				return;
 			}
 		}
-		auto node = make_uniq<DAGEdge>(from);
+		auto node = make_uniq<GraphEdge>(from);
 		node->Push(filter);
 		forward_in_.emplace_back(std::move(node));
 	} else {
@@ -19,14 +19,14 @@ void DAGNode::AddIn(idx_t from, Expression *filter, bool forward) {
 				return;
 			}
 		}
-		auto node = make_uniq<DAGEdge>(from);
+		auto node = make_uniq<GraphEdge>(from);
 		node->Push(filter);
 		backward_in_.emplace_back(std::move(node));
 	}
 	return;
 }
 
-void DAGNode::AddIn(idx_t from, shared_ptr<BlockedBloomFilter> bloom_filter, bool forward) {
+void GraphNode::AddIn(idx_t from, shared_ptr<BlockedBloomFilter> bloom_filter, bool forward) {
 	if (forward) {
 		for (auto &node : forward_in_) {
 			if (node->GetDest() == from) {
@@ -34,7 +34,7 @@ void DAGNode::AddIn(idx_t from, shared_ptr<BlockedBloomFilter> bloom_filter, boo
 				return;
 			}
 		}
-		auto node = make_uniq<DAGEdge>(from);
+		auto node = make_uniq<GraphEdge>(from);
 		node->Push(bloom_filter);
 		forward_in_.emplace_back(std::move(node));
 	} else {
@@ -44,13 +44,13 @@ void DAGNode::AddIn(idx_t from, shared_ptr<BlockedBloomFilter> bloom_filter, boo
 				return;
 			}
 		}
-		auto node = make_uniq<DAGEdge>(from);
+		auto node = make_uniq<GraphEdge>(from);
 		node->Push(bloom_filter);
 		backward_in_.emplace_back(std::move(node));
 	}
 }
 
-void DAGNode::AddOut(idx_t to, Expression *filter, bool forward) {
+void GraphNode::AddOut(idx_t to, Expression *filter, bool forward) {
 	if (forward) {
 		for (auto &node : forward_out_) {
 			if (node->GetDest() == to) {
@@ -58,7 +58,7 @@ void DAGNode::AddOut(idx_t to, Expression *filter, bool forward) {
 				return;
 			}
 		}
-		auto node = make_uniq<DAGEdge>(to);
+		auto node = make_uniq<GraphEdge>(to);
 		node->Push(std::move(filter));
 		forward_out_.emplace_back(std::move(node));
 	} else {
@@ -68,13 +68,13 @@ void DAGNode::AddOut(idx_t to, Expression *filter, bool forward) {
 				return;
 			}
 		}
-		auto node = make_uniq<DAGEdge>(to);
+		auto node = make_uniq<GraphEdge>(to);
 		node->Push(std::move(filter));
 		backward_out_.emplace_back(std::move(node));
 	}
 }
 
-void DAGNode::AddOut(idx_t to, shared_ptr<BlockedBloomFilter> bloom_filter, bool forward) {
+void GraphNode::AddOut(idx_t to, shared_ptr<BlockedBloomFilter> bloom_filter, bool forward) {
 	if (forward) {
 		for (auto &node : forward_out_) {
 			if (node->GetDest() == to) {
@@ -82,7 +82,7 @@ void DAGNode::AddOut(idx_t to, shared_ptr<BlockedBloomFilter> bloom_filter, bool
 				return;
 			}
 		}
-		auto node = make_uniq<DAGEdge>(to);
+		auto node = make_uniq<GraphEdge>(to);
 		node->Push(bloom_filter);
 		forward_out_.emplace_back(std::move(node));
 	} else {
@@ -92,7 +92,7 @@ void DAGNode::AddOut(idx_t to, shared_ptr<BlockedBloomFilter> bloom_filter, bool
 				return;
 			}
 		}
-		auto node = make_uniq<DAGEdge>(to);
+		auto node = make_uniq<GraphEdge>(to);
 		node->Push(bloom_filter);
 		backward_out_.emplace_back(std::move(node));
 	}

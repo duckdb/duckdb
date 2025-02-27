@@ -15,51 +15,9 @@
 namespace duckdb {
 std::unordered_map<std::string, int> PredicateTransferOptimizer::table_exists;
 
-void PredicateTransferScheduler::ExtractNodes(LogicalOperator &plan, vector<reference<LogicalOperator>> &tables,
-                                             vector<reference<LogicalOperator>> &joins) {
-	LogicalOperator *op = &plan;
-
-	switch (op->type) {
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-		joins.push_back(*op);
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
-	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
-	case LogicalOperatorType::LOGICAL_DELIM_GET:
-	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
-	case LogicalOperatorType::LOGICAL_UNION:
-	case LogicalOperatorType::LOGICAL_EXCEPT:
-	case LogicalOperatorType::LOGICAL_INTERSECT:
-	case LogicalOperatorType::LOGICAL_GET: {
-		tables.push_back(*op);
-		break;
-	}
-	case LogicalOperatorType::LOGICAL_FILTER: {
-		LogicalOperator *child = op->children[0].get();
-		if (child->type == LogicalOperatorType::LOGICAL_GET) {
-			tables.push_back(*op);
-			op = child;
-		}
-		break;
-	}
-	default:
-		break;
-	}
-
-	for (auto &child : op->children) {
-		ExtractNodes(*child, tables, joins);
-	}
-}
-
-/* For PredTransfer */
-/* Here is the entry of PredicateTransferOptimizer */
-/* Given a query plan, we insert CreateBF and UseBF into it */
 unique_ptr<LogicalOperator> PredicateTransferOptimizer::PreOptimize(unique_ptr<LogicalOperator> plan,
                                                                     optional_ptr<RelationStats> stats) {
-	/* Build the DAG to decide the transfer order */
-	bool success = dag_manager.Build(*plan);
+	dag_manager.Build(*plan);
 	return plan;
 }
 
@@ -96,7 +54,7 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<Logi
 			dag_manager.Add(BF.first, BF.second, true);
 		}
 	}
-	auto result = InsertCreateBFOperator_d(std::move(plan));
+	auto result = InsertCreateBFOperator(std::move(plan));
 	return result;
 }
 
@@ -335,29 +293,9 @@ unique_ptr<LogicalCreateBF> PredicateTransferOptimizer::BuildCreateUsePair(
 	return create_bf;
 }
 
-/* Insert CreateBF into the plan */
 unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertCreateBFOperator(unique_ptr<LogicalOperator> plan) {
 	for (auto &child : plan->children) {
 		child = InsertCreateBFOperator(std::move(child));
-	}
-	void *plan_ptr = plan.get();
-	auto itr = replace_map_forward.find(plan_ptr);
-	if (itr != replace_map_forward.end()) {
-		auto ptr = itr->second.get();
-		while (ptr->children.size() != 0) {
-			ptr = ptr->children[0].get();
-		}
-		ptr->AddChild(std::move(plan));
-		return std::move(itr->second);
-	} else {
-		return plan;
-	}
-}
-
-/* Only for microbenchmark */
-unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertCreateBFOperator_d(unique_ptr<LogicalOperator> plan) {
-	for (auto &child : plan->children) {
-		child = InsertCreateBFOperator_d(std::move(child));
 	}
 	void *plan_ptr = plan.get();
 	auto itr = replace_map_forward.find(plan_ptr);
