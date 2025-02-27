@@ -177,21 +177,36 @@ idx_t JSONLocalTableFunctionState::GetBatchIndex() const {
 	return state.GetScanState().batch_index.GetIndex();
 }
 
-idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
-	scan_state.Reset();
-
-	// We have to wrap this in a loop otherwise we stop scanning too early when there's an empty JSON file
-	while (scan_state.scan_count == 0) {
-		if (scan_state.buffer_offset == scan_state.buffer_size) {
-			if (!ReadNextBuffer(gstate)) {
-				break;
-			}
-		}
-
+idx_t JSONScanLocalState::Read(JSONScanGlobalState &gstate) {
+	if (!scan_state.is_first_scan) {
+		scan_state.Reset();
+	}
+	scan_state.is_first_scan = false;
+	while (scan_state.scan_count == 0 && scan_state.buffer_offset < scan_state.buffer_size) {
 		ParseNextChunk(gstate);
 	}
-
 	return scan_state.scan_count;
+}
+
+bool JSONScanLocalState::NextBuffer(JSONScanGlobalState &gstate) {
+	if (scan_state.buffer_offset < scan_state.buffer_size) {
+		throw InternalException("Not finished yet!?");
+	}
+	return ReadNextBuffer(gstate);
+}
+
+idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
+	while (true) {
+		auto count = Read(gstate);
+		if (count > 0) {
+			return count;
+		}
+		// exhausted buffer - read next
+		if (!NextBuffer(gstate)) {
+			// no buffer available - done
+			return 0;
+		}
+	}
 }
 
 void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining) {

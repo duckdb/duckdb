@@ -853,6 +853,7 @@ void BufferedJSONReader::FinalizeBufferInternal(JSONReaderScanState &scan_state,
 			scan_state.scan_count++;
 		}
 	}
+	scan_state.is_first_scan = true;
 }
 
 bool BufferedJSONReader::ReadNextBufferInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,

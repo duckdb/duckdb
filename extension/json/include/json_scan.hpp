@@ -97,6 +97,8 @@ public:
 	JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate);
 
 public:
+	idx_t Read(JSONScanGlobalState &gstate);
+	bool NextBuffer(JSONScanGlobalState &gstate);
 	idx_t ReadNext(JSONScanGlobalState &gstate);
 	void ThrowTransformError(idx_t object_index, const string &error_message);
 
