@@ -74,6 +74,8 @@ private:
 	                                           Expression &expr);
 	FilterPushdownResult TryPushdownInFilter(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
 	                                         Expression &expr);
+	FilterPushdownResult TryPushdownOrClause(TableFilterSet &table_filters, const vector<ColumnIndex> &column_ids,
+	                                         Expression &expr);
 
 private:
 	vector<unique_ptr<Expression>> remaining_filters;
