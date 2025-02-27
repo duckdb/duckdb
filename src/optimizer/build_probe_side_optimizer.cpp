@@ -138,8 +138,9 @@ double BuildProbeSideOptimizer::GetBuildSize(vector<LogicalType> types, const id
 		});
 	}
 
-	// There is also a cost of ~2 * sizeof(ht_entry_t) per tuple in the hash table
-	row_width += 2 * sizeof(ht_entry_t);
+	// There is also a cost of NextPowerOfTwo(count * 2) * sizeof(ht_entry_t) per tuple in the hash table
+	// This is a not a smooth cost function, so instead we do the average, which is ~3 * sizeof(ht_entry_t)
+	row_width += 3 * sizeof(ht_entry_t);
 
 	return static_cast<double>(row_width * cardinality);
 }

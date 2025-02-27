@@ -85,7 +85,7 @@ private:
 	static constexpr idx_t MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR = 16ULL;
 
 	//! The maximum ratio of the memory limit that we reserve using the TemporaryMemoryManager
-	static constexpr double MAXIMUM_MEMORY_LIMIT_RATIO = 0.8;
+	static constexpr double MAXIMUM_MEMORY_LIMIT_RATIO = 0.9;
 	//! The maximum ratio of the remaining memory that we reserve per TemporaryMemoryState
 	static constexpr double MAXIMUM_FREE_MEMORY_RATIO = 0.9;
 	//! Or, we leave room for between this many minimum reservations (if it is less than MAXIMUM_FREE_MEMORY_RATIO)
