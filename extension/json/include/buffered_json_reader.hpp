@@ -147,6 +147,7 @@ public:
 	BufferedJSONReader(ClientContext &context, JSONReaderOptions options, string file_name);
 
 	void OpenJSONFile();
+	void CloseHandle();
 	void Reset();
 
 	bool HasFileHandle() const;
@@ -192,14 +193,14 @@ public:
 	                    optional_idx &buffer_index, bool &file_done);
 	bool ReadNextBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,
 	                    optional_idx &buffer_index, bool &file_done);
-	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,
-	                            optional_idx &buffer_index, bool &file_done);
 	void FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer, idx_t buffer_index);
 
 	//! Scan progress
 	double GetProgress() const;
 
 private:
+	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,
+				    optional_idx &buffer_index, bool &file_done);
 	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,
 	                        optional_idx &buffer_index, bool &file_done);
 	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,

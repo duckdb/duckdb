@@ -208,6 +208,13 @@ void BufferedJSONReader::OpenJSONFile() {
 	Reset();
 }
 
+void BufferedJSONReader::CloseHandle() {
+	lock_guard<mutex> guard(lock);
+	if (IsOpen()) {
+		file_handle->Close();
+	}
+}
+
 void BufferedJSONReader::Reset() {
 	buffer_index = 0;
 	buffer_map.clear();

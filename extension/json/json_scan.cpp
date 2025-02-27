@@ -228,8 +228,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			if (file_done) {
 				lock_guard<mutex> guard(gstate.lock);
 				TryIncrementFileIndex(gstate);
-				lock_guard<mutex> reader_guard(current_reader->lock);
-				current_reader->GetFileHandle().Close();
+				current_reader->CloseHandle();
 			}
 
 			if (read_success) {
@@ -264,8 +263,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		current_reader->InitializeScan(gstate, scan_state, buffer_index, file_done);
 		if (file_done) {
 			TryIncrementFileIndex(gstate);
-			lock_guard<mutex> reader_guard(current_reader->lock);
-			current_reader->GetFileHandle().Close();
+			current_reader->CloseHandle();
 		}
 
 		if (gstate.enable_parallel_scans) {
