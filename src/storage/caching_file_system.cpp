@@ -213,6 +213,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 			if (result.IsValid()) {
 				return result;
 			}
+			ranges.erase(it);
 		}
 	}
 
