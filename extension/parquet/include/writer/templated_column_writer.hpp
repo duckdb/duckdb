@@ -131,8 +131,8 @@ public:
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
 		const auto &page_info = state_p.page_info[page_idx];
 		auto result = make_uniq<StandardWriterPageState<SRC, TGT, OP>>(
-		    page_info.row_count - page_info.empty_count + page_info.null_count, state.total_string_size, state.encoding,
-		    state.dictionary);
+		    page_info.row_count - (page_info.empty_count + page_info.null_count), state.total_string_size,
+		    state.encoding, state.dictionary);
 		return std::move(result);
 	}
 
