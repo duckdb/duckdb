@@ -565,7 +565,6 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
 				 const TableFilter &filter, idx_t scan_count, idx_t &approved_tuple_count) {
-	throw InternalException("FIXME: FilterSelection without TableFilterState");
 	auto filter_state = TableFilterState::Initialize(filter);
 	return FilterSelection(sel, vector, vdata, filter, *filter_state, scan_count, approved_tuple_count);
 }

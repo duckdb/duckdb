@@ -7,12 +7,12 @@ namespace duckdb {
 CachedSelectionVector::CachedSelectionVector() {
 }
 
-sel_t *CachedSelectionVector::Get(idx_t count) {
+SelectionVector &CachedSelectionVector::Get(idx_t count) {
 	if (count > capacity) {
-		sel_data = make_uniq_array<sel_t>(count);
+		sel.Initialize(count);
 		capacity = count;
 	}
-	return sel_data.get();
+	return sel;
 }
 
 LeafFilterState::LeafFilterState() {}

@@ -16,11 +16,11 @@ namespace duckdb {
 struct CachedSelectionVector {
 	CachedSelectionVector();
 
-	unique_array<sel_t> sel_data;
+	SelectionVector sel;
 	idx_t capacity = 0;
 
 public:
-	sel_t *Get(idx_t count);
+	SelectionVector &Get(idx_t count);
 };
 
 //! Thread-local state for executing a table filter
