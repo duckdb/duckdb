@@ -20,8 +20,8 @@ statement ok
 drop schema my_temporary_schema cascade;
 
 # this is empty since we didn't query anything yet
-query III
-select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+query II
+select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() order by location;
 ----
 
 
@@ -33,41 +33,41 @@ statement ok
 create view lineitem as from '__TEST_DIR__/lineitem.parquet';
 
 # creating the view has loaded the footer
-query III
-select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+query II
+select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() order by location;
 ----
-1986	18281732	true
+1.9 KiB	true
 
 # select the first column
 statement ok
 select l_orderkey from lineitem;
 
-query III
-select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+query II
+select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() order by location;
 ----
-935292	4	true
-1986	18281732	true
+913.3 KiB	1
+1.9 KiB	1
 
 # select the third column (not contiguous with the first column so it should have two cache entries)
 statement ok
 select l_suppkey from lineitem;
 
-query III
-select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+query II
+select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() order by location;
 ----
-935292	4	true
-757153	2144704	true
-1986	18281732	true
+913.3 KiB	true
+739.4 KiB	true
+1.9 KiB	true
 
 # select the first four columns (contiguous, and supersede the previous two cache entries, should merge into one entry)
 statement ok
 select l_orderkey, l_partkey, l_suppkey, l_linenumber from lineitem;
 
-query III
-select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+query II
+select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() order by location;
 ----
-3045982	4	true
-1986	18281732	true
+2.9 MiB	1
+1.9 KiB	1
 
 # shows up in duckdb_memory under its own tag
 # this is slightly higher than the sum of nr_bytes above due buffers having a header and are rounded up to sector size
@@ -85,17 +85,17 @@ statement ok
 set memory_limit='500mb';
 
 # loaded should now be "false" for the large buffer
-query III
-select nr_bytes, location, loaded from duckdb_external_file_cache() where location = 4
+query II
+select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() where location = 4;
 ----
-3045982	4	false
+2.9 MiB	0
 
 # disabling the file cache should empty it
 statement ok
 set enable_external_file_cache=false;
 
-query III
-select nr_bytes, location, loaded from duckdb_external_file_cache() order by location;
+query II
+select format_bytes(nr_bytes), loaded from duckdb_external_file_cache() order by location;
 ----
 
 
