@@ -14,9 +14,10 @@ public:
 
 	unique_ptr<LogicalOperator> PreOptimize(unique_ptr<LogicalOperator> plan);
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
-	unique_ptr<LogicalOperator> InsertTransferOperators(unique_ptr<LogicalOperator> plan);
 
 private:
+	unique_ptr<LogicalOperator> InsertTransferOperators(unique_ptr<LogicalOperator> plan);
+
 	//! Create Bloom filter and use existing Bloom filter for the given scan or filter node
 	vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> CreateBloomFilter(LogicalOperator &node, bool reverse = false);
 
