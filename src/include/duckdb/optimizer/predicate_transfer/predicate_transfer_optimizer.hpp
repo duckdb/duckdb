@@ -16,29 +16,22 @@ public:
 	unique_ptr<LogicalOperator> InsertCreateBFOperator(unique_ptr<LogicalOperator> plan);
 
 private:
-	static void GetColumnBindingExpression(Expression &expr, vector<BoundColumnRefExpression *> &expressions);
-
 	vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> CreateBloomFilter(LogicalOperator &node, bool reverse);
 
-	void GetAllBFUsed(idx_t cur, vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_use,
-	                  vector<idx_t> &depend_nodes, bool reverse);
-	void GetAllBFCreate(idx_t cur, vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_create, bool reverse);
+	void GetAllBFsToUse(idx_t cur_node_id, vector<shared_ptr<BlockedBloomFilter>> &bfs_to_use,
+	                    vector<idx_t> &parent_nodes, bool reverse);
+	void GetAllBFsToCreate(idx_t cur_node_id, vector<shared_ptr<BlockedBloomFilter>> &bfs_to_create, bool reverse);
 
-	static unique_ptr<LogicalCreateBF>
-	BuildCreateBFOperator(LogicalOperator &node, vector<shared_ptr<BlockedBloomFilter>> &bloom_filters);
-
+	unique_ptr<LogicalCreateBF> BuildCreateBFOperator(LogicalOperator &node,
+	                                                  vector<shared_ptr<BlockedBloomFilter>> &bloom_filters);
 	unique_ptr<LogicalUseBF> BuildUseBFOperator(LogicalOperator &node,
-	                                          vector<shared_ptr<BlockedBloomFilter>> &bf_for_use,
-	                                          vector<idx_t> &depend_nodes, bool reverse);
-
-	unique_ptr<LogicalCreateBF> BuildCreateUsePair(LogicalOperator &node,
-	                                               vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_use,
-	                                               vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_create,
-	                                               vector<idx_t> &depend_nodes, bool reverse);
-
-	static idx_t GetNodeId(LogicalOperator &node);
+	                                            vector<shared_ptr<BlockedBloomFilter>> &bloom_filters,
+	                                            vector<idx_t> &parent_nodes, bool reverse);
 
 	bool PossibleFilterAny(LogicalOperator &node, bool reverse);
+
+	static void GetColumnBindingExpression(Expression &expr, vector<BoundColumnRefExpression *> &expressions);
+	static idx_t GetNodeId(LogicalOperator &node);
 
 private:
 	ClientContext &context;

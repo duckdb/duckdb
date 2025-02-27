@@ -43,14 +43,8 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<Logi
 	// Backward
 	for (int i = 0; i < ordered_nodes.size(); i++) {
 		auto &current_node = ordered_nodes[i];
-		// We do predicate transfer in the function CreateBloomFilter
-		// query_graph_manager holds the input bloom filter
-		// return BF and its corresponding table id
-		auto BFvec = CreateBloomFilter(*current_node, true);
-		for (auto &BF : BFvec) {
-			// Add the Bloom Filter to its corresponding edge
-			// Need to check whether the Bloom Filter needs to transfer
-			// Such as, the column not involved in the predicate
+		auto BFs = CreateBloomFilter(*current_node, true);
+		for (auto &BF : BFs) {
 			dag_manager.Add(BF.first, BF.second, true);
 		}
 	}
@@ -76,38 +70,47 @@ void PredicateTransferOptimizer::GetColumnBindingExpression(Expression &expr,
 vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::CreateBloomFilter(LogicalOperator &node,
                                                                                                   bool reverse) {
 	vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> result;
-	vector<shared_ptr<BlockedBloomFilter>> bf_for_use;
-	vector<shared_ptr<BlockedBloomFilter>> bf_for_create;
+	vector<shared_ptr<BlockedBloomFilter>> bfs_to_use;
+	vector<shared_ptr<BlockedBloomFilter>> bfs_to_create;
+
 	idx_t node_id = GetNodeId(node);
 	if (dag_manager.nodes.find(node_id) == dag_manager.nodes.end()) {
 		return result;
 	}
+
 	// Use Bloom Filter
-	vector<idx_t> depend_nodes;
-	GetAllBFUsed(node_id, bf_for_use, depend_nodes, reverse);
+	vector<idx_t> parent_nodes;
+	GetAllBFsToUse(node_id, bfs_to_use, parent_nodes, reverse);
 
 	// Create Bloom Filter
-	GetAllBFCreate(node_id, bf_for_create, reverse);
+	GetAllBFsToCreate(node_id, bfs_to_create, reverse);
 
 	auto &operators = reverse ? replace_map_backward : replace_map_forward;
 
-	if (!bf_for_use.empty() && !bf_for_create.empty()) {
-		auto create_bf = BuildCreateUsePair(node, bf_for_use, bf_for_create, depend_nodes, reverse);
+	if (!bfs_to_use.empty() && !bfs_to_create.empty()) {
+		auto last_use_bf = BuildUseBFOperator(node, bfs_to_use, parent_nodes, reverse);
+
+		auto create_bf = BuildCreateBFOperator(node, bfs_to_create);
 		for (auto &filter : create_bf->bf_to_create) {
 			result.emplace_back(make_pair(node_id, filter));
 		}
+
+		create_bf->AddChild(unique_ptr_cast<LogicalUseBF, LogicalOperator>(std::move(last_use_bf)));
 		operators[&node] = std::move(create_bf);
-	} else if (!bf_for_use.empty()) {
-		auto use_bf = BuildUseBFOperator(node, bf_for_use, depend_nodes, reverse);
-		operators[&node] = std::move(use_bf);
-	} else if (!bf_for_create.empty()) {
+	} else if (!bfs_to_use.empty()) {
+		auto last_use_bf = BuildUseBFOperator(node, bfs_to_use, parent_nodes, reverse);
+
+		operators[&node] = std::move(last_use_bf);
+	} else if (!bfs_to_create.empty()) {
 		if (!PossibleFilterAny(node, reverse)) {
 			return result;
 		}
-		auto create_bf = BuildCreateBFOperator(node, bf_for_create);
+
+		auto create_bf = BuildCreateBFOperator(node, bfs_to_create);
 		for (auto &filter : create_bf->bf_to_create) {
 			result.emplace_back(make_pair(node_id, filter));
 		}
+
 		operators[&node] = std::move(create_bf);
 	}
 
@@ -141,69 +144,52 @@ idx_t PredicateTransferOptimizer::GetNodeId(LogicalOperator &node) {
 	return res;
 }
 
-void PredicateTransferOptimizer::GetAllBFUsed(idx_t cur, vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_use,
-                                              vector<idx_t> &depend_nodes, bool reverse) {
-	auto &node = dag_manager.nodes[cur];
+void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, vector<shared_ptr<BlockedBloomFilter>> &bfs_to_use,
+                                                vector<idx_t> &parent_nodes, bool reverse) {
+	auto &node = dag_manager.nodes[cur_node_id];
 	auto &edges = reverse ? node->backward_in_ : node->forward_in_;
 
 	for (auto &edge : edges) {
-		for (auto bloom_filter : edge->bloom_filters) {
-			if (!bloom_filter->isUsed()) {
-				bloom_filter->setUsed();
-				temp_result_to_use.emplace_back(bloom_filter);
-				depend_nodes.emplace_back(edge->destination);
+		for (auto bf : edge->bloom_filters) {
+			if (!bf->isUsed()) {
+				bf->setUsed();
+				bfs_to_use.emplace_back(bf);
+				parent_nodes.emplace_back(edge->destination);
 			}
 		}
 	}
 }
 
-void PredicateTransferOptimizer::GetAllBFCreate(idx_t cur,
-                                                vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_create,
-                                                bool reverse) {
-	if (!reverse) {
-		for (auto &edge : dag_manager.nodes[cur]->forward_out_) {
-			auto cur_filter = make_shared_ptr<BlockedBloomFilter>();
+void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id,
+                                                   vector<shared_ptr<BlockedBloomFilter>> &bfs_to_create,
+                                                   bool reverse) {
+	auto &node = dag_manager.nodes[cur_node_id];
+	auto &edges = reverse ? node->backward_out_ : node->forward_out_;
 
-			// Each Expression leads to a bloom filter on a column on this table
-			for (auto &expr : edge->filters) {
-				vector<BoundColumnRefExpression *> expressions;
-				GetColumnBindingExpression(*expr, expressions);
-				if (dag_manager.nodes_manager.FindRename(expressions[0]->binding).table_index == cur) {
-					cur_filter->AddColumnBindingApplied(dag_manager.nodes_manager.FindRename(expressions[1]->binding));
-					cur_filter->AddColumnBindingBuilt(dag_manager.nodes_manager.FindRename(expressions[0]->binding));
-				} else if (dag_manager.nodes_manager.FindRename(expressions[1]->binding).table_index == cur) {
-					cur_filter->AddColumnBindingApplied(dag_manager.nodes_manager.FindRename(expressions[0]->binding));
-					cur_filter->AddColumnBindingBuilt(dag_manager.nodes_manager.FindRename(expressions[1]->binding));
-				}
-			}
-			if (cur_filter->column_bindings_built_.size() != 0) {
-				temp_result_to_create.emplace_back(cur_filter);
-			} else {
-				throw InternalException("No colmun binding found!");
+	for (auto &edge : edges) {
+		auto cur_filter = make_shared_ptr<BlockedBloomFilter>();
+
+		// Each expression leads to a bloom filter on a column on this table
+		for (auto &expr : edge->filters) {
+			vector<BoundColumnRefExpression *> expressions;
+			GetColumnBindingExpression(*expr, expressions);
+			D_ASSERT(expressions.size() == 2);
+
+			auto binding0 = dag_manager.nodes_manager.FindRename(expressions[0]->binding);
+			auto binding1 = dag_manager.nodes_manager.FindRename(expressions[1]->binding);
+
+			if (binding0.table_index == cur_node_id) {
+				cur_filter->AddColumnBindingApplied(binding1);
+				cur_filter->AddColumnBindingBuilt(binding0);
+			} else if (binding1.table_index == cur_node_id) {
+				cur_filter->AddColumnBindingApplied(binding0);
+				cur_filter->AddColumnBindingBuilt(binding1);
 			}
 		}
-	} else {
-		for (auto &edge : dag_manager.nodes[cur]->backward_out_) {
-			auto cur_filter = make_shared_ptr<BlockedBloomFilter>();
-
-			// Each Expression leads to a bloom filter on a column on this table
-			for (auto &expr : edge->filters) {
-				vector<BoundColumnRefExpression *> expressions;
-				GetColumnBindingExpression(*expr, expressions);
-				D_ASSERT(expressions.size() == 2);
-				if (dag_manager.nodes_manager.FindRename(expressions[0]->binding).table_index == cur) {
-					cur_filter->AddColumnBindingApplied(dag_manager.nodes_manager.FindRename(expressions[1]->binding));
-					cur_filter->AddColumnBindingBuilt(dag_manager.nodes_manager.FindRename(expressions[0]->binding));
-				} else if (dag_manager.nodes_manager.FindRename(expressions[1]->binding).table_index == cur) {
-					cur_filter->AddColumnBindingApplied(dag_manager.nodes_manager.FindRename(expressions[0]->binding));
-					cur_filter->AddColumnBindingBuilt(dag_manager.nodes_manager.FindRename(expressions[1]->binding));
-				}
-			}
-			if (cur_filter->column_bindings_built_.size() != 0) {
-				temp_result_to_create.emplace_back(cur_filter);
-			} else {
-				throw InternalException("No built colmun found!");
-			}
+		if (cur_filter->column_bindings_built_.size() != 0) {
+			bfs_to_create.emplace_back(cur_filter);
+		} else {
+			throw InternalException("No built column found!");
 		}
 	}
 }
@@ -212,29 +198,28 @@ unique_ptr<LogicalCreateBF>
 PredicateTransferOptimizer::BuildCreateBFOperator(LogicalOperator &node,
                                                   vector<shared_ptr<BlockedBloomFilter>> &bloom_filters) {
 	auto create_bf = make_uniq<LogicalCreateBF>(bloom_filters);
-	create_bf->has_estimated_cardinality = true;
-	create_bf->estimated_cardinality = node.estimated_cardinality;
+	create_bf->SetEstimatedCardinality(node.estimated_cardinality);
 	return create_bf;
 }
 
 unique_ptr<LogicalUseBF>
 PredicateTransferOptimizer::BuildUseBFOperator(LogicalOperator &node,
-                                               vector<shared_ptr<BlockedBloomFilter>> &bf_for_use,
-                                               vector<idx_t> &depend_nodes, bool reverse) {
+                                               vector<shared_ptr<BlockedBloomFilter>> &bloom_filters,
+                                               vector<idx_t> &parent_nodes, bool reverse) {
 	unique_ptr<LogicalUseBF> last_operator;
+	auto &operators = reverse ? replace_map_backward : replace_map_forward;
 
 	// This is important for performance, not use (int i = 0; i < temp_result_to_use.size(); i++)
-	auto &operators = reverse ? replace_map_backward : replace_map_forward;
-	for (int i = bf_for_use.size() - 1; i >= 0; i--) {
-		auto use_bf_operator = make_uniq<LogicalUseBF>(bf_for_use[i]);
+	for (int i = bloom_filters.size() - 1; i >= 0; i--) {
+		auto use_bf_operator = make_uniq<LogicalUseBF>(bloom_filters[i]);
 		use_bf_operator->SetEstimatedCardinality(node.estimated_cardinality);
 
-		auto idx = depend_nodes[i];
-		auto base_node = dag_manager.nodes_manager.GetNode(idx);
+		auto node_id = parent_nodes[i];
+		auto base_node = dag_manager.nodes_manager.GetNode(node_id);
 		auto related_bf_create = operators[base_node].get();
 
 		D_ASSERT(related_bf_create->type == LogicalOperatorType::LOGICAL_CREATE_BF);
-		use_bf_operator->AddDownStreamOperator((LogicalCreateBF *)related_bf_create);
+		use_bf_operator->AddDownStreamOperator(static_cast<LogicalCreateBF *>(related_bf_create));
 
 		if (last_operator != nullptr) {
 			use_bf_operator->AddChild(std::move(last_operator));
@@ -242,17 +227,6 @@ PredicateTransferOptimizer::BuildUseBFOperator(LogicalOperator &node,
 		last_operator = std::move(use_bf_operator);
 	}
 	return last_operator;
-}
-
-unique_ptr<LogicalCreateBF> PredicateTransferOptimizer::BuildCreateUsePair(
-    LogicalOperator &node, vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_use,
-    vector<shared_ptr<BlockedBloomFilter>> &temp_result_to_create, vector<idx_t> &depend_nodes, bool reverse) {
-	auto use_bf = BuildUseBFOperator(node, temp_result_to_use, depend_nodes, reverse);
-	auto create_bf = make_uniq<LogicalCreateBF>(temp_result_to_create);
-	create_bf->AddChild(unique_ptr_cast<LogicalUseBF, LogicalOperator>(std::move(use_bf)));
-	create_bf->has_estimated_cardinality = true;
-	create_bf->estimated_cardinality = node.estimated_cardinality;
-	return create_bf;
 }
 
 unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertCreateBFOperator(unique_ptr<LogicalOperator> plan) {
@@ -291,8 +265,7 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertCreateBFOperator(u
 
 /* Will this node be filtered? */
 bool PredicateTransferOptimizer::PossibleFilterAny(LogicalOperator &node, bool reverse) {
-	// return true;
-	if (!reverse) {
+	if (!reverse || (replace_map_forward.find(&node) == replace_map_forward.end())) {
 		if (node.type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = node.Cast<LogicalGet>();
 			if (get.table_filters.filters.size() == 0) {
@@ -301,18 +274,8 @@ bool PredicateTransferOptimizer::PossibleFilterAny(LogicalOperator &node, bool r
 		} else if (node.type == LogicalOperatorType::LOGICAL_UNION) {
 			return false;
 		}
-	} else {
-		if (replace_map_forward.find(&node) == replace_map_forward.end()) {
-			if (node.type == LogicalOperatorType::LOGICAL_GET) {
-				auto &get = node.Cast<LogicalGet>();
-				if (get.table_filters.filters.size() == 0) {
-					return false;
-				}
-			} else if (node.type == LogicalOperatorType::LOGICAL_UNION) {
-				return false;
-			}
-		}
 	}
+
 	return true;
 }
 } // namespace duckdb
