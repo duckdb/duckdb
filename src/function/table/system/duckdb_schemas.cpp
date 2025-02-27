@@ -86,8 +86,7 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 		if (entry.catalog.IsSystemCatalog() || entry.catalog.InMemory()) {
 			output.SetValue(col++, count, Value());
 		} else {
-			const auto &db_path = Catalog::GetCatalog(entry.ParentCatalog().GetAttached()).GetDBPath();
-			output.SetValue(col++, count, Value(db_path));
+			output.SetValue(col++, count, Value(entry.catalog.GetDBPath()));
 		}
 
 		data.offset++;
