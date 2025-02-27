@@ -151,8 +151,6 @@ public:
 private:
 	//! Get the version tag of the file (for checking cache invalidation)
 	const string &GetVersionTag(const unique_lock<mutex> &guard);
-	//! Whether the range is still valid given the last modified time
-	bool RangeIsValid(const CachedFileRange &range, const unique_lock<mutex> &guard);
 	//! Try to read from cache, return an invalid BufferHandle if it fails
 	BufferHandle TryReadFromFileRange(CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
 

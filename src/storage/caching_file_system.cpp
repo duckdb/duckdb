@@ -177,7 +177,8 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 
 		unique_lock<mutex> guard(cached_file.lock);
 		if (caching_file_system.check_cached_file_invalidation &&
-		    (version_tag.empty() || cached_file.VersionTag(guard) != version_tag)) {
+		    (version_tag.empty() || cached_file.VersionTag(guard).empty() ||
+		     cached_file.VersionTag(guard) != version_tag)) {
 			cached_file.Ranges(guard).clear(); // Invalidate entire cache
 		}
 		cached_file.FileSize(guard) = file_handle->GetFileSize();
@@ -206,10 +207,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	auto it = ranges.find(location);
 	if (it != ranges.end()) {
 		// We have read from the exact same location before
-		if (!RangeIsValid(*it->second, guard)) {
-			// The range is no longer valid: erase it
-			ranges.erase(it);
-		} else if (it->second->GetOverlap(nr_bytes, location) == CachedFileRangeOverlap::FULL) {
+		if (it->second->GetOverlap(nr_bytes, location) == CachedFileRangeOverlap::FULL) {
 			// The file range contains the requested file range
 			result = TryReadFromFileRange(*it->second, buffer, nr_bytes, location);
 			if (result.IsValid()) {
@@ -225,11 +223,6 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 		if (it->second->location >= this_end) {
 			// We're past the requested location
 			break;
-		}
-		if (!RangeIsValid(*it->second, guard)) {
-			// The range is no longer valid: erase it
-			it = ranges.erase(it);
-			continue;
 		}
 		// Check if the cached range overlaps the requested one
 		switch (it->second->GetOverlap(nr_bytes, location)) {
@@ -313,11 +306,6 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 
 	// Start at lower_bound (first range with a location not less than the location of the newly create range)
 	for (it = ranges.lower_bound(location); it != ranges.end();) {
-		if (!RangeIsValid(*it->second, guard)) {
-			// The range is no longer valid: erase it
-			it = ranges.erase(it);
-			continue;
-		}
 		if (it->second->GetOverlap(*new_file_range) == CachedFileRangeOverlap::FULL) {
 			// Another thread has read a range that fully contains the requested range in the meantime
 			result = TryReadFromFileRange(*it->second, buffer, nr_bytes, location);
@@ -397,17 +385,6 @@ const string &CachingFileHandle::GetVersionTag(const unique_lock<mutex> &guard) 
 		return version_tag;
 	}
 	return cached_file.VersionTag(guard);
-}
-
-bool CachingFileHandle::RangeIsValid(const CachedFileRange &range, const unique_lock<mutex> &guard) {
-	if (!caching_file_system.check_cached_file_invalidation) {
-		return true;
-	}
-	const auto this_version_tag = GetVersionTag(guard);
-	if (this_version_tag.empty() || range.version_tag.empty()) {
-		return false;
-	}
-	return this_version_tag == range.version_tag;
 }
 
 BufferHandle CachingFileHandle::TryReadFromFileRange(CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes,
