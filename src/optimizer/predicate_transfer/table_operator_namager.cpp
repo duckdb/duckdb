@@ -1,18 +1,58 @@
 #include "duckdb/optimizer/predicate_transfer/table_operator_namager.hpp"
+
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_delim_get.hpp"
-#include "duckdb/planner/operator/logical_dummy_scan.hpp"
-#include "duckdb/planner/operator/logical_empty_result.hpp"
-#include "duckdb/planner/operator/logical_expression_get.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/planner/operator/logical_projection.hpp"
-#include "duckdb/planner/operator/logical_window.hpp"
-#include "duckdb/optimizer/predicate_transfer/predicate_transfer_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
-#include <pthread.h>
 
 namespace duckdb {
+vector<reference<LogicalOperator>> TableOperatorManager::ExtractOperators(LogicalOperator &plan) {
+	vector<reference<LogicalOperator>> ret;
+	ExtractOperators(plan, ret);
+	SortTableOperators();
+	return std::move(ret);
+}
+
+void TableOperatorManager::SortTableOperators() {
+	sorted_table_operators.clear();
+	for (auto &node : table_operators) {
+		sorted_table_operators.emplace_back(node.second);
+	}
+	sort(sorted_table_operators.begin(), sorted_table_operators.end(),
+	     [&](LogicalOperator *a, LogicalOperator *b) { return a->estimated_cardinality < b->estimated_cardinality; });
+}
+
+LogicalOperator *TableOperatorManager::GetTableOperator(idx_t table_idx) {
+	auto itr = table_operators.find(table_idx);
+	if (itr == table_operators.end()) {
+		return nullptr;
+	}
+
+	return itr->second;
+}
+
+idx_t TableOperatorManager::GetTableOperatorOrder(const LogicalOperator *node) {
+	if (sorted_table_operators.empty()) {
+		SortTableOperators();
+	}
+
+	for (idx_t i = 0; i < sorted_table_operators.size(); i++) {
+		if (sorted_table_operators[i] == node) {
+			return i;
+		}
+	}
+	return -1; // fallback if not found
+}
+
+ColumnBinding TableOperatorManager::FindRename(ColumnBinding binding) {
+	auto itr = rename_col_bindings.find(binding);
+	while (itr != rename_col_bindings.end()) {
+		binding = itr->second;
+		itr = rename_col_bindings.find(binding);
+	}
+	return binding;
+}
+
 idx_t TableOperatorManager::GetScalarTableIndex(LogicalOperator *op) {
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_GET:
@@ -44,63 +84,7 @@ idx_t TableOperatorManager::GetScalarTableIndex(LogicalOperator *op) {
 	}
 }
 
-ColumnBinding TableOperatorManager::FindRename(ColumnBinding binding) {
-	auto itr = rename_col_bindings.find(binding);
-	while (itr != rename_col_bindings.end()) {
-		binding = itr->second;
-		itr = rename_col_bindings.find(binding);
-	}
-	return binding;
-}
-
-void TableOperatorManager::AddTableOperator(LogicalOperator *op) {
-	op->estimated_cardinality = op->EstimateCardinality(context);
-
-	idx_t table_idx = GetScalarTableIndex(op);
-	if (table_idx != -1 && table_operators.find(table_idx) == table_operators.end()) {
-		table_operators[table_idx] = op;
-	}
-}
-
-vector<reference<LogicalOperator>> TableOperatorManager::ExtractOperators(LogicalOperator &plan) {
-	vector<reference<LogicalOperator>> ret;
-	ExtractOperators(plan, ret);
-	SortTableOperators();
-	return std::move(ret);
-}
-
-void TableOperatorManager::SortTableOperators() {
-	sorted_table_operators.clear();
-	for (auto &node : table_operators) {
-		sorted_table_operators.emplace_back(node.second);
-	}
-	sort(sorted_table_operators.begin(), sorted_table_operators.end(),
-	     [&](LogicalOperator *a, LogicalOperator *b) { return a->estimated_cardinality < b->estimated_cardinality; });
-}
-
-idx_t TableOperatorManager::GetTableOperatorOrder(const LogicalOperator *node) {
-	if (sorted_table_operators.empty()) {
-		SortTableOperators();
-	}
-
-	for (idx_t i = 0; i < sorted_table_operators.size(); i++) {
-		if (sorted_table_operators[i] == node) {
-			return i;
-		}
-	}
-	return -1; // fallback if not found
-}
-
-LogicalOperator *TableOperatorManager::GetTableOperator(idx_t table_idx) {
-	auto itr = table_operators.find(table_idx);
-	if (itr == table_operators.end()) {
-		return nullptr;
-	}
-
-	return itr->second;
-}
-
-static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
+bool TableOperatorManager::OperatorNeedsRelation(LogicalOperatorType op_type) {
 	switch (op_type) {
 	case LogicalOperatorType::LOGICAL_PROJECTION:
 	case LogicalOperatorType::LOGICAL_EXPRESSION_GET:
@@ -111,6 +95,15 @@ static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 		return true;
 	default:
 		return false;
+	}
+}
+
+void TableOperatorManager::AddTableOperator(LogicalOperator *op) {
+	op->estimated_cardinality = op->EstimateCardinality(context);
+
+	idx_t table_idx = GetScalarTableIndex(op);
+	if (table_idx != -1 && table_operators.find(table_idx) == table_operators.end()) {
+		table_operators[table_idx] = op;
 	}
 }
 
@@ -201,4 +194,5 @@ void TableOperatorManager::ExtractOperators(LogicalOperator &plan, vector<refere
 		}
 	}
 }
+
 } // namespace duckdb
