@@ -149,7 +149,8 @@ BindResult SelectBinder::BindUnnest(FunctionExpression &function, idx_t depth, b
 	case LogicalTypeId::SQLNULL:
 		break;
 	default:
-		return BindResult(BinderException(function, "UNNEST() can only be applied to lists, structs and NULL"));
+		return BindResult(BinderException(function, "UNNEST() can only be applied to lists, structs and NULL, not %s",
+		                                  child_type.ToString()));
 	}
 
 	idx_t list_unnests;
