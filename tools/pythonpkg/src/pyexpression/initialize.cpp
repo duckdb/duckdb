@@ -42,6 +42,10 @@ void InitializeStaticMethods(py::module_ &m) {
 	// Lambda Expression
 	docs = "";
 	m.def("LambdaExpression", &DuckDBPyExpression::LambdaExpression, py::arg("lhs"), py::arg("rhs"), docs);
+
+	// SQL Expression
+	docs = "";
+	m.def("SQLExpression", &DuckDBPyExpression::SQLExpression, docs, py::arg("expression"));
 }
 
 static void InitializeDunderMethods(py::class_<DuckDBPyExpression, shared_ptr<DuckDBPyExpression>> &m) {

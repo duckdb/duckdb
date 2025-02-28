@@ -454,6 +454,10 @@ void ParquetMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data_p, Bin
 optional_idx ParquetMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data_p,
                                               const MultiFileGlobalState &global_state,
                                               FileExpandResult expand_result) {
+	if (expand_result == FileExpandResult::MULTIPLE_FILES) {
+		// always launch max threads if we are reading multiple files
+		return optional_idx();
+	}
 	auto &bind_data = bind_data_p.bind_data->Cast<ParquetReadBindData>();
 	return MaxValue(bind_data.initial_file_row_groups, static_cast<idx_t>(1));
 }
