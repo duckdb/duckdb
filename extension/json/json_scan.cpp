@@ -229,72 +229,67 @@ bool JSONScanLocalState::IsParallel(JSONScanGlobalState &gstate) const {
 	return current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED;
 }
 
+bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, BufferedJSONReader &reader) {
+	// try to initialize a scan in the given reader
+	// three scenarios:
+	// scenario 1 - unseekable file - Read from the file and setup the buffers
+	// scenario 2 - seekable file - get the position from the file to read and return
+	// scenario 3 - entire file readers - if we are reading an entire file at once, do not do anything here, except for setting up the basics
+	if (!gstate.enable_parallel_scans) {
+		// we are reading the entire file - we want to return true if nobody has read this file yet, otherwise return false
+		if (gstate.file_is_assigned) {
+			// the file has already been assigned
+			return false;
+		}
+		gstate.file_is_assigned = true;
+		return true;
+	}
+	// scenario 1 & 2
+	if (scan_state.buffer_index.IsValid()) {
+		// we have already read a buffer as part of PrepareReader - just return and read it
+		return true;
+	}
+	// we need to check if there is data available within our current reader
+	if (reader.ReadNextBuffer(gstate, scan_state, scan_state.buffer_index)) {
+		// there is! return
+		return true;
+	}
+	return false;
+}
+
+void JSONScanLocalState::PrepareReader(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, BufferedJSONReader &reader) {
+	if (!gstate.enable_parallel_scans) {
+		// we are reading the entire file - we don't even need to open the file yet
+		// just set the read flag to false
+		gstate.file_is_assigned = false;
+		return;
+	}
+	// prepare a reader for reading
+	// scenario 1 & 2 -> auto detect
+	// scenario 3 -> nothing
+	reader.InitializeScan(gstate, scan_state, scan_state.buffer_index);
+}
+
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 	// First we make sure we have a buffer to read into
 
-	optional_idx buffer_index;
-	while (true) {
-		// Continue with the current reader
-		if (current_reader) {
-			// Try to read (if we were not the last read in the previous iteration)
-			bool file_done = false;
-			AllocatedData buffer;
-			bool read_success = current_reader->ReadNextBuffer(gstate, scan_state, buffer, buffer_index, file_done);
-			if (file_done) {
-				lock_guard<mutex> guard(gstate.lock);
-				TryIncrementFileIndex(gstate);
-				current_reader->CloseHandle();
-			}
-
-			if (read_success) {
-				current_reader->FinalizeBufferInternal(scan_state, buffer, buffer_index.GetIndex());
-				return true;
-			}
-
-			// We were the last reader last time, or we didn't read anything this time
-			current_reader = nullptr;
-			scan_state.current_buffer_handle = nullptr;
-			scan_state.is_last = false;
+	lock_guard<mutex> guard(gstate.lock);
+	scan_state.buffer_index = optional_idx();
+	while (gstate.file_index < gstate.json_readers.size()) {
+		auto current_file = gstate.json_readers[gstate.file_index].get();
+		if (TryInitializeScan(gstate, scan_state, *current_file)) {
+			// read from the current file yay
+			return true;
 		}
-		D_ASSERT(!scan_state.current_buffer_handle);
-
-		// If we got here, we don't have a reader (anymore). Try to get one
-		unique_lock<mutex> guard(gstate.lock);
+		// we could not read from the current file, move to the next file
+		gstate.file_index++;
 		if (gstate.file_index == gstate.json_readers.size()) {
 			return false; // No more files left
 		}
-
-		// Assign the next reader to this thread
-		current_reader = gstate.json_readers[gstate.file_index].get();
-
-		scan_state.batch_index = gstate.batch_index++;
-		if (!gstate.enable_parallel_scans) {
-			// Non-parallel scans, increment file index and unlock
-			gstate.file_index++;
-			guard.unlock();
-		}
-
-		bool file_done = false;
-		current_reader->InitializeScan(gstate, scan_state, buffer_index, file_done);
-		if (file_done) {
-			TryIncrementFileIndex(gstate);
-			current_reader->CloseHandle();
-		}
-
-		if (gstate.enable_parallel_scans) {
-			if (!IsParallel(gstate)) {
-				// We still have the lock here if parallel scans are enabled
-				TryIncrementFileIndex(gstate);
-			}
-		}
-
-		if (!buffer_index.IsValid() || scan_state.buffer_size == 0) {
-			// If we didn't get a buffer index (because not auto-detecting), or the file was empty, just re-enter loop
-			continue;
-		}
-
-		return true;
+		// prepare the reader so we can read from it
+		PrepareReader(gstate, scan_state, *gstate.json_readers[gstate.file_index]);
 	}
+	return false;
 }
 
 void JSONScanLocalState::ParseNextChunk(JSONScanGlobalState &gstate) {

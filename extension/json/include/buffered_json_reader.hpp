@@ -20,7 +20,7 @@
 #include "json_enums.hpp"
 
 namespace duckdb {
-class JSONScanGlobalState;
+struct JSONScanGlobalState;
 
 struct JSONBufferHandle {
 public:
@@ -59,9 +59,9 @@ public:
 
 	//! The next two functions return whether the read was successful
 	bool GetPositionAndSize(idx_t &position, idx_t &size, idx_t requested_size);
-	bool Read(char *pointer, idx_t &read_size, idx_t requested_size, bool &file_done, bool sample_run);
+	bool Read(char *pointer, idx_t &read_size, idx_t requested_size, bool sample_run);
 	//! Read at position optionally allows passing a custom handle to read from, otherwise the default one is used
-	void ReadAtPosition(char *pointer, idx_t size, idx_t position, bool &file_done, bool sample_run,
+	void ReadAtPosition(char *pointer, idx_t size, idx_t position, bool sample_run,
 	                    optional_ptr<FileHandle> override_handle = nullptr);
 
 private:
@@ -117,6 +117,13 @@ struct JSONReaderScanState {
 	//! Thread-local allocator
 	JSONAllocator allocator;
 	idx_t buffer_capacity;
+	// if we have a buffer already - this is our buffer index
+	optional_idx buffer_index;
+	// Data for reading (if we have postponed reading)
+	bool needs_to_read = false;
+	idx_t request_size;
+	idx_t read_position;
+	idx_t read_size;
 	//! Current scan data
 	idx_t scan_count = 0;
 	JSONString units[STANDARD_VECTOR_SIZE];
@@ -191,22 +198,22 @@ public:
 	bool ReconstructFirstObject(JSONReaderScanState &scan_state);
 	void ParseNextChunk(JSONReaderScanState &scan_state);
 	void ThrowObjectSizeError(const idx_t object_size);
-	void InitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, optional_idx &buffer_index,
-	                    bool &file_done);
-	bool ReadNextBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,
-	                    optional_idx &buffer_index, bool &file_done);
+	void InitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, optional_idx &buffer_indexfile_done);
+	bool ReadNextBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
+	                    optional_idx &buffer_index);
 	void FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer, idx_t buffer_index);
+	void PrepareForRead(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer);
 
 	//! Scan progress
 	double GetProgress() const;
 
 private:
 	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,
-	                            optional_idx &buffer_index, bool &file_done);
-	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,
-	                        optional_idx &buffer_index, bool &file_done);
-	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,
-	                          optional_idx &buffer_index, bool &file_done);
+	                            optional_idx &buffer_index);
+	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
+	                        optional_idx &buffer_index);
+	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
+	                          optional_idx &buffer_index);
 
 private:
 	idx_t GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf);

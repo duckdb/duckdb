@@ -90,6 +90,8 @@ public:
 	idx_t system_threads;
 	//! Whether we enable parallel scans (only if less files than threads)
 	bool enable_parallel_scans;
+
+	bool file_is_assigned = false;
 };
 
 struct JSONScanLocalState {
@@ -127,6 +129,8 @@ private:
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 
 	//! Must hold the lock
+	bool TryInitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, BufferedJSONReader &reader);
+	void PrepareReader(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, BufferedJSONReader &reader);
 	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
 	bool IsParallel(JSONScanGlobalState &gstate) const;
 
