@@ -18,7 +18,7 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::PreOptimize(unique_ptr<L
 }
 
 unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
-	auto &ordered_nodes = graph_manager.GetExecutionOrder();
+	auto &ordered_nodes = graph_manager.transfer_order;
 
 	// Forward
 	for (int i = ordered_nodes.size() - 1; i >= 0; i--) {

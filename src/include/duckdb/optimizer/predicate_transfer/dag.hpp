@@ -41,5 +41,5 @@ public:
 	GraphEdge *Add(idx_t other, const shared_ptr<BlockedBloomFilter> &bloom_filter, bool is_forward, bool is_in_edge);
 };
 
-using GraphNodes = unordered_map<idx_t, unique_ptr<GraphNode>>;
+using TransferGraph = unordered_map<idx_t, unique_ptr<GraphNode>>;
 } // namespace duckdb

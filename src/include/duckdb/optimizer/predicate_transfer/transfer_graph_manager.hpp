@@ -24,26 +24,16 @@ public:
 
 class TransferGraphManager {
 public:
-	explicit TransferGraphManager(ClientContext &context) : table_operator_manager(context), context(context) {
+	explicit TransferGraphManager(ClientContext &context) : context(context), table_operator_manager(context) {
 	}
 
 	ClientContext &context;
-
 	TableOperatorManager table_operator_manager;
-	GraphNodes transfer_graph;
-
-	struct PairHash {
-		std::size_t operator()(const std::pair<int, int> &p) const {
-			return std::hash<int> {}(p.first) ^ (std::hash<int> {}(p.second) << 1);
-		}
-	};
-	unordered_map<std::pair<int, int>, vector<shared_ptr<EdgeInfo>>, PairHash> edges;
+	TransferGraph transfer_graph;
+	vector<LogicalOperator *> transfer_order;
 
 public:
 	bool Build(LogicalOperator &op);
-
-	vector<LogicalOperator *> &GetExecutionOrder();
-
 	void AddBF(idx_t create_bf, const shared_ptr<BlockedBloomFilter> &use_bf, bool reverse);
 
 private:
@@ -51,10 +41,15 @@ private:
 	void LargestRoot(vector<LogicalOperator *> &sorted_nodes);
 	void CreatePredicateTransferGraph();
 
-	pair<int, int> FindEdge(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set);
+	pair<int, int> FindEdge(const unordered_set<int> &constructed_set, const unordered_set<int> &unconstructed_set);
 
 private:
+	struct PairHash {
+		std::size_t operator()(const std::pair<int, int> &p) const {
+			return std::hash<int> {}(p.first) ^ (std::hash<int> {}(p.second) << 1);
+		}
+	};
+	unordered_map<std::pair<int, int>, vector<shared_ptr<EdgeInfo>>, PairHash> edges_info;
 	vector<shared_ptr<EdgeInfo>> selected_edges;
-	vector<LogicalOperator *> TransferOrder;
 };
 } // namespace duckdb

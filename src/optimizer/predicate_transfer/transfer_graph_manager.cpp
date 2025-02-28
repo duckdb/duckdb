@@ -18,17 +18,12 @@ bool TransferGraphManager::Build(LogicalOperator &plan) {
 
 	// Getting graph edges information from join operators
 	ExtractEdgesInfo(joins);
-	if (edges.empty()) {
+	if (edges_info.empty()) {
 		return false;
 	}
 
 	CreatePredicateTransferGraph();
 	return true;
-}
-
-vector<LogicalOperator *> &TransferGraphManager::GetExecutionOrder() {
-	// The root as first
-	return TransferOrder;
 }
 
 void TransferGraphManager::AddBF(idx_t create_table, const shared_ptr<BlockedBloomFilter> &use_bf, bool reverse) {
@@ -119,37 +114,35 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			// Insert the edge info into the map for both key orders.
 			auto key1 = make_pair(right_table, left_table);
 			auto key2 = make_pair(left_table, right_table);
-			if (edges.find(key1) == edges.end()) {
-				edges[key1] = vector<shared_ptr<EdgeInfo>>();
-				edges[key2] = vector<shared_ptr<EdgeInfo>>();
+			if (edges_info.find(key1) == edges_info.end()) {
+				edges_info[key1] = vector<shared_ptr<EdgeInfo>>();
+				edges_info[key2] = vector<shared_ptr<EdgeInfo>>();
 			}
-			edges[key1].emplace_back(edge);
-			edges[key2].emplace_back(edge);
+			edges_info[key1].emplace_back(edge);
+			edges_info[key2].emplace_back(edge);
 		}
 	}
 }
 
-pair<int, int> TransferGraphManager::FindEdge(unordered_set<int> &constructed_set,
-                                              unordered_set<int> &unconstructed_set) {
-	idx_t max_weight = 0;
-	idx_t max_card = 0;
-	auto result = make_pair(-1, -1);
-	for (int i : unconstructed_set) {
-		for (int j : constructed_set) {
+pair<int, int> TransferGraphManager::FindEdge(const unordered_set<int> &constructed_set,
+                                              const unordered_set<int> &unconstructed_set) {
+	idx_t max_weight = 0, max_card = 0;
+	pair<int, int> result {-1, -1};
+
+	for (auto i : unconstructed_set) {
+		for (auto j : constructed_set) {
 			auto key = make_pair(j, i);
-			if (edges.find(key) != edges.end()) {
-				auto card = table_operator_manager.GetTableOperator(i)->estimated_cardinality;
-				auto weight = edges[key].size();
-				if (weight > max_weight) {
-					max_weight = weight;
-					max_card = card;
-					result = key;
-				} else if (weight == max_weight) {
-					if (card > max_card) {
-						max_card = card;
-						result = key;
-					}
-				}
+			auto it = edges_info.find(key);
+			if (it == edges_info.end())
+				continue;
+
+			idx_t card = table_operator_manager.GetTableOperator(i)->estimated_cardinality;
+			idx_t weight = it->second.size();
+
+			if (weight > max_weight || (weight == max_weight && card > max_card)) {
+				max_weight = weight;
+				max_card = card;
+				result = key;
 			}
 		}
 	}
@@ -179,7 +172,7 @@ void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) 
 	}
 
 	// delete root
-	TransferOrder.emplace_back(table_operator_manager.GetTableOperator(root));
+	transfer_order.emplace_back(table_operator_manager.GetTableOperator(root));
 	table_operator_manager.table_operators.erase(root);
 	while (!unconstructed_set.empty()) {
 		// Old node at first, new add node at second
@@ -187,14 +180,14 @@ void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) 
 		if (selected_edge.first == -1 && selected_edge.second == -1) {
 			break;
 		}
-		if (edges.find(selected_edge) != edges.end()) {
-			for (auto &v : edges[selected_edge]) {
+		if (edges_info.find(selected_edge) != edges_info.end()) {
+			for (auto &v : edges_info[selected_edge]) {
 				selected_edges.emplace_back(std::move(v));
 			}
 		}
 		auto node = transfer_graph[selected_edge.second].get();
 		node->priority = prior_flag--;
-		TransferOrder.emplace_back(table_operator_manager.GetTableOperator(node->id));
+		transfer_order.emplace_back(table_operator_manager.GetTableOperator(node->id));
 		table_operator_manager.table_operators.erase(node->id);
 		unconstructed_set.erase(selected_edge.second);
 		constructed_set.emplace(selected_edge.second);
