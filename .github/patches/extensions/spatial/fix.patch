@@ -1,0 +1,20 @@
+diff --git a/duckdb b/duckdb
+index 83d07cb..aaa5443 160000
+--- a/duckdb
++++ b/duckdb
+@@ -1 +1 @@
+-Subproject commit 83d07cb6838a6a56e951425b82ea3457cd2dd9e5
++Subproject commit aaa5443f2bdde371be543ba781485624c5fdaf21
+diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
+index 318f414..d9b4dc1 100644
+--- a/src/spatial/index/rtree/rtree_index_scan.cpp
++++ b/src/spatial/index/rtree/rtree_index_scan.cpp
+@@ -56,7 +56,7 @@ static unique_ptr<GlobalTableFunctionState> RTreeIndexScanInitGlobal(ClientConte
+ 	}
+ 
+ 	// Initialize the storage scan state
+-	result->local_storage_state.Initialize(result->column_ids, input.filters.get());
++	result->local_storage_state.Initialize(result->column_ids, context, input.filters);
+ 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
+ 
+ 	// Initialize the scan state for the index

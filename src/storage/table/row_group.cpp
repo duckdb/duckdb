@@ -606,7 +606,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						// this filter is always true - skip it
 						continue;
 					}
-					auto &table_filter_state = filter_info.GetFilterState(filter_idx);
+					auto &table_filter_state = *filter.filter_state;
 
 					const auto scan_idx = filter.scan_column_index;
 					const auto column_idx = filter.table_column_index;

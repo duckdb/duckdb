@@ -32,7 +32,7 @@ public:
 
 public:
 	FilterPropagateResult CheckStatistics(BaseStatistics &stats) override;
-	string ToString(const string &column_name) override;
+	string ToString(const string &column_name) const override;
 	bool Equals(const TableFilter &other) const override;
 	unique_ptr<TableFilter> Copy() const override;
 	unique_ptr<Expression> ToExpression(const Expression &column) const override;

@@ -310,9 +310,8 @@ static idx_t TemplatedFilterSelection(UnifiedVectorFormat &vdata, T predicate, S
 
 template <class T>
 static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, SelectionVector &sel,
-                                  LeafFilterState &filter_state, idx_t &approved_tuple_count,
-                                  ExpressionType comparison_type) {
-	SelectionVector new_sel(filter_state.sel_data.Get(approved_tuple_count));
+                                  idx_t &approved_tuple_count, ExpressionType comparison_type) {
+	SelectionVector new_sel(approved_tuple_count);
 	auto &mask = vdata.validity;
 	// the inplace loops take the result as the last parameter
 	switch (comparison_type) {
@@ -383,8 +382,7 @@ static void FilterSelectionSwitch(UnifiedVectorFormat &vdata, T predicate, Selec
 }
 
 template <bool IS_NULL>
-static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector &sel, LeafFilterState &filter_state,
-                                    idx_t &approved_tuple_count) {
+static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector &sel, idx_t &approved_tuple_count) {
 	auto &mask = vdata.validity;
 	if (mask.AllValid()) {
 		// no NULL values
@@ -395,7 +393,7 @@ static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector 
 			return approved_tuple_count;
 		}
 	} else {
-		SelectionVector result_sel(filter_state.sel_data.Get(approved_tuple_count));
+		SelectionVector result_sel(approved_tuple_count);
 		idx_t result_count = 0;
 		for (idx_t i = 0; i < approved_tuple_count; i++) {
 			auto idx = sel.get_index(i);
@@ -421,7 +419,7 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)
 		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
 		idx_t count_total = 0;
-		SelectionVector result_sel(state.result_sel.Get(approved_tuple_count));
+		SelectionVector result_sel(approved_tuple_count);
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
 		for (idx_t child_idx = 0; child_idx < conjunction_or.child_filters.size(); child_idx++) {
 			auto &child_filter = *conjunction_or.child_filters[child_idx];
@@ -461,90 +459,85 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	}
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter.Cast<ConstantFilter>();
-		auto &state = filter_state.Cast<LeafFilterState>();
 		switch (vector.GetType().InternalType()) {
 		case PhysicalType::UINT8: {
 			auto predicate = UTinyIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<uint8_t>(vdata, predicate, sel, state, approved_tuple_count,
+			FilterSelectionSwitch<uint8_t>(vdata, predicate, sel, approved_tuple_count,
 			                               constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::UINT16: {
 			auto predicate = USmallIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<uint16_t>(vdata, predicate, sel, state, approved_tuple_count,
+			FilterSelectionSwitch<uint16_t>(vdata, predicate, sel, approved_tuple_count,
 			                                constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::UINT32: {
 			auto predicate = UIntegerValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<uint32_t>(vdata, predicate, sel, state, approved_tuple_count,
+			FilterSelectionSwitch<uint32_t>(vdata, predicate, sel, approved_tuple_count,
 			                                constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::UINT64: {
 			auto predicate = UBigIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<uint64_t>(vdata, predicate, sel, state, approved_tuple_count,
+			FilterSelectionSwitch<uint64_t>(vdata, predicate, sel, approved_tuple_count,
 			                                constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::INT8: {
 			auto predicate = TinyIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<int8_t>(vdata, predicate, sel, state, approved_tuple_count,
-			                              constant_filter.comparison_type);
+			FilterSelectionSwitch<int8_t>(vdata, predicate, sel, approved_tuple_count, constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::INT16: {
 			auto predicate = SmallIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<int16_t>(vdata, predicate, sel, state, approved_tuple_count,
+			FilterSelectionSwitch<int16_t>(vdata, predicate, sel, approved_tuple_count,
 			                               constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::INT32: {
 			auto predicate = IntegerValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<int32_t>(vdata, predicate, sel, state, approved_tuple_count,
+			FilterSelectionSwitch<int32_t>(vdata, predicate, sel, approved_tuple_count,
 			                               constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::INT64: {
 			auto predicate = BigIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<int64_t>(vdata, predicate, sel, state, approved_tuple_count,
+			FilterSelectionSwitch<int64_t>(vdata, predicate, sel, approved_tuple_count,
 			                               constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::INT128: {
 			auto predicate = HugeIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<hugeint_t>(vdata, predicate, sel, state, approved_tuple_count,
+			FilterSelectionSwitch<hugeint_t>(vdata, predicate, sel, approved_tuple_count,
 			                                 constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::UINT128: {
 			auto predicate = UhugeIntValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<uhugeint_t>(vdata, predicate, sel, state, approved_tuple_count,
+			FilterSelectionSwitch<uhugeint_t>(vdata, predicate, sel, approved_tuple_count,
 			                                  constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::FLOAT: {
 			auto predicate = FloatValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<float>(vdata, predicate, sel, state, approved_tuple_count,
-			                             constant_filter.comparison_type);
+			FilterSelectionSwitch<float>(vdata, predicate, sel, approved_tuple_count, constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::DOUBLE: {
 			auto predicate = DoubleValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<double>(vdata, predicate, sel, state, approved_tuple_count,
-			                              constant_filter.comparison_type);
+			FilterSelectionSwitch<double>(vdata, predicate, sel, approved_tuple_count, constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::VARCHAR: {
 			auto predicate = string_t(StringValue::Get(constant_filter.constant));
-			FilterSelectionSwitch<string_t>(vdata, predicate, sel, state, approved_tuple_count,
+			FilterSelectionSwitch<string_t>(vdata, predicate, sel, approved_tuple_count,
 			                                constant_filter.comparison_type);
 			break;
 		}
 		case PhysicalType::BOOL: {
 			auto predicate = BooleanValue::Get(constant_filter.constant);
-			FilterSelectionSwitch<bool>(vdata, predicate, sel, state, approved_tuple_count,
-			                            constant_filter.comparison_type);
+			FilterSelectionSwitch<bool>(vdata, predicate, sel, approved_tuple_count, constant_filter.comparison_type);
 			break;
 		}
 		default:
@@ -553,12 +546,10 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		return approved_tuple_count;
 	}
 	case TableFilterType::IS_NULL: {
-		auto &state = filter_state.Cast<LeafFilterState>();
-		return TemplatedNullSelection<true>(vdata, sel, state, approved_tuple_count);
+		return TemplatedNullSelection<true>(vdata, sel, approved_tuple_count);
 	}
 	case TableFilterType::IS_NOT_NULL: {
-		auto &state = filter_state.Cast<LeafFilterState>();
-		return TemplatedNullSelection<false>(vdata, sel, state, approved_tuple_count);
+		return TemplatedNullSelection<false>(vdata, sel, approved_tuple_count);
 	}
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = filter.Cast<StructFilter>();

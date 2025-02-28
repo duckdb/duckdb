@@ -13,7 +13,7 @@ FilterPropagateResult ExpressionFilter::CheckStatistics(BaseStatistics &stats) {
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-string ExpressionFilter::ToString(const string &column_name) {
+string ExpressionFilter::ToString(const string &column_name) const {
 	auto name_expr = make_uniq<BoundReferenceExpression>(column_name, LogicalType::INVALID, 0ULL);
 	return ToExpression(*name_expr)->ToString();
 }
