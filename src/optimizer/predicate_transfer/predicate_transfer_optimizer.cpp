@@ -83,7 +83,7 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 	BloomFilters bfs_to_use;
 	BloomFilters bfs_to_create;
 
-	idx_t node_id = NodesManager::GetScalarTableIndex(&node);
+	idx_t node_id = NodeBindingManager::GetScalarTableIndex(&node);
 	if (node_id == -1 || graph_manager.nodes.find(node_id) == graph_manager.nodes.end()) {
 		return result;
 	}
@@ -152,8 +152,8 @@ void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id, BloomFilte
 			GetColumnBindingExpression(*expr, expressions);
 			D_ASSERT(expressions.size() == 2);
 
-			auto binding0 = graph_manager.nodes_manager.FindRename(expressions[0]->binding);
-			auto binding1 = graph_manager.nodes_manager.FindRename(expressions[1]->binding);
+			auto binding0 = graph_manager.binding_manager.FindRename(expressions[0]->binding);
+			auto binding1 = graph_manager.binding_manager.FindRename(expressions[1]->binding);
 
 			if (binding0.table_index == cur_node_id) {
 				cur_filter->AddColumnBindingApplied(binding1);
@@ -190,7 +190,7 @@ unique_ptr<LogicalUseBF> PredicateTransferOptimizer::BuildUseBFOperator(LogicalO
 		use_bf_operator->SetEstimatedCardinality(node.estimated_cardinality);
 
 		auto node_id = parent_nodes[i];
-		auto base_node = graph_manager.nodes_manager.GetNode(node_id);
+		auto base_node = graph_manager.binding_manager.GetNode(node_id);
 		auto related_bf_create = replace_map[base_node].get();
 
 		D_ASSERT(related_bf_create->type == LogicalOperatorType::LOGICAL_CREATE_BF);

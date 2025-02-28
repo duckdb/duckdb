@@ -13,19 +13,7 @@
 #include <pthread.h>
 
 namespace duckdb {
-void NodesManager::Reset() {
-	can_add_mark = true;
-	nodes.clear();
-	duplicate_nodes.clear();
-	sorted_nodes.clear();
-	rename_cols.clear();
-}
-
-idx_t NodesManager::NumNodes() {
-	return nodes.size();
-}
-
-idx_t NodesManager::GetScalarTableIndex(LogicalOperator *op) {
+idx_t NodeBindingManager::GetScalarTableIndex(LogicalOperator *op) {
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
@@ -56,19 +44,16 @@ idx_t NodesManager::GetScalarTableIndex(LogicalOperator *op) {
 	}
 }
 
-ColumnBinding NodesManager::FindRename(ColumnBinding col) {
-	auto itr = rename_cols.find(col);
-	ColumnBinding res = col;
-	if (itr != rename_cols.end()) {
-		res = itr->second;
-		for (auto cur_itr = rename_cols.find(res); cur_itr != rename_cols.end(); cur_itr = rename_cols.find(res)) {
-			res = cur_itr->second;
-		}
+ColumnBinding NodeBindingManager::FindRename(ColumnBinding binding) {
+	auto itr = rename_cols.find(binding);
+	while (itr != rename_cols.end()) {
+		binding = itr->second;
+		itr = rename_cols.find(binding);
 	}
-	return res;
+	return binding;
 }
 
-void NodesManager::AddNode(LogicalOperator *op) {
+void NodeBindingManager::AddNode(LogicalOperator *op) {
 	op->estimated_cardinality = op->EstimateCardinality(context);
 
 	idx_t table_idx = GetScalarTableIndex(op);
@@ -77,7 +62,14 @@ void NodesManager::AddNode(LogicalOperator *op) {
 	}
 }
 
-void NodesManager::SortNodes() {
+vector<reference<LogicalOperator>> NodeBindingManager::ExtractNodesAndJoins(LogicalOperator &plan) {
+	vector<reference<LogicalOperator>> ret;
+	ExtractNodes(plan, ret);
+	SortNodes();
+	return std::move(ret);
+}
+
+void NodeBindingManager::SortNodes() {
 	sorted_nodes.clear();
 	for (auto &node : nodes) {
 		sorted_nodes.emplace_back(node.second);
@@ -86,7 +78,7 @@ void NodesManager::SortNodes() {
 	     [&](LogicalOperator *a, LogicalOperator *b) { return a->estimated_cardinality < b->estimated_cardinality; });
 }
 
-idx_t NodesManager::GetNodeOrder(const LogicalOperator *node) {
+idx_t NodeBindingManager::GetNodeOrder(const LogicalOperator *node) {
 	if (sorted_nodes.empty()) {
 		SortNodes();
 	}
@@ -99,8 +91,8 @@ idx_t NodesManager::GetNodeOrder(const LogicalOperator *node) {
 	return -1; // fallback if not found
 }
 
-LogicalOperator *NodesManager::GetNode(idx_t table_binding) {
-	auto itr = nodes.find(table_binding);
+LogicalOperator *NodeBindingManager::GetNode(idx_t table_idx) {
+	auto itr = nodes.find(table_idx);
 	if (itr == nodes.end()) {
 		return nullptr;
 	}
@@ -122,11 +114,7 @@ static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 	}
 }
 
-void NodesManager::EraseNode(idx_t key) {
-	nodes.erase(key);
-}
-
-void NodesManager::ExtractNodes(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
+void NodeBindingManager::ExtractNodes(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
 	LogicalOperator *op = &plan;
 
 	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {

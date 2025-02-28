@@ -8,31 +8,32 @@
 
 namespace duckdb {
 
-class DAGEdgeInfo {
+class EdgeInfo {
 public:
-	DAGEdgeInfo(unique_ptr<Expression> filter, LogicalOperator &large, LogicalOperator &small)
-	    : filter(std::move(filter)), large_(large), small_(small) {
+	EdgeInfo(unique_ptr<Expression> filter, LogicalOperator &bigger, LogicalOperator &smaller)
+	    : condition(std::move(filter)), bigger_table(bigger), smaller_table(smaller) {
 	}
 
-	unique_ptr<Expression> filter;
-	LogicalOperator &large_;
-	LogicalOperator &small_;
-	bool large_protect = false;
-	bool small_protect = false;
+	unique_ptr<Expression> condition;
+
+	LogicalOperator &bigger_table;
+	LogicalOperator &smaller_table;
+	bool protect_bigger_side = false;
+	bool protect_smaller_side = false;
 };
 
 class DAGManager {
 public:
-	explicit DAGManager(ClientContext &context) : nodes_manager(context), context(context) {
+	explicit DAGManager(ClientContext &context) : binding_manager(context), context(context) {
 	}
 
 	bool Build(LogicalOperator &op);
 
 	vector<LogicalOperator *> &GetExecutionOrder();
 
-	void AddBF(idx_t create_bf, const shared_ptr<BlockedBloomFilter>& use_bf, bool reverse);
+	void AddBF(idx_t create_bf, const shared_ptr<BlockedBloomFilter> &use_bf, bool reverse);
 
-	NodesManager nodes_manager;
+	NodeBindingManager binding_manager;
 	ClientContext &context;
 	GraphNodes nodes;
 
@@ -44,8 +45,6 @@ private:
 	void CreateDAG();
 
 	pair<int, int> FindEdge(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set);
-
-	vector<GraphNode *> GetNeighbors(idx_t node_id);
 
 private:
 	struct PairHash {
@@ -62,8 +61,8 @@ private:
 	};
 
 	// (small table, large table), (large table, small table) are both valid
-	unordered_map<pair<int, int>, vector<shared_ptr<DAGEdgeInfo>>, PairHash, PairEqual> edges;
-	vector<shared_ptr<DAGEdgeInfo>> selected_edges;
+	unordered_map<pair<int, int>, vector<shared_ptr<EdgeInfo>>, PairHash, PairEqual> edges;
+	vector<shared_ptr<EdgeInfo>> selected_edges;
 	vector<LogicalOperator *> TransferOrder;
 };
 } // namespace duckdb

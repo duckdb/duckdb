@@ -10,18 +10,13 @@ namespace duckdb {
 
 /* Build DAG according to the query plan */
 bool DAGManager::Build(LogicalOperator &plan) {
-	nodes_manager.Reset();
-
-	// Extract all the vertex nodes (and joins)
-	vector<reference<LogicalOperator>> joins;
-	nodes_manager.ExtractNodes(plan, joins);
-	nodes_manager.DuplicateNodes();
-	if (nodes_manager.NumNodes() < 2) {
+	// Extract all nodes (and joins)
+	vector<reference<LogicalOperator>> joins = binding_manager.ExtractNodesAndJoins(plan);
+	if (binding_manager.nodes.size() < 2) {
 		return false;
 	}
-	nodes_manager.SortNodes();
 
-	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
+	// Transform joins into edges
 	ExtractEdges(joins);
 	if (edges.empty()) {
 		return false;
@@ -45,13 +40,11 @@ void DAGManager::AddBF(idx_t create_table, const shared_ptr<BlockedBloomFilter> 
 
 // extract the edges of the hypergraph, creating a list of filters and their associated bindings.
 void DAGManager::ExtractEdges(vector<reference<LogicalOperator>> &join_operators) {
-	// Track processed comparisons to avoid duplicates.
 	expression_set_t conditions;
 
 	for (auto &join_op : join_operators) {
 		auto &j_op = join_op.get();
 
-		// Only process comparison or delim joins.
 		if (j_op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
 		    j_op.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			continue;
@@ -61,11 +54,9 @@ void DAGManager::ExtractEdges(vector<reference<LogicalOperator>> &join_operators
 		D_ASSERT(join.expressions.empty());
 
 		for (auto &cond : join.conditions) {
-			// Only consider equality comparisons.
 			if (cond.comparison != ExpressionType::COMPARE_EQUAL)
 				continue;
 
-			// Create a unique comparison expression.
 			auto comparison =
 			    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy());
 			if (conditions.find(*comparison) != conditions.end())
@@ -82,16 +73,16 @@ void DAGManager::ExtractEdges(vector<reference<LogicalOperator>> &join_operators
 			}
 
 			// Determine table indices and corresponding nodes.
-			idx_t left_table = nodes_manager.FindRename(left_binding).table_index;
-			idx_t right_table = nodes_manager.FindRename(right_binding).table_index;
-			auto left_node = nodes_manager.GetNode(left_table);
-			auto right_node = nodes_manager.GetNode(right_table);
+			idx_t left_table = binding_manager.FindRename(left_binding).table_index;
+			idx_t right_table = binding_manager.FindRename(right_binding).table_index;
+			auto left_node = binding_manager.GetNode(left_table);
+			auto right_node = binding_manager.GetNode(right_table);
 			if (!left_node || !right_node)
 				continue;
 
 			// Determine the order of the nodes.
-			auto left_order = nodes_manager.GetNodeOrder(left_node);
-			auto right_order = nodes_manager.GetNodeOrder(right_node);
+			auto left_order = binding_manager.GetNodeOrder(left_node);
+			auto right_order = binding_manager.GetNodeOrder(right_node);
 			bool swap_order = left_order > right_order;
 
 			// Use swap_order to determine effective ordering.
@@ -99,8 +90,8 @@ void DAGManager::ExtractEdges(vector<reference<LogicalOperator>> &join_operators
 			auto effective_right = (swap_order ? right_node : left_node);
 
 			// Create the edge using the effective node order.
-			shared_ptr<DAGEdgeInfo> edge =
-			    make_shared_ptr<DAGEdgeInfo>(std::move(comparison), *effective_left, *effective_right);
+			shared_ptr<EdgeInfo> edge =
+			    make_shared_ptr<EdgeInfo>(std::move(comparison), *effective_left, *effective_right);
 
 			// Set protection flags based on join type.
 			switch (join.join_type) {
@@ -112,15 +103,15 @@ void DAGManager::ExtractEdges(vector<reference<LogicalOperator>> &join_operators
 				break;
 			case JoinType::LEFT:
 				if (swap_order)
-					edge->large_protect = true;
+					edge->protect_bigger_side = true;
 				else
-					edge->small_protect = true;
+					edge->protect_smaller_side = true;
 				break;
 			case JoinType::RIGHT:
 				if (swap_order)
-					edge->small_protect = true;
+					edge->protect_smaller_side = true;
 				else
-					edge->large_protect = true;
+					edge->protect_bigger_side = true;
 				break;
 			default:
 				// Unsupported join type; skip.
@@ -131,20 +122,14 @@ void DAGManager::ExtractEdges(vector<reference<LogicalOperator>> &join_operators
 			auto key1 = make_pair(right_table, left_table);
 			auto key2 = make_pair(left_table, right_table);
 			if (edges.find(key1) == edges.end()) {
-				edges[key1] = vector<shared_ptr<DAGEdgeInfo>>();
-				edges[key2] = vector<shared_ptr<DAGEdgeInfo>>();
+				edges[key1] = vector<shared_ptr<EdgeInfo>>();
+				edges[key2] = vector<shared_ptr<EdgeInfo>>();
 			}
 			edges[key1].emplace_back(edge);
 			edges[key2].emplace_back(edge);
 		}
 	}
 }
-
-struct DAGNodeCompare {
-	bool operator()(const GraphNode *lhs, const GraphNode *rhs) const {
-		return lhs->est_cardinality < rhs->est_cardinality;
-	}
-};
 
 pair<int, int> DAGManager::FindEdge(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set) {
 	idx_t max_weight = 0;
@@ -154,7 +139,7 @@ pair<int, int> DAGManager::FindEdge(unordered_set<int> &constructed_set, unorder
 		for (int j : constructed_set) {
 			auto key = make_pair(j, i);
 			if (edges.find(key) != edges.end()) {
-				auto card = nodes_manager.GetNode(i)->estimated_cardinality;
+				auto card = binding_manager.GetNode(i)->estimated_cardinality;
 				auto weight = edges[key].size();
 				if (weight > max_weight) {
 					max_weight = weight;
@@ -175,11 +160,11 @@ pair<int, int> DAGManager::FindEdge(unordered_set<int> &constructed_set, unorder
 void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 	unordered_set<int> constructed_set;
 	unordered_set<int> unconstructed_set;
-	int prior_flag = nodes_manager.NumNodes() - 1;
+	int prior_flag = binding_manager.nodes.size() - 1;
 	int root = -1;
 
 	// Create Vertices
-	for (auto &vertex : nodes_manager.GetNodes()) {
+	for (auto &vertex : binding_manager.nodes) {
 		// Set the last operator as root
 		if (vertex.second == sorted_nodes.back()) {
 			auto node = make_uniq<GraphNode>(vertex.first, vertex.second->estimated_cardinality, true);
@@ -195,8 +180,8 @@ void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 	}
 
 	// delete root
-	TransferOrder.emplace_back(nodes_manager.GetNode(root));
-	nodes_manager.EraseNode(root);
+	TransferOrder.emplace_back(binding_manager.GetNode(root));
+	binding_manager.nodes.erase(root);
 	while (!unconstructed_set.empty()) {
 		// Old node at first, new add node at second
 		auto selected_edge = FindEdge(constructed_set, unconstructed_set);
@@ -210,27 +195,27 @@ void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 		}
 		auto node = nodes[selected_edge.second].get();
 		node->priority = prior_flag--;
-		TransferOrder.emplace_back(nodes_manager.GetNode(node->id));
-		nodes_manager.EraseNode(node->id);
+		TransferOrder.emplace_back(binding_manager.GetNode(node->id));
+		binding_manager.nodes.erase(node->id);
 		unconstructed_set.erase(selected_edge.second);
 		constructed_set.emplace(selected_edge.second);
 	}
 }
 
 void DAGManager::CreateDAG() {
-	while (nodes_manager.GetNodes().size() > 0) {
-		auto &sorted_nodes = nodes_manager.getSortedNodes();
-		LargestRoot(sorted_nodes);
-		nodes_manager.SortNodes();
+	auto saved_nodes = binding_manager.nodes;
+	while (binding_manager.nodes.size() > 0) {
+		LargestRoot(binding_manager.sorted_nodes);
+		binding_manager.SortNodes();
 	}
-	nodes_manager.RecoverNodes();
+	binding_manager.nodes = saved_nodes;
 
 	for (auto &edge : selected_edges) {
 		if (!edge)
 			continue;
 
-		idx_t large = NodesManager::GetScalarTableIndex(&edge->large_);
-		idx_t small = NodesManager::GetScalarTableIndex(&edge->small_);
+		idx_t large = NodeBindingManager::GetScalarTableIndex(&edge->bigger_table);
+		idx_t small = NodeBindingManager::GetScalarTableIndex(&edge->smaller_table);
 
 		D_ASSERT(large != -1 && small != -1);
 
@@ -242,42 +227,22 @@ void DAGManager::CreateDAG() {
 		// otherwise use the opposite.
 		bool forward = (small_node->priority > large_node->priority);
 
-		if (!edge->large_protect && !edge->small_protect) {
+		if (!edge->protect_bigger_side && !edge->protect_smaller_side) {
 			// No protection
-			small_node->Add(large_node->id, edge->filter.get(), forward, true);
-			large_node->Add(small_node->id, edge->filter.get(), forward, false);
+			small_node->Add(large_node->id, edge->condition.get(), forward, true);
+			large_node->Add(small_node->id, edge->condition.get(), forward, false);
 
-			small_node->Add(large_node->id, edge->filter.get(), !forward, false);
-			large_node->Add(small_node->id, edge->filter.get(), !forward, true);
-		} else if (edge->large_protect && !edge->small_protect) {
+			small_node->Add(large_node->id, edge->condition.get(), !forward, false);
+			large_node->Add(small_node->id, edge->condition.get(), !forward, true);
+		} else if (edge->protect_bigger_side && !edge->protect_smaller_side) {
 			// When only large is protected,
-			small_node->Add(large_node->id, edge->filter.get(), forward, true);
-			large_node->Add(small_node->id, edge->filter.get(), !forward, false);
-		} else if (!edge->large_protect && edge->small_protect) {
+			small_node->Add(large_node->id, edge->condition.get(), forward, true);
+			large_node->Add(small_node->id, edge->condition.get(), !forward, false);
+		} else if (!edge->protect_bigger_side && edge->protect_smaller_side) {
 			// When only small is protected,
-			small_node->Add(large_node->id, edge->filter.get(), forward, false);
-			large_node->Add(small_node->id, edge->filter.get(), !forward, true);
+			small_node->Add(large_node->id, edge->condition.get(), forward, false);
+			large_node->Add(small_node->id, edge->condition.get(), !forward, true);
 		}
 	}
-}
-
-vector<GraphNode *> DAGManager::GetNeighbors(idx_t node_id) {
-	vector<GraphNode *> result;
-	for (auto &edge : edges) {
-		for (auto &info : edge.second) {
-			if (&info->large_ == nodes_manager.GetNode(node_id)) {
-				auto &op = info->small_;
-				int64_t another_node_id = NodesManager::GetScalarTableIndex(&op);
-				D_ASSERT(another_node_id != -1);
-				result.emplace_back(nodes[another_node_id].get());
-			} else if (&info->small_ == nodes_manager.GetNode(node_id)) {
-				auto &op = info->large_;
-				int64_t another_node_id = NodesManager::GetScalarTableIndex(&op);
-				D_ASSERT(another_node_id != -1);
-				result.emplace_back(nodes[another_node_id].get());
-			}
-		}
-	}
-	return result;
 }
 } // namespace duckdb
