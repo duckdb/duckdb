@@ -109,69 +109,45 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 	}
 }
 
-pair<int, int> TransferGraphManager::FindEdge(const unordered_set<int> &constructed_set,
-                                              const unordered_set<int> &unconstructed_set) {
-	idx_t max_weight = 0, max_card = 0;
-	pair<int, int> result {-1, -1};
-
-	for (auto i : unconstructed_set) {
-		for (auto j : constructed_set) {
-			auto key = make_pair(j, i);
-			auto it = edges_info.find(key);
-			if (it == edges_info.end())
-				continue;
-
-			idx_t card = table_operator_manager.GetTableOperator(i)->estimated_cardinality;
-			idx_t weight = it->second.size();
-
-			if (weight > max_weight || (weight == max_weight && card > max_card)) {
-				max_weight = weight;
-				max_card = card;
-				result = key;
-			}
-		}
-	}
-	return result;
-}
-
 void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
-	unordered_set<int> constructed_set;
-	unordered_set<int> unconstructed_set;
-	int prior_flag = table_operator_manager.table_operators.size() - 1;
+	unordered_set<int> constructed_set, unconstructed_set;
+	int prior_flag = static_cast<int>(table_operator_manager.table_operators.size()) - 1;
 	int root = -1;
 
-	// Create Vertices
-	for (auto &vertex : table_operator_manager.table_operators) {
-		// Set the last operator as root
-		if (vertex.second == sorted_nodes.back()) {
-			auto node = make_uniq<GraphNode>(vertex.first, vertex.second->estimated_cardinality, true);
-			node->priority = prior_flag--;
-			constructed_set.emplace(vertex.first);
-			transfer_graph[vertex.first] = std::move(node);
-			root = vertex.first;
+	// Create table operators
+	for (auto &table_operator : table_operator_manager.table_operators) {
+		bool is_root = (table_operator.second == sorted_nodes.back());
+		auto node = make_uniq<GraphNode>(table_operator.first, table_operator.second->estimated_cardinality, is_root);
+		node->priority = prior_flag--;
+
+		if (is_root) {
+			constructed_set.emplace(table_operator.first);
+			root = table_operator.first;
 		} else {
-			auto node = make_uniq<GraphNode>(vertex.first, vertex.second->estimated_cardinality, false);
-			unconstructed_set.emplace(vertex.first);
-			transfer_graph[vertex.first] = std::move(node);
+			unconstructed_set.emplace(table_operator.first);
 		}
+
+		transfer_graph.emplace(table_operator.first, std::move(node));
 	}
 
-	// delete root
+	// Remove root
 	transfer_order.emplace_back(table_operator_manager.GetTableOperator(root));
 	table_operator_manager.table_operators.erase(root);
+
 	while (!unconstructed_set.empty()) {
-		// Old node at first, new add node at second
 		auto selected_edge = FindEdge(constructed_set, unconstructed_set);
-		if (selected_edge.first == -1 && selected_edge.second == -1) {
+		if (selected_edge.first == -1)
 			break;
-		}
-		if (edges_info.find(selected_edge) != edges_info.end()) {
+
+		if (edges_info.count(selected_edge)) {
 			for (auto &v : edges_info[selected_edge]) {
 				selected_edges.emplace_back(std::move(v));
 			}
 		}
+
 		auto node = transfer_graph[selected_edge.second].get();
 		node->priority = prior_flag--;
+
 		transfer_order.emplace_back(table_operator_manager.GetTableOperator(node->id));
 		table_operator_manager.table_operators.erase(node->id);
 		unconstructed_set.erase(selected_edge.second);
@@ -215,4 +191,30 @@ void TransferGraphManager::CreatePredicateTransferGraph() {
 		}
 	}
 }
+
+pair<int, int> TransferGraphManager::FindEdge(const unordered_set<int> &constructed_set,
+                                              const unordered_set<int> &unconstructed_set) {
+	idx_t max_weight = 0, max_card = 0;
+	pair<int, int> result {-1, -1};
+
+	for (auto i : unconstructed_set) {
+		for (auto j : constructed_set) {
+			auto key = make_pair(j, i);
+			auto it = edges_info.find(key);
+			if (it == edges_info.end())
+				continue;
+
+			idx_t card = table_operator_manager.GetTableOperator(i)->estimated_cardinality;
+			idx_t weight = it->second.size();
+
+			if (weight > max_weight || (weight == max_weight && card > max_card)) {
+				max_weight = weight;
+				max_card = card;
+				result = key;
+			}
+		}
+	}
+	return result;
+}
+
 } // namespace duckdb

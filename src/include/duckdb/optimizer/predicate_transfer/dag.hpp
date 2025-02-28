@@ -28,7 +28,7 @@ public:
 
 	idx_t id;
 	bool is_root;
-	int priority;
+	int32_t priority;
 	idx_t est_cardinality;
 
 	//! Predicate Transfer has two stages, the transfer graph is different because of the existence of LEFT JOIN, RIGHT
