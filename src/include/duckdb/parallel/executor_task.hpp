@@ -34,6 +34,9 @@ public:
 	unique_ptr<ThreadContext> thread_context;
 	optional_ptr<const PhysicalOperator> op;
 
+private:
+	ClientContext &context;
+
 public:
 	virtual TaskExecutionResult ExecuteTask(TaskExecutionMode mode) = 0;
 	TaskExecutionResult Execute(TaskExecutionMode mode) override;
