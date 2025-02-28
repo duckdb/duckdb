@@ -13,16 +13,6 @@
 
 namespace duckdb {
 
-struct CachedSelectionVector {
-	CachedSelectionVector();
-
-	SelectionVector sel;
-	idx_t capacity = 0;
-
-public:
-	SelectionVector &Get(idx_t count);
-};
-
 //! Thread-local state for executing a table filter
 struct TableFilterState {
 public:
@@ -52,14 +42,6 @@ public:
 struct ConjunctionOrFilterState : public TableFilterState {
 public:
 	vector<unique_ptr<TableFilterState>> child_states;
-	CachedSelectionVector result_sel;
-};
-
-struct LeafFilterState : public TableFilterState {
-public:
-	LeafFilterState();
-
-	CachedSelectionVector sel_data;
 };
 
 } // namespace duckdb

@@ -4,20 +4,6 @@
 
 namespace duckdb {
 
-CachedSelectionVector::CachedSelectionVector() {
-}
-
-SelectionVector &CachedSelectionVector::Get(idx_t count) {
-	if (count > capacity) {
-		sel.Initialize(count);
-		capacity = count;
-	}
-	return sel;
-}
-
-LeafFilterState::LeafFilterState() {
-}
-
 unique_ptr<TableFilterState> TableFilterState::Initialize(const TableFilter &filter) {
 	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL_FILTER:
@@ -46,7 +32,8 @@ unique_ptr<TableFilterState> TableFilterState::Initialize(const TableFilter &fil
 	case TableFilterType::CONSTANT_COMPARISON:
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:
-		return make_uniq<LeafFilterState>();
+		// root nodes - create an empty filter state
+		return make_uniq<TableFilterState>();
 	default:
 		throw InternalException("Unsupported filter type for TableFilterState::Initialize");
 	}
