@@ -20,7 +20,7 @@ FilterPropagateResult StructFilter::CheckStatistics(BaseStatistics &stats) {
 	return child_filter->CheckStatistics(child_stats);
 }
 
-string StructFilter::ToString(const string &column_name) {
+string StructFilter::ToString(const string &column_name) const {
 	if (!child_name.empty()) {
 		return child_filter->ToString(column_name + "." + child_name);
 	}
