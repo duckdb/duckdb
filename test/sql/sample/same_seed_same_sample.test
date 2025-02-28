@@ -1,0 +1,25 @@
+# name: test/sql/sample/same_seed_same_sample.test
+# description: Test same seed same sample for system sample
+# group: [sample]
+
+statement ok
+CREATE OR REPLACE TABLE test AS SELECT UNNEST(RANGE(100000)) as x;
+
+loop i 0 20
+
+query II
+SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
+----
+20480	12288
+
+endloop
+
+
+loop i 0 20
+
+query II
+SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE (42);
+----
+24903	6
+
+endloop

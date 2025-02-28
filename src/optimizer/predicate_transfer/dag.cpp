@@ -3,7 +3,7 @@
 namespace duckdb {
 
 GraphEdge *GraphNode::Add(idx_t other, bool is_forward, bool is_in_edge) {
-	auto &stage = (is_forward ? forward_edges : backward_edges);
+	auto &stage = (is_forward ? forward_stage_edges : backward_stage_edges);
 	auto &edges = (is_in_edge ? stage.in : stage.out);
 	for (auto &edge : edges) {
 		if (edge->destination == other) {

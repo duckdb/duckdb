@@ -126,7 +126,7 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, BloomFilters &bfs_to_use,
                                                 vector<idx_t> &parent_nodes, bool reverse) {
 	auto &node = graph_manager.nodes[cur_node_id];
-	auto &edges = reverse ? node->backward_edges.in : node->forward_edges.in;
+	auto &edges = reverse ? node->backward_stage_edges.in : node->forward_stage_edges.in;
 
 	for (auto &edge : edges) {
 		for (auto bf : edge->bloom_filters) {
@@ -141,7 +141,7 @@ void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, BloomFilters 
 
 void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id, BloomFilters &bfs_to_create, bool reverse) {
 	auto &node = graph_manager.nodes[cur_node_id];
-	auto &edges = reverse ? node->backward_edges.out : node->forward_edges.out;
+	auto &edges = reverse ? node->backward_stage_edges.out : node->forward_stage_edges.out;
 
 	for (auto &edge : edges) {
 		auto cur_filter = make_shared_ptr<BlockedBloomFilter>();

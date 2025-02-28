@@ -6,7 +6,7 @@
 namespace duckdb {
 class GraphEdge {
 public:
-	GraphEdge(idx_t to) : destination(to) {
+	explicit GraphEdge(idx_t destination) : destination(destination) {
 	}
 
 	idx_t destination;
@@ -33,8 +33,8 @@ public:
 
 	//! Predicate Transfer has two stages, the transfer graph is different because of the existence of LEFT JOIN, RIGHT
 	//! JOIN, etc.
-	Edges forward_edges;
-	Edges backward_edges;
+	Edges forward_stage_edges;
+	Edges backward_stage_edges;
 
 	GraphEdge *Add(idx_t other, bool is_forward, bool is_in_edge);
 	GraphEdge *Add(idx_t other, Expression *expression, bool is_forward, bool is_in_edge);
