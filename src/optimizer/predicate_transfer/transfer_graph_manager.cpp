@@ -1,17 +1,16 @@
 #include "duckdb/optimizer/predicate_transfer/transfer_graph_manager.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/optimizer/predicate_transfer/predicate_transfer_optimizer.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+
 #include <queue>
 
 namespace duckdb {
 
-/* Build DAG according to the query plan */
 bool TransferGraphManager::Build(LogicalOperator &plan) {
 	// Extract all operators, including table operators and join operators
-	vector<reference<LogicalOperator>> joins = table_operator_manager.ExtractOperators(plan);
+	const vector<reference<LogicalOperator>> joins = table_operator_manager.ExtractOperators(plan);
 	if (table_operator_manager.table_operators.size() < 2) {
 		return false;
 	}
@@ -35,28 +34,26 @@ void TransferGraphManager::AddBF(idx_t create_table, const shared_ptr<BlockedBlo
 void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperator>> &join_operators) {
 	expression_set_t conditions;
 
-	for (auto &join_op : join_operators) {
-		auto &j_op = join_op.get();
-
-		if (j_op.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-		    j_op.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
+	for (size_t i = 0; i < join_operators.size(); i++) {
+		auto &join = join_operators[i].get();
+		if (join.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
+		    join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN)
 			continue;
-		}
 
-		auto &join = j_op.Cast<LogicalComparisonJoin>();
-		D_ASSERT(join.expressions.empty());
+		auto &comp_join = join.Cast<LogicalComparisonJoin>();
+		D_ASSERT(comp_join.expressions.empty());
 
-		for (auto &cond : join.conditions) {
+		for (size_t j = 0; j < comp_join.conditions.size(); j++) {
+			auto &cond = comp_join.conditions[j];
 			if (cond.comparison != ExpressionType::COMPARE_EQUAL)
 				continue;
 
-			auto comparison =
-			    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy());
-			if (conditions.find(*comparison) != conditions.end())
+			unique_ptr<BoundComparisonExpression> comparison(
+			    new BoundComparisonExpression(cond.comparison, cond.left->Copy(), cond.right->Copy()));
+			if (!conditions.insert(*comparison).second)
 				continue;
-			conditions.insert(*comparison);
 
-			// Extract column bindings from the left and right expressions.
+			// Extract column bindings
 			ColumnBinding left_binding, right_binding;
 			if (comparison->left->type == ExpressionType::BOUND_COLUMN_REF) {
 				left_binding = comparison->left->Cast<BoundColumnRefExpression>().binding;
@@ -65,7 +62,7 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 				right_binding = comparison->right->Cast<BoundColumnRefExpression>().binding;
 			}
 
-			// Determine table indices and corresponding nodes.
+			// Determine table indices and corresponding nodes
 			idx_t left_table = table_operator_manager.FindRename(left_binding).table_index;
 			idx_t right_table = table_operator_manager.FindRename(right_binding).table_index;
 			auto left_node = table_operator_manager.GetTableOperator(left_table);
@@ -73,53 +70,41 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			if (!left_node || !right_node)
 				continue;
 
-			// Determine the order of the nodes.
-			auto left_order = table_operator_manager.GetTableOperatorOrder(left_node);
-			auto right_order = table_operator_manager.GetTableOperatorOrder(right_node);
-			bool swap_order = left_order > right_order;
+			// Order nodes based on priority
+			bool swap_order = table_operator_manager.GetTableOperatorOrder(left_node) >
+			                  table_operator_manager.GetTableOperatorOrder(right_node);
 
-			// Use swap_order to determine effective ordering.
-			auto effective_left = (swap_order ? left_node : right_node);
-			auto effective_right = (swap_order ? right_node : left_node);
+			LogicalOperator *big_table = swap_order ? left_node : right_node;
+			LogicalOperator *small_table = swap_order ? right_node : left_node;
 
-			// Create the edge using the effective node order.
-			shared_ptr<EdgeInfo> edge =
-			    make_shared_ptr<EdgeInfo>(std::move(comparison), *effective_left, *effective_right);
+			// Create edge
+			shared_ptr<EdgeInfo> edge(new EdgeInfo(std::move(comparison), *big_table, *small_table));
 
-			// Set protection flags based on join type.
-			switch (join.join_type) {
-			case JoinType::INNER:
-			case JoinType::SEMI:
-			case JoinType::RIGHT_SEMI:
-			case JoinType::MARK:
-				// No protection flags needed.
-				break;
-			case JoinType::LEFT:
+			// Set protection flags
+			if (comp_join.join_type == JoinType::LEFT) {
 				if (swap_order)
 					edge->protect_bigger_side = true;
 				else
 					edge->protect_smaller_side = true;
-				break;
-			case JoinType::RIGHT:
+			} else if (comp_join.join_type == JoinType::RIGHT) {
 				if (swap_order)
 					edge->protect_smaller_side = true;
 				else
 					edge->protect_bigger_side = true;
-				break;
-			default:
-				// Unsupported join type; skip.
-				continue;
+			} else if (comp_join.join_type != JoinType::INNER && comp_join.join_type != JoinType::SEMI &&
+			           comp_join.join_type != JoinType::RIGHT_SEMI && comp_join.join_type != JoinType::MARK) {
+				continue; // Unsupported join type
 			}
 
-			// Insert the edge info into the map for both key orders.
-			auto key1 = make_pair(right_table, left_table);
-			auto key2 = make_pair(left_table, right_table);
+			// Store edge info
+			pair<int, int> key1 = make_pair(right_table, left_table);
+			pair<int, int> key2 = make_pair(left_table, right_table);
 			if (edges_info.find(key1) == edges_info.end()) {
 				edges_info[key1] = vector<shared_ptr<EdgeInfo>>();
 				edges_info[key2] = vector<shared_ptr<EdgeInfo>>();
 			}
-			edges_info[key1].emplace_back(edge);
-			edges_info[key2].emplace_back(edge);
+			edges_info[key1].push_back(edge);
+			edges_info[key2].push_back(edge);
 		}
 	}
 }

@@ -10,16 +10,16 @@ namespace duckdb {
 
 class EdgeInfo {
 public:
-	EdgeInfo(unique_ptr<Expression> filter, LogicalOperator &bigger, LogicalOperator &smaller)
-	    : condition(std::move(filter)), bigger_table(bigger), smaller_table(smaller) {
+	EdgeInfo(unique_ptr<Expression> condition, LogicalOperator &bigger, LogicalOperator &smaller)
+	    : condition(std::move(condition)), bigger_table(bigger), smaller_table(smaller), protect_bigger_side(false),
+	      protect_smaller_side(false) {
 	}
 
 	unique_ptr<Expression> condition;
-
 	LogicalOperator &bigger_table;
 	LogicalOperator &smaller_table;
-	bool protect_bigger_side = false;
-	bool protect_smaller_side = false;
+	bool protect_bigger_side;
+	bool protect_smaller_side;
 };
 
 class TransferGraphManager {
