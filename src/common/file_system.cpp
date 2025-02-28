@@ -400,9 +400,7 @@ time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 }
 
 string FileSystem::GetVersionTag(FileHandle &handle) {
-	// Used to check cache invalidation in CachingFileSystem
-	// Returning an empty string here makes it so that caching is not used by default
-	// We implement this function in LocalFileSystem and httpfs so we can cache files there
+	// Used to check cache invalidation for httpfs files with an ETag in CachingFileSystem
 	return "";
 }
 

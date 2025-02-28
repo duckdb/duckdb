@@ -59,9 +59,8 @@ void CachingFileSystem::CachedFileRange::VerifyCheckSum() {
 CachingFileSystem::CachedFile::CachedFile(string path_p) : path(std::move(path_p)) {
 }
 
-void CachingFileSystem::CachedFile::Verify(const unique_lock<mutex> &guard) const {
+void CachingFileSystem::CachedFile::Verify(const unique_ptr<StorageLockKey> &guard) const {
 #ifdef DEBUG
-	VerifyLock(guard);
 	for (const auto &range1 : ranges) {
 		for (const auto &range2 : ranges) {
 			if (range1 == range2) {
@@ -73,39 +72,29 @@ void CachingFileSystem::CachedFile::Verify(const unique_lock<mutex> &guard) cons
 #endif
 }
 
-idx_t &CachingFileSystem::CachedFile::FileSize(const unique_lock<mutex> &guard) {
-	VerifyLock(guard);
+idx_t &CachingFileSystem::CachedFile::FileSize(const unique_ptr<StorageLockKey> &guard) {
 	return file_size;
 }
 
-time_t &CachingFileSystem::CachedFile::LastModified(const unique_lock<mutex> &guard) {
-	VerifyLock(guard);
+time_t &CachingFileSystem::CachedFile::LastModified(const unique_ptr<StorageLockKey> &guard) {
 	return last_modified;
 }
 
-string &CachingFileSystem::CachedFile::VersionTag(const unique_lock<mutex> &guard) {
-	VerifyLock(guard);
+string &CachingFileSystem::CachedFile::VersionTag(const unique_ptr<StorageLockKey> &guard) {
 	return version_tag;
 }
 
-bool &CachingFileSystem::CachedFile::CanSeek(const unique_lock<mutex> &guard) {
-	VerifyLock(guard);
+bool &CachingFileSystem::CachedFile::CanSeek(const unique_ptr<StorageLockKey> &guard) {
 	return can_seek;
 }
 
-bool &CachingFileSystem::CachedFile::OnDiskFile(const unique_lock<mutex> &guard) {
-	VerifyLock(guard);
+bool &CachingFileSystem::CachedFile::OnDiskFile(const unique_ptr<StorageLockKey> &guard) {
 	return on_disk_file;
 }
 
 map<idx_t, shared_ptr<CachingFileSystem::CachedFileRange>> &
-CachingFileSystem::CachedFile::Ranges(const unique_lock<mutex> &guard) {
-	VerifyLock(guard);
+CachingFileSystem::CachedFile::Ranges(const unique_ptr<StorageLockKey> &guard) {
 	return ranges;
-}
-
-void CachingFileSystem::CachedFile::VerifyLock(const unique_lock<mutex> &guard) const {
-	D_ASSERT(guard.mutex() == &lock || guard.owns_lock());
 }
 
 CachingFileSystem::CachingFileSystem(DatabaseInstance &db, bool enable_p)
@@ -122,10 +111,11 @@ void CachingFileSystem::SetEnabled(bool enable_p) {
 }
 
 vector<CachedFileInformation> CachingFileSystem::GetCachedFileInformation() const {
-	unique_lock<mutex> guard(lock);
+	unique_lock<mutex> files_guard(lock);
 	vector<CachedFileInformation> result;
 	for (const auto &file : cached_files) {
-		for (const auto &range_entry : file.second->Ranges(guard)) {
+		auto ranges_guard = file.second->lock.GetSharedLock();
+		for (const auto &range_entry : file.second->Ranges(ranges_guard)) {
 			const auto &range = *range_entry.second;
 			result.push_back({file.first, range.nr_bytes, range.location, !range.block_handle->IsUnloaded()});
 		}
@@ -150,6 +140,28 @@ CachingFileSystem::CachedFile &CachingFileSystem::GetOrCreateCachedFile(const st
 	return *entry;
 }
 
+bool CachingFileSystem::FileIsValid(CachedFile &cached_file, const unique_ptr<StorageLockKey> &guard,
+                                    const string &current_version_tag, time_t current_last_modified,
+                                    int64_t access_time) {
+	if (!check_cached_file_invalidation) {
+		return true; // Assume valid
+	}
+	if (!current_version_tag.empty()) {
+		return cached_file.VersionTag(guard) == current_version_tag; // Validity checked by version tag (httpfs)
+	}
+	if (cached_file.LastModified(guard) != current_last_modified) {
+		return false; // The file has certainly been modified
+	}
+	// The last modified time matches. However, we cannot blindly trust this,
+	// because some file systems use a low resolution clock to set the last modified time.
+	// So, we will require that the last modified time is more than 2 seconds ago.
+	static constexpr int64_t LAST_MODIFIED_THRESHOLD = 2;
+	if (access_time < current_last_modified) {
+		return false; // Last modified in the future?
+	}
+	return access_time - current_last_modified > LAST_MODIFIED_THRESHOLD;
+}
+
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const string &path, FileOpenFlags flags) {
 	return make_uniq<CachingFileHandle>(*this, GetOrCreateCachedFile(file_system.ExpandPath(path)), flags);
 }
@@ -163,7 +175,7 @@ CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, C
 		return;
 	}
 	// If we don't have any cached file ranges, we must also open the file
-	unique_lock<mutex> guard(cached_file.lock);
+	auto guard = cached_file.lock.GetSharedLock();
 	if (cached_file.Ranges(guard).empty()) {
 		GetFileHandle();
 	}
@@ -171,14 +183,13 @@ CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, C
 
 FileHandle &CachingFileHandle::GetFileHandle() {
 	if (!file_handle) {
+		const auto current_time = duration_cast<std::chrono::seconds>(system_clock::now().time_since_epoch()).count();
 		file_handle = caching_file_system.file_system.OpenFile(cached_file.path, flags);
 		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
-		unique_lock<mutex> guard(cached_file.lock);
-		if (caching_file_system.check_cached_file_invalidation &&
-		    (version_tag.empty() || cached_file.VersionTag(guard).empty() ||
-		     cached_file.VersionTag(guard) != version_tag)) {
+		auto guard = cached_file.lock.GetExclusiveLock();
+		if (!caching_file_system.FileIsValid(cached_file, guard, version_tag, last_modified, current_time)) {
 			cached_file.Ranges(guard).clear(); // Invalidate entire cache
 		}
 		cached_file.FileSize(guard) = file_handle->GetFileSize();
@@ -199,8 +210,8 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 		return result;
 	}
 
-	// Get lock for cached ranges
-	unique_lock<mutex> guard(cached_file.lock);
+	// Get read lock for cached ranges
+	auto guard = cached_file.lock.GetSharedLock();
 	auto &ranges = cached_file.Ranges(guard);
 
 	// First, try to see if we've read from the exact same location before
@@ -209,11 +220,10 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 		// We have read from the exact same location before
 		if (it->second->GetOverlap(nr_bytes, location) == CachedFileRangeOverlap::FULL) {
 			// The file range contains the requested file range
-			result = TryReadFromFileRange(*it->second, buffer, nr_bytes, location);
+			result = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
 			if (result.IsValid()) {
 				return result;
 			}
-			ranges.erase(it);
 		}
 	}
 
@@ -236,18 +246,17 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 			break;
 		case CachedFileRangeOverlap::FULL:
 			// The file range fully contains the requested file range, if the buffer is still valid we're done
-			result = TryReadFromFileRange(*it->second, buffer, nr_bytes, location);
+			result = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
 			if (result.IsValid()) {
 				return result;
 			}
-			it = ranges.erase(it);
 			continue;
 		}
 		it++;
 	}
 
 	// We can unlock now because we copied over the ranges to local
-	guard.unlock();
+	guard.reset();
 
 	// Finally, if we weren't able to find the file range in the cache, we have to create a new file range
 	result = caching_file_system.buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
@@ -302,14 +311,14 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 		GetFileHandle().Read(buffer + buffer_offset, remaining_bytes, current_location);
 	}
 
-	// Grab the lock again to insert the newly created buffer into the ranges
-	guard.lock();
+	// Grab the lock again (write lock this time) to insert the newly created buffer into the ranges
+	guard = cached_file.lock.GetExclusiveLock();
 
 	// Start at lower_bound (first range with a location not less than the location of the newly create range)
 	for (it = ranges.lower_bound(location); it != ranges.end();) {
 		if (it->second->GetOverlap(*new_file_range) == CachedFileRangeOverlap::FULL) {
 			// Another thread has read a range that fully contains the requested range in the meantime
-			result = TryReadFromFileRange(*it->second, buffer, nr_bytes, location);
+			result = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
 			if (result.IsValid()) {
 				return result;
 			}
@@ -326,6 +335,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 			break; // The newly created range does not fully contain this range, so it is still useful
 		case CachedFileRangeOverlap::FULL:
 			// Full overlap, this range will be obsolete when we insert the current one
+			// Since we have the write lock here, we can do some cleanup
 			it = ranges.erase(it);
 			continue;
 		}
@@ -351,7 +361,7 @@ idx_t CachingFileHandle::GetFileSize() {
 	if (file_handle || caching_file_system.check_cached_file_invalidation) {
 		return GetFileHandle().GetFileSize();
 	}
-	unique_lock<mutex> guard(cached_file.lock);
+	auto guard = cached_file.lock.GetSharedLock();
 	return cached_file.FileSize(guard);
 }
 
@@ -360,7 +370,7 @@ time_t CachingFileHandle::GetLastModifiedTime() {
 		GetFileHandle();
 		return last_modified;
 	}
-	unique_lock<mutex> guard(cached_file.lock);
+	auto guard = cached_file.lock.GetSharedLock();
 	return cached_file.LastModified(guard);
 }
 
@@ -368,7 +378,7 @@ bool CachingFileHandle::CanSeek() {
 	if (file_handle || caching_file_system.check_cached_file_invalidation) {
 		return GetFileHandle().CanSeek();
 	}
-	unique_lock<mutex> guard(cached_file.lock);
+	auto guard = cached_file.lock.GetSharedLock();
 	return cached_file.CanSeek(guard);
 }
 
@@ -376,11 +386,11 @@ bool CachingFileHandle::OnDiskFile() {
 	if (file_handle || caching_file_system.check_cached_file_invalidation) {
 		return GetFileHandle().OnDiskFile();
 	}
-	unique_lock<mutex> guard(cached_file.lock);
+	auto guard = cached_file.lock.GetSharedLock();
 	return cached_file.OnDiskFile(guard);
 }
 
-const string &CachingFileHandle::GetVersionTag(const unique_lock<mutex> &guard) {
+const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> &guard) {
 	if (file_handle || caching_file_system.check_cached_file_invalidation) {
 		GetFileHandle();
 		return version_tag;
@@ -388,9 +398,13 @@ const string &CachingFileHandle::GetVersionTag(const unique_lock<mutex> &guard) 
 	return cached_file.VersionTag(guard);
 }
 
-BufferHandle CachingFileHandle::TryReadFromFileRange(CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes,
+BufferHandle CachingFileHandle::TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard,
+                                                     CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes,
                                                      idx_t location) {
 	D_ASSERT(file_range.GetOverlap(nr_bytes, location) == CachedFileRangeOverlap::FULL);
+	if (file_range.block_handle->IsUnloaded()) {
+		return BufferHandle(); // Purely in-memory (for now)
+	}
 	auto result = caching_file_system.buffer_manager.Pin(file_range.block_handle);
 	if (result.IsValid()) {
 		buffer = result.Ptr() + (location - file_range.location);

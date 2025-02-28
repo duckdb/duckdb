@@ -15,6 +15,7 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
+#include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
 
@@ -69,22 +70,19 @@ class CachingFileSystem {
 
 	public:
 		//! Verifies that none of the ranges fully overlap (must hold the lock)
-		void Verify(const unique_lock<mutex> &guard) const;
+		void Verify(const unique_ptr<StorageLockKey> &guard) const;
 
 		//! Get reference to properties (must hold the lock)
-		idx_t &FileSize(const unique_lock<mutex> &guard);
-		time_t &LastModified(const unique_lock<mutex> &guard);
-		string &VersionTag(const unique_lock<mutex> &guard);
-		bool &CanSeek(const unique_lock<mutex> &guard);
-		bool &OnDiskFile(const unique_lock<mutex> &guard);
-		map<idx_t, shared_ptr<CachedFileRange>> &Ranges(const unique_lock<mutex> &guard);
-
-	private:
-		void VerifyLock(const unique_lock<mutex> &guard) const;
+		idx_t &FileSize(const unique_ptr<StorageLockKey> &guard);
+		time_t &LastModified(const unique_ptr<StorageLockKey> &guard);
+		string &VersionTag(const unique_ptr<StorageLockKey> &guard);
+		bool &CanSeek(const unique_ptr<StorageLockKey> &guard);
+		bool &OnDiskFile(const unique_ptr<StorageLockKey> &guard);
+		map<idx_t, shared_ptr<CachedFileRange>> &Ranges(const unique_ptr<StorageLockKey> &guard);
 
 	public:
 		const string path;
-		mutex lock;
+		StorageLock lock;
 
 	private:
 		map<idx_t, shared_ptr<CachedFileRange>> ranges;
@@ -111,6 +109,9 @@ public:
 private:
 	//! Gets the cached file, or creates it if is not yet present
 	CachedFile &GetOrCreateCachedFile(const string &path);
+	//! Whether the CachedFile is still valid given the current modified/version tag
+	bool FileIsValid(CachedFile &cached_file, const unique_ptr<StorageLockKey> &guard,
+	                 const string &current_version_tag, time_t current_last_modified, int64_t access_time);
 
 private:
 	//! The FileSystem used to read/write files
@@ -150,9 +151,10 @@ public:
 
 private:
 	//! Get the version tag of the file (for checking cache invalidation)
-	const string &GetVersionTag(const unique_lock<mutex> &guard);
+	const string &GetVersionTag(const unique_ptr<StorageLockKey> &guard);
 	//! Try to read from cache, return an invalid BufferHandle if it fails
-	BufferHandle TryReadFromFileRange(CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
+	BufferHandle TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard, CachedFileRange &file_range,
+	                                  data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
 
 private:
 	//! The caching file system that was used to create this CachingFileHandle
