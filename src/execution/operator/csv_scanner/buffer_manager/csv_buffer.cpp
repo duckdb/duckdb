@@ -4,7 +4,7 @@
 namespace duckdb {
 
 CSVBuffer::CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle &file_handle,
-                     idx_t &global_csv_current_position, idx_t file_number_p)
+                     const idx_t &global_csv_current_position, idx_t file_number_p)
     : context(context), requested_size(buffer_size_p), file_number(file_number_p), can_seek(file_handle.CanSeek()),
       is_pipe(file_handle.IsPipe()) {
 	AllocateBuffer(buffer_size_p);
@@ -34,7 +34,7 @@ CSVBuffer::CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t b
 }
 
 shared_ptr<CSVBuffer> CSVBuffer::Next(CSVFileHandle &file_handle, idx_t buffer_size, idx_t file_number_p,
-                                      bool &has_seaked) {
+                                      bool &has_seaked) const {
 	if (has_seaked) {
 		// This means that at some point a reload was done, and we are currently on the incorrect position in our file
 		// handle

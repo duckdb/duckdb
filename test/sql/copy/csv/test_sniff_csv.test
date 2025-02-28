@@ -8,6 +8,11 @@ PRAGMA enable_verification
 # requires notwindows because tests will return \r\n to be used in the parameters
 require notwindows
 
+query III
+SELECT escape,quote, delimiter from sniff_csv('data/csv/later_quotes.csv');
+----
+"	"	,
+
 query I
 SELECT Prompt FROM sniff_csv('data/csv/real/lineitem_sample.csv');
 ----

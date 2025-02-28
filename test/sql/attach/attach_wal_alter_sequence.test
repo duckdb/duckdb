@@ -1,0 +1,52 @@
+# name: test/sql/attach/attach_wal_alter_sequence.test
+# description: Test binding of a WAL with a sequence entry in it
+# group: [attach]
+
+require skip_reload
+
+statement ok
+PRAGMA disable_checkpoint_on_shutdown
+
+statement ok
+PRAGMA wal_autocheckpoint='1TB';
+
+# create a table with hugeints
+statement ok
+attach '__TEST_DIR__/attach_wal_with_sequence.db' as db1;
+
+statement ok
+CREATE SEQUENCE db1.seq;
+
+statement ok
+CREATE TABLE db1.test (a INTEGER DEFAULT nextval('seq'), b INTEGER, c INTEGER DEFAULT currval('seq'));
+
+statement ok
+INSERT INTO db1.test (b) VALUES (1);
+
+statement ok
+alter table db1.test RENAME TO blubb;
+
+statement ok
+INSERT INTO db1.blubb (b) VALUES (10);
+
+query III
+SELECT * FROM db1.blubb
+----
+1	1	1
+2	10	2
+
+statement ok
+DETACH db1
+
+statement ok
+attach '__TEST_DIR__/attach_wal_with_sequence.db' as db2;
+
+statement ok
+INSERT INTO db2.blubb (b) VALUES (100);
+
+query III
+SELECT * FROM db2.blubb
+----
+1	1	1
+2	10	2
+3	100	3
