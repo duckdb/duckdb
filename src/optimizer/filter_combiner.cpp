@@ -625,7 +625,8 @@ FilterPushdownResult FilterCombiner::TryPushdownExpression(const LogicalGet &get
 	return FilterPushdownResult::NO_PUSHDOWN;
 }
 
-TableFilterSet FilterCombiner::GenerateTableScanFilters(const LogicalGet &get) {
+TableFilterSet FilterCombiner::GenerateTableScanFilters(const LogicalGet &get,
+                                                        vector<FilterPushdownResult> &pushdown_results) {
 	TableFilterSet table_filters;
 	auto &column_ids = get.GetColumnIds();
 	//! First, we figure the filters that have constant expressions that we can push down to the table scan
@@ -641,6 +642,8 @@ TableFilterSet FilterCombiner::GenerateTableScanFilters(const LogicalGet &get) {
 		if (pushdown_result == FilterPushdownResult::PUSHED_DOWN_FULLY) {
 			// the filter has been pushed down entirely - we can prune it
 			remaining_filters.erase_at(rem_fil_idx--);
+		} else {
+			pushdown_results.push_back(pushdown_result);
 		}
 	}
 	return table_filters;

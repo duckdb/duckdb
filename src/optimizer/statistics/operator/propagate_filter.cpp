@@ -231,9 +231,9 @@ FilterPropagateResult StatisticsPropagator::HandleFilter(unique_ptr<Expression> 
 		return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 	}
 	if (ExpressionIsConstant(*condition, Value::BOOLEAN(false)) ||
-		ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
+	    ExpressionIsConstantOrNull(*condition, Value::BOOLEAN(false))) {
 		return FilterPropagateResult::FILTER_FALSE_OR_NULL;
-   }
+	}
 
 	// cannot prune this filter: propagate statistics from the filter
 	UpdateFilterStatistics(*condition);

@@ -51,16 +51,28 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	PushFilters();
 
 	//! We generate the table filters that will be executed during the table scan
-	get.table_filters = combiner.GenerateTableScanFilters(get);
+	vector<FilterPushdownResult> pushdown_results;
+	get.table_filters = combiner.GenerateTableScanFilters(get, pushdown_results);
 
 	GenerateFilters();
 
+	for (idx_t i = pushdown_results.size(); i < filters.size(); ++i) {
+		// any generated filters have not been pushed down yet
+		pushdown_results.push_back(FilterPushdownResult::NO_PUSHDOWN);
+	}
 	// for any filters we did not manage to push into specialized table filters - try to push them as a generic
 	// expression
 	for (idx_t i = 0; i < filters.size(); ++i) {
-		auto pushdown_result = combiner.TryPushdownGenericExpression(get, *filters[i]->filter);
+		// get the previous pushdown result
+		auto pushdown_result = pushdown_results[i];
+		if (pushdown_result != FilterPushdownResult::NO_PUSHDOWN) {
+			// this has already been (partially) pushed down - skip
+			continue;
+		}
+		pushdown_result = combiner.TryPushdownGenericExpression(get, *filters[i]->filter);
 		if (pushdown_result == FilterPushdownResult::PUSHED_DOWN_FULLY) {
 			filters.erase_at(i--);
+			pushdown_results.erase_at(i--);
 		}
 	}
 

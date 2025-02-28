@@ -7,7 +7,8 @@
 
 namespace duckdb {
 
-FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats, TableFilter &filter) {
+FilterPropagateResult StatisticsPropagator::PropagateTableFilter(ColumnBinding stats_binding, BaseStatistics &stats,
+                                                                 TableFilter &filter) {
 	if (filter.filter_type == TableFilterType::EXPRESSION_FILTER) {
 		auto &expr_filter = filter.Cast<ExpressionFilter>();
 		auto column_ref = make_uniq<BoundColumnRefExpression>(stats.GetType(), stats_binding);
