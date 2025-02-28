@@ -130,6 +130,7 @@ struct ScanFilter {
 	idx_t table_column_index;
 	TableFilter &filter;
 	bool always_true;
+	unique_ptr<TableFilterState> filter_state;
 
 	bool IsAlwaysTrue() const {
 		return always_true;
@@ -144,9 +145,6 @@ public:
 
 	const vector<ScanFilter> &GetFilterList() const {
 		return filter_list;
-	}
-	TableFilterState &GetFilterState(idx_t filter_idx) {
-		return *filter_states[filter_idx];
 	}
 
 	optional_ptr<AdaptiveFilter> GetAdaptiveFilter();
@@ -172,8 +170,6 @@ private:
 	unique_ptr<AdaptiveFilter> adaptive_filter;
 	//! The set of filters
 	vector<ScanFilter> filter_list;
-	//! The set of filter states
-	vector<unique_ptr<TableFilterState>> filter_states;
 	//! Whether or not the column has a filter active right now
 	unsafe_vector<bool> column_has_filter;
 	//! Whether or not the column has a filter active at all
