@@ -92,6 +92,7 @@ public:
 	bool enable_parallel_scans;
 
 	bool file_is_assigned = false;
+	bool initialized = false;
 };
 
 struct JSONScanLocalState {
@@ -137,9 +138,6 @@ private:
 private:
 	//! Scan state
 	JSONReaderScanState scan_state;
-
-	//! Current reader and buffer handle
-	optional_ptr<BufferedJSONReader> current_reader;
 };
 
 struct JSONGlobalTableFunctionState : public GlobalTableFunctionState {

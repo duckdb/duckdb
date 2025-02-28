@@ -8,12 +8,12 @@
 
 namespace duckdb {
 
-JSONBufferHandle::JSONBufferHandle(idx_t buffer_index_p, idx_t readers_p, AllocatedData &&buffer_p, idx_t buffer_size_p)
-    : buffer_index(buffer_index_p), readers(readers_p), buffer(std::move(buffer_p)), buffer_size(buffer_size_p) {
+JSONBufferHandle::JSONBufferHandle(BufferedJSONReader &reader, idx_t buffer_index_p, idx_t readers_p, AllocatedData &&buffer_p, idx_t buffer_size_p)
+    : reader(reader), buffer_index(buffer_index_p), readers(readers_p), buffer(std::move(buffer_p)), buffer_size(buffer_size_p) {
 }
 
 JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
-    : file_handle(std::move(file_handle_p)), allocator(allocator_p), can_seek(file_handle->CanSeek()),
+    : file_handle(std::move(file_handle_p)), allocator(allocator_p), can_seek(false),
       file_size(file_handle->GetFileSize()), read_position(0), requested_reads(0), actual_reads(0),
       last_read_requested(false), cached_size(0) {
 }
@@ -811,6 +811,7 @@ void BufferedJSONReader::InitializeScan(JSONScanGlobalState &gstate, JSONReaderS
 		if (buffer_index.IsValid() && scan_state.buffer_size != 0) {
 			FinalizeBufferInternal(scan_state, buffer, buffer_index.GetIndex());
 		}
+		scan_state.current_reader = this;
 	}
 }
 
@@ -844,7 +845,7 @@ void BufferedJSONReader::FinalizeBufferInternal(JSONReaderScanState &scan_state,
 
 	// Create an entry and insert it into the map
 	auto json_buffer_handle =
-	    make_uniq<JSONBufferHandle>(buffer_index, readers, std::move(buffer), scan_state.buffer_size);
+	    make_uniq<JSONBufferHandle>(*this, buffer_index, readers, std::move(buffer), scan_state.buffer_size);
 	scan_state.current_buffer_handle = json_buffer_handle.get();
 	InsertBuffer(buffer_index, std::move(json_buffer_handle));
 
@@ -862,13 +863,23 @@ void BufferedJSONReader::FinalizeBufferInternal(JSONReaderScanState &scan_state,
 	scan_state.is_first_scan = true;
 }
 
+void BufferedJSONReader::DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer) {
+	SetBufferLineOrObjectCount(handle, lines_or_object_in_buffer);
+	if (--handle.readers == 0) {
+		buffer = RemoveBuffer(handle);
+	}
+}
+
+void BufferedJSONReader::DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer) {
+	AllocatedData buffer;
+	DecrementBufferUsage(handle, lines_or_object_in_buffer, buffer);
+}
+
 void BufferedJSONReader::PrepareForRead(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer) {
 	// Try to re-use a buffer that was used before
 	if (scan_state.current_buffer_handle) {
-		SetBufferLineOrObjectCount(*scan_state.current_buffer_handle, scan_state.lines_or_objects_in_buffer);
-		if (--scan_state.current_buffer_handle->readers == 0) {
-			buffer = RemoveBuffer(*scan_state.current_buffer_handle);
-		}
+		auto &handle = *scan_state.current_buffer_handle;
+		handle.reader.DecrementBufferUsage(*scan_state.current_buffer_handle, scan_state.lines_or_objects_in_buffer, buffer);
 	}
 
 	// Copy last bit of previous buffer
@@ -888,8 +899,7 @@ bool BufferedJSONReader::ReadNextBufferInternal(JSONScanGlobalState &gstate, JSO
 	// 	}
 	// } else {
 		// prepare for read
-		PrepareForRead(gstate, scan_state, buffer);
-		if (!ReadNextBufferNoSeek(gstate, scan_state, buffer_index)) {
+		if (!ReadNextBufferNoSeek(gstate, scan_state, buffer, buffer_index)) {
 			return false;
 		}
 	// }
@@ -912,9 +922,6 @@ bool BufferedJSONReader::ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONRea
 	if (!file_handle.GetPositionAndSize(scan_state.read_position, scan_state.read_size, scan_state.request_size)) {
 		return false; // We weren't able to read
 	}
-	if (GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
-		scan_state.batch_index = gstate.batch_index++;
-	}
 	buffer_index = GetBufferIndex();
 	scan_state.is_last = scan_state.read_size == 0;
 	scan_state.needs_to_read = true;
@@ -923,9 +930,7 @@ bool BufferedJSONReader::ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONRea
 }
 
 bool BufferedJSONReader::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
-                                              optional_idx &buffer_index) {
-	lock_guard<mutex> reader_guard(lock);
-
+                                              AllocatedData &buffer, optional_idx &buffer_index) {
 	idx_t request_size = scan_state.buffer_capacity - scan_state.prev_buffer_remainder - YYJSON_PADDING_SIZE;
 	idx_t read_size;
 
@@ -936,12 +941,10 @@ bool BufferedJSONReader::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONR
 	if (file_handle.LastReadRequested()) {
 		return false;
 	}
+	PrepareForRead(gstate, scan_state, buffer);
 	if (!file_handle.Read(scan_state.buffer_ptr + scan_state.prev_buffer_remainder, read_size, request_size,
 	                      options.type == JSONScanType::SAMPLE)) {
 		return false; // Couldn't read anything
-	}
-	if (GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
-		scan_state.batch_index = gstate.batch_index++;
 	}
 	buffer_index = GetBufferIndex();
 	scan_state.is_last = read_size == 0;
@@ -950,7 +953,6 @@ bool BufferedJSONReader::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONR
 	}
 	scan_state.buffer_size = scan_state.prev_buffer_remainder + read_size;
 	scan_state.needs_to_read = false;
-
 	return true;
 }
 

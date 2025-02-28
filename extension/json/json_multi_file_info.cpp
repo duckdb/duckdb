@@ -31,6 +31,9 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
                                     MultiFileReaderOptions &, BaseFileReaderOptions &options_p) {
 	auto &reader_options = options_p.Cast<JSONFileReaderOptions>();
 	auto &options = reader_options.options;
+	if (value.IsNull()) {
+		throw BinderException("Cannot use NULL as argument to key %s", key);
+	}
 	auto loption = StringUtil::Lower(key);
 	if (loption == "ignore_errors") {
 		options.ignore_errors = BooleanValue::Get(value);

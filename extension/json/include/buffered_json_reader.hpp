@@ -21,12 +21,15 @@
 
 namespace duckdb {
 struct JSONScanGlobalState;
+class BufferedJSONReader;
 
 struct JSONBufferHandle {
 public:
-	JSONBufferHandle(idx_t buffer_index, idx_t readers, AllocatedData &&buffer, idx_t buffer_size);
+	JSONBufferHandle(BufferedJSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData &&buffer, idx_t buffer_size);
 
 public:
+	//! The reader this buffer comes from
+	BufferedJSONReader &reader;
 	//! Buffer index (within same file)
 	const idx_t buffer_index;
 
@@ -130,6 +133,7 @@ struct JSONReaderScanState {
 	yyjson_val *values[STANDARD_VECTOR_SIZE];
 	optional_ptr<JSONBufferHandle> current_buffer_handle;
 	//! Current buffer read info
+	optional_ptr<BufferedJSONReader> current_reader;
 	char *buffer_ptr = nullptr;
 	idx_t buffer_size = 0;
 	idx_t buffer_offset = 0;
@@ -203,6 +207,8 @@ public:
 	                    optional_idx &buffer_index);
 	void FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer, idx_t buffer_index);
 	void PrepareForRead(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer);
+	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer);
+	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer);
 
 	//! Scan progress
 	double GetProgress() const;
@@ -212,7 +218,7 @@ private:
 	                            optional_idx &buffer_index);
 	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
 	                        optional_idx &buffer_index);
-	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
+	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,
 	                          optional_idx &buffer_index);
 
 private:
