@@ -199,25 +199,19 @@ void TransferGraphManager::CreatePredicateTransferGraph() {
 
 		auto small_node = transfer_graph[smaller].get();
 		auto large_node = transfer_graph[bigger].get();
-
-		// Determine the ordering based on priority:
-		// If small_node's priority is higher than large_node's, use one set of flags,
-		// otherwise use the opposite.
 		bool swap_order = (small_node->priority > large_node->priority);
-		if (!edge->protect_bigger_side && !edge->protect_smaller_side) {
-			// No protection
-			small_node->Add(large_node->id, edge->condition.get(), swap_order, true);
-			small_node->Add(large_node->id, edge->condition.get(), !swap_order, false);
-			large_node->Add(small_node->id, edge->condition.get(), swap_order, false);
-			large_node->Add(small_node->id, edge->condition.get(), !swap_order, true);
-		} else if (edge->protect_bigger_side && !edge->protect_smaller_side) {
-			// only the bigger is protected,
-			small_node->Add(large_node->id, edge->condition.get(), swap_order, true);
-			large_node->Add(small_node->id, edge->condition.get(), swap_order, false);
-		} else if (!edge->protect_bigger_side && edge->protect_smaller_side) {
-			// only the smaller is protected,
-			small_node->Add(large_node->id, edge->condition.get(), !swap_order, false);
-			large_node->Add(small_node->id, edge->condition.get(), !swap_order, true);
+		auto *condition = edge->condition.get();
+
+		// forward: from the smaller to the larger
+		if (!edge->protect_bigger_side) {
+			small_node->Add(large_node->id, condition, !swap_order, false);
+			large_node->Add(small_node->id, condition, !swap_order, true);
+		}
+
+		// backward: from the larger to the smaller
+		if (!edge->protect_smaller_side) {
+			small_node->Add(large_node->id, condition, swap_order, true);
+			large_node->Add(small_node->id, condition, swap_order, false);
 		}
 	}
 }
