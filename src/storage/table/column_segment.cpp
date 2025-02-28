@@ -564,10 +564,10 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		// FIXME: this doesn't work with count > STANDARD_VECTOR_SIZE probably?
 		auto &state = filter_state.Cast<ExpressionFilterState>();
 		DataChunk chunk;
-		chunk.data.emplace_back(vector, sel, approved_tuple_count);
-		chunk.SetCardinality(approved_tuple_count);
+		chunk.data.emplace_back(vector);
+		chunk.SetCardinality(scan_count);
 		SelectionVector result_sel(approved_tuple_count);
-		approved_tuple_count = state.executor.SelectExpression(chunk, result_sel);
+		approved_tuple_count = state.executor.SelectExpression(chunk, result_sel, sel, approved_tuple_count);
 		sel.Initialize(result_sel);
 		return approved_tuple_count;
 	}

@@ -211,13 +211,14 @@ static unique_ptr<TableFilter> PushDownFilterIntoExpr(const Expression &expr, un
 	if (expr.GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 		auto &func = expr.Cast<BoundFunctionExpression>();
 		auto &child_expr = func.children[0];
-		auto child_value = func.children[1]->Cast<BoundConstantExpression>().value;
 		if (func.function.name == "struct_extract") {
+			auto &child_value = func.children[1]->Cast<BoundConstantExpression>().value;
 			string child_name = child_value.GetValue<string>();
 			auto child_index = StructType::GetChildIndexUnsafe(func.children[0]->return_type, child_name);
 			inner_filter = make_uniq<StructFilter>(child_index, child_name, std::move(inner_filter));
 			return PushDownFilterIntoExpr(*child_expr, std::move(inner_filter));
 		} else if (func.function.name == "struct_extract_at") {
+			auto &child_value = func.children[1]->Cast<BoundConstantExpression>().value;
 			inner_filter = make_uniq<StructFilter>(child_value.GetValue<idx_t>() - 1, "", std::move(inner_filter));
 			return PushDownFilterIntoExpr(*child_expr, std::move(inner_filter));
 		}
@@ -338,6 +339,10 @@ void ReplaceWithBoundReference(unique_ptr<Expression> &expr) {
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &get, Expression &expr) {
+	if (expr.IsVolatile() || expr.CanThrow()) {
+		// we cannot push down volatile or throwing expressions
+		return FilterPushdownResult::NO_PUSHDOWN;
+	}
 	if (!get.function.pushdown_expression) {
 		// the scan does not support pushing down generic expressions
 		return FilterPushdownResult::NO_PUSHDOWN;
@@ -366,7 +371,7 @@ FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &ge
 	auto &column_ids = get.GetColumnIds();
 	auto expr_filter = make_uniq<ExpressionFilter>(std::move(filter_expr));
 	auto &column_index = column_ids[bindings[0].column_index];
-	get.table_filters.PushFilter(column_index, PushDownFilterIntoExpr(expr, std::move(expr_filter)));
+	get.table_filters.PushFilter(column_index, std::move(expr_filter));
 	return FilterPushdownResult::PUSHED_DOWN_FULLY;
 }
 
