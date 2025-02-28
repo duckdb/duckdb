@@ -1,6 +1,6 @@
 #pragma once
 
-#include "duckdb/optimizer/predicate_transfer/dag_manager.hpp"
+#include "duckdb/optimizer/predicate_transfer/transfer_graph_manager.hpp"
 #include "duckdb/planner/operator/logical_create_bf.hpp"
 #include "duckdb/planner/operator/logical_use_bf.hpp"
 
@@ -35,7 +35,7 @@ private:
 
 private:
 	ClientContext &context;
-	DAGManager graph_manager;
+	TransferGraphManager graph_manager;
 
 	//! we use a map to record how to modify/update the operators in the query plan.
 	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> modify_map_forward;

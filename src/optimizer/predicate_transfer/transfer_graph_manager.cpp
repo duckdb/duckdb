@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/predicate_transfer/dag_manager.hpp"
+#include "duckdb/optimizer/predicate_transfer/transfer_graph_manager.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
@@ -9,37 +9,35 @@
 namespace duckdb {
 
 /* Build DAG according to the query plan */
-bool DAGManager::Build(LogicalOperator &plan) {
-	// Extract all nodes (and joins)
-	vector<reference<LogicalOperator>> joins = binding_manager.ExtractNodesAndJoins(plan);
-	if (binding_manager.nodes.size() < 2) {
+bool TransferGraphManager::Build(LogicalOperator &plan) {
+	// Extract all operators, including table operators and join operators
+	vector<reference<LogicalOperator>> joins = table_operator_manager.ExtractOperators(plan);
+	if (table_operator_manager.table_operators.size() < 2) {
 		return false;
 	}
 
-	// Transform joins into edges
-	ExtractEdges(joins);
+	// Getting graph edges information from join operators
+	ExtractEdgesInfo(joins);
 	if (edges.empty()) {
 		return false;
 	}
 
-	// Create the query_graph hyper edges
-	CreateDAG();
+	CreatePredicateTransferGraph();
 	return true;
 }
 
-vector<LogicalOperator *> &DAGManager::GetExecutionOrder() {
+vector<LogicalOperator *> &TransferGraphManager::GetExecutionOrder() {
 	// The root as first
 	return TransferOrder;
 }
 
-void DAGManager::AddBF(idx_t create_table, const shared_ptr<BlockedBloomFilter> &use_bf, bool reverse) {
+void TransferGraphManager::AddBF(idx_t create_table, const shared_ptr<BlockedBloomFilter> &use_bf, bool reverse) {
 	bool is_forward = !reverse;
 	auto node_idx = use_bf->GetColApplied()[0].table_index;
-	nodes[node_idx]->Add(create_table, use_bf, is_forward, true);
+	transfer_graph[node_idx]->Add(create_table, use_bf, is_forward, true);
 }
 
-// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
-void DAGManager::ExtractEdges(vector<reference<LogicalOperator>> &join_operators) {
+void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperator>> &join_operators) {
 	expression_set_t conditions;
 
 	for (auto &join_op : join_operators) {
@@ -73,16 +71,16 @@ void DAGManager::ExtractEdges(vector<reference<LogicalOperator>> &join_operators
 			}
 
 			// Determine table indices and corresponding nodes.
-			idx_t left_table = binding_manager.FindRename(left_binding).table_index;
-			idx_t right_table = binding_manager.FindRename(right_binding).table_index;
-			auto left_node = binding_manager.GetNode(left_table);
-			auto right_node = binding_manager.GetNode(right_table);
+			idx_t left_table = table_operator_manager.FindRename(left_binding).table_index;
+			idx_t right_table = table_operator_manager.FindRename(right_binding).table_index;
+			auto left_node = table_operator_manager.GetTableOperator(left_table);
+			auto right_node = table_operator_manager.GetTableOperator(right_table);
 			if (!left_node || !right_node)
 				continue;
 
 			// Determine the order of the nodes.
-			auto left_order = binding_manager.GetNodeOrder(left_node);
-			auto right_order = binding_manager.GetNodeOrder(right_node);
+			auto left_order = table_operator_manager.GetTableOperatorOrder(left_node);
+			auto right_order = table_operator_manager.GetTableOperatorOrder(right_node);
 			bool swap_order = left_order > right_order;
 
 			// Use swap_order to determine effective ordering.
@@ -131,7 +129,8 @@ void DAGManager::ExtractEdges(vector<reference<LogicalOperator>> &join_operators
 	}
 }
 
-pair<int, int> DAGManager::FindEdge(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set) {
+pair<int, int> TransferGraphManager::FindEdge(unordered_set<int> &constructed_set,
+                                              unordered_set<int> &unconstructed_set) {
 	idx_t max_weight = 0;
 	idx_t max_card = 0;
 	auto result = make_pair(-1, -1);
@@ -139,7 +138,7 @@ pair<int, int> DAGManager::FindEdge(unordered_set<int> &constructed_set, unorder
 		for (int j : constructed_set) {
 			auto key = make_pair(j, i);
 			if (edges.find(key) != edges.end()) {
-				auto card = binding_manager.GetNode(i)->estimated_cardinality;
+				auto card = table_operator_manager.GetTableOperator(i)->estimated_cardinality;
 				auto weight = edges[key].size();
 				if (weight > max_weight) {
 					max_weight = weight;
@@ -157,31 +156,31 @@ pair<int, int> DAGManager::FindEdge(unordered_set<int> &constructed_set, unorder
 	return result;
 }
 
-void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
+void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 	unordered_set<int> constructed_set;
 	unordered_set<int> unconstructed_set;
-	int prior_flag = binding_manager.nodes.size() - 1;
+	int prior_flag = table_operator_manager.table_operators.size() - 1;
 	int root = -1;
 
 	// Create Vertices
-	for (auto &vertex : binding_manager.nodes) {
+	for (auto &vertex : table_operator_manager.table_operators) {
 		// Set the last operator as root
 		if (vertex.second == sorted_nodes.back()) {
 			auto node = make_uniq<GraphNode>(vertex.first, vertex.second->estimated_cardinality, true);
 			node->priority = prior_flag--;
 			constructed_set.emplace(vertex.first);
-			nodes[vertex.first] = std::move(node);
+			transfer_graph[vertex.first] = std::move(node);
 			root = vertex.first;
 		} else {
 			auto node = make_uniq<GraphNode>(vertex.first, vertex.second->estimated_cardinality, false);
 			unconstructed_set.emplace(vertex.first);
-			nodes[vertex.first] = std::move(node);
+			transfer_graph[vertex.first] = std::move(node);
 		}
 	}
 
 	// delete root
-	TransferOrder.emplace_back(binding_manager.GetNode(root));
-	binding_manager.nodes.erase(root);
+	TransferOrder.emplace_back(table_operator_manager.GetTableOperator(root));
+	table_operator_manager.table_operators.erase(root);
 	while (!unconstructed_set.empty()) {
 		// Old node at first, new add node at second
 		auto selected_edge = FindEdge(constructed_set, unconstructed_set);
@@ -193,34 +192,34 @@ void DAGManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 				selected_edges.emplace_back(std::move(v));
 			}
 		}
-		auto node = nodes[selected_edge.second].get();
+		auto node = transfer_graph[selected_edge.second].get();
 		node->priority = prior_flag--;
-		TransferOrder.emplace_back(binding_manager.GetNode(node->id));
-		binding_manager.nodes.erase(node->id);
+		TransferOrder.emplace_back(table_operator_manager.GetTableOperator(node->id));
+		table_operator_manager.table_operators.erase(node->id);
 		unconstructed_set.erase(selected_edge.second);
 		constructed_set.emplace(selected_edge.second);
 	}
 }
 
-void DAGManager::CreateDAG() {
-	auto saved_nodes = binding_manager.nodes;
-	while (binding_manager.nodes.size() > 0) {
-		LargestRoot(binding_manager.sorted_nodes);
-		binding_manager.SortNodes();
+void TransferGraphManager::CreatePredicateTransferGraph() {
+	auto saved_nodes = table_operator_manager.table_operators;
+	while (table_operator_manager.table_operators.size() > 0) {
+		LargestRoot(table_operator_manager.sorted_table_operators);
+		table_operator_manager.SortTableOperators();
 	}
-	binding_manager.nodes = saved_nodes;
+	table_operator_manager.table_operators = saved_nodes;
 
 	for (auto &edge : selected_edges) {
 		if (!edge)
 			continue;
 
-		idx_t large = NodeBindingManager::GetScalarTableIndex(&edge->bigger_table);
-		idx_t small = NodeBindingManager::GetScalarTableIndex(&edge->smaller_table);
+		idx_t large = TableOperatorManager::GetScalarTableIndex(&edge->bigger_table);
+		idx_t small = TableOperatorManager::GetScalarTableIndex(&edge->smaller_table);
 
 		D_ASSERT(large != -1 && small != -1);
 
-		auto small_node = nodes[small].get();
-		auto large_node = nodes[large].get();
+		auto small_node = transfer_graph[small].get();
+		auto large_node = transfer_graph[large].get();
 
 		// Determine the ordering based on priority:
 		// If small_node's priority is higher than large_node's, use one set of flags,

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "duckdb/optimizer/predicate_transfer/nodes_manager.hpp"
+#include "duckdb/optimizer/predicate_transfer/table_operator_namager.hpp"
 #include "duckdb/optimizer/predicate_transfer/dag.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/expression.hpp"
@@ -22,46 +22,38 @@ public:
 	bool protect_smaller_side = false;
 };
 
-class DAGManager {
+class TransferGraphManager {
 public:
-	explicit DAGManager(ClientContext &context) : binding_manager(context), context(context) {
+	explicit TransferGraphManager(ClientContext &context) : table_operator_manager(context), context(context) {
 	}
 
+	ClientContext &context;
+
+	TableOperatorManager table_operator_manager;
+	GraphNodes transfer_graph;
+
+	struct PairHash {
+		std::size_t operator()(const std::pair<int, int> &p) const {
+			return std::hash<int> {}(p.first) ^ (std::hash<int> {}(p.second) << 1);
+		}
+	};
+	unordered_map<std::pair<int, int>, vector<shared_ptr<EdgeInfo>>, PairHash> edges;
+
+public:
 	bool Build(LogicalOperator &op);
 
 	vector<LogicalOperator *> &GetExecutionOrder();
 
 	void AddBF(idx_t create_bf, const shared_ptr<BlockedBloomFilter> &use_bf, bool reverse);
 
-	NodeBindingManager binding_manager;
-	ClientContext &context;
-	GraphNodes nodes;
-
 private:
-	void ExtractEdges(vector<reference<LogicalOperator>> &join_operators);
-
+	void ExtractEdgesInfo(const vector<reference<LogicalOperator>> &join_operators);
 	void LargestRoot(vector<LogicalOperator *> &sorted_nodes);
-
-	void CreateDAG();
+	void CreatePredicateTransferGraph();
 
 	pair<int, int> FindEdge(unordered_set<int> &constructed_set, unordered_set<int> &unconstructed_set);
 
 private:
-	struct PairHash {
-		std::size_t operator()(const pair<int, int> &m) const {
-			std::hash<int> hashVal;
-			return hashVal(m.first) ^ hashVal(m.second);
-		}
-	};
-
-	struct PairEqual {
-		bool operator()(const pair<int, int> &lhs, const pair<int, int> &rhs) const {
-			return lhs.first == rhs.first && lhs.second == rhs.second;
-		}
-	};
-
-	// (small table, large table), (large table, small table) are both valid
-	unordered_map<pair<int, int>, vector<shared_ptr<EdgeInfo>>, PairHash, PairEqual> edges;
 	vector<shared_ptr<EdgeInfo>> selected_edges;
 	vector<LogicalOperator *> TransferOrder;
 };

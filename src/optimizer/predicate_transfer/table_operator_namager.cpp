@@ -1,4 +1,4 @@
-#include "duckdb/optimizer/predicate_transfer/nodes_manager.hpp"
+#include "duckdb/optimizer/predicate_transfer/table_operator_namager.hpp"
 #include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_delim_get.hpp"
@@ -13,7 +13,7 @@
 #include <pthread.h>
 
 namespace duckdb {
-idx_t NodeBindingManager::GetScalarTableIndex(LogicalOperator *op) {
+idx_t TableOperatorManager::GetScalarTableIndex(LogicalOperator *op) {
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
@@ -44,56 +44,56 @@ idx_t NodeBindingManager::GetScalarTableIndex(LogicalOperator *op) {
 	}
 }
 
-ColumnBinding NodeBindingManager::FindRename(ColumnBinding binding) {
-	auto itr = rename_cols.find(binding);
-	while (itr != rename_cols.end()) {
+ColumnBinding TableOperatorManager::FindRename(ColumnBinding binding) {
+	auto itr = rename_col_bindings.find(binding);
+	while (itr != rename_col_bindings.end()) {
 		binding = itr->second;
-		itr = rename_cols.find(binding);
+		itr = rename_col_bindings.find(binding);
 	}
 	return binding;
 }
 
-void NodeBindingManager::AddNode(LogicalOperator *op) {
+void TableOperatorManager::AddTableOperator(LogicalOperator *op) {
 	op->estimated_cardinality = op->EstimateCardinality(context);
 
 	idx_t table_idx = GetScalarTableIndex(op);
-	if (table_idx != -1 && nodes.find(table_idx) == nodes.end()) {
-		nodes[table_idx] = op;
+	if (table_idx != -1 && table_operators.find(table_idx) == table_operators.end()) {
+		table_operators[table_idx] = op;
 	}
 }
 
-vector<reference<LogicalOperator>> NodeBindingManager::ExtractNodesAndJoins(LogicalOperator &plan) {
+vector<reference<LogicalOperator>> TableOperatorManager::ExtractOperators(LogicalOperator &plan) {
 	vector<reference<LogicalOperator>> ret;
-	ExtractNodes(plan, ret);
-	SortNodes();
+	ExtractOperators(plan, ret);
+	SortTableOperators();
 	return std::move(ret);
 }
 
-void NodeBindingManager::SortNodes() {
-	sorted_nodes.clear();
-	for (auto &node : nodes) {
-		sorted_nodes.emplace_back(node.second);
+void TableOperatorManager::SortTableOperators() {
+	sorted_table_operators.clear();
+	for (auto &node : table_operators) {
+		sorted_table_operators.emplace_back(node.second);
 	}
-	sort(sorted_nodes.begin(), sorted_nodes.end(),
+	sort(sorted_table_operators.begin(), sorted_table_operators.end(),
 	     [&](LogicalOperator *a, LogicalOperator *b) { return a->estimated_cardinality < b->estimated_cardinality; });
 }
 
-idx_t NodeBindingManager::GetNodeOrder(const LogicalOperator *node) {
-	if (sorted_nodes.empty()) {
-		SortNodes();
+idx_t TableOperatorManager::GetTableOperatorOrder(const LogicalOperator *node) {
+	if (sorted_table_operators.empty()) {
+		SortTableOperators();
 	}
 
-	for (idx_t i = 0; i < sorted_nodes.size(); i++) {
-		if (sorted_nodes[i] == node) {
+	for (idx_t i = 0; i < sorted_table_operators.size(); i++) {
+		if (sorted_table_operators[i] == node) {
 			return i;
 		}
 	}
 	return -1; // fallback if not found
 }
 
-LogicalOperator *NodeBindingManager::GetNode(idx_t table_idx) {
-	auto itr = nodes.find(table_idx);
-	if (itr == nodes.end()) {
+LogicalOperator *TableOperatorManager::GetTableOperator(idx_t table_idx) {
+	auto itr = table_operators.find(table_idx);
+	if (itr == table_operators.end()) {
 		return nullptr;
 	}
 
@@ -114,14 +114,14 @@ static bool OperatorNeedsRelation(LogicalOperatorType op_type) {
 	}
 }
 
-void NodeBindingManager::ExtractNodes(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
+void TableOperatorManager::ExtractOperators(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
 	LogicalOperator *op = &plan;
 
 	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			LogicalOperator *child = op->children[0].get();
 			if (child->type == LogicalOperatorType::LOGICAL_GET) {
-				AddNode(op);
+				AddTableOperator(op);
 				return;
 			}
 			if (op->expressions[0]->type == ExpressionType::OPERATOR_NOT &&
@@ -131,7 +131,7 @@ void NodeBindingManager::ExtractNodes(LogicalOperator &plan, vector<reference<Lo
 			} else {
 				can_add_mark = true;
 			}
-			ExtractNodes(*child, joins);
+			ExtractOperators(*child, joins);
 			return;
 		}
 		op = op->children[0].get();
@@ -157,16 +157,16 @@ void NodeBindingManager::ExtractNodes(LogicalOperator &plan, vector<reference<Lo
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &agg = op->Cast<LogicalAggregate>();
 		if (agg.groups.empty() && agg.grouping_sets.size() <= 1) {
-			ExtractNodes(*op->children[0], joins);
-			AddNode(op);
+			ExtractOperators(*op->children[0], joins);
+			AddTableOperator(op);
 		} else {
 			for (size_t i = 0; i < agg.groups.size(); i++) {
 				if (agg.groups[i]->type == ExpressionType::BOUND_COLUMN_REF) {
 					auto &colref = agg.groups[i]->Cast<BoundColumnRefExpression>();
-					rename_cols.insert({agg.GetColumnBindings()[i], colref.binding});
+					rename_col_bindings.insert({agg.GetColumnBindings()[i], colref.binding});
 				}
 			}
-			ExtractNodes(*op->children[0], joins);
+			ExtractOperators(*op->children[0], joins);
 		}
 		return;
 	}
@@ -174,18 +174,18 @@ void NodeBindingManager::ExtractNodes(LogicalOperator &plan, vector<reference<Lo
 		for (size_t i = 0; i < op->expressions.size(); i++) {
 			if (op->expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
 				auto &colref = op->expressions[i]->Cast<BoundColumnRefExpression>();
-				rename_cols.insert({op->GetColumnBindings()[i], colref.binding});
+				rename_col_bindings.insert({op->GetColumnBindings()[i], colref.binding});
 			}
 		}
-		ExtractNodes(*op->children[0], joins);
+		ExtractOperators(*op->children[0], joins);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-		AddNode(op);
-		ExtractNodes(*op->children[0], joins);
-		ExtractNodes(*op->children[1], joins);
+		AddTableOperator(op);
+		ExtractOperators(*op->children[0], joins);
+		ExtractOperators(*op->children[1], joins);
 		return;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
@@ -193,11 +193,11 @@ void NodeBindingManager::ExtractNodes(LogicalOperator &plan, vector<reference<Lo
 	case LogicalOperatorType::LOGICAL_GET:
 	case LogicalOperatorType::LOGICAL_DELIM_GET:
 	case LogicalOperatorType::LOGICAL_EMPTY_RESULT:
-		AddNode(op);
+		AddTableOperator(op);
 		return;
 	default:
 		for (auto &child : op->children) {
-			ExtractNodes(*child, joins);
+			ExtractOperators(*child, joins);
 		}
 	}
 }

@@ -83,8 +83,8 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 	BloomFilters bfs_to_use;
 	BloomFilters bfs_to_create;
 
-	idx_t node_id = NodeBindingManager::GetScalarTableIndex(&node);
-	if (node_id == -1 || graph_manager.nodes.find(node_id) == graph_manager.nodes.end()) {
+	idx_t node_id = TableOperatorManager::GetScalarTableIndex(&node);
+	if (node_id == -1 || graph_manager.transfer_graph.find(node_id) == graph_manager.transfer_graph.end()) {
 		return result;
 	}
 
@@ -125,7 +125,7 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 
 void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, BloomFilters &bfs_to_use,
                                                 vector<idx_t> &parent_nodes, bool reverse) {
-	auto &node = graph_manager.nodes[cur_node_id];
+	auto &node = graph_manager.transfer_graph[cur_node_id];
 	auto &edges = reverse ? node->backward_stage_edges.in : node->forward_stage_edges.in;
 
 	for (auto &edge : edges) {
@@ -140,7 +140,7 @@ void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, BloomFilters 
 }
 
 void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id, BloomFilters &bfs_to_create, bool reverse) {
-	auto &node = graph_manager.nodes[cur_node_id];
+	auto &node = graph_manager.transfer_graph[cur_node_id];
 	auto &edges = reverse ? node->backward_stage_edges.out : node->forward_stage_edges.out;
 
 	for (auto &edge : edges) {
@@ -152,8 +152,8 @@ void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id, BloomFilte
 			GetColumnBindingExpression(*expr, expressions);
 			D_ASSERT(expressions.size() == 2);
 
-			auto binding0 = graph_manager.binding_manager.FindRename(expressions[0]->binding);
-			auto binding1 = graph_manager.binding_manager.FindRename(expressions[1]->binding);
+			auto binding0 = graph_manager.table_operator_manager.FindRename(expressions[0]->binding);
+			auto binding1 = graph_manager.table_operator_manager.FindRename(expressions[1]->binding);
 
 			if (binding0.table_index == cur_node_id) {
 				cur_filter->AddColumnBindingApplied(binding1);
@@ -190,7 +190,7 @@ unique_ptr<LogicalUseBF> PredicateTransferOptimizer::BuildUseBFOperator(LogicalO
 		use_bf_operator->SetEstimatedCardinality(node.estimated_cardinality);
 
 		auto node_id = parent_nodes[i];
-		auto base_node = graph_manager.binding_manager.GetNode(node_id);
+		auto base_node = graph_manager.table_operator_manager.GetTableOperator(node_id);
 		auto related_bf_create = replace_map[base_node].get();
 
 		D_ASSERT(related_bf_create->type == LogicalOperatorType::LOGICAL_CREATE_BF);
