@@ -4,50 +4,41 @@
 #include "duckdb/optimizer/predicate_transfer/bloom_filter/bloom_filter.hpp"
 
 namespace duckdb {
-class GraphEdge;
+class GraphEdge {
+public:
+	GraphEdge(idx_t to) : destination(to) {
+	}
+
+	idx_t destination;
+
+	vector<Expression *> filters;
+	vector<shared_ptr<BlockedBloomFilter>> bloom_filters;
+};
+
+struct Edges {
+	vector<unique_ptr<GraphEdge>> in;
+	vector<unique_ptr<GraphEdge>> out;
+};
 
 class GraphNode {
 public:
 	GraphNode(idx_t id, idx_t est_cardinality, bool is_root)
-	    : id(id), is_root(is_root), est_cardinality(est_cardinality) {
+	    : id(id), is_root(is_root), priority(-1), est_cardinality(est_cardinality) {
 	}
 
 	idx_t id;
 	bool is_root;
-	int priority = -1;
+	int priority;
 	idx_t est_cardinality;
 
-	vector<unique_ptr<GraphEdge>> forward_in_;
-	vector<unique_ptr<GraphEdge>> backward_in_;
-	vector<unique_ptr<GraphEdge>> forward_out_;
-	vector<unique_ptr<GraphEdge>> backward_out_;
+	//! Predicate Transfer has two stages, the transfer graph is different because of the existence of LEFT JOIN, RIGHT
+	//! JOIN, etc.
+	Edges forward_edges;
+	Edges backward_edges;
 
-	void AddIn(idx_t from, Expression *filter, bool forward);
-	void AddIn(idx_t from, shared_ptr<BlockedBloomFilter> bloom_filter, bool forward);
-	void AddOut(idx_t to, Expression *filter, bool forward);
-	void AddOut(idx_t to, shared_ptr<BlockedBloomFilter> bloom_filter, bool forward);
-};
-
-class GraphEdge {
-public:
-	explicit GraphEdge(idx_t id) : destination(id) {
-	}
-
-	void Push(Expression *filter) {
-		filters.emplace_back(filter);
-	}
-
-	void Push(const shared_ptr<BlockedBloomFilter> &bloom_filter) {
-		bloom_filters.emplace_back(bloom_filter);
-	}
-
-	idx_t GetDest() const {
-		return destination;
-	}
-
-	idx_t destination;
-	vector<Expression *> filters;
-	vector<shared_ptr<BlockedBloomFilter>> bloom_filters;
+	GraphEdge *Add(idx_t other, bool is_forward, bool is_in_edge);
+	GraphEdge *Add(idx_t other, Expression *expression, bool is_forward, bool is_in_edge);
+	GraphEdge *Add(idx_t other, const shared_ptr<BlockedBloomFilter> &bloom_filter, bool is_forward, bool is_in_edge);
 };
 
 using GraphNodes = unordered_map<idx_t, unique_ptr<GraphNode>>;

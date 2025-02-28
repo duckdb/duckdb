@@ -31,7 +31,7 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<Logi
 			// Add the Bloom Filter to its corresponding edge
 			// Need to check whether the Bloom Filter needs to transfer
 			// Such as, the column not involved in the predicate
-			graph_manager.Add(BF.first, BF.second, false);
+			graph_manager.AddBF(BF.first, BF.second, false);
 		}
 	}
 
@@ -40,7 +40,7 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<Logi
 		auto &current_node = ordered_nodes[i];
 		auto BFs = CreateBloomFilter(*current_node, true);
 		for (auto &BF : BFs) {
-			graph_manager.Add(BF.first, BF.second, true);
+			graph_manager.AddBF(BF.first, BF.second, true);
 		}
 	}
 	auto result = InsertTransferOperators(std::move(plan));
@@ -126,7 +126,7 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, BloomFilters &bfs_to_use,
                                                 vector<idx_t> &parent_nodes, bool reverse) {
 	auto &node = graph_manager.nodes[cur_node_id];
-	auto &edges = reverse ? node->backward_in_ : node->forward_in_;
+	auto &edges = reverse ? node->backward_edges.in : node->forward_edges.in;
 
 	for (auto &edge : edges) {
 		for (auto bf : edge->bloom_filters) {
@@ -141,7 +141,7 @@ void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, BloomFilters 
 
 void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id, BloomFilters &bfs_to_create, bool reverse) {
 	auto &node = graph_manager.nodes[cur_node_id];
-	auto &edges = reverse ? node->backward_out_ : node->forward_out_;
+	auto &edges = reverse ? node->backward_edges.out : node->forward_edges.out;
 
 	for (auto &edge : edges) {
 		auto cur_filter = make_shared_ptr<BlockedBloomFilter>();

@@ -23,7 +23,7 @@ bool DAGManager::Build(LogicalOperator &plan) {
 
 	// extract the edges of the hypergraph, creating a list of filters and their associated bindings.
 	ExtractEdges(joins);
-	if (edges.size() == 0) {
+	if (edges.empty()) {
 		return false;
 	}
 
@@ -37,10 +37,10 @@ vector<LogicalOperator *> &DAGManager::GetExecutionOrder() {
 	return TransferOrder;
 }
 
-void DAGManager::Add(idx_t create_table, shared_ptr<BlockedBloomFilter> use_bf, bool reverse) {
+void DAGManager::AddBF(idx_t create_table, const shared_ptr<BlockedBloomFilter> &use_bf, bool reverse) {
 	bool is_forward = !reverse;
 	auto node_idx = use_bf->GetColApplied()[0].table_index;
-	nodes[node_idx]->AddIn(create_table, use_bf, is_forward);
+	nodes[node_idx]->Add(create_table, use_bf, is_forward, true);
 }
 
 // extract the edges of the hypergraph, creating a list of filters and their associated bindings.
@@ -240,24 +240,23 @@ void DAGManager::CreateDAG() {
 		// Determine the ordering based on priority:
 		// If small_node's priority is higher than large_node's, use one set of flags,
 		// otherwise use the opposite.
-		bool high_priority_first = (small_node->priority > large_node->priority);
-		bool in_flag = high_priority_first ? true : false;
-		bool out_flag = high_priority_first ? false : true;
+		bool forward = (small_node->priority > large_node->priority);
 
 		if (!edge->large_protect && !edge->small_protect) {
-			// No protection: set the in/out flags based on priority.
-			small_node->AddIn(large_node->id, edge->filter.get(), in_flag);
-			small_node->AddOut(large_node->id, edge->filter.get(), out_flag);
-			large_node->AddOut(small_node->id, edge->filter.get(), in_flag);
-			large_node->AddIn(small_node->id, edge->filter.get(), out_flag);
+			// No protection
+			small_node->Add(large_node->id, edge->filter.get(), forward, true);
+			large_node->Add(small_node->id, edge->filter.get(), forward, false);
+
+			small_node->Add(large_node->id, edge->filter.get(), !forward, false);
+			large_node->Add(small_node->id, edge->filter.get(), !forward, true);
 		} else if (edge->large_protect && !edge->small_protect) {
-			// When only large is protected, force a true on the corresponding edge.
-			small_node->AddIn(large_node->id, edge->filter.get(), in_flag);
-			large_node->AddOut(small_node->id, edge->filter.get(), true);
+			// When only large is protected,
+			small_node->Add(large_node->id, edge->filter.get(), forward, true);
+			large_node->Add(small_node->id, edge->filter.get(), !forward, false);
 		} else if (!edge->large_protect && edge->small_protect) {
-			// When only small is protected, force the out flag for small.
-			small_node->AddOut(large_node->id, edge->filter.get(), out_flag);
-			large_node->AddIn(small_node->id, edge->filter.get(), out_flag);
+			// When only small is protected,
+			small_node->Add(large_node->id, edge->filter.get(), forward, false);
+			large_node->Add(small_node->id, edge->filter.get(), !forward, true);
 		}
 	}
 }

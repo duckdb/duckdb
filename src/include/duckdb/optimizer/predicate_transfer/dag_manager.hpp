@@ -30,7 +30,7 @@ public:
 
 	vector<LogicalOperator *> &GetExecutionOrder();
 
-	void Add(idx_t create_table, shared_ptr<BlockedBloomFilter> use_bf, bool reverse);
+	void AddBF(idx_t create_bf, const shared_ptr<BlockedBloomFilter>& use_bf, bool reverse);
 
 	NodesManager nodes_manager;
 	ClientContext &context;
