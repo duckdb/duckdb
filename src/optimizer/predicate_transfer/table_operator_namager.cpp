@@ -8,7 +8,7 @@
 namespace duckdb {
 vector<reference<LogicalOperator>> TableOperatorManager::ExtractOperators(LogicalOperator &plan) {
 	vector<reference<LogicalOperator>> ret;
-	ExtractOperators(plan, ret);
+	ExtractOperators(plan, ret, true);
 	SortTableOperators();
 	return std::move(ret);
 }
@@ -107,7 +107,8 @@ void TableOperatorManager::AddTableOperator(LogicalOperator *op) {
 	}
 }
 
-void TableOperatorManager::ExtractOperators(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
+void TableOperatorManager::ExtractOperators(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins,
+                                            bool can_add_mark) {
 	LogicalOperator *op = &plan;
 
 	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
@@ -124,7 +125,7 @@ void TableOperatorManager::ExtractOperators(LogicalOperator &plan, vector<refere
 			} else {
 				can_add_mark = true;
 			}
-			ExtractOperators(*child, joins);
+			ExtractOperators(*child, joins, can_add_mark);
 			return;
 		}
 		op = op->children[0].get();
@@ -150,35 +151,35 @@ void TableOperatorManager::ExtractOperators(LogicalOperator &plan, vector<refere
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &agg = op->Cast<LogicalAggregate>();
 		if (agg.groups.empty() && agg.grouping_sets.size() <= 1) {
-			ExtractOperators(*op->children[0], joins);
+			ExtractOperators(*op->children[0], joins, can_add_mark);
 			AddTableOperator(op);
 		} else {
 			for (size_t i = 0; i < agg.groups.size(); i++) {
 				if (agg.groups[i]->type == ExpressionType::BOUND_COLUMN_REF) {
-					auto &colref = agg.groups[i]->Cast<BoundColumnRefExpression>();
-					rename_col_bindings.insert({agg.GetColumnBindings()[i], colref.binding});
+					auto &col_ref = agg.groups[i]->Cast<BoundColumnRefExpression>();
+					rename_col_bindings.insert({agg.GetColumnBindings()[i], col_ref.binding});
 				}
 			}
-			ExtractOperators(*op->children[0], joins);
+			ExtractOperators(*op->children[0], joins, can_add_mark);
 		}
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		for (size_t i = 0; i < op->expressions.size(); i++) {
 			if (op->expressions[i]->type == ExpressionType::BOUND_COLUMN_REF) {
-				auto &colref = op->expressions[i]->Cast<BoundColumnRefExpression>();
-				rename_col_bindings.insert({op->GetColumnBindings()[i], colref.binding});
+				auto &col_ref = op->expressions[i]->Cast<BoundColumnRefExpression>();
+				rename_col_bindings.insert({op->GetColumnBindings()[i], col_ref.binding});
 			}
 		}
-		ExtractOperators(*op->children[0], joins);
+		ExtractOperators(*op->children[0], joins, can_add_mark);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 		AddTableOperator(op);
-		ExtractOperators(*op->children[0], joins);
-		ExtractOperators(*op->children[1], joins);
+		ExtractOperators(*op->children[0], joins, can_add_mark);
+		ExtractOperators(*op->children[1], joins, can_add_mark);
 		return;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
@@ -190,7 +191,7 @@ void TableOperatorManager::ExtractOperators(LogicalOperator &plan, vector<refere
 		return;
 	default:
 		for (auto &child : op->children) {
-			ExtractOperators(*child, joins);
+			ExtractOperators(*child, joins, can_add_mark);
 		}
 	}
 }
