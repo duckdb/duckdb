@@ -188,37 +188,36 @@ void TransferGraphManager::CreatePredicateTransferGraph() {
 	table_operator_manager.table_operators = saved_nodes;
 
 	for (auto &edge : selected_edges) {
-		if (!edge)
+		if (!edge) {
 			continue;
+		}
 
-		idx_t large = TableOperatorManager::GetScalarTableIndex(&edge->bigger_table);
-		idx_t small = TableOperatorManager::GetScalarTableIndex(&edge->smaller_table);
+		idx_t bigger = TableOperatorManager::GetScalarTableIndex(&edge->bigger_table);
+		idx_t smaller = TableOperatorManager::GetScalarTableIndex(&edge->smaller_table);
 
-		D_ASSERT(large != -1 && small != -1);
+		D_ASSERT(bigger != -1 && smaller != -1);
 
-		auto small_node = transfer_graph[small].get();
-		auto large_node = transfer_graph[large].get();
+		auto small_node = transfer_graph[smaller].get();
+		auto large_node = transfer_graph[bigger].get();
 
 		// Determine the ordering based on priority:
 		// If small_node's priority is higher than large_node's, use one set of flags,
 		// otherwise use the opposite.
-		bool forward = (small_node->priority > large_node->priority);
-
+		bool swap_order = (small_node->priority > large_node->priority);
 		if (!edge->protect_bigger_side && !edge->protect_smaller_side) {
 			// No protection
-			small_node->Add(large_node->id, edge->condition.get(), forward, true);
-			large_node->Add(small_node->id, edge->condition.get(), forward, false);
-
-			small_node->Add(large_node->id, edge->condition.get(), !forward, false);
-			large_node->Add(small_node->id, edge->condition.get(), !forward, true);
+			small_node->Add(large_node->id, edge->condition.get(), swap_order, true);
+			small_node->Add(large_node->id, edge->condition.get(), !swap_order, false);
+			large_node->Add(small_node->id, edge->condition.get(), swap_order, false);
+			large_node->Add(small_node->id, edge->condition.get(), !swap_order, true);
 		} else if (edge->protect_bigger_side && !edge->protect_smaller_side) {
-			// When only large is protected,
-			small_node->Add(large_node->id, edge->condition.get(), forward, true);
-			large_node->Add(small_node->id, edge->condition.get(), !forward, false);
+			// only the bigger is protected,
+			small_node->Add(large_node->id, edge->condition.get(), swap_order, true);
+			large_node->Add(small_node->id, edge->condition.get(), swap_order, false);
 		} else if (!edge->protect_bigger_side && edge->protect_smaller_side) {
-			// When only small is protected,
-			small_node->Add(large_node->id, edge->condition.get(), forward, false);
-			large_node->Add(small_node->id, edge->condition.get(), !forward, true);
+			// only the smaller is protected,
+			small_node->Add(large_node->id, edge->condition.get(), !swap_order, false);
+			large_node->Add(small_node->id, edge->condition.get(), !swap_order, true);
 		}
 	}
 }
