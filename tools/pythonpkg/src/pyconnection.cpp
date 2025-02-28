@@ -43,6 +43,7 @@
 #include "duckdb_python/filesystem_object.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/parser/parsed_data/create_aggregate_function_info.hpp"
 #include "duckdb_python/pandas/pandas_scan.hpp"
 #include "duckdb_python/python_objects.hpp"
 #include "duckdb/function/function.hpp"
