@@ -1265,7 +1265,7 @@ public:
 		return size;
 	}
 
-	// Returns the number of element
+	// Returns the number of elements currently in the queue for a specific producer.
 	size_t size_producer_approx(producer_token_t const& producer) const
 	{
 		return static_cast<ExplicitProducer*>(producer.producer)->size_approx();
