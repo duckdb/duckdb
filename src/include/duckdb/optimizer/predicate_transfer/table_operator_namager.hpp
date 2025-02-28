@@ -14,7 +14,6 @@ public:
 	unordered_map<idx_t, LogicalOperator *> table_operators;
 
 public:
-	//! Extract All the vertex nodes
 	vector<reference<LogicalOperator>> ExtractOperators(LogicalOperator &plan);
 	void SortTableOperators();
 	LogicalOperator *GetTableOperator(idx_t table_idx);

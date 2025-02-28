@@ -20,31 +20,25 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::PreOptimize(unique_ptr<L
 unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<LogicalOperator> plan) {
 	auto &ordered_nodes = graph_manager.transfer_order;
 
-	// Forward
-	for (int i = ordered_nodes.size() - 1; i >= 0; i--) {
-		auto current_node = ordered_nodes[i];
-		// We do predicate transfer in the function CreateBloomFilter
-		// query_graph_manager holds the input bloom filter
-		// return BF and its corresponding table id
-		auto BFvec = CreateBloomFilter(*current_node, false);
-		for (auto &BF : BFvec) {
-			// Add the Bloom Filter to its corresponding edge
-			// Need to check whether the Bloom Filter needs to transfer
-			// Such as, the column not involved in the predicate
+	// **Forward pass**: Process nodes in reverse order (from last to first)
+	// - Generate Bloom Filters (BFs) based on predicates
+	// - Add BFs to the corresponding edges in the graph
+	for (auto it = ordered_nodes.rbegin(); it != ordered_nodes.rend(); ++it) {
+		auto *current_node = *it;
+		for (auto &BF : CreateBloomFilter(*current_node, false)) {
 			graph_manager.AddBF(BF.first, BF.second, false);
 		}
 	}
 
-	// Backward
-	for (int i = 0; i < ordered_nodes.size(); i++) {
-		auto &current_node = ordered_nodes[i];
-		auto BFs = CreateBloomFilter(*current_node, true);
-		for (auto &BF : BFs) {
+	// **Backward pass**: Process nodes in original order (from first to last)
+	// - Similar to the forward pass, but for backward edges
+	for (auto *current_node : ordered_nodes) {
+		for (auto &BF : CreateBloomFilter(*current_node, true)) {
 			graph_manager.AddBF(BF.first, BF.second, true);
 		}
 	}
-	auto result = InsertTransferOperators(std::move(plan));
-	return result;
+
+	return InsertTransferOperators(std::move(plan));
 }
 
 unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(unique_ptr<LogicalOperator> plan) {
@@ -52,27 +46,24 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(
 		child = InsertTransferOperators(std::move(child));
 	}
 
-	auto *operator_ptr = plan.get();
-	auto itr = modify_map_forward.find(operator_ptr);
-	if (itr != modify_map_forward.end()) {
-		auto ptr = itr->second.get();
-		while (ptr->children.size() != 0) {
-			ptr = ptr->children[0].get();
-		}
-		ptr->AddChild(std::move(plan));
-		plan = std::move(itr->second);
-	}
+	LogicalOperator *original_operator = plan.get(); // Store original operator pointer
 
-	D_ASSERT(operator_ptr != nullptr);
-	auto itr_next = modify_map_backward.find(operator_ptr);
-	if (itr_next != modify_map_backward.end()) {
-		auto ptr_next = itr_next->second.get();
-		while (ptr_next->children.size() != 0) {
-			ptr_next = ptr_next->children[0].get();
+	auto apply_modification = [&](std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> &modify_map) {
+		auto it = modify_map.find(original_operator);
+		if (it == modify_map.end()) {
+			return; // No modification needed
 		}
-		ptr_next->AddChild(std::move(plan));
-		plan = std::move(itr_next->second);
-	}
+
+		auto *last_child = it->second.get();
+		while (!last_child->children.empty()) {
+			last_child = last_child->children[0].get();
+		}
+		last_child->AddChild(std::move(plan));
+		plan = std::move(it->second);
+	};
+
+	apply_modification(modify_map_forward);
+	apply_modification(modify_map_backward);
 
 	return plan;
 }
