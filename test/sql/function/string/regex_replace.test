@@ -90,3 +90,32 @@ statement error
 SELECT regexp_replace('asdf', '.*SD.*', 'a', 'q')
 ----
 
+# this used to fail as it should but lets make sure it still fails
+statement error
+select regexp_matches('abc', '*');
+----
+no argument for repetition operator: *
+
+# this used to silently swallow the error from the invalid regex
+statement error
+select regexp_replace('abc', '*', 'X');
+----
+no argument for repetition operator: *
+
+# make sure this also holds for non-constant case
+statement ok
+create table regex (s string, r string);
+
+statement ok
+insert into regex values ('abc', '*');
+
+statement error
+select regexp_matches(s, r) from regex;
+----
+no argument for repetition operator: *
+
+statement error
+select regexp_replace(s, r, 'X') from regex;
+----
+no argument for repetition operator: *
+
