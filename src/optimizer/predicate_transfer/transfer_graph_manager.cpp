@@ -119,8 +119,7 @@ void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) 
 	// Create table operators
 	for (auto &table_operator : table_operator_manager.table_operators) {
 		bool is_root = (table_operator.second == sorted_nodes.back());
-		auto node = make_uniq<GraphNode>(table_operator.first, table_operator.second->estimated_cardinality, is_root);
-		node->priority = prior_flag--;
+		auto node = make_uniq<GraphNode>(table_operator.first, prior_flag--);
 
 		if (is_root) {
 			constructed_set.emplace(table_operator.first);

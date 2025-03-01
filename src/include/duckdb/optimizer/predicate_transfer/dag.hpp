@@ -22,20 +22,18 @@ struct Edges {
 
 class GraphNode {
 public:
-	GraphNode(idx_t id, idx_t est_cardinality, bool is_root)
-	    : id(id), is_root(is_root), priority(-1), est_cardinality(est_cardinality) {
+	GraphNode(idx_t id, int32_t priority) : id(id), priority(priority) {
 	}
 
 	idx_t id;
-	bool is_root;
 	int32_t priority;
-	idx_t est_cardinality;
 
 	//! Predicate Transfer has two stages, the transfer graph is different because of the existence of LEFT JOIN, RIGHT
 	//! JOIN, etc.
 	Edges forward_stage_edges;
 	Edges backward_stage_edges;
 
+public:
 	GraphEdge *Add(idx_t other, bool is_forward, bool is_in_edge);
 	GraphEdge *Add(idx_t other, Expression *expression, bool is_forward, bool is_in_edge);
 	GraphEdge *Add(idx_t other, const shared_ptr<BlockedBloomFilter> &bloom_filter, bool is_forward, bool is_in_edge);
