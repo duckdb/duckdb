@@ -443,19 +443,19 @@ void UDFSumFunction::Initialize(double &state) {
 }
 
 void UDFSumFunction::Operation(double &state, const double &input, AggregateUnaryInput &) {
-	sum += input;
+	state += input;
 }
 
 void UDFSumFunction::ConstantOperation(double &state, const double &input, AggregateUnaryInput &, idx_t count) {
-	state.sum += input * count;
+	state += input * count;
 }
 
 void UDFSumFunction::Combine(const double &source, double &target, AggregateInputData &) {
-	target.sum += source.sum;
+	target += source;
 }
 
 void UDFSumFunction::Finalize(double &state, double &target, AggregateFinalizeData &finalize_data) {
-	target = sum;
+	target = state;
 }
 
 bool UDFSumFunction::IgnoreNull() {
