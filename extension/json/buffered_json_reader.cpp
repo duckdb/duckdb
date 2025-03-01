@@ -760,10 +760,11 @@ void BufferedJSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 			// We reached the end of the buffer
 			if (!scan_state.is_last) {
 				// Last bit of data belongs to the next batch
-				if (format != JSONFormat::NEWLINE_DELIMITED) {
+				if (scan_state.scan_entire_file) {
 					if (remaining > options.maximum_object_size) {
 						ThrowObjectSizeError(remaining);
 					}
+					// Copy last bit of previous buffer if we are doing a single-threaded read
 					memcpy(scan_state.GetReconstructBuffer(), json_start, remaining);
 					scan_state.prev_buffer_remainder = remaining;
 				}
@@ -855,12 +856,11 @@ void BufferedJSONReader::FinalizeBufferInternal(JSONReaderScanState &scan_state,
 	// YYJSON needs this
 	memset(scan_state.buffer_ptr + scan_state.buffer_size, 0, YYJSON_PADDING_SIZE);
 
-	if (scan_state.current_buffer_handle->buffer_index != 0 && GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
+	if (scan_state.current_buffer_handle->buffer_index != 0 && !scan_state.scan_entire_file) {
 		if (ReconstructFirstObject(scan_state)) {
 			scan_state.scan_count++;
 		}
 	}
-	scan_state.is_first_scan = true;
 }
 
 void BufferedJSONReader::DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer) {
@@ -881,14 +881,13 @@ void BufferedJSONReader::PrepareForRead(JSONScanGlobalState &gstate, JSONReaderS
 		auto &handle = *scan_state.current_buffer_handle;
 		handle.reader.DecrementBufferUsage(*scan_state.current_buffer_handle, scan_state.lines_or_objects_in_buffer, buffer);
 	}
-
-	// Copy last bit of previous buffer
-	if (GetFormat() != JSONFormat::NEWLINE_DELIMITED && !scan_state.is_last) {
-		memcpy(scan_state.buffer_ptr, scan_state.GetReconstructBuffer(), scan_state.prev_buffer_remainder);
-	}
 	if (!buffer.IsSet()) {
 		buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
 		scan_state.buffer_ptr = char_ptr_cast(buffer.get());
+	}
+	// Copy last bit of previous buffer
+	if (scan_state.prev_buffer_remainder > 0) {
+		memcpy(scan_state.buffer_ptr, scan_state.GetReconstructBuffer(), scan_state.prev_buffer_remainder);
 	}
 }
 bool BufferedJSONReader::ReadNextBufferInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,

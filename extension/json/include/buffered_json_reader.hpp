@@ -122,6 +122,11 @@ struct JSONReaderScanState {
 	idx_t buffer_capacity;
 	// if we have a buffer already - this is our buffer index
 	optional_idx buffer_index;
+	//! Whether or not we are scanning the entire file
+	//! If we are scanning the entire file we don't share reads between threads and just read the file until we are done
+	bool initialized = false;
+	bool scan_entire_file = false;
+	bool reader_is_initialized = true;
 	// Data for reading (if we have postponed reading)
 	bool needs_to_read = false;
 	idx_t request_size;
