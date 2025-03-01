@@ -173,6 +173,20 @@ struct UDFAverageFunction {
 	static bool IgnoreNull();
 };
 
+struct UDFSumFunction {
+	static void Initialize(double &state);
+
+	static void Operation(double &state, const double &input, AggregateUnaryInput &);
+
+	static void ConstantOperation(double &state, const double &input, AggregateUnaryInput &, idx_t count);
+
+	static void Combine(const double &source, double &target, AggregateInputData &);
+
+	static void Finalize(double &state, double &target, AggregateFinalizeData &finalize_data);
+
+	static bool IgnoreNull();
+};
+
 struct DuckDBPyConnection : public enable_shared_from_this<DuckDBPyConnection> {
 private:
 	class Cursors {

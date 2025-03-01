@@ -435,6 +435,34 @@ bool UDFAverageFunction::IgnoreNull() {
 	return true;
 }
 
+
+// Simplication to double and single field to start python udf aggregation work.
+// Need to add back complex and composite type later.
+void UDFSumFunction::Initialize(double &state) {
+	state = 0;
+}
+
+void UDFSumFunction::Operation(double &state, const double &input, AggregateUnaryInput &) {
+	sum += input;
+}
+
+void UDFSumFunction::ConstantOperation(double &state, const double &input, AggregateUnaryInput &, idx_t count) {
+	state.sum += input * count;
+}
+
+void UDFSumFunction::Combine(const double &source, double &target, AggregateInputData &) {
+	target.sum += source.sum;
+}
+
+void UDFSumFunction::Finalize(double &state, double &target, AggregateFinalizeData &finalize_data) {
+	target = sum;
+}
+
+bool UDFSumFunction::IgnoreNull() {
+	return true;
+}
+
+
 shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(
     const string &name, const py::function &udf, const py::object &arguments,
     const shared_ptr<DuckDBPyType> &return_type, PythonUDFType type,
@@ -453,9 +481,13 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(
 		                              name);
 	}
 
-	auto aggregate_function =
+	auto aggregate_function = UDFWrapper::CreateAggregateFunction<UDFSS
+
+	/*
 	    UDFWrapper::CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>(
 	        "udf_avg_double");
+	*/
+
 	CreateAggregateFunctionInfo info(aggregate_function);
 	context.RegisterFunction(info);
 
