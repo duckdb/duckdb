@@ -25,7 +25,8 @@ class BufferedJSONReader;
 
 struct JSONBufferHandle {
 public:
-	JSONBufferHandle(BufferedJSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData &&buffer, idx_t buffer_size);
+	JSONBufferHandle(BufferedJSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData &&buffer,
+	                 idx_t buffer_size);
 
 public:
 	//! The reader this buffer comes from
@@ -220,7 +221,8 @@ public:
 	void PrepareForReadInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
 	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer);
 	void PrepareForScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
-	bool PrepareBufferForRead(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
+	bool PrepareBufferForRead(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
+	                          bool immediate_read_required = false);
 	void FinalizeBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
 
 	//! Scan progress

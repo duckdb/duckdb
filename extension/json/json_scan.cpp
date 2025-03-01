@@ -179,7 +179,7 @@ idx_t JSONLocalTableFunctionState::GetBatchIndex() const {
 
 idx_t JSONScanLocalState::Read(JSONScanGlobalState &gstate) {
 	scan_state.current_reader->PrepareForScan(gstate, scan_state);
-	while (scan_state.scan_count == 0 ) {
+	while (scan_state.scan_count == 0) {
 		while (scan_state.buffer_offset >= scan_state.buffer_size) {
 			// we have exhausted the current buffer
 			if (!scan_state.scan_entire_file) {
@@ -242,14 +242,17 @@ bool JSONScanLocalState::IsParallel(JSONScanGlobalState &gstate) const {
 	return scan_state.current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED;
 }
 
-bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, BufferedJSONReader &reader) {
+bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
+                                           BufferedJSONReader &reader) {
 	// try to initialize a scan in the given reader
 	// three scenarios:
 	// scenario 1 - unseekable file - Read from the file and setup the buffers
 	// scenario 2 - seekable file - get the position from the file to read and return
-	// scenario 3 - entire file readers - if we are reading an entire file at once, do not do anything here, except for setting up the basics
+	// scenario 3 - entire file readers - if we are reading an entire file at once, do not do anything here, except for
+	// setting up the basics
 	if (!gstate.enable_parallel_scans || reader.GetFormat() != JSONFormat::NEWLINE_DELIMITED) {
-		// we are reading the entire file - we want to return true if nobody has read this file yet, otherwise return false
+		// we are reading the entire file - we want to return true if nobody has read this file yet, otherwise return
+		// false
 		if (gstate.file_is_assigned) {
 			// the file has already been assigned
 			return false;
@@ -280,7 +283,8 @@ bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate, JSONRead
 	return false;
 }
 
-void JSONScanLocalState::PrepareReader(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, BufferedJSONReader &reader) {
+void JSONScanLocalState::PrepareReader(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
+                                       BufferedJSONReader &reader) {
 	gstate.file_is_assigned = false;
 	if (!gstate.enable_parallel_scans) {
 		// we are reading the entire file - we don't even need to open the file yet

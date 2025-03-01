@@ -8,12 +8,14 @@
 
 namespace duckdb {
 
-JSONBufferHandle::JSONBufferHandle(BufferedJSONReader &reader, idx_t buffer_index_p, idx_t readers_p, AllocatedData &&buffer_p, idx_t buffer_size_p)
-    : reader(reader), buffer_index(buffer_index_p), readers(readers_p), buffer(std::move(buffer_p)), buffer_size(buffer_size_p) {
+JSONBufferHandle::JSONBufferHandle(BufferedJSONReader &reader, idx_t buffer_index_p, idx_t readers_p,
+                                   AllocatedData &&buffer_p, idx_t buffer_size_p)
+    : reader(reader), buffer_index(buffer_index_p), readers(readers_p), buffer(std::move(buffer_p)),
+      buffer_size(buffer_size_p) {
 }
 
 JSONFileHandle::JSONFileHandle(unique_ptr<FileHandle> file_handle_p, Allocator &allocator_p)
-    : file_handle(std::move(file_handle_p)), allocator(allocator_p), can_seek(false),
+    : file_handle(std::move(file_handle_p)), allocator(allocator_p), can_seek(file_handle->CanSeek()),
       file_size(file_handle->GetFileSize()), read_position(0), requested_reads(0), actual_reads(0),
       last_read_requested(false), cached_size(0) {
 }
@@ -696,7 +698,8 @@ void BufferedJSONReader::AutoDetect(JSONReaderScanState &scan_state) {
 
 	if (!options.ignore_errors && options.record_type == JSONRecordType::RECORDS &&
 	    GetRecordType() != JSONRecordType::RECORDS) {
-		ThrowTransformError(scan_state.buffer_index.GetIndex(), 0, "Expected records, detected non-record JSON instead.");
+		ThrowTransformError(scan_state.buffer_index.GetIndex(), 0,
+		                    "Expected records, detected non-record JSON instead.");
 	}
 }
 
@@ -830,9 +833,11 @@ void BufferedJSONReader::InitializeScan(JSONScanGlobalState &gstate, JSONReaderS
 	// Auto-detect if we haven't yet done this during the bind
 	if (options.record_type == JSONRecordType::AUTO_DETECT || GetFormat() == JSONFormat::AUTO_DETECT) {
 		// We have to detect the JSON format
-		if (!PrepareBufferForRead(gstate, scan_state)) {
+		// read a buffer
+		if (!PrepareBufferForRead(gstate, scan_state, true)) {
 			return;
 		}
+
 		AutoDetect(scan_state);
 		if (scan_state.buffer_index.IsValid() && scan_state.buffer_size != 0) {
 			FinalizeBufferInternal(scan_state, scan_state.read_buffer, scan_state.buffer_index.GetIndex());
@@ -856,14 +861,13 @@ void BufferedJSONReader::PrepareForScan(JSONScanGlobalState &gstate, JSONReaderS
 		}
 		return;
 	}
-	if (!scan_state.read_buffer.IsSet()) {
+	if (!scan_state.needs_to_read && !scan_state.read_buffer.IsSet()) {
 		// we have already read (because we auto-detected) - skip
 		return;
 	}
 	// we are scanning only a buffer - finalize it so we can start reading
 	FinalizeBuffer(gstate, scan_state);
 }
-
 
 void BufferedJSONReader::FinalizeBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state) {
 	if (scan_state.needs_to_read) {
@@ -872,6 +876,7 @@ void BufferedJSONReader::FinalizeBuffer(JSONScanGlobalState &gstate, JSONReaderS
 		ReadNextBufferSeek(gstate, scan_state);
 		scan_state.needs_to_read = false;
 	}
+
 	// we read something
 	// skip over the array start if required
 	if (!scan_state.is_last) {
@@ -918,7 +923,8 @@ void BufferedJSONReader::FinalizeBufferInternal(JSONReaderScanState &scan_state,
 	}
 }
 
-void BufferedJSONReader::DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer) {
+void BufferedJSONReader::DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer,
+                                              AllocatedData &buffer) {
 	SetBufferLineOrObjectCount(handle, lines_or_object_in_buffer);
 	if (--handle.readers == 0) {
 		buffer = RemoveBuffer(handle);
@@ -936,23 +942,25 @@ void BufferedJSONReader::PrepareForReadInternal(JSONScanGlobalState &gstate, JSO
 		memcpy(scan_state.buffer_ptr, scan_state.GetReconstructBuffer(), scan_state.prev_buffer_remainder);
 	}
 }
-bool BufferedJSONReader::PrepareBufferForRead(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state) {
-	// if (GetFileHandle().CanSeek()) {
-	// 	if (!PrepareBufferSeek(gstate, scan_state, buffer_index)) {
-	// 		return false;
-	// 	}
-	// } else {
+bool BufferedJSONReader::PrepareBufferForRead(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
+                                              bool immediate_read_required) {
+	if (!scan_state.scan_entire_file && !immediate_read_required && GetFileHandle().CanSeek()) {
+		// we can seek and are doing a parallel read - we don't need to read immediately yet
+		// we only need to prepare the read now
+		if (!PrepareBufferSeek(gstate, scan_state)) {
+			return false;
+		}
+	} else {
 		// we cannot seek - we need to read immediately here
 		if (!ReadNextBufferNoSeek(gstate, scan_state)) {
 			return false;
 		}
-	// }
+	}
 	scan_state.buffer_offset = 0;
 	return true;
 }
 
 bool BufferedJSONReader::PrepareBufferSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state) {
-	lock_guard<mutex> reader_guard(lock);
 	scan_state.request_size = scan_state.buffer_capacity - scan_state.prev_buffer_remainder - YYJSON_PADDING_SIZE;
 	if (!IsOpen()) {
 		return false;
@@ -967,8 +975,12 @@ bool BufferedJSONReader::PrepareBufferSeek(JSONScanGlobalState &gstate, JSONRead
 	}
 	scan_state.buffer_index = GetBufferIndex();
 	scan_state.is_last = scan_state.read_size == 0;
-	scan_state.needs_to_read = true;
+	scan_state.needs_to_read = scan_state.read_size > 0;
 	scan_state.buffer_size = scan_state.prev_buffer_remainder + scan_state.read_size;
+	if (!scan_state.needs_to_read) {
+		// if this is the last buffer just round this off immediately
+		PrepareForReadInternal(gstate, scan_state);
+	}
 	return true;
 }
 
@@ -984,10 +996,10 @@ void BufferedJSONReader::ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONRea
 		// per tcp connection can occur meaning that using multiple connections is faster.
 		if (!raw_handle.OnDiskFile() && raw_handle.CanSeek()) {
 			if (!scan_state.thread_local_filehandle ||
-				scan_state.thread_local_filehandle->GetPath() != raw_handle.GetPath()) {
+			    scan_state.thread_local_filehandle->GetPath() != raw_handle.GetPath()) {
 				scan_state.thread_local_filehandle = scan_state.fs.OpenFile(
-					raw_handle.GetPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
-				}
+				    raw_handle.GetPath(), FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+			}
 		} else if (scan_state.thread_local_filehandle) {
 			scan_state.thread_local_filehandle = nullptr;
 		}
@@ -995,8 +1007,9 @@ void BufferedJSONReader::ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONRea
 
 	// Now read the file lock-free!
 	PrepareForReadInternal(gstate, scan_state);
-	file_handle.ReadAtPosition(scan_state.buffer_ptr + scan_state.prev_buffer_remainder, scan_state.read_size, scan_state.read_position,
-							   options.type == JSONScanType::SAMPLE, scan_state.thread_local_filehandle);
+	file_handle.ReadAtPosition(scan_state.buffer_ptr + scan_state.prev_buffer_remainder, scan_state.read_size,
+	                           scan_state.read_position, options.type == JSONScanType::SAMPLE,
+	                           scan_state.thread_local_filehandle);
 }
 
 bool BufferedJSONReader::ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state) {
