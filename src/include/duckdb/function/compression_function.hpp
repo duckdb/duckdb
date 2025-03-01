@@ -24,6 +24,7 @@ struct ColumnDataCheckpointData;
 class ColumnSegment;
 class SegmentStatistics;
 class TableFilter;
+struct TableFilterState;
 struct ColumnSegmentState;
 
 struct ColumnFetchState;
@@ -175,7 +176,8 @@ typedef void (*compression_select_t)(ColumnSegment &segment, ColumnScanState &st
                                      const SelectionVector &sel, idx_t sel_count);
 //! Function prototype used for applying a filter to a vector while scanning that vector
 typedef void (*compression_filter_t)(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                                     SelectionVector &sel, idx_t &sel_count, const TableFilter &filter);
+                                     SelectionVector &sel, idx_t &sel_count, const TableFilter &filter,
+                                     TableFilterState &filter_state);
 //! Function prototype used for reading a single value
 typedef void (*compression_fetch_row_t)(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                         idx_t result_idx);

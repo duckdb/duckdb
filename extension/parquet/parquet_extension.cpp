@@ -585,7 +585,7 @@ void ParquetMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader_p
                                 LocalTableFunctionState &local_state_p, DataChunk &chunk) {
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	auto &reader = reader_p.Cast<ParquetReader>();
-	reader.Scan(local_state.scan_state, chunk);
+	reader.Scan(context, local_state.scan_state, chunk);
 }
 
 static case_insensitive_map_t<LogicalType> GetChildNameToTypeMap(const LogicalType &type) {
