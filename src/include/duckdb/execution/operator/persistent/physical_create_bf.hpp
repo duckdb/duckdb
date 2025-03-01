@@ -18,6 +18,7 @@ public:
 	vector<shared_ptr<BlockedBloomFilter>> bf_to_create;
 	shared_ptr<Pipeline> this_pipeline;
 
+public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 public:

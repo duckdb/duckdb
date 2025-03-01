@@ -14,8 +14,6 @@ public:
 	vector<shared_ptr<BlockedBloomFilter>> bf_to_use;
 	vector<PhysicalCreateBF *> related_create_bf;
 
-	InsertionOrderPreservingMap<string> ParamsToString() const override;
-
 public:
 	/* Operator interface */
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
@@ -23,6 +21,8 @@ public:
 	bool ParallelOperator() const override {
 		return true;
 	}
+
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 
