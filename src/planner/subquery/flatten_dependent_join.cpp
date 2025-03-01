@@ -401,6 +401,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				// only right has correlation: push into right
 				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
 				                                                  parent_propagate_null_values, lateral_depth);
+				delim_offset += plan->children[0]->GetColumnBindings().size();
 				// Remove the correlated columns coming from outside for current join node
 				return plan;
 			}
@@ -419,6 +420,7 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 				// only right has correlation: push into right
 				plan->children[1] = PushDownDependentJoinInternal(std::move(plan->children[1]),
 				                                                  parent_propagate_null_values, lateral_depth);
+				delim_offset += plan->children[0]->GetColumnBindings().size();
 				return plan;
 			}
 		} else if (join.join_type == JoinType::MARK) {
@@ -728,6 +730,17 @@ unique_ptr<LogicalOperator> FlattenDependentJoins::PushDownDependentJoinInternal
 			base_binding.column_index = setop.column_count;
 			table_index = setop.table_index;
 			setop.correlated_columns = correlated_columns;
+
+			if (!setop.key_targets.empty()) {
+				for (idx_t i = 0; i < correlated_columns.size(); i++) {
+					auto corr = correlated_columns[i];
+					auto colref = make_uniq<BoundColumnRefExpression>(
+					    correlated_columns[i].type,
+					    ColumnBinding(base_binding.table_index, base_binding.column_index + i));
+					setop.key_targets.push_back(std::move(colref));
+				}
+			}
+
 		} else if (plan->type == LogicalOperatorType::LOGICAL_MATERIALIZED_CTE) {
 			auto &setop = plan->Cast<LogicalMaterializedCTE>();
 			base_binding.table_index = setop.table_index;

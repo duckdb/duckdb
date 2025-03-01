@@ -1,9 +1,15 @@
 import pytest
+import platform
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 from spark_namespace.sql import functions as F
 from spark_namespace.sql.types import Row
 from spark_namespace import USE_ACTUAL_SPARK
+
+pytestmark = pytest.mark.skipif(
+    platform.system() == "Emscripten",
+    reason="This Spark experimental test is not supported on Emscripten",
+)
 
 
 class TestSparkFunctionsArray:

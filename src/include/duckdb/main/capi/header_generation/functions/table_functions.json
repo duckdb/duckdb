@@ -117,7 +117,7 @@
                 "param_comments": {
                     "table_function": "The table function",
                     "extra_info": "The extra information",
-                    "destroy": "The callback that will be called to destroy the bind data (if any)"
+                    "destroy": "The callback that will be called to destroy the extra information (if any)"
                 }
             }
         },

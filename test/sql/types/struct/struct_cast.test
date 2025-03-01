@@ -152,3 +152,20 @@ AS tab(col)
 {'duck': NULL}
 {'duck': NULL}
 {'duck': NULL}
+
+# Allow missing / additional STRUCT fields.
+
+query I
+SELECT {'i': 42, 'j': 84}::STRUCT(i INT) AS result;
+----
+{'i': 42}
+
+query I
+SELECT {'i': 42}::STRUCT(i INT, j INT) AS result;
+----
+{'i': 42, 'j': NULL}
+
+query I
+SELECT {'a': 7, 'i': 42, 'j': 84, 'k': 42}::STRUCT(m INT, k INT, l INT) AS result;
+----
+{'m': NULL, 'k': 42, 'l': NULL}

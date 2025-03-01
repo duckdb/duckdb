@@ -26,117 +26,50 @@ public:
 	const Expression *filter_ref;
 };
 
-bool WindowAggregateExecutor::IsConstantAggregate() {
-	if (!wexpr.aggregate) {
-		return false;
-	}
-	// window exclusion cannot be handled by constant aggregates
-	if (wexpr.exclude_clause != WindowExcludeMode::NO_OTHER) {
-		return false;
-	}
-
-	//	COUNT(*) is already handled efficiently by segment trees.
-	if (wexpr.children.empty()) {
-		return false;
-	}
-
-	/*
-	    The default framing option is RANGE UNBOUNDED PRECEDING, which
-	    is the same as RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT
-	    ROW; it sets the frame to be all rows from the partition start
-	    up through the current row's last peer (a row that the window's
-	    ORDER BY clause considers equivalent to the current row; all
-	    rows are peers if there is no ORDER BY). In general, UNBOUNDED
-	    PRECEDING means that the frame starts with the first row of the
-	    partition, and similarly UNBOUNDED FOLLOWING means that the
-	    frame ends with the last row of the partition, regardless of
-	    RANGE, ROWS or GROUPS mode. In ROWS mode, CURRENT ROW means that
-	    the frame starts or ends with the current row; but in RANGE or
-	    GROUPS mode it means that the frame starts or ends with the
-	    current row's first or last peer in the ORDER BY ordering. The
-	    offset PRECEDING and offset FOLLOWING options vary in meaning
-	    depending on the frame mode.
-	*/
-	switch (wexpr.start) {
-	case WindowBoundary::UNBOUNDED_PRECEDING:
-		break;
-	case WindowBoundary::CURRENT_ROW_RANGE:
-		if (!wexpr.orders.empty()) {
-			return false;
+static BoundWindowExpression &SimplifyWindowedAggregate(BoundWindowExpression &wexpr, ClientContext &context) {
+	// Remove redundant/irrelevant modifiers (they can be serious performance cliffs)
+	if (wexpr.aggregate && ClientConfig::GetConfig(context).enable_optimizer) {
+		const auto &aggr = wexpr.aggregate;
+		auto &arg_orders = wexpr.arg_orders;
+		if (aggr->distinct_dependent != AggregateDistinctDependent::DISTINCT_DEPENDENT) {
+			wexpr.distinct = false;
 		}
-		break;
-	default:
-		return false;
-	}
-
-	switch (wexpr.end) {
-	case WindowBoundary::UNBOUNDED_FOLLOWING:
-		break;
-	case WindowBoundary::CURRENT_ROW_RANGE:
-		if (!wexpr.orders.empty()) {
-			return false;
+		if (aggr->order_dependent != AggregateOrderDependent::ORDER_DEPENDENT) {
+			arg_orders.clear();
+		} else {
+			//	If the argument order is prefix of the partition ordering,
+			//	then we can just use the partition ordering.
+			if (BoundWindowExpression::GetSharedOrders(wexpr.orders, arg_orders) == arg_orders.size()) {
+				arg_orders.clear();
+			}
 		}
-		break;
-	default:
-		return false;
 	}
 
-	return true;
-}
-
-bool WindowAggregateExecutor::IsDistinctAggregate() {
-	if (!wexpr.aggregate) {
-		return false;
-	}
-
-	return wexpr.distinct;
-}
-
-bool WindowAggregateExecutor::IsCustomAggregate() {
-	if (!wexpr.aggregate) {
-		return false;
-	}
-
-	if (!AggregateObject(wexpr).function.window) {
-		return false;
-	}
-
-	return (mode < WindowAggregationMode::COMBINE);
-}
-
-void WindowExecutor::Evaluate(idx_t row_idx, DataChunk &eval_chunk, Vector &result, WindowExecutorLocalState &lstate,
-                              WindowExecutorGlobalState &gstate) const {
-	auto &lbstate = lstate.Cast<WindowExecutorBoundsState>();
-	lbstate.UpdateBounds(gstate, row_idx, eval_chunk, lstate.range_cursor);
-
-	const auto count = eval_chunk.size();
-	EvaluateInternal(gstate, lstate, eval_chunk, result, count, row_idx);
-
-	result.Verify(count);
+	return wexpr;
 }
 
 WindowAggregateExecutor::WindowAggregateExecutor(BoundWindowExpression &wexpr, ClientContext &context,
                                                  WindowSharedExpressions &shared, WindowAggregationMode mode)
-    : WindowExecutor(wexpr, context, shared), mode(mode) {
-	auto return_type = wexpr.return_type;
+    : WindowExecutor(SimplifyWindowedAggregate(wexpr, context), context, shared), mode(mode) {
 
 	// Force naive for SEPARATE mode or for (currently!) unsupported functionality
-	const auto force_naive =
-	    !ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE;
-	if (force_naive || (wexpr.distinct && wexpr.exclude_clause != WindowExcludeMode::NO_OTHER)) {
-		aggregator = make_uniq<WindowNaiveAggregator>(wexpr, wexpr.exclude_clause, shared);
-	} else if (IsDistinctAggregate()) {
+	if (!ClientConfig::GetConfig(context).enable_optimizer || mode == WindowAggregationMode::SEPARATE) {
+		aggregator = make_uniq<WindowNaiveAggregator>(*this, shared);
+	} else if (WindowDistinctAggregator::CanAggregate(wexpr)) {
 		// build a merge sort tree
 		// see https://dl.acm.org/doi/pdf/10.1145/3514221.3526184
-		aggregator = make_uniq<WindowDistinctAggregator>(wexpr, wexpr.exclude_clause, shared, context);
-	} else if (IsConstantAggregate()) {
-		aggregator = make_uniq<WindowConstantAggregator>(wexpr, wexpr.exclude_clause, shared);
-	} else if (IsCustomAggregate()) {
-		aggregator = make_uniq<WindowCustomAggregator>(wexpr, wexpr.exclude_clause, shared);
-	} else {
+		aggregator = make_uniq<WindowDistinctAggregator>(wexpr, shared, context);
+	} else if (WindowConstantAggregator::CanAggregate(wexpr)) {
+		aggregator = make_uniq<WindowConstantAggregator>(wexpr, shared, context);
+	} else if (WindowCustomAggregator::CanAggregate(wexpr, mode)) {
+		aggregator = make_uniq<WindowCustomAggregator>(wexpr, shared);
+	} else if (WindowSegmentTree::CanAggregate(wexpr)) {
 		// build a segment tree for frame-adhering aggregates
 		// see http://www.vldb.org/pvldb/vol8/p1058-leis.pdf
-		aggregator = make_uniq<WindowSegmentTree>(wexpr, mode, wexpr.exclude_clause, shared);
+		aggregator = make_uniq<WindowSegmentTree>(wexpr, shared);
+	} else {
+		// No accelerator can handle this combination, so fall back to naïve.
+		aggregator = make_uniq<WindowNaiveAggregator>(*this, shared);
 	}
 
 	// Compute the FILTER with the other eval columns.
@@ -261,7 +194,12 @@ static void ApplyWindowStats(const WindowBoundary &boundary, FrameDelta &delta, 
 	case WindowBoundary::EXPR_PRECEDING_RANGE:
 	case WindowBoundary::EXPR_FOLLOWING_RANGE:
 		return;
-	default:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+	case WindowBoundary::EXPR_PRECEDING_GROUPS:
+	case WindowBoundary::EXPR_FOLLOWING_GROUPS:
+		return;
+	case WindowBoundary::INVALID:
+		throw InternalException(is_start ? "Unknown window start boundary" : "Unknown window end boundary");
 		break;
 	}
 

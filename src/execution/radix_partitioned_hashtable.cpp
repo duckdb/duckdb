@@ -97,6 +97,8 @@ public:
 	void SetRadixBits(const idx_t &radix_bits_p);
 	bool SetRadixBitsToExternal();
 	idx_t GetRadixBits() const;
+	idx_t GetMaximumSinkRadixBits() const;
+	idx_t GetExternalRadixBits() const;
 
 private:
 	void SetRadixBitsInternal(idx_t radix_bits_p, bool external);
@@ -160,7 +162,7 @@ public:
 	ClientContext &context;
 	//! Temporary memory state for managing this hash table's memory usage
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
-	idx_t minimum_reservation;
+	atomic<idx_t> minimum_reservation;
 
 	//! Whether we've called Finalize
 	bool finalized;
@@ -210,13 +212,13 @@ RadixHTGlobalSinkState::RadixHTGlobalSinkState(ClientContext &context_p, const R
 	auto tuples_per_block = block_alloc_size / radix_ht.GetLayout().GetRowWidth();
 	idx_t ht_count =
 	    LossyNumericCast<idx_t>(static_cast<double>(config.sink_capacity) / GroupedAggregateHashTable::LOAD_FACTOR);
-	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetRadixBits());
+	auto num_partitions = RadixPartitioning::NumberOfPartitions(config.GetMaximumSinkRadixBits());
 	auto count_per_partition = ht_count / num_partitions;
-	auto blocks_per_partition = (count_per_partition + tuples_per_block) / tuples_per_block + 1;
+	auto blocks_per_partition = (count_per_partition + tuples_per_block) / tuples_per_block;
 	if (!radix_ht.GetLayout().AllConstant()) {
-		blocks_per_partition += 2;
+		blocks_per_partition += 1;
 	}
-	auto ht_size = blocks_per_partition * block_alloc_size + config.sink_capacity * sizeof(ht_entry_t);
+	auto ht_size = num_partitions * blocks_per_partition * block_alloc_size + config.sink_capacity * sizeof(ht_entry_t);
 
 	// This really is the minimum reservation that we can do
 	auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
@@ -280,19 +282,31 @@ idx_t RadixHTConfig::GetRadixBits() const {
 	return sink_radix_bits;
 }
 
+idx_t RadixHTConfig::GetMaximumSinkRadixBits() const {
+	return maximum_sink_radix_bits;
+}
+
+idx_t RadixHTConfig::GetExternalRadixBits() const {
+	return MAXIMUM_FINAL_SINK_RADIX_BITS;
+}
+
 void RadixHTConfig::SetRadixBitsInternal(const idx_t radix_bits_p, bool external) {
-	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
+	if (sink_radix_bits > radix_bits_p || sink.any_combined) {
 		return;
 	}
 
 	auto guard = sink.Lock();
-	if (sink_radix_bits >= radix_bits_p || sink.any_combined) {
+	if (sink_radix_bits > radix_bits_p || sink.any_combined) {
 		return;
 	}
 
 	if (external) {
+		const auto partition_multiplier = RadixPartitioning::NumberOfPartitions(radix_bits_p) /
+		                                  RadixPartitioning::NumberOfPartitions(sink_radix_bits);
+		sink.minimum_reservation = sink.minimum_reservation * partition_multiplier;
 		sink.external = true;
 	}
+
 	sink_radix_bits = radix_bits_p;
 }
 
@@ -585,7 +599,7 @@ idx_t RadixPartitionedHashTable::MaxThreads(GlobalSinkState &sink_p) const {
 
 	// we cannot spill aggregate state memory
 	const auto usable_memory = sink.temporary_memory_state->GetReservation() > sink.stored_allocators_size
-	                               ? sink.temporary_memory_state->GetReservation() - sink.max_partition_size
+	                               ? sink.temporary_memory_state->GetReservation() - sink.stored_allocators_size
 	                               : 0;
 	// This many partitions will fit given our reservation (at least 1))
 	const auto partitions_fit = MaxValue<idx_t>(usable_memory / sink.max_partition_size, 1);

@@ -26,8 +26,10 @@
 #include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/parser/parsed_data/drop_info.hpp"
+#include "duckdb/parser/statement/create_statement.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/catalog/default/default_types.hpp"
 #include "duckdb/main/extension_entries.hpp"
 #include "duckdb/main/extension/generated_extension_loader.hpp"
@@ -304,6 +306,14 @@ optional_ptr<CatalogEntry> Catalog::CreateIndex(ClientContext &context, CreateIn
 	return CreateIndex(GetCatalogTransaction(context), info);
 }
 
+unique_ptr<LogicalOperator> Catalog::BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
+                                                     unique_ptr<LogicalOperator> plan) {
+	D_ASSERT(plan->type == LogicalOperatorType::LOGICAL_GET);
+	auto create_index_info = unique_ptr_cast<CreateInfo, CreateIndexInfo>(std::move(stmt.info));
+	IndexBinder index_binder(binder, binder.context);
+	return index_binder.BindCreateIndex(binder.context, std::move(create_index_info), table, std::move(plan), nullptr);
+}
+
 unique_ptr<LogicalOperator> Catalog::BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
                                                        unique_ptr<LogicalOperator> plan,
                                                        unique_ptr<CreateIndexInfo> create_info,
@@ -416,7 +426,12 @@ vector<CatalogSearchEntry> GetCatalogEntries(CatalogEntryRetriever &retriever, c
 			entries.emplace_back(catalog, schema_name);
 		}
 		if (entries.empty()) {
-			entries.emplace_back(catalog, DEFAULT_SCHEMA);
+			auto catalog_entry = Catalog::GetCatalogEntry(context, catalog);
+			if (catalog_entry) {
+				entries.emplace_back(catalog, catalog_entry->GetDefaultSchema());
+			} else {
+				entries.emplace_back(catalog, DEFAULT_SCHEMA);
+			}
 		}
 	} else {
 		// specific catalog and schema provided
@@ -677,7 +692,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	// however, if there is an exact match in another schema, we will always show it
 	static constexpr const double UNSEEN_PENALTY = 0.2;
 	auto unseen_entries = SimilarEntriesInSchemas(context, entry_name, type, unseen_schemas);
-	vector<string> suggestions;
+	set<string> suggestions;
 	if (!unseen_entries.empty() && (unseen_entries[0].score == 1.0 || unseen_entries[0].score - UNSEEN_PENALTY >
 	                                                                      (entries.empty() ? 0.0 : entries[0].score))) {
 		// the closest matching entry requires qualification as it is not in the default search path
@@ -688,19 +703,19 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 			bool qualify_database;
 			bool qualify_schema;
 			FindMinimalQualification(retriever, catalog_name, schema_name, qualify_database, qualify_schema);
-			suggestions.push_back(unseen_entry.GetQualifiedName(qualify_database, qualify_schema));
+			auto qualified_name = unseen_entry.GetQualifiedName(qualify_database, qualify_schema);
+			suggestions.insert(qualified_name);
 		}
 	} else if (!entries.empty()) {
 		for (auto &entry : entries) {
-			suggestions.push_back(entry.name);
+			suggestions.insert(entry.name);
 		}
 	}
 
 	string did_you_mean;
-	std::sort(suggestions.begin(), suggestions.end());
 	if (suggestions.size() > 2) {
-		auto last = suggestions.back();
-		suggestions.pop_back();
+		string last = *suggestions.rbegin();
+		suggestions.erase(last);
 		did_you_mean = StringUtil::Join(suggestions, ", ") + ", or " + last;
 	} else {
 		did_you_mean = StringUtil::Join(suggestions, " or ");
@@ -754,6 +769,12 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, Cat
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		return {nullptr, nullptr, ErrorData()};
+	}
+	// Check if the default database is actually attached. CreateMissingEntryException will throw binder exception
+	// otherwise.
+	if (!GetCatalogEntry(context, GetDefaultCatalog(retriever))) {
+		auto except = CatalogException("%s with name %s does not exist!", CatalogTypeToString(type), name);
+		return {nullptr, nullptr, ErrorData(except)};
 	} else {
 		auto except = CreateMissingEntryException(retriever, name, type, schemas, error_context);
 		return {nullptr, nullptr, ErrorData(except)};
@@ -790,6 +811,12 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, vec
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		return {nullptr, nullptr, ErrorData()};
+	}
+	// Check if the default database is actually attached. CreateMissingEntryException will throw binder exception
+	// otherwise.
+	if (!GetCatalogEntry(context, GetDefaultCatalog(retriever))) {
+		auto except = CatalogException("%s with name %s does not exist!", CatalogTypeToString(type), name);
+		return {nullptr, nullptr, ErrorData(except)};
 	} else {
 		auto except = CreateMissingEntryException(retriever, name, type, schemas, error_context);
 		return {nullptr, nullptr, ErrorData(except)};
@@ -953,12 +980,20 @@ optional_ptr<SchemaCatalogEntry> Catalog::GetSchema(CatalogEntryRetriever &retri
                                                     QueryErrorContext error_context) {
 	auto entries = GetCatalogEntries(retriever, catalog_name, schema_name);
 	for (idx_t i = 0; i < entries.size(); i++) {
-		auto on_not_found = i + 1 == entries.size() ? if_not_found : OnEntryNotFound::RETURN_NULL;
-		auto &catalog = Catalog::GetCatalog(retriever, entries[i].catalog);
-		auto result = catalog.GetSchema(retriever.GetContext(), schema_name, on_not_found, error_context);
+		auto catalog = Catalog::GetCatalogEntry(retriever, entries[i].catalog);
+		if (!catalog) {
+			// skip if it is not an attached database
+			continue;
+		}
+		const auto on_not_found = i + 1 == entries.size() ? if_not_found : OnEntryNotFound::RETURN_NULL;
+		auto result = catalog->GetSchema(retriever.GetContext(), schema_name, on_not_found, error_context);
 		if (result) {
 			return result;
 		}
+	}
+	// Catalog has not been found.
+	if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
+		throw CatalogException(error_context, "Catalog with name %s does not exist!", catalog_name);
 	}
 	return nullptr;
 }
@@ -1057,6 +1092,10 @@ vector<MetadataBlockInfo> Catalog::GetMetadataInfo(ClientContext &context) {
 
 optional_ptr<DependencyManager> Catalog::GetDependencyManager() {
 	return nullptr;
+}
+
+string Catalog::GetDefaultSchema() const {
+	return DEFAULT_SCHEMA;
 }
 
 //! Whether this catalog has a default table. Catalogs with a default table can be queries by their catalog name

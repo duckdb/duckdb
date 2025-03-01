@@ -120,7 +120,16 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	Profiler profiler;
 	auto display_name = benchmark->DisplayName();
 
-	auto state = benchmark->Initialize(configuration);
+	duckdb::unique_ptr<BenchmarkState> state;
+	try {
+		state = benchmark->Initialize(configuration);
+	} catch (std::exception &ex) {
+		Log(StringUtil::Format("%s\t1\t", benchmark->name));
+		LogResult("ERROR");
+		duckdb::ErrorData error_data(ex);
+		LogLine(error_data.Message());
+		return;
+	}
 	auto nruns = benchmark->NRuns();
 	for (size_t i = 0; i < nruns + 1; i++) {
 		bool hotrun = i > 0;
@@ -135,16 +144,25 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 		std::thread interrupt_thread(sleep_thread, benchmark, this, state.get(), hotrun,
 		                             benchmark->Timeout(configuration));
 
-		profiler.Start();
-		benchmark->Run(state.get());
-		profiler.End();
+		string error;
+		try {
+			profiler.Start();
+			benchmark->Run(state.get());
+			profiler.End();
+		} catch (std::exception &ex) {
+			duckdb::ErrorData error_data(ex);
+			error = error_data.Message();
+		}
 
 		is_active = false;
 		interrupt_thread.join();
 		if (hotrun) {
 			LogOutput(benchmark->GetLogOutput(state.get()));
-			if (timeout) {
-				// write timeout
+			if (!error.empty()) {
+				LogResult("ERROR");
+				LogLine(error);
+				break;
+			} else if (timeout) {
 				LogResult("TIMEOUT");
 				break;
 			} else {

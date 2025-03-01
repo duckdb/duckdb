@@ -298,7 +298,7 @@ public:
 	virtual unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
 	                                                unique_ptr<PhysicalOperator> plan) = 0;
 	virtual unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
-	                                                    unique_ptr<LogicalOperator> plan) = 0;
+	                                                    unique_ptr<LogicalOperator> plan);
 	virtual unique_ptr<LogicalOperator> BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
 	                                                      unique_ptr<LogicalOperator> plan,
 	                                                      unique_ptr<CreateIndexInfo> create_info,
@@ -315,7 +315,11 @@ public:
 		return CatalogLookupBehavior::STANDARD;
 	}
 
+	//! Returns the default schema of the catalog
+	virtual string GetDefaultSchema() const;
+
 	//! The default table is used for `SELECT * FROM <catalog_name>;`
+	//! FIXME: these should be virtual methods
 	DUCKDB_API bool HasDefaultTable() const;
 	DUCKDB_API void SetDefaultTable(const string &schema, const string &name);
 	DUCKDB_API string GetDefaultTable() const;

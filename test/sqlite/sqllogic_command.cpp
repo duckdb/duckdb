@@ -290,6 +290,11 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 				throw std::runtime_error("Nested parallel loop commands not allowed");
 			}
 		}
+		for (auto &command : loop_commands) {
+			if (!command->SupportsConcurrent()) {
+				throw std::runtime_error("Concurrent loop is not supported over this command");
+			}
+		}
 		// parallel loop: launch threads
 		std::list<ParallelExecuteContext> contexts;
 		while (true) {
@@ -332,6 +337,15 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 			}
 		}
 	}
+}
+
+bool LoopCommand::SupportsConcurrent() const {
+	for (auto &command : loop_commands) {
+		if (!command->SupportsConcurrent()) {
+			return false;
+		}
+	}
+	return true;
 }
 
 void Query::ExecuteInternal(ExecuteContext &context) const {
@@ -526,6 +540,10 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 	} else {
 		runner.config->options.use_temporary_directory = true;
 		runner.config->options.access_mode = AccessMode::AUTOMATIC;
+	}
+	if (runner.db) {
+		runner.config->options.serialization_compatibility =
+		    runner.db->instance->config.options.serialization_compatibility;
 	}
 	// now create the database file
 	runner.LoadDatabase(resolved_path, true);

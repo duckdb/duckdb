@@ -23,7 +23,7 @@
 
 namespace duckdb {
 
-void RemoveUnusedColumns::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
+void BaseColumnPruner::ReplaceBinding(ColumnBinding current_binding, ColumnBinding new_binding) {
 	auto colrefs = column_references.find(current_binding);
 	if (colrefs != column_references.end()) {
 		for (auto &colref_p : colrefs->second.bindings) {
@@ -240,8 +240,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 					throw InternalException("Could not find column index for table filter");
 				}
 
-				auto column_type =
-				    filter.first == COLUMN_IDENTIFIER_ROW_ID ? LogicalType::ROW_TYPE : get.returned_types[filter.first];
+				auto column_type = get.GetColumnType(ColumnIndex(filter.first));
 
 				ColumnBinding filter_binding(get.table_index, index.GetIndex());
 				auto column_ref = make_uniq<BoundColumnRefExpression>(std::move(column_type), filter_binding);
@@ -261,9 +260,6 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				if (entry == column_references.end()) {
 					throw InternalException("RemoveUnusedColumns - could not find referenced column");
 				}
-				if (final_column_ids[col_sel_idx].HasChildren()) {
-					throw InternalException("RemoveUnusedColumns - LogicalGet::column_ids already has children");
-				}
 				ColumnIndex new_index(final_column_ids[col_sel_idx].GetPrimaryIndex(), entry->second.child_columns);
 				column_ids.emplace_back(new_index);
 			}
@@ -271,7 +267,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// this generally means we are only interested in whether or not anything exists in the table (e.g.
 				// EXISTS(SELECT * FROM tbl)) in this case, we just scan the row identifier column as it means we do not
 				// need to read any of the columns
-				column_ids.emplace_back(COLUMN_IDENTIFIER_ROW_ID);
+				column_ids.emplace_back(get.GetAnyColumn());
 			}
 			get.SetColumnIds(std::move(column_ids));
 
@@ -279,6 +275,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 				// Now set the projection cols by matching the "selection vector" that excludes filter columns
 				// with the "selection vector" that includes filter columns
 				idx_t col_idx = 0;
+				get.projection_ids.clear();
 				for (auto proj_sel_idx : proj_sel) {
 					for (; col_idx < col_sel.size(); col_idx++) {
 						if (proj_sel_idx == col_sel[col_idx]) {
@@ -347,8 +344,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 }
 
-bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
-                                                       vector<idx_t> &indexes) {
+bool BaseColumnPruner::HandleStructExtractRecursive(Expression &expr, optional_ptr<BoundColumnRefExpression> &colref,
+                                                    vector<idx_t> &indexes) {
 	if (expr.GetExpressionClass() != ExpressionClass::BOUND_FUNCTION) {
 		return false;
 	}
@@ -382,7 +379,7 @@ bool RemoveUnusedColumns::HandleStructExtractRecursive(Expression &expr, optiona
 	return true;
 }
 
-bool RemoveUnusedColumns::HandleStructExtract(Expression &expr) {
+bool BaseColumnPruner::HandleStructExtract(Expression &expr) {
 	optional_ptr<BoundColumnRefExpression> colref;
 	vector<idx_t> indexes;
 	if (!HandleStructExtractRecursive(expr, colref, indexes)) {
@@ -428,7 +425,7 @@ void MergeChildColumns(vector<ColumnIndex> &current_child_columns, ColumnIndex &
 	current_child_columns.push_back(std::move(new_child_column));
 }
 
-void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column) {
+void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col, ColumnIndex child_column) {
 	auto entry = column_references.find(col.binding);
 	if (entry == column_references.end()) {
 		// column not referenced yet - add a binding to it entirely
@@ -445,7 +442,7 @@ void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col, ColumnIndex 
 	}
 }
 
-void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col) {
+void BaseColumnPruner::AddBinding(BoundColumnRefExpression &col) {
 	auto entry = column_references.find(col.binding);
 	if (entry == column_references.end()) {
 		// column not referenced yet - add a binding to it entirely
@@ -458,7 +455,7 @@ void RemoveUnusedColumns::AddBinding(BoundColumnRefExpression &col) {
 	}
 }
 
-void RemoveUnusedColumns::VisitExpression(unique_ptr<Expression> *expression) {
+void BaseColumnPruner::VisitExpression(unique_ptr<Expression> *expression) {
 	auto &expr = **expression;
 	if (HandleStructExtract(expr)) {
 		// already handled
@@ -468,15 +465,15 @@ void RemoveUnusedColumns::VisitExpression(unique_ptr<Expression> *expression) {
 	LogicalOperatorVisitor::VisitExpression(expression);
 }
 
-unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundColumnRefExpression &expr,
-                                                         unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> BaseColumnPruner::VisitReplace(BoundColumnRefExpression &expr,
+                                                      unique_ptr<Expression> *expr_ptr) {
 	// add a reference to the entire column
 	AddBinding(expr);
 	return nullptr;
 }
 
-unique_ptr<Expression> RemoveUnusedColumns::VisitReplace(BoundReferenceExpression &expr,
-                                                         unique_ptr<Expression> *expr_ptr) {
+unique_ptr<Expression> BaseColumnPruner::VisitReplace(BoundReferenceExpression &expr,
+                                                      unique_ptr<Expression> *expr_ptr) {
 	// BoundReferenceExpression should not be used here yet, they only belong in the physical plan
 	throw InternalException("BoundReferenceExpression should not be used here yet!");
 }

@@ -16,6 +16,7 @@
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/planner/binding_alias.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/table_column.hpp"
 
 namespace duckdb {
 class BindContext;
@@ -101,12 +102,14 @@ public:
 public:
 	TableBinding(const string &alias, vector<LogicalType> types, vector<string> names,
 	             vector<ColumnIndex> &bound_column_ids, optional_ptr<StandardEntry> entry, idx_t index,
-	             bool add_row_id = false);
+	             virtual_column_map_t virtual_columns);
 
 	//! A reference to the set of bound column ids
 	vector<ColumnIndex> &bound_column_ids;
 	//! The underlying catalog entry (if any)
 	optional_ptr<StandardEntry> entry;
+	//! Virtual columns
+	virtual_column_map_t virtual_columns;
 
 public:
 	unique_ptr<ParsedExpression> ExpandGeneratedColumn(const string &column_name);

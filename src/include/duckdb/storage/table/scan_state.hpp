@@ -18,6 +18,7 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/parser/parsed_data/sample_options.hpp"
 #include "duckdb/storage/storage_index.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 
 namespace duckdb {
 class AdaptiveFilter;
@@ -40,6 +41,7 @@ class TableFilter;
 struct AdaptiveFilterState;
 struct TableScanOptions;
 struct ScanSamplingInfo;
+struct TableFilterState;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
@@ -128,6 +130,7 @@ struct ScanFilter {
 	idx_t table_column_index;
 	TableFilter &filter;
 	bool always_true;
+	unique_ptr<TableFilterState> filter_state;
 
 	bool IsAlwaysTrue() const {
 		return always_true;
@@ -138,7 +141,7 @@ class ScanFilterInfo {
 public:
 	~ScanFilterInfo();
 
-	void Initialize(TableFilterSet &filters, const vector<StorageIndex> &column_ids);
+	void Initialize(ClientContext &context, TableFilterSet &filters, const vector<StorageIndex> &column_ids);
 
 	const vector<ScanFilter> &GetFilterList() const {
 		return filter_list;
@@ -252,7 +255,8 @@ public:
 	ScanSamplingInfo sampling_info;
 
 public:
-	void Initialize(vector<StorageIndex> column_ids, optional_ptr<TableFilterSet> table_filters = nullptr,
+	void Initialize(vector<StorageIndex> column_ids, optional_ptr<ClientContext> context = nullptr,
+	                optional_ptr<TableFilterSet> table_filters = nullptr,
 	                optional_ptr<SampleOptions> table_sampling = nullptr);
 
 	const vector<StorageIndex> &GetColumnIds();

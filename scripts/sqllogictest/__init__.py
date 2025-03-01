@@ -20,6 +20,7 @@ from .statement import (
     Sleep,
     SleepUnit,
     Skip,
+    Unzip,
     Unskip,
 )
 from .decorator import SkipIf, OnlyIf
@@ -50,6 +51,7 @@ __all__ = [
     Sleep,
     SleepUnit,
     Skip,
+    Unzip,
     Unskip,
     SkipIf,
     OnlyIf,

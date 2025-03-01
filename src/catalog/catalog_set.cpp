@@ -353,7 +353,7 @@ bool CatalogSet::AlterEntry(CatalogTransaction transaction, const string &name, 
 	// push the old entry in the undo buffer for this transaction
 	if (transaction.transaction) {
 		// serialize the AlterInfo into a temporary buffer
-		MemoryStream stream;
+		MemoryStream stream(Allocator::Get(*transaction.db));
 		BinarySerializer serializer(stream);
 		serializer.Begin();
 		serializer.WriteProperty(100, "column_name", alter_info.GetColumnName());

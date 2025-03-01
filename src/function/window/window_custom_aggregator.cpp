@@ -1,13 +1,30 @@
 #include "duckdb/function/window/window_custom_aggregator.hpp"
+#include "duckdb/planner/expression/bound_window_expression.hpp"
 
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
 // WindowCustomAggregator
 //===--------------------------------------------------------------------===//
-WindowCustomAggregator::WindowCustomAggregator(const BoundWindowExpression &wexpr, const WindowExcludeMode exclude_mode,
-                                               WindowSharedExpressions &shared)
-    : WindowAggregator(wexpr, exclude_mode, shared) {
+bool WindowCustomAggregator::CanAggregate(const BoundWindowExpression &wexpr, WindowAggregationMode mode) {
+	if (!wexpr.aggregate) {
+		return false;
+	}
+
+	if (!wexpr.aggregate->window) {
+		return false;
+	}
+
+	//	ORDER BY arguments are not currently supported
+	if (!wexpr.arg_orders.empty()) {
+		return false;
+	}
+
+	return (mode < WindowAggregationMode::COMBINE);
+}
+
+WindowCustomAggregator::WindowCustomAggregator(const BoundWindowExpression &wexpr, WindowSharedExpressions &shared)
+    : WindowAggregator(wexpr, shared) {
 }
 
 WindowCustomAggregator::~WindowCustomAggregator() {

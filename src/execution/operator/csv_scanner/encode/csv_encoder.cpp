@@ -51,6 +51,10 @@ CSVEncoder::CSVEncoder(DBConfig &config, const string &encoding_name_to_find, id
 	}
 	// We ensure that the encoded buffer size is an even number to make the two byte lookup on utf-16 work
 	idx_t encoded_buffer_size = buffer_size % 2 != 0 ? buffer_size - 1 : buffer_size;
+	if (encoded_buffer_size == 0) {
+		// This might happen if buffer size = 1
+		encoded_buffer_size = 2;
+	}
 	D_ASSERT(encoded_buffer_size > 0);
 	encoded_buffer.Initialize(encoded_buffer_size);
 	remaining_bytes_buffer.Initialize(function->GetBytesPerIteration());

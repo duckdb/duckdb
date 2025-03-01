@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <utility>
+
 #include "test_helpers.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/common/types/value.hpp"
@@ -35,9 +37,9 @@ namespace duckdb {
 class ArrowTestFactory {
 public:
 	ArrowTestFactory(vector<LogicalType> types_p, vector<string> names_p, duckdb::unique_ptr<QueryResult> result_p,
-	                 bool big_result, ClientProperties options)
+	                 bool big_result, ClientProperties options, ClientContext &context)
 	    : types(std::move(types_p)), names(std::move(names_p)), result(std::move(result_p)), big_result(big_result),
-	      options(options) {
+	      options(std::move(options)), context(context) {
 		if (result->type == QueryResultType::ARROW_RESULT) {
 			auto &arrow_result = result->Cast<ArrowQueryResult>();
 			prefetched_chunks = arrow_result.ConsumeArrays();
@@ -52,6 +54,7 @@ public:
 	vector<unique_ptr<ArrowArrayWrapper>>::iterator chunk_iterator;
 	bool big_result;
 	ClientProperties options;
+	ClientContext &context;
 
 	struct ArrowArrayStreamData {
 		explicit ArrowArrayStreamData(ArrowTestFactory &factory, ClientProperties options)

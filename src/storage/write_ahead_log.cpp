@@ -19,6 +19,7 @@
 #include "duckdb/storage/table/column_data.hpp"
 #include "duckdb/storage/table/data_table_info.hpp"
 #include "duckdb/storage/table_io_manager.hpp"
+#include "duckdb/storage/storage_manager.hpp"
 
 namespace duckdb {
 
@@ -30,6 +31,10 @@ WriteAheadLog::WriteAheadLog(AttachedDatabase &database, const string &wal_path,
 }
 
 WriteAheadLog::~WriteAheadLog() {
+}
+
+AttachedDatabase &WriteAheadLog::GetDatabase() {
+	return database;
 }
 
 BufferedFileWriter &WriteAheadLog::Initialize() {
@@ -98,7 +103,7 @@ void WriteAheadLog::Delete() {
 //===--------------------------------------------------------------------===//
 class ChecksumWriter : public WriteStream {
 public:
-	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal) {
+	explicit ChecksumWriter(WriteAheadLog &wal) : wal(wal), memory_stream(Allocator::Get(wal.GetDatabase())) {
 	}
 
 	void WriteData(const_data_ptr_t buffer, idx_t write_size) override {
@@ -131,7 +136,8 @@ private:
 
 class WriteAheadLogSerializer {
 public:
-	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type) : checksum_writer(wal), serializer(checksum_writer) {
+	WriteAheadLogSerializer(WriteAheadLog &wal, WALType wal_type)
+	    : checksum_writer(wal), serializer(checksum_writer, SerializationOptions(wal.GetDatabase())) {
 		if (!wal.Initialized()) {
 			wal.Initialize();
 		}
@@ -158,6 +164,7 @@ public:
 
 private:
 	ChecksumWriter checksum_writer;
+	SerializationOptions options;
 	BinarySerializer serializer;
 };
 
@@ -274,8 +281,8 @@ void WriteAheadLog::WriteDropTableMacro(const TableMacroCatalogEntry &entry) {
 
 void SerializeIndex(AttachedDatabase &db, WriteAheadLogSerializer &serializer, TableIndexList &list,
                     const string &name) {
-	const auto &db_options = db.GetDatabase().config.options;
-	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
+	auto storage_version = db.GetStorageManager().GetStorageVersion();
+	auto v1_0_0_storage = storage_version < 3;
 	case_insensitive_map_t<Value> options;
 	if (!v1_0_0_storage) {
 		options.emplace("v1_0_0_storage", v1_0_0_storage);

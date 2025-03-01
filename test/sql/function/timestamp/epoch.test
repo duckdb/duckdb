@@ -31,4 +31,4 @@ SELECT to_timestamp(1284352323.5);
 statement error
 SELECT to_timestamp(1284352323::DOUBLE * 100000000);
 ----
-Could not convert epoch seconds to TIMESTAMP WITH TIME ZONE
+Conversion Error: Epoch seconds out of range for TIMESTAMP WITH TIME ZONE

@@ -116,7 +116,6 @@ static void ListFinalize(Vector &states_vector, AggregateInputData &aggr_input_d
 
 	// first iterate over all entries and set up the list entries, and get the newly required total length
 	for (idx_t i = 0; i < count; i++) {
-
 		auto &state = *states[states_data.sel->get_index(i)];
 		const auto rid = i + offset;
 		result_data[rid].offset = total_len;

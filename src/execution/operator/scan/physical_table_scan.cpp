@@ -14,11 +14,12 @@ PhysicalTableScan::PhysicalTableScan(vector<LogicalType> types, TableFunction fu
                                      vector<ColumnIndex> column_ids_p, vector<idx_t> projection_ids_p,
                                      vector<string> names_p, unique_ptr<TableFilterSet> table_filters_p,
                                      idx_t estimated_cardinality, ExtraOperatorInfo extra_info,
-                                     vector<Value> parameters_p)
+                                     vector<Value> parameters_p, virtual_column_map_t virtual_columns_p)
     : PhysicalOperator(PhysicalOperatorType::TABLE_SCAN, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), returned_types(std::move(returned_types_p)),
       column_ids(std::move(column_ids_p)), projection_ids(std::move(projection_ids_p)), names(std::move(names_p)),
-      table_filters(std::move(table_filters_p)), extra_info(extra_info), parameters(std::move(parameters_p)) {
+      table_filters(std::move(table_filters_p)), extra_info(extra_info), parameters(std::move(parameters_p)),
+      virtual_columns(std::move(virtual_columns_p)) {
 }
 
 class TableScanGlobalSourceState : public GlobalSourceState {
@@ -27,9 +28,12 @@ public:
 		if (op.dynamic_filters && op.dynamic_filters->HasFilters()) {
 			table_filters = op.dynamic_filters->GetFinalTableFilters(op, op.table_filters.get());
 		}
+
 		if (op.function.init_global) {
-			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, GetTableFilters(op),
+			auto filters = table_filters ? *table_filters : GetTableFilters(op);
+			TableFunctionInitInput input(op.bind_data.get(), op.column_ids, op.projection_ids, filters,
 			                             op.extra_info.sample_options);
+
 			global_state = op.function.init_global(context, input);
 			if (global_state) {
 				max_threads = global_state->MaxThreads();
@@ -92,23 +96,34 @@ unique_ptr<GlobalSourceState> PhysicalTableScan::GetGlobalSourceState(ClientCont
 SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk &chunk,
                                             OperatorSourceInput &input) const {
 	D_ASSERT(!column_ids.empty());
-	auto &gstate = input.global_state.Cast<TableScanGlobalSourceState>();
-	auto &state = input.local_state.Cast<TableScanLocalSourceState>();
+	auto &g_state = input.global_state.Cast<TableScanGlobalSourceState>();
+	auto &l_state = input.local_state.Cast<TableScanLocalSourceState>();
 
-	TableFunctionInput data(bind_data.get(), state.local_state.get(), gstate.global_state.get());
+	TableFunctionInput data(bind_data.get(), l_state.local_state.get(), g_state.global_state.get());
+
 	if (function.function) {
 		function.function(context.client, data, chunk);
-	} else {
-		if (gstate.in_out_final) {
-			function.in_out_function_final(context, data, chunk);
-		}
-		function.in_out_function(context, data, gstate.input_chunk, chunk);
-		if (chunk.size() == 0 && function.in_out_function_final) {
-			function.in_out_function_final(context, data, chunk);
-			gstate.in_out_final = true;
-		}
+		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
+	if (g_state.in_out_final) {
+		function.in_out_function_final(context, data, chunk);
+	}
+	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
+	case OperatorResultType::BLOCKED: {
+		auto guard = g_state.Lock();
+		return g_state.BlockSource(guard, input.interrupt_state);
+	}
+	default:
+		// FIXME: Handling for other cases (such as NEED_MORE_INPUT) breaks current functionality and extensions that
+		// might be relying on current behaviour. Needs a rework that is not in scope
+		break;
+	}
+
+	if (chunk.size() == 0 && function.in_out_function_final) {
+		function.in_out_function_final(context, data, chunk);
+		g_state.in_out_final = true;
+	}
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
@@ -210,8 +225,12 @@ InsertionOrderPreservingMap<string> PhysicalTableScan::ParamsToString() const {
 				first_item = false;
 
 				const auto col_id = column_ids[column_index].GetPrimaryIndex();
-				if (col_id == COLUMN_IDENTIFIER_ROW_ID) {
-					filters_info += filter->ToString("rowid");
+				if (IsVirtualColumn(col_id)) {
+					auto entry = virtual_columns.find(col_id);
+					if (entry == virtual_columns.end()) {
+						throw InternalException("Virtual column not found");
+					}
+					filters_info += filter->ToString(entry->second.name);
 				} else {
 					filters_info += filter->ToString(names[col_id]);
 				}

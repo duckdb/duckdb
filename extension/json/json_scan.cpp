@@ -171,7 +171,7 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 		const auto &col_id = input.column_ids[col_idx];
 
 		// Skip any multi-file reader / row id stuff
-		if (col_id == bind_data.reader_bind.filename_idx || IsRowIdColumnId(col_id)) {
+		if (col_id == bind_data.reader_bind.filename_idx || IsVirtualColumn(col_id)) {
 			continue;
 		}
 		bool skip = false;
@@ -206,11 +206,15 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 		gstate.json_readers.emplace_back(reader.get());
 	}
 
-	vector<LogicalType> dummy_types(input.column_ids.size(), LogicalType::ANY);
+	vector<LogicalType> dummy_global_types(bind_data.names.size(), LogicalType::ANY);
+	vector<LogicalType> dummy_local_types(gstate.names.size(), LogicalType::ANY);
+	auto local_columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(gstate.names, dummy_local_types);
+	auto global_columns =
+	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, dummy_global_types);
 	for (auto &reader : gstate.json_readers) {
 		MultiFileReader().FinalizeBind(reader->GetOptions().file_options, gstate.bind_data.reader_bind,
-		                               reader->GetFileName(), gstate.names, dummy_types, bind_data.names,
-		                               input.column_indexes, reader->reader_data, context, nullptr);
+		                               reader->GetFileName(), local_columns, global_columns, input.column_indexes,
+		                               reader->reader_data, context, nullptr);
 	}
 
 	return std::move(result);
@@ -249,7 +253,7 @@ unique_ptr<LocalTableFunctionState> JSONLocalTableFunctionState::Init(ExecutionC
 	auto result = make_uniq<JSONLocalTableFunctionState>(context.client, gstate.state);
 
 	// Copy the transform options / date format map because we need to do thread-local stuff
-	result->state.date_format_map = gstate.state.bind_data.date_format_map;
+	result->state.date_format_map = gstate.state.bind_data.date_format_map.Copy();
 	result->state.transform_options = gstate.state.transform_options;
 	result->state.transform_options.date_format_map = &result->state.date_format_map;
 
@@ -1021,6 +1025,14 @@ unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, Table
 	return std::move(result);
 }
 
+virtual_column_map_t JSONScan::GetVirtualColumns(ClientContext &context, optional_ptr<FunctionData> bind_data) {
+	auto &csv_bind = bind_data->Cast<JSONScanData>();
+	virtual_column_map_t result;
+	MultiFileReader::GetVirtualColumns(context, csv_bind.reader_bind, result);
+	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
+	return result;
+}
+
 void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 	MultiFileReader().AddParameters(table_function);
 
@@ -1035,6 +1047,7 @@ void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
 
 	table_function.serialize = Serialize;
 	table_function.deserialize = Deserialize;
+	table_function.get_virtual_columns = GetVirtualColumns;
 
 	table_function.projection_pushdown = true;
 	table_function.filter_pushdown = false;

@@ -43,6 +43,7 @@ struct OperatorInformation {
 	idx_t elements_returned;
 	idx_t result_set_size;
 	string name;
+	InsertionOrderPreservingMap<string> extra_info;
 
 	void AddTime(double n_time) {
 		time += n_time;
@@ -88,8 +89,8 @@ private:
 	Profiler op;
 	//! The stack of Physical Operators that are currently active
 	optional_ptr<const PhysicalOperator> active_operator;
-	//! A mapping of physical operators to recorded timings
-	reference_map_t<const PhysicalOperator, OperatorInformation> timings;
+	//! A mapping of physical operators to profiled operator information.
+	reference_map_t<const PhysicalOperator, OperatorInformation> operator_infos;
 };
 
 struct QueryInfo {
@@ -163,6 +164,13 @@ public:
 	//! Return the root of the query tree
 	optional_ptr<ProfilingNode> GetRoot() {
 		return root.get();
+	}
+
+	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications
+	//! This can be useful when implementing continuous profiling or making customizations
+	DUCKDB_API void GetRootUnderLock(const std::function<void(optional_ptr<ProfilingNode>)> &callback) {
+		lock_guard<std::mutex> guard(lock);
+		callback(GetRoot());
 	}
 
 private:

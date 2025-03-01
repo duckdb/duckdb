@@ -6,8 +6,14 @@ mutable struct Stmt <: DBInterface.Statement
 
     function Stmt(con::Connection, sql::AbstractString, result_type::Type)
         handle = Ref{duckdb_prepared_statement}()
-        if duckdb_prepare(con.handle, sql, handle) != DuckDBSuccess
-            error_message = unsafe_string(duckdb_prepare_error(handle))
+        result = duckdb_prepare(con.handle, sql, handle)
+        if result != DuckDBSuccess
+            ptr = duckdb_prepare_error(handle[])
+            if ptr == C_NULL
+                error_message = "Preparation of statement failed: unknown error"
+            else
+                error_message = unsafe_string(ptr)
+            end
             duckdb_destroy_prepare(handle)
             throw(QueryException(error_message))
         end
@@ -30,6 +36,12 @@ function _close_stmt(stmt::Stmt)
 end
 
 DBInterface.getconnection(stmt::Stmt) = stmt.con
+
+
+function nparameters(stmt::Stmt)
+    return Int(duckdb_nparams(stmt.handle))
+end
+
 
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::AbstractFloat) = duckdb_bind_double(stmt.handle, i, Float64(val));
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Bool) = duckdb_bind_boolean(stmt.handle, i, val);
@@ -60,12 +72,38 @@ function duckdb_bind_internal(stmt::Stmt, i::Integer, val::Any)
     throw(NotImplementedException("unsupported type for bind"))
 end
 
-function bind_parameters(stmt::Stmt, params::DBInterface.StatementParams)
+function bind_parameters(stmt::Stmt, params::DBInterface.PositionalStatementParams)
     i = 1
     for param in params
         if duckdb_bind_internal(stmt, i, param) != DuckDBSuccess
             throw(QueryException("Failed to bind parameter"))
         end
         i += 1
+    end
+end
+
+function bind_parameters(stmt::Stmt, params::DBInterface.NamedStatementParams)
+    N = nparameters(stmt)
+    if length(params) == 0
+        return # no parameters to bind
+    end
+    K = eltype(keys(params))
+    for i in 1:N
+        name_ptr = duckdb_parameter_name(stmt.handle, i)
+        name = unsafe_string(name_ptr)
+        duckdb_free(name_ptr)
+        name_key = K(name)
+        if !haskey(params, name_key)
+            if isa(params, NamedTuple)
+                value = params[i] # FIXME this is a workaround to keep the interface consistent, see the test in test_sqlite.jl
+            else
+                throw(QueryException("Parameter '$name' not found"))
+            end
+        else
+            value = getindex(params, name_key)
+        end
+        if duckdb_bind_internal(stmt, i, value) != DuckDBSuccess
+            throw(QueryException("Failed to bind parameter '$name'"))
+        end
     end
 end

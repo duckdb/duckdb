@@ -300,6 +300,45 @@ SELECT * FROM integers WHERE a!=1 OR a>3 OR a<2 ORDER by a
 4	4
 5	5
 
+# test comparison with null in OR conjunctions uses ISNULL/ISNOTNULL table filter
+statement ok
+CREATE TABLE t0 as from values (1), (2), (2), (0), (NULL) t(c1);
+
+# is distinct from NULL
+query I
+SELECT * FROM t0 WHERE ((t0.c1 IS DISTINCT FROM NULL) OR (NULL));
+----
+1
+2
+2
+0
+
+# is not distinct from NULL
+query I
+SELECT * FROM t0 WHERE ((t0.c1 IS NOT DISTINCT FROM NULL) OR (NULL));
+----
+NULL
+
+# = NULL in conjunction or
+query I
+SELECT * FROM t0 WHERE ((t0.c1 = NULL) OR (NULL));
+----
+
+query I
+SELECT * FROM t0 WHERE ((t0.c1 != NULL) OR (NULL));
+----
+
+statement ok
+SELECT * FROM t0 WHERE ((t0.c1 = NULL) OR (NOT NULL) OR (t0.c1 = 1));
+
+query I
+select * from t0 where (NULL OR cast(t0.c1 as bool)) order by all;
+----
+1
+2
+2
+
+
 mode skip
 
 #### numeric statistics

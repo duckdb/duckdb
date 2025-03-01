@@ -56,6 +56,18 @@ const vector<string> ExtensionHelper::PathComponents() {
 	return vector<string> {GetVersionDirectoryName(), DuckDB::Platform()};
 }
 
+string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extension_name) {
+	auto components = PathComponents();
+
+	string link = "https://duckdb.org/docs/extensions/troubleshooting";
+
+	if (components.size() >= 2) {
+		link += "/?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;
+	}
+
+	return link;
+}
+
 duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
 	string home_directory = fs.GetHomeDirectory();
 	// exception if the home directory does not exist, don't create whatever we think is home
@@ -70,10 +82,13 @@ duckdb::string ExtensionHelper::DefaultExtensionFolder(FileSystem &fs) {
 	return res;
 }
 
-string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs) {
-#ifdef WASM_LOADABLE_EXTENSIONS
-	throw PermissionException("ExtensionDirectory functionality is not supported in duckdb-wasm");
-#endif
+string ExtensionHelper::GetExtensionDirectoryPath(ClientContext &context) {
+	auto &db = DatabaseInstance::GetDatabase(context);
+	auto &fs = FileSystem::GetFileSystem(context);
+	return GetExtensionDirectoryPath(db, fs);
+}
+
+string ExtensionHelper::GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs) {
 	string extension_directory;
 	auto &config = db.config;
 	if (!config.options.extension_directory.empty()) { // create the extension directory if not present
@@ -83,10 +98,25 @@ string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs)
 	} else { // otherwise default to home
 		extension_directory = DefaultExtensionFolder(fs);
 	}
+
+	extension_directory = fs.ConvertSeparators(extension_directory);
+	// expand ~ in extension directory
+	extension_directory = fs.ExpandPath(extension_directory);
+
+	auto path_components = PathComponents();
+	for (auto &path_ele : path_components) {
+		extension_directory = fs.JoinPath(extension_directory, path_ele);
+	}
+
+	return extension_directory;
+}
+
+string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs) {
+#ifdef WASM_LOADABLE_EXTENSIONS
+	throw PermissionException("ExtensionDirectory functionality is not supported in duckdb-wasm");
+#endif
+	string extension_directory = GetExtensionDirectoryPath(db, fs);
 	{
-		extension_directory = fs.ConvertSeparators(extension_directory);
-		// expand ~ in extension directory
-		extension_directory = fs.ExpandPath(extension_directory);
 		if (!fs.DirectoryExists(extension_directory)) {
 			auto sep = fs.PathSeparator(extension_directory);
 			auto splits = StringUtil::Split(extension_directory, sep);
@@ -105,13 +135,6 @@ string ExtensionHelper::ExtensionDirectory(DatabaseInstance &db, FileSystem &fs)
 	}
 	D_ASSERT(fs.DirectoryExists(extension_directory));
 
-	auto path_components = PathComponents();
-	for (auto &path_ele : path_components) {
-		extension_directory = fs.JoinPath(extension_directory, path_ele);
-		if (!fs.DirectoryExists(extension_directory)) {
-			fs.CreateDirectory(extension_directory);
-		}
-	}
 	return extension_directory;
 }
 
@@ -296,7 +319,8 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 	// Throw error on failure
 	if (!exists) {
 		if (!fs.IsRemoteFile(file)) {
-			throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
+			throw IOException("Failed to install local extension \"%s\", no access to the file at PATH \"%s\"\n",
+			                  extension_name, file);
 		}
 		if (StringUtil::StartsWith(file, "https://")) {
 			throw IOException("Failed to install remote extension \"%s\" from url \"%s\"", extension_name, file);
@@ -433,9 +457,11 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 		if (!should_retry || retry_count >= MAX_RETRY_COUNT) {
 			// if we should not retry or exceeded the number of retries - bubble up the error
 			string message;
-			auto exact_match = ExtensionHelper::CreateSuggestions(extension_name, message);
-			if (exact_match && !ExtensionHelper::IsRelease(DuckDB::LibraryVersion())) {
-				message += "\nAre you using a development build? In this case, extensions might not (yet) be uploaded.";
+			ExtensionHelper::CreateSuggestions(extension_name, message);
+
+			auto documentation_link = ExtensionHelper::ExtensionInstallDocumentationLink(extension_name);
+			if (!documentation_link.empty()) {
+				message += "\nFor more info, visit " + documentation_link;
 			}
 			if (res.error() == duckdb_httplib::Error::Success) {
 				throw HTTPException(res.value(), "Failed to download extension \"%s\" at URL \"%s%s\" (HTTP %n)\n%s",

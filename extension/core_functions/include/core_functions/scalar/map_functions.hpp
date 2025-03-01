@@ -57,6 +57,15 @@ struct ElementAtFun {
 	static constexpr const char *Name = "element_at";
 };
 
+struct MapExtractValueFun {
+	static constexpr const char *Name = "map_extract_value";
+	static constexpr const char *Parameters = "map,key";
+	static constexpr const char *Description = "Returns the value for a given key or NULL if the key is not contained in the map. The type of the key provided in the second parameter must match the type of the map’s keys else an error is returned";
+	static constexpr const char *Example = "map_extract_value(map(['key'], ['val']), 'key')";
+
+	static ScalarFunction GetFunction();
+};
+
 struct MapFromEntriesFun {
 	static constexpr const char *Name = "map_from_entries";
 	static constexpr const char *Parameters = "map";

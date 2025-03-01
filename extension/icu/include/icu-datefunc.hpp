@@ -49,7 +49,9 @@ struct ICUDateFunc {
 	static duckdb::unique_ptr<FunctionData> Bind(ClientContext &context, ScalarFunction &bound_function,
 	                                             vector<duckdb::unique_ptr<Expression>> &arguments);
 
-	//! Sets the time zone for the calendar.
+	//! Tries to set the time zone for the calendar and returns false if it is not valid.
+	static bool TrySetTimeZone(icu::Calendar *calendar, const string_t &tz_id);
+	//! Sets the time zone for the calendar. Throws if it is not valid
 	static void SetTimeZone(icu::Calendar *calendar, const string_t &tz_id);
 	//! Gets the timestamp from the calendar, throwing if it is not in range.
 	static bool TryGetTime(icu::Calendar *calendar, uint64_t micros, timestamp_t &result);
@@ -62,7 +64,7 @@ struct ICUDateFunc {
 	//! Extracts the field from the calendar
 	static int32_t ExtractField(icu::Calendar *calendar, UCalendarDateFields field);
 	//! Subtracts the field of the given date from the calendar
-	static int64_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date);
+	static int32_t SubtractField(icu::Calendar *calendar, UCalendarDateFields field, timestamp_t end_date);
 	//! Adds the timestamp and the interval using the calendar
 	static timestamp_t Add(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval);
 	//! Subtracts the interval from the timestamp using the calendar

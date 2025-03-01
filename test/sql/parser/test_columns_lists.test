@@ -59,12 +59,11 @@ SELECT COLUMNS(['i']) + COLUMNS(['i']) FROM integers
 84
 26
 
-# columns are turned into strings
-query II
+# columns must be returned as strings
+statement error
 SELECT COLUMNS([i, j]) FROM integers
 ----
-42	84
-13	14
+COLUMNS expression can only contain lambda parameters
 
 # nested columns
 statement error
