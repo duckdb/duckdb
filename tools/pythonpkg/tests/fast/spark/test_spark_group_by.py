@@ -40,6 +40,8 @@ from spark_namespace.sql.functions import (
     covar_samp,
     first,
     last,
+    every,
+    count_if,
 )
 
 
@@ -297,3 +299,40 @@ class TestDataFrameGroupBy(object):
             assert pytest.approx(res[0].v) == 0.7071067811865475
         else:
             assert pytest.approx(res[0].v) == 1.7320508075688699
+
+    def test_group_by_count_if(self, spark):
+        df = spark.createDataFrame(
+            [
+                ("Alice", 2),
+                ("Bob", 5),
+                ("Alice", None),
+                ("Alice", 3),
+                ("Bob", 6),
+                ("Alice", 4),
+            ],
+            ("name", "age"),
+        )
+
+        res = df.groupBy("name").agg(count_if(col("age") > 3).alias("count")).orderBy("name").collect()
+        assert res == [
+            Row(name="Alice", count=1),
+            Row(name="Bob", count=2),
+        ]
+
+    def test_group_by_every(self, spark):
+        df = spark.createDataFrame(
+            [
+                ("Alice", 2),
+                ("Bob", 5),
+                ("Alice", 3),
+                ("Bob", 6),
+                ("Alice", 4),
+            ],
+            ("name", "age"),
+        )
+
+        res = df.groupBy("name").agg(every(col("age") > 3).alias("all_gt_3")).orderBy("name").collect()
+        assert res == [
+            Row(name="Alice", all_gt_3=False),
+            Row(name="Bob", all_gt_3=True),
+        ]
