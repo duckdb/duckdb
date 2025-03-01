@@ -66,7 +66,7 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const MultiFile
       transform_options(json_data.transform_options), allocator(BufferAllocator::Get(context)),
       buffer_capacity(json_data.options.maximum_object_size * 2), file_index(0), batch_index(0),
       system_threads(TaskScheduler::GetScheduler(context).NumberOfThreads()),
-      enable_parallel_scans(false) {//bind_data.file_list->GetTotalFileCount() < system_threads) {
+      enable_parallel_scans(bind_data.file_list->GetTotalFileCount() < system_threads) {
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
@@ -178,17 +178,7 @@ idx_t JSONLocalTableFunctionState::GetBatchIndex() const {
 }
 
 idx_t JSONScanLocalState::Read(JSONScanGlobalState &gstate) {
-	if (!scan_state.reader_is_initialized) {
-		// first time scanning from this reader while scanning the entire file
-		// we need to initialize this reader
-		D_ASSERT(scan_state.scan_entire_file);
-		scan_state.current_reader->InitializeScan(gstate, scan_state, scan_state.buffer_index);
-		scan_state.reader_is_initialized = true;
-	}
-	if (!scan_state.is_first_scan) {
-		scan_state.Reset();
-	}
-	scan_state.is_first_scan = false;
+	scan_state.current_reader->PrepareForScan(gstate, scan_state);
 	while (scan_state.scan_count == 0 ) {
 		while (scan_state.buffer_offset >= scan_state.buffer_size) {
 			// we have exhausted the current buffer
@@ -198,7 +188,7 @@ idx_t JSONScanLocalState::Read(JSONScanGlobalState &gstate) {
 				return 0;
 			}
 			// read the next buffer
-			if (!scan_state.current_reader->ReadNextBuffer(gstate, scan_state, scan_state.buffer_index)) {
+			if (!scan_state.current_reader->ReadNextBuffer(gstate, scan_state)) {
 				// we have exhausted the file
 				return 0;
 			}
@@ -273,7 +263,6 @@ bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate, JSONRead
 	// scenario 1 & 2
 	// this is a parallel read
 	scan_state.scan_entire_file = false;
-	scan_state.reader_is_initialized = true;
 	if (scan_state.buffer_index.IsValid()) {
 		// we have already read a buffer as part of PrepareReader - just return and read it
 		scan_state.current_reader = reader;
@@ -281,8 +270,8 @@ bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate, JSONRead
 		return true;
 	}
 	// we need to check if there is data available within our current reader
-	if (reader.ReadNextBuffer(gstate, scan_state, scan_state.buffer_index)) {
-		// there is! return
+	if (reader.PrepareBufferForRead(gstate, scan_state)) {
+		// there is data available! return
 		scan_state.current_reader = reader;
 		scan_state.is_first_scan = true;
 		return true;
@@ -295,24 +284,20 @@ void JSONScanLocalState::PrepareReader(JSONScanGlobalState &gstate, JSONReaderSc
 	gstate.file_is_assigned = false;
 	if (!gstate.enable_parallel_scans) {
 		// we are reading the entire file - we don't even need to open the file yet
-		scan_state.reader_is_initialized = false;
+		scan_state.reader_needs_initialization = true;
 		return;
 	}
-	scan_state.reader_is_initialized = true;
 	// prepare a reader for reading
 	// scenario 1 & 2 -> auto detect
 	// scenario 3 -> nothing
-	reader.InitializeScan(gstate, scan_state, scan_state.buffer_index);
+	reader.InitializeScan(gstate, scan_state);
 }
 
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 	// First we make sure we have a buffer to read into
 
 	lock_guard<mutex> guard(gstate.lock);
-	scan_state.buffer_index = optional_idx();
-	scan_state.buffer_size = 0;
-	scan_state.scan_count = 0;
-	scan_state.is_last = false;
+	scan_state.ResetForNextBuffer();
 	while (gstate.file_index < gstate.json_readers.size()) {
 		if (gstate.initialized) {
 			auto &current_file = *gstate.json_readers[gstate.file_index];

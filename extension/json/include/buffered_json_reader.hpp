@@ -126,8 +126,10 @@ struct JSONReaderScanState {
 	//! If we are scanning the entire file we don't share reads between threads and just read the file until we are done
 	bool initialized = false;
 	bool scan_entire_file = false;
-	bool reader_is_initialized = true;
+	bool reader_needs_initialization = false;
 	// Data for reading (if we have postponed reading)
+	//! Buffer (if we have one)
+	AllocatedData read_buffer;
 	bool needs_to_read = false;
 	idx_t request_size;
 	idx_t read_position;
@@ -157,7 +159,10 @@ struct JSONReaderScanState {
 
 public:
 	data_ptr_t GetReconstructBuffer();
-	void Reset();
+	//! Reset for parsing the next batch of JSON from the current buffer
+	void ResetForNextParse();
+	//! Reset state for reading the next buffer
+	void ResetForNextBuffer();
 };
 
 class BufferedJSONReader : public BaseFileReader {
@@ -203,28 +208,27 @@ public:
 	               const idx_t remaining);
 	void SkipOverArrayStart(JSONReaderScanState &scan_state);
 	void ThrowTransformError(JSONReaderScanState &scan_state, idx_t object_index, const string &error_message);
-	void AutoDetect(JSONReaderScanState &scan_state, optional_idx buffer_index);
+	void AutoDetect(JSONReaderScanState &scan_state);
 	bool ReconstructFirstObject(JSONReaderScanState &scan_state);
 	void ParseNextChunk(JSONReaderScanState &scan_state);
 	void ThrowObjectSizeError(const idx_t object_size);
-	void InitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, optional_idx &buffer_indexfile_done);
-	bool ReadNextBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
-	                    optional_idx &buffer_index);
+	void InitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
+	bool ReadNextBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
 	void FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer, idx_t buffer_index);
-	void PrepareForRead(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer);
+	void PrepareForReadInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
 	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer);
 	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer);
+	void PrepareForScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
+	bool PrepareBufferForRead(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
+	void FinalizeBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
 
 	//! Scan progress
 	double GetProgress() const;
 
 private:
-	bool ReadNextBufferInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,
-	                            optional_idx &buffer_index);
-	bool ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
-	                        optional_idx &buffer_index);
-	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, AllocatedData &buffer,
-	                          optional_idx &buffer_index);
+	bool PrepareBufferSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
+	void ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
+	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
 
 private:
 	idx_t GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf);
@@ -237,7 +241,7 @@ private:
 	unique_ptr<JSONFileHandle> file_handle;
 
 	//! Next buffer index within the file
-	idx_t buffer_index;
+	idx_t next_buffer_index;
 	//! Mapping from batch index to currently held buffers
 	unordered_map<idx_t, unique_ptr<JSONBufferHandle>> buffer_map;
 
