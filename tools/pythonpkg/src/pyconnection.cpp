@@ -457,6 +457,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(
 	    UDFWrapper::CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>(
 	        "udf_avg_double");
 	CreateAggregateFunctionInfo info(aggregate_function);
+	context.RegisterFunction(info);
 
 	auto dependency = make_uniq<ExternalDependency>();
 	dependency->AddDependency("function", PythonDependencyItem::Create(udf));
