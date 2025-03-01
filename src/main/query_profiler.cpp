@@ -221,9 +221,10 @@ void QueryProfiler::EndQuery() {
 			auto &info = root->GetProfilingInfo();
 			info = ProfilingInfo(ClientConfig::GetConfig(context).profiler_settings);
 			auto &child_info = root->children[0]->GetProfilingInfo();
-			info.metrics[MetricsType::QUERY_NAME] = query_info.query_name;
-
 			auto &settings = info.expanded_settings;
+			if (info.Enabled(settings, MetricsType::QUERY_NAME)) {
+				info.metrics[MetricsType::QUERY_NAME] = query_info.query_name;
+			}
 			if (info.Enabled(settings, MetricsType::BLOCKED_THREAD_TIME)) {
 				info.metrics[MetricsType::BLOCKED_THREAD_TIME] = query_info.blocked_thread_time;
 			}
@@ -593,12 +594,19 @@ void PrintPhaseTimingsToStream(std::ostream &ss, const ProfilingInfo &info, idx_
 
 void QueryProfiler::QueryTreeToStream(std::ostream &ss) const {
 	lock_guard<std::mutex> guard(lock);
+
+	bool show_query_name = false;
+	if (root) {
+		auto &info = root->GetProfilingInfo();
+		auto &settings = info.expanded_settings;
+		show_query_name = info.Enabled(settings, MetricsType::QUERY_NAME);
+	}
 	ss << "┌─────────────────────────────────────┐\n";
 	ss << "│┌───────────────────────────────────┐│\n";
 	ss << "││    Query Profiling Information    ││\n";
 	ss << "│└───────────────────────────────────┘│\n";
 	ss << "└─────────────────────────────────────┘\n";
-	ss << StringUtil::Replace(query_info.query_name, "\n", " ") + "\n";
+	ss << (show_query_name ? StringUtil::Replace(query_info.query_name, "\n", " ") : "") + "\n";
 
 	// checking the tree to ensure the query is really empty
 	// the query string is empty when a logical plan is deserialized
