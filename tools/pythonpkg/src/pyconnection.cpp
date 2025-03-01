@@ -438,23 +438,28 @@ bool UDFAverageFunction::IgnoreNull() {
 
 // Simplication to double and single field to start python udf aggregation work.
 // Need to add back complex and composite type later.
-void UDFSumFunction::Initialize(double &state) {
+template <class STATE>
+void UDFSumFunction::Initialize(STATE &state) {
 	state = 0;
 }
 
-void UDFSumFunction::Operation(double &state, const double &input, AggregateUnaryInput &) {
+template <class INPUT_TYPE, class STATE, class OP>
+void UDFSumFunction::Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 	state += input;
 }
 
-void UDFSumFunction::ConstantOperation(double &state, const double &input, AggregateUnaryInput &, idx_t count) {
+template <class INPUT_TYPE, class STATE, class OP>
+void UDFSumFunction::ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
 	state += input * count;
 }
 
-void UDFSumFunction::Combine(const double &source, double &target, AggregateInputData &) {
+template <class STATE, class OP>
+void UDFSumFunction::Combine(const STATE &source, STATE &target, AggregateInputData &) {
 	target += source;
 }
 
-void UDFSumFunction::Finalize(double &state, double &target, AggregateFinalizeData &finalize_data) {
+template <class T, class STATE>
+void UDFSumFunction::Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
 	target = state;
 }
 

@@ -174,15 +174,20 @@ struct UDFAverageFunction {
 };
 
 struct UDFSumFunction {
-	static void Initialize(double &state);
+	template <class STATE>
+	static void Initialize(STATE &state);
 
-	static void Operation(double &state, const double &input, AggregateUnaryInput &);
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &);
 
-	static void ConstantOperation(double &state, const double &input, AggregateUnaryInput &, idx_t count);
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count);
 
-	static void Combine(const double &source, double &target, AggregateInputData &);
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &);
 
-	static void Finalize(double &state, double &target, AggregateFinalizeData &finalize_data);
+	template <class T, class STATE>
+	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data);
 
 	static bool IgnoreNull();
 };
