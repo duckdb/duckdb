@@ -2172,6 +2172,8 @@ const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_RESET), "LOGICAL_RESET" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS), "LOGICAL_UPDATE_EXTENSIONS" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_SECRET), "LOGICAL_CREATE_SECRET" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_CREATE_BF), "LOGICAL_CREATE_BF" },
+		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_USE_BF), "LOGICAL_USE_BF" },
 		{ static_cast<uint32_t>(LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR), "LOGICAL_EXTENSION_OPERATOR" }
 	};
 	return values;
@@ -2179,12 +2181,12 @@ const StringUtil::EnumStringLiteral *GetLogicalOperatorTypeValues() {
 
 template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value) {
-	return StringUtil::EnumToString(GetLogicalOperatorTypeValues(), 61, "LogicalOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetLogicalOperatorTypeValues(), 63, "LogicalOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value) {
-	return static_cast<LogicalOperatorType>(StringUtil::StringToEnum(GetLogicalOperatorTypeValues(), 61, "LogicalOperatorType", value));
+	return static_cast<LogicalOperatorType>(StringUtil::StringToEnum(GetLogicalOperatorTypeValues(), 63, "LogicalOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetLogicalTypeIdValues() {
@@ -2943,19 +2945,21 @@ const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {
 		{ static_cast<uint32_t>(PhysicalOperatorType::EXTENSION), "EXTENSION" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::VERIFY_VECTOR), "VERIFY_VECTOR" },
 		{ static_cast<uint32_t>(PhysicalOperatorType::UPDATE_EXTENSIONS), "UPDATE_EXTENSIONS" },
-		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_SECRET), "CREATE_SECRET" }
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_SECRET), "CREATE_SECRET" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::CREATE_BF), "CREATE_BF" },
+		{ static_cast<uint32_t>(PhysicalOperatorType::USE_BF), "USE_BF" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value) {
-	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 81, "PhysicalOperatorType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetPhysicalOperatorTypeValues(), 83, "PhysicalOperatorType", static_cast<uint32_t>(value));
 }
 
 template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value) {
-	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 81, "PhysicalOperatorType", value));
+	return static_cast<PhysicalOperatorType>(StringUtil::StringToEnum(GetPhysicalOperatorTypeValues(), 83, "PhysicalOperatorType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPhysicalTypeValues() {

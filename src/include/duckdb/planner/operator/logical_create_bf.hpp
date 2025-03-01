@@ -18,6 +18,9 @@ public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	vector<ColumnBinding> GetColumnBindings() override;
 
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
+
 protected:
 	void ResolveTypes() override;
 };

@@ -24,6 +24,15 @@ InsertionOrderPreservingMap<string> LogicalUseBF::ParamsToString() const {
 	return result;
 }
 
+void LogicalUseBF::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	throw InternalException("Shouldn't go here: LogicalUseBF::Serialize");
+}
+
+unique_ptr<LogicalOperator> LogicalUseBF::Deserialize(Deserializer &deserializer) {
+	throw InternalException("Shouldn't go here: LogicalUseBF::Deserialize");
+}
+
 vector<ColumnBinding> LogicalUseBF::GetColumnBindings() {
 	return children[0]->GetColumnBindings();
 }

@@ -112,7 +112,6 @@ enum class LogicalOperatorType : uint8_t {
 	// -----------------------------
 	LOGICAL_CREATE_BF = 210,
 	LOGICAL_USE_BF = 211,
-	LOGICAL_CREATE_TABLE_BF = 212,
 
 	LOGICAL_EXTENSION_OPERATOR = 255
 };
