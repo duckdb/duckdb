@@ -173,7 +173,8 @@ void Optimizer::RunBuiltInOptimizers() {
 		PredicateTransferOptimizer PT(context);
 		plan = PT.PreOptimize(std::move(plan));
 
-		// 2. Then we perform the join ordering optimization, this also rewrites cross products + filters into joins and performs filter pushdowns
+		// 2. Then we perform the join ordering optimization, this also rewrites cross products + filters into joins and
+		// performs filter pushdowns
 		RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
 			JoinOrderOptimizer optimizer(context);
 			plan = optimizer.Optimize(std::move(plan));
@@ -182,7 +183,7 @@ void Optimizer::RunBuiltInOptimizers() {
 		// 3. Insert BloomFilter-related operators
 		plan = PT.Optimize(std::move(plan));
 	}
-	
+
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
 		UnnestRewriter unnest_rewriter;
