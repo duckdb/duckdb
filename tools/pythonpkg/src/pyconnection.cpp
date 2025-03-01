@@ -456,7 +456,7 @@ void UDFSumFunction::ConstantOperation(STATE &state, const INPUT_TYPE &input, Ag
 template <class STATE, class OP>
 void UDFSumFunction::Combine(const STATE &source, STATE &target, AggregateInputData &) {
 	// target += sum;
-	target = m_CombineFunction(source, target);
+	target += source;
 }
 
 template <class T, class STATE>
