@@ -80,7 +80,7 @@ public:
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
 	inline static AggregateFunction CreateAggregateFunction(const string &name, CombineFuncPtr<STATE> combineFunction) {
-		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, combine);
+		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, combineFunction);
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
