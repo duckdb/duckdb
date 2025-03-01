@@ -59,9 +59,8 @@ public:
 		// Read and detect schema
 		idx_t total_tuple_count = 0;
 		idx_t total_read_size = 0;
-		scan_state.ResetForNextBuffer();
+
 		scan_state.scan_entire_file = true;
-		scan_state.current_reader = &reader;
 		reader.InitializeScan(scan_state);
 		while (remaining != 0) {
 			allocator.Reset();

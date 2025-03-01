@@ -271,7 +271,6 @@ void JSONScanLocalState::PrepareReader(JSONScanGlobalState &gstate, JSONReaderSc
 	gstate.file_is_assigned = false;
 	if (!gstate.enable_parallel_scans) {
 		// we are reading the entire file - we don't even need to open the file yet
-		scan_state.reader_needs_initialization = true;
 		return;
 	}
 	// prepare a reader for reading

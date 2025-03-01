@@ -112,6 +112,8 @@ public:
 	}
 };
 
+enum class JSONFilePrepare { READ_IMMEDIATELY, CAN_READ_LAZILY };
+
 struct JSONReaderScanState {
 	explicit JSONReaderScanState(ClientContext &context, Allocator &global_allocator,
 	                             idx_t reconstruct_buffer_capacity);
@@ -121,13 +123,12 @@ struct JSONReaderScanState {
 	//! Thread-local allocator
 	JSONAllocator allocator;
 	idx_t buffer_capacity;
+	bool initialized = false;
 	// if we have a buffer already - this is our buffer index
 	optional_idx buffer_index;
 	//! Whether or not we are scanning the entire file
 	//! If we are scanning the entire file we don't share reads between threads and just read the file until we are done
-	bool initialized = false;
 	bool scan_entire_file = false;
-	bool reader_needs_initialization = false;
 	// Data for reading (if we have postponed reading)
 	//! Buffer (if we have one)
 	AllocatedData read_buffer;
@@ -178,6 +179,9 @@ public:
 
 	bool HasFileHandle() const;
 	bool IsOpen() const;
+	bool IsInitialized() const {
+		return initialized;
+	}
 
 	JSONReaderOptions &GetOptions();
 
@@ -216,7 +220,8 @@ public:
 	idx_t Scan(JSONReaderScanState &scan_state);
 	bool ReadNextBuffer(JSONReaderScanState &scan_state);
 	void PrepareForScan(JSONReaderScanState &scan_state);
-	bool PrepareBufferForRead(JSONReaderScanState &scan_state, bool immediate_read_required = false);
+	bool PrepareBufferForRead(JSONReaderScanState &scan_state,
+	                          JSONFilePrepare file_prepare = JSONFilePrepare::CAN_READ_LAZILY);
 	void FinalizeBuffer(JSONReaderScanState &scan_state);
 
 	//! Scan progress
@@ -244,6 +249,8 @@ private:
 	//! File handle
 	unique_ptr<JSONFileHandle> file_handle;
 
+	//! Whether or not the reader has been initialized
+	bool initialized;
 	//! Next buffer index within the file
 	idx_t next_buffer_index;
 	//! Mapping from batch index to currently held buffers

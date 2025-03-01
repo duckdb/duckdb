@@ -195,8 +195,8 @@ idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, idx_t &position
 }
 
 BufferedJSONReader::BufferedJSONReader(ClientContext &context, JSONReaderOptions options_p, string file_name_p)
-    : BaseFileReader(std::move(file_name_p)), context(context), options(std::move(options_p)), next_buffer_index(0),
-      thrown(false) {
+    : BaseFileReader(std::move(file_name_p)), context(context), options(std::move(options_p)), initialized(0),
+      next_buffer_index(0), thrown(false) {
 }
 
 void BufferedJSONReader::OpenJSONFile() {
@@ -217,6 +217,7 @@ void BufferedJSONReader::CloseHandle() {
 }
 
 void BufferedJSONReader::Reset() {
+	initialized = false;
 	next_buffer_index = 0;
 	buffer_map.clear();
 	buffer_line_or_object_counts.clear();
@@ -406,7 +407,6 @@ void JSONReaderScanState::ResetForNextBuffer() {
 	scan_count = 0;
 	is_last = false;
 	scan_entire_file = false;
-	reader_needs_initialization = false;
 }
 
 data_ptr_t JSONReaderScanState::GetReconstructBuffer() {
@@ -829,15 +829,19 @@ void BufferedJSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 }
 
 void BufferedJSONReader::InitializeScan(JSONReaderScanState &scan_state) {
+	if (initialized) {
+		throw InternalException("JSON InitializeScan called twice on the same reader without resetting");
+	}
 	// Open the file if it is not yet open
 	if (!IsOpen()) {
 		OpenJSONFile();
 	}
+	initialized = true;
 	// Auto-detect if we haven't yet done this during the bind
 	if (options.record_type == JSONRecordType::AUTO_DETECT || GetFormat() == JSONFormat::AUTO_DETECT) {
 		// We have to detect the JSON format
 		// read a buffer
-		if (!PrepareBufferForRead(scan_state, true)) {
+		if (!PrepareBufferForRead(scan_state, JSONFilePrepare::READ_IMMEDIATELY)) {
 			return;
 		}
 
@@ -845,8 +849,8 @@ void BufferedJSONReader::InitializeScan(JSONReaderScanState &scan_state) {
 		if (scan_state.buffer_index.IsValid() && scan_state.buffer_size != 0) {
 			FinalizeBufferInternal(scan_state, scan_state.read_buffer, scan_state.buffer_index.GetIndex());
 		}
-		scan_state.current_reader = this;
 	}
+	scan_state.current_reader = this;
 }
 
 idx_t BufferedJSONReader::Scan(JSONReaderScanState &scan_state) {
@@ -880,7 +884,7 @@ void BufferedJSONReader::PrepareForScan(JSONReaderScanState &scan_state) {
 	if (scan_state.scan_entire_file) {
 		// first time scanning from this reader while scanning the entire file
 		// we need to initialize the reader
-		if (scan_state.reader_needs_initialization) {
+		if (!scan_state.current_reader->IsInitialized()) {
 			scan_state.current_reader->InitializeScan(scan_state);
 		}
 		return;
@@ -966,8 +970,8 @@ void BufferedJSONReader::PrepareForReadInternal(JSONReaderScanState &scan_state)
 		memcpy(scan_state.buffer_ptr, scan_state.GetReconstructBuffer(), scan_state.prev_buffer_remainder);
 	}
 }
-bool BufferedJSONReader::PrepareBufferForRead(JSONReaderScanState &scan_state, bool immediate_read_required) {
-	if (!scan_state.scan_entire_file && !immediate_read_required && GetFileHandle().CanSeek()) {
+bool BufferedJSONReader::PrepareBufferForRead(JSONReaderScanState &scan_state, JSONFilePrepare file_prepare) {
+	if (!scan_state.scan_entire_file && file_prepare == JSONFilePrepare::CAN_READ_LAZILY && GetFileHandle().CanSeek()) {
 		// we can seek and are doing a parallel read - we don't need to read immediately yet
 		// we only need to prepare the read now
 		if (!PrepareBufferSeek(scan_state)) {
