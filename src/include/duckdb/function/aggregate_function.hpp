@@ -337,7 +337,7 @@ public:
 	template <typename STATE>
 	aggregate_combine_t GetAggregateCombineFunction(CombineFuncPtr<STATE> combineFunction) {
 		// Return a function pointer that calls StateCombine with the given combineFunction
-		return [](Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
+		return [combineFunction](Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
 			AggregateExecutor::Combine<STATE>(source, target, aggr_input_data, count, combineFunction);
 		};
 	}
