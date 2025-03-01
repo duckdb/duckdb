@@ -100,7 +100,7 @@ public:
 	JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate);
 
 public:
-	idx_t Read(JSONScanGlobalState &gstate);
+	idx_t Read();
 	bool NextBuffer(JSONScanGlobalState &gstate);
 	idx_t ReadNext(JSONScanGlobalState &gstate);
 	void ThrowTransformError(idx_t object_index, const string &error_message);
@@ -125,7 +125,7 @@ public:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	void ParseNextChunk(JSONScanGlobalState &gstate);
+	void ParseNextChunk();
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 

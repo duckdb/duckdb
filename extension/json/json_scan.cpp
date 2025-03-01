@@ -177,8 +177,8 @@ idx_t JSONLocalTableFunctionState::GetBatchIndex() const {
 	return state.GetScanState().batch_index.GetIndex();
 }
 
-idx_t JSONScanLocalState::Read(JSONScanGlobalState &gstate) {
-	scan_state.current_reader->PrepareForScan(gstate, scan_state);
+idx_t JSONScanLocalState::Read() {
+	scan_state.current_reader->PrepareForScan(scan_state);
 	while (scan_state.scan_count == 0) {
 		while (scan_state.buffer_offset >= scan_state.buffer_size) {
 			// we have exhausted the current buffer
@@ -188,12 +188,12 @@ idx_t JSONScanLocalState::Read(JSONScanGlobalState &gstate) {
 				return 0;
 			}
 			// read the next buffer
-			if (!scan_state.current_reader->ReadNextBuffer(gstate, scan_state)) {
+			if (!scan_state.current_reader->ReadNextBuffer(scan_state)) {
 				// we have exhausted the file
 				return 0;
 			}
 		}
-		ParseNextChunk(gstate);
+		ParseNextChunk();
 	}
 	return scan_state.scan_count;
 }
@@ -208,7 +208,7 @@ bool JSONScanLocalState::NextBuffer(JSONScanGlobalState &gstate) {
 idx_t JSONScanLocalState::ReadNext(JSONScanGlobalState &gstate) {
 	while (true) {
 		if (scan_state.initialized) {
-			auto count = Read(gstate);
+			auto count = Read();
 			if (count > 0) {
 				return count;
 			}
@@ -273,7 +273,7 @@ bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate, JSONRead
 		return true;
 	}
 	// we need to check if there is data available within our current reader
-	if (reader.PrepareBufferForRead(gstate, scan_state)) {
+	if (reader.PrepareBufferForRead(scan_state)) {
 		// there is data available! return
 		scan_state.current_reader = reader;
 		scan_state.is_first_scan = true;
@@ -294,7 +294,7 @@ void JSONScanLocalState::PrepareReader(JSONScanGlobalState &gstate, JSONReaderSc
 	// prepare a reader for reading
 	// scenario 1 & 2 -> auto detect
 	// scenario 3 -> nothing
-	reader.InitializeScan(gstate, scan_state);
+	reader.InitializeScan(scan_state);
 }
 
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
@@ -324,7 +324,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 	return false;
 }
 
-void JSONScanLocalState::ParseNextChunk(JSONScanGlobalState &gstate) {
+void JSONScanLocalState::ParseNextChunk() {
 	auto buffer_offset_before = scan_state.buffer_offset;
 	scan_state.current_reader->ParseNextChunk(scan_state);
 

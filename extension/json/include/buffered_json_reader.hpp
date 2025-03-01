@@ -209,29 +209,29 @@ public:
 
 	void ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
 	               const idx_t remaining);
-	void SkipOverArrayStart(JSONReaderScanState &scan_state);
 	void ThrowTransformError(JSONReaderScanState &scan_state, idx_t object_index, const string &error_message);
-	void AutoDetect(JSONReaderScanState &scan_state);
-	bool ReconstructFirstObject(JSONReaderScanState &scan_state);
 	void ParseNextChunk(JSONReaderScanState &scan_state);
 	void ThrowObjectSizeError(const idx_t object_size);
-	void InitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
-	bool ReadNextBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
-	void FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer, idx_t buffer_index);
-	void PrepareForReadInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
-	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer);
-	void PrepareForScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
-	bool PrepareBufferForRead(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
-	                          bool immediate_read_required = false);
-	void FinalizeBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
+	void InitializeScan(JSONReaderScanState &scan_state);
+	bool ReadNextBuffer(JSONReaderScanState &scan_state);
+	void PrepareForScan(JSONReaderScanState &scan_state);
+	bool PrepareBufferForRead(JSONReaderScanState &scan_state, bool immediate_read_required = false);
+	void FinalizeBuffer(JSONReaderScanState &scan_state);
 
 	//! Scan progress
 	double GetProgress() const;
 
+	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer);
+
 private:
-	bool PrepareBufferSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
-	void ReadNextBufferSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
-	bool ReadNextBufferNoSeek(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
+	void SkipOverArrayStart(JSONReaderScanState &scan_state);
+	void AutoDetect(JSONReaderScanState &scan_state);
+	bool ReconstructFirstObject(JSONReaderScanState &scan_state);
+	void FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer, idx_t buffer_index);
+	void PrepareForReadInternal(JSONReaderScanState &scan_state);
+	bool PrepareBufferSeek(JSONReaderScanState &scan_state);
+	void ReadNextBufferSeek(JSONReaderScanState &scan_state);
+	bool ReadNextBufferNoSeek(JSONReaderScanState &scan_state);
 
 private:
 	idx_t GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf);
