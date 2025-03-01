@@ -26,7 +26,7 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<Logi
 	for (auto it = ordered_nodes.rbegin(); it != ordered_nodes.rend(); ++it) {
 		auto *current_node = *it;
 		for (auto &BF : CreateBloomFilter(*current_node, false)) {
-			graph_manager.AddBF(BF.first, BF.second, false);
+			graph_manager.AddBloomFilter(BF.first, BF.second, false);
 		}
 	}
 
@@ -34,7 +34,7 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::Optimize(unique_ptr<Logi
 	// - Similar to the forward pass, but for backward edges
 	for (auto *current_node : ordered_nodes) {
 		for (auto &BF : CreateBloomFilter(*current_node, true)) {
-			graph_manager.AddBF(BF.first, BF.second, true);
+			graph_manager.AddBloomFilter(BF.first, BF.second, true);
 		}
 	}
 
@@ -62,8 +62,8 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(
 		plan = std::move(it->second);
 	};
 
-	apply_modification(modify_map_forward);
-	apply_modification(modify_map_backward);
+	apply_modification(modify_map_for_forward_stage);
+	apply_modification(modify_map_for_backward_stage);
 
 	return plan;
 }
@@ -86,7 +86,7 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 	// Create Bloom Filter
 	GetAllBFsToCreate(node_id, bfs_to_create, reverse);
 
-	auto &replace_map = reverse ? modify_map_backward : modify_map_forward;
+	auto &replace_map = reverse ? modify_map_for_backward_stage : modify_map_for_forward_stage;
 
 	if (!bfs_to_use.empty() && !bfs_to_create.empty()) {
 		auto last_use_bf = BuildUseBFOperator(node, bfs_to_use, parent_nodes, reverse);
@@ -143,8 +143,8 @@ void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id, BloomFilte
 			GetColumnBindingExpression(*expr, expressions);
 			D_ASSERT(expressions.size() == 2);
 
-			auto binding0 = graph_manager.table_operator_manager.FindRename(expressions[0]->binding);
-			auto binding1 = graph_manager.table_operator_manager.FindRename(expressions[1]->binding);
+			auto binding0 = graph_manager.table_operator_manager.GetRenaming(expressions[0]->binding);
+			auto binding1 = graph_manager.table_operator_manager.GetRenaming(expressions[1]->binding);
 
 			if (binding0.table_index == cur_node_id) {
 				cur_filter->AddColumnBindingApplied(binding1);
@@ -173,7 +173,7 @@ unique_ptr<LogicalUseBF> PredicateTransferOptimizer::BuildUseBFOperator(LogicalO
                                                                         BloomFilters &bloom_filters,
                                                                         vector<idx_t> &parent_nodes, bool reverse) {
 	unique_ptr<LogicalUseBF> last_operator;
-	auto &replace_map = reverse ? modify_map_backward : modify_map_forward;
+	auto &replace_map = reverse ? modify_map_for_backward_stage : modify_map_for_forward_stage;
 
 	// This is important for performance, not use (int i = 0; i < temp_result_to_use.size(); i++)
 	for (int i = bloom_filters.size() - 1; i >= 0; i--) {
@@ -196,7 +196,7 @@ unique_ptr<LogicalUseBF> PredicateTransferOptimizer::BuildUseBFOperator(LogicalO
 }
 
 bool PredicateTransferOptimizer::PossibleFilterAny(LogicalOperator &node, bool reverse) {
-	if (!reverse || (modify_map_forward.find(&node) == modify_map_forward.end())) {
+	if (!reverse || (modify_map_for_forward_stage.find(&node) == modify_map_for_forward_stage.end())) {
 		if (node.type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = node.Cast<LogicalGet>();
 			if (get.table_filters.filters.size() == 0) {

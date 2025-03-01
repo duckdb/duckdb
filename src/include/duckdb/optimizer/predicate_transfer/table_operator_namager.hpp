@@ -16,10 +16,11 @@ public:
 public:
 	vector<reference<LogicalOperator>> ExtractOperators(LogicalOperator &plan);
 	void SortTableOperators();
+
 	LogicalOperator *GetTableOperator(idx_t table_idx);
 	idx_t GetTableOperatorOrder(const LogicalOperator *node);
+	ColumnBinding GetRenaming(ColumnBinding col_binding);
 
-	ColumnBinding FindRename(ColumnBinding col_binding);
 	static idx_t GetScalarTableIndex(LogicalOperator *op);
 	static bool OperatorNeedsRelation(LogicalOperatorType op_type);
 

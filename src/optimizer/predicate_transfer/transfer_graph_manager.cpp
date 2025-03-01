@@ -26,7 +26,7 @@ bool TransferGraphManager::Build(LogicalOperator &plan) {
 	return true;
 }
 
-void TransferGraphManager::AddBF(idx_t create_table, const shared_ptr<BlockedBloomFilter> &use_bf, bool reverse) {
+void TransferGraphManager::AddBloomFilter(idx_t create_table, const shared_ptr<BlockedBloomFilter> &use_bf, bool reverse) {
 	bool is_forward = !reverse;
 	auto node_idx = use_bf->GetColApplied()[0].table_index;
 	transfer_graph[node_idx]->Add(create_table, use_bf, is_forward, true);
@@ -64,8 +64,8 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			}
 
 			// Determine table indices and corresponding nodes
-			idx_t left_table = table_operator_manager.FindRename(left_binding).table_index;
-			idx_t right_table = table_operator_manager.FindRename(right_binding).table_index;
+			idx_t left_table = table_operator_manager.GetRenaming(left_binding).table_index;
+			idx_t right_table = table_operator_manager.GetRenaming(right_binding).table_index;
 			auto left_node = table_operator_manager.GetTableOperator(left_table);
 			auto right_node = table_operator_manager.GetTableOperator(right_table);
 			if (!left_node || !right_node)

@@ -38,7 +38,7 @@ private:
 	TransferGraphManager graph_manager;
 
 	//! we use a map to record how to modify/update the operators in the query plan.
-	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> modify_map_forward;
-	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> modify_map_backward;
+	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> modify_map_for_forward_stage;
+	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> modify_map_for_backward_stage;
 };
 } // namespace duckdb

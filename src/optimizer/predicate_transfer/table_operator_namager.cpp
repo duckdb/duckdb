@@ -44,7 +44,7 @@ idx_t TableOperatorManager::GetTableOperatorOrder(const LogicalOperator *node) {
 	return -1; // fallback if not found
 }
 
-ColumnBinding TableOperatorManager::FindRename(ColumnBinding binding) {
+ColumnBinding TableOperatorManager::GetRenaming(ColumnBinding binding) {
 	auto itr = rename_col_bindings.find(binding);
 	while (itr != rename_col_bindings.end()) {
 		binding = itr->second;
