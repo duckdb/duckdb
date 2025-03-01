@@ -15,13 +15,10 @@ public:
 	vector<shared_ptr<BlockedBloomFilter>> bf_to_use;
 	vector<LogicalCreateBF *> related_create_bf;
 
+public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
-
-public:
-	void AddDownStreamOperator(LogicalCreateBF *op);
-
-public:
 	vector<ColumnBinding> GetColumnBindings() override;
+	void AddDownStreamOperator(LogicalCreateBF *op);
 
 protected:
 	void ResolveTypes() override;

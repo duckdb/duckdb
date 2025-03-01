@@ -24,15 +24,15 @@ InsertionOrderPreservingMap<string> LogicalUseBF::ParamsToString() const {
 	return result;
 }
 
-void LogicalUseBF::ResolveTypes() {
-	types = children[0]->types;
-}
-
 vector<ColumnBinding> LogicalUseBF::GetColumnBindings() {
 	return children[0]->GetColumnBindings();
 }
 
 void LogicalUseBF::AddDownStreamOperator(LogicalCreateBF *op) {
 	related_create_bf.emplace_back(op);
+}
+
+void LogicalUseBF::ResolveTypes() {
+	types = children[0]->types;
 }
 } // namespace duckdb

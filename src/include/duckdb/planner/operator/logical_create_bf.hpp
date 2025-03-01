@@ -8,16 +8,14 @@ class LogicalCreateBF : public LogicalOperator {
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CREATE_BF;
 
-	PhysicalCreateBF *physical = nullptr;
-
 public:
 	explicit LogicalCreateBF(vector<shared_ptr<BlockedBloomFilter>> bloom_filters);
 
+	PhysicalCreateBF *physical = nullptr;
 	vector<shared_ptr<BlockedBloomFilter>> bf_to_create;
 
-	InsertionOrderPreservingMap<string> ParamsToString() const override;
-
 public:
+	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	vector<ColumnBinding> GetColumnBindings() override;
 
 protected:
