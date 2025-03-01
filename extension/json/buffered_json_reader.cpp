@@ -840,7 +840,7 @@ bool BufferedJSONReader::ReadNextBuffer(JSONScanGlobalState &gstate, JSONReaderS
 void BufferedJSONReader::FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer,
                                                 idx_t buffer_index) {
 	idx_t readers = 1;
-	if (GetFormat() == JSONFormat::NEWLINE_DELIMITED) {
+	if (!scan_state.scan_entire_file) {
 		readers = scan_state.is_last ? 1 : 2;
 	}
 
