@@ -163,6 +163,8 @@ public:
 	void ResetForNextParse();
 	//! Reset state for reading the next buffer
 	void ResetForNextBuffer();
+	//! Clear the buffer handle (if any)
+	void ClearBufferHandle();
 };
 
 class BufferedJSONReader : public BaseFileReader {
@@ -217,7 +219,6 @@ public:
 	void FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer, idx_t buffer_index);
 	void PrepareForReadInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
 	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer);
-	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer);
 	void PrepareForScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
 	bool PrepareBufferForRead(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);
 	void FinalizeBuffer(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state);

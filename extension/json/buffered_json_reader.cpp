@@ -378,19 +378,30 @@ void JSONReaderScanState::ResetForNextParse() {
 	scan_count = 0;
 }
 
+void JSONReaderScanState::ClearBufferHandle() {
+	if (!current_buffer_handle) {
+		return;
+	}
+	// Free up the current buffer - if any
+	auto &handle = *current_buffer_handle;
+	if (!RefersToSameObject(handle.reader, *current_reader)) {
+		throw InternalException("Handle reader and current reader are unaligned");
+	}
+	if (handle.buffer_index != buffer_index.GetIndex()) {
+		throw InternalException("Handle index and current index are unaligned");
+	}
+	handle.reader.DecrementBufferUsage(*current_buffer_handle, lines_or_objects_in_buffer, read_buffer);
+	current_buffer_handle = nullptr;
+}
+
 void JSONReaderScanState::ResetForNextBuffer() {
+	ClearBufferHandle();
 	buffer_index = optional_idx();
 	buffer_size = 0;
 	scan_count = 0;
 	is_last = false;
 	scan_entire_file = false;
 	reader_needs_initialization = false;
-	if (current_buffer_handle) {
-		// Free up the current buffer - if any
-		auto &handle = *current_buffer_handle;
-		handle.reader.DecrementBufferUsage(*current_buffer_handle, lines_or_objects_in_buffer, read_buffer);
-		current_buffer_handle = nullptr;
-	}
 }
 
 data_ptr_t JSONReaderScanState::GetReconstructBuffer() {
@@ -914,18 +925,8 @@ void BufferedJSONReader::DecrementBufferUsage(JSONBufferHandle &handle, idx_t li
 	}
 }
 
-void BufferedJSONReader::DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer) {
-	AllocatedData buffer;
-	DecrementBufferUsage(handle, lines_or_object_in_buffer, buffer);
-}
-
 void BufferedJSONReader::PrepareForReadInternal(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state) {
-	if (scan_state.current_buffer_handle) {
-		// Free up the current buffer - if any
-		auto &handle = *scan_state.current_buffer_handle;
-		handle.reader.DecrementBufferUsage(*scan_state.current_buffer_handle, scan_state.lines_or_objects_in_buffer, scan_state.read_buffer);
-		scan_state.current_buffer_handle = nullptr;
-	}
+	scan_state.ClearBufferHandle();
 	if (!scan_state.read_buffer.IsSet()) {
 		scan_state.read_buffer = gstate.allocator.Allocate(gstate.buffer_capacity);
 		scan_state.buffer_ptr = char_ptr_cast(scan_state.read_buffer.get());
