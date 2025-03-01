@@ -138,7 +138,7 @@ Binder Error
 query T
 SELECT json_extract('{"a":2,"c":[4,5],"f":7}', ['$.c','$.a']);
 ----
-[[4,5], 2]
+['[4,5]', 2]
 
 query T
 SELECT json_extract('{"a":2,"c":[4,5,{"f":7}]}', ['$.x', '$.a']);

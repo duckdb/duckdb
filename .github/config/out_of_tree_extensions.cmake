@@ -91,6 +91,7 @@ duckdb_extension_load(inet
     GIT_TAG a8b361ab5d43f6390d7cb48c9a9f0638e9581cf9
     INCLUDE_DIR src/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# POSTGRES_SCANNER

@@ -25,7 +25,7 @@ static bool IsNull(const char *buf, idx_t pos, idx_t end_pos) {
 	if (pos + 4 != end_pos) {
 		return false;
 	}
-	return StringUtil::CIEquals(string(buf + pos, buf + pos + 4), "null");
+	return StringUtil::CIEquals(buf + pos, 4, "null", 4);
 }
 
 inline static void SkipWhitespace(StringCastInputState &input_state) {
