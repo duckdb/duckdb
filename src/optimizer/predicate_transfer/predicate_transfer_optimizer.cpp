@@ -75,7 +75,8 @@ vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> PredicateTransferOptimizer::
 	BloomFilters bfs_to_create;
 
 	idx_t node_id = TableOperatorManager::GetScalarTableIndex(&node);
-	if (node_id == -1 || graph_manager.transfer_graph.find(node_id) == graph_manager.transfer_graph.end()) {
+	if (node_id == std::numeric_limits<idx_t>::max() ||
+	    graph_manager.transfer_graph.find(node_id) == graph_manager.transfer_graph.end()) {
 		return result;
 	}
 

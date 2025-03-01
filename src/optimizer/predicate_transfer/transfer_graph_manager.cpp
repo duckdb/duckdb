@@ -26,7 +26,8 @@ bool TransferGraphManager::Build(LogicalOperator &plan) {
 	return true;
 }
 
-void TransferGraphManager::AddBloomFilter(idx_t create_table, const shared_ptr<BlockedBloomFilter> &use_bf, bool reverse) {
+void TransferGraphManager::AddBloomFilter(idx_t create_table, const shared_ptr<BlockedBloomFilter> &use_bf,
+                                          bool reverse) {
 	bool is_forward = !reverse;
 	auto node_idx = use_bf->GetColApplied()[0].table_index;
 	transfer_graph[node_idx]->Add(create_table, use_bf, is_forward, true);
@@ -172,7 +173,7 @@ void TransferGraphManager::CreatePredicateTransferGraph() {
 		idx_t bigger = TableOperatorManager::GetScalarTableIndex(&edge->bigger_table);
 		idx_t smaller = TableOperatorManager::GetScalarTableIndex(&edge->smaller_table);
 
-		D_ASSERT(bigger != -1 && smaller != -1);
+		D_ASSERT(bigger != std::numeric_limits<idx_t>::max() && smaller != std::numeric_limits<idx_t>::max());
 
 		auto small_node = transfer_graph[smaller].get();
 		auto large_node = transfer_graph[bigger].get();

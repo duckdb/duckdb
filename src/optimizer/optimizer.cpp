@@ -180,7 +180,7 @@ void Optimizer::RunBuiltInOptimizers() {
 
 	plan = PT.Optimize(std::move(plan));
 
-	// plan->Print();
+	plan->Print();
 
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {

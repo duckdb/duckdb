@@ -10,7 +10,7 @@ vector<reference<LogicalOperator>> TableOperatorManager::ExtractOperators(Logica
 	vector<reference<LogicalOperator>> ret;
 	ExtractOperators(plan, ret, true);
 	SortTableOperators();
-	return std::move(ret);
+	return ret;
 }
 
 void TableOperatorManager::SortTableOperators() {
@@ -80,7 +80,7 @@ idx_t TableOperatorManager::GetScalarTableIndex(LogicalOperator *op) {
 		return op->GetTableIndex()[1];
 	}
 	default:
-		return -1;
+		return std::numeric_limits<idx_t>::max();
 	}
 }
 
@@ -102,7 +102,7 @@ void TableOperatorManager::AddTableOperator(LogicalOperator *op) {
 	op->estimated_cardinality = op->EstimateCardinality(context);
 
 	idx_t table_idx = GetScalarTableIndex(op);
-	if (table_idx != -1 && table_operators.find(table_idx) == table_operators.end()) {
+	if (table_idx != std::numeric_limits<idx_t>::max() && table_operators.find(table_idx) == table_operators.end()) {
 		table_operators[table_idx] = op;
 	}
 }
