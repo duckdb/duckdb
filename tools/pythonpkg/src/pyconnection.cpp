@@ -447,7 +447,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(const st
 		                              name);
 	}
 
-	auto aggregate_function = UDFWrapper::CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>("udf_avg_double"));
+	auto aggregate_function = UDFWrapper::CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>("udf_avg_double");
 	CreateAggregateFunctionInfo info(aggregate_function);
 
 	auto dependency = make_uniq<ExternalDependency>();
