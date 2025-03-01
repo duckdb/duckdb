@@ -232,7 +232,7 @@ public:
 private:
 	void SkipOverArrayStart(JSONReaderScanState &scan_state);
 	void AutoDetect(JSONReaderScanState &scan_state);
-	bool ReconstructFirstObject(JSONReaderScanState &scan_state);
+	bool CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state);
 	void FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer, idx_t buffer_index);
 	void PrepareForReadInternal(JSONReaderScanState &scan_state);
 	bool PrepareBufferSeek(JSONReaderScanState &scan_state);
