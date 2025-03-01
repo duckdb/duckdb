@@ -118,6 +118,7 @@ void TableOperatorManager::ExtractOperators(LogicalOperator &plan, vector<refere
 				AddTableOperator(op);
 				return;
 			}
+			D_ASSERT(!op->expressions.empty());
 			if (op->expressions[0]->type == ExpressionType::OPERATOR_NOT &&
 			    op->expressions[0]->expression_class == ExpressionClass::BOUND_OPERATOR &&
 			    child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {

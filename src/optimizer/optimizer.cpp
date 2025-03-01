@@ -167,21 +167,22 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = empty_result_pullup.Optimize(std::move(plan));
 	});
 
-	// then we start the first phase of predicate transfer optimization, build the transfer graph
-	PredicateTransferOptimizer PT(context);
-	plan = PT.PreOptimize(std::move(plan));
+	// Perform predicate transfer and join order optimization
+	{
+		// 1. Extract information for predicate transfer, because some information may be lost in the next step.
+		PredicateTransferOptimizer PT(context);
+		plan = PT.PreOptimize(std::move(plan));
 
-	// then we perform the join ordering optimization
-	// this also rewrites cross products + filters into joins and performs filter pushdowns
-	RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
-		JoinOrderOptimizer optimizer(context);
-		plan = optimizer.Optimize(std::move(plan));
-	});
+		// 2. Then we perform the join ordering optimization, this also rewrites cross products + filters into joins and performs filter pushdowns
+		RunOptimizer(OptimizerType::JOIN_ORDER, [&]() {
+			JoinOrderOptimizer optimizer(context);
+			plan = optimizer.Optimize(std::move(plan));
+		});
 
-	plan = PT.Optimize(std::move(plan));
-
-	// plan->Print();
-
+		// 3. Insert BloomFilter-related operators
+		plan = PT.Optimize(std::move(plan));
+	}
+	
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
 		UnnestRewriter unnest_rewriter;
@@ -244,12 +245,12 @@ void Optimizer::RunBuiltInOptimizers() {
 	});
 
 	// perform statistics propagation
-	 column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
-		RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
-			StatisticsPropagator propagator(*this, *plan);
-			propagator.PropagateStatistics(plan);
-			statistics_map = propagator.GetStatisticsMap();
-		});
+	column_binding_map_t<unique_ptr<BaseStatistics>> statistics_map;
+	RunOptimizer(OptimizerType::STATISTICS_PROPAGATION, [&]() {
+		StatisticsPropagator propagator(*this, *plan);
+		propagator.PropagateStatistics(plan);
+		statistics_map = propagator.GetStatisticsMap();
+	});
 
 	// remove duplicate aggregates
 	RunOptimizer(OptimizerType::COMMON_AGGREGATE, [&]() {

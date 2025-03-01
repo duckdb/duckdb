@@ -12,7 +12,12 @@ public:
 	explicit PredicateTransferOptimizer(ClientContext &context) : context(context), graph_manager(context) {
 	}
 
+	//! Extract the query join information, note that this function must be called before join order optimization,
+	//! because some join conditions are lost during join order optimization.
 	unique_ptr<LogicalOperator> PreOptimize(unique_ptr<LogicalOperator> plan);
+
+	//! Create bloom filters and insert them into the query plan, note that this function must be called after join
+	//! order optimization, because it cannot handle newly inserted operator correctly.
 	unique_ptr<LogicalOperator> Optimize(unique_ptr<LogicalOperator> plan);
 
 private:
