@@ -96,6 +96,54 @@
 		"return": "DuckDBPyConnection"
 	},
 	{
+		"name": "create_aggregate_function",
+		"function": "RegisterScalarUDF",
+		"docs": "Create a DuckDB function out of the passing in Python function so it can be used in queries",
+		"args": [
+			{
+				"name": "name",
+				"type": "str"
+			},
+			{
+				"name": "function",
+				"type": "function"
+			},
+			{
+				"name": "parameters",
+				"type": "Optional[List[DuckDBPyType]]",
+				"default": "None"
+			},
+			{
+				"name": "return_type",
+				"type": "Optional[DuckDBPyType]",
+				"default": "None"
+			}
+		],
+		"kwargs": [
+			{
+				"name": "type",
+				"type": "Optional[PythonUDFType]",
+				"default": "PythonUDFType.NATIVE"
+			},
+			{
+				"name": "null_handling",
+				"type": "Optional[FunctionNullHandling]",
+				"default": "FunctionNullHandling.DEFAULT"
+			},
+			{
+				"name": "exception_handling",
+				"type": "Optional[PythonExceptionHandling]",
+				"default": "PythonExceptionHandling.DEFAULT"
+			},
+			{
+				"name": "side_effects",
+				"type": "bool",
+				"default": "False"
+			}
+		],
+		"return": "DuckDBPyConnection"
+	},
+	{
 		"name": "remove_function",
 		"function": "UnregisterUDF",
 		"docs": "Remove a previously created function",
