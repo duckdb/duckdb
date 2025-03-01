@@ -455,7 +455,8 @@ void UDFSumFunction::ConstantOperation(STATE &state, const INPUT_TYPE &input, Ag
 
 template <class STATE, class OP>
 void UDFSumFunction::Combine(const STATE &source, STATE &target, AggregateInputData &) {
-	target += source;
+	// target += sum;
+	target = m_CombineFunction(source, target);
 }
 
 template <class T, class STATE>
@@ -486,8 +487,10 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(
 		                              name);
 	}
 
-	auto aggregate_function =
-	    UDFWrapper::CreateAggregateFunction<UDFSumFunction, double, double, double>("udf_sum_double");
+	// TODO: figure out strange c++ template and python co-op issue.
+	AggregateFunction aggregate_function =
+	    UDFWrapper::CreateAggregateFunction<UDFSumFunction, double, double, double>("udf_sum_double", UDFSumFunction<double, UDFSumFunction>::Combine);
+	// UDFWrapper::CreateAggregateFunction<UDFSumFunction, double, double, double>("udf_sum_double");
 
 	/*
 	    UDFWrapper::CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>(

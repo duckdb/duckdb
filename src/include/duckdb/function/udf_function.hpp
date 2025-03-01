@@ -78,6 +78,11 @@ public:
 		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name);
 	}
 
+	template <typename UDF_OP, typename STATE, typename TR, typename TA>
+	inline static AggregateFunction CreateAggregateFunction(const string &name, aggregate_combine_t combine) {
+		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, combine);
+	}
+
 	template <typename UDF_OP, typename STATE, typename TR, typename TA, typename TB>
 	inline static AggregateFunction CreateAggregateFunction(const string &name) {
 		return CreateBinaryAggregateFunction<UDF_OP, STATE, TR, TA, TB>(name);
@@ -353,10 +358,27 @@ private:
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
+	inline static AggregateFunction CreateUnaryAggregateFunction(const string &name, aggregate_combine_t combine) {
+		LogicalType return_type = GetArgumentType<TR>();
+		LogicalType input_type = GetArgumentType<TA>();
+		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, return_type, input_type, combine);
+	}
+
+	template <typename UDF_OP, typename STATE, typename TR, typename TA>
 	inline static AggregateFunction CreateUnaryAggregateFunction(const string &name, const LogicalType &ret_type,
 	                                                             const LogicalType &input_type) {
 		AggregateFunction aggr_function =
 		    AggregateFunction::UnaryAggregate<STATE, TR, TA, UDF_OP>(input_type, ret_type);
+		aggr_function.name = name;
+		return aggr_function;
+	}
+
+	template <typename UDF_OP, typename STATE, typename TR, typename TA>
+	inline static AggregateFunction CreateUnaryAggregateFunction(const string &name, const LogicalType &ret_type,
+	                                                             const LogicalType &input_type,
+	                                                             aggregate_combine_t combine) {
+		AggregateFunction aggr_function =
+		    AggregateFunction::UnaryAggregate<STATE, TR, TA, UDF_OP>(input_type, ret_type, combine);
 		aggr_function.name = name;
 		return aggr_function;
 	}

@@ -173,7 +173,12 @@ struct UDFAverageFunction {
 	static bool IgnoreNull();
 };
 
+typedef std::function<void(const double &source, double &target)> CombineFunction;
+
 struct UDFSumFunction {
+
+public:
+
 	template <class STATE>
 	static void Initialize(STATE &state);
 
