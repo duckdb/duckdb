@@ -140,6 +140,12 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE,
 	      py::arg("null_handling") = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	      py::arg("exception_handling") = PythonExceptionHandling::FORWARD_ERROR, py::arg("side_effects") = false);
+	m.def("create_aggregate_function", &DuckDBPyConnection::RegisterScalarUDF,
+	      "Create a DuckDB function out of the passing in Python function so it can be used in queries",
+	      py::arg("name"), py::arg("function"), py::arg("parameters") = py::none(), py::arg("return_type") = py::none(),
+	      py::kw_only(), py::arg("type") = PythonUDFType::NATIVE,
+	      py::arg("null_handling") = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+	      py::arg("exception_handling") = PythonExceptionHandling::FORWARD_ERROR, py::arg("side_effects") = false);
 	m.def("remove_function", &DuckDBPyConnection::UnregisterUDF, "Remove a previously created function",
 	      py::arg("name"));
 	m.def("sqltype", &DuckDBPyConnection::Type, "Create a type object by parsing the 'type_str' string",
@@ -392,7 +398,6 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 	return shared_from_this();
 }
 
-
 template <class STATE>
 void UDFAverageFunction::Initialize(STATE &state) {
 	state.count = 0;
@@ -447,7 +452,9 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(const st
 		                              name);
 	}
 
-	auto aggregate_function = UDFWrapper::CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>("udf_avg_double");
+	auto aggregate_function =
+	    UDFWrapper::CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>(
+	        "udf_avg_double");
 	CreateAggregateFunctionInfo info(aggregate_function);
 
 	auto dependency = make_uniq<ExternalDependency>();
@@ -456,7 +463,6 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(const st
 
 	return shared_from_this();
 }
-
 
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	auto connection_module =
