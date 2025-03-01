@@ -119,10 +119,6 @@ public:
 	//! Options when transforming the JSON to columnar data
 	JSONTransformOptions transform_options;
 
-	//! For determining average tuple size
-	idx_t total_read_size;
-	idx_t total_tuple_count;
-
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
 	void ParseNextChunk();

@@ -70,7 +70,7 @@ JSONScanGlobalState::JSONScanGlobalState(ClientContext &context, const MultiFile
 }
 
 JSONScanLocalState::JSONScanLocalState(ClientContext &context, JSONScanGlobalState &gstate)
-    : total_read_size(0), total_tuple_count(0), scan_state(context, gstate.allocator, gstate.buffer_capacity) {
+    : scan_state(context, gstate.allocator, gstate.buffer_capacity) {
 }
 
 JSONGlobalTableFunctionState::JSONGlobalTableFunctionState(ClientContext &context, TableFunctionInitInput &input)
@@ -325,11 +325,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 }
 
 void JSONScanLocalState::ParseNextChunk() {
-	auto buffer_offset_before = scan_state.buffer_offset;
 	scan_state.current_reader->ParseNextChunk(scan_state);
-
-	total_read_size += scan_state.buffer_offset - buffer_offset_before;
-	total_tuple_count += scan_state.scan_count;
 }
 
 const MultiFileReaderData &JSONScanLocalState::GetReaderData() const {
