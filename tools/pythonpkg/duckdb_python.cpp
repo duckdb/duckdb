@@ -151,8 +151,8 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    if (!conn) {
 			    conn = DuckDBPyConnection::DefaultConnection();
 		    }
-		    return conn->RegisterScalarUDF(name, udf, arguments, return_type, type, null_handling, exception_handling,
-		                                   side_effects);
+		    return conn->RegisterAggregateUDF(name, udf, arguments, return_type, type, null_handling,
+		                                      exception_handling, side_effects);
 	    },
 	    "Create a DuckDB function out of the passing in Python function so it can be used in queries", py::arg("name"),
 	    py::arg("function"), py::arg("parameters") = py::none(), py::arg("return_type") = py::none(), py::kw_only(),
