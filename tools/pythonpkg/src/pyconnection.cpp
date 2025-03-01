@@ -482,7 +482,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(
 	}
 
 	auto aggregate_function =
-	    UDFWrapper::CreateAggregateFunction<UDFSSumFunction, double, double, double>("udf_sum_double");
+	    UDFWrapper::CreateAggregateFunction<UDFSumFunction, double, double, double>("udf_sum_double");
 
 	/*
 	    UDFWrapper::CreateAggregateFunction<UDFAverageFunction, udf_avg_state_t<double>, double, double>(
