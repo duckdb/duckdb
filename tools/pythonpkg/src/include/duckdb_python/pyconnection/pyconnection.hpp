@@ -148,6 +148,12 @@ private:
 	unique_ptr<DuckDBPyRelation> result;
 };
 
+template <class T>
+struct udf_avg_state_t {
+	uint64_t count;
+	T sum;
+};
+
 struct UDFAverageFunction {
 	template <class STATE>
 	static void Initialize(STATE &state);
