@@ -439,7 +439,7 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(
     const string &name, const py::function &udf, const py::object &arguments,
     const shared_ptr<DuckDBPyType> &return_type, PythonUDFType type,
     FunctionNullHandling null_handling,
-    PythonExceptionHandling exception_handling, bool side_effects);
+    PythonExceptionHandling exception_handling, bool side_effects)
 {
 	auto &connection = con.GetConnection();
 	auto &context = *connection.context;
