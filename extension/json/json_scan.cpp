@@ -178,24 +178,7 @@ idx_t JSONLocalTableFunctionState::GetBatchIndex() const {
 }
 
 idx_t JSONScanLocalState::Read() {
-	scan_state.current_reader->PrepareForScan(scan_state);
-	while (scan_state.scan_count == 0) {
-		while (scan_state.buffer_offset >= scan_state.buffer_size) {
-			// we have exhausted the current buffer
-			if (!scan_state.scan_entire_file) {
-				// we are not scanning the entire file
-				// return and fetch the next buffer from the global state
-				return 0;
-			}
-			// read the next buffer
-			if (!scan_state.current_reader->ReadNextBuffer(scan_state)) {
-				// we have exhausted the file
-				return 0;
-			}
-		}
-		ParseNextChunk();
-	}
-	return scan_state.scan_count;
+	return scan_state.current_reader->Scan(scan_state);
 }
 
 bool JSONScanLocalState::NextBuffer(JSONScanGlobalState &gstate) {
@@ -322,10 +305,6 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 		PrepareReader(gstate, scan_state, *gstate.json_readers[gstate.file_index]);
 	}
 	return false;
-}
-
-void JSONScanLocalState::ParseNextChunk() {
-	scan_state.current_reader->ParseNextChunk(scan_state);
 }
 
 const MultiFileReaderData &JSONScanLocalState::GetReaderData() const {

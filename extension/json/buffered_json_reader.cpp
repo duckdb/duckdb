@@ -849,6 +849,27 @@ void BufferedJSONReader::InitializeScan(JSONReaderScanState &scan_state) {
 	}
 }
 
+idx_t BufferedJSONReader::Scan(JSONReaderScanState &scan_state) {
+	PrepareForScan(scan_state);
+	while (scan_state.scan_count == 0) {
+		while (scan_state.buffer_offset >= scan_state.buffer_size) {
+			// we have exhausted the current buffer
+			if (!scan_state.scan_entire_file) {
+				// we are not scanning the entire file
+				// return and fetch the next buffer from the global state
+				return 0;
+			}
+			// read the next buffer
+			if (!ReadNextBuffer(scan_state)) {
+				// we have exhausted the file
+				return 0;
+			}
+		}
+		ParseNextChunk(scan_state);
+	}
+	return scan_state.scan_count;
+}
+
 void BufferedJSONReader::PrepareForScan(JSONReaderScanState &scan_state) {
 	if (!scan_state.is_first_scan) {
 		// we have already scanned from this buffer before - just reset and scan the next batch

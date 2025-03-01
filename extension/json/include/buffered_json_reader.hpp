@@ -213,6 +213,7 @@ public:
 	void ParseNextChunk(JSONReaderScanState &scan_state);
 	void ThrowObjectSizeError(const idx_t object_size);
 	void InitializeScan(JSONReaderScanState &scan_state);
+	idx_t Scan(JSONReaderScanState &scan_state);
 	bool ReadNextBuffer(JSONReaderScanState &scan_state);
 	void PrepareForScan(JSONReaderScanState &scan_state);
 	bool PrepareBufferForRead(JSONReaderScanState &scan_state, bool immediate_read_required = false);

@@ -62,26 +62,11 @@ public:
 		scan_state.ResetForNextBuffer();
 		scan_state.scan_entire_file = true;
 		scan_state.current_reader = &reader;
-		bool finished = false;
 		reader.InitializeScan(scan_state);
 		while (remaining != 0) {
-			scan_state.ResetForNextParse();
 			allocator.Reset();
 			auto buffer_offset_before = scan_state.buffer_offset;
-			while (scan_state.scan_count == 0 && !finished) {
-				while (scan_state.buffer_offset >= scan_state.buffer_size) {
-					if (!reader.ReadNextBuffer(scan_state)) {
-						// we have exhausted the file
-						finished = true;
-						break;
-					}
-				}
-				reader.ParseNextChunk(scan_state);
-			}
-			if (finished) {
-				break;
-			}
-			const auto read_count = scan_state.scan_count;
+			auto read_count = reader.Scan(scan_state);
 			if (read_count == 0) {
 				break;
 			}

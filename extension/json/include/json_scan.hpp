@@ -121,7 +121,6 @@ public:
 
 private:
 	bool ReadNextBuffer(JSONScanGlobalState &gstate);
-	void ParseNextChunk();
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 
