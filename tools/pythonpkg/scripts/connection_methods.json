@@ -97,7 +97,7 @@
 	},
 	{
 		"name": "create_aggregate_function",
-		"function": "RegisterScalarUDF",
+		"function": "RegisterAggregateUDF",
 		"docs": "Create a DuckDB function out of the passing in Python function so it can be used in queries",
 		"args": [
 			{

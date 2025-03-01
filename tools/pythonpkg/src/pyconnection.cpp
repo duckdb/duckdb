@@ -435,11 +435,12 @@ bool UDFAverageFunction::IgnoreNull() {
 	return true;
 }
 
-shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(const string &name, const py::function &udf,
-                                                                        const py::object &parameters_p,
-                                                                        const shared_ptr<DuckDBPyType> &return_type_p,
-                                                                        FunctionNullHandling null_handling,
-                                                                        PythonExceptionHandling exception_handling) {
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(
+    const string &name, const py::function &udf, const py::object &arguments = py::none(),
+    const shared_ptr<DuckDBPyType> &return_type = nullptr, PythonUDFType type = PythonUDFType::NATIVE,
+    FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING,
+    PythonExceptionHandling exception_handling = PythonExceptionHandling::FORWARD_ERROR, bool side_effects = false);
+{
 	auto &connection = con.GetConnection();
 	auto &context = *connection.context;
 
