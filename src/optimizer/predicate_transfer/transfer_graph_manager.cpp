@@ -9,18 +9,19 @@
 namespace duckdb {
 
 bool TransferGraphManager::Build(LogicalOperator &plan) {
-	// Extract all operators, including table operators and join operators
+	// 1. Extract all operators, including table operators and join operators
 	const vector<reference<LogicalOperator>> joins = table_operator_manager.ExtractOperators(plan);
 	if (table_operator_manager.table_operators.size() < 2) {
 		return false;
 	}
 
-	// Getting graph edges information from join operators
+	// 2. Getting graph edges information from join operators
 	ExtractEdgesInfo(joins);
 	if (edges_info.empty()) {
 		return false;
 	}
 
+	// 3. Create the transfer graph
 	CreatePredicateTransferGraph();
 	return true;
 }
