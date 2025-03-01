@@ -154,7 +154,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    return conn->RegisterScalarUDF(name, udf, arguments, return_type, type, null_handling, exception_handling,
 		                                   side_effects);
 	    },
-	    "Create a DuckDB aggregate function out of the passing in Python function so it can be used in queries", py::arg("name"),
+	    "Create a DuckDB function out of the passing in Python function so it can be used in queries", py::arg("name"),
 	    py::arg("function"), py::arg("parameters") = py::none(), py::arg("return_type") = py::none(), py::kw_only(),
 	    py::arg("type") = PythonUDFType::NATIVE, py::arg("null_handling") = FunctionNullHandling::DEFAULT_NULL_HANDLING,
 	    py::arg("exception_handling") = PythonExceptionHandling::FORWARD_ERROR, py::arg("side_effects") = false,
