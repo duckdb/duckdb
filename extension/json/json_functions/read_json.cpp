@@ -51,25 +51,43 @@ public:
 	static idx_t ExecuteInternal(ClientContext &context, MultiFileBindData &bind_data, JSONStructureNode &node,
 	                             const idx_t file_idx, ArenaAllocator &allocator, Vector &string_vector,
 	                             idx_t remaining, MutableDateFormatMap &date_format_map) {
-		JSONScanGlobalState gstate(context, bind_data);
-		JSONScanLocalState lstate(context, gstate);
-		optional_ptr<BufferedJSONReader> reader;
-		if (bind_data.union_readers[file_idx]) {
-			reader = &bind_data.union_readers[file_idx]->reader->Cast<BufferedJSONReader>();
-		}
-		gstate.json_readers.emplace_back(reader.get());
-
 		auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
+		auto &reader = bind_data.union_readers[file_idx]->reader->Cast<BufferedJSONReader>();
+		idx_t buffer_capacity = json_data.options.maximum_object_size * 2;
+		JSONReaderScanState scan_state(context, Allocator::Get(context), buffer_capacity);
 		auto &options = json_data.options;
 		// Read and detect schema
+		idx_t total_tuple_count = 0;
+		idx_t total_read_size = 0;
+		scan_state.ResetForNextBuffer();
+		scan_state.scan_entire_file = true;
+		scan_state.current_reader = &reader;
+		bool finished = false;
+		reader.InitializeScan(scan_state);
 		while (remaining != 0) {
+			scan_state.ResetForNextParse();
 			allocator.Reset();
-			const auto read_count = lstate.ReadNext(gstate);
+			auto buffer_offset_before = scan_state.buffer_offset;
+			while (scan_state.scan_count == 0 && !finished) {
+				while (scan_state.buffer_offset >= scan_state.buffer_size) {
+					if (!reader.ReadNextBuffer(scan_state)) {
+						// we have exhausted the file
+						finished = true;
+						break;
+					}
+				}
+				reader.ParseNextChunk(scan_state);
+			}
+			if (finished) {
+				break;
+			}
+			const auto read_count = scan_state.scan_count;
 			if (read_count == 0) {
 				break;
 			}
+			total_read_size += scan_state.buffer_offset - buffer_offset_before;
+			total_tuple_count += read_count;
 
-			auto &scan_state = lstate.GetScanState();
 			const auto next = MinValue<idx_t>(read_count, remaining);
 			for (idx_t i = 0; i < next; i++) {
 				const auto &val = scan_state.values[i];
@@ -85,8 +103,8 @@ public:
 			remaining -= next;
 		}
 
-		if (file_idx == 0 && lstate.total_tuple_count != 0) {
-			json_data.avg_tuple_size = lstate.total_read_size / lstate.total_tuple_count;
+		if (file_idx == 0 && total_tuple_count != 0) {
+			json_data.avg_tuple_size = total_read_size / total_tuple_count;
 		}
 
 		return remaining;
