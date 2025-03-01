@@ -392,6 +392,32 @@ DuckDBPyConnection::RegisterScalarUDF(const string &name, const py::function &ud
 	return shared_from_this();
 }
 
+
+shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(const string &name, const py::function &udf,
+                                                                        const py::object &parameters_p,
+                                                                        const shared_ptr<DuckDBPyType> &return_type_p,
+                                                                        FunctionNullHandling null_handling,
+                                                                        PythonExceptionHandling exception_handling) {
+	auto &connection = con.GetConnection();
+	auto &context = *connection.context;
+
+	if (context.transaction.HasActiveTransaction()) {
+		context.CancelTransaction();
+	}
+	if (registered_functions.find(name) != registered_functions.end()) {
+		throw NotImplementedException("A function by the name of '%s' is already created, creating multiple "
+		                              "functions with the same name is not supported yet, please remove it first",
+		                              name);
+	}
+
+	auto dependency = make_uniq<ExternalDependency>();
+	dependency->AddDependency("function", PythonDependencyItem::Create(udf));
+	registered_functions[name] = std::move(dependency);
+
+	return shared_from_this();
+}
+
+
 void DuckDBPyConnection::Initialize(py::handle &m) {
 	auto connection_module =
 	    py::class_<DuckDBPyConnection, shared_ptr<DuckDBPyConnection>>(m, "DuckDBPyConnection", py::module_local());
