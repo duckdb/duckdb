@@ -79,7 +79,7 @@ public:
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
-	inline static AggregateFunction CreateAggregateFunction(const string &name, aggregate_combine_t combine) {
+	inline static AggregateFunction CreateAggregateFunction(const string &name, CombineFuncPtr<STATE> combineFunction) {
 		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, combine);
 	}
 
@@ -358,10 +358,11 @@ private:
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
-	inline static AggregateFunction CreateUnaryAggregateFunction(const string &name, aggregate_combine_t combine) {
+	inline static AggregateFunction CreateUnaryAggregateFunction(const string &name,
+	                                                             CombineFuncPtr<STATE> combineFunction) {
 		LogicalType return_type = GetArgumentType<TR>();
 		LogicalType input_type = GetArgumentType<TA>();
-		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, return_type, input_type, combine);
+		return CreateUnaryAggregateFunction<UDF_OP, STATE, TR, TA>(name, return_type, input_type, combineFunction);
 	}
 
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
@@ -376,9 +377,9 @@ private:
 	template <typename UDF_OP, typename STATE, typename TR, typename TA>
 	inline static AggregateFunction CreateUnaryAggregateFunction(const string &name, const LogicalType &ret_type,
 	                                                             const LogicalType &input_type,
-	                                                             aggregate_combine_t combine) {
+	                                                             CombineFuncPtr<STATE> combineFunction) {
 		AggregateFunction aggr_function =
-		    AggregateFunction::UnaryAggregate<STATE, TR, TA, UDF_OP>(input_type, ret_type, combine);
+		    AggregateFunction::UnaryAggregate<STATE, TR, TA, UDF_OP>(input_type, ret_type, combineFunction);
 		aggr_function.name = name;
 		return aggr_function;
 	}

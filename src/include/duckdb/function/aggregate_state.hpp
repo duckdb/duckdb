@@ -98,4 +98,7 @@ struct AggregateStatisticsInput {
 	optional_ptr<NodeStatistics> node_stats;
 };
 
+template <typename STATE_TYPE>
+using CombineFuncPtr = void (*)(const STATE_TYPE &, STATE_TYPE &, AggregateInputData &);
+
 } // namespace duckdb

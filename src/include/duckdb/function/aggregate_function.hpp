@@ -233,13 +233,12 @@ public:
 	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
 	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction UnaryAggregate(
-					const LogicalType &input_type, LogicalType return_type,
-					aggregate_combine_t combine,
+					const LogicalType &input_type, LogicalType return_type, CombineFuncPtr<STATE> combineFunction,
 					FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING) {
 		return AggregateFunction({input_type}, return_type, AggregateFunction::StateSize<STATE>,
 		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
-								 combine,
+		                         GetAggregateCombineFunction<STATE>(combineFunction),
 		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
 		                         AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>);
 	}
@@ -327,6 +326,20 @@ public:
 	template <class STATE, class OP>
 	static void StateCombine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
 		AggregateExecutor::Combine<STATE, OP>(source, target, aggr_input_data, count);
+	}
+
+	template <class STATE, class OP>
+	static void StateCombine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count,
+	                         CombineFuncPtr<STATE> combineFunction) {
+		AggregateExecutor::Combine<STATE>(source, target, aggr_input_data, count, combineFunction);
+	}
+
+	template <typename STATE>
+	aggregate_combine_t GetAggregateCombineFunction(CombineFuncPtr<STATE> combineFunction) {
+		// Return a function pointer that calls StateCombine with the given combineFunction
+		return [](Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
+			AggregateExecutor::Combine<STATE>(source, target, aggr_input_data, count, combineFunction);
+		};
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>
