@@ -2,6 +2,8 @@ import os
 
 # list all include directories
 include_directories = [os.path.sep.join(x.split('/')) for x in ['extension/json/include']]
+
+
 # source files
 def list_files_recursive(rootdir, suffix):
     file_list = []
