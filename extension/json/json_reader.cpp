@@ -707,7 +707,7 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 	auto read_buffer = allocator.Allocate(buffer_capacity);
 	idx_t read_size = 0;
 	auto buffer_ptr = char_ptr_cast(read_buffer.get());
-	if (!file_handle->Read(buffer_ptr, read_size, buffer_capacity)) {
+	if (!file_handle->Read(buffer_ptr, read_size, buffer_capacity - YYJSON_PADDING_SIZE)) {
 		// could not read anything
 		return;
 	}
@@ -1019,7 +1019,7 @@ bool JSONReader::PrepareBufferForRead(JSONReaderScanState &scan_state) {
 }
 
 bool JSONReader::PrepareBufferSeek(JSONReaderScanState &scan_state) {
-	scan_state.request_size = scan_state.buffer_capacity - scan_state.prev_buffer_remainder - YYJSON_PADDING_SIZE;
+	scan_state.request_size = scan_state.buffer_capacity / 2 - scan_state.prev_buffer_remainder - YYJSON_PADDING_SIZE;
 	if (!IsOpen()) {
 		return false;
 	}
