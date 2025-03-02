@@ -374,7 +374,7 @@ static CombineFuncPtr<double> CreateCombineFunction(PyObject *function, PythonEx
 		python_results.resize(1);
 		for (idx_t row = 0; row < 1; row++) {
 
-			auto bundled_parameters = py::tuple((int) 1);
+			auto bundled_parameters = py::tuple((int) 2);
 			bool contains_null = false;
 			for (idx_t i = 0; i < 2; i++) {
 				// Fill the tuple with the arguments for this row
