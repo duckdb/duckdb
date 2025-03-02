@@ -383,10 +383,6 @@ static CombineFuncPtr<double> CreateCombineFunction(PyObject *function, PythonEx
 				else
 					value = target;
 
-				if (value.IsNull() && default_null_handling) {
-					contains_null = true;
-					break;
-				}
 				bundled_parameters[i] = PythonObject::FromValue(value, double, client_properties);
 			}
 			if (contains_null) {
