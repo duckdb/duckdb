@@ -6,6 +6,7 @@
 #include "duckdb_python/pyresult.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 #include "datetime.h" //From Python
 
