@@ -334,12 +334,18 @@ public:
 		AggregateExecutor::Combine<STATE>(source, target, aggr_input_data, count, combineFunction);
 	}
 
+	using AggregateCombineFunctionType = std::function<void(Vector &, Vector &, AggregateInputData &, idx_t)>;
+
 	template <typename STATE>
 	static aggregate_combine_t GetAggregateCombineFunction(CombineFuncPtr<STATE> combineFunction) {
 		// Return a function pointer that calls StateCombine with the given combineFunction
-		return [combineFunction](Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count) {
+
+		AggregateCombineFunctionType functionToReturn = [combineFunction](Vector & source, Vector & target,
+		                                              AggregateInputData & aggr_input_data, idx_t count) {
 			AggregateExecutor::Combine<STATE>(source, target, aggr_input_data, count, combineFunction);
 		};
+
+		 return functionToReturn;
 	}
 
 	template <class STATE, class RESULT_TYPE, class OP>
