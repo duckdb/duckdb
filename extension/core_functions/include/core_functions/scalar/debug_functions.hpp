@@ -20,6 +20,7 @@ struct VectorTypeFun {
 	static constexpr const char *Parameters = "col";
 	static constexpr const char *Description = "Returns the VectorType of a given column";
 	static constexpr const char *Example = "vector_type(col)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
