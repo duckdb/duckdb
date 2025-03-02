@@ -1,0 +1,70 @@
+diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
+index 6e1f635..083ef86 100644
+--- a/extension/httpfs/httpfs.cpp
++++ b/extension/httpfs/httpfs.cpp
+@@ -599,6 +599,11 @@ time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
+ 	return sfh.last_modified;
+ }
+ 
++string HTTPFileSystem::GetVersionTag(FileHandle &handle) {
++	auto &sfh = handle.Cast<HTTPFileHandle>();
++	return sfh.etag;
++}
++
+ bool HTTPFileSystem::FileExists(const string &filename, optional_ptr<FileOpener> opener) {
+ 	try {
+ 		auto handle = OpenFile(filename, FileFlags::FILE_FLAGS_READ, opener);
+@@ -699,6 +704,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 		if (found) {
+ 			last_modified = value.last_modified;
+ 			length = value.length;
++			etag = value.last_modified;
+ 
+ 			if (flags.OpenForReading()) {
+ 				read_buffer = duckdb::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
+@@ -785,9 +791,12 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 			last_modified = mktime(&tm);
+ 		}
+ 	}
++	if (!res->headers["Etag"].empty()) {
++		etag = res->headers["Etag"];
++	}
+ 
+ 	if (should_write_cache) {
+-		current_cache->Insert(path, {length, last_modified});
++		current_cache->Insert(path, {length, last_modified, etag});
+ 	}
+ }
+ 
+diff --git a/extension/httpfs/include/http_metadata_cache.hpp b/extension/httpfs/include/http_metadata_cache.hpp
+index 73d032b..8fc7909 100644
+--- a/extension/httpfs/include/http_metadata_cache.hpp
++++ b/extension/httpfs/include/http_metadata_cache.hpp
+@@ -18,6 +18,7 @@ namespace duckdb {
+ struct HTTPMetadataCacheEntry {
+ 	idx_t length;
+ 	time_t last_modified;
++	string etag;
+ };
+ 
+ // Simple cache with a max age for an entry to be valid
+diff --git a/extension/httpfs/include/httpfs.hpp b/extension/httpfs/include/httpfs.hpp
+index 9dc9eda..b056279 100644
+--- a/extension/httpfs/include/httpfs.hpp
++++ b/extension/httpfs/include/httpfs.hpp
+@@ -101,6 +101,7 @@ public:
+ 	FileOpenFlags flags;
+ 	idx_t length;
+ 	time_t last_modified;
++	string etag;
+ 
+ 	// When using full file download, the full file will be written to a cached file handle
+ 	unique_ptr<CachedFileHandle> cached_file_handle;
+@@ -176,6 +177,7 @@ public:
+ 	void FileSync(FileHandle &handle) override;
+ 	int64_t GetFileSize(FileHandle &handle) override;
+ 	time_t GetLastModifiedTime(FileHandle &handle) override;
++	string GetVersionTag(FileHandle &handle) override;
+ 	bool FileExists(const string &filename, optional_ptr<FileOpener> opener) override;
+ 	void Seek(FileHandle &handle, idx_t location) override;
+ 	idx_t SeekPosition(FileHandle &handle) override;

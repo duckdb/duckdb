@@ -31,6 +31,7 @@ struct AttachOptions;
 class DatabaseFileSystem;
 struct DatabaseCacheEntry;
 class LogManager;
+class CachingFileSystem;
 
 struct ExtensionInfo {
 	bool is_loaded;
@@ -54,6 +55,7 @@ public:
 	DUCKDB_API const BufferManager &GetBufferManager() const;
 	DUCKDB_API DatabaseManager &GetDatabaseManager();
 	DUCKDB_API FileSystem &GetFileSystem();
+	DUCKDB_API CachingFileSystem &GetCachingFileSystem();
 	DUCKDB_API TaskScheduler &GetScheduler();
 	DUCKDB_API ObjectCache &GetObjectCache();
 	DUCKDB_API ConnectionManager &GetConnectionManager();
@@ -95,6 +97,7 @@ private:
 	ValidChecker db_validity;
 	unique_ptr<DatabaseFileSystem> db_file_system;
 	shared_ptr<LogManager> log_manager;
+	unique_ptr<CachingFileSystem> caching_file_system;
 
 	duckdb_ext_api_v1 (*create_api_v1)();
 };

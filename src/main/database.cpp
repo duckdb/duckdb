@@ -26,6 +26,7 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
+#include "duckdb/storage/caching_file_system.hpp"
 #include "duckdb/storage/compression/empty_validity.hpp"
 #include "duckdb/logging/logger.hpp"
 
@@ -79,6 +80,8 @@ DatabaseInstance::~DatabaseInstance() {
 
 	// stop the log manager, after this point Logger calls are unsafe.
 	log_manager.reset();
+
+	caching_file_system.reset();
 
 	buffer_manager.reset();
 
@@ -295,6 +298,8 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	log_manager = make_shared_ptr<LogManager>(*this, LogConfig());
 	log_manager->Initialize();
 
+	caching_file_system = make_uniq<CachingFileSystem>(*this, config.options.enable_external_file_cache);
+
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
@@ -378,6 +383,10 @@ ObjectCache &DatabaseInstance::GetObjectCache() {
 
 FileSystem &DatabaseInstance::GetFileSystem() {
 	return *db_file_system;
+}
+
+CachingFileSystem &DatabaseInstance::GetCachingFileSystem() {
+	return *caching_file_system;
 }
 
 ConnectionManager &DatabaseInstance::GetConnectionManager() {
