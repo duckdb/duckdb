@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <functional>
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
@@ -99,6 +100,7 @@ struct AggregateStatisticsInput {
 };
 
 template <typename STATE_TYPE>
-using CombineFuncPtr = void (*)(const STATE_TYPE &, STATE_TYPE &, AggregateInputData &);
+using CombineFuncPtr = std::function<void(const STATE_TYPE &, STATE_TYPE &, AggregateInputData &)>;
+
 
 } // namespace duckdb
