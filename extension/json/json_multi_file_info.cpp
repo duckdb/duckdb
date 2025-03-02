@@ -506,6 +506,14 @@ void JSONMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctio
 	lstate.GetScanState().ResetForNextBuffer();
 }
 
+void JSONMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data, BindInfo &info) {
+}
+
+unique_ptr<NodeStatistics> JSONMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
+	// FIXME
+	return make_uniq<NodeStatistics>(42 * file_count);
+}
+
 void JSONMultiFileInfo::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
                                           virtual_column_map_t &result) {
 	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));

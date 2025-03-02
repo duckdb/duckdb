@@ -261,11 +261,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 // }
 
 TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info) {
-	TableFunction table_function({LogicalType::VARCHAR}, MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileScan,
-	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileBind,
-	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileInitGlobal,
-	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileInitLocal);
-	table_function.name = "read_json";
+	MultiFileReaderFunction<JSONMultiFileInfo> table_function("read_json");
 
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.named_parameters["columns"] = LogicalType::ANY;
@@ -279,13 +275,9 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	table_function.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
 
 	// TODO: might be able to do filter pushdown/prune ?
-	table_function.table_scan_progress = MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileProgress;
-	table_function.get_partition_data = MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileGetPartitionData;
-	table_function.cardinality = nullptr;
-
 	table_function.function_info = std::move(function_info);
 
-	return table_function;
+	return static_cast<TableFunction>(table_function);
 }
 
 TableFunctionSet CreateJSONFunctionInfo(string name, shared_ptr<JSONScanInfo> info) {

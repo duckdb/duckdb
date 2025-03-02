@@ -120,12 +120,6 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 		union_reader.columns = global_columns;
 		union_reader.Reset();
 	}
-	//
-	// for (auto &reader : gstate.json_readers) {
-	// 	MultiFileReader().FinalizeBind(bind_data.file_options, gstate.bind_data.reader_bind, reader->GetFileName(),
-	// 	                               local_columns, global_columns, input.column_indexes, reader->reader_data,
-	// 	                               context, nullptr);
-	// }
 	return std::move(result);
 }
 
@@ -279,29 +273,29 @@ void JSONScanLocalState::ThrowTransformError(idx_t object_index, const string &e
 // 	return progress / double(gstate.json_readers.size());
 // }
 
-OperatorPartitionData JSONScan::GetPartitionData(ClientContext &, TableFunctionGetPartitionInput &input) {
-	if (input.partition_info.RequiresPartitionColumns()) {
-		throw InternalException("JSONScan::GetPartitionData: partition columns not supported");
-	}
-	auto &lstate = input.local_state->Cast<JSONLocalTableFunctionState>();
-	return OperatorPartitionData(lstate.GetBatchIndex());
-}
-
-unique_ptr<NodeStatistics> JSONScan::Cardinality(ClientContext &, const FunctionData *bind_data) {
-	auto &data = bind_data->Cast<MultiFileBindData>();
-	auto &json_data = data.bind_data->Cast<JSONScanData>();
-	idx_t per_file_cardinality;
-
-	per_file_cardinality = 42; // The cardinality of an unknown JSON file is the almighty number 42
-	if (data.initial_reader) {
-		auto &initial_reader = data.initial_reader->Cast<BufferedJSONReader>();
-		if (initial_reader.HasFileHandle()) {
-			per_file_cardinality = initial_reader.GetFileHandle().FileSize() / json_data.avg_tuple_size;
-		}
-	} else {
-	}
-	return make_uniq<NodeStatistics>(per_file_cardinality * data.file_list->GetTotalFileCount());
-}
+// OperatorPartitionData JSONScan::GetPartitionData(ClientContext &, TableFunctionGetPartitionInput &input) {
+// 	if (input.partition_info.RequiresPartitionColumns()) {
+// 		throw InternalException("JSONScan::GetPartitionData: partition columns not supported");
+// 	}
+// 	auto &lstate = input.local_state->Cast<JSONLocalTableFunctionState>();
+// 	return OperatorPartitionData(lstate.GetBatchIndex());
+// }
+//
+// unique_ptr<NodeStatistics> JSONScan::Cardinality(ClientContext &, const FunctionData *bind_data) {
+// 	auto &data = bind_data->Cast<MultiFileBindData>();
+// 	auto &json_data = data.bind_data->Cast<JSONScanData>();
+// 	idx_t per_file_cardinality;
+//
+// 	per_file_cardinality = 42; // The cardinality of an unknown JSON file is the almighty number 42
+// 	if (data.initial_reader) {
+// 		auto &initial_reader = data.initial_reader->Cast<BufferedJSONReader>();
+// 		if (initial_reader.HasFileHandle()) {
+// 			per_file_cardinality = initial_reader.GetFileHandle().FileSize() / json_data.avg_tuple_size;
+// 		}
+// 	} else {
+// 	}
+// 	return make_uniq<NodeStatistics>(per_file_cardinality * data.file_list->GetTotalFileCount());
+// }
 
 void JSONScan::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p, const TableFunction &) {
 	throw NotImplementedException("JSONScan Serialize not implemented");
@@ -312,25 +306,17 @@ unique_ptr<FunctionData> JSONScan::Deserialize(Deserializer &deserializer, Table
 }
 
 void JSONScan::TableFunctionDefaults(TableFunction &table_function) {
-	MultiFileReader().AddParameters(table_function);
-
 	table_function.named_parameters["maximum_object_size"] = LogicalType::UINTEGER;
 	table_function.named_parameters["ignore_errors"] = LogicalType::BOOLEAN;
 	table_function.named_parameters["format"] = LogicalType::VARCHAR;
 	table_function.named_parameters["compression"] = LogicalType::VARCHAR;
 
-	// table_function.table_scan_progress = ScanProgress;
-	table_function.get_partition_data = GetPartitionData;
-	table_function.cardinality = Cardinality;
-
 	table_function.serialize = Serialize;
 	table_function.deserialize = Deserialize;
-	table_function.get_virtual_columns = MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileGetVirtualColumns;
 
 	table_function.projection_pushdown = true;
 	table_function.filter_pushdown = false;
 	table_function.filter_prune = false;
-	table_function.pushdown_complex_filter = MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileComplexFilterPushdown;
 }
 
 } // namespace duckdb
