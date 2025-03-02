@@ -256,7 +256,8 @@ public:
 	bool done = false;
 };
 
-unique_ptr<LocalTableFunctionState> CSVMultiFileInfo::InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &) {
+unique_ptr<LocalTableFunctionState> CSVMultiFileInfo::InitializeLocalState(ExecutionContext &,
+                                                                           GlobalTableFunctionState &) {
 	return make_uniq<CSVLocalState>();
 }
 

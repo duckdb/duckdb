@@ -40,24 +40,24 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 
 class JSONSchemaTask : public BaseExecutorTask {
 public:
-	JSONSchemaTask(TaskExecutor &executor, ClientContext &context_p, const vector<string> &files, MultiFileBindData &bind_data_p,
-	               MutableDateFormatMap &date_format_map, JSONStructureNode &node_p, const idx_t file_idx_start_p,
-	               const idx_t file_idx_end_p)
-	    : BaseExecutorTask(executor), context(context_p), files(files), bind_data(bind_data_p), date_format_map(date_format_map),
-	      node(node_p), file_idx_start(file_idx_start_p), file_idx_end(file_idx_end_p),
-	      allocator(BufferAllocator::Get(context)), string_vector(LogicalType::VARCHAR) {
+	JSONSchemaTask(TaskExecutor &executor, ClientContext &context_p, const vector<string> &files,
+	               MultiFileBindData &bind_data_p, MutableDateFormatMap &date_format_map, JSONStructureNode &node_p,
+	               const idx_t file_idx_start_p, const idx_t file_idx_end_p)
+	    : BaseExecutorTask(executor), context(context_p), files(files), bind_data(bind_data_p),
+	      date_format_map(date_format_map), node(node_p), file_idx_start(file_idx_start_p),
+	      file_idx_end(file_idx_end_p), allocator(BufferAllocator::Get(context)), string_vector(LogicalType::VARCHAR) {
 	}
 
-	static idx_t ExecuteInternal(ClientContext &context, const vector<string> &files, MultiFileBindData &bind_data, JSONStructureNode &node,
-	                             const idx_t file_idx, ArenaAllocator &allocator, Vector &string_vector,
-	                             idx_t remaining, MutableDateFormatMap &date_format_map) {
+	static idx_t ExecuteInternal(ClientContext &context, const vector<string> &files, MultiFileBindData &bind_data,
+	                             JSONStructureNode &node, const idx_t file_idx, ArenaAllocator &allocator,
+	                             Vector &string_vector, idx_t remaining, MutableDateFormatMap &date_format_map) {
 		auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 		auto json_reader = make_shared_ptr<BufferedJSONReader>(context, json_data.options, files[file_idx]);
 		if (bind_data.union_readers[file_idx]) {
 			throw InternalException("Union data already set");
 		}
 		auto &reader = *json_reader;
- 		auto union_data = make_uniq<BaseUnionData>(files[file_idx]);
+		auto union_data = make_uniq<BaseUnionData>(files[file_idx]);
 		union_data->reader = std::move(json_reader);
 		bind_data.union_readers[file_idx] = std::move(union_data);
 
@@ -148,8 +148,9 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 		TaskExecutor executor(context);
 		for (idx_t task_idx = 0; task_idx < num_tasks; task_idx++) {
 			const auto file_idx_start = task_idx * files_per_task;
-			auto task = make_uniq<JSONSchemaTask>(executor, context, files, bind_data, date_format_map, task_nodes[task_idx],
-			                                      file_idx_start, file_idx_start + files_per_task);
+			auto task =
+			    make_uniq<JSONSchemaTask>(executor, context, files, bind_data, date_format_map, task_nodes[task_idx],
+			                              file_idx_start, file_idx_start + files_per_task);
 			executor.ScheduleTask(std::move(task));
 		}
 		executor.WorkOnTasks();
@@ -163,8 +164,8 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 		Vector string_vector(LogicalType::VARCHAR);
 		idx_t remaining = options.sample_size;
 		for (idx_t file_idx = 0; file_idx < file_count; file_idx++) {
-			remaining = JSONSchemaTask::ExecuteInternal(context, files, bind_data, node, file_idx, allocator, string_vector,
-			                                            remaining, date_format_map);
+			remaining = JSONSchemaTask::ExecuteInternal(context, files, bind_data, node, file_idx, allocator,
+			                                            string_vector, remaining, date_format_map);
 			if (remaining == 0 || file_idx == options.maximum_sample_files - 1) {
 				break; // We sample sample_size in total (across the first maximum_sample_files files)
 			}
@@ -262,7 +263,8 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info) {
 	TableFunction table_function({LogicalType::VARCHAR}, MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileScan,
 	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileBind,
-	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileInitGlobal, MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileInitLocal);
+	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileInitGlobal,
+	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileInitLocal);
 	table_function.name = "read_json";
 
 	JSONScan::TableFunctionDefaults(table_function);

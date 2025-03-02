@@ -7,7 +7,7 @@
 namespace duckdb {
 
 static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	throw InternalException("ReadJSONObjectsFunction not implemented");
+	throw NotImplementedException("ReadJSONObjectsFunction not implemented");
 	// auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
 	// auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
 	//

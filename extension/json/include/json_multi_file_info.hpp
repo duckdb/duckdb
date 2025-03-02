@@ -38,7 +38,8 @@ struct JSONMultiFileInfo {
 	                               FileExpandResult expand_result);
 	static unique_ptr<GlobalTableFunctionState>
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state);
-	static unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &context, GlobalTableFunctionState &global_state);
+	static unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &context,
+	                                                                GlobalTableFunctionState &global_state);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,

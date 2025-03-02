@@ -111,7 +111,7 @@ unique_ptr<GlobalTableFunctionState> JSONGlobalTableFunctionState::Init(ClientCo
 	vector<LogicalType> dummy_global_types(bind_data.names.size(), LogicalType::ANY);
 	auto local_columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(gstate.names, dummy_local_types);
 	auto global_columns =
-		MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, dummy_global_types);
+	    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, dummy_global_types);
 	for (const auto &reader : bind_data.union_readers) {
 		if (!reader->reader) {
 			continue;
@@ -203,8 +203,7 @@ void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size
 	scan_state.current_reader->ParseJSON(scan_state, json_start, json_size, remaining);
 }
 
-bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate,
-                                           BufferedJSONReader &reader) {
+bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate, BufferedJSONReader &reader) {
 	// try to initialize a scan in the given reader
 	// three scenarios:
 	// scenario 1 - unseekable file - Read from the file and setup the buffers

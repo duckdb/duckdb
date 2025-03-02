@@ -549,7 +549,8 @@ unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState
 	return make_uniq<ParquetReadGlobalState>();
 }
 
-unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &) {
+unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ExecutionContext &,
+                                                                               GlobalTableFunctionState &) {
 	return make_uniq<ParquetReadLocalState>();
 }
 
