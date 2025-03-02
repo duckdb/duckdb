@@ -32,24 +32,8 @@ InsertionOrderPreservingMap<string> LogicalUseBF::ParamsToString() const {
 	return result;
 }
 
-// void LogicalUseBF::Serialize(Serializer &serializer) const {
-// 	LogicalOperator::Serialize(serializer);
-// 	serializer.WritePropertyWithDefault<vector<shared_ptr<FilterPlan>>>(200, "BloomFilter Plans", bf_to_use_plans);
-// }
-//
-// unique_ptr<LogicalOperator> LogicalUseBF::Deserialize(Deserializer &deserializer) {
-// 	vector<shared_ptr<FilterPlan>> bloom_filter_plans;
-// 	deserializer.ReadPropertyWithDefault<vector<shared_ptr<FilterPlan>>>(200, "BloomFilter Plans", bloom_filter_plans);
-// 	auto result = make_uniq<LogicalUseBF>(std::move(bloom_filter_plans));
-// 	return std::move(result);
-// }
-
 vector<ColumnBinding> LogicalUseBF::GetColumnBindings() {
 	return children[0]->GetColumnBindings();
-}
-
-void LogicalUseBF::AddDownStreamOperator(LogicalCreateBF *op) {
-	related_create_bfs.push_back(op);
 }
 
 void LogicalUseBF::ResolveTypes() {

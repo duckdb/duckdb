@@ -23,9 +23,6 @@ public:
 
 	vector<ColumnBinding> GetColumnBindings() override;
 
-public:
-	void AddDownStreamOperator(LogicalCreateBF *op);
-
 protected:
 	void ResolveTypes() override;
 };
