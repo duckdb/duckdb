@@ -88,7 +88,7 @@ bool JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t &size, idx_t requ
 	return true;
 }
 
-void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, bool sample_run,
+void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position,
                                     optional_ptr<FileHandle> override_handle) {
 	if (size != 0) {
 		auto &handle = override_handle ? *override_handle.get() : *file_handle.get();
@@ -121,7 +121,7 @@ void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, b
 	}
 }
 
-bool JSONFileHandle::Read(char *pointer, idx_t &read_size, idx_t requested_size, bool sample_run) {
+bool JSONFileHandle::Read(char *pointer, idx_t &read_size, idx_t requested_size) {
 	D_ASSERT(requested_size != 0);
 	if (last_read_requested) {
 		return false;
@@ -686,7 +686,7 @@ void BufferedJSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity)
 	auto read_buffer = allocator.Allocate(buffer_capacity);
 	idx_t read_size = 0;
 	auto buffer_ptr = char_ptr_cast(read_buffer.get());
-	if (!file_handle->Read(buffer_ptr, read_size, buffer_capacity, false)) {
+	if (!file_handle->Read(buffer_ptr, read_size, buffer_capacity)) {
 		// could not read anything
 		return;
 	}
@@ -1038,8 +1038,7 @@ void BufferedJSONReader::ReadNextBufferSeek(JSONReaderScanState &scan_state) {
 
 		// Now read the file lock-free!
 		file_handle.ReadAtPosition(scan_state.buffer_ptr + scan_state.prev_buffer_remainder, scan_state.read_size,
-		                           scan_state.read_position, options.type == JSONScanType::SAMPLE,
-		                           scan_state.thread_local_filehandle);
+		                           scan_state.read_position, scan_state.thread_local_filehandle);
 	}
 	scan_state.buffer_size = scan_state.prev_buffer_remainder + scan_state.read_size;
 	scan_state.prev_buffer_remainder = 0;
@@ -1058,8 +1057,7 @@ bool BufferedJSONReader::ReadNextBufferNoSeek(JSONReaderScanState &scan_state) {
 	}
 	scan_state.buffer_index = GetBufferIndex();
 	PrepareForReadInternal(scan_state);
-	if (!file_handle.Read(scan_state.buffer_ptr + scan_state.prev_buffer_remainder, read_size, request_size,
-	                      options.type == JSONScanType::SAMPLE)) {
+	if (!file_handle.Read(scan_state.buffer_ptr + scan_state.prev_buffer_remainder, read_size, request_size)) {
 		return false; // Couldn't read anything
 	}
 	scan_state.is_last = read_size == 0;

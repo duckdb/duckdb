@@ -128,9 +128,6 @@ private:
 void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, vector<LogicalType> &return_types,
                           vector<string> &names) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
-	// Change scan type during detection
-	D_ASSERT(json_data.options.type == JSONScanType::READ_JSON);
-	json_data.options.type = JSONScanType::SAMPLE;
 
 	MutableDateFormatMap date_format_map(*json_data.date_format_map);
 	JSONStructureNode node;
@@ -171,9 +168,6 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 			}
 		}
 	}
-
-	// Restore the scan type
-	json_data.options.type = JSONScanType::READ_JSON;
 
 	// Convert structure to logical type
 	auto type = JSONStructure::StructureToType(context, node, options.max_depth, options.field_appearance_threshold,
