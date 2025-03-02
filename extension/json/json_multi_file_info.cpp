@@ -454,8 +454,9 @@ bool JSONMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<Bas
 void ReadJSONFunction(ClientContext &context, BufferedJSONReader &json_reader, JSONScanGlobalState &gstate,
                       JSONScanLocalState &lstate, DataChunk &output) {
 	auto &scan_state = lstate.GetScanState();
+	D_ASSERT(RefersToSameObject(json_reader, *scan_state.current_reader));
 
-	const auto count = json_reader.Scan(scan_state);
+	const auto count = lstate.Read();
 	yyjson_val **values = scan_state.values;
 	output.SetCardinality(count);
 
@@ -496,8 +497,9 @@ void ReadJSONObjectsFunction(ClientContext &context, BufferedJSONReader &json_re
                              JSONScanLocalState &lstate, DataChunk &output) {
 	// Fetch next lines
 	auto &scan_state = lstate.GetScanState();
+	D_ASSERT(RefersToSameObject(json_reader, *scan_state.current_reader));
 
-	const auto count = json_reader.Scan(scan_state);
+	const auto count = lstate.Read();
 	const auto units = scan_state.units;
 	const auto objects = scan_state.values;
 

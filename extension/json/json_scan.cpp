@@ -99,22 +99,6 @@ bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate, Buffered
 	return reader.InitializeScan(scan_state, read_type);
 }
 
-void JSONScanLocalState::PrepareReader(JSONScanGlobalState &gstate, BufferedJSONReader &reader) {
-	gstate.file_is_assigned = false;
-	if (!gstate.enable_parallel_scans) {
-		// we are reading the entire file - we don't even need to open the file yet
-		return;
-	}
-	// prepare a reader for reading
-	// scenario 1 & 2 -> auto detect
-	// scenario 3 -> nothing
-	reader.Initialize(gstate.allocator, gstate.buffer_capacity);
-}
-
-const MultiFileReaderData &JSONScanLocalState::GetReaderData() const {
-	return scan_state.current_reader->reader_data;
-}
-
 void JSONScanLocalState::ThrowTransformError(idx_t object_index, const string &error_message) {
 	scan_state.current_reader->ThrowTransformError(scan_state, object_index, error_message);
 }

@@ -95,8 +95,6 @@ public:
 	idx_t Read();
 	void ThrowTransformError(idx_t object_index, const string &error_message);
 
-	const MultiFileReaderData &GetReaderData() const;
-
 	JSONReaderScanState &GetScanState() {
 		return scan_state;
 	}
@@ -113,8 +111,6 @@ public:
 
 private:
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
-
-	void PrepareReader(JSONScanGlobalState &gstate, BufferedJSONReader &reader);
 
 private:
 	//! Scan state
