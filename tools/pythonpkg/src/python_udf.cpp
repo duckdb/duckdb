@@ -420,7 +420,6 @@ static CombineFuncPtr<double> CreateCombineFunction(PyObject *function, PythonEx
 	};
 	return func;
 }
-*/
 
 
 namespace {
@@ -596,7 +595,8 @@ CombineFuncPtr<double> DuckDBPyConnection::CreateCombineUDF(const string &name, 
                                                    const py::object &parameters,
                                                    const shared_ptr<DuckDBPyType> &return_type, bool vectorized,
                                                    FunctionNullHandling null_handling,
-                                                   PythonExceptionHandling exception_handling, bool side_effects) {
+                                                   PythonExceptionHandling exception_handling, bool side_effects)
+{
 	PythonUDFData data(name, vectorized, null_handling);
 	auto &connection = con.GetConnection();
 
