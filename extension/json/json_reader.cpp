@@ -791,14 +791,13 @@ void JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 		const char *json_end = format == JSONFormat::NEWLINE_DELIMITED ? NextNewline(json_start, remaining)
 		                                                               : NextJSON(json_start, remaining);
 		if (json_end == nullptr) {
+			if (remaining > options.maximum_object_size) {
+				ThrowObjectSizeError(remaining);
+			}
 			// We reached the end of the buffer
 			if (!scan_state.is_last) {
 				// Last bit of data belongs to the next batch
 				if (scan_state.file_read_type == JSONFileReadType::SCAN_ENTIRE_FILE) {
-					// if we are doing a single-threaded read, we can just leave it in the buffer
-					if (remaining > options.maximum_object_size) {
-						ThrowObjectSizeError(remaining);
-					}
 					scan_state.prev_buffer_remainder = remaining;
 					scan_state.prev_buffer_offset = json_start - buffer_ptr;
 				}
