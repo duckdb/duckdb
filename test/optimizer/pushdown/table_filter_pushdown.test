@@ -26,17 +26,12 @@ EXPLAIN SELECT k FROM integers where j=5
 ----
 logical_opt	<!REGEX>:.*FILTER.*
 
+# complex filters are also pushed down
 query I
-SELECT k FROM integers where j%5=0
+SELECT k FROM integers where j::VARCHAR SIMILAR TO '[0-9]*'
 ----
 5
 10
-
-# simple filter is pushed down: no filter remaining
-query II
-EXPLAIN SELECT k FROM integers where j%5=0
-----
-logical_opt	<!REGEX>:.*FILTER.*
 
 # multiple filters pushed down
 query II
@@ -44,16 +39,9 @@ EXPLAIN SELECT k FROM integers where j = 5 and i = 10
 ----
 logical_opt	<!REGEX>:.*FILTER.*
 
-# we can push down arbitrary expressions
-query I
-SELECT k FROM integers where j%5=0
-----
-5
-10
-
 # simple filter is pushed down: no filter remaining
 query II
-EXPLAIN SELECT k FROM integers where j%5=0
+EXPLAIN SELECT k FROM integers where j::VARCHAR SIMILAR TO '[0-9]*'
 ----
 logical_opt	<!REGEX>:.*FILTER.*
 

@@ -71,8 +71,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 		}
 		pushdown_result = combiner.TryPushdownGenericExpression(get, *filters[i]->filter);
 		if (pushdown_result == FilterPushdownResult::PUSHED_DOWN_FULLY) {
-			filters.erase_at(i--);
-			pushdown_results.erase_at(i--);
+			filters.erase_at(i);
+			pushdown_results.erase_at(i);
+			i--;
 		}
 	}
 
