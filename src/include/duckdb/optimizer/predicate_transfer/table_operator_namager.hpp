@@ -26,7 +26,7 @@ public:
 
 private:
 	void AddTableOperator(LogicalOperator *op);
-	void ExtractOperators(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins, bool can_add_mark);
+	void ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins, bool can_add_mark);
 
 	struct HashFunc {
 		size_t operator()(const ColumnBinding &key) const {
