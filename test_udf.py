@@ -3,13 +3,14 @@ from duckdb.typing import *
 from faker import Faker
 
 
-def generate_random_name():
-    fake = Faker()
-    return fake.name()
+def generate_random_name(str1, str2):
+    #fake = Faker()
+    #fake2 = Faker()
+    return str1+ str2
 
 
-duckdb.create_function("random_name", generate_random_name, [], VARCHAR)
-res = duckdb.sql("SELECT random_name()").fetchall()
+duckdb.create_function("random_name", generate_random_name, [VARCHAR, VARCHAR], VARCHAR)
+res = duckdb.sql("SELECT random_name('UW', 'final project')").fetchall()
 print(res)
 
 #duckdb.create_aggregate_function("test", generate_random_name, [], DOUBLE)
@@ -40,10 +41,11 @@ con.execute("""
         (6, 'Books', 10.99)
     """
     )
-con.create_function("random_name", generate_random_name, [], VARCHAR)
-con.create_aggregate_function("udf_avg", generate_random_name, [], DOUBLE)
+#con.create_function("random_name", generate_random_name, [], VARCHAR)
+#con.create_aggregate_function("udf_avg", generate_random_name, [], DOUBLE)
+con.create_aggregate_function("udf_sum", generate_random_name, [], DOUBLE)
 result = con.execute("""
-        SELECT udf_avg_double(amount) FROM sales
+        SELECT udf_sum_double(amount) FROM sales
         """
         ).fetchall()
 print(result)
