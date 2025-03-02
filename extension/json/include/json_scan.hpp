@@ -40,8 +40,8 @@ public:
 	//! Options when transforming the JSON to columnar data
 	JSONTransformOptions transform_options;
 
-	//! The inferred avg tuple size
-	idx_t avg_tuple_size = 420;
+	optional_idx max_threads;
+	optional_idx estimated_cardinality_per_file;
 };
 
 struct JSONScanInfo : public TableFunctionInfo {

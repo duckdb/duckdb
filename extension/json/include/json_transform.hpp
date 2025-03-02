@@ -16,7 +16,7 @@
 namespace duckdb {
 
 struct DateFormatMap;
-class BufferedJSONReader;
+class JSONReader;
 
 //! Options for error handling while transforming JSON
 struct JSONTransformOptions {

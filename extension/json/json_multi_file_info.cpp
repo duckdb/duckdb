@@ -316,23 +316,8 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 			name_collision_count[col_name] = 0;
 		}
 	}
-	auto files = bind_data.file_list->GetAllFiles();
-	for (idx_t i = 0; i < bind_data.union_readers.size(); i++) {
-		auto &union_data = bind_data.union_readers[i];
-		if (!union_data) {
-			union_data = make_uniq<BaseUnionData>(files[i]);
-		}
-		// FIXME: re-use readers instead of resetting here?
-		union_data->names = names;
-		union_data->types = return_types;
-		union_data->reader.reset();
-		// if (!union_data->reader) {
-		// 	continue;
-		// }
-		// auto &json_reader = union_data->reader->Cast<BufferedJSONReader>();
-		// json_reader.columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(names, return_types);
-		// json_reader.Reset();
-	}
+	// FIXME: re-use readers created during auto-detection instead of clearing here
+	bind_data.union_readers.clear();
 }
 
 void JSONMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
@@ -552,8 +537,13 @@ void JSONMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data, BindInfo
 }
 
 unique_ptr<NodeStatistics> JSONMultiFileInfo::GetCardinality(const MultiFileBindData &bind_data, idx_t file_count) {
-	// FIXME
-	return make_uniq<NodeStatistics>(42 * file_count);
+	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
+	idx_t per_file_cardinality = 42;
+	// get the average per-file cardinality from the bind data (if it is set)
+	if (json_data.estimated_cardinality_per_file.IsValid()) {
+		per_file_cardinality = json_data.estimated_cardinality_per_file.GetIndex();
+	}
+	return make_uniq<NodeStatistics>(per_file_cardinality * file_count);
 }
 
 void JSONMultiFileInfo::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
@@ -566,7 +556,9 @@ optional_idx JSONMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, c
 	if (expand_result == FileExpandResult::MULTIPLE_FILES) {
 		return optional_idx();
 	}
-	return optional_idx();
+	// get the max threads from the bind data (if it is set)
+	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
+	return json_data.max_threads;
 }
 
 } // namespace duckdb
