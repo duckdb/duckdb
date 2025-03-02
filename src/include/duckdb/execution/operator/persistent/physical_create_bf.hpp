@@ -3,7 +3,7 @@
 #include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/optimizer/predicate_transfer/bloom_filter/bloom_filter.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
-#include "duckdb/storage/temporary_memory_manager.hpp"
+#include "duckdb/optimizer/predicate_transfer/dag.hpp"
 
 namespace duckdb {
 class CreateBFGlobalSinkState;
@@ -13,7 +13,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_BF;
 
 public:
-	PhysicalCreateBF(vector<LogicalType> types, vector<shared_ptr<BlockedBloomFilter>> bf, idx_t estimated_cardinality);
+	PhysicalCreateBF(vector<LogicalType> types, vector<shared_ptr<FilterPlan>> bf_plans, idx_t estimated_cardinality);
 
 	vector<shared_ptr<BlockedBloomFilter>> bf_to_create;
 	shared_ptr<Pipeline> this_pipeline;
@@ -58,7 +58,6 @@ public:
 	void BuildPipelinesFromRelated(Pipeline &current, MetaPipeline &meta_pipeline);
 
 private:
-	idx_t counter = 0;
-	shared_ptr<idx_t> count_for_debug;
+	static shared_ptr<BlockedBloomFilter> BuiltBloomFilter(FilterPlan &bf_plan);
 };
 } // namespace duckdb

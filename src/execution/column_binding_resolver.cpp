@@ -23,16 +23,17 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_CREATE_BF: {
 		VisitOperatorChildren(op);
 		auto &create_bf = op.Cast<LogicalCreateBF>();
-		for (auto &bf : create_bf.bf_to_create) {
-			for (auto &col_bind : bf->GetColBuilt()) {
+		for (auto &BF_plan : create_bf.bf_to_create_plans) {
+			for (auto &col_bind : BF_plan->build) {
 				for (idx_t i = 0; i < bindings.size(); i++) {
 					if (col_bind == bindings[i]) {
-						bf->BoundColsBuilt.emplace_back(i);
+						BF_plan->bound_cols_build.push_back(i);
 						break;
 					}
 				}
 			}
-			if (bf->BoundColsBuilt.size() == 0) {
+			if (BF_plan->bound_cols_build.empty()) {
+				std::cerr << "Table: " << BF_plan->build[0].table_index << "." << BF_plan->build[0].column_index << "\n";
 				throw InternalException("No bound column found!");
 			}
 		}
@@ -42,16 +43,17 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_USE_BF: {
 		VisitOperatorChildren(op);
 		auto &use_bf = op.Cast<LogicalUseBF>();
-		for (auto bf : use_bf.bf_to_use) {
-			for (auto &col_bind : bf->GetColApplied()) {
+		for (auto &BF_plan : use_bf.bf_to_use_plans) {
+			for (auto &col_bind : BF_plan->apply) {
 				for (idx_t i = 0; i < bindings.size(); i++) {
 					if (col_bind == bindings[i]) {
-						bf->BoundColsApplied.emplace_back(i);
+						BF_plan->bound_cols_apply.push_back(i);
 						break;
 					}
 				}
 			}
-			if (bf->BoundColsApplied.size() == 0) {
+			if (BF_plan->bound_cols_apply.empty()) {
+				std::cerr << "Table: " << BF_plan->apply[0].table_index << "." << BF_plan->apply[0].column_index << "\n";
 				throw InternalException("No bound column found!");
 			}
 		}

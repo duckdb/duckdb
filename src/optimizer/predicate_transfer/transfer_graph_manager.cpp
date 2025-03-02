@@ -26,11 +26,10 @@ bool TransferGraphManager::Build(LogicalOperator &plan) {
 	return true;
 }
 
-void TransferGraphManager::AddBloomFilter(idx_t create_table, const shared_ptr<BlockedBloomFilter> &use_bf,
-                                          bool reverse) {
+void TransferGraphManager::AddFilterPlan(idx_t create_table, const shared_ptr<FilterPlan> &filter_plan, bool reverse) {
 	bool is_forward = !reverse;
-	auto node_idx = use_bf->GetColApplied()[0].table_index;
-	transfer_graph[node_idx]->Add(create_table, use_bf, is_forward, true);
+	auto node_idx = filter_plan->apply[0].table_index;
+	transfer_graph[node_idx]->Add(create_table, filter_plan, is_forward, true);
 }
 
 void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperator>> &join_operators) {
@@ -158,7 +157,7 @@ void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) 
 
 void TransferGraphManager::CreatePredicateTransferGraph() {
 	auto saved_nodes = table_operator_manager.table_operators;
-	while (table_operator_manager.table_operators.size() > 0) {
+	while (!table_operator_manager.table_operators.empty()) {
 		LargestRoot(table_operator_manager.sorted_table_operators);
 		table_operator_manager.SortTableOperators();
 	}
@@ -202,8 +201,9 @@ pair<int, int> TransferGraphManager::FindEdge(const unordered_set<int> &construc
 		for (auto j : constructed_set) {
 			auto key = make_pair(j, i);
 			auto it = edges_info.find(key);
-			if (it == edges_info.end())
+			if (it == edges_info.end()) {
 				continue;
+			}
 
 			idx_t card = table_operator_manager.GetTableOperator(i)->estimated_cardinality;
 			idx_t weight = it->second.size();

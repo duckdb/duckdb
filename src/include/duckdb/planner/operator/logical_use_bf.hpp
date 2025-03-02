@@ -9,11 +9,11 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_USE_BF;
 
 public:
-	explicit LogicalUseBF(vector<shared_ptr<BlockedBloomFilter>> bloom_filters);
-	explicit LogicalUseBF(shared_ptr<BlockedBloomFilter> bloom_filter);
+	explicit LogicalUseBF(vector<shared_ptr<FilterPlan>> bloom_filter_plans);
+	explicit LogicalUseBF(shared_ptr<FilterPlan> bloom_filter);
 
-	vector<shared_ptr<BlockedBloomFilter>> bf_to_use;
-	vector<LogicalCreateBF *> related_create_bf;
+	vector<shared_ptr<FilterPlan>> bf_to_use_plans;
+	vector<LogicalCreateBF *> related_create_bfs;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

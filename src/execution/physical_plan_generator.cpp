@@ -3,6 +3,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
+#include "duckdb/execution/predicate_transfer_bf_linker.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"
@@ -23,6 +24,10 @@ PhysicalPlanGenerator::~PhysicalPlanGenerator() {
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
 	auto &profiler = QueryProfiler::Get(context);
+
+	// Create and link BloomFilters for LogicalUseBFOperator and LogicalCreateBFOperator
+	PredicateTransferBFLinker linker;
+	linker.LinkBloomFilters(*op);
 
 	// first resolve column references
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING);

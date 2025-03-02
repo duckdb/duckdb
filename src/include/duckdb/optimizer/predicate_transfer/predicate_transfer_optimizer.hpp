@@ -24,18 +24,18 @@ private:
 	unique_ptr<LogicalOperator> InsertTransferOperators(unique_ptr<LogicalOperator> plan);
 
 	//! Create Bloom filter and use existing Bloom filter for the given scan or filter node
-	vector<pair<idx_t, shared_ptr<BlockedBloomFilter>>> CreateBloomFilter(LogicalOperator &node, bool reverse = false);
+	vector<pair<idx_t, shared_ptr<FilterPlan>>> CreateBloomFilterPlan(LogicalOperator &node, bool reverse = false);
 
-	void GetAllBFsToUse(idx_t cur_node_id, BloomFilters &bfs_to_use, vector<idx_t> &parent_nodes, bool reverse = false);
-	void GetAllBFsToCreate(idx_t cur_node_id, BloomFilters &bfs_to_create, bool reverse = false);
-	unique_ptr<LogicalCreateBF> BuildCreateBFOperator(LogicalOperator &node, BloomFilters &bloom_filters);
-	unique_ptr<LogicalUseBF> BuildUseBFOperator(LogicalOperator &node, BloomFilters &bloom_filters,
-	                                            vector<idx_t> &parent_nodes, bool reverse = false);
+	void GetAllBFsToUse(idx_t cur_node_id, vector<shared_ptr<FilterPlan>> &bfs_to_use_plan, vector<idx_t> &parent_nodes, bool reverse);
+	void GetAllBFsToCreate(idx_t cur_node_id, vector<shared_ptr<FilterPlan>> &bfs_to_create_plan, bool reverse);
+
+	static unique_ptr<LogicalCreateBF> BuildCreateBFOperator(LogicalOperator &node, vector<shared_ptr<FilterPlan>> &bf_plans);
+	static unique_ptr<LogicalUseBF> BuildUseBFOperator(LogicalOperator &node, vector<shared_ptr<FilterPlan>> &bf_plans);
 
 	//! Will this node be filtered?
 	bool PossibleFilterAny(LogicalOperator &node, bool reverse = false);
 
-	//! which column(s) involved in this expression
+	//! which column(s) involved in this expression?
 	static void GetColumnBindingExpression(Expression &expr, vector<BoundColumnRefExpression *> &expressions);
 
 private:

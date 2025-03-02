@@ -6,8 +6,9 @@
 namespace duckdb {
 
 PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, vector<shared_ptr<BlockedBloomFilter>> bf,
-                             idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::USE_BF, std::move(types), estimated_cardinality), bf_to_use(bf) {
+                             const vector<PhysicalCreateBF *> &related_create_bfs, idx_t estimated_cardinality)
+    : CachingPhysicalOperator(PhysicalOperatorType::USE_BF, std::move(types), estimated_cardinality), bf_to_use(bf),
+      related_create_bfs(related_create_bfs) {
 }
 
 unique_ptr<OperatorState> PhysicalUseBF::GetOperatorState(ExecutionContext &context) const {
@@ -19,7 +20,7 @@ InsertionOrderPreservingMap<string> PhysicalUseBF::ParamsToString() const {
 
 	result["BF Number"] = std::to_string(bf_to_use.size());
 	string bfs;
-	for (auto *bf : related_create_bf) {
+	for (auto *bf : related_create_bfs) {
 		bfs += "0x" + std::to_string(reinterpret_cast<size_t>(bf)) + "\n";
 	}
 	result["BF Creators"] = bfs;
@@ -31,7 +32,7 @@ void PhysicalUseBF::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 
 	auto &state = meta_pipeline.GetState();
 	state.AddPipelineOperator(current, *this);
-	for (auto cell : related_create_bf) {
+	for (auto cell : related_create_bfs) {
 		cell->BuildPipelinesFromRelated(current, meta_pipeline);
 	}
 	children[0]->BuildPipelines(current, meta_pipeline);

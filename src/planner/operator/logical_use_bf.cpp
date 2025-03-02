@@ -4,23 +4,31 @@
 
 namespace duckdb {
 
-LogicalUseBF::LogicalUseBF(vector<shared_ptr<BlockedBloomFilter>> bloom_filters)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_USE_BF), bf_to_use(std::move(bloom_filters)) {
+LogicalUseBF::LogicalUseBF(vector<shared_ptr<FilterPlan>> bloom_filter_plans)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_USE_BF), bf_to_use_plans(std::move(bloom_filter_plans)) {
 }
-
-LogicalUseBF::LogicalUseBF(shared_ptr<BlockedBloomFilter> bloom_filter)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_USE_BF), bf_to_use({std::move(bloom_filter)}) {
+LogicalUseBF::LogicalUseBF(shared_ptr<FilterPlan> bloom_filter)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_USE_BF), bf_to_use_plans({std::move(bloom_filter)}) {
 }
 
 InsertionOrderPreservingMap<string> LogicalUseBF::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 
-	result["BF Number"] = std::to_string(bf_to_use.size());
+	result["BF Number"] = std::to_string(bf_to_use_plans.size());
 	string bfs;
-	for (auto *bf : related_create_bf) {
-		bfs += "0x" + std::to_string(reinterpret_cast<size_t>(bf)) + "\n";
+	for (auto &bf_plan : bf_to_use_plans) {
+		bfs += "0x" + std::to_string(reinterpret_cast<uint64_t>(bf_plan.get())) + "\n";
+		bfs += "Build: ";
+		for (auto &v : bf_plan->build) {
+			bfs += std::to_string(v.table_index) + "." + std::to_string(v.column_index) + " ";
+		}
+		bfs += " Apply: ";
+		for (auto &v : bf_plan->apply) {
+			bfs += std::to_string(v.table_index) + "." + std::to_string(v.column_index) + " ";
+		}
+		bfs += "\n";
 	}
-	result["BF Creators"] = bfs;
+	result["BloomFilters"] = bfs;
 	return result;
 }
 
@@ -38,7 +46,7 @@ vector<ColumnBinding> LogicalUseBF::GetColumnBindings() {
 }
 
 void LogicalUseBF::AddDownStreamOperator(LogicalCreateBF *op) {
-	related_create_bf.emplace_back(op);
+	related_create_bfs.push_back(op);
 }
 
 void LogicalUseBF::ResolveTypes() {

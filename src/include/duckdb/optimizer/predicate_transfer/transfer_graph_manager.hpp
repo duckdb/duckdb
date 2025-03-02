@@ -34,7 +34,7 @@ public:
 
 public:
 	bool Build(LogicalOperator &op);
-	void AddBloomFilter(idx_t create_bf, const shared_ptr<BlockedBloomFilter> &use_bf, bool reverse);
+	void AddFilterPlan(idx_t create_table, const shared_ptr<FilterPlan> &filter_plan, bool reverse);
 
 private:
 	void ExtractEdgesInfo(const vector<reference<LogicalOperator>> &join_operators);

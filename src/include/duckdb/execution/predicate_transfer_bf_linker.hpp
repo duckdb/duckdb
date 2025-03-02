@@ -1,0 +1,42 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/execution/predicate_transfer_bf_linker.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
+#pragma once
+
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_use_bf.hpp"
+#include "duckdb/planner/operator/logical_create_bf.hpp"
+
+namespace duckdb {
+class PredicateTransferBFLinker : public LogicalOperatorVisitor {
+public:
+	PredicateTransferBFLinker() : state(State::COLLECT_BF_CREATORS) {
+	}
+
+	void LinkBloomFilters(LogicalOperator &op);
+	void VisitOperator(LogicalOperator &op) override;
+
+protected:
+	enum class State { COLLECT_BF_CREATORS, LINK_BF_USERS };
+	State state;
+
+	struct FilterPlanHash {
+		std::size_t operator()(const FilterPlan &fp) const {
+			size_t h = 0;
+			for (const auto &v : fp.build) {
+				h ^= std::hash<idx_t> {}(v.table_index) ^ (std::hash<idx_t> {}(v.column_index));
+			}
+			for (const auto &v : fp.apply) {
+				h ^= std::hash<idx_t> {}(v.table_index) ^ (std::hash<idx_t> {}(v.column_index));
+			}
+			return h;
+		}
+	};
+	unordered_map<FilterPlan, LogicalCreateBF *, FilterPlanHash> filter_creators;
+};
+} // namespace duckdb

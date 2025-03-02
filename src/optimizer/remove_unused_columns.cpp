@@ -361,8 +361,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 
 	if (op.type == LogicalOperatorType::LOGICAL_CREATE_BF) {
 		auto &create_bf = op.Cast<LogicalCreateBF>();
-		for (auto cell : create_bf.bf_to_create) {
-			for (auto &v : cell->column_bindings_built_) {
+		for (auto cell : create_bf.bf_to_create_plans) {
+			for (auto &v : cell->build) {
 				if (column_references.find(v) != column_references.end()) {
 					auto exprs = column_references[v];
 					v = exprs.bindings[0].get().binding;
@@ -372,8 +372,8 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 	if (op.type == LogicalOperatorType::LOGICAL_USE_BF) {
 		auto &use_bf = op.Cast<LogicalUseBF>();
-		for (auto cell : use_bf.bf_to_use) {
-			for (auto &v : cell->column_bindings_applied_) {
+		for (auto cell : use_bf.bf_to_use_plans) {
+			for (auto &v : cell->apply) {
 				if (column_references.find(v) != column_references.end()) {
 					auto exprs = column_references[v];
 					v = exprs.bindings[0].get().binding;

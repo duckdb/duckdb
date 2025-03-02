@@ -4,6 +4,19 @@
 #include "duckdb/optimizer/predicate_transfer/bloom_filter/bloom_filter.hpp"
 
 namespace duckdb {
+
+struct FilterPlan {
+	vector<ColumnBinding> build;
+	vector<ColumnBinding> apply;
+
+	vector<idx_t> bound_cols_build;
+	vector<idx_t> bound_cols_apply;
+
+	bool operator==(const FilterPlan &other) const {
+		return build == other.build && apply == other.apply;
+	}
+};
+
 class GraphEdge {
 public:
 	explicit GraphEdge(idx_t destination) : destination(destination) {
@@ -11,8 +24,8 @@ public:
 
 	idx_t destination;
 
-	vector<Expression *> filters;
-	vector<shared_ptr<BlockedBloomFilter>> bloom_filters;
+	vector<Expression *> conditions;
+	vector<shared_ptr<FilterPlan>> filter_plan;
 };
 
 struct Edges {
@@ -28,7 +41,7 @@ public:
 	idx_t id;
 	int32_t priority;
 
-	//! Predicate Transfer has two stages, the transfer graph is different because of the existence of LEFT JOIN, RIGHT
+	//! Predicate Transfer has two stages. The transfer graph is different because of the existence of LEFT JOIN, RIGHT
 	//! JOIN, etc.
 	Edges forward_stage_edges;
 	Edges backward_stage_edges;
@@ -36,7 +49,7 @@ public:
 public:
 	GraphEdge *Add(idx_t other, bool is_forward, bool is_in_edge);
 	GraphEdge *Add(idx_t other, Expression *expression, bool is_forward, bool is_in_edge);
-	GraphEdge *Add(idx_t other, const shared_ptr<BlockedBloomFilter> &bloom_filter, bool is_forward, bool is_in_edge);
+	GraphEdge *Add(idx_t other, const shared_ptr<FilterPlan> &filter_plan, bool is_forward, bool is_in_edge);
 };
 
 using TransferGraph = unordered_map<idx_t, unique_ptr<GraphNode>>;

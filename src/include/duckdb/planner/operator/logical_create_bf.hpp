@@ -2,6 +2,7 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
+#include "duckdb/optimizer/predicate_transfer/dag.hpp"
 
 namespace duckdb {
 class LogicalCreateBF : public LogicalOperator {
@@ -9,10 +10,10 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CREATE_BF;
 
 public:
-	explicit LogicalCreateBF(vector<shared_ptr<BlockedBloomFilter>> bloom_filters);
+	explicit LogicalCreateBF(vector<shared_ptr<FilterPlan>> bloom_filters);
 
+	vector<shared_ptr<FilterPlan>> bf_to_create_plans;
 	PhysicalCreateBF *physical = nullptr;
-	vector<shared_ptr<BlockedBloomFilter>> bf_to_create;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

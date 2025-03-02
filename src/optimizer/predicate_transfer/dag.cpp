@@ -16,14 +16,14 @@ GraphEdge *GraphNode::Add(idx_t other, bool is_forward, bool is_in_edge) {
 
 GraphEdge *GraphNode::Add(idx_t other, Expression *expression, bool is_forward, bool is_in_edge) {
 	auto *edge = Add(other, is_forward, is_in_edge);
-	edge->filters.push_back(expression);
+	edge->conditions.push_back(expression);
 	return edge;
 }
 
-GraphEdge *GraphNode::Add(idx_t other, const shared_ptr<BlockedBloomFilter> &bloom_filter, bool is_forward,
-                          bool is_in_edge) {
+GraphEdge *GraphNode::Add(idx_t other, const shared_ptr<FilterPlan> &filter_plan, bool is_forward, bool is_in_edge) {
 	auto *edge = Add(other, is_forward, is_in_edge);
-	edge->bloom_filters.push_back(bloom_filter);
+	edge->filter_plan.push_back(filter_plan);
 	return edge;
 }
+
 } // namespace duckdb
