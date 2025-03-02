@@ -13,6 +13,7 @@
 #include "duckdb/function/aggregate_state.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
 #include "duckdb/planner/expression.hpp"
+#include <functional>
 
 namespace duckdb {
 
@@ -57,8 +58,12 @@ typedef void (*aggregate_initialize_t)(const AggregateFunction &function, data_p
 //! The type used for updating hashed aggregate functions
 typedef void (*aggregate_update_t)(Vector inputs[], AggregateInputData &aggr_input_data, idx_t input_count,
                                    Vector &state, idx_t count);
+
+
+// Define std::function type equivalent to aggregate_combine_t
+using aggregate_combine_t = std::function<void(Vector &, Vector &, AggregateInputData &, idx_t)>;
+
 //! The type used for combining hashed aggregate states
-typedef void (*aggregate_combine_t)(Vector &state, Vector &combined, AggregateInputData &aggr_input_data, idx_t count);
 //! The type used for finalizing hashed aggregate function payloads
 typedef void (*aggregate_finalize_t)(Vector &state, AggregateInputData &aggr_input_data, Vector &result, idx_t count,
                                      idx_t offset);
