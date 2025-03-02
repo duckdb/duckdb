@@ -957,5 +957,31 @@
         "type": "bool"
       }
     ]
+  },
+  {
+    "class": "LogicalUseBF",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_USE_BF",
+    "members": [
+      {
+        "id": 200,
+        "name": "bf_to_use_plans",
+        "type": "vector<shared_ptr<BloomFilterPlan>>"
+      }
+    ],
+    "constructor": ["bf_to_use_plans"]
+  },
+  {
+    "class": "LogicalCreateBF",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_CREATE_BF",
+    "members": [
+      {
+        "id": 200,
+        "name": "bf_to_create_plans",
+        "type": "vector<shared_ptr<BloomFilterPlan>>"
+      }
+    ],
+    "constructor": ["bf_to_create_plans"]
   }
 ]

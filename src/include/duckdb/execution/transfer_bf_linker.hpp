@@ -29,7 +29,7 @@ protected:
 	State state;
 
 	struct FilterPlanHash {
-		std::size_t operator()(const FilterPlan &fp) const {
+		std::size_t operator()(const BloomFilterPlan &fp) const {
 			size_t h = 0;
 			for (const auto &v : fp.build) {
 				h ^= std::hash<idx_t> {}(v.table_index) ^ (std::hash<idx_t> {}(v.column_index));
@@ -40,6 +40,6 @@ protected:
 			return h;
 		}
 	};
-	unordered_map<FilterPlan, LogicalCreateBF *, FilterPlanHash> filter_creators;
+	unordered_map<BloomFilterPlan, LogicalCreateBF *, FilterPlanHash> filter_creators;
 };
 } // namespace duckdb

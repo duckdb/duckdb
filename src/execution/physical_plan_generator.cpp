@@ -3,7 +3,7 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/column_binding_resolver.hpp"
-renaming#include "duckdb/execution/transfer_bf_linker.hpp"
+#include "duckdb/execution/transfer_bf_linker.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/query_profiler.hpp"

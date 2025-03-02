@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-LogicalCreateBF::LogicalCreateBF(vector<shared_ptr<FilterPlan>> bloom_filters)
+LogicalCreateBF::LogicalCreateBF(vector<shared_ptr<BloomFilterPlan>> bloom_filters)
     : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_BF), bf_to_create_plans(std::move(bloom_filters)) {};
 
 InsertionOrderPreservingMap<string> LogicalCreateBF::ParamsToString() const {
@@ -28,13 +28,17 @@ InsertionOrderPreservingMap<string> LogicalCreateBF::ParamsToString() const {
 	return result;
 }
 
-void LogicalCreateBF::Serialize(Serializer &serializer) const {
-	throw InternalException("Shouldn't go here: LogicalCreateBF::Serialize");
-}
-
-unique_ptr<LogicalOperator> LogicalCreateBF::Deserialize(Deserializer &deserializer) {
-	throw InternalException("Shouldn't go here: LogicalCreateBF::Deserialize");
-}
+// void LogicalCreateBF::Serialize(Serializer &serializer) const {
+// 	LogicalOperator::Serialize(serializer);
+// 	serializer.WritePropertyWithDefault<vector<shared_ptr<FilterPlan>>>(200, "BloomFilter Plans", bf_to_create_plans);
+// }
+//
+// unique_ptr<LogicalOperator> LogicalCreateBF::Deserialize(Deserializer &deserializer) {
+// 	vector<shared_ptr<FilterPlan>> bloom_filter_plans;
+// 	deserializer.ReadPropertyWithDefault<vector<shared_ptr<FilterPlan>>>(200, "BloomFilter Plans", bloom_filter_plans);
+// 	auto result = make_uniq<LogicalCreateBF>(std::move(bloom_filter_plans));
+// 	return std::move(result);
+// }
 
 vector<ColumnBinding> LogicalCreateBF::GetColumnBindings() {
 	return children[0]->GetColumnBindings();

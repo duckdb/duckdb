@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_storage_serialization
   OBJECT
+        serialize_bloom_filter_plan.cpp
   serialize_constraint.cpp
   serialize_create_info.cpp
   serialize_dependency.cpp

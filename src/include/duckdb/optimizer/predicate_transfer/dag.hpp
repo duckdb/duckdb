@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/optimizer/predicate_transfer/dag.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
@@ -5,16 +13,19 @@
 
 namespace duckdb {
 
-struct FilterPlan {
+struct BloomFilterPlan {
 	vector<ColumnBinding> build;
 	vector<ColumnBinding> apply;
 
 	vector<idx_t> bound_cols_build;
 	vector<idx_t> bound_cols_apply;
 
-	bool operator==(const FilterPlan &other) const {
+	bool operator==(const BloomFilterPlan &other) const {
 		return build == other.build && apply == other.apply;
 	}
+
+	void Serialize(Serializer &serializer) const;
+	static unique_ptr<BloomFilterPlan> Deserialize(Deserializer &deserializer);
 };
 
 class GraphEdge {
@@ -25,7 +36,7 @@ public:
 	idx_t destination;
 
 	vector<Expression *> conditions;
-	vector<shared_ptr<FilterPlan>> filter_plan;
+	vector<shared_ptr<BloomFilterPlan>> filter_plan;
 };
 
 struct Edges {
@@ -49,7 +60,7 @@ public:
 public:
 	GraphEdge *Add(idx_t other, bool is_forward, bool is_in_edge);
 	GraphEdge *Add(idx_t other, Expression *expression, bool is_forward, bool is_in_edge);
-	GraphEdge *Add(idx_t other, const shared_ptr<FilterPlan> &filter_plan, bool is_forward, bool is_in_edge);
+	GraphEdge *Add(idx_t other, const shared_ptr<BloomFilterPlan> &filter_plan, bool is_forward, bool is_in_edge);
 };
 
 using TransferGraph = unordered_map<idx_t, unique_ptr<GraphNode>>;

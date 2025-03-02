@@ -11,7 +11,7 @@
 
 namespace duckdb {
 
-PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, vector<shared_ptr<FilterPlan>> bf_plans,
+PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, vector<shared_ptr<BloomFilterPlan>> bf_plans,
                                    idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality) {
 	for (auto &plan : bf_plans) {
@@ -20,7 +20,7 @@ PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, vector<shared_ptr<
 	}
 }
 
-shared_ptr<BlockedBloomFilter> PhysicalCreateBF::BuiltBloomFilter(FilterPlan &bf_plan) {
+shared_ptr<BlockedBloomFilter> PhysicalCreateBF::BuiltBloomFilter(BloomFilterPlan &bf_plan) {
 	auto BF = make_shared_ptr<BlockedBloomFilter>();
 	for (auto &apply_col : bf_plan.apply) {
 		BF->AddColumnBindingApplied(apply_col);

@@ -49,6 +49,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 	case LogicalOperatorType::LOGICAL_COPY_TO_FILE:
 		result = LogicalCopyToFile::Deserialize(deserializer);
 		break;
+	case LogicalOperatorType::LOGICAL_CREATE_BF:
+		result = LogicalCreateBF::Deserialize(deserializer);
+		break;
 	case LogicalOperatorType::LOGICAL_CREATE_INDEX:
 		result = LogicalCreateIndex::Deserialize(deserializer);
 		break;
@@ -174,6 +177,9 @@ unique_ptr<LogicalOperator> LogicalOperator::Deserialize(Deserializer &deseriali
 		break;
 	case LogicalOperatorType::LOGICAL_UPDATE:
 		result = LogicalUpdate::Deserialize(deserializer);
+		break;
+	case LogicalOperatorType::LOGICAL_USE_BF:
+		result = LogicalUseBF::Deserialize(deserializer);
 		break;
 	case LogicalOperatorType::LOGICAL_VACUUM:
 		result = LogicalVacuum::Deserialize(deserializer);
@@ -325,6 +331,17 @@ void LogicalCreate::Serialize(Serializer &serializer) const {
 unique_ptr<LogicalOperator> LogicalCreate::Deserialize(Deserializer &deserializer) {
 	auto info = deserializer.ReadPropertyWithDefault<unique_ptr<CreateInfo>>(200, "info");
 	auto result = duckdb::unique_ptr<LogicalCreate>(new LogicalCreate(deserializer.Get<LogicalOperatorType>(), deserializer.Get<ClientContext &>(), std::move(info)));
+	return std::move(result);
+}
+
+void LogicalCreateBF::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<shared_ptr<BloomFilterPlan>>>(200, "bf_to_create_plans", bf_to_create_plans);
+}
+
+unique_ptr<LogicalOperator> LogicalCreateBF::Deserialize(Deserializer &deserializer) {
+	auto bf_to_create_plans = deserializer.ReadPropertyWithDefault<vector<shared_ptr<BloomFilterPlan>>>(200, "bf_to_create_plans");
+	auto result = duckdb::unique_ptr<LogicalCreateBF>(new LogicalCreateBF(std::move(bf_to_create_plans)));
 	return std::move(result);
 }
 
@@ -749,6 +766,17 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserialize
 	deserializer.ReadPropertyWithDefault<vector<PhysicalIndex>>(204, "columns", result->columns);
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(205, "bound_defaults", result->bound_defaults);
 	deserializer.ReadPropertyWithDefault<bool>(206, "update_is_del_and_insert", result->update_is_del_and_insert);
+	return std::move(result);
+}
+
+void LogicalUseBF::Serialize(Serializer &serializer) const {
+	LogicalOperator::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<shared_ptr<BloomFilterPlan>>>(200, "bf_to_use_plans", bf_to_use_plans);
+}
+
+unique_ptr<LogicalOperator> LogicalUseBF::Deserialize(Deserializer &deserializer) {
+	auto bf_to_use_plans = deserializer.ReadPropertyWithDefault<vector<shared_ptr<BloomFilterPlan>>>(200, "bf_to_use_plans");
+	auto result = duckdb::unique_ptr<LogicalUseBF>(new LogicalUseBF(std::move(bf_to_use_plans)));
 	return std::move(result);
 }
 

@@ -1,0 +1,31 @@
+[
+  {
+    "class": "BloomFilterPlan",
+    "includes": [
+      "duckdb/optimizer/predicate_transfer/dag.hpp"
+    ],
+    "members": [
+      {
+        "id": 200,
+        "name": "build",
+        "type": "vector<ColumnBinding>"
+      },
+      {
+        "id": 201,
+        "name": "apply",
+        "type": "vector<ColumnBinding>"
+      },
+      {
+        "id": 202,
+        "name": "bound_cols_build",
+        "type": "vector<idx_t>"
+      },
+      {
+        "id": 203,
+        "name": "bound_cols_apply",
+        "type": "vector<idx_t>"
+      }
+    ],
+    "constructor": []
+  }
+]

@@ -10,9 +10,9 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_CREATE_BF;
 
 public:
-	explicit LogicalCreateBF(vector<shared_ptr<FilterPlan>> bloom_filters);
+	explicit LogicalCreateBF(vector<shared_ptr<BloomFilterPlan>> bloom_filters);
 
-	vector<shared_ptr<FilterPlan>> bf_to_create_plans;
+	vector<shared_ptr<BloomFilterPlan>> bf_to_create_plans;
 	PhysicalCreateBF *physical = nullptr;
 
 public:

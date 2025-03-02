@@ -33,7 +33,8 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 				}
 			}
 			if (BF_plan->bound_cols_build.empty()) {
-				std::cerr << "Table: " << BF_plan->build[0].table_index << "." << BF_plan->build[0].column_index << "\n";
+				std::cerr << "Table: " << BF_plan->build[0].table_index << "." << BF_plan->build[0].column_index
+				          << "\n";
 				throw InternalException("No bound column found!");
 			}
 		}
@@ -53,7 +54,8 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 				}
 			}
 			if (BF_plan->bound_cols_apply.empty()) {
-				std::cerr << "Table: " << BF_plan->apply[0].table_index << "." << BF_plan->apply[0].column_index << "\n";
+				std::cerr << "Table: " << BF_plan->apply[0].table_index << "." << BF_plan->apply[0].column_index
+				          << "\n";
 				throw InternalException("No bound column found!");
 			}
 		}

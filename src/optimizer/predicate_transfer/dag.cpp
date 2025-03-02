@@ -20,7 +20,8 @@ GraphEdge *GraphNode::Add(idx_t other, Expression *expression, bool is_forward, 
 	return edge;
 }
 
-GraphEdge *GraphNode::Add(idx_t other, const shared_ptr<FilterPlan> &filter_plan, bool is_forward, bool is_in_edge) {
+GraphEdge *GraphNode::Add(idx_t other, const shared_ptr<BloomFilterPlan> &filter_plan, bool is_forward,
+                          bool is_in_edge) {
 	auto *edge = Add(other, is_forward, is_in_edge);
 	edge->filter_plan.push_back(filter_plan);
 	return edge;
