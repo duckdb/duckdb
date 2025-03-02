@@ -104,7 +104,7 @@ struct ParquetMultiFileInfo {
 	                               FileExpandResult expand_result);
 	static unique_ptr<GlobalTableFunctionState>
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state);
-	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
+	static unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -549,7 +549,7 @@ unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState
 	return make_uniq<ParquetReadGlobalState>();
 }
 
-unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState() {
+unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &) {
 	return make_uniq<ParquetReadLocalState>();
 }
 

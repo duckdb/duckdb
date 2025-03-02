@@ -40,19 +40,27 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 
 class JSONSchemaTask : public BaseExecutorTask {
 public:
-	JSONSchemaTask(TaskExecutor &executor, ClientContext &context_p, MultiFileBindData &bind_data_p,
+	JSONSchemaTask(TaskExecutor &executor, ClientContext &context_p, const vector<string> &files, MultiFileBindData &bind_data_p,
 	               MutableDateFormatMap &date_format_map, JSONStructureNode &node_p, const idx_t file_idx_start_p,
 	               const idx_t file_idx_end_p)
-	    : BaseExecutorTask(executor), context(context_p), bind_data(bind_data_p), date_format_map(date_format_map),
+	    : BaseExecutorTask(executor), context(context_p), files(files), bind_data(bind_data_p), date_format_map(date_format_map),
 	      node(node_p), file_idx_start(file_idx_start_p), file_idx_end(file_idx_end_p),
 	      allocator(BufferAllocator::Get(context)), string_vector(LogicalType::VARCHAR) {
 	}
 
-	static idx_t ExecuteInternal(ClientContext &context, MultiFileBindData &bind_data, JSONStructureNode &node,
+	static idx_t ExecuteInternal(ClientContext &context, const vector<string> &files, MultiFileBindData &bind_data, JSONStructureNode &node,
 	                             const idx_t file_idx, ArenaAllocator &allocator, Vector &string_vector,
 	                             idx_t remaining, MutableDateFormatMap &date_format_map) {
 		auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
-		auto &reader = bind_data.union_readers[file_idx]->reader->Cast<BufferedJSONReader>();
+		auto json_reader = make_shared_ptr<BufferedJSONReader>(context, json_data.options, files[file_idx]);
+		if (bind_data.union_readers[file_idx]) {
+			throw InternalException("Union data already set");
+		}
+		auto &reader = *json_reader;
+ 		auto union_data = make_uniq<BaseUnionData>(files[file_idx]);
+		union_data->reader = std::move(json_reader);
+		bind_data.union_readers[file_idx] = std::move(union_data);
+
 		auto &global_allocator = Allocator::Get(context);
 		idx_t buffer_capacity = json_data.options.maximum_object_size * 2;
 		JSONReaderScanState scan_state(context, global_allocator, buffer_capacity);
@@ -99,13 +107,14 @@ public:
 		auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 		auto &options = json_data.options;
 		for (idx_t file_idx = file_idx_start; file_idx < file_idx_end; file_idx++) {
-			ExecuteInternal(context, bind_data, node, file_idx, allocator, string_vector, options.sample_size,
+			ExecuteInternal(context, files, bind_data, node, file_idx, allocator, string_vector, options.sample_size,
 			                date_format_map);
 		}
 	}
 
 private:
 	ClientContext &context;
+	const vector<string> &files;
 	MultiFileBindData &bind_data;
 	MutableDateFormatMap &date_format_map;
 	JSONStructureNode &node;
@@ -126,7 +135,9 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	MutableDateFormatMap date_format_map(*json_data.date_format_map);
 	JSONStructureNode node;
 	auto &options = json_data.options;
-	auto file_count = bind_data.file_list->GetTotalFileCount();
+	auto files = bind_data.file_list->GetAllFiles();
+	auto file_count = files.size();
+	bind_data.union_readers.resize(files.empty() ? 0 : files.size());
 	if (bind_data.file_options.union_by_name) {
 		const auto num_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 		const auto files_per_task = (file_count + num_threads - 1) / num_threads;
@@ -137,7 +148,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 		TaskExecutor executor(context);
 		for (idx_t task_idx = 0; task_idx < num_tasks; task_idx++) {
 			const auto file_idx_start = task_idx * files_per_task;
-			auto task = make_uniq<JSONSchemaTask>(executor, context, bind_data, date_format_map, task_nodes[task_idx],
+			auto task = make_uniq<JSONSchemaTask>(executor, context, files, bind_data, date_format_map, task_nodes[task_idx],
 			                                      file_idx_start, file_idx_start + files_per_task);
 			executor.ScheduleTask(std::move(task));
 		}
@@ -152,7 +163,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 		Vector string_vector(LogicalType::VARCHAR);
 		idx_t remaining = options.sample_size;
 		for (idx_t file_idx = 0; file_idx < file_count; file_idx++) {
-			remaining = JSONSchemaTask::ExecuteInternal(context, bind_data, node, file_idx, allocator, string_vector,
+			remaining = JSONSchemaTask::ExecuteInternal(context, files, bind_data, node, file_idx, allocator, string_vector,
 			                                            remaining, date_format_map);
 			if (remaining == 0 || file_idx == options.maximum_sample_files - 1) {
 				break; // We sample sample_size in total (across the first maximum_sample_files files)
@@ -202,56 +213,56 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	}
 }
 
-static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
-	auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
-
-	const auto count = lstate.ReadNext(gstate);
-	auto &scan_state = lstate.GetScanState();
-	yyjson_val **values = scan_state.values;
-	output.SetCardinality(count);
-
-	if (!gstate.names.empty()) {
-		vector<Vector *> result_vectors;
-		result_vectors.reserve(gstate.column_ids.size());
-		for (const auto &col_idx : gstate.column_ids) {
-			result_vectors.emplace_back(&output.data[col_idx]);
-		}
-
-		D_ASSERT(gstate.json_data.options.record_type != JSONRecordType::AUTO_DETECT);
-		bool success;
-		if (gstate.json_data.options.record_type == JSONRecordType::RECORDS) {
-			success = JSONTransform::TransformObject(values, scan_state.allocator.GetYYAlc(), count, gstate.names,
-			                                         result_vectors, lstate.transform_options, gstate.column_indices,
-			                                         lstate.transform_options.error_unknown_key);
-		} else {
-			D_ASSERT(gstate.json_data.options.record_type == JSONRecordType::VALUES);
-			success = JSONTransform::Transform(values, scan_state.allocator.GetYYAlc(), *result_vectors[0], count,
-			                                   lstate.transform_options, gstate.column_indices[0]);
-		}
-
-		if (!success) {
-			string hint =
-			    gstate.json_data.options.auto_detect
-			        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns', 'format' or "
-			          "'records' manually, setting 'ignore_errors' to true, or setting 'union_by_name' to true when "
-			          "reading multiple files with a different structure."
-			        : "\nTry setting 'auto_detect' to true, specifying 'format' or 'records' manually, or setting "
-			          "'ignore_errors' to true.";
-			lstate.ThrowTransformError(lstate.transform_options.object_index,
-			                           lstate.transform_options.error_message + hint);
-		}
-	}
-
-	if (output.size() != 0) {
-		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output, nullptr);
-	}
-}
+// static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+// 	auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
+// 	auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
+//
+// 	const auto count = lstate.ReadNext(gstate);
+// 	auto &scan_state = lstate.GetScanState();
+// 	yyjson_val **values = scan_state.values;
+// 	output.SetCardinality(count);
+//
+// 	if (!gstate.names.empty()) {
+// 		vector<Vector *> result_vectors;
+// 		result_vectors.reserve(gstate.column_ids.size());
+// 		for (const auto &col_idx : gstate.column_ids) {
+// 			result_vectors.emplace_back(&output.data[col_idx]);
+// 		}
+//
+// 		D_ASSERT(gstate.json_data.options.record_type != JSONRecordType::AUTO_DETECT);
+// 		bool success;
+// 		if (gstate.json_data.options.record_type == JSONRecordType::RECORDS) {
+// 			success = JSONTransform::TransformObject(values, scan_state.allocator.GetYYAlc(), count, gstate.names,
+// 			                                         result_vectors, lstate.transform_options, gstate.column_indices,
+// 			                                         lstate.transform_options.error_unknown_key);
+// 		} else {
+// 			D_ASSERT(gstate.json_data.options.record_type == JSONRecordType::VALUES);
+// 			success = JSONTransform::Transform(values, scan_state.allocator.GetYYAlc(), *result_vectors[0], count,
+// 			                                   lstate.transform_options, gstate.column_indices[0]);
+// 		}
+//
+// 		if (!success) {
+// 			string hint =
+// 			    gstate.json_data.options.auto_detect
+// 			        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns', 'format' or "
+// 			          "'records' manually, setting 'ignore_errors' to true, or setting 'union_by_name' to true when "
+// 			          "reading multiple files with a different structure."
+// 			        : "\nTry setting 'auto_detect' to true, specifying 'format' or 'records' manually, or setting "
+// 			          "'ignore_errors' to true.";
+// 			lstate.ThrowTransformError(lstate.transform_options.object_index,
+// 			                           lstate.transform_options.error_message + hint);
+// 		}
+// 	}
+//
+// 	if (output.size() != 0) {
+// 		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output, nullptr);
+// 	}
+// }
 
 TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info) {
-	TableFunction table_function({LogicalType::VARCHAR}, ReadJSONFunction,
+	TableFunction table_function({LogicalType::VARCHAR}, MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileScan,
 	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileBind,
-	                             JSONGlobalTableFunctionState::Init, JSONLocalTableFunctionState::Init);
+	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileInitGlobal, MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileInitLocal);
 	table_function.name = "read_json";
 
 	JSONScan::TableFunctionDefaults(table_function);
@@ -266,6 +277,9 @@ TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> f
 	table_function.named_parameters["maximum_sample_files"] = LogicalType::BIGINT;
 
 	// TODO: might be able to do filter pushdown/prune ?
+	table_function.table_scan_progress = MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileProgress;
+	table_function.get_partition_data = MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileGetPartitionData;
+	table_function.cardinality = nullptr;
 
 	table_function.function_info = std::move(function_info);
 

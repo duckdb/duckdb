@@ -256,7 +256,6 @@ unique_ptr<TableFunctionData> JSONMultiFileInfo::InitializeBindData(MultiFileBin
 void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
                                    MultiFileBindData &bind_data) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
-	json_data.InitializeReaders(context, bind_data);
 
 	auto &options = json_data.options;
 	names = options.name_list;
@@ -334,9 +333,158 @@ void JSONMultiFileInfo::FinalizeCopyBind(ClientContext &context, BaseFileReaderO
 	}
 }
 
+unique_ptr<GlobalTableFunctionState> JSONMultiFileInfo::InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state) {
+	auto json_state = make_uniq<JSONGlobalTableFunctionState>(context, bind_data);
+	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
+
+	auto &gstate = json_state->state;
+	// Perform projection pushdown
+	for (idx_t col_idx = 0; col_idx < global_state.column_indexes.size(); col_idx++) {
+		auto &column_index = global_state.column_indexes[col_idx];
+		const auto &col_id = column_index.GetPrimaryIndex();
+
+		// Skip any multi-file reader / row id stuff
+		if (col_id == bind_data.reader_bind.filename_idx || IsVirtualColumn(col_id)) {
+			continue;
+		}
+		bool skip = false;
+		for (const auto &hive_partitioning_index : bind_data.reader_bind.hive_partitioning_indexes) {
+			if (col_id == hive_partitioning_index.index) {
+				skip = true;
+				break;
+			}
+		}
+		if (skip) {
+			continue;
+		}
+
+		gstate.names.push_back(json_data.key_names[col_id]);
+		gstate.column_ids.push_back(col_idx);
+		gstate.column_indices.push_back(column_index);
+	}
+	if (gstate.names.size() < json_data.key_names.size() || bind_data.file_options.union_by_name) {
+		// If we are auto-detecting, but don't need all columns present in the file,
+		// then we don't need to throw an error if we encounter an unseen column
+		gstate.transform_options.error_unknown_key = false;
+	}
+	return std::move(json_state);
+}
+
+unique_ptr<LocalTableFunctionState> JSONMultiFileInfo::InitializeLocalState(ExecutionContext &context, GlobalTableFunctionState &global_state) {
+	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>();
+	auto result = make_uniq<JSONLocalTableFunctionState>(context.client, gstate.state);
+
+	// Copy the transform options / date format map because we need to do thread-local stuff
+	result->state.transform_options = gstate.state.transform_options;
+
+	return std::move(result);
+}
+
+double JSONMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFileReader &reader) {
+	auto &json_reader = reader.Cast<BufferedJSONReader>();
+	return json_reader.GetProgress();
+}
+
+shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
+											   BaseUnionData &union_data, const MultiFileBindData &bind_data_p) {
+	throw InternalException("Create reader from union data not implemented");
+}
+
+shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
+											   const string &filename, idx_t file_idx,
+											   const MultiFileBindData &bind_data) {
+	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
+	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
+	auto reader = make_shared_ptr<BufferedJSONReader>(context, json_data.options, filename);
+	reader->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
+	if (gstate.enable_parallel_scans) {
+		// if we are doing parallel scans we need to open the file here
+		reader->Initialize(gstate.allocator, gstate.buffer_capacity);
+	}
+	return std::move(reader);
+
+}
+shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
+											   JSONReaderOptions &options,
+											   const MultiFileReaderOptions &file_options) {
+	throw InternalException("Create reader from file not implemented");
+}
+
+void JSONMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader) {
+}
+
+bool JSONMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
+							  GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
+	auto &json_reader = reader->Cast<BufferedJSONReader>();
+	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
+	auto &lstate = lstate_p.Cast<JSONLocalTableFunctionState>().state;
+	return lstate.TryInitializeScan(gstate, reader->Cast<BufferedJSONReader>());
+}
+
+void JSONMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
+				 LocalTableFunctionState &local_state, DataChunk &output) {
+	auto &json_reader = reader.Cast<BufferedJSONReader>();
+	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
+	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
+	auto &scan_state = lstate.GetScanState();
+
+	const auto count = json_reader.Scan(scan_state);
+	yyjson_val **values = scan_state.values;
+	output.SetCardinality(count);
+
+	if (!gstate.names.empty()) {
+		vector<Vector *> result_vectors;
+		result_vectors.reserve(gstate.column_ids.size());
+		for (const auto &col_idx : gstate.column_ids) {
+			result_vectors.emplace_back(&output.data[col_idx]);
+		}
+
+		D_ASSERT(gstate.json_data.options.record_type != JSONRecordType::AUTO_DETECT);
+		bool success;
+		if (gstate.json_data.options.record_type == JSONRecordType::RECORDS) {
+			success = JSONTransform::TransformObject(values, scan_state.allocator.GetYYAlc(), count, gstate.names,
+													 result_vectors, lstate.transform_options, gstate.column_indices,
+													 lstate.transform_options.error_unknown_key);
+		} else {
+			D_ASSERT(gstate.json_data.options.record_type == JSONRecordType::VALUES);
+			success = JSONTransform::Transform(values, scan_state.allocator.GetYYAlc(), *result_vectors[0], count,
+											   lstate.transform_options, gstate.column_indices[0]);
+		}
+
+		if (!success) {
+			string hint =
+				gstate.json_data.options.auto_detect
+					? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns', 'format' or "
+					  "'records' manually, setting 'ignore_errors' to true, or setting 'union_by_name' to true when "
+					  "reading multiple files with a different structure."
+					: "\nTry setting 'auto_detect' to true, specifying 'format' or 'records' manually, or setting "
+					  "'ignore_errors' to true.";
+			lstate.ThrowTransformError(lstate.transform_options.object_index,
+									   lstate.transform_options.error_message + hint);
+		}
+	}
+}
+
+void JSONMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state, BaseFileReader &reader) {
+	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
+	gstate.file_is_assigned = false;
+}
+
+void JSONMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
+						  LocalTableFunctionState &local_state) {
+}
+
 void JSONMultiFileInfo::GetVirtualColumns(ClientContext &context, MultiFileBindData &bind_data,
                                           virtual_column_map_t &result) {
 	result.insert(make_pair(COLUMN_IDENTIFIER_EMPTY, TableColumn("", LogicalType::BOOLEAN)));
+}
+
+optional_idx JSONMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state,
+							   FileExpandResult expand_result) {
+	if (expand_result == FileExpandResult::MULTIPLE_FILES) {
+		return optional_idx();
+	}
+	return optional_idx();
 }
 
 } // namespace duckdb

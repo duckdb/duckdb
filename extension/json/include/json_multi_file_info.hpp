@@ -34,11 +34,11 @@ struct JSONMultiFileInfo {
 	                       MultiFileBindData &bind_data);
 	static void FinalizeBindData(MultiFileBindData &multi_file_data);
 	static void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
-	static optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
+	static optional_idx MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state,
 	                               FileExpandResult expand_result);
 	static unique_ptr<GlobalTableFunctionState>
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state);
-	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
+	static unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &context, GlobalTableFunctionState &global_state);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,

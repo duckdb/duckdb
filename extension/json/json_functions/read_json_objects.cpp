@@ -7,34 +7,35 @@
 namespace duckdb {
 
 static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
-	auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
-
-	// Fetch next lines
-	const auto count = lstate.ReadNext(gstate);
-	auto &scan_state = lstate.GetScanState();
-	const auto units = scan_state.units;
-	const auto objects = scan_state.values;
-
-	if (!gstate.names.empty()) {
-		// Create the strings without copying them
-		const auto col_idx = gstate.column_ids[0];
-		auto strings = FlatVector::GetData<string_t>(output.data[col_idx]);
-		auto &validity = FlatVector::Validity(output.data[col_idx]);
-		for (idx_t i = 0; i < count; i++) {
-			if (objects[i]) {
-				strings[i] = string_t(units[i].pointer, units[i].size);
-			} else {
-				validity.SetInvalid(i);
-			}
-		}
-	}
-
-	output.SetCardinality(count);
-
-	if (output.size() != 0) {
-		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output, nullptr);
-	}
+	throw InternalException("ReadJSONObjectsFunction not implemented");
+	// auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
+	// auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
+	//
+	// // Fetch next lines
+	// const auto count = lstate.ReadNext(gstate);
+	// auto &scan_state = lstate.GetScanState();
+	// const auto units = scan_state.units;
+	// const auto objects = scan_state.values;
+	//
+	// if (!gstate.names.empty()) {
+	// 	// Create the strings without copying them
+	// 	const auto col_idx = gstate.column_ids[0];
+	// 	auto strings = FlatVector::GetData<string_t>(output.data[col_idx]);
+	// 	auto &validity = FlatVector::Validity(output.data[col_idx]);
+	// 	for (idx_t i = 0; i < count; i++) {
+	// 		if (objects[i]) {
+	// 			strings[i] = string_t(units[i].pointer, units[i].size);
+	// 		} else {
+	// 			validity.SetInvalid(i);
+	// 		}
+	// 	}
+	// }
+	//
+	// output.SetCardinality(count);
+	//
+	// if (output.size() != 0) {
+	// 	MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output, nullptr);
+	// }
 }
 
 TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {

@@ -25,7 +25,6 @@ struct JSONScanData : public TableFunctionData {
 public:
 	JSONScanData();
 
-	void InitializeReaders(ClientContext &context, MultiFileBindData &bind_data);
 	void InitializeFormats();
 	void InitializeFormats(bool auto_detect);
 
@@ -79,13 +78,6 @@ public:
 	//! The current buffer capacity
 	idx_t buffer_capacity;
 
-	mutex lock;
-	//! One JSON reader per file
-	vector<optional_ptr<BufferedJSONReader>> json_readers;
-	//! Current file/batch index
-	atomic<idx_t> file_index;
-	atomic<idx_t> batch_index;
-
 	//! Current number of threads active
 	idx_t system_threads;
 	//! Whether we enable parallel scans (only if less files than threads)
@@ -101,8 +93,8 @@ public:
 
 public:
 	idx_t Read();
-	bool NextBuffer(JSONScanGlobalState &gstate);
-	idx_t ReadNext(JSONScanGlobalState &gstate);
+	// bool NextBuffer(JSONScanGlobalState &gstate);
+	// idx_t ReadNext(JSONScanGlobalState &gstate);
 	void ThrowTransformError(idx_t object_index, const string &error_message);
 
 	const MultiFileReaderData &GetReaderData() const;
@@ -115,17 +107,17 @@ public:
 		return scan_state;
 	}
 
+	bool TryInitializeScan(JSONScanGlobalState &gstate, BufferedJSONReader &reader);
+
 public:
 	//! Options when transforming the JSON to columnar data
 	JSONTransformOptions transform_options;
 
 private:
-	bool ReadNextBuffer(JSONScanGlobalState &gstate);
+	// bool ReadNextBuffer(JSONScanGlobalState &gstate);
 
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 
-	//! Must hold the lock
-	bool TryInitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, BufferedJSONReader &reader);
 	void PrepareReader(JSONScanGlobalState &gstate, BufferedJSONReader &reader);
 
 private:
@@ -135,9 +127,9 @@ private:
 
 struct JSONGlobalTableFunctionState : public GlobalTableFunctionState {
 public:
-	JSONGlobalTableFunctionState(ClientContext &context, TableFunctionInitInput &input);
+	JSONGlobalTableFunctionState(ClientContext &context, const MultiFileBindData &bind_data);
 	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
-	idx_t MaxThreads() const override;
+	// idx_t MaxThreads() const override;
 
 public:
 	JSONScanGlobalState state;
@@ -159,8 +151,8 @@ public:
 	static void AutoDetect(ClientContext &context, MultiFileBindData &bind_data, vector<LogicalType> &return_types,
 	                       vector<string> &names);
 
-	static double ScanProgress(ClientContext &context, const FunctionData *bind_data_p,
-	                           const GlobalTableFunctionState *global_state);
+	// static double ScanProgress(ClientContext &context, const FunctionData *bind_data_p,
+	//                            const GlobalTableFunctionState *global_state);
 	static OperatorPartitionData GetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
 	static unique_ptr<NodeStatistics> Cardinality(ClientContext &context, const FunctionData *bind_data);
 

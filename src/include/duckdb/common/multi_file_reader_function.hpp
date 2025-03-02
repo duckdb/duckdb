@@ -425,7 +425,7 @@ public:
 		auto result = make_uniq<MultiFileLocalState>();
 		result->is_parallel = true;
 		result->batch_index = 0;
-		result->local_state = OP::InitializeLocalState();
+		result->local_state = OP::InitializeLocalState(context, *gstate.global_state);
 
 		if (gstate.CanRemoveColumns()) {
 			result->all_columns.Initialize(context.client, gstate.scanned_types);
