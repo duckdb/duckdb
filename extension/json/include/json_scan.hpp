@@ -126,9 +126,7 @@ private:
 
 	//! Must hold the lock
 	bool TryInitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, BufferedJSONReader &reader);
-	void PrepareReader(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state, BufferedJSONReader &reader);
-	void TryIncrementFileIndex(JSONScanGlobalState &gstate) const;
-	bool IsParallel(JSONScanGlobalState &gstate) const;
+	void PrepareReader(JSONScanGlobalState &gstate, BufferedJSONReader &reader);
 
 private:
 	//! Scan state

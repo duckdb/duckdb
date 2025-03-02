@@ -61,9 +61,8 @@ public:
 		idx_t total_tuple_count = 0;
 		idx_t total_read_size = 0;
 
-		scan_state.scan_entire_file = true;
-		scan_state.current_reader = reader;
 		reader.Initialize(global_allocator, buffer_capacity);
+		reader.InitializeScan(scan_state, JSONFileReadType::SCAN_ENTIRE_FILE);
 		while (remaining != 0) {
 			allocator.Reset();
 			auto buffer_offset_before = scan_state.buffer_offset;

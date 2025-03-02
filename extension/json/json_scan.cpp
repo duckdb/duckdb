@@ -209,22 +209,6 @@ void JSONScanLocalState::ParseJSON(char *const json_start, const idx_t json_size
 	scan_state.current_reader->ParseJSON(scan_state, json_start, json_size, remaining);
 }
 
-void JSONScanLocalState::TryIncrementFileIndex(JSONScanGlobalState &gstate) const {
-	if (gstate.file_index < gstate.json_readers.size() &&
-	    RefersToSameObject(*scan_state.current_reader, *gstate.json_readers[gstate.file_index])) {
-		gstate.file_index++;
-	}
-}
-
-bool JSONScanLocalState::IsParallel(JSONScanGlobalState &gstate) const {
-	if (gstate.bind_data.file_list->GetTotalFileCount() >= gstate.system_threads) {
-		return false; // More files than threads, just parallelize over the files
-	}
-
-	// NDJSON can be read in parallel
-	return scan_state.current_reader->GetFormat() == JSONFormat::NEWLINE_DELIMITED;
-}
-
 bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
                                            BufferedJSONReader &reader) {
 	// try to initialize a scan in the given reader
@@ -233,41 +217,20 @@ bool JSONScanLocalState::TryInitializeScan(JSONScanGlobalState &gstate, JSONRead
 	// scenario 2 - seekable file - get the position from the file to read and return
 	// scenario 3 - entire file readers - if we are reading an entire file at once, do not do anything here, except for
 	// setting up the basics
+	auto read_type = JSONFileReadType::SCAN_PARTIAL;
 	if (!gstate.enable_parallel_scans || reader.GetFormat() != JSONFormat::NEWLINE_DELIMITED) {
-		// we are reading the entire file - we want to return true if nobody has read this file yet, otherwise return
-		// false
+		read_type = JSONFileReadType::SCAN_ENTIRE_FILE;
+	}
+	if (read_type == JSONFileReadType::SCAN_ENTIRE_FILE) {
 		if (gstate.file_is_assigned) {
-			// the file has already been assigned
 			return false;
 		}
-		scan_state.current_reader = reader;
-		scan_state.scan_entire_file = true;
-		scan_state.is_first_scan = true;
 		gstate.file_is_assigned = true;
-		return true;
 	}
-	// scenario 1 & 2
-	// this is a parallel read
-	scan_state.scan_entire_file = false;
-	if (scan_state.buffer_index.IsValid()) {
-		// we have already read a buffer as part of PrepareReader - just return and read it
-		scan_state.current_reader = reader;
-		scan_state.is_first_scan = true;
-		return true;
-	}
-	// we need to check if there is data available within our current reader
-	if (reader.PrepareBufferForRead(scan_state)) {
-		// there is data available! return
-		scan_state.current_reader = reader;
-		scan_state.is_first_scan = true;
-		return true;
-	}
-	scan_state.current_reader = nullptr;
-	return false;
+	return reader.InitializeScan(scan_state, read_type);
 }
 
-void JSONScanLocalState::PrepareReader(JSONScanGlobalState &gstate, JSONReaderScanState &scan_state,
-                                       BufferedJSONReader &reader) {
+void JSONScanLocalState::PrepareReader(JSONScanGlobalState &gstate, BufferedJSONReader &reader) {
 	gstate.file_is_assigned = false;
 	if (!gstate.enable_parallel_scans) {
 		// we are reading the entire file - we don't even need to open the file yet
@@ -301,7 +264,7 @@ bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {
 			return false; // No more files left
 		}
 		// prepare the reader so we can read from it
-		PrepareReader(gstate, scan_state, *gstate.json_readers[gstate.file_index]);
+		PrepareReader(gstate, *gstate.json_readers[gstate.file_index]);
 	}
 	return false;
 }

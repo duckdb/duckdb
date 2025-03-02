@@ -405,7 +405,7 @@ void JSONReaderScanState::ResetForNextBuffer() {
 	buffer_size = 0;
 	scan_count = 0;
 	is_last = false;
-	scan_entire_file = false;
+	file_read_type = JSONFileReadType::SCAN_PARTIAL;
 }
 
 data_ptr_t JSONReaderScanState::GetReconstructBuffer() {
@@ -774,7 +774,7 @@ void BufferedJSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 			// We reached the end of the buffer
 			if (!scan_state.is_last) {
 				// Last bit of data belongs to the next batch
-				if (scan_state.scan_entire_file) {
+				if (scan_state.file_read_type == JSONFileReadType::SCAN_ENTIRE_FILE) {
 					if (remaining > options.maximum_object_size) {
 						ThrowObjectSizeError(remaining);
 					}
@@ -825,12 +825,32 @@ void BufferedJSONReader::Initialize(Allocator &allocator, idx_t buffer_size) {
 	}
 }
 
+bool BufferedJSONReader::InitializeScan(JSONReaderScanState &scan_state, JSONFileReadType file_read_type) {
+	if (file_read_type == JSONFileReadType::SCAN_PARTIAL && GetFormat() != JSONFormat::NEWLINE_DELIMITED) {
+		throw InternalException("JSON Partial scans are only possible on ND json");
+	}
+	scan_state.current_reader = this;
+	scan_state.is_first_scan = true;
+	scan_state.file_read_type = file_read_type;
+	if (file_read_type == JSONFileReadType::SCAN_ENTIRE_FILE) {
+		// when initializing a single-file scan we don't need to read anything yet
+		return true;
+	}
+	// partial read
+	// we need to check if there is data available within our current reader
+	if (PrepareBufferForRead(scan_state)) {
+		// there is data available! return
+		return true;
+	}
+	return false;
+}
+
 idx_t BufferedJSONReader::Scan(JSONReaderScanState &scan_state) {
 	PrepareForScan(scan_state);
 	while (scan_state.scan_count == 0) {
 		while (scan_state.buffer_offset >= scan_state.buffer_size) {
 			// we have exhausted the current buffer
-			if (!scan_state.scan_entire_file) {
+			if (scan_state.file_read_type == JSONFileReadType::SCAN_PARTIAL) {
 				// we are not scanning the entire file
 				// return and fetch the next buffer from the global state
 				return 0;
@@ -853,7 +873,7 @@ void BufferedJSONReader::PrepareForScan(JSONReaderScanState &scan_state) {
 		return;
 	}
 	scan_state.is_first_scan = false;
-	if (scan_state.scan_entire_file) {
+	if (scan_state.file_read_type == JSONFileReadType::SCAN_ENTIRE_FILE) {
 		// first time scanning from this reader while scanning the entire file
 		// we need to initialize the reader
 		if (!scan_state.current_reader->IsInitialized()) {
@@ -900,7 +920,7 @@ bool BufferedJSONReader::ReadNextBuffer(JSONReaderScanState &scan_state) {
 void BufferedJSONReader::FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer,
                                                 idx_t buffer_index) {
 	idx_t readers = 1;
-	if (!scan_state.scan_entire_file) {
+	if (scan_state.file_read_type == JSONFileReadType::SCAN_PARTIAL) {
 		readers = scan_state.is_last ? 1 : 2;
 	}
 
@@ -934,7 +954,7 @@ void BufferedJSONReader::PrepareForReadInternal(JSONReaderScanState &scan_state)
 		scan_state.buffer_ptr = char_ptr_cast(scan_state.read_buffer.get());
 	}
 	// if we are not scanning the entire file - copy the remainder of the previous buffer into this buffer
-	if (!scan_state.scan_entire_file && scan_state.buffer_index.GetIndex() != 0) {
+	if (scan_state.file_read_type == JSONFileReadType::SCAN_PARTIAL && scan_state.buffer_index.GetIndex() != 0) {
 		CopyRemainderFromPreviousBuffer(scan_state);
 	}
 	// copy over the last bit of previous buffer
@@ -942,7 +962,7 @@ void BufferedJSONReader::PrepareForReadInternal(JSONReaderScanState &scan_state)
 		memcpy(scan_state.buffer_ptr, scan_state.GetReconstructBuffer(), scan_state.prev_buffer_remainder);
 	}
 }
-bool BufferedJSONReader::PrepareBufferForRead(JSONReaderScanState &scan_state, JSONFilePrepare file_prepare) {
+bool BufferedJSONReader::PrepareBufferForRead(JSONReaderScanState &scan_state) {
 	if (auto_detect_data.IsSet()) {
 		// we have auto-detected data - re-use the buffer
 		if (next_buffer_index != 0 || auto_detect_data_size == 0 || scan_state.prev_buffer_remainder != 0) {
@@ -960,7 +980,7 @@ bool BufferedJSONReader::PrepareBufferForRead(JSONReaderScanState &scan_state, J
 		auto_detect_data_size = 0;
 		return true;
 	}
-	if (!scan_state.scan_entire_file && file_prepare == JSONFilePrepare::CAN_READ_LAZILY && GetFileHandle().CanSeek()) {
+	if (scan_state.file_read_type == JSONFileReadType::SCAN_PARTIAL && GetFileHandle().CanSeek()) {
 		// we can seek and are doing a parallel read - we don't need to read immediately yet
 		// we only need to prepare the read now
 		if (!PrepareBufferSeek(scan_state)) {

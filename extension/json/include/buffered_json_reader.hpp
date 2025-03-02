@@ -112,7 +112,7 @@ public:
 	}
 };
 
-enum class JSONFilePrepare { READ_IMMEDIATELY, CAN_READ_LAZILY };
+enum class JSONFileReadType { SCAN_ENTIRE_FILE, SCAN_PARTIAL };
 
 struct JSONReaderScanState {
 	explicit JSONReaderScanState(ClientContext &context, Allocator &global_allocator,
@@ -128,7 +128,7 @@ struct JSONReaderScanState {
 	optional_idx buffer_index;
 	//! Whether or not we are scanning the entire file
 	//! If we are scanning the entire file we don't share reads between threads and just read the file until we are done
-	bool scan_entire_file = false;
+	JSONFileReadType file_read_type = JSONFileReadType::SCAN_PARTIAL;
 	// Data for reading (if we have postponed reading)
 	//! Buffer (if we have one)
 	AllocatedData read_buffer;
@@ -207,14 +207,14 @@ public:
 	bool HasThrown();
 
 	void Initialize(Allocator &allocator, idx_t buffer_size);
+	bool InitializeScan(JSONReaderScanState &state, JSONFileReadType file_read_type);
 	void ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
 	               const idx_t remaining);
 	void ThrowTransformError(JSONReaderScanState &scan_state, idx_t object_index, const string &error_message);
 	void ParseNextChunk(JSONReaderScanState &scan_state);
 	idx_t Scan(JSONReaderScanState &scan_state);
 	bool ReadNextBuffer(JSONReaderScanState &scan_state);
-	bool PrepareBufferForRead(JSONReaderScanState &scan_state,
-	                          JSONFilePrepare file_prepare = JSONFilePrepare::CAN_READ_LAZILY);
+	bool PrepareBufferForRead(JSONReaderScanState &scan_state);
 
 	//! Scan progress
 	double GetProgress() const;
