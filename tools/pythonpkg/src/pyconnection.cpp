@@ -488,8 +488,13 @@ shared_ptr<DuckDBPyConnection> DuckDBPyConnection::RegisterAggregateUDF(
 	}
 
 	// TODO: figure out strange c++ template and python co-op issue.
+	CombineFuncPtr<double> aggregate_combine_function = CreateCombineUDF(name, udf, parameters_p, return_type_p,
+	                                                                        type == PythonUDFType::ARROW,
+	                                       null_handling, exception_handling, side_effects);
 	AggregateFunction aggregate_function = UDFWrapper::CreateAggregateFunction<UDFSumFunction, double, double, double>(
-	    "udf_sum_double", UDFSumFunction::Combine<double, UDFSumFunction>);
+	    "udf_sum_double", aggregate_combine_function);
+	//AggregateFunction aggregate_function = UDFWrapper::CreateAggregateFunction<UDFSumFunction, double, double, double>(
+	//    "udf_sum_double", UDFSumFunction::Combine<double, UDFSumFunction>);
 	// UDFWrapper::CreateAggregateFunction<UDFSumFunction, double, double, double>("udf_sum_double");
 
 	/*
