@@ -98,11 +98,21 @@ unique_ptr<DuckDBPyRelation> DuckDBPyRelation::Project(const py::args &args, con
 		vector<unique_ptr<ParsedExpression>> expressions;
 		for (auto arg : args) {
 			shared_ptr<DuckDBPyExpression> py_expr;
-			if (!py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
-				throw InvalidInputException("Please provide arguments of type Expression!");
+
+			if (py::isinstance<py::str>(arg)) {
+				string expr_string = py::str(arg);
+				auto parsed_exprs =
+				    Parser::ParseExpressionList(expr_string, rel->context->GetContext()->GetParserOptions());
+				expressions.insert(expressions.end(), std::make_move_iterator(parsed_exprs.begin()),
+				                   std::make_move_iterator(parsed_exprs.end()));
+			} else if (py::try_cast<shared_ptr<DuckDBPyExpression>>(arg, py_expr)) {
+				auto expr = py_expr->GetExpression().Copy();
+				expressions.push_back(std::move(expr));
+			} else {
+				string actual_type = py::str(arg.get_type());
+				throw InvalidInputException("Expected argument of type Expression or str, received '%s' instead",
+				                            actual_type);
 			}
-			auto expr = py_expr->GetExpression().Copy();
-			expressions.push_back(std::move(expr));
 		}
 		vector<string> empty_aliases;
 		if (groups.empty()) {
