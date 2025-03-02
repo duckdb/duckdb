@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// buffered_json_reader.hpp
+// json_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,16 +21,15 @@
 
 namespace duckdb {
 struct JSONScanGlobalState;
-class BufferedJSONReader;
+class JSONReader;
 
 struct JSONBufferHandle {
 public:
-	JSONBufferHandle(BufferedJSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData &&buffer,
-	                 idx_t buffer_size);
+	JSONBufferHandle(JSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData &&buffer, idx_t buffer_size);
 
 public:
 	//! The reader this buffer comes from
-	BufferedJSONReader &reader;
+	JSONReader &reader;
 	//! Buffer index (within same file)
 	const idx_t buffer_index;
 
@@ -141,7 +140,7 @@ struct JSONReaderScanState {
 	yyjson_val *values[STANDARD_VECTOR_SIZE];
 	optional_ptr<JSONBufferHandle> current_buffer_handle;
 	//! Current buffer read info
-	optional_ptr<BufferedJSONReader> current_reader;
+	optional_ptr<JSONReader> current_reader;
 	char *buffer_ptr = nullptr;
 	idx_t buffer_size = 0;
 	idx_t buffer_offset = 0;
@@ -168,9 +167,9 @@ public:
 	void ClearBufferHandle();
 };
 
-class BufferedJSONReader : public BaseFileReader {
+class JSONReader : public BaseFileReader {
 public:
-	BufferedJSONReader(ClientContext &context, JSONReaderOptions options, string file_name);
+	JSONReader(ClientContext &context, JSONReaderOptions options, string file_name);
 
 	void OpenJSONFile();
 	void CloseHandle();

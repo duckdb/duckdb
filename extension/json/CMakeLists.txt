@@ -6,7 +6,7 @@ include_directories(include)
 add_subdirectory(json_functions)
 
 set(JSON_EXTENSION_FILES
-    buffered_json_reader.cpp
+    json_reader.cpp
     json_extension.cpp
     json_common.cpp
     json_enums.cpp

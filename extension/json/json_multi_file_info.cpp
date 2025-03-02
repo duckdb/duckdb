@@ -401,7 +401,7 @@ unique_ptr<LocalTableFunctionState> JSONMultiFileInfo::InitializeLocalState(Exec
 }
 
 double JSONMultiFileInfo::GetProgressInFile(ClientContext &context, const BaseFileReader &reader) {
-	auto &json_reader = reader.Cast<BufferedJSONReader>();
+	auto &json_reader = reader.Cast<JSONReader>();
 	return json_reader.GetProgress();
 }
 
@@ -410,7 +410,7 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
                                                            const MultiFileBindData &bind_data_p) {
 	auto &json_data = bind_data_p.bind_data->Cast<JSONScanData>();
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
-	auto reader = make_shared_ptr<BufferedJSONReader>(context, json_data.options, union_data.GetFileName());
+	auto reader = make_shared_ptr<JSONReader>(context, json_data.options, union_data.GetFileName());
 	reader->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(union_data.names, union_data.types);
 	return std::move(reader);
 }
@@ -420,7 +420,7 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
                                                            const MultiFileBindData &bind_data) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
-	auto reader = make_shared_ptr<BufferedJSONReader>(context, json_data.options, filename);
+	auto reader = make_shared_ptr<JSONReader>(context, json_data.options, filename);
 	reader->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
 	return std::move(reader);
 }
@@ -432,7 +432,7 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
 
 void JSONMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader_p,
                                        GlobalTableFunctionState &gstate_p) {
-	auto &reader = reader_p.Cast<BufferedJSONReader>();
+	auto &reader = reader_p.Cast<JSONReader>();
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	if (gstate.enable_parallel_scans) {
 		// if we are doing parallel scans we need to open the file here
@@ -442,14 +442,14 @@ void JSONMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &r
 
 bool JSONMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
                                           GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
-	auto &json_reader = reader->Cast<BufferedJSONReader>();
+	auto &json_reader = reader->Cast<JSONReader>();
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = lstate_p.Cast<JSONLocalTableFunctionState>().state;
 	lstate.GetScanState().ResetForNextBuffer();
-	return lstate.TryInitializeScan(gstate, reader->Cast<BufferedJSONReader>());
+	return lstate.TryInitializeScan(gstate, reader->Cast<JSONReader>());
 }
 
-void ReadJSONFunction(ClientContext &context, BufferedJSONReader &json_reader, JSONScanGlobalState &gstate,
+void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanGlobalState &gstate,
                       JSONScanLocalState &lstate, DataChunk &output) {
 	auto &scan_state = lstate.GetScanState();
 	D_ASSERT(RefersToSameObject(json_reader, *scan_state.current_reader));
@@ -491,7 +491,7 @@ void ReadJSONFunction(ClientContext &context, BufferedJSONReader &json_reader, J
 	}
 }
 
-void ReadJSONObjectsFunction(ClientContext &context, BufferedJSONReader &json_reader, JSONScanGlobalState &gstate,
+void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JSONScanGlobalState &gstate,
                              JSONScanLocalState &lstate, DataChunk &output) {
 	// Fetch next lines
 	auto &scan_state = lstate.GetScanState();
@@ -523,7 +523,7 @@ void JSONMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader, Glo
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
 	auto &json_data = gstate.bind_data.bind_data->Cast<JSONScanData>();
-	auto &json_reader = reader.Cast<BufferedJSONReader>();
+	auto &json_reader = reader.Cast<JSONReader>();
 	switch (json_data.options.type) {
 	case JSONScanType::READ_JSON:
 		ReadJSONFunction(context, json_reader, gstate, lstate, output);

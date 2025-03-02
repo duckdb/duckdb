@@ -52,7 +52,7 @@ public:
 	                             JSONStructureNode &node, const idx_t file_idx, ArenaAllocator &allocator,
 	                             Vector &string_vector, idx_t remaining, MutableDateFormatMap &date_format_map) {
 		auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
-		auto json_reader = make_shared_ptr<BufferedJSONReader>(context, json_data.options, files[file_idx]);
+		auto json_reader = make_shared_ptr<JSONReader>(context, json_data.options, files[file_idx]);
 		if (bind_data.union_readers[file_idx]) {
 			throw InternalException("Union data already set");
 		}

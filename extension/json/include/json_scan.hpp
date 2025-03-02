@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "buffered_json_reader.hpp"
+#include "json_reader.hpp"
 #include "duckdb/common/multi_file_reader.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/pair.hpp"
@@ -103,7 +103,7 @@ public:
 		return scan_state;
 	}
 
-	bool TryInitializeScan(JSONScanGlobalState &gstate, BufferedJSONReader &reader);
+	bool TryInitializeScan(JSONScanGlobalState &gstate, JSONReader &reader);
 
 public:
 	//! Options when transforming the JSON to columnar data
