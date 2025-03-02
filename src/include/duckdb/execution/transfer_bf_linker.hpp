@@ -13,9 +13,12 @@
 #include "duckdb/planner/operator/logical_create_bf.hpp"
 
 namespace duckdb {
-class PredicateTransferBFLinker : public LogicalOperatorVisitor {
+
+//! This class is to link each LogicalUseBF with its LogicalCreateBF. It uses the FilterPlan information instead of
+//! shared ptr to link.
+class TransferBFLinker : public LogicalOperatorVisitor {
 public:
-	PredicateTransferBFLinker() : state(State::COLLECT_BF_CREATORS) {
+	TransferBFLinker() : state(State::COLLECT_BF_CREATORS) {
 	}
 
 	void LinkBloomFilters(LogicalOperator &op);

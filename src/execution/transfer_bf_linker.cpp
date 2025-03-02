@@ -1,8 +1,8 @@
-#include "duckdb/execution/predicate_transfer_bf_linker.hpp"
+#include "duckdb/execution/transfer_bf_linker.hpp"
 
 namespace duckdb {
 
-void PredicateTransferBFLinker::LinkBloomFilters(LogicalOperator &op) {
+void TransferBFLinker::LinkBloomFilters(LogicalOperator &op) {
 	state = State::COLLECT_BF_CREATORS;
 	VisitOperator(op);
 
@@ -10,7 +10,7 @@ void PredicateTransferBFLinker::LinkBloomFilters(LogicalOperator &op) {
 	VisitOperator(op);
 }
 
-void PredicateTransferBFLinker::VisitOperator(LogicalOperator &op) {
+void TransferBFLinker::VisitOperator(LogicalOperator &op) {
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_CREATE_BF: {
 		VisitOperatorChildren(op);

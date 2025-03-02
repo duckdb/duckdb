@@ -19,7 +19,7 @@ add_library_unity(
   physical_operator.cpp
   physical_plan_generator.cpp
   radix_partitioned_hashtable.cpp
-  predicate_transfer_bf_linker.cpp)
+  transfer_bf_linker.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_execution>
     PARENT_SCOPE)
