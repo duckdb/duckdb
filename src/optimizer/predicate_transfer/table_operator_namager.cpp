@@ -111,6 +111,25 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
                                                     bool can_add_mark) {
 	LogicalOperator *op = &plan;
 
+	// TODO: Currently, predicate transfer does not support the following operators
+	switch (op->type) {
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+		joins.clear();
+		table_operators.clear();
+		return;
+	}
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		auto &join = op->Cast<LogicalComparisonJoin>();
+		if (join.join_type == JoinType::MARK) {
+			joins.clear();
+			table_operators.clear();
+			return;
+		}
+	}
+	default:
+		break;
+	}
+
 	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			LogicalOperator *child = op->children[0].get();
