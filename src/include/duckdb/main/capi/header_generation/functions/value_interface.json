@@ -1276,6 +1276,23 @@
                 },
                 "return_value": "The child as a duckdb_value."
             }
+        },
+        {
+            "name": "duckdb_to_sql_string",
+            "return_type": "char *",
+            "params": [
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Returns the SQL string representation of the given value.\n\n",
+                "param_comments": {
+                    "value": "A duckdb_value."
+                },
+                "return_value": "The SQL string representation as a null-terminated string. The result must be freed with `duckdb_free`."
+            }
         }
     ]
 }
