@@ -765,6 +765,9 @@ bool JSONReader::CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state
 		// Just a newline
 		return false;
 	}
+	if (prev_object_size > options.maximum_object_size) {
+		ThrowObjectSizeError(prev_object_size);
+	}
 	scan_state.prev_buffer_remainder = prev_object_size;
 	return true;
 }
