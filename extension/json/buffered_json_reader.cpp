@@ -221,6 +221,8 @@ void BufferedJSONReader::Reset() {
 	next_buffer_index = 0;
 	buffer_map.clear();
 	buffer_line_or_object_counts.clear();
+	auto_detect_data.Reset();
+	auto_detect_data_size = 0;
 	if (HasFileHandle()) {
 		file_handle->Reset();
 	}
@@ -679,28 +681,35 @@ void BufferedJSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const 
 	scan_state.values[scan_state.scan_count] = doc->root;
 }
 
-void BufferedJSONReader::AutoDetect(JSONReaderScanState &scan_state) {
-	if (scan_state.buffer_size == 0) {
+void BufferedJSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
+	// read the first buffer from the file
+	auto read_buffer = allocator.Allocate(buffer_capacity);
+	idx_t read_size = 0;
+	auto buffer_ptr = char_ptr_cast(read_buffer.get());
+	if (!file_handle->Read(buffer_ptr, read_size, buffer_capacity, false)) {
+		// could not read anything
 		return;
 	}
-
-	auto format_and_record_type =
-	    DetectFormatAndRecordType(scan_state.buffer_ptr, scan_state.buffer_size, scan_state.allocator.GetYYAlc());
+	if (read_size == 0) {
+		// file is empty - skip
+		return;
+	}
+	// perform auto-detection over the data we just read
+	JSONAllocator json_allocator(allocator);
+	auto format_and_record_type = DetectFormatAndRecordType(buffer_ptr, read_size, json_allocator.GetYYAlc());
 	if (GetFormat() == JSONFormat::AUTO_DETECT) {
 		SetFormat(format_and_record_type.first);
 	}
 	if (GetRecordType() == JSONRecordType::AUTO_DETECT) {
 		SetRecordType(format_and_record_type.second);
 	}
-	if (GetFormat() == JSONFormat::ARRAY) {
-		SkipOverArrayStart(scan_state);
-	}
-
 	if (!options.ignore_errors && options.record_type == JSONRecordType::RECORDS &&
 	    GetRecordType() != JSONRecordType::RECORDS) {
-		ThrowTransformError(scan_state.buffer_index.GetIndex(), 0,
-		                    "Expected records, detected non-record JSON instead.");
+		ThrowTransformError(0, 0, "Expected records, detected non-record JSON instead.");
 	}
+	// store the buffer in the file so it can be re-used by the first reader of the file
+	auto_detect_data = std::move(read_buffer);
+	auto_detect_data_size = read_size;
 }
 
 void BufferedJSONReader::ThrowObjectSizeError(const idx_t object_size) {
@@ -800,7 +809,7 @@ void BufferedJSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 	}
 }
 
-void BufferedJSONReader::InitializeScan(JSONReaderScanState &scan_state) {
+void BufferedJSONReader::Initialize(Allocator &allocator, idx_t buffer_size) {
 	if (initialized) {
 		throw InternalException("JSON InitializeScan called twice on the same reader without resetting");
 	}
@@ -812,17 +821,8 @@ void BufferedJSONReader::InitializeScan(JSONReaderScanState &scan_state) {
 	// Auto-detect if we haven't yet done this during the bind
 	if (options.record_type == JSONRecordType::AUTO_DETECT || GetFormat() == JSONFormat::AUTO_DETECT) {
 		// We have to detect the JSON format
-		// read a buffer
-		if (!PrepareBufferForRead(scan_state, JSONFilePrepare::READ_IMMEDIATELY)) {
-			return;
-		}
-
-		AutoDetect(scan_state);
-		if (scan_state.buffer_index.IsValid() && scan_state.buffer_size != 0) {
-			FinalizeBufferInternal(scan_state, scan_state.read_buffer, scan_state.buffer_index.GetIndex());
-		}
+		AutoDetect(allocator, buffer_size);
 	}
-	scan_state.current_reader = this;
 }
 
 idx_t BufferedJSONReader::Scan(JSONReaderScanState &scan_state) {
@@ -857,7 +857,7 @@ void BufferedJSONReader::PrepareForScan(JSONReaderScanState &scan_state) {
 		// first time scanning from this reader while scanning the entire file
 		// we need to initialize the reader
 		if (!scan_state.current_reader->IsInitialized()) {
-			scan_state.current_reader->InitializeScan(scan_state);
+			scan_state.current_reader->Initialize(scan_state.global_allocator, scan_state.buffer_capacity);
 		}
 		return;
 	}
@@ -943,6 +943,23 @@ void BufferedJSONReader::PrepareForReadInternal(JSONReaderScanState &scan_state)
 	}
 }
 bool BufferedJSONReader::PrepareBufferForRead(JSONReaderScanState &scan_state, JSONFilePrepare file_prepare) {
+	if (auto_detect_data.IsSet()) {
+		// we have auto-detected data - re-use the buffer
+		if (next_buffer_index != 0 || auto_detect_data_size == 0 || scan_state.prev_buffer_remainder != 0) {
+			throw InternalException("Invalid re-use of auto-detect data in JSON");
+		}
+		scan_state.buffer_index = GetBufferIndex();
+		scan_state.buffer_size = auto_detect_data_size;
+		scan_state.read_buffer = std::move(auto_detect_data);
+		scan_state.buffer_ptr = char_ptr_cast(scan_state.read_buffer.get());
+		scan_state.prev_buffer_remainder = 0;
+		scan_state.needs_to_read = false;
+		scan_state.is_last = false;
+		scan_state.buffer_offset = 0;
+		auto_detect_data.Reset();
+		auto_detect_data_size = 0;
+		return true;
+	}
 	if (!scan_state.scan_entire_file && file_prepare == JSONFilePrepare::CAN_READ_LAZILY && GetFileHandle().CanSeek()) {
 		// we can seek and are doing a parallel read - we don't need to read immediately yet
 		// we only need to prepare the read now

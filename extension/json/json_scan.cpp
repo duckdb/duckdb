@@ -276,7 +276,7 @@ void JSONScanLocalState::PrepareReader(JSONScanGlobalState &gstate, JSONReaderSc
 	// prepare a reader for reading
 	// scenario 1 & 2 -> auto detect
 	// scenario 3 -> nothing
-	reader.InitializeScan(scan_state);
+	reader.Initialize(gstate.allocator, gstate.buffer_capacity);
 }
 
 bool JSONScanLocalState::ReadNextBuffer(JSONScanGlobalState &gstate) {

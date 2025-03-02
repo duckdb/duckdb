@@ -53,15 +53,17 @@ public:
 	                             idx_t remaining, MutableDateFormatMap &date_format_map) {
 		auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
 		auto &reader = bind_data.union_readers[file_idx]->reader->Cast<BufferedJSONReader>();
+		auto &global_allocator = Allocator::Get(context);
 		idx_t buffer_capacity = json_data.options.maximum_object_size * 2;
-		JSONReaderScanState scan_state(context, Allocator::Get(context), buffer_capacity);
+		JSONReaderScanState scan_state(context, global_allocator, buffer_capacity);
 		auto &options = json_data.options;
 		// Read and detect schema
 		idx_t total_tuple_count = 0;
 		idx_t total_read_size = 0;
 
 		scan_state.scan_entire_file = true;
-		reader.InitializeScan(scan_state);
+		scan_state.current_reader = reader;
+		reader.Initialize(global_allocator, buffer_capacity);
 		while (remaining != 0) {
 			allocator.Reset();
 			auto buffer_offset_before = scan_state.buffer_offset;

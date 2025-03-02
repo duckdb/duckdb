@@ -216,7 +216,7 @@ public:
 	void ThrowTransformError(JSONReaderScanState &scan_state, idx_t object_index, const string &error_message);
 	void ParseNextChunk(JSONReaderScanState &scan_state);
 	void ThrowObjectSizeError(const idx_t object_size);
-	void InitializeScan(JSONReaderScanState &scan_state);
+	void Initialize(Allocator &allocator, idx_t buffer_size);
 	idx_t Scan(JSONReaderScanState &scan_state);
 	bool ReadNextBuffer(JSONReaderScanState &scan_state);
 	void PrepareForScan(JSONReaderScanState &scan_state);
@@ -231,7 +231,7 @@ public:
 
 private:
 	void SkipOverArrayStart(JSONReaderScanState &scan_state);
-	void AutoDetect(JSONReaderScanState &scan_state);
+	void AutoDetect(Allocator &allocator, idx_t buffer_size);
 	bool CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state);
 	void FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer, idx_t buffer_index);
 	void PrepareForReadInternal(JSONReaderScanState &scan_state);
@@ -260,6 +260,10 @@ private:
 	vector<int64_t> buffer_line_or_object_counts;
 	//! Whether any of the reading threads has thrown an error
 	bool thrown;
+
+	//! If we have auto-detected, this is the buffer read by the auto-detection
+	AllocatedData auto_detect_data;
+	idx_t auto_detect_data_size = 0;
 
 public:
 	mutable mutex lock;
