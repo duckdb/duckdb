@@ -317,7 +317,7 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 		}
 	}
 	auto files = bind_data.file_list->GetAllFiles();
-	for(idx_t i = 0; i < bind_data.union_readers.size(); i++) {
+	for (idx_t i = 0; i < bind_data.union_readers.size(); i++) {
 		auto &union_data = bind_data.union_readers[i];
 		if (!union_data) {
 			union_data = make_uniq<BaseUnionData>(files[i]);
@@ -451,11 +451,8 @@ bool JSONMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<Bas
 	return lstate.TryInitializeScan(gstate, reader->Cast<BufferedJSONReader>());
 }
 
-void JSONMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
-                             LocalTableFunctionState &local_state, DataChunk &output) {
-	auto &json_reader = reader.Cast<BufferedJSONReader>();
-	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
-	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
+void ReadJSONFunction(ClientContext &context, BufferedJSONReader &json_reader, JSONScanGlobalState &gstate,
+                      JSONScanLocalState &lstate, DataChunk &output) {
 	auto &scan_state = lstate.GetScanState();
 
 	const auto count = json_reader.Scan(scan_state);
@@ -495,13 +492,58 @@ void JSONMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader, Glo
 	}
 }
 
+void ReadJSONObjectsFunction(ClientContext &context, BufferedJSONReader &json_reader, JSONScanGlobalState &gstate,
+                             JSONScanLocalState &lstate, DataChunk &output) {
+	// Fetch next lines
+	auto &scan_state = lstate.GetScanState();
+
+	const auto count = json_reader.Scan(scan_state);
+	const auto units = scan_state.units;
+	const auto objects = scan_state.values;
+
+	if (!gstate.names.empty()) {
+		// Create the strings without copying them
+		const auto col_idx = gstate.column_ids[0];
+		auto strings = FlatVector::GetData<string_t>(output.data[col_idx]);
+		auto &validity = FlatVector::Validity(output.data[col_idx]);
+		for (idx_t i = 0; i < count; i++) {
+			if (objects[i]) {
+				strings[i] = string_t(units[i].pointer, units[i].size);
+			} else {
+				validity.SetInvalid(i);
+			}
+		}
+	}
+
+	output.SetCardinality(count);
+}
+
+void JSONMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
+                             LocalTableFunctionState &local_state, DataChunk &output) {
+	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
+	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
+	auto &json_data = gstate.bind_data.bind_data->Cast<JSONScanData>();
+	auto &json_reader = reader.Cast<BufferedJSONReader>();
+	switch (json_data.options.type) {
+	case JSONScanType::READ_JSON:
+		ReadJSONFunction(context, json_reader, gstate, lstate, output);
+		break;
+	case JSONScanType::READ_JSON_OBJECTS:
+		ReadJSONObjectsFunction(context, json_reader, gstate, lstate, output);
+		break;
+	default:
+		throw InternalException("Unsupported scan type for JSONMultiFileInfo::Scan");
+	}
+}
+
 void JSONMultiFileInfo::FinishFile(ClientContext &context, GlobalTableFunctionState &global_state,
                                    BaseFileReader &reader) {
 	auto &gstate = global_state.Cast<JSONGlobalTableFunctionState>().state;
 	gstate.file_is_assigned = false;
 }
 
-void JSONMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state, LocalTableFunctionState &local_state) {
+void JSONMultiFileInfo::FinishReading(ClientContext &context, GlobalTableFunctionState &global_state,
+                                      LocalTableFunctionState &local_state) {
 	auto &lstate = local_state.Cast<JSONLocalTableFunctionState>().state;
 	lstate.GetScanState().ResetForNextBuffer();
 }

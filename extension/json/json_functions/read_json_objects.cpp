@@ -7,9 +7,8 @@
 namespace duckdb {
 
 static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-	throw NotImplementedException("ReadJSONObjectsFunction not implemented");
-	// auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
-	// auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
+	auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
+	auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
 	//
 	// // Fetch next lines
 	// const auto count = lstate.ReadNext(gstate);
@@ -38,42 +37,32 @@ static void ReadJSONObjectsFunction(ClientContext &context, TableFunctionInput &
 	// }
 }
 
-TableFunction GetReadJSONObjectsTableFunction(bool list_parameter, shared_ptr<JSONScanInfo> function_info) {
-	auto parameter = list_parameter ? LogicalType::LIST(LogicalType::VARCHAR) : LogicalType::VARCHAR;
-	TableFunction table_function({parameter}, ReadJSONObjectsFunction,
-	                             MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileBind,
-	                             JSONGlobalTableFunctionState::Init, JSONLocalTableFunctionState::Init);
+TableFunction GetReadJSONObjectsTableFunction(string name, shared_ptr<JSONScanInfo> function_info) {
+	MultiFileReaderFunction<JSONMultiFileInfo> table_function(std::move(name));
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.function_info = std::move(function_info);
-
-	return table_function;
+	return static_cast<TableFunction>(table_function);
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONObjectsFunction() {
-	TableFunctionSet function_set("read_json_objects");
 	auto function_info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::AUTO_DETECT,
 	                                                   JSONRecordType::RECORDS);
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
-	return function_set;
+	auto table_function = GetReadJSONObjectsTableFunction("read_json_objects", std::move(function_info));
+	return MultiFileReader::CreateFunctionSet(std::move(table_function));
 }
 
 TableFunctionSet JSONFunctions::GetReadNDJSONObjectsFunction() {
-	TableFunctionSet function_set("read_ndjson_objects");
 	auto function_info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::NEWLINE_DELIMITED,
 	                                                   JSONRecordType::RECORDS);
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
-	return function_set;
+	auto table_function = GetReadJSONObjectsTableFunction("read_ndjson_objects", std::move(function_info));
+	return MultiFileReader::CreateFunctionSet(std::move(table_function));
 }
 
 TableFunctionSet JSONFunctions::GetReadJSONObjectsAutoFunction() {
-	TableFunctionSet function_set("read_json_objects_auto");
 	auto function_info = make_shared_ptr<JSONScanInfo>(JSONScanType::READ_JSON_OBJECTS, JSONFormat::AUTO_DETECT,
 	                                                   JSONRecordType::RECORDS);
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(false, function_info));
-	function_set.AddFunction(GetReadJSONObjectsTableFunction(true, function_info));
-	return function_set;
+	auto table_function = GetReadJSONObjectsTableFunction("read_json_objects_auto", std::move(function_info));
+	return MultiFileReader::CreateFunctionSet(std::move(table_function));
 }
 
 } // namespace duckdb
