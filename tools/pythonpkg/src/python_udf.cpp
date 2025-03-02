@@ -414,7 +414,7 @@ static CombineFuncPtr<double> CreateCombineFunction(PyObject *function, PythonEx
 			python_results[row] = ret;
 		}
 
-		target = TransformPythonValue(python_results[0], LogicalTypeId::DOUBLE);
+		target = TransformPythonValue(python_results[0], duckdb::LogicalType(LogicalTypeId::DOUBLE), false);
 	};
 	return func;
 }
