@@ -339,10 +339,6 @@ void ReplaceWithBoundReference(unique_ptr<Expression> &expr) {
 }
 
 FilterPushdownResult FilterCombiner::TryPushdownGenericExpression(LogicalGet &get, Expression &expr) {
-	if (expr.IsVolatile() || expr.CanThrow()) {
-		// we cannot push down volatile or throwing expressions
-		return FilterPushdownResult::NO_PUSHDOWN;
-	}
 	if (!get.function.pushdown_expression) {
 		// the scan does not support pushing down generic expressions
 		return FilterPushdownResult::NO_PUSHDOWN;

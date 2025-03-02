@@ -69,7 +69,12 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 			// this has already been (partially) pushed down - skip
 			continue;
 		}
-		pushdown_result = combiner.TryPushdownGenericExpression(get, *filters[i]->filter);
+		auto &expr = *filters[i]->filter;
+		if ((expr.IsVolatile() || expr.CanThrow()) && (filters.size() > 1 || !get.table_filters.filters.empty())) {
+			// we cannot push down volatile or throwing expressions if there are multiple filters
+			continue;
+		}
+		pushdown_result = combiner.TryPushdownGenericExpression(get, expr);
 		if (pushdown_result == FilterPushdownResult::PUSHED_DOWN_FULLY) {
 			filters.erase_at(i);
 			pushdown_results.erase_at(i);

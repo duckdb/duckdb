@@ -133,7 +133,7 @@ logical_opt	<!REGEX>:.*FILTER.*
 query II
 EXPLAIN SELECT i FROM tablinho where i like 'bl_a%'
 ----
-logical_opt	<!REGEX>:.*FILTER.*
+logical_opt	<REGEX>:.*FILTER.*
 
 query II
 EXPLAIN SELECT i FROM tablinho where i like '%bla'

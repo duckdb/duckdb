@@ -194,7 +194,7 @@ SELECT * FROM integers WHERE concat(a=1, b=1)='truetrue' OR a=2 ORDER by a
 query II
 EXPLAIN SELECT * FROM strings WHERE s>'BBBB' OR s LIKE '%AAAAAAAAAAAAAAA%' ORDER BY s
 ----
-physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query I
 SELECT * FROM strings WHERE s>'BBBB' OR s LIKE '%AAAAAAAAAAAAAAA%' ORDER BY s
@@ -207,7 +207,7 @@ CCCC
 query II
 EXPLAIN SELECT * FROM integers WHERE a=1 OR (CASE WHEN a%2=0 THEN true ELSE false END)
 ----
-physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query II
 SELECT * FROM integers WHERE a=1 OR (CASE WHEN a%2=0 THEN true ELSE false END)
@@ -234,7 +234,7 @@ INSERT INTO integers VALUES (NULL, NULL)
 query II
 EXPLAIN SELECT * FROM integers WHERE a=1 OR a IS NULL ORDER BY a
 ----
-physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query II
 SELECT * FROM integers WHERE a=1 OR a IS NULL ORDER BY a
@@ -245,7 +245,7 @@ NULL	NULL
 query II
 EXPLAIN SELECT * FROM integers WHERE a=1 OR a IS NOT NULL
 ----
-physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query II
 SELECT * FROM integers WHERE a=1 OR a IS NOT NULL
@@ -260,7 +260,7 @@ SELECT * FROM integers WHERE a=1 OR a IS NOT NULL
 query II
 EXPLAIN SELECT * FROM integers WHERE a!=1 OR a IS NULL ORDER BY a
 ----
-physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query II
 SELECT * FROM integers WHERE a!=1 OR a IS NULL ORDER BY a
@@ -275,7 +275,7 @@ NULL	NULL
 query II
 EXPLAIN SELECT * FROM integers WHERE a!=1 OR a IS NOT NULL ORDER BY a
 ----
-physical_plan	<!REGEX>:.*SEQ_SCAN.*Filters:.*
+physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query II
 SELECT * FROM integers WHERE a!=1 OR a IS NOT NULL ORDER BY a
