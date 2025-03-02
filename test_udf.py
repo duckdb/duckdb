@@ -32,7 +32,7 @@ con.execute("""
 # Insert some sample data
 
 def test_python_udf(d1, d2):
-    return d1+d2 + d1+ d2;
+    return d1 + d2 + d1 + d2 + d1 + d2;
 
 con.execute("""
         INSERT INTO sales (id, category, amount) VALUES
