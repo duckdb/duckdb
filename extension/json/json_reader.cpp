@@ -437,13 +437,6 @@ void JSONReaderScanState::ResetForNextBuffer() {
 	file_read_type = JSONFileReadType::SCAN_PARTIAL;
 }
 
-data_ptr_t JSONReaderScanState::GetReconstructBuffer() {
-	if (!reconstruct_buffer.IsSet()) {
-		reconstruct_buffer = global_allocator.Allocate(buffer_capacity);
-	}
-	return reconstruct_buffer.get();
-}
-
 static inline void SkipWhitespace(const char *buffer_ptr, idx_t &buffer_offset, const idx_t &buffer_size) {
 	for (; buffer_offset != buffer_size; buffer_offset++) {
 		if (!StringUtil::CharacterIsSpace(buffer_ptr[buffer_offset])) {
@@ -757,23 +750,22 @@ bool JSONReader::CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state
 
 	// First we find the newline in the previous block
 	auto prev_buffer_ptr = char_ptr_cast(previous_buffer_handle->buffer.get()) + previous_buffer_handle->buffer_size;
-	auto part1_ptr = PreviousNewline(prev_buffer_ptr, previous_buffer_handle->buffer_size);
-	auto part1_size = prev_buffer_ptr - part1_ptr;
+	auto prev_object_start = PreviousNewline(prev_buffer_ptr, previous_buffer_handle->buffer_size);
+	auto prev_object_size = prev_buffer_ptr - prev_object_start;
 
 	// Now copy the data to our reconstruct buffer
-	const auto reconstruct_ptr = scan_state.GetReconstructBuffer();
-	memcpy(reconstruct_ptr, part1_ptr, part1_size);
+	memcpy(scan_state.buffer_ptr, prev_object_start, prev_object_size);
 
 	// We copied the object, so we are no longer reading the previous buffer
 	if (--previous_buffer_handle->readers == 0) {
 		RemoveBuffer(*previous_buffer_handle);
 	}
 
-	if (part1_size == 1) {
+	if (prev_object_size == 1) {
 		// Just a newline
 		return false;
 	}
-	scan_state.prev_buffer_remainder = part1_size;
+	scan_state.prev_buffer_remainder = prev_object_size;
 	return true;
 }
 
@@ -798,12 +790,12 @@ void JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 			if (!scan_state.is_last) {
 				// Last bit of data belongs to the next batch
 				if (scan_state.file_read_type == JSONFileReadType::SCAN_ENTIRE_FILE) {
+					// if we are doing a single-threaded read, we can just leave it in the buffer
 					if (remaining > options.maximum_object_size) {
 						ThrowObjectSizeError(remaining);
 					}
-					// Copy last bit of previous buffer if we are doing a single-threaded read
-					memcpy(scan_state.GetReconstructBuffer(), json_start, remaining);
 					scan_state.prev_buffer_remainder = remaining;
+					scan_state.prev_buffer_offset = json_start - buffer_ptr;
 				}
 				buffer_offset = buffer_size;
 				break;
@@ -975,13 +967,16 @@ void JSONReader::PrepareForReadInternal(JSONReaderScanState &scan_state) {
 		scan_state.read_buffer = scan_state.global_allocator.Allocate(scan_state.buffer_capacity);
 		scan_state.buffer_ptr = char_ptr_cast(scan_state.read_buffer.get());
 	}
-	// if we are not scanning the entire file - copy the remainder of the previous buffer into this buffer
-	if (scan_state.file_read_type == JSONFileReadType::SCAN_PARTIAL && scan_state.buffer_index.GetIndex() != 0) {
-		CopyRemainderFromPreviousBuffer(scan_state);
-	}
-	// copy over the last bit of previous buffer
-	if (scan_state.prev_buffer_remainder > 0) {
-		memcpy(scan_state.buffer_ptr, scan_state.GetReconstructBuffer(), scan_state.prev_buffer_remainder);
+	if (scan_state.file_read_type == JSONFileReadType::SCAN_PARTIAL) {
+		// if we are not scanning the entire file - copy the remainder of the previous buffer into this buffer
+		// we don't need to do this for the first buffer
+		if (scan_state.buffer_index.GetIndex() != 0) {
+			CopyRemainderFromPreviousBuffer(scan_state);
+		}
+	} else {
+		// Copy last bit of previous buffer to the beginning if we are doing a single-threaded read
+		memmove(scan_state.buffer_ptr, scan_state.buffer_ptr + scan_state.prev_buffer_offset,
+		        scan_state.prev_buffer_remainder);
 	}
 }
 bool JSONReader::PrepareBufferForRead(JSONReaderScanState &scan_state) {

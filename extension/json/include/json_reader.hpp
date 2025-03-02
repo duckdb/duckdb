@@ -145,20 +145,19 @@ struct JSONReaderScanState {
 	idx_t buffer_size = 0;
 	idx_t buffer_offset = 0;
 	idx_t prev_buffer_remainder = 0;
+	idx_t prev_buffer_offset = 0;
 	idx_t lines_or_objects_in_buffer = 0;
 	//! Whether this is the first time scanning this buffer
 	bool is_first_scan = false;
 	//! Whether this is the last batch of the file
 	bool is_last = false;
 	//! Buffer to reconstruct split values
-	AllocatedData reconstruct_buffer;
 	optional_idx batch_index;
 
 	//! For some filesystems (e.g. S3), using a filehandle per thread increases performance
 	unique_ptr<FileHandle> thread_local_filehandle;
 
 public:
-	data_ptr_t GetReconstructBuffer();
 	//! Reset for parsing the next batch of JSON from the current buffer
 	void ResetForNextParse();
 	//! Reset state for reading the next buffer
