@@ -383,7 +383,8 @@ static CombineFuncPtr<double> CreateCombineFunction(PyObject *function, PythonEx
 				else
 					value = target;
 
-				bundled_parameters[i] = PythonObject::FromValue(value, double, client_properties);
+				bundled_parameters[i] =
+				    PythonObject::FromValue(value, duckdb::LogicalType(LogicalTypeId::Double), client_properties);
 			}
 			if (contains_null) {
 				// Immediately insert None, no need to call the function
