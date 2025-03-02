@@ -232,7 +232,7 @@ bool ColumnReader::PageIsFilteredOut(PageHeader &page_hdr) {
 	return true;
 }
 
-void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter) {
+void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_ptr<TableFilterState> filter_state) {
 	encoding = ColumnEncoding::INVALID;
 	defined_decoder.reset();
 	page_is_filtered_out = false;
@@ -264,7 +264,7 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter) {
 		if (dictionary_size < 0) {
 			throw std::runtime_error("Invalid dictionary page header (num_values < 0)");
 		}
-		dictionary_decoder.InitializeDictionary(dictionary_size, filter, HasDefines());
+		dictionary_decoder.InitializeDictionary(dictionary_size, filter, filter_state, HasDefines());
 		break;
 	}
 	default:
@@ -495,9 +495,10 @@ void ColumnReader::BeginRead(data_ptr_t define_out, data_ptr_t repeat_out) {
 	}
 }
 
-idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter) {
+idx_t ColumnReader::ReadPageHeaders(idx_t max_read, optional_ptr<const TableFilter> filter,
+                                    optional_ptr<TableFilterState> filter_state) {
 	while (page_rows_available == 0) {
-		PrepareRead(filter);
+		PrepareRead(filter, filter_state);
 	}
 	return MinValue<idx_t>(MinValue<idx_t>(max_read, page_rows_available), STANDARD_VECTOR_SIZE);
 }
@@ -636,23 +637,24 @@ void ColumnReader::DirectSelect(uint64_t num_values, data_ptr_t define_out, data
 }
 
 void ColumnReader::Filter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                          const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count,
-                          bool is_first_filter) {
+                          const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
+                          idx_t &approved_tuple_count, bool is_first_filter) {
 	if (SupportsDirectFilter() && is_first_filter) {
-		DirectFilter(num_values, define_out, repeat_out, result, filter, sel, approved_tuple_count);
+		DirectFilter(num_values, define_out, repeat_out, result, filter, filter_state, sel, approved_tuple_count);
 		return;
 	}
 	Select(num_values, define_out, repeat_out, result, sel, approved_tuple_count);
-	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
+	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
 }
 
 void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data_ptr_t repeat_out, Vector &result,
-                                const TableFilter &filter, SelectionVector &sel, idx_t &approved_tuple_count) {
+                                const TableFilter &filter, TableFilterState &filter_state, SelectionVector &sel,
+                                idx_t &approved_tuple_count) {
 	auto to_read = num_values;
 
 	// prepare the first read if we haven't yet
 	BeginRead(define_out, repeat_out);
-	auto read_now = ReadPageHeaders(num_values, &filter);
+	auto read_now = ReadPageHeaders(num_values, &filter, &filter_state);
 
 	// we can only push the filter into the decoder if we are reading the ENTIRE vector in one go
 	if (encoding == ColumnEncoding::DICTIONARY && read_now == to_read && dictionary_decoder.HasFilter()) {
@@ -664,7 +666,7 @@ void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data
 			// read the defines/repeats
 			const auto all_valid = PrepareRead(read_now, define_out, repeat_out, 0);
 			const auto define_ptr = all_valid ? nullptr : static_cast<uint8_t *>(define_out);
-			dictionary_decoder.Filter(define_ptr, read_now, result, filter, sel, approved_tuple_count);
+			dictionary_decoder.Filter(define_ptr, read_now, result, sel, approved_tuple_count);
 		}
 		page_rows_available -= read_now;
 		FinishRead(num_values);
@@ -672,14 +674,14 @@ void ColumnReader::DirectFilter(uint64_t num_values, data_ptr_t define_out, data
 	}
 	// fallback to regular read + filter
 	ReadInternal(num_values, define_out, repeat_out, result);
-	ApplyFilter(result, filter, num_values, sel, approved_tuple_count);
+	ApplyFilter(result, filter, filter_state, num_values, sel, approved_tuple_count);
 }
 
-void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, idx_t scan_count, SelectionVector &sel,
-                               idx_t &approved_tuple_count) {
+void ColumnReader::ApplyFilter(Vector &v, const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
+                               SelectionVector &sel, idx_t &approved_tuple_count) {
 	UnifiedVectorFormat vdata;
 	v.ToUnifiedFormat(scan_count, vdata);
-	ColumnSegment::FilterSelection(sel, v, vdata, filter, scan_count, approved_tuple_count);
+	ColumnSegment::FilterSelection(sel, v, vdata, filter, filter_state, scan_count, approved_tuple_count);
 }
 
 void ColumnReader::Skip(idx_t num_values) {

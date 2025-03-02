@@ -744,6 +744,9 @@ void WindowDistinctAggregatorLocalState::Evaluate(const WindowDistinctAggregator
 
 	//	Finalise the result aggregates and write to the result
 	statef.Finalize(result);
+
+	//	Destruct any non-POD state
+	statef.Destroy();
 }
 
 unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetLocalState(const WindowAggregatorState &gstate) const {

@@ -454,6 +454,10 @@ void ParquetMultiFileInfo::GetBindInfo(const TableFunctionData &bind_data_p, Bin
 optional_idx ParquetMultiFileInfo::MaxThreads(const MultiFileBindData &bind_data_p,
                                               const MultiFileGlobalState &global_state,
                                               FileExpandResult expand_result) {
+	if (expand_result == FileExpandResult::MULTIPLE_FILES) {
+		// always launch max threads if we are reading multiple files
+		return optional_idx();
+	}
 	auto &bind_data = bind_data_p.bind_data->Cast<ParquetReadBindData>();
 	return MaxValue(bind_data.initial_file_row_groups, static_cast<idx_t>(1));
 }
@@ -581,7 +585,7 @@ void ParquetMultiFileInfo::Scan(ClientContext &context, BaseFileReader &reader_p
                                 LocalTableFunctionState &local_state_p, DataChunk &chunk) {
 	auto &local_state = local_state_p.Cast<ParquetReadLocalState>();
 	auto &reader = reader_p.Cast<ParquetReader>();
-	reader.Scan(local_state.scan_state, chunk);
+	reader.Scan(context, local_state.scan_state, chunk);
 }
 
 static case_insensitive_map_t<LogicalType> GetChildNameToTypeMap(const LogicalType &type) {

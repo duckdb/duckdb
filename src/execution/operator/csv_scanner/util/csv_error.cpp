@@ -316,6 +316,7 @@ CSVError CSVError::CastError(const CSVReaderOptions &options, const string &colu
 		       "correctly parse this column."
 		    << '\n';
 	}
+	how_to_fix_it << "* Check whether the null string value is set correctly (e.g., nullstr = 'N/A')" << '\n';
 
 	return CSVError(error.str(), CAST_ERROR, column_idx, csv_row, error_info, row_byte_position, byte_position, options,
 	                how_to_fix_it.str(), current_path);
