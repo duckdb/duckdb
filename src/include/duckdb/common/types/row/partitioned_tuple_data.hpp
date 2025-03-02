@@ -109,7 +109,7 @@ public:
 	//! Resets this PartitionedTupleData
 	void Reset();
 	//! Repartition this PartitionedTupleData into the new PartitionedTupleData
-	void Repartition(PartitionedTupleData &new_partitioned_data);
+	void Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data);
 	//! Unpins the data
 	void Unpin();
 	//! Get the partitions in this PartitionedTupleData

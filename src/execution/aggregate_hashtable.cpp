@@ -35,12 +35,12 @@ GroupedAggregateHashTable::AggregateHTAppendState::AggregateHTAppendState()
       addresses(LogicalType::POINTER) {
 }
 
-GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, Allocator &allocator,
+GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, Allocator &allocator,
                                                      vector<LogicalType> group_types_p,
                                                      vector<LogicalType> payload_types_p,
                                                      vector<AggregateObject> aggregate_objects_p,
                                                      idx_t initial_capacity, idx_t radix_bits)
-    : BaseAggregateHashTable(context, allocator, aggregate_objects_p, std::move(payload_types_p)),
+    : BaseAggregateHashTable(context_p, allocator, aggregate_objects_p, std::move(payload_types_p)), context(context_p),
       radix_bits(radix_bits), count(0), capacity(0), skip_lookups(false),
       aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)) {
 
@@ -106,7 +106,7 @@ unique_ptr<PartitionedTupleData> GroupedAggregateHashTable::AcquirePartitionedDa
 		if (unpartitioned_data) {
 			unpartitioned_data->FlushAppendState(state.unpartitioned_append_state);
 			unpartitioned_data->Unpin();
-			unpartitioned_data->Repartition(*partitioned_data);
+			unpartitioned_data->Repartition(context, *partitioned_data);
 		}
 		InitializeUnpartitionedData();
 	}
@@ -123,7 +123,7 @@ void GroupedAggregateHashTable::Abandon() {
 		if (unpartitioned_data) {
 			unpartitioned_data->FlushAppendState(state.unpartitioned_append_state);
 			unpartitioned_data->Unpin();
-			unpartitioned_data->Repartition(*partitioned_data);
+			unpartitioned_data->Repartition(context, *partitioned_data);
 		}
 		InitializeUnpartitionedData();
 	}
@@ -139,7 +139,7 @@ void GroupedAggregateHashTable::Abandon() {
 void GroupedAggregateHashTable::Repartition() {
 	auto old = AcquirePartitionedData();
 	D_ASSERT(old->GetPartitions().size() != partitioned_data->GetPartitions().size());
-	old->Repartition(*partitioned_data);
+	old->Repartition(context, *partitioned_data);
 }
 
 shared_ptr<ArenaAllocator> GroupedAggregateHashTable::GetAggregateAllocator() {
@@ -834,6 +834,10 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	idx_t chunk_idx = 0;
 	const auto chunk_count = other_data.ChunkCount();
 	while (fm_state.Scan()) {
+		// Check for interrupts with each chunk
+		if (context.interrupted) {
+			throw InterruptException();
+		}
 		const auto input_chunk_size = fm_state.groups.size();
 		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
 		RowOperations::CombineStates(row_state, layout, fm_state.scan_state.chunk_state.row_locations,

@@ -251,7 +251,7 @@ void PartitionedTupleData::Reset() {
 	Verify();
 }
 
-void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_data) {
+void PartitionedTupleData::Repartition(ClientContext &context, PartitionedTupleData &new_partitioned_data) {
 	D_ASSERT(layout.GetTypes() == new_partitioned_data.layout.GetTypes());
 
 	if (partitions.size() == new_partitioned_data.partitions.size()) {
@@ -269,6 +269,10 @@ void PartitionedTupleData::Repartition(PartitionedTupleData &new_partitioned_dat
 			TupleDataChunkIterator iterator(partition, TupleDataPinProperties::DESTROY_AFTER_DONE, true);
 			auto &chunk_state = iterator.GetChunkState();
 			do {
+				// Check for interrupts with each chunk
+				if (context.interrupted) {
+					throw InterruptException();
+				}
 				new_partitioned_data.Append(append_state, chunk_state, iterator.GetCurrentChunkCount());
 			} while (iterator.Next());
 

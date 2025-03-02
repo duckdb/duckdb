@@ -118,7 +118,7 @@ static void ListSortFunction(DataChunk &args, ExpressionState &state, Vector &re
 
 	// initialize the global and local sorting state
 	auto &buffer_manager = BufferManager::GetBufferManager(info.context);
-	GlobalSortState global_sort_state(buffer_manager, info.orders, info.payload_layout);
+	GlobalSortState global_sort_state(info.context, info.orders, info.payload_layout);
 	LocalSortState local_sort_state;
 	local_sort_state.Initialize(global_sort_state, buffer_manager);
 

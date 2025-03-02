@@ -27,7 +27,6 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &context, const vector<Bo
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
 
-	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	if (unique) {
 		vector<BoundOrderByNode> unique_orders;
 		for (const auto &order : orders) {
@@ -37,9 +36,9 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &context, const vector<Bo
 		const auto order_type = OrderType::ASCENDING;
 		const auto order_by_type = OrderByNullType::NULLS_LAST;
 		unique_orders.emplace_back(BoundOrderByNode(order_type, order_by_type, std::move(unique_expr)));
-		global_sort = make_uniq<GlobalSortState>(buffer_manager, unique_orders, payload_layout);
+		global_sort = make_uniq<GlobalSortState>(context, unique_orders, payload_layout);
 	} else {
-		global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
+		global_sort = make_uniq<GlobalSortState>(context, orders, payload_layout);
 	}
 	global_sort->external = force_external;
 }
