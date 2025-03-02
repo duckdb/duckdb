@@ -25,7 +25,8 @@ class JSONReader;
 
 struct JSONBufferHandle {
 public:
-	JSONBufferHandle(JSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData &&buffer, idx_t buffer_size);
+	JSONBufferHandle(JSONReader &reader, idx_t buffer_index, idx_t readers, AllocatedData &&buffer, idx_t buffer_size,
+	                 idx_t buffer_start);
 
 public:
 	//! The reader this buffer comes from
@@ -39,6 +40,8 @@ public:
 	AllocatedData buffer;
 	//! The size of the data in the buffer (can be less than buffer.GetSize())
 	const idx_t buffer_size;
+	//! The start position in the buffer
+	idx_t buffer_start;
 };
 
 struct JSONFileHandle {
