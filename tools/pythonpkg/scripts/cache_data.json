@@ -315,7 +315,6 @@
         "full_path": "numpy",
         "name": "numpy",
         "children": [
-            "numpy.core",
             "numpy.ma",
             "numpy.ndarray",
             "numpy.datetime64",
@@ -341,20 +340,6 @@
             "numpy.clongdouble"
         ],
         "required": false
-    },
-    "numpy.core": {
-        "type": "attribute",
-        "full_path": "numpy.core",
-        "name": "core",
-        "children": [
-            "numpy.core.multiarray"
-        ]
-    },
-    "numpy.core.multiarray": {
-        "type": "attribute",
-        "full_path": "numpy.core.multiarray",
-        "name": "multiarray",
-        "children": []
     },
     "numpy.ma": {
         "type": "attribute",

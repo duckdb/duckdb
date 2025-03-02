@@ -378,6 +378,17 @@ struct ParameterKind {
 	}
 };
 
+static bool NumpyDeprecatesAccessToCore(const py::tuple &numpy_version) {
+	if (numpy_version.empty()) {
+		return false;
+	}
+	if (string(py::str(numpy_version[0])) == string("2")) {
+		//! Starting with numpy version 2.0.0 the use of 'core' is deprecated.
+		return true;
+	}
+	return false;
+}
+
 struct PythonUDFData {
 public:
 	PythonUDFData(const string &name, bool vectorized, FunctionNullHandling null_handling)
@@ -480,9 +491,21 @@ public:
 	ScalarFunction GetFunction(const py::function &udf, PythonExceptionHandling exception_handling, bool side_effects,
 	                           const ClientProperties &client_properties) {
 
-		auto &import_cache = *DuckDBPyConnection::ImportCache();
 		// Import this module, because importing this from a non-main thread causes a segfault
-		(void)import_cache.numpy.core.multiarray();
+
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		py::handle core;
+		auto numpy = import_cache.numpy();
+		if (!numpy) {
+			throw InvalidInputException("'numpy' is required for this operation, but it wasn't installed");
+		}
+		auto numpy_version = py::cast<py::tuple>(numpy.attr("__version__"));
+		if (NumpyDeprecatesAccessToCore(numpy_version)) {
+			core = numpy.attr("_core");
+		} else {
+			core = numpy.attr("core");
+		}
+		(void)core.attr("multiarray");
 
 		scalar_function_t func;
 		if (vectorized) {
