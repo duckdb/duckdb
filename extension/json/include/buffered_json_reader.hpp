@@ -195,11 +195,6 @@ public:
 	JSONFileHandle &GetFileHandle() const;
 
 public:
-	//! Insert/get/remove buffer (grabs the lock)
-	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer);
-	optional_ptr<JSONBufferHandle> GetBuffer(idx_t buffer_idx);
-	AllocatedData RemoveBuffer(JSONBufferHandle &handle);
-
 	//! Get a new buffer index (must hold the lock)
 	idx_t GetBufferIndex();
 	//! Set line count for a buffer that is done (grabs the lock)
@@ -211,18 +206,15 @@ public:
 	//! Whether this reader has thrown if an error has occurred
 	bool HasThrown();
 
+	void Initialize(Allocator &allocator, idx_t buffer_size);
 	void ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
 	               const idx_t remaining);
 	void ThrowTransformError(JSONReaderScanState &scan_state, idx_t object_index, const string &error_message);
 	void ParseNextChunk(JSONReaderScanState &scan_state);
-	void ThrowObjectSizeError(const idx_t object_size);
-	void Initialize(Allocator &allocator, idx_t buffer_size);
 	idx_t Scan(JSONReaderScanState &scan_state);
 	bool ReadNextBuffer(JSONReaderScanState &scan_state);
-	void PrepareForScan(JSONReaderScanState &scan_state);
 	bool PrepareBufferForRead(JSONReaderScanState &scan_state,
 	                          JSONFilePrepare file_prepare = JSONFilePrepare::CAN_READ_LAZILY);
-	void FinalizeBuffer(JSONReaderScanState &scan_state);
 
 	//! Scan progress
 	double GetProgress() const;
@@ -235,9 +227,18 @@ private:
 	bool CopyRemainderFromPreviousBuffer(JSONReaderScanState &scan_state);
 	void FinalizeBufferInternal(JSONReaderScanState &scan_state, AllocatedData &buffer, idx_t buffer_index);
 	void PrepareForReadInternal(JSONReaderScanState &scan_state);
+	void PrepareForScan(JSONReaderScanState &scan_state);
 	bool PrepareBufferSeek(JSONReaderScanState &scan_state);
 	void ReadNextBufferSeek(JSONReaderScanState &scan_state);
 	bool ReadNextBufferNoSeek(JSONReaderScanState &scan_state);
+	void FinalizeBuffer(JSONReaderScanState &scan_state);
+
+	//! Insert/get/remove buffer (grabs the lock)
+	void InsertBuffer(idx_t buffer_idx, unique_ptr<JSONBufferHandle> &&buffer);
+	optional_ptr<JSONBufferHandle> GetBuffer(idx_t buffer_idx);
+	AllocatedData RemoveBuffer(JSONBufferHandle &handle);
+
+	void ThrowObjectSizeError(const idx_t object_size);
 
 private:
 	idx_t GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf);
