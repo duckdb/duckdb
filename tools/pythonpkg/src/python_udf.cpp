@@ -18,6 +18,7 @@
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
 
@@ -384,7 +385,7 @@ static CombineFuncPtr<double> CreateCombineFunction(PyObject *function, PythonEx
 					value = target;
 
 				bundled_parameters[i] =
-				    PythonObject::FromValue(value, duckdb::LogicalType(LogicalTypeId::Double), client_properties);
+				    PythonObject::FromValue(value, duckdb::LogicalType(LogicalTypeId::DOUBLE), client_properties);
 			}
 			if (contains_null) {
 				// Immediately insert None, no need to call the function
