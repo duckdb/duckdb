@@ -27,6 +27,7 @@ DEFAULT_TIMEOUT = 600
 @dataclass
 class BenchmarkRunnerConfig:
     "Configuration for a BenchmarkRunner"
+
     benchmark_runner: str
     benchmark_file: str
     verbose: bool = False

@@ -106,8 +106,8 @@ def get_types():
         ),
         Candidate(
             BLOB,
-            b'\xF6\x96\xB0\x85',
-            b'\x85\xB0\x96\xF6',
+            b'\xf6\x96\xb0\x85',
+            b'\x85\xb0\x96\xf6',
         ),
         Candidate(
             INTERVAL,
