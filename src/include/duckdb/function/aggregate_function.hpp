@@ -334,12 +334,6 @@ public:
 		AggregateExecutor::Combine<STATE, OP>(source, target, aggr_input_data, count);
 	}
 
-	template <class STATE, class OP>
-	static void StateCombine(Vector &source, Vector &target, AggregateInputData &aggr_input_data, idx_t count,
-	                         CombineFuncPtr<STATE> combineFunction) {
-		AggregateExecutor::Combine<STATE>(source, target, aggr_input_data, count, combineFunction);
-	}
-
 	using AggregateCombineFunctionType = std::function<void(Vector &, Vector &, AggregateInputData &, idx_t)>;
 
 	template <typename STATE>
