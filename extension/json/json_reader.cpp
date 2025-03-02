@@ -303,49 +303,79 @@ void JSONReader::SetBufferLineOrObjectCount(JSONBufferHandle &handle, idx_t coun
 	D_ASSERT(RefersToSameObject(handle, *buffer_map.find(handle.buffer_index)->second));
 	D_ASSERT(buffer_line_or_object_counts[handle.buffer_index] == -1);
 	buffer_line_or_object_counts[handle.buffer_index] = count;
+	// if we have any errors - try to report them after finishing a buffer
+	ThrowErrorsIfPossible();
 }
 
-idx_t JSONReader::GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf) {
-	D_ASSERT(options.format != JSONFormat::AUTO_DETECT);
-	while (true) {
-		idx_t line = line_or_object_in_buf;
-		bool can_throw = true;
-		{
-			lock_guard<mutex> guard(lock);
-			if (thrown) {
-				return DConstants::INVALID_INDEX;
-			}
-			for (idx_t b_idx = 0; b_idx < buf_index; b_idx++) {
-				if (buffer_line_or_object_counts[b_idx] == -1) {
-					can_throw = false;
-					break;
-				} else {
-					line += buffer_line_or_object_counts[b_idx];
-				}
-			}
-			if (can_throw) {
-				thrown = true;
-				// SQL uses 1-based indexing so I guess we will do that in our exception here as well
-				return line + 1;
-			}
+void JSONReader::AddParseError(JSONReaderScanState &scan_state, idx_t line_or_object_in_buf, yyjson_read_err &err,
+                               const string &extra) {
+	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
+	auto error_msg = StringUtil::Format("Malformed JSON in file \"%s\", at byte %llu in %s {line}: %s. %s", file_name,
+	                                    err.pos + 1, unit, err.msg, extra);
+	lock_guard<mutex> guard(lock);
+	AddError(scan_state.current_buffer_handle->buffer_index, line_or_object_in_buf + 1, error_msg);
+	ThrowErrorsIfPossible();
+	// if we could not throw immediately - finish processing this buffer
+	scan_state.buffer_offset = 0;
+	scan_state.scan_count = 0;
+}
+
+void JSONReader::AddTransformError(JSONReaderScanState &scan_state, idx_t object_index, const string &error_message) {
+	D_ASSERT(scan_state.current_buffer_handle);
+	D_ASSERT(object_index != DConstants::INVALID_INDEX);
+	auto line_or_object_in_buffer = scan_state.lines_or_objects_in_buffer - scan_state.scan_count + object_index;
+	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
+	auto error_msg =
+	    StringUtil::Format("JSON transform error in file \"%s\", in %s {line}: %s", file_name, unit, error_message);
+	lock_guard<mutex> guard(lock);
+	AddError(scan_state.current_buffer_handle->buffer_index, line_or_object_in_buffer, error_msg);
+	ThrowErrorsIfPossible();
+	// if we could not throw immediately - finish processing this buffer
+	scan_state.buffer_offset = scan_state.buffer_size;
+	scan_state.scan_count = 0;
+}
+
+void JSONReader::AddError(idx_t buf_index, idx_t line_or_object_in_buf, const string &error_msg) {
+	if (error) {
+		// we already have an error - check if it happened before this error
+		if (error->buf_index < buf_index ||
+		    (error->buf_index == buf_index && error->line_or_object_in_buf < line_or_object_in_buf)) {
+			// it did! don't record this error
+			return;
 		}
-		TaskScheduler::YieldThread();
+	} else {
+		error = make_uniq<JSONError>();
 	}
+	error->buf_index = buf_index;
+	error->line_or_object_in_buf = line_or_object_in_buf;
+	error->error_msg = error_msg;
 }
 
-void JSONReader::ThrowParseError(idx_t buf_index, idx_t line_or_object_in_buf, yyjson_read_err &err,
-                                 const string &extra) {
-	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
-	auto line = GetLineNumber(buf_index, line_or_object_in_buf);
-	throw InvalidInputException("Malformed JSON in file \"%s\", at byte %llu in %s %llu: %s. %s", file_name,
-	                            err.pos + 1, unit, line + 1, err.msg, extra);
+optional_idx JSONReader::TryGetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf) {
+	idx_t line = line_or_object_in_buf;
+	for (idx_t b_idx = 0; b_idx < buf_index; b_idx++) {
+		if (buffer_line_or_object_counts[b_idx] == -1) {
+			// this buffer has not been parsed yet - we cannot throw
+			return optional_idx();
+		}
+		line += buffer_line_or_object_counts[b_idx];
+	}
+	return line;
 }
 
-void JSONReader::ThrowTransformError(idx_t buf_index, idx_t line_or_object_in_buf, const string &error_message) {
-	string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
-	auto line = GetLineNumber(buf_index, line_or_object_in_buf);
-	throw InvalidInputException("JSON transform error in file \"%s\", in %s %llu: %s", file_name, unit, line,
-	                            error_message);
+void JSONReader::ThrowErrorsIfPossible() {
+	if (!error) {
+		return;
+	}
+	// check if we finished all buffers before the error buffer
+	auto line = TryGetLineNumber(error->buf_index, error->line_or_object_in_buf);
+	if (!line.IsValid()) {
+		return;
+	}
+	// we can throw!
+	thrown = true;
+	auto formatted_error = StringUtil::Replace(error->error_msg, "{line}", to_string(line.GetIndex() + 1));
+	throw InvalidInputException(formatted_error);
 }
 
 bool JSONReader::HasThrown() {
@@ -531,13 +561,6 @@ void JSONReader::SkipOverArrayStart(JSONReaderScanState &scan_state) {
 	}
 }
 
-void JSONReader::ThrowTransformError(JSONReaderScanState &scan_state, idx_t object_index, const string &error_message) {
-	D_ASSERT(scan_state.current_buffer_handle);
-	D_ASSERT(object_index != DConstants::INVALID_INDEX);
-	auto line_or_object_in_buffer = scan_state.lines_or_objects_in_buffer - scan_state.scan_count + object_index;
-	ThrowTransformError(scan_state.current_buffer_handle->buffer_index, line_or_object_in_buffer, error_message);
-}
-
 static pair<JSONFormat, JSONRecordType> DetectFormatAndRecordType(char *const buffer_ptr, const idx_t buffer_size,
                                                                   yyjson_alc *alc) {
 	// First we do the easy check whether it's NEWLINE_DELIMITED
@@ -640,8 +663,8 @@ void JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 			            : "";
 		}
 		if (!can_ignore_this_error) {
-			ThrowParseError(scan_state.current_buffer_handle->buffer_index, scan_state.lines_or_objects_in_buffer, err,
-			                extra);
+			AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err, extra);
+			return;
 		}
 	}
 
@@ -652,8 +675,8 @@ void JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 		err.code = YYJSON_READ_ERROR_UNEXPECTED_END;
 		err.msg = "unexpected end of data";
 		err.pos = json_size;
-		ThrowParseError(scan_state.current_buffer_handle->buffer_index, scan_state.lines_or_objects_in_buffer, err,
-		                "Try auto-detecting the JSON format");
+		AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err, "Try auto-detecting the JSON format");
+		return;
 	} else if (!options.ignore_errors && read_size < json_size) {
 		idx_t off = read_size;
 		idx_t rem = json_size;
@@ -662,8 +685,8 @@ void JSONReader::ParseJSON(JSONReaderScanState &scan_state, char *const json_sta
 			err.code = YYJSON_READ_ERROR_UNEXPECTED_CONTENT;
 			err.msg = "unexpected content after document";
 			err.pos = read_size;
-			ThrowParseError(scan_state.current_buffer_handle->buffer_index, scan_state.lines_or_objects_in_buffer, err,
-			                "Try auto-detecting the JSON format");
+			AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err, "Try auto-detecting the JSON format");
+			return;
 		}
 	}
 
@@ -703,7 +726,9 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 	}
 	if (!options.ignore_errors && options.record_type == JSONRecordType::RECORDS &&
 	    GetRecordType() != JSONRecordType::RECORDS) {
-		ThrowTransformError(0, 0, "Expected records, detected non-record JSON instead.");
+		string unit = options.format == JSONFormat::NEWLINE_DELIMITED ? "line" : "record/value";
+		throw InvalidInputException(
+		    "JSON auto-detection error in file \"%s\": Expected records, detected non-record JSON instead", file_name);
 	}
 	// store the buffer in the file so it can be re-used by the first reader of the file
 	auto_detect_data = std::move(read_buffer);
@@ -799,8 +824,8 @@ void JSONReader::ParseNextChunk(JSONReaderScanState &scan_state) {
 				err.code = YYJSON_READ_ERROR_UNEXPECTED_CHARACTER;
 				err.msg = "unexpected character";
 				err.pos = json_size;
-				ThrowParseError(scan_state.current_buffer_handle->buffer_index, scan_state.lines_or_objects_in_buffer,
-				                err);
+				AddParseError(scan_state, scan_state.lines_or_objects_in_buffer, err);
+				return;
 			}
 		}
 		SkipWhitespace(buffer_ptr, buffer_offset, buffer_size);

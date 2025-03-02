@@ -93,7 +93,7 @@ public:
 
 public:
 	idx_t Read();
-	void ThrowTransformError(idx_t object_index, const string &error_message);
+	void AddTransformError(idx_t object_index, const string &error_message);
 
 	JSONReaderScanState &GetScanState() {
 		return scan_state;

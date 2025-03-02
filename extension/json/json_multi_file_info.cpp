@@ -394,7 +394,6 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
                                                            BaseUnionData &union_data,
                                                            const MultiFileBindData &bind_data_p) {
 	auto &json_data = bind_data_p.bind_data->Cast<JSONScanData>();
-	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	auto reader = make_shared_ptr<JSONReader>(context, json_data.options, union_data.GetFileName());
 	reader->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(union_data.names, union_data.types);
 	return std::move(reader);
@@ -404,7 +403,6 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
                                                            const string &filename, idx_t file_idx,
                                                            const MultiFileBindData &bind_data) {
 	auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
-	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	auto reader = make_shared_ptr<JSONReader>(context, json_data.options, filename);
 	reader->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
 	return std::move(reader);
@@ -427,7 +425,6 @@ void JSONMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &r
 
 bool JSONMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
                                           GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
-	auto &json_reader = reader->Cast<JSONReader>();
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = lstate_p.Cast<JSONLocalTableFunctionState>().state;
 	lstate.GetScanState().ResetForNextBuffer();
@@ -441,7 +438,6 @@ void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanG
 
 	const auto count = lstate.Read();
 	yyjson_val **values = scan_state.values;
-	output.SetCardinality(count);
 
 	if (!gstate.names.empty()) {
 		vector<Vector *> result_vectors;
@@ -470,10 +466,12 @@ void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanG
 			          "reading multiple files with a different structure."
 			        : "\nTry setting 'auto_detect' to true, specifying 'format' or 'records' manually, or setting "
 			          "'ignore_errors' to true.";
-			lstate.ThrowTransformError(lstate.transform_options.object_index,
-			                           lstate.transform_options.error_message + hint);
+			lstate.AddTransformError(lstate.transform_options.object_index,
+			                         lstate.transform_options.error_message + hint);
+			return;
 		}
 	}
+	output.SetCardinality(count);
 }
 
 void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JSONScanGlobalState &gstate,

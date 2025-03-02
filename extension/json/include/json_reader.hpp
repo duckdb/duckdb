@@ -167,6 +167,12 @@ public:
 	void ClearBufferHandle();
 };
 
+struct JSONError {
+	idx_t buf_index;
+	idx_t line_or_object_in_buf;
+	string error_msg;
+};
+
 class JSONReader : public BaseFileReader {
 public:
 	JSONReader(ClientContext &context, JSONReaderOptions options, string file_name);
@@ -197,10 +203,11 @@ public:
 	idx_t GetBufferIndex();
 	//! Set line count for a buffer that is done (grabs the lock)
 	void SetBufferLineOrObjectCount(JSONBufferHandle &handle, idx_t count);
-	//! Throws a parse error that mentions the file name and line number
-	void ThrowParseError(idx_t buf_index, idx_t line_or_object_in_buf, yyjson_read_err &err, const string &extra = "");
-	//! Throws a transform error that mentions the file name and line number
-	void ThrowTransformError(idx_t buf_index, idx_t line_or_object_in_buf, const string &error_message);
+	//! Records a parse error in the specified buffer
+	void AddParseError(JSONReaderScanState &scan_state, idx_t line_or_object_in_buf, yyjson_read_err &err,
+	                   const string &extra = "");
+	//! Records a transform error in the specified buffer
+	void AddTransformError(JSONReaderScanState &scan_state, idx_t object_index, const string &error_message);
 	//! Whether this reader has thrown if an error has occurred
 	bool HasThrown();
 
@@ -208,7 +215,6 @@ public:
 	bool InitializeScan(JSONReaderScanState &state, JSONFileReadType file_read_type);
 	void ParseJSON(JSONReaderScanState &scan_state, char *const json_start, const idx_t json_size,
 	               const idx_t remaining);
-	void ThrowTransformError(JSONReaderScanState &scan_state, idx_t object_index, const string &error_message);
 	void ParseNextChunk(JSONReaderScanState &scan_state);
 	idx_t Scan(JSONReaderScanState &scan_state);
 	bool ReadNextBuffer(JSONReaderScanState &scan_state);
@@ -239,7 +245,12 @@ private:
 	void ThrowObjectSizeError(const idx_t object_size);
 
 private:
-	idx_t GetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf);
+	//! Add an error to the buffer - requires the lock to be held
+	void AddError(idx_t buf_index, idx_t line_or_object_in_buf, const string &error_msg);
+	//! Throw errors if possible - requires the lock to be held
+	void ThrowErrorsIfPossible();
+	//! Try to get the line number - requires the lock to be held
+	optional_idx TryGetLineNumber(idx_t buf_index, idx_t line_or_object_in_buf);
 
 private:
 	ClientContext &context;
@@ -263,6 +274,9 @@ private:
 	//! If we have auto-detected, this is the buffer read by the auto-detection
 	AllocatedData auto_detect_data;
 	idx_t auto_detect_data_size = 0;
+
+	//! The first error we found in the file (if any)
+	unique_ptr<JSONError> error;
 
 public:
 	mutable mutex lock;
