@@ -49,7 +49,7 @@ struct JSONMultiFileInfo {
 	                                               JSONReaderOptions &options,
 	                                               const MultiFileReaderOptions &file_options);
 	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
-	static void FinalizeReader(ClientContext &context, BaseFileReader &reader);
+	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &gstate_p);
 	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
 	                              GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,

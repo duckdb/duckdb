@@ -412,11 +412,6 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	auto reader = make_shared_ptr<BufferedJSONReader>(context, json_data.options, union_data.GetFileName());
 	reader->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(union_data.names, union_data.types);
-	// FIXME: move to FinalizeReader
-	if (gstate.enable_parallel_scans) {
-		// if we are doing parallel scans we need to open the file here
-		reader->Initialize(gstate.allocator, gstate.buffer_capacity);
-	}
 	return std::move(reader);
 }
 
@@ -427,10 +422,6 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	auto reader = make_shared_ptr<BufferedJSONReader>(context, json_data.options, filename);
 	reader->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(bind_data.names, bind_data.types);
-	if (gstate.enable_parallel_scans) {
-		// if we are doing parallel scans we need to open the file here
-		reader->Initialize(gstate.allocator, gstate.buffer_capacity);
-	}
 	return std::move(reader);
 }
 shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
@@ -439,7 +430,14 @@ shared_ptr<BaseFileReader> JSONMultiFileInfo::CreateReader(ClientContext &contex
 	throw InternalException("Create reader from file not implemented");
 }
 
-void JSONMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader) {
+void JSONMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader_p,
+                                       GlobalTableFunctionState &gstate_p) {
+	auto &reader = reader_p.Cast<BufferedJSONReader>();
+	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
+	if (gstate.enable_parallel_scans) {
+		// if we are doing parallel scans we need to open the file here
+		reader.Initialize(gstate.allocator, gstate.buffer_capacity);
+	}
 }
 
 bool JSONMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,

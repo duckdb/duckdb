@@ -113,7 +113,7 @@ struct ParquetMultiFileInfo {
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
 	                                               ParquetOptions &options, const MultiFileReaderOptions &file_options);
 	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
-	static void FinalizeReader(ClientContext &context, BaseFileReader &reader);
+	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk);
 	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
@@ -541,7 +541,7 @@ shared_ptr<BaseUnionData> ParquetMultiFileInfo::GetUnionData(shared_ptr<BaseFile
 	return result;
 }
 
-void ParquetMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader) {
+void ParquetMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &) {
 }
 
 unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState(ClientContext &, MultiFileBindData &,

@@ -323,7 +323,7 @@ shared_ptr<BaseUnionData> CSVMultiFileInfo::GetUnionData(shared_ptr<BaseFileRead
 	return data;
 }
 
-void CSVMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader) {
+void CSVMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &) {
 	auto &csv_file_scan = reader.Cast<CSVFileScan>();
 	csv_file_scan.InitializeFileNamesTypes();
 	csv_file_scan.SetStart();

@@ -320,7 +320,7 @@ public:
 					}
 					InitializeReader(*reader, bind_data, global_state.column_indexes, global_state.filters, context, i,
 					                 global_state.multi_file_reader_state);
-					OP::FinalizeReader(context, *reader);
+					OP::FinalizeReader(context, *reader, *global_state.global_state);
 				} catch (...) {
 					parallel_lock.lock();
 					global_state.error_opening_file = true;
