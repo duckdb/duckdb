@@ -606,6 +606,7 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						// this filter is always true - skip it
 						continue;
 					}
+					auto &table_filter_state = *filter.filter_state;
 
 					const auto scan_idx = filter.scan_column_index;
 					const auto column_idx = filter.table_column_index;
@@ -640,13 +641,13 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						// Now apply the filter
 						UnifiedVectorFormat vdata;
 						result_vector.ToUnifiedFormat(approved_tuple_count, vdata);
-						ColumnSegment::FilterSelection(sel, result_vector, vdata, filter.filter, approved_tuple_count,
-						                               approved_tuple_count);
+						ColumnSegment::FilterSelection(sel, result_vector, vdata, filter.filter, table_filter_state,
+						                               approved_tuple_count, approved_tuple_count);
 
 					} else {
 						auto &col_data = GetColumn(filter.table_column_index);
 						col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector,
-						                sel, approved_tuple_count, filter.filter);
+						                sel, approved_tuple_count, filter.filter, table_filter_state);
 					}
 				}
 				for (auto &table_filter : filter_list) {

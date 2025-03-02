@@ -208,9 +208,6 @@ public:
 	// type of the value. Only use this if you know what you are doing.
 	template <class T>
 	T GetValueUnsafe() const;
-	//! Returns a reference to the internal value. This can only be used for primitive types.
-	template <class T>
-	T &GetReferenceUnsafe();
 
 	//! Return a copy of this value
 	Value Copy() const {
