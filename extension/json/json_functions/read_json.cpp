@@ -214,52 +214,6 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	}
 }
 
-// static void ReadJSONFunction(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
-// 	auto &gstate = data_p.global_state->Cast<JSONGlobalTableFunctionState>().state;
-// 	auto &lstate = data_p.local_state->Cast<JSONLocalTableFunctionState>().state;
-//
-// 	const auto count = lstate.ReadNext(gstate);
-// 	auto &scan_state = lstate.GetScanState();
-// 	yyjson_val **values = scan_state.values;
-// 	output.SetCardinality(count);
-//
-// 	if (!gstate.names.empty()) {
-// 		vector<Vector *> result_vectors;
-// 		result_vectors.reserve(gstate.column_ids.size());
-// 		for (const auto &col_idx : gstate.column_ids) {
-// 			result_vectors.emplace_back(&output.data[col_idx]);
-// 		}
-//
-// 		D_ASSERT(gstate.json_data.options.record_type != JSONRecordType::AUTO_DETECT);
-// 		bool success;
-// 		if (gstate.json_data.options.record_type == JSONRecordType::RECORDS) {
-// 			success = JSONTransform::TransformObject(values, scan_state.allocator.GetYYAlc(), count, gstate.names,
-// 			                                         result_vectors, lstate.transform_options, gstate.column_indices,
-// 			                                         lstate.transform_options.error_unknown_key);
-// 		} else {
-// 			D_ASSERT(gstate.json_data.options.record_type == JSONRecordType::VALUES);
-// 			success = JSONTransform::Transform(values, scan_state.allocator.GetYYAlc(), *result_vectors[0], count,
-// 			                                   lstate.transform_options, gstate.column_indices[0]);
-// 		}
-//
-// 		if (!success) {
-// 			string hint =
-// 			    gstate.json_data.options.auto_detect
-// 			        ? "\nTry increasing 'sample_size', reducing 'maximum_depth', specifying 'columns', 'format' or "
-// 			          "'records' manually, setting 'ignore_errors' to true, or setting 'union_by_name' to true when "
-// 			          "reading multiple files with a different structure."
-// 			        : "\nTry setting 'auto_detect' to true, specifying 'format' or 'records' manually, or setting "
-// 			          "'ignore_errors' to true.";
-// 			lstate.ThrowTransformError(lstate.transform_options.object_index,
-// 			                           lstate.transform_options.error_message + hint);
-// 		}
-// 	}
-//
-// 	if (output.size() != 0) {
-// 		MultiFileReader().FinalizeChunk(context, gstate.bind_data.reader_bind, lstate.GetReaderData(), output, nullptr);
-// 	}
-// }
-
 TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info) {
 	MultiFileReaderFunction<JSONMultiFileInfo> table_function("read_json");
 

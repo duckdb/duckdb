@@ -93,8 +93,6 @@ public:
 
 public:
 	idx_t Read();
-	// bool NextBuffer(JSONScanGlobalState &gstate);
-	// idx_t ReadNext(JSONScanGlobalState &gstate);
 	void ThrowTransformError(idx_t object_index, const string &error_message);
 
 	const MultiFileReaderData &GetReaderData() const;
@@ -114,8 +112,6 @@ public:
 	JSONTransformOptions transform_options;
 
 private:
-	// bool ReadNextBuffer(JSONScanGlobalState &gstate);
-
 	void ParseJSON(char *const json_start, const idx_t json_size, const idx_t remaining);
 
 	void PrepareReader(JSONScanGlobalState &gstate, BufferedJSONReader &reader);
@@ -128,8 +124,6 @@ private:
 struct JSONGlobalTableFunctionState : public GlobalTableFunctionState {
 public:
 	JSONGlobalTableFunctionState(ClientContext &context, const MultiFileBindData &bind_data);
-	static unique_ptr<GlobalTableFunctionState> Init(ClientContext &context, TableFunctionInitInput &input);
-	// idx_t MaxThreads() const override;
 
 public:
 	JSONScanGlobalState state;
@@ -138,9 +132,6 @@ public:
 struct JSONLocalTableFunctionState : public LocalTableFunctionState {
 public:
 	JSONLocalTableFunctionState(ClientContext &context, JSONScanGlobalState &gstate);
-	static unique_ptr<LocalTableFunctionState> Init(ExecutionContext &context, TableFunctionInitInput &input,
-	                                                GlobalTableFunctionState *global_state);
-	idx_t GetBatchIndex() const;
 
 public:
 	JSONScanLocalState state;
@@ -150,11 +141,6 @@ struct JSONScan {
 public:
 	static void AutoDetect(ClientContext &context, MultiFileBindData &bind_data, vector<LogicalType> &return_types,
 	                       vector<string> &names);
-
-	// static double ScanProgress(ClientContext &context, const FunctionData *bind_data_p,
-	//                            const GlobalTableFunctionState *global_state);
-	static OperatorPartitionData GetPartitionData(ClientContext &context, TableFunctionGetPartitionInput &input);
-	static unique_ptr<NodeStatistics> Cardinality(ClientContext &context, const FunctionData *bind_data);
 
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
 	                      const TableFunction &function);
