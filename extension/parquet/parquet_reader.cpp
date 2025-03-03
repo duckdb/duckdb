@@ -65,21 +65,17 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.GetPath());
 	}
 
-	ResizeableBuffer buf;
-	buf.resize(allocator, 8);
-	buf.zero();
-
-	transport.SetLocation(file_size - 8);
-	transport.read(buf.ptr, 8);
+	data_ptr_t last_eight_bytes_ptr;
+	auto last_eight_bytes_pin = file_handle.Read(last_eight_bytes_ptr, 8, file_size - 8);
 
 	bool footer_encrypted;
-	if (memcmp(buf.ptr + 4, "PAR1", 4) == 0) {
+	if (memcmp(last_eight_bytes_ptr + 4, "PAR1", 4) == 0) {
 		footer_encrypted = false;
 		if (encryption_config) {
 			throw InvalidInputException("File '%s' is not encrypted, but 'encryption_config' was set",
 			                            file_handle.GetPath());
 		}
-	} else if (memcmp(buf.ptr + 4, "PARE", 4) == 0) {
+	} else if (memcmp(last_eight_bytes_ptr + 4, "PARE", 4) == 0) {
 		footer_encrypted = true;
 		if (!encryption_config) {
 			throw InvalidInputException("File '%s' is encrypted, but 'encryption_config' was not set",
@@ -90,7 +86,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 	}
 
 	// read four-byte footer length from just before the end magic bytes
-	auto footer_len = *reinterpret_cast<uint32_t *>(buf.ptr);
+	auto footer_len = *reinterpret_cast<uint32_t *>(last_eight_bytes_ptr);
 	if (footer_len == 0 || file_size < 12 + footer_len) {
 		throw InvalidInputException("Footer length error in file '%s'", file_handle.GetPath());
 	}
