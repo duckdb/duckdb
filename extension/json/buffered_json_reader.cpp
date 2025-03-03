@@ -95,11 +95,8 @@ void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, b
 			ReadFromCache(pointer, size, position);
 		}
 
-		if (can_seek) {
-			handle.Read(pointer, size, position);
-		} else if (file_handle->IsPipe()) { // Cache the buffer
-			handle.Read(pointer, size, position);
-
+		handle.Read(pointer, size, position);
+		if (file_handle->IsPipe()) { // Cache the buffer
 			cached_buffers.emplace_back(allocator.Allocate(size));
 			memcpy(cached_buffers.back().get(), pointer, size);
 			cached_size += size;
@@ -127,19 +124,14 @@ bool JSONFileHandle::Read(char *pointer, idx_t &read_size, idx_t requested_size,
 		read_size += ReadFromCache(pointer, requested_size, read_position);
 	}
 
-	if (can_seek) {
-		read_size += ReadInternal(pointer, requested_size);
-		read_position += read_size;
-	} else if (file_handle->IsPipe()) { // Cache the buffer
-		auto temp_read_size = ReadInternal(pointer, requested_size);
-		if (temp_read_size > 0) {
-			cached_buffers.emplace_back(allocator.Allocate(temp_read_size));
-			memcpy(cached_buffers.back().get(), pointer, temp_read_size);
-		}
-		cached_size += temp_read_size;
-		read_position += temp_read_size;
-		read_size += temp_read_size;
+	auto temp_read_size = ReadInternal(pointer, requested_size);
+	if (file_handle->IsPipe() && temp_read_size != 0) { // Cache the buffer
+		cached_buffers.emplace_back(allocator.Allocate(temp_read_size));
+		memcpy(cached_buffers.back().get(), pointer, temp_read_size);
 	}
+	cached_size += temp_read_size;
+	read_position += temp_read_size;
+	read_size += temp_read_size;
 
 	if (read_size == 0) {
 		last_read_requested = true;
