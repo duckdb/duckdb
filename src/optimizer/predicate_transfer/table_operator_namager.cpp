@@ -109,18 +109,6 @@ void TableOperatorManager::AddTableOperator(LogicalOperator *op) {
 
 void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
 	LogicalOperator *op = &plan;
-
-	// TODO: Currently, predicate transfer does not support the following operators
-	switch (op->type) {
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-		joins.clear();
-		table_operators.clear();
-		return;
-	}
-	default:
-		break;
-	}
-
 	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			LogicalOperator *child = op->children[0].get();
@@ -138,16 +126,24 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	    op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
-
-		auto legal_type = join.join_type == JoinType::INNER || join.join_type == JoinType::LEFT ||
-		                  join.join_type == JoinType::RIGHT || join.join_type == JoinType::SEMI ||
-		                  join.join_type == JoinType::RIGHT_SEMI || join.join_type == JoinType::MARK;
-		if (legal_type && std::any_of(join.conditions.begin(), join.conditions.end(), [](const auto &jc) {
-			    return jc.comparison == ExpressionType::COMPARE_EQUAL &&
-			           jc.left->type == ExpressionType::BOUND_COLUMN_REF &&
-			           jc.right->type == ExpressionType::BOUND_COLUMN_REF;
-		    })) {
-			joins.push_back(*op);
+		switch (join.join_type) {
+		case JoinType::INNER:
+		case JoinType::LEFT:
+		case JoinType::RIGHT:
+		case JoinType::SEMI:
+		case JoinType::RIGHT_SEMI:
+		case JoinType::MARK: {
+			if (std::any_of(join.conditions.begin(), join.conditions.end(), [](const auto &jc) {
+				    return jc.comparison == ExpressionType::COMPARE_EQUAL &&
+				           jc.left->type == ExpressionType::BOUND_COLUMN_REF &&
+				           jc.right->type == ExpressionType::BOUND_COLUMN_REF;
+			    })) {
+				joins.push_back(*op);
+			}
+			break;
+		}
+		default:
+			break;
 		}
 	}
 

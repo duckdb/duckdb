@@ -106,8 +106,6 @@ void PhysicalRightDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 	sink_state.reset();
 
 	auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-	child_meta_pipeline.Build(*children[0]);
-
 	D_ASSERT(type == PhysicalOperatorType::RIGHT_DELIM_JOIN);
 	// recurse into the actual join
 	// any pipelines in there depend on the main pipeline
@@ -118,6 +116,8 @@ void PhysicalRightDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 		state.delim_join_dependencies.insert(
 		    make_pair(delim_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
+
+	child_meta_pipeline.Build(*children[0]);
 
 	// Build join pipelines without building the RHS (already built in the Sink of this op)
 	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, *join, false);

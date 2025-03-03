@@ -73,29 +73,53 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 				continue;
 
 			// Order nodes based on priority
-			bool swap_order = table_operator_manager.GetTableOperatorOrder(left_node) >
-			                  table_operator_manager.GetTableOperatorOrder(right_node);
+			bool left_is_larger = table_operator_manager.GetTableOperatorOrder(left_node) >
+			                      table_operator_manager.GetTableOperatorOrder(right_node);
 
-			LogicalOperator *big_table = swap_order ? left_node : right_node;
-			LogicalOperator *small_table = swap_order ? right_node : left_node;
+			LogicalOperator *big_table = left_is_larger ? left_node : right_node;
+			LogicalOperator *small_table = left_is_larger ? right_node : left_node;
 
 			// Create edge
 			shared_ptr<EdgeInfo> edge(new EdgeInfo(std::move(comparison), *big_table, *small_table));
 
 			// Set protection flags
-			if (comp_join.join_type == JoinType::LEFT || comp_join.join_type == JoinType::MARK) {
-				if (swap_order)
-					edge->protect_bigger_side = true;
-				else
-					edge->protect_smaller_side = true;
-			} else if (comp_join.join_type == JoinType::RIGHT) {
-				if (swap_order)
-					edge->protect_smaller_side = true;
-				else
-					edge->protect_bigger_side = true;
-			} else if (comp_join.join_type != JoinType::INNER && comp_join.join_type != JoinType::SEMI &&
-			           comp_join.join_type != JoinType::RIGHT_SEMI && comp_join.join_type != JoinType::MARK) {
-				continue; // Unsupported join type
+			switch (comp_join.type) {
+			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+				if (comp_join.join_type == JoinType::LEFT || comp_join.join_type == JoinType::MARK) {
+					if (left_is_larger) {
+						edge->protect_bigger_side = true;
+					} else {
+						edge->protect_smaller_side = true;
+					}
+				} else if (comp_join.join_type == JoinType::RIGHT) {
+					if (left_is_larger) {
+						edge->protect_smaller_side = true;
+					} else {
+						edge->protect_bigger_side = true;
+					}
+				} else if (comp_join.join_type != JoinType::INNER && comp_join.join_type != JoinType::SEMI &&
+				           comp_join.join_type != JoinType::RIGHT_SEMI && comp_join.join_type != JoinType::MARK) {
+					continue; // Unsupported join type
+				}
+				break;
+			}
+			case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
+				// todo: it works, but why?
+				if (comp_join.delim_flipped == 0) {
+					if (left_is_larger)
+						edge->protect_bigger_side = true;
+					else
+						edge->protect_smaller_side = true;
+				} else {
+					if (left_is_larger)
+						edge->protect_smaller_side = true;
+					else
+						edge->protect_bigger_side = true;
+				}
+				break;
+			}
+			default:
+				continue;
 			}
 
 			// Store edge info
