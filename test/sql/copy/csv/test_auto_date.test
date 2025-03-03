@@ -72,7 +72,6 @@ CREATE TABLE stg_device_metadata_with_dates (
 statement ok
 COPY stg_device_metadata_with_dates
  FROM 'data/csv/auto_date/device_metadata_1.csv' WITH (
- new_line '\n',
  delimiter ',',
  skip '1',
  header 'false'

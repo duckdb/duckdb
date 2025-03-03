@@ -6,7 +6,7 @@ statement ok
 PRAGMA enable_verification
 
 query IIIIIIIIIIIIIIIIIIIIIIIIII
-FROM read_csv('data/csv/14512_og.csv', buffer_size = 473)
+FROM read_csv('data/csv/14512_og.csv', buffer_size = 473, strict_mode = false, delim = ',', quote = '"', escape = '"')
 ----
 00000579000098	13.99	EA	PINE RIDGE CHENIN VOIGNIER	750.0	ML	1	13	NULL	1	NULL	NULL	NULL	NULL	NULL	NULL	DEFAULT BRAND	NULL	NULL	NULL	NULL	BEER & WINE	NULL	NULL	7.25	{"sales_tax":{ "tax_type": "rate_percent", "value" :0.0725}}
 00000609082001	3.99	EA	MADELAINE MINI MILK CHOCOLATE TURKEY	1.0	OZ	1	13	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	MADELEINE	NULL	NULL	NULL	NULL	CANDY	NULL	NULL	7.25	{"sales_tax":{ "tax_type": "rate_percent", "value" :0.0725}}
