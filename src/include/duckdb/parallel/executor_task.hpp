@@ -9,10 +9,10 @@
 #pragma once
 
 #include "duckdb/parallel/task.hpp"
-#include "duckdb/parallel/event.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 
 namespace duckdb {
+class Event;
 class PhysicalOperator;
 class ThreadContext;
 

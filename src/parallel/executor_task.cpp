@@ -1,4 +1,4 @@
-#include "duckdb/parallel/task.hpp"
+#include "duckdb/parallel/executor_task.hpp"
 #include "duckdb/parallel/task_notifier.hpp"
 #include "duckdb/execution/executor.hpp"
 #include "duckdb/main/client_context.hpp"
