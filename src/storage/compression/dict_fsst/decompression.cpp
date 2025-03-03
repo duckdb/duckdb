@@ -10,7 +10,7 @@ CompressedStringScanState::~CompressedStringScanState() {
 }
 
 string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t dict_offset, idx_t dict_idx) {
-	D_ASSERT(dict_offset <= NumericCast<int32_t>(segment.GetBlockManager().GetBlockSize()));
+	D_ASSERT(dict_offset <= NumericCast<uint32_t>(segment.GetBlockManager().GetBlockSize()));
 
 	if (dict_idx == 0) {
 		return string_t(nullptr, 0);
