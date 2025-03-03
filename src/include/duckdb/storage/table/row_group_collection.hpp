@@ -60,7 +60,7 @@ public:
 	void Verify();
 
 	void InitializeScan(CollectionScanState &state, const vector<StorageIndex> &column_ids,
-	                    TableFilterSet *table_filters);
+	                    optional_ptr<TableFilterSet> table_filters);
 	void InitializeCreateIndexScan(CreateIndexScanState &state);
 	void InitializeScanWithOffset(CollectionScanState &state, const vector<StorageIndex> &column_ids, idx_t start_row,
 	                              idx_t end_row);

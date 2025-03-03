@@ -73,8 +73,8 @@ public:
 	vector<LogicalType> GetTypes();
 	const vector<ColumnDefinition> &Columns() const;
 
-	void InitializeScan(DuckTransaction &transaction, TableScanState &state, const vector<StorageIndex> &column_ids,
-	                    TableFilterSet *table_filters = nullptr);
+	void InitializeScan(ClientContext &context, DuckTransaction &transaction, TableScanState &state,
+	                    const vector<StorageIndex> &column_ids, optional_ptr<TableFilterSet> table_filters = nullptr);
 
 	//! Returns the maximum amount of threads that should be assigned to scan this data table
 	idx_t MaxThreads(ClientContext &context) const;

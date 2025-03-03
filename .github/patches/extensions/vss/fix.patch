@@ -1,0 +1,13 @@
+diff --git a/src/hnsw/hnsw_index_scan.cpp b/src/hnsw/hnsw_index_scan.cpp
+index 472bc09..edd808e 100644
+--- a/src/hnsw/hnsw_index_scan.cpp
++++ b/src/hnsw/hnsw_index_scan.cpp
+@@ -56,7 +56,7 @@ static unique_ptr<GlobalTableFunctionState> HNSWIndexScanInitGlobal(ClientContex
+ 	}
+ 
+ 	// Initialize the storage scan state
+-	result->local_storage_state.Initialize(result->column_ids, input.filters.get());
++	result->local_storage_state.Initialize(result->column_ids, context, input.filters);
+ 	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
+ 
+ 	// Initialize the scan state for the index
