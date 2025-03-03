@@ -11,8 +11,10 @@ add_library(duckdb_mbedtls STATIC
         library/aes.cpp
         library/aria.cpp
         library/asn1parse.cpp
+        library/asn1write.cpp
         library/base64.cpp
         library/bignum.cpp
+        library/bignum_core.cpp
         library/camellia.cpp
         library/cipher.cpp
         library/cipher_wrap.cpp
