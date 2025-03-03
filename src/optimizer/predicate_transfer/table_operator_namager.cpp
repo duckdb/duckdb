@@ -8,7 +8,7 @@
 namespace duckdb {
 vector<reference<LogicalOperator>> TableOperatorManager::ExtractOperators(LogicalOperator &plan) {
 	vector<reference<LogicalOperator>> ret;
-	ExtractOperatorsInternal(plan, ret, true);
+	ExtractOperatorsInternal(plan, ret);
 	SortTableOperators();
 	return ret;
 }
@@ -107,8 +107,7 @@ void TableOperatorManager::AddTableOperator(LogicalOperator *op) {
 	}
 }
 
-void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins,
-                                                    bool can_add_mark) {
+void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
 	LogicalOperator *op = &plan;
 
 	// TODO: Currently, predicate transfer does not support the following operators
@@ -130,14 +129,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 				return;
 			}
 			D_ASSERT(!op->expressions.empty());
-			if (op->expressions[0]->type == ExpressionType::OPERATOR_NOT &&
-			    op->expressions[0]->expression_class == ExpressionClass::BOUND_OPERATOR &&
-			    child->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN) {
-				can_add_mark = false;
-			} else {
-				can_add_mark = true;
-			}
-			ExtractOperatorsInternal(*child, joins, can_add_mark);
+			ExtractOperatorsInternal(*child, joins);
 			return;
 		}
 		op = op->children[0].get();
@@ -146,24 +138,24 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 	if (op->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN ||
 	    op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
-		if ((join.join_type == JoinType::INNER || join.join_type == JoinType::LEFT ||
-		     join.join_type == JoinType::RIGHT || join.join_type == JoinType::SEMI ||
-		     join.join_type == JoinType::RIGHT_SEMI || (join.join_type == JoinType::MARK && can_add_mark)) &&
-		    std::any_of(join.conditions.begin(), join.conditions.end(), [](const auto &jc) {
+
+		auto legal_type = join.join_type == JoinType::INNER || join.join_type == JoinType::LEFT ||
+		                  join.join_type == JoinType::RIGHT || join.join_type == JoinType::SEMI ||
+		                  join.join_type == JoinType::RIGHT_SEMI || join.join_type == JoinType::MARK;
+		if (legal_type && std::any_of(join.conditions.begin(), join.conditions.end(), [](const auto &jc) {
 			    return jc.comparison == ExpressionType::COMPARE_EQUAL &&
 			           jc.left->type == ExpressionType::BOUND_COLUMN_REF &&
 			           jc.right->type == ExpressionType::BOUND_COLUMN_REF;
 		    })) {
 			joins.push_back(*op);
 		}
-		can_add_mark = true;
 	}
 
 	switch (op->type) {
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &agg = op->Cast<LogicalAggregate>();
 		if (agg.groups.empty() && agg.grouping_sets.size() <= 1) {
-			ExtractOperatorsInternal(*op->children[0], joins, can_add_mark);
+			ExtractOperatorsInternal(*op->children[0], joins);
 			AddTableOperator(op);
 		} else {
 			for (size_t i = 0; i < agg.groups.size(); i++) {
@@ -172,7 +164,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 					rename_col_bindings.insert({agg.GetColumnBindings()[i], col_ref.binding});
 				}
 			}
-			ExtractOperatorsInternal(*op->children[0], joins, can_add_mark);
+			ExtractOperatorsInternal(*op->children[0], joins);
 		}
 		return;
 	}
@@ -183,15 +175,15 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 				rename_col_bindings.insert({op->GetColumnBindings()[i], col_ref.binding});
 			}
 		}
-		ExtractOperatorsInternal(*op->children[0], joins, can_add_mark);
+		ExtractOperatorsInternal(*op->children[0], joins);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
 		AddTableOperator(op);
-		ExtractOperatorsInternal(*op->children[0], joins, can_add_mark);
-		ExtractOperatorsInternal(*op->children[1], joins, can_add_mark);
+		ExtractOperatorsInternal(*op->children[0], joins);
+		ExtractOperatorsInternal(*op->children[1], joins);
 		return;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
@@ -203,7 +195,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		return;
 	default:
 		for (auto &child : op->children) {
-			ExtractOperatorsInternal(*child, joins, can_add_mark);
+			ExtractOperatorsInternal(*child, joins);
 		}
 	}
 }
