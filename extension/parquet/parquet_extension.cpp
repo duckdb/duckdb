@@ -85,7 +85,8 @@ struct ParquetReadLocalState : public LocalTableFunctionState {
 };
 
 struct ParquetMultiFileInfo {
-	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context);
+	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
+	                                                           optional_ptr<TableFunctionInfo> info);
 	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
 	                            BaseFileReaderOptions &options, vector<string> &expected_names,
 	                            vector<LogicalType> &expected_types);
@@ -103,7 +104,7 @@ struct ParquetMultiFileInfo {
 	                               FileExpandResult expand_result);
 	static unique_ptr<GlobalTableFunctionState>
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state);
-	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
+	static unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -112,7 +113,7 @@ struct ParquetMultiFileInfo {
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
 	                                               ParquetOptions &options, const MultiFileReaderOptions &file_options);
 	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
-	static void FinalizeReader(ClientContext &context, BaseFileReader &reader);
+	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
 	                 LocalTableFunctionState &local_state, DataChunk &chunk);
 	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
@@ -337,7 +338,8 @@ public:
 	}
 };
 
-unique_ptr<BaseFileReaderOptions> ParquetMultiFileInfo::InitializeOptions(ClientContext &context) {
+unique_ptr<BaseFileReaderOptions> ParquetMultiFileInfo::InitializeOptions(ClientContext &context,
+                                                                          optional_ptr<TableFunctionInfo> info) {
 	return make_uniq<ParquetFileReaderOptions>(context);
 }
 
@@ -543,7 +545,7 @@ shared_ptr<BaseUnionData> ParquetMultiFileInfo::GetUnionData(shared_ptr<BaseFile
 	return result;
 }
 
-void ParquetMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader) {
+void ParquetMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &) {
 }
 
 unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState(ClientContext &, MultiFileBindData &,
@@ -551,7 +553,8 @@ unique_ptr<GlobalTableFunctionState> ParquetMultiFileInfo::InitializeGlobalState
 	return make_uniq<ParquetReadGlobalState>();
 }
 
-unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState() {
+unique_ptr<LocalTableFunctionState> ParquetMultiFileInfo::InitializeLocalState(ExecutionContext &,
+                                                                               GlobalTableFunctionState &) {
 	return make_uniq<ParquetReadLocalState>();
 }
 
