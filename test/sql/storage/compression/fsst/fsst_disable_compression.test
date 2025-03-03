@@ -30,6 +30,6 @@ statement ok
 CHECKPOINT
 
 query I
-SELECT BOOL_OR(compression ILIKE '%fsst%') FROM pragma_storage_info('test')
+SELECT BOOL_OR(compression ILIKE 'fsst%') FROM pragma_storage_info('test')
 ----
 false

@@ -60,7 +60,7 @@ select segment_type, compression from pragma_storage_info('tbl') where segment_t
 ----
 VALIDITY	Constant
 VALIDITY	Constant
-VALIDITY	Roaring
+VALIDITY	Uncompressed
 VARCHAR	Uncompressed
 
 query I
