@@ -8,22 +8,16 @@
 
 #pragma once
 
-#include "duckdb/common/atomic.hpp"
 #include "duckdb/common/file_open_flags.hpp"
-#include "duckdb/common/map.hpp"
-#include "duckdb/common/mutex.hpp"
 #include "duckdb/common/shared_ptr.hpp"
-#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/storage/buffer/temporary_file_information.hpp"
+#include "duckdb/storage/external_file_cache.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 
 namespace duckdb {
 
 class ClientContext;
-class DatabaseInstance;
-class BlockHandle;
 class BufferHandle;
-class BufferManager;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
@@ -36,102 +30,25 @@ struct CachingFileHandle;
 class CachingFileSystem {
 	friend struct CachingFileHandle;
 
-	enum class CachedFileRangeOverlap { NONE, PARTIAL, FULL };
-
-	//! Cached reads (immutable)
-	struct CachedFileRange {
-	public:
-		CachedFileRange(shared_ptr<BlockHandle> block_handle, idx_t nr_bytes, idx_t location, string version_tag);
-		~CachedFileRange();
-
-	public:
-		//! Gets the overlap between this file range and another
-		CachedFileRangeOverlap GetOverlap(idx_t other_nr_bytes, idx_t other_location) const;
-		CachedFileRangeOverlap GetOverlap(const CachedFileRange &other) const;
-
-		//! Computes/verifies checksum over the buffer to ensure data was not modified (used for Verification only)
-		void AddCheckSum();
-		void VerifyCheckSum();
-
-	public:
-		shared_ptr<BlockHandle> block_handle;
-		const idx_t nr_bytes;
-		const idx_t location;
-		const string version_tag;
-#ifdef DEBUG
-		hash_t checksum = 0;
-#endif
-	};
-
-	//! Cached files
-	struct CachedFile {
-	public:
-		explicit CachedFile(string path_p);
-
-	public:
-		//! Verifies that none of the ranges fully overlap (must hold the lock)
-		void Verify(const unique_ptr<StorageLockKey> &guard) const;
-
-		//! Get reference to properties (must hold the lock)
-		idx_t &FileSize(const unique_ptr<StorageLockKey> &guard);
-		time_t &LastModified(const unique_ptr<StorageLockKey> &guard);
-		string &VersionTag(const unique_ptr<StorageLockKey> &guard);
-		bool &CanSeek(const unique_ptr<StorageLockKey> &guard);
-		bool &OnDiskFile(const unique_ptr<StorageLockKey> &guard);
-		map<idx_t, shared_ptr<CachedFileRange>> &Ranges(const unique_ptr<StorageLockKey> &guard);
-
-	public:
-		const string path;
-		StorageLock lock;
-
-	private:
-		map<idx_t, shared_ptr<CachedFileRange>> ranges;
-
-		idx_t file_size;
-		time_t last_modified;
-		string version_tag;
-		bool can_seek;
-		bool on_disk_file;
-	};
+public:
+	CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
 
 public:
-	explicit CachingFileSystem(DatabaseInstance &db, bool enable);
-
-public:
-	void SetEnabled(bool enable);
-	vector<CachedFileInformation> GetCachedFileInformation() const;
-
-	DUCKDB_API static CachingFileSystem &Get(DatabaseInstance &db);
 	DUCKDB_API static CachingFileSystem &Get(ClientContext &context);
 
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const string &path, FileOpenFlags flags);
 
 private:
-	//! Gets the cached file, or creates it if is not yet present
-	CachedFile &GetOrCreateCachedFile(const string &path);
-	//! Whether the CachedFile is still valid given the current modified/version tag
-	bool FileIsValid(CachedFile &cached_file, const unique_ptr<StorageLockKey> &guard,
-	                 const string &current_version_tag, time_t current_last_modified, int64_t access_time);
-
-private:
-	//! The FileSystem used to read/write files
+	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)
 	FileSystem &file_system;
-	//! The BufferManager used to cache files
-	BufferManager &buffer_manager;
-	//! Whether or not file caching is enabled
-	bool enable;
-	//! Whether or not to check whether cached files are invalidated (due to modifying the file)
-	bool check_cached_file_invalidation;
-	//! Mapping from file path to cached file with cached ranges
-	unordered_map<string, unique_ptr<CachedFile>> cached_files;
-	//! Lock for accessing the cached files
-	mutable mutex lock;
+	//! The External File Cache that caches the files
+	ExternalFileCache &external_file_cache;
 };
 
 struct CachingFileHandle {
-	using CachedFileRangeOverlap = CachingFileSystem::CachedFileRangeOverlap;
-	using CachedFileRange = CachingFileSystem::CachedFileRange;
-	using CachedFile = CachingFileSystem::CachedFile;
+	using CachedFileRangeOverlap = ExternalFileCache::CachedFileRangeOverlap;
+	using CachedFileRange = ExternalFileCache::CachedFileRange;
+	using CachedFile = ExternalFileCache::CachedFile;
 
 public:
 	DUCKDB_API CachingFileHandle(CachingFileSystem &caching_file_system, CachedFile &cached_file, FileOpenFlags flags);
@@ -155,10 +72,17 @@ private:
 	//! Try to read from cache, return an invalid BufferHandle if it fails
 	BufferHandle TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard, CachedFileRange &file_range,
 	                                  data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
+	//! Read from file and copy from cached buffers until the requested read is complete
+	//! If actually_read is false, no reading happens, only the number of non-cached reads is counted and returned
+	idx_t ReadAndCopyInterleaved(const vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
+	                             const shared_ptr<CachedFileRange> &new_file_range, data_ptr_t buffer, idx_t nr_bytes,
+	                             idx_t location, bool actually_read);
 
 private:
-	//! The caching file system that was used to create this CachingFileHandle
+	//! The client caching file system that was used to create this CachingFileHandle
 	CachingFileSystem &caching_file_system;
+	//! The DB external file cache
+	ExternalFileCache &external_file_cache;
 	//! The associated CachedFile with cached ranges
 	CachedFile &cached_file;
 	//! Flags used to open the file

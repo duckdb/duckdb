@@ -17,6 +17,7 @@ add_library_unity(
   block.cpp
   data_pointer.cpp
   data_table.cpp
+  external_file_cache.cpp
   index.cpp
   local_storage.cpp
   magic_bytes.cpp

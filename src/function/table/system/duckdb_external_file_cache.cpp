@@ -31,7 +31,7 @@ static unique_ptr<FunctionData> DuckDBExternalFileCacheBind(ClientContext &conte
 unique_ptr<GlobalTableFunctionState> DuckDBExternalFileCacheInit(ClientContext &context,
                                                                  TableFunctionInitInput &input) {
 	auto result = make_uniq<DuckDBExternalFileCacheData>();
-	result->entries = CachingFileSystem::Get(context).GetCachedFileInformation();
+	result->entries = ExternalFileCache::Get(context).GetCachedFileInformation();
 	return std::move(result);
 }
 
