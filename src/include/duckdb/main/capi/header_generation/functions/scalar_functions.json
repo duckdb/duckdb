@@ -80,7 +80,7 @@
                 }
             ],
             "comment": {
-                "description": "Sets the parameters of the given scalar function to varargs. Does not require adding parameters with\nduckdb_scalar_function_add_parameter.\n\n",
+                "description": "Sets the scalar function's null-handling behavior to special.\n\n",
                 "param_comments": {
                     "scalar_function": "The scalar function."
                 }
@@ -166,7 +166,7 @@
                 "param_comments": {
                     "scalar_function": "The scalar function",
                     "extra_info": "The extra information",
-                    "destroy": "The callback that will be called to destroy the bind data (if any)"
+                    "destroy": "The callback that will be called to destroy the extra information (if any)"
                 }
             }
         },

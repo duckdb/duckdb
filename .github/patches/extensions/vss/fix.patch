@@ -1,8 +1,8 @@
-diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
-index 318f414..d9b4dc1 100644
---- a/src/spatial/index/rtree/rtree_index_scan.cpp
-+++ b/src/spatial/index/rtree/rtree_index_scan.cpp
-@@ -56,7 +56,7 @@ static unique_ptr<GlobalTableFunctionState> RTreeIndexScanInitGlobal(ClientConte
+diff --git a/src/hnsw/hnsw_index_scan.cpp b/src/hnsw/hnsw_index_scan.cpp
+index 472bc09..edd808e 100644
+--- a/src/hnsw/hnsw_index_scan.cpp
++++ b/src/hnsw/hnsw_index_scan.cpp
+@@ -56,7 +56,7 @@ static unique_ptr<GlobalTableFunctionState> HNSWIndexScanInitGlobal(ClientContex
  	}
  
  	// Initialize the storage scan state
