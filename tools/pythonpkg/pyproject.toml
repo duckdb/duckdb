@@ -3,7 +3,6 @@ requires = [
 	"setuptools>=60",
 	"setuptools_scm>=6.4",
 	"pybind11>=2.6.0",
-	"numpy>=2.0"
 ]
 build-backend = "setuptools.build_meta"
 
@@ -16,6 +15,7 @@ local_scheme = "no-local-version"
 # Default config runs all tests and requires at least one extension to be tested against
 [tool.cibuildwheel]
 dependency-versions = "latest"
+before-build = 'pip install numpy>=2.0'
 before-test = 'python scripts/optional_requirements.py'
 test-requires = 'pytest'
 test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests --verbose'
