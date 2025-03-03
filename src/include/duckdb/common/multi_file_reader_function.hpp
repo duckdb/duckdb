@@ -613,29 +613,24 @@ public:
 				continue;
 			}
 			auto &reader_data = *reader_data_ptr;
-			parallel_lock.unlock();
 			double progress_in_file;
-			{
-				lock_guard<mutex> l(*reader_data.file_mutex);
-				if (reader_data.file_state == MultiFileFileState::OPEN) {
-					// file is currently open - get the progress within the file
-					progress_in_file = OP::GetProgressInFile(context, *reader_data.reader);
-				} else if (reader_data.file_state == MultiFileFileState::CLOSED) {
-					// file has been closed - check if the reader is still in use
-					auto reader = reader_data.closed_reader.lock();
-					if (!reader) {
-						// reader has been destroyed - we are done with this file
-						progress_in_file = 100.0;
-					} else {
-						// file is still being read
-						progress_in_file = OP::GetProgressInFile(context, *reader);
-					}
+			if (reader_data.file_state == MultiFileFileState::OPEN) {
+				// file is currently open - get the progress within the file
+				progress_in_file = OP::GetProgressInFile(context, *reader_data.reader);
+			} else if (reader_data.file_state == MultiFileFileState::CLOSED) {
+				// file has been closed - check if the reader is still in use
+				auto reader = reader_data.closed_reader.lock();
+				if (!reader) {
+					// reader has been destroyed - we are done with this file
+					progress_in_file = 100.0;
 				} else {
-					// file has not been opened yet - progress in this file is zero
-					progress_in_file = 0;
+					// file is still being read
+					progress_in_file = OP::GetProgressInFile(context, *reader);
 				}
+			} else {
+				// file has not been opened yet - progress in this file is zero
+				progress_in_file = 0;
 			}
-			parallel_lock.lock();
 			progress_in_file = MaxValue<double>(0.0, MinValue<double>(100.0, progress_in_file));
 			total_progress += progress_in_file;
 			if (i == gstate.completed_file_index && progress_in_file >= 100) {
