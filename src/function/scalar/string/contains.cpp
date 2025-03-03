@@ -8,41 +8,33 @@
 
 namespace duckdb {
 
-template <class UNSIGNED, int NEEDLE_SIZE>
-static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
-                               idx_t base_offset) {
+#ifndef DUCKDB_SMALLER_BINARY
+template <class UNSIGNED, idx_t NEEDLE_SIZE>
+static idx_t ContainsUnaligned(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle, idx_t base_offset) {
 	if (NEEDLE_SIZE > haystack_size) {
 		// needle is bigger than haystack: haystack cannot contain needle
 		return DConstants::INVALID_INDEX;
 	}
-	// contains for a small unaligned needle (3/5/6/7 bytes)
-	// we perform unsigned integer comparisons to check for equality of the entire needle in a single comparison
-	// this implementation is inspired by the memmem implementation of freebsd
-
-	// first we set up the needle and the first NEEDLE_SIZE characters of the haystack as UNSIGNED integers
-	UNSIGNED needle_entry = 0;
-	UNSIGNED haystack_entry = 0;
-	const UNSIGNED start = (sizeof(UNSIGNED) * 8) - 8;
-	const UNSIGNED shift = (sizeof(UNSIGNED) - NEEDLE_SIZE) * 8;
-	for (idx_t i = 0; i < NEEDLE_SIZE; i++) {
-		needle_entry |= UNSIGNED(needle[i]) << UNSIGNED(start - i * 8);
-		haystack_entry |= UNSIGNED(haystack[i]) << UNSIGNED(start - i * 8);
-	}
-	// now we perform the actual search
-	for (idx_t offset = NEEDLE_SIZE; offset < haystack_size; offset++) {
-		// for this position we first compare the haystack with the needle
-		if (haystack_entry == needle_entry) {
-			return base_offset + offset - NEEDLE_SIZE;
+	haystack_size -= NEEDLE_SIZE - 1;
+	auto needle_entry = Load<UNSIGNED>(needle);
+	for(idx_t offset = 0; offset < haystack_size; offset++) {
+		// start off by performing a memchr to find the first character of the
+		auto location = static_cast<const unsigned char *>(memchr(haystack + offset, needle[0], haystack_size - offset));
+		if (!location) {
+			return DConstants::INVALID_INDEX;
 		}
-		// now we adjust the haystack entry by
-		// (1) removing the left-most character (shift by 8)
-		// (2) adding the next character (bitwise or, with potential shift)
-		// this shift is only necessary if the needle size is not aligned with the unsigned integer size
-		// (e.g. needle size 3, unsigned integer size 4, we need to shift by 1)
-		haystack_entry = (haystack_entry << 8) | ((UNSIGNED(haystack[offset])) << shift);
-	}
-	if (haystack_entry == needle_entry) {
-		return base_offset + haystack_size - NEEDLE_SIZE;
+		// for this position we first compare the haystack with the needle
+		offset = UnsafeNumericCast<idx_t>(location - haystack);
+		auto haystack_entry = Load<UNSIGNED>(location);
+		if (needle_entry == haystack_entry) {
+			idx_t matches = 0;
+			for(idx_t i = sizeof(UNSIGNED); i < NEEDLE_SIZE; i++) {
+				matches += location[i] == needle[i];
+			}
+			if (matches == NEEDLE_SIZE - sizeof(UNSIGNED)) {
+				return base_offset + offset;
+			}
+		}
 	}
 	return DConstants::INVALID_INDEX;
 }
@@ -54,18 +46,24 @@ static idx_t ContainsAligned(const unsigned char *haystack, idx_t haystack_size,
 		// needle is bigger than haystack: haystack cannot contain needle
 		return DConstants::INVALID_INDEX;
 	}
-	// contains for a small needle aligned with unsigned integer (2/4/8)
-	// similar to ContainsUnaligned, but simpler because we only need to do a reinterpret cast
+	haystack_size -= sizeof(UNSIGNED) - 1;
 	auto needle_entry = Load<UNSIGNED>(needle);
-	for (idx_t offset = 0; offset <= haystack_size - sizeof(UNSIGNED); offset++) {
+	for(idx_t offset = 0; offset < haystack_size; offset++) {
+		// start off by performing a memchr to find the first character of the
+		auto location = static_cast<const unsigned char *>(memchr(haystack + offset, needle[0], haystack_size - offset));
+		if (!location) {
+			return DConstants::INVALID_INDEX;
+		}
 		// for this position we first compare the haystack with the needle
-		auto haystack_entry = Load<UNSIGNED>(haystack + offset);
+		offset = UnsafeNumericCast<idx_t>(location - haystack);
+		auto haystack_entry = Load<UNSIGNED>(location);
 		if (needle_entry == haystack_entry) {
 			return base_offset + offset;
 		}
 	}
 	return DConstants::INVALID_INDEX;
 }
+#endif
 
 idx_t ContainsGeneric(const unsigned char *haystack, idx_t haystack_size, const unsigned char *needle,
                       idx_t needle_size, idx_t base_offset) {
@@ -110,6 +108,7 @@ idx_t FindStrInStr(const unsigned char *haystack, idx_t haystack_size, const uns
 	idx_t base_offset = UnsafeNumericCast<idx_t>(const_uchar_ptr_cast(location) - haystack);
 	haystack_size -= base_offset;
 	haystack = const_uchar_ptr_cast(location);
+#ifndef DUCKDB_SMALLER_BINARY
 	// switch algorithm depending on needle size
 	switch (needle_size) {
 	case 1:
@@ -117,20 +116,23 @@ idx_t FindStrInStr(const unsigned char *haystack, idx_t haystack_size, const uns
 	case 2:
 		return ContainsAligned<uint16_t>(haystack, haystack_size, needle, base_offset);
 	case 3:
-		return ContainsUnaligned<uint32_t, 3>(haystack, haystack_size, needle, base_offset);
+		return ContainsUnaligned<uint16_t, 3>(haystack, haystack_size, needle, base_offset);
 	case 4:
 		return ContainsAligned<uint32_t>(haystack, haystack_size, needle, base_offset);
 	case 5:
-		return ContainsUnaligned<uint64_t, 5>(haystack, haystack_size, needle, base_offset);
+		return ContainsUnaligned<uint32_t, 5>(haystack, haystack_size, needle, base_offset);
 	case 6:
-		return ContainsUnaligned<uint64_t, 6>(haystack, haystack_size, needle, base_offset);
+		return ContainsUnaligned<uint32_t, 6>(haystack, haystack_size, needle, base_offset);
 	case 7:
-		return ContainsUnaligned<uint64_t, 7>(haystack, haystack_size, needle, base_offset);
+		return ContainsUnaligned<uint32_t, 7>(haystack, haystack_size, needle, base_offset);
 	case 8:
 		return ContainsAligned<uint64_t>(haystack, haystack_size, needle, base_offset);
 	default:
 		return ContainsGeneric(haystack, haystack_size, needle, needle_size, base_offset);
 	}
+#else
+	return ContainsGeneric(haystack, haystack_size, needle, needle_size, base_offset);
+#endif
 }
 
 idx_t FindStrInStr(const string_t &haystack_s, const string_t &needle_s) {
