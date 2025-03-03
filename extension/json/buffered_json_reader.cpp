@@ -90,22 +90,16 @@ void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, b
                                     optional_ptr<FileHandle> override_handle) {
 	if (size != 0) {
 		auto &handle = override_handle ? *override_handle.get() : *file_handle.get();
-		if (can_seek) {
-			handle.Read(pointer, size, position);
-		} else if (file_handle->IsPipe()) { // Cache the buffer
-			handle.Read(pointer, size, position);
 
+		if (!cached_buffers.empty() || position < cached_size) {
+			ReadFromCache(pointer, size, position);
+		}
+
+		handle.Read(pointer, size, position);
+		if (file_handle->IsPipe()) { // Cache the buffer
 			cached_buffers.emplace_back(allocator.Allocate(size));
 			memcpy(cached_buffers.back().get(), pointer, size);
 			cached_size += size;
-		} else {
-			if (!cached_buffers.empty() || position < cached_size) {
-				ReadFromCache(pointer, size, position);
-			}
-
-			if (size != 0) {
-				handle.Read(pointer, size, position);
-			}
 		}
 	}
 
@@ -121,30 +115,23 @@ void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, b
 
 bool JSONFileHandle::Read(char *pointer, idx_t &read_size, idx_t requested_size, bool &file_done, bool sample_run) {
 	D_ASSERT(requested_size != 0);
+	read_size = 0;
 	if (last_read_requested) {
 		return false;
 	}
 
-	if (can_seek) {
-		read_size = ReadInternal(pointer, requested_size);
-		read_position += read_size;
-	} else if (file_handle->IsPipe()) { // Cache the buffer
-		read_size = ReadInternal(pointer, requested_size);
-		if (read_size > 0) {
-			cached_buffers.emplace_back(allocator.Allocate(read_size));
-			memcpy(cached_buffers.back().get(), pointer, read_size);
-		}
-		cached_size += read_size;
-		read_position += read_size;
-	} else {
-		read_size = 0;
-		if (!cached_buffers.empty() || read_position < cached_size) {
-			read_size += ReadFromCache(pointer, requested_size, read_position);
-		}
-		if (requested_size != 0) {
-			read_size += ReadInternal(pointer, requested_size);
-		}
+	if (!cached_buffers.empty() || read_position < cached_size) {
+		read_size += ReadFromCache(pointer, requested_size, read_position);
 	}
+
+	auto temp_read_size = ReadInternal(pointer, requested_size);
+	if (file_handle->IsPipe() && temp_read_size != 0) { // Cache the buffer
+		cached_buffers.emplace_back(allocator.Allocate(temp_read_size));
+		memcpy(cached_buffers.back().get(), pointer, temp_read_size);
+	}
+	cached_size += temp_read_size;
+	read_position += temp_read_size;
+	read_size += temp_read_size;
 
 	if (read_size == 0) {
 		last_read_requested = true;
