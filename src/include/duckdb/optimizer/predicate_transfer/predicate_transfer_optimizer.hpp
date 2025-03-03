@@ -35,8 +35,8 @@ private:
 	static unique_ptr<LogicalUseBF> BuildUseBFOperator(LogicalOperator &node,
 	                                                   vector<shared_ptr<BloomFilterPlan>> &bf_plans);
 
-	//! Will this node be filtered?
-	bool PossibleFilterAny(LogicalOperator &node, bool reverse = false);
+	//! if this node has been filtered?
+	bool HasAnyFilter(LogicalOperator &node, bool reverse = false);
 
 	//! which column(s) involved in this expression?
 	static void GetColumnBindingExpression(Expression &expr, vector<BoundColumnRefExpression *> &expressions);

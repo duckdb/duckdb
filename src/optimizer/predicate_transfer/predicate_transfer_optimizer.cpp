@@ -102,7 +102,7 @@ PredicateTransferOptimizer::CreateBloomFilterPlan(LogicalOperator &node, bool re
 		auto last_use_bf = BuildUseBFOperator(node, bfs_to_use_plan);
 		replace_map[&node] = std::move(last_use_bf);
 	} else if (!bfs_to_create_plan.empty()) {
-		if (!PossibleFilterAny(node, reverse)) {
+		if (!HasAnyFilter(node, reverse)) {
 			return result;
 		}
 
@@ -189,7 +189,7 @@ unique_ptr<LogicalUseBF> PredicateTransferOptimizer::BuildUseBFOperator(LogicalO
 	return last_operator;
 }
 
-bool PredicateTransferOptimizer::PossibleFilterAny(LogicalOperator &node, bool reverse) {
+bool PredicateTransferOptimizer::HasAnyFilter(LogicalOperator &node, bool reverse) {
 	if (!reverse || (modify_map_for_forward_stage.find(&node) == modify_map_for_forward_stage.end())) {
 		if (node.type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = node.Cast<LogicalGet>();
