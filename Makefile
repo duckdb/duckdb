@@ -268,7 +268,12 @@ endif
 ifeq (${NATIVE_ARCH}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DNATIVE_ARCH=1
 endif
-
+ifeq (${MAIN_BRANCH_VERSIONING}, 0)
+        CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=0
+endif
+ifeq (${MAIN_BRANCH_VERSIONING}, 1)
+        CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
+endif
 
 # Optional overrides
 ifneq (${STANDARD_VECTOR_SIZE}, )
@@ -316,7 +321,6 @@ clean-python:
 debug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/debug && \
 	cd build/debug && \
-	echo ${DUCKDB_EXTENSION_SUBSTRAIT_PATH} && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 

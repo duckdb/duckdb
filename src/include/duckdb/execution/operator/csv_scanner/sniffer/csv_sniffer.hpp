@@ -108,8 +108,9 @@ struct HasType {
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
-	explicit CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-	                    CSVStateMachineCache &state_machine_cache, bool default_null_to_varchar = true);
+	explicit CSVSniffer(CSVReaderOptions &options_p, const MultiFileReaderOptions &file_options,
+	                    shared_ptr<CSVBufferManager> buffer_manager_p, CSVStateMachineCache &state_machine_cache,
+	                    bool default_null_to_varchar = true);
 
 	//! Main method that sniffs the CSV file, returns the types, names and options as a result
 	//! CSV Sniffing consists of five steps:
@@ -149,6 +150,8 @@ private:
 	vector<unique_ptr<ColumnCountScanner>> candidates;
 	//! Reference to original CSV Options, it will be modified as a result of the sniffer.
 	CSVReaderOptions &options;
+	//! The multi-file reader options
+	const MultiFileReaderOptions &file_options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;
 	//! Information regarding columns that were set by user/query
@@ -236,7 +239,8 @@ private:
 	DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
 	                     const SetColumns &set_columns,
 	                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-	                     CSVReaderOptions &options, CSVErrorHandler &error_handler);
+	                     CSVReaderOptions &options, const MultiFileReaderOptions &file_options,
+	                     CSVErrorHandler &error_handler);
 	vector<string> names;
 	//! If the file only has a header
 	bool single_row_file = false;

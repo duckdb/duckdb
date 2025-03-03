@@ -82,7 +82,8 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromSelect(ClientContext &context, un
 	return info;
 }
 
-unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context, const string &sql) {
+unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context, SchemaCatalogEntry &schema,
+                                                          const string &sql) {
 	D_ASSERT(!sql.empty());
 
 	// parse the SQL statement
@@ -101,9 +102,11 @@ unique_ptr<CreateViewInfo> CreateViewInfo::FromCreateView(ClientContext &context
 	}
 
 	auto result = unique_ptr_cast<CreateInfo, CreateViewInfo>(std::move(create_statement.info));
+	result->catalog = schema.ParentCatalog().GetName();
+	result->schema = schema.name;
 
-	auto binder = Binder::CreateBinder(context);
-	binder->BindCreateViewInfo(*result);
+	auto view_binder = Binder::CreateBinder(context);
+	view_binder->BindCreateViewInfo(*result);
 
 	return result;
 }

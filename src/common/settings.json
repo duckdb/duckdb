@@ -115,6 +115,12 @@
         "scope": "global"
     },
     {
+        "name": "asof_loop_join_threshold",
+        "description": "The maximum number of rows we need on the left side of an ASOF join to use a nested loop join",
+        "type": "UBIGINT",
+        "scope": "local"
+    },
+    {
         "name": "autoinstall_extension_repository",
         "description": "Overrides the custom endpoint for extension installation on autoloading",
         "type": "VARCHAR",

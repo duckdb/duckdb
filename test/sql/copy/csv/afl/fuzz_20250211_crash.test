@@ -1,0 +1,10 @@
+# name: test/sql/copy/csv/afl/fuzz_20250211_crash.test
+# description: fuzzer generated csv files - should not raise internal exception (by failed assertion).
+# group: [afl]
+
+statement ok
+PRAGMA enable_verification
+
+statement maybe
+FROM read_csv('data/csv/afl/20250211_csv_fuzz_crash/case_53.csv', buffer_size=42);
+----

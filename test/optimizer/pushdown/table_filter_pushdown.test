@@ -107,7 +107,7 @@ logical_opt	<!REGEX>:.*FILTER.*
 
 # more complex filters cannot be pushed down
 query II
-EXPLAIN SELECT i FROM tablinho where i like 'bla%'
+EXPLAIN SELECT i FROM tablinho where i like 'bl_a%'
 ----
 logical_opt	<REGEX>:.*FILTER.*
 

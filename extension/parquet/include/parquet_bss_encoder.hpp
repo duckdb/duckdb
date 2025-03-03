@@ -30,7 +30,6 @@ public:
 	}
 
 	void FinishWrite(WriteStream &writer) {
-		D_ASSERT(count == total_value_count);
 		writer.WriteData(buffer.get(), total_value_count * bit_width);
 	}
 
@@ -41,5 +40,24 @@ private:
 	idx_t count;
 	AllocatedData buffer;
 };
+
+namespace bss_encoder {
+
+template <class T>
+void WriteValue(BssEncoder &encoder, const T &value) {
+	throw InternalException("Can't write type to BYTE_STREAM_SPLIT column");
+}
+
+template <>
+void WriteValue(BssEncoder &encoder, const float &value) {
+	encoder.WriteValue(value);
+}
+
+template <>
+void WriteValue(BssEncoder &encoder, const double &value) {
+	encoder.WriteValue(value);
+}
+
+} // namespace bss_encoder
 
 } // namespace duckdb

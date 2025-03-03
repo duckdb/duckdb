@@ -218,6 +218,17 @@ struct ArrowOutputListViewSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct AsofLoopJoinThresholdSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "asof_loop_join_threshold";
+	static constexpr const char *Description =
+	    "The maximum number of rows we need on the left side of an ASOF join to use a nested loop join";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AutoinstallExtensionRepositorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "autoinstall_extension_repository";

@@ -20,3 +20,14 @@ class TestInsert(object):
         rel.insert([3, 'three'])
         rel_a3 = cursor.table('test').project('CAST(i as BIGINT)i, j').to_df()
         pandas.testing.assert_frame_equal(rel_a3, test_df)
+
+    def test_insert_with_schema(self, duckdb_cursor):
+        duckdb_cursor.sql("create schema not_main")
+        duckdb_cursor.sql("create table not_main.tbl as select * from range(10)")
+
+        res = duckdb_cursor.table('not_main.tbl').fetchall()
+        assert len(res) == 10
+
+        # FIXME: This is not currently supported
+        with pytest.raises(duckdb.CatalogException, match='Table with name tbl does not exist'):
+            duckdb_cursor.table('not_main.tbl').insert([42, 21, 1337])

@@ -135,6 +135,8 @@ public:
 	//! Returns a relation that produces a table from this connection
 	DUCKDB_API shared_ptr<Relation> Table(const string &tname);
 	DUCKDB_API shared_ptr<Relation> Table(const string &schema_name, const string &table_name);
+	DUCKDB_API shared_ptr<Relation> Table(const string &catalog_name, const string &schema_name,
+	                                      const string &table_name);
 	//! Returns a relation that produces a view from this connection
 	DUCKDB_API shared_ptr<Relation> View(const string &tname);
 	DUCKDB_API shared_ptr<Relation> View(const string &schema_name, const string &table_name);
@@ -166,14 +168,6 @@ public:
 	DUCKDB_API shared_ptr<Relation> RelationFromQuery(unique_ptr<SelectStatement> select_stmt,
 	                                                  const string &alias = "queryrelation", const string &query = "");
 
-	//! Returns a substrait BLOB from a valid query
-	DUCKDB_API string GetSubstrait(const string &query);
-	//! Returns a Query Result from a substrait blob
-	DUCKDB_API unique_ptr<QueryResult> FromSubstrait(const string &proto);
-	//! Returns a substrait BLOB from a valid query
-	DUCKDB_API string GetSubstraitJSON(const string &query);
-	//! Returns a Query Result from a substrait JSON
-	DUCKDB_API unique_ptr<QueryResult> FromSubstraitJSON(const string &json);
 	DUCKDB_API void BeginTransaction();
 	DUCKDB_API void Commit();
 	DUCKDB_API void Rollback();
@@ -251,6 +245,10 @@ public:
 		UDFWrapper::RegisterAggrFunction(function, *context);
 	}
 	// NOLINTEND
+
+protected:
+	//! Identified used to uniquely identify connections to the database.
+	connection_t connection_id;
 
 private:
 	unique_ptr<QueryResult> QueryParamsRecursive(const string &query, vector<Value> &values);

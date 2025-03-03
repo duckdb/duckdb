@@ -1,0 +1,30 @@
+# name: test/sql/attach/attach_issue16122.test
+# description: Issue #16122 - Attach binding to incorrect table
+# group: [attach]
+
+require noforcestorage
+
+load __TEST_DIR__/issue16122.db
+
+
+statement ok
+create table mytable (C1 VARCHAR(10));
+
+statement ok
+insert into mytable values ('a');
+
+statement ok
+attach '__TEST_DIR__/issue16122_new.db' as TOMERGE;
+
+statement ok
+create table TOMERGE.mytable (C1 VARCHAR(10));
+
+query I
+insert into TOMERGE.mytable SELECT * FROM mytable;
+----
+1
+
+query I
+select * from TOMERGE.mytable;
+----
+a

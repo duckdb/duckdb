@@ -296,7 +296,7 @@ def create_function_declaration(function_obj):
     function_return_type = function_obj['return_type']
 
     # Construct function declaration
-    result += f'DUCKDB_API {function_return_type}'
+    result += f'DUCKDB_C_API {function_return_type}'
     if result[-1] != '*':
         result += ' '
     result += f'{function_name}('

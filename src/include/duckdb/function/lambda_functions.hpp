@@ -17,7 +17,7 @@
 
 namespace duckdb {
 
-struct ListLambdaBindData : public FunctionData {
+struct ListLambdaBindData final : public FunctionData {
 public:
 	ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr, const bool has_index = false)
 	    : return_type(return_type), lambda_expr(std::move(lambda_expr)), has_index(has_index) {};
@@ -30,8 +30,16 @@ public:
 	bool has_index;
 
 public:
-	bool Equals(const FunctionData &other_p) const override;
-	unique_ptr<FunctionData> Copy() const override;
+	unique_ptr<FunctionData> Copy() const override {
+		auto lambda_expr_copy = lambda_expr ? lambda_expr->Copy() : nullptr;
+		return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr_copy), has_index);
+	}
+
+	bool Equals(const FunctionData &other_p) const override {
+		auto &other = other_p.Cast<ListLambdaBindData>();
+		return Expression::Equals(lambda_expr, other.lambda_expr) && return_type == other.return_type &&
+		       has_index == other.has_index;
+	}
 
 	//! Serializes a lambda function's bind data
 	static void Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,

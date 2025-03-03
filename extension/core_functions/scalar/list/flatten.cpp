@@ -7,44 +7,41 @@
 
 namespace duckdb {
 
-void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	D_ASSERT(args.ColumnCount() == 1);
+static void ListFlattenFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
-	Vector &input = args.data[0];
-	if (input.GetType().id() == LogicalTypeId::SQLNULL) {
-		result.Reference(input);
+	const auto flat_list_data = FlatVector::GetData<list_entry_t>(result);
+	auto &flat_list_mask = FlatVector::Validity(result);
+
+	UnifiedVectorFormat outer_format;
+	UnifiedVectorFormat inner_format;
+	UnifiedVectorFormat items_format;
+
+	// Setup outer vec;
+	auto &outer_vec = args.data[0];
+	const auto outer_count = args.size();
+	outer_vec.ToUnifiedFormat(outer_count, outer_format);
+
+	// Special case: outer list is all-null
+	if (outer_vec.GetType().id() == LogicalTypeId::SQLNULL) {
+		result.Reference(outer_vec);
 		return;
 	}
 
-	idx_t count = args.size();
+	// Setup inner vec
+	auto &inner_vec = ListVector::GetEntry(outer_vec);
+	const auto inner_count = ListVector::GetListSize(outer_vec);
+	inner_vec.ToUnifiedFormat(inner_count, inner_format);
 
-	// Prepare the result vector
-	result.SetVectorType(VectorType::FLAT_VECTOR);
-	// This holds the new offsets and lengths
-	auto result_entries = FlatVector::GetData<list_entry_t>(result);
-	auto &result_validity = FlatVector::Validity(result);
-
-	// The outermost list in each row
-	UnifiedVectorFormat row_data;
-	input.ToUnifiedFormat(count, row_data);
-	auto row_entries = UnifiedVectorFormat::GetData<list_entry_t>(row_data);
-
-	// The list elements in each row: [HERE, ...]
-	auto &row_lists = ListVector::GetEntry(input);
-	UnifiedVectorFormat row_lists_data;
-	idx_t total_row_lists = ListVector::GetListSize(input);
-	row_lists.ToUnifiedFormat(total_row_lists, row_lists_data);
-	auto row_lists_entries = UnifiedVectorFormat::GetData<list_entry_t>(row_lists_data);
-
-	if (row_lists.GetType().id() == LogicalTypeId::SQLNULL) {
-		for (idx_t row_cnt = 0; row_cnt < count; row_cnt++) {
-			auto row_idx = row_data.sel->get_index(row_cnt);
-			if (!row_data.validity.RowIsValid(row_idx)) {
-				result_validity.SetInvalid(row_cnt);
+	// Special case: inner list is all-null
+	if (inner_vec.GetType().id() == LogicalTypeId::SQLNULL) {
+		for (idx_t outer_raw_idx = 0; outer_raw_idx < outer_count; outer_raw_idx++) {
+			const auto outer_idx = outer_format.sel->get_index(outer_raw_idx);
+			if (!outer_format.validity.RowIsValid(outer_idx)) {
+				flat_list_mask.SetInvalid(outer_raw_idx);
 				continue;
 			}
-			result_entries[row_cnt].offset = 0;
-			result_entries[row_cnt].length = 0;
+			flat_list_data[outer_raw_idx].offset = 0;
+			flat_list_data[outer_raw_idx].length = 0;
 		}
 		if (args.AllConstant()) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -52,57 +49,90 @@ void ListFlattenFunction(DataChunk &args, ExpressionState &state, Vector &result
 		return;
 	}
 
-	// The actual elements inside each row list: [[HERE, ...], []]
-	// This one becomes the child vector of the result.
-	auto &elem_vector = ListVector::GetEntry(row_lists);
+	// Setup items vec
+	auto &items_vec = ListVector::GetEntry(inner_vec);
+	const auto items_count = ListVector::GetListSize(inner_vec);
+	items_vec.ToUnifiedFormat(items_count, items_format);
 
-	// We'll use this selection vector to slice the elem_vector.
-	idx_t child_elem_cnt = ListVector::GetListSize(row_lists);
-	SelectionVector sel(child_elem_cnt);
-	idx_t sel_idx = 0;
+	// First pass: Figure out the total amount of items.
+	// This can be more than items_count if the inner list reference the same item(s) multiple times.
 
-	// HERE, [[]], ...
-	for (idx_t row_cnt = 0; row_cnt < count; row_cnt++) {
-		auto row_idx = row_data.sel->get_index(row_cnt);
+	idx_t total_items = 0;
 
-		if (!row_data.validity.RowIsValid(row_idx)) {
-			result_validity.SetInvalid(row_cnt);
+	const auto outer_data = UnifiedVectorFormat::GetData<list_entry_t>(outer_format);
+	const auto inner_data = UnifiedVectorFormat::GetData<list_entry_t>(inner_format);
+
+	for (idx_t outer_raw_idx = 0; outer_raw_idx < outer_count; outer_raw_idx++) {
+		const auto outer_idx = outer_format.sel->get_index(outer_raw_idx);
+
+		if (!outer_format.validity.RowIsValid(outer_idx)) {
 			continue;
 		}
 
-		idx_t list_offset = sel_idx;
-		idx_t list_length = 0;
+		const auto &outer_entry = outer_data[outer_idx];
 
-		// [HERE, [...], ...]
-		auto row_entry = row_entries[row_idx];
-		for (idx_t row_lists_cnt = 0; row_lists_cnt < row_entry.length; row_lists_cnt++) {
-			auto row_lists_idx = row_lists_data.sel->get_index(row_entry.offset + row_lists_cnt);
+		for (idx_t inner_raw_idx = outer_entry.offset; inner_raw_idx < outer_entry.offset + outer_entry.length;
+		     inner_raw_idx++) {
+			const auto inner_idx = inner_format.sel->get_index(inner_raw_idx);
 
-			// Skip invalid lists
-			if (!row_lists_data.validity.RowIsValid(row_lists_idx)) {
+			if (!inner_format.validity.RowIsValid(inner_idx)) {
 				continue;
 			}
 
-			// [[HERE, ...], [.., ...]]
-			auto list_entry = row_lists_entries[row_lists_idx];
-			list_length += list_entry.length;
+			const auto &inner_entry = inner_data[inner_idx];
 
-			for (idx_t elem_cnt = 0; elem_cnt < list_entry.length; elem_cnt++) {
-				// offset of the element in the elem_vector.
-				idx_t offset = list_entry.offset + elem_cnt;
-				sel.set_index(sel_idx, offset);
+			total_items += inner_entry.length;
+		}
+	}
+
+	// Now we know the total amount of items, we can create our selection vector.
+	SelectionVector sel(total_items);
+	idx_t sel_idx = 0;
+
+	// Second pass: Fill the selection vector (and the result list entries)
+
+	for (idx_t outer_raw_idx = 0; outer_raw_idx < outer_count; outer_raw_idx++) {
+		const auto outer_idx = outer_format.sel->get_index(outer_raw_idx);
+
+		if (!outer_format.validity.RowIsValid(outer_idx)) {
+			flat_list_mask.SetInvalid(outer_raw_idx);
+			continue;
+		}
+
+		const auto &outer_entry = outer_data[outer_idx];
+
+		list_entry_t list_entry = {sel_idx, 0};
+
+		for (idx_t inner_raw_idx = outer_entry.offset; inner_raw_idx < outer_entry.offset + outer_entry.length;
+		     inner_raw_idx++) {
+			const auto inner_idx = inner_format.sel->get_index(inner_raw_idx);
+
+			if (!inner_format.validity.RowIsValid(inner_idx)) {
+				continue;
+			}
+
+			const auto &inner_entry = inner_data[inner_idx];
+
+			list_entry.length += inner_entry.length;
+
+			for (idx_t elem_raw_idx = inner_entry.offset; elem_raw_idx < inner_entry.offset + inner_entry.length;
+			     elem_raw_idx++) {
+				const auto elem_idx = items_format.sel->get_index(elem_raw_idx);
+
+				sel.set_index(sel_idx, elem_idx);
 				sel_idx++;
 			}
 		}
 
-		result_entries[row_cnt].offset = list_offset;
-		result_entries[row_cnt].length = list_length;
+		// Assign the result list entry
+		flat_list_data[outer_raw_idx] = list_entry;
 	}
 
+	// Now assing the result
 	ListVector::SetListSize(result, sel_idx);
 
 	auto &result_child_vector = ListVector::GetEntry(result);
-	result_child_vector.Slice(elem_vector, sel, sel_idx);
+	result_child_vector.Slice(items_vec, sel, sel_idx);
 	result_child_vector.Flatten(sel_idx);
 
 	if (args.AllConstant()) {
