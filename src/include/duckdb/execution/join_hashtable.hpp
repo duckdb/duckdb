@@ -177,8 +177,10 @@ public:
 	void Merge(JoinHashTable &other);
 	//! Combines the partitions in sink_collection into data_collection, as if it were not partitioned
 	void Unpartition();
+	//! Allocate the pointer table for the probe
+	void AllocatePointerTable();
 	//! Initialize the pointer table for the probe
-	void InitializePointerTable();
+	void InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to);
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.

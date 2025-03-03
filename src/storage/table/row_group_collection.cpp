@@ -141,7 +141,7 @@ void RowGroupCollection::Verify() {
 // Scan
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::InitializeScan(CollectionScanState &state, const vector<StorageIndex> &column_ids,
-                                        TableFilterSet *table_filters) {
+                                        optional_ptr<TableFilterSet> table_filters) {
 	auto row_group = row_groups->GetRootSegment();
 	D_ASSERT(row_group);
 	state.row_groups = row_groups.get();
@@ -1082,9 +1082,9 @@ void RowGroupCollection::Checkpoint(TableDataWriter &writer, TableStatistics &gl
 //===--------------------------------------------------------------------===//
 // CommitDrop
 //===--------------------------------------------------------------------===//
-void RowGroupCollection::CommitDropColumn(idx_t index) {
+void RowGroupCollection::CommitDropColumn(const idx_t column_index) {
 	for (auto &row_group : row_groups->Segments()) {
-		row_group.CommitDropColumn(index);
+		row_group.CommitDropColumn(column_index);
 	}
 }
 

@@ -89,6 +89,11 @@ public:
 		}
 		return *connection;
 	}
+
+	bool ConnectionIsClosed() const {
+		return connection == nullptr;
+	}
+
 	const Connection &GetConnection() const {
 		if (!connection) {
 			ThrowConnectionException();
@@ -182,6 +187,7 @@ public:
 
 	static bool DetectAndGetEnvironment();
 	static bool IsJupyter();
+	static std::string FormattedPythonVersion();
 	static shared_ptr<DuckDBPyConnection> DefaultConnection();
 	static void SetDefaultConnection(shared_ptr<DuckDBPyConnection> conn);
 	static PythonImportCache *ImportCache();
@@ -348,6 +354,7 @@ private:
 	vector<unique_ptr<SQLStatement>> GetStatements(const py::object &query);
 
 	static PythonEnvironmentType environment;
+	static std::string formatted_python_version;
 	static void DetectEnvironment();
 };
 

@@ -205,11 +205,10 @@ static idx_t FindTypedRangeBound(WindowCursor &range_lo, WindowCursor &range_hi,
 	}
 	//	Try to reuse the previous bounds to restrict the search.
 	//	This is only valid if the previous bounds were non-empty
-	//	Only inject the comparisons if the previous bounds are a strict subset.
 	WindowColumnIterator<T> begin(range_lo, order_begin);
 	WindowColumnIterator<T> end(range_hi, order_end);
 	if (prev.start < prev.end) {
-		if (order_begin < prev.start && prev.start < order_end) {
+		if (order_begin <= prev.start && prev.start < order_end) {
 			const auto first = range_lo.GetCell<T>(0, prev.start);
 			if (FROM && !comp(val, first)) {
 				// If prev.start == val and we are looking for a lower bound, then we are done
@@ -648,11 +647,15 @@ void WindowBoundariesState::PeerEnd(DataChunk &bounds, idx_t row_idx, const idx_
 	auto partition_end_data = FlatVector::GetData<const idx_t>(bounds.data[PARTITION_END]);
 	auto peer_begin_data = FlatVector::GetData<const idx_t>(bounds.data[PEER_BEGIN]);
 	auto peer_end_data = FlatVector::GetData<idx_t>(bounds.data[PEER_END]);
+	auto prev_end = peer_begin_data[0];
 	for (idx_t chunk_idx = 0; chunk_idx < count; ++chunk_idx, ++row_idx) {
-		idx_t n = 1;
 		const auto peer_start = peer_begin_data[chunk_idx];
-		const auto partition_end = partition_end_data[chunk_idx];
-		peer_end_data[chunk_idx] = FindNextStart(order_mask, peer_start + 1, partition_end, n);
+		if (peer_start >= prev_end) {
+			idx_t n = 1;
+			const auto partition_end = partition_end_data[chunk_idx];
+			prev_end = FindNextStart(order_mask, peer_start + 1, partition_end, n);
+		}
+		peer_end_data[chunk_idx] = prev_end;
 	}
 }
 

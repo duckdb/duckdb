@@ -1,0 +1,40 @@
+# name: test/fuzzer/fuzz_not_unpacked_columns.test
+# group: [fuzzer]
+
+statement ok
+CREATE TABLE v00 (c01 INT, c02 STRING);
+
+statement error
+SELECT NOT (*COLUMNS(*)) FROM v00;
+----
+Binder Error: *COLUMNS() can not be used together with the 'OPERATOR_NOT' operator
+
+statement error
+SELECT (*COLUMNS(*) IS NOT NULL) FROM v00;
+----
+Binder Error: *COLUMNS() can not be used together with the 'OPERATOR_IS_NOT_NULL' operator
+
+statement error
+SELECT (*COLUMNS(*) IS NULL) FROM v00;
+----
+Binder Error: *COLUMNS() can not be used together with the 'OPERATOR_IS_NULL' operator
+
+statement error
+SELECT (*COLUMNS(*))[2] FROM v00;
+----
+Binder Error: *COLUMNS() can not be used together with the 'ARRAY_EXTRACT' operator
+
+statement error
+SELECT (*COLUMNS(*))[2:1:0] FROM v00;
+----
+Binder Error: *COLUMNS() can not be used together with the 'ARRAY_SLICE' operator
+
+statement error
+SELECT (*COLUMNS(*)).a FROM v00;
+----
+Binder Error: *COLUMNS() can not be used together with the 'STRUCT_EXTRACT' operator
+
+statement error
+SELECT construct_array(*COLUMNS(*)) FROM v00;
+----
+Binder Error: *COLUMNS() can not be used together with the 'ARRAY_CONSTRUCTOR' operator
