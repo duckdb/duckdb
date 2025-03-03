@@ -39,12 +39,13 @@ EXPLAIN SELECT k FROM integers where j = 5 and i = 10
 ----
 logical_opt	<!REGEX>:.*FILTER.*
 
-# simple filter is pushed down: no filter remaining
+# complex filter is pushed down: no filter remaining
 query II
 EXPLAIN SELECT k FROM integers where j::VARCHAR SIMILAR TO '[0-9]*'
 ----
 logical_opt	<!REGEX>:.*FILTER.*
 
+# we cannot push down expressions that can throw errors
 query I
 SELECT k FROM integers where j%50=j
 ----
@@ -54,7 +55,7 @@ SELECT k FROM integers where j%50=j
 query II
 EXPLAIN SELECT k FROM integers where j%50=j
 ----
-logical_opt	<!REGEX>:.*FILTER.*
+logical_opt	<REGEX>:.*FILTER.*
 
 # test different data types
 foreach type <numeric>

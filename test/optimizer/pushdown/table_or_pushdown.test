@@ -205,12 +205,12 @@ CCCC
 
 #### OR filters with CASE statement
 query II
-EXPLAIN SELECT * FROM integers WHERE a=1 OR (CASE WHEN a%2=0 THEN true ELSE false END)
+EXPLAIN SELECT * FROM integers WHERE a=1 OR (CASE WHEN a=2 THEN true WHEN a=4 THEN true ELSE false END)
 ----
 physical_plan	<REGEX>:.*SEQ_SCAN.*Filters:.*
 
 query II
-SELECT * FROM integers WHERE a=1 OR (CASE WHEN a%2=0 THEN true ELSE false END)
+SELECT * FROM integers WHERE a=1 OR (CASE WHEN a=2 THEN true WHEN a=4 THEN true ELSE false END)
 ----
 1	1
 2	2

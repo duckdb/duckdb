@@ -70,7 +70,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 			continue;
 		}
 		auto &expr = *filters[i]->filter;
-		if ((expr.IsVolatile() || expr.CanThrow()) && (filters.size() > 1 || !get.table_filters.filters.empty())) {
+		if (expr.IsVolatile() || expr.CanThrow()) {
 			// we cannot push down volatile or throwing expressions if there are multiple filters
 			continue;
 		}
