@@ -118,14 +118,6 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		table_operators.clear();
 		return;
 	}
-	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-		auto &join = op->Cast<LogicalComparisonJoin>();
-		if (join.join_type == JoinType::MARK) {
-			joins.clear();
-			table_operators.clear();
-			return;
-		}
-	}
 	default:
 		break;
 	}

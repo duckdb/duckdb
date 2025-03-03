@@ -83,7 +83,7 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			shared_ptr<EdgeInfo> edge(new EdgeInfo(std::move(comparison), *big_table, *small_table));
 
 			// Set protection flags
-			if (comp_join.join_type == JoinType::LEFT) {
+			if (comp_join.join_type == JoinType::LEFT || comp_join.join_type == JoinType::MARK) {
 				if (swap_order)
 					edge->protect_bigger_side = true;
 				else
