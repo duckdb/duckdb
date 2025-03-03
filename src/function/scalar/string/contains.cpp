@@ -8,7 +8,6 @@
 
 namespace duckdb {
 
-#ifndef DUCKDB_SMALLER_BINARY
 struct ContainsAligned {
 	template <class UNSIGNED>
 	static bool MatchRemainder(const unsigned char *haystack, const unsigned char *needle, idx_t needle_size) {
@@ -26,7 +25,6 @@ struct ContainsUnaligned {
 		return matches == needle_size - sizeof(UNSIGNED);
 	}
 };
-#endif
 
 struct ContainsGeneric {
 	template <class UNSIGNED>
@@ -73,7 +71,6 @@ idx_t FindStrInStr(const unsigned char *haystack, idx_t haystack_size, const uns
 	idx_t base_offset = UnsafeNumericCast<idx_t>(const_uchar_ptr_cast(location) - haystack);
 	haystack_size -= base_offset;
 	haystack = const_uchar_ptr_cast(location);
-#ifndef DUCKDB_SMALLER_BINARY
 	// switch algorithm depending on needle size
 	switch (needle_size) {
 	case 1:
@@ -93,11 +90,8 @@ idx_t FindStrInStr(const unsigned char *haystack, idx_t haystack_size, const uns
 	case 8:
 		return Contains<uint64_t, ContainsAligned>(haystack, haystack_size, needle, 8, base_offset);
 	default:
-#endif
 		return Contains<uint64_t, ContainsGeneric>(haystack, haystack_size, needle, needle_size, base_offset);
-#ifndef DUCKDB_SMALLER_BINARY
 	}
-#endif
 }
 
 idx_t FindStrInStr(const string_t &haystack_s, const string_t &needle_s) {
