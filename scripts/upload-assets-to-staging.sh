@@ -25,12 +25,12 @@ DRY_RUN_PARAM=""
 # dryrun if repo is not duckdb/duckdb
 if [ "$GITHUB_REPOSITORY" != "duckdb/duckdb" ]; then
   echo "Repository is $GITHUB_REPOSITORY (not duckdb/duckdb)"
-  DRY_RUN_PARAM="--dryrun"
+  DRY_RUN_PARAM="--if-match '1234567890abcdef'"
 fi
 # dryrun if we are not in main
 if [ "$GITHUB_REF" != "refs/heads/main" ]; then
   echo "git ref is $GITHUB_REF (not refs/heads/main)"
-  DRY_RUN_PARAM="--dryrun"
+  DRY_RUN_PARAM="--if-match '1234567890abcdef'"
 fi
 
 if [ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]; then
@@ -41,7 +41,7 @@ fi
 # dryrun if AWS key is not set
 if [ -z "$AWS_ACCESS_KEY_ID" ]; then
   echo "No access key available"
-  DRY_RUN_PARAM="--dryrun"
+  DRY_RUN_PARAM="--if-match '1234567890abcdef'"
 fi
 
 
@@ -60,5 +60,6 @@ python3 -m pip install awscli
 
 for var in "${@: 2}"
 do
-    aws s3 cp $var s3://duckdb-staging/$TARGET/$GITHUB_REPOSITORY/$FOLDER/ $DRY_RUN_PARAM --region us-east-2
+    filename=$(basename -- "$var")
+    aws s3api put-object --bucket duckdb-staging --key $TARGET/$GITHUB_REPOSITORY/$FOLDER/$filename --body $var $DRY_RUN_PARAM --if-none-match '*' --region us-east-2
 done
