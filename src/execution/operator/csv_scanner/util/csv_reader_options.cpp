@@ -200,12 +200,13 @@ bool CSVReaderOptions::IgnoreErrors() const {
 	return ignore_errors.GetValue() && !store_rejects.GetValue();
 }
 
-char CSVReaderOptions::GetSingleByteDelimiter() const {
-	return dialect_options.state_machine_options.delimiter.GetValue()[0];
+CSVOption<char> CSVReaderOptions::GetSingleByteDelimiter() const {
+	auto &delim = dialect_options.state_machine_options.delimiter;
+	return CSVOption<char>(delim.GetValue()[0], delim.IsSetByUser());
 }
 
-string CSVReaderOptions::GetMultiByteDelimiter() const {
-	return dialect_options.state_machine_options.delimiter.GetValue();
+CSVOption<string> CSVReaderOptions::GetMultiByteDelimiter() const {
+	return dialect_options.state_machine_options.delimiter;
 }
 
 void CSVReaderOptions::SetDateFormat(LogicalTypeId type, const string &format, bool read_format) {
@@ -539,7 +540,7 @@ bool StoreUserDefinedParameter(const string &option) {
 	return true;
 }
 
-void CSVReaderOptions::Verify() {
+void CSVReaderOptions::Verify(MultiFileReaderOptions &file_options) {
 	if (rejects_table_name.IsSetByUser() && !store_rejects.GetValue() && store_rejects.IsSetByUser()) {
 		throw BinderException("REJECTS_TABLE option is only supported when store_rejects is not manually set to false");
 	}
@@ -579,157 +580,167 @@ void CSVReaderOptions::Verify() {
 	}
 }
 
-bool GetBooleanValue(const pair<const string, Value> &option) {
-	if (option.second.IsNull()) {
-		throw BinderException("read_csv %s cannot be NULL", option.first);
+bool GetBooleanValue(const string &loption, const Value &val) {
+	if (val.IsNull()) {
+		throw BinderException("read_csv %s cannot be NULL", loption);
 	}
-	return BooleanValue::Get(option.second);
+	return BooleanValue::Get(val);
 }
 
-void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context) {
-	map<string, string> ordered_user_defined_parameters;
+string CSVReaderOptions::GetUserDefinedParameters() const {
+	string result;
+	for (auto &udf_parameter : user_defined_parameters) {
+		if (!result.empty()) {
+			result += ", ";
+		}
+		result += udf_parameter.first + "=" + udf_parameter.second;
+	}
+	return result;
+}
+
+void CSVReaderOptions::FromNamedParameters(const named_parameter_map_t &in, ClientContext &context,
+                                           MultiFileReaderOptions &file_options) {
 	for (auto &kv : in) {
-		if (MultiFileReader().ParseOption(kv.first, kv.second, file_options, context)) {
+		auto loption = StringUtil::Lower(kv.first);
+		if (MultiFileReader().ParseOption(loption, kv.second, file_options, context)) {
 			continue;
 		}
-		auto loption = StringUtil::Lower(kv.first);
-		// skip variables that are specific to auto-detection
-		if (StoreUserDefinedParameter(loption)) {
-			ordered_user_defined_parameters[loption] = kv.second.ToSQLString();
+		ParseOption(context, kv.first, kv.second);
+	}
+}
+
+void CSVReaderOptions::ParseOption(ClientContext &context, const string &key, const Value &val) {
+	auto loption = StringUtil::Lower(key);
+	// skip variables that are specific to auto-detection
+	if (StoreUserDefinedParameter(loption)) {
+		user_defined_parameters[loption] = val.ToSQLString();
+	}
+	if (loption == "columns") {
+		if (!name_list.empty()) {
+			throw BinderException("read_csv column_names/names can only be supplied once");
 		}
-		if (loption == "columns") {
-			if (!name_list.empty()) {
-				throw BinderException("read_csv column_names/names can only be supplied once");
+		columns_set = true;
+		auto &child_type = val.type();
+		if (child_type.id() != LogicalTypeId::STRUCT) {
+			throw BinderException("read_csv columns requires a struct as input");
+		}
+		auto &struct_children = StructValue::GetChildren(val);
+		D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
+		for (idx_t i = 0; i < struct_children.size(); i++) {
+			auto &name = StructType::GetChildName(child_type, i);
+			auto &val = struct_children[i];
+			name_list.push_back(name);
+			if (val.type().id() != LogicalTypeId::VARCHAR) {
+				throw BinderException("read_csv requires a type specification as string");
 			}
-			columns_set = true;
-			auto &child_type = kv.second.type();
-			if (child_type.id() != LogicalTypeId::STRUCT) {
-				throw BinderException("read_csv columns requires a struct as input");
+			sql_types_per_column[name] = i;
+			sql_type_list.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
+		}
+		if (name_list.empty()) {
+			throw BinderException("read_csv requires at least a single column as input!");
+		}
+	} else if (loption == "auto_type_candidates") {
+		auto_type_candidates.clear();
+		map<uint8_t, LogicalType> candidate_types;
+		// We always have the extremes of Null and Varchar, so we can default to varchar if the
+		// sniffer is not able to confidently detect that column type
+		candidate_types[GetCandidateSpecificity(LogicalType::VARCHAR)] = LogicalType::VARCHAR;
+		candidate_types[GetCandidateSpecificity(LogicalType::SQLNULL)] = LogicalType::SQLNULL;
+
+		auto &child_type = val.type();
+		if (child_type.id() != LogicalTypeId::LIST) {
+			throw BinderException("read_csv auto_types requires a list as input");
+		}
+		auto &list_children = ListValue::GetChildren(val);
+		if (list_children.empty()) {
+			throw BinderException("auto_type_candidates requires at least one type");
+		}
+		for (auto &child : list_children) {
+			if (child.type().id() != LogicalTypeId::VARCHAR) {
+				throw BinderException("auto_type_candidates requires a type specification as string");
 			}
-			auto &struct_children = StructValue::GetChildren(kv.second);
+			auto candidate_type = TransformStringToLogicalType(StringValue::Get(child), context);
+			candidate_types[GetCandidateSpecificity(candidate_type)] = candidate_type;
+		}
+		for (auto &candidate_type : candidate_types) {
+			auto_type_candidates.emplace_back(candidate_type.second);
+		}
+	} else if (loption == "column_names" || loption == "names") {
+		unordered_set<string> column_names;
+		if (!name_list.empty()) {
+			throw BinderException("read_csv column_names/names can only be supplied once");
+		}
+		if (val.IsNull()) {
+			throw BinderException("read_csv %s cannot be NULL", key);
+		}
+		auto &children = ListValue::GetChildren(val);
+		for (auto &child : children) {
+			if (child.IsNull()) {
+				throw BinderException("read_csv %s parameter cannot have a NULL value", key);
+			}
+			name_list.push_back(StringValue::Get(child));
+		}
+		for (auto &name : name_list) {
+			bool empty = true;
+			for (auto &c : name) {
+				if (!StringUtil::CharacterIsSpace(c)) {
+					empty = false;
+					break;
+				}
+			}
+			if (empty) {
+				throw BinderException("read_csv %s cannot have empty (or all whitespace) value", key);
+			}
+			if (column_names.find(name) != column_names.end()) {
+				throw BinderException("read_csv %s must have unique values. \"%s\" is repeated.", key, name);
+			}
+			column_names.insert(name);
+		}
+	} else if (loption == "column_types" || loption == "types" || loption == "dtypes") {
+		auto &child_type = val.type();
+		if (child_type.id() != LogicalTypeId::STRUCT && child_type.id() != LogicalTypeId::LIST) {
+			throw BinderException("read_csv %s requires a struct or list as input", key);
+		}
+		if (!sql_type_list.empty()) {
+			throw BinderException("read_csv column_types/types/dtypes can only be supplied once");
+		}
+		vector<string> sql_type_names;
+		if (child_type.id() == LogicalTypeId::STRUCT) {
+			auto &struct_children = StructValue::GetChildren(val);
 			D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
 			for (idx_t i = 0; i < struct_children.size(); i++) {
 				auto &name = StructType::GetChildName(child_type, i);
 				auto &val = struct_children[i];
-				name_list.push_back(name);
 				if (val.type().id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("read_csv requires a type specification as string");
+					throw BinderException("read_csv %s requires a type specification as string", key);
 				}
+				sql_type_names.push_back(StringValue::Get(val));
 				sql_types_per_column[name] = i;
-				sql_type_list.emplace_back(TransformStringToLogicalType(StringValue::Get(val), context));
 			}
-			if (name_list.empty()) {
-				throw BinderException("read_csv requires at least a single column as input!");
-			}
-		} else if (loption == "auto_type_candidates") {
-			auto_type_candidates.clear();
-			map<uint8_t, LogicalType> candidate_types;
-			// We always have the extremes of Null and Varchar, so we can default to varchar if the
-			// sniffer is not able to confidently detect that column type
-			candidate_types[GetCandidateSpecificity(LogicalType::VARCHAR)] = LogicalType::VARCHAR;
-			candidate_types[GetCandidateSpecificity(LogicalType::SQLNULL)] = LogicalType::SQLNULL;
-
-			auto &child_type = kv.second.type();
-			if (child_type.id() != LogicalTypeId::LIST) {
-				throw BinderException("read_csv auto_types requires a list as input");
-			}
-			auto &list_children = ListValue::GetChildren(kv.second);
-			if (list_children.empty()) {
-				throw BinderException("auto_type_candidates requires at least one type");
-			}
-			for (auto &child : list_children) {
-				if (child.type().id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("auto_type_candidates requires a type specification as string");
-				}
-				auto candidate_type = TransformStringToLogicalType(StringValue::Get(child), context);
-				candidate_types[GetCandidateSpecificity(candidate_type)] = candidate_type;
-			}
-			for (auto &candidate_type : candidate_types) {
-				auto_type_candidates.emplace_back(candidate_type.second);
-			}
-		} else if (loption == "column_names" || loption == "names") {
-			unordered_set<string> column_names;
-			if (!name_list.empty()) {
-				throw BinderException("read_csv column_names/names can only be supplied once");
-			}
-			if (kv.second.IsNull()) {
-				throw BinderException("read_csv %s cannot be NULL", kv.first);
-			}
-			auto &children = ListValue::GetChildren(kv.second);
-			for (auto &child : children) {
-				if (child.IsNull()) {
-					throw BinderException("read_csv %s parameter cannot have a NULL value", kv.first);
-				}
-				name_list.push_back(StringValue::Get(child));
-			}
-			for (auto &name : name_list) {
-				bool empty = true;
-				for (auto &c : name) {
-					if (!StringUtil::CharacterIsSpace(c)) {
-						empty = false;
-						break;
-					}
-				}
-				if (empty) {
-					throw BinderException("read_csv %s cannot have empty (or all whitespace) value", kv.first);
-				}
-				if (column_names.find(name) != column_names.end()) {
-					throw BinderException("read_csv %s must have unique values. \"%s\" is repeated.", kv.first, name);
-				}
-				column_names.insert(name);
-			}
-		} else if (loption == "column_types" || loption == "types" || loption == "dtypes") {
-			auto &child_type = kv.second.type();
-			if (child_type.id() != LogicalTypeId::STRUCT && child_type.id() != LogicalTypeId::LIST) {
-				throw BinderException("read_csv %s requires a struct or list as input", kv.first);
-			}
-			if (!sql_type_list.empty()) {
-				throw BinderException("read_csv column_types/types/dtypes can only be supplied once");
-			}
-			vector<string> sql_type_names;
-			if (child_type.id() == LogicalTypeId::STRUCT) {
-				auto &struct_children = StructValue::GetChildren(kv.second);
-				D_ASSERT(StructType::GetChildCount(child_type) == struct_children.size());
-				for (idx_t i = 0; i < struct_children.size(); i++) {
-					auto &name = StructType::GetChildName(child_type, i);
-					auto &val = struct_children[i];
-					if (val.type().id() != LogicalTypeId::VARCHAR) {
-						throw BinderException("read_csv %s requires a type specification as string", kv.first);
-					}
-					sql_type_names.push_back(StringValue::Get(val));
-					sql_types_per_column[name] = i;
-				}
-			} else {
-				auto &list_child = ListType::GetChildType(child_type);
-				if (list_child.id() != LogicalTypeId::VARCHAR) {
-					throw BinderException("read_csv %s requires a list of types (varchar) as input", kv.first);
-				}
-				auto &children = ListValue::GetChildren(kv.second);
-				for (auto &child : children) {
-					sql_type_names.push_back(StringValue::Get(child));
-				}
-			}
-			sql_type_list.reserve(sql_type_names.size());
-			for (auto &sql_type : sql_type_names) {
-				auto def_type = TransformStringToLogicalType(sql_type, context);
-				if (def_type.id() == LogicalTypeId::USER) {
-					throw BinderException("Unrecognized type \"%s\" for read_csv %s definition", sql_type, kv.first);
-				}
-				sql_type_list.push_back(std::move(def_type));
-			}
-		} else if (loption == "all_varchar") {
-			all_varchar = GetBooleanValue(kv);
-		} else if (loption == "normalize_names") {
-			normalize_names = GetBooleanValue(kv);
 		} else {
-			SetReadOption(loption, kv.second, name_list);
+			auto &list_child = ListType::GetChildType(child_type);
+			if (list_child.id() != LogicalTypeId::VARCHAR) {
+				throw BinderException("read_csv %s requires a list of types (varchar) as input", key);
+			}
+			auto &children = ListValue::GetChildren(val);
+			for (auto &child : children) {
+				sql_type_names.push_back(StringValue::Get(child));
+			}
 		}
-	}
-	for (auto &udf_parameter : ordered_user_defined_parameters) {
-		user_defined_parameters += udf_parameter.first + "=" + udf_parameter.second + ", ";
-	}
-	if (user_defined_parameters.size() >= 2) {
-		user_defined_parameters.erase(user_defined_parameters.size() - 2);
+		sql_type_list.reserve(sql_type_names.size());
+		for (auto &sql_type : sql_type_names) {
+			auto def_type = TransformStringToLogicalType(sql_type, context);
+			if (def_type.id() == LogicalTypeId::USER) {
+				throw BinderException("Unrecognized type \"%s\" for read_csv %s definition", sql_type, key);
+			}
+			sql_type_list.push_back(std::move(def_type));
+		}
+	} else if (loption == "all_varchar") {
+		all_varchar = GetBooleanValue(loption, val);
+	} else if (loption == "normalize_names") {
+		normalize_names = GetBooleanValue(loption, val);
+	} else {
+		SetReadOption(loption, val, name_list);
 	}
 }
 //! This function is used to remember options set by the sniffer, for use in ReadCSVRelation

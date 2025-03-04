@@ -42,4 +42,31 @@ struct WriteLogFun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct CurrentConnectionId {
+	static constexpr const char *Name = "current_connection_id";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "Get the current connection_id";
+	static constexpr const char *Example = "current_connection_id()";
+
+	static ScalarFunction GetFunction();
+};
+
+struct CurrentTransactionId {
+	static constexpr const char *Name = "current_transaction_id";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "Get the current global transaction_id";
+	static constexpr const char *Example = "current_transaction_id()";
+
+	static ScalarFunction GetFunction();
+};
+
+struct CurrentQueryId {
+	static constexpr const char *Name = "current_query_id";
+	static constexpr const char *Parameters = "";
+	static constexpr const char *Description = "Get the current query_id";
+	static constexpr const char *Example = "current_transaction_id('Hello')";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb

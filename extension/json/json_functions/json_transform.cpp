@@ -294,8 +294,8 @@ static bool TransformFromString(yyjson_val *vals[], Vector &result, const idx_t 
 }
 
 template <class OP, class T>
-static bool TransformStringWithFormat(Vector &string_vector, StrpTimeFormat &format, const idx_t count, Vector &result,
-                                      JSONTransformOptions &options) {
+static bool TransformStringWithFormat(Vector &string_vector, const StrpTimeFormat &format, const idx_t count,
+                                      Vector &result, JSONTransformOptions &options) {
 	const auto source_strings = FlatVector::GetData<string_t>(string_vector);
 	const auto &source_validity = FlatVector::Validity(string_vector);
 

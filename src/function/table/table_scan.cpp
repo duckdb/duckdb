@@ -217,7 +217,7 @@ public:
 			storage_ids.push_back(GetStorageIndex(bind_data.table, col));
 		}
 
-		l_state->scan_state.Initialize(std::move(storage_ids), input.filters.get(), input.sample_options.get());
+		l_state->scan_state.Initialize(std::move(storage_ids), context.client, input.filters, input.sample_options);
 
 		auto &duck_table = bind_data.table.Cast<DuckTableEntry>();
 		auto &storage = duck_table.GetStorage();
@@ -352,7 +352,7 @@ unique_ptr<GlobalTableFunctionState> DuckIndexScanInitGlobal(ClientContext &cont
 		g_state->scanned_types.push_back(columns.GetColumn(col_idx.ToLogical()).Type());
 	}
 
-	g_state->table_scan_state.Initialize(g_state->column_ids, input.filters.get());
+	g_state->table_scan_state.Initialize(g_state->column_ids, context, input.filters);
 	local_storage.InitializeScan(storage, g_state->table_scan_state.local_state, input.filters);
 
 	// Const-cast to indicate an index scan.

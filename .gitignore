@@ -248,6 +248,9 @@ io_file
 # IPython notebook checkpoints
 .ipynb_checkpoints
 
+# Python virtual env
+venv/
+
 # Editor temporaries
 *.swp
 *~

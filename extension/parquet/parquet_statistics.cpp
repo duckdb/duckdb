@@ -3,6 +3,7 @@
 #include "duckdb.hpp"
 #include "parquet_decimal_utils.hpp"
 #include "parquet_timestamp.hpp"
+#include "parquet_float16.hpp"
 #include "parquet_reader.hpp"
 #include "reader/string_column_reader.hpp"
 #include "reader/struct_column_reader.hpp"
@@ -93,10 +94,18 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 		}
 		return Value::BIGINT(Load<int64_t>(stats_data));
 	case LogicalTypeId::FLOAT: {
-		if (stats.size() != sizeof(float)) {
-			throw InvalidInputException("Incorrect stats size for type FLOAT");
+		float val;
+		if (schema_ele.type_info == ParquetExtraTypeInfo::FLOAT16) {
+			if (stats.size() != sizeof(uint16_t)) {
+				throw InvalidInputException("Incorrect stats size for type FLOAT16");
+			}
+			val = Float16ToFloat32(Load<uint16_t>(stats_data));
+		} else {
+			if (stats.size() != sizeof(float)) {
+				throw InvalidInputException("Incorrect stats size for type FLOAT");
+			}
+			val = Load<float>(stats_data);
 		}
-		auto val = Load<float>(stats_data);
 		if (!Value::FloatIsFinite(val)) {
 			return Value();
 		}

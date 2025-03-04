@@ -2,6 +2,7 @@ import os
 import json
 import re
 import argparse
+from enum import Enum
 
 from typing import Dict, Optional, Tuple, List
 
@@ -10,6 +11,15 @@ parser.add_argument('--source', type=str, help='Source directory')
 parser.add_argument('--target', type=str, help='Target directory')
 
 args = parser.parse_args()
+
+
+class MemberVariableStatus(Enum):
+    # Both serialized and deserialized
+    EXISTING = 1
+    # Not serialized, but is deserialized
+    READ_ONLY = 2
+    # Not serialized, not deserialized
+    DELETED = 3
 
 
 def get_file_list():
@@ -207,44 +217,6 @@ def get_default_argument(default_value):
     return f'{default_value}'.lower() if type(default_value) == bool else f'{default_value}'
 
 
-def get_serialize_element(
-    property_name,
-    property_id,
-    property_key,
-    property_type,
-    has_default,
-    default_value,
-    is_deleted,
-    pointer_type,
-    version,
-):
-    assignment = '.' if pointer_type == 'none' else '->'
-    default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
-    template = SERIALIZE_ELEMENT_FORMAT
-    if is_deleted:
-        template = "\t/* [Deleted] ({property_type}) \"{property_name}\" */\n"
-    elif has_default:
-        template = template.replace('WriteProperty', 'WritePropertyWithDefault')
-    serialization_code = template.format(
-        property_name=property_name,
-        property_type=property_type,
-        property_id=str(property_id),
-        property_key=property_key,
-        property_default=default_argument,
-        assignment=assignment,
-    )
-
-    storage_version = lookup_serialization_version(version)
-    if storage_version != 1:
-        code = []
-        code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
-        code.append('\t' + serialization_code)
-
-        result = '\n'.join(code) + '\t}\n'
-        return result
-    return serialization_code
-
-
 def get_deserialize_element_template(
     template,
     property_name,
@@ -253,13 +225,17 @@ def get_deserialize_element_template(
     property_type,
     has_default,
     default_value,
-    is_deleted,
+    status: MemberVariableStatus,
     pointer_type,
 ):
+    if status == MemberVariableStatus.READ_ONLY and not has_default:
+        print("'read_only' status is not allowed without a default value")
+        exit(1)
+
     # read_method = 'ReadProperty'
     assignment = '.' if pointer_type == 'none' else '->'
     default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
-    if is_deleted:
+    if status == MemberVariableStatus.DELETED:
         template = template.replace(', result{assignment}{property_name}', '').replace(
             'ReadProperty', 'ReadDeletedProperty'
         )
@@ -275,30 +251,9 @@ def get_deserialize_element_template(
         property_type=property_type,
         assignment=assignment,
     )
-    if is_deleted:
+    if status == MemberVariableStatus.DELETED:
         template = template.replace(f'auto {property_name} = ', '')
     return template
-
-
-def get_deserialize_element(
-    property_name, property_key, property_id, property_type, has_default, default_value, is_deleted, base, pointer_type
-):
-    property_name = property_name.replace('.', '_')
-    template = DESERIALIZE_ELEMENT_FORMAT
-    if base:
-        template = DESERIALIZE_ELEMENT_BASE_FORMAT.replace('{base_property}', base.replace('*', ''))
-
-    return get_deserialize_element_template(
-        template,
-        property_name,
-        property_key,
-        property_id,
-        property_type,
-        has_default,
-        default_value,
-        is_deleted,
-        pointer_type,
-    )
 
 
 def get_deserialize_assignment(property_name, property_type, pointer_type):
@@ -315,18 +270,24 @@ def get_return_value(pointer_type, class_name):
     return POINTER_RETURN_FORMAT.format(pointer=pointer_type, class_name=class_name)
 
 
-def generate_constructor(pointer_type, class_name, constructor_parameters):
-    if pointer_type == 'none':
-        params = '' if len(constructor_parameters) == 0 else '(' + constructor_parameters + ')'
-        return f'\t{class_name} result{params};\n'
-    return f'\tauto result = duckdb::{pointer_type}<{class_name}>(new {class_name}({constructor_parameters}));\n'
-
-
 def generate_return(class_entry):
-    if class_entry.base is None:
+    if class_entry.base is None or class_entry.constructor_method is not None:
         return '\treturn result;'
     else:
         return '\treturn std::move(result);'
+
+
+def parse_status(status: str):
+    if status == 'deleted':
+        return MemberVariableStatus.DELETED
+    if status == 'read_only':
+        return MemberVariableStatus.READ_ONLY
+    if status == 'existing':
+        return MemberVariableStatus.EXISTING
+    valid_options = ['deleted', 'read_only', 'existing']
+    valid_options_string = ", ".join(valid_options)
+    print(f"Invalid 'status' ('{status}') encountered, valid options are: {valid_options_string}")
+    exit(1)
 
 
 # FIXME: python has __slots__ for this, so it's enforced by Python itself
@@ -340,7 +301,7 @@ supported_member_entries = [
     'deserialize_property',
     'base',
     'default',
-    'deleted',
+    'status',
     'version',
 ]
 
@@ -369,7 +330,7 @@ class MemberVariable:
         self.base = None
         self.has_default = False
         self.default = None
-        self.deleted = False
+        self.status: MemberVariableStatus = MemberVariableStatus.EXISTING
         self.version: str = 'v0.10.2'
         if 'property' in entry:
             self.serialize_property = entry['property']
@@ -386,8 +347,8 @@ class MemberVariable:
         if 'default' in entry:
             self.has_default = True
             self.default = entry['default']
-        if 'deleted' in entry:
-            self.deleted = entry['deleted']
+        if 'status' in entry:
+            self.status = parse_status(entry['status'])
         if self.default is None:
             # default default
             self.has_default = has_default_by_default(self.type)
@@ -407,6 +368,7 @@ supported_serialize_entries = [
     'base',
     'enum',
     'constructor',
+    'constructor_method',
     'custom_implementation',
     'custom_switch_code',
     'members',
@@ -427,7 +389,8 @@ class SerializableClass:
         self.set_parameter_names = []
         self.set_parameters = []
         self.pointer_type = 'unique_ptr'
-        self.constructor = None
+        self.constructor: Optional[List[str]] = None
+        self.constructor_method = None
         self.members: Optional[List[MemberVariable]] = None
         self.custom_implementation = False
         self.custom_switch_code = None
@@ -446,6 +409,16 @@ class SerializableClass:
             self.return_type = self.base
         if 'constructor' in entry:
             self.constructor = entry['constructor']
+            if not isinstance(self.constructor, list):
+                print(f"constructor for {self.name}, must be of type [], but is of type {str(type(self.constructor))}")
+                exit(1)
+        if 'constructor_method' in entry:
+            self.constructor_method = entry['constructor_method']
+            if self.constructor is not None:
+                print(
+                    "Not allowed to mix 'constructor_method' and 'constructor', 'constructor_method' will implicitly receive all parameters"
+                )
+                exit(1)
         if 'custom_implementation' in entry and entry['custom_implementation']:
             self.custom_implementation = True
         if 'custom_switch_code' in entry:
@@ -477,40 +450,91 @@ class SerializableClass:
         self.base_object = base_class
         self.pointer_type = base_class.pointer_type
 
+    def get_deserialize_element(
+        self, entry: MemberVariable, *, base: Optional[str] = None, pointer_type: Optional[str] = None
+    ):
+        property_name = entry.deserialize_property
+        property_id = entry.id
+        property_key = entry.name
+        property_type = replace_pointer(entry.type)
+        if not pointer_type:
+            pointer_type = self.pointer_type
 
-def generate_base_class_code(base_class):
+        property_name = property_name.replace('.', '_')
+        template = DESERIALIZE_ELEMENT_FORMAT
+        if base:
+            template = DESERIALIZE_ELEMENT_BASE_FORMAT.replace('{base_property}', base.replace('*', ''))
+
+        return get_deserialize_element_template(
+            template,
+            property_name,
+            property_key,
+            property_id,
+            property_type,
+            entry.has_default,
+            entry.default,
+            entry.status,
+            pointer_type,
+        )
+
+    def get_serialize_element(self, entry: MemberVariable):
+        property_name = entry.serialize_property
+        property_id = entry.id
+        property_key = entry.name
+        property_type = replace_pointer(entry.type)
+        default_value = entry.default
+
+        assignment = '.' if self.pointer_type == 'none' else '->'
+        default_argument = '' if default_value is None else f', {get_default_argument(default_value)}'
+        template = SERIALIZE_ELEMENT_FORMAT
+        if entry.status != MemberVariableStatus.EXISTING:
+            template = "\t/* [Deleted] ({property_type}) \"{property_name}\" */\n"
+        elif entry.has_default:
+            template = template.replace('WriteProperty', 'WritePropertyWithDefault')
+        serialization_code = template.format(
+            property_name=property_name,
+            property_type=property_type,
+            property_id=str(property_id),
+            property_key=property_key,
+            property_default=default_argument,
+            assignment=assignment,
+        )
+
+        storage_version = lookup_serialization_version(entry.version)
+        if storage_version != 1:
+            code = []
+            code.append(f'\tif (serializer.ShouldSerialize({storage_version})) {{')
+            code.append('\t' + serialization_code)
+
+            result = '\n'.join(code) + '\t}\n'
+            return result
+        return serialization_code
+
+    def generate_constructor(self, constructor_parameters: List[str]):
+        parameters = ", ".join(constructor_parameters)
+
+        if self.constructor_method is not None:
+            return f'\tauto result = {self.constructor_method}({parameters});\n'
+        if self.pointer_type == 'none':
+            if parameters != '':
+                parameters = f'({parameters})'
+            return f'\t{self.return_class} result{parameters};\n'
+        return f'\tauto result = duckdb::{self.pointer_type}<{self.return_class}>(new {self.return_class}({parameters}));\n'
+
+
+def generate_base_class_code(base_class: SerializableClass):
     base_class_serialize = ''
     base_class_deserialize = ''
 
     # properties
     enum_type = ''
     for entry in base_class.members:
-        type_name = replace_pointer(entry.type)
         if entry.serialize_property == base_class.enum_value:
             enum_type = entry.type
-        default = entry.default
-        base_class_serialize += get_serialize_element(
-            entry.serialize_property,
-            entry.id,
-            entry.name,
-            type_name,
-            entry.has_default,
-            default,
-            entry.deleted,
-            base_class.pointer_type,
-            entry.version,
-        )
-        base_class_deserialize += get_deserialize_element(
-            entry.deserialize_property,
-            entry.name,
-            entry.id,
-            type_name,
-            entry.has_default,
-            default,
-            entry.deleted,
-            None,
-            base_class.pointer_type,
-        )
+        base_class_serialize += base_class.get_serialize_element(entry)
+
+        type_name = replace_pointer(entry.type)
+        base_class_deserialize += base_class.get_deserialize_element(entry)
     expressions = [x for x in base_class.children.items()]
     expressions = sorted(expressions, key=lambda x: x[0])
 
@@ -561,7 +585,7 @@ def generate_base_class_code(base_class):
         base_class_deserialize += UNSET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type)
 
     for entry in assign_entries:
-        if entry.deleted:
+        if entry.status != MemberVariableStatus.EXISTING:
             continue
         move = False
         if entry.type in MOVE_LIST or is_container(entry.type) or is_pointer(entry.type):
@@ -586,18 +610,16 @@ def generate_base_class_code(base_class):
     return base_class_generation
 
 
-def generate_class_code(class_entry):
+def generate_class_code(class_entry: SerializableClass):
     if class_entry.custom_implementation:
         return None
     class_serialize = ''
     class_deserialize = ''
 
-    constructor_parameters = ''
-    constructor_entries = {}
+    constructor_parameters: List[str] = []
+    constructor_entries = set()
     last_constructor_index = -1
     if class_entry.constructor is not None:
-        if type(class_entry.constructor) != type([]):
-            raise Exception(f"constructor must be of type [], but is of type {str(type(class_entry.constructor))}")
         for constructor_entry_ in class_entry.constructor:
             if constructor_entry_.endswith('&'):
                 constructor_entry = constructor_entry_[:-1]
@@ -605,26 +627,22 @@ def generate_class_code(class_entry):
             else:
                 constructor_entry = constructor_entry_
                 is_reference = False
-            constructor_entries[constructor_entry] = True
+            constructor_entries.add(constructor_entry)
             found = False
-            for entry_idx in range(len(class_entry.members)):
-                entry = class_entry.members[entry_idx]
+            for entry_idx, entry in enumerate(class_entry.members):
                 if entry.name == constructor_entry:
                     if entry_idx > last_constructor_index:
                         last_constructor_index = entry_idx
-                    if len(constructor_parameters) > 0:
-                        constructor_parameters += ", "
                     type_name = replace_pointer(entry.type)
                     entry.deserialize_property = entry.deserialize_property.replace('.', '_')
                     if requires_move(type_name) and not is_reference:
-                        constructor_parameters += 'std::move(' + entry.deserialize_property + ')'
+                        constructor_parameters.append(f'std::move({entry.deserialize_property})')
                     else:
-                        constructor_parameters += entry.deserialize_property
+                        constructor_parameters.append(entry.deserialize_property)
                     found = True
                     break
+
             if constructor_entry.startswith('$') or constructor_entry.startswith('?'):
-                if len(constructor_parameters) > 0:
-                    constructor_parameters += ", "
                 is_optional = constructor_entry.startswith('?')
                 if is_optional:
                     param_type = constructor_entry.replace('?', '')
@@ -634,82 +652,67 @@ def generate_class_code(class_entry):
                     get_format = GET_DESERIALIZE_PARAMETER_FORMAT
                     if param_type in REFERENCE_LIST:
                         param_type += ' &'
-                constructor_parameters += get_format.format(property_type=param_type)
+                constructor_parameters.append(get_format.format(property_type=param_type))
                 found = True
+
             if class_entry.base_object is not None:
                 for entry in class_entry.base_object.set_parameters:
                     if entry.name == constructor_entry:
-                        if len(constructor_parameters) > 0:
-                            constructor_parameters += ", "
-                        constructor_parameters += GET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type)
+                        constructor_parameters.append(GET_DESERIALIZE_PARAMETER_FORMAT.format(property_type=entry.type))
                         found = True
                         break
             if not found:
-                raise Exception(f"Constructor member \"{constructor_entry}\" was not found in members list")
+                print(f"Constructor member \"{constructor_entry}\" was not found in members list")
+                exit(1)
+    elif class_entry.constructor_method is not None:
+        for entry_idx, entry in enumerate(class_entry.members):
+            if entry_idx > last_constructor_index:
+                last_constructor_index = entry_idx
+            constructor_entries.add(entry.name)
+            type_name = replace_pointer(entry.type)
+            entry.deserialize_property = entry.deserialize_property.replace('.', '_')
+            if requires_move(type_name):
+                constructor_parameters.append(f'std::move({entry.deserialize_property})')
+            else:
+                constructor_parameters.append(entry.deserialize_property)
 
     if class_entry.base is not None:
         class_serialize += BASE_SERIALIZE_FORMAT.format(base_class_name=class_entry.base)
     for entry_idx in range(last_constructor_index + 1):
         entry = class_entry.members[entry_idx]
-        type_name = replace_pointer(entry.type)
-        class_deserialize += get_deserialize_element(
-            entry.deserialize_property,
-            entry.name,
-            entry.id,
-            type_name,
-            entry.has_default,
-            entry.default,
-            entry.deleted,
-            entry.base,
-            'unique_ptr',
-        )
+        class_deserialize += class_entry.get_deserialize_element(entry, base=entry.base, pointer_type='unique_ptr')
 
-    class_deserialize += generate_constructor(
-        class_entry.pointer_type, class_entry.return_class, constructor_parameters
-    )
+    class_deserialize += class_entry.generate_constructor(constructor_parameters)
     if class_entry.members is None:
         return None
-    for entry_idx in range(len(class_entry.members)):
-        entry = class_entry.members[entry_idx]
-        property_id = entry.id
-        property_key = entry.name
+    for entry_idx, entry in enumerate(class_entry.members):
         write_property_name = entry.serialize_property
         deserialize_template_str = DESERIALIZE_ELEMENT_CLASS_FORMAT
-        default_value = entry.default
         if entry.base:
             deserialize_template_str = DESERIALIZE_ELEMENT_CLASS_BASE_FORMAT.replace(
                 '{base_property}', entry.base.replace('*', '')
             ).replace('{derived_property}', entry.type.replace('*', ''))
-        type_name = replace_pointer(entry.type)
 
-        class_serialize += get_serialize_element(
-            write_property_name,
-            property_id,
-            property_key,
-            type_name,
-            entry.has_default,
-            default_value,
-            entry.deleted,
-            class_entry.pointer_type,
-            entry.version,
-        )
+        class_serialize += class_entry.get_serialize_element(entry)
+
+        type_name = replace_pointer(entry.type)
         if entry_idx > last_constructor_index:
             class_deserialize += get_deserialize_element_template(
                 deserialize_template_str,
                 entry.deserialize_property,
-                property_key,
-                property_id,
+                entry.name,
+                entry.id,
                 type_name,
                 entry.has_default,
-                default_value,
-                entry.deleted,
+                entry.default,
+                entry.status,
                 class_entry.pointer_type,
             )
-        elif entry.name not in constructor_entries and not entry.deleted:
+        elif entry.name not in constructor_entries and entry.status == MemberVariableStatus.EXISTING:
             class_deserialize += get_deserialize_assignment(
                 entry.deserialize_property, entry.type, class_entry.pointer_type
             )
-        if entry.name in class_entry.set_parameter_names and not entry.deleted:
+        if entry.name in class_entry.set_parameter_names and entry.status == MemberVariableStatus.EXISTING:
             class_deserialize += SET_DESERIALIZE_PARAMETER_FORMAT.format(
                 property_type=entry.type, property_name=entry.name
             )
