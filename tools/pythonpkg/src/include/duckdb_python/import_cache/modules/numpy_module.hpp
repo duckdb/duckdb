@@ -26,18 +26,6 @@ public:
 	PythonImportCacheItem masked_array;
 };
 
-struct NumpyCoreCacheItem : public PythonImportCacheItem {
-
-public:
-	NumpyCoreCacheItem(optional_ptr<PythonImportCacheItem> parent)
-	    : PythonImportCacheItem("core", parent), multiarray("multiarray", this) {
-	}
-	~NumpyCoreCacheItem() override {
-	}
-
-	PythonImportCacheItem multiarray;
-};
-
 struct NumpyCacheItem : public PythonImportCacheItem {
 
 public:
@@ -45,9 +33,9 @@ public:
 
 public:
 	NumpyCacheItem()
-	    : PythonImportCacheItem("numpy"), core(this), ma(this), ndarray("ndarray", this),
-	      datetime64("datetime64", this), generic("generic", this), int64("int64", this), bool_("bool_", this),
-	      byte("byte", this), ubyte("ubyte", this), short_("short", this), ushort_("ushort", this), intc("intc", this),
+	    : PythonImportCacheItem("numpy"), ma(this), ndarray("ndarray", this), datetime64("datetime64", this),
+	      generic("generic", this), int64("int64", this), bool_("bool_", this), byte("byte", this),
+	      ubyte("ubyte", this), short_("short", this), ushort_("ushort", this), intc("intc", this),
 	      uintc("uintc", this), int_("int_", this), uint("uint", this), longlong("longlong", this),
 	      ulonglong("ulonglong", this), half("half", this), float16("float16", this), single("single", this),
 	      longdouble("longdouble", this), csingle("csingle", this), cdouble("cdouble", this),
@@ -56,7 +44,6 @@ public:
 	~NumpyCacheItem() override {
 	}
 
-	NumpyCoreCacheItem core;
 	NumpyMaCacheItem ma;
 	PythonImportCacheItem ndarray;
 	PythonImportCacheItem datetime64;

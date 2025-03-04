@@ -58,7 +58,6 @@ ipywidgets.FloatProgress
 
 import numpy
 
-numpy.core.multiarray
 numpy.ma.masked
 numpy.ma.masked_array
 numpy.ndarray
