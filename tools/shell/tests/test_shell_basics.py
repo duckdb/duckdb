@@ -673,32 +673,6 @@ def test_mode_tabs(shell):
     result = test.run()
     result.check_stdout('fourty-two')
 
-def test_open(shell, tmp_path):
-    file_one = tmp_path / "file_one"
-    file_two = tmp_path / "file_two"
-    test = (
-        ShellTest(shell)
-        .statement(f".open {file_one.as_posix()}")
-        .statement("CREATE TABLE t1 (i INTEGER);")
-        .statement("INSERT INTO t1 VALUES (42);")
-        .statement(f".open {file_two.as_posix()}")
-        .statement("CREATE TABLE t2 (i INTEGER);")
-        .statement("INSERT INTO t2 VALUES (43);")
-        .statement(f".open {file_one.as_posix()}")
-        .statement("SELECT * FROM t1;")
-    )
-    result = test.run()
-    result.check_stdout('42')
-
-@pytest.mark.parametrize('generated_file', ["blablabla"], indirect=True)
-def test_open_non_database(shell, generated_file):
-    test = (
-        ShellTest(shell)
-        .add_argument(generated_file.as_posix())
-    )
-    result = test.run()
-    result.check_stderr('not a valid DuckDB database file')
-
 def test_enable_profiling(shell):
     test = (
         ShellTest(shell)

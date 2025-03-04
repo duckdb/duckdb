@@ -2236,11 +2236,6 @@ static const char *azHelp[] = {
     "       --bom  Put a UTF8 byte-order mark at the beginning",
     "       -e     Send output to the system text editor",
     "       -x     Send output as CSV to a spreadsheet (same as \".excel\")",
-    ".open ?OPTIONS? ?FILE?   Close existing database and reopen FILE",
-    "     Options:",
-    "        --new           Initialize FILE to an empty database",
-    "        --nofollow      Do not follow symbolic links",
-    "        --readonly      Open FILE readonly",
     ".output ?FILE?           Send output to FILE or stdout if FILE is omitted",
     "   If FILE begins with '|' then open it as a pipe.",
     "   Options:",
@@ -3619,64 +3614,6 @@ MetadataResult ImportData(ShellState &state, const char **azArg, idx_t nArg) {
 	return MetadataResult::SUCCESS;
 }
 
-bool ShellState::OpenDatabase(const char **azArg, idx_t nArg) {
-	if (safe_mode) {
-		utf8_printf(stderr, ".open cannot be used in -safe mode\n");
-		return false;
-	}
-	char *zNewFilename;   /* Name of the database file to open */
-	idx_t iName = 1;      /* Index in azArg[] of the filename */
-	bool newFlag = false; /* True to delete file before opening */
-	/* Close the existing database */
-	close_db(db);
-	db = nullptr;
-	globalDb = nullptr;
-	zDbFilename = string();
-	openMode = SHELL_OPEN_UNSPEC;
-	openFlags = openFlags & ~(SQLITE_OPEN_NOFOLLOW); // don't overwrite settings loaded in the command line
-	szMax = 0;
-	/* Check for command-line arguments */
-	for (idx_t iName = 1; iName < nArg && azArg[iName][0] == '-'; iName++) {
-		const char *z = azArg[iName];
-		if (optionMatch(z, "new")) {
-			newFlag = true;
-		} else if (optionMatch(z, "readonly")) {
-			openMode = SHELL_OPEN_READONLY;
-		} else if (optionMatch(z, "nofollow")) {
-			openFlags |= SQLITE_OPEN_NOFOLLOW;
-		} else if (z[0] == '-') {
-			utf8_printf(stderr, "unknown option: %s\n", z);
-			return false;
-		}
-	}
-	/* If a filename is specified, try to open it first */
-	zNewFilename = nArg > iName ? sqlite3_mprintf("%s", azArg[iName]) : 0;
-	if (zNewFilename || openMode == SHELL_OPEN_HEXDB) {
-		if (newFlag) {
-			shellDeleteFile(zNewFilename);
-		}
-		zDbFilename = zNewFilename;
-		sqlite3_free(zNewFilename);
-		OpenDB(OPEN_DB_KEEPALIVE);
-		if (!db) {
-			utf8_printf(stderr, "Error: cannot open '%s'\n", zNewFilename);
-		}
-	}
-	if (!db) {
-		/* As a fall-back open a TEMP database */
-		zDbFilename = string();
-		OpenDB(0);
-	}
-	return true;
-}
-
-MetadataResult OpenDatabase(ShellState &state, const char **azArg, idx_t nArg) {
-	if (!state.OpenDatabase(azArg, nArg)) {
-		return MetadataResult::FAIL;
-	}
-	return MetadataResult::SUCCESS;
-}
-
 MetadataResult PrintArguments(ShellState &state, const char **azArg, idx_t nArg) {
 	for (idx_t i = 1; i < nArg; i++) {
 		if (i > 1) {
@@ -4196,7 +4133,6 @@ static const MetadataCommand metadata_commands[] = {
     {"mode", 0, SetOutputMode, "MODE ?TABLE?", "Set output mode", 0},
     {"nullvalue", 2, SetNullValue, "STRING", "Use STRING in place of NULL values", 0},
 
-    {"open", 0, OpenDatabase, "?OPTIONS? ?FILE?", "Close existing database and reopen FILE", 2},
     {"once", 0, SetOutputOnce, "?FILE?", "Output for the next SQL command only to FILE", 0},
     {"output", 0, SetOutput, "?FILE?", "Send output to FILE or stdout if FILE is omitted", 0},
     {"print", 0, PrintArguments, "STRING...", "Print literal STRING", 3},
@@ -5110,7 +5046,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				ShellHighlight highlighter(data);
 				highlighter.PrintText("transient in-memory database", PrintOutput::STDOUT, PrintColor::STANDARD,
 				                      PrintIntensity::BOLD);
-				printf(".\nUse \".open FILENAME\" to reopen on a "
+				printf(".\nCall \"Attach 'FILENAME' AS database_name; USE database_name;\" to reopen on a "
 				       "persistent database.\n");
 			}
 			zHistory = getenv("DUCKDB_HISTORY");
