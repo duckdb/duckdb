@@ -338,6 +338,7 @@ jobs:
         python scripts/generate_extensions_function.py
         pip install "black>=24"
         pip install cmake-format
+        pip install "clang_format==11.0.1"
         make format-fix
 
     - uses: actions/upload-artifact@v4
