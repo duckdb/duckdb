@@ -50,6 +50,10 @@ public:
 		const auto decompressed_string_size =
 		    duckdb_fsst_decompress(fsst_decoder, compressed_string_len, compressed_string_ptr,
 		                           string_t::INLINE_LENGTH + sizeof(StringWithExtraSpace::extra_space), target_ptr);
+		if (decompressed_string_size > string_t::INLINE_LENGTH) {
+			throw IOException("Corrupt database file: decoded FSST string of >=%llu bytes (should be <=%llu bytes)",
+			                  decompressed_string_size, string_t::INLINE_LENGTH);
+		}
 		D_ASSERT(decompressed_string_size <= string_t::INLINE_LENGTH);
 		result.str.SetSize(UnsafeNumericCast<uint32_t>(decompressed_string_size));
 		result.str.Finalize();
