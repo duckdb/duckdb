@@ -474,6 +474,10 @@ void FileSystem::UnregisterSubSystem(const string &name) {
 	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
 }
 
+unique_ptr<FileSystem> FileSystem::ExtractSubSystem(const string &name) {
+	throw NotImplementedException("%s: Can't extract a sub system on a non-virtual file system", GetName());
+}
+
 void FileSystem::SetDisabledFileSystems(const vector<string> &names) {
 	throw NotImplementedException("%s: Can't disable file systems on a non-virtual file system", GetName());
 }
