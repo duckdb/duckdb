@@ -41,7 +41,7 @@ public:
 	DUCKDB_API PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner,
 	                                               LogicalCreateTable &op, PhysicalOperator &plan) override;
 	DUCKDB_API PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
-	                                        PhysicalOperator &plan) override;
+	                                        optional_ptr<PhysicalOperator> plan) override;
 	DUCKDB_API PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op,
 	                                        PhysicalOperator &plan) override;
 	DUCKDB_API PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,

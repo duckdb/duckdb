@@ -8,17 +8,17 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	D_ASSERT(op.children.size() == 1);
 	auto logical_plan_opt = op.children[0]->ToString(op.explain_format);
-	auto plan = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlan(*op.children[0]);
 	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE) {
-		auto result = make_uniq<PhysicalExplainAnalyze>(op.types, op.explain_format);
-		result->children.push_back(std::move(plan));
-		return std::move(result);
+		auto &result_ref = Make<PhysicalExplainAnalyze>(op.types, op.explain_format);
+		result_ref.children.push_back(plan);
+		return result_ref;
 	}
 
-	op.physical_plan = plan->ToString(op.explain_format);
+	op.physical_plan = plan.ToString(op.explain_format);
 	// the output of the explain
 	vector<string> keys, values;
 	switch (ClientConfig::GetConfig(context).explain_output_type) {
@@ -55,9 +55,8 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExplain &o
 	collection->Append(chunk);
 
 	// create a chunk scan to output the result
-	auto chunk_scan = make_uniq<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN,
-	                                                    op.estimated_cardinality, std::move(collection));
-	return std::move(chunk_scan);
+	return Make<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality,
+	                                    std::move(collection));
 }
 
 } // namespace duckdb

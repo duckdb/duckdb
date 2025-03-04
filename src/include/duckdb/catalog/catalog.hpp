@@ -293,7 +293,7 @@ public:
 	virtual PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner,
 	                                            LogicalCreateTable &op, PhysicalOperator &plan) = 0;
 	virtual PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
-	                                     PhysicalOperator &plan) = 0;
+	                                     optional_ptr<PhysicalOperator> plan) = 0;
 	virtual PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op,
 	                                     PhysicalOperator &plan) = 0;
 	virtual PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,

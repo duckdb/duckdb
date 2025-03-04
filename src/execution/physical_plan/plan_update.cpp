@@ -6,24 +6,22 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> DuckCatalog::PlanUpdate(ClientContext &context, LogicalUpdate &op,
-                                                     unique_ptr<PhysicalOperator> plan) {
-	auto update = make_uniq<PhysicalUpdate>(op.types, op.table, op.table.GetStorage(), op.columns,
-	                                        std::move(op.expressions), std::move(op.bound_defaults),
-	                                        std::move(op.bound_constraints), op.estimated_cardinality, op.return_chunk);
-
-	update->update_is_del_and_insert = op.update_is_del_and_insert;
-	update->children.push_back(std::move(plan));
-	return std::move(update);
+PhysicalOperator &DuckCatalog::PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,
+                                          PhysicalOperator &plan) {
+	auto &update_ref = planner.Make<PhysicalUpdate>(
+	    op.types, op.table, op.table.GetStorage(), op.columns, std::move(op.expressions), std::move(op.bound_defaults),
+	    std::move(op.bound_constraints), op.estimated_cardinality, op.return_chunk);
+	auto &cast_update_ref = update_ref.Cast<PhysicalUpdate>();
+	cast_update_ref.update_is_del_and_insert = op.update_is_del_and_insert;
+	cast_update_ref.children.push_back(plan);
+	return update_ref;
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUpdate &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalUpdate &op) {
 	D_ASSERT(op.children.size() == 1);
-
-	auto plan = CreatePlan(*op.children[0]);
-
+	auto &plan_ref = CreatePlan(*op.children[0]);
 	dependencies.AddDependency(op.table);
-	return op.table.catalog.PlanUpdate(context, op, std::move(plan));
+	return op.table.catalog.PlanUpdate(context, *this, op, plan_ref);
 }
 
 } // namespace duckdb

@@ -122,6 +122,5 @@ public:
 private:
 	ClientContext &context;
 	vector<unique_ptr<PhysicalOperator>> &ops;
-	reference<PhysicalOperator> root;
 };
 } // namespace duckdb

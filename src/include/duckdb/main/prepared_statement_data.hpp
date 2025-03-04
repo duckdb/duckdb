@@ -31,8 +31,10 @@ public:
 	//! The unbound SQL statement that was prepared
 	unique_ptr<SQLStatement> unbound_statement;
 
-	//! Contains the physical plan. The first element is the root.
+	//! Contains the physical plan.
 	vector<unique_ptr<PhysicalOperator>> ops;
+	//! The root of the physical plan.
+	reference<PhysicalOperator> root;
 
 	//! The result names of the transaction
 	vector<string> names;
