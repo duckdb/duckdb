@@ -100,7 +100,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
-            GIT_TAG 79fcce4a7478d245189d851ce289def2b42f4f93
+            GIT_TAG 8461ed8b6f726564934e9c831cdc88d431e3148f
             )
 endif()
 
@@ -160,6 +160,6 @@ duckdb_extension_load(fts
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb-fts
-        GIT_TAG 0477abaf2484aa7b9aabf8ace9dc0bde80a15554
+        GIT_TAG 3aa6a180b9c101d78070f5f7214c27552bb091c8
         TEST_DIR test/sql
 )
