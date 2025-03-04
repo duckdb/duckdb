@@ -504,7 +504,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 	DataChunk combined_chunk; // contains conflict_chunk + scan_chunk (wide)
 
 	// Filter out everything but the conflicting rows
-	conflict_chunk.Initialize(context.client, tuples.GetTypes());
+	conflict_chunk.Initialize(context.client, tuples.GetTypes(), tuples.size());
 	conflict_chunk.Reference(tuples);
 	conflict_chunk.Slice(conflicts.Selection(), conflicts.Count());
 	conflict_chunk.SetCardinality(conflicts.Count());
@@ -515,7 +515,7 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 		D_ASSERT(scan_chunk.size() == 0);
 		// When these values are required for the conditions or the SET expressions,
 		// then we scan the existing table for the conflicting tuples, using the rowids
-		scan_chunk.Initialize(context.client, types_to_fetch);
+		scan_chunk.Initialize(context.client, types_to_fetch, conflicts.Count());
 		fetch_state = make_uniq<ColumnFetchState>();
 		if (GLOBAL) {
 			auto &transaction = DuckTransaction::Get(context.client, table.catalog);
