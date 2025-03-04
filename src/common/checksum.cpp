@@ -1,5 +1,7 @@
 #include "duckdb/common/checksum.hpp"
 
+#include "duckdb/common/helper.hpp"
+
 namespace duckdb {
 
 hash_t Checksum(uint64_t x) {
