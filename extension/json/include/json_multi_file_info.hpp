@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp
+// json_multi_file_info.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,16 +9,16 @@
 #pragma once
 
 #include "duckdb/common/multi_file_reader_function.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
+#include "json_reader_options.hpp"
 
 namespace duckdb {
 
-class CSVFileReaderOptions : public BaseFileReaderOptions {
+class JSONFileReaderOptions : public BaseFileReaderOptions {
 public:
-	CSVReaderOptions options;
+	JSONReaderOptions options;
 };
 
-struct CSVMultiFileInfo {
+struct JSONMultiFileInfo {
 	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
 	                                                           optional_ptr<TableFunctionInfo> info);
 	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
@@ -34,21 +34,22 @@ struct CSVMultiFileInfo {
 	                       MultiFileBindData &bind_data);
 	static void FinalizeBindData(MultiFileBindData &multi_file_data);
 	static void GetBindInfo(const TableFunctionData &bind_data, BindInfo &info);
-	static optional_idx MaxThreads(const MultiFileBindData &bind_data_p, const MultiFileGlobalState &global_state,
+	static optional_idx MaxThreads(const MultiFileBindData &bind_data, const MultiFileGlobalState &global_state,
 	                               FileExpandResult expand_result);
 	static unique_ptr<GlobalTableFunctionState>
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state);
-	static unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &);
+	static unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &context,
+	                                                                GlobalTableFunctionState &global_state);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               const string &filename, idx_t file_idx,
 	                                               const MultiFileBindData &bind_data);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
-	                                               CSVReaderOptions &options,
+	                                               JSONReaderOptions &options,
 	                                               const MultiFileReaderOptions &file_options);
 	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
-	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &);
+	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &gstate_p);
 	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
 	                              GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,
