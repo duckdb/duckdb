@@ -534,7 +534,7 @@ struct FSSTScanState : public StringScanState {
 		last_known_row = -1;
 	}
 	inline string_t DecompressString(StringDictionaryContainer dict, data_ptr_t baseptr,
-	                                 const bp_delta_offsets_t &offsets, idx_t index, Vector &result) {
+	                                 const bp_delta_offsets_t &offsets, idx_t index, VectorStringBuffer &str_buffer) {
 		uint32_t str_len = bitunpack_buffer[offsets.scan_offset + index];
 		auto str_ptr = FSSTStorage::FetchStringPointer(
 		    dict, baseptr,
@@ -543,7 +543,8 @@ struct FSSTScanState : public StringScanState {
 		if (str_len == 0) {
 			return string_t(nullptr, 0);
 		}
-		return FSSTPrimitives::DecompressValue(duckdb_fsst_decoder.get(), result, str_ptr, str_len, decompress_buffer);
+		return FSSTPrimitives::DecompressValue(duckdb_fsst_decoder.get(), str_buffer, str_ptr, str_len,
+		                                       decompress_buffer);
 	}
 };
 
@@ -665,8 +666,9 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		}
 	} else {
 		// Just decompress
+		auto &str_buffer = StringVector::GetStringBuffer(result);
 		for (idx_t i = 0; i < scan_count; i++) {
-			result_data[i + result_offset] = scan_state.DecompressString(dict, baseptr, offsets, i, result);
+			result_data[i + result_offset] = scan_state.DecompressString(dict, baseptr, offsets, i, str_buffer);
 		}
 	}
 	EndScan(scan_state, offsets, start, scan_count);
@@ -690,11 +692,12 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
+	auto &str_buffer = StringVector::GetStringBuffer(result);
 	auto offsets = StartScan(scan_state, base_data, start, vector_count);
 	auto result_data = FlatVector::GetData<string_t>(result);
 	for (idx_t i = 0; i < sel_count; i++) {
 		idx_t index = sel.get_index(i);
-		result_data[i] = scan_state.DecompressString(dict, baseptr, offsets, index, result);
+		result_data[i] = scan_state.DecompressString(dict, baseptr, offsets, index, str_buffer);
 	}
 	EndScan(scan_state, offsets, start, vector_count);
 }
@@ -739,10 +742,11 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	    segment, dict.end, result, base_ptr,
 	    UnsafeNumericCast<int32_t>(delta_decode_buffer[offsets.unused_delta_decoded_values]), string_length);
 
+	auto &str_buffer = StringVector::GetStringBuffer(result);
 	vector<unsigned char> uncompress_buffer;
 	auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
 	uncompress_buffer.resize(string_block_limit + 1);
-	result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, result, compressed_string.GetData(),
+	result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, str_buffer, compressed_string.GetData(),
 	                                                          compressed_string.GetSize(), uncompress_buffer);
 }
 

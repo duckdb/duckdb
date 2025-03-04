@@ -2116,6 +2116,7 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 	auto dst_mask = FlatVector::Validity(dst);
 	auto ldata = FSSTVector::GetCompressedData<string_t>(src);
 	auto tdata = FlatVector::GetData<string_t>(dst);
+	auto &str_buffer = StringVector::GetStringBuffer(dst);
 	for (idx_t i = 0; i < copy_count; i++) {
 		auto source_idx = sel->get_index(src_offset + i);
 		auto target_idx = dst_offset + i;
@@ -2123,7 +2124,7 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
 			auto decoder = FSSTVector::GetDecoder(src);
 			auto &decompress_buffer = FSSTVector::GetDecompressBuffer(src);
-			tdata[target_idx] = FSSTPrimitives::DecompressValue(decoder, dst, compressed_string.GetData(),
+			tdata[target_idx] = FSSTPrimitives::DecompressValue(decoder, str_buffer, compressed_string.GetData(),
 			                                                    compressed_string.GetSize(), decompress_buffer);
 		} else {
 			tdata[target_idx] = string_t(nullptr, 0);
