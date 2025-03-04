@@ -289,7 +289,7 @@ jobs:
  check-load-install-extensions:
     name: Checks extension entries
     if: ${{ inputs.skip_tests != 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-extensions-64
     env:
       CC: gcc-10
@@ -359,7 +359,7 @@ jobs:
  symbol-leakage:
     name: Symbol Leakage
     if: ${{ inputs.skip_tests != 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-extensions-64
 
     steps:
@@ -390,7 +390,7 @@ jobs:
     name: Amalgamation Tests
     if: ${{ inputs.skip_tests != 'true' }}
     needs: linux-extensions-64
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       CC: clang
       CXX: clang++
