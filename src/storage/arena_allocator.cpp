@@ -60,44 +60,37 @@ ArenaAllocator::ArenaAllocator(Allocator &allocator, idx_t initial_capacity)
 ArenaAllocator::~ArenaAllocator() {
 }
 
-data_ptr_t ArenaAllocator::Allocate(idx_t len) {
-	D_ASSERT(!head || head->current_position <= head->maximum_size);
-	if (!head || head->current_position + len > head->maximum_size) {
-		idx_t capacity;
-		// start off with either (1) initial capacity (if we have no block) or (2) capacity of the previous block
-		if (!head) {
-			capacity = initial_capacity;
-		} else {
-			capacity = head->maximum_size;
-		}
-		// capacity of the previous block can be bigger than the max capacity if we allocate len > max capacity
-		// for new blocks - try to set it back to the max capacity
-		if (capacity > ARENA_ALLOCATOR_MAX_CAPACITY) {
-			capacity = ARENA_ALLOCATOR_MAX_CAPACITY;
-		}
-		// if we are below the max capacity - double the size of the block
-		if (capacity < ARENA_ALLOCATOR_MAX_CAPACITY) {
-			capacity *= 2;
-		}
-		// we double the size until we can fit `len`
-		// this is generally only relevant if len is very large
-		while (capacity < len) {
-			capacity *= 2;
-		}
-		auto new_chunk = make_unsafe_uniq<ArenaChunk>(allocator, capacity);
-		if (head) {
-			head->prev = new_chunk.get();
-			new_chunk->next = std::move(head);
-		} else {
-			tail = new_chunk.get();
-		}
-		head = std::move(new_chunk);
-		allocated_size += capacity;
+void ArenaAllocator::AllocateNewBlock(idx_t min_size) {
+	idx_t capacity;
+	// start off with either (1) initial capacity (if we have no block) or (2) capacity of the previous block
+	if (!head) {
+		capacity = initial_capacity;
+	} else {
+		capacity = head->maximum_size;
 	}
-	D_ASSERT(head->current_position + len <= head->maximum_size);
-	auto result = head->data.get() + head->current_position;
-	head->current_position += len;
-	return result;
+	// capacity of the previous block can be bigger than the max capacity if we allocate len > max capacity
+	// for new blocks - try to set it back to the max capacity
+	if (capacity > ARENA_ALLOCATOR_MAX_CAPACITY) {
+		capacity = ARENA_ALLOCATOR_MAX_CAPACITY;
+	}
+	// if we are below the max capacity - double the size of the block
+	if (capacity < ARENA_ALLOCATOR_MAX_CAPACITY) {
+		capacity *= 2;
+	}
+	// we double the size until we can fit `len`
+	// this is generally only relevant if len is very large
+	while (capacity < min_size) {
+		capacity *= 2;
+	}
+	auto new_chunk = make_unsafe_uniq<ArenaChunk>(allocator, capacity);
+	if (head) {
+		head->prev = new_chunk.get();
+		new_chunk->next = std::move(head);
+	} else {
+		tail = new_chunk.get();
+	}
+	head = std::move(new_chunk);
+	allocated_size += capacity;
 }
 
 data_ptr_t ArenaAllocator::Reallocate(data_ptr_t pointer, idx_t old_size, idx_t size) {

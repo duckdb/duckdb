@@ -20,6 +20,7 @@
 namespace duckdb {
 
 class VectorCache;
+class VectorStringBuffer;
 class VectorStructBuffer;
 class VectorListBuffer;
 struct SelCache;
@@ -456,6 +457,8 @@ struct StringVector {
 	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
 	//! result of an operation
 	DUCKDB_API static string_t EmptyString(Vector &vector, idx_t len);
+	//! Returns a reference to the underlying VectorStringBuffer - throws an error if vector is not of type VARCHAR
+	DUCKDB_API static VectorStringBuffer &GetStringBuffer(Vector &vector);
 	//! Adds a reference to a handle that stores strings of this vector
 	DUCKDB_API static void AddHandle(Vector &vector, BufferHandle handle);
 	//! Adds a reference to an unspecified vector buffer that stores strings of this vector

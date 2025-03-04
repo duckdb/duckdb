@@ -163,7 +163,7 @@ inline size_t /* OUT: bytesize of the decompressed string. If > size, the decode
 duckdb_fsst_decompress(
    duckdb_fsst_decoder_t *decoder,  /* IN: use this symbol table for compression. */
    size_t lenIn,             /* IN: byte-length of compressed string. */
-   unsigned char *strIn,     /* IN: compressed string. */
+   const unsigned char *strIn,     /* IN: compressed string. */
    size_t size,              /* IN: byte-length of output buffer. */
    unsigned char *output     /* OUT: memory buffer to put the decompressed string in. */
 ) {

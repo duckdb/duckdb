@@ -197,6 +197,23 @@ public:
 	string_t EmptyString(idx_t len) {
 		return heap.EmptyString(len);
 	}
+	//! Allocate a buffer to store up to "len" bytes for a string
+	//! This can be turned into a proper string by using FinalizeBuffer afterwards
+	//! Note that alloc_len only has to be an upper bound, the final string may be smaller
+	data_ptr_t AllocateBuffer(idx_t alloc_len) {
+		auto &allocator = heap.GetAllocator();
+		return allocator.Allocate(alloc_len);
+	}
+	//! Finalize a buffer allocated with AllocateBuffer into a string of size str_len
+	//! str_len must be <= alloc_len
+	string_t FinalizeBuffer(data_ptr_t buffer, idx_t alloc_len, idx_t str_len) {
+		auto &allocator = heap.GetAllocator();
+		D_ASSERT(str_len <= alloc_len);
+		bool is_not_inlined = str_len > string_t::INLINE_LENGTH;
+		idx_t shrink_count = alloc_len - (str_len * is_not_inlined);
+		allocator.ShrinkHead(shrink_count);
+		return string_t(const_char_ptr_cast(buffer), UnsafeNumericCast<uint32_t>(str_len));
+	}
 
 	void AddHeapReference(buffer_ptr<VectorBuffer> heap) {
 		references.push_back(std::move(heap));
