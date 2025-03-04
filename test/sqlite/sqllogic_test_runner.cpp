@@ -524,6 +524,12 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 		}
 		return RequireResult::PRESENT;
 	}
+	if (param == "allow_unsigned_extensions") {
+		if (config->options.allow_unsigned_extensions) {
+			return RequireResult::PRESENT;
+		}
+		return RequireResult::MISSING;
+	}
 
 	bool excluded_from_autoloading = true;
 	for (const auto &ext : AUTOLOADABLE_EXTENSIONS) {

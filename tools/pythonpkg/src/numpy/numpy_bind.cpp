@@ -4,6 +4,7 @@
 #include "duckdb_python/pandas/column/pandas_numpy_column.hpp"
 #include "duckdb_python/pandas/pandas_bind.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
+#include "duckdb_python/pyconnection/pyconnection.hpp"
 
 namespace duckdb {
 

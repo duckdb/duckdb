@@ -162,19 +162,26 @@ except FileNotFoundError:
     pass
 
 
-def update_json(existing: dict, new: dict):
-    for item in new:
-        if item not in existing:
-            continue
-        object = new[item]
-        if isinstance(object, dict):
-            object.update(existing[item])
-            update_json(object, existing[item])
+def update_json(existing: dict, new: dict) -> dict:
+    # Iterate over keys in the new dictionary.
+    for key in new:
+        new_value = new[key]
+        old_value = existing[key] if key in existing else None
+
+        # If both values are dictionaries, update recursively.
+        if isinstance(new_value, dict) and isinstance(old_value, dict):
+            print(key)
+            updated = update_json(old_value, new_value)
+            existing[key] = updated
+        else:
+            # Otherwise, overwrite the existing value.
+            existing[key] = new_value
+    return existing
 
 
 # Merge the existing JSON data with the new data
 json_data = generator.to_json()
-update_json(existing_json_data, json_data)
+json_data = update_json(existing_json_data, json_data)
 
 # Save the merged JSON data back to the file
 with open(json_cache_path, "w") as file:

@@ -44,14 +44,14 @@ class CSVBuffer {
 public:
 	//! Constructor for Initial Buffer
 	CSVBuffer(ClientContext &context, idx_t buffer_size_p, CSVFileHandle &file_handle,
-	          idx_t &global_csv_current_position);
+	          const idx_t &global_csv_current_position);
 
 	//! Constructor for `Next()` Buffers
 	CSVBuffer(CSVFileHandle &file_handle, ClientContext &context, idx_t buffer_size, idx_t global_csv_current_position,
 	          idx_t buffer_idx);
 
 	//! Creates a new buffer with the next part of the CSV File
-	shared_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, bool &has_seeked);
+	shared_ptr<CSVBuffer> Next(CSVFileHandle &file_handle, idx_t buffer_size, bool &has_seeked) const;
 
 	//! Gets the buffer actual size
 	idx_t GetBufferSize() const;
@@ -66,7 +66,7 @@ public:
 	//! Wrapper for the Pin Function, if it can seek, it means that the buffer might have been destroyed, hence we must
 	//! Scan it from the disk file again.
 	shared_ptr<CSVBufferHandle> Pin(CSVFileHandle &file_handle, bool &has_seeked);
-	//! Wrapper for the unpin
+	//! Wrapper for unpin
 	void Unpin();
 	char *Ptr() {
 		return char_ptr_cast(handle.Ptr());

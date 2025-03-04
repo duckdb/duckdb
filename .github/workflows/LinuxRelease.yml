@@ -51,7 +51,6 @@ env:
 jobs:
  linux-release-cli:
     needs: linux-extensions-64
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
 
     strategy:
       fail-fast: false
@@ -127,7 +126,6 @@ jobs:
       run: |
         build/release/benchmark/benchmark_runner benchmark/micro/update/update_with_join.benchmark
         build/release/duckdb -c "COPY (SELECT 42) TO '/dev/stdout' (FORMAT PARQUET)" | cat
-
 
  # Linux extensions for builds that use C++11 ABI, currently these are all linux builds based on ubuntu >= 18 (e.g. NodeJS)
  # note that the linux-release-64 is based on the manylinux-based extensions, which are built in .github/workflows/Python.yml
@@ -258,7 +256,7 @@ jobs:
  check-load-install-extensions:
     name: Checks extension entries
     if: ${{ inputs.skip_tests != 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-extensions-64
     env:
       CC: gcc-10
@@ -307,6 +305,7 @@ jobs:
         python scripts/generate_extensions_function.py
         pip install "black>=24"
         pip install cmake-format
+        pip install "clang_format==11.0.1"
         make format-fix
 
     - uses: actions/upload-artifact@v4
@@ -328,7 +327,7 @@ jobs:
  symbol-leakage:
     name: Symbol Leakage
     if: ${{ inputs.skip_tests != 'true' }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-extensions-64
 
     steps:
@@ -359,7 +358,7 @@ jobs:
     name: Amalgamation Tests
     if: ${{ inputs.skip_tests != 'true' }}
     needs: linux-extensions-64
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       CC: clang
       CXX: clang++
@@ -377,7 +376,7 @@ jobs:
     - name: Install LLVM and Clang
       uses: KyleMayes/install-llvm-action@v1
       with:
-        version: "10.0"
+        version: "14.0"
 
     - name: Generate Amalgamation
       shell: bash

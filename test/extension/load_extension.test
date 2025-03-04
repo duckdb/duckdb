@@ -6,6 +6,8 @@ require notmingw
 
 require skip_reload
 
+require allow_unsigned_extensions
+
 statement ok
 PRAGMA enable_verification
 

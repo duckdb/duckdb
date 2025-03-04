@@ -48,10 +48,13 @@
         "name": "pandas",
         "children": [
             "pandas.DataFrame",
-            "pandas.isnull",
-            "pandas.ArrowDtype",
+            "pandas.Categorical",
+            "pandas.CategoricalDtype",
+            "pandas.Series",
             "pandas.NaT",
             "pandas.NA",
+            "pandas.isnull",
+            "pandas.ArrowDtype",
             "pandas.BooleanDtype",
             "pandas.UInt8Dtype",
             "pandas.UInt16Dtype",
@@ -170,8 +173,8 @@
             "datetime.date",
             "datetime.time",
             "datetime.timedelta",
-            "datetime.timezone",
-            "datetime.datetime"
+            "datetime.datetime",
+            "datetime.timezone"
         ]
     },
     "datetime.date": {
@@ -670,6 +673,24 @@
         "type": "attribute",
         "full_path": "collections.abc.Mapping",
         "name": "Mapping",
+        "children": []
+    },
+    "pandas.Categorical": {
+        "type": "attribute",
+        "full_path": "pandas.Categorical",
+        "name": "Categorical",
+        "children": []
+    },
+    "pandas.CategoricalDtype": {
+        "type": "attribute",
+        "full_path": "pandas.CategoricalDtype",
+        "name": "CategoricalDtype",
+        "children": []
+    },
+    "pandas.Series": {
+        "type": "attribute",
+        "full_path": "pandas.Series",
+        "name": "Series",
         "children": []
     }
 }

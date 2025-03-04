@@ -12,7 +12,7 @@ env:
 jobs:
  regression-test-all:
   name: All Regression Tests
-  runs-on: ubuntu-20.04
+  runs-on: ubuntu-22.04
   env:
     CC: gcc-10
     CXX: g++-10

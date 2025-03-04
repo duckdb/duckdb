@@ -121,8 +121,8 @@ private:
 };
 
 struct ParseTypeInfo {
-	ParseTypeInfo() {};
-	ParseTypeInfo(const LogicalType &type, bool validate_utf_8_p) : validate_utf8(validate_utf_8_p) {
+	ParseTypeInfo() : validate_utf8(false), type_id(), internal_type(), scale(0), width(0) {};
+	ParseTypeInfo(const LogicalType &type, const bool validate_utf_8_p) : validate_utf8(validate_utf_8_p) {
 		type_id = type.id();
 		internal_type = type.InternalType();
 		if (type.id() == LogicalTypeId::DECIMAL) {

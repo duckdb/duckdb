@@ -36,7 +36,7 @@ void CSVEncoderBuffer::Reset() {
 	actual_encoded_buffer_size = 0;
 }
 
-CSVEncoder::CSVEncoder(DBConfig &config, const string &encoding_name_to_find, idx_t buffer_size) {
+CSVEncoder::CSVEncoder(const DBConfig &config, const string &encoding_name_to_find, idx_t buffer_size) {
 	encoding_name = StringUtil::Lower(encoding_name_to_find);
 	auto function = config.GetEncodeFunction(encoding_name_to_find);
 	if (!function) {

@@ -247,7 +247,7 @@ void AttachedDatabase::Close() {
 			}
 			CheckpointOptions options;
 			options.wal_action = CheckpointWALAction::DELETE_WAL;
-			storage->CreateCheckpoint(options);
+			storage->CreateCheckpoint(nullptr, options);
 		}
 	} catch (...) { // NOLINT
 	}

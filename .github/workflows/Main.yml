@@ -37,7 +37,7 @@ jobs:
  linux-debug:
     name: Linux Debug (${{ matrix.tag }})
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
       matrix:
@@ -124,7 +124,7 @@ jobs:
  force-storage:
     name: Force Storage
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       CC: gcc-10
       CXX: g++-10
@@ -161,7 +161,7 @@ jobs:
  force-restart:
     name: Force Restart
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: force-storage
     env:
       CC: gcc-10
@@ -198,7 +198,7 @@ jobs:
  valgrind:
     name: Valgrind
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: force-storage
     env:
       CC: gcc-10

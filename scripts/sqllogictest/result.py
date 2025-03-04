@@ -1092,6 +1092,15 @@ class SQLLogicContext:
                 return RequireResult.MISSING
             return RequireResult.PRESENT
 
+        allow_unsigned_extensions = connection.execute(
+            "select value::BOOLEAN from duckdb_settings() where name == 'allow_unsigned_extensions'"
+        ).fetchone()[0]
+        if param == "allow_unsigned_extensions":
+            if allow_unsigned_extensions == False:
+                # If extension validation is turned on (that is allow_unsigned_extensions=False), skip test
+                return RequireResult.MISSING
+            return RequireResult.PRESENT
+
         excluded_from_autoloading = True
         for ext in self.runner.AUTOLOADABLE_EXTENSIONS:
             if ext == param:

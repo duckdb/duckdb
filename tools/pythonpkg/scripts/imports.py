@@ -9,6 +9,9 @@ pyarrow.RecordBatchReader
 import pandas
 
 pandas.DataFrame
+pandas.Categorical
+pandas.CategoricalDtype
+pandas.Series
 pandas.NaT
 pandas.NA
 pandas.isnull

@@ -20,7 +20,6 @@
 namespace duckdb {
 
 class Executor;
-class Event;
 class MetaPipeline;
 class PipelineExecutor;
 class Pipeline;

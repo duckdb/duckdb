@@ -1,4 +1,5 @@
 #include "duckdb/parallel/task_executor.hpp"
+#include "duckdb/parallel/task_notifier.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
 namespace duckdb {
@@ -7,7 +8,8 @@ TaskExecutor::TaskExecutor(TaskScheduler &scheduler)
     : scheduler(scheduler), token(scheduler.CreateProducer()), completed_tasks(0), total_tasks(0) {
 }
 
-TaskExecutor::TaskExecutor(ClientContext &context) : TaskExecutor(TaskScheduler::GetScheduler(context)) {
+TaskExecutor::TaskExecutor(ClientContext &context_p) : TaskExecutor(TaskScheduler::GetScheduler(context_p)) {
+	context = context_p;
 }
 
 TaskExecutor::~TaskExecutor() {
@@ -69,6 +71,7 @@ TaskExecutionResult BaseExecutorTask::Execute(TaskExecutionMode mode) {
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 	try {
+		TaskNotifier task_notifier {executor.context};
 		ExecuteTask();
 		executor.FinishTask();
 		return TaskExecutionResult::TASK_FINISHED;

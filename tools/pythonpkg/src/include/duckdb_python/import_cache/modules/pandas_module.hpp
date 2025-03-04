@@ -20,8 +20,9 @@ public:
 
 public:
 	PandasCacheItem()
-	    : PythonImportCacheItem("pandas"), DataFrame("DataFrame", this), isnull("isnull", this),
-	      ArrowDtype("ArrowDtype", this), NaT("NaT", this), NA("NA", this), BooleanDtype("BooleanDtype", this),
+	    : PythonImportCacheItem("pandas"), DataFrame("DataFrame", this), Categorical("Categorical", this),
+	      CategoricalDtype("CategoricalDtype", this), Series("Series", this), NaT("NaT", this), NA("NA", this),
+	      isnull("isnull", this), ArrowDtype("ArrowDtype", this), BooleanDtype("BooleanDtype", this),
 	      UInt8Dtype("UInt8Dtype", this), UInt16Dtype("UInt16Dtype", this), UInt32Dtype("UInt32Dtype", this),
 	      UInt64Dtype("UInt64Dtype", this), Int8Dtype("Int8Dtype", this), Int16Dtype("Int16Dtype", this),
 	      Int32Dtype("Int32Dtype", this), Int64Dtype("Int64Dtype", this), Float32Dtype("Float32Dtype", this),
@@ -31,10 +32,13 @@ public:
 	}
 
 	PythonImportCacheItem DataFrame;
-	PythonImportCacheItem isnull;
-	PythonImportCacheItem ArrowDtype;
+	PythonImportCacheItem Categorical;
+	PythonImportCacheItem CategoricalDtype;
+	PythonImportCacheItem Series;
 	PythonImportCacheItem NaT;
 	PythonImportCacheItem NA;
+	PythonImportCacheItem isnull;
+	PythonImportCacheItem ArrowDtype;
 	PythonImportCacheItem BooleanDtype;
 	PythonImportCacheItem UInt8Dtype;
 	PythonImportCacheItem UInt16Dtype;
