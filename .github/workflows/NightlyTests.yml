@@ -449,6 +449,39 @@ jobs:
         shell: bash
         run: build/relassert/test/unittest
 
+  prefetch-all-parquet-files:
+    name: Prefetch All Parquet Files
+    runs-on: ubuntu-24.04
+    needs: linux-memory-leaks
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      PREFETCH_ALL_PARQUET_FILES: 1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ env.CCACHE_SAVE }}
+
+      - name: Build
+        shell: bash
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: build/relassert/test/unittest
+
   latest-storage:
     name: Latest Storage
     runs-on: ubuntu-20.04
