@@ -121,11 +121,12 @@ bool JSONFileHandle::Read(char *pointer, idx_t &read_size, idx_t requested_size)
 		return false;
 	}
 
+	read_size = 0;
 	if (!cached_buffers.empty() || read_position < cached_size) {
 		read_size += ReadFromCache(pointer, requested_size, read_position);
 	}
 
-	auto temp_read_size = ReadInternal(pointer, requested_size);
+	auto temp_read_size = ReadInternal(pointer, requested_size - read_size);
 	if (file_handle->IsPipe() && temp_read_size != 0) { // Cache the buffer
 		cached_buffers.emplace_back(allocator.Allocate(temp_read_size));
 		memcpy(cached_buffers.back().get(), pointer, temp_read_size);
