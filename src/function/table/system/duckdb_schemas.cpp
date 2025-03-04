@@ -83,7 +83,11 @@ void DuckDBSchemasFunction(ClientContext &context, TableFunctionInput &data_p, D
 		// "internal", PhysicalType::BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(entry.internal));
 		// "sql", PhysicalType::VARCHAR
-		output.SetValue(col++, count, Value());
+		if (entry.catalog.IsSystemCatalog() || entry.catalog.InMemory()) {
+			output.SetValue(col++, count, Value());
+		} else {
+			output.SetValue(col++, count, Value(entry.catalog.GetDBPath()));
+		}
 
 		data.offset++;
 		count++;

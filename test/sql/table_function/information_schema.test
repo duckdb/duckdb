@@ -138,3 +138,19 @@ query I
 SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='scheme'
 ----
 0
+
+statement ok
+ATTACH '__TEST_DIR__/schemata.db' AS fsdb
+
+query I
+SELECT sql_path = '__TEST_DIR__/schemata.db' FROM information_schema.schemata WHERE catalog_name = 'fsdb'
+----
+true
+
+statement ok
+DETACH fsdb;
+
+query I
+SELECT DISTINCT sql_path FROM information_schema.schemata WHERE catalog_name <> 'fsdb'
+----
+NULL
