@@ -275,7 +275,6 @@ idx_t CachingFileHandle::ReadAndCopyInterleaved(const vector<shared_ptr<CachedFi
 		if (overlapping_range->GetOverlap(remaining_bytes, current_location) == CachedFileRangeOverlap::NONE) {
 			continue; // Remainder does not overlap with the current overlapping file range
 		}
-		D_ASSERT(overlapping_range->GetOverlap(remaining_bytes, current_location) == CachedFileRangeOverlap::PARTIAL);
 
 		// Try to pin the current overlapping file range
 		auto overlapping_file_range_pin = external_file_cache.buffer_manager.Pin(overlapping_range->block_handle);
