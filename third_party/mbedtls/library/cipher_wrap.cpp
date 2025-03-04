@@ -60,11 +60,7 @@
 
 enum mbedtls_cipher_base_index : uint8_t {
     MBEDTLS_CIPHER_BASE_INDEX_AES = 0,
-    MBEDTLS_CIPHER_BASE_INDEX_ARIA = 1,
-    MBEDTLS_CIPHER_BASE_INDEX_CAMELLIA = 2,
     MBEDTLS_CIPHER_BASE_INDEX_GCM_AES = 3,
-    MBEDTLS_CIPHER_BASE_INDEX_GCM_ARIA = 4,
-    MBEDTLS_CIPHER_BASE_INDEX_GCM_CAMELLIA = 5
 };
 
 #if defined(MBEDTLS_GCM_C) && \
@@ -2380,11 +2376,7 @@ int mbedtls_cipher_supported[NUM_CIPHERS];
 
 const mbedtls_cipher_base_t *mbedtls_cipher_base_lookup_table[] = {
    /* MBEDTLS_CIPHER_BASE_INDEX_AES */ &aes_info,
-   /* MBEDTLS_CIPHER_BASE_INDEX_ARIA */&aria_info,
-   /* MBEDTLS_CIPHER_BASE_INDEX_CAMELLIA */ &camellia_info,
    /* MBEDTLS_CIPHER_BASE_INDEX_GCM_AES */ &gcm_aes_info,
-   /* MBEDTLS_CIPHER_BASE_INDEX_GCM_ARIA */&gcm_aria_info,
-   /* MBEDTLS_CIPHER_BASE_INDEX_GCM_CAMELLIA */ &gcm_camellia_info
 };
 
 #endif /* MBEDTLS_CIPHER_C */

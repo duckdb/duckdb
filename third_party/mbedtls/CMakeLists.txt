@@ -9,13 +9,11 @@ set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 add_library(duckdb_mbedtls STATIC
         mbedtls_wrapper.cpp
         library/aes.cpp
-        library/aria.cpp
         library/asn1parse.cpp
         library/asn1write.cpp
         library/base64.cpp
         library/bignum.cpp
         library/bignum_core.cpp
-        library/camellia.cpp
         library/cipher.cpp
         library/cipher_wrap.cpp
         library/constant_time.cpp
@@ -32,8 +30,7 @@ add_library(duckdb_mbedtls STATIC
         library/rsa.cpp
         library/rsa_alt_helpers.cpp
         library/sha1.cpp
-        library/sha256.cpp
-        library/sha512.cpp)
+        library/sha256.cpp)
 
 set_property(TARGET duckdb_mbedtls PROPERTY C_STANDARD 99)
 
