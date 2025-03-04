@@ -1,0 +1,28 @@
+# name: test/optimizer/column_binding_error.test
+# description: column binding error test inspired by #16426,
+# group: [optimizer]
+
+require tpch
+
+statement ok
+CREATE TABLE stats(num_docs) AS SELECT 1;
+
+statement ok
+CREATE TABLE postings(docid, termid, tf) AS SELECT range, range, 1 FROM range(30);
+
+statement ok
+CREATE TABLE docs(docid) AS FROM range(2);
+
+statement ok
+WITH termids(termid) AS (SELECT 1)
+SELECT
+  (SELECT num_docs FROM stats),
+  (SELECT num_docs FROM stats),
+  (SELECT num_docs FROM stats),
+  (SELECT num_docs FROM stats),
+  (SELECT num_docs FROM stats),
+  (SELECT num_docs FROM stats)
+FROM postings
+JOIN docs USING (docid)
+JOIN termids USING (termid)
+WHERE termid IN (SELECT termid FROM termids);
