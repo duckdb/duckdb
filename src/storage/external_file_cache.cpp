@@ -1,5 +1,6 @@
 #include "duckdb/storage/external_file_cache.hpp"
 
+#include "duckdb/common/checksum.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
@@ -39,7 +40,7 @@ void ExternalFileCache::CachedFileRange::AddCheckSum() {
 #ifdef DEBUG
 	D_ASSERT(checksum == 0);
 	auto buffer_handle = block_handle->block_manager.buffer_manager.Pin(block_handle);
-	checksum = Hash(buffer_handle.Ptr(), nr_bytes);
+	checksum = Checksum(buffer_handle.Ptr(), nr_bytes);
 #endif
 }
 
@@ -49,7 +50,7 @@ void ExternalFileCache::CachedFileRange::VerifyCheckSum() {
 		return;
 	}
 	auto buffer_handle = block_handle->block_manager.buffer_manager.Pin(block_handle);
-	D_ASSERT(checksum == Hash(buffer_handle.Ptr(), nr_bytes));
+	D_ASSERT(checksum == Checksum(buffer_handle.Ptr(), nr_bytes));
 #endif
 }
 

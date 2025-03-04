@@ -36,6 +36,7 @@ CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, C
 	// If we don't have any cached file ranges, we must also open the file
 	auto guard = cached_file.lock.GetSharedLock();
 	if (cached_file.Ranges(guard).empty()) {
+		guard.reset();
 		GetFileHandle();
 	}
 }
