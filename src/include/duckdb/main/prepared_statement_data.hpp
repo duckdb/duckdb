@@ -30,8 +30,9 @@ public:
 	StatementType statement_type;
 	//! The unbound SQL statement that was prepared
 	unique_ptr<SQLStatement> unbound_statement;
-	//! The fully prepared physical plan of the prepared statement
-	unique_ptr<PhysicalOperator> plan;
+
+	//! Contains the physical plan. The first element is the root.
+	vector<unique_ptr<PhysicalOperator>> ops;
 
 	//! The result names of the transaction
 	vector<string> names;

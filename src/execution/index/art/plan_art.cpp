@@ -9,8 +9,9 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> ART::CreatePlan(PlanIndexInput &input) {
+PhysicalOperator &ART::CreatePlan(PlanIndexInput &input) {
 	auto &op = input.op;
+	auto &planner = input.planner;
 
 	// PROJECTION on indexed columns.
 	vector<LogicalType> new_column_types;
@@ -22,11 +23,12 @@ unique_ptr<PhysicalOperator> ART::CreatePlan(PlanIndexInput &input) {
 	new_column_types.emplace_back(LogicalType::ROW_TYPE);
 	select_list.push_back(make_uniq<BoundReferenceExpression>(LogicalType::ROW_TYPE, op.info->scan_types.size() - 1));
 
-	auto projection = make_uniq<PhysicalProjection>(new_column_types, std::move(select_list), op.estimated_cardinality);
-	projection->children.push_back(std::move(input.table_scan));
+	auto &projection_ref =
+	    planner.Make<PhysicalProjection>(new_column_types, std::move(select_list), op.estimated_cardinality);
+	projection_ref.children.push_back(input.table_scan);
 
 	// Optional NOT NULL filter.
-	unique_ptr<PhysicalOperator> prev_operator;
+	reference<PhysicalOperator> prev_operator_ref(projection_ref);
 	auto is_alter = op.alter_table_info != nullptr;
 	if (!is_alter) {
 		vector<LogicalType> filter_types;
@@ -41,13 +43,10 @@ unique_ptr<PhysicalOperator> ART::CreatePlan(PlanIndexInput &input) {
 			filter_select_list.push_back(std::move(is_not_null_expr));
 		}
 
-		prev_operator =
-		    make_uniq<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list), op.estimated_cardinality);
-		prev_operator->types.emplace_back(LogicalType::ROW_TYPE);
-		prev_operator->children.push_back(std::move(projection));
-
-	} else {
-		prev_operator = std::move(projection);
+		prev_operator_ref = planner.Make<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list),
+		                                                 op.estimated_cardinality);
+		prev_operator_ref.get().types.emplace_back(LogicalType::ROW_TYPE);
+		prev_operator_ref.get().children.push_back(projection_ref);
 	}
 
 	// Determine whether to push an ORDER BY operator.
@@ -59,13 +58,13 @@ unique_ptr<PhysicalOperator> ART::CreatePlan(PlanIndexInput &input) {
 	}
 
 	// CREATE INDEX operator.
-	auto physical_create_index = make_uniq<PhysicalCreateARTIndex>(
+	auto &create_index_ref = planner.Make<PhysicalCreateARTIndex>(
 	    op, op.table, op.info->column_ids, std::move(op.info), std::move(op.unbound_expressions),
 	    op.estimated_cardinality, sort, std::move(op.alter_table_info));
 
 	if (!sort) {
-		physical_create_index->children.push_back(std::move(prev_operator));
-		return std::move(physical_create_index);
+		create_index_ref.children.push_back(prev_operator_ref);
+		return create_index_ref;
 	}
 
 	// ORDER BY operator.
@@ -78,12 +77,11 @@ unique_ptr<PhysicalOperator> ART::CreatePlan(PlanIndexInput &input) {
 	}
 	projections.emplace_back(new_column_types.size() - 1);
 
-	auto physical_order =
-	    make_uniq<PhysicalOrder>(new_column_types, std::move(orders), std::move(projections), op.estimated_cardinality);
-
-	physical_order->children.push_back(std::move(prev_operator));
-	physical_create_index->children.push_back(std::move(physical_order));
-	return std::move(physical_create_index);
+	auto &order_ref = planner.Make<PhysicalOrder>(new_column_types, std::move(orders), std::move(projections),
+	                                              op.estimated_cardinality);
+	order_ref.children.push_back(prev_operator_ref);
+	create_index_ref.children.push_back(order_ref);
+	return create_index_ref;
 }
 
 } // namespace duckdb

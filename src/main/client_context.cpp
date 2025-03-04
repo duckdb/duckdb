@@ -396,16 +396,12 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 #endif
 	}
 
+	// Convert the logical query plan into a physical query plan.
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER);
-	// now convert logical query plan into a physical query plan
-	PhysicalPlanGenerator physical_planner(*this);
-	auto physical_plan = physical_planner.CreatePlan(std::move(plan));
+	PhysicalPlanGenerator physical_planner(*this, result->ops);
+	physical_planner.CreatePlan(std::move(plan));
 	profiler.EndPhase();
-
-#ifdef DEBUG
-	D_ASSERT(!physical_plan->ToString().empty());
-#endif
-	result->plan = std::move(physical_plan);
+	D_ASSERT(!result->ops.empty());
 	return result;
 }
 

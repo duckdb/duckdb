@@ -7,26 +7,26 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> DuckCatalog::PlanDelete(ClientContext &context, LogicalDelete &op,
-                                                     unique_ptr<PhysicalOperator> plan) {
+PhysicalOperator &DuckCatalog::PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op,
+                                          PhysicalOperator &plan) {
 	// get the index of the row_id column
 	auto &bound_ref = op.expressions[0]->Cast<BoundReferenceExpression>();
 
-	auto del = make_uniq<PhysicalDelete>(op.types, op.table, op.table.GetStorage(), std::move(op.bound_constraints),
-	                                     bound_ref.index, op.estimated_cardinality, op.return_chunk);
-	del->children.push_back(std::move(plan));
-	return std::move(del);
+	auto &del_ref =
+	    planner.Make<PhysicalDelete>(op.types, op.table, op.table.GetStorage(), std::move(op.bound_constraints),
+	                                 bound_ref.index, op.estimated_cardinality, op.return_chunk);
+	del_ref.children.push_back(plan);
+	return del_ref;
 }
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalDelete &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDelete &op) {
 	D_ASSERT(op.children.size() == 1);
 	D_ASSERT(op.expressions.size() == 1);
 	D_ASSERT(op.expressions[0]->GetExpressionType() == ExpressionType::BOUND_REF);
 
-	auto plan = CreatePlan(*op.children[0]);
-
+	auto &plan = CreatePlan(*op.children[0]);
 	dependencies.AddDependency(op.table);
-	return op.table.catalog.PlanDelete(context, op, std::move(plan));
+	return op.table.catalog.PlanDelete(context, *this, op, plan);
 }
 
 } // namespace duckdb

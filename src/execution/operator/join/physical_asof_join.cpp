@@ -17,8 +17,7 @@
 
 namespace duckdb {
 
-PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right)
+PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::ASOF_JOIN, std::move(op.conditions), op.join_type,
                              op.estimated_cardinality),
       comparison_type(ExpressionType::INVALID) {
@@ -60,13 +59,13 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<Physica
 	D_ASSERT(!lhs_orders.empty());
 	D_ASSERT(!rhs_orders.empty());
 
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+	children.push_back(left);
+	children.push_back(right);
 
 	//	Fill out the right projection map.
 	right_projection_map = op.right_projection_map;
 	if (right_projection_map.empty()) {
-		const auto right_count = children[1]->types.size();
+		const auto right_count = children[1].get().types.size();
 		right_projection_map.reserve(right_count);
 		for (column_t i = 0; i < right_count; ++i) {
 			right_projection_map.emplace_back(i);
@@ -80,7 +79,7 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, unique_ptr<Physica
 class AsOfGlobalSinkState : public GlobalSinkState {
 public:
 	AsOfGlobalSinkState(ClientContext &context, const PhysicalAsOfJoin &op)
-	    : rhs_sink(context, op.rhs_partitions, op.rhs_orders, op.children[1]->types, {}, op.estimated_cardinality),
+	    : rhs_sink(context, op.rhs_partitions, op.rhs_orders, op.children[1].get().types, {}, op.estimated_cardinality),
 	      is_outer(IsRightOuterJoin(op.join_type)), has_null(false) {
 	}
 
@@ -158,7 +157,7 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	// The data is all in so we can initialise the left partitioning.
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;
-	gstate.lhs_sink = make_uniq<PartitionGlobalSinkState>(context, lhs_partitions, lhs_orders, children[0]->types,
+	gstate.lhs_sink = make_uniq<PartitionGlobalSinkState>(context, lhs_partitions, lhs_orders, children[0].get().types,
 	                                                      partitions_stats, 0U);
 	gstate.lhs_sink->SyncPartitioning(gstate.rhs_sink);
 
@@ -207,7 +206,7 @@ public:
 			lhs_executor.AddExpression(*cond.left);
 		}
 
-		lhs_payload.Initialize(allocator, op.children[0]->types);
+		lhs_payload.Initialize(allocator, op.children[0].get().types);
 		lhs_sel.Initialize();
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 
@@ -398,8 +397,8 @@ AsOfProbeBuffer::AsOfProbeBuffer(ClientContext &context, const PhysicalAsOfJoin 
 	                                            partition_stats);
 
 	//	We sort the row numbers of the incoming block, not the rows
-	lhs_payload.Initialize(allocator, op.children[0]->types);
-	rhs_payload.Initialize(allocator, op.children[1]->types);
+	lhs_payload.Initialize(allocator, op.children[0].get().types);
+	rhs_payload.Initialize(allocator, op.children[1].get().types);
 
 	lhs_sel.Initialize();
 	left_outer.Initialize(STANDARD_VECTOR_SIZE);
@@ -856,7 +855,7 @@ SourceResultType PhysicalAsOfJoin::GetData(ExecutionContext &context, DataChunk 
 
 		if (result_count > 0) {
 			// if there were any tuples that didn't find a match, output them
-			const idx_t left_column_count = children[0]->types.size();
+			const idx_t left_column_count = children[0].get().types.size();
 			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
 				chunk.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(chunk.data[col_idx], true);
