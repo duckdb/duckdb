@@ -39,21 +39,24 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 	for (size_t i = 0; i < join_operators.size(); i++) {
 		auto &join = join_operators[i].get();
 		if (join.type != LogicalOperatorType::LOGICAL_COMPARISON_JOIN &&
-		    join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN)
+		    join.type != LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 			continue;
+		}
 
 		auto &comp_join = join.Cast<LogicalComparisonJoin>();
 		D_ASSERT(comp_join.expressions.empty());
 
 		for (size_t j = 0; j < comp_join.conditions.size(); j++) {
 			auto &cond = comp_join.conditions[j];
-			if (cond.comparison != ExpressionType::COMPARE_EQUAL)
+			if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
 				continue;
+			}
 
 			unique_ptr<BoundComparisonExpression> comparison(
 			    new BoundComparisonExpression(cond.comparison, cond.left->Copy(), cond.right->Copy()));
-			if (!conditions.insert(*comparison).second)
+			if (!conditions.insert(*comparison).second) {
 				continue;
+			}
 
 			// Extract column bindings
 			ColumnBinding left_binding, right_binding;
@@ -69,8 +72,9 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			idx_t right_table = table_operator_manager.GetRenaming(right_binding).table_index;
 			auto left_node = table_operator_manager.GetTableOperator(left_table);
 			auto right_node = table_operator_manager.GetTableOperator(right_table);
-			if (!left_node || !right_node)
+			if (!left_node || !right_node) {
 				continue;
+			}
 
 			// Order nodes based on priority
 			bool left_is_larger = table_operator_manager.GetTableOperatorOrder(left_node) >
@@ -85,7 +89,9 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			// Set protection flags
 			switch (comp_join.type) {
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-				if (comp_join.join_type == JoinType::LEFT || comp_join.join_type == JoinType::MARK) {
+				if (comp_join.join_type == JoinType::LEFT ||
+				    (comp_join.join_type == JoinType::MARK &&
+				     table_operator_manager.not_exist_mark_joins.count(&comp_join))) {
 					if (left_is_larger) {
 						edge->protect_bigger_side = true;
 					} else {
@@ -106,15 +112,17 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 				// todo: it works, but why?
 				if (comp_join.delim_flipped == 0) {
-					if (left_is_larger)
+					if (left_is_larger) {
 						edge->protect_bigger_side = true;
-					else
+					} else {
 						edge->protect_smaller_side = true;
+					}
 				} else {
-					if (left_is_larger)
+					if (left_is_larger) {
 						edge->protect_smaller_side = true;
-					else
+					} else {
 						edge->protect_bigger_side = true;
+					}
 				}
 				break;
 			}
