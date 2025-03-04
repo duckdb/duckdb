@@ -1,3 +1,7 @@
+// HM: beware of changes here
+// there are patches in mbedtls_cipher_base_index & mbedtls_cipher_base_lookup_table
+// that break if mbedtls features are changed
+
 #define MBEDTLS_AES_C
 #define MBEDTLS_ASN1_PARSE_C
 #define MBEDTLS_ASN1_WRITE_C
