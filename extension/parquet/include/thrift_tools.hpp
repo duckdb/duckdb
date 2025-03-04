@@ -135,8 +135,8 @@ public:
 	static constexpr uint64_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
 
 	ThriftFileTransport(Allocator &allocator, FileHandle &handle_p, bool prefetch_mode_p)
-	    : handle(handle_p), location(0), allocator(allocator), ra_buffer(ReadAheadBuffer(allocator, handle_p)),
-	      prefetch_mode(prefetch_mode_p) {
+	    : handle(handle_p), location(0), size(handle.GetFileSize()), allocator(allocator),
+	      ra_buffer(ReadAheadBuffer(allocator, handle_p)), prefetch_mode(prefetch_mode_p) {
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
@@ -195,6 +195,10 @@ public:
 		location += skip_count;
 	}
 
+	bool HasPrefetch() const {
+		return !ra_buffer.read_heads.empty() || !ra_buffer.merge_set.empty();
+	}
+
 	void SetLocation(idx_t location_p) {
 		location = location_p;
 	}
@@ -203,12 +207,13 @@ public:
 		return location;
 	}
 	idx_t GetSize() {
-		return handle.file_system.GetFileSize(handle);
+		return size;
 	}
 
 private:
 	FileHandle &handle;
 	idx_t location;
+	idx_t size;
 
 	Allocator &allocator;
 

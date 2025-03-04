@@ -238,7 +238,19 @@ void ColumnReader::PrepareRead(optional_ptr<const TableFilter> filter, optional_
 	page_is_filtered_out = false;
 	block.reset();
 	PageHeader page_hdr;
-	reader.Read(page_hdr, *protocol);
+	auto &trans = reinterpret_cast<ThriftFileTransport &>(*protocol->getTransport());
+	if (trans.HasPrefetch()) {
+		// Already has some data prefetched, let's not mess with it
+		reader.Read(page_hdr, *protocol);
+	} else {
+		// No prefetch yet, prefetch the full header in one go (so thrift won't read byte-by-byte from storage)
+		// 256 bytes should cover almost all headers (unless it's a V2 header with really LONG string statistics)
+		static constexpr idx_t ASSUMED_HEADER_SIZE = 256;
+		const auto prefetch_size = MinValue(trans.GetSize() - trans.GetLocation(), ASSUMED_HEADER_SIZE);
+		trans.Prefetch(trans.GetLocation(), prefetch_size);
+		reader.Read(page_hdr, *protocol);
+		trans.ClearPrefetch();
+	}
 	// some basic sanity check
 	if (page_hdr.compressed_page_size < 0 || page_hdr.uncompressed_page_size < 0) {
 		throw std::runtime_error("Page sizes can't be < 0");
