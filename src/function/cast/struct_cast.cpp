@@ -2,6 +2,7 @@
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
+#include "duckdb/function/cast/vector_cast_helpers.hpp"
 
 namespace duckdb {
 
@@ -138,6 +139,7 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
 	Vector varchar_struct(cast_data.target, count);
 	StructToStructCast(source, varchar_struct, count, parameters);
+	auto &base_children = StructVector::GetEntries(source);
 
 	// now construct the actual varchar vector
 	varchar_struct.Flatten(count);
@@ -147,29 +149,47 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 	auto &validity = FlatVector::Validity(varchar_struct);
 	auto result_data = FlatVector::GetData<string_t>(result);
 	static constexpr const idx_t SEP_LENGTH = 2;
-	static constexpr const idx_t NAME_SEP_LENGTH = 4;
+	static constexpr const idx_t NAME_SEP_LENGTH = 2;
 	static constexpr const idx_t NULL_LENGTH = 4;
+	auto key_needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(children.size());
+	auto value_needs_quotes = make_unsafe_uniq_array_uninitialized<bool>(children.size());
+
 	for (idx_t i = 0; i < count; i++) {
 		if (!validity.RowIsValid(i)) {
 			FlatVector::SetNull(result, i, true);
 			continue;
 		}
+
+		//! Calculate the total length of the row
 		idx_t string_length = 2; // {}
 		for (idx_t c = 0; c < children.size(); c++) {
 			if (c > 0) {
 				string_length += SEP_LENGTH;
 			}
+			auto add_escapes = !base_children[c]->GetType().IsNested();
+			auto string_length_func = add_escapes ? VectorCastHelpers::CalculateEscapedStringLength<false>
+			                                      : VectorCastHelpers::CalculateStringLength;
+
 			children[c]->Flatten(count);
 			auto &child_validity = FlatVector::Validity(*children[c]);
 			auto data = FlatVector::GetData<string_t>(*children[c]);
 			auto &name = child_types[c].first;
 			if (!is_unnamed) {
-				string_length += name.size() + NAME_SEP_LENGTH; // "'{name}': "
+				string_length += VectorCastHelpers::CalculateEscapedStringLength<true>(name, key_needs_quotes[c]);
+				string_length += NAME_SEP_LENGTH; // ": "
 			}
-			string_length += child_validity.RowIsValid(i) ? data[i].GetSize() : NULL_LENGTH;
+			if (child_validity.RowIsValid(i)) {
+				//! Skip the `\`, not a special character outside quotes
+				string_length += string_length_func(data[i], value_needs_quotes[c]);
+			} else {
+				string_length += NULL_LENGTH;
+			}
 		}
+
 		result_data[i] = StringVector::EmptyString(result, string_length);
 		auto dataptr = result_data[i].GetDataWriteable();
+
+		//! Serialize the struct to the string
 		idx_t offset = 0;
 		dataptr[offset++] = is_unnamed ? '(' : '{';
 		for (idx_t c = 0; c < children.size(); c++) {
@@ -177,23 +197,23 @@ static bool StructToVarcharCast(Vector &source, Vector &result, idx_t count, Cas
 				memcpy(dataptr + offset, ", ", SEP_LENGTH);
 				offset += SEP_LENGTH;
 			}
+			auto add_escapes = !base_children[c]->GetType().IsNested();
+			auto write_string_func =
+			    add_escapes ? VectorCastHelpers::WriteEscapedString<false> : VectorCastHelpers::WriteString;
+
 			auto &child_validity = FlatVector::Validity(*children[c]);
 			auto data = FlatVector::GetData<string_t>(*children[c]);
 			if (!is_unnamed) {
 				auto &name = child_types[c].first;
-				// "'{name}': "
-				dataptr[offset++] = '\'';
-				memcpy(dataptr + offset, name.c_str(), name.size());
-				offset += name.size();
-				dataptr[offset++] = '\'';
+				// "{<name>: <value>}"
+				offset += VectorCastHelpers::WriteEscapedString<true>(dataptr + offset, name, key_needs_quotes[c]);
 				dataptr[offset++] = ':';
 				dataptr[offset++] = ' ';
 			}
 			// value
 			if (child_validity.RowIsValid(i)) {
-				auto len = data[i].GetSize();
-				memcpy(dataptr + offset, data[i].GetData(), len);
-				offset += len;
+				//! Skip the `\`, not a special character outside quotes
+				offset += write_string_func(dataptr + offset, data[i], value_needs_quotes[c]);
 			} else {
 				memcpy(dataptr + offset, "NULL", NULL_LENGTH);
 				offset += NULL_LENGTH;
