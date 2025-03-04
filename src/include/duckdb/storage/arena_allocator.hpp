@@ -53,7 +53,10 @@ public:
 
 	//! This shrinks the LAST allocation that was made using the allocator
 	//! Note that we can ONLY safely call this method if Allocate has been called previously with a size >= shrink_size
-	DUCKDB_API void ShrinkHead(idx_t shrink_size);
+	DUCKDB_API void ShrinkHead(idx_t shrink_size) const {
+		D_ASSERT(head && head->current_position >= shrink_size);
+		head->current_position -= shrink_size;
+	}
 
 	//! Resets the current head and destroys all previous arena chunks
 	DUCKDB_API void Reset();

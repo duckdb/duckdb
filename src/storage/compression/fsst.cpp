@@ -513,6 +513,8 @@ struct FSSTScanState : public StringScanState {
 	}
 
 	buffer_ptr<void> duckdb_fsst_decoder;
+	void *duckdb_fsst_decoder_ptr = nullptr;
+
 	vector<unsigned char> decompress_buffer;
 	bitpacking_width_t current_width;
 
@@ -543,7 +545,7 @@ struct FSSTScanState : public StringScanState {
 		if (str_len == 0) {
 			return string_t(nullptr, 0);
 		}
-		return FSSTPrimitives::DecompressValue(duckdb_fsst_decoder.get(), str_buffer, str_ptr, str_len,
+		return FSSTPrimitives::DecompressValue(duckdb_fsst_decoder_ptr, str_buffer, str_ptr, str_len,
 		                                       decompress_buffer);
 	}
 };
@@ -561,6 +563,7 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 	if (!retval) {
 		state->duckdb_fsst_decoder = nullptr;
 	}
+	state->duckdb_fsst_decoder_ptr = state->duckdb_fsst_decoder.get();
 
 	return std::move(state);
 }
