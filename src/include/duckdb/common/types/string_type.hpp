@@ -97,6 +97,10 @@ public:
 		return value.inlined.length;
 	}
 
+	void SetSize(uint32_t size) {
+		value.inlined.length = size;
+	}
+
 	bool Empty() const {
 		return value.inlined.length == 0;
 	}

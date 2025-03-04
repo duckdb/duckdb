@@ -2123,9 +2123,8 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 		string_t compressed_string = ldata[source_idx];
 		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
 			auto decoder = FSSTVector::GetDecoder(src);
-			auto &decompress_buffer = FSSTVector::GetDecompressBuffer(src);
 			tdata[target_idx] = FSSTPrimitives::DecompressValue(decoder, str_buffer, compressed_string.GetData(),
-			                                                    compressed_string.GetSize(), decompress_buffer);
+			                                                    compressed_string.GetSize());
 		} else {
 			tdata[target_idx] = string_t(nullptr, 0);
 		}
