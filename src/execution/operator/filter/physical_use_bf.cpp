@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "duckdb/execution/operator/filter/physical_use_bf.hpp"
 
 #include "duckdb/optimizer/predicate_transfer/bloom_filter/bloom_filter_use_kernel.hpp"
@@ -7,8 +9,8 @@ namespace duckdb {
 
 PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, vector<shared_ptr<BlockedBloomFilter>> bf,
                              const vector<PhysicalCreateBF *> &related_create_bfs, idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::USE_BF, std::move(types), estimated_cardinality), bf_to_use(bf),
-      related_create_bfs(related_create_bfs) {
+    : CachingPhysicalOperator(PhysicalOperatorType::USE_BF, std::move(types), estimated_cardinality),
+      bf_to_use(std::move(bf)), related_create_bfs(related_create_bfs) {
 }
 
 unique_ptr<OperatorState> PhysicalUseBF::GetOperatorState(ExecutionContext &context) const {
@@ -19,6 +21,7 @@ InsertionOrderPreservingMap<string> PhysicalUseBF::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 
 	result["BF Number"] = std::to_string(bf_to_use.size());
+	result["Hash Column Number"] = std::to_string(bf_to_use[0]->BoundColsApplied.size());
 	string bfs;
 	for (auto *bf : related_create_bfs) {
 		bfs += "0x" + std::to_string(reinterpret_cast<size_t>(bf)) + "\n";
