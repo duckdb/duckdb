@@ -60,8 +60,7 @@ void PhysicalRangeJoin::LocalSortedTable::Sink(DataChunk &input, GlobalSortState
 
 PhysicalRangeJoin::GlobalSortedTable::GlobalSortedTable(ClientContext &context, const vector<BoundOrderByNode> &orders,
                                                         RowLayout &payload_layout, const PhysicalOperator &op_p)
-    : op(op_p), global_sort_state(BufferManager::GetBufferManager(context), orders, payload_layout), has_null(0),
-      count(0), memory_per_thread(0) {
+    : op(op_p), global_sort_state(context, orders, payload_layout), has_null(0), count(0), memory_per_thread(0) {
 
 	// Set external (can be forced with the PRAGMA)
 	auto &config = ClientConfig::GetConfig(context);
