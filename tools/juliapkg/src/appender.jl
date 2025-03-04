@@ -103,7 +103,7 @@ append(appender::Appender, val::Time) = duckdb_append_time(appender.handle, Date
 append(appender::Appender, val::DateTime) =
     duckdb_append_timestamp(appender.handle, (Dates.datetime2epochms(val) - ROUNDING_EPOCH_TO_UNIX_EPOCH_MS) * 1000);
 
-function append(appender::Appender, val::AbstractVector{T}) where {T} 
+function append(appender::Appender, val::AbstractVector{T}) where {T}
     value = create_value(val)
     if length(val) == 0
         duckdb_append_null(appender.handle)
