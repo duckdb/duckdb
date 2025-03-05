@@ -37,7 +37,7 @@ void JSONFileHandle::Reset() {
 	requested_reads = 0;
 	actual_reads = 0;
 	last_read_requested = false;
-	if (IsOpen() && !file_handle->IsPipe()) {
+	if (IsOpen() && !IsPipe()) {
 		file_handle->Reset();
 	}
 }
@@ -88,21 +88,13 @@ bool JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t &size, idx_t requ
 	return true;
 }
 
-void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position,
-                                    optional_ptr<FileHandle> override_handle) {
+void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, optional_ptr<FileHandle> override_handle) {
+	if (IsPipe()) {
+		throw InternalException("ReadAtPosition is not supported for pipes");
+	}
 	if (size != 0) {
 		auto &handle = override_handle ? *override_handle.get() : *file_handle.get();
-
-		if (!cached_buffers.empty() || position < cached_size) {
-			ReadFromCache(pointer, size, position);
-		}
-
 		handle.Read(pointer, size, position);
-		if (file_handle->IsPipe()) { // Cache the buffer
-			cached_buffers.emplace_back(allocator.Allocate(size));
-			memcpy(cached_buffers.back().get(), pointer, size);
-			cached_size += size;
-		}
 	}
 
 	const auto incremented_actual_reads = ++actual_reads;
@@ -126,12 +118,12 @@ bool JSONFileHandle::Read(char *pointer, idx_t &read_size, idx_t requested_size)
 		read_size += ReadFromCache(pointer, requested_size, read_position);
 	}
 
-	auto temp_read_size = ReadInternal(pointer, requested_size - read_size);
-	if (file_handle->IsPipe() && temp_read_size != 0) { // Cache the buffer
+	auto temp_read_size = ReadInternal(pointer, requested_size);
+	if (IsPipe() && temp_read_size != 0) { // Cache the buffer
 		cached_buffers.emplace_back(allocator.Allocate(temp_read_size));
 		memcpy(cached_buffers.back().get(), pointer, temp_read_size);
+		cached_size += temp_read_size;
 	}
-	cached_size += temp_read_size;
 	read_position += temp_read_size;
 	read_size += temp_read_size;
 
@@ -711,8 +703,12 @@ void JSONReader::AutoDetect(Allocator &allocator, idx_t buffer_capacity) {
 		    "JSON auto-detection error in file \"%s\": Expected records, detected non-record JSON instead", file_name);
 	}
 	// store the buffer in the file so it can be re-used by the first reader of the file
-	auto_detect_data = std::move(read_buffer);
-	auto_detect_data_size = read_size;
+	if (!file_handle->IsPipe()) {
+		auto_detect_data = std::move(read_buffer);
+		auto_detect_data_size = read_size;
+	} else {
+		file_handle->Reset();
+	}
 }
 
 void JSONReader::ThrowObjectSizeError(const idx_t object_size) {
