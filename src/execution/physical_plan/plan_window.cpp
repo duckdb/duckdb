@@ -11,15 +11,15 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 	D_ASSERT(op.children.size() == 1);
 
-	auto plan = CreatePlan(*op.children[0]);
-#ifdef DEBUG
+	reference<PhysicalOperator> plan = CreatePlan(*op.children[0]);
+	//#ifdef DEBUG
 	for (auto &expr : op.expressions) {
 		D_ASSERT(expr->IsWindow());
 	}
-#endif
+	//#endif
 
 	op.estimated_cardinality = op.EstimateCardinality(context);
 
@@ -121,14 +121,15 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 		}
 
 		// Chain the new window operator on top of the plan
-		unique_ptr<PhysicalOperator> window;
 		if (i < blocking_count) {
-			window = make_uniq<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality);
+			auto &window_ref = Make<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality);
+			window_ref.children.push_back(plan);
+			plan = window_ref;
 		} else {
-			window = make_uniq<PhysicalStreamingWindow>(types, std::move(select_list), op.estimated_cardinality);
+			auto &window_ref = Make<PhysicalStreamingWindow>(types, std::move(select_list), op.estimated_cardinality);
+			window_ref.children.push_back(plan);
+			plan = window_ref;
 		}
-		window->children.push_back(std::move(plan));
-		plan = std::move(window);
 	}
 
 	// Put everything back into place if it moved
@@ -142,9 +143,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalWindow &op
 		for (const auto &p : projection_map) {
 			select_list[p.first] = make_uniq<BoundReferenceExpression>(op.types[p.first], p.second);
 		}
-		auto proj = make_uniq<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
-		proj->children.push_back(std::move(plan));
-		plan = std::move(proj);
+		auto &proj_ref = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
+		proj_ref.children.push_back(plan);
+		plan = proj_ref;
 	}
 
 	return plan;
