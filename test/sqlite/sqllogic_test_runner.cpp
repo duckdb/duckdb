@@ -935,14 +935,33 @@ void SQLLogicTestRunner::ExecuteFile(string script) {
 			environment_variables[env_var] = env_actual;
 
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_LOAD) {
-			bool readonly = token.parameters.size() > 1 && token.parameters[1] == "readonly";
+			bool is_read_only = false;
+			if (token.parameters.size() > 1) {
+				auto param = token.parameters[1];
+				if (StringUtil::CIEquals("readonly", param)) {
+					is_read_only = true;
+				} else if (StringUtil::CIEquals("readwrite", param)) {
+					is_read_only = false;
+				} else {
+					parser.Fail(StringUtil::Format(
+					    "parameter to 'load' is invalid, received '%s', accepted options are 'readonly' and 'readwrite",
+					    param));
+				}
+			}
+
+			string version;
+			if (token.parameters.size() > 2) {
+				version = token.parameters[2];
+			}
+
 			string load_db_path;
 			if (!token.parameters.empty()) {
 				load_db_path = ReplaceKeywords(token.parameters[0]);
 			} else {
 				load_db_path = string();
 			}
-			auto command = make_uniq<LoadCommand>(*this, load_db_path, readonly);
+
+			auto command = make_uniq<LoadCommand>(*this, load_db_path, is_read_only, version);
 			ExecuteCommand(std::move(command));
 		} else if (token.type == SQLLogicTokenType::SQLLOGIC_RESTART) {
 			bool load_extensions = !(token.parameters.size() == 1 && token.parameters[0] == "no_extension_load");
