@@ -69,6 +69,12 @@ struct DictFSSTCompressionStorage {
 // Analyze
 //===--------------------------------------------------------------------===//
 unique_ptr<AnalyzeState> DictFSSTCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
+	auto &storage_manager = col_data.GetStorageManager();
+	if (storage_manager.GetStorageVersion() < 5) {
+		// dict_fsst not introduced yet, disable it
+		return nullptr;
+	}
+
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	return make_uniq<DictFSSTAnalyzeState>(info);
 }

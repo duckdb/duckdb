@@ -305,7 +305,7 @@ static inline bool AddLookup(DictFSSTCompressionState &state, idx_t lookup, cons
 
 	//! This string exists in the dictionary
 	idx_t new_dictionary_indices_space = state.dictionary_indices_space;
-	if (recalculate_indices_space) {
+	if (APPEND_STATE != DictionaryAppendState::ENCODED_ALL_UNIQUE && recalculate_indices_space) {
 		new_dictionary_indices_space =
 		    BitpackingPrimitives::GetRequiredSize(state.tuple_count + 1, state.dictionary_indices_width);
 	}
@@ -373,12 +373,14 @@ static inline bool AddToDictionary(DictFSSTCompressionState &state, const string
 	//! Dictionary Indices
 	bitpacking_width_t new_dictionary_indices_width = state.dictionary_indices_width;
 	idx_t new_dictionary_indices_space = state.dictionary_indices_space;
-	if (requires_higher_indices_bitwidth) {
-		new_dictionary_indices_width = BitpackingPrimitives::MinimumBitWidth(state.dict_count);
-	}
-	if (requires_higher_indices_bitwidth || recalculate_indices_space) {
-		new_dictionary_indices_space =
-		    BitpackingPrimitives::GetRequiredSize(state.tuple_count + 1, new_dictionary_indices_width);
+	if (APPEND_STATE != DictionaryAppendState::ENCODED_ALL_UNIQUE) {
+		if (requires_higher_indices_bitwidth) {
+			new_dictionary_indices_width = BitpackingPrimitives::MinimumBitWidth(state.dict_count);
+		}
+		if (requires_higher_indices_bitwidth || recalculate_indices_space) {
+			new_dictionary_indices_space =
+			    BitpackingPrimitives::GetRequiredSize(state.tuple_count + 1, new_dictionary_indices_width);
+		}
 	}
 
 	idx_t required_space = 0;
@@ -463,7 +465,10 @@ bool DictFSSTCompressionState::CompressInternal(UnifiedVectorFormat &vector_form
 
 	//! In GetRequiredSize we will round up to ALGORITHM_GROUP_SIZE anyways
 	//  so we can avoid recalculating for every tuple
-	const bool recalculate_indices_space = ((tuple_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) == 0);
+	const bool recalculate_indices_space =
+	    append_state == DictionaryAppendState::ENCODED_ALL_UNIQUE
+	        ? false
+	        : ((tuple_count % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE) == 0);
 
 	const auto &str = strings[idx];
 	if (append_state == DictionaryAppendState::ENCODED_ALL_UNIQUE || is_null) {
@@ -745,6 +750,7 @@ DictionaryAppendState DictFSSTCompressionState::TryEncode() {
 		//! We omit the selection buffer in this mode, setting the width to 0 makes the RequiredSpace result not include
 		//! the selection buffer space.
 		dictionary_indices_width = 0;
+		dictionary_indices_space = 0;
 	}
 
 #ifdef DEBUG

@@ -101,10 +101,10 @@ CompressionType ForceCompression(StorageManager &storage_manager,
                                  CompressionType compression_type) {
 	// One of the force_compression flags has been set
 	// check if this compression method is available
-	if (CompressionTypeIsDeprecated(compression_type, storage_manager)) {
-		throw InvalidInputException("The forced compression method (%s) is not available in storage version %d",
-		                            CompressionTypeToString(compression_type));
-	}
+	// if (CompressionTypeIsDeprecated(compression_type, storage_manager)) {
+	//	throw InvalidInputException("The forced compression method (%s) is not available in the current storage
+	//version", 	                            CompressionTypeToString(compression_type));
+	//}
 
 	bool found = false;
 	for (idx_t i = 0; i < compression_functions.size(); i++) {

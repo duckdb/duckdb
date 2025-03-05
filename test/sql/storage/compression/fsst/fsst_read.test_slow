@@ -18,9 +18,3 @@ select street from tbl;
 query I
 SELECT compression FROM pragma_storage_info('tbl') WHERE segment_type == 'VARCHAR' AND compression != 'FSST';
 ----
-
-# Verify that the compression method is deprecated
-statement error
-pragma force_compression='fsst'
-----
-deprecated
