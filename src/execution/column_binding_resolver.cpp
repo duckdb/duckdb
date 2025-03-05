@@ -24,6 +24,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		VisitOperatorChildren(op);
 		auto &create_bf = op.Cast<LogicalCreateBF>();
 		for (auto &BF_plan : create_bf.bf_to_create_plans) {
+			BF_plan->bound_cols_build.clear();
 			for (auto &col_bind : BF_plan->build) {
 				for (idx_t i = 0; i < bindings.size(); i++) {
 					if (col_bind == bindings[i]) {
@@ -45,6 +46,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		VisitOperatorChildren(op);
 		auto &use_bf = op.Cast<LogicalUseBF>();
 		for (auto &BF_plan : use_bf.bf_to_use_plans) {
+			BF_plan->bound_cols_apply.clear();
 			for (auto &col_bind : BF_plan->apply) {
 				for (idx_t i = 0; i < bindings.size(); i++) {
 					if (col_bind == bindings[i]) {
