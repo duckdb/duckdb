@@ -26,6 +26,7 @@ add_library(duckdb_mbedtls STATIC
         library/pk.cpp
         library/pk_wrap.cpp
         library/pkparse.cpp
+        library/platform.cpp
         library/platform_util.cpp
         library/rsa.cpp
         library/rsa_alt_helpers.cpp
