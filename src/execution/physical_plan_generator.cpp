@@ -13,15 +13,19 @@
 
 namespace duckdb {
 
-PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context, vector<unique_ptr<PhysicalOperator>> &ops,
-                                             optional_ptr<PhysicalOperator> &rooty)
-    : context(context), ops(ops), rooty(rooty) {
+PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context) : context(context) {
 }
 
 PhysicalPlanGenerator::~PhysicalPlanGenerator() {
 }
 
-PhysicalOperator &PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
+unique_ptr<PhysicalPlan> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
+	auto &plan_ref = ResolveAndPlan(std::move(op));
+	plan_ref.Verify();
+	return std::move(physical_plan);
+}
+
+PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperator> op) {
 	auto &profiler = QueryProfiler::Get(context);
 
 	// Resolve the column references.
@@ -37,23 +41,25 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> 
 
 	// Create the main physical plan.
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN);
-	auto &plan = FinalizeCreatePlan(*op);
+	physical_plan = Plan(*op);
 	profiler.EndPhase();
 
-	plan.Verify();
-	return plan;
+	// Return a reference to the root of this plan.
+	return physical_plan->Root();
 }
 
-PhysicalOperator &PhysicalPlanGenerator::FinalizeCreatePlan(LogicalOperator &op) {
+unique_ptr<PhysicalPlan> PhysicalPlanGenerator::Plan(LogicalOperator &op) {
+	if (!physical_plan) {
+		physical_plan = make_uniq<PhysicalPlan>();
+	}
 	op.estimated_cardinality = op.EstimateCardinality(context);
-	auto &plan = CreatePlan(op);
-	plan.estimated_cardinality = op.estimated_cardinality;
-	rooty = plan;
+	physical_plan->SetRoot(CreatePlan(op));
+	physical_plan->Root().estimated_cardinality = op.estimated_cardinality;
 
 #ifdef DUCKDB_VERIFY_VECTOR_OPERATOR
-	rooty = Make<PhysicalVerifyVector>(plan);
+	physical_plan->SetRoot(Make<PhysicalVerifyVector>(physical_plan->Root()));
 #endif
-	return *rooty;
+	return std::move(physical_plan);
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {

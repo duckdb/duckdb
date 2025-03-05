@@ -21,11 +21,37 @@ namespace duckdb {
 class ClientContext;
 class ColumnDataCollection;
 
+class PhysicalPlan {
+public:
+	template <class T, class... ARGS>
+	PhysicalOperator &Make(ARGS &&... args) {
+		auto op = make_uniq_base<PhysicalOperator, T>(std::forward<ARGS>(args)...);
+		D_ASSERT(op);
+		auto &op_ref = *op;
+		ops.push_back(std::move(op));
+		return op_ref;
+	}
+
+	PhysicalOperator &Root() {
+		D_ASSERT(root);
+		return *root;
+	}
+
+	void SetRoot(PhysicalOperator &op) {
+		root = op;
+	}
+
+private:
+	//! Contains the memory of the physical plan.
+	vector<unique_ptr<PhysicalOperator>> ops;
+	//! The root of the physical plan.
+	optional_ptr<PhysicalOperator> root;
+};
+
 //! The physical plan generator generates a physical execution plan from a logical query plan.
 class PhysicalPlanGenerator {
 public:
-	explicit PhysicalPlanGenerator(ClientContext &context, vector<unique_ptr<PhysicalOperator>> &ops,
-	                               optional_ptr<PhysicalOperator> &root);
+	explicit PhysicalPlanGenerator(ClientContext &context);
 	~PhysicalPlanGenerator();
 
 	LogicalDependencyList dependencies;
@@ -36,12 +62,18 @@ public:
 	unordered_map<idx_t, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
 	//! Materialized CTE ids must be collected.
 	unordered_map<idx_t, vector<const_reference<PhysicalOperator>>> materialized_ctes;
+	//! The index for duplicate eliminated joins.
+	idx_t delim_index = 0;
 
 public:
-	//! Creates a plan from the logical operator.
-	//! This involves resolving column bindings and generating physical operator nodes.
-	PhysicalOperator &CreatePlan(unique_ptr<LogicalOperator> logical);
-	PhysicalOperator &FinalizeCreatePlan(LogicalOperator &logical);
+	//! Creates and returns the physical plan from the logical operator.
+	//! Performs a verification pass.
+	unique_ptr<PhysicalPlan> CreatePlan(unique_ptr<LogicalOperator> logical);
+	//! Resolves column bindings and operator types before returning a reference to the root of the plan.
+	PhysicalOperator &ResolveAndPlan(unique_ptr<LogicalOperator> logical);
+	//! Creates and returns the physical plan from the logical operator.
+	//! Does not verify, and does not resolve any bindings or types.
+	unique_ptr<PhysicalPlan> Plan(LogicalOperator &logical);
 
 	//! Whether or not we can (or should) use a batch-index based operator for executing the given sink
 	static bool UseBatchIndex(ClientContext &context, PhysicalOperator &plan);
@@ -50,12 +82,7 @@ public:
 
 	template <class T, class... ARGS>
 	PhysicalOperator &Make(ARGS &&... args) {
-		auto op = make_uniq_base<PhysicalOperator, T>(std::forward<ARGS>(args)...);
-		D_ASSERT(op);
-
-		auto &op_ref = *op;
-		ops.push_back(std::move(op));
-		return op_ref;
+		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
 	}
 
 protected:
@@ -111,18 +138,13 @@ protected:
 	                                              vector<unique_ptr<Expression>> &groups);
 
 private:
-	bool PreserveInsertionOrder(PhysicalOperator &plan);
-	bool UseBatchIndex(PhysicalOperator &plan);
-
-	optional_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
-	                                                PhysicalOperator &build);
-
-public:
-	idx_t delim_index = 0;
+	ClientContext &context;
+	unique_ptr<PhysicalPlan> physical_plan;
 
 private:
-	ClientContext &context;
-	vector<unique_ptr<PhysicalOperator>> &ops;
-	optional_ptr<PhysicalOperator> &rooty;
+	bool PreserveInsertionOrder(PhysicalOperator &plan);
+	bool UseBatchIndex(PhysicalOperator &plan);
+	optional_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,
+	                                                PhysicalOperator &build);
 };
 } // namespace duckdb

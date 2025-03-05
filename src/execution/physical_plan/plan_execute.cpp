@@ -5,10 +5,9 @@
 namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExecute &op) {
-	// TODO: Did I mess up the root here?
-	if (op.prepared->rooty) {
+	if (op.prepared->physical_plan) {
 		D_ASSERT(op.children.empty());
-		return Make<PhysicalExecute>(*op.prepared->rooty);
+		return Make<PhysicalExecute>(op.prepared->physical_plan->Root());
 	}
 
 	D_ASSERT(op.children.size() == 1);
@@ -19,19 +18,5 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExecute &op) {
 	cast_execute_ref.prepared = op.prepared;
 	return execute_ref;
 }
-
-// unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalExecute &op) {
-//	if (!op.prepared->plan) { // plan is nullptr, (ops are empty)
-//		D_ASSERT(op.children.size() == 1);
-//		auto owned_plan = CreatePlan(*op.children[0]);
-//		auto execute = make_uniq<PhysicalExecute>(*owned_plan);
-//		execute->owned_plan = std::move(owned_plan);
-//		execute->prepared = std::move(op.prepared);
-//		return std::move(execute);
-//	} else {
-//		D_ASSERT(op.children.size() == 0);
-//		return make_uniq<PhysicalExecute>(*op.prepared->plan);
-//	}
-//}
 
 } // namespace duckdb
