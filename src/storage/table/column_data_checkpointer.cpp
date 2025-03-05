@@ -103,7 +103,7 @@ CompressionType ForceCompression(StorageManager &storage_manager,
 	// check if this compression method is available
 	// if (CompressionTypeIsDeprecated(compression_type, storage_manager)) {
 	//	throw InvalidInputException("The forced compression method (%s) is not available in the current storage
-	//version", 	                            CompressionTypeToString(compression_type));
+	// version", 	                            CompressionTypeToString(compression_type));
 	//}
 
 	bool found = false;

@@ -43,16 +43,19 @@ struct InterpretedBenchmarkState : public BenchmarkState {
 	Connection con;
 	duckdb::unique_ptr<MaterializedQueryResult> result;
 
-	explicit InterpretedBenchmarkState(string path)
-	    : benchmark_config(GetBenchmarkConfig()), db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()),
-	      con(db) {
+	explicit InterpretedBenchmarkState(string path, const string &version)
+	    : benchmark_config(GetBenchmarkConfig(version)),
+	      db(path.empty() ? nullptr : path.c_str(), benchmark_config.get()), con(db) {
 		auto &instance = BenchmarkRunner::GetInstance();
 		auto res = con.Query("PRAGMA threads=" + to_string(instance.threads));
 		D_ASSERT(!res->HasError());
 	}
 
-	duckdb::unique_ptr<DBConfig> GetBenchmarkConfig() {
+	duckdb::unique_ptr<DBConfig> GetBenchmarkConfig(const string &version = "") {
 		auto result = make_uniq<DBConfig>();
+		if (!version.empty()) {
+			result->options.serialization_compatibility = SerializationCompatibility::FromString(version);
+		}
 		result->options.load_extensions = false;
 		return result;
 	}
@@ -242,8 +245,8 @@ void InterpretedBenchmark::LoadBenchmark() {
 				cache_db = string();
 			}
 		} else if (splits[0] == "storage") {
-			if (splits.size() != 2) {
-				throw std::runtime_error(reader.FormatException("storage requires a single parameter"));
+			if (splits.size() < 2) {
+				throw std::runtime_error(reader.FormatException("storage requires at least one parameter"));
 			}
 			if (splits[1] == "transient") {
 				in_memory = true;
@@ -251,6 +254,10 @@ void InterpretedBenchmark::LoadBenchmark() {
 				in_memory = false;
 			} else {
 				throw std::runtime_error(reader.FormatException("Invalid argument for storage"));
+			}
+
+			if (splits.size() == 3) {
+				storage_version = splits[2];
 			}
 		} else if (splits[0] == "require_reinit") {
 			if (splits.size() != 1) {
@@ -390,12 +397,12 @@ unique_ptr<BenchmarkState> InterpretedBenchmark::Initialize(BenchmarkConfigurati
 	duckdb::unique_ptr<InterpretedBenchmarkState> state;
 	auto full_db_path = GetDatabasePath();
 	try {
-		state = make_uniq<InterpretedBenchmarkState>(full_db_path);
+		state = make_uniq<InterpretedBenchmarkState>(full_db_path, storage_version);
 	} catch (Exception &e) {
 		// if the connection throws an error, chances are it's a storage format error.
 		// In this case delete the file and connect again.
 		DeleteDatabase(full_db_path);
-		state = make_uniq<InterpretedBenchmarkState>(full_db_path);
+		state = make_uniq<InterpretedBenchmarkState>(full_db_path, storage_version);
 	}
 	extensions.insert("core_functions");
 	extensions.insert("parquet");

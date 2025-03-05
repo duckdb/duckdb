@@ -109,6 +109,7 @@ private:
 	string subgroup;
 
 	bool in_memory = true;
+	string storage_version;
 	QueryResultType result_type = QueryResultType::MATERIALIZED_RESULT;
 	idx_t arrow_batch_size = STANDARD_VECTOR_SIZE;
 	bool require_reinit = false;
