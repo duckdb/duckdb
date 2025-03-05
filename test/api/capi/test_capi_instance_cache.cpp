@@ -38,3 +38,30 @@ TEST_CASE("Test the database instance cache in the C API", "[api][.]") {
 
 	duckdb_destroy_instance_cache(&instance_cache);
 }
+
+TEST_CASE("Test the database instance cache in the C API with a null path", "[capi]") {
+	auto instance_cache = duckdb_create_instance_cache();
+	duckdb_database db;
+	auto state = duckdb_get_or_create_from_cache(instance_cache, nullptr, &db, nullptr, nullptr);
+	REQUIRE(state == DuckDBSuccess);
+	duckdb_close(&db);
+	duckdb_destroy_instance_cache(&instance_cache);
+}
+
+TEST_CASE("Test the database instance cache in the C API with an empty path", "[capi]") {
+	auto instance_cache = duckdb_create_instance_cache();
+	duckdb_database db;
+	auto state = duckdb_get_or_create_from_cache(instance_cache, "", &db, nullptr, nullptr);
+	REQUIRE(state == DuckDBSuccess);
+	duckdb_close(&db);
+	duckdb_destroy_instance_cache(&instance_cache);
+}
+
+TEST_CASE("Test the database instance cache in the C API with a memory path", "[capi]") {
+	auto instance_cache = duckdb_create_instance_cache();
+	duckdb_database db;
+	auto state = duckdb_get_or_create_from_cache(instance_cache, ":memory:", &db, nullptr, nullptr);
+	REQUIRE(state == DuckDBSuccess);
+	duckdb_close(&db);
+	duckdb_destroy_instance_cache(&instance_cache);
+}
