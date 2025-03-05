@@ -2037,17 +2037,25 @@ string_t StringVector::AddString(Vector &vector, const string &data) {
 	return StringVector::AddString(vector, string_t(data.c_str(), UnsafeNumericCast<uint32_t>(data.size())));
 }
 
+VectorStringBuffer &StringVector::GetStringBuffer(Vector &vector) {
+	if (vector.GetType().InternalType() != PhysicalType::VARCHAR) {
+		throw InternalException("StringVector::GetStringBuffer - vector is not of internal type VARCHAR but of type %s",
+		                        vector.GetType());
+	}
+	if (!vector.auxiliary) {
+		vector.auxiliary = make_buffer<VectorStringBuffer>();
+	}
+	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
+	return vector.auxiliary.get()->Cast<VectorStringBuffer>();
+}
+
 string_t StringVector::AddString(Vector &vector, string_t data) {
 	D_ASSERT(vector.GetType().id() == LogicalTypeId::VARCHAR || vector.GetType().id() == LogicalTypeId::BIT);
 	if (data.IsInlined()) {
 		// string will be inlined: no need to store in string heap
 		return data;
 	}
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
+	auto &string_buffer = GetStringBuffer(vector);
 	return string_buffer.AddString(data);
 }
 
@@ -2057,11 +2065,7 @@ string_t StringVector::AddStringOrBlob(Vector &vector, string_t data) {
 		// string will be inlined: no need to store in string heap
 		return data;
 	}
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
+	auto &string_buffer = GetStringBuffer(vector);
 	return string_buffer.AddBlob(data);
 }
 
@@ -2070,30 +2074,18 @@ string_t StringVector::EmptyString(Vector &vector, idx_t len) {
 	if (len <= string_t::INLINE_LENGTH) {
 		return string_t(UnsafeNumericCast<uint32_t>(len));
 	}
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	D_ASSERT(vector.auxiliary->GetBufferType() == VectorBufferType::STRING_BUFFER);
-	auto &string_buffer = vector.auxiliary.get()->Cast<VectorStringBuffer>();
+	auto &string_buffer = GetStringBuffer(vector);
 	return string_buffer.EmptyString(len);
 }
 
 void StringVector::AddHandle(Vector &vector, BufferHandle handle) {
-	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
+	auto &string_buffer = GetStringBuffer(vector);
 	string_buffer.AddHeapReference(make_buffer<ManagedVectorBuffer>(std::move(handle)));
 }
 
 void StringVector::AddBuffer(Vector &vector, buffer_ptr<VectorBuffer> buffer) {
-	D_ASSERT(vector.GetType().InternalType() == PhysicalType::VARCHAR);
 	D_ASSERT(buffer.get() != vector.auxiliary.get());
-	if (!vector.auxiliary) {
-		vector.auxiliary = make_buffer<VectorStringBuffer>();
-	}
-	auto &string_buffer = vector.auxiliary->Cast<VectorStringBuffer>();
+	auto &string_buffer = GetStringBuffer(vector);
 	string_buffer.AddHeapReference(std::move(buffer));
 }
 
@@ -2196,15 +2188,15 @@ void FSSTVector::DecompressVector(const Vector &src, Vector &dst, idx_t src_offs
 	auto dst_mask = FlatVector::Validity(dst);
 	auto ldata = FSSTVector::GetCompressedData<string_t>(src);
 	auto tdata = FlatVector::GetData<string_t>(dst);
+	auto &str_buffer = StringVector::GetStringBuffer(dst);
 	for (idx_t i = 0; i < copy_count; i++) {
 		auto source_idx = sel->get_index(src_offset + i);
 		auto target_idx = dst_offset + i;
 		string_t compressed_string = ldata[source_idx];
 		if (dst_mask.RowIsValid(target_idx) && compressed_string.GetSize() > 0) {
 			auto decoder = FSSTVector::GetDecoder(src);
-			auto &decompress_buffer = FSSTVector::GetDecompressBuffer(src);
-			tdata[target_idx] = FSSTPrimitives::DecompressValue(decoder, dst, compressed_string.GetData(),
-			                                                    compressed_string.GetSize(), decompress_buffer);
+			tdata[target_idx] = FSSTPrimitives::DecompressValue(decoder, str_buffer, compressed_string.GetData(),
+			                                                    compressed_string.GetSize());
 		} else {
 			tdata[target_idx] = string_t(nullptr, 0);
 		}
