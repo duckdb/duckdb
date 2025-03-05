@@ -49,7 +49,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	D_ASSERT(op.children.size() == 1);
 	auto &table_scan_ref = CreatePlan(*op.children[0]);
 
-	PlanIndexInput input(context, op, table_scan_ref);
+	PlanIndexInput input(context, op, *this, table_scan_ref);
 	return index_type->create_plan(input);
 }
 

@@ -13,8 +13,9 @@
 
 namespace duckdb {
 
-PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context, vector<unique_ptr<PhysicalOperator>> &ops)
-    : context(context), ops(ops) {
+PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context, vector<unique_ptr<PhysicalOperator>> &ops,
+                                             optional_ptr<PhysicalOperator> &root)
+    : context(context), ops(ops), root(root) {
 }
 
 PhysicalPlanGenerator::~PhysicalPlanGenerator() {
@@ -52,7 +53,7 @@ PhysicalOperator &PhysicalPlanGenerator::FinalizeCreatePlan(unique_ptr<LogicalOp
 #ifdef DUCKDB_VERIFY_VECTOR_OPERATOR
 	root = Make<PhysicalVerifyVector>(plan);
 #endif
-	return root;
+	return *root;
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {

@@ -143,7 +143,7 @@ public:
 	FixedBatchCopyState current_task = FixedBatchCopyState::SINKING_DATA;
 
 	void InitializeCollection(ClientContext &context, const PhysicalOperator &op) {
-		collection = make_uniq<ColumnDataCollection>(context, op.children[0]->types);
+		collection = make_uniq<ColumnDataCollection>(context, op.children[0].get().types);
 		collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 		collection->InitializeAppend(append_state);
 		local_memory_usage = 0;
@@ -434,7 +434,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 			} else {
 				// the collection is too large for a batch - we need to repartition
 				// create an empty collection
-				auto new_collection = make_uniq<ColumnDataCollection>(context, children[0]->types);
+				auto new_collection = make_uniq<ColumnDataCollection>(context, children[0].get().types);
 				new_collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 				append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			}
@@ -459,7 +459,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 			// the collection is full - move it to the result and create a new one
 			task_manager.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(append_batch)));
 
-			auto new_collection = make_uniq<ColumnDataCollection>(context, children[0]->types);
+			auto new_collection = make_uniq<ColumnDataCollection>(context, children[0].get().types);
 			new_collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 			append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			append_batch->collection->InitializeAppend(append_state);
@@ -596,7 +596,7 @@ unique_ptr<LocalSinkState> PhysicalBatchCopyToFile::GetLocalSinkState(ExecutionC
 unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientContext &context) const {
 	// request memory based on the minimum amount of memory per column
 	auto minimum_memory_per_thread =
-	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0]->types.size();
+	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0].get().types.size();
 	auto result = make_uniq<FixedBatchCopyGlobalState>(
 	    context, function.copy_to_initialize_global(context, *bind_data, file_path), minimum_memory_per_thread);
 	result->batch_size = function.desired_batch_size ? function.desired_batch_size(context, *bind_data) : 0;

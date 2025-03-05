@@ -8,7 +8,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExecute &op) {
 	// TODO: Did I mess up the root here?
 	if (!op.prepared->ops.empty()) {
 		D_ASSERT(op.children.empty());
-		return Make<PhysicalExecute>(op.prepared->root.get());
+		return Make<PhysicalExecute>(*op.prepared->root);
 	}
 
 	D_ASSERT(op.children.size() == 1);

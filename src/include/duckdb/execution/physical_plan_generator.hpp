@@ -24,7 +24,8 @@ class ColumnDataCollection;
 //! The physical plan generator generates a physical execution plan from a logical query plan.
 class PhysicalPlanGenerator {
 public:
-	explicit PhysicalPlanGenerator(ClientContext &context, vector<unique_ptr<PhysicalOperator>> &ops);
+	explicit PhysicalPlanGenerator(ClientContext &context, vector<unique_ptr<PhysicalOperator>> &ops,
+	                               optional_ptr<PhysicalOperator> &root);
 	~PhysicalPlanGenerator();
 
 	LogicalDependencyList dependencies;
@@ -54,6 +55,11 @@ public:
 
 		auto &op_ref = *op;
 		ops.push_back(std::move(op));
+		// TODO: There are some places where (I think) we need to use a separate MakeNewRoot function or so...
+		// TODO: I am pretty sure that I messed this up somewhere...
+		if (ops.empty()) {
+			root = op_ref;
+		}
 		return op_ref;
 	}
 
@@ -122,5 +128,6 @@ public:
 private:
 	ClientContext &context;
 	vector<unique_ptr<PhysicalOperator>> &ops;
+	optional_ptr<PhysicalOperator> &root;
 };
 } // namespace duckdb
