@@ -150,11 +150,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = regex_opt.Rewrite(std::move(plan));
 	});
 
-	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
-		InClauseRewriter ic_rewriter(context, *this);
-		plan = ic_rewriter.Rewrite(std::move(plan));
-	});
-
 	// removes any redundant DelimGets/DelimJoins
 	RunOptimizer(OptimizerType::DELIMINATOR, [&]() {
 		Deliminator deliminator;
@@ -185,6 +180,11 @@ void Optimizer::RunBuiltInOptimizers() {
 	}
 
 	// plan->Print();
+
+	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
+		InClauseRewriter ic_rewriter(context, *this);
+		plan = ic_rewriter.Rewrite(std::move(plan));
+	});
 
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {
