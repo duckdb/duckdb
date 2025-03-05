@@ -179,6 +179,29 @@ TEST_CASE("ADBC - Test ingestion - Temporary Table - Schema Set", "[adbc]") {
 	REQUIRE(db.QueryAndCheck("SELECT * FROM my_schema.my_table"));
 }
 
+TEST_CASE("ADBC - Test ingestion - Quoted Table and Schema", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+	ADBCTestDatabase db;
+	db.Query("CREATE SCHEMA \"my schema\";");
+	// Create Arrow Result
+	auto input_data = db.QueryArrow("SELECT 42");
+
+	// Create table with name requiring quoting
+	db.CreateTable("my table", input_data, "my schema");
+
+	// Validate that we can get its schema
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	ArrowSchema arrow_schema;
+	REQUIRE(SUCCESS(
+	    AdbcConnectionGetTableSchema(&db.adbc_connection, nullptr, "my schema", "my table", &arrow_schema, &adbc_error)));
+	REQUIRE((arrow_schema.n_children == 1));
+	arrow_schema.release(&arrow_schema);
+}
+
 TEST_CASE("ADBC - Test ingestion - Lineitem", "[adbc]") {
 	if (!duckdb_lib) {
 		return;
@@ -1521,7 +1544,7 @@ TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	}
 	//  Now lets test some errors
 	{
-		ADBCTestDatabase db("test_errors");
+		ADBCTestDatabase db("test_errors");  
 		// Create Arrow Result
 		auto input_data = db.QueryArrow("SELECT 42");
 		// Create Table 'my_table' from the Arrow Result
