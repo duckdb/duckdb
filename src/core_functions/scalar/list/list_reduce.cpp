@@ -1,3 +1,6 @@
+#include <list>
+#include <duckdb/function/cast/bound_cast_data.hpp>
+
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include "duckdb/core_functions/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -7,18 +10,16 @@ namespace duckdb {
 
 struct ReduceExecuteInfo {
 	ReduceExecuteInfo(LambdaFunctions::LambdaInfo &info, ClientContext &context) : left_slice(*info.child_vector) {
-		row_count = info.row_count;
 		if (info.has_initial) {
-			// row_count++;
 			initial_value_offset = 0;
 		}
 
-		SelectionVector left_vector(row_count);
-		active_rows.Resize(0, row_count);
-		active_rows.SetAllValid(row_count);
+		SelectionVector left_vector(info.row_count);
+		active_rows.Resize(0, info.row_count);
+		active_rows.SetAllValid(info.row_count);
 
-		left_sel.Initialize(row_count);
-		active_rows_sel.Initialize(row_count);
+		left_sel.Initialize(info.row_count);
+		active_rows_sel.Initialize(info.row_count);
 
 		idx_t reduced_row_idx = 0;
 
@@ -26,10 +27,10 @@ struct ReduceExecuteInfo {
 			left_vector.set_index(0, 0);
 		}
 
-		for (idx_t original_row_idx = 0; original_row_idx < row_count; original_row_idx++) {
+		for (idx_t original_row_idx = 0; original_row_idx < info.row_count; original_row_idx++) {
 			auto list_column_format_index = info.list_column_format.sel->get_index(original_row_idx);
 			if (info.list_column_format.validity.RowIsValid(list_column_format_index)) {
-				if (info.list_entries[list_column_format_index].length == 0) {
+				if (info.list_entries[list_column_format_index].length == 0 && !info.has_initial) {
 					throw ParameterNotAllowedException("Cannot perform list_reduce on an empty input list");
 				}
 				left_vector.set_index(reduced_row_idx, info.list_entries[list_column_format_index].offset);
@@ -60,7 +61,6 @@ struct ReduceExecuteInfo {
 	unique_ptr<ExpressionExecutor> expr_executor;
 	vector<LogicalType> input_types;
 
-	idx_t row_count;
 	idx_t initial_value_offset = 1;
 	SelectionVector left_sel;
 	SelectionVector active_rows_sel;
@@ -79,16 +79,16 @@ static bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, La
 
 	// reset right_sel each iteration to prevent referencing issues
 	SelectionVector right_sel;
-	right_sel.Initialize(execute_info.row_count);
+	right_sel.Initialize(info.row_count);
 
 	idx_t bits_per_entry = sizeof(idx_t) * 8;
-	for (idx_t entry_idx = 0; original_row_idx < execute_info.row_count; entry_idx++) {
+	for (idx_t entry_idx = 0; original_row_idx < info.row_count; entry_idx++) {
 		if (data[entry_idx] == 0) {
 			original_row_idx += bits_per_entry;
 			continue;
 		}
 
-		for (idx_t j = 0; entry_idx * bits_per_entry + j < execute_info.row_count; j++) {
+		for (idx_t j = 0; entry_idx * bits_per_entry + j < info.row_count; j++) {
 			if (!execute_info.active_rows.RowIsValid(original_row_idx)) {
 				original_row_idx++;
 				continue;
@@ -100,6 +100,10 @@ static bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, La
 				execute_info.active_rows_sel.set_index(reduced_row_idx, original_row_idx);
 
 				reduced_row_idx++;
+			} else if (info.list_entries[list_column_format_index].length == 0 && info.has_initial && loops_offset == 0) {
+				// If the list is empty and there is an initial value, use the initial value
+				execute_info.active_rows.SetInvalid(original_row_idx);
+				info.result.SetValue(original_row_idx, info.column_infos[0].vector.get().GetValue(original_row_idx));
 			} else {
 				execute_info.active_rows.SetInvalid(original_row_idx);
 				info.result.SetValue(original_row_idx, execute_info.left_slice.GetValue(valid_row_idx));
@@ -225,9 +229,18 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 
 	bool has_initial = arguments.size() == 3;
 	if (has_initial) {
-		arguments[2] = BoundCastExpression::AddCastToType(context, std::move(arguments[2]), list_child_type);
-		if (!arguments[2]) {
-			throw BinderException("Could not cast the initial value to the list child type");
+		const auto initial_value_type = arguments[2]->return_type;
+		// Check if the initial value type is the same as the list child type and if not find the max logical type
+		if (list_child_type != initial_value_type) {
+			LogicalType max_logical_type;
+			const auto has_max_logical_type = LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
+			if (!has_max_logical_type) {
+				throw BinderException("The initial value type must be the same as the list child type or a common super type");
+			}
+
+			list_child_type = max_logical_type;
+			arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(max_logical_type));
+			arguments[2] = BoundCastExpression::AddCastToType(context, std::move(arguments[2]), max_logical_type);
 		}
 	}
 

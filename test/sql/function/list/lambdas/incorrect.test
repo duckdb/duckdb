@@ -66,6 +66,17 @@ SELECT ${func_name}(1, 1);
 ----
 
 statement error
+SELECT ${func_name}(1, x -> x + 1);
+----
+Invalid LIST argument during lambda function binding!
+
+endloop
+
+# list_reduce accepts a third parameter, so shows a different error message
+
+foreach func_name list_transform list_filter
+
+statement error
 SELECT ${func_name}([1], x -> x, 3);
 ----
 Binder Error: failed to bind function, either: Invalid number of function arguments!
@@ -77,12 +88,18 @@ SELECT ${func_name}([True], x -> x, x -> x);
 Binder Error: failed to bind function, either: Invalid number of function arguments!
  or: Referenced column "x" not found in FROM clause!
 
-statement error
-SELECT ${func_name}(1, x -> x + 1);
-----
-Invalid LIST argument during lambda function binding!
-
 endloop
+
+statement error
+SELECT list_reduce([1], x -> x, 3);
+----
+Binder Error: list_reduce expects a function with 2 or 3 arguments
+
+statement error
+SELECT list_reduce([True], x -> x, x -> x);
+----
+Binder Error: failed to bind function, either: Referenced column "x" not found in FROM clause!
+ or: Referenced column "x" not found in FROM clause!
 
 # list_transform specific tests
 

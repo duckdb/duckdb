@@ -145,14 +145,14 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 
 // FIXME: This is not good solution±!!!!!!!
 	idx_t expected_size = 1;
-	if (func.functions.name == "list_reduce") {
+	if (func.functions.name == "list_reduce" && function.children.size() == 3) {
 		expected_size = 2;
 	}
 
-	// scalar functions with lambdas can never be overloaded
-	if (func.functions.functions.size() != expected_size) {
-		return BindResult("This scalar function does not support lambdas!");
-	}
+	// // scalar functions with lambdas can never be overloaded
+	// if (func.functions.functions.size() != expected_size) {
+	// 	return BindResult("This scalar function does not support lambdas!");
+	// }
 
 	// get the callback function for the lambda parameter types
 	auto &scalar_function = func.functions.functions.front();
@@ -173,9 +173,11 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 		return BindResult(std::move(error));
 	}
 
-	BindChild(function.children[2], depth, error);
-	if (error.HasError()) {
-		return BindResult(std::move(error));
+	if (expected_size == 2) {
+		BindChild(function.children[2], depth, error);
+		if (error.HasError()) {
+			return BindResult(std::move(error));
+		}
 	}
 
 	// get the logical type of the children of the list
