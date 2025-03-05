@@ -110,7 +110,7 @@ if (NOT MINGW)
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-spatial
-    GIT_TAG 00aa7dec31c74f60f616f3ae53104cba4ba17f10
+    GIT_TAG 2905968a85703e5ca3698976daafd759554e1744
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
     )
