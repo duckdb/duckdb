@@ -41,7 +41,7 @@ public:
 	//! Creates a plan from the logical operator.
 	//! This involves resolving column bindings and generating physical operator nodes.
 	PhysicalOperator &CreatePlan(unique_ptr<LogicalOperator> logical);
-	PhysicalOperator &FinalizeCreatePlan(unique_ptr<LogicalOperator> logical);
+	PhysicalOperator &FinalizeCreatePlan(LogicalOperator &logical);
 
 	//! Whether or not we can (or should) use a batch-index based operator for executing the given sink
 	static bool UseBatchIndex(ClientContext &context, PhysicalOperator &plan);
@@ -55,11 +55,6 @@ public:
 
 		auto &op_ref = *op;
 		ops.push_back(std::move(op));
-		// TODO: There are some places where (I think) we need to use a separate MakeNewRoot function or so...
-		// TODO: I am pretty sure that I messed this up somewhere...
-		if (ops.empty()) {
-			root = op_ref;
-		}
 		return op_ref;
 	}
 
@@ -128,6 +123,6 @@ public:
 private:
 	ClientContext &context;
 	vector<unique_ptr<PhysicalOperator>> &ops;
-	optional_ptr<PhysicalOperator> &root;
+	optional_ptr<PhysicalOperator> &rooty;
 };
 } // namespace duckdb

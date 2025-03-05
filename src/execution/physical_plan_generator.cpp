@@ -14,8 +14,8 @@
 namespace duckdb {
 
 PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context, vector<unique_ptr<PhysicalOperator>> &ops,
-                                             optional_ptr<PhysicalOperator> &root)
-    : context(context), ops(ops), root(root) {
+                                             optional_ptr<PhysicalOperator> &rooty)
+    : context(context), ops(ops), rooty(rooty) {
 }
 
 PhysicalPlanGenerator::~PhysicalPlanGenerator() {
@@ -37,23 +37,23 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> 
 
 	// Create the main physical plan.
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN);
-	auto &plan = FinalizeCreatePlan(std::move(op));
+	auto &plan = FinalizeCreatePlan(*op);
 	profiler.EndPhase();
 
 	plan.Verify();
 	return plan;
 }
 
-PhysicalOperator &PhysicalPlanGenerator::FinalizeCreatePlan(unique_ptr<LogicalOperator> op) {
-	op->estimated_cardinality = op->EstimateCardinality(context);
-	auto &plan = CreatePlan(*op);
-	plan.estimated_cardinality = op->estimated_cardinality;
-	root = plan;
+PhysicalOperator &PhysicalPlanGenerator::FinalizeCreatePlan(LogicalOperator &op) {
+	op.estimated_cardinality = op.EstimateCardinality(context);
+	auto &plan = CreatePlan(op);
+	plan.estimated_cardinality = op.estimated_cardinality;
+	rooty = plan;
 
 #ifdef DUCKDB_VERIFY_VECTOR_OPERATOR
-	root = Make<PhysicalVerifyVector>(plan);
+	rooty = Make<PhysicalVerifyVector>(plan);
 #endif
-	return *root;
+	return *rooty;
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {

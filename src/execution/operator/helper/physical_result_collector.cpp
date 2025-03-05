@@ -15,19 +15,19 @@ namespace duckdb {
 
 PhysicalResultCollector::PhysicalResultCollector(PreparedStatementData &data)
     : PhysicalOperator(PhysicalOperatorType::RESULT_COLLECTOR, {LogicalType::BOOLEAN}, 0),
-      statement_type(data.statement_type), properties(data.properties), plan(*data.root), names(data.names) {
+      statement_type(data.statement_type), properties(data.properties), plan(*data.rooty), names(data.names) {
 	this->types = data.types;
 }
 
 unique_ptr<PhysicalResultCollector> PhysicalResultCollector::GetResultCollector(ClientContext &context,
                                                                                 PreparedStatementData &data) {
-	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, *data.root)) {
+	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, *data.rooty)) {
 		// the plan is not order preserving, so we just use the parallel materialized collector
 		if (data.is_streaming) {
 			return make_uniq_base<PhysicalResultCollector, PhysicalBufferedCollector>(data, true);
 		}
 		return make_uniq_base<PhysicalResultCollector, PhysicalMaterializedCollector>(data, true);
-	} else if (!PhysicalPlanGenerator::UseBatchIndex(context, *data.root)) {
+	} else if (!PhysicalPlanGenerator::UseBatchIndex(context, *data.rooty)) {
 		// the plan is order preserving, but we cannot use the batch index: use a single-threaded result collector
 		if (data.is_streaming) {
 			return make_uniq_base<PhysicalResultCollector, PhysicalBufferedCollector>(data, false);

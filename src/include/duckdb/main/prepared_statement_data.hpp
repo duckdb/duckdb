@@ -34,7 +34,7 @@ public:
 	//! Contains the physical plan.
 	vector<unique_ptr<PhysicalOperator>> ops;
 	//! The root of the physical plan.
-	optional_ptr<PhysicalOperator> root;
+	optional_ptr<PhysicalOperator> rooty;
 
 	//! The result names of the transaction
 	vector<string> names;

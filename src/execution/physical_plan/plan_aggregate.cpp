@@ -236,9 +236,8 @@ static bool CanUsePerfectHashAggregate(ClientContext &context, LogicalAggregate 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 	D_ASSERT(op.children.size() == 1);
 
-	auto &plan = CreatePlan(*op.children[0]);
-	reference<PhysicalOperator> plan_ref(plan);
-	plan_ref = ExtractAggregateExpressions(plan, op.expressions, op.groups);
+	reference<PhysicalOperator> plan_ref = CreatePlan(*op.children[0]);
+	plan_ref = ExtractAggregateExpressions(plan_ref, op.expressions, op.groups);
 
 	bool can_use_simple_aggregation = true;
 	for (auto &expression : op.expressions) {
@@ -267,10 +266,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 
 	// groups! create a GROUP BY aggregator
 	// use a partitioned or perfect hash aggregate if possible
-
 	vector<column_t> partition_columns;
 	vector<idx_t> required_bits;
-	if (can_use_simple_aggregation && CanUsePartitionedAggregate(context, op, plan, partition_columns)) {
+	if (can_use_simple_aggregation && CanUsePartitionedAggregate(context, op, plan_ref, partition_columns)) {
 		auto &group_by_ref =
 		    Make<PhysicalPartitionedAggregate>(context, op.types, std::move(op.expressions), std::move(op.groups),
 		                                       std::move(partition_columns), op.estimated_cardinality);
@@ -315,11 +313,11 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 	}
 	for (auto &aggr : aggregates) {
 		auto &bound_aggr = aggr->Cast<BoundAggregateExpression>();
-		for (auto &bound_aggr_child : bound_aggr.children) {
-			auto ref = make_uniq<BoundReferenceExpression>(bound_aggr_child->return_type, expressions.size());
-			types.push_back(bound_aggr_child->return_type);
-			expressions.push_back(std::move(bound_aggr_child));
-			bound_aggr_child = std::move(ref);
+		for (auto &child : bound_aggr.children) {
+			auto ref = make_uniq<BoundReferenceExpression>(child->return_type, expressions.size());
+			types.push_back(child->return_type);
+			expressions.push_back(std::move(child));
+			child = std::move(ref);
 		}
 		if (bound_aggr.filter) {
 			auto &filter = bound_aggr.filter;
@@ -332,11 +330,9 @@ PhysicalOperator &PhysicalPlanGenerator::ExtractAggregateExpressions(PhysicalOpe
 	if (expressions.empty()) {
 		return child;
 	}
-
-	auto &projection_ref =
-	    Make<PhysicalProjection>(std::move(types), std::move(expressions), child.estimated_cardinality);
-	projection_ref.children.push_back(child);
-	return projection_ref;
+	auto &proj_ref = Make<PhysicalProjection>(std::move(types), std::move(expressions), child.estimated_cardinality);
+	proj_ref.children.push_back(child);
+	return proj_ref;
 }
 
 } // namespace duckdb
