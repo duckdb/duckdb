@@ -88,7 +88,8 @@ bool JSONFileHandle::GetPositionAndSize(idx_t &position, idx_t &size, idx_t requ
 	return true;
 }
 
-void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position, optional_ptr<FileHandle> override_handle) {
+void JSONFileHandle::ReadAtPosition(char *pointer, idx_t size, idx_t position,
+                                    optional_ptr<FileHandle> override_handle) {
 	if (IsPipe()) {
 		throw InternalException("ReadAtPosition is not supported for pipes");
 	}
