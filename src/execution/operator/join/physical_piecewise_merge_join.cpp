@@ -73,7 +73,7 @@ public:
 public:
 	MergeJoinGlobalState(ClientContext &context, const PhysicalPiecewiseMergeJoin &op) {
 		RowLayout rhs_layout;
-		rhs_layout.Initialize(op.children[1].get().types);
+		rhs_layout.Initialize(op.children[1].get().GetTypes());
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
 		table = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
@@ -171,8 +171,8 @@ public:
 			condition_types.push_back(order.expression->return_type);
 		}
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
-		lhs_layout.Initialize(op.children[0].get().types);
-		lhs_payload.Initialize(allocator, op.children[0].get().types);
+		lhs_layout.Initialize(op.children[0].get().GetTypes());
+		lhs_payload.Initialize(allocator, op.children[0].get().GetTypes());
 
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
 
@@ -747,13 +747,12 @@ SourceResultType PhysicalPiecewiseMergeJoin::GetData(ExecutionContext &context, 
 
 		if (result_count > 0) {
 			// if there were any tuples that didn't find a match, output them
-			const idx_t left_column_count = children[0].get().types.size();
+			const idx_t left_column_count = children[0].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < left_column_count; ++col_idx) {
 				result.data[col_idx].SetVectorType(VectorType::CONSTANT_VECTOR);
 				ConstantVector::SetNull(result.data[col_idx], true);
 			}
-			const idx_t right_column_count = children[1].get().types.size();
-			;
+			const idx_t right_column_count = children[1].get().GetTypes().size();
 			for (idx_t col_idx = 0; col_idx < right_column_count; ++col_idx) {
 				result.data[left_column_count + col_idx].Slice(rhs_chunk.data[col_idx], rsel, result_count);
 			}

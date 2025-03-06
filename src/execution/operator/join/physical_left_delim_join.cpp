@@ -22,13 +22,13 @@ PhysicalLeftDelimJoin::PhysicalLeftDelimJoin(PhysicalPlanGenerator &planner, vec
 
 	// we replace it with a PhysicalColumnDataScan, that scans the ColumnDataCollection that we keep cached
 	// the actual chunk collection to scan will be created in the LeftDelimJoinGlobalState
-	auto &cached_chunk_scan_ref = planner.Make<PhysicalColumnDataScan>(
+	auto &cached_scan = planner.Make<PhysicalColumnDataScan>(
 	    children[0].get().GetTypes(), PhysicalOperatorType::COLUMN_DATA_SCAN, estimated_cardinality, nullptr);
 	if (delim_idx.IsValid()) {
-		auto &cast_cached_chunk_scan_ref = cached_chunk_scan_ref.Cast<PhysicalColumnDataScan>();
-		cast_cached_chunk_scan_ref.cte_index = delim_idx.GetIndex();
+		auto &cast_cached_scan = cached_scan.Cast<PhysicalColumnDataScan>();
+		cast_cached_scan.cte_index = delim_idx.GetIndex();
 	}
-	join.children[0] = cached_chunk_scan_ref;
+	join.children[0] = cached_scan;
 }
 
 //===--------------------------------------------------------------------===//
@@ -40,8 +40,8 @@ public:
 	    : lhs_data(context, delim_join.children[0].get().GetTypes()) {
 		D_ASSERT(!delim_join.delim_scans.empty());
 		// set up the delim join chunk to scan in the original join
-		auto &cached_chunk_scan = delim_join.join.children[0].get().Cast<PhysicalColumnDataScan>();
-		cached_chunk_scan.collection = &lhs_data;
+		auto &cast_cached_scan = delim_join.join.children[0].get().Cast<PhysicalColumnDataScan>();
+		cast_cached_scan.collection = &lhs_data;
 	}
 
 	ColumnDataCollection lhs_data;

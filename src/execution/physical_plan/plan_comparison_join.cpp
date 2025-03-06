@@ -62,11 +62,11 @@ PhysicalOperator &PhysicalPlanGenerator::PlanComparisonJoin(LogicalComparisonJoi
 	const auto prefer_range_joins = client_config.prefer_range_joins && can_iejoin;
 	if (has_equality && !prefer_range_joins) {
 		// Equality join with small number of keys : possible perfect join optimization
-		auto &plan = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
+		auto &join = Make<PhysicalHashJoin>(op, left, right, std::move(op.conditions), op.join_type,
 		                                    op.left_projection_map, op.right_projection_map, std::move(op.mark_types),
 		                                    op.estimated_cardinality, std::move(op.filter_pushdown));
-		plan.Cast<PhysicalHashJoin>().join_stats = std::move(op.join_stats);
-		return plan;
+		join.Cast<PhysicalHashJoin>().join_stats = std::move(op.join_stats);
+		return join;
 	}
 
 	D_ASSERT(op.left_projection_map.empty());

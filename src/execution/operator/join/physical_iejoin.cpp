@@ -84,13 +84,13 @@ public:
 	IEJoinGlobalState(ClientContext &context, const PhysicalIEJoin &op) : child(0) {
 		tables.resize(2);
 		RowLayout lhs_layout;
-		lhs_layout.Initialize(op.children[0].get().types);
+		lhs_layout.Initialize(op.children[0].get().GetTypes());
 		vector<BoundOrderByNode> lhs_order;
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
 		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_layout, op);
 
 		RowLayout rhs_layout;
-		rhs_layout.Initialize(op.children[1].get().types);
+		rhs_layout.Initialize(op.children[1].get().GetTypes());
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
 		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);

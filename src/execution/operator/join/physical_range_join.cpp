@@ -194,7 +194,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperator
 	//	Fill out the left projection map.
 	left_projection_map = op.left_projection_map;
 	if (left_projection_map.empty()) {
-		const auto left_count = children[0].get().types.size();
+		const auto left_count = children[0].get().GetTypes().size();
 		left_projection_map.reserve(left_count);
 		for (column_t i = 0; i < left_count; ++i) {
 			left_projection_map.emplace_back(i);
@@ -203,7 +203,7 @@ PhysicalRangeJoin::PhysicalRangeJoin(LogicalComparisonJoin &op, PhysicalOperator
 	//	Fill out the right projection map.
 	right_projection_map = op.right_projection_map;
 	if (right_projection_map.empty()) {
-		const auto right_count = children[1].get().types.size();
+		const auto right_count = children[1].get().GetTypes().size();
 		right_projection_map.reserve(right_count);
 		for (column_t i = 0; i < right_count; ++i) {
 			right_projection_map.emplace_back(i);
@@ -313,7 +313,7 @@ void PhysicalRangeJoin::ProjectResult(DataChunk &chunk, DataChunk &result) const
 	for (idx_t i = 0; i < left_projected; ++i) {
 		result.data[i].Reference(chunk.data[left_projection_map[i]]);
 	}
-	const auto left_width = children[0].get().types.size();
+	const auto left_width = children[0].get().GetTypes().size();
 	for (idx_t i = 0; i < right_projection_map.size(); ++i) {
 		result.data[left_projected + i].Reference(chunk.data[left_width + right_projection_map[i]]);
 	}

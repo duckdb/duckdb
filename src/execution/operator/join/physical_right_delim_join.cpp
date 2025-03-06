@@ -22,8 +22,7 @@ PhysicalRightDelimJoin::PhysicalRightDelimJoin(PhysicalPlanGenerator &planner, v
 	children.push_back(join.children[1]);
 
 	// we replace it with a PhysicalDummyScan, which contains no data, just the types, it won't be scanned anyway
-	auto &dummy_ref = planner.Make<PhysicalDummyScan>(children[0].get().GetTypes(), estimated_cardinality);
-	join.children[1] = dummy_ref;
+	join.children[1] = planner.Make<PhysicalDummyScan>(children[0].get().GetTypes(), estimated_cardinality);
 }
 
 //===--------------------------------------------------------------------===//
