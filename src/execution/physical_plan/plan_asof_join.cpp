@@ -201,8 +201,8 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	auto &window = Make<PhysicalStreamingWindow>(window_types, std::move(window_select), probe_cardinality);
 	window.children.emplace_back(probe);
 
-	auto &join = Make<PhysicalNestedLoopJoin>(join_op, build, window, std::move(join_op.conditions),
-	                                              join_op.join_type, probe_cardinality);
+	auto &join = Make<PhysicalNestedLoopJoin>(join_op, build, window, std::move(join_op.conditions), join_op.join_type,
+	                                          probe_cardinality);
 
 	// Plan a projection of the compare column
 	auto &comp_proj = Make<PhysicalProjection>(std::move(comp_types), std::move(comp_list), probe_cardinality);
@@ -215,7 +215,8 @@ PhysicalPlanGenerator::PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOpera
 	auto pk_ref = make_uniq<BoundReferenceExpression>(pk_type, join_op.types.size() - 1);
 	groups.emplace_back(std::move(pk_ref));
 
-	auto &aggr = Make<PhysicalHashAggregate>(context, aggr_types, std::move(aggregates), std::move(groups), probe_cardinality);
+	auto &aggr =
+	    Make<PhysicalHashAggregate>(context, aggr_types, std::move(aggregates), std::move(groups), probe_cardinality);
 	aggr.children.emplace_back(comp_proj);
 
 	// Project away primary/grouping key

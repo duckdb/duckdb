@@ -43,7 +43,7 @@ PhysicalOperator &ART::CreatePlan(PlanIndexInput &input) {
 		}
 
 		prev_op = planner.Make<PhysicalFilter>(std::move(filter_types), std::move(filter_select_list),
-		                                                 op.estimated_cardinality);
+		                                       op.estimated_cardinality);
 		prev_op.get().types.emplace_back(LogicalType::ROW_TYPE);
 		prev_op.get().children.push_back(proj);
 	}
@@ -57,9 +57,9 @@ PhysicalOperator &ART::CreatePlan(PlanIndexInput &input) {
 	}
 
 	// CREATE INDEX operator.
-	auto &create_idx = planner.Make<PhysicalCreateARTIndex>(
-	    op, op.table, op.info->column_ids, std::move(op.info), std::move(op.unbound_expressions),
-	    op.estimated_cardinality, sort, std::move(op.alter_table_info));
+	auto &create_idx = planner.Make<PhysicalCreateARTIndex>(op, op.table, op.info->column_ids, std::move(op.info),
+	                                                        std::move(op.unbound_expressions), op.estimated_cardinality,
+	                                                        sort, std::move(op.alter_table_info));
 
 	if (!sort) {
 		create_idx.children.push_back(prev_op);
@@ -77,7 +77,7 @@ PhysicalOperator &ART::CreatePlan(PlanIndexInput &input) {
 	projections.emplace_back(new_column_types.size() - 1);
 
 	auto &order = planner.Make<PhysicalOrder>(new_column_types, std::move(orders), std::move(projections),
-	                                              op.estimated_cardinality);
+	                                          op.estimated_cardinality);
 	order.children.push_back(prev_op);
 	create_idx.children.push_back(order);
 	return create_idx;

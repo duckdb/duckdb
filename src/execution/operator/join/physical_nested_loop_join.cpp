@@ -151,8 +151,9 @@ public:
 class NestedLoopJoinGlobalState : public GlobalSinkState {
 public:
 	explicit NestedLoopJoinGlobalState(ClientContext &context, const PhysicalNestedLoopJoin &op)
-	    : right_payload_data(context, op.children[1].get().GetTypes()), right_condition_data(context, op.GetJoinTypes()),
-	      has_null(false), right_outer(PropagatesBuildSide(op.join_type)) {
+	    : right_payload_data(context, op.children[1].get().GetTypes()),
+	      right_condition_data(context, op.GetJoinTypes()), has_null(false),
+	      right_outer(PropagatesBuildSide(op.join_type)) {
 	}
 
 	mutex nj_lock;

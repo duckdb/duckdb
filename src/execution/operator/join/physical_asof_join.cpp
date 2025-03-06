@@ -79,7 +79,8 @@ PhysicalAsOfJoin::PhysicalAsOfJoin(LogicalComparisonJoin &op, PhysicalOperator &
 class AsOfGlobalSinkState : public GlobalSinkState {
 public:
 	AsOfGlobalSinkState(ClientContext &context, const PhysicalAsOfJoin &op)
-	    : rhs_sink(context, op.rhs_partitions, op.rhs_orders, op.children[1].get().GetTypes(), {}, op.estimated_cardinality),
+	    : rhs_sink(context, op.rhs_partitions, op.rhs_orders, op.children[1].get().GetTypes(), {},
+	               op.estimated_cardinality),
 	      is_outer(IsRightOuterJoin(op.join_type)), has_null(false) {
 	}
 
@@ -157,8 +158,8 @@ SinkFinalizeType PhysicalAsOfJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	// The data is all in so we can initialise the left partitioning.
 	const vector<unique_ptr<BaseStatistics>> partitions_stats;
-	gstate.lhs_sink = make_uniq<PartitionGlobalSinkState>(context, lhs_partitions, lhs_orders, children[0].get().GetTypes(),
-	                                                      partitions_stats, 0U);
+	gstate.lhs_sink = make_uniq<PartitionGlobalSinkState>(context, lhs_partitions, lhs_orders,
+	                                                      children[0].get().GetTypes(), partitions_stats, 0U);
 	gstate.lhs_sink->SyncPartitioning(gstate.rhs_sink);
 
 	// Find the first group to sort

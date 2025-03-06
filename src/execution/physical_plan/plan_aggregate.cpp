@@ -278,15 +278,15 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalAggregate &op) {
 
 	if (CanUsePerfectHashAggregate(context, op, required_bits)) {
 		auto &group_by = Make<PhysicalPerfectHashAggregate>(context, op.types, std::move(op.expressions),
-		                                                        std::move(op.groups), std::move(op.group_stats),
-		                                                        std::move(required_bits), op.estimated_cardinality);
+		                                                    std::move(op.groups), std::move(op.group_stats),
+		                                                    std::move(required_bits), op.estimated_cardinality);
 		group_by.children.push_back(plan);
 		return group_by;
 	}
 
 	auto &group_by = Make<PhysicalHashAggregate>(context, op.types, std::move(op.expressions), std::move(op.groups),
-	                                                 std::move(op.grouping_sets), std::move(op.grouping_functions),
-	                                                 op.estimated_cardinality);
+	                                             std::move(op.grouping_sets), std::move(op.grouping_functions),
+	                                             op.estimated_cardinality);
 	group_by.children.push_back(plan);
 	return group_by;
 }
