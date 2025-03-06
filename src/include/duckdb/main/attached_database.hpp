@@ -64,7 +64,7 @@ public:
 	~AttachedDatabase() override;
 
 	//! Initializes the catalog and storage of the attached database.
-	void Initialize(StorageOptions options = StorageOptions());
+	void Initialize(optional_ptr<ClientContext> context = nullptr, StorageOptions options = StorageOptions());
 	void Close();
 
 	Catalog &ParentCatalog() override;
