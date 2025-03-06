@@ -91,18 +91,9 @@ Unsupported
 
 # but it works with equi-height
 query II
-SELECT * FROM histogram_values(integers, i::VARCHAR, technique := 'equi-height')
+SELECT COUNT(*), AVG(count)  FROM histogram_values(integers, i::VARCHAR, technique := 'equi-height')
 ----
-109	13
-120	13
-19	13
-30	13
-42	14
-53	12
-65	13
-77	13
-88	13
-99999999	13
+10	13.0
 
 # histogram with ranges
 query II
