@@ -9,8 +9,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	auto &plan = CreatePlan(*op.children[0]);
 	bool preserve_insertion_order = PhysicalPlanGenerator::PreserveInsertionOrder(context, plan);
 	bool supports_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, plan);
+
 	auto &fs = FileSystem::GetFileSystem(context);
 	op.file_path = fs.ExpandPath(op.file_path);
+
 	if (op.use_tmp_file) {
 		auto path = StringUtil::GetFilePath(op.file_path);
 		auto base = StringUtil::GetFileName(op.file_path);
@@ -31,41 +33,43 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 			throw InternalException("BATCH_COPY_TO_FILE can only be used if batch indexes are supported");
 		}
 		// batched copy to file
-		auto &copy_ref =
+		auto &copy =
 		    Make<PhysicalBatchCopyToFile>(op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);
 
-		auto &cast_copy_ref = copy_ref.Cast<PhysicalBatchCopyToFile>();
-		cast_copy_ref.file_path = op.file_path;
-		cast_copy_ref.use_tmp_file = op.use_tmp_file;
-		cast_copy_ref.children.push_back(plan);
-		cast_copy_ref.return_type = op.return_type;
-		return copy_ref;
+		auto &cast_copy = copy.Cast<PhysicalBatchCopyToFile>();
+		cast_copy.file_path = op.file_path;
+		cast_copy.use_tmp_file = op.use_tmp_file;
+		cast_copy.children.push_back(plan);
+		cast_copy.return_type = op.return_type;
+		return copy;
 	}
 
 	// COPY from select statement to file
-	auto &copy_ref = Make<PhysicalCopyToFile>(op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);
+	auto &copy = Make<PhysicalCopyToFile>(op.types, op.function, std::move(op.bind_data), op.estimated_cardinality);
 
-	auto &cast_copy_ref = copy_ref.Cast<PhysicalCopyToFile>();
-	cast_copy_ref.file_path = op.file_path;
-	cast_copy_ref.use_tmp_file = op.use_tmp_file;
-	cast_copy_ref.overwrite_mode = op.overwrite_mode;
-	cast_copy_ref.filename_pattern = op.filename_pattern;
-	cast_copy_ref.file_extension = op.file_extension;
-	cast_copy_ref.per_thread_output = op.per_thread_output;
+	auto &cast_copy = copy.Cast<PhysicalCopyToFile>();
+	cast_copy.file_path = op.file_path;
+	cast_copy.use_tmp_file = op.use_tmp_file;
+	cast_copy.overwrite_mode = op.overwrite_mode;
+	cast_copy.filename_pattern = op.filename_pattern;
+	cast_copy.file_extension = op.file_extension;
+	cast_copy.per_thread_output = op.per_thread_output;
+
 	if (op.file_size_bytes.IsValid()) {
-		cast_copy_ref.file_size_bytes = op.file_size_bytes;
+		cast_copy.file_size_bytes = op.file_size_bytes;
 	}
-	cast_copy_ref.rotate = op.rotate;
-	cast_copy_ref.return_type = op.return_type;
-	cast_copy_ref.partition_output = op.partition_output;
-	cast_copy_ref.partition_columns = op.partition_columns;
-	cast_copy_ref.write_partition_columns = op.write_partition_columns;
-	cast_copy_ref.names = op.names;
-	cast_copy_ref.expected_types = op.expected_types;
-	cast_copy_ref.parallel = mode == CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;
 
-	cast_copy_ref.children.push_back(plan);
-	return copy_ref;
+	cast_copy.rotate = op.rotate;
+	cast_copy.return_type = op.return_type;
+	cast_copy.partition_output = op.partition_output;
+	cast_copy.partition_columns = op.partition_columns;
+	cast_copy.write_partition_columns = op.write_partition_columns;
+	cast_copy.names = op.names;
+	cast_copy.expected_types = op.expected_types;
+	cast_copy.parallel = mode == CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;
+
+	cast_copy.children.push_back(plan);
+	return copy;
 }
 
 } // namespace duckdb

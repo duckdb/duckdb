@@ -25,14 +25,14 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreate &op) {
 		return Make<PhysicalCreateFunction>(unique_ptr_cast<CreateInfo, CreateMacroInfo>(std::move(op.info)),
 		                                    op.estimated_cardinality);
 	case LogicalOperatorType::LOGICAL_CREATE_TYPE: {
-		auto &create_ref = Make<PhysicalCreateType>(unique_ptr_cast<CreateInfo, CreateTypeInfo>(std::move(op.info)),
-		                                            op.estimated_cardinality);
+		auto &create = Make<PhysicalCreateType>(unique_ptr_cast<CreateInfo, CreateTypeInfo>(std::move(op.info)),
+		                                        op.estimated_cardinality);
 		if (!op.children.empty()) {
 			D_ASSERT(op.children.size() == 1);
 			auto &plan = CreatePlan(*op.children[0]);
-			create_ref.children.push_back(plan);
+			create.children.push_back(plan);
 		}
-		return create_ref;
+		return create;
 	}
 	default:
 		throw NotImplementedException("Unimplemented type for logical simple create");

@@ -123,13 +123,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 
 		// Chain the new window operator on top of the plan
 		if (i < blocking_count) {
-			auto &window_ref = Make<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality);
-			window_ref.children.push_back(plan);
-			plan = window_ref;
+			auto &window = Make<PhysicalWindow>(types, std::move(select_list), op.estimated_cardinality);
+			window.children.push_back(plan);
+			plan = window;
 		} else {
-			auto &window_ref = Make<PhysicalStreamingWindow>(types, std::move(select_list), op.estimated_cardinality);
-			window_ref.children.push_back(plan);
-			plan = window_ref;
+			auto &window = Make<PhysicalStreamingWindow>(types, std::move(select_list), op.estimated_cardinality);
+			window.children.push_back(plan);
+			plan = window;
 		}
 	}
 
@@ -144,9 +144,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalWindow &op) {
 		for (const auto &p : projection_map) {
 			select_list[p.first] = make_uniq<BoundReferenceExpression>(op.types[p.first], p.second);
 		}
-		auto &proj_ref = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
-		proj_ref.children.push_back(plan);
-		plan = proj_ref;
+		auto &proj = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
+		proj.children.push_back(plan);
+		plan = proj;
 	}
 
 	return plan;

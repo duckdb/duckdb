@@ -84,18 +84,17 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDistinct &op) {
 	child = ExtractAggregateExpressions(child, aggregates, groups);
 
 	// we add a physical hash aggregation in the plan to select the distinct groups
-	auto &group_by_ref = Make<PhysicalHashAggregate>(context, aggregate_types, std::move(aggregates), std::move(groups),
-	                                                 child.get().estimated_cardinality);
-	group_by_ref.children.push_back(child);
+	auto &group_by = Make<PhysicalHashAggregate>(context, aggregate_types, std::move(aggregates), std::move(groups),
+	                                             child.get().estimated_cardinality);
+	group_by.children.push_back(child);
 	if (!requires_projection) {
-		return group_by_ref;
+		return group_by;
 	}
 
 	// we add a physical projection on top of the aggregation to project all members in the select list
-	auto &aggr_projection_ref =
-	    Make<PhysicalProjection>(types, std::move(projections), group_by_ref.estimated_cardinality);
-	aggr_projection_ref.children.push_back(group_by_ref);
-	return aggr_projection_ref;
+	auto &proj = Make<PhysicalProjection>(types, std::move(projections), group_by.estimated_cardinality);
+	proj.children.push_back(group_by);
+	return proj;
 }
 
 } // namespace duckdb

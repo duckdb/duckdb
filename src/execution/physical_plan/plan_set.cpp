@@ -12,10 +12,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSet &op) {
 	}
 
 	// Set a variable.
-	auto &child_ref = CreatePlan(*op.children[0]);
-	auto &set_variable_ref = Make<PhysicalSetVariable>(std::move(op.name), op.estimated_cardinality);
-	set_variable_ref.children.push_back(child_ref);
-	return set_variable_ref;
+	auto &plan = CreatePlan(*op.children[0]);
+	auto &set_variable = Make<PhysicalSetVariable>(std::move(op.name), op.estimated_cardinality);
+	set_variable.children.push_back(plan);
+	return set_variable;
 }
 
 } // namespace duckdb

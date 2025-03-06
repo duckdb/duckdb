@@ -47,9 +47,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateIndex &op) {
 	// Generate a physical plan for the parallel index creation.
 	// TABLE SCAN - PROJECTION - (optional) NOT NULL FILTER - (optional) ORDER BY - CREATE INDEX
 	D_ASSERT(op.children.size() == 1);
-	auto &table_scan_ref = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlan(*op.children[0]);
 
-	PlanIndexInput input(context, op, *this, table_scan_ref);
+	PlanIndexInput input(context, op, *this, plan);
 	return index_type->create_plan(input);
 }
 
