@@ -5,7 +5,6 @@
 #include "duckdb/main/prepared_statement_data.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
 
