@@ -24,8 +24,6 @@ struct MultiFileLocalState : public LocalTableFunctionState {
 	idx_t batch_index;
 	idx_t file_index;
 	unique_ptr<LocalTableFunctionState> local_state;
-	//! The DataChunk containing all read columns (even columns that are immediately removed)
-	DataChunk all_columns;
 };
 
 struct MultiFileFileReaderData {
@@ -427,9 +425,6 @@ public:
 		result->batch_index = 0;
 		result->local_state = OP::InitializeLocalState(context, *gstate.global_state);
 
-		if (gstate.CanRemoveColumns()) {
-			result->all_columns.Initialize(context.client, gstate.scanned_types);
-		}
 		if (!TryInitializeNextBatch(context.client, bind_data, *result, gstate)) {
 			return nullptr;
 		}
@@ -554,18 +549,17 @@ public:
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
 		auto remove_columns = gstate.CanRemoveColumns();
-		if (remove_columns) {
-			data.all_columns.Reset();
-		}
+		auto &scan_chunk = data.reader->reader_data.intermediate_chunk;
+		scan_chunk.Reset();
 
 		do {
-			auto &scan_chunk = remove_columns ? data.all_columns : output;
 			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, scan_chunk);
+			output.SetCardinality(scan_chunk.size());
 			if (scan_chunk.size() > 0) {
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           scan_chunk, gstate.multi_file_reader_state);
+				                                           scan_chunk, output, gstate.multi_file_reader_state);
 				if (remove_columns) {
-					output.ReferenceColumns(data.all_columns, gstate.projection_ids);
+					output.ReferenceColumns(scan_chunk, gstate.projection_ids);
 				}
 				return;
 			}

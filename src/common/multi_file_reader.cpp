@@ -563,13 +563,32 @@ void MultiFileReader::CreateFilterMap(const vector<ColumnIndex> &global_column_i
 }
 
 void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
-                                    const MultiFileReaderData &reader_data, DataChunk &chunk,
-                                    optional_ptr<MultiFileReaderGlobalState> global_state) {
+                                    const MultiFileReaderData &reader_data, DataChunk &input_chunk,
+                                    DataChunk &output_chunk, optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
-	for (auto &entry : reader_data.constant_map) {
-		chunk.data[entry.column_id].Reference(entry.value);
+	unordered_map<idx_t, idx_t> column_id_to_constant_map;
+	for (idx_t i = 0; i < reader_data.constant_map.size(); i++) {
+		auto &entry = reader_data.constant_map[i];
+		column_id_to_constant_map[entry.column_id] = i;
 	}
-	chunk.Verify();
+
+	if (input_chunk.ColumnCount() != output_chunk.ColumnCount()) {
+		throw InternalException("FinalizeChunk: input_chunk and output_chunk column count mismatch (%d vs %d)",
+		                        input_chunk.ColumnCount(), output_chunk.ColumnCount());
+	}
+
+	for (idx_t column_id = 0; column_id < input_chunk.ColumnCount(); column_id++) {
+		auto it = column_id_to_constant_map.find(column_id);
+		if (it != column_id_to_constant_map.end()) {
+			auto i = it->second;
+			auto &entry = reader_data.constant_map[i];
+			output_chunk.data[column_id].Reference(entry.value);
+		} else {
+			output_chunk.data[column_id].Reference(input_chunk.data[column_id]);
+		}
+	}
+	output_chunk.SetCardinality(input_chunk.size());
+	output_chunk.Verify();
 }
 
 void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,

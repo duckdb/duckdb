@@ -132,6 +132,8 @@ struct MultiFileReaderData {
 	unordered_map<column_t, LogicalType> cast_map;
 	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
 	optional_idx file_list_idx;
+	//! The intermediate chunk used by the reader before it gets finalized into the global schema
+	DataChunk intermediate_chunk;
 };
 
 //! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader
