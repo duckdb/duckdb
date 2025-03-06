@@ -20,7 +20,12 @@ public:
 	template <class FUNC>
 	static void Serialize(Serializer &serializer, const FUNC &function, optional_ptr<FunctionData> bind_info) {
 		D_ASSERT(!function.name.empty());
-		serializer.WriteProperty(500, "name", function.name);
+		if (!function.catalog_name.empty() && !function.schema_name.empty()) {
+			serializer.WriteProperty(500, "name",
+			                         function.catalog_name + "." + function.schema_name + "." + function.name);
+		} else {
+			serializer.WriteProperty(500, "name", function.name);
+		}
 		serializer.WriteProperty(501, "arguments", function.arguments);
 		serializer.WriteProperty(502, "original_arguments", function.original_arguments);
 		bool has_serialize = function.serialize;
@@ -33,9 +38,12 @@ public:
 	}
 
 	template <class FUNC, class CATALOG_ENTRY>
-	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const string &name,
-	                                vector<LogicalType> arguments, vector<LogicalType> original_arguments) {
-		auto &func_catalog = Catalog::GetEntry(context, catalog_type, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
+	static FUNC DeserializeFunction(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
+	                                const string &schema_name, const string &name, vector<LogicalType> arguments,
+	                                vector<LogicalType> original_arguments) {
+		auto &func_catalog =
+		    Catalog::GetEntry(context, catalog_type, catalog_name.empty() ? SYSTEM_CATALOG : catalog_name,
+		                      schema_name.empty() ? DEFAULT_SCHEMA : schema_name, name);
 		if (func_catalog.type != catalog_type) {
 			throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
 		}
@@ -51,10 +59,29 @@ public:
 	static pair<FUNC, bool> DeserializeBase(Deserializer &deserializer, CatalogType catalog_type) {
 		auto &context = deserializer.Get<ClientContext &>();
 		auto name = deserializer.ReadProperty<string>(500, "name");
+		string catalog_name;
+		string schema_name;
+		if (name.find('.') != std::string::npos) {
+			std::vector<std::string> parts;
+			std::stringstream ss(name);
+			std::string token;
+
+			while (std::getline(ss, token, '.')) {
+				parts.push_back(token);
+			}
+
+			if (parts.size() != 3) {
+				throw InternalException(
+				    "DeserializeBase - expected three parts for fully qualified serialized function %s", name);
+			}
+			catalog_name = parts[0];
+			schema_name = parts[1];
+			name = parts[2];
+		}
 		auto arguments = deserializer.ReadProperty<vector<LogicalType>>(501, "arguments");
 		auto original_arguments = deserializer.ReadProperty<vector<LogicalType>>(502, "original_arguments");
-		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, name, std::move(arguments),
-		                                                         std::move(original_arguments));
+		auto function = DeserializeFunction<FUNC, CATALOG_ENTRY>(context, catalog_type, catalog_name, schema_name, name,
+		                                                         std::move(arguments), std::move(original_arguments));
 		auto has_serialize = deserializer.ReadProperty<bool>(503, "has_serialize");
 		return make_pair(std::move(function), has_serialize);
 	}
