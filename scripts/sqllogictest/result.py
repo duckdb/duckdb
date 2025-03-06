@@ -949,7 +949,7 @@ class SQLLogicContext:
             # If enable_profiling is NULL, skip setting custom_profiling_settings to not
             # accidentally enable profiling.
             # In that case, custom_profiling_settings is set to the default value anyway.
-            if name == "custom_profiling_settings" and not "enable_profiling" in old_settings:
+            if name == "custom_profiling_settings" and "enable_profiling" not in old_settings:
                 continue
                 
             query = f"SET {name}='{value}'"
