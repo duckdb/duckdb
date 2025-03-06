@@ -7,23 +7,23 @@ namespace duckdb {
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOrder &op) {
 	D_ASSERT(op.children.size() == 1);
 
-	auto &plan_ref = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlan(*op.children[0]);
 	if (op.orders.empty()) {
-		return plan_ref;
+		return plan;
 	}
 
 	vector<idx_t> projection_map;
 	if (op.HasProjectionMap()) {
 		projection_map = std::move(op.projection_map);
 	} else {
-		for (idx_t i = 0; i < plan_ref.types.size(); i++) {
+		for (idx_t i = 0; i < plan.types.size(); i++) {
 			projection_map.push_back(i);
 		}
 	}
-	auto &order_ref =
+	auto &order =
 	    Make<PhysicalOrder>(op.types, std::move(op.orders), std::move(projection_map), op.estimated_cardinality);
-	order_ref.children.push_back(plan_ref);
-	return order_ref;
+	order.children.push_back(plan);
+	return order;
 }
 
 } // namespace duckdb

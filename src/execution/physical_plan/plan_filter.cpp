@@ -16,9 +16,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalFilter &op) {
 	if (!op.expressions.empty()) {
 		D_ASSERT(!plan.get().types.empty());
 		// create a filter if there is anything to filter
-		auto &filter_ref = Make<PhysicalFilter>(plan.get().types, std::move(op.expressions), op.estimated_cardinality);
-		filter_ref.children.push_back(plan);
-		plan = filter_ref;
+		auto &filter = Make<PhysicalFilter>(plan.get().types, std::move(op.expressions), op.estimated_cardinality);
+		filter.children.push_back(plan);
+		plan = filter;
 	}
 	if (op.HasProjectionMap()) {
 		// there is a projection map, generate a physical projection
@@ -26,9 +26,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalFilter &op) {
 		for (idx_t i = 0; i < op.projection_map.size(); i++) {
 			select_list.push_back(make_uniq<BoundReferenceExpression>(op.types[i], op.projection_map[i]));
 		}
-		auto &proj_ref = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
-		proj_ref.children.push_back(plan);
-		plan = proj_ref;
+		auto &proj = Make<PhysicalProjection>(op.types, std::move(select_list), op.estimated_cardinality);
+		proj.children.push_back(plan);
+		plan = proj;
 	}
 	return plan;
 }

@@ -61,15 +61,17 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 			vector<LogicalType> window_types = types;
 			window_types.push_back(LogicalType::BIGINT);
 
-			auto &window_left_ref = Make<PhysicalWindow>(window_types, CreatePartitionedRowNumExpression(types),
-			                                             left.get().estimated_cardinality);
-			window_left_ref.children.push_back(left);
-			left = window_left_ref;
+			auto select_list = CreatePartitionedRowNumExpression(types);
+			auto &left_window =
+			    Make<PhysicalWindow>(window_types, std::move(select_list), left.get().estimated_cardinality);
+			left_window.children.push_back(left);
+			left = left_window;
 
-			auto &window_right_ref = Make<PhysicalWindow>(window_types, CreatePartitionedRowNumExpression(types),
-			                                              right.get().estimated_cardinality);
-			window_right_ref.children.push_back(right);
-			right = window_right_ref;
+			select_list = CreatePartitionedRowNumExpression(types);
+			auto &right_window =
+			    Make<PhysicalWindow>(window_types, std::move(select_list), right.get().estimated_cardinality);
+			right_window.children.push_back(right);
+			right = right_window;
 
 			// add window expression result to join condition
 			conditions.push_back(CreateNotDistinctComparison(LogicalType::BIGINT, types.size()));
@@ -85,14 +87,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 
 		// For EXCEPT ALL / INTERSECT ALL we need to remove the row number column again
 		if (op.setop_all) {
-			vector<unique_ptr<Expression>> projection_select_list;
+			vector<unique_ptr<Expression>> select_list;
 			for (idx_t i = 0; i < types.size(); i++) {
-				projection_select_list.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
+				select_list.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
 			}
-			auto &proj_ref =
-			    Make<PhysicalProjection>(types, std::move(projection_select_list), op.estimated_cardinality);
-			proj_ref.children.push_back(*result);
-			result = proj_ref;
+			auto &proj = Make<PhysicalProjection>(types, std::move(select_list), op.estimated_cardinality);
+			proj.children.push_back(*result);
+			result = proj;
 		}
 		break;
 	}
@@ -107,10 +108,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 		for (idx_t i = 0; i < types.size(); i++) {
 			groups.push_back(make_uniq<BoundReferenceExpression>(types[i], i));
 		}
-		auto &group_by_ref = Make<PhysicalHashAggregate>(context, op.types, std::move(aggregates), std::move(groups),
-		                                                 result->estimated_cardinality);
-		group_by_ref.children.push_back(*result);
-		result = group_by_ref;
+		auto &group_by = Make<PhysicalHashAggregate>(context, op.types, std::move(aggregates), std::move(groups),
+		                                             result->estimated_cardinality);
+		group_by.children.push_back(*result);
+		result = group_by;
 	}
 
 	D_ASSERT(result);

@@ -27,12 +27,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	// then we create a normal recursive CTE operator.
 	if (op.key_targets.empty()) {
 		auto &right = CreatePlan(*op.children[1]);
-		auto &cte_ref = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
-		                                           op.estimated_cardinality);
-		auto &cast_cte_ref = cte_ref.Cast<PhysicalRecursiveCTE>();
-		cast_cte_ref.distinct_types = op.types;
-		cast_cte_ref.working_table = working_table;
-		return cte_ref;
+		auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
+		                                       op.estimated_cardinality);
+		auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
+		cast_cte.distinct_types = op.types;
+		cast_cte.working_table = working_table;
+		return cte;
 	}
 
 	vector<LogicalType> payload_types, distinct_types;
@@ -85,19 +85,19 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalRecursiveCTE &op) {
 	recurring_cte_tables[op.table_index] = recurring_table;
 
 	auto &right = CreatePlan(*op.children[1]);
-	auto &cte_ref = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
-	                                           op.estimated_cardinality);
-	auto &cast_cte_ref = cte_ref.Cast<PhysicalRecursiveCTE>();
-	cast_cte_ref.using_key = true;
-	cast_cte_ref.payload_aggregates = std::move(payload_aggregates);
-	cast_cte_ref.distinct_idx = distinct_idx;
-	cast_cte_ref.distinct_types = distinct_types;
-	cast_cte_ref.payload_idx = payload_idx;
-	cast_cte_ref.payload_types = payload_types;
-	cast_cte_ref.ref_recurring = op.ref_recurring;
-	cast_cte_ref.working_table = working_table;
-	cast_cte_ref.recurring_table = recurring_table;
-	return cte_ref;
+	auto &cte = Make<PhysicalRecursiveCTE>(op.ctename, op.table_index, op.types, op.union_all, left, right,
+	                                       op.estimated_cardinality);
+	auto &cast_cte = cte.Cast<PhysicalRecursiveCTE>();
+	cast_cte.using_key = true;
+	cast_cte.payload_aggregates = std::move(payload_aggregates);
+	cast_cte.distinct_idx = distinct_idx;
+	cast_cte.distinct_types = distinct_types;
+	cast_cte.payload_idx = payload_idx;
+	cast_cte.payload_types = payload_types;
+	cast_cte.ref_recurring = op.ref_recurring;
+	cast_cte.working_table = working_table;
+	cast_cte.recurring_table = recurring_table;
+	return cte;
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {

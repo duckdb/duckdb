@@ -38,8 +38,8 @@ unique_ptr<TableFilterSet> CreateTableFilterSet(TableFilterSet &table_filters, c
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	auto column_ids = op.GetColumnIds();
 	if (!op.children.empty()) {
-		reference<PhysicalOperator> child_node_ref = ResolveAndPlan(std::move(op.children[0]));
-		auto &child_types = child_node_ref.get().types;
+		reference<PhysicalOperator> child = ResolveAndPlan(std::move(op.children[0]));
+		auto &child_types = child.get().types;
 
 		// this is for table producing functions that consume subquery results
 		// push a projection node with casts if required
@@ -68,16 +68,17 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 		}
 
 		if (any_cast_required) {
-			auto &proj_ref = Make<PhysicalProjection>(std::move(return_types), std::move(expressions),
-			                                          child_node_ref.get().estimated_cardinality);
-			proj_ref.children.push_back(child_node_ref);
-			child_node_ref = proj_ref;
+			auto &proj = Make<PhysicalProjection>(std::move(return_types), std::move(expressions),
+			                                      child.get().estimated_cardinality);
+			proj.children.push_back(child);
+			child = proj;
 		}
 
-		auto &node_ref = Make<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), column_ids,
-		                                                  op.estimated_cardinality, std::move(op.projected_input));
-		node_ref.children.push_back(child_node_ref);
-		return node_ref;
+		auto &table_in_out =
+		    Make<PhysicalTableInOutFunction>(op.types, op.function, std::move(op.bind_data), column_ids,
+		                                     op.estimated_cardinality, std::move(op.projected_input));
+		table_in_out.children.push_back(child);
+		return table_in_out;
 	}
 
 	if (!op.projected_input.empty()) {
@@ -139,10 +140,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 	// create the table scan node
 	if (!op.function.projection_pushdown) {
 		// function does not support projection pushdown
-		auto &node_ref = Make<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data),
-		                                         op.returned_types, column_ids, vector<column_t>(), op.names,
-		                                         std::move(table_filters), op.estimated_cardinality, op.extra_info,
-		                                         std::move(op.parameters), std::move(op.virtual_columns));
+		auto &table_scan = Make<PhysicalTableScan>(op.returned_types, op.function, std::move(op.bind_data),
+		                                           op.returned_types, column_ids, vector<column_t>(), op.names,
+		                                           std::move(table_filters), op.estimated_cardinality, op.extra_info,
+		                                           std::move(op.parameters), std::move(op.virtual_columns));
 		// first check if an additional projection is necessary
 		if (column_ids.size() == op.returned_types.size()) {
 			bool projection_necessary = false;
@@ -156,10 +157,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				// a projection is not necessary if all columns have been requested in-order
 				// in that case we just return the node
 				if (filter) {
-					filter->children.push_back(node_ref);
+					filter->children.push_back(table_scan);
 					return *filter;
 				}
-				return node_ref;
+				return table_scan;
 			}
 		}
 		// push a projection on top that does the projection
@@ -175,27 +176,27 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalGet &op) {
 				expressions.push_back(make_uniq<BoundReferenceExpression>(type, col_id));
 			}
 		}
-		auto &proj_ref = Make<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
+		auto &proj = Make<PhysicalProjection>(std::move(types), std::move(expressions), op.estimated_cardinality);
 		if (filter) {
-			filter->children.push_back(node_ref);
-			proj_ref.children.push_back(*filter);
-		} else {
-			proj_ref.children.push_back(node_ref);
+			filter->children.push_back(table_scan);
+			proj.children.push_back(*filter);
+			return proj;
 		}
-		return proj_ref;
+		proj.children.push_back(table_scan);
+		return proj;
 	}
 
-	auto &node_ref =
+	auto &table_scan =
 	    Make<PhysicalTableScan>(op.types, op.function, std::move(op.bind_data), op.returned_types, column_ids,
 	                            op.projection_ids, op.names, std::move(table_filters), op.estimated_cardinality,
 	                            op.extra_info, std::move(op.parameters), std::move(op.virtual_columns));
-	auto &cast_node_ref = node_ref.Cast<PhysicalTableScan>();
-	cast_node_ref.dynamic_filters = op.dynamic_filters;
+	auto &cast_table_scan = table_scan.Cast<PhysicalTableScan>();
+	cast_table_scan.dynamic_filters = op.dynamic_filters;
 	if (filter) {
-		filter->children.push_back(node_ref);
+		filter->children.push_back(table_scan);
 		return *filter;
 	}
-	return node_ref;
+	return table_scan;
 }
 
 } // namespace duckdb

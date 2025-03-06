@@ -48,40 +48,39 @@ bool UseBatchLimit(PhysicalOperator &child_node, BoundLimitNode &limit_val, Boun
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalLimit &op) {
 	D_ASSERT(op.children.size() == 1);
-
-	auto &plan_ref = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlan(*op.children[0]);
 
 	switch (op.limit_val.Type()) {
 	case LimitNodeType::EXPRESSION_PERCENTAGE:
 	case LimitNodeType::CONSTANT_PERCENTAGE: {
-		auto &limit_ref = Make<PhysicalLimitPercent>(op.types, std::move(op.limit_val), std::move(op.offset_val),
-		                                             op.estimated_cardinality);
-		limit_ref.children.push_back(plan_ref);
-		return limit_ref;
+		auto &limit = Make<PhysicalLimitPercent>(op.types, std::move(op.limit_val), std::move(op.offset_val),
+		                                         op.estimated_cardinality);
+		limit.children.push_back(plan);
+		return limit;
 	}
 	default: {
-		if (!PreserveInsertionOrder(plan_ref)) {
+		if (!PreserveInsertionOrder(plan)) {
 			// use parallel streaming limit if insertion order is not important
-			auto &limit_ref = Make<PhysicalStreamingLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
-			                                               op.estimated_cardinality, true);
-			limit_ref.children.push_back(plan_ref);
-			return limit_ref;
+			auto &limit = Make<PhysicalStreamingLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
+			                                           op.estimated_cardinality, true);
+			limit.children.push_back(plan);
+			return limit;
 		}
 
 		// maintaining insertion order is important
-		if (UseBatchIndex(plan_ref) && UseBatchLimit(plan_ref, op.limit_val, op.offset_val)) {
+		if (UseBatchIndex(plan) && UseBatchLimit(plan, op.limit_val, op.offset_val)) {
 			// source supports batch index: use parallel batch limit
-			auto &limit_ref = Make<PhysicalLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
-			                                      op.estimated_cardinality);
-			limit_ref.children.push_back(plan_ref);
-			return limit_ref;
+			auto &limit = Make<PhysicalLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
+			                                  op.estimated_cardinality);
+			limit.children.push_back(plan);
+			return limit;
 		}
 
 		// source does not support batch index: use a non-parallel streaming limit
-		auto &limit_ref = Make<PhysicalStreamingLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
-		                                               op.estimated_cardinality, false);
-		limit_ref.children.push_back(plan_ref);
-		return limit_ref;
+		auto &limit = Make<PhysicalStreamingLimit>(op.types, std::move(op.limit_val), std::move(op.offset_val),
+		                                           op.estimated_cardinality, false);
+		limit.children.push_back(plan);
+		return limit;
 	}
 	}
 }

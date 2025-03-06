@@ -8,20 +8,20 @@ namespace duckdb {
 
 PhysicalOperator &DuckCatalog::PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,
                                           PhysicalOperator &plan) {
-	auto &update_ref = planner.Make<PhysicalUpdate>(
+	auto &update = planner.Make<PhysicalUpdate>(
 	    op.types, op.table, op.table.GetStorage(), op.columns, std::move(op.expressions), std::move(op.bound_defaults),
 	    std::move(op.bound_constraints), op.estimated_cardinality, op.return_chunk);
-	auto &cast_update_ref = update_ref.Cast<PhysicalUpdate>();
-	cast_update_ref.update_is_del_and_insert = op.update_is_del_and_insert;
-	cast_update_ref.children.push_back(plan);
-	return update_ref;
+	auto &cast_update = update.Cast<PhysicalUpdate>();
+	cast_update.update_is_del_and_insert = op.update_is_del_and_insert;
+	cast_update.children.push_back(plan);
+	return update;
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalUpdate &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto &plan_ref = CreatePlan(*op.children[0]);
+	auto &plan = CreatePlan(*op.children[0]);
 	dependencies.AddDependency(op.table);
-	return op.table.catalog.PlanUpdate(context, *this, op, plan_ref);
+	return op.table.catalog.PlanUpdate(context, *this, op, plan);
 }
 
 } // namespace duckdb
