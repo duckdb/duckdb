@@ -12,11 +12,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExecute &op) {
 
 	D_ASSERT(op.children.size() == 1);
 	auto &owned_plan = CreatePlan(*op.children[0]);
-	auto &execute_ref = Make<PhysicalExecute>(owned_plan);
-	auto &cast_execute_ref = execute_ref.Cast<PhysicalExecute>();
-	cast_execute_ref.owned_plan = owned_plan;
-	cast_execute_ref.prepared = op.prepared;
-	return execute_ref;
+	auto &execute = Make<PhysicalExecute>(owned_plan);
+	auto &cast_execute = execute.Cast<PhysicalExecute>();
+	cast_execute.owned_plan = owned_plan;
+	cast_execute.prepared = op.prepared;
+	return execute;
 }
 
 } // namespace duckdb

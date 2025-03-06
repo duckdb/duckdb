@@ -6,14 +6,14 @@
 namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExport &op) {
-	auto &export_node_ref = Make<PhysicalExport>(op.types, op.function, std::move(op.copy_info),
-	                                             op.estimated_cardinality, std::move(op.exported_tables));
+	auto &export_op = Make<PhysicalExport>(op.types, op.function, std::move(op.copy_info), op.estimated_cardinality,
+	                                       std::move(op.exported_tables));
 	// Plan the underlying copy statements, if any.
 	if (!op.children.empty()) {
 		auto &plan = CreatePlan(*op.children[0]);
-		export_node_ref.children.push_back(plan);
+		export_op.children.push_back(plan);
 	}
-	return export_node_ref;
+	return export_op;
 }
 
 } // namespace duckdb

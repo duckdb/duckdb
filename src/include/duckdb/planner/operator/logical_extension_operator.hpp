@@ -29,7 +29,6 @@ public:
 	void Serialize(Serializer &serializer) const override;
 	static unique_ptr<LogicalOperator> Deserialize(Deserializer &deserializer);
 
-	// TODO: This will break extensions.
 	virtual PhysicalOperator &CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) = 0;
 
 	virtual void ResolveColumnBindings(ColumnBindingResolver &res, vector<ColumnBinding> &bindings);

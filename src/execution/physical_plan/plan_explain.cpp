@@ -13,13 +13,13 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	auto logical_plan_opt = op.children[0]->ToString(op.explain_format);
 	auto &plan = CreatePlan(*op.children[0]);
 	if (op.explain_type == ExplainType::EXPLAIN_ANALYZE) {
-		auto &result_ref = Make<PhysicalExplainAnalyze>(op.types, op.explain_format);
-		result_ref.children.push_back(plan);
-		return result_ref;
+		auto &explain = Make<PhysicalExplainAnalyze>(op.types, op.explain_format);
+		explain.children.push_back(plan);
+		return explain;
 	}
 
+	// Format the plan and set the output of the EXPLAIN.
 	op.physical_plan = plan.ToString(op.explain_format);
-	// the output of the explain
 	vector<string> keys, values;
 	switch (ClientConfig::GetConfig(context).explain_output_type) {
 	case ExplainOutputType::OPTIMIZED_ONLY:
@@ -35,7 +35,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 		values = {op.logical_plan_unopt, logical_plan_opt, op.physical_plan};
 	}
 
-	// create a ColumnDataCollection from the output
+	// Create a ColumnDataCollection from the output.
 	auto &allocator = Allocator::Get(context);
 	vector<LogicalType> plan_types {LogicalType::VARCHAR, LogicalType::VARCHAR};
 	auto collection =
@@ -54,7 +54,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExplain &op) {
 	}
 	collection->Append(chunk);
 
-	// create a chunk scan to output the result
+	// Output the result via a chunk scan.
 	return Make<PhysicalColumnDataScan>(op.types, PhysicalOperatorType::COLUMN_DATA_SCAN, op.estimated_cardinality,
 	                                    std::move(collection));
 }

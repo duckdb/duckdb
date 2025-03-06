@@ -23,11 +23,11 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalMaterializedCTE &op) 
 	// Initialize an empty vector to collect the scan operators.
 	auto &right = CreatePlan(*op.children[1]);
 
-	auto &cte_ref = Make<PhysicalCTE>(op.ctename, op.table_index, right.types, left, right, op.estimated_cardinality);
-	auto &cast_cte_ref = cte_ref.Cast<PhysicalCTE>();
-	cast_cte_ref.working_table = working_table;
-	cast_cte_ref.cte_scans = materialized_ctes[op.table_index];
-	return cte_ref;
+	auto &cte = Make<PhysicalCTE>(op.ctename, op.table_index, right.types, left, right, op.estimated_cardinality);
+	auto &cast_cte = cte.Cast<PhysicalCTE>();
+	cast_cte.working_table = working_table;
+	cast_cte.cte_scans = materialized_ctes[op.table_index];
+	return cte;
 }
 
 } // namespace duckdb

@@ -49,15 +49,15 @@ PhysicalOperator &PhysicalPlanGenerator::PlanDelimJoin(LogicalComparisonJoin &op
 	}
 
 	// we still have to create the DISTINCT clause that is used to generate the duplicate eliminated chunk
-	auto &distinct_ref = Make<PhysicalHashAggregate>(context, delim_types, std::move(distinct_expressions),
-	                                                 std::move(distinct_groups), op.estimated_cardinality);
+	auto &distinct = Make<PhysicalHashAggregate>(context, delim_types, std::move(distinct_expressions),
+	                                             std::move(distinct_groups), op.estimated_cardinality);
 
 	// Create the duplicate eliminated join.
 	if (op.delim_flipped) {
-		return Make<PhysicalRightDelimJoin>(*this, op.types, plan, distinct_ref, delim_scans, op.estimated_cardinality,
+		return Make<PhysicalRightDelimJoin>(*this, op.types, plan, distinct, delim_scans, op.estimated_cardinality,
 		                                    optional_idx(this->delim_index));
 	}
-	return Make<PhysicalLeftDelimJoin>(*this, op.types, plan, distinct_ref, delim_scans, op.estimated_cardinality,
+	return Make<PhysicalLeftDelimJoin>(*this, op.types, plan, distinct, delim_scans, op.estimated_cardinality,
 	                                   optional_idx(this->delim_index));
 }
 

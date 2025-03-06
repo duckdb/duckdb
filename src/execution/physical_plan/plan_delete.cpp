@@ -9,14 +9,12 @@ namespace duckdb {
 
 PhysicalOperator &DuckCatalog::PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op,
                                           PhysicalOperator &plan) {
-	// get the index of the row_id column
+	// Get the row_id column index.
 	auto &bound_ref = op.expressions[0]->Cast<BoundReferenceExpression>();
-
-	auto &del_ref =
-	    planner.Make<PhysicalDelete>(op.types, op.table, op.table.GetStorage(), std::move(op.bound_constraints),
-	                                 bound_ref.index, op.estimated_cardinality, op.return_chunk);
-	del_ref.children.push_back(plan);
-	return del_ref;
+	auto &del = planner.Make<PhysicalDelete>(op.types, op.table, op.table.GetStorage(), std::move(op.bound_constraints),
+	                                         bound_ref.index, op.estimated_cardinality, op.return_chunk);
+	del.children.push_back(plan);
+	return del;
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDelete &op) {

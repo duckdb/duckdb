@@ -6,10 +6,10 @@ namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalUnnest &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto &plan_ref = CreatePlan(*op.children[0]);
-	auto &unnest_ref = Make<PhysicalUnnest>(op.types, std::move(op.expressions), op.estimated_cardinality);
-	unnest_ref.children.push_back(plan_ref);
-	return unnest_ref;
+	auto &plan = CreatePlan(*op.children[0]);
+	auto &unnest = Make<PhysicalUnnest>(op.types, std::move(op.expressions), op.estimated_cardinality);
+	unnest.children.push_back(plan);
+	return unnest;
 }
 
 } // namespace duckdb

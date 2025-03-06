@@ -21,16 +21,17 @@ PhysicalOperator &DuckCatalog::PlanCreateTableAs(ClientContext &context, Physica
 	bool use_batch_index = PhysicalPlanGenerator::UseBatchIndex(context, plan);
 	auto num_threads = TaskScheduler::GetScheduler(context).NumberOfThreads();
 	if (!parallel_streaming_insert && use_batch_index) {
-		auto &create_ref = planner.Make<PhysicalBatchInsert>(op, op.schema, std::move(op.info), 0U);
+		auto &insert = planner.Make<PhysicalBatchInsert>(op, op.schema, std::move(op.info), 0U);
 		D_ASSERT(op.children.size() == 1);
-		create_ref.children.push_back(plan);
-		return create_ref;
+		insert.children.push_back(plan);
+		return insert;
 	}
+
 	auto parallel = parallel_streaming_insert && num_threads > 1;
-	auto &create_ref = planner.Make<PhysicalInsert>(op, op.schema, std::move(op.info), 0U, parallel);
+	auto &insert = planner.Make<PhysicalInsert>(op, op.schema, std::move(op.info), 0U, parallel);
 	D_ASSERT(op.children.size() == 1);
-	create_ref.children.push_back(plan);
-	return create_ref;
+	insert.children.push_back(plan);
+	return insert;
 }
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateTable &op) {
