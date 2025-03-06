@@ -63,12 +63,12 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalSetOperation &op) {
 
 			auto &window_left_ref = Make<PhysicalWindow>(window_types, CreatePartitionedRowNumExpression(types),
 			                                             left.get().estimated_cardinality);
-			window_left_ref.children.push_back(std::move(left));
+			window_left_ref.children.push_back(left);
 			left = window_left_ref;
 
 			auto &window_right_ref = Make<PhysicalWindow>(window_types, CreatePartitionedRowNumExpression(types),
 			                                              right.get().estimated_cardinality);
-			window_right_ref.children.push_back(std::move(right));
+			window_right_ref.children.push_back(right);
 			right = window_right_ref;
 
 			// add window expression result to join condition

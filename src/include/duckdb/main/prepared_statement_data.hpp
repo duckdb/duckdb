@@ -19,7 +19,7 @@
 namespace duckdb {
 class CatalogEntry;
 class ClientContext;
-class PhysicalOperator;
+class PhysicalPlan;
 class SQLStatement;
 
 class PreparedStatementData {
