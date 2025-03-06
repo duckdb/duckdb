@@ -36,7 +36,6 @@ public:
 		D_ASSERT(root);
 		return *root;
 	}
-
 	void SetRoot(PhysicalOperator &op) {
 		root = op;
 	}

@@ -20,8 +20,8 @@ PhysicalPlanGenerator::~PhysicalPlanGenerator() {
 }
 
 unique_ptr<PhysicalPlan> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
-	auto &plan_ref = ResolveAndPlan(std::move(op));
-	plan_ref.Verify();
+	auto &plan = ResolveAndPlan(std::move(op));
+	plan.Verify();
 	return std::move(physical_plan);
 }
 

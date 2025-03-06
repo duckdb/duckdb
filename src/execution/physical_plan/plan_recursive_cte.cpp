@@ -110,18 +110,18 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 
 		// If this check fails, this is a reference to a materialized recursive CTE.
 		if (materialized_cte != materialized_ctes.end()) {
-			auto &chunk_scan_ref = Make<PhysicalColumnDataScan>(op.chunk_types, PhysicalOperatorType::CTE_SCAN,
-			                                                    op.estimated_cardinality, op.cte_index);
+			auto &chunk_scan = Make<PhysicalColumnDataScan>(op.chunk_types, PhysicalOperatorType::CTE_SCAN,
+			                                                op.estimated_cardinality, op.cte_index);
 
 			auto cte = recursive_cte_tables.find(op.cte_index);
 			if (cte == recursive_cte_tables.end()) {
 				throw InvalidInputException("Referenced materialized CTE does not exist.");
 			}
 
-			auto &cast_chunk_scan_ref = chunk_scan_ref.Cast<PhysicalColumnDataScan>();
-			cast_chunk_scan_ref.collection = cte->second.get();
-			materialized_cte->second.push_back(cast_chunk_scan_ref);
-			return chunk_scan_ref;
+			auto &cast_chunk_scan = chunk_scan.Cast<PhysicalColumnDataScan>();
+			cast_chunk_scan.collection = cte->second.get();
+			materialized_cte->second.push_back(cast_chunk_scan);
+			return chunk_scan;
 		}
 	}
 
@@ -142,10 +142,10 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCTERef &op) {
 	auto &types = cte->second.get()->Types();
 	auto op_type =
 	    op.is_recurring ? PhysicalOperatorType::RECURSIVE_RECURRING_CTE_SCAN : PhysicalOperatorType::RECURSIVE_CTE_SCAN;
-	auto &chunk_scan_ref = Make<PhysicalColumnDataScan>(types, op_type, op.estimated_cardinality, op.cte_index);
-	auto &cast_chunk_scan_ref = chunk_scan_ref.Cast<PhysicalColumnDataScan>();
-	cast_chunk_scan_ref.collection = cte->second.get();
-	return chunk_scan_ref;
+	auto &chunk_scan = Make<PhysicalColumnDataScan>(types, op_type, op.estimated_cardinality, op.cte_index);
+	auto &cast_chunk_scan = chunk_scan.Cast<PhysicalColumnDataScan>();
+	cast_chunk_scan.collection = cte->second.get();
+	return chunk_scan;
 }
 
 } // namespace duckdb

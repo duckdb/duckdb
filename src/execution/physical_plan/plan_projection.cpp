@@ -15,7 +15,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalProjection &op) {
 		D_ASSERT(!expr->IsAggregate());
 	}
 #endif
-	if (plan.types.size() == op.types.size()) {
+	if (plan.GetTypes().size() == op.types.size()) {
 		// check if this projection can be omitted entirely
 		// this happens if a projection simply emits the columns in the same order
 		// e.g. PROJECTION(#0, #1, #2, #3, ...)
