@@ -33,7 +33,11 @@ if(NOT WIN32 AND NOT SUN)
   add_subdirectory(persistence)
 endif()
 
-set(UNITTEST_ROOT_DIRECTORY "" CACHE STRING "The unittest root directory (defaults to the project source directory)")
+set(UNITTEST_ROOT_DIRECTORY
+    ""
+    CACHE
+      STRING
+      "The unittest root directory (defaults to the project source directory)")
 if(DEFINED UNITTEST_ROOT_DIRECTORY AND NOT UNITTEST_ROOT_DIRECTORY STREQUAL "")
   add_definitions(-DDUCKDB_ROOT_DIRECTORY="${UNITTEST_ROOT_DIRECTORY}")
 else()
