@@ -1241,26 +1241,25 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 					if (used_count * 2 < count) { // only serialize as a dict vector if that makes things smaller
 						auto sel_data = reinterpret_cast<data_ptr_t>(new_sel.data());
 						dict.Slice(used_sel, used_count);
-						serializer.WriteProperty(99, "vector_type", VectorType::DICTIONARY_VECTOR);
-						serializer.WriteProperty(100, "sel_vector", sel_data, sizeof(sel_t) * count);
-						serializer.WriteProperty(101, "dict_count", used_count);
+						serializer.WriteProperty(200, "vector_type", VectorType::DICTIONARY_VECTOR);
+						serializer.WriteProperty(201, "sel_vector", sel_data, sizeof(sel_t) * count);
+						serializer.WriteProperty(202, "dict_count", used_count);
 						return dict.Serialize(serializer, used_count, false);
 					}
 				}
 			} else if (vtype == VectorType::CONSTANT_VECTOR && count >= 1) {
-				serializer.WriteProperty(99, "vector_type", VectorType::CONSTANT_VECTOR);
+				serializer.WriteProperty(200, "vector_type", VectorType::CONSTANT_VECTOR);
 				return Vector::Serialize(serializer, 1, false); // just serialize one value
 			} else if (vtype == VectorType::SEQUENCE_VECTOR) {
-				serializer.WriteProperty(99, "vector_type", VectorType::SEQUENCE_VECTOR);
+				serializer.WriteProperty(200, "vector_type", VectorType::SEQUENCE_VECTOR);
 				auto data = reinterpret_cast<int64_t *>(buffer->GetData());
-				serializer.WriteProperty(100, "seq_start", data[0]);
-				serializer.WriteProperty(100, "seq_increment", data[1]);
+				serializer.WriteProperty(201, "seq_start", data[0]);
+				serializer.WriteProperty(202, "seq_increment", data[1]);
 				return; // for sequence vectors we do not serialize anything else
 			} else {
 				// TODO: other compressed vector types (FSST)
 			}
 		}
-		serializer.WriteProperty(99, "vector_type", VectorType::FLAT_VECTOR);
 	}
 	ToUnifiedFormat(count, vdata);
 
