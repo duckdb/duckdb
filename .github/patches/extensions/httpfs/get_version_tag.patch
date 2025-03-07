@@ -1,5 +1,5 @@
 diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
-index 6e1f635..083ef86 100644
+index 6e1f635..ec1da2e 100644
 --- a/extension/httpfs/httpfs.cpp
 +++ b/extension/httpfs/httpfs.cpp
 @@ -599,6 +599,11 @@ time_t HTTPFileSystem::GetLastModifiedTime(FileHandle &handle) {
@@ -18,7 +18,7 @@ index 6e1f635..083ef86 100644
  		if (found) {
  			last_modified = value.last_modified;
  			length = value.length;
-+			etag = value.last_modified;
++			etag = value.etag;
  
  			if (flags.OpenForReading()) {
  				read_buffer = duckdb::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
