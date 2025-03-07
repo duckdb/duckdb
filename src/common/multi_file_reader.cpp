@@ -279,7 +279,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 		auto column_id = col_idx.GetPrimaryIndex();
 		if (column_id == options.filename_idx) {
 			// filename
-			auto emplace_result = reader_data.constant_map.emplace(std::make_pair(i, Value(filename)));
+			auto emplace_result = reader_data.constant_map.emplace(i, Value(filename));
 			if (!emplace_result.second) {
 				throw InternalException(
 				    "Tried to create a constant value for column_id %d but it already has a constant assigned!", i);
@@ -297,7 +297,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			for (auto &entry : options.hive_partitioning_indexes) {
 				if (column_id == entry.index) {
 					Value value = file_options.GetHivePartitionValue(partitions[entry.value], entry.value, context);
-					auto emplace_result = reader_data.constant_map.emplace(std::make_pair(i, value));
+					auto emplace_result = reader_data.constant_map.emplace(i, value);
 					if (!emplace_result.second) {
 						throw InternalException(
 						    "Tried to create a constant value for column_id %d but it already has a constant assigned!",
@@ -321,7 +321,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			if (not_present_in_file) {
 				// we need to project a column with name \"global_name\" - but it does not exist in the current file
 				// push a NULL value of the specified type
-				auto emplace_result = reader_data.constant_map.emplace(std::make_pair(i, Value(type)));
+				auto emplace_result = reader_data.constant_map.emplace(i, Value(type));
 				if (!emplace_result.second) {
 					throw InternalException(
 					    "Tried to create a constant value for column_id %d but it already has a constant assigned!", i);
@@ -378,8 +378,7 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		if (entry == name_map.end()) {
 			// identiier not present in file, use default value
 			if (global_column.default_expression) {
-				auto emplace_result =
-				    reader_data.constant_map.emplace(std::make_pair(i, global_column.GetDefaultValue()));
+				auto emplace_result = reader_data.constant_map.emplace(i, global_column.GetDefaultValue());
 				if (!emplace_result.second) {
 					throw InternalException(
 					    "Tried to create a constant value for column_id %d but it already has a constant assigned!", i);
@@ -483,7 +482,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 				throw NotImplementedException("Default expression that isn't constant is not supported yet");
 			}
 			auto &constant_expr = default_val->Cast<ConstantExpression>();
-			auto emplace_result = reader_data.constant_map.emplace(std::make_pair(i, constant_expr.value));
+			auto emplace_result = reader_data.constant_map.emplace(i, constant_expr.value);
 			if (!emplace_result.second) {
 				throw InternalException(
 				    "Tried to create a constant value for column_id %d but it already has a constant assigned!", i);
