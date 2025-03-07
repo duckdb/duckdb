@@ -82,7 +82,7 @@ SourceResultType PhysicalAttach::GetData(ExecutionContext &context, DataChunk &c
 
 	//! Initialize the database.
 	const auto storage_options = info->GetStorageOptions();
-	attached_db->Initialize(storage_options);
+	attached_db->Initialize(context.client, storage_options);
 	if (!options.default_table.name.empty()) {
 		attached_db->GetCatalog().SetDefaultTable(options.default_table.schema, options.default_table.name);
 	}
