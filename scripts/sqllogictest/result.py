@@ -951,7 +951,7 @@ class SQLLogicContext:
             # In that case, custom_profiling_settings is set to the default value anyway.
             if name == "custom_profiling_settings" and "enable_profiling" not in old_settings:
                 continue
-                
+
             query = f"SET {name}='{value}'"
             con.execute(query)
 
