@@ -190,6 +190,10 @@ class WindowDistinctAggregatorLocalState : public WindowAggregatorLocalState {
 public:
 	explicit WindowDistinctAggregatorLocalState(const WindowDistinctAggregatorGlobalState &aggregator);
 
+	~WindowDistinctAggregatorLocalState() override {
+		statef.Destroy();
+	}
+
 	void Sink(DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel,
 	          idx_t filtered);
 	void Finalize(WindowAggregatorGlobalState &gastate, CollectionPtr collection) override;
@@ -740,6 +744,8 @@ void WindowDistinctAggregatorLocalState::Evaluate(const WindowDistinctAggregator
 
 	//	Finalise the result aggregates and write to the result
 	statef.Finalize(result);
+
+	//	Destruct any non-POD state
 	statef.Destroy();
 }
 

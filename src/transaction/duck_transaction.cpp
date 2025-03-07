@@ -192,6 +192,7 @@ bool DuckTransaction::ShouldWriteToWAL(AttachedDatabase &db) {
 }
 
 ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCommitState> &commit_state) noexcept {
+	ErrorData error_data;
 	try {
 		D_ASSERT(ShouldWriteToWAL(db));
 		auto &storage_manager = db.GetStorageManager();
@@ -206,13 +207,20 @@ ErrorData DuckTransaction::WriteToWAL(AttachedDatabase &db, unique_ptr<StorageCo
 			storage_manager.GetBlockManager().FileSync();
 		}
 	} catch (std::exception &ex) {
-		if (commit_state) {
+		// Call RevertCommit() outside this try-catch as it itself may throw
+		error_data = ErrorData(ex);
+	}
+
+	if (commit_state && error_data.HasError()) {
+		try {
 			commit_state->RevertCommit();
 			commit_state.reset();
+		} catch (std::exception &) {
+			// Ignore this error. If we fail to RevertCommit(), just return the original exception
 		}
-		return ErrorData(ex);
 	}
-	return ErrorData();
+
+	return error_data;
 }
 
 ErrorData DuckTransaction::Commit(AttachedDatabase &db, transaction_t new_commit_id,

@@ -284,6 +284,39 @@ int32_t TaskScheduler::NumberOfThreads() {
 	return current_thread_count.load();
 }
 
+idx_t TaskScheduler::GetNumberOfTasks() const {
+#ifndef DUCKDB_NO_THREADS
+	return queue->q.size_approx();
+#else
+	idx_t task_count = 0;
+	for (auto &producer : queue->q) {
+		task_count += producer.second.size();
+	}
+	return task_count;
+#endif
+}
+
+idx_t TaskScheduler::GetProducerCount() const {
+#ifndef DUCKDB_NO_THREADS
+	return queue->q.size_producers_approx();
+#else
+	return queue->q.size();
+#endif
+}
+
+idx_t TaskScheduler::GetTaskCountForProducer(ProducerToken &token) const {
+#ifndef DUCKDB_NO_THREADS
+	lock_guard<mutex> producer_lock(token.producer_lock);
+	return queue->q.size_producer_approx(token.token->queue_token);
+#else
+	const auto it = queue->q.find(std::ref(*token.token));
+	if (it == queue->q.end()) {
+		return 0;
+	}
+	return it->second.size();
+#endif
+}
+
 void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	if (total_threads == 0) {
 		throw SyntaxException("Number of threads must be positive!");

@@ -1,0 +1,35 @@
+# name: test/sql/window/window_valid_end.test_slow
+# description: Nasty user test that stresses ValidEnd vectorisation.
+# group: [window]
+
+# This only reproduced in release because debug wrote garbage instead of 0s...
+statement ok
+pragma threads=2;
+
+loop i 1 100
+
+query IIIIII
+select * from
+(
+  select
+	column0,
+	sale_customer__id,
+	year_total,
+	next_year,
+	sale_date__year,
+    (
+      first (year_total) over (
+        partition by
+          sale_customer__id
+        order by
+          sale_date__year
+        range between 1 following and 1 following
+      ) 
+    ) as recompute_next_year,
+  from 'data/csv/issue_16098.csv'	
+)
+where next_year is distinct from recompute_next_year
+order by all;
+----
+
+endloop

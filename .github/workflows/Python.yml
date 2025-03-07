@@ -10,6 +10,8 @@ on:
         type: string
       run_all:
         type: string
+      override_twine_upload:
+        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -20,7 +22,8 @@ on:
         type: string
       run_all:
         type: string
-  repository_dispatch:
+      override_twine_upload:
+        type: string
   push:
     branches-ignore:
       - 'main'
@@ -62,7 +65,7 @@ jobs:
 # This is just a sanity check of Python 3.10 running with Arrow
   linux-python3-10:
     name: Python 3.10 Linux
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
@@ -147,6 +150,7 @@ jobs:
           vcpkg_target_triplet: x64-linux
           duckdb_arch: linux_amd64_gcc4
           run_tests: ${{ inputs.skip_tests != 'true' }}
+          override_git_describe: ${{ inputs.override_git_describe }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -435,7 +439,7 @@ jobs:
      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
      name: PyPi Release Cleanup
      needs: twine-upload
-     runs-on: ubuntu-20.04
+     runs-on: ubuntu-22.04
      env:
        PYPI_CLEANUP_USERNAME: 'mytherin'
        PYPI_CLEANUP_PASSWORD: ${{secrets.PYPI_CLEANUP_PASSWORD}}
@@ -466,8 +470,10 @@ jobs:
       - win-python3
       - linux-python3
     # Note that want to run this by default ONLY if no override_git_describe is provided
-    # This means we are not staging a release
-    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
+    # This means we are not staging a release, or we explicitly set `twine_upload`
+    # Why? If present, it means we are staging releases, and we want to do the upload manually
+    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.override_twine_upload == 'true' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
     uses: ./.github/workflows/TwineUpload.yml
     secrets: inherit
-    # Why? If present, it means we are staging releases, and we want to do the upload manually
+    with:
+      twine_upload: 'true'

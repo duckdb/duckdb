@@ -7,20 +7,19 @@
 
 #pragma once
 
-//! duplicate of duckdb/main/winapi.hpp
-#ifndef DUCKDB_API
+#ifndef DUCKDB_C_API
 #ifdef _WIN32
 #ifdef DUCKDB_STATIC_BUILD
-#define DUCKDB_API
+#define DUCKDB_C_API
 #else
 #if defined(DUCKDB_BUILD_LIBRARY) && !defined(DUCKDB_BUILD_LOADABLE_EXTENSION)
-#define DUCKDB_API __declspec(dllexport)
+#define DUCKDB_C_API __declspec(dllexport)
 #else
-#define DUCKDB_API __declspec(dllimport)
+#define DUCKDB_C_API __declspec(dllimport)
 #endif
 #endif
 #else
-#define DUCKDB_API
+#define DUCKDB_C_API
 #endif
 #endif
 
@@ -129,6 +128,10 @@ typedef enum DUCKDB_TYPE {
 	DUCKDB_TYPE_VARINT = 35,
 	// SQLNULL type
 	DUCKDB_TYPE_SQLNULL = 36,
+	// STRING_LITERAL type
+	DUCKDB_TYPE_STRING_LITERAL = 37,
+	// INTEGER_LITERAL type
+	DUCKDB_TYPE_INTEGER_LITERAL = 38,
 } duckdb_type;
 //! An enum over the returned state of different functions.
 typedef enum duckdb_state { DuckDBSuccess = 0, DuckDBError = 1 } duckdb_state;

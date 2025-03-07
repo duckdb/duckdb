@@ -1,0 +1,16 @@
+# name: test/sql/function/autocomplete/identical_schema_table.test
+# description: Test sql_auto_complete
+# group: [autocomplete]
+
+require autocomplete
+
+statement ok
+CREATE SCHEMA my_catalog_entry;
+
+statement ok
+CREATE TABLE my_catalog_entry(i INT);
+
+query II
+FROM sql_auto_complete('FROM my_c') LIMIT 1;
+----
+my_catalog_entry	5
