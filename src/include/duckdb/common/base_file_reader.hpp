@@ -17,6 +17,16 @@
 
 namespace duckdb {
 
+//! global column_id
+using global_column_id_t = idx_t;
+//! local column_id
+using local_column_id_t = idx_t;
+
+//! index into a global mapping
+using global_idx_t = idx_t;
+//! index into a local mapping
+using local_idx_t = idx_t;
+
 struct MultiFileReaderColumnDefinition {
 public:
 	MultiFileReaderColumnDefinition(const string &name, const LogicalType &type) : name(name), type(type) {
@@ -98,24 +108,26 @@ public:
 
 struct MultiFileReaderData {
 	//! The column ids to read from the file
-	vector<idx_t> column_ids;
+	//! vector containing a mapping from (indexed with) `local_idx_t` -> `local_column_id_t`
+	vector<local_column_id_t> column_ids;
 	//! The column indexes to read from the file
+	//! vector containing a mapping from (indexed with) `local_idx_t` -> `local_column_id_t` (as a ColumnIndex)
 	vector<ColumnIndex> column_indexes;
 	//! The mapping of column id -> result column id
 	//! The result chunk will be filled as follows: chunk.data[column_mapping[i]] = ReadColumn(column_ids[i]);
-	vector<idx_t> column_mapping;
+	//! vector containing a mapping from `local_idx_t` -> `global_idx_t`
+	vector<global_idx_t> column_mapping;
 	//! Whether or not there are no columns to read. This can happen when a file only consists of constants
 	bool empty_columns = false;
-	//! Filters can point to either (1) local columns in the file, or (2) constant values in the `constant_map`
-	//! This map specifies where the to-be-filtered value can be found
-	vector<idx_t> filter_map;
-	//! The set of table filters
+	//! vector containing a mapping from `global_idx_t` -> `local_idx_t` (or DConstants::INVALID_INDEX if constant)
+	vector<local_idx_t> filter_map;
+	//! The set of table filters, which
 	optional_ptr<TableFilterSet> filters;
-	//! The mapping of (global) column_id -> constant value
-	unordered_map<idx_t, Value> constant_map;
-	//! Map of column_id -> cast, used when reading multiple files when files have diverging types
+	//! The mapping of (global) index -> constant value
+	unordered_map<global_idx_t, Value> constant_map;
+	//! Map of (local) column_id -> cast, used when reading multiple files when files have diverging types
 	//! for the same column
-	unordered_map<column_t, LogicalType> cast_map;
+	unordered_map<local_column_id_t, LogicalType> cast_map;
 	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
 	optional_idx file_list_idx;
 };

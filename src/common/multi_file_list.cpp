@@ -30,7 +30,7 @@ MultiFilePushdownInfo::MultiFilePushdownInfo(idx_t table_index, const vector<str
 bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &options, MultiFilePushdownInfo &info,
                       vector<unique_ptr<Expression>> &filters, vector<string> &expanded_files) {
 	HivePartitioningFilterInfo filter_info;
-	for (idx_t i = 0; i < info.column_ids.size(); i++) {
+	for (local_idx_t i = 0; i < info.column_ids.size(); i++) {
 		if (IsVirtualColumn(info.column_ids[i])) {
 			continue;
 		}
@@ -61,7 +61,8 @@ bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &opti
 	// construct the set of expressions from the table filters
 	vector<unique_ptr<Expression>> filter_expressions;
 	for (auto &entry : filters.filters) {
-		auto column_idx = column_ids[entry.first];
+		local_idx_t local_index = entry.first;
+		local_column_id_t column_idx = column_ids[local_index];
 		if (IsVirtualColumn(column_idx)) {
 			continue;
 		}

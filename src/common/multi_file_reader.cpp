@@ -274,7 +274,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			name_map[column.name] = col_idx;
 		}
 	}
-	for (idx_t i = 0; i < global_column_ids.size(); i++) {
+	for (global_idx_t i = 0; i < global_column_ids.size(); i++) {
 		auto &col_idx = global_column_ids[i];
 		auto column_id = col_idx.GetPrimaryIndex();
 		if (column_id == options.filename_idx) {
@@ -349,14 +349,14 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
                                                 const MultiFileReaderBindData &bind_data, const string &initial_file,
                                                 optional_ptr<MultiFileReaderGlobalState> global_state) {
 
-	// we have expected types: create a map of name -> column index
-	case_insensitive_map_t<idx_t> name_map;
-	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
+	// we have expected types: create a map of name -> (local) column id
+	case_insensitive_map_t<local_column_id_t> name_map;
+	for (local_column_id_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 		auto &column = local_columns[col_idx];
 		name_map[column.name] = col_idx;
 	}
 
-	for (idx_t i = 0; i < global_column_ids.size(); i++) {
+	for (global_idx_t i = 0; i < global_column_ids.size(); i++) {
 		if (reader_data.constant_map.count(i)) {
 			// this column is constant for this file
 			continue;
@@ -401,7 +401,7 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 			}
 		}
 		// we found the column in the local file - check if the types are the same
-		auto local_id = entry->second;
+		local_column_id_t local_id = entry->second;
 		D_ASSERT(global_id < global_columns.size());
 		D_ASSERT(local_id < local_columns.size());
 		auto &global_type = global_columns[global_id].type;
@@ -438,7 +438,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 #endif
 
 	// we have expected types: create a map of field_id -> column index
-	unordered_map<int32_t, idx_t> field_id_map;
+	unordered_map<int32_t, local_column_id_t> field_id_map;
 	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 		auto &column = local_columns[col_idx];
 		if (column.identifier.IsNull()) {
@@ -450,7 +450,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 	}
 
 	// loop through the schema definition
-	for (idx_t i = 0; i < global_column_ids.size(); i++) {
+	for (global_idx_t i = 0; i < global_column_ids.size(); i++) {
 		if (reader_data.constant_map.count(i)) {
 			// this column is constant for this file
 			continue;
@@ -490,7 +490,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 			continue;
 		}
 
-		const auto &local_id = it->second;
+		const local_column_id_t &local_id = it->second;
 		auto &local_column = local_columns[local_id];
 		ColumnIndex local_index(local_id);
 		if (local_column.type != global_column.type) {
@@ -554,8 +554,8 @@ void MultiFileReader::CreateFilterMap(const vector<ColumnIndex> &global_column_i
 		}
 		reader_data.filter_map.resize(filter_map_size);
 
-		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
-			auto map_index = reader_data.column_mapping[c];
+		for (global_column_id_t c = 0; c < reader_data.column_mapping.size(); c++) {
+			global_idx_t map_index = reader_data.column_mapping[c];
 			reader_data.filter_map[map_index] = c;
 		}
 		for (auto &entry : reader_data.constant_map) {

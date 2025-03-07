@@ -125,8 +125,9 @@ void CSVFileScan::InitializeFileNamesTypes() {
 	// We need to be sure that our types are also following the cast_map
 	if (!reader_data.cast_map.empty()) {
 		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
-			if (reader_data.cast_map.find(reader_data.column_ids[i]) != reader_data.cast_map.end()) {
-				file_types[i] = reader_data.cast_map[reader_data.column_ids[i]];
+			auto entry = reader_data.cast_map.find(reader_data.column_ids[i]);
+			if (entry != reader_data.cast_map.end()) {
+				file_types[i] = entry->second;
 			}
 		}
 	}
