@@ -16,10 +16,10 @@ prepare p3 as select 21, $1, $2
 statement ok
 prepare p4 as select $name, $other_name
 
-query IIIIIIII
+query IIII
 select * from duckdb_prepared_statements() order by name;
 ----
-p1	SELECT 42	NULL	NULL	[INTEGER]	NULL	NULL	NULL
-p2	INSERT INTO tbl (VALUES ('test'))	NULL	NULL	[BIGINT]	NULL	NULL	NULL
-p3	SELECT 21, $1, $2	NULL	[UNKNOWN, UNKNOWN]	NULL	NULL	NULL	NULL
-p4	SELECT $name, $other_name	NULL	[UNKNOWN, UNKNOWN]	NULL	NULL	NULL	NULL
+p1	SELECT 42	NULL	[INTEGER]
+p2	INSERT INTO tbl (VALUES ('test'))	NULL	[BIGINT]
+p3	SELECT 21, $1, $2	[UNKNOWN, UNKNOWN]	NULL
+p4	SELECT $name, $other_name	[UNKNOWN, UNKNOWN]	NULL

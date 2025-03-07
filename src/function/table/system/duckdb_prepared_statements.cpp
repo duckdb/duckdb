@@ -24,24 +24,11 @@ static unique_ptr<FunctionData> DuckDBPreparedStatementsBind(ClientContext &cont
 	names.emplace_back("statement");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
-	names.emplace_back("prepare_time");
-	return_types.emplace_back(LogicalType::TIMESTAMP);
-
 	names.emplace_back("parameter_types");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
 	names.emplace_back("result_types");
 	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
-
-	names.emplace_back("from_sql");
-	return_types.emplace_back(LogicalType::BOOLEAN);
-
-	names.emplace_back("generic_plans");
-	return_types.emplace_back(LogicalType::BIGINT);
-
-	names.emplace_back("custom_plans");
-	return_types.emplace_back(LogicalType::BIGINT);
-
 	return nullptr;
 }
 
@@ -73,18 +60,16 @@ void DuckDBPreparedStatementsFunction(ClientContext &context, TableFunctionInput
 		output.SetValue(0, count, Value(name));
 		// statement, VARCHAR
 		output.SetValue(1, count, Value(prepared_statement.unbound_statement->ToString()));
-		// prepare_time, VARCHAR
-		output.SetValue(2, count, Value(LogicalType::TIMESTAMP));
 		// parameter_types, VARCHAR[]
 		auto &named_parameter_map = prepared_statement.unbound_statement->named_param_map;
 		if (named_parameter_map.empty()) {
-			output.SetValue(3, count, Value(LogicalType::LIST(LogicalType::VARCHAR)));
+			output.SetValue(2, count, Value(LogicalType::LIST(LogicalType::VARCHAR)));
 		} else {
 			vector<Value> parameter_types;
 			for (idx_t i = 0; i < prepared_statement.properties.parameter_count; i++) {
 				parameter_types.push_back(LogicalType(LogicalTypeId::UNKNOWN).ToString());
 			}
-			output.SetValue(3, count, Value::LIST(std::move(parameter_types)));
+			output.SetValue(2, count, Value::LIST(std::move(parameter_types)));
 		}
 		// result_types, VARCHAR[]
 		switch (prepared_statement.properties.return_type) {
@@ -95,28 +80,22 @@ void DuckDBPreparedStatementsFunction(ClientContext &context, TableFunctionInput
 				for (auto &type : plan_types) {
 					return_types.push_back(type.ToString());
 				}
-				output.SetValue(4, count, Value::LIST(return_types));
+				output.SetValue(3, count, Value::LIST(return_types));
 			} else {
-				output.SetValue(4, count, Value(LogicalType::LIST(LogicalType::VARCHAR)));
+				output.SetValue(3, count, Value(LogicalType::LIST(LogicalType::VARCHAR)));
 			}
 			break;
 		}
 		case StatementReturnType::CHANGED_ROWS: {
-			output.SetValue(4, count, Value::LIST({"BIGINT"}));
+			output.SetValue(3, count, Value::LIST({"BIGINT"}));
 			break;
 		}
 		case StatementReturnType::NOTHING:
 		default: {
-			output.SetValue(4, count, Value(LogicalType::LIST(LogicalType::VARCHAR)));
+			output.SetValue(3, count, Value(LogicalType::LIST(LogicalType::VARCHAR)));
 			break;
 		}
 		}
-		// from_sql, BOOL
-		output.SetValue(5, count, Value(LogicalType::BOOLEAN));
-		// generic_plans, BIGINT
-		output.SetValue(6, count, Value(LogicalType::BIGINT));
-		// custom_plans, BIGINT
-		output.SetValue(7, count, Value(LogicalType::BIGINT));
 		count++;
 	}
 	output.SetCardinality(count);
