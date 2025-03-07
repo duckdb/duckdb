@@ -254,7 +254,7 @@ idx_t CachingFileHandle::ReadAndCopyInterleaved(const vector<shared_ptr<CachedFi
 	idx_t current_location = location;
 	idx_t remaining_bytes = nr_bytes;
 	for (auto &overlapping_range : overlapping_ranges) {
-		D_ASSERT(new_file_range->GetOverlap(*overlapping_range) == CachedFileRangeOverlap::FULL);
+		D_ASSERT(new_file_range->GetOverlap(*overlapping_range) != CachedFileRangeOverlap::NONE);
 
 		if (remaining_bytes == 0) {
 			break; // All requested bytes were read
