@@ -473,7 +473,7 @@ typedef struct {
 	                                               idx_t row);
 	// New string functions that are added
 
-	char *(*duckdb_to_sql_string)(duckdb_value value);
+	char *(*duckdb_value_to_string)(duckdb_value value);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -889,7 +889,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_get_or_create_from_cache = duckdb_get_or_create_from_cache;
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
-	result.duckdb_to_sql_string = duckdb_to_sql_string;
+	result.duckdb_value_to_string = duckdb_value_to_string;
 	return result;
 }
 

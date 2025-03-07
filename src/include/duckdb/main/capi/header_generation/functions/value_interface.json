@@ -1278,7 +1278,7 @@
             }
         },
         {
-            "name": "duckdb_to_sql_string",
+            "name": "duckdb_value_to_string",
             "return_type": "char *",
             "params": [
                 {

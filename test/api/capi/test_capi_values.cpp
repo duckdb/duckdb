@@ -430,7 +430,7 @@ TEST_CASE("Test UUID value", "[capi]") {
 
 TEST_CASE("Test SQL string conversion", "[capi]") {
 	auto uint_val = duckdb_create_uint64(42);
-	auto uint_val_str = duckdb_to_sql_string(uint_val);
+	auto uint_val_str = duckdb_value_to_string(uint_val);
 	REQUIRE(string(uint_val_str).compare("42") == 0);
 
 	duckdb_destroy_value(&uint_val);

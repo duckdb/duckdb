@@ -538,7 +538,11 @@ duckdb_value duckdb_get_struct_child(duckdb_value value, idx_t index) {
 	return WrapValue(new duckdb::Value(children[index]));
 }
 
-char *duckdb_to_sql_string(duckdb_value val) {
+char *duckdb_value_to_string(duckdb_value val) {
+	if (!val) {
+		return nullptr;
+	}
+
 	auto v = UnwrapValue(val);
 	auto str = v.ToSQLString();
 

@@ -2543,7 +2543,7 @@ Returns the SQL string representation of the given value.
 * @param value A duckdb_value.
 * @return The SQL string representation as a null-terminated string. The result must be freed with `duckdb_free`.
 */
-DUCKDB_C_API char *duckdb_to_sql_string(duckdb_value value);
+DUCKDB_C_API char *duckdb_value_to_string(duckdb_value value);
 
 //===--------------------------------------------------------------------===//
 // Logical Type Interface

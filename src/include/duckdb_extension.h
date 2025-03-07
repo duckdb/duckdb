@@ -544,7 +544,7 @@ typedef struct {
 
 // New string functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
-	char *(*duckdb_to_sql_string)(duckdb_value value);
+	char *(*duckdb_value_to_string)(duckdb_value value);
 #endif
 
 } duckdb_ext_api_v1;
@@ -970,7 +970,7 @@ typedef struct {
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
 
 // Version unstable_new_string_functions
-#define duckdb_to_sql_string duckdb_ext_api.duckdb_to_sql_string
+#define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
