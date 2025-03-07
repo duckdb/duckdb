@@ -1,6 +1,8 @@
 #include <list>
+#include <duckdb/common/operator/convert_to_string.hpp>
 #include <duckdb/function/cast/bound_cast_data.hpp>
 
+#include "../../../../test/sqlite/termcolor.hpp"
 #include "duckdb/core_functions/scalar/list_functions.hpp"
 #include "duckdb/core_functions/lambda_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -49,8 +51,9 @@ struct ReduceExecuteInfo {
 		}
 		input_types.push_back(left_slice.GetType());
 		input_types.push_back(left_slice.GetType());
-		for (auto &entry : info.column_infos) {
-			input_types.push_back(entry.vector.get().GetType());
+		// skip the first entry if there is an initial value
+		for (idx_t i = info.has_initial ? 1 : 0; i < info.column_infos.size(); i++) {
+			input_types.push_back(info.column_infos[i].vector.get().GetType());
 		}
 
 		expr_executor = make_uniq<ExpressionExecutor>(context, *info.lambda_expr);
@@ -95,6 +98,7 @@ static bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, La
 			}
 			auto list_column_format_index = info.list_column_format.sel->get_index(original_row_idx);
 			if (info.list_entries[list_column_format_index].length > loops_offset) {
+				// While the list has more entries set the right slice to the next entry
 				right_sel.set_index(reduced_row_idx, info.list_entries[list_column_format_index].offset + loops_offset);
 				execute_info.left_sel.set_index(reduced_row_idx, valid_row_idx);
 				execute_info.active_rows_sel.set_index(reduced_row_idx, original_row_idx);
@@ -105,6 +109,7 @@ static bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, La
 				execute_info.active_rows.SetInvalid(original_row_idx);
 				info.result.SetValue(original_row_idx, info.column_infos[0].vector.get().GetValue(original_row_idx));
 			} else {
+				// If the list has no more entries, write the result
 				execute_info.active_rows.SetInvalid(original_row_idx);
 				info.result.SetValue(original_row_idx, execute_info.left_slice.GetValue(valid_row_idx));
 			}
@@ -129,12 +134,13 @@ static bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, La
 	input_chunk.InitializeEmpty(execute_info.input_types);
 	input_chunk.SetCardinality(reduced_row_idx);
 
-	idx_t slice_offset = info.has_index ? 1 : 0;
+	const idx_t slice_offset = info.has_index ? 1 : 0;
 	if (info.has_index) {
 		input_chunk.data[0].Reference(index_vector);
 	}
 
 	if (loops == 0 && info.has_initial) {
+		info.column_infos[0].vector.get().Slice(execute_info.active_rows_sel, reduced_row_idx);
 		input_chunk.data[slice_offset + 1].Reference(info.column_infos[0].vector);
 	} else {
 		input_chunk.data[slice_offset + 1].Reference(execute_info.left_slice);
@@ -142,14 +148,16 @@ static bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, La
 	input_chunk.data[slice_offset].Reference(right_slice);
 
 	// add the other columns
+	// skip the initial value if there is one
 	vector<Vector> slices;
-	for (idx_t i = 0; i < info.column_infos.size(); i++) {
+	const idx_t initial_offset = info.has_initial ? 1 : 0;
+	for (idx_t i = 0; i < info.column_infos.size() - initial_offset; i++) {
 		if (info.column_infos[i].vector.get().GetVectorType() == VectorType::CONSTANT_VECTOR) {
 			// only reference constant vectors
-			input_chunk.data[slice_offset + 2 + i].Reference(info.column_infos[i].vector);
+			input_chunk.data[slice_offset + 2 + i].Reference(info.column_infos[initial_offset + i].vector);
 		} else {
 			// slice the other vectors
-			slices.emplace_back(info.column_infos[i].vector, execute_info.active_rows_sel, reduced_row_idx);
+			slices.emplace_back(info.column_infos[initial_offset + i].vector, execute_info.active_rows_sel, reduced_row_idx);
 			input_chunk.data[slice_offset + 2 + i].Reference(slices.back());
 		}
 	}
