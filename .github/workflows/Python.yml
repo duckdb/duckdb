@@ -10,6 +10,8 @@ on:
         type: string
       run_all:
         type: string
+      override_twine_upload:
+        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -19,6 +21,8 @@ on:
       skip_tests:
         type: string
       run_all:
+        type: string
+      override_twine_upload:
         type: string
   push:
     branches-ignore:
@@ -61,7 +65,7 @@ jobs:
 # This is just a sanity check of Python 3.10 running with Arrow
   linux-python3-10:
     name: Python 3.10 Linux
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
@@ -328,19 +332,12 @@ jobs:
         shell: bash
         run: pip install 'cibuildwheel>=2.16.2' build
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}-${{ matrix.python_build }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
       - name: Build
         shell: bash
         run: |
           cd tools/pythonpkg
           pyproject-build . --sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
             export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
@@ -438,7 +435,7 @@ jobs:
      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
      name: PyPi Release Cleanup
      needs: twine-upload
-     runs-on: ubuntu-20.04
+     runs-on: ubuntu-22.04
      env:
        PYPI_CLEANUP_USERNAME: 'mytherin'
        PYPI_CLEANUP_PASSWORD: ${{secrets.PYPI_CLEANUP_PASSWORD}}
@@ -469,8 +466,10 @@ jobs:
       - win-python3
       - linux-python3
     # Note that want to run this by default ONLY if no override_git_describe is provided
-    # This means we are not staging a release
-    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
+    # This means we are not staging a release, or we explicitly set `twine_upload`
+    # Why? If present, it means we are staging releases, and we want to do the upload manually
+    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.override_twine_upload == 'true' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
     uses: ./.github/workflows/TwineUpload.yml
     secrets: inherit
-    # Why? If present, it means we are staging releases, and we want to do the upload manually
+    with:
+      twine_upload: 'true'

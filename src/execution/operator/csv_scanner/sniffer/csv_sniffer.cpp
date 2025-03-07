@@ -3,10 +3,12 @@
 
 namespace duckdb {
 
-CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-                       CSVStateMachineCache &state_machine_cache_p, bool default_null_to_varchar_p)
-    : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)),
-      lines_sniffed(0), default_null_to_varchar(default_null_to_varchar_p) {
+CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, const MultiFileReaderOptions &file_options,
+                       shared_ptr<CSVBufferManager> buffer_manager_p, CSVStateMachineCache &state_machine_cache_p,
+                       bool default_null_to_varchar_p)
+    : state_machine_cache(state_machine_cache_p), options(options_p), file_options(file_options),
+      buffer_manager(std::move(buffer_manager_p)), lines_sniffed(0),
+      default_null_to_varchar(default_null_to_varchar_p) {
 	// Initialize Format Candidates
 	for (const auto &format_template : format_template_candidates) {
 		auto &logical_type = format_template.first;
@@ -143,7 +145,7 @@ AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	}
 
 	auto names = DetectHeaderInternal(buffer_manager->context, potential_header, *state_machine, set_columns,
-	                                  best_sql_types_candidates_per_column_idx, options, *error_handler);
+	                                  best_sql_types_candidates_per_column_idx, options, file_options, *error_handler);
 
 	for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
 		LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
@@ -161,7 +163,7 @@ SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 	// Check if we are happy with the result or if we need to do more sniffing
 	if (!error_handler->AnyErrors() && !detection_error_handler->AnyErrors()) {
 		// If we got no errors, we also run full if schemas do not match.
-		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
+		if (!set_columns.IsSet() && !file_options.AnySet()) {
 			string error;
 			run_full = !file_schema.SchemasMatch(error, min_sniff_res, options.file_path, true);
 		}
@@ -169,7 +171,7 @@ SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 	if (run_full) {
 		// We run full sniffer
 		auto full_sniffer = SniffCSV();
-		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
+		if (!set_columns.IsSet() && !file_options.AnySet()) {
 			string error;
 			if (!file_schema.SchemasMatch(error, full_sniffer, options.file_path, false) &&
 			    !options.ignore_errors.GetValue()) {

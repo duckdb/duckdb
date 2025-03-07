@@ -116,6 +116,14 @@ static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const Func
 	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = false;
 }
 
+static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
+	context.db->GetLogManager().SetEnableLogging(true);
+}
+
+static void PragmaDisableLogging(ClientContext &context, const FunctionParameters &parameters) {
+	context.db->GetLogManager().SetEnableLogging(false);
+}
+
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).enable_optimizer = true;
 }
@@ -147,6 +155,9 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_logging", PragmaEnableLogging));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_logging", PragmaDisableLogging));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));

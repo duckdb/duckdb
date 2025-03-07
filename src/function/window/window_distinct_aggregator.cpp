@@ -142,7 +142,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
 
-	global_sort = make_uniq<GlobalSortState>(BufferManager::GetBufferManager(context), orders, payload_layout);
+	global_sort = make_uniq<GlobalSortState>(context, orders, payload_layout);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
 
@@ -744,6 +744,9 @@ void WindowDistinctAggregatorLocalState::Evaluate(const WindowDistinctAggregator
 
 	//	Finalise the result aggregates and write to the result
 	statef.Finalize(result);
+
+	//	Destruct any non-POD state
+	statef.Destroy();
 }
 
 unique_ptr<WindowAggregatorState> WindowDistinctAggregator::GetLocalState(const WindowAggregatorState &gstate) const {

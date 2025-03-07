@@ -55,7 +55,7 @@
         "id": 102,
         "name": "modifiers",
         "type": "vector<Value>",
-        "deleted": true
+        "status": "deleted"
       },
       {
         "id": 103,

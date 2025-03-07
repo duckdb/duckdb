@@ -24,4 +24,4 @@ query I
 SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty%' ORDER BY database_name;
 ----
 {storage_version=v1.0.0 - v1.1.3}
-{storage_version=v1.2.0}
+{storage_version=v1.2.0 - v1.2.1}

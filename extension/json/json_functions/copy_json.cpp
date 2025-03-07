@@ -9,6 +9,7 @@
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_transform.hpp"
+#include "json_multi_file_info.hpp"
 
 namespace duckdb {
 
@@ -111,80 +112,13 @@ static BoundStatement CopyToJSONPlan(Binder &binder, CopyStatement &stmt) {
 	return binder.Bind(*stmt_copy);
 }
 
-static unique_ptr<FunctionData> CopyFromJSONBind(ClientContext &context, CopyInfo &info, vector<string> &expected_names,
-                                                 vector<LogicalType> &expected_types) {
-	auto bind_data = make_uniq<JSONScanData>();
-	bind_data->type = JSONScanType::READ_JSON;
-	bind_data->options.record_type = JSONRecordType::RECORDS;
-	bind_data->options.format = JSONFormat::NEWLINE_DELIMITED;
-
-	bind_data->files.emplace_back(info.file_path);
-	bind_data->names = expected_names;
-
-	bool auto_detect = false;
-	for (auto &kv : info.options) {
-		const auto &loption = StringUtil::Lower(kv.first);
-		if (loption == "dateformat" || loption == "date_format") {
-			if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			}
-			bind_data->date_format = StringValue::Get(kv.second.back());
-		} else if (loption == "timestampformat" || loption == "timestamp_format") {
-			if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			}
-			bind_data->timestamp_format = StringValue::Get(kv.second.back());
-		} else if (loption == "auto_detect") {
-			if (kv.second.empty()) {
-				auto_detect = true;
-			} else if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			} else {
-				auto_detect = BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
-			}
-		} else if (loption == "compression") {
-			if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			}
-			bind_data->SetCompression(StringValue::Get(kv.second.back()));
-		} else if (loption == "array") {
-			if (kv.second.empty()) {
-				bind_data->options.format = JSONFormat::ARRAY;
-			} else if (kv.second.size() != 1) {
-				ThrowJSONCopyParameterException(loption);
-			} else if (BooleanValue::Get(kv.second.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
-				bind_data->options.format = JSONFormat::ARRAY;
-			}
-		} else {
-			throw BinderException("Unknown option for COPY ... FROM ... (FORMAT JSON): \"%s\".", loption);
-		}
-	}
-	bind_data->InitializeFormats(auto_detect);
-	if (auto_detect && bind_data->options.format != JSONFormat::ARRAY) {
-		bind_data->options.format = JSONFormat::AUTO_DETECT;
-	}
-
-	bind_data->transform_options = JSONTransformOptions(true, true, true, true);
-	bind_data->transform_options.delay_error = true;
-
-	bind_data->InitializeReaders(context);
-	if (auto_detect) {
-		JSONScan::AutoDetect(context, *bind_data, expected_types, expected_names);
-		bind_data->auto_detect = true;
-	}
-
-	bind_data->transform_options.date_format_map = &bind_data->date_format_map;
-
-	return std::move(bind_data);
-}
-
 CopyFunction JSONFunctions::GetJSONCopyFunction() {
 	CopyFunction function("json");
 	function.extension = "json";
 
 	function.plan = CopyToJSONPlan;
 
-	function.copy_from_bind = CopyFromJSONBind;
+	function.copy_from_bind = MultiFileReaderFunction<JSONMultiFileInfo>::MultiFileBindCopy;
 	function.copy_from_function = JSONFunctions::GetReadJSONTableFunction(make_shared_ptr<JSONScanInfo>(
 	    JSONScanType::READ_JSON, JSONFormat::NEWLINE_DELIMITED, JSONRecordType::RECORDS, false));
 

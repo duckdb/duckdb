@@ -222,7 +222,7 @@ public:
 public:
 	void ResolveJoinKeys(DataChunk &input) {
 		// sort by join key
-		lhs_global_state = make_uniq<GlobalSortState>(buffer_manager, lhs_order, lhs_layout);
+		lhs_global_state = make_uniq<GlobalSortState>(context, lhs_order, lhs_layout);
 		lhs_local_table = make_uniq<LocalSortedTable>(context, op, 0U);
 		lhs_local_table->Sink(input, *lhs_global_state);
 
