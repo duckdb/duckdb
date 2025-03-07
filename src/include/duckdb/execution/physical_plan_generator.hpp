@@ -67,12 +67,7 @@ public:
 public:
 	//! Creates and returns the physical plan from the logical operator.
 	//! Performs a verification pass.
-	unique_ptr<PhysicalPlan> CreatePlan(unique_ptr<LogicalOperator> logical);
-	//! Resolves column bindings and operator types before returning a reference to the root of the plan.
-	PhysicalOperator &ResolveAndPlan(unique_ptr<LogicalOperator> logical);
-	//! Creates and returns the physical plan from the logical operator.
-	//! Does not verify, and does not resolve any bindings or types.
-	unique_ptr<PhysicalPlan> Plan(LogicalOperator &logical);
+	unique_ptr<PhysicalPlan> Plan(unique_ptr<LogicalOperator> logical);
 
 	//! Whether or not we can (or should) use a batch-index based operator for executing the given sink
 	static bool UseBatchIndex(ClientContext &context, PhysicalOperator &plan);
@@ -141,6 +136,8 @@ private:
 	unique_ptr<PhysicalPlan> physical_plan;
 
 private:
+	PhysicalOperator &ResolveAndPlan(unique_ptr<LogicalOperator> logical);
+	unique_ptr<PhysicalPlan> PlanInternal(LogicalOperator &logical);
 	bool PreserveInsertionOrder(PhysicalOperator &plan);
 	bool UseBatchIndex(PhysicalOperator &plan);
 	optional_ptr<PhysicalOperator> PlanAsOfLoopJoin(LogicalComparisonJoin &op, PhysicalOperator &probe,

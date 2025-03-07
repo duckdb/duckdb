@@ -19,7 +19,7 @@ PhysicalPlanGenerator::PhysicalPlanGenerator(ClientContext &context) : context(c
 PhysicalPlanGenerator::~PhysicalPlanGenerator() {
 }
 
-unique_ptr<PhysicalPlan> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
+unique_ptr<PhysicalPlan> PhysicalPlanGenerator::Plan(unique_ptr<LogicalOperator> op) {
 	auto &plan = ResolveAndPlan(std::move(op));
 	plan.Verify();
 	return std::move(physical_plan);
@@ -41,14 +41,14 @@ PhysicalOperator &PhysicalPlanGenerator::ResolveAndPlan(unique_ptr<LogicalOperat
 
 	// Create the main physical plan.
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN);
-	physical_plan = Plan(*op);
+	physical_plan = PlanInternal(*op);
 	profiler.EndPhase();
 
 	// Return a reference to the root of this plan.
 	return physical_plan->Root();
 }
 
-unique_ptr<PhysicalPlan> PhysicalPlanGenerator::Plan(LogicalOperator &op) {
+unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op) {
 	if (!physical_plan) {
 		physical_plan = make_uniq<PhysicalPlan>();
 	}

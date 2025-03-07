@@ -11,7 +11,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPrepare &op) {
 	D_ASSERT(op.children.size() <= 1);
 	if (op.prepared->properties.bound_all_parameters && !op.children.empty()) {
 		PhysicalPlanGenerator inner_planner(context);
-		op.prepared->physical_plan = inner_planner.Plan(*op.children[0]);
+		op.prepared->physical_plan = inner_planner.PlanInternal(*op.children[0]);
 		op.prepared->types = op.prepared->physical_plan->Root().types;
 	}
 	return Make<PhysicalPrepare>(op.name, std::move(op.prepared), op.estimated_cardinality);
