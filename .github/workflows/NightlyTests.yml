@@ -65,7 +65,7 @@ jobs:
 
   release-assert:
     name: Release Assertions
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-memory-leaks
     env:
       CC: gcc-10
@@ -140,7 +140,7 @@ jobs:
 
   linux-clang:
     name: Clang 14
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-memory-leaks
     env:
       CC: /home/runner/work/llvm/bin/clang
@@ -235,7 +235,7 @@ jobs:
 
   linux-tarball:
      name: Python 3 Tarball
-     runs-on: ubuntu-20.04
+     runs-on: ubuntu-22.04
      needs: linux-memory-leaks
      steps:
      - uses: actions/checkout@v3
@@ -274,7 +274,7 @@ jobs:
 
   python-sqllogic:
      name: Python SQLLogicTest Library (Linux)
-     runs-on: ubuntu-20.04
+     runs-on: ubuntu-22.04
      env:
         GEN: ninja
         DUCKDEBUG: 1
@@ -333,7 +333,7 @@ jobs:
 
   storage-initialization:
      name: Storage Initialization Verification
-     runs-on: ubuntu-20.04
+     runs-on: ubuntu-22.04
      needs: linux-memory-leaks
      env:
        CC: gcc-10
@@ -365,7 +365,7 @@ jobs:
 
   extension-updating:
     name: Extension updating test
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-memory-leaks
     env:
       CC: gcc-10
@@ -484,7 +484,7 @@ jobs:
 
   latest-storage:
     name: Latest Storage
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-memory-leaks
     env:
       CC: gcc-10
@@ -521,7 +521,7 @@ jobs:
 
   vector-verification:
     name: Vector Verification Tests (${{ matrix.vector_type }})
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-memory-leaks
     strategy:
       fail-fast: false
@@ -601,7 +601,7 @@ jobs:
 
   regression-test-memory-safety:
    name: Regression Tests between safe and unsafe builds
-   runs-on: ubuntu-20.04
+   runs-on: ubuntu-22.04
    needs: linux-memory-leaks
    env:
      CC: gcc-10
@@ -726,7 +726,7 @@ jobs:
 
   vector-sizes:
     name: Vector Sizes
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-memory-leaks
     env:
       CC: gcc-10
@@ -878,7 +878,7 @@ jobs:
 
   codecov:
     name: Code Coverage
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: linux-memory-leaks
     strategy:
       fail-fast: false
@@ -926,7 +926,7 @@ jobs:
 
   linux-httpfs:
     name: Linux HTTPFS
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       CORE_EXTENSIONS: "json;parquet;tpch;tpcds;httpfs"
       S3_TEST_SERVER_AVAILABLE: 1

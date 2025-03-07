@@ -316,8 +316,32 @@ void JSONMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &
 			name_collision_count[col_name] = 0;
 		}
 	}
-	// FIXME: re-use readers created during auto-detection instead of clearing here
-	bind_data.union_readers.clear();
+	bool reuse_readers = true;
+	for (auto &union_reader : bind_data.union_readers) {
+		if (!union_reader || !union_reader->reader) {
+			// not all readers have been initialized - don't re-use any
+			reuse_readers = false;
+			break;
+		}
+		auto &json_reader = union_reader->reader->Cast<JSONReader>();
+		if (!json_reader.IsOpen()) {
+			// no open file-handle - close
+			reuse_readers = false;
+		}
+	}
+	if (!reuse_readers) {
+		bind_data.union_readers.clear();
+	} else {
+		// re-use readers
+		for (auto &union_reader : bind_data.union_readers) {
+			auto &json_reader = union_reader->reader->Cast<JSONReader>();
+			union_reader->names = names;
+			union_reader->types = return_types;
+			union_reader->reader->columns =
+			    MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(names, return_types);
+			json_reader.Reset();
+		}
+	}
 }
 
 void JSONMultiFileInfo::FinalizeBindData(MultiFileBindData &multi_file_data) {
@@ -427,8 +451,10 @@ bool JSONMultiFileInfo::TryInitializeScan(ClientContext &context, shared_ptr<Bas
                                           GlobalTableFunctionState &gstate_p, LocalTableFunctionState &lstate_p) {
 	auto &gstate = gstate_p.Cast<JSONGlobalTableFunctionState>().state;
 	auto &lstate = lstate_p.Cast<JSONLocalTableFunctionState>().state;
+	auto &json_reader = reader->Cast<JSONReader>();
+
 	lstate.GetScanState().ResetForNextBuffer();
-	return lstate.TryInitializeScan(gstate, reader->Cast<JSONReader>());
+	return lstate.TryInitializeScan(gstate, json_reader);
 }
 
 void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanGlobalState &gstate,

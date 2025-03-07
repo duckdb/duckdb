@@ -129,8 +129,8 @@ public:
 	static constexpr uint64_t PREFETCH_FALLBACK_BUFFERSIZE = 1000000;
 
 	ThriftFileTransport(CachingFileHandle &file_handle_p, bool prefetch_mode_p)
-	    : file_handle(file_handle_p), location(0), ra_buffer(ReadAheadBuffer(file_handle)),
-	      prefetch_mode(prefetch_mode_p) {
+	    : file_handle(file_handle_p), location(0), size(file_handle.GetFileSize()),
+	      ra_buffer(ReadAheadBuffer(file_handle)), prefetch_mode(prefetch_mode_p) {
 	}
 
 	uint32_t read(uint8_t *buf, uint32_t len) {
@@ -189,20 +189,25 @@ public:
 		location += skip_count;
 	}
 
+	bool HasPrefetch() const {
+		return !ra_buffer.read_heads.empty() || !ra_buffer.merge_set.empty();
+	}
+
 	void SetLocation(idx_t location_p) {
 		location = location_p;
 	}
 
-	idx_t GetLocation() {
+	idx_t GetLocation() const {
 		return location;
 	}
-	idx_t GetSize() {
-		return file_handle.GetFileSize();
+	idx_t GetSize() const {
+		return size;
 	}
 
 private:
 	CachingFileHandle &file_handle;
 	idx_t location;
+	idx_t size;
 
 	// Multi-buffer prefetch
 	ReadAheadBuffer ra_buffer;
