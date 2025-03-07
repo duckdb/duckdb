@@ -70,6 +70,12 @@ struct DictionaryCompressionStorage {
 // Analyze
 //===--------------------------------------------------------------------===//
 unique_ptr<AnalyzeState> DictionaryCompressionStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
+	auto &storage_manager = col_data.GetStorageManager();
+	if (storage_manager.GetStorageVersion() >= 5) {
+		// dict_fsst introduced - disable dictionary
+		return nullptr;
+	}
+
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	return make_uniq<DictionaryCompressionAnalyzeState>(info);
 }
@@ -88,7 +94,7 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	                                                      state.current_dict_size, width);
 
 	const auto total_space = state.segment_count * state.info.GetBlockSize() + req_space;
-	return LossyNumericCast<idx_t>(DictionaryCompression::MINIMUM_COMPRESSION_RATIO * float(total_space));
+	return LossyNumericCast<idx_t>(DictionaryCompression::MINIMUM_COMPRESSION_RATIO * float(total_space)) * 5;
 }
 
 //===--------------------------------------------------------------------===//
@@ -157,7 +163,7 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type) {
-	return CompressionFunction(
+	auto res = CompressionFunction(
 	    CompressionType::COMPRESSION_DICTIONARY, data_type, DictionaryCompressionStorage ::StringInitAnalyze,
 	    DictionaryCompressionStorage::StringAnalyze, DictionaryCompressionStorage::StringFinalAnalyze,
 	    DictionaryCompressionStorage::InitCompression, DictionaryCompressionStorage::Compress,
@@ -165,6 +171,8 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	    DictionaryCompressionStorage::StringScan, DictionaryCompressionStorage::StringScanPartial<false>,
 	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
 	    UncompressedStringStorage::StringInitSegment);
+	res.validity = CompressionValidity::NO_VALIDITY_REQUIRED;
+	return res;
 }
 
 bool DictionaryCompressionFun::TypeIsSupported(const PhysicalType physical_type) {

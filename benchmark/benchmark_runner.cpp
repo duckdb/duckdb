@@ -123,6 +123,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	duckdb::unique_ptr<BenchmarkState> state;
 	try {
 		state = benchmark->Initialize(configuration);
+		benchmark->Assert(state.get());
 	} catch (std::exception &ex) {
 		Log(StringUtil::Format("%s\t1\t", benchmark->name));
 		LogResult("ERROR");

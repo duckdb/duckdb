@@ -43,6 +43,8 @@ public:
 	virtual duckdb::unique_ptr<BenchmarkState> Initialize(BenchmarkConfiguration &config) {
 		return nullptr;
 	}
+	//! Assert correctness after load, before run
+	virtual void Assert(BenchmarkState *state) {};
 	//! Run the benchmark
 	virtual void Run(BenchmarkState *state) = 0;
 	//! Cleanup the benchmark, called after each Run
