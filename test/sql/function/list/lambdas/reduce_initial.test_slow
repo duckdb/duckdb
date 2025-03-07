@@ -1,4 +1,4 @@
-# name: test/sql/function/list/lambdas/reduce_initial.test/
+# name: test/sql/function/list/lambdas/reduce_initial.test_slow
 # description: Test list_reduce function with an intial value
 # group: [lambdas]
 

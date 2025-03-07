@@ -104,7 +104,8 @@ static bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, La
 				execute_info.active_rows_sel.set_index(reduced_row_idx, original_row_idx);
 
 				reduced_row_idx++;
-			} else if (info.list_entries[list_column_format_index].length == 0 && info.has_initial && loops_offset == 0) {
+			} else if (info.list_entries[list_column_format_index].length == 0 && info.has_initial &&
+			           loops_offset == 0) {
 				// If the list is empty and there is an initial value, use the initial value
 				execute_info.active_rows.SetInvalid(original_row_idx);
 				info.result.SetValue(original_row_idx, info.column_infos[0].vector.get().GetValue(original_row_idx));
@@ -157,7 +158,8 @@ static bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, La
 			input_chunk.data[slice_offset + 2 + i].Reference(info.column_infos[initial_offset + i].vector);
 		} else {
 			// slice the other vectors
-			slices.emplace_back(info.column_infos[initial_offset + i].vector, execute_info.active_rows_sel, reduced_row_idx);
+			slices.emplace_back(info.column_infos[initial_offset + i].vector, execute_info.active_rows_sel,
+			                    reduced_row_idx);
 			input_chunk.data[slice_offset + 2 + i].Reference(slices.back());
 		}
 	}
@@ -172,8 +174,7 @@ static bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, La
 	return false;
 }
 
-void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state,
-                                         Vector &result) {
+void LambdaFunctions::ListReduceFunction(DataChunk &args, ExpressionState &state, Vector &result) {
 	// Initializes the left slice from the list entries, active rows, the expression executor and the input types
 	bool completed = false;
 	LambdaInfo info(args, state, result, completed);
@@ -241,13 +242,16 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 		// Check if the initial value type is the same as the list child type and if not find the max logical type
 		if (list_child_type != initial_value_type) {
 			LogicalType max_logical_type;
-			const auto has_max_logical_type = LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
+			const auto has_max_logical_type =
+			    LogicalType::TryGetMaxLogicalType(context, list_child_type, initial_value_type, max_logical_type);
 			if (!has_max_logical_type) {
-				throw BinderException("The initial value type must be the same as the list child type or a common super type");
+				throw BinderException(
+				    "The initial value type must be the same as the list child type or a common super type");
 			}
 
 			list_child_type = max_logical_type;
-			arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]), LogicalType::LIST(max_logical_type));
+			arguments[0] = BoundCastExpression::AddCastToType(context, std::move(arguments[0]),
+			                                                  LogicalType::LIST(max_logical_type));
 			arguments[2] = BoundCastExpression::AddCastToType(context, std::move(arguments[2]), max_logical_type);
 		}
 	}
@@ -258,7 +262,8 @@ static unique_ptr<FunctionData> ListReduceBind(ClientContext &context, ScalarFun
 		throw BinderException("Could not cast lambda expression to list child type");
 	}
 	bound_function.return_type = cast_lambda_expr->return_type;
-	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(cast_lambda_expr), has_index, has_initial);
+	return make_uniq<ListLambdaBindData>(bound_function.return_type, std::move(cast_lambda_expr), has_index,
+	                                     has_initial);
 }
 
 static LogicalType ListReduceBindLambda(const idx_t parameter_idx, const LogicalType &list_child_type) {

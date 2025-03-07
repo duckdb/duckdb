@@ -19,8 +19,10 @@ namespace duckdb {
 
 struct ListLambdaBindData : public FunctionData {
 public:
-	ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr, const bool has_index = false, const bool has_initial = false)
-	    : return_type(return_type), lambda_expr(std::move(lambda_expr)), has_index(has_index), has_initial(has_initial) {};
+	ListLambdaBindData(const LogicalType &return_type, unique_ptr<Expression> lambda_expr, const bool has_index = false,
+	                   const bool has_initial = false)
+	    : return_type(return_type), lambda_expr(std::move(lambda_expr)), has_index(has_index),
+	      has_initial(has_initial) {};
 
 	//! Return type of the scalar function
 	LogicalType return_type;
