@@ -1035,9 +1035,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	auto &names = csv_file_scan->GetNames();
 	auto &reader_data = csv_file_scan->reader_data;
 	// Now Do the cast-aroo
-	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
+	for (global_idx_t c = 0; c < reader_data.column_ids.size(); c++) {
 		idx_t col_idx = c;
-		idx_t result_idx = reader_data.column_mapping[c];
+		global_idx_t result_idx = reader_data.column_mapping[c];
 		if (!csv_file_scan->projection_ids.empty()) {
 			result_idx = reader_data.column_mapping[csv_file_scan->projection_ids[c].second];
 		}
