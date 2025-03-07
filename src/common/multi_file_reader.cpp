@@ -557,13 +557,11 @@ void MultiFileReader::CreateFilterMap(const vector<ColumnIndex> &global_column_i
 
 		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
 			auto map_index = reader_data.column_mapping[c];
-			reader_data.filter_map[map_index].index = c;
-			reader_data.filter_map[map_index].is_constant = false;
+			reader_data.filter_map[map_index] = c;
 		}
 		for (auto &entry : reader_data.constant_map) {
 			auto constant_index = entry.first;
-			reader_data.filter_map[constant_index].index = DConstants::INVALID_INDEX;
-			reader_data.filter_map[constant_index].is_constant = true;
+			reader_data.filter_map[constant_index] = DConstants::INVALID_INDEX;
 		}
 	}
 }

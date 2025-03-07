@@ -96,11 +96,6 @@ public:
 	Value identifier;
 };
 
-struct MultiFileFilterEntry {
-	idx_t index = DConstants::INVALID_INDEX;
-	bool is_constant = false;
-};
-
 struct MultiFileReaderData {
 	//! The column ids to read from the file
 	vector<idx_t> column_ids;
@@ -113,7 +108,7 @@ struct MultiFileReaderData {
 	bool empty_columns = false;
 	//! Filters can point to either (1) local columns in the file, or (2) constant values in the `constant_map`
 	//! This map specifies where the to-be-filtered value can be found
-	vector<MultiFileFilterEntry> filter_map;
+	vector<idx_t> filter_map;
 	//! The set of table filters
 	optional_ptr<TableFilterSet> filters;
 	//! The mapping of (global) column_id -> constant value
