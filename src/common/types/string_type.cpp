@@ -39,5 +39,7 @@ void string_t::VerifyCharacters() const {
 		D_ASSERT(GetData()[i] == '\0');
 	}
 }
+std::atomic<uint64_t> string_t::StringComparisonOperators::faster_hash;
+std::atomic<uint64_t> string_t::StringComparisonOperators::faster_equality;
 
 } // namespace duckdb

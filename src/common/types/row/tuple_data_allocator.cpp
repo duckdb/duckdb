@@ -7,7 +7,8 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
-
+#include <iostream>
+#include <iomanip>
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
@@ -510,10 +511,12 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 				const auto string_location = row_location + col_offset;
 				if (Load<uint32_t>(string_location) > string_t::INLINE_LENGTH) {
 					const auto string_ptr_location = string_location + string_t::HEADER_SIZE;
-					const auto string_ptr = Load<data_ptr_t>(string_ptr_location);
-					const auto diff = string_ptr - old_heap_ptr;
-					D_ASSERT(diff >= 0);
-					Store<data_ptr_t>(new_heap_ptr + diff, string_ptr_location);
+					if (!string_t::isInUnifiedStringDictionary(char_ptr_cast(Load<data_ptr_t>(string_ptr_location)))) {
+						const auto string_ptr = Load<data_ptr_t>(string_ptr_location);
+						const auto diff = string_ptr - old_heap_ptr;
+						D_ASSERT(diff >= 0);
+						Store<data_ptr_t>(new_heap_ptr + diff, string_ptr_location);
+					}
 				}
 			}
 			VerifyStrings(layout, type.id(), row_locations, col_idx, base_col_offset, col_offset, offset, count);
@@ -588,8 +591,8 @@ void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, Sele
 #endif
 					const auto string_location = row_location + col_offset;
 					if (Load<uint32_t>(string_location) > string_t::INLINE_LENGTH) {
-						const auto string_ptr_location = string_location + string_t::HEADER_SIZE;
-						heap_locations[idx] = Load<data_ptr_t>(string_ptr_location);
+						const auto string_ptr_location = reinterpret_cast<uint64_t >(string_location + string_t::HEADER_SIZE) & string_t::POINTER_MASK;
+						heap_locations[idx] = Load<data_ptr_t>(reinterpret_cast<data_ptr_t>(string_ptr_location));
 						continue;
 					}
 #ifndef DUCKDB_DEBUG_NO_INLINE

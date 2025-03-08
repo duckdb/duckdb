@@ -5,6 +5,8 @@
 #include "duckdb/common/types/interval.hpp"
 #include "duckdb/common/types/uhugeint.hpp"
 
+#include "duckdb/optimizer/UnifiedStringDictionary.h"
+
 #include <functional>
 #include <cmath>
 
@@ -150,6 +152,15 @@ hash_t Hash(const char *val, size_t size) {
 
 hash_t Hash(uint8_t *val, size_t size) {
 	return HashBytes(const_data_ptr_cast(val), size);
+}
+
+hash_t string_hash(string_t val) {
+	if (!val.IsInlined() &&
+	    (reinterpret_cast<uint64_t>(val.GetTaggedPointer()) & string_t::UNIFIED_STRING_DICTIONARY_SALT_MASK)) {
+		return *(reinterpret_cast<uint64_t *>(data_ptr_cast(val.GetPointer()) -
+		                                      (8 + UnifiedStringsDictionary::STR_LENGTH_BYTES)));
+	}
+	return Hash(val);
 }
 
 } // namespace duckdb

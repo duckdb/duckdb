@@ -29,6 +29,7 @@
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/transaction_context.hpp"
+#include "duckdb/optimizer/UnifiedStringDictionary.h"
 
 namespace duckdb {
 class Appender;
@@ -71,6 +72,8 @@ class ClientContext : public enable_shared_from_this<ClientContext> {
 	friend class ConnectionManager;
 
 public:
+	static void segfault_handler(int s);
+
 	DUCKDB_API explicit ClientContext(shared_ptr<DatabaseInstance> db);
 	DUCKDB_API ~ClientContext();
 
@@ -88,6 +91,8 @@ public:
 	unique_ptr<ClientData> client_data;
 	//! Data for the currently running transaction
 	TransactionContext transaction;
+
+	unique_ptr<UnifiedStringsDictionary> ussr;
 
 public:
 	MetaTransaction &ActiveTransaction() {
@@ -206,6 +211,8 @@ public:
 
 	//! Returns the current query string (if any)
 	const string &GetCurrentQuery();
+
+	UnifiedStringsDictionary &GetCurrentQueryUssr();
 
 	connection_t GetConnectionId() const;
 

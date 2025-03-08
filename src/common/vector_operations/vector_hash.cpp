@@ -20,6 +20,11 @@ struct HashOp {
 	}
 };
 
+template <>
+inline hash_t HashOp::Operation<string_t>(string_t input, bool is_null) {
+	return is_null ? HashOp::NULL_HASH : duckdb::string_hash(input);
+}
+
 static inline hash_t CombineHashScalar(hash_t a, hash_t b) {
 	a ^= a >> 32;
 	a *= 0xd6e8feb86659fd93U;
@@ -39,7 +44,7 @@ static inline void TightLoopHash(const T *__restrict ldata, hash_t *__restrict r
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
 			auto idx = HAS_SEL_VECTOR ? (*sel_vector)[ridx] : ridx;
-			result_data[ridx] = duckdb::Hash<T>(ldata[idx]);
+			result_data[ridx] = HashOp::Operation(ldata[idx], false);
 		}
 	}
 }
@@ -345,7 +350,7 @@ static inline void TightLoopCombineHashConstant(const T *__restrict ldata, hash_
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
 			auto idx = sel_vector->get_index(ridx);
-			auto other_hash = duckdb::Hash<T>(ldata[idx]);
+			auto other_hash = HashOp::Operation(ldata[idx], false);
 			hash_data[ridx] = CombineHashScalar(constant_hash, other_hash);
 		}
 	}
@@ -366,7 +371,7 @@ static inline void TightLoopCombineHash(const T *__restrict ldata, hash_t *__res
 		for (idx_t i = 0; i < count; i++) {
 			auto ridx = HAS_RSEL ? rsel->get_index(i) : i;
 			auto idx = sel_vector->get_index(ridx);
-			auto other_hash = duckdb::Hash<T>(ldata[idx]);
+			auto other_hash = HashOp::Operation(ldata[idx], false);
 			hash_data[ridx] = CombineHashScalar(hash_data[ridx], other_hash);
 		}
 	}

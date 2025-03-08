@@ -13,6 +13,7 @@
 #include "duckdb/common/winapi.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/main/client_properties.hpp"
+#include "duckdb/optimizer/UnifiedStringDictionary.h"
 
 namespace duckdb {
 struct BoxRendererConfig;
@@ -38,6 +39,8 @@ public:
 	vector<LogicalType> types;
 	//! The names of the result
 	vector<string> names;
+
+	unique_ptr<UnifiedStringsDictionary> ussr;
 
 public:
 	[[noreturn]] DUCKDB_API void ThrowError(const string &prepended_message = "") const;

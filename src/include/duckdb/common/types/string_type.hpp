@@ -28,6 +28,9 @@ public:
 	static constexpr idx_t INLINE_BYTES = 12 * sizeof(char);
 	static constexpr idx_t HEADER_SIZE = sizeof(uint32_t) + PREFIX_BYTES;
 	static constexpr idx_t MAX_STRING_SIZE = NumericLimits<uint32_t>::Maximum();
+	static constexpr const idx_t UNIFIED_STRING_DICTIONARY_SALT_MASK = 0x8000000000000000;
+	static constexpr const idx_t POINTER_MASK = 0x0000FFFFFFFFFFFF;
+
 #ifndef DUCKDB_DEBUG_NO_INLINE
 	static constexpr idx_t PREFIX_LENGTH = PREFIX_BYTES;
 	static constexpr idx_t INLINE_LENGTH = INLINE_BYTES;
@@ -75,14 +78,14 @@ public:
 	}
 
 	const char *GetData() const {
-		return IsInlined() ? const_char_ptr_cast(value.inlined.inlined) : value.pointer.ptr;
+		return IsInlined() ? const_char_ptr_cast(value.inlined.inlined) : reinterpret_cast<const char *>(reinterpret_cast<uint64_t>(value.pointer.ptr) & POINTER_MASK);
 	}
 	const char *GetDataUnsafe() const {
 		return GetData();
 	}
 
 	char *GetDataWriteable() const {
-		return IsInlined() ? (char *)value.inlined.inlined : value.pointer.ptr; // NOLINT
+		return IsInlined() ? (char *)value.inlined.inlined : reinterpret_cast<char *>(reinterpret_cast<uint64_t>(value.pointer.ptr) & POINTER_MASK); // NOLINT
 	}
 
 	const char *GetPrefix() const {
@@ -117,12 +120,21 @@ public:
 
 	char *GetPointer() const {
 		D_ASSERT(!IsInlined());
+		return reinterpret_cast<char *>(reinterpret_cast<uint64_t>(value.pointer.ptr) & POINTER_MASK);
+	}
+
+	char *GetTaggedPointer() const {
+		D_ASSERT(!IsInlined());
 		return value.pointer.ptr;
 	}
 
 	void SetPointer(char *new_ptr) {
 		D_ASSERT(!IsInlined());
 		value.pointer.ptr = new_ptr;
+	}
+
+	static bool isInUnifiedStringDictionary(char * ptr) {
+		return reinterpret_cast<uint64_t>(ptr) & UNIFIED_STRING_DICTIONARY_SALT_MASK;
 	}
 
 	void Finalize() {
@@ -147,6 +159,9 @@ public:
 	void VerifyNull() const;
 
 	struct StringComparisonOperators {
+		static std::atomic<uint64_t> faster_hash;
+		static std::atomic<uint64_t> faster_equality;
+
 		static inline bool Equals(const string_t &a, const string_t &b) {
 #ifdef DUCKDB_DEBUG_NO_INLINE
 			if (a.GetSize() != b.GetSize()) {
@@ -165,11 +180,12 @@ public:
 			b_bulk_comp = Load<uint64_t>(const_data_ptr_cast(&b) + 8u);
 			if (a_bulk_comp == b_bulk_comp) {
 				// either they are both inlined (so compare equal) or point to the same string (so compare equal)
+				//								faster_equality++;
 				return true;
 			}
 			if (!a.IsInlined()) {
 				// 'long' strings of the same length -> compare pointed value
-				if (memcmp(a.value.pointer.ptr, b.value.pointer.ptr, a.GetSize()) == 0) {
+				if (memcmp(a.GetPointer(), b.GetPointer(), a.GetSize()) == 0) {
 					return true;
 				}
 			}
@@ -206,6 +222,13 @@ public:
 				return byte_swap(a_prefix) > byte_swap(b_prefix);
 			}
 #endif
+			uint64_t a_bulk_comp = Load<uint64_t>(const_data_ptr_cast(&left) + 8u);
+			uint64_t b_bulk_comp = Load<uint64_t>(const_data_ptr_cast(&right) + 8u);
+			if (a_bulk_comp == b_bulk_comp && left_length == right_length) {
+				// either they are both inlined (so compare equal) or point to the same string (so compare equal)
+				//								faster_equality++;
+				return false;
+			}
 			auto memcmp_res = memcmp(left.GetData(), right.GetData(), min_length);
 			return memcmp_res > 0 || (memcmp_res == 0 && left_length > right_length);
 		}

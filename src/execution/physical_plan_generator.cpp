@@ -171,6 +171,8 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalOperator &op) {
 		return CreatePlan(op.Cast<LogicalCopyDatabase>());
 	case LogicalOperatorType::LOGICAL_UPDATE_EXTENSIONS:
 		return CreatePlan(op.Cast<LogicalSimple>());
+	case LogicalOperatorType::LOGICAL_USSR_INSERTION:
+		return CreatePlan(op.Cast<LogicalUSSRInsertion>());
 	case LogicalOperatorType::LOGICAL_EXTENSION_OPERATOR: {
 		auto &extension_op = op.Cast<LogicalExtensionOperator>();
 		return extension_op.CreatePlan(context, *this);

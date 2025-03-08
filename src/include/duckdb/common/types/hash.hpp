@@ -72,5 +72,6 @@ template <>
 DUCKDB_API hash_t Hash(dtime_tz_t val);
 DUCKDB_API hash_t Hash(const char *val, size_t size);
 DUCKDB_API hash_t Hash(uint8_t *val, size_t size);
+DUCKDB_API hash_t string_hash(string_t val);
 
 } // namespace duckdb

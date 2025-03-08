@@ -79,12 +79,21 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 
 	BitpackingPrimitives::UnPackBuffer<sel_t>(data_ptr_cast(sel_vec_ptr), src, decompress_count, current_width);
 
-	for (idx_t i = 0; i < scan_count; i++) {
-		// Lookup dict offset in index buffer
-		auto string_number = sel_vec->get_index(i + start_offset);
-		auto dict_offset = index_buffer_ptr[string_number];
-		auto str_len = GetStringLength(UnsafeNumericCast<sel_t>(string_number));
-		result_data[result_offset + i] = FetchStringFromDict(UnsafeNumericCast<int32_t>(dict_offset), str_len);
+	if (dictionary) {
+		auto dict_child_data = FlatVector::GetData<string_t>(*(dictionary));
+		for (idx_t i = 0; i < scan_count; i++) {
+			// Lookup dict offset in index buffer
+			auto string_number = sel_vec->get_index(i + start_offset);
+			result_data[result_offset + i] = dict_child_data[string_number];
+		}
+	} else {
+		for (idx_t i = 0; i < scan_count; i++) {
+			// Lookup dict offset in index buffer
+			auto string_number = sel_vec->get_index(i + start_offset);
+			auto dict_offset = index_buffer_ptr[string_number];
+			auto str_len = GetStringLength(UnsafeNumericCast<sel_t>(string_number));
+			result_data[result_offset + i] = FetchStringFromDict(UnsafeNumericCast<int32_t>(dict_offset), str_len);
+		}
 	}
 }
 

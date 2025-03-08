@@ -46,3 +46,4 @@
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/operator/logical_vacuum.hpp"
 #include "duckdb/planner/operator/logical_window.hpp"
+#include "duckdb/planner/operator/logical_ussr_insertion.h"

@@ -75,11 +75,13 @@ static void GatherVarchar(Vector &rows, const SelectionVector &row_sel, Vector &
 			}
 			col_mask.SetInvalid(col_idx);
 		} else if (base_heap_ptr && Load<uint32_t>(col_ptr) > string_t::INLINE_LENGTH) {
-			//	Not inline, so unswizzle the copied pointer the pointer
-			auto heap_ptr_ptr = row + heap_offset;
-			auto heap_row_ptr = base_heap_ptr + Load<idx_t>(heap_ptr_ptr);
-			auto string_ptr = data_ptr_t(data + col_idx) + string_t::HEADER_SIZE;
-			Store<data_ptr_t>(heap_row_ptr + Load<idx_t>(string_ptr), string_ptr);
+			if (!string_t::isInUnifiedStringDictionary(char_ptr_cast(data[col_idx].GetTaggedPointer()))) {
+				//	Not inline, so unswizzle the copied pointer the pointer
+				auto heap_ptr_ptr = row + heap_offset;
+				auto heap_row_ptr = base_heap_ptr + Load<idx_t>(heap_ptr_ptr);
+				auto string_ptr = data_ptr_t(data + col_idx) + string_t::HEADER_SIZE;
+				Store<data_ptr_t>(heap_row_ptr + Load<idx_t>(string_ptr), string_ptr);
+			}
 #ifdef DEBUG
 			data[col_idx].Verify();
 #endif

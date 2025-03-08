@@ -147,6 +147,7 @@ protected:
 	PhysicalOperator &CreatePlan(LogicalMaterializedCTE &op);
 	PhysicalOperator &CreatePlan(LogicalCTERef &op);
 	PhysicalOperator &CreatePlan(LogicalPivot &op);
+	PhysicalOperator &CreatePlan(LogicalUSSRInsertion &op);
 
 	PhysicalOperator &PlanAsOfJoin(LogicalComparisonJoin &op);
 	PhysicalOperator &PlanComparisonJoin(LogicalComparisonJoin &op);

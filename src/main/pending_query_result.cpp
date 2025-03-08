@@ -86,6 +86,7 @@ unique_ptr<QueryResult> PendingQueryResult::ExecuteInternal(ClientContextLock &l
 		}
 	}
 	auto result = context->FetchResultInternal(lock, *this);
+	result->ussr = std::move(context->ussr);
 	Close();
 	return result;
 }
