@@ -327,6 +327,19 @@ void NumpyScan::Scan(PandasColumnBindData &bind_data, idx_t count, idx_t offset,
 		}
 		break;
 	}
+	case NumpyNullableType::FIXED_WIDTH_STRING: {
+		auto tgt_ptr = FlatVector::GetData<string_t>(out);
+		auto max_len = bind_data.numpy_type.fixed_width_str_len;
+		for (idx_t row = 0; row < count; row++) {
+			auto data = reinterpret_cast<const char *>(array.data(row + offset));
+			tgt_ptr[row] = string_t((data), strnlen(data, max_len));
+		}
+		if (bind_data.mask) {
+			auto &result_mask = FlatVector::Validity(out);
+			ApplyMask(bind_data, result_mask, count, offset);
+		}
+		break;
+	}
 	case NumpyNullableType::STRING:
 	case NumpyNullableType::OBJECT: {
 		// Get the source pointer of the numpy array
