@@ -1,0 +1,25 @@
+# name: test/sql/table_function/duckdb_prepared_statements.test
+# group: [table_function]
+
+statement ok
+prepare p1 as select 42;
+
+statement ok
+create table tbl(a varchar);
+
+statement ok
+prepare p2 as insert into tbl values ('test');
+
+statement ok
+prepare p3 as select 21, $1, $2
+
+statement ok
+prepare p4 as select $name, $other_name
+
+query IIII
+select * from duckdb_prepared_statements() order by name;
+----
+p1	SELECT 42	NULL	[INTEGER]
+p2	INSERT INTO tbl (VALUES ('test'))	NULL	[BIGINT]
+p3	SELECT 21, $1, $2	[UNKNOWN, UNKNOWN]	NULL
+p4	SELECT $name, $other_name	[UNKNOWN, UNKNOWN]	NULL
