@@ -8,9 +8,9 @@ require parquet
 query I
 select * FROM parquet_scan('data/parquet-testing/map.parquet') sq limit 3;
 ----
-{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:19:57 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=921}
-{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:19:59 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=922}
-{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via=1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf), X-Xss-Protection=1; mode=block, Content-Type=text/html;charset=utf-8, Date=Sat, 30 Jan 2021 16:19:59 GMT, X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup=HIT from ip-10-1-1-216.ec2.internal:3128, X-Content-Type-Options=nosniff, Content-Length=919}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via='1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)', X-Xss-Protection='1; mode=block', Content-Type='text/html;charset=utf-8', Date='Sat, 30 Jan 2021 16:19:57 GMT', X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup='HIT from ip-10-1-1-216.ec2.internal:3128', X-Content-Type-Options=nosniff, Content-Length=921}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via='1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)', X-Xss-Protection='1; mode=block', Content-Type='text/html;charset=utf-8', Date='Sat, 30 Jan 2021 16:19:59 GMT', X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup='HIT from ip-10-1-1-216.ec2.internal:3128', X-Content-Type-Options=nosniff, Content-Length=922}
+{Content-Encoding=gzip, X-Frame-Options=SAMEORIGIN, Connection=keep-alive, Via='1.1 ip-10-1-1-216.ec2.internal (squid/4.10-20200322-r358ad2fdf)', X-Xss-Protection='1; mode=block', Content-Type='text/html;charset=utf-8', Date='Sat, 30 Jan 2021 16:19:59 GMT', X-Cache=MISS from ip-10-1-1-216.ec2.internal, Vary=Accept-Encoding, Server=nginx/1.10.3, X-Cache-Lookup='HIT from ip-10-1-1-216.ec2.internal:3128', X-Content-Type-Options=nosniff, Content-Length=919}
 
 # this was a hard one
 query II
@@ -60,17 +60,16 @@ SELECT * FROM parquet_scan('data/parquet-testing/arrow/list_columns.parquet')
 query II
 SELECT id, url FROM parquet_scan('data/parquet-testing/apkwan.parquet') limit 10
 ----
-53e997b9b7602d9701f9f044	[https://link.springer.com/10.1007/s00108-004-1229-0]
+53e997b9b7602d9701f9f044	['https://link.springer.com/10.1007/s00108-004-1229-0']
 53e997b2b7602d9701f8fea5	[]
-53e997aeb7602d9701f8856e	[http://www.ncbi.nlm.nih.gov/pubmed/4669724?report=xml&format=text, http://www.ncbi.nlm.nih.gov/pubmed/5123793?report=xml&format=text, http://www.ncbi.nlm.nih.gov/pubmed/5315218?report=xml&format=text]
+53e997aeb7602d9701f8856e	['http://www.ncbi.nlm.nih.gov/pubmed/4669724?report=xml&format=text', 'http://www.ncbi.nlm.nih.gov/pubmed/5123793?report=xml&format=text', 'http://www.ncbi.nlm.nih.gov/pubmed/5315218?report=xml&format=text']
 53e997bab7602d9701fa1e34	[]
 53e997abb7602d9701f846c0	[]
 53e9978db7602d9701f4d7e8	[]
-53e9984bb7602d970207c61d	[http://subs.emis.de/LNI/Proceedings/Proceedings26/article639.html]
+53e9984bb7602d970207c61d	['http://subs.emis.de/LNI/Proceedings/Proceedings26/article639.html']
 53e99796b7602d9701f5cd36	[]
-53e99809b7602d970201f551	[http://dx.doi.org/10.1016/S0140-6736(00)82170-4, http://www.ncbi.nlm.nih.gov/pubmed/20914302?report=xml&format=text]
-53e997a6b7602d9701f7ffb0	[http://www.ncbi.nlm.nih.gov/pubmed/4051185?report=xml&format=text]
-
+53e99809b7602d970201f551	['http://dx.doi.org/10.1016/S0140-6736(00)82170-4', 'http://www.ncbi.nlm.nih.gov/pubmed/20914302?report=xml&format=text']
+53e997a6b7602d9701f7ffb0	['http://www.ncbi.nlm.nih.gov/pubmed/4051185?report=xml&format=text']
 
 query II
 select * from (SELECT id, unnest(url) u FROM parquet_scan('data/parquet-testing/apkwan.parquet')) sq where u is not null limit 10
@@ -91,7 +90,7 @@ query II
 SELECT id, authors FROM parquet_scan('data/parquet-testing/apkwan.parquet') limit 10
 ----
 53e997b9b7602d9701f9f044	[{'name': M. Stoll, 'id': 56018d9645cedb3395e77641, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}, {'name': H. Heiken, 'id': 53f4d53adabfaef34ff814c8, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}, {'name': G. M. N. Behrens, 'id': 53f42afbdabfaec09f0ed4e0, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}, {'name': R. E. Schmidt, 'id': 56018d9645cedb3395e77644, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}]
-53e997b2b7602d9701f8fea5	[{'name': D. Barr, 'id': 5440d4cfdabfae805a6fd46c, 'org': Camborne School of Mines Redruth, Cornwall England}]
+53e997b2b7602d9701f8fea5	[{'name': D. Barr, 'id': 5440d4cfdabfae805a6fd46c, 'org': 'Camborne School of Mines Redruth, Cornwall England'}]
 53e997aeb7602d9701f8856e	[{'name': B Sharf, 'id': 54059f34dabfae44f081a626, 'org': NULL}, {'name': E Bental, 'id': 5434518edabfaebba5856df4, 'org': NULL}]
 53e997bab7602d9701fa1e34	[{'name': R. A. Kyle, 'id': 53f45704dabfaedd74e30781, 'org': NULL}]
 53e997abb7602d9701f846c0	[{'name': J. Mitchell, 'id': 5405942bdabfae44f08177f9, 'org': NULL}]
@@ -108,7 +107,7 @@ SELECT id, unnest(authors) FROM parquet_scan('data/parquet-testing/apkwan.parque
 53e997b9b7602d9701f9f044	{'name': H. Heiken, 'id': 53f4d53adabfaef34ff814c8, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}
 53e997b9b7602d9701f9f044	{'name': G. M. N. Behrens, 'id': 53f42afbdabfaec09f0ed4e0, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}
 53e997b9b7602d9701f9f044	{'name': R. E. Schmidt, 'id': 56018d9645cedb3395e77644, 'org': Abteilung Klinische Immunologie Medizinische Hochschule Hannover}
-53e997b2b7602d9701f8fea5	{'name': D. Barr, 'id': 5440d4cfdabfae805a6fd46c, 'org': Camborne School of Mines Redruth, Cornwall England}
+53e997b2b7602d9701f8fea5	{'name': D. Barr, 'id': 5440d4cfdabfae805a6fd46c, 'org': 'Camborne School of Mines Redruth, Cornwall England'}
 53e997aeb7602d9701f8856e	{'name': B Sharf, 'id': 54059f34dabfae44f081a626, 'org': NULL}
 53e997aeb7602d9701f8856e	{'name': E Bental, 'id': 5434518edabfaebba5856df4, 'org': NULL}
 53e997bab7602d9701fa1e34	{'name': R. A. Kyle, 'id': 53f45704dabfaedd74e30781, 'org': NULL}

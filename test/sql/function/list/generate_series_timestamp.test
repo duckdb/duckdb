@@ -9,25 +9,25 @@ PRAGMA enable_verification
 query I
 SELECT generate_series(timestamp '2020-01-01', timestamp '2020-07-01', interval '3' month);
 ----
-[2020-01-01 00:00:00, 2020-04-01 00:00:00, 2020-07-01 00:00:00]
+['2020-01-01 00:00:00', '2020-04-01 00:00:00', '2020-07-01 00:00:00']
 
 # exclusive bound
 query I
 SELECT range(timestamp '2020-01-01', timestamp '2020-07-01', interval '3' month);
 ----
-[2020-01-01 00:00:00, 2020-04-01 00:00:00]
+['2020-01-01 00:00:00', '2020-04-01 00:00:00']
 
 # negative interval
 query I
 SELECT generate_series(timestamp '2020-06-01', timestamp '2020-01-01', -interval '3' month);
 ----
-[2020-06-01 00:00:00, 2020-03-01 00:00:00]
+['2020-06-01 00:00:00', '2020-03-01 00:00:00']
 
 # start = end
 query I
 SELECT generate_series(timestamp '2020-01-01', timestamp '2020-01-01', interval '1' day);
 ----
-[2020-01-01 00:00:00]
+['2020-01-01 00:00:00']
 
 query I
 SELECT range(timestamp '2020-01-01', timestamp '2020-01-01', interval '1' day);
