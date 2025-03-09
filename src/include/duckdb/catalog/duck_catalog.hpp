@@ -38,14 +38,14 @@ public:
 	GetSchema(CatalogTransaction transaction, const string &schema_name, OnEntryNotFound if_not_found,
 	          QueryErrorContext error_context = QueryErrorContext()) override;
 
-	DUCKDB_API unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
-	                                                          unique_ptr<PhysicalOperator> plan) override;
-	DUCKDB_API unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
-	                                                   unique_ptr<PhysicalOperator> plan) override;
-	DUCKDB_API unique_ptr<PhysicalOperator> PlanDelete(ClientContext &context, LogicalDelete &op,
-	                                                   unique_ptr<PhysicalOperator> plan) override;
-	DUCKDB_API unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
-	                                                   unique_ptr<PhysicalOperator> plan) override;
+	DUCKDB_API PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner,
+	                                               LogicalCreateTable &op, PhysicalOperator &plan) override;
+	DUCKDB_API PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
+	                                        optional_ptr<PhysicalOperator> plan) override;
+	DUCKDB_API PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op,
+	                                        PhysicalOperator &plan) override;
+	DUCKDB_API PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,
+	                                        PhysicalOperator &plan) override;
 	DUCKDB_API unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt,
 	                                                       TableCatalogEntry &table,
 	                                                       unique_ptr<LogicalOperator> plan) override;
