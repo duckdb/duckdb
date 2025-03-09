@@ -226,9 +226,6 @@ TEST_CASE("Test Parallel CSV All Files - data/csv", "[parallel-csv][.]") {
 	// This file requires a temp_dir for offloading
 	skip.insert("data/csv/hebere.csv.gz");
 	skip.insert("data/csv/no_quote.csv");
-	// FIXME: This should be fixed when we get the strict mode working with mixed new line delims
-	skip.insert("data/csv/mixed_new_line.csv");
-
 	RunTestOnFolder("data/csv/", &skip);
 }
 
