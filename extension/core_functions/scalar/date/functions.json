@@ -19,7 +19,9 @@
         "description": "The number of partition boundaries between the timestamps",
         "example": "date_diff('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')",
         "type": "scalar_function_set",
-        "aliases": ["datediff"]
+        "aliases": [
+            "datediff"
+        ]
     },
     {
         "name": "date_part",
@@ -27,7 +29,9 @@
         "description": "Get subfield (equivalent to extract)",
         "example": "date_part('minute', TIMESTAMP '1992-09-20 20:38:40')",
         "type": "scalar_function_set",
-        "aliases": ["datepart"]
+        "aliases": [
+            "datepart"
+        ]
     },
     {
         "name": "date_sub",
@@ -35,7 +39,9 @@
         "description": "The number of complete partitions between the timestamps",
         "example": "date_sub('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')",
         "type": "scalar_function_set",
-        "aliases": ["datesub"]
+        "aliases": [
+            "datesub"
+        ]
     },
     {
         "name": "date_trunc",
@@ -43,7 +49,9 @@
         "description": "Truncate to specified precision",
         "example": "date_trunc('hour', TIMESTAMPTZ '1992-09-20 20:38:40')",
         "type": "scalar_function_set",
-        "aliases": ["datetrunc"]
+        "aliases": [
+            "datetrunc"
+        ]
     },
     {
         "name": "day",
@@ -131,7 +139,10 @@
         "description": "Returns the current timestamp",
         "example": "get_current_timestamp()",
         "type": "scalar_function",
-        "aliases": ["now", "transaction_timestamp"]
+        "aliases": [
+            "now",
+            "transaction_timestamp"
+        ]
     },
     {
         "struct": "HoursFun",
@@ -177,16 +188,25 @@
         "variants": [
             {
                 "parameters": [
-                    {"name": "year"},
-                    {"name": "month"},
-                    {"name": "day"}
+                    {
+                        "name": "year"
+                    },
+                    {
+                        "name": "month"
+                    },
+                    {
+                        "name": "day"
+                    }
                 ],
                 "description": "The date for the given parts",
                 "example": "make_date(1992, 9, 20)"
             },
             {
                 "parameters": [
-                    {"name": "date-struct", "type": "STRUCT(year BIGINT, month BIGINT, day BIGINT)"}
+                    {
+                        "name": "date-struct",
+                        "type": "STRUCT(year BIGINT, month BIGINT, day BIGINT)"
+                    }
                 ],
                 "description": "The date for the given struct.",
                 "example": "make_date({'year': 2024, 'month': 11, 'day': 14})"
@@ -266,7 +286,7 @@
         "name": "nanosecond",
         "parameters": "tsns",
         "description": "Extract the nanosecond component from a date or timestamp",
-        "example": "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789') => 44123456789",
+        "example": "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789')",
         "type": "scalar_function_set"
     },
     {

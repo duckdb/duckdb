@@ -18,7 +18,8 @@ namespace duckdb {
 struct AgeFun {
 	static constexpr const char *Name = "age";
 	static constexpr const char *Parameters = "timestamp,timestamp";
-	static constexpr const char *Description = "Subtract arguments, resulting in the time difference between the two timestamps";
+	static constexpr const char *Description =
+	    "Subtract arguments, resulting in the time difference between the two timestamps";
 	static constexpr const char *Example = "age(TIMESTAMP '2001-04-10', TIMESTAMP '1992-09-20')";
 
 	static ScalarFunctionSet GetFunctions();
@@ -37,7 +38,8 @@ struct DateDiffFun {
 	static constexpr const char *Name = "date_diff";
 	static constexpr const char *Parameters = "part,startdate,enddate";
 	static constexpr const char *Description = "The number of partition boundaries between the timestamps";
-	static constexpr const char *Example = "date_diff('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')";
+	static constexpr const char *Example =
+	    "date_diff('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -67,7 +69,8 @@ struct DateSubFun {
 	static constexpr const char *Name = "date_sub";
 	static constexpr const char *Parameters = "part,startdate,enddate";
 	static constexpr const char *Description = "The number of complete partitions between the timestamps";
-	static constexpr const char *Example = "date_sub('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')";
+	static constexpr const char *Example =
+	    "date_sub('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -260,7 +263,8 @@ struct LastDayFun {
 
 struct MakeDateFun {
 	static constexpr const char *Name = "make_date";
-	static constexpr const char *Parameters = "year,month,day\1date-struct::STRUCT(year BIGINT, month BIGINT, day BIGINT)";
+	static constexpr const char *Parameters =
+	    "year,month,day\1date-struct::STRUCT(year BIGINT, month BIGINT, day BIGINT)";
 	static constexpr const char *Description = "The date for the given parts\1The date for the given struct.";
 	static constexpr const char *Example = "make_date(1992, 9, 20)\1make_date({'year': 2024, 'month': 11, 'day': 14})";
 
@@ -352,7 +356,7 @@ struct NanosecondsFun {
 	static constexpr const char *Name = "nanosecond";
 	static constexpr const char *Parameters = "tsns";
 	static constexpr const char *Description = "Extract the nanosecond component from a date or timestamp";
-	static constexpr const char *Example = "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789') => 44123456789";
+	static constexpr const char *Example = "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789')";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -387,8 +391,12 @@ struct SecondsFun {
 struct TimeBucketFun {
 	static constexpr const char *Name = "time_bucket";
 	static constexpr const char *Parameters = "bucket_width,timestamp,origin";
-	static constexpr const char *Description = "Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03 00:00:00+00 for buckets that do not include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets";
-	static constexpr const char *Example = "time_bucket(INTERVAL '2 weeks', TIMESTAMP '1992-04-20 15:26:00-07', TIMESTAMP '1992-04-01 00:00:00-07')";
+	static constexpr const char *Description =
+	    "Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned relative to origin "
+	    "TIMESTAMPTZ. The origin defaults to 2000-01-03 00:00:00+00 for buckets that do not include a month or year "
+	    "interval, and to 2000-01-01 00:00:00+00 for month and year buckets";
+	static constexpr const char *Example =
+	    "time_bucket(INTERVAL '2 weeks', TIMESTAMP '1992-04-20 15:26:00-07', TIMESTAMP '1992-04-01 00:00:00-07')";
 
 	static ScalarFunctionSet GetFunctions();
 };
