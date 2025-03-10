@@ -335,6 +335,7 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 		error.Throw();
 	}
 	auto table_function = function.functions.GetFunctionByOffset(best_function_idx.GetIndex());
+	table_function.with_ordinality = ref.with_ordinality;
 
 	// now check the named parameters
 	BindNamedParameters(table_function.named_parameters, named_parameters, error_context, table_function.name);
