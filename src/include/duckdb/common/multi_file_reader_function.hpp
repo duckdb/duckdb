@@ -24,6 +24,8 @@ struct MultiFileLocalState : public LocalTableFunctionState {
 	idx_t batch_index;
 	idx_t file_index;
 	unique_ptr<LocalTableFunctionState> local_state;
+	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
+	DataChunk scan_chunk;
 };
 
 struct MultiFileFileReaderData {
@@ -541,6 +543,21 @@ public:
 		return partition_data;
 	}
 
+	static void InitializeScanChunk(ClientContext &context, MultiFileLocalState &lstate) {
+		auto &reader_data = lstate.reader->reader_data;
+		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
+		vector<LogicalType> intermediate_chunk_types;
+		auto &local_column_ids = reader_data.column_ids;
+		auto &local_columns = lstate.reader->GetColumns();
+		for (idx_t i = 0; i < local_column_ids.size(); i++) {
+			auto local_id = local_column_ids[i];
+			auto &col = local_columns[local_id];
+			intermediate_chunk_types.push_back(col.type);
+		}
+		lstate.scan_chunk.Destroy();
+		lstate.scan_chunk.Initialize(context, intermediate_chunk_types);
+	}
+
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
 			return;
@@ -548,9 +565,11 @@ public:
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
+		InitializeScanChunk(context, data);
 
 		do {
-			auto &scan_chunk = data.reader->reader_data.intermediate_chunk;
+			idx_t previous_file_index = data.file_index;
+			auto &scan_chunk = data.scan_chunk;
 			scan_chunk.Reset();
 
 			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, scan_chunk);
@@ -564,6 +583,10 @@ public:
 			scan_chunk.Reset();
 			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
 				return;
+			}
+			if (data.file_index != previous_file_index) {
+				//! The schema could be different, reinitialize the chunk with the new schema
+				InitializeScanChunk(context, data);
 			}
 		} while (true);
 	}

@@ -264,17 +264,6 @@ public:
 		CreateMapping(reader.GetFileName(), reader.GetColumns(), global_columns, global_column_ids, table_filters,
 		              reader.reader_data, initial_file, bind_data, global_state);
 		reader.reader_data.filters = table_filters;
-
-		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
-		vector<LogicalType> intermediate_chunk_types;
-		auto &local_columns = reader.GetColumns();
-		auto &local_column_ids = reader.reader_data.column_ids;
-		for (idx_t i = 0; i < local_column_ids.size(); i++) {
-			auto local_id = local_column_ids[i];
-			auto &col = local_columns[local_id];
-			intermediate_chunk_types.push_back(col.type);
-		}
-		reader.reader_data.intermediate_chunk.Initialize(context, intermediate_chunk_types);
 	}
 
 	template <class BIND_DATA>

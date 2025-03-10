@@ -132,8 +132,6 @@ struct MultiFileReaderData {
 	optional_idx file_list_idx;
 
 	vector<unique_ptr<Expression>> expressions;
-	//! The intermediate chunk used by the reader before it gets finalized into the global schema
-	DataChunk intermediate_chunk;
 };
 
 //! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader
