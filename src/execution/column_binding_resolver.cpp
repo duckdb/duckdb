@@ -23,20 +23,18 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_CREATE_BF: {
 		VisitOperatorChildren(op);
 		auto &create_bf = op.Cast<LogicalCreateBF>();
-		for (auto &BF_plan : create_bf.bf_to_create_plans) {
-			BF_plan->bound_cols_build.clear();
-			for (auto &col_bind : BF_plan->build) {
+		for (auto &bf_plan : create_bf.bf_to_create_plans) {
+			bf_plan->bound_cols_build.clear();
+			for (auto &col_bind : bf_plan->build) {
 				for (idx_t i = 0; i < bindings.size(); i++) {
 					if (col_bind == bindings[i]) {
-						BF_plan->bound_cols_build.push_back(i);
+						bf_plan->bound_cols_build.push_back(i);
 						break;
 					}
 				}
 			}
-			if (BF_plan->bound_cols_build.empty()) {
-				std::cerr << "Table: " << BF_plan->build[0].table_index << "." << BF_plan->build[0].column_index
-				          << "\n";
-				throw InternalException("No bound column found!");
+			if (bf_plan->bound_cols_build.size() != bf_plan->build.size()) {
+				throw InternalException("Failed to bind column reference.\n");
 			}
 		}
 		bindings = op.GetColumnBindings();
@@ -45,19 +43,18 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_USE_BF: {
 		VisitOperatorChildren(op);
 		auto &use_bf = op.Cast<LogicalUseBF>();
-		auto &BF_plan = use_bf.bf_to_use_plan;
-		BF_plan->bound_cols_apply.clear();
-		for (auto &col_bind : BF_plan->apply) {
+		auto &bf_plan = use_bf.bf_to_use_plan;
+		bf_plan->bound_cols_apply.clear();
+		for (auto &col_bind : bf_plan->apply) {
 			for (idx_t i = 0; i < bindings.size(); i++) {
 				if (col_bind == bindings[i]) {
-					BF_plan->bound_cols_apply.push_back(i);
+					bf_plan->bound_cols_apply.push_back(i);
 					break;
 				}
 			}
 		}
-		if (BF_plan->bound_cols_apply.empty()) {
-			std::cerr << "Table: " << BF_plan->apply[0].table_index << "." << BF_plan->apply[0].column_index << "\n";
-			throw InternalException("No bound column found!");
+		if (bf_plan->bound_cols_apply.size() != bf_plan->apply.size()) {
+			throw InternalException("Failed to bind column reference.\n");
 		}
 
 		bindings = op.GetColumnBindings();
