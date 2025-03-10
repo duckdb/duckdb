@@ -32,12 +32,12 @@ copy (select d from date_test) to '__TEST_DIR__/my_file.json' (timestampformat)
 Binder Error
 
 statement error
-copy date_test from '__TEST_DIR__/my_file.json' (dateformat)
+copy date_test from 'data/json/simple_timestamp.json' (dateformat)
 ----
 Binder Error
 
 statement error
-copy date_test from '__TEST_DIR__/my_file.json' (timestampformat)
+copy date_test from 'data/json/simple_timestamp.json' (timestampformat)
 ----
 Binder Error
 

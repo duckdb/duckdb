@@ -15,9 +15,7 @@ enum class JSONScanType : uint8_t {
 	//! Read JSON straight to columnar data
 	READ_JSON = 1,
 	//! Read JSON values as strings
-	READ_JSON_OBJECTS = 2,
-	//! Sample run for schema detection
-	SAMPLE = 3,
+	READ_JSON_OBJECTS = 2
 };
 
 enum class JSONRecordType : uint8_t {

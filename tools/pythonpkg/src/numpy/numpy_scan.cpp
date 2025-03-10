@@ -144,16 +144,13 @@ static void SetInvalidRecursive(Vector &out, idx_t index) {
 //! 'count' is the amount of rows in the 'out' vector
 //! 'offset' is the current row number within this vector
 void ScanNumpyObject(PyObject *object, idx_t offset, Vector &out) {
-
 	// handle None
 	if (object == Py_None) {
 		SetInvalidRecursive(out, offset);
 		return;
 	}
 
-	auto val = TransformPythonValue(object, out.GetType());
-	// Check if the Value type is accepted for the LogicalType of Vector
-	out.SetValue(offset, val);
+	TransformPythonObject(object, out, offset);
 }
 
 static void VerifyMapConstraints(Vector &vec, idx_t count) {
@@ -184,7 +181,6 @@ void VerifyTypeConstraints(Vector &vec, idx_t count) {
 void NumpyScan::ScanObjectColumn(PyObject **col, idx_t stride, idx_t count, idx_t offset, Vector &out) {
 	// numpy_col is a sequential list of objects, that make up one "column" (Vector)
 	out.SetVectorType(VectorType::FLAT_VECTOR);
-	auto &mask = FlatVector::Validity(out);
 	PythonGILWrapper gil; // We're creating python objects here, so we need the GIL
 
 	if (stride == sizeof(PyObject *)) {

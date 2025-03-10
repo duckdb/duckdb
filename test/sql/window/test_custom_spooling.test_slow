@@ -14,6 +14,10 @@ PRAGMA temp_directory='__TEST_DIR__/window_spooling'
 statement ok
 PRAGMA memory_limit='50MB'
 
+# Limit threads to improve stability
+statement ok
+PRAGMA threads=4;
+
 statement ok
 PRAGMA enable_verification
 
@@ -25,13 +29,13 @@ FROM (
 		SUM(l_extendedprice) OVER w AS s,
 		QUANTILE(l_extendedprice, 0.5) OVER w AS q,
 		MAD(l_extendedprice) OVER w AS m,
-		MODE(l_quantity) OVER w AS d,
+		MODE(l_linenumber) OVER w AS d,
 	FROM lineitem
 	WINDOW w AS (
-		PARTITION BY (l_linenumber = 1) 
-		ORDER BY l_orderkey, l_linenumber 
+		PARTITION BY l_suppkey 
+		ORDER BY l_shipdate, l_orderkey, l_linenumber
 		ROWS BETWEEN 20 PRECEDING AND 20 FOLLOWING
 	)
 ) t;
 ----
-886221884732.62	20709502135.61	9898471727.97	15330000
+871183083803.67	20718441622.70	9873496927.55	1050000.0

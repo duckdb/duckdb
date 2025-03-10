@@ -45,11 +45,13 @@ struct ParquetReaderPrefetchConfig {
 };
 
 struct ParquetScanFilter {
-	ParquetScanFilter(idx_t filter_idx, TableFilter &filter) : filter_idx(filter_idx), filter(filter) {
-	}
+	ParquetScanFilter(ClientContext &context, idx_t filter_idx, TableFilter &filter);
+	~ParquetScanFilter();
+	ParquetScanFilter(ParquetScanFilter &&) = default;
 
 	idx_t filter_idx;
 	TableFilter &filter;
+	unique_ptr<TableFilterState> filter_state;
 };
 
 struct ParquetReaderScanState {
@@ -146,7 +148,7 @@ public:
 
 public:
 	void InitializeScan(ClientContext &context, ParquetReaderScanState &state, vector<idx_t> groups_to_read);
-	void Scan(ParquetReaderScanState &state, DataChunk &output);
+	void Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
 
 	idx_t NumRows() const;
 	idx_t NumRowGroups() const;
@@ -174,7 +176,7 @@ private:
 	              shared_ptr<ParquetFileMetadataCache> metadata);
 
 	void InitializeSchema(ClientContext &context);
-	bool ScanInternal(ParquetReaderScanState &state, DataChunk &output);
+	bool ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &output);
 	//! Parse the schema of the file
 	unique_ptr<ParquetColumnSchema> ParseSchema();
 	ParquetColumnSchema ParseSchemaRecursive(idx_t depth, idx_t max_define, idx_t max_repeat, idx_t &next_schema_idx,

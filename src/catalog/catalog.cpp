@@ -769,6 +769,12 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, Cat
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		return {nullptr, nullptr, ErrorData()};
+	}
+	// Check if the default database is actually attached. CreateMissingEntryException will throw binder exception
+	// otherwise.
+	if (!GetCatalogEntry(context, GetDefaultCatalog(retriever))) {
+		auto except = CatalogException("%s with name %s does not exist!", CatalogTypeToString(type), name);
+		return {nullptr, nullptr, ErrorData(except)};
 	} else {
 		auto except = CreateMissingEntryException(retriever, name, type, schemas, error_context);
 		return {nullptr, nullptr, ErrorData(except)};
@@ -805,6 +811,12 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, vec
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
 		return {nullptr, nullptr, ErrorData()};
+	}
+	// Check if the default database is actually attached. CreateMissingEntryException will throw binder exception
+	// otherwise.
+	if (!GetCatalogEntry(context, GetDefaultCatalog(retriever))) {
+		auto except = CatalogException("%s with name %s does not exist!", CatalogTypeToString(type), name);
+		return {nullptr, nullptr, ErrorData(except)};
 	} else {
 		auto except = CreateMissingEntryException(retriever, name, type, schemas, error_context);
 		return {nullptr, nullptr, ErrorData(except)};
@@ -1113,6 +1125,10 @@ bool Catalog::IsSystemCatalog() const {
 
 bool Catalog::IsTemporaryCatalog() const {
 	return db.IsTemporary();
+}
+
+void Catalog::Initialize(optional_ptr<ClientContext> context, bool load_builtin) {
+	Initialize(load_builtin);
 }
 
 } // namespace duckdb

@@ -9,13 +9,13 @@
 
 namespace duckdb {
 
-PartitionGlobalHashGroup::PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions,
+PartitionGlobalHashGroup::PartitionGlobalHashGroup(ClientContext &context, const Orders &partitions,
                                                    const Orders &orders, const Types &payload_types, bool external)
     : count(0) {
 
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
-	global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
+	global_sort = make_uniq<GlobalSortState>(context, orders, payload_layout);
 	global_sort->external = external;
 
 	//	Set up a comparator for the partition subset
@@ -103,8 +103,7 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
 			grouping_types.Initialize(payload_types);
-			auto new_group =
-			    make_uniq<PartitionGlobalHashGroup>(buffer_manager, partitions, orders, payload_types, external);
+			auto new_group = make_uniq<PartitionGlobalHashGroup>(context, partitions, orders, payload_types, external);
 			hash_groups.emplace_back(std::move(new_group));
 		} else {
 			auto types = payload_types;
@@ -172,7 +171,7 @@ void PartitionGlobalSinkState::SyncLocalPartition(GroupingPartition &local_parti
 	// If the local partition is now too small, flush it and reallocate
 	auto new_partition = CreatePartition(new_bits);
 	local_partition->FlushAppendState(*local_append);
-	local_partition->Repartition(*new_partition);
+	local_partition->Repartition(context, *new_partition);
 
 	local_partition = std::move(new_partition);
 	local_append = make_uniq<PartitionedTupleDataAppendState>();
@@ -407,8 +406,8 @@ PartitionGlobalMergeState::PartitionGlobalMergeState(PartitionGlobalSinkState &s
       num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(sink.context).NumberOfThreads())),
       stage(PartitionSortStage::INIT), total_tasks(0), tasks_assigned(0), tasks_completed(0) {
 
-	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.buffer_manager, sink.partitions, sink.orders,
-	                                                     sink.payload_types, sink.external);
+	auto new_group = make_uniq<PartitionGlobalHashGroup>(sink.context, sink.partitions, sink.orders, sink.payload_types,
+	                                                     sink.external);
 	sink.hash_groups.emplace_back(std::move(new_group));
 
 	hash_group = sink.hash_groups[group_idx].get();

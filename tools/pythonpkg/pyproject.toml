@@ -15,7 +15,7 @@ local_scheme = "no-local-version"
 # Default config runs all tests and requires at least one extension to be tested against
 [tool.cibuildwheel]
 dependency-versions = "latest"
-before-build = 'pip install oldest-supported-numpy'
+before-build = 'pip install numpy>=2.0'
 before-test = 'python scripts/optional_requirements.py'
 test-requires = 'pytest'
 test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests --verbose'

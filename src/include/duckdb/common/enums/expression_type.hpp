@@ -26,6 +26,8 @@ enum class ExpressionType : uint8_t {
 	OPERATOR_IS_NULL = 14,
 	// is not null operator
 	OPERATOR_IS_NOT_NULL = 15,
+	// unpack operator
+	OPERATOR_UNPACK = 16,
 
 	// -----------------------------
 	// Comparison Operators

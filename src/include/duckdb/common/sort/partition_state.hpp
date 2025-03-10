@@ -22,7 +22,7 @@ public:
 	using Types = vector<LogicalType>;
 	using OrderMasks = unordered_map<idx_t, ValidityMask>;
 
-	PartitionGlobalHashGroup(BufferManager &buffer_manager, const Orders &partitions, const Orders &orders,
+	PartitionGlobalHashGroup(ClientContext &context, const Orders &partitions, const Orders &orders,
 	                         const Types &payload_types, bool external);
 
 	inline int ComparePartitions(const SBIterator &left, const SBIterator &right) {
