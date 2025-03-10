@@ -430,7 +430,7 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		}
 		expressions.push_back(std::move(expression));
 		// create the mapping
-		reader_data.column_mapping.push_back(local_idx);
+		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
 		reader_data.column_indexes.push_back(std::move(local_index));
 	}
@@ -487,7 +487,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 		auto local_idx = reader_data.column_ids.size();
 		if (global_id >= global_columns.size()) {
 			if (bind_data.file_row_number_idx == global_id) {
-				reader_data.column_mapping.push_back(local_idx);
+				reader_data.column_mapping.push_back(i);
 				// FIXME: this needs a more extensible solution
 				reader_data.column_ids.push_back(field_id_map.size());
 				reader_data.column_indexes.emplace_back(field_id_map.size());
@@ -535,7 +535,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 		}
 		expressions.push_back(std::move(expression));
 
-		reader_data.column_mapping.push_back(local_idx);
+		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
 		reader_data.column_indexes.push_back(std::move(local_index));
 	}

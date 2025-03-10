@@ -40,11 +40,11 @@ struct HivePartitioningIndex {
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
 	//! The index of the filename column (if any)
-	idx_t filename_idx = DConstants::INVALID_INDEX;
+	global_column_id_t filename_idx = DConstants::INVALID_INDEX;
 	//! The set of hive partitioning indexes (if any)
 	vector<HivePartitioningIndex> hive_partitioning_indexes;
 	//! The index of the file_row_number column (if any)
-	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
+	global_column_id_t file_row_number_idx = DConstants::INVALID_INDEX;
 	//! (optional) The schema set by the multi file reader
 	vector<MultiFileReaderColumnDefinition> schema;
 	//! The method used to map local -> global columns
