@@ -17,9 +17,14 @@ ARTKey::ARTKey(ArenaAllocator &allocator, idx_t len) : len(len) {
 }
 
 template <>
-ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value) {
+ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value, const idx_t max_len) {
 	auto string_data = const_data_ptr_cast(value.GetData());
 	auto string_len = value.GetSize();
+
+	if (string_len > max_len) {
+		throw InvalidInputException("key size of %d bytes exceeds the maximum size of %d bytes for this ART",
+		                            string_len, max_len);
+	}
 
 	// We escape \00 and \01.
 	idx_t escape_count = 0;
@@ -29,70 +34,70 @@ ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value) {
 		}
 	}
 
-	idx_t len = string_len + escape_count + 1;
-	auto data = allocator.Allocate(len);
+	idx_t key_len = string_len + escape_count + 1;
+	auto key_data = allocator.Allocate(key_len);
 
 	// Copy over the data and add escapes.
 	idx_t pos = 0;
 	for (idx_t i = 0; i < string_len; i++) {
 		if (string_data[i] <= 1) {
 			// Add escape.
-			data[pos++] = '\01';
+			key_data[pos++] = '\01';
 		}
-		data[pos++] = string_data[i];
+		key_data[pos++] = string_data[i];
 	}
 
 	// End with a null-terminator.
-	data[pos] = '\0';
-	return ARTKey(data, len);
+	key_data[pos] = '\0';
+	return ARTKey(key_data, key_len);
 }
 
 template <>
-ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const char *value) {
-	return ARTKey::CreateARTKey(allocator, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))));
+ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const char *value, const idx_t max_len) {
+	return ARTKey::CreateARTKey(allocator, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))), max_len);
 }
 
 template <>
-void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, string_t value) {
-	key = ARTKey::CreateARTKey<string_t>(allocator, value);
+void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, string_t value, const idx_t max_len) {
+	key = ARTKey::CreateARTKey<string_t>(allocator, value, max_len);
 }
 
 template <>
-void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, const char *value) {
-	ARTKey::CreateARTKey(allocator, key, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))));
+void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, const char *value, const idx_t max_len) {
+	ARTKey::CreateARTKey(allocator, key, string_t(value, UnsafeNumericCast<uint32_t>(strlen(value))), max_len);
 }
 
-ARTKey ARTKey::CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value) {
+ARTKey ARTKey::CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value, const idx_t max_len) {
 	D_ASSERT(type == value.type().InternalType());
 	switch (type) {
 	case PhysicalType::BOOL:
-		return ARTKey::CreateARTKey<bool>(allocator, value);
+		return ARTKey::CreateARTKey<bool>(allocator, value, max_len);
 	case PhysicalType::INT8:
-		return ARTKey::CreateARTKey<int8_t>(allocator, value);
+		return ARTKey::CreateARTKey<int8_t>(allocator, value, max_len);
 	case PhysicalType::INT16:
-		return ARTKey::CreateARTKey<int16_t>(allocator, value);
+		return ARTKey::CreateARTKey<int16_t>(allocator, value, max_len);
 	case PhysicalType::INT32:
-		return ARTKey::CreateARTKey<int32_t>(allocator, value);
+		return ARTKey::CreateARTKey<int32_t>(allocator, value, max_len);
 	case PhysicalType::INT64:
-		return ARTKey::CreateARTKey<int64_t>(allocator, value);
+		return ARTKey::CreateARTKey<int64_t>(allocator, value, max_len);
 	case PhysicalType::UINT8:
-		return ARTKey::CreateARTKey<uint8_t>(allocator, value);
+		return ARTKey::CreateARTKey<uint8_t>(allocator, value, max_len);
 	case PhysicalType::UINT16:
-		return ARTKey::CreateARTKey<uint16_t>(allocator, value);
+		return ARTKey::CreateARTKey<uint16_t>(allocator, value, max_len);
 	case PhysicalType::UINT32:
-		return ARTKey::CreateARTKey<uint32_t>(allocator, value);
+		return ARTKey::CreateARTKey<uint32_t>(allocator, value, max_len);
 	case PhysicalType::UINT64:
-		return ARTKey::CreateARTKey<uint64_t>(allocator, value);
+		return ARTKey::CreateARTKey<uint64_t>(allocator, value, max_len);
 	case PhysicalType::INT128:
-		return ARTKey::CreateARTKey<hugeint_t>(allocator, value);
+		return ARTKey::CreateARTKey<hugeint_t>(allocator, value, max_len);
 	case PhysicalType::UINT128:
-		return ARTKey::CreateARTKey<uhugeint_t>(allocator, value);
+		return ARTKey::CreateARTKey<uhugeint_t>(allocator, value, max_len);
 	case PhysicalType::FLOAT:
-		return ARTKey::CreateARTKey<float>(allocator, value);
+		return ARTKey::CreateARTKey<float>(allocator, value, max_len);
 	case PhysicalType::DOUBLE:
-		return ARTKey::CreateARTKey<double>(allocator, value);
+		return ARTKey::CreateARTKey<double>(allocator, value, max_len);
 	case PhysicalType::VARCHAR:
-		return ARTKey::CreateARTKey<string_t>(allocator, value);
+		return ARTKey::CreateARTKey<string_t>(allocator, value, max_len);
 	default:
 		throw InternalException("Invalid type for the ART key.");
 	}
@@ -132,12 +137,17 @@ bool ARTKey::operator==(const ARTKey &key) const {
 	return true;
 }
 
-void ARTKey::Concat(ArenaAllocator &allocator, const ARTKey &other) {
+void ARTKey::Concat(ArenaAllocator &allocator, const ARTKey &other, const idx_t max_len) {
 	auto compound_data = allocator.Allocate(len + other.len);
 	memcpy(compound_data, data, len);
 	memcpy(compound_data + len, other.data, other.len);
 	len += other.len;
 	data = compound_data;
+
+	if (len > max_len) {
+		throw InvalidInputException("key size of %d bytes exceeds the maximum size of %d bytes for this ART", len,
+		                            max_len);
+	}
 }
 
 row_t ARTKey::GetRowId() const {
