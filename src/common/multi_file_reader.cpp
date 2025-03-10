@@ -482,6 +482,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 		if (IsVirtualColumn(global_id)) {
 			//! FIXME: what to do here???
 			expressions.push_back(make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR)));
+			continue;
 		}
 		auto local_idx = reader_data.column_ids.size();
 		if (global_id >= global_columns.size()) {
