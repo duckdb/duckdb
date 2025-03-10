@@ -11,7 +11,7 @@ inputs:
 
   # Deploy config
   deploy_as:
-    description: 'Binary architecture name for deploy step'
+    description: 'Binary architecture name for deploy step - DEPRECATED'
     default: ''
   deploy_version:
     description: 'Version tag or commit short hash for deploy step'
@@ -217,35 +217,5 @@ runs:
     - name: Deploy
       if: ${{ inputs.deploy_as != '' }}
       shell: bash
-      env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
-        DUCKDB_EXTENSION_SIGNING_PK: ${{ inputs.signing_pk }}
-        AWS_DEFAULT_REGION: us-east-1
-        DUCKDB_DEPLOY_SCRIPT_MODE: for_real
       run: |
-        cd  ${{ inputs.build_dir}}
-        if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          if [[ ! -z "${{ inputs.deploy_version }}" ]] ; then
-            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ inputs.deploy_version }}
-          elif [[ "$GITHUB_REF" =~ ^(refs/tags/v.+)$ ]] ; then
-            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} ${{ github.ref_name }}
-          elif [[ "$GITHUB_REF" =~ ^(refs/heads/main)$ ]] ; then
-            ./scripts/extension-upload-all.sh ${{ inputs.deploy_as }} `git log -1 --format=%h`
-          fi
-        fi
-
-    # Run the unittests (excluding the out-of-tree tests) with the extensions that we deployed to S3
-    - name: Test deployed extensions
-      if: ${{ inputs.deploy_as != '' && inputs.run_tests == 1 }}
-      shell: bash
-      env:
-        AWS_ACCESS_KEY_ID: ${{ inputs.s3_id }}
-        AWS_SECRET_ACCESS_KEY: ${{ inputs.s3_key }}
-        AWS_DEFAULT_REGION: us-east-1
-      run: |
-        rm -rf ~/.duckdb
-        cd  ${{ inputs.build_dir}}
-        if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-          ./scripts/extension-upload-test.sh
-        fi
+        exit 1
