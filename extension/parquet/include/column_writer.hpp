@@ -10,6 +10,7 @@
 
 #include "duckdb.hpp"
 #include "parquet_types.h"
+#include "parquet_column_schema.hpp"
 
 namespace duckdb {
 class MemoryStream;
@@ -78,12 +79,15 @@ public:
 	bool can_have_nulls;
 
 public:
+	static ParquetColumnSchema FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
+	                                             const LogicalType &type, const string &name,
+	                                             optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat = 0,
+	                                             idx_t max_define = 1, bool can_have_nulls = true);
 	//! Create the column writer for a specific type recursively
-	static unique_ptr<ColumnWriter>
-	CreateWriterRecursive(ClientContext &context, vector<duckdb_parquet::SchemaElement> &schemas, ParquetWriter &writer,
-	                      const LogicalType &type, const string &name, vector<string> schema_path,
-	                      optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat = 0, idx_t max_define = 1,
-	                      bool can_have_nulls = true);
+	static unique_ptr<ColumnWriter> CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
+	                                                      const vector<duckdb_parquet::SchemaElement> &parquet_schemas,
+	                                                      const ParquetColumnSchema &schema,
+	                                                      vector<string> path_in_schema);
 
 	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) = 0;
 
