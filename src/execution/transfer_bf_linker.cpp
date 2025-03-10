@@ -26,11 +26,10 @@ void TransferBFLinker::VisitOperator(LogicalOperator &op) {
 		VisitOperatorChildren(op);
 		if (state == State::LINK_BF_USERS) {
 			auto &use_bf_op = op.Cast<LogicalUseBF>();
-			for (auto &filter_plan : use_bf_op.bf_to_use_plans) {
-				auto *related_creator = filter_creators[*filter_plan];
-				D_ASSERT(related_creator != nullptr);
-				use_bf_op.related_create_bfs.push_back(related_creator);
-			}
+			auto &filter_plan = use_bf_op.bf_to_use_plan;
+			auto *related_creator = filter_creators[*filter_plan];
+			D_ASSERT(related_creator != nullptr);
+			use_bf_op.related_create_bf = related_creator;
 		}
 		return;
 	}

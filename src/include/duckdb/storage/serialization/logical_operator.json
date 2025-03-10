@@ -965,11 +965,11 @@
     "members": [
       {
         "id": 200,
-        "name": "bf_to_use_plans",
-        "type": "vector<shared_ptr<BloomFilterPlan>>"
+        "name": "bf_to_use_plan",
+        "type": "shared_ptr<BloomFilterPlan>"
       }
     ],
-    "constructor": ["bf_to_use_plans"]
+    "constructor": ["bf_to_use_plan"]
   },
   {
     "class": "LogicalCreateBF",

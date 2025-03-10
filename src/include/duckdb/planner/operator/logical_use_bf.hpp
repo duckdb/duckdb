@@ -10,10 +10,9 @@ public:
 
 public:
 	explicit LogicalUseBF(shared_ptr<BloomFilterPlan> bloom_filter);
-	explicit LogicalUseBF(vector<shared_ptr<BloomFilterPlan>> bloom_filter_plans);
 
-	vector<shared_ptr<BloomFilterPlan>> bf_to_use_plans;
-	vector<LogicalCreateBF *> related_create_bfs;
+	shared_ptr<BloomFilterPlan> bf_to_use_plan;
+	LogicalCreateBF *related_create_bf;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

@@ -771,12 +771,12 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserialize
 
 void LogicalUseBF::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<shared_ptr<BloomFilterPlan>>>(200, "bf_to_use_plans", bf_to_use_plans);
+	serializer.WritePropertyWithDefault<shared_ptr<BloomFilterPlan>>(200, "bf_to_use_plan", bf_to_use_plan);
 }
 
 unique_ptr<LogicalOperator> LogicalUseBF::Deserialize(Deserializer &deserializer) {
-	auto bf_to_use_plans = deserializer.ReadPropertyWithDefault<vector<shared_ptr<BloomFilterPlan>>>(200, "bf_to_use_plans");
-	auto result = duckdb::unique_ptr<LogicalUseBF>(new LogicalUseBF(std::move(bf_to_use_plans)));
+	auto bf_to_use_plan = deserializer.ReadPropertyWithDefault<shared_ptr<BloomFilterPlan>>(200, "bf_to_use_plan");
+	auto result = duckdb::unique_ptr<LogicalUseBF>(new LogicalUseBF(std::move(bf_to_use_plan)));
 	return std::move(result);
 }
 

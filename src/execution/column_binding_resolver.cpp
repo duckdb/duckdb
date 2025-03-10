@@ -45,22 +45,21 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 	case LogicalOperatorType::LOGICAL_USE_BF: {
 		VisitOperatorChildren(op);
 		auto &use_bf = op.Cast<LogicalUseBF>();
-		for (auto &BF_plan : use_bf.bf_to_use_plans) {
-			BF_plan->bound_cols_apply.clear();
-			for (auto &col_bind : BF_plan->apply) {
-				for (idx_t i = 0; i < bindings.size(); i++) {
-					if (col_bind == bindings[i]) {
-						BF_plan->bound_cols_apply.push_back(i);
-						break;
-					}
+		auto &BF_plan = use_bf.bf_to_use_plan;
+		BF_plan->bound_cols_apply.clear();
+		for (auto &col_bind : BF_plan->apply) {
+			for (idx_t i = 0; i < bindings.size(); i++) {
+				if (col_bind == bindings[i]) {
+					BF_plan->bound_cols_apply.push_back(i);
+					break;
 				}
 			}
-			if (BF_plan->bound_cols_apply.empty()) {
-				std::cerr << "Table: " << BF_plan->apply[0].table_index << "." << BF_plan->apply[0].column_index
-				          << "\n";
-				throw InternalException("No bound column found!");
-			}
 		}
+		if (BF_plan->bound_cols_apply.empty()) {
+			std::cerr << "Table: " << BF_plan->apply[0].table_index << "." << BF_plan->apply[0].column_index << "\n";
+			throw InternalException("No bound column found!");
+		}
+
 		bindings = op.GetColumnBindings();
 		return;
 	}

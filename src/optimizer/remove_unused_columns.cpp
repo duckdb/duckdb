@@ -356,12 +356,11 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 	if (op.type == LogicalOperatorType::LOGICAL_USE_BF) {
 		auto &use_bf = op.Cast<LogicalUseBF>();
-		for (auto cell : use_bf.bf_to_use_plans) {
-			for (auto &v : cell->apply) {
-				if (column_references.find(v) != column_references.end()) {
-					auto exprs = column_references[v];
-					v = exprs.bindings[0].get().binding;
-				}
+		auto &cell = use_bf.bf_to_use_plan;
+		for (auto &v : cell->apply) {
+			if (column_references.find(v) != column_references.end()) {
+				auto exprs = column_references[v];
+				v = exprs.bindings[0].get().binding;
 			}
 		}
 	}
