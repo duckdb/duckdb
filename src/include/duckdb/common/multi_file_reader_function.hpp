@@ -548,10 +548,11 @@ public:
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
-		auto &scan_chunk = data.reader->reader_data.intermediate_chunk;
-		scan_chunk.Reset();
 
 		do {
+			auto &scan_chunk = data.reader->reader_data.intermediate_chunk;
+			scan_chunk.Reset();
+
 			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, scan_chunk);
 			output.SetCardinality(scan_chunk.size());
 			if (scan_chunk.size() > 0) {
