@@ -307,7 +307,7 @@ void VerifyHeapSizes(const data_ptr_t source_locations[], const idx_t heap_sizes
 #ifdef DEBUG
 	for (idx_t i = 0; i < append_count; i++) {
 		auto idx = append_sel.get_index(i);
-		const auto stored_heap_size = Load<uint32_t>(source_locations[idx] + heap_size_offset);
+		const auto stored_heap_size = Load<idx_t>(source_locations[idx] + heap_size_offset);
 		D_ASSERT(stored_heap_size == heap_sizes[idx]);
 	}
 #endif

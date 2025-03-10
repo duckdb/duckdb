@@ -13,6 +13,8 @@
 #include "duckdb/common/types/validity_mask.hpp"
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/planner/bound_result_modifier.hpp"
+#include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {
 
@@ -33,6 +35,8 @@ public:
 	void Initialize(vector<LogicalType> types, bool align = true, bool heap_offset = true);
 	//! Initializes the TupleDataLayout with the specified aggregates to an empty TupleDataLayout
 	void Initialize(Aggregates aggregates_p, bool align = true, bool heap_offset = true);
+	//! Initializes a TupleDataLayout with the specified ORDER BY to an empty TupleDataLayout
+	void Initialize(const vector<BoundOrderByNode> &orders, bool has_payload);
 
 	//! Returns the number of data columns
 	inline idx_t ColumnCount() const {
@@ -104,6 +108,10 @@ private:
 	vector<LogicalType> types;
 	//! The aggregate functions
 	Aggregates aggregates;
+	//! The specified ORDER BY
+	vector<BoundOrderByNode> orders;
+	//! The sort key type associated with orders
+	SortKeyType sort_key_type;
 	//! Structs are a recursive TupleDataLayout
 	unique_ptr<unordered_map<idx_t, TupleDataLayout>> struct_layouts;
 	//! The width of the validity header

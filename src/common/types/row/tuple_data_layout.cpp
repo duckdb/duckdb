@@ -5,13 +5,19 @@
 namespace duckdb {
 
 TupleDataLayout::TupleDataLayout()
-    : flag_width(0), data_width(0), aggr_width(0), row_width(0), all_constant(true), heap_size_offset(0) {
+    : sort_key_type(SortKeyType::INVALID), flag_width(0), data_width(0), aggr_width(0), row_width(0),
+      all_constant(true), heap_size_offset(0) {
 }
 
 TupleDataLayout TupleDataLayout::Copy() const {
 	TupleDataLayout result;
 	result.types = this->types;
 	result.aggregates = this->aggregates;
+	result.orders.clear();
+	for (const auto &order : orders) {
+		result.orders.push_back(order.Copy());
+	}
+	result.sort_key_type = this->sort_key_type;
 	if (this->struct_layouts) {
 		result.struct_layouts = make_uniq<unordered_map<idx_t, TupleDataLayout>>();
 		for (const auto &entry : *this->struct_layouts) {
@@ -30,8 +36,11 @@ TupleDataLayout TupleDataLayout::Copy() const {
 }
 
 void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggregates_p, bool align, bool heap_offset_p) {
+	sort_key_type = SortKeyType::INVALID;
 	offsets.clear();
+	aggr_destructor_idxs.clear();
 	types = std::move(types_p);
+	all_constant = true;
 
 	// Null mask at the front - 1 bit per value.
 	flag_width = ValidityBytes::ValidityMaskSize(types.size());
@@ -59,20 +68,20 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, Aggregates aggrega
 		}
 	}
 
-	// This enables pointer swizzling for out-of-core computation.
+	// This enables pointer recomputation for out-of-core.
 	if (heap_offset_p && !all_constant) {
 		heap_size_offset = row_width;
-		row_width += sizeof(uint32_t);
+		row_width += sizeof(idx_t);
 	}
 
 	// Data columns. No alignment required.
 	for (idx_t col_idx = 0; col_idx < types.size(); col_idx++) {
 		const auto &type = types[col_idx];
 		offsets.push_back(row_width);
-		const auto internal_type = type.InternalType();
-		if (TypeIsConstantSize(internal_type) || internal_type == PhysicalType::VARCHAR) {
-			row_width += GetTypeIdSize(type.InternalType());
-		} else if (internal_type == PhysicalType::STRUCT) {
+		const auto physical_type = type.InternalType();
+		if (TypeIsConstantSize(physical_type) || physical_type == PhysicalType::VARCHAR) {
+			row_width += GetTypeIdSize(physical_type);
+		} else if (physical_type == PhysicalType::STRUCT) {
 			// Just get the size of the TupleDataLayout of the struct
 			row_width += GetStructLayout(col_idx).GetRowWidth();
 		} else {
@@ -122,6 +131,63 @@ void TupleDataLayout::Initialize(vector<LogicalType> types_p, bool align, bool h
 
 void TupleDataLayout::Initialize(Aggregates aggregates_p, bool align, bool heap_offset_p) {
 	Initialize(vector<LogicalType>(), std::move(aggregates_p), align, heap_offset_p);
+}
+
+void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, bool has_payload) {
+	// Reset state
+	types.clear();
+	aggregates.clear();
+	struct_layouts->clear();
+	flag_width = DConstants::INVALID_INDEX;
+	data_width = DConstants::INVALID_INDEX;
+	aggr_width = DConstants::INVALID_INDEX;
+	offsets.clear();
+	all_constant = true;
+	heap_size_offset = DConstants::INVALID_INDEX;
+	aggr_destructor_idxs.clear();
+
+	// Compute row width
+	idx_t temp_row_width = has_payload ? 8 : 0;
+	for (auto &order : orders) {
+		const auto &logical_type = order.expression->return_type;
+		const auto physical_type = logical_type.InternalType();
+		if (TypeIsConstantSize(physical_type)) {
+			// NULL byte + fixed-width type
+			temp_row_width += 1 + GetTypeIdSize(physical_type);
+		} else if (logical_type == LogicalType::VARCHAR && order.stats &&
+		           StringStats::HasMaxStringLength(*order.stats)) {
+			// NULL byte + maximum string length + string delimiter
+			temp_row_width += 1 + StringStats::MaxStringLength(*order.stats) + 1;
+		} else {
+			// We don't know how long the key will be
+			temp_row_width = DConstants::INVALID_INDEX;
+			break;
+		}
+	}
+
+	// Set row width and sort key type accordingly
+	if (temp_row_width <= 8) {
+		D_ASSERT(!has_payload);
+		row_width = 8;
+		sort_key_type = SortKeyType::NO_PAYLOAD_FIXED_8;
+	} else if (temp_row_width <= 16) {
+		row_width = 16;
+		sort_key_type = has_payload ? SortKeyType::PAYLOAD_FIXED_16 : SortKeyType::NO_PAYLOAD_FIXED_16;
+	} else if (temp_row_width <= 24) {
+		row_width = 24;
+		sort_key_type = has_payload ? SortKeyType::PAYLOAD_FIXED_24 : SortKeyType::NO_PAYLOAD_FIXED_24;
+	} else if (temp_row_width <= 32) {
+		row_width = 32;
+		sort_key_type = has_payload ? SortKeyType::PAYLOAD_FIXED_32 : SortKeyType::NO_PAYLOAD_FIXED_32;
+	} else {
+		row_width = 32;
+		sort_key_type = has_payload ? SortKeyType::PAYLOAD_VARIABLE_32 : SortKeyType::NO_PAYLOAD_VARIABLE_32;
+
+		// Variable-size sort key, also set these
+		all_constant = false;
+		heap_size_offset = has_payload ? SortKey<SortKeyType::PAYLOAD_VARIABLE_32>::HEAP_SIZE_OFFSET
+		                               : SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>::HEAP_SIZE_OFFSET;
+	}
 }
 
 } // namespace duckdb

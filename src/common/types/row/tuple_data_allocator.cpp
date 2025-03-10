@@ -247,7 +247,7 @@ static inline void InitializeHeapSizes(const data_ptr_t row_locations[], idx_t h
 	// Read the heap sizes from the rows
 	for (idx_t i = 0; i < next; i++) {
 		auto idx = offset + i;
-		heap_sizes[idx] = Load<uint32_t>(row_locations[idx] + heap_size_offset);
+		heap_sizes[idx] = Load<idx_t>(row_locations[idx] + heap_size_offset);
 	}
 
 	// Verify total size

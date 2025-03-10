@@ -580,7 +580,7 @@ void TupleDataCollection::Scatter(TupleDataChunkState &chunk_state, const DataCh
 		const auto heap_size_offset = layout.GetHeapSizeOffset();
 		const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
 		for (idx_t i = 0; i < append_count; i++) {
-			Store<uint32_t>(UnsafeNumericCast<uint32_t>(heap_sizes[i]), row_locations[i] + heap_size_offset);
+			Store<idx_t>(heap_sizes[i], row_locations[i] + heap_size_offset);
 		}
 	}
 
