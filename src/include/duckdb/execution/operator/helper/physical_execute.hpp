@@ -21,7 +21,7 @@ public:
 	explicit PhysicalExecute(PhysicalOperator &plan);
 
 	PhysicalOperator &plan;
-	unique_ptr<PhysicalOperator> owned_plan;
+	optional_ptr<PhysicalOperator> owned_plan;
 	shared_ptr<PreparedStatementData> prepared;
 
 public:
