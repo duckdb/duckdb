@@ -125,9 +125,6 @@ struct MultiFileReaderData {
 	optional_ptr<TableFilterSet> filters;
 	//! The mapping of (global) index -> constant value
 	unordered_map<global_idx_t, Value> constant_map;
-	//! Map of (local) column_id -> cast, used when reading multiple files when files have diverging types
-	//! for the same column
-	unordered_map<local_column_id_t, LogicalType> cast_map;
 	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
 	optional_idx file_list_idx;
 

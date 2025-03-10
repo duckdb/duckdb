@@ -1106,11 +1106,10 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				                          state.sel, filter_count);
 			} else {
 				auto id = filter_entry;
-				local_column_id_t local_col_idx = reader_data.column_ids[id];
-				global_idx_t result_idx = reader_data.column_mapping[id];
+				local_column_id_t local_col_id = reader_data.column_ids[id];
 
-				auto &result_vector = result.data[result_idx];
-				auto &child_reader = root_reader.GetChildReader(local_col_idx);
+				auto &result_vector = result.data[local_col_id];
+				auto &child_reader = root_reader.GetChildReader(local_col_id);
 				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
 				                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
 				need_to_read[id] = false;
@@ -1128,7 +1127,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				root_reader.GetChildReader(file_col_idx).Skip(result.size());
 				continue;
 			}
-			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
+			auto &result_vector = result.data[col_idx];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
 			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count);
 		}
@@ -1138,8 +1137,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 	} else {
 		for (local_idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
 			auto file_col_idx = reader_data.column_ids[col_idx];
-			global_idx_t global_col_idx = reader_data.column_mapping[col_idx];
-			auto &result_vector = result.data[global_col_idx];
+			auto &result_vector = result.data[col_idx];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
 			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
 			if (rows_read != scan_count) {

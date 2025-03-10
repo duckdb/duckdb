@@ -422,7 +422,6 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		expression = make_uniq<BoundReferenceExpression>(local_type, local_idx);
 		if (global_type != local_type) {
 			// the types are not the same - add a cast
-			reader_data.cast_map[local_id] = global_type;
 			auto cast_expression = BoundCastExpression::AddDefaultCastToType(std::move(expression), global_type);
 			expression = std::move(cast_expression);
 		} else {
@@ -527,7 +526,6 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 		expression = make_uniq<BoundReferenceExpression>(local_column.type, local_idx);
 		if (global_column.type != local_column.type) {
 			// differing types, wrap in a cast column reader
-			reader_data.cast_map[local_id] = global_column.type;
 			auto cast_expression = BoundCastExpression::AddDefaultCastToType(std::move(expression), global_column.type);
 			expression = std::move(cast_expression);
 		} else {
