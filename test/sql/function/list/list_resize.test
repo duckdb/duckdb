@@ -61,7 +61,7 @@ select list_resize(a, b) from string_tbl;
 [abc, def, NULL]
 [d, ef, ghij, NULL, NULL, NULL, NULL, NULL]
 [lmnopqrs, NULL, NULL, NULL, NULL]
-[here is a little story about a duck,, whose name is harold., He is a cool duck who lives in a cool world, NULL, NULL]
+['here is a little story about a duck,', whose name is harold., He is a cool duck who lives in a cool world, NULL, NULL]
 
 # Null Check
 

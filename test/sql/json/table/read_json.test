@@ -148,17 +148,17 @@ SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=1)
 query II
 SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=2)
 ----
-1	["O", "Brother,", "Where", "Art", "Thou?"]
-2	["Home", "for", "the", "Holidays"]
-3	["The", "Firm"]
-4	["Broadcast", "News"]
-5	["Raising", "Arizona"]
+1	['"O"', '"Brother,"', '"Where"', '"Art"', '"Thou?"']
+2	['"Home"', '"for"', '"the"', '"Holidays"']
+3	['"The"', '"Firm"']
+4	['"Broadcast"', '"News"']
+5	['"Raising"', '"Arizona"']
 
 # at level 3 it's fully detected, and we get BIGINT and VARCHAR[]
 query II
 SELECT * FROM read_json_auto('data/json/with_list.json', maximum_depth=3)
 ----
-1	[O, Brother,, Where, Art, Thou?]
+1	[O, 'Brother,', Where, Art, Thou?]
 2	[Home, for, the, Holidays]
 3	[The, Firm]
 4	[Broadcast, News]
@@ -251,7 +251,7 @@ Invalid Input Error: Expected top-level JSON array
 
 # test that we can read a list of longer than STANDARD_VECTOR_SIZE properly
 statement ok
-copy (select list(to_json({duck: 42})) from range(10000)) to '__TEST_DIR__/my_file.json' (format csv, quote '', HEADER 0)
+copy (select 42 duck from range(10000)) to '__TEST_DIR__/my_file.json' (array true)
 
 query T
 select count(*) from read_json('__TEST_DIR__/my_file.json', columns={duck: 'INTEGER'}, format='array')
@@ -395,7 +395,7 @@ pragma disable_verification
 # the JSON is 55 bytes, and the minimum buffer size is 32MB
 # let's do 50k to be safe
 statement ok
-copy (select list(to_json({this_is_a_very_long_field_name_yes_very_much_so:42})) from range(50000)) to '__TEST_DIR__/my_file.json' (format csv, quote '', header 0)
+copy (select 42 this_is_a_very_long_field_name_yes_very_much_so from range(50000)) to '__TEST_DIR__/my_file.json' (array true)
 
 query T
 select sum(this_is_a_very_long_field_name_yes_very_much_so) = 42 * 50000 from '__TEST_DIR__/my_file.json'
