@@ -142,8 +142,8 @@ SinkResultType PhysicalCreateARTIndex::Sink(ExecutionContext &context, DataChunk
 		}
 	}
 
-	ART::GenerateKeyVectors(l_state.arena_allocator, l_state.key_chunk, chunk.data[chunk.ColumnCount() - 1],
-	                        l_state.keys, l_state.row_ids);
+	l_state.local_index->Cast<ART>().GenerateKeyVectors(
+	    l_state.arena_allocator, l_state.key_chunk, chunk.data[chunk.ColumnCount() - 1], l_state.keys, l_state.row_ids);
 
 	if (sorted) {
 		return SinkSorted(input);

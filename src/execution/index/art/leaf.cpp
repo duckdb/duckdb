@@ -35,7 +35,8 @@ void Leaf::MergeInlined(ART &art, Node &l_node, Node &r_node) {
 	D_ASSERT(r_node.GetType() == INLINED);
 
 	ArenaAllocator arena_allocator(Allocator::Get(art.db));
-	auto key = ARTKey::CreateARTKey<row_t>(arena_allocator, r_node.GetRowId());
+	auto max_len = art.prefix_count * art.MAX_KEY_LEN;
+	auto key = ARTKey::CreateARTKey<row_t>(arena_allocator, r_node.GetRowId(), max_len);
 	art.Insert(l_node, key, 0, key, l_node.GetGateStatus(), nullptr, IndexAppendMode::DEFAULT);
 	r_node.Clear();
 }
@@ -44,7 +45,8 @@ void Leaf::InsertIntoInlined(ART &art, Node &node, const ARTKey &row_id, idx_t d
 	D_ASSERT(node.GetType() == INLINED);
 
 	ArenaAllocator allocator(Allocator::Get(art.db));
-	auto key = ARTKey::CreateARTKey<row_t>(allocator, node.GetRowId());
+	auto max_len = art.prefix_count * art.MAX_KEY_LEN;
+	auto key = ARTKey::CreateARTKey<row_t>(allocator, node.GetRowId(), max_len);
 
 	GateStatus new_status;
 	if (status == GateStatus::GATE_NOT_SET || node.GetGateStatus() == GateStatus::GATE_SET) {
@@ -98,10 +100,11 @@ void Leaf::TransformToNested(ART &art, Node &node) {
 
 	// Move all row IDs into the nested leaf.
 	reference<const Node> leaf_ref(node);
+	auto max_len = art.prefix_count * art.MAX_KEY_LEN;
 	while (leaf_ref.get().HasMetadata()) {
 		auto &leaf = Node::Ref<const Leaf>(art, leaf_ref, LEAF);
 		for (uint8_t i = 0; i < leaf.count; i++) {
-			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, leaf.row_ids[i]);
+			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, leaf.row_ids[i], max_len);
 			auto conflict_type =
 			    art.Insert(root, row_id, 0, row_id, GateStatus::GATE_SET, nullptr, IndexAppendMode::INSERT_DUPLICATES);
 			if (conflict_type != ARTConflictType::NO_CONFLICT) {
