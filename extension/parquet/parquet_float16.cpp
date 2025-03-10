@@ -39,7 +39,7 @@ float Float16ToFloat32(const uint16_t &float16_value) {
 		float32_value = (sign << 31) | ((exponent + (127 - 15)) << 23) | (fraction << 13);
 	}
 
-	return *((float *)&float32_value);
+	return *reinterpret_cast<float *>(&float32_value);
 }
 
 } // namespace duckdb
