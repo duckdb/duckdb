@@ -140,6 +140,9 @@ struct RegexLocalState : public FunctionLocalState {
 	explicit RegexLocalState(RegexpBaseBindData &info, bool extract_all = false)
 	    : constant_pattern(duckdb_re2::StringPiece(info.constant_string.c_str(), info.constant_string.size()),
 	                       info.options) {
+		if (!constant_pattern.ok()) {
+			throw InvalidInputException(constant_pattern.error());
+		}
 		if (extract_all) {
 			auto group_count_p = constant_pattern.NumberOfCapturingGroups();
 			if (group_count_p != -1) {
