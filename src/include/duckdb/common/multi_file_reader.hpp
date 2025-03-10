@@ -192,7 +192,7 @@ public:
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
 	                                      const MultiFileReaderData &reader_data, DataChunk &input_chunk,
-	                                      DataChunk &output_chunk,
+	                                      DataChunk &output_chunk, const vector<idx_t> &projection_ids,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Fetch the partition data for the current chunk
@@ -267,7 +267,11 @@ public:
 
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
 		vector<LogicalType> intermediate_chunk_types;
-		for (auto &col : reader.GetColumns()) {
+		auto &local_columns = reader.GetColumns();
+		auto &local_column_ids = reader.reader_data.column_ids;
+		for (idx_t i = 0; i < local_column_ids.size(); i++) {
+			auto local_id = local_column_ids[i];
+			auto &col = local_columns[local_id];
 			intermediate_chunk_types.push_back(col.type);
 		}
 		reader.reader_data.intermediate_chunk.Initialize(context, intermediate_chunk_types);

@@ -548,7 +548,6 @@ public:
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
-		auto remove_columns = gstate.CanRemoveColumns();
 		auto &scan_chunk = data.reader->reader_data.intermediate_chunk;
 		scan_chunk.Reset();
 
@@ -557,10 +556,8 @@ public:
 			output.SetCardinality(scan_chunk.size());
 			if (scan_chunk.size() > 0) {
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           scan_chunk, output, gstate.multi_file_reader_state);
-				if (remove_columns) {
-					output.ReferenceColumns(scan_chunk, gstate.projection_ids);
-				}
+				                                           scan_chunk, output, gstate.projection_ids,
+				                                           gstate.multi_file_reader_state);
 				return;
 			}
 			scan_chunk.Reset();

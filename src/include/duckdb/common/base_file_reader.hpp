@@ -130,6 +130,8 @@ struct MultiFileReaderData {
 	unordered_map<local_column_id_t, LogicalType> cast_map;
 	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
 	optional_idx file_list_idx;
+
+	vector<unique_ptr<Expression>> expressions;
 	//! The intermediate chunk used by the reader before it gets finalized into the global schema
 	DataChunk intermediate_chunk;
 };
