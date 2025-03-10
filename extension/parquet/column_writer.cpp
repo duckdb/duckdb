@@ -204,6 +204,17 @@ void ColumnWriter::HandleDefineLevels(ColumnWriterState &state, ColumnWriterStat
 	}
 }
 
+string ColumnWriter::GetColumnName() const {
+	string result;
+	for (idx_t i = 0; i < schema_path.size(); i++) {
+		if (!result.empty()) {
+			result += ".";
+		}
+		result += schema_path[i];
+	}
+	return result;
+}
+
 //===--------------------------------------------------------------------===//
 // WKB Column Writer
 //===--------------------------------------------------------------------===//

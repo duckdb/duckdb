@@ -113,6 +113,8 @@ public:
 		return string();
 	}
 
+	string GetColumnName() const;
+
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
 	                        const idx_t count, const uint16_t define_value, const uint16_t null_value) const;

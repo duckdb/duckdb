@@ -157,6 +157,29 @@ struct ParquetStringOperator : public BaseParquetOperator {
 	static idx_t GetRowSize(const Vector &vector, idx_t index) {
 		return FlatVector::GetData<string_t>(vector)[index].GetSize();
 	}
+
+	template <class SRC, class TGT>
+	static void UnifyMinMax(const string &new_min, const string &new_max, string &global_min, string &global_max) {
+		if (global_min.empty()) {
+			global_min = new_min;
+		} else {
+			if (LessThan::Operation(string_t(new_min), string_t(global_min))) {
+				global_min = new_min;
+			}
+		}
+		if (global_max.empty()) {
+			global_max = new_max;
+		} else {
+			if (GreaterThan::Operation(string_t(new_max), string_t(global_max))) {
+				global_max = new_max;
+			}
+		}
+	}
+
+	template <class SRC, class TGT>
+	static string StatsToString(const string &stats) {
+		return stats;
+	}
 };
 
 struct ParquetIntervalTargetType {

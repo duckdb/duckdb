@@ -5,12 +5,44 @@
 require parquet
 
 statement ok
-CREATE TABLE integers AS SELECT range i FROM range(200000);
-
-statement ok
 SET preserve_insertion_order=false;
 
+statement ok
+SET threads=1
+
+statement ok
+CREATE VIEW integers AS SELECT range i FROM range(200000);
+
+# single column
 query IIIIII
 COPY integers TO '__TEST_DIR__/test_copy_to_file.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*test_copy_to_file.parquet	200000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{i={max=199999, null_count=0, min=0}}
+<REGEX>:.*test_copy_to_file.parquet	200000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{i={max=199999, min=0, null_count=0}}
+
+# multi-column
+statement ok
+CREATE VIEW multi_column_test AS SELECT range i, range%10 j, case when range%2=0 then null else range end k FROM range(2500);
+
+query IIIIII
+COPY multi_column_test TO '__TEST_DIR__/multi_column_copy.parquet' (RETURN_STATS);
+----
+<REGEX>:.*multi_column_copy.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{i={max=2499, min=1250, null_count=1}, j={max=9, min=0, null_count=0}, k={max=2499, min=0, null_count=0}}
+
+# strings
+statement ok
+CREATE VIEW string_test AS SELECT concat('thisisalongstring_', range) s FROM range(2500);
+
+query IIIIII
+COPY string_test TO '__TEST_DIR__/string_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*string_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{s={max=thisisalongstring_999, min=0, null_count=thisisalongstring_0}}
+
+# timestamps/dates
+
+# empty table
+
+# test all types
+
+# quoted/funky column names
+
+# unsupported format (CSV)

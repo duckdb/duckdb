@@ -528,9 +528,13 @@ void ParquetWriter::GatherWrittenStatistics() {
 	vector<string> min_values;
 	vector<string> max_values;
 	vector<idx_t> null_counts;
+	vector<bool> all_min_max_set;
+	vector<bool> all_nulls_set;
 	min_values.resize(column_writers.size());
 	max_values.resize(column_writers.size());
 	null_counts.resize(column_writers.size());
+	all_min_max_set.resize(column_writers.size(), true);
+	all_nulls_set.resize(column_writers.size(), true);
 	// unify the stats of all of the row groups
 	for (auto &row_group : file_meta_data.row_groups) {
 		for (idx_t c = 0; c < row_group.columns.size(); c++) {
@@ -540,22 +544,37 @@ void ParquetWriter::GatherWrittenStatistics() {
 				if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
 					column_writer->UnifyMinMax(column.meta_data.statistics.min_value,
 					                           column.meta_data.statistics.max_value, min_values[c], max_values[c]);
+				} else {
+					all_min_max_set[c] = false;
 				}
 				if (column.meta_data.statistics.__isset.null_count) {
 					null_counts[c] += column.meta_data.statistics.null_count;
+				} else {
+					all_nulls_set[c] = false;
 				}
 			}
 		}
 	}
-	// finalize the min/max values
+	// finalize the min/max values and write to column stats
 	for (idx_t c = 0; c < column_writers.size(); c++) {
 		auto &column_writer = column_writers[c];
-		min_values[c] = column_writer->StatsToString(min_values[c]);
-		max_values[c] = column_writer->StatsToString(max_values[c]);
+		string column_name = column_writer->GetColumnName();
+		case_insensitive_map_t<Value> column_stats;
+		if (all_min_max_set[c]) {
+			min_values[c] = column_writer->StatsToString(min_values[c]);
+			max_values[c] = column_writer->StatsToString(max_values[c]);
+			if (!min_values[c].empty()) {
+				column_stats["min"] = min_values[c];
+			}
+			if (!max_values[c].empty()) {
+				column_stats["max"] = max_values[c];
+			}
+		}
+		if (all_nulls_set[c]) {
+			column_stats["null_count"] = Value::UBIGINT(null_counts[c]);
+		}
+		written_stats->column_statistics[column_name] = std::move(column_stats);
 	}
-	written_stats->column_statistics["i"]["min"] = min_values[0];
-	written_stats->column_statistics["i"]["max"] = max_values[0];
-	written_stats->column_statistics["i"]["null_count"] = Value::UBIGINT(null_counts[0]);
 }
 
 void ParquetWriter::Finalize() {
