@@ -5,19 +5,7 @@
  */
 /*
  *  Copyright The Mbed TLS Contributors
- *  SPDX-License-Identifier: Apache-2.0
- *
- *  Licensed under the Apache License, Version 2.0 (the "License"); you may
- *  not use this file except in compliance with the License.
- *  You may obtain a copy of the License at
- *
- *  http://www.apache.org/licenses/LICENSE-2.0
- *
- *  Unless required by applicable law or agreed to in writing, software
- *  distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- *  WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- *  See the License for the specific language governing permissions and
- *  limitations under the License.
+ *  SPDX-License-Identifier: Apache-2.0 OR GPL-2.0-or-later
  */
 #ifndef MBEDTLS_ENTROPY_POLL_H
 #define MBEDTLS_ENTROPY_POLL_H
@@ -42,21 +30,21 @@ extern "C" {
 /**
  * \brief           Platform-specific entropy poll callback
  */
-int mbedtls_platform_entropy_poll( void *data,
-                           unsigned char *output, size_t len, size_t *olen );
+int mbedtls_platform_entropy_poll(void *data,
+                                  unsigned char *output, size_t len, size_t *olen);
 #endif
 
 #if defined(MBEDTLS_ENTROPY_HARDWARE_ALT)
 /**
  * \brief           Entropy poll callback for a hardware source
  *
- * \warning         This is not provided by mbed TLS!
+ * \warning         This is not provided by Mbed TLS!
  *                  See \c MBEDTLS_ENTROPY_HARDWARE_ALT in mbedtls_config.h.
  *
  * \note            This must accept NULL as its first argument.
  */
-int mbedtls_hardware_poll( void *data,
-                           unsigned char *output, size_t len, size_t *olen );
+int mbedtls_hardware_poll(void *data,
+                          unsigned char *output, size_t len, size_t *olen);
 #endif
 
 #if defined(MBEDTLS_ENTROPY_NV_SEED)
@@ -65,8 +53,8 @@ int mbedtls_hardware_poll( void *data,
  *
  * \note            This must accept NULL as its first argument.
  */
-int mbedtls_nv_seed_poll( void *data,
-                          unsigned char *output, size_t len, size_t *olen );
+int mbedtls_nv_seed_poll(void *data,
+                         unsigned char *output, size_t len, size_t *olen);
 #endif
 
 #ifdef __cplusplus
