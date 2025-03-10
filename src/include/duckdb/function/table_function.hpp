@@ -18,6 +18,7 @@
 #include "duckdb/common/table_column.hpp"
 #include "duckdb/function/partition_stats.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"
+#include "duckdb/common/enums/ordinality_request_type.hpp"
 
 #include <functional>
 
@@ -387,6 +388,8 @@ public:
 	bool sampling_pushdown;
 	//! Whether or not the table function supports late materialization
 	bool late_materialization;
+	//! Whether or not WITH ORDINALITY has been invoked
+	ordinality_request with_ordinality = ordinality_request::NOT_REQUESTED;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 
