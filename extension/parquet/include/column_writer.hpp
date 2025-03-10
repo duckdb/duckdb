@@ -107,6 +107,12 @@ public:
 	virtual void Write(ColumnWriterState &state, Vector &vector, idx_t count) = 0;
 	virtual void FinalizeWrite(ColumnWriterState &state) = 0;
 
+	virtual void UnifyMinMax(const string &new_min, const string &new_max, string &global_min, string &global_max) {
+	}
+	virtual string StatsToString(const string &stats) const {
+		return string();
+	}
+
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
 	                        const idx_t count, const uint16_t define_value, const uint16_t null_value) const;

@@ -33,6 +33,8 @@ class ParquetEncryptionConfig;
 class Serializer;
 class Deserializer;
 
+struct CopyFunctionFileStatistics;
+
 struct PreparedRowGroup {
 	duckdb_parquet::RowGroup row_group;
 	vector<unique_ptr<ColumnWriterState>> states;
@@ -141,6 +143,10 @@ public:
 	                              optional_ptr<duckdb_parquet::Type::type> type = nullptr);
 
 	void BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilter> bloom_filter);
+	void SetWrittenStatistics(CopyFunctionFileStatistics &written_stats);
+
+private:
+	void GatherWrittenStatistics();
 
 private:
 	ClientContext &context;
@@ -167,6 +173,8 @@ private:
 
 	unique_ptr<GeoParquetFileMetadata> geoparquet_data;
 	vector<ParquetBloomFilterEntry> bloom_filters;
+
+	optional_ptr<CopyFunctionFileStatistics> written_stats;
 };
 
 } // namespace duckdb

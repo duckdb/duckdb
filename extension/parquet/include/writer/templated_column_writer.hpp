@@ -419,6 +419,14 @@ private:
 			throw InternalException("Unknown encoding");
 		}
 	}
+
+	void UnifyMinMax(const string &new_min, const string &new_max, string &global_min, string &global_max) override {
+		OP::template UnifyMinMax<SRC, TGT>(new_min, new_max, global_min, global_max);
+	}
+
+	string StatsToString(const string &stats) const override {
+		return OP::template StatsToString<SRC, TGT>(stats);
+	}
 };
 
 } // namespace duckdb

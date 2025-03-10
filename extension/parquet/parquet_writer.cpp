@@ -521,6 +521,43 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	FlushRowGroup(prepared_row_group);
 }
 
+void ParquetWriter::GatherWrittenStatistics() {
+	written_stats->row_count = file_meta_data.num_rows;
+
+	// find the per-column stats
+	vector<string> min_values;
+	vector<string> max_values;
+	vector<idx_t> null_counts;
+	min_values.resize(column_writers.size());
+	max_values.resize(column_writers.size());
+	null_counts.resize(column_writers.size());
+	// unify the stats of all of the row groups
+	for (auto &row_group : file_meta_data.row_groups) {
+		for (idx_t c = 0; c < row_group.columns.size(); c++) {
+			auto &column = row_group.columns[c];
+			auto &column_writer = column_writers[c];
+			if (column.meta_data.__isset.statistics) {
+				if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
+					column_writer->UnifyMinMax(column.meta_data.statistics.min_value,
+					                           column.meta_data.statistics.max_value, min_values[c], max_values[c]);
+				}
+				if (column.meta_data.statistics.__isset.null_count) {
+					null_counts[c] += column.meta_data.statistics.null_count;
+				}
+			}
+		}
+	}
+	// finalize the min/max values
+	for (idx_t c = 0; c < column_writers.size(); c++) {
+		auto &column_writer = column_writers[c];
+		min_values[c] = column_writer->StatsToString(min_values[c]);
+		max_values[c] = column_writer->StatsToString(max_values[c]);
+	}
+	written_stats->column_statistics["i"]["min"] = min_values[0];
+	written_stats->column_statistics["i"]["max"] = max_values[0];
+	written_stats->column_statistics["i"]["null_count"] = Value::UBIGINT(null_counts[0]);
+}
+
 void ParquetWriter::Finalize() {
 
 	// dump the bloom filters right before footer, not if stuff is encrypted
@@ -569,7 +606,8 @@ void ParquetWriter::Finalize() {
 
 	Write(file_meta_data);
 
-	writer->Write<uint32_t>(writer->GetTotalWritten() - metadata_start_offset);
+	uint32_t footer_size = writer->GetTotalWritten() - metadata_start_offset;
+	writer->Write<uint32_t>(footer_size);
 
 	if (encryption_config) {
 		// encrypted parquet files also end with the string "PARE"
@@ -577,6 +615,13 @@ void ParquetWriter::Finalize() {
 	} else {
 		// parquet files also end with the string "PAR1"
 		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
+	}
+	if (written_stats) {
+		// gather written statistics from the metadata
+		GatherWrittenStatistics();
+		written_stats->file_size_bytes = writer->GetTotalWritten();
+		written_stats->footer_offset = Value::UBIGINT(metadata_start_offset);
+		written_stats->footer_size = Value::UBIGINT(footer_size);
 	}
 
 	// flush to disk
@@ -600,6 +645,10 @@ void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilt
 	new_entry.column_idx = col_idx;
 	new_entry.row_group_idx = file_meta_data.row_groups.size();
 	bloom_filters.push_back(std::move(new_entry));
+}
+
+void ParquetWriter::SetWrittenStatistics(CopyFunctionFileStatistics &written_stats_p) {
+	written_stats = written_stats_p;
 }
 
 } // namespace duckdb

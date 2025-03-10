@@ -960,6 +960,12 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	return std::move(global_state);
 }
 
+void ParquetWriteGetWrittenStatistics(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                                      CopyFunctionFileStatistics &statistics) {
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	global_state.writer->SetWrittenStatistics(statistics);
+}
+
 void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
                       LocalFunctionData &lstate, DataChunk &input) {
 	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
@@ -1380,6 +1386,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.copy_to_bind = ParquetWriteBind;
 	function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
 	function.copy_to_initialize_local = ParquetWriteInitializeLocal;
+	function.copy_to_get_written_statistics = ParquetWriteGetWrittenStatistics;
 	function.copy_to_sink = ParquetWriteSink;
 	function.copy_to_combine = ParquetWriteCombine;
 	function.copy_to_finalize = ParquetWriteFinalize;

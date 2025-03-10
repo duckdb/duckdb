@@ -1,0 +1,16 @@
+# name: test/sql/copy/return_stats.test
+# description: test RETURN_STATS parameter for COPY
+# group: [copy]
+
+require parquet
+
+statement ok
+CREATE TABLE integers AS SELECT range i FROM range(200000);
+
+statement ok
+SET preserve_insertion_order=false;
+
+query IIIIII
+COPY integers TO '__TEST_DIR__/test_copy_to_file.parquet' (RETURN_STATS);
+----
+<REGEX>:.*test_copy_to_file.parquet	200000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{i={max=199999, null_count=0, min=0}}
