@@ -4,6 +4,7 @@ add_library_unity(
   csv_sniffer.cpp
   dialect_detection.cpp
   header_detection.cpp
+  set_columns.cpp
   type_detection.cpp
   type_refinement.cpp
   type_replacement.cpp)

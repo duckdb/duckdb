@@ -15,6 +15,7 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/execution/operator/csv_scanner/header_value.hpp"
+#include "duckdb/execution/operator/csv_scanner/set_columns.hpp"
 
 namespace duckdb {
 class InternalAppender;
@@ -67,7 +68,8 @@ public:
 	                             string &csv_row, idx_t row_byte_position, optional_idx byte_position,
 	                             const string &current_path);
 	//! Produces an error message for a dialect sniffing error.
-	static CSVError SniffingError(const CSVReaderOptions &options, const string &search_space);
+	static CSVError SniffingError(const CSVReaderOptions &options, const string &search_space, idx_t max_columns_found,
+	                              SetColumns &set_columns);
 	//! Produces an error message for a header sniffing error.
 	static CSVError HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
 	                                    idx_t column_count, const string &delimiter);
