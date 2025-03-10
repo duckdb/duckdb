@@ -19,6 +19,7 @@ typedef AggregateFunctionSet (*get_aggregate_function_set_t)();
 
 struct StaticFunctionDefinition {
 	const char *name;
+	const char *canonical_name;
 	const char *parameters;
 	const char *description;
 	const char *example;
