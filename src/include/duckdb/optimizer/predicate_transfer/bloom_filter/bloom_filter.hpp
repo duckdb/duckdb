@@ -14,8 +14,11 @@
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/optimizer/predicate_transfer/bloom_filter/partition_util.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
+
+class BloomFilterBuilderParallel;
 
 template <typename T>
 inline T SafeLoadAs(const uint8_t *unaligned) {
@@ -25,13 +28,6 @@ inline T SafeLoadAs(const uint8_t *unaligned) {
 }
 
 // A set of pre-generated bit masks from a 64-bit word.
-//
-// It is used to map selected bits of hash to a bit mask that will be used in
-// a Bloom filter.
-//
-// These bit masks need to look random and need to have a similar fractions of
-// bits set in order for a Bloom filter to have a low false positives rate.
-//
 struct BloomFilterMasks {
 	// Generate all masks as a single bit vector. Each bit offset in this bit
 	// vector corresponds to a single mask.
@@ -76,21 +72,18 @@ struct BloomFilterMasks {
 };
 
 class BlockedBloomFilter {
-	friend class BloomFilterBuilderParallel;
-
 public:
-	BlockedBloomFilter() : finalized_(false), log_num_blocks_(0), num_blocks_(0), blocks_(nullptr) {
-	}
+	BlockedBloomFilter() = default;
+
+	void Initialize(int64_t num_rows_to_insert, arrow::MemoryPool *pool);
 
 	bool finalized_;
 	int log_num_blocks_;
 	int64_t num_blocks_;
 
-	// The columns applied this BF
+	// The columns applied this BF, and the columns used to build this BF
 	vector<ColumnBinding> column_bindings_applied_;
-	// The columns build this BF
 	vector<ColumnBinding> column_bindings_built_;
-
 	vector<idx_t> BoundColsApplied;
 	vector<idx_t> BoundColsBuilt;
 
@@ -102,8 +95,8 @@ public:
 	}
 
 	// Uses SIMD if available for smaller Bloom filters. Uses memory prefetching for larger Bloom filters.
-	void Find(int64_t hardware_flags, int64_t num_rows, const uint64_t *hashes, SelectionVector &sel,
-	          idx_t &result_count, bool enable_prefetch = true) const;
+	void Find(int64_t num_rows, const uint64_t *hashes, SelectionVector &sel, idx_t &result_count,
+	          bool enable_prefetch = true, int64_t hardware_flags = 0) const;
 
 	int NumHashBitsUsed() const;
 
@@ -120,8 +113,6 @@ public:
 	static constexpr int64_t kNumBitsBlocksUsedBy32Bit = 32 - (BloomFilterMasks::kLogNumMasks + 6);
 	static constexpr int64_t kNumBlocksUsedBy32Bit = 1 << kNumBitsBlocksUsedBy32Bit;
 	static constexpr int64_t kMaxNumRowsFor32Bit = kNumBlocksUsedBy32Bit * 64 / kMinNumBitsPerKey;
-
-	arrow::Status CreateEmpty(int64_t num_rows_to_insert, arrow::MemoryPool *pool);
 
 	void Insert(int64_t hardware_flags, int64_t num_rows, const uint64_t *hashes);
 
@@ -150,27 +141,13 @@ private:
 		return (hash >> (BloomFilterMasks::kLogNumMasks + 6)) & (num_blocks_ - 1);
 	}
 
-	template <typename T>
-	inline void InsertImp(int64_t num_rows, const T *hashes);
-	inline void FindImp(int64_t num_rows, int64_t num_preprocessed, const uint64_t *hashes, SelectionVector &sel,
-	                    idx_t &result_count, bool enable_prefetch) const;
-
 	inline __m256i mask_avx2(__m256i hash) const;
 	inline __m256i block_id_avx2(__m256i hash) const;
-	int64_t Insert_avx2(int64_t num_rows, const uint32_t *hashes);
 	int64_t Insert_avx2(int64_t num_rows, const uint64_t *hashes);
-	template <typename T>
-	int64_t InsertImp_avx2(int64_t num_rows, const T *hashes);
 	int64_t Find_avx2(int64_t num_rows, const uint64_t *hashes, uint8_t *result_bit_vector) const;
-	int64_t FindImp_avx2(int64_t num_rows, const uint64_t *hashes, uint8_t *result_bit_vector) const;
 
 	bool UsePrefetch() const {
 		return num_blocks_ * sizeof(uint64_t) > kPrefetchLimitBytes;
-	}
-
-	void SetBuf(const std::shared_ptr<arrow::Buffer> &buf) {
-		buf_ = buf;
-		blocks_ = reinterpret_cast<std::atomic<uint64_t> *>(const_cast<uint8_t *>(buf_->data()));
 	}
 
 	static constexpr int64_t kPrefetchLimitBytes = 256 * 1024;

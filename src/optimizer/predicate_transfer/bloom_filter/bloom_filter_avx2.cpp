@@ -6,7 +6,6 @@
 namespace duckdb {
 inline __m256i BlockedBloomFilter::mask_avx2(__m256i hash) const {
 	// AVX2 translation of mask() method
-	//
 	__m256i mask_id = _mm256_and_si256(hash, _mm256_set1_epi64x(BloomFilterMasks::kNumMasks - 1));
 
 	auto masks = reinterpret_cast<const arrow::util::int64_for_gather_t *>(masks_.masks_);
@@ -27,13 +26,12 @@ inline __m256i BlockedBloomFilter::mask_avx2(__m256i hash) const {
 
 inline __m256i BlockedBloomFilter::block_id_avx2(__m256i hash) const {
 	// AVX2 translation of block_id() method
-	//
 	__m256i result = _mm256_srli_epi64(hash, BloomFilterMasks::kLogNumMasks + 6);
 	result = _mm256_and_si256(result, _mm256_set1_epi64x(num_blocks_ - 1));
 	return result;
 }
 
-int64_t BlockedBloomFilter::FindImp_avx2(int64_t num_rows, const uint64_t *hashes, uint8_t *result_bit_vector) const {
+int64_t BlockedBloomFilter::Find_avx2(int64_t num_rows, const uint64_t *hashes, uint8_t *result_bit_vector) const {
 	constexpr int unroll = 8;
 
 	auto blocks = reinterpret_cast<const arrow::util::int64_for_gather_t *>(blocks_);
@@ -59,21 +57,12 @@ int64_t BlockedBloomFilter::FindImp_avx2(int64_t num_rows, const uint64_t *hashe
 	return num_rows - (num_rows % unroll);
 }
 
-int64_t BlockedBloomFilter::Find_avx2(int64_t num_rows, const uint64_t *hashes, uint8_t *result_bit_vector) const {
-	return FindImp_avx2(num_rows, hashes, result_bit_vector);
-}
-
-template <typename T>
-int64_t BlockedBloomFilter::InsertImp_avx2(int64_t num_rows, const T *hashes) {
+int64_t BlockedBloomFilter::Insert_avx2(int64_t num_rows, const uint64_t *hashes) {
 	constexpr int unroll = 4;
 
 	for (int64_t i = 0; i < num_rows / unroll; ++i) {
 		__m256i hash;
-		if (sizeof(T) == sizeof(uint32_t)) {
-			hash = _mm256_cvtepu32_epi64(_mm_loadu_si128(reinterpret_cast<const __m128i *>(hashes) + i));
-		} else {
-			hash = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(hashes) + i);
-		}
+		hash = _mm256_loadu_si256(reinterpret_cast<const __m256i *>(hashes) + i);
 		__m256i mask = mask_avx2(hash);
 		__m256i block_id = block_id_avx2(hash);
 		blocks_[_mm256_extract_epi64(block_id, 0)].fetch_or(_mm256_extract_epi64(mask, 0));
@@ -83,14 +72,6 @@ int64_t BlockedBloomFilter::InsertImp_avx2(int64_t num_rows, const T *hashes) {
 	}
 
 	return num_rows - (num_rows % unroll);
-}
-
-int64_t BlockedBloomFilter::Insert_avx2(int64_t num_rows, const uint32_t *hashes) {
-	return InsertImp_avx2(num_rows, hashes);
-}
-
-int64_t BlockedBloomFilter::Insert_avx2(int64_t num_rows, const uint64_t *hashes) {
-	return InsertImp_avx2(num_rows, hashes);
 }
 
 } // namespace duckdb

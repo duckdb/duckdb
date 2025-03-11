@@ -19,7 +19,7 @@ static void BloomFilterExecute(const vector<Vector> &result, const shared_ptr<Bl
 	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		hashes.Flatten(row_num);
 	}
-	bloom_filter->Find(arrow::internal::CpuInfo::AVX2, row_num, (hash_t *)hashes.GetData(), sel, result_count, false);
+	bloom_filter->Find(row_num, (hash_t *)hashes.GetData(), sel, result_count, false, arrow::internal::CpuInfo::AVX2);
 
 	approved_tuple_count = result_count;
 }
