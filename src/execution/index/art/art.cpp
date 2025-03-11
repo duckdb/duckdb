@@ -45,7 +45,7 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
          const shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> &allocators_ptr,
          const IndexStorageInfo &info)
     : BoundIndex(name, ART::TYPE_NAME, index_constraint_type, column_ids, table_io_manager, unbound_expressions, db),
-      allocators(allocators_ptr), owns_data(false) {
+      allocators(allocators_ptr), owns_data(false), verify_max_key_len(false) {
 
 	// FIXME: Use the new byte representation function to support nested types.
 	for (idx_t i = 0; i < types.size(); i++) {
@@ -68,6 +68,12 @@ ART::ART(const string &name, const IndexConstraintType index_constraint_type, co
 		default:
 			throw InvalidTypeException(logical_types[i], "Invalid type for index key.");
 		}
+	}
+
+	if (types.size() > 1) {
+		verify_max_key_len = true;
+	} else if (types[0] == PhysicalType::VARCHAR) {
+		verify_max_key_len = true;
 	}
 
 	// Initialize the allocators.
@@ -378,10 +384,9 @@ void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, unsafe_ve
 }
 
 template <>
-void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys,
-                         const bool verify_keys) {
+void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
 	GenerateKeysInternal<false>(allocator, input, keys);
-	if (!verify_keys) {
+	if (!verify_max_key_len) {
 		return;
 	}
 	auto max_len = MAX_KEY_LEN * idx_t(prefix_count);
@@ -391,10 +396,9 @@ void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vec
 }
 
 template <>
-void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys,
-                             const bool verify_keys) {
+void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
 	GenerateKeysInternal<true>(allocator, input, keys);
-	if (!verify_keys) {
+	if (!verify_max_key_len) {
 		return;
 	}
 	auto max_len = MAX_KEY_LEN * idx_t(prefix_count);
@@ -405,13 +409,13 @@ void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe
 
 void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
                              unsafe_vector<ARTKey> &row_id_keys) {
-	GenerateKeys<>(allocator, input, keys, true);
+	GenerateKeys<>(allocator, input, keys);
 
 	DataChunk row_id_chunk;
 	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE}, input.size());
 	row_id_chunk.data[0].Reference(row_ids);
 	row_id_chunk.SetCardinality(input.size());
-	GenerateKeys<>(allocator, row_id_chunk, row_id_keys, false);
+	GenerateKeys<>(allocator, row_id_chunk, row_id_keys);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1165,7 +1169,7 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 
 	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	unsafe_vector<ARTKey> keys(expr_chunk.size());
-	GenerateKeys<>(arena_allocator, expr_chunk, keys, true);
+	GenerateKeys<>(arena_allocator, expr_chunk, keys);
 
 	optional_ptr<ART> delete_art;
 	if (info.delete_index) {
