@@ -97,14 +97,39 @@ COPY struct_test TO '__TEST_DIR__/struct_test.parquet' (RETURN_STATS);
 <REGEX>:.*struct_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{"struct_val"."x"={max=2499, min=1, null_count=250}, "struct_val"."y"={max=2598, min=102, null_count=1500}}
 
 # list
+statement ok
+CREATE VIEW list_test AS SELECT [i] l1, case when i%10=0 then null else [case when i%2=0 then 100 + i else null end] end l2 FROM range(2500) t(i)
+
+query IIIIII
+COPY list_test TO '__TEST_DIR__/list_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*list_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{"l1"."element"={max=2499, min=0}, "l2"."element"={max=2598, min=102}}
+
+# nested struct
+statement ok
+CREATE VIEW nested_struct_test AS SELECT {'s1': {'x': i}, 's2': {'s3': {'y': i}, 'l': [i]}} n FROM range(2500) t(i)
+
+query IIIIII
+COPY nested_struct_test TO '__TEST_DIR__/nested_struct_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*nested_struct_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{"n"."s1"."x"={max=2499, min=0, null_count=0}, "n"."s2"."l"."element"={max=2499, min=0}, "n"."s2"."s3"."y"={max=2499, min=0, null_count=0}}
+
+# quoted/funky column names
+statement ok
+CREATE VIEW funky_names AS SELECT {'quoted ''"field name"': 42} """quoted col name"""
+
+query IIIIII
+COPY funky_names TO '__TEST_DIR__/funky_names.parquet' (RETURN_STATS);
+----
+<REGEX>:.*funky_names.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{"""quoted col name"""."quoted '""field name"""={max=42, min=42, null_count=0}}
+
 # map
 # array
 
 
 # test all types
-
-
-# quoted/funky column names
+statement ok
+COPY (FROM test_all_types()) TO '__TEST_DIR__/test_all_types.parquet' (RETURN_STATS);
 
 # partition_by
 

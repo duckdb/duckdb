@@ -666,7 +666,6 @@ unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 		return make_uniq<NumericStatsUnifier<int32_t>>();
 	case LogicalTypeId::DATE:
 		return make_uniq<NumericStatsUnifier<date_t>>();
-	case LogicalTypeId::UINTEGER:
 	case LogicalTypeId::BIGINT:
 		return make_uniq<NumericStatsUnifier<int64_t>>();
 	case LogicalTypeId::TIME:
@@ -682,6 +681,8 @@ unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 		return make_uniq<NumericStatsUnifier<timestamp_ns_t>>();
 	case LogicalTypeId::TIME_TZ:
 		return make_uniq<NumericStatsUnifier<dtime_tz_t>>();
+	case LogicalTypeId::UINTEGER:
+		return make_uniq<NumericStatsUnifier<uint32_t>>();
 	case LogicalTypeId::UBIGINT:
 		return make_uniq<NumericStatsUnifier<uint64_t>>();
 	case LogicalTypeId::FLOAT:
