@@ -24,8 +24,8 @@ struct SetColumns {
 	//! How many columns
 	idx_t Size() const;
 	//! Helper function that checks if candidate is acceptable based on the number of columns it produces
-	inline bool IsCandidateUnacceptable(const idx_t num_cols, bool null_padding, bool ignore_errors,
-	                                    bool last_value_always_empty) const;
+	bool IsCandidateUnacceptable(const idx_t num_cols, bool null_padding, bool ignore_errors,
+	                             bool last_value_always_empty) const;
 
 	string ToString() const;
 };
