@@ -61,6 +61,8 @@ public:
 	DataChunk input_chunk;
 	//! Combined table filters, if we have dynamic filters
 	unique_ptr<TableFilterSet> table_filters;
+	idx_t ordinality_current_idx = 0;
+	bool reset_ordinality = false;
 
 	optional_ptr<TableFilterSet> GetTableFilters(const PhysicalTableScan &op) const {
 		return table_filters ? table_filters.get() : op.table_filters.get();
@@ -123,7 +125,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	}
 
 	if (function.ordinality_data.ordinality_request == ordinality_request::NOT_REQUESTED) {
-		// TODO: call function.ordinality_data.SetOrdinality(...);
+		function.ordinality_data.SetOrdinality(chunk, column_ids, g_state.ordinality_current_idx, g_state.reset_ordinality);
 	}
 
 
