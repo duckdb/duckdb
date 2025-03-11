@@ -17,8 +17,6 @@
 
 namespace duckdb {
 
-//! global column_id
-using global_column_id_t = idx_t;
 //! local column_id
 using local_column_id_t = idx_t;
 
