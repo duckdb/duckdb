@@ -226,8 +226,7 @@ unique_ptr<IndexScanState> ART::TryInitializeScan(const Expression &expr, const 
 //===--------------------------------------------------------------------===//
 
 template <class T, bool IS_NOT_NULL>
-static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys,
-                                  const idx_t max_len) {
+static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys) {
 	D_ASSERT(keys.size() >= count);
 
 	UnifiedVectorFormat data;
@@ -238,7 +237,6 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 		auto idx = data.sel->get_index(i);
 		if (IS_NOT_NULL || data.validity.RowIsValid(idx)) {
 			ARTKey::CreateARTKey<T>(allocator, keys[i], input_data[idx]);
-			keys[i].VerifyKeyLength(max_len);
 			continue;
 		}
 
@@ -248,8 +246,7 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 }
 
 template <class T, bool IS_NOT_NULL>
-static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys,
-                            const idx_t max_len) {
+static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t count, unsafe_vector<ARTKey> &keys) {
 	UnifiedVectorFormat data;
 	input.ToUnifiedFormat(count, data);
 	auto input_data = UnifiedVectorFormat::GetData<T>(data);
@@ -260,7 +257,6 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 		if (IS_NOT_NULL) {
 			auto other_key = ARTKey::CreateARTKey<T>(allocator, input_data[idx]);
 			keys[i].Concat(allocator, other_key);
-			keys[i].VerifyKeyLength(max_len);
 			continue;
 		}
 
@@ -278,55 +274,53 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 		// Concatenate the keys.
 		auto other_key = ARTKey::CreateARTKey<T>(allocator, input_data[idx]);
 		keys[i].Concat(allocator, other_key);
-		keys[i].VerifyKeyLength(max_len);
 	}
 }
 
 template <bool IS_NOT_NULL>
-void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys,
-                          const idx_t max_len) {
+void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
 	switch (input.data[0].GetType().InternalType()) {
 	case PhysicalType::BOOL:
-		TemplatedGenerateKeys<bool, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<bool, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT8:
-		TemplatedGenerateKeys<int8_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<int8_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT16:
-		TemplatedGenerateKeys<int16_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<int16_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT32:
-		TemplatedGenerateKeys<int32_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<int32_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT64:
-		TemplatedGenerateKeys<int64_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<int64_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::INT128:
-		TemplatedGenerateKeys<hugeint_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<hugeint_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT8:
-		TemplatedGenerateKeys<uint8_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<uint8_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT16:
-		TemplatedGenerateKeys<uint16_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<uint16_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT32:
-		TemplatedGenerateKeys<uint32_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<uint32_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT64:
-		TemplatedGenerateKeys<uint64_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<uint64_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::UINT128:
-		TemplatedGenerateKeys<uhugeint_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<uhugeint_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::FLOAT:
-		TemplatedGenerateKeys<float, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<float, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::DOUBLE:
-		TemplatedGenerateKeys<double, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<double, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	case PhysicalType::VARCHAR:
-		TemplatedGenerateKeys<string_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys, max_len);
+		TemplatedGenerateKeys<string_t, IS_NOT_NULL>(allocator, input.data[0], input.size(), keys);
 		break;
 	default:
 		throw InternalException("Invalid type for index");
@@ -336,46 +330,46 @@ void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, unsafe_ve
 	for (idx_t i = 1; i < input.ColumnCount(); i++) {
 		switch (input.data[i].GetType().InternalType()) {
 		case PhysicalType::BOOL:
-			ConcatenateKeys<bool, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<bool, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT8:
-			ConcatenateKeys<int8_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<int8_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT16:
-			ConcatenateKeys<int16_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<int16_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT32:
-			ConcatenateKeys<int32_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<int32_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT64:
-			ConcatenateKeys<int64_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<int64_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::INT128:
-			ConcatenateKeys<hugeint_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<hugeint_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT8:
-			ConcatenateKeys<uint8_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<uint8_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT16:
-			ConcatenateKeys<uint16_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<uint16_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT32:
-			ConcatenateKeys<uint32_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<uint32_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT64:
-			ConcatenateKeys<uint64_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<uint64_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::UINT128:
-			ConcatenateKeys<uhugeint_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<uhugeint_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::FLOAT:
-			ConcatenateKeys<float, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<float, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::DOUBLE:
-			ConcatenateKeys<double, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<double, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		case PhysicalType::VARCHAR:
-			ConcatenateKeys<string_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys, max_len);
+			ConcatenateKeys<string_t, IS_NOT_NULL>(allocator, input.data[i], input.size(), keys);
 			break;
 		default:
 			throw InternalException("Invalid type for index");
@@ -384,26 +378,40 @@ void GenerateKeysInternal(ArenaAllocator &allocator, DataChunk &input, unsafe_ve
 }
 
 template <>
-void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
+void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys,
+                         const bool verify_keys) {
+	GenerateKeysInternal<false>(allocator, input, keys);
+	if (!verify_keys) {
+		return;
+	}
 	auto max_len = MAX_KEY_LEN * idx_t(prefix_count);
-	GenerateKeysInternal<false>(allocator, input, keys, max_len);
+	for (idx_t i = 0; i < input.size(); i++) {
+		keys[i].VerifyKeyLength(max_len);
+	}
 }
 
 template <>
-void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys) {
+void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys,
+                             const bool verify_keys) {
+	GenerateKeysInternal<true>(allocator, input, keys);
+	if (!verify_keys) {
+		return;
+	}
 	auto max_len = MAX_KEY_LEN * idx_t(prefix_count);
-	GenerateKeysInternal<true>(allocator, input, keys, max_len);
+	for (idx_t i = 0; i < input.size(); i++) {
+		keys[i].VerifyKeyLength(max_len);
+	}
 }
 
 void ART::GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
                              unsafe_vector<ARTKey> &row_id_keys) {
-	GenerateKeys<>(allocator, input, keys);
+	GenerateKeys<>(allocator, input, keys, true);
 
 	DataChunk row_id_chunk;
 	row_id_chunk.Initialize(Allocator::DefaultAllocator(), vector<LogicalType> {LogicalType::ROW_TYPE}, input.size());
 	row_id_chunk.data[0].Reference(row_ids);
 	row_id_chunk.SetCardinality(input.size());
-	GenerateKeys<>(allocator, row_id_chunk, row_id_keys);
+	GenerateKeys<>(allocator, row_id_chunk, row_id_keys, false);
 }
 
 //===--------------------------------------------------------------------===//
@@ -1157,7 +1165,7 @@ void ART::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictMana
 
 	ArenaAllocator arena_allocator(BufferAllocator::Get(db));
 	unsafe_vector<ARTKey> keys(expr_chunk.size());
-	GenerateKeys<>(arena_allocator, expr_chunk, keys);
+	GenerateKeys<>(arena_allocator, expr_chunk, keys, true);
 
 	optional_ptr<ART> delete_art;
 	if (info.delete_index) {

@@ -108,7 +108,7 @@ public:
 
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
-	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys, const bool verify_keys);
 	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
 	                        unsafe_vector<ARTKey> &row_id_keys);
 
@@ -163,9 +163,11 @@ private:
 };
 
 template <>
-void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+void ART::GenerateKeys<>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys,
+                         const bool verify_keys);
 
 template <>
-void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+void ART::GenerateKeys<true>(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys,
+                             const bool verify_keys);
 
 } // namespace duckdb
