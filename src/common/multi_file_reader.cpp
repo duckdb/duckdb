@@ -517,6 +517,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(
 			}
 			auto &constant_expr = default_val->Cast<ConstantExpression>();
 			reader_data.constant_map.emplace_back(i, constant_expr.value);
+			expressions.push_back(make_uniq<BoundConstantExpression>(constant_expr.value));
 			continue;
 		}
 
@@ -538,6 +539,8 @@ void MultiFileReader::CreateColumnMappingByFieldId(
 		reader_data.column_ids.push_back(local_id);
 		reader_data.column_indexes.push_back(std::move(local_index));
 	}
+	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
+
 	reader_data.empty_columns = reader_data.column_ids.empty();
 }
 
