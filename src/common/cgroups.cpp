@@ -5,6 +5,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/printer.hpp"
 
 #include <cinttypes>
 
@@ -53,19 +54,24 @@ optional_idx CGroups::GetCGroupV1MemoryLimit(FileSystem &fs) {
 	const char *cgroup_self = "/proc/self/cgroup";
 
 	if (!fs.FileExists(cgroup_self)) {
+		Printer::PrintF("Could not find cgroup file: %s", cgroup_self);
 		return optional_idx();
 	}
+	Printer::PrintF("Found cgroup file: %s", cgroup_self);
 
 	string memory_cgroup_path = ReadMemoryCGroupPath(fs, cgroup_self);
 	if (memory_cgroup_path.empty()) {
+		Printer::PrintF("Did not find a 'memory' block in the content", cgroup_self);
 		return optional_idx();
 	}
+	Printer::PrintF("Found cgroup memory path: %s", memory_group_path);
 
 	auto memory_limit_path = StringUtil::Format("/sys/fs/cgroup/memory/%s/memory.limit_in_bytes", memory_cgroup_path);
 	if (!fs.FileExists(memory_limit_path)) {
+		Printer::PrintF("Memory limit path: %s does not exist", memory_limit_path);
 		return optional_idx();
 	}
-
+	Printer::PrintF("Memory limit path: %s exists", memory_limit_path);
 	return ReadCGroupValue(fs, memory_limit_path.c_str());
 #else
 	return optional_idx();
@@ -104,6 +110,8 @@ string CGroups::ReadMemoryCGroupPath(FileSystem &fs, const char *cgroup_file) {
 
 	// For cgroup v1, we're looking for a line with "memory:/path"
 	string content(buffer);
+	Printer::PrintF("cgroup file contents: %s", content);
+
 	size_t pos = 0;
 	string line;
 	while ((pos = content.find('\n')) != string::npos) {
@@ -124,8 +132,10 @@ optional_idx CGroups::ReadCGroupValue(FileSystem &fs, const char *file_path) {
 	auto bytes_read = fs.Read(*handle, buffer, 99);
 	buffer[bytes_read] = '\0';
 
+	auto contents = string_t(buffer);
+	Printer::PrintF("Contents of the memory limit file: %s", contents.GetString());
 	idx_t value;
-	if (TryCast::Operation<string_t, idx_t>(string_t(buffer), value)) {
+	if (TryCast::Operation<string_t, idx_t>(contents, value)) {
 		return optional_idx(value);
 	}
 #endif
