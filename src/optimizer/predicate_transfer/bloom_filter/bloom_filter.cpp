@@ -256,7 +256,7 @@ int64_t BlockedBloomFilter::NumBitsSet() const {
 	return arrow::internal::CountSetBits(reinterpret_cast<const uint8_t *>(blocks_), 0, (1LL << log_num_blocks()) * 64);
 }
 
-arrow::Status BloomFilterBuilder_SingleThreaded::Begin(size_t /*num_threads*/, int64_t hardware_flags,
+arrow::Status BloomFilterBuilderSingleThreaded::Begin(size_t /*num_threads*/, int64_t hardware_flags,
                                                        arrow::MemoryPool *pool, int64_t num_rows,
                                                        int64_t /*num_batches*/, BlockedBloomFilter *build_target) {
 	hardware_flags_ = hardware_flags;
@@ -267,21 +267,21 @@ arrow::Status BloomFilterBuilder_SingleThreaded::Begin(size_t /*num_threads*/, i
 	return arrow::Status::OK();
 }
 
-arrow::Status BloomFilterBuilder_SingleThreaded::PushNextBatch(size_t /*thread_index*/, int64_t num_rows,
+arrow::Status BloomFilterBuilderSingleThreaded::PushNextBatch(size_t /*thread_index*/, int64_t num_rows,
                                                                const uint64_t *hashes) {
 	PushNextBatchImp(num_rows, hashes);
 	return arrow::Status::OK();
 }
 
-vector<idx_t> BloomFilterBuilder_SingleThreaded::BuiltCols() {
+vector<idx_t> BloomFilterBuilderSingleThreaded::BuiltCols() {
 	return build_target_->BoundColsBuilt;
 }
 
-void BloomFilterBuilder_SingleThreaded::PushNextBatchImp(int64_t num_rows, const uint64_t *hashes) {
+void BloomFilterBuilderSingleThreaded::PushNextBatchImp(int64_t num_rows, const uint64_t *hashes) {
 	build_target_->Insert(hardware_flags_, num_rows, hashes);
 }
 
-arrow::Status BloomFilterBuilder_Parallel::Begin(size_t num_threads, int64_t hardware_flags, arrow::MemoryPool *pool,
+arrow::Status BloomFilterBuilderParallel::Begin(size_t num_threads, int64_t hardware_flags, arrow::MemoryPool *pool,
                                                  int64_t num_rows, int64_t num_batches,
                                                  BlockedBloomFilter *build_target) {
 	hardware_flags_ = hardware_flags;
@@ -299,16 +299,16 @@ arrow::Status BloomFilterBuilder_Parallel::Begin(size_t num_threads, int64_t har
 	return arrow::Status::OK();
 }
 
-arrow::Status BloomFilterBuilder_Parallel::PushNextBatch(size_t thread_id, int64_t num_rows, const uint64_t *hashes) {
+arrow::Status BloomFilterBuilderParallel::PushNextBatch(size_t thread_id, int64_t num_rows, const uint64_t *hashes) {
 	PushNextBatchImp(thread_id, num_rows, hashes);
 	return arrow::Status::OK();
 }
 
-vector<idx_t> BloomFilterBuilder_Parallel::BuiltCols() {
+vector<idx_t> BloomFilterBuilderParallel::BuiltCols() {
 	return build_target_->BoundColsBuilt;
 }
 
-void BloomFilterBuilder_Parallel::PushNextBatchImp(size_t thread_id, int64_t num_rows, const uint64_t *hashes) {
+void BloomFilterBuilderParallel::PushNextBatchImp(size_t thread_id, int64_t num_rows, const uint64_t *hashes) {
 	// Partition IDs are calculated using the higher bits of the block ID.  This
 	// ensures that each block is contained entirely within a partition and prevents
 	// concurrent access to a block.
@@ -366,11 +366,11 @@ void BloomFilterBuilder_Parallel::PushNextBatchImp(size_t thread_id, int64_t num
 	}
 }
 
-void BloomFilterBuilder_Parallel::CleanUp() {
+void BloomFilterBuilderParallel::CleanUp() {
 	thread_local_states_.clear();
 	prtn_locks_.CleanUp();
 }
 
-void BloomFilterBuilder_Parallel::Merge() {
+void BloomFilterBuilderParallel::Merge() {
 }
 } // namespace duckdb

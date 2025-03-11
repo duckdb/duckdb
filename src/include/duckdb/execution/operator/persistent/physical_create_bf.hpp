@@ -13,7 +13,7 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_BF;
 
 public:
-	PhysicalCreateBF(vector<LogicalType> types, vector<shared_ptr<BloomFilterPlan>> bf_plans,
+	PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<BloomFilterPlan>>& bf_plans,
 	                 idx_t estimated_cardinality);
 
 	vector<shared_ptr<BlockedBloomFilter>> bf_to_create;
@@ -55,10 +55,11 @@ public:
 		return true;
 	}
 
+	/* Add related createBF dependency */
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 	void BuildPipelinesFromRelated(Pipeline &current, MetaPipeline &meta_pipeline);
 
 private:
-	static shared_ptr<BlockedBloomFilter> BuiltBloomFilter(BloomFilterPlan &bf_plan);
+	static shared_ptr<BlockedBloomFilter> BuildBloomFilter(BloomFilterPlan &bf_plan);
 };
 } // namespace duckdb
