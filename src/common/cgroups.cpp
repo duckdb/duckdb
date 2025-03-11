@@ -66,7 +66,7 @@ optional_idx CGroups::GetCGroupV1MemoryLimit(FileSystem &fs) {
 		return optional_idx();
 	}
 
-	return ReadCGroupValue(fs, memory_limit_path);
+	return ReadCGroupValue(fs, memory_limit_path.c_str());
 #else
 	return optional_idx();
 #endif
