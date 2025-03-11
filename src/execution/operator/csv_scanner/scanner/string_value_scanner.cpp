@@ -1343,36 +1343,35 @@ void StringValueScanner::ProcessOverBufferValue() {
 	}
 	if (over_buffer_string.empty() &&
 	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
-		while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
-		       (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' ||
-		        buffer_handle_ptr[iterator.pos.buffer_pos] == '\r')) {
-			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
-				if (result.last_position.buffer_pos <= previous_buffer_handle->actual_size) {
-					// we add the value
-					result.AddValue(result, previous_buffer_handle->actual_size);
-					// And an extra empty value to represent what comes after the delimiter
-					if (result.IsCommentSet(result)) {
-						result.UnsetComment(result, iterator.pos.buffer_pos);
-					} else {
-						result.AddRow(result, previous_buffer_handle->actual_size);
-					}
-					return;
-				}
-			} else {
-				if (iterator.pos.buffer_pos + 1 == cur_buffer_handle->actual_size) {
-					// we add the value
-					// result.AddValue(result, previous_buffer_handle->actual_size);
-					// // And an extra empty value to represent what comes after the delimiter
-					// if (result.IsCommentSet(result)) {
-					// 	result.UnsetComment(result, iterator.pos.buffer_pos);
-					// } else {
-					// 	result.AddRow(result, previous_buffer_handle->actual_size);
-					// }
-					return;
-				}
+		if (!iterator.IsBoundarySet()) {
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+				iterator.pos.buffer_pos++;
 			}
-			state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
-			iterator.pos.buffer_pos++;
+		} else {
+			while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+			       (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' ||
+			        buffer_handle_ptr[iterator.pos.buffer_pos] == '\r')) {
+				if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
+					if (result.last_position.buffer_pos <= previous_buffer_handle->actual_size) {
+						// we add the value
+						result.AddValue(result, previous_buffer_handle->actual_size);
+						if (result.IsCommentSet(result)) {
+							result.UnsetComment(result, iterator.pos.buffer_pos);
+						} else {
+							result.AddRow(result, previous_buffer_handle->actual_size);
+						}
+						state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+						while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+						       (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r' ||
+						        buffer_handle_ptr[iterator.pos.buffer_pos] == '\n')) {
+							state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+						}
+						return;
+					}
+				}
+				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
+				iterator.pos.buffer_pos++;
+			}
 		}
 	}
 	// second buffer
