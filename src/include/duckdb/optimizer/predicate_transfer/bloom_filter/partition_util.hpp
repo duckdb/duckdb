@@ -1,12 +1,10 @@
 #pragma once
 
 #include <atomic>
-#include <cassert>
 #include <cstdint>
-#include <functional>
 #include <random>
+
 #include "arrow/acero/util.h"
-#include "arrow/buffer.h"
 #include "pcg_random.hpp"
 
 namespace duckdb {

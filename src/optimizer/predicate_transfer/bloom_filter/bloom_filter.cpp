@@ -176,22 +176,12 @@ void BlockedBloomFilter::Find(int64_t hardware_flags, int64_t num_rows, const ui
 
 int BlockedBloomFilter::NumHashBitsUsed() const {
 	constexpr int num_bits_for_mask = (BloomFilterMasks::kLogNumMasks + 6);
-	int num_bits_for_block = log_num_blocks();
+	int num_bits_for_block = log_num_blocks_;
 	return num_bits_for_mask + num_bits_for_block;
 }
 
-bool BlockedBloomFilter::IsSameAs(const BlockedBloomFilter *other) const {
-	if (log_num_blocks_ != other->log_num_blocks_ || num_blocks_ != other->num_blocks_) {
-		return false;
-	}
-	if (memcmp(blocks_, other->blocks_, num_blocks_ * sizeof(uint64_t)) != 0) {
-		return false;
-	}
-	return true;
-}
-
 int64_t BlockedBloomFilter::NumBitsSet() const {
-	return arrow::internal::CountSetBits(reinterpret_cast<const uint8_t *>(blocks_), 0, (1LL << log_num_blocks()) * 64);
+	return arrow::internal::CountSetBits(reinterpret_cast<const uint8_t *>(blocks_), 0, (1LL << log_num_blocks_) * 64);
 }
 
 arrow::Status BloomFilterBuilderParallel::Begin(size_t num_threads, int64_t hardware_flags, arrow::MemoryPool *pool,
@@ -227,7 +217,7 @@ void BloomFilterBuilderParallel::PushNextBatchImp(size_t thread_id, int64_t num_
 	constexpr int kLogBlocksKeptTogether = 7;
 	constexpr int kPrtnIdBitOffset = BloomFilterMasks::kLogNumMasks + 6 + kLogBlocksKeptTogether;
 
-	const int log_num_prtns_max = std::max(0, build_target_->log_num_blocks() - kLogBlocksKeptTogether);
+	const int log_num_prtns_max = std::max(0, build_target_->log_num_blocks_ - kLogBlocksKeptTogether);
 	const int log_num_prtns_mod = std::min(log_num_prtns_, log_num_prtns_max);
 	int num_prtns = 1 << log_num_prtns_mod;
 
@@ -272,8 +262,5 @@ void BloomFilterBuilderParallel::PushNextBatchImp(size_t thread_id, int64_t num_
 
 void BloomFilterBuilderParallel::CleanUp() {
 	thread_local_states_.clear();
-}
-
-void BloomFilterBuilderParallel::Merge() {
 }
 } // namespace duckdb

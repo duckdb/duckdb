@@ -193,6 +193,12 @@ public:
 		SetTasks(std::move(finalize_tasks));
 	}
 
+	void FinishEvent() override {
+		for (auto &bf : sink.op.bf_to_create) {
+			bf->finalized_ = true;
+		}
+	}
+
 	static constexpr idx_t CHUNKS_PER_TASK = 256;
 };
 

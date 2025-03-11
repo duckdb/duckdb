@@ -6,7 +6,7 @@ namespace duckdb {
 namespace {
 static void BloomFilterExecute(const vector<Vector> &result, const shared_ptr<BlockedBloomFilter> &bloom_filter,
                                SelectionVector &sel, idx_t &approved_tuple_count, idx_t row_num) {
-	if (bloom_filter->isEmpty()) {
+	if (!bloom_filter->finalized_) {
 		approved_tuple_count = 0;
 		return;
 	}
