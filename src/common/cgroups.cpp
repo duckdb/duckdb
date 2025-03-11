@@ -64,7 +64,7 @@ optional_idx CGroups::GetCGroupV1MemoryLimit(FileSystem &fs) {
 		Printer::PrintF("Did not find a 'memory' block in the content", cgroup_self);
 		return optional_idx();
 	}
-	Printer::PrintF("Found cgroup memory path: %s", memory_group_path);
+	Printer::PrintF("Found cgroup memory path: %s", memory_cgroup_path);
 
 	auto memory_limit_path = StringUtil::Format("/sys/fs/cgroup/memory/%s/memory.limit_in_bytes", memory_cgroup_path);
 	if (!fs.FileExists(memory_limit_path)) {
