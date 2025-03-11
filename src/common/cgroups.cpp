@@ -51,7 +51,6 @@ optional_idx CGroups::GetCGroupV2MemoryLimit(FileSystem &fs) {
 optional_idx CGroups::GetCGroupV1MemoryLimit(FileSystem &fs) {
 #if defined(__linux__) && !defined(DUCKDB_WASM)
 	const char *cgroup_self = "/proc/self/cgroup";
-	const char *memory_limit = "/sys/fs/cgroup/memory/%s/memory.limit_in_bytes";
 
 	if (!fs.FileExists(cgroup_self)) {
 		return optional_idx();
@@ -62,9 +61,7 @@ optional_idx CGroups::GetCGroupV1MemoryLimit(FileSystem &fs) {
 		return optional_idx();
 	}
 
-	char memory_limit_path[256];
-	snprintf(memory_limit_path, sizeof(memory_limit_path), memory_limit, memory_cgroup_path.c_str());
-
+	auto memory_limit_path = StringUtil::Format("/sys/fs/cgroup/memory/%s/memory.limit_in_bytes", memory_cgroup_path);
 	if (!fs.FileExists(memory_limit_path)) {
 		return optional_idx();
 	}
