@@ -385,8 +385,8 @@ static void endTimer(void) {
 #define ArraySize(X) (int)(sizeof(X) / sizeof(X[0]))
 
 /*
-** If the following flag is set, then command execution stops
-** at an error if we are not interactive.
+** If the following flag is set, then command execution stops at an error
+** if we are not interactive, including any error in processed files.
 */
 static bool bail_on_error = false;
 
@@ -4626,28 +4626,31 @@ string ShellState::GetDefaultDuckDBRC() {
 ** Read input from the file given by sqliterc_override.  Or if that
 ** parameter is NULL, take input from ~/.duckdbrc
 **
-** Returns the number of errors.
+** Returns true if successful, false otherwise.
 */
 
-void ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
+bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 	FILE *inSaved = in;
 	int savedLineno = lineno;
+	int rc;
 
 	in = fopen(file.c_str(), "rb");
 	if (in) {
 		if (stdin_is_interactive && is_duckdb_rc) {
 			utf8_printf(stderr, "-- Loading resources from %s\n", file.c_str());
 		}
-		ProcessInput();
+		rc = ProcessInput();
 		fclose(in);
 	} else if (!is_duckdb_rc) {
 		utf8_printf(stderr, "Failed to read file \"%s\"\n", file.c_str());
+		rc = 1;
 	}
 	in = inSaved;
 	lineno = savedLineno;
+	return rc == 0;
 }
 
-void ShellState::ProcessDuckDBRC(const char *file) {
+bool ShellState::ProcessDuckDBRC(const char *file) {
 	string path;
 	if (!file) {
 		// use default .duckdbrc path
@@ -4656,11 +4659,11 @@ void ShellState::ProcessDuckDBRC(const char *file) {
 			// could not find home directory - return
 			raw_printf(stderr, "-- warning: cannot find home directory;"
 			                   " cannot read ~/.duckdbrc\n");
-			return;
+			return true;
 		}
 		file = path.c_str();
 	}
-	ProcessFile(file, true);
+	return ProcessFile(file, true);
 }
 
 /*
@@ -4901,6 +4904,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			data.openFlags |= DUCKDB_UNSIGNED_EXTENSIONS;
 		} else if (strcmp(z, "-safe") == 0) {
 			safe_mode = true;
+		} else if (strcmp(z, "-bail") == 0) {
+			bail_on_error = true;
 		}
 	}
 	verify_uninitialized();
@@ -4944,7 +4949,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	** is given on the command line, look for a file named ~/.sqliterc and
 	** try to process it.
 	*/
-	data.ProcessDuckDBRC(zInitFile);
+	if (!data.ProcessDuckDBRC(zInitFile) && bail_on_error) {
+		return 1;
+	}
 
 	/* Make a second pass through the command-line argument and set
 	** options.  This second pass is delayed until after the initialization
@@ -5028,7 +5035,10 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				break;
 			}
 			z = cmdline_option_value(argc, argv, ++i);
-			data.ProcessFile(string(z));
+			if (!data.ProcessFile(string(z))) {
+				free(azCmd);
+				return 1;
+			}
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 				readStdin = false;
