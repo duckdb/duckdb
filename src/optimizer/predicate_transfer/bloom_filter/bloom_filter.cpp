@@ -174,68 +174,6 @@ void BlockedBloomFilter::Find(int64_t hardware_flags, int64_t num_rows, const ui
 	FindImp(num_rows - num_processed, num_processed, hashes + num_processed, sel, result_count, enable_prefetch);
 }
 
-void BlockedBloomFilter::Fold() {
-	// Keep repeating until one of the stop conditions checked inside the loop
-	// is met
-	for (;;) {
-		// If we reached the minimum size of blocked Bloom filter then stop
-		constexpr int log_num_blocks_min = 4;
-		if (log_num_blocks_ <= log_num_blocks_min) {
-			break;
-		}
-
-		int64_t num_bits = num_blocks_ * 64;
-
-		// Calculate the number of bits set in this blocked Bloom filter
-		int64_t num_bits_set = 0;
-		int batch_size_max = 65536;
-		for (int64_t i = 0; i < num_bits; i += batch_size_max) {
-			int batch_size = static_cast<int>(std::min(num_bits - i, static_cast<int64_t>(batch_size_max)));
-			num_bits_set +=
-			    arrow::internal::CountSetBits(reinterpret_cast<const uint8_t *>(blocks_) + i / 8, 0, batch_size);
-		}
-
-		// If at least 1/4 of bits is set then stop
-		if (4 * num_bits_set >= num_bits) {
-			break;
-		}
-
-		// Decide how many times to fold at once.
-		// The resulting size should not be less than log_num_bits_min.
-		int num_folds = 1;
-
-		while ((log_num_blocks_ - num_folds) > log_num_blocks_min && (4 * num_bits_set) < (num_bits >> num_folds)) {
-			++num_folds;
-		}
-
-		// Actual update to block Bloom filter bits
-		SingleFold(num_folds);
-	}
-}
-
-void BlockedBloomFilter::SingleFold(int num_folds) {
-	// Calculate number of slices and size of a slice
-	//
-	int64_t num_slices = 1LL << num_folds;
-	int64_t num_slice_blocks = (num_blocks_ >> num_folds);
-
-	// uint64_t* target_slice = blocks_;
-	std::atomic<uint64_t> *target_slice = blocks_;
-
-	// OR bits of all the slices and store result in the first slice
-	//
-	for (int64_t slice = 1; slice < num_slices; ++slice) {
-		// const uint64_t* source_slice = blocks_ + slice * num_slice_blocks;
-		std::atomic<uint64_t> *source_slice = blocks_ + slice * num_slice_blocks;
-		for (int i = 0; i < num_slice_blocks; ++i) {
-			target_slice[i] |= source_slice[i];
-		}
-	}
-
-	log_num_blocks_ -= num_folds;
-	num_blocks_ = 1ULL << log_num_blocks_;
-}
-
 int BlockedBloomFilter::NumHashBitsUsed() const {
 	constexpr int num_bits_for_mask = (BloomFilterMasks::kLogNumMasks + 6);
 	int num_bits_for_block = log_num_blocks();
@@ -256,34 +194,9 @@ int64_t BlockedBloomFilter::NumBitsSet() const {
 	return arrow::internal::CountSetBits(reinterpret_cast<const uint8_t *>(blocks_), 0, (1LL << log_num_blocks()) * 64);
 }
 
-arrow::Status BloomFilterBuilderSingleThreaded::Begin(size_t /*num_threads*/, int64_t hardware_flags,
-                                                       arrow::MemoryPool *pool, int64_t num_rows,
-                                                       int64_t /*num_batches*/, BlockedBloomFilter *build_target) {
-	hardware_flags_ = hardware_flags;
-	build_target_ = build_target;
-
-	RETURN_NOT_OK(build_target->CreateEmpty(num_rows, pool));
-
-	return arrow::Status::OK();
-}
-
-arrow::Status BloomFilterBuilderSingleThreaded::PushNextBatch(size_t /*thread_index*/, int64_t num_rows,
-                                                               const uint64_t *hashes) {
-	PushNextBatchImp(num_rows, hashes);
-	return arrow::Status::OK();
-}
-
-vector<idx_t> BloomFilterBuilderSingleThreaded::BuiltCols() {
-	return build_target_->BoundColsBuilt;
-}
-
-void BloomFilterBuilderSingleThreaded::PushNextBatchImp(int64_t num_rows, const uint64_t *hashes) {
-	build_target_->Insert(hardware_flags_, num_rows, hashes);
-}
-
 arrow::Status BloomFilterBuilderParallel::Begin(size_t num_threads, int64_t hardware_flags, arrow::MemoryPool *pool,
-                                                 int64_t num_rows, int64_t num_batches,
-                                                 BlockedBloomFilter *build_target) {
+                                                int64_t num_rows, int64_t num_batches,
+                                                BlockedBloomFilter *build_target) {
 	hardware_flags_ = hardware_flags;
 	build_target_ = build_target;
 	total_row_nums_ = num_rows;
@@ -292,7 +205,6 @@ arrow::Status BloomFilterBuilderParallel::Begin(size_t num_threads, int64_t hard
 	log_num_prtns_ = std::min(kMaxLogNumPrtns, arrow::bit_util::Log2(num_threads));
 
 	thread_local_states_.resize(num_threads);
-	prtn_locks_.Init(num_threads, 1 << log_num_prtns_);
 
 	RETURN_NOT_OK(build_target->CreateEmpty(num_rows, pool));
 
@@ -327,14 +239,6 @@ void BloomFilterBuilderParallel::PushNextBatchImp(size_t thread_id, int64_t num_
 	uint64_t *partitioned_hashes = local_state.partitioned_hashes_64.data();
 	int *unprocessed_partition_ids = local_state.unprocessed_partition_ids.data();
 
-	/*
-	if(local_state.local_bf == nullptr) {
-	  ColumnBinding col_bind(0, 0);
-	  local_state.local_bf = make_shared<BlockedBloomFilter>(col_bind);
-	  local_state.local_bf->CreateEmpty(total_row_nums_, arrow::default_memory_pool());
-	}
-	*/
-
 	PartitionSort::Eval(
 	    num_rows, num_prtns, partition_ranges,
 	    [=](int64_t row_id) { return (hashes[row_id] >> (kPrtnIdBitOffset)) & (num_prtns - 1); },
@@ -368,7 +272,6 @@ void BloomFilterBuilderParallel::PushNextBatchImp(size_t thread_id, int64_t num_
 
 void BloomFilterBuilderParallel::CleanUp() {
 	thread_local_states_.clear();
-	prtn_locks_.CleanUp();
 }
 
 void BloomFilterBuilderParallel::Merge() {

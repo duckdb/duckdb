@@ -1,11 +1,29 @@
-#include <utility>
-
 #include "duckdb/execution/operator/filter/physical_use_bf.hpp"
 
-#include "duckdb/optimizer/predicate_transfer/bloom_filter/bloom_filter_use_kernel.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
 
 namespace duckdb {
+namespace {
+static void BloomFilterExecute(const vector<Vector> &result, const shared_ptr<BlockedBloomFilter> &bloom_filter,
+                               SelectionVector &sel, idx_t &approved_tuple_count, idx_t row_num) {
+	if (bloom_filter->isEmpty()) {
+		approved_tuple_count = 0;
+		return;
+	}
+	idx_t result_count = 0;
+	Vector hashes(LogicalType::HASH);
+	VectorOperations::Hash(const_cast<Vector &>(result[bloom_filter->BoundColsApplied[0]]), hashes, row_num);
+	for (int i = 1; i < bloom_filter->BoundColsApplied.size(); i++) {
+		VectorOperations::CombineHash(hashes, const_cast<Vector &>(result[bloom_filter->BoundColsApplied[i]]), row_num);
+	}
+	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+		hashes.Flatten(row_num);
+	}
+	bloom_filter->Find(arrow::internal::CpuInfo::AVX2, row_num, (hash_t *)hashes.GetData(), sel, result_count, false);
+
+	approved_tuple_count = result_count;
+}
+} // namespace
 
 PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, vector<shared_ptr<BlockedBloomFilter>> bf,
                              const vector<PhysicalCreateBF *> &related_create_bfs, idx_t estimated_cardinality)
@@ -48,7 +66,7 @@ OperatorResultType PhysicalUseBF::ExecuteInternal(ExecutionContext &context, Dat
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
 	auto bf = bf_to_use[0];
 
-	BloomFilterUseKernel::filter(input.data, bf, sel, result_count, row_num);
+	BloomFilterExecute(input.data, bf, sel, result_count, row_num);
 
 	if (result_count == row_num) {
 		// nothing was filtered: skip adding any selection vectors

@@ -41,11 +41,7 @@ struct BloomFilterMasks {
 	BloomFilterMasks();
 
 	inline uint64_t mask(int bit_offset) {
-#if ARROW_LITTLE_ENDIAN
 		return (SafeLoadAs<uint64_t>(masks_ + bit_offset / 8) >> (bit_offset % 8)) & kFullMask;
-#else
-		return (BYTESWAP(SafeLoadAs<uint64_t>(masks_ + bit_offset / 8)) >> (bit_offset % 8)) & kFullMask;
-#endif
 	}
 
 	// Masks are 57 bits long because then they can be accessed at an
@@ -79,39 +75,14 @@ struct BloomFilterMasks {
 	uint8_t masks_[kTotalBytes];
 };
 
-// A variant of a blocked Bloom filter implementation.
-// A Bloom filter is a data structure that provides approximate membership test
-// functionality based only on the hash of the key. Membership test may return
-// false positives but not false negatives. Approximation of the result allows
-// in general case (for arbitrary data types of keys) to save on both memory and
-// lookup cost compared to the accurate membership test.
-// The accurate test may sometimes still be cheaper for a specific data types
-// and inputs, e.g. integers from a small range.
-//
-// This blocked Bloom filter is optimized for use in hash joins, to achieve a
-// good balance between the size of the filter, the cost of its building and
-// querying and the rate of false positives.
-//
 class BlockedBloomFilter {
-	friend class BloomFilterBuilderSingleThreaded;
 	friend class BloomFilterBuilderParallel;
 
 public:
-	BlockedBloomFilter()
-	    : private_masks_(nullptr), log_num_blocks_(0), num_blocks_(0), blocks_(nullptr), use_64bit_hashes_(true),
-	      Used_(false) {
+	BlockedBloomFilter() : log_num_blocks_(0), num_blocks_(0), blocks_(nullptr) {
 	}
 	BlockedBloomFilter(int log_num_blocks, bool use_64bit_hashes)
-	    : log_num_blocks_(log_num_blocks), num_blocks_(1ULL << log_num_blocks_), use_64bit_hashes_(use_64bit_hashes),
-	      Used_(false) {
-	}
-
-	void AddColumnBindingApplied(ColumnBinding column_binding) {
-		column_bindings_applied_.emplace_back(column_binding);
-	}
-
-	void AddColumnBindingBuilt(ColumnBinding column_binding) {
-		column_bindings_built_.emplace_back(column_binding);
+	    : log_num_blocks_(log_num_blocks), num_blocks_(1ULL << log_num_blocks_) {
 	}
 
 	inline bool Find(uint64_t hash) const {
@@ -126,20 +97,8 @@ public:
 	void Find(int64_t hardware_flags, int64_t num_rows, const uint64_t *hashes, SelectionVector &sel,
 	          idx_t &result_count, bool enable_prefetch = true) const;
 
-	vector<ColumnBinding> GetColApplied() {
-		return column_bindings_applied_;
-	}
-
-	vector<ColumnBinding> GetColBuilt() {
-		return column_bindings_built_;
-	}
-
 	int log_num_blocks() const {
 		return log_num_blocks_;
-	}
-
-	bool use_64bit_hashes() const {
-		return use_64bit_hashes_;
 	}
 
 	int NumHashBitsUsed() const;
@@ -151,39 +110,6 @@ public:
 	}
 
 	int64_t NumBitsSet() const;
-
-	// Folding of a block Bloom filter after the initial version
-	// has been built.
-	//
-	// One of the parameters for creation of Bloom filter is the number
-	// of bits allocated for it. The more bits allocated, the lower the
-	// probability of false positives. A good heuristic is to aim for
-	// half of the bits set in the constructed Bloom filter. This should
-	// result in a good trade off between size (and following cost of
-	// memory accesses) and false positives rate.
-	//
-	// There might have been many duplicate keys in the input provided
-	// to Bloom filter builder. In that case the resulting bit vector
-	// would be more sparse then originally intended. It is possible to
-	// easily correct that and cut in half the size of Bloom filter
-	// after it has already been constructed. The process to do that is
-	// approximately equal to OR-ing bits from upper and lower half (the
-	// way we address these bits when inserting or querying a hash makes
-	// such folding in half possible).
-	//
-	// We will keep folding as long as the fraction of bits set is less
-	// than 1/4. The resulting bit vector density should be in the [1/4,
-	// 1/2) range.
-	//
-	void Fold();
-
-	bool isUsed() {
-		return Used_;
-	}
-
-	void setUsed() {
-		Used_ = true;
-	}
 
 	// Num bits used per hash value
 	static constexpr int64_t kMinNumBitsPerKey = 8;
@@ -199,12 +125,10 @@ public:
 
 	// The columns applied this BF
 	vector<ColumnBinding> column_bindings_applied_;
-
 	// The columns build this BF
 	vector<ColumnBinding> column_bindings_built_;
 
 	vector<idx_t> BoundColsApplied;
-
 	vector<idx_t> BoundColsBuilt;
 
 	arrow::Status CreateEmpty(int64_t num_rows_to_insert, arrow::MemoryPool *pool);
@@ -249,8 +173,6 @@ private:
 	inline void FindImp(int64_t num_rows, int64_t num_preprocessed, const uint64_t *hashes, SelectionVector &sel,
 	                    idx_t &result_count, bool enable_prefetch) const;
 
-	void SingleFold(int num_folds);
-
 	inline __m256i mask_avx2(__m256i hash) const;
 	inline __m256i block_id_avx2(__m256i hash) const;
 	int64_t Insert_avx2(int64_t num_rows, const uint32_t *hashes);
@@ -271,94 +193,32 @@ private:
 	}
 
 	static constexpr int64_t kPrefetchLimitBytes = 256 * 1024;
-
 	static BloomFilterMasks masks_;
 
-	// Used when receiving bloom filters from other nodes, where
-	// the same masks should be used instead of the static one.
-	std::shared_ptr<BloomFilterMasks> private_masks_;
-
-	// Total number of bits used by block Bloom filter must be a power
-	// of 2.
-	//
+	// The Total number of bits used by block Bloom filter must be a power of 2.
 	int log_num_blocks_;
 	int64_t num_blocks_;
 
-	// Whether to use 64-bit hashes as input values.
-	bool use_64bit_hashes_;
-
-	// Buffer allocated to store an array of power of 2 64-bit blocks.
+	// Buffer allocated to store an array of power of 2, 64-bit blocks.
 	std::shared_ptr<arrow::Buffer> buf_;
 
 	// Pointer to mutable data owned by Buffer
 	// uint64_t* blocks_ = nullptr;
 	std::atomic<uint64_t> *blocks_;
-
-	bool Used_;
 };
 
-// We have two separate implementations of building a Bloom filter, multi-threaded and
-// single-threaded.
-//
-// Single threaded version is useful in two ways:
-// a) It allows to verify parallel implementation in tests (the single threaded one is
-// simpler and can be used as the source of truth).
-// b) It is preferred for small and medium size Bloom filters, because it skips extra
-// synchronization related steps from parallel variant (partitioning and taking locks).
-//
-enum class BloomFilterBuildStrategy {
-	SINGLE_THREADED = 0,
-	PARALLEL = 1,
-};
-
-class BloomFilterBuilder {
-public:
-	virtual ~BloomFilterBuilder() = default;
-	virtual arrow::Status Begin(size_t num_threads, int64_t hardware_flags, arrow::MemoryPool *pool, int64_t num_rows,
-	                            int64_t num_batches, BlockedBloomFilter *build_target) = 0;
-
-	virtual int64_t num_tasks() const {
-		return 0;
-	}
-	virtual arrow::Status PushNextBatch(size_t thread_index, int64_t num_rows, const uint64_t *hashes) = 0;
-
-	virtual vector<idx_t> BuiltCols() = 0;
-
-	virtual void CleanUp() {
-	}
-
-	virtual void Merge() {
-	}
-};
-
-class BloomFilterBuilderSingleThreaded : public BloomFilterBuilder {
+class BloomFilterBuilderParallel {
 public:
 	arrow::Status Begin(size_t num_threads, int64_t hardware_flags, arrow::MemoryPool *pool, int64_t num_rows,
-	                    int64_t num_batches, BlockedBloomFilter *build_target) override;
+	                    int64_t num_batches, BlockedBloomFilter *build_target);
 
-	arrow::Status PushNextBatch(size_t /*thread_index*/, int64_t num_rows, const uint64_t *hashes) override;
+	arrow::Status PushNextBatch(size_t thread_id, int64_t num_rows, const uint64_t *hashes);
 
-	vector<idx_t> BuiltCols() override;
+	void CleanUp();
 
-private:
-	void PushNextBatchImp(int64_t num_rows, const uint64_t *hashes);
+	void Merge();
 
-	int64_t hardware_flags_;
-	BlockedBloomFilter *build_target_;
-};
-
-class ARROW_ACERO_EXPORT BloomFilterBuilderParallel : public BloomFilterBuilder {
-public:
-	arrow::Status Begin(size_t num_threads, int64_t hardware_flags, arrow::MemoryPool *pool, int64_t num_rows,
-	                    int64_t num_batches, BlockedBloomFilter *build_target) override;
-
-	arrow::Status PushNextBatch(size_t thread_id, int64_t num_rows, const uint64_t *hashes) override;
-
-	void CleanUp() override;
-
-	void Merge() override;
-
-	vector<idx_t> BuiltCols() override;
+	vector<idx_t> BuiltCols();
 
 private:
 	void PushNextBatchImp(size_t thread_id, int64_t num_rows, const uint64_t *hashes);
@@ -375,6 +235,5 @@ private:
 		shared_ptr<BlockedBloomFilter> local_bf;
 	};
 	std::vector<ThreadLocalState> thread_local_states_;
-	PartitionLocks prtn_locks_;
 };
 } // namespace duckdb

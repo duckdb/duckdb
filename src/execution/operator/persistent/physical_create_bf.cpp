@@ -1,6 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
-#include "duckdb/parallel/thread_context.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -23,10 +22,10 @@ PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<share
 shared_ptr<BlockedBloomFilter> PhysicalCreateBF::BuildBloomFilter(BloomFilterPlan &bf_plan) {
 	auto BF = make_shared_ptr<BlockedBloomFilter>();
 	for (auto &apply_col : bf_plan.apply) {
-		BF->AddColumnBindingApplied(apply_col);
+		BF->column_bindings_applied_.emplace_back(apply_col);
 	}
 	for (auto &build_col : bf_plan.build) {
-		BF->AddColumnBindingBuilt(build_col);
+		BF->column_bindings_built_.emplace_back(build_col);
 	}
 	// BF->BoundColsApply will be updated in the related PhysicalUseBF
 	BF->BoundColsBuilt = bf_plan.bound_cols_build;
@@ -51,7 +50,7 @@ public:
 	const PhysicalCreateBF &op;
 
 	const idx_t num_threads;
-	vector<shared_ptr<BloomFilterBuilder>> builders;
+	vector<shared_ptr<BloomFilterBuilderParallel>> builders;
 	unique_ptr<ColumnDataCollection> data_collection;
 	vector<unique_ptr<ColumnDataCollection>> local_data_collections;
 };
