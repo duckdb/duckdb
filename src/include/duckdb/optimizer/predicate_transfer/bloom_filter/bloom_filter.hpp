@@ -58,9 +58,9 @@ private:
 
 class BlockedBloomFilter {
 public:
-	static constexpr int64_t MIN_NUM_BITS_PER_KEY = 8;
-	static constexpr int64_t MIN_NUM_BITS = 512;
-	static constexpr int64_t LOG_BLOCK_SIZE = 6;
+	static constexpr const int64_t MIN_NUM_BITS_PER_KEY = 8;
+	static constexpr const int64_t MIN_NUM_BITS = 512;
+	static constexpr const int64_t LOG_BLOCK_SIZE = 6;
 
 public:
 	BlockedBloomFilter() = default;
