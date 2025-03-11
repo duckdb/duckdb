@@ -6,6 +6,7 @@
 #include "duckdb/common/helper.hpp"
 #include "mbedtls/entropy.h"
 #include "mbedtls/gcm.h"
+#include "mbedtls/md.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/sha1.h"
 #include "mbedtls/sha256.h"
