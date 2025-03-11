@@ -125,9 +125,6 @@ public:
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		ThreadContext tcontext(this->executor.context);
-		tcontext.profiler.StartOperator(&sink.op);
-
 		size_t thread_id = 0;
 		std::thread::id threadId = std::this_thread::get_id();
 		for (size_t i = 0; i < threads.size(); i++) {
@@ -155,8 +152,6 @@ public:
 			}
 		}
 		event->FinishTask();
-		tcontext.profiler.EndOperator(nullptr);
-		this->executor.Flush(tcontext);
 		return TaskExecutionResult::TASK_FINISHED;
 	}
 
