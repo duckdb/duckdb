@@ -597,30 +597,27 @@ SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChun
 			// footer size BIGINT
 			chunk.SetValue(4, i, file_stats.footer_size);
 			// column statistics map(varchar, map(varchar, varchar))
-			vector<string> column_names;
-			vector<Value> values;
+			map<string, Value> stats;
 			for (auto &entry : file_stats.column_statistics) {
-				column_names.emplace_back(entry.first);
-
-				vector<string> stats_keys_str;
-				vector<Value> stats_values;
+				map<string, Value> per_column_stats;
 				for (auto &stats_entry : entry.second) {
-					stats_keys_str.emplace_back(stats_entry.first);
-					stats_values.emplace_back(stats_entry.second);
+					per_column_stats.insert(make_pair(stats_entry.first, stats_entry.second));
 				}
-				std::sort(stats_keys_str.begin(), stats_keys_str.end());
 				vector<Value> stats_keys;
-				for (auto &key : stats_keys_str) {
-					stats_keys.emplace_back(key);
+				vector<Value> stats_values;
+				for (auto &stats_entry : per_column_stats) {
+					stats_keys.emplace_back(stats_entry.first);
+					stats_values.emplace_back(std::move(stats_entry.second));
 				}
-
-				values.push_back(Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(stats_keys),
-				                            std::move(stats_values)));
+				auto map_value = Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(stats_keys),
+											std::move(stats_values));
+				stats.insert(make_pair(entry.first, std::move(map_value)));
 			}
-			std::sort(column_names.begin(), column_names.end());
 			vector<Value> keys;
-			for (auto &column_name : column_names) {
-				keys.emplace_back(column_name);
+			vector<Value> values;
+			for (auto &entry : stats) {
+				keys.emplace_back(entry.first);
+				values.emplace_back(std::move(entry.second));
 			}
 			auto map_val_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
 			chunk.SetValue(5, i, Value::MAP(LogicalType::VARCHAR, map_val_type, std::move(keys), std::move(values)));
