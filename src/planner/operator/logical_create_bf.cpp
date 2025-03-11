@@ -5,7 +5,8 @@
 namespace duckdb {
 
 LogicalCreateBF::LogicalCreateBF(vector<shared_ptr<BloomFilterPlan>> bloom_filters)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_BF), bf_to_create_plans(std::move(bloom_filters)) {};
+    : LogicalOperator(LogicalOperatorType::LOGICAL_CREATE_BF), bf_to_create_plans(std::move(bloom_filters)) {
+}
 
 InsertionOrderPreservingMap<string> LogicalCreateBF::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
