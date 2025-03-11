@@ -551,8 +551,13 @@ public:
 		auto &local_columns = lstate.reader->GetColumns();
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
 			auto local_id = local_column_ids[i];
-			auto &col = local_columns[local_id];
-			intermediate_chunk_types.push_back(col.type);
+			auto cast_entry = reader_data.cast_map.find(local_id);
+			if (cast_entry == reader_data.cast_map.end()) {
+				auto &col = local_columns[local_id];
+				intermediate_chunk_types.push_back(col.type);
+			} else {
+				intermediate_chunk_types.push_back(cast_entry->second);
+			}
 		}
 		lstate.scan_chunk.Destroy();
 		lstate.scan_chunk.Initialize(context, intermediate_chunk_types);

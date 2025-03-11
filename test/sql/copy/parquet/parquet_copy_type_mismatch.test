@@ -19,7 +19,7 @@ COPY (SELECT DATE '1992-01-01' d) TO '__TEST_DIR__/single_date.parquet' (FORMAT 
 statement error
 COPY integers FROM '__TEST_DIR__/single_date.parquet'
 ----
-Conversion Error: Unimplemented type for cast (DATE -> INTEGER)
+the column "d" has type DATE, but we are trying to load it into column "i" with type INTEGER
 
 statement ok
 COPY (SELECT DATE '1992-01-01' d, 42 k) TO '__TEST_DIR__/too_many_columns.parquet' (FORMAT parquet);
