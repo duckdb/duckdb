@@ -1111,15 +1111,15 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				ColumnReader::ApplyFilter(constant_vector, scan_filter.filter, *scan_filter.filter_state, scan_count,
 				                          state.sel, filter_count);
 			} else {
-				auto id = filter_entry.index;
-				local_column_id_t local_col_idx = reader_data.column_ids[id];
-				global_idx_t result_idx = reader_data.column_mapping[id];
+				local_idx_t local_idx = filter_entry.index;
+				local_column_id_t column_id = reader_data.column_ids[local_idx];
+				global_idx_t result_idx = reader_data.column_mapping[local_idx];
 
 				auto &result_vector = result.data[result_idx];
-				auto &child_reader = root_reader.GetChildReader(local_col_idx);
+				auto &child_reader = root_reader.GetChildReader(column_id);
 				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
 				                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
-				need_to_read[id] = false;
+				need_to_read[local_idx] = false;
 			}
 		}
 		state.adaptive_filter->EndFilter(filter_state);
