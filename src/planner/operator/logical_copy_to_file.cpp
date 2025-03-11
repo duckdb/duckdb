@@ -142,14 +142,12 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 }
 
 vector<ColumnBinding> LogicalCopyToFile::GetColumnBindings() {
-	switch (return_type) {
-	case CopyFunctionReturnType::CHANGED_ROWS:
-		return {ColumnBinding(0, 0)};
-	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
-		return {ColumnBinding(0, 0), ColumnBinding(0, 1)};
-	default:
-		throw NotImplementedException("Unknown CopyFunctionReturnType");
+	idx_t return_column_count = GetCopyFunctionReturnLogicalTypes(return_type).size();
+	vector<ColumnBinding> result;
+	for (idx_t i = 0; i < return_column_count; i++) {
+		result.emplace_back(0, i);
 	}
+	return result;
 }
 
 idx_t LogicalCopyToFile::EstimateCardinality(ClientContext &context) {
