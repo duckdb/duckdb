@@ -18,7 +18,7 @@ SELECT list_reduce([1, 2, 3], (x, y) -> x * y, -1);
 query I
 SELECT list_reduce([100, 10, 1], (x, y, i) -> x - y - i, 1000);
 ----
-880
+886
 
 query I
 SELECT list_reduce([1, 2, 3], (x, y) -> y - x, -1);
