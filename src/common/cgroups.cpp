@@ -18,6 +18,12 @@ static constexpr const char *CGROUP_PATH = "/proc/self/cgroup";
 static constexpr const idx_t DEFAULT_CGROUP_FILE_BUFFER_SIZE = 1024;
 
 struct CGroupEntry {
+public:
+	CGroupEntry(idx_t hierarchy_id, vector<string> &&controller_list, const string &cgroup_path)
+	    : hierarchy_id(hierarchy_id), controller_list(std::move(controller_list)), cgroup_path(cgroup_path) {
+	}
+
+public:
 	idx_t hierarchy_id;
 	vector<string> controller_list;
 	string cgroup_path;
