@@ -72,6 +72,22 @@ COPY blob_test TO '__TEST_DIR__/blob_test.parquet' (RETURN_STATS);
 <REGEX>:.*blob_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{bl={max=800080, min=, null_count=0}}
 
 # decimal
+statement ok
+CREATE VIEW decimal_test AS
+SELECT 25.3::DECIMAL(4,1) AS dec_i16,
+       123456.789::DECIMAL(9,3) AS dec_i32,
+       123456789123.456::DECIMAL(18,3) AS dec_i64
+UNION ALL
+SELECT 1.1::DECIMAL(4,1),
+       2.123::DECIMAL(9,3),
+       3.456::DECIMAL(18,3)
+
+query IIIIII
+COPY decimal_test TO '__TEST_DIR__/decimal_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*decimal_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{dec_i16={max=25.3, min=1.1, null_count=0}, dec_i32={max=123456.789, min=2.123, null_count=0}, dec_i64={max=123456789123.456, min=3.456, null_count=0}}
+
+
 
 # nested types
 

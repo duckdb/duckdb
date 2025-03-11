@@ -529,8 +529,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	FlushRowGroup(prepared_row_group);
 }
 
-class ColumnStatsUnifier {
-public:
+struct ColumnStatsUnifier {
 	virtual ~ColumnStatsUnifier() = default;
 
 	string global_min;
@@ -546,7 +545,7 @@ public:
 };
 
 template <class T>
-class NumericStatsUnifier : public ColumnStatsUnifier {
+struct BaseNumericStatsUnifier : public ColumnStatsUnifier {
 	void UnifyMinMax(const string &new_min, const string &new_max) override {
 		if (new_min.size() != sizeof(T) || new_max.size() != sizeof(T)) {
 			throw InternalException("Incorrect size for stats in UnifyMinMax");
@@ -572,7 +571,10 @@ class NumericStatsUnifier : public ColumnStatsUnifier {
 			}
 		}
 	}
+};
 
+template <class T>
+struct NumericStatsUnifier : public BaseNumericStatsUnifier<T> {
 	string StatsToString(const string &stats) override {
 		if (stats.empty()) {
 			return string();
@@ -581,7 +583,24 @@ class NumericStatsUnifier : public ColumnStatsUnifier {
 	}
 };
 
-class BaseStringStatsUnifier : public ColumnStatsUnifier {
+template <class T>
+struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
+	DecimalStatsUnifier(uint8_t width, uint8_t scale) : width(width), scale(scale) {
+	}
+
+	uint8_t width;
+	uint8_t scale;
+
+	string StatsToString(const string &stats) override {
+		if (stats.empty()) {
+			return string();
+		}
+		auto numeric_val = Load<T>(const_data_ptr_cast(stats.data()));
+		return Value::DECIMAL(numeric_val, width, scale).ToString();
+	}
+};
+
+struct BaseStringStatsUnifier : public ColumnStatsUnifier {
 	void UnifyMinMax(const string &new_min, const string &new_max) override {
 		if (!min_is_set) {
 			global_min = new_min;
@@ -602,13 +621,13 @@ class BaseStringStatsUnifier : public ColumnStatsUnifier {
 	}
 };
 
-class StringStatsUnifier : public BaseStringStatsUnifier {
+struct StringStatsUnifier : public BaseStringStatsUnifier {
 	string StatsToString(const string &stats) override {
 		return stats;
 	}
 };
 
-class BlobStatsUnifier : public BaseStringStatsUnifier {
+struct BlobStatsUnifier : public BaseStringStatsUnifier {
 	string StatsToString(const string &stats) override {
 		// convert blobs to hexadecimal
 		auto data = const_data_ptr_cast(stats.c_str());
@@ -625,7 +644,7 @@ class BlobStatsUnifier : public BaseStringStatsUnifier {
 	}
 };
 
-class NullStatsUnifier : public ColumnStatsUnifier {
+struct NullStatsUnifier : public ColumnStatsUnifier {
 	void UnifyMinMax(const string &new_min, const string &new_max) override {
 	}
 
@@ -670,16 +689,19 @@ unique_ptr<ColumnStatsUnifier> GetStatsUnifier(const LogicalType &type) {
 	case LogicalTypeId::UHUGEINT:
 	case LogicalTypeId::DOUBLE:
 		return make_uniq<NumericStatsUnifier<double>>();
-	case LogicalTypeId::DECIMAL:
+	case LogicalTypeId::DECIMAL: {
+		auto width = DecimalType::GetWidth(type);
+		auto scale = DecimalType::GetScale(type);
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
 		case PhysicalType::INT32:
-			return make_uniq<NumericStatsUnifier<int32_t>>();
+			return make_uniq<DecimalStatsUnifier<int32_t>>(width, scale);
 		case PhysicalType::INT64:
-			return make_uniq<NumericStatsUnifier<int64_t>>();
+			return make_uniq<DecimalStatsUnifier<int64_t>>(width, scale);
 		default:
 			return make_uniq<NullStatsUnifier>();
 		}
+	}
 	case LogicalTypeId::BLOB:
 		return make_uniq<BlobStatsUnifier>();
 	case LogicalTypeId::VARCHAR:
