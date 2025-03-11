@@ -58,7 +58,7 @@ bool TableFunction::Equal(const TableFunction &rhs) const {
 		return false;
 	}
 
-	if (with_ordinality != rhs.with_ordinality) {
+	if (ordinality_data != rhs.ordinality_data) {
 		return false;
 	}
 
