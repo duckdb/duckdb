@@ -1035,11 +1035,10 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	auto &names = csv_file_scan->GetNames();
 	auto &reader_data = csv_file_scan->reader_data;
 	// Now Do the cast-aroo
-	for (global_idx_t c = 0; c < reader_data.column_ids.size(); c++) {
-		idx_t col_idx = c;
-		global_idx_t result_idx = c;
+	for (local_idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
+		auto result_idx = col_idx;
 		if (!csv_file_scan->projection_ids.empty()) {
-			result_idx = csv_file_scan->projection_ids[c].second;
+			result_idx = csv_file_scan->projection_ids[col_idx].second;
 		}
 		if (col_idx >= parse_chunk.ColumnCount()) {
 			throw InvalidInputException("Mismatch between the schema of different files");

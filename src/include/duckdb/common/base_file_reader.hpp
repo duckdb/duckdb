@@ -106,6 +106,21 @@ public:
 	Value identifier;
 };
 
+struct MultiFileFilterEntry {
+	//! index into 'constant_map' if 'is_constant' else this is a 'local_idx_t'
+	idx_t index = DConstants::INVALID_INDEX;
+	bool is_constant = false;
+};
+
+struct MultiFileConstantEntry {
+	MultiFileConstantEntry(idx_t column_idx, Value value_p) : column_idx(column_idx), value(std::move(value_p)) {
+	}
+	//! The (global) column idx to apply the constant value to
+	global_idx_t column_idx;
+	//! The constant value
+	Value value;
+};
+
 struct MultiFileReaderData {
 	//! The column ids to read from the file
 	//! vector containing a mapping from (indexed with) `local_idx_t` -> `local_column_id_t`
@@ -119,12 +134,14 @@ struct MultiFileReaderData {
 	vector<global_idx_t> column_mapping;
 	//! Whether or not there are no columns to read. This can happen when a file only consists of constants
 	bool empty_columns = false;
-	//! vector containing a mapping from `global_idx_t` -> `local_idx_t` (or DConstants::INVALID_INDEX if constant)
-	vector<local_idx_t> filter_map;
-	//! The set of table filters, which
+	//! Filters can point to either (1) local columns in the file, or (2) constant values in the `constant_map`
+	//! This map specifies where the to-be-filtered value can be found
+	//! `global_idx_t` -> `MultiFileFilterEntry`
+	vector<MultiFileFilterEntry> filter_map;
+	//! The set of table filters
 	optional_ptr<TableFilterSet> filters;
-	//! The mapping of (global) index -> constant value
-	unordered_map<global_idx_t, Value> constant_map;
+	//! The constants that should be applied at the various positions
+	vector<MultiFileConstantEntry> constant_map;
 	//! Map of (local) column_id -> cast, used when reading multiple files when files have diverging types
 	//! for the same column
 	unordered_map<local_column_id_t, LogicalType> cast_map;

@@ -1108,22 +1108,21 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 			}
 			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
 			auto filter_entry = reader_data.filter_map[scan_filter.filter_idx];
-			if (filter_entry == DConstants::INVALID_INDEX) {
+			if (filter_entry.is_constant) {
 				// this is a constant vector, look for the constant
-				D_ASSERT(reader_data.constant_map.count(scan_filter.filter_idx));
-				auto &constant = reader_data.constant_map[scan_filter.filter_idx];
+				auto &constant = reader_data.constant_map[filter_entry.index].value;
 				Vector constant_vector(constant);
 				ColumnReader::ApplyFilter(constant_vector, scan_filter.filter, *scan_filter.filter_state, scan_count,
 				                          state.sel, filter_count);
 			} else {
-				auto id = filter_entry;
-				local_column_id_t local_col_id = reader_data.column_ids[id];
+				local_idx_t local_idx = filter_entry.index;
+				local_column_id_t column_id = reader_data.column_ids[local_idx];
 
-				auto &result_vector = result.data[id];
-				auto &child_reader = root_reader.GetChildReader(local_col_id);
+				auto &result_vector = result.data[local_idx];
+				auto &child_reader = root_reader.GetChildReader(column_id);
 				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
 				                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
-				need_to_read[id] = false;
+				need_to_read[local_idx] = false;
 			}
 		}
 		state.adaptive_filter->EndFilter(filter_state);
