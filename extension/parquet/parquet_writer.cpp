@@ -532,6 +532,7 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 struct ColumnStatsUnifier {
 	virtual ~ColumnStatsUnifier() = default;
 
+	string column_name;
 	string global_min;
 	string global_max;
 	idx_t null_count = 0;
@@ -653,7 +654,7 @@ struct NullStatsUnifier : public ColumnStatsUnifier {
 	}
 };
 
-unique_ptr<ColumnStatsUnifier> GetStatsUnifier(const LogicalType &type) {
+unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
 		return make_uniq<NullStatsUnifier>();
@@ -714,13 +715,30 @@ unique_ptr<ColumnStatsUnifier> GetStatsUnifier(const LogicalType &type) {
 	}
 }
 
+void GetStatsUnifier(const ParquetColumnSchema &schema, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
+                     string base_name = string()) {
+	if (!base_name.empty()) {
+		base_name += ".";
+	}
+	base_name += KeywordHelper::WriteQuoted(schema.name, '\"');
+	if (schema.children.empty()) {
+		auto unifier = GetBaseStatsUnifier(schema.type);
+		unifier->column_name = std::move(base_name);
+		unifiers.push_back(std::move(unifier));
+		return;
+	}
+	for (auto &child_schema : schema.children) {
+		GetStatsUnifier(child_schema, unifiers, base_name);
+	}
+}
+
 void ParquetWriter::GatherWrittenStatistics() {
 	written_stats->row_count = file_meta_data.num_rows;
 
 	// find the per-column stats
 	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
 	for (auto &column_writer : column_writers) {
-		stats_unifiers.push_back(GetStatsUnifier(column_writer->Type()));
+		GetStatsUnifier(column_writer->Schema(), stats_unifiers);
 	}
 	// unify the stats of all of the row groups
 	for (auto &row_group : file_meta_data.row_groups) {
@@ -744,9 +762,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 	}
 	// finalize the min/max values and write to column stats
 	for (idx_t c = 0; c < stats_unifiers.size(); c++) {
-		auto &column_writer = column_writers[c];
 		auto &stats_unifier = stats_unifiers[c];
-		string column_name = column_writer->GetColumnName();
 		case_insensitive_map_t<Value> column_stats;
 		if (stats_unifier->all_min_max_set) {
 			auto min_value = stats_unifier->StatsToString(stats_unifier->global_min);
@@ -761,7 +777,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 		if (stats_unifier->all_nulls_set) {
 			column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
 		}
-		written_stats->column_statistics[column_name] = std::move(column_stats);
+		written_stats->column_statistics.insert(make_pair(stats_unifier->column_name, std::move(column_stats)));
 	}
 }
 
