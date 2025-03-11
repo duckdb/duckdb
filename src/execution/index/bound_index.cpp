@@ -32,10 +32,29 @@ void BoundIndex::InitializeLock(IndexLock &state) {
 	state.index_lock = unique_lock<mutex>(lock);
 }
 
-ErrorData BoundIndex::Append(DataChunk &entries, Vector &row_identifiers) {
-	IndexLock state;
-	InitializeLock(state);
-	return Append(state, entries, row_identifiers);
+ErrorData BoundIndex::Append(DataChunk &chunk, Vector &row_ids) {
+	IndexLock l;
+	InitializeLock(l);
+	return Append(l, chunk, row_ids);
+}
+
+ErrorData BoundIndex::Append(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
+	// Fallback to the old Append.
+	return Append(l, chunk, row_ids);
+}
+
+ErrorData BoundIndex::Append(DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
+	IndexLock l;
+	InitializeLock(l);
+	return Append(l, chunk, row_ids, info);
+}
+
+void BoundIndex::VerifyAppend(DataChunk &chunk, IndexAppendInfo &info, optional_ptr<ConflictManager> manager) {
+	throw NotImplementedException("this implementation of VerifyAppend does not exist.");
+}
+
+void BoundIndex::VerifyConstraint(DataChunk &chunk, IndexAppendInfo &info, ConflictManager &manager) {
+	throw NotImplementedException("this implementation of VerifyConstraint does not exist.");
 }
 
 void BoundIndex::CommitDrop() {
@@ -48,6 +67,10 @@ void BoundIndex::Delete(DataChunk &entries, Vector &row_identifiers) {
 	IndexLock state;
 	InitializeLock(state);
 	Delete(state, entries, row_identifiers);
+}
+
+ErrorData BoundIndex::Insert(IndexLock &l, DataChunk &chunk, Vector &row_ids, IndexAppendInfo &info) {
+	throw NotImplementedException("this implementation of Insert does not exist.");
 }
 
 bool BoundIndex::MergeIndexes(BoundIndex &other_index) {
@@ -85,7 +108,7 @@ void BoundIndex::ExecuteExpressions(DataChunk &input, DataChunk &result) {
 }
 
 unique_ptr<Expression> BoundIndex::BindExpression(unique_ptr<Expression> expr) {
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 		return make_uniq<BoundReferenceExpression>(expr->return_type, column_ids[bound_colref.binding.column_index]);
 	}

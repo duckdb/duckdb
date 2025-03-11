@@ -43,8 +43,7 @@ void ArrowUnionData::Append(ArrowAppendData &append_data, Vector &input, idx_t f
 		for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {
 			child_vectors[child_idx].SetValue(input_idx, child_idx == tag ? resolved_value : Value(nullptr));
 		}
-
-		types_buffer.data()[input_idx] = NumericCast<data_t>(tag);
+		types_buffer.push_back<data_t>(NumericCast<data_t>(tag));
 	}
 
 	for (idx_t child_idx = 0; child_idx < child_vectors.size(); child_idx++) {

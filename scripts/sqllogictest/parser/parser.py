@@ -23,6 +23,7 @@ from ..statement import (
     Reconnect,
     Sleep,
     Skip,
+    Unzip,
     Unskip,
     SortStyle,
 )
@@ -86,6 +87,7 @@ class SQLLogicParser:
             TokenType.SQLLOGIC_RESTART: self.statement_restart,
             TokenType.SQLLOGIC_RECONNECT: self.statement_reconnect,
             TokenType.SQLLOGIC_SLEEP: self.statement_sleep,
+            TokenType.SQLLOGIC_UNZIP: self.statement_unzip,
             TokenType.SQLLOGIC_INVALID: None,
         }
         self.DECORATORS = {
@@ -99,6 +101,61 @@ class SQLLogicParser:
             "<integral>": ["tinyint", "smallint", "integer", "bigint", "hugeint"],
             "<signed>": ["tinyint", "smallint", "integer", "bigint", "hugeint"],
             "<unsigned>": ["utinyint", "usmallint", "uinteger", "ubigint", "uhugeint"],
+            "<all_types_columns>": [
+                "bool",
+                "tinyint",
+                "smallint",
+                "int",
+                "bigint",
+                "hugeint",
+                "uhugeint",
+                "utinyint",
+                "usmallint",
+                "uint",
+                "ubigint",
+                "date",
+                "time",
+                "timestamp",
+                "timestamp_s",
+                "timestamp_ms",
+                "timestamp_ns",
+                "time_tz",
+                "timestamp_tz",
+                "float",
+                "double",
+                "dec_4_1",
+                "dec_9_4",
+                "dec_18_6",
+                "dec38_10",
+                "uuid",
+                "interval",
+                "varchar",
+                "blob",
+                "bit",
+                "small_enum",
+                "medium_enum",
+                "large_enum",
+                "int_array",
+                "double_array",
+                "date_array",
+                "timestamp_array",
+                "timestamptz_array",
+                "varchar_array",
+                "nested_int_array",
+                "struct",
+                "struct_of_arrays",
+                "array_of_structs",
+                "map",
+                "union",
+                "fixed_int_array",
+                "fixed_varchar_array",
+                "fixed_nested_int_array",
+                "fixed_nested_varchar_array",
+                "fixed_struct_array",
+                "struct_of_fixed_array",
+                "fixed_array_of_int_list",
+                "list_of_fixed_int_array",
+            ],
         }
 
     def peek(self):
@@ -350,6 +407,29 @@ class SQLLogicParser:
             raise self.fail(f"Unrecognized sleep mode - expected {create_formatted_list(options)}")
         return Sleep(header, self.current_line + 1, sleep_duration, sleep_unit)
 
+    def statement_unzip(self, header: Token) -> Optional[BaseStatement]:
+        params = header.parameters
+        if len(params) != 1 and len(params) != 2:
+            docs = """
+                unzip requires 1 parameter, the path to a (g)zipped file.
+                Optionally a destination location can be provided, defaulting to '__TEST_DIR__/<base_name>'
+            """
+            self.fail(docs)
+
+        source = params[0]
+
+        accepted_filetypes = {'.gz'}
+
+        basename = os.path.basename(source)
+        stem, extension = os.path.splitext(basename)
+        if extension not in accepted_filetypes:
+            accepted_options = ", ".join(list(accepted_filetypes))
+            self.fail(
+                f"unzip: input does not end in a valid file extension ({extension}), accepted options are: {accepted_options}"
+            )
+        destination = params[1] if len(params) == 2 else f'__TEST_DIR__/{stem}'
+        return Unzip(header, self.current_line + 1, source, destination)
+
     # Decorators
 
     def decorator_skipif(self, token: Token) -> Optional[BaseDecorator]:
@@ -476,6 +556,7 @@ class SQLLogicParser:
             TokenType.SQLLOGIC_RESTART,
             TokenType.SQLLOGIC_RECONNECT,
             TokenType.SQLLOGIC_SLEEP,
+            TokenType.SQLLOGIC_UNZIP,
         ]
 
         if token.type in single_line_statements:
@@ -511,6 +592,7 @@ class SQLLogicParser:
             "load": TokenType.SQLLOGIC_LOAD,
             "restart": TokenType.SQLLOGIC_RESTART,
             "reconnect": TokenType.SQLLOGIC_RECONNECT,
+            "unzip": TokenType.SQLLOGIC_UNZIP,
             "sleep": TokenType.SQLLOGIC_SLEEP,
         }
 

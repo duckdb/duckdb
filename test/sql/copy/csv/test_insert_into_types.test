@@ -20,13 +20,13 @@ SELECT *
 FROM read_csv('data/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
 
 query III
-select * from users;
+select * from users order by all;
 ----
 1	alice	alice@email.com
+1	alice	alice@email.com
+1	alice	alice@email.com
 2	eve	eve@email.com
-1	alice	alice@email.com
 3	bob	bob@email.com
-1	alice	alice@email.com
 3	bob	bob@email.com
 
 statement ok
@@ -205,13 +205,13 @@ SELECT *
 FROM read_csv('data/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
 
 query III
-select * from users;
+select * from users order by all;
 ----
 1	alice	alice@email.com
+1	alice	alice@email.com
+1	alice	alice@email.com
 2	eve	eve@email.com
-1	alice	alice@email.com
 3	bob	bob@email.com
-1	alice	alice@email.com
 3	bob	bob@email.com
 
 # Test Glob + Projection
@@ -231,14 +231,14 @@ SELECT email, id
 FROM read_csv('data/csv/glob/f_*.csv', ignore_errors=true, null_padding=true);
 
 query II
-select * from proj;
+select * from proj order by all;
 ----
 alice@email.com	1
+alice@email.com	1
+alice@email.com	1
+bob@email.com	3
+bob@email.com	3
 eve@email.com	2
-alice@email.com	1
-bob@email.com	3
-alice@email.com	1
-bob@email.com	3
 
 # Test union by name
 statement ok

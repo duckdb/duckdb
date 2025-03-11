@@ -5,19 +5,20 @@ mutable struct DuckDBHandle
     file::String
     handle::duckdb_database
     functions::Vector{Any}
+    scalar_functions::Dict{String, Any}
     registered_objects::Dict{Any, Any}
 
     function DuckDBHandle(f::AbstractString, config::Config)
         f = String(isempty(f) ? f : expanduser(f))
         handle = Ref{duckdb_database}()
-        error = Ref{Ptr{UInt8}}()
+        error = Ref{Cstring}()
         if duckdb_open_ext(f, handle, config.handle, error) != DuckDBSuccess
             error_message = unsafe_string(error[])
-            duckdb_free(error[])
+            duckdb_free(pointer(error[]))
             throw(ConnectionException(error_message))
         end
 
-        db = new(f, handle[], Vector(), Dict())
+        db = new(f, handle[], Vector(), Dict(), Dict())
         finalizer(_close_database, db)
         return db
     end
@@ -40,7 +41,7 @@ A connection can only run a single query concurrently.
 It is possible to open multiple connections to a single DuckDB database instance.
 Multiple connections can run multiple queries concurrently.
 """
-mutable struct Connection
+mutable struct Connection <: DBInterface.Connection
     db::DuckDBHandle
     handle::duckdb_connection
 
@@ -108,7 +109,9 @@ DBInterface.connect(db::DB) = Connection(db.handle)
 DBInterface.close!(db::DB) = close_database(db)
 DBInterface.close!(con::Connection) = _close_connection(con)
 Base.close(db::DB) = close_database(db)
+Base.close(con::Connection) = _close_connection(con)
 Base.isopen(db::DB) = db.handle.handle != C_NULL
+Base.isopen(con::Connection) = con.handle != C_NULL
 
 Base.show(io::IO, db::DuckDB.DB) = print(io, string("DuckDB.DB(", "\"$(db.handle.file)\"", ")"))
 Base.show(io::IO, con::DuckDB.Connection) = print(io, string("DuckDB.Connection(", "\"$(con.db.file)\"", ")"))

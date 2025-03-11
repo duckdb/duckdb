@@ -1,7 +1,7 @@
 #include "duckdb/optimizer/compressed_materialization.hpp"
 
 #include "duckdb/execution/expression_executor.hpp"
-#include "duckdb/function/scalar/compressed_materialization_functions.hpp"
+#include "duckdb/function/scalar/compressed_materialization_utils.hpp"
 #include "duckdb/function/scalar/operators.hpp"
 #include "duckdb/optimizer/column_binding_replacer.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
@@ -329,11 +329,14 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetCompressExpression(
 static Value GetIntegralRangeValue(ClientContext &context, const LogicalType &type, const BaseStatistics &stats) {
 	auto min = NumericStats::Min(stats);
 	auto max = NumericStats::Max(stats);
+	if (max < min) {
+		return Value::HUGEINT(NumericLimits<hugeint_t>::Maximum());
+	}
 
 	vector<unique_ptr<Expression>> arguments;
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(max));
 	arguments.emplace_back(make_uniq<BoundConstantExpression>(min));
-	BoundFunctionExpression sub(type, SubtractFun::GetFunction(type, type), std::move(arguments), nullptr);
+	BoundFunctionExpression sub(type, SubtractFunction::GetFunction(type, type), std::move(arguments), nullptr);
 
 	Value result;
 	if (ExpressionExecutor::TryEvaluateScalar(context, sub, result)) {
@@ -401,7 +404,7 @@ unique_ptr<CompressExpression> CompressedMaterialization::GetStringCompress(uniq
 
 	const auto max_string_length = StringStats::MaxStringLength(stats);
 	LogicalType cast_type = LogicalType::INVALID;
-	for (const auto &compressed_type : CompressedMaterializationFunctions::StringTypes()) {
+	for (const auto &compressed_type : CMUtils::StringTypes()) {
 		if (max_string_length < GetTypeIdSize(compressed_type.InternalType())) {
 			cast_type = compressed_type;
 			break;

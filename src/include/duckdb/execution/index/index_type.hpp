@@ -18,6 +18,8 @@
 namespace duckdb {
 
 class BoundIndex;
+class PhysicalOperator;
+class LogicalCreateIndex;
 enum class IndexConstraintType : uint8_t;
 class Expression;
 class TableIOManager;
@@ -43,7 +45,19 @@ struct CreateIndexInput {
 	      options(options) {};
 };
 
+struct PlanIndexInput {
+	ClientContext &context;
+	LogicalCreateIndex &op;
+	unique_ptr<PhysicalOperator> &table_scan;
+
+	PlanIndexInput(ClientContext &context_p, LogicalCreateIndex &op_p, unique_ptr<PhysicalOperator> &table_scan_p)
+	    : context(context_p), op(op_p), table_scan(table_scan_p) {
+	}
+};
+
 typedef unique_ptr<BoundIndex> (*index_create_function_t)(CreateIndexInput &input);
+typedef unique_ptr<PhysicalOperator> (*index_plan_function_t)(PlanIndexInput &input);
+
 //! A index "type"
 class IndexType {
 public:
@@ -51,7 +65,8 @@ public:
 	string name;
 
 	// Callbacks
-	index_create_function_t create_instance;
+	index_plan_function_t create_plan = nullptr;
+	index_create_function_t create_instance = nullptr;
 };
 
 } // namespace duckdb

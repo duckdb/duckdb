@@ -1,5 +1,6 @@
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/list_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
@@ -31,25 +32,28 @@ void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &result) {
 	UnifiedVectorFormat new_sizes_data;
 	new_sizes.ToUnifiedFormat(row_count, new_sizes_data);
 	D_ASSERT(new_sizes.GetType().id() == LogicalTypeId::UBIGINT);
-	auto new_sizes_entries = UnifiedVectorFormat::GetData<uint64_t>(new_sizes_data);
+	auto new_size_entries = UnifiedVectorFormat::GetData<uint64_t>(new_sizes_data);
 
 	// Get the new size of the result child vector.
-	idx_t new_child_vector_size = 0;
-	for (idx_t i = 0; i < row_count; i++) {
-		auto idx = new_sizes_data.sel->get_index(i);
-		if (new_sizes_data.validity.RowIsValid(idx)) {
-			new_child_vector_size += new_sizes_entries[idx];
+	// We skip rows with NULL values in the input lists.
+	idx_t child_vector_size = 0;
+	for (idx_t row_idx = 0; row_idx < row_count; row_idx++) {
+		auto list_idx = lists_data.sel->get_index(row_idx);
+		auto new_size_idx = new_sizes_data.sel->get_index(row_idx);
+
+		if (lists_data.validity.RowIsValid(list_idx) && new_sizes_data.validity.RowIsValid(new_size_idx)) {
+			child_vector_size += new_size_entries[new_size_idx];
 		}
 	}
-	ListVector::Reserve(result, new_child_vector_size);
-	ListVector::SetListSize(result, new_child_vector_size);
+	ListVector::Reserve(result, child_vector_size);
+	ListVector::SetListSize(result, child_vector_size);
 
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_entries = FlatVector::GetData<list_entry_t>(result);
 	auto &result_validity = FlatVector::Validity(result);
 	auto &result_child_vector = ListVector::GetEntry(result);
 
-	// Get the default values vector, if it exists.
+	// Get the default values, if provided.
 	UnifiedVectorFormat default_data;
 	optional_ptr<Vector> default_vector;
 	if (args.ColumnCount() == 3) {
@@ -71,7 +75,7 @@ void ListResizeFunction(DataChunk &args, ExpressionState &, Vector &result) {
 
 		idx_t new_size = 0;
 		if (new_sizes_data.validity.RowIsValid(new_size_idx)) {
-			new_size = new_sizes_entries[new_size_idx];
+			new_size = new_size_entries[new_size_idx];
 		}
 
 		// If new_size >= length, then we copy [0, length) values.
@@ -151,24 +155,19 @@ static unique_ptr<FunctionData> ListResizeBind(ClientContext &context, ScalarFun
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 
-void ListResizeFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunctionSet ListResizeFun::GetFunctions() {
 	ScalarFunction simple_fun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY},
 	                          LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
 	simple_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-
+	BaseScalarFunction::SetReturnsError(simple_fun);
 	ScalarFunction default_value_fun({LogicalType::LIST(LogicalTypeId::ANY), LogicalTypeId::ANY, LogicalTypeId::ANY},
 	                                 LogicalType::LIST(LogicalTypeId::ANY), ListResizeFunction, ListResizeBind);
 	default_value_fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-
-	ScalarFunctionSet list_resize("list_resize");
-	list_resize.AddFunction(simple_fun);
-	list_resize.AddFunction(default_value_fun);
-	set.AddFunction(list_resize);
-
-	ScalarFunctionSet array_resize("array_resize");
-	array_resize.AddFunction(simple_fun);
-	array_resize.AddFunction(default_value_fun);
-	set.AddFunction(array_resize);
+	BaseScalarFunction::SetReturnsError(default_value_fun);
+	ScalarFunctionSet list_resize_set("list_resize");
+	list_resize_set.AddFunction(simple_fun);
+	list_resize_set.AddFunction(default_value_fun);
+	return list_resize_set;
 }
 
 } // namespace duckdb

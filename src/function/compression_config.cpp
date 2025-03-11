@@ -26,6 +26,10 @@ static const DefaultCompressionMethod internal_compression_methods[] = {
     {CompressionType::COMPRESSION_ALP, AlpCompressionFun::GetFunction, AlpCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_ALPRD, AlpRDCompressionFun::GetFunction, AlpRDCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_FSST, FSSTFun::GetFunction, FSSTFun::TypeIsSupported},
+    {CompressionType::COMPRESSION_ZSTD, ZSTDFun::GetFunction, ZSTDFun::TypeIsSupported},
+    {CompressionType::COMPRESSION_ROARING, RoaringCompressionFun::GetFunction, RoaringCompressionFun::TypeIsSupported},
+    {CompressionType::COMPRESSION_EMPTY, EmptyValidityCompressionFun::GetFunction,
+     EmptyValidityCompressionFun::TypeIsSupported},
     {CompressionType::COMPRESSION_AUTO, nullptr, nullptr}};
 
 static optional_ptr<CompressionFunction> FindCompressionFunction(CompressionFunctionSet &set, CompressionType type,
@@ -61,6 +65,10 @@ static optional_ptr<CompressionFunction> LoadCompressionFunction(CompressionFunc
 
 static void TryLoadCompression(DBConfig &config, vector<reference<CompressionFunction>> &result, CompressionType type,
                                const PhysicalType physical_type) {
+	if (config.options.disabled_compression_methods.find(type) != config.options.disabled_compression_methods.end()) {
+		// explicitly disabled
+		return;
+	}
 	auto function = config.GetCompressionFunction(type, physical_type);
 	if (!function) {
 		return;
@@ -79,6 +87,8 @@ vector<reference<CompressionFunction>> DBConfig::GetCompressionFunctions(const P
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ALP, physical_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ALPRD, physical_type);
 	TryLoadCompression(*this, result, CompressionType::COMPRESSION_FSST, physical_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ZSTD, physical_type);
+	TryLoadCompression(*this, result, CompressionType::COMPRESSION_ROARING, physical_type);
 	return result;
 }
 

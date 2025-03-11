@@ -9,7 +9,7 @@ TableFunctionCatalogEntry::TableFunctionCatalogEntry(Catalog &catalog, SchemaCat
 	D_ASSERT(this->functions.Size() > 0);
 }
 
-unique_ptr<CatalogEntry> TableFunctionCatalogEntry::AlterEntry(ClientContext &context, AlterInfo &info) {
+unique_ptr<CatalogEntry> TableFunctionCatalogEntry::AlterEntry(CatalogTransaction transaction, AlterInfo &info) {
 	if (info.type != AlterType::ALTER_TABLE_FUNCTION) {
 		throw InternalException("Attempting to alter TableFunctionCatalogEntry with unsupported alter type");
 	}

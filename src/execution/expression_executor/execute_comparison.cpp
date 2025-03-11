@@ -12,8 +12,9 @@ namespace duckdb {
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const BoundComparisonExpression &expr,
                                                                 ExpressionExecutorState &root) {
 	auto result = make_uniq<ExpressionState>(expr, root);
-	result->AddChild(expr.left.get());
-	result->AddChild(expr.right.get());
+	result->AddChild(*expr.left);
+	result->AddChild(*expr.right);
+
 	result->Finalize();
 	return result;
 }
@@ -28,7 +29,7 @@ void ExpressionExecutor::Execute(const BoundComparisonExpression &expr, Expressi
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
 	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
 
-	switch (expr.type) {
+	switch (expr.GetExpressionType()) {
 	case ExpressionType::COMPARE_EQUAL:
 		VectorOperations::Equals(left, right, result, count);
 		break;
@@ -356,7 +357,7 @@ idx_t ExpressionExecutor::Select(const BoundComparisonExpression &expr, Expressi
 	Execute(*expr.left, state->child_states[0].get(), sel, count, left);
 	Execute(*expr.right, state->child_states[1].get(), sel, count, right);
 
-	switch (expr.type) {
+	switch (expr.GetExpressionType()) {
 	case ExpressionType::COMPARE_EQUAL:
 		return VectorOperations::Equals(left, right, sel, count, true_sel, false_sel);
 	case ExpressionType::COMPARE_NOTEQUAL:

@@ -347,7 +347,9 @@
  * If defined, explicitly attempt to more uniformly distribute large allocation
  * pointer alignments across all cache indices.
  */
-// #define JEMALLOC_CACHE_OBLIVIOUS
+#if (LG_PAGE == 12)
+#define JEMALLOC_CACHE_OBLIVIOUS
+#endif
 
 /*
  * If defined, enable logging facilities.  We make this a configure option to
@@ -393,9 +395,9 @@
  * Defined if transparent huge pages are supported via the MADV_[NO]HUGEPAGE
  * arguments to madvise(2).
  */
-#ifdef __GLIBC__
-#define JEMALLOC_HAVE_MADVISE_HUGE
-#endif
+// #ifdef __GLIBC__
+// #define JEMALLOC_HAVE_MADVISE_HUGE
+// #endif
 
 /*
  * Methods for purging unused pages differ between operating systems.

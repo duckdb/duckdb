@@ -37,7 +37,7 @@ BindResult ExpressionBinder::TryBindLambdaOrJson(FunctionExpression &function, i
 BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t depth,
                                             unique_ptr<ParsedExpression> &expr_ptr) {
 	// lookup the function in the catalog
-	QueryErrorContext error_context(function.query_location);
+	QueryErrorContext error_context(function.GetQueryLocation());
 	binder.BindSchemaOrCatalog(function.catalog, function.schema);
 	auto func = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
 	                            function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
@@ -125,13 +125,13 @@ BindResult ExpressionBinder::BindFunction(FunctionExpression &function, ScalarFu
 		children.push_back(std::move(child));
 	}
 
-	FunctionBinder function_binder(context);
+	FunctionBinder function_binder(binder);
 	auto result = function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
 		error.AddQueryLocation(function);
 		error.Throw();
 	}
-	if (result->type == ExpressionType::BOUND_FUNCTION) {
+	if (result->GetExpressionType() == ExpressionType::BOUND_FUNCTION) {
 		auto &bound_function = result->Cast<BoundFunctionExpression>();
 		if (bound_function.function.stability == FunctionStability::CONSISTENT_WITHIN_QUERY) {
 			binder.SetAlwaysRequireRebind();
@@ -202,10 +202,10 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	}
 
 	// successfully bound: replace the node with a BoundExpression
-	auto alias = function.children[1]->alias;
-	bind_lambda_result.expression->alias = alias;
+	auto alias = function.children[1]->GetAlias();
+	bind_lambda_result.expression->SetAlias(alias);
 	if (!alias.empty()) {
-		bind_lambda_result.expression->alias = alias;
+		bind_lambda_result.expression->SetAlias(alias);
 	}
 	function.children[1] = make_uniq<BoundExpression>(std::move(bind_lambda_result.expression));
 
@@ -225,7 +225,7 @@ BindResult ExpressionBinder::BindLambdaFunction(FunctionExpression &function, Sc
 	auto &bound_lambda_expr = children[1]->Cast<BoundLambdaExpression>();
 	CaptureLambdaColumns(bound_lambda_expr, bound_lambda_expr.lambda_expr, &bind_lambda_function, list_child_type);
 
-	FunctionBinder function_binder(context);
+	FunctionBinder function_binder(binder);
 	unique_ptr<Expression> result =
 	    function_binder.BindScalarFunction(func, std::move(children), error, function.is_operator, &binder);
 	if (!result) {
@@ -275,6 +275,9 @@ BindResult ExpressionBinder::BindAggregate(FunctionExpression &expr, AggregateFu
 
 BindResult ExpressionBinder::BindUnnest(FunctionExpression &expr, idx_t depth, bool root_expression) {
 	return BindUnsupportedExpression(expr, depth, UnsupportedUnnestMessage());
+}
+
+void ExpressionBinder::ThrowIfUnnestInLambda(const ColumnBinding &column_binding) {
 }
 
 string ExpressionBinder::UnsupportedAggregateMessage() {

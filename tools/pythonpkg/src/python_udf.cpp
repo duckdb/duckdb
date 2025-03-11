@@ -16,23 +16,26 @@
 #include "duckdb_python/arrow/arrow_export_utils.hpp"
 #include "duckdb/common/types/arrow_aux_data.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
+#include "duckdb_python/python_conversion.hpp"
 
 namespace duckdb {
 
 static py::list ConvertToSingleBatch(vector<LogicalType> &types, vector<string> &names, DataChunk &input,
-                                     const ClientProperties &options) {
+                                     ClientProperties &options, ClientContext &context) {
 	ArrowSchema schema;
 	ArrowConverter::ToArrowSchema(&schema, types, names, options);
 
 	py::list single_batch;
-	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options);
+	ArrowAppender appender(types, STANDARD_VECTOR_SIZE, options,
+	                       ArrowTypeExtensionData::GetExtensionTypes(context, types));
 	appender.Append(input, 0, input.size(), input.size());
 	auto array = appender.Finalize();
 	TransformDuckToArrowChunk(schema, array, single_batch);
 	return single_batch;
 }
 
-static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientProperties &options) {
+static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, ClientProperties &options, ClientContext &context) {
 	auto types = input.GetTypes();
 	vector<string> names;
 	names.reserve(types.size());
@@ -40,7 +43,7 @@ static py::object ConvertDataChunkToPyArrowTable(DataChunk &input, const ClientP
 		names.push_back(StringUtil::Format("c%d", i));
 	}
 
-	return pyarrow::ToArrowTable(types, names, ConvertToSingleBatch(types, names, input, options), options);
+	return pyarrow::ToArrowTable(types, names, ConvertToSingleBatch(types, names, input, options, context), options);
 }
 
 // If these types are arrow canonical extensions, we must check if they are registered.
@@ -68,9 +71,11 @@ void AreExtensionsRegistered(const LogicalType &arrow_type, const LogicalType &d
 static void ConvertArrowTableToVector(const py::object &table, Vector &out, ClientContext &context, idx_t count) {
 	// Create the stream factory from the Table object
 	auto ptr = table.ptr();
+	D_ASSERT(py::gil_check());
 	py::gil_scoped_release gil;
 
-	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(ptr, context.GetClientProperties());
+	auto stream_factory =
+	    make_uniq<PythonTableArrowArrayStreamFactory>(ptr, context.GetClientProperties(), DBConfig::GetConfig(context));
 	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
 	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
 
@@ -125,6 +130,7 @@ static void ConvertArrowTableToVector(const py::object &table, Vector &out, Clie
 
 	VectorOperations::Cast(context, result.data[0], out, count);
 	out.Flatten(count);
+	out.Verify(count);
 }
 
 static string NullHandlingError() {
@@ -172,12 +178,12 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 		// owning references
 		py::object python_object;
 		// Convert the input datachunk to pyarrow
-		ClientProperties options;
+		//		ClientProperties options;
 
-		if (state.HasContext()) {
-			auto &context = state.GetContext();
-			options = context.GetClientProperties();
-		}
+		//		if (state.HasContext()) {
+		auto &context = state.GetContext();
+		auto options = context.GetClientProperties();
+		//		}
 
 		auto result_validity = FlatVector::Validity(result);
 		SelectionVector selvec(input.size());
@@ -209,7 +215,7 @@ static scalar_function_t CreateVectorizedFunction(PyObject *function, PythonExce
 			}
 		}
 
-		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options);
+		auto pyarrow_table = ConvertDataChunkToPyArrowTable(input, options, state.GetContext());
 		py::tuple column_list = pyarrow_table.attr("columns");
 
 		auto count = input.size();
@@ -299,10 +305,6 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 
 		const bool default_null_handling = null_handling == FunctionNullHandling::DEFAULT_NULL_HANDLING;
 
-		// owning references
-		vector<py::object> python_objects;
-		vector<PyObject *> python_results;
-		python_results.resize(input.size());
 		for (idx_t row = 0; row < input.size(); row++) {
 
 			auto bundled_parameters = py::tuple((int)input.ColumnCount());
@@ -319,8 +321,7 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 			}
 			if (contains_null) {
 				// Immediately insert None, no need to call the function
-				python_objects.push_back(py::none());
-				python_results[row] = py::none().ptr();
+				FlatVector::SetNull(result, row, true);
 				continue;
 			}
 
@@ -333,18 +334,17 @@ static scalar_function_t CreateNativeFunction(PyObject *function, PythonExceptio
 					                            exception.what());
 				} else if (exception_handling == PythonExceptionHandling::RETURN_NULL) {
 					PyErr_Clear();
-					ret = Py_None;
+					FlatVector::SetNull(result, row, true);
+					continue;
 				} else {
 					throw NotImplementedException("Exception handling type not implemented");
 				}
 			} else if ((!ret || ret == Py_None) && default_null_handling) {
 				throw InvalidInputException(NullHandlingError());
 			}
-			python_objects.push_back(py::reinterpret_steal<py::object>(ret));
-			python_results[row] = ret;
+			TransformPythonObject(ret, result, row);
 		}
 
-		NumpyScan::ScanObjectColumn(python_results.data(), sizeof(PyObject *), input.size(), 0, result);
 		if (input.size() == 1) {
 			result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		}

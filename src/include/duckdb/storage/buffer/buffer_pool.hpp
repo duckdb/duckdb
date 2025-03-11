@@ -41,12 +41,16 @@ class BufferPool {
 	friend class StandardBufferManager;
 
 public:
-	explicit BufferPool(idx_t maximum_memory, bool track_eviction_timestamps);
+	BufferPool(idx_t maximum_memory, bool track_eviction_timestamps, idx_t allocator_bulk_deallocation_flush_threshold);
 	virtual ~BufferPool();
 
 	//! Set a new memory limit to the buffer pool, throws an exception if the new limit is too low and not enough
 	//! blocks can be evicted
 	void SetLimit(idx_t limit, const char *exception_postscript);
+
+	//! If bulk deallocation larger than this occurs, flush outstanding allocations
+	void SetAllocatorBulkDeallocationFlushThreshold(idx_t threshold);
+	idx_t GetAllocatorBulkDeallocationFlushThreshold();
 
 	void UpdateUsedMemory(MemoryTag tag, int64_t size);
 
@@ -78,14 +82,21 @@ protected:
 	idx_t PurgeAgedBlocks(uint32_t max_age_sec);
 	idx_t PurgeAgedBlocksInternal(EvictionQueue &queue, uint32_t max_age_sec, int64_t now, int64_t limit);
 	//! Garbage collect dead nodes in the eviction queue.
-	void PurgeQueue(FileBufferType type);
+	void PurgeQueue(const BlockHandle &handle);
 	//! Add a buffer handle to the eviction queue. Returns true, if the queue is
 	//! ready to be purged, and false otherwise.
 	bool AddToEvictionQueue(shared_ptr<BlockHandle> &handle);
 	//! Gets the eviction queue for the specified type
-	EvictionQueue &GetEvictionQueueForType(FileBufferType type);
+	EvictionQueue &GetEvictionQueueForBlockHandle(const BlockHandle &handle);
 	//! Increments the dead nodes for the queue with specified type
-	void IncrementDeadNodes(FileBufferType type);
+	void IncrementDeadNodes(const BlockHandle &handle);
+
+	//! How many eviction queues we have for the different FileBufferTypes
+	static constexpr idx_t BLOCK_QUEUE_SIZE = 1;
+	static constexpr idx_t MANAGED_BUFFER_QUEUE_SIZE = 6;
+	static constexpr idx_t TINY_BUFFER_QUEUE_SIZE = 1;
+	//! Mapping and priority order for the eviction queues
+	const array<idx_t, FILE_BUFFER_TYPE_COUNT> eviction_queue_sizes;
 
 protected:
 	enum class MemoryUsageCaches {
@@ -135,6 +146,8 @@ protected:
 	mutex limit_lock;
 	//! The maximum amount of memory that the buffer manager can keep (in bytes)
 	atomic<idx_t> maximum_memory;
+	//! If bulk deallocation larger than this occurs, flush outstanding allocations
+	atomic<idx_t> allocator_bulk_deallocation_flush_threshold;
 	//! Record timestamps of buffer manager unpin() events. Usable by custom eviction policies.
 	bool track_eviction_timestamps;
 	//! Eviction queues

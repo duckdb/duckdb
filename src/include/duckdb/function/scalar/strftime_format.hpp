@@ -169,10 +169,11 @@ public:
 		return format_specifier != other.format_specifier;
 	}
 	DUCKDB_API static ParseResult Parse(const string &format, const string &text);
+	DUCKDB_API static bool TryParse(const string &format, const string &text, ParseResult &result);
 
-	DUCKDB_API bool Parse(string_t str, ParseResult &result) const;
+	DUCKDB_API bool Parse(string_t str, ParseResult &result, bool strict = false) const;
 
-	DUCKDB_API bool Parse(const char *data, size_t size, ParseResult &result) const;
+	DUCKDB_API bool Parse(const char *data, size_t size, ParseResult &result, bool strict = false) const;
 
 	DUCKDB_API bool TryParseDate(const char *data, size_t size, date_t &result) const;
 	DUCKDB_API bool TryParseTimestamp(const char *data, size_t size, timestamp_t &result) const;

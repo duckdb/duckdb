@@ -53,7 +53,7 @@
 #define __BYTE_ORDER__ __ORDER_LITTLE_ENDIAN__
 #define __ORDER_LITTLE_ENDIAN__ 2
 #include <intrin.h>
-static inline int __builtin_ctzl(unsigned long long x) {
+static inline int __builtin_ctzll(unsigned long long x) {
 #  ifdef _WIN64
 	unsigned long ret;
     _BitScanForward64(&ret, x);
@@ -163,7 +163,7 @@ inline size_t /* OUT: bytesize of the decompressed string. If > size, the decode
 duckdb_fsst_decompress(
    duckdb_fsst_decoder_t *decoder,  /* IN: use this symbol table for compression. */
    size_t lenIn,             /* IN: byte-length of compressed string. */
-   unsigned char *strIn,     /* IN: compressed string. */
+   const unsigned char *strIn,     /* IN: compressed string. */
    size_t size,              /* IN: byte-length of output buffer. */
    unsigned char *output     /* OUT: memory buffer to put the decompressed string in. */
 ) {
@@ -184,7 +184,7 @@ duckdb_fsst_decompress(
          code = strIn[posIn++]; FSST_UNALIGNED_STORE(strOut+posOut, symbol[code]); posOut += len[code]; 
          code = strIn[posIn++]; FSST_UNALIGNED_STORE(strOut+posOut, symbol[code]); posOut += len[code]; 
      } else { 
-         unsigned long firstEscapePos=static_cast<unsigned long>(__builtin_ctzl((unsigned long long) escapeMask)>>3);
+         unsigned long firstEscapePos=static_cast<unsigned long>(__builtin_ctzll((unsigned long long) escapeMask)>>3);
          switch(firstEscapePos) { /* Duff's device */
          case 3: code = strIn[posIn++]; FSST_UNALIGNED_STORE(strOut+posOut, symbol[code]); posOut += len[code];
 			 DUCKDB_FSST_EXPLICIT_FALLTHROUGH;

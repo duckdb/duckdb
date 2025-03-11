@@ -159,20 +159,6 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 		duckdb_destroy_prepare(&stmt);
 	}
 
-	SECTION("test unsupported type") {
-		auto state = duckdb_query_arrow(tester.connection, "SELECT 0::UHUGEINT", &arrow_result);
-		REQUIRE(state == DuckDBSuccess);
-
-		ArrowSchema arrow_schema;
-		arrow_schema.Init();
-		auto arrow_schema_ptr = &arrow_schema;
-
-		state = duckdb_query_arrow_schema(arrow_result, reinterpret_cast<duckdb_arrow_schema *>(&arrow_schema_ptr));
-		REQUIRE(state == DuckDBError);
-
-		duckdb_destroy_arrow(&arrow_result);
-	}
-
 	SECTION("test scan") {
 
 		const auto logical_types = duckdb::vector<LogicalType> {LogicalType(LogicalTypeId::INTEGER)};
@@ -229,7 +215,8 @@ TEST_CASE("Test arrow in C API", "[capi][arrow]") {
 
 			// Create a view with a `value` column containing 4096 values.
 			int num_buffers = 2, size = STANDARD_VECTOR_SIZE * num_buffers;
-			ArrowAppender appender(logical_types, size, options);
+			unordered_map<idx_t, const duckdb::shared_ptr<ArrowTypeExtensionData>> extension_type_cast;
+			ArrowAppender appender(logical_types, size, options, extension_type_cast);
 			Allocator allocator;
 
 			auto data_chunks = std::vector<DataChunk>(num_buffers);

@@ -119,6 +119,7 @@ copy_generic_opt_arg:
 			| '*'							{ $$ = (PGNode *) makeNode(PGAStar); }
 			| '(' copy_generic_opt_arg_list ')'		{ $$ = (PGNode *) $2; }
 			| struct_expr					{ $$ = (PGNode *) $1; }
+			| map_expr					    { $$ = (PGNode *) $1; }
 			| /* EMPTY */					{ $$ = NULL; }
 		;
 

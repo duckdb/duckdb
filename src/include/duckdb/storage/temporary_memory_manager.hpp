@@ -48,6 +48,8 @@ public:
 	idx_t GetReservation() const;
 	//! Set the materialization penalty for this state
 	void SetMaterializationPenalty(idx_t new_materialization_penalty);
+	//! Get the materialization penalty for this state
+	idx_t GetMaterializationPenalty() const;
 
 private:
 	//! The TemporaryMemoryManager that owns this state
@@ -83,9 +85,12 @@ private:
 	static constexpr idx_t MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR = 16ULL;
 
 	//! The maximum ratio of the memory limit that we reserve using the TemporaryMemoryManager
-	static constexpr double MAXIMUM_MEMORY_LIMIT_RATIO = 0.8;
+	static constexpr double MAXIMUM_MEMORY_LIMIT_RATIO = 0.9;
 	//! The maximum ratio of the remaining memory that we reserve per TemporaryMemoryState
-	static constexpr double MAXIMUM_FREE_MEMORY_RATIO = 2.0 / 3.0;
+	static constexpr double MAXIMUM_FREE_MEMORY_RATIO = 0.9;
+	//! Or, we leave room for between this many minimum reservations (if it is less than MAXIMUM_FREE_MEMORY_RATIO)
+	static constexpr idx_t MINIMUM_REMAINING_STATE_RESERVATIONS = 8ULL;
+	static constexpr idx_t MAXIMUM_REMAINING_STATE_RESERVATIONS = 32ULL;
 
 public:
 	//! Get the TemporaryMemoryManager
@@ -96,6 +101,8 @@ public:
 private:
 	//! Locks the TemporaryMemoryManager
 	unique_lock<mutex> Lock();
+	//! Get the default minimum reservation
+	idx_t DefaultMinimumReservation() const;
 	//! Unregister a TemporaryMemoryState (called by the destructor of TemporaryMemoryState)
 	void Unregister(TemporaryMemoryState &temporary_memory_state);
 	//! Update memory_limit, has_temporary_directory, and num_threads (must hold the lock)
@@ -107,8 +114,7 @@ private:
 	//! Set the reservation of a TemporaryMemoryState (must hold the lock)
 	void SetReservation(TemporaryMemoryState &temporary_memory_state, idx_t new_reservation);
 	//! Computes optimal reservation of a TemporaryMemoryState based on a cost function
-	idx_t ComputeOptimalReservation(const TemporaryMemoryState &temporary_memory_state, idx_t free_memory,
-	                                idx_t lower_bound, idx_t upper_bound) const;
+	idx_t ComputeReservation(const TemporaryMemoryState &temporary_memory_state) const;
 	//! Verify internal counts (must hold the lock)
 	void Verify() const;
 
@@ -122,6 +128,8 @@ private:
 	bool has_temporary_directory = false;
 	//! Number of threads
 	idx_t num_threads = DConstants::INVALID_INDEX;
+	//! Number of active connections
+	idx_t num_connections = DConstants::INVALID_INDEX;
 	//! Max memory per query
 	idx_t query_max_memory = DConstants::INVALID_INDEX;
 

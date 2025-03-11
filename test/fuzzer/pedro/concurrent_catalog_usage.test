@@ -2,6 +2,8 @@
 # description: Concurrent catalog usage
 # group: [pedro]
 
+# FIXME: add a dependency to 't2' to see how the DependencyManager behaves in that case
+
 statement ok
 CREATE TABLE t2 AS (SELECT 42);
 

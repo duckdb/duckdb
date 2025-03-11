@@ -5,6 +5,7 @@ import os
 import platform
 import sys
 import traceback
+import subprocess
 from functools import lru_cache
 from glob import glob
 from os.path import exists
@@ -115,20 +116,13 @@ class build_ext(CompilerLauncherMixin, _build_ext):
 
 lib_name = 'duckdb'
 
-extensions = ['parquet', 'icu', 'fts', 'tpch', 'tpcds', 'json']
-
-if platform.system() == 'Windows':
-    extensions = ['parquet', 'icu', 'fts', 'tpch', 'json']
+extensions = ['core_functions', 'parquet', 'icu', 'tpch', 'json']
 
 is_android = hasattr(sys, 'getandroidapilevel')
 is_pyodide = 'PYODIDE' in os.environ
 no_source_wheel = is_pyodide
 use_jemalloc = (
-    not is_android
-    and not is_pyodide
-    and platform.system() == 'Linux'
-    and platform.architecture()[0] == '64bit'
-    and platform.machine() == 'x86_64'
+    not is_android and not is_pyodide and platform.system() == 'Linux' and platform.architecture()[0] == '64bit'
 )
 
 if use_jemalloc:
@@ -180,7 +174,7 @@ libraries = []
 if 'DUCKDB_BINARY_DIR' in os.environ:
     existing_duckdb_dir = os.environ['DUCKDB_BINARY_DIR']
 if 'DUCKDB_COMPILE_FLAGS' in os.environ:
-    toolchain_args = ['-std=c++11'] + os.environ['DUCKDB_COMPILE_FLAGS'].split()
+    toolchain_args = os.environ['DUCKDB_COMPILE_FLAGS'].split()
 if 'DUCKDB_LIBS' in os.environ:
     libraries = os.environ['DUCKDB_LIBS'].split(' ')
 
@@ -383,7 +377,84 @@ spark_packages = [
 
 packages.extend(spark_packages)
 
+######
+# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
+# - CMakeLists.txt
+# - scripts/amalgamation.py
+# - scripts/package_build.py
+# - tools/pythonpkg/setup.py
+######
+main_branch_versioning = os.getenv('MAIN_BRANCH_VERSIONING') or 1
+
+
+def get_git_describe():
+    override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
+    versioning_tag_match = 'v*.*.*'
+    if main_branch_versioning:
+        versioning_tag_match = 'v*.*.0'
+    # empty override_git_describe, either since env was empty string or not existing
+    # -> ask git (that can fail, so except in place)
+    if len(override_git_describe) == 0:
+        try:
+            return (
+                subprocess.check_output(
+                    ['git', 'describe', '--tags', '--long', '--debug', '--match', versioning_tag_match]
+                )
+                .strip()
+                .decode('utf8')
+            )
+        except subprocess.CalledProcessError:
+            return "v0.0.0-0-gdeadbeeff"
+    if len(override_git_describe.split('-')) == 3:
+        return override_git_describe
+    if len(override_git_describe.split('-')) == 1:
+        override_git_describe += "-0"
+    assert len(override_git_describe.split('-')) == 2
+    try:
+        return (
+            override_git_describe
+            + "-g"
+            + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
+        )
+    except subprocess.CalledProcessError:
+        return override_git_describe + "-g" + "deadbeeff"
+
+
+def prefix_version(version):
+    """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
+    if version.startswith('v'):
+        return version
+    return 'v' + version
+
+
+def git_dev_version():
+    if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
+        return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
+    try:
+        long_version = get_git_describe()
+        version_splits = long_version.split('-')[0].lstrip('v').split('.')
+        dev_version = long_version.split('-')[1]
+        if int(dev_version) == 0:
+            # directly on a tag: emit the regular version
+            return "v" + '.'.join(version_splits)
+        else:
+            # not on a tag: increment the version by one and add a -devX suffix
+            # this needs to keep in sync with changes to CMakeLists.txt
+            if main_branch_versioning == 1:
+                # increment minor version
+                version_splits[1] = str(int(version_splits[1]) + 1)
+            else:
+                # increment patch version
+                version_splits[2] = str(int(version_splits[2]) + 1)
+            return "v" + '.'.join(version_splits) + "-dev" + dev_version
+    except:
+        return "v0.0.0"
+
+
+package_version = git_dev_version()
+
 setup(
+    version=package_version,
     name=lib_name,
     description='DuckDB in-process database',
     keywords='DuckDB Database SQL OLAP',

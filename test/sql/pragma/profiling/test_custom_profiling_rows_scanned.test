@@ -1,0 +1,71 @@
+# name: test/sql/pragma/profiling/test_custom_profiling_rows_scanned.test
+# description: Test ROWS_SCANNED metric.
+# group: [profiling]
+
+require json
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"OPERATOR_CARDINALITY": "true", "OPERATOR_ROWS_SCANNED": "true", "CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true"}';
+
+statement ok
+CREATE TABLE integers(i INTEGER);
+
+statement ok
+INSERT INTO integers VALUES (1), (2), (3), (NULL);
+
+statement ok
+SELECT * FROM integers i1, integers i2 WHERE i1.i = i2.i ORDER BY 1;
+
+statement ok
+pragma disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+statement ok
+SELECT cumulative_cardinality, cumulative_rows_scanned FROM metrics_output;
+
+query I
+SELECT
+	CASE WHEN cumulative_rows_scanned > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true
+
+# Only output the cumulative metric.
+
+statement ok
+PRAGMA enable_profiling = 'json';
+
+statement ok
+PRAGMA profiling_output = '__TEST_DIR__/profiling_output.json';
+
+statement ok
+PRAGMA custom_profiling_settings='{"CUMULATIVE_CARDINALITY": "true", "CUMULATIVE_ROWS_SCANNED": "true", "BLOCKED_THREAD_TIME": "true"}';
+
+statement ok
+SELECT * FROM integers i1, integers i2 WHERE i1.i = i2.i ORDER BY 1;
+
+statement ok
+PRAGMA disable_profiling;
+
+statement ok
+CREATE OR REPLACE TABLE metrics_output AS SELECT * FROM '__TEST_DIR__/profiling_output.json';
+
+query I
+SELECT
+	CASE WHEN cumulative_rows_scanned > 0 THEN 'true'
+	ELSE 'false' END
+FROM metrics_output;
+----
+true

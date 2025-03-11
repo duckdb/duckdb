@@ -24,7 +24,7 @@ struct DialectOptions {
 	CSVStateMachineOptions state_machine_options;
 	//! Expected number of columns
 	idx_t num_cols = 0;
-	//! Whether or not the file has a header line
+	//! Whether the file has a header line
 	CSVOption<bool> header = false;
 	//! The date format to use (if any is specified)
 	map<LogicalTypeId, CSVOption<StrpTimeFormat>> date_format = {{LogicalTypeId::DATE, {}},
@@ -35,18 +35,21 @@ struct DialectOptions {
 };
 
 struct CSVReaderOptions {
+	CSVReaderOptions() {
+	}
+	CSVReaderOptions(CSVOption<char> single_byte_delimiter, const CSVOption<string> &multi_byte_delimiter);
 	//===--------------------------------------------------------------------===//
 	// CommonCSVOptions
 	//===--------------------------------------------------------------------===//
 	//! See struct above.
 	DialectOptions dialect_options;
-	//! Whether or not we should ignore InvalidInput errors
+	//! Whether we should ignore InvalidInput errors
 	CSVOption<bool> ignore_errors = false;
 	//! Whether we store CSV Errors in the rejects table or not
 	CSVOption<bool> store_rejects = false;
 	//! Rejects table name (Name of the table the store rejects errors)
 	CSVOption<string> rejects_table_name = {"reject_errors"};
-	//! Rejects Scan name name  (Name of the table the store rejects scans)
+	//! Rejects Scan name  (Name of the table the store rejects scans)
 	CSVOption<string> rejects_scan_name = {"reject_scans"};
 	//! Rejects table entry limit (0 = no limit)
 	idx_t rejects_limit = 0;
@@ -59,7 +62,7 @@ struct CSVReaderOptions {
 	FileCompressionType compression = FileCompressionType::AUTO_DETECT;
 	//! Option to convert quoted values to NULL values
 	bool allow_quoted_nulls = true;
-	char comment;
+	char comment = '\0';
 
 	//===--------------------------------------------------------------------===//
 	// CSVAutoOptions
@@ -72,10 +75,11 @@ struct CSVReaderOptions {
 	vector<string> name_list;
 	//! If the names and types were set by the columns parameter
 	bool columns_set = false;
-	//! Types considered as candidates for auto detection ordered by descending specificity (~ from high to low)
-	vector<LogicalType> auto_type_candidates = {LogicalType::VARCHAR,   LogicalType::DOUBLE, LogicalType::BIGINT,
-	                                            LogicalType::TIMESTAMP, LogicalType::DATE,   LogicalType::TIME,
-	                                            LogicalType::BOOLEAN,   LogicalType::SQLNULL};
+	//! Types considered as candidates for auto-detection ordered by descending specificity (~ from high to low)
+	vector<LogicalType> auto_type_candidates = {
+	    LogicalType::VARCHAR,      LogicalType::DOUBLE,    LogicalType::BIGINT,
+	    LogicalType::TIMESTAMP_TZ, LogicalType::TIMESTAMP, LogicalType::DATE,
+	    LogicalType::TIME,         LogicalType::BOOLEAN,   LogicalType::SQLNULL};
 	//! In case the sniffer found a mismatch error from user defined types or dialect
 	string sniffer_user_mismatch_error;
 	//! In case the sniffer found a mismatch error from user defined types or dialect
@@ -85,8 +89,9 @@ struct CSVReaderOptions {
 	//===--------------------------------------------------------------------===//
 	//! Maximum CSV line size: specified because if we reach this amount, we likely have wrong delimiters (default: 2MB)
 	//! note that this is the guaranteed line length that will succeed, longer lines may be accepted if slightly above
-	idx_t maximum_line_size = 2097152;
-	//! Whether or not header names shall be normalized
+	static constexpr idx_t max_line_size_default = 2000000;
+	CSVOption<idx_t> maximum_line_size = max_line_size_default;
+	//! Whether header names shall be normalized
 	bool normalize_names = false;
 	//! True, if column with that index must skip null check
 	unordered_set<string> force_not_null_names;
@@ -94,27 +99,31 @@ struct CSVReaderOptions {
 	vector<bool> force_not_null;
 	//! Result size of sniffing phases
 	static constexpr idx_t sniff_size = 2048;
+
 	//! Number of sample chunks used in auto-detection
 	idx_t sample_size_chunks = 20480 / sniff_size;
 	//! Consider all columns to be of type varchar
 	bool all_varchar = false;
-	//! Whether or not to automatically detect dialect and datatypes
+	//! Whether to automatically detect dialect and datatypes
 	bool auto_detect = true;
 	//! The file path of the CSV file to read
 	string file_path;
-	//! Multi-file reader options
-	MultiFileReaderOptions file_options;
 	//! Buffer Size (Parallel Scan)
-	idx_t buffer_size = CSVBuffer::CSV_BUFFER_SIZE;
+	CSVOption<idx_t> buffer_size_option = CSVBuffer::ROWS_PER_BUFFER * max_line_size_default;
 	//! Decimal separator when reading as numeric
 	string decimal_separator = ".";
-	//! Whether or not to pad rows that do not have enough columns with NULL values
+	//! Whether  to pad rows that do not have enough columns with NULL values
 	bool null_padding = false;
 	//! If we should attempt to run parallel scanning over one file
 	bool parallel = true;
 
-	//! User defined parameters for the csv function concatenated on a string
-	string user_defined_parameters;
+	//! By default, our encoding is always UTF-8
+	string encoding = "utf-8";
+	//! User defined parameters
+	map<string, string> user_defined_parameters;
+
+	//! Returns a list of user-defined parameters in string format
+	string GetUserDefinedParameters() const;
 
 	//===--------------------------------------------------------------------===//
 	// WriteCSVOptions
@@ -128,11 +137,10 @@ struct CSVReaderOptions {
 
 	//! The date format to use for writing (if any is specified)
 	map<LogicalTypeId, Value> write_date_format = {{LogicalTypeId::DATE, Value()}, {LogicalTypeId::TIMESTAMP, Value()}};
-	//! Whether or not a type format is specified
+	//! Whether  a type format is specified
 	map<LogicalTypeId, bool> has_format = {{LogicalTypeId::DATE, false}, {LogicalTypeId::TIMESTAMP, false}};
-
-	void Serialize(Serializer &serializer) const;
-	static CSVReaderOptions Deserialize(Deserializer &deserializer);
+	//! If this reader is a multifile reader
+	bool multi_file_reader = false;
 
 	void SetCompression(const string &compression);
 
@@ -143,7 +151,6 @@ struct CSVReaderOptions {
 	void SetEscape(const string &escape);
 
 	idx_t GetSkipRows() const;
-
 	void SetSkipRows(int64_t rows);
 
 	void SetQuote(const string &quote);
@@ -158,6 +165,13 @@ struct CSVReaderOptions {
 
 	string GetNewline() const;
 	void SetNewline(const string &input);
+
+	bool GetRFC4180() const;
+	void SetRFC4180(bool rfc4180);
+
+	CSVOption<char> GetSingleByteDelimiter() const;
+	CSVOption<string> GetMultiByteDelimiter() const;
+
 	//! Set an option that is supported by both reading and writing functions, called by
 	//! the SetReadOption and SetWriteOption methods
 	bool SetBaseOption(const string &loption, const Value &value, bool write_option = false);
@@ -168,8 +182,12 @@ struct CSVReaderOptions {
 	void SetReadOption(const string &loption, const Value &value, vector<string> &expected_names);
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
-	void ToNamedParameters(named_parameter_map_t &out);
-	void FromNamedParameters(named_parameter_map_t &in, ClientContext &context);
+	void ToNamedParameters(named_parameter_map_t &out) const;
+	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context,
+	                         MultiFileReaderOptions &file_options);
+	void ParseOption(ClientContext &context, const string &key, const Value &val);
+	//! Verify options are not conflicting
+	void Verify(MultiFileReaderOptions &file_options);
 
 	string ToString(const string &current_file_path) const;
 	//! If the type for column with idx i was manually set

@@ -13,7 +13,7 @@ from pytest import raises, importorskip, fixture, MonkeyPatch, mark
 importorskip('fsspec', '2022.11.0')
 from fsspec import filesystem, AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem
-from fsspec.implementations.local import LocalFileOpener
+from fsspec.implementations.local import LocalFileOpener, LocalFileSystem
 
 FILENAME = 'integers.csv'
 
@@ -21,18 +21,18 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> List[str]:
-    error_occured = []
+    error_occurred = []
     orig = getattr(obj, name)
 
     def ceptor(*args, **kwargs):
         try:
             return orig(*args, **kwargs)
         except Exception as e:
-            error_occured.append(e)
+            error_occurred.append(e)
             raise e
 
     monkeypatch.setattr(obj, name, ceptor)
-    return error_occured
+    return error_occurred
 
 
 @fixture()
@@ -111,7 +111,7 @@ class TestPythonFilesystem:
             fh.write(b'hello\n\0world\0')
         duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute('select * from read_csv("memory://test.csv", header = 0)')
+        duckdb_cursor.execute('select * from read_csv("memory://test.csv", header = 0, quote = \'"\', escape = \'"\')')
 
         assert duckdb_cursor.fetchall() == [('hello',), ('\0world\0',)]
 
@@ -257,3 +257,32 @@ class TestPythonFilesystem:
         # hive partitioning: no cast to int
         duckdb_cursor.execute(query + ', HIVE_PARTITIONING=1' + ', HIVE_TYPES_AUTOCAST=0' + ');')
         assert duckdb_cursor.fetchall() == [(2, '2')]
+
+    def test_parallel_union_by_name(self, tmp_path):
+        pa = importorskip('pyarrow')
+        pq = importorskip('pyarrow.parquet')
+        fsspec = importorskip('fsspec')
+
+        table1 = pa.Table.from_pylist(
+            [
+                {'time': 1719568210134107692, 'col1': 1},
+            ]
+        )
+        table1_path = tmp_path / "table1.parquet"
+        pa.parquet.write_table(table1, table1_path)
+
+        table2 = pa.Table.from_pylist(
+            [
+                {'time': 1719568210134107692, 'col1': 1},
+            ]
+        )
+        table2_path = tmp_path / "table2.parquet"
+        pq.write_table(table2, table2_path)
+
+        c = duckdb.connect()
+        c.register_filesystem(LocalFileSystem())
+
+        q = f"SELECT * FROM read_parquet('file://{tmp_path}/table*.parquet', union_by_name = TRUE) ORDER BY time DESC LIMIT 1"
+
+        res = c.sql(q).fetchall()
+        assert res == [(1719568210134107692, 1)]

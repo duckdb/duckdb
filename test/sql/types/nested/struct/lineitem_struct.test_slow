@@ -36,3 +36,22 @@ query I
 PRAGMA tpch(1)
 ----
 <FILE>:extension/tpch/dbgen/answers/sf0.01/q01.csv
+
+# top-n
+query IIIIIIIIIIIIIII
+SELECT l_orderkey, l_partkey, l_suppkey, l_linenumber, l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate, l_commitdate, l_receiptdate, l_shipinstruct, l_shipmode FROM lineitem ORDER BY l_shipdate, l_orderkey LIMIT 5;
+----
+27137	1673	56	3	24.00	37792.08	0.06	0.03	R	F	1992-01-04	1992-02-18	1992-01-22	DELIVER IN PERSON	RAIL
+27137	590	51	5	37.00	55151.83	0.03	0.03	A	F	1992-01-06	1992-02-24	1992-01-13	DELIVER IN PERSON	MAIL
+47591	676	39	1	38.00	59913.46	0.05	0.04	A	F	1992-01-06	1992-03-19	1992-01-11	COLLECT COD	REG AIR
+5601	723	24	3	38.00	61701.36	0.07	0.00	A	F	1992-01-08	1992-03-01	1992-01-09	TAKE BACK RETURN	REG AIR
+9379	556	57	4	13.00	18935.15	0.00	0.01	A	F	1992-01-09	1992-03-20	1992-01-12	COLLECT COD	TRUCK
+
+query IIIIIIIIIIIIIII
+SELECT l_orderkey,l_partkey,l_suppkey,l_linenumber,l_quantity,l_extendedprice,l_discount,l_tax,l_returnflag,l_linestatus,l_shipdate,l_commitdate,l_receiptdate,l_shipinstruct,l_shipmode FROM lineitem ORDER BY l_orderkey DESC, l_shipdate DESC LIMIT 5;
+----
+60000	1843	44	2	23.00	40131.32	0.05	0.03	N	O	1995-08-09	1995-06-08	1995-08-23	COLLECT COD	FOB
+60000	585	16	5	31.00	46052.98	0.00	0.05	N	O	1995-08-06	1995-07-18	1995-08-19	TAKE BACK RETURN	TRUCK
+60000	271	53	4	29.00	33966.83	0.02	0.01	N	O	1995-07-25	1995-06-07	1995-08-17	COLLECT COD	SHIP
+60000	836	3	6	45.00	78157.35	0.04	0.08	N	O	1995-07-23	1995-07-17	1995-07-24	DELIVER IN PERSON	TRUCK
+60000	292	93	1	45.00	53653.05	0.05	0.06	N	O	1995-07-13	1995-05-29	1995-08-10	TAKE BACK RETURN	MAIL

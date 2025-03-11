@@ -1,0 +1,20 @@
+# name: test/sql/types/list/unnest_aggregate.test
+# description: Test unnest semantics with NULL and empty lists
+# group: [list]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT SUM(a) FROM UNNEST(RANGE(1, 11)) t(a);
+----
+55
+
+statement ok
+create or replace function rnv(a,b) as (select a + b * pi());
+
+query I
+select rnv(0, 1) from unnest( range(0,2) );
+----
+3.141592653589793
+3.141592653589793

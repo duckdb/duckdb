@@ -3,6 +3,7 @@
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/scalar_data.hpp"
 #include "duckdb/common/types/arrow_string_view_type.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 namespace duckdb {
 
@@ -18,6 +19,18 @@ struct ArrowVarcharConverter {
 	template <class SRC>
 	static void WriteData(data_ptr_t target, SRC input) {
 		memcpy(target, input.GetData(), input.GetSize());
+	}
+};
+
+struct ArrowUUIDConverter {
+	template <class SRC>
+	static idx_t GetLength(SRC input) {
+		return UUID::STRING_SIZE;
+	}
+
+	template <class SRC>
+	static void WriteData(data_ptr_t target, SRC input) {
+		UUID::ToString(input, char_ptr_cast(target));
 	}
 };
 
@@ -74,7 +87,8 @@ struct ArrowVarcharData {
 				D_ASSERT(append_data.options.arrow_offset_size == ArrowOffsetSize::REGULAR);
 				throw InvalidInputException(
 				    "Arrow Appender: The maximum total string size for regular string buffers is "
-				    "%u but the offset of %lu exceeds this.",
+				    "%u but the offset of %lu exceeds this.\n* SET arrow_large_buffer_size=true to use large string "
+				    "buffers",
 				    NumericLimits<int32_t>::Maximum(), current_offset);
 			}
 			offset_data[offset_idx] = UnsafeNumericCast<BUFTYPE>(current_offset);

@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
+#include "duckdb/parser/simplified_token.hpp"
 
 namespace duckdb {
 
@@ -16,6 +17,8 @@ class KeywordHelper {
 public:
 	//! Returns true if the given text matches a keyword of the parser
 	static bool IsKeyword(const string &text);
+
+	static KeywordCategory KeywordCategoryType(const string &text);
 
 	static string EscapeQuotes(const string &text, char quote = '"');
 

@@ -32,7 +32,7 @@ public:
 
 class PythonFileHandle : public FileHandle {
 public:
-	PythonFileHandle(FileSystem &file_system, const string &path, const py::object &handle);
+	PythonFileHandle(FileSystem &file_system, const string &path, const py::object &handle, FileOpenFlags flags);
 	~PythonFileHandle() override;
 	void Close() override;
 
@@ -41,6 +41,7 @@ public:
 private:
 	py::object handle;
 };
+
 class PythonFilesystem : public FileSystem {
 private:
 	const vector<string> protocols;

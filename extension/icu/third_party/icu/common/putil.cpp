@@ -46,11 +46,6 @@
 // First, the platform type. Need this for U_PLATFORM.
 #include "unicode/platform.h"
 
-#if U_PLATFORM == U_PF_MINGW && defined __STRICT_ANSI__
-/* tzset isn't defined in strict ANSI on MinGW. */
-#undef __STRICT_ANSI__
-#endif
-
 /*
  * Cygwin with GCC requires inclusion of time.h after the above disabling strict asci mode statement.
  */

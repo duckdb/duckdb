@@ -47,7 +47,7 @@ public:
 	//! Returns true, if key_bytes contains all bytes of key.
 	bool Contains(const ARTKey &key) const;
 	//! Returns true, if key_bytes is greater than [or equal to] the key.
-	bool GreaterThan(const ARTKey &key, bool equal) const;
+	bool GreaterThan(const ARTKey &key, const bool equal, const uint8_t nested_depth) const;
 
 private:
 	unsafe_vector<uint8_t> key_bytes;
@@ -72,6 +72,11 @@ public:
 	//! bound exceeds the maximum value of the ART.
 	bool LowerBound(const Node &node, const ARTKey &key, const bool equal, idx_t depth);
 
+	//! Returns the nested depth.
+	uint8_t GetNestedDepth() const {
+		return nested_depth;
+	}
+
 private:
 	//! The ART.
 	ART &art;
@@ -85,6 +90,8 @@ private:
 	GateStatus status;
 	//! Depth in a nested leaf.
 	uint8_t nested_depth = 0;
+	//! True, if we entered a nested leaf to retrieve the next node.
+	bool entered_nested_leaf = false;
 
 private:
 	//! Goes to the next leaf in the ART and sets it as last_leaf,

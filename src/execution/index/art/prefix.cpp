@@ -40,7 +40,7 @@ idx_t Prefix::GetMismatchWithOther(const Prefix &l_prefix, const Prefix &r_prefi
 	return DConstants::INVALID_INDEX;
 }
 
-idx_t Prefix::GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, idx_t &depth) {
+optional_idx Prefix::GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, idx_t &depth) {
 	Prefix prefix(art, node);
 	for (idx_t i = 0; i < prefix.data[Prefix::Count(art)]; i++) {
 		if (prefix.data[i] != key[depth]) {
@@ -48,7 +48,7 @@ idx_t Prefix::GetMismatchWithKey(ART &art, const Node &node, const ARTKey &key, 
 		}
 		depth++;
 	}
-	return DConstants::INVALID_INDEX;
+	return optional_idx::Invalid();
 }
 
 uint8_t Prefix::GetByte(const ART &art, const Node &node, const uint8_t pos) {
@@ -134,14 +134,8 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_s
 
 	if (status == GateStatus::GATE_SET && child.GetType() == NType::LEAF_INLINED) {
 		auto row_id = child.GetRowId();
-		if (parent.GetType() == PREFIX) {
-			auto parent_status = parent.GetGateStatus();
-			Free(art, parent);
-			Leaf::New(parent, row_id);
-			parent.SetGateStatus(parent_status);
-		} else {
-			Leaf::New(parent, row_id);
-		}
+		Free(art, parent);
+		Leaf::New(parent, row_id);
 		return;
 	}
 
@@ -166,14 +160,14 @@ void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_s
 }
 
 template <class NODE>
-idx_t TraverseInternal(ART &art, reference<NODE> &node, const ARTKey &key, idx_t &depth,
-                       const bool is_mutable = false) {
+optional_idx TraverseInternal(ART &art, reference<NODE> &node, const ARTKey &key, idx_t &depth,
+                              const bool is_mutable = false) {
 	D_ASSERT(node.get().HasMetadata());
 	D_ASSERT(node.get().GetType() == NType::PREFIX);
 
 	while (node.get().GetType() == NType::PREFIX) {
 		auto pos = Prefix::GetMismatchWithKey(art, node, key, depth);
-		if (pos != DConstants::INVALID_INDEX) {
+		if (pos.IsValid()) {
 			return pos;
 		}
 
@@ -183,14 +177,18 @@ idx_t TraverseInternal(ART &art, reference<NODE> &node, const ARTKey &key, idx_t
 			break;
 		}
 	}
-	return DConstants::INVALID_INDEX;
+
+	// We return an invalid index, if (and only if) the next node is:
+	// 1. not a prefix, or
+	// 2. a gate.
+	return optional_idx::Invalid();
 }
 
-idx_t Prefix::Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth) {
+optional_idx Prefix::Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth) {
 	return TraverseInternal<const Node>(art, node, key, depth);
 }
 
-idx_t Prefix::TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth) {
+optional_idx Prefix::TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth) {
 	return TraverseInternal<Node>(art, node, key, depth, true);
 }
 
@@ -251,7 +249,7 @@ void Prefix::Reduce(ART &art, Node &node, const idx_t pos) {
 GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uint8_t pos) {
 	D_ASSERT(node.get().HasMetadata());
 
-	Prefix prefix(art, node);
+	Prefix prefix(art, node, true);
 
 	// The split is at the last prefix byte. Decrease the count and return.
 	if (pos + 1 == Count(art)) {
@@ -297,23 +295,23 @@ GateStatus Prefix::Split(ART &art, reference<Node> &node, Node &child, const uin
 	return GateStatus::GATE_NOT_SET;
 }
 
-bool Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id,
-                    const GateStatus status) {
+ARTConflictType Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const ARTKey &row_id,
+                               const GateStatus status, optional_ptr<ART> delete_art,
+                               const IndexAppendMode append_mode) {
 	reference<Node> next(node);
 	auto pos = TraverseMutable(art, next, key, depth);
 
 	// We recurse into the next node, if
 	// (1) the prefix matches the key.
 	// (2) we reach a gate.
-	if (pos == DConstants::INVALID_INDEX) {
-		if (next.get().GetType() != NType::PREFIX || next.get().GetGateStatus() == GateStatus::GATE_SET) {
-			return art.Insert(next, key, depth, row_id, status);
-		}
+	if (!pos.IsValid()) {
+		D_ASSERT(next.get().GetType() != NType::PREFIX || next.get().GetGateStatus() == GateStatus::GATE_SET);
+		return art.Insert(next, key, depth, row_id, status, delete_art, append_mode);
 	}
 
 	Node remainder;
-	auto byte = GetByte(art, next, UnsafeNumericCast<uint8_t>(pos));
-	auto split_status = Split(art, next, remainder, UnsafeNumericCast<uint8_t>(pos));
+	auto byte = GetByte(art, next, UnsafeNumericCast<uint8_t>(pos.GetIndex()));
+	auto split_status = Split(art, next, remainder, UnsafeNumericCast<uint8_t>(pos.GetIndex()));
 	Node4::New(art, next);
 	next.get().SetGateStatus(split_status);
 
@@ -321,11 +319,11 @@ bool Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const 
 	Node4::InsertChild(art, next, byte, remainder);
 
 	if (status == GateStatus::GATE_SET) {
-		D_ASSERT(pos != ROW_ID_COUNT);
+		D_ASSERT(pos.GetIndex() != ROW_ID_COUNT);
 		Node new_row_id;
 		Leaf::New(new_row_id, key.GetRowId());
 		Node::InsertChild(art, next, key[depth], new_row_id);
-		return true;
+		return ARTConflictType::NO_CONFLICT;
 	}
 
 	Node leaf;
@@ -335,10 +333,11 @@ bool Prefix::Insert(ART &art, Node &node, const ARTKey &key, idx_t depth, const 
 		auto count = key.len - depth - 1;
 		Prefix::New(art, ref, key, depth + 1, count);
 	}
+
 	// Create the inlined leaf.
 	Leaf::New(ref, row_id.GetRowId());
 	Node4::InsertChild(art, next, key[depth], leaf);
-	return true;
+	return ARTConflictType::NO_CONFLICT;
 }
 
 string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_verify) {
@@ -400,42 +399,15 @@ void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<Fixed
 		return Node::TransformToDeprecated(art, ref, allocator);
 	}
 
-	// Fast path.
-	if (art.prefix_count <= DEPRECATED_COUNT) {
-		reference<Node> ref(node);
-		while (ref.get().GetType() == PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
-			Prefix prefix(art, ref, true, true);
-			if (!prefix.in_memory) {
-				return;
-			}
-
-			Node new_node;
-			new_node = allocator->New();
-			new_node.SetMetadata(static_cast<uint8_t>(PREFIX));
-
-			Prefix new_prefix(allocator, new_node, DEPRECATED_COUNT);
-			new_prefix.data[DEPRECATED_COUNT] = prefix.data[Count(art)];
-			memcpy(new_prefix.data, prefix.data, new_prefix.data[DEPRECATED_COUNT]);
-			*new_prefix.ptr = *prefix.ptr;
-
-			prefix.ptr->Clear();
-			Node::Free(art, ref);
-			ref.get() = new_node;
-			ref = *new_prefix.ptr;
-		}
-
-		return Node::TransformToDeprecated(art, ref, allocator);
-	}
-
-	// Else, we need to create a new prefix chain.
+	// We need to create a new prefix (chain).
 	Node new_node;
 	new_node = allocator->New();
 	new_node.SetMetadata(static_cast<uint8_t>(PREFIX));
 	Prefix new_prefix(allocator, new_node, DEPRECATED_COUNT);
 
-	reference<Node> ref(node);
-	while (ref.get().GetType() == PREFIX && ref.get().GetGateStatus() == GateStatus::GATE_NOT_SET) {
-		Prefix prefix(art, ref, true, true);
+	Node current_node = node;
+	while (current_node.GetType() == PREFIX && current_node.GetGateStatus() == GateStatus::GATE_NOT_SET) {
+		Prefix prefix(art, current_node, true, true);
 		if (!prefix.in_memory) {
 			return;
 		}
@@ -445,11 +417,13 @@ void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<Fixed
 		}
 
 		*new_prefix.ptr = *prefix.ptr;
-		Node::GetAllocator(art, PREFIX).Free(ref);
-		ref = *new_prefix.ptr;
+		prefix.ptr->Clear();
+		Node::Free(art, current_node);
+		current_node = *new_prefix.ptr;
 	}
 
-	return Node::TransformToDeprecated(art, ref, allocator);
+	node = new_node;
+	return Node::TransformToDeprecated(art, *new_prefix.ptr, allocator);
 }
 
 Prefix Prefix::Append(ART &art, const uint8_t byte) {

@@ -107,13 +107,21 @@ void DuckDBSecretsFunction(ClientContext &context, TableFunctionInput &data_p, D
 
 		const auto &secret = *secret_entry.secret;
 
-		output.SetValue(0, count, secret.GetName());
-		output.SetValue(1, count, Value(secret.GetType()));
-		output.SetValue(2, count, Value(secret.GetProvider()));
-		output.SetValue(3, count, Value(secret_entry.persist_type == SecretPersistType::PERSISTENT));
-		output.SetValue(4, count, Value(secret_entry.storage_mode));
-		output.SetValue(5, count, Value::LIST(LogicalType::VARCHAR, scope_value));
-		output.SetValue(6, count, secret.ToString(bind_data.redact));
+		idx_t i = 0;
+		// name
+		output.SetValue(i++, count, secret.GetName());
+		// type
+		output.SetValue(i++, count, Value(secret.GetType()));
+		// provider
+		output.SetValue(i++, count, Value(secret.GetProvider()));
+		// persistent
+		output.SetValue(i++, count, Value(secret_entry.persist_type == SecretPersistType::PERSISTENT));
+		// storage
+		output.SetValue(i++, count, Value(secret_entry.storage_mode));
+		// scope
+		output.SetValue(i++, count, Value::LIST(LogicalType::VARCHAR, scope_value));
+		// secret_string
+		output.SetValue(i++, count, secret.ToString(bind_data.redact));
 
 		data.offset++;
 		count++;

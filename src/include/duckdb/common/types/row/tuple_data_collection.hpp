@@ -66,6 +66,8 @@ public:
 	idx_t SizeInBytes() const;
 	//! Unpins all held pins
 	void Unpin();
+	//! Sets the partition index of this tuple data collection
+	void SetPartitionIndex(idx_t index);
 
 	//! Gets the scatter function for the given type
 	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_collection = false);
@@ -114,6 +116,8 @@ public:
 	static void ToUnifiedFormat(TupleDataChunkState &chunk_state, DataChunk &new_chunk);
 	//! Gets the UnifiedVectorFormat from the Chunk state as an array
 	static void GetVectorData(const TupleDataChunkState &chunk_state, UnifiedVectorFormat result[]);
+	//! Resets the cached cache vectors (used for ARRAY/LIST casts)
+	static void ResetCachedCastVectors(TupleDataChunkState &chunk_state, const vector<column_t> &column_ids);
 	//! Computes the heap sizes for the new DataChunk that will be appended
 	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
 	                             const SelectionVector &append_sel, const idx_t append_count);
@@ -250,6 +254,8 @@ private:
 	vector<TupleDataScatterFunction> scatter_functions;
 	//! The set of gather functions
 	vector<TupleDataGatherFunction> gather_functions;
+	//! Partition index (optional, if partitioned)
+	optional_idx partition_index;
 };
 
 } // namespace duckdb

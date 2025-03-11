@@ -26,10 +26,15 @@ endloop
 statement ok
 CREATE TABLE long_escaped_value (a INTEGER, b INTEGER, c VARCHAR);
 
-statement error
-COPY long_escaped_value FROM 'data/csv/test/long_escaped_value.csv' (DELIMITER '🦆', AUTO_DETECT FALSE);
+query I
+COPY long_escaped_value FROM 'data/csv/test/long_escaped_value.csv' (DELIMITER '🦆', AUTO_DETECT FALSE, QUOTE '"', ESCAPE '"');
 ----
-The delimiter option cannot exceed a size of 1 byte.
+1
+
+query IIT
+SELECT * FROM long_escaped_value
+----
+3 values hashing to 935bbda15d681cd3f79b11e49788e90e
 
 # long value with escape and complex delimiter
 # load CSV file into a table

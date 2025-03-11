@@ -19,6 +19,14 @@ using Tables: partitions
     @test size(df, 1) == 1
     @test df.a == [42]
 
+    # do block syntax to automatically close cursor
+    df = DBInterface.execute(con, "SELECT 42 a") do results
+        return DataFrame(results)
+    end
+    @test names(df) == ["a"]
+    @test size(df, 1) == 1
+    @test df.a == [42]
+
     DBInterface.close!(con)
 end
 
@@ -145,9 +153,29 @@ end
 @testset "Test chunked response" begin
     con = DBInterface.connect(DuckDB.DB)
     DBInterface.execute(con, "CREATE TABLE chunked_table AS SELECT * FROM range(2049)")
-    result = DBInterface.execute(con, "SELECT * FROM chunked_table ;")
+    result = DBInterface.execute(con, "SELECT * FROM chunked_table;")
     chunks_it = partitions(result)
     chunks = collect(chunks_it)
     @test length(chunks) == 2
+    @test_throws DuckDB.NotImplementedException collect(chunks_it)
+
+    result = DBInterface.execute(con, "SELECT * FROM chunked_table;", DuckDB.StreamResult)
+    chunks_it = partitions(result)
+    chunks = collect(chunks_it)
+    @test length(chunks) == 2
+    @test_throws DuckDB.NotImplementedException collect(chunks_it)
+
+    DuckDB.execute(
+        con,
+        """
+CREATE TABLE large (x1 INT, x2 INT, x3 INT, x4 INT, x5 INT, x6 INT, x7 INT, x8 INT, x9 INT, x10 INT, x11 INT);
+"""
+    )
+    DuckDB.execute(con, "INSERT INTO large VALUES (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);")
+    result = DBInterface.execute(con, "SELECT * FROM large ;")
+    chunks_it = partitions(result)
+    chunks = collect(chunks_it)
+    @test length(chunks) == 1
+
     DBInterface.close!(con)
 end

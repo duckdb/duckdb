@@ -8,6 +8,7 @@ LogicalAnyJoin::LogicalAnyJoin(JoinType type) : LogicalJoin(type, LogicalOperato
 InsertionOrderPreservingMap<string> LogicalAnyJoin::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	result["Condition"] = condition->ToString();
+	SetParamsEstimatedCardinality(result);
 	return result;
 }
 

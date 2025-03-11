@@ -144,7 +144,7 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 		return result;
 	}
 	case duckdb_libpgquery::T_PGSelectStmt:
-		return TransformSelect(PGCast<duckdb_libpgquery::PGSelectStmt>(stmt));
+		return TransformSelectStmt(PGCast<duckdb_libpgquery::PGSelectStmt>(stmt));
 	case duckdb_libpgquery::T_PGCreateStmt:
 		return TransformCreateTable(PGCast<duckdb_libpgquery::PGCreateStmt>(stmt));
 	case duckdb_libpgquery::T_PGCreateSchemaStmt:
@@ -194,9 +194,9 @@ unique_ptr<SQLStatement> Transformer::TransformStatementInternal(duckdb_libpgque
 	case duckdb_libpgquery::T_PGVacuumStmt:
 		return TransformVacuum(PGCast<duckdb_libpgquery::PGVacuumStmt>(stmt));
 	case duckdb_libpgquery::T_PGVariableShowStmt:
-		return TransformShow(PGCast<duckdb_libpgquery::PGVariableShowStmt>(stmt));
+		return TransformShowStmt(PGCast<duckdb_libpgquery::PGVariableShowStmt>(stmt));
 	case duckdb_libpgquery::T_PGVariableShowSelectStmt:
-		return TransformShowSelect(PGCast<duckdb_libpgquery::PGVariableShowSelectStmt>(stmt));
+		return TransformShowSelectStmt(PGCast<duckdb_libpgquery::PGVariableShowSelectStmt>(stmt));
 	case duckdb_libpgquery::T_PGCallStmt:
 		return TransformCall(PGCast<duckdb_libpgquery::PGCallStmt>(stmt));
 	case duckdb_libpgquery::T_PGVariableSetStmt:
@@ -259,14 +259,14 @@ void Transformer::SetQueryLocation(ParsedExpression &expr, int query_location) {
 	if (query_location < 0) {
 		return;
 	}
-	expr.query_location = optional_idx(idx_t(query_location));
+	expr.SetQueryLocation(optional_idx(static_cast<idx_t>(query_location)));
 }
 
 void Transformer::SetQueryLocation(TableRef &ref, int query_location) {
 	if (query_location < 0) {
 		return;
 	}
-	ref.query_location = optional_idx(idx_t(query_location));
+	ref.query_location = optional_idx(static_cast<idx_t>(query_location));
 }
 
 } // namespace duckdb

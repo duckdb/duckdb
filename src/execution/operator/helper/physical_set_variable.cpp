@@ -13,13 +13,27 @@ SourceResultType PhysicalSetVariable::GetData(ExecutionContext &context, DataChu
 	return SourceResultType::FINISHED;
 }
 
+class SetVariableGlobalState : public GlobalSinkState {
+public:
+	SetVariableGlobalState() {
+	}
+
+	bool is_set = false;
+};
+
+unique_ptr<GlobalSinkState> PhysicalSetVariable::GetGlobalSinkState(ClientContext &context) const {
+	return make_uniq<SetVariableGlobalState>();
+}
+
 SinkResultType PhysicalSetVariable::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
-	if (chunk.size() != 1) {
+	auto &gstate = input.global_state.Cast<SetVariableGlobalState>();
+	if (chunk.size() != 1 || gstate.is_set) {
 		throw InvalidInputException("PhysicalSetVariable can only handle a single value");
 	}
 	auto &config = ClientConfig::GetConfig(context.client);
 	config.SetUserVariable(name, chunk.GetValue(0, 0));
-	return SinkResultType::FINISHED;
+	gstate.is_set = true;
+	return SinkResultType::NEED_MORE_INPUT;
 }
 
 } // namespace duckdb

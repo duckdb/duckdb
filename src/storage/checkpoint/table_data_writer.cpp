@@ -10,7 +10,8 @@
 
 namespace duckdb {
 
-TableDataWriter::TableDataWriter(TableCatalogEntry &table_p) : table(table_p.Cast<DuckTableEntry>()) {
+TableDataWriter::TableDataWriter(TableCatalogEntry &table_p, optional_ptr<ClientContext> client_context_p)
+    : table(table_p.Cast<DuckTableEntry>()), client_context(client_context_p) {
 	D_ASSERT(table_p.IsDuckTable());
 }
 
@@ -31,12 +32,17 @@ void TableDataWriter::AddRowGroup(RowGroupPointer &&row_group_pointer, unique_pt
 }
 
 TaskScheduler &TableDataWriter::GetScheduler() {
-	return TaskScheduler::GetScheduler(table.ParentCatalog().GetDatabase());
+	return TaskScheduler::GetScheduler(GetDatabase());
+}
+
+DatabaseInstance &TableDataWriter::GetDatabase() {
+	return table.ParentCatalog().GetDatabase();
 }
 
 SingleFileTableDataWriter::SingleFileTableDataWriter(SingleFileCheckpointWriter &checkpoint_manager,
                                                      TableCatalogEntry &table, MetadataWriter &table_data_writer)
-    : TableDataWriter(table), checkpoint_manager(checkpoint_manager), table_data_writer(table_data_writer) {
+    : TableDataWriter(table, checkpoint_manager.GetClientContext()), checkpoint_manager(checkpoint_manager),
+      table_data_writer(table_data_writer) {
 }
 
 unique_ptr<RowGroupWriter> SingleFileTableDataWriter::GetRowGroupWriter(RowGroup &row_group) {
@@ -56,7 +62,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	auto pointer = table_data_writer.GetMetaBlockPointer();
 
 	// Serialize statistics as a single unit
-	BinarySerializer stats_serializer(table_data_writer);
+	BinarySerializer stats_serializer(table_data_writer, serializer.GetOptions());
 	stats_serializer.Begin();
 	global_stats.Serialize(stats_serializer);
 	stats_serializer.End();
@@ -71,7 +77,7 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 		}
 
 		// Each RowGroup is its own unit
-		BinarySerializer row_group_serializer(table_data_writer);
+		BinarySerializer row_group_serializer(table_data_writer, serializer.GetOptions());
 		row_group_serializer.Begin();
 		RowGroup::Serialize(row_group_pointer, row_group_serializer);
 		row_group_serializer.End();
@@ -82,13 +88,22 @@ void SingleFileTableDataWriter::FinalizeTable(const TableStatistics &global_stat
 	serializer.WriteProperty(101, "table_pointer", pointer);
 	serializer.WriteProperty(102, "total_rows", total_rows);
 
-	auto db_options = checkpoint_manager.db.GetDatabase().config.options;
-	auto v1_0_0_storage = db_options.serialization_compatibility.serialization_version < 3;
+	auto v1_0_0_storage = serializer.GetOptions().serialization_compatibility.serialization_version < 3;
 	case_insensitive_map_t<Value> options;
 	if (!v1_0_0_storage) {
 		options.emplace("v1_0_0_storage", v1_0_0_storage);
 	}
 	auto index_storage_infos = info->GetIndexes().GetStorageInfos(options);
+
+#ifdef DUCKDB_BLOCK_VERIFICATION
+	for (auto &entry : index_storage_infos) {
+		for (auto &allocator : entry.allocator_infos) {
+			for (auto &block : allocator.block_pointers) {
+				checkpoint_manager.verify_block_usage_count[block.block_id]++;
+			}
+		}
+	}
+#endif
 
 	// write empty block pointers for forwards compatibility
 	vector<BlockPointer> compat_block_pointers;

@@ -88,7 +88,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 
 	vector<string> comparison_values;
 	if (values.size() == 1 && ResultIsFile(values[0])) {
-		auto fname = SQLLogicTestRunner::LoopReplacement(values[0], context.running_loops);
+		auto fname = runner.LoopReplacement(values[0], context.running_loops);
 		string csv_error;
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {
@@ -263,27 +263,21 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		// internal errors are never expected
 		// neither are "unoptimized result differs from original result" errors
 
-		bool internal_error = false;
-		if (result.HasError()) {
-			if (TestIsInternalError(runner.always_fail_error_messages, result.GetError())) {
-				internal_error = true;
-			}
+		if (result.HasError() && TestIsInternalError(runner.always_fail_error_messages, result.GetError())) {
+			logger.InternalException(result);
+			return false;
 		}
-		if (!internal_error) {
-			if (expected_result == ExpectedResult::RESULT_UNKNOWN) {
-				error = false;
-			} else {
-				error = !error;
-			}
+		if (expected_result == ExpectedResult::RESULT_UNKNOWN) {
+			error = false;
 		} else {
-			expected_result = ExpectedResult::RESULT_SUCCESS;
+			error = !error;
 		}
 		if (result.HasError() && !statement.expected_error.empty()) {
 			if (!StringUtil::Contains(result.GetError(), statement.expected_error)) {
 				bool success = false;
 				if (StringUtil::StartsWith(statement.expected_error, "<REGEX>:") ||
 				    StringUtil::StartsWith(statement.expected_error, "<!REGEX>:")) {
-					success = MatchesRegex(logger, result, statement.expected_error);
+					success = MatchesRegex(logger, result.ToString(), statement.expected_error);
 				}
 				if (!success) {
 					logger.ExpectedErrorMismatch(statement.expected_error, result);
@@ -320,7 +314,8 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
                                                     string &error) {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.Query("PRAGMA threads=" + to_string(std::thread::hardware_concurrency()));
+	auto threads = MaxValue<idx_t>(std::thread::hardware_concurrency(), 1);
+	con.Query("PRAGMA threads=" + to_string(threads));
 	fname = StringUtil::Replace(fname, "<FILE>:", "");
 
 	string struct_definition = "STRUCT_PACK(";
@@ -450,7 +445,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		return true;
 	}
 	if (StringUtil::StartsWith(rvalue_str, "<REGEX>:") || StringUtil::StartsWith(rvalue_str, "<!REGEX>:")) {
-		if (MatchesRegex(logger, result, rvalue_str)) {
+		if (MatchesRegex(logger, lvalue_str, rvalue_str)) {
 			return true;
 		}
 	}
@@ -510,8 +505,9 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		logger.PrintLineSep();
 		logger.PrintSQL();
 		logger.PrintLineSep();
+
 		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
-		          << current_column + 1 << std::endl
+		          << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
 		          << termcolor::reset;
 		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
 		logger.PrintLineSep();
@@ -521,7 +517,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 	return true;
 }
 
-bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, MaterializedQueryResult &result, string rvalue_str) {
+bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_str, string rvalue_str) {
 	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
 	string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
 
@@ -536,8 +532,7 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, MaterializedQuer
 		logger.PrintLineSep();
 		return false;
 	}
-	auto resString = result.ToString();
-	bool regex_matches = RE2::FullMatch(result.ToString(), re);
+	bool regex_matches = RE2::FullMatch(lvalue_str, re);
 	if ((want_match && regex_matches) || (!want_match && !regex_matches)) {
 		return true;
 	}

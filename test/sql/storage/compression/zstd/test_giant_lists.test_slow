@@ -1,0 +1,42 @@
+# name: test/sql/storage/compression/zstd/test_giant_lists.test_slow
+# group: [zstd]
+
+# With the vector metadata size taking between 24-32 bytes (because of padding), this equates to around 584 vectors per segment
+# which is 1_196_032 values
+statement ok
+SET default_block_size = '16384';
+
+statement ok
+SET storage_compatibility_version='v1.2.0'
+
+statement ok
+attach '__TEST_DIR__/giant_list.db' as db2
+
+statement ok
+USE db2;
+
+statement ok
+pragma force_compression='zstd';
+
+statement ok
+pragma checkpoint_threshold='1gb';
+
+statement ok
+set zstd_min_string_length=1;
+
+# With 1.2m values per segment, this roughly creates 25 segments
+statement ok
+create table tbl as
+select repeat('a', 30_000_000).split('') lst;
+
+statement ok
+force checkpoint;
+
+query III
+select len(lst), lst[1], lst[-1] from tbl;
+----
+30_000_000	a	a
+
+query I
+SELECT compression FROM pragma_storage_info('tbl') WHERE segment_type = 'VARCHAR' AND compression != 'ZSTD';
+----

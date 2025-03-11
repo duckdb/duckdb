@@ -483,6 +483,66 @@ DUCKDB_API bool TryCast::Operation(double input, double &result, bool strict);
 //===--------------------------------------------------------------------===//
 // String -> Numeric Casts
 //===--------------------------------------------------------------------===//
+static inline bool TryCastStringBool(const char *input_data, idx_t input_size, bool &result, bool strict) {
+	switch (input_size) {
+	case 1: {
+		unsigned char c = static_cast<uint8_t>(std::tolower(*input_data));
+		if (c == 't' || (!strict && c == 'y') || (!strict && c == '1')) {
+			result = true;
+			return true;
+		} else if (c == 'f' || (!strict && c == 'n') || (!strict && c == '0')) {
+			result = false;
+			return true;
+		}
+		return false;
+	}
+	case 2: {
+		unsigned char n = static_cast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char o = static_cast<uint8_t>(std::tolower(input_data[1]));
+		if (n == 'n' && o == 'o') {
+			result = false;
+			return true;
+		}
+		return false;
+	}
+	case 3: {
+		unsigned char y = static_cast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char e = static_cast<uint8_t>(std::tolower(input_data[1]));
+		unsigned char s = static_cast<uint8_t>(std::tolower(input_data[2]));
+		if (y == 'y' && e == 'e' && s == 's') {
+			result = true;
+			return true;
+		}
+		return false;
+	}
+	case 4: {
+		unsigned char t = static_cast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char r = static_cast<uint8_t>(std::tolower(input_data[1]));
+		unsigned char u = static_cast<uint8_t>(std::tolower(input_data[2]));
+		unsigned char e = static_cast<uint8_t>(std::tolower(input_data[3]));
+		if (t == 't' && r == 'r' && u == 'u' && e == 'e') {
+			result = true;
+			return true;
+		}
+		return false;
+	}
+	case 5: {
+		unsigned char f = static_cast<uint8_t>(std::tolower(input_data[0]));
+		unsigned char a = static_cast<uint8_t>(std::tolower(input_data[1]));
+		unsigned char l = static_cast<uint8_t>(std::tolower(input_data[2]));
+		unsigned char s = static_cast<uint8_t>(std::tolower(input_data[3]));
+		unsigned char e = static_cast<uint8_t>(std::tolower(input_data[4]));
+		if (f == 'f' && a == 'a' && l == 'l' && s == 's' && e == 'e') {
+			result = false;
+			return true;
+		}
+		return false;
+	}
+	default:
+		return false;
+	}
+}
+
 template <>
 DUCKDB_API bool TryCast::Operation(string_t input, bool &result, bool strict);
 template <>
@@ -554,6 +614,22 @@ template <>
 DUCKDB_API bool TryCast::Operation(timestamp_t input, dtime_tz_t &result, bool strict);
 template <>
 DUCKDB_API bool TryCast::Operation(timestamp_t input, timestamp_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_sec_t input, timestamp_sec_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_t input, timestamp_sec_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_ms_t input, timestamp_ms_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_t input, timestamp_ms_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_ns_t input, timestamp_ns_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_t input, timestamp_ns_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_tz_t input, timestamp_tz_t &result, bool strict);
+template <>
+DUCKDB_API bool TryCast::Operation(timestamp_t input, timestamp_tz_t &result, bool strict);
 
 //===--------------------------------------------------------------------===//
 // Interval Casts

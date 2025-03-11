@@ -79,16 +79,28 @@ class BlockwiseNLJoinState : public CachingOperatorState {
 public:
 	explicit BlockwiseNLJoinState(ExecutionContext &context, ColumnDataCollection &rhs,
 	                              const PhysicalBlockwiseNLJoin &op)
-	    : cross_product(rhs), left_outer(IsLeftOuterJoin(op.join_type)), match_sel(STANDARD_VECTOR_SIZE),
+	    : op(op), cross_product(rhs), left_outer(IsLeftOuterJoin(op.join_type)), match_sel(STANDARD_VECTOR_SIZE),
 	      executor(context.client, *op.condition) {
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
+		ResetMatches();
 	}
 
+	const PhysicalBlockwiseNLJoin &op;
 	CrossProductExecutor cross_product;
 	OuterJoinMarker left_outer;
 	SelectionVector match_sel;
 	ExpressionExecutor executor;
 	DataChunk intermediate_chunk;
+	bool found_match[STANDARD_VECTOR_SIZE];
+
+	void ResetMatches() {
+		if (op.join_type != JoinType::SEMI && op.join_type != JoinType::ANTI) {
+			return;
+		}
+		for (idx_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			found_match[i] = false;
+		}
+	}
 };
 
 unique_ptr<OperatorState> PhysicalBlockwiseNLJoin::GetOperatorState(ExecutionContext &context) const {
@@ -136,69 +148,66 @@ OperatorResultType PhysicalBlockwiseNLJoin::ExecuteInternal(ExecutionContext &co
 	// now perform the actual join
 	// we perform a cross product, then execute the expression directly on the cross product result
 	idx_t result_count = 0;
-	bool found_match[STANDARD_VECTOR_SIZE] = {false};
 
-	do {
-		auto result = state.cross_product.Execute(input, *intermediate_chunk);
-		if (result == OperatorResultType::NEED_MORE_INPUT) {
-			// exhausted input, have to pull new LHS chunk
-			if (state.left_outer.Enabled()) {
-				// left join: before we move to the next chunk, see if we need to output any vectors that didn't
-				// have a match found
-				state.left_outer.ConstructLeftJoinResult(input, *intermediate_chunk);
-				state.left_outer.Reset();
-			}
-
-			if (join_type == JoinType::SEMI) {
-				PhysicalJoin::ConstructSemiJoinResult(input, chunk, found_match);
-			}
-			if (join_type == JoinType::ANTI) {
-				PhysicalJoin::ConstructAntiJoinResult(input, chunk, found_match);
-			}
-
-			return OperatorResultType::NEED_MORE_INPUT;
+	auto result = state.cross_product.Execute(input, *intermediate_chunk);
+	if (result == OperatorResultType::NEED_MORE_INPUT) {
+		// exhausted input, have to pull new LHS chunk
+		if (state.left_outer.Enabled()) {
+			// left join: before we move to the next chunk, see if we need to output any vectors that didn't
+			// have a match found
+			state.left_outer.ConstructLeftJoinResult(input, *intermediate_chunk);
+			state.left_outer.Reset();
 		}
 
-		// now perform the computation
-		result_count = state.executor.SelectExpression(*intermediate_chunk, state.match_sel);
+		if (join_type == JoinType::SEMI) {
+			PhysicalJoin::ConstructSemiJoinResult(input, chunk, state.found_match);
+		}
+		if (join_type == JoinType::ANTI) {
+			PhysicalJoin::ConstructAntiJoinResult(input, chunk, state.found_match);
+		}
+		state.ResetMatches();
 
-		// handle anti and semi joins with different logic
-		if (result_count > 0) {
-			// found a match!
-			// handle anti semi join conditions first
-			if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
-				if (state.cross_product.ScanLHS()) {
-					found_match[state.cross_product.PositionInChunk()] = true;
-				} else {
-					for (idx_t i = 0; i < result_count; i++) {
-						found_match[state.match_sel.get_index(i)] = true;
-					}
-				}
-				intermediate_chunk->Reset();
-				// trick the loop to continue as semi and anti joins will never produce more output than
-				// the LHS cardinality
-				result_count = 0;
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
+
+	// now perform the computation
+	result_count = state.executor.SelectExpression(*intermediate_chunk, state.match_sel);
+
+	// handle anti and semi joins with different logic
+	if (result_count > 0) {
+		// found a match!
+		// handle anti semi join conditions first
+		if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
+			if (state.cross_product.ScanLHS()) {
+				state.found_match[state.cross_product.PositionInChunk()] = true;
 			} else {
-				// check if the cross product is scanning the LHS or the RHS in its entirety
-				if (!state.cross_product.ScanLHS()) {
-					// set the match flags in the LHS
-					state.left_outer.SetMatches(state.match_sel, result_count);
-					// set the match flag in the RHS
-					gstate.right_outer.SetMatch(state.cross_product.ScanPosition() +
-					                            state.cross_product.PositionInChunk());
-				} else {
-					// set the match flag in the LHS
-					state.left_outer.SetMatch(state.cross_product.PositionInChunk());
-					// set the match flags in the RHS
-					gstate.right_outer.SetMatches(state.match_sel, result_count, state.cross_product.ScanPosition());
+				for (idx_t i = 0; i < result_count; i++) {
+					state.found_match[state.match_sel.get_index(i)] = true;
 				}
-				intermediate_chunk->Slice(state.match_sel, result_count);
 			}
-		} else {
-			// no result: reset the chunk
 			intermediate_chunk->Reset();
+			// trick the loop to continue as semi and anti joins will never produce more output than
+			// the LHS cardinality
+			result_count = 0;
+		} else {
+			// check if the cross product is scanning the LHS or the RHS in its entirety
+			if (!state.cross_product.ScanLHS()) {
+				// set the match flags in the LHS
+				state.left_outer.SetMatches(state.match_sel, result_count);
+				// set the match flag in the RHS
+				gstate.right_outer.SetMatch(state.cross_product.ScanPosition() + state.cross_product.PositionInChunk());
+			} else {
+				// set the match flag in the LHS
+				state.left_outer.SetMatch(state.cross_product.PositionInChunk());
+				// set the match flags in the RHS
+				gstate.right_outer.SetMatches(state.match_sel, result_count, state.cross_product.ScanPosition());
+			}
+			intermediate_chunk->Slice(state.match_sel, result_count);
 		}
-	} while (result_count == 0);
+	} else {
+		// no result: reset the chunk
+		intermediate_chunk->Reset();
+	}
 
 	return OperatorResultType::HAVE_MORE_OUTPUT;
 }

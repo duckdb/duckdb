@@ -649,7 +649,7 @@ os_overcommits_sysctl(void) {
 static bool
 os_overcommits_proc(void) {
 	int fd;
-	char buf[1];
+	char buf[1] = {'0'};
 
 #if defined(JEMALLOC_USE_SYSCALL) && defined(SYS_open)
 	#if defined(O_CLOEXEC)

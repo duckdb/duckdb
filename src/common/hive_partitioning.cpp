@@ -51,7 +51,7 @@ GetKnownColumnValues(const string &filename, const HivePartitioningFilterInfo &f
 static void ConvertKnownColRefToConstants(ClientContext &context, unique_ptr<Expression> &expr,
                                           const unordered_map<column_t, PartitioningColumnValue> &known_column_values,
                                           idx_t table_index) {
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 
 		// This bound column ref is for another table
@@ -245,7 +245,7 @@ static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionK
 
 	const auto &type = input.GetType();
 
-	const auto reinterpret = Value::CreateValue<T>(data[0]).GetTypeMutable() != type;
+	const auto reinterpret = Value::CreateValue<T>(data[sel.get_index(0)]).GetTypeMutable() != type;
 	if (reinterpret) {
 		for (idx_t i = 0; i < count; i++) {
 			auto &key = keys[i];

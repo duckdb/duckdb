@@ -9,6 +9,7 @@ add_library_unity(
   comment_on_column_info.cpp
   copy_info.cpp
   create_info.cpp
+  create_function_info.cpp
   create_index_info.cpp
   create_aggregate_function_info.cpp
   create_collation_info.cpp
@@ -25,6 +26,7 @@ add_library_unity(
   create_view_info.cpp
   detach_info.cpp
   drop_info.cpp
+  exported_table_data.cpp
   extra_drop_info.cpp
   load_info.cpp
   sample_options.cpp

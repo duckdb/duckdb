@@ -1,6 +1,7 @@
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
+#include "duckdb/storage/buffer/buffer_pool.hpp"
 
 namespace duckdb {
 
@@ -114,7 +115,7 @@ TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p)
 TupleDataSegment::~TupleDataSegment() {
 	lock_guard<mutex> guard(pinned_handles_lock);
 	if (allocator) {
-		allocator->SetCanDestroy(); // Prevent blocks from being added to eviction queue
+		allocator->SetDestroyBufferUponUnpin(); // Prevent blocks from being added to eviction queue
 	}
 	pinned_row_handles.clear();
 	pinned_heap_handles.clear();

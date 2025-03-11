@@ -1,4 +1,5 @@
 #include "duckdb/common/constants.hpp"
+#include "duckdb/common/exception.hpp"
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/vector_size.hpp"
@@ -8,7 +9,9 @@ namespace duckdb {
 constexpr const idx_t DConstants::INVALID_INDEX;
 const row_t MAX_ROW_ID = 36028797018960000ULL;       // 2^55
 const row_t MAX_ROW_ID_LOCAL = 72057594037920000ULL; // 2^56
-const column_t COLUMN_IDENTIFIER_ROW_ID = (column_t)-1;
+const column_t COLUMN_IDENTIFIER_ROW_ID = UINT64_C(18446744073709551615);
+const column_t COLUMN_IDENTIFIER_EMPTY = UINT64_C(18446744073709551614);
+const column_t VIRTUAL_COLUMN_START = UINT64_C(9223372036854775808); // 2^63
 const double PI = 3.141592653589793;
 
 const transaction_t TRANSACTION_ID_START = 4611686018427388000ULL;                // 2^62
@@ -21,6 +24,10 @@ bool IsPowerOfTwo(uint64_t v) {
 }
 
 uint64_t NextPowerOfTwo(uint64_t v) {
+	auto v_in = v;
+	if (v < 1) { // this is not strictly right but we seem to rely on it in places
+		return 2;
+	}
 	v--;
 	v |= v >> 1;
 	v |= v >> 2;
@@ -29,6 +36,9 @@ uint64_t NextPowerOfTwo(uint64_t v) {
 	v |= v >> 16;
 	v |= v >> 32;
 	v++;
+	if (v == 0) {
+		throw OutOfRangeException("Can't find next power of 2 for %llu", v_in);
+	}
 	return v;
 }
 
@@ -46,6 +56,10 @@ bool IsInvalidCatalog(const string &str) {
 
 bool IsRowIdColumnId(column_t column_id) {
 	return column_id == COLUMN_IDENTIFIER_ROW_ID;
+}
+
+bool IsVirtualColumn(column_t column_id) {
+	return column_id >= VIRTUAL_COLUMN_START;
 }
 
 } // namespace duckdb

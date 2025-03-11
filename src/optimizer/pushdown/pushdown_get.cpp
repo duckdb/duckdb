@@ -6,7 +6,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 
 namespace duckdb {
-
 unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperator> op) {
 	D_ASSERT(op->type == LogicalOperatorType::LOGICAL_GET);
 	auto &get = op->Cast<LogicalGet>();
@@ -54,22 +53,6 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownGet(unique_ptr<LogicalOperat
 	//! We generate the table filters that will be executed during the table scan
 	//! Right now this only executes simple AND filters
 	get.table_filters = combiner.GenerateTableScanFilters(get.GetColumnIds());
-
-	// //! For more complex filters if all filters to a column are constants we generate a min max boundary used to
-	// check
-	// //! the zonemaps.
-	// auto zonemap_checks = combiner.GenerateZonemapChecks(get.column_ids, get.table_filters);
-
-	// for (auto &f : get.table_filters) {
-	// 	f.column_index = get.column_ids[f.column_index];
-	// }
-
-	// //! Use zonemap checks as table filters for pre-processing
-	// for (auto &zonemap_check : zonemap_checks) {
-	// 	if (zonemap_check.column_index != COLUMN_IDENTIFIER_ROW_ID) {
-	// 		get.table_filters.push_back(zonemap_check);
-	// 	}
-	// }
 
 	GenerateFilters();
 

@@ -92,6 +92,7 @@ enum class PythonTypeObject : uint8_t {
 	COMPOSITE, // list|dict types
 	STRUCT,    // dictionary
 	STRING,    // string value
+	TYPE       // duckdb pytype
 };
 }
 
@@ -110,6 +111,9 @@ static PythonTypeObject GetTypeObjectType(const py::handle &type_object) {
 	}
 	if (py::isinstance<PyUnionType>(type_object)) {
 		return PythonTypeObject::UNION;
+	}
+	if (py::isinstance<DuckDBPyType>(type_object)) {
+		return PythonTypeObject::TYPE;
 	}
 	return PythonTypeObject::INVALID;
 }
@@ -270,6 +274,9 @@ static LogicalType FromGenericAlias(const py::object &obj) {
 static LogicalType FromDictionary(const py::object &obj) {
 	auto dict = py::reinterpret_steal<py::dict>(obj);
 	child_list_t<LogicalType> children;
+	if (dict.size() == 0) {
+		throw InvalidInputException("Could not convert empty dictionary to a duckdb STRUCT type");
+	}
 	children.reserve(dict.size());
 	for (auto &item : dict) {
 		auto &name_p = item.first;
@@ -299,6 +306,14 @@ static LogicalType FromObject(const py::object &object) {
 	case PythonTypeObject::STRING: {
 		auto string_value = std::string(py::str(object));
 		return FromString(string_value, nullptr);
+	}
+	case PythonTypeObject::TYPE: {
+		shared_ptr<DuckDBPyType> type_object;
+		if (!py::try_cast<shared_ptr<DuckDBPyType>>(object, type_object)) {
+			string actual_type = py::str(object.get_type());
+			throw InvalidInputException("Expected argument of type DuckDBPyType, received '%s' instead", actual_type);
+		}
+		return type_object->Type();
 	}
 	default: {
 		string actual_type = py::str(object.get_type());

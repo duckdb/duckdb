@@ -7,7 +7,7 @@ require parquet
 require httpfs
 
 statement ok
-CREATE TABLE issue_5968 AS FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/issue_5968.parquet'
+CREATE TABLE issue_5968 AS FROM 'https://github.com/duckdb/duckdb-data/releases/download/v1.0/issue_5968.parquet';
 
 query I
 SELECT COUNT(*) FROM issue_5968

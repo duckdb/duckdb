@@ -1,0 +1,46 @@
+# name: test/sql/create/create_table_with_arraybounds.test
+# group: [create]
+
+require noforcestorage
+
+# Create a table with an ENUM[] type
+statement ok
+create table T (
+	vis enum ('hide', 'visible')[]
+);
+
+query I
+select column_type from (describe T);
+----
+ENUM('hide', 'visible')[]
+
+statement ok
+attach ':memory:' as db2;
+
+statement ok
+create schema schema2;
+
+statement ok
+create schema db2.schema3;
+
+statement ok
+create type schema2.foo as VARCHAR;
+
+statement ok
+create type db2.schema3.bar as BOOL;
+
+# Create a table with a USER[] type qualified with a schema
+statement error
+create table B (
+	vis schema2.foo[]
+);
+----
+syntax error at or near
+
+# Create a table with a USER[] type qualified with a schema and a catalog
+statement error
+create table B (
+	vis db2.schema3.bar[]
+);
+----
+syntax error at or near

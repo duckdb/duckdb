@@ -13,8 +13,12 @@
 #include "duckdb/storage/buffer/buffer_handle.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/scan_options.hpp"
+#include "duckdb/common/random_engine.hpp"
 #include "duckdb/storage/table/segment_lock.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
+#include "duckdb/parser/parsed_data/sample_options.hpp"
+#include "duckdb/storage/storage_index.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 
 namespace duckdb {
 class AdaptiveFilter;
@@ -36,6 +40,8 @@ class RowGroupSegmentTree;
 class TableFilter;
 struct AdaptiveFilterState;
 struct TableScanOptions;
+struct ScanSamplingInfo;
+struct TableFilterState;
 
 struct SegmentScanState {
 	virtual ~SegmentScanState() {
@@ -93,10 +99,14 @@ struct ColumnScanState {
 	vector<unique_ptr<SegmentScanState>> previous_states;
 	//! The last read offset in the child state (used for LIST columns only)
 	idx_t last_offset = 0;
+	//! Whether or not we should scan a specific child column
+	vector<bool> scan_child_column;
 	//! Contains TableScan level config for scanning
 	optional_ptr<TableScanOptions> scan_options;
 
 public:
+	void Initialize(const LogicalType &type, const vector<StorageIndex> &children,
+	                optional_ptr<TableScanOptions> options);
 	void Initialize(const LogicalType &type, optional_ptr<TableScanOptions> options);
 	//! Move the scan state forward by "count" rows (including all child states)
 	void Next(idx_t count);
@@ -114,12 +124,13 @@ struct ColumnFetchState {
 };
 
 struct ScanFilter {
-	ScanFilter(idx_t index, const vector<column_t> &column_ids, TableFilter &filter);
+	ScanFilter(idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter);
 
 	idx_t scan_column_index;
 	idx_t table_column_index;
 	TableFilter &filter;
 	bool always_true;
+	unique_ptr<TableFilterState> filter_state;
 
 	bool IsAlwaysTrue() const {
 		return always_true;
@@ -130,7 +141,7 @@ class ScanFilterInfo {
 public:
 	~ScanFilterInfo();
 
-	void Initialize(TableFilterSet &filters, const vector<column_t> &column_ids);
+	void Initialize(ClientContext &context, TableFilterSet &filters, const vector<StorageIndex> &column_ids);
 
 	const vector<ScanFilter> &GetFilterList() const {
 		return filter_list;
@@ -188,10 +199,13 @@ public:
 	//! The valid selection
 	SelectionVector valid_sel;
 
+	RandomEngine random;
+
 public:
 	void Initialize(const vector<LogicalType> &types);
-	const vector<storage_t> &GetColumnIds();
+	const vector<StorageIndex> &GetColumnIds();
 	ScanFilterInfo &GetFilterInfo();
+	ScanSamplingInfo &GetSamplingInfo();
 	TableScanOptions &GetOptions();
 	bool Scan(DuckTransaction &transaction, DataChunk &result);
 	bool ScanCommitted(DataChunk &result, TableScanType type);
@@ -201,9 +215,25 @@ private:
 	TableScanState &parent;
 };
 
+struct ScanSamplingInfo {
+	//! Whether or not to do a system sample during scanning
+	bool do_system_sample = false;
+	//! The sampling rate to use
+	double sample_rate;
+};
+
 struct TableScanOptions {
 	//! Fetch rows one-at-a-time instead of using the regular scans.
 	bool force_fetch_row = false;
+};
+
+class CheckpointLock {
+public:
+	explicit CheckpointLock(unique_ptr<StorageLockKey> lock_p) : lock(std::move(lock_p)) {
+	}
+
+private:
+	unique_ptr<StorageLockKey> lock;
 };
 
 class TableScanState {
@@ -218,20 +248,26 @@ public:
 	//! Options for scanning
 	TableScanOptions options;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
-	unique_ptr<StorageLockKey> checkpoint_lock;
+	shared_ptr<CheckpointLock> checkpoint_lock;
 	//! Filter info
 	ScanFilterInfo filters;
+	//! Sampling info
+	ScanSamplingInfo sampling_info;
 
 public:
-	void Initialize(vector<storage_t> column_ids, optional_ptr<TableFilterSet> table_filters = nullptr);
+	void Initialize(vector<StorageIndex> column_ids, optional_ptr<ClientContext> context = nullptr,
+	                optional_ptr<TableFilterSet> table_filters = nullptr,
+	                optional_ptr<SampleOptions> table_sampling = nullptr);
 
-	const vector<storage_t> &GetColumnIds();
+	const vector<StorageIndex> &GetColumnIds();
 
 	ScanFilterInfo &GetFilterInfo();
 
+	ScanSamplingInfo &GetSamplingInfo();
+
 private:
 	//! The column identifiers of the scan
-	vector<storage_t> column_ids;
+	vector<StorageIndex> column_ids;
 };
 
 struct ParallelCollectionScanState {
@@ -253,7 +289,7 @@ struct ParallelTableScanState {
 	//! Parallel scan state for the transaction-local state
 	ParallelCollectionScanState local_state;
 	//! Shared lock over the checkpoint to prevent checkpoints while reading
-	unique_ptr<StorageLockKey> checkpoint_lock;
+	shared_ptr<CheckpointLock> checkpoint_lock;
 };
 
 struct PrefetchState {

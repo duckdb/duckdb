@@ -49,7 +49,7 @@ unique_ptr<CreateStatement> Transformer::TransformCreateType(duckdb_libpgquery::
 		if (stmt.query) {
 			// CREATE TYPE mood AS ENUM (SELECT ...)
 			D_ASSERT(stmt.vals == nullptr);
-			auto query = TransformSelect(stmt.query, false);
+			auto query = TransformSelectStmt(*stmt.query, false);
 			info->query = std::move(query);
 			info->type = LogicalType::INVALID;
 		} else {

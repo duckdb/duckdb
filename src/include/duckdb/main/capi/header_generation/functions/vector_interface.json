@@ -63,7 +63,7 @@
                 }
             ],
             "comment": {
-                "description": "Ensures the validity mask is writable by allocating it.\n\nAfter this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.\nThis allows null values to be written to the vector, regardless of whether a validity mask was present before.\n\n",
+                "description": "Ensures the validity mask is writable by allocating it.\n\nAfter this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.\nThis allows NULL values to be written to the vector, regardless of whether a validity mask was present before.\n\n",
                 "param_comments": {
                     "vector": "The vector to alter"
                 }

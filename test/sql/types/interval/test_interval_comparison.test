@@ -46,3 +46,153 @@ SELECT INTERVAL '1' YEAR = INTERVAL '12' MONTH
 ----
 1
 
+# Double carry left
+query I
+select interval '28 days 432000 seconds' = interval '1 month 3 days';
+----
+True
+
+# Sorting with normalisation
+statement ok
+CREATE TABLE issue14384(i INTERVAL);
+
+statement ok
+INSERT INTO issue14384(i) VALUES 
+	('2 years 3 months'),
+	('-1734799452 DAYS'), 
+	('2 DAYS'),
+	('13 days'),
+	('1 month'),
+	('3 days'),
+;
+
+query I
+SELECT i FROM issue14384 ORDER BY ALL;
+----
+-1734799452 days
+2 days
+3 days
+13 days
+1 month
+2 years 3 months
+
+# PiecewiseMergeJoin
+query II 
+SELECT * 
+FROM issue14384 
+INNER JOIN (
+	SELECT INTERVAL 1000 DAY AS col0 
+	FROM issue14384) AS sub0  
+	ON (issue14384.i < sub0.col0)
+ORDER BY ALL;
+----
+-1734799452 days	1000 days
+-1734799452 days	1000 days
+-1734799452 days	1000 days
+-1734799452 days	1000 days
+-1734799452 days	1000 days
+-1734799452 days	1000 days
+2 days	1000 days
+2 days	1000 days
+2 days	1000 days
+2 days	1000 days
+2 days	1000 days
+2 days	1000 days
+3 days	1000 days
+3 days	1000 days
+3 days	1000 days
+3 days	1000 days
+3 days	1000 days
+3 days	1000 days
+13 days	1000 days
+13 days	1000 days
+13 days	1000 days
+13 days	1000 days
+13 days	1000 days
+13 days	1000 days
+1 month	1000 days
+1 month	1000 days
+1 month	1000 days
+1 month	1000 days
+1 month	1000 days
+1 month	1000 days
+2 years 3 months	1000 days
+2 years 3 months	1000 days
+2 years 3 months	1000 days
+2 years 3 months	1000 days
+2 years 3 months	1000 days
+2 years 3 months	1000 days
+
+# NestedLoopJoin
+query II
+SELECT * 
+FROM issue14384 
+INNER  JOIN  (
+	SELECT  INTERVAL 1000 DAY AS col0 FROM issue14384) AS sub0  
+	ON (issue14384.i < sub0.col0) 
+WHERE (NOT (issue14384.i != issue14384.i))
+ORDER BY ALL;
+----
+-1734799452 days	1000 days
+-1734799452 days	1000 days
+-1734799452 days	1000 days
+-1734799452 days	1000 days
+-1734799452 days	1000 days
+-1734799452 days	1000 days
+2 days	1000 days
+2 days	1000 days
+2 days	1000 days
+2 days	1000 days
+2 days	1000 days
+2 days	1000 days
+3 days	1000 days
+3 days	1000 days
+3 days	1000 days
+3 days	1000 days
+3 days	1000 days
+3 days	1000 days
+13 days	1000 days
+13 days	1000 days
+13 days	1000 days
+13 days	1000 days
+13 days	1000 days
+13 days	1000 days
+1 month	1000 days
+1 month	1000 days
+1 month	1000 days
+1 month	1000 days
+1 month	1000 days
+1 month	1000 days
+2 years 3 months	1000 days
+2 years 3 months	1000 days
+2 years 3 months	1000 days
+2 years 3 months	1000 days
+2 years 3 months	1000 days
+2 years 3 months	1000 days
+
+
+statement ok
+INSERT INTO issue14384(i) VALUES 
+	('1000 DAY'),
+	('28 days 432000 seconds'),
+	('1 month 3 days'),
+	('2147483647 months 2147483647 days 9223372036854775807 microseconds'),
+	('-2147483648 months -2147483648 days -9223372036854775807 microseconds'),
+	(NULL)
+;
+
+query I
+SELECT i FROM issue14384 ORDER BY ALL;
+----
+-178956970 years -8 months -2147483648 days -2562047788:00:54.775807
+-1734799452 days
+2 days
+3 days
+13 days
+1 month
+28 days 120:00:00
+1 month 3 days
+2 years 3 months
+1000 days
+178956970 years 7 months 2147483647 days 2562047788:00:54.775807
+NULL

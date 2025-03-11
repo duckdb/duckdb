@@ -9,16 +9,16 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalOrder &op)
 
 	auto plan = CreatePlan(*op.children[0]);
 	if (!op.orders.empty()) {
-		vector<idx_t> projections;
-		if (op.projections.empty()) {
-			for (idx_t i = 0; i < plan->types.size(); i++) {
-				projections.push_back(i);
-			}
+		vector<idx_t> projection_map;
+		if (op.HasProjectionMap()) {
+			projection_map = std::move(op.projection_map);
 		} else {
-			projections = std::move(op.projections);
+			for (idx_t i = 0; i < plan->types.size(); i++) {
+				projection_map.push_back(i);
+			}
 		}
-		auto order =
-		    make_uniq<PhysicalOrder>(op.types, std::move(op.orders), std::move(projections), op.estimated_cardinality);
+		auto order = make_uniq<PhysicalOrder>(op.types, std::move(op.orders), std::move(projection_map),
+		                                      op.estimated_cardinality);
 		order->children.push_back(std::move(plan));
 		plan = std::move(order);
 	}

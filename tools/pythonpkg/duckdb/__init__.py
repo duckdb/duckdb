@@ -24,10 +24,13 @@ from .duckdb import (
     Expression,
     ConstantExpression,
     ColumnExpression,
+    DefaultExpression,
     CoalesceOperator,
+    LambdaExpression,
     StarExpression,
     FunctionExpression,
     CaseExpression,
+    SQLExpression
 )
 _exported_symbols.extend([
     "DuckDBPyRelation",
@@ -37,10 +40,13 @@ _exported_symbols.extend([
     "Expression",
     "ConstantExpression",
     "ColumnExpression",
+    "DefaultExpression",
     "CoalesceOperator",
+    "LambdaExpression",
     "StarExpression",
     "FunctionExpression",
     "CaseExpression",
+    "SQLExpression"
 ])
 
 # These are overloaded twice, we define them inside of C++ so pybind can deal with it
@@ -121,10 +127,6 @@ from .duckdb import (
 	read_parquet,
 	from_parquet,
 	read_parquet,
-	from_substrait,
-	get_substrait,
-	get_substrait_json,
-	from_substrait_json,
 	get_table_names,
 	install_extension,
 	load_extension,
@@ -204,10 +206,6 @@ _exported_symbols.extend([
 	'read_parquet',
 	'from_parquet',
 	'read_parquet',
-	'from_substrait',
-	'get_substrait',
-	'get_substrait_json',
-	'from_substrait_json',
 	'get_table_names',
 	'install_extension',
 	'load_extension',
@@ -248,10 +246,10 @@ from .duckdb import (
     __standard_vector_size__,
     __interactive__,
     __jupyter__,
+    __formatted_python_version__,
     __version__,
     apilevel,
     comment,
-    default_connection,
     identifier,
     keyword,
     numeric_const,
@@ -266,10 +264,10 @@ _exported_symbols.extend([
     "__standard_vector_size__",
     "__interactive__",
     "__jupyter__",
+    "__formatted_python_version__",
     "__version__",
     "apilevel",
     "comment",
-    "default_connection",
     "identifier",
     "keyword",
     "numeric_const",
@@ -283,11 +281,15 @@ _exported_symbols.extend([
 
 
 from .duckdb import (
-    connect
+    connect,
+    default_connection,
+    set_default_connection,
 )
 
 _exported_symbols.extend([
-    "connect"
+    "connect",
+    "default_connection",
+    "set_default_connection",
 ])
 
 # Exceptions

@@ -1,0 +1,98 @@
+# name: test/sql/types/struct/struct_concat.test
+# group: [struct]
+
+statement ok
+PRAGMA enable_verification
+
+query I
+SELECT struct_concat({'a': 1}, {'b': NULL}, NULL::STRUCT(k INT), struct_pack( x := 'foobar'));;
+----
+{'a': 1, 'b': NULL, 'k': NULL, 'x': foobar}
+
+statement ok
+CREATE TABLE t1 AS SELECT {'i': i, 'j': i + i % 2} as s FROM generate_series(1, 15) AS t(i);
+
+# Test mixed flat and constant arguments
+query I rowsort
+SELECT struct_concat({'a': 2, 'b': NULL}, s) FROM t1;
+----
+{'a': 2, 'b': NULL, 'i': 1, 'j': 2}
+{'a': 2, 'b': NULL, 'i': 10, 'j': 10}
+{'a': 2, 'b': NULL, 'i': 11, 'j': 12}
+{'a': 2, 'b': NULL, 'i': 12, 'j': 12}
+{'a': 2, 'b': NULL, 'i': 13, 'j': 14}
+{'a': 2, 'b': NULL, 'i': 14, 'j': 14}
+{'a': 2, 'b': NULL, 'i': 15, 'j': 16}
+{'a': 2, 'b': NULL, 'i': 2, 'j': 2}
+{'a': 2, 'b': NULL, 'i': 3, 'j': 4}
+{'a': 2, 'b': NULL, 'i': 4, 'j': 4}
+{'a': 2, 'b': NULL, 'i': 5, 'j': 6}
+{'a': 2, 'b': NULL, 'i': 6, 'j': 6}
+{'a': 2, 'b': NULL, 'i': 7, 'j': 8}
+{'a': 2, 'b': NULL, 'i': 8, 'j': 8}
+{'a': 2, 'b': NULL, 'i': 9, 'j': 10}
+
+# Test dictionary vector concatenation
+query I rowsort
+SELECT struct_concat(s, {'a': 2, 'b': NULL}) FROM t1 WHERE s.i % 2 = 0;
+----
+{'i': 10, 'j': 10, 'a': 2, 'b': NULL}
+{'i': 12, 'j': 12, 'a': 2, 'b': NULL}
+{'i': 14, 'j': 14, 'a': 2, 'b': NULL}
+{'i': 2, 'j': 2, 'a': 2, 'b': NULL}
+{'i': 4, 'j': 4, 'a': 2, 'b': NULL}
+{'i': 6, 'j': 6, 'a': 2, 'b': NULL}
+{'i': 8, 'j': 8, 'a': 2, 'b': NULL}
+
+statement error
+SELECT struct_concat();
+----
+Invalid Input Error: struct_concat: At least one argument is required
+
+statement error
+SELECT struct_concat(NULL::STRUCT(k INT), 'not a struct');
+----
+Invalid Input Error: struct_concat: Argument at position "2" is not a STRUCT
+
+statement error
+SELECT struct_concat({'a': 'first struct'}, {'a': 'second struct'});
+----
+Invalid Input Error: struct_concat: Arguments contain duplicate STRUCT entry "a"
+
+statement error
+SELECT struct_concat({'a': 'first struct'}, {'A': 'second struct'});
+----
+Invalid Input Error: struct_concat: Arguments contain case-insensitive duplicate STRUCT entry "A" and "a"
+
+statement error
+SELECT struct_concat({'a': 1}, NULL);
+----
+Invalid Input Error: struct_concat: Argument at position "2" is not a STRUCT
+
+statement error
+SELECT struct_concat({'a': 'named struct'}, row(10));
+----
+Invalid Input Error: struct_concat: Cannot mix named and unnamed STRUCTs
+
+query I
+SELECT struct_concat(row('a'), row('b'));
+----
+(a, b)
+
+statement ok
+PREPARE v1 AS SELECT struct_concat({'a': 1}, ?);
+
+query I
+EXECUTE v1({'b': 42});
+----
+{'a': 1, 'b': 42}
+
+statement ok
+PREPARE v2 AS SELECT struct_concat({'a': ?}, {'b': 42});
+
+query I
+EXECUTE v2(1);
+----
+{'a': 1, 'b': 42}
+
+

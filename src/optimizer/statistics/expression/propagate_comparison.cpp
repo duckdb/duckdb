@@ -99,7 +99,7 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCompar
 		return nullptr;
 	}
 	// propagate the statistics of the comparison operator
-	auto propagate_result = PropagateComparison(*left_stats, *right_stats, expr.type);
+	auto propagate_result = PropagateComparison(*left_stats, *right_stats, expr.GetExpressionType());
 	switch (propagate_result) {
 	case FilterPropagateResult::FILTER_ALWAYS_TRUE:
 		expr_ptr = make_uniq<BoundConstantExpression>(Value::BOOLEAN(true));

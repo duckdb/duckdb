@@ -20,6 +20,7 @@
 namespace duckdb {
 
 class VectorCache;
+class VectorStringBuffer;
 class VectorStructBuffer;
 class VectorListBuffer;
 struct SelCache;
@@ -109,9 +110,10 @@ public:
 	/*!
 	    Create a new vector
 	    If create_data is true, the vector will be an owning empty vector.
-	    If zero_data is true, the allocated data will be zero-initialized.
+	    If initialize_to_zero is true, the allocated data will be zero-initialized.
 	*/
-	DUCKDB_API Vector(LogicalType type, bool create_data, bool zero_data, idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API Vector(LogicalType type, bool create_data, bool initialize_to_zero,
+	                  idx_t capacity = STANDARD_VECTOR_SIZE);
 	// implicit copying of Vectors is not allowed
 	Vector(const Vector &) = delete;
 	// but moving of vectors is allowed
@@ -144,10 +146,14 @@ public:
 	DUCKDB_API void Slice(const SelectionVector &sel, idx_t count);
 	//! Slice the vector, keeping the result around in a cache or potentially using the cache instead of slicing
 	DUCKDB_API void Slice(const SelectionVector &sel, idx_t count, SelCache &cache);
+	//! Turn this vector into a dictionary vector
+	DUCKDB_API void Dictionary(idx_t dictionary_size, const SelectionVector &sel, idx_t count);
+	//! Creates a reference to a dictionary of the other vector
+	DUCKDB_API void Dictionary(const Vector &dict, idx_t dictionary_size, const SelectionVector &sel, idx_t count);
 
 	//! Creates the data of this vector with the specified type. Any data that
 	//! is currently in the vector is destroyed.
-	DUCKDB_API void Initialize(bool zero_data = false, idx_t capacity = STANDARD_VECTOR_SIZE);
+	DUCKDB_API void Initialize(bool initialize_to_zero = false, idx_t capacity = STANDARD_VECTOR_SIZE);
 
 	//! Converts this Vector to a printable string representation
 	DUCKDB_API string ToString(idx_t count) const;
@@ -201,7 +207,7 @@ public:
 	//! Returns a vector of ResizeInfo containing each (nested) vector to resize.
 	DUCKDB_API void FindResizeInfos(vector<ResizeInfo> &resize_infos, const idx_t multiplier);
 
-	DUCKDB_API void Serialize(Serializer &serializer, idx_t count);
+	DUCKDB_API void Serialize(Serializer &serializer, idx_t count, bool compressed_serialization = true);
 	DUCKDB_API void Deserialize(Deserializer &deserializer, idx_t count);
 
 	idx_t GetAllocationSize(idx_t cardinality) const;
@@ -304,21 +310,43 @@ struct ConstantVector {
 };
 
 struct DictionaryVector {
-	static inline const SelectionVector &SelVector(const Vector &vector) {
+	static void VerifyDictionary(const Vector &vector) {
+#ifdef DUCKDB_DEBUG_NO_SAFETY
 		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+#else
+		if (vector.GetVectorType() != VectorType::DICTIONARY_VECTOR) {
+			throw InternalException(
+			    "Operation requires a dictionary vector but a non-dictionary vector was encountered");
+		}
+#endif
+	}
+	static inline const SelectionVector &SelVector(const Vector &vector) {
+		VerifyDictionary(vector);
 		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline SelectionVector &SelVector(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		VerifyDictionary(vector);
 		return vector.buffer->Cast<DictionaryBuffer>().GetSelVector();
 	}
 	static inline const Vector &Child(const Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		VerifyDictionary(vector);
 		return vector.auxiliary->Cast<VectorChildBuffer>().data;
 	}
 	static inline Vector &Child(Vector &vector) {
-		D_ASSERT(vector.GetVectorType() == VectorType::DICTIONARY_VECTOR);
+		VerifyDictionary(vector);
 		return vector.auxiliary->Cast<VectorChildBuffer>().data;
+	}
+	static inline optional_idx DictionarySize(const Vector &vector) {
+		VerifyDictionary(vector);
+		return vector.buffer->Cast<DictionaryBuffer>().GetDictionarySize();
+	}
+	static inline const string &DictionaryId(const Vector &vector) {
+		VerifyDictionary(vector);
+		return vector.buffer->Cast<DictionaryBuffer>().GetDictionaryId();
+	}
+	static inline void SetDictionaryId(Vector &vector, string new_id) {
+		VerifyDictionary(vector);
+		vector.buffer->Cast<DictionaryBuffer>().SetDictionaryId(std::move(new_id));
 	}
 };
 
@@ -429,6 +457,8 @@ struct StringVector {
 	//! Allocates an empty string of the specified size, and returns a writable pointer that can be used to store the
 	//! result of an operation
 	DUCKDB_API static string_t EmptyString(Vector &vector, idx_t len);
+	//! Returns a reference to the underlying VectorStringBuffer - throws an error if vector is not of type VARCHAR
+	DUCKDB_API static VectorStringBuffer &GetStringBuffer(Vector &vector);
 	//! Adds a reference to a handle that stores strings of this vector
 	DUCKDB_API static void AddHandle(Vector &vector, BufferHandle handle);
 	//! Adds a reference to an unspecified vector buffer that stores strings of this vector

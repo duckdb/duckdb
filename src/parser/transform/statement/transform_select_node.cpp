@@ -31,11 +31,20 @@ void Transformer::TransformModifiers(duckdb_libpgquery::PGSelectStmt &stmt, Quer
 			node.modifiers.push_back(std::move(limit_percent_modifier));
 		} else {
 			auto limit_modifier = make_uniq<LimitModifier>();
-			if (stmt.limitCount) {
-				limit_modifier->limit = TransformExpression(stmt.limitCount);
-			}
-			if (stmt.limitOffset) {
-				limit_modifier->offset = TransformExpression(stmt.limitOffset);
+			if (stmt.offset_first) {
+				if (stmt.limitOffset) {
+					limit_modifier->offset = TransformExpression(stmt.limitOffset);
+				}
+				if (stmt.limitCount) {
+					limit_modifier->limit = TransformExpression(stmt.limitCount);
+				}
+			} else {
+				if (stmt.limitCount) {
+					limit_modifier->limit = TransformExpression(stmt.limitCount);
+				}
+				if (stmt.limitOffset) {
+					limit_modifier->offset = TransformExpression(stmt.limitOffset);
+				}
 			}
 			node.modifiers.push_back(std::move(limit_modifier));
 		}
@@ -91,9 +100,14 @@ unique_ptr<QueryNode> Transformer::TransformSelectInternal(duckdb_libpgquery::PG
 			if (!stmt.targetList) {
 				throw ParserException("SELECT clause without selection list");
 			}
-			// select list
-			TransformExpressionList(*stmt.targetList, result.select_list);
-			result.from_table = TransformFrom(stmt.fromClause);
+			// transform in the specified order to ensure positional parameters are correctly set
+			if (stmt.from_first) {
+				result.from_table = TransformFrom(stmt.fromClause);
+				TransformExpressionList(*stmt.targetList, result.select_list);
+			} else {
+				TransformExpressionList(*stmt.targetList, result.select_list);
+				result.from_table = TransformFrom(stmt.fromClause);
+			}
 		}
 
 		// where

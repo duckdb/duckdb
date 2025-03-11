@@ -25,7 +25,7 @@ public:
 public:
 	void SetStart(idx_t new_start) override;
 
-	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count) override;
+	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) override;
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
 	void InitializeScan(ColumnScanState &state) override;
 	void InitializeScanWithOffset(ColumnScanState &state, idx_t row_idx) override;
@@ -34,7 +34,12 @@ public:
 	           idx_t target_count) override;
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
 	                    idx_t target_count) override;
-	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
+	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) override;
+
+	void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	            SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state) override;
+	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	            SelectionVector &sel, idx_t sel_count) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;
 	void AppendData(BaseStatistics &stats, ColumnAppendState &state, UnifiedVectorFormat &vdata, idx_t count) override;

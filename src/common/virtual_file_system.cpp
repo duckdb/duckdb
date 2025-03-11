@@ -13,15 +13,15 @@ unique_ptr<FileHandle> VirtualFileSystem::OpenFile(const string &path, FileOpenF
                                                    optional_ptr<FileOpener> opener) {
 	auto compression = flags.Compression();
 	if (compression == FileCompressionType::AUTO_DETECT) {
-		// auto detect compression settings based on file name
+		// auto-detect compression settings based on file name
 		auto lower_path = StringUtil::Lower(path);
 		if (StringUtil::EndsWith(lower_path, ".tmp")) {
 			// strip .tmp
 			lower_path = lower_path.substr(0, lower_path.length() - 4);
 		}
-		if (StringUtil::EndsWith(lower_path, ".gz")) {
+		if (IsFileCompressed(path, FileCompressionType::GZIP)) {
 			compression = FileCompressionType::GZIP;
-		} else if (StringUtil::EndsWith(lower_path, ".zst")) {
+		} else if (IsFileCompressed(path, FileCompressionType::ZSTD)) {
 			compression = FileCompressionType::ZSTD;
 		} else {
 			compression = FileCompressionType::UNCOMPRESSED;
@@ -137,6 +137,26 @@ void VirtualFileSystem::UnregisterSubSystem(const string &name) {
 
 void VirtualFileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) {
 	compressed_fs[compression_type] = std::move(fs);
+}
+
+unique_ptr<FileSystem> VirtualFileSystem::ExtractSubSystem(const string &name) {
+	// If the subsystem has been disabled, we don't allow extraction and return nullptr here.
+	if (disabled_file_systems.find(name) != disabled_file_systems.end()) {
+		return nullptr;
+	}
+
+	unique_ptr<FileSystem> extracted_filesystem;
+	for (auto iter = sub_systems.begin(); iter != sub_systems.end(); ++iter) {
+		auto &cur_filesystem = *iter;
+		if (cur_filesystem->GetName() == name) {
+			extracted_filesystem = std::move(cur_filesystem);
+			sub_systems.erase(iter);
+			return extracted_filesystem;
+		}
+	}
+
+	// Requested subfilesystem is not registered.
+	return nullptr;
 }
 
 vector<string> VirtualFileSystem::ListSubSystems() {

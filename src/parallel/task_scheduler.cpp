@@ -164,17 +164,25 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	shared_ptr<Task> task;
 	// loop until the marker is set to false
 	while (*marker) {
-		if (!Allocator::SupportsFlush() || allocator_background_threads) {
-			// allocator can't flush, or background threads clean up allocations, just start an untimed wait
+		if (!Allocator::SupportsFlush()) {
+			// allocator can't flush, just start an untimed wait
 			queue->semaphore.wait();
 		} else if (!queue->semaphore.wait(INITIAL_FLUSH_WAIT)) {
-			// no background threads, flush this threads outstanding allocations after it was idle for 0.5s
-			Allocator::ThreadFlush(allocator_flush_threshold);
-			if (!queue->semaphore.wait(Allocator::DecayDelay() * 1000000 - INITIAL_FLUSH_WAIT)) {
-				// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
-				// mark it as idle and start an untimed wait
-				Allocator::ThreadIdle();
+			// allocator can flush, we flush this threads outstanding allocations after it was idle for 0.5s
+			Allocator::ThreadFlush(allocator_background_threads, allocator_flush_threshold,
+			                       NumericCast<idx_t>(requested_thread_count.load()));
+			auto decay_delay = Allocator::DecayDelay();
+			if (!decay_delay.IsValid()) {
+				// no decay delay specified - just wait
 				queue->semaphore.wait();
+			} else {
+				if (!queue->semaphore.wait(UnsafeNumericCast<int64_t>(decay_delay.GetIndex()) * 1000000 -
+				                           INITIAL_FLUSH_WAIT)) {
+					// in total, the thread was idle for the entire decay delay (note: seconds converted to mus)
+					// mark it as idle and start an untimed wait
+					Allocator::ThreadIdle();
+					queue->semaphore.wait();
+				}
 			}
 		}
 		if (queue->q.try_dequeue(task)) {
@@ -196,7 +204,7 @@ void TaskScheduler::ExecuteForever(atomic<bool> *marker) {
 	}
 	// this thread will exit, flush all of its outstanding allocations
 	if (Allocator::SupportsFlush()) {
-		Allocator::ThreadFlush(0);
+		Allocator::ThreadFlush(allocator_background_threads, 0, NumericCast<idx_t>(requested_thread_count.load()));
 		Allocator::ThreadIdle();
 	}
 #else
@@ -276,6 +284,39 @@ int32_t TaskScheduler::NumberOfThreads() {
 	return current_thread_count.load();
 }
 
+idx_t TaskScheduler::GetNumberOfTasks() const {
+#ifndef DUCKDB_NO_THREADS
+	return queue->q.size_approx();
+#else
+	idx_t task_count = 0;
+	for (auto &producer : queue->q) {
+		task_count += producer.second.size();
+	}
+	return task_count;
+#endif
+}
+
+idx_t TaskScheduler::GetProducerCount() const {
+#ifndef DUCKDB_NO_THREADS
+	return queue->q.size_producers_approx();
+#else
+	return queue->q.size();
+#endif
+}
+
+idx_t TaskScheduler::GetTaskCountForProducer(ProducerToken &token) const {
+#ifndef DUCKDB_NO_THREADS
+	lock_guard<mutex> producer_lock(token.producer_lock);
+	return queue->q.size_producer_approx(token.token->queue_token);
+#else
+	const auto it = queue->q.find(std::ref(*token.token));
+	if (it == queue->q.end()) {
+		return 0;
+	}
+	return it->second.size();
+#endif
+}
+
 void TaskScheduler::SetThreads(idx_t total_threads, idx_t external_threads) {
 	if (total_threads == 0) {
 		throw SyntaxException("Number of threads must be positive!");
@@ -327,8 +368,13 @@ idx_t TaskScheduler::GetEstimatedCPUId() {
 #elif defined(_GNU_SOURCE)
 	auto cpu = sched_getcpu();
 	if (cpu < 0) {
+#ifndef DUCKDB_NO_THREADS
 		// fallback to thread id
 		return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+#else
+
+		return 0;
+#endif
 	}
 	return (idx_t)cpu;
 #elif defined(__aarch64__) && defined(__APPLE__)
@@ -337,8 +383,12 @@ idx_t TaskScheduler::GetEstimatedCPUId() {
 	asm volatile("mrs %x0, tpidrro_el0" : "=r"(c)::"memory");
 	return (idx_t)(c & (1 << 3) - 1);
 #else
+#ifndef DUCKDB_NO_THREADS
 	// fallback to thread id
 	return (idx_t)std::hash<std::thread::id>()(std::this_thread::get_id());
+#else
+	return 0;
+#endif
 #endif
 #endif
 }

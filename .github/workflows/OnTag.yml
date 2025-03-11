@@ -14,9 +14,10 @@ jobs:
     secrets: inherit
     with:
       override_git_describe: ${{ inputs.override_git_describe || github.ref_name }}
+      twine_upload: 'true'
 
   staged_upload:
     uses: ./.github/workflows/StagedUpload.yml
     secrets: inherit
     with:
-      override_git_describe: ${{ inputs.override_git_describe || github.ref_name }}
+      target_git_describe: ${{ inputs.override_git_describe || github.ref_name }}

@@ -1,0 +1,7 @@
+{
+    "version": "unstable_new_append_functions",
+    "description": "New append functions that are added",
+    "entries": [
+        "duckdb_append_default_to_chunk"
+    ]
+}

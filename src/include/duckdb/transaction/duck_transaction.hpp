@@ -10,13 +10,17 @@
 
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/common/reference_map.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "duckdb/transaction/undo_buffer.hpp"
 
 namespace duckdb {
+class CheckpointLock;
 class RowGroupCollection;
 class RowVersionManager;
 class DuckTransactionManager;
 class StorageLockKey;
 class StorageCommitState;
+struct DataTableInfo;
 struct UndoBufferProperties;
 
 class DuckTransaction : public Transaction {
@@ -55,7 +59,7 @@ public:
 	bool AutomaticCheckpoint(AttachedDatabase &db, const UndoBufferProperties &properties);
 
 	//! Rollback
-	void Rollback() noexcept;
+	ErrorData Rollback();
 	//! Cleanup the undo buffer
 	void Cleanup(transaction_t lowest_active_transaction);
 
@@ -66,7 +70,7 @@ public:
 	                idx_t base_row);
 	void PushSequenceUsage(SequenceCatalogEntry &entry, const SequenceData &data);
 	void PushAppend(DataTable &table, idx_t row_start, idx_t row_count);
-	UpdateInfo *CreateUpdateInfo(idx_t type_size, idx_t entries);
+	UndoBufferReference CreateUpdateInfo(idx_t type_size, idx_t entries);
 
 	bool IsDuckTransaction() const override {
 		return true;
@@ -78,6 +82,9 @@ public:
 	}
 
 	void UpdateCollection(shared_ptr<RowGroupCollection> &collection);
+
+	//! Get a shared lock on a table
+	shared_ptr<CheckpointLock> SharedLockTable(DataTableInfo &info);
 
 private:
 	DuckTransactionManager &transaction_manager;
@@ -94,6 +101,14 @@ private:
 	reference_map_t<SequenceCatalogEntry, reference<SequenceValue>> sequence_usage;
 	//! Collections that are updated by this transaction
 	reference_map_t<RowGroupCollection, shared_ptr<RowGroupCollection>> updated_collections;
+	//! Lock for the active_locks map
+	mutex active_locks_lock;
+	struct ActiveTableLock {
+		mutex checkpoint_lock_mutex; // protects access to the checkpoint_lock field in this class
+		weak_ptr<CheckpointLock> checkpoint_lock;
+	};
+	//! Active locks on tables
+	reference_map_t<DataTableInfo, unique_ptr<ActiveTableLock>> active_locks;
 };
 
 } // namespace duckdb

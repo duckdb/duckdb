@@ -1,9 +1,9 @@
 #include "duckdb/catalog/catalog_entry/scalar_macro_catalog_entry.hpp"
-#include "duckdb/common/reference_map.hpp"
-#include "duckdb/common/string_util.hpp"
+#include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/function/scalar_macro_function.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
+#include "duckdb/parser/expression/window_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
 #include "duckdb/planner/expression_binder.hpp"
 
@@ -13,7 +13,7 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
                                                       vector<unordered_set<string>> &lambda_params) {
 
 	for (auto &child : function.children) {
-		if (child->expression_class != ExpressionClass::LAMBDA) {
+		if (child->GetExpressionClass() != ExpressionClass::LAMBDA) {
 			ReplaceMacroParameters(child, lambda_params);
 			continue;
 		}
@@ -26,12 +26,8 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 
 		if (!error_message.empty()) {
 			// Possibly a JSON function, replace both LHS and RHS.
-			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.lhs, [&](unique_ptr<ParsedExpression> &child) {
-				ReplaceMacroParameters(child, lambda_params);
-			});
-			ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
-				ReplaceMacroParameters(child, lambda_params);
-			});
+			ReplaceMacroParameters(lambda_expr.lhs, lambda_params);
+			ReplaceMacroParameters(lambda_expr.expr, lambda_params);
 			continue;
 		}
 
@@ -43,9 +39,7 @@ void ExpressionBinder::ReplaceMacroParametersInLambda(FunctionExpression &functi
 		}
 
 		// Only replace in the RHS of the expression.
-		ParsedExpressionIterator::EnumerateChildren(*lambda_expr.expr, [&](unique_ptr<ParsedExpression> &child) {
-			ReplaceMacroParameters(child, lambda_params);
-		});
+		ReplaceMacroParameters(lambda_expr.expr, lambda_params);
 
 		lambda_params.pop_back();
 	}
@@ -99,8 +93,8 @@ void ExpressionBinder::ReplaceMacroParameters(unique_ptr<ParsedExpression> &expr
 	    *expr, [&](unique_ptr<ParsedExpression> &child) { ReplaceMacroParameters(child, lambda_params); });
 }
 
-BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
-                                       unique_ptr<ParsedExpression> &expr) {
+void ExpressionBinder::UnfoldMacroExpression(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func,
+                                             unique_ptr<ParsedExpression> &expr) {
 	// validate the arguments and separate positional and default arguments
 	vector<unique_ptr<ParsedExpression>> positionals;
 	unordered_map<string, unique_ptr<ParsedExpression>> defaults;
@@ -117,13 +111,13 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	vector<string> names;
 	// positional parameters
 	for (idx_t i = 0; i < macro_def.parameters.size(); i++) {
-		types.emplace_back(LogicalType::SQLNULL);
+		types.emplace_back(LogicalTypeId::UNKNOWN);
 		auto &param = macro_def.parameters[i]->Cast<ColumnRefExpression>();
 		names.push_back(param.GetColumnName());
 	}
 	// default parameters
 	for (auto it = macro_def.default_parameters.begin(); it != macro_def.default_parameters.end(); it++) {
-		types.emplace_back(LogicalType::SQLNULL);
+		types.emplace_back(LogicalTypeId::UNKNOWN);
 		names.push_back(it->first);
 		// now push the defaults into the positionals
 		positionals.push_back(std::move(defaults[it->first]));
@@ -133,7 +127,26 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	macro_binding = new_macro_binding.get();
 
 	// replace current expression with stored macro expression
-	expr = macro_def.expression->Copy();
+	// special case: If this is a window function, then we need to return a window expression
+	if (expr->GetExpressionClass() == ExpressionClass::WINDOW) {
+		//	Only allowed if the expression is a function
+		if (macro_def.expression->GetExpressionType() != ExpressionType::FUNCTION) {
+			throw BinderException("Window function macros must be functions");
+		}
+		auto macro_copy = macro_def.expression->Copy();
+		auto &macro_expr = macro_copy->Cast<FunctionExpression>();
+		// Transfer the macro function attributes
+		auto &window_expr = expr->Cast<WindowExpression>();
+		window_expr.catalog = macro_expr.catalog;
+		window_expr.schema = macro_expr.schema;
+		window_expr.function_name = macro_expr.function_name;
+		window_expr.children = std::move(macro_expr.children);
+		window_expr.distinct = macro_expr.distinct;
+		window_expr.filter_expr = std::move(macro_expr.filter);
+		// TODO: transfer order_bys when window functions support them
+	} else {
+		expr = macro_def.expression->Copy();
+	}
 
 	// qualify only the macro parameters with a new empty binder that only knows the macro binding
 	auto dummy_binder = Binder::CreateBinder(context);
@@ -143,6 +156,14 @@ BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacro
 	// now replace the parameters
 	vector<unordered_set<string>> lambda_params;
 	ReplaceMacroParameters(expr, lambda_params);
+}
+
+BindResult ExpressionBinder::BindMacro(FunctionExpression &function, ScalarMacroCatalogEntry &macro_func, idx_t depth,
+                                       unique_ptr<ParsedExpression> &expr) {
+	auto stack_checker = StackCheck(*expr, 3);
+
+	// unfold the macro expression
+	UnfoldMacroExpression(function, macro_func, expr);
 
 	// bind the unfolded macro
 	return BindExpression(expr, depth);

@@ -27,7 +27,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 	if (group_index != DConstants::INVALID_INDEX) {
 		return BindGroup(expr, depth, group_index);
 	}
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::COLUMN_REF:
 		return BindColumnRef(expr_ptr, depth, root_expression);
 	case ExpressionClass::DEFAULT:
@@ -41,7 +41,7 @@ BindResult BaseSelectBinder::BindExpression(unique_ptr<ParsedExpression> &expr_p
 
 idx_t BaseSelectBinder::TryBindGroup(ParsedExpression &expr) {
 	// first check the group alias map, if expr is a ColumnRefExpression
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &colref = expr.Cast<ColumnRefExpression>();
 		if (!colref.IsQualified()) {
 			auto alias_entry = info.alias_map.find(colref.column_names[0]);

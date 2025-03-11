@@ -2,52 +2,51 @@
 # description: Verify that metadata is relocated to allow the database to free up space
 # group: [storage]
 
-# load the DB from disk
 load __TEST_DIR__/relocate_metadata.db
 
 statement ok
 CREATE TABLE test (x INT, y AS (x + 100));
 
 statement ok
-insert into test select range FROM range(100000000);
+INSERT INTO test SELECT range FROM range(100000000);
 
 statement ok
-delete from test where x % 10 = 7;
+DELETE FROM test WHERE x % 10 = 7;
 
 statement ok
-delete from test where x % 10 = 6;
+DELETE FROM test WHERE x % 10 = 6;
 
 statement ok
-delete from test where x % 10 = 5;
+DELETE FROM test WHERE x % 10 = 5;
 
 statement ok
-delete from test where x % 10 = 4;
+DELETE FROM test WHERE x % 10 = 4;
 
 statement ok
-delete from test where x % 10 = 3;
+DELETE FROM test WHERE x % 10 = 3;
 
 statement ok
-delete from test where x % 10 = 2;
+DELETE FROM test WHERE x % 10 = 2;
 
 statement ok
-delete from test where x % 10 = 1;
+DELETE FROM test WHERE x % 10 = 1;
 
 statement ok
-delete from test where x % 10 = 0;
+DELETE FROM test WHERE x % 10 = 0;
 
 statement ok
-delete from test where x % 10 = 8;
+DELETE FROM test WHERE x % 10 = 8;
 
 statement ok
-delete from test where x % 10 = 9;
+DELETE FROM test WHERE x % 10 = 9;
 
 statement ok
-drop table test;
+DROP TABLE test;
 
 statement ok
-checkpoint
+CHECKPOINT
 
 query I
-SELECT MAX(block_id)<5 FROM pragma_metadata_info();
+SELECT MAX(block_id) < 5 * (2621440 / get_block_size('relocate_metadata')) FROM pragma_metadata_info();
 ----
 true

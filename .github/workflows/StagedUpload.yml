@@ -2,7 +2,7 @@ name: Staged Upload
 on:
   workflow_call:
     inputs:
-      override_git_describe:
+      target_git_describe:
         type: string
   workflow_dispatch:
     inputs:

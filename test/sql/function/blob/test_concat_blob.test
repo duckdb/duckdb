@@ -1,0 +1,28 @@
+# name: test/sql/function/blob/test_concat_blob.test
+# description: Test concat of blobs function
+# group: [blob]
+
+statement ok
+PRAGMA enable_verification
+
+# concat operator works with blobs
+query I
+SELECT blob 'aaa\x80' || blob 'aaa\x80'
+----
+aaa\x80aaa\x80
+
+query I
+SELECT typeof(blob 'aaa\x80' || blob 'aaa\x80')
+----
+BLOB
+
+# concat function works - but it converts to varchar
+query I
+SELECT concat(blob 'aaa\x80', blob 'aaa\x80')
+----
+aaa\x80aaa\x80
+
+query I
+SELECT typeof(concat(blob 'aaa\x80', blob 'aaa\x80'))
+----
+VARCHAR

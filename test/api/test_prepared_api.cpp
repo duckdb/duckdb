@@ -13,6 +13,10 @@ TEST_CASE("Test prepared statements API", "[api]") {
 	// prepare no statements
 	REQUIRE_FAIL(con.Prepare(""));
 
+	// PrepareAndExecute with no values
+	duckdb::vector<Value> values;
+	REQUIRE_FAIL(con.PendingQuery("", values, false));
+
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE a (i TINYINT)"));
 	REQUIRE_NO_FAIL(con.Query("INSERT INTO a VALUES (11), (12), (13)"));
 	REQUIRE_NO_FAIL(con.Query("CREATE TABLE strings(s VARCHAR)"));
@@ -475,4 +479,36 @@ TEST_CASE("Test ambiguous prepared statement parameter types", "[api]") {
 
 	result = prep->Execute("hello");
 	REQUIRE(CHECK_COLUMN(result, 0, {"hello"}));
+}
+
+TEST_CASE("Test prepared statements with SET", "[api]") {
+	duckdb::unique_ptr<QueryResult> result;
+	DuckDB db(nullptr);
+	Connection con(db);
+	con.EnableQueryVerification();
+
+	// create a prepared statement and use it to query
+	auto prepare = con.Prepare("SET default_null_order=$1");
+	REQUIRE(prepare->success);
+
+	// too many parameters
+	REQUIRE_FAIL(prepare->Execute("xxx", "yyy"));
+	// too few parameters
+	REQUIRE_FAIL(prepare->Execute());
+	// unsupported setting
+	REQUIRE_FAIL(prepare->Execute("unsupported_mode"));
+	// this works
+	REQUIRE_NO_FAIL(prepare->Execute("NULLS FIRST"));
+}
+
+TEST_CASE("Test prepared statements that require rebind", "[api]") {
+	DuckDB db(nullptr);
+	Connection con1(db);
+	con1.EnableQueryVerification();
+
+	auto prepared = con1.Prepare("DROP TABLE IF EXISTS t1");
+
+	Connection con2(db);
+	REQUIRE_NO_FAIL(con2.Query("CREATE OR REPLACE TABLE t1 (c1 varchar)"));
+	REQUIRE_NO_FAIL(prepared->Execute());
 }

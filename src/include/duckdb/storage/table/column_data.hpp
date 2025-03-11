@@ -18,6 +18,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/enums/scan_vector_type.hpp"
 #include "duckdb/common/serializer/serialization_traits.hpp"
+#include "duckdb/common/atomic_ptr.hpp"
 
 namespace duckdb {
 class ColumnData;
@@ -25,6 +26,7 @@ class ColumnSegment;
 class DatabaseInstance;
 class RowGroup;
 class RowGroupWriter;
+class StorageManager;
 class TableDataWriter;
 class TableStorageInfo;
 struct DataTableInfo;
@@ -33,6 +35,8 @@ struct RowGroupWriteInfo;
 struct TableScanOptions;
 struct TransactionData;
 struct PersistentColumnData;
+
+using column_segment_vector_t = vector<SegmentNode<ColumnSegment>>;
 
 struct ColumnCheckpointInfo {
 	ColumnCheckpointInfo(RowGroupWriteInfo &info, idx_t column_idx) : info(info), column_idx(column_idx) {
@@ -65,8 +69,6 @@ public:
 	idx_t column_index;
 	//! The type of the column
 	LogicalType type;
-	//! The parent column (if any)
-	optional_ptr<ColumnData> parent;
 
 public:
 	virtual FilterPropagateResult CheckZonemap(ColumnScanState &state, TableFilter &filter);
@@ -76,10 +78,22 @@ public:
 	}
 	DatabaseInstance &GetDatabase() const;
 	DataTableInfo &GetTableInfo() const;
+	StorageManager &GetStorageManager() const;
 	virtual idx_t GetMaxEntry();
 
 	idx_t GetAllocationSize() const {
 		return allocation_size;
+	}
+	optional_ptr<const CompressionFunction> GetCompressionFunction() const {
+		return compression.get();
+	}
+
+	bool HasParent() const {
+		return parent != nullptr;
+	}
+	const ColumnData &Parent() const {
+		D_ASSERT(HasParent());
+		return *parent;
 	}
 
 	virtual void SetStart(idx_t new_start);
@@ -87,8 +101,9 @@ public:
 	const LogicalType &RootType() const;
 	//! Whether or not the column has any updates
 	bool HasUpdates() const;
+	bool HasChanges(idx_t start_row, idx_t end_row) const;
 	//! Whether or not we can scan an entire vector
-	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count);
+	virtual ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result);
 
 	//! Initialize prefetch state with required I/O data for the next N rows
 	virtual void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows);
@@ -105,15 +120,15 @@ public:
 	                            idx_t scan_count);
 
 	virtual void ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_group, idx_t count, Vector &result);
-	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count);
+	virtual idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0);
 
 	//! Select
+	virtual void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	                    SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state);
 	virtual void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                    SelectionVector &sel, idx_t &count, const TableFilter &filter);
-	virtual void FilterScan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                        SelectionVector &sel, idx_t count);
-	virtual void FilterScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
-	                                 idx_t count, bool allow_updates);
+	                    SelectionVector &sel, idx_t count);
+	virtual void SelectCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
+	                             idx_t count, bool allow_updates);
 
 	//! Skip the scan forward by "count" rows
 	virtual void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE);
@@ -177,14 +192,21 @@ public:
 protected:
 	//! Append a transient segment
 	void AppendTransientSegment(SegmentLock &l, idx_t start_row);
+	void AppendSegment(SegmentLock &l, unique_ptr<ColumnSegment> segment);
 
+	void BeginScanVectorInternal(ColumnScanState &state);
 	//! Scans a base vector from the column
-	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type);
+	idx_t ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type,
+	                 idx_t result_offset = 0);
 	//! Scans a vector from the column merged with any potential updates
-	//! If ALLOW_UPDATES is set to false, the function will instead throw an exception if any updates are found
-	template <bool SCAN_COMMITTED, bool ALLOW_UPDATES>
 	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                 idx_t target_scan);
+	                 idx_t target_scan, ScanVectorType scan_type, ScanVectorMode mode);
+	idx_t ScanVector(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	                 idx_t target_scan, ScanVectorMode mode);
+	void SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
+	                  idx_t sel_count);
+	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
+	                  idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state);
 
 	void ClearUpdates();
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,
@@ -194,6 +216,9 @@ protected:
 	                    idx_t update_count, Vector &base_vector);
 
 	idx_t GetVectorCount(idx_t vector_index) const;
+
+private:
+	void UpdateCompressionFunction(SegmentLock &l, const CompressionFunction &function);
 
 protected:
 	//! The segments holding the data of this column segment
@@ -208,6 +233,13 @@ protected:
 	unique_ptr<SegmentStatistics> stats;
 	//! Total transient allocation size
 	idx_t allocation_size;
+
+private:
+	//! The parent column (if any)
+	optional_ptr<ColumnData> parent;
+	//!	The compression function used by the ColumnData
+	//! This is empty if the segments have mixed compression or the ColumnData is empty
+	atomic_ptr<const CompressionFunction> compression;
 };
 
 struct PersistentColumnData {
@@ -224,11 +256,13 @@ struct PersistentColumnData {
 	PhysicalType physical_type;
 	vector<DataPointer> pointers;
 	vector<PersistentColumnData> child_columns;
+	bool has_updates = false;
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentColumnData Deserialize(Deserializer &deserializer);
 	void DeserializeField(Deserializer &deserializer, field_id_t field_idx, const char *field_name,
 	                      const LogicalType &type);
+	bool HasUpdates() const;
 };
 
 struct PersistentRowGroupData {
@@ -249,6 +283,7 @@ struct PersistentRowGroupData {
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentRowGroupData Deserialize(Deserializer &deserializer);
+	bool HasUpdates() const;
 };
 
 struct PersistentCollectionData {
@@ -265,6 +300,7 @@ struct PersistentCollectionData {
 
 	void Serialize(Serializer &serializer) const;
 	static PersistentCollectionData Deserialize(Deserializer &deserializer);
+	bool HasUpdates() const;
 };
 
 } // namespace duckdb

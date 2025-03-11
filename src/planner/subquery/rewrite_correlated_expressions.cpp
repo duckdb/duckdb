@@ -132,7 +132,7 @@ void RewriteCorrelatedRecursive::RewriteCorrelatedSubquery(Binder &binder, Bound
 }
 
 void RewriteCorrelatedRecursive::VisitExpression(unique_ptr<Expression> &expression) {
-	if (expression->type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expression->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		// bound column reference
 		auto &bound_colref = expression->Cast<BoundColumnRefExpression>();
 		if (bound_colref.depth == 0) {
@@ -148,7 +148,7 @@ void RewriteCorrelatedRecursive::VisitExpression(unique_ptr<Expression> &express
 			bound_colref.binding = ColumnBinding(base_binding.table_index, base_binding.column_index + entry->second);
 			bound_colref.depth--;
 		}
-	} else if (expression->type == ExpressionType::SUBQUERY) {
+	} else if (expression->GetExpressionType() == ExpressionType::SUBQUERY) {
 		// we encountered another subquery: rewrite recursively
 		auto &bound_subquery = expression->Cast<BoundSubqueryExpression>();
 		RewriteCorrelatedSubquery(*bound_subquery.binder, *bound_subquery.subquery);

@@ -21,6 +21,7 @@
 namespace duckdb {
 class AttachedDatabase;
 class Catalog;
+class CatalogEntryRetriever;
 class CatalogSet;
 class ClientContext;
 class DatabaseInstance;
@@ -77,12 +78,20 @@ public:
 	transaction_t ActiveQueryNumber() const {
 		return current_query_number;
 	}
+	transaction_t GetNewTransactionNumber() {
+		return current_transaction_id++;
+	}
+	transaction_t ActiveTransactionNumber() const {
+		return current_transaction_id;
+	}
 	idx_t NextOid() {
 		return next_oid++;
 	}
 	bool HasDefaultDatabase() {
 		return !default_database.empty();
 	}
+	//! Gets a list of all attached database paths
+	vector<string> GetAttachedDatabasePaths();
 
 private:
 	//! Returns a database with a specified path
@@ -98,6 +107,8 @@ private:
 	atomic<idx_t> next_oid;
 	//! The current query number
 	atomic<transaction_t> current_query_number;
+	//! The current transaction number
+	atomic<transaction_t> current_transaction_id;
 	//! The current default database
 	string default_database;
 

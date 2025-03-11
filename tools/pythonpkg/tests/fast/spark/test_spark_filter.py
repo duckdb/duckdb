@@ -2,7 +2,8 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from duckdb.experimental.spark.sql.types import (
+from spark_namespace import USE_ACTUAL_SPARK
+from spark_namespace.sql.types import (
     LongType,
     StructType,
     BooleanType,
@@ -14,8 +15,8 @@ from duckdb.experimental.spark.sql.types import (
     ArrayType,
     MapType,
 )
-from duckdb.experimental.spark.sql.functions import col, struct, when, lit, array_contains
-from duckdb.experimental.spark.errors import PySparkTypeError
+from spark_namespace.sql.functions import col, struct, when, lit, array_contains
+from spark_namespace.errors import PySparkTypeError
 import duckdb
 import re
 
@@ -140,15 +141,21 @@ class TestDataFrameFilter(object):
 
         df2 = df.filter(array_contains(df.languages, "Java"))
         res = df2.collect()
+
+        james_name = {'firstname': 'James', 'middlename': '', 'lastname': 'Smith'}
+        anna_name = {'firstname': 'Anna', 'middlename': 'Rose', 'lastname': ''}
+        if USE_ACTUAL_SPARK:
+            james_name = Row(**james_name)
+            anna_name = Row(**anna_name)
         assert res == [
             Row(
-                name={'firstname': 'James', 'middlename': '', 'lastname': 'Smith'},
+                name=james_name,
                 languages=['Java', 'Scala', 'C++'],
                 state='OH',
                 gender='M',
             ),
             Row(
-                name={'firstname': 'Anna', 'middlename': 'Rose', 'lastname': ''},
+                name=anna_name,
                 languages=['Spark', 'Java', 'C++'],
                 state='CA',
                 gender='F',
@@ -157,15 +164,20 @@ class TestDataFrameFilter(object):
 
         df2 = df.filter(df.name.lastname == "Williams")
         res = df2.collect()
+        julia_name = {'firstname': 'Julia', 'middlename': '', 'lastname': 'Williams'}
+        mike_name = {'firstname': 'Mike', 'middlename': 'Mary', 'lastname': 'Williams'}
+        if USE_ACTUAL_SPARK:
+            julia_name = Row(**julia_name)
+            mike_name = Row(**mike_name)
         assert res == [
             Row(
-                name={'firstname': 'Julia', 'middlename': '', 'lastname': 'Williams'},
+                name=julia_name,
                 languages=['CSharp', 'VB'],
                 state='OH',
                 gender='F',
             ),
             Row(
-                name={'firstname': 'Mike', 'middlename': 'Mary', 'lastname': 'Williams'},
+                name=mike_name,
                 languages=['Python', 'VB'],
                 state='OH',
                 gender='M',

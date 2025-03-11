@@ -1,6 +1,5 @@
 {
     "group": "result_functions",
-    "deprecated": true,
     "entries": [
         {
             "name": "duckdb_result_get_chunk",
@@ -15,6 +14,7 @@
                     "name": "chunk_index"
                 }
             ],
+            "deprecated": true,
             "comment": {
                 "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nFetches a data chunk from the duckdb_result. This function should be called repeatedly until the result is exhausted.\n\nThe result must be destroyed with `duckdb_destroy_data_chunk`.\n\nThis function supersedes all `duckdb_value` functions, as well as the `duckdb_column_data` and `duckdb_nullmask_data`\nfunctions. It results in significantly better performance, and should be preferred in newer code-bases.\n\nIf this function is used, none of the other result functions can be used and vice versa (i.e. this function cannot be\nmixed with the legacy result functions).\n\nUse `duckdb_result_chunk_count` to figure out how many chunks there are in the result.\n\n",
                 "param_comments": {
@@ -33,6 +33,7 @@
                     "name": "result"
                 }
             ],
+            "deprecated": true,
             "comment": {
                 "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nChecks if the type of the internal result is StreamQueryResult.\n\n",
                 "param_comments": {
@@ -50,6 +51,7 @@
                     "name": "result"
                 }
             ],
+            "deprecated": true,
             "comment": {
                 "description": "**DEPRECATION NOTICE**: This method is scheduled for removal in a future release.\n\nReturns the number of data chunks present in the result.\n\n",
                 "param_comments": {

@@ -166,7 +166,8 @@
       {
         "id": 201,
         "name": "projections",
-        "type": "vector<idx_t>"
+        "type": "vector<idx_t>",
+        "property": "projection_map"
       }
     ],
     "constructor": ["orders"]
@@ -352,6 +353,10 @@
         "id": 204,
         "name": "materialized_cte",
         "type": "CTEMaterialize"
+      }, {
+        "id": 205,
+        "name": "is_recurring",
+        "type": "bool"
       }
     ],
     "constructor": ["table_index", "cte_index", "chunk_types", "bound_columns", "materialized_cte"]
@@ -506,6 +511,16 @@
         "id": 203,
         "name": "column_count",
         "type": "idx_t"
+      },
+      {
+        "id": 204,
+        "name": "key_targets",
+        "type": "vector<Expression*>"
+      },
+      {
+        "id": 205,
+        "name": "ref_recurring",
+        "type": "bool"
       }
     ]
   },
@@ -630,6 +645,12 @@
         "id": 217,
         "name": "expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 218,
+        "name": "update_is_del_and_insert",
+        "type": "bool",
+        "default": "false"
       }
     ],
     "constructor": ["$ClientContext", "table_info"]
@@ -874,9 +895,15 @@
         "id": 201,
         "name": "unbound_expressions",
         "type": "vector<Expression*>"
+      },
+      {
+        "id": 202,
+        "name": "alter_table_info",
+        "type": "unique_ptr<AlterTableInfo>",
+        "base": "ParseInfo"
       }
     ],
-    "constructor": ["$ClientContext", "info", "unbound_expressions"]
+    "constructor": ["$ClientContext", "info", "unbound_expressions", "alter_table_info"]
   },
   {
     "class": "LogicalExtensionOperator",
@@ -889,6 +916,26 @@
     "base": "LogicalOperator",
     "enum": "LOGICAL_VACUUM",
     "custom_implementation": true
+  },
+  {
+    "class": "LogicalExport",
+    "base": "LogicalOperator",
+    "enum": "LOGICAL_EXPORT",
+    "members": [
+      {
+        "id": 200,
+        "name": "copy_info",
+        "type": "CopyInfo*",
+        "base": "ParseInfo"
+      },
+      {
+        "id": 201,
+        "name": "exported_tables",
+        "type": "BoundExportData*",
+        "base": "ParseInfo"
+      }
+    ],
+    "constructor": ["$ClientContext", "copy_info", "exported_tables"]
   },
   {
     "class": "FilenamePattern",

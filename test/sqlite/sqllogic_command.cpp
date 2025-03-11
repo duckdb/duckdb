@@ -197,7 +197,7 @@ void Command::Execute(ExecuteContext &context) const {
 		return;
 	}
 	// perform the string replacement
-	context.sql_query = SQLLogicTestRunner::LoopReplacement(base_sql_query, context.running_loops);
+	context.sql_query = runner.LoopReplacement(base_sql_query, context.running_loops);
 	// execute the iterated statement
 	ExecuteInternal(context);
 }
@@ -290,6 +290,11 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 				throw std::runtime_error("Nested parallel loop commands not allowed");
 			}
 		}
+		for (auto &command : loop_commands) {
+			if (!command->SupportsConcurrent()) {
+				throw std::runtime_error("Concurrent loop is not supported over this command");
+			}
+		}
 		// parallel loop: launch threads
 		std::list<ParallelExecuteContext> contexts;
 		while (true) {
@@ -332,6 +337,15 @@ void LoopCommand::ExecuteInternal(ExecuteContext &context) const {
 			}
 		}
 	}
+}
+
+bool LoopCommand::SupportsConcurrent() const {
+	for (auto &command : loop_commands) {
+		if (!command->SupportsConcurrent()) {
+			return false;
+		}
+	}
+	return true;
 }
 
 void Query::ExecuteInternal(ExecuteContext &context) const {
@@ -492,14 +506,6 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 		throw CatalogException("Cannot open the file \"%s\"", input_path);
 	}
 
-	// read the compressed data from the file
-	int64_t file_size = vfs.GetFileSize(*compressed_file_handle);
-	std::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
-	int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
-	if (bytes_read < file_size) {
-		throw CatalogException("Cannot read the file \"%s\"", input_path);
-	}
-
 	// output
 	FileOpenFlags out_flags(FileOpenFlags::FILE_FLAGS_FILE_CREATE | FileOpenFlags::FILE_FLAGS_WRITE);
 	auto output_file = vfs.OpenFile(extraction_path, out_flags);
@@ -507,14 +513,20 @@ void UnzipCommand::ExecuteInternal(ExecuteContext &context) const {
 		throw CatalogException("Cannot open the file \"%s\"", extraction_path);
 	}
 
-	int64_t bytes_written = vfs.Write(*output_file, compressed_buffer.get(), BUFFER_SIZE);
-	if (bytes_written < file_size) {
-		throw CatalogException("Cannot write the file \"%s\"", extraction_path);
+	// read the compressed data from the file
+	while (true) {
+		std::unique_ptr<char[]> compressed_buffer(new char[BUFFER_SIZE]);
+		int64_t bytes_read = vfs.Read(*compressed_file_handle, compressed_buffer.get(), BUFFER_SIZE);
+		if (bytes_read == 0) {
+			break;
+		}
+
+		vfs.Write(*output_file, compressed_buffer.get(), bytes_read);
 	}
 }
 
 void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
-	auto resolved_path = SQLLogicTestRunner::LoopReplacement(dbpath, context.running_loops);
+	auto resolved_path = runner.LoopReplacement(dbpath, context.running_loops);
 	if (!readonly) {
 		// delete the target database file, if it exists
 		DeleteDatabase(resolved_path);
@@ -528,6 +540,10 @@ void LoadCommand::ExecuteInternal(ExecuteContext &context) const {
 	} else {
 		runner.config->options.use_temporary_directory = true;
 		runner.config->options.access_mode = AccessMode::AUTOMATIC;
+	}
+	if (runner.db) {
+		runner.config->options.serialization_compatibility =
+		    runner.db->instance->config.options.serialization_compatibility;
 	}
 	// now create the database file
 	runner.LoadDatabase(resolved_path, true);

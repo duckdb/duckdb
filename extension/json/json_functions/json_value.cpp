@@ -4,6 +4,7 @@ namespace duckdb {
 
 static inline string_t ValueFromVal(yyjson_val *val, yyjson_alc *alc, Vector &, ValidityMask &mask, idx_t idx) {
 	switch (yyjson_get_tag(val)) {
+	case YYJSON_TYPE_NULL | YYJSON_SUBTYPE_NONE:
 	case YYJSON_TYPE_ARR | YYJSON_SUBTYPE_NONE:
 	case YYJSON_TYPE_OBJ | YYJSON_SUBTYPE_NONE:
 		mask.SetInvalid(idx);
@@ -22,12 +23,12 @@ static void ValueManyFunction(DataChunk &args, ExpressionState &state, Vector &r
 }
 
 static void GetValueFunctionsInternal(ScalarFunctionSet &set, const LogicalType &input_type) {
-	set.AddFunction(ScalarFunction({input_type, LogicalType::BIGINT}, LogicalType::JSON(), ValueFunction,
+	set.AddFunction(ScalarFunction({input_type, LogicalType::BIGINT}, LogicalType::VARCHAR, ValueFunction,
 	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
-	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::JSON(), ValueFunction,
+	set.AddFunction(ScalarFunction({input_type, LogicalType::VARCHAR}, LogicalType::VARCHAR, ValueFunction,
 	                               JSONReadFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 	set.AddFunction(ScalarFunction({input_type, LogicalType::LIST(LogicalType::VARCHAR)},
-	                               LogicalType::LIST(LogicalType::JSON()), ValueManyFunction,
+	                               LogicalType::LIST(LogicalType::VARCHAR), ValueManyFunction,
 	                               JSONReadManyFunctionData::Bind, nullptr, nullptr, JSONFunctionLocalState::Init));
 }
 

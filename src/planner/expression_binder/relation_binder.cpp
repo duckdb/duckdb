@@ -8,7 +8,7 @@ RelationBinder::RelationBinder(Binder &binder, ClientContext &context, string op
 
 BindResult RelationBinder::BindExpression(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	auto &expr = *expr_ptr;
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::AGGREGATE:
 		return BindResult(BinderException::Unsupported(expr, "aggregate functions are not allowed in " + op));
 	case ExpressionClass::DEFAULT:

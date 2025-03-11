@@ -104,6 +104,7 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 						// TODO: write better CE logic for limits so that we can just look at
 						//  join.children[1].estimated_cardinality.
 						auto limit = make_uniq<LogicalLimit>(BoundLimitNode::ConstantValue(1), BoundLimitNode());
+						limit->SetEstimatedCardinality(1);
 						limit->AddChild(std::move(join.children[1]));
 						auto cross_product = LogicalCrossProduct::Create(std::move(join.children[0]), std::move(limit));
 						node_ptr = std::move(cross_product);
@@ -156,8 +157,8 @@ void StatisticsPropagator::PropagateStatistics(LogicalComparisonJoin &join, uniq
 
 			// Try to push lhs stats down rhs and vice versa
 			if (stats_left && stats_right && updated_stats_left && updated_stats_right &&
-			    condition.left->type == ExpressionType::BOUND_COLUMN_REF &&
-			    condition.right->type == ExpressionType::BOUND_COLUMN_REF) {
+			    condition.left->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF &&
+			    condition.right->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 				CreateFilterFromJoinStats(join.children[0], condition.left, *stats_left, *updated_stats_left);
 				CreateFilterFromJoinStats(join.children[1], condition.right, *stats_right, *updated_stats_right);
 			}
@@ -323,7 +324,7 @@ void StatisticsPropagator::CreateFilterFromJoinStats(unique_ptr<LogicalOperator>
                                                      const BaseStatistics &stats_before,
                                                      const BaseStatistics &stats_after) {
 	// Only do this for integral colref's that have stats
-	if (expr->type != ExpressionType::BOUND_COLUMN_REF || !expr->return_type.IsIntegral() ||
+	if (expr->GetExpressionType() != ExpressionType::BOUND_COLUMN_REF || !expr->return_type.IsIntegral() ||
 	    !NumericStats::HasMinMax(stats_before) || !NumericStats::HasMinMax(stats_after)) {
 		return;
 	}

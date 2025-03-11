@@ -1,0 +1,22 @@
+# name: test/sql/copy/csv/csv_copy_sniffer.test
+# description: Test CSV sniffer copy
+# group: [csv]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE sales (
+    salesid INTEGER  NOT NULL PRIMARY KEY,
+    listid INTEGER NOT NULL,
+    sellerid INTEGER NOT NULL,
+    buyerid  INTEGER NOT NULL,
+    eventid INTEGER NOT NULL,
+    dateid  SMALLINT  NOT NULL,
+    qtysold   SMALLINT  NOT NULL,
+    pricepaid DECIMAL (8,2),
+    commission DECIMAL (8,2),
+    saletime TIMESTAMP);
+
+statement ok
+COPY sales FROM 'data/csv/sales_snippet.csv' (TIMESTAMPFORMAT '%m/%d/%Y %I:%M:%S', IGNORE_ERRORS true);

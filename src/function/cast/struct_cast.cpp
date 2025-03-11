@@ -1,3 +1,4 @@
+#include "duckdb/common/exception/binder_exception.hpp"
 #include "duckdb/function/cast/default_casts.hpp"
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast/bound_cast_data.hpp"
@@ -7,51 +8,67 @@ namespace duckdb {
 unique_ptr<BoundCastData> StructBoundCastData::BindStructToStructCast(BindCastInput &input, const LogicalType &source,
                                                                       const LogicalType &target) {
 	vector<BoundCastInfo> child_cast_info;
-	auto &source_child_types = StructType::GetChildTypes(source);
-	auto &result_child_types = StructType::GetChildTypes(target);
+	auto &source_children = StructType::GetChildTypes(source);
+	auto &target_children = StructType::GetChildTypes(target);
 
 	auto target_is_unnamed = StructType::IsUnnamed(target);
 	auto source_is_unnamed = StructType::IsUnnamed(source);
 
-	if (source_child_types.size() != result_child_types.size()) {
+	auto is_unnamed = target_is_unnamed || source_is_unnamed;
+	if (is_unnamed && source_children.size() != target_children.size()) {
 		throw TypeMismatchException(input.query_location, source, target, "Cannot cast STRUCTs of different size");
 	}
-	bool named_struct_cast = !source_is_unnamed && !target_is_unnamed;
-	case_insensitive_map_t<idx_t> target_members;
-	if (named_struct_cast) {
-		for (idx_t i = 0; i < result_child_types.size(); i++) {
-			auto &target_name = result_child_types[i].first;
-			if (target_members.find(target_name) != target_members.end()) {
-				throw NotImplementedException("Error while casting - duplicate name \"%s\" in struct", target_name);
+
+	case_insensitive_map_t<idx_t> target_children_map;
+	if (!is_unnamed) {
+		for (idx_t i = 0; i < target_children.size(); i++) {
+			auto &name = target_children[i].first;
+			if (target_children_map.find(name) != target_children_map.end()) {
+				throw NotImplementedException("Error while casting - duplicate name \"%s\" in struct", name);
 			}
-			target_members[target_name] = i;
+			target_children_map[name] = i;
 		}
 	}
-	vector<idx_t> child_member_map;
-	child_member_map.reserve(source_child_types.size());
-	for (idx_t source_idx = 0; source_idx < source_child_types.size(); source_idx++) {
-		auto &source_child = source_child_types[source_idx];
-		idx_t target_idx;
-		if (named_struct_cast) {
-			// named struct cast - find corresponding member in target
-			auto entry = target_members.find(source_child.first);
-			if (entry == target_members.end()) {
-				throw TypeMismatchException(input.query_location, source, target,
-				                            "Cannot cast STRUCTs - element \"" + source_child.first +
-				                                "\" in source struct was not found in target struct");
+
+	vector<idx_t> source_indexes;
+	vector<idx_t> target_indexes;
+	vector<idx_t> target_null_indexes;
+	bool has_any_match = is_unnamed;
+
+	for (idx_t i = 0; i < source_children.size(); i++) {
+		auto &source_child = source_children[i];
+		auto target_idx = i;
+
+		// Map to the correct index for names structs.
+		if (!is_unnamed) {
+			auto target_child = target_children_map.find(source_child.first);
+			if (target_child == target_children_map.end()) {
+				// Skip any children that have no target.
+				continue;
 			}
-			target_idx = entry->second;
-			target_members.erase(entry);
-		} else {
-			// unnamed struct cast - positionally cast elements
-			target_idx = source_idx;
+			target_idx = target_child->second;
+			target_children_map.erase(target_child);
+			has_any_match = true;
 		}
-		child_member_map.push_back(target_idx);
-		auto child_cast = input.GetCastFunction(source_child.second, result_child_types[target_idx].second);
+
+		source_indexes.push_back(i);
+		target_indexes.push_back(target_idx);
+		auto child_cast = input.GetCastFunction(source_child.second, target_children[target_idx].second);
 		child_cast_info.push_back(std::move(child_cast));
 	}
-	D_ASSERT(child_member_map.size() == source_child_types.size());
-	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target, std::move(child_member_map));
+
+	if (!has_any_match) {
+		throw BinderException("STRUCT to STRUCT cast must have at least one matching member");
+	}
+
+	// The remaining target children have no match in the source struct.
+	// Thus, they become NULL.
+	for (const auto &target_child : target_children_map) {
+		target_null_indexes.push_back(target_child.second);
+	}
+
+	return make_uniq<StructBoundCastData>(std::move(child_cast_info), target, std::move(source_indexes),
+	                                      std::move(target_indexes), std::move(target_null_indexes));
 }
 
 unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(CastLocalStateParameters &parameters) {
@@ -71,32 +88,47 @@ unique_ptr<FunctionLocalState> StructBoundCastData::InitStructCastLocalState(Cas
 
 static bool StructToStructCast(Vector &source, Vector &result, idx_t count, CastParameters &parameters) {
 	auto &cast_data = parameters.cast_data->Cast<StructBoundCastData>();
-	auto &lstate = parameters.local_state->Cast<StructCastLocalState>();
-	auto &source_child_types = StructType::GetChildTypes(source.GetType());
-	auto &source_children = StructVector::GetEntries(source);
-	D_ASSERT(source_children.size() == StructType::GetChildTypes(result.GetType()).size());
+	auto &l_state = parameters.local_state->Cast<StructCastLocalState>();
 
-	auto &result_children = StructVector::GetEntries(result);
+	auto &source_vectors = StructVector::GetEntries(source);
+	auto &target_children = StructVector::GetEntries(result);
+
 	bool all_converted = true;
-	for (idx_t c_idx = 0; c_idx < source_child_types.size(); c_idx++) {
-		auto source_idx = c_idx;
-		auto target_idx = cast_data.child_member_map[source_idx];
-		auto &source_child_vector = *source_children[source_idx];
-		auto &result_child_vector = *result_children[target_idx];
-		CastParameters child_parameters(parameters, cast_data.child_cast_info[c_idx].cast_data,
-		                                lstate.local_states[c_idx]);
-		if (!cast_data.child_cast_info[c_idx].function(source_child_vector, result_child_vector, count,
-		                                               child_parameters)) {
+	for (idx_t i = 0; i < cast_data.source_indexes.size(); i++) {
+		auto source_idx = cast_data.source_indexes[i];
+		auto target_idx = cast_data.target_indexes[i];
+
+		auto &source_vector = *source_vectors[source_idx];
+		auto &target_vector = *target_children[target_idx];
+
+		auto &child_cast_info = cast_data.child_cast_info[i];
+		CastParameters child_parameters(parameters, child_cast_info.cast_data, l_state.local_states[i]);
+		auto success = child_cast_info.function(source_vector, target_vector, count, child_parameters);
+		if (!success) {
 			all_converted = false;
 		}
 	}
+
+	if (!cast_data.target_null_indexes.empty()) {
+		for (idx_t i = 0; i < cast_data.target_null_indexes.size(); i++) {
+			auto target_idx = cast_data.target_null_indexes[i];
+			auto &target_vector = *target_children[target_idx];
+
+			target_vector.SetVectorType(VectorType::CONSTANT_VECTOR);
+			ConstantVector::SetNull(target_vector, true);
+		}
+	}
+
 	if (source.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
 		ConstantVector::SetNull(result, ConstantVector::IsNull(source));
-	} else {
-		source.Flatten(count);
-		FlatVector::Validity(result) = FlatVector::Validity(source);
+		return all_converted;
 	}
+
+	source.Flatten(count);
+	auto &result_validity = FlatVector::Validity(result);
+	result_validity = FlatVector::Validity(source);
+	result.Verify(count);
 	return all_converted;
 }
 

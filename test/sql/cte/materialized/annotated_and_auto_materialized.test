@@ -1,0 +1,39 @@
+# name: test/sql/cte/materialized/annotated_and_auto_materialized.test
+# description: Issue 13850 - Binder error when manually materializing a CTE
+# group: [materialized]
+
+statement ok
+create table batch (
+    entity text,
+    start_ts timestamp,
+    duration interval
+);
+
+statement ok
+create table active_events (
+    entity text,
+    start_ts timestamp,
+    end_ts timestamp
+);
+
+statement ok
+explain create table new_active_events as
+with
+  new_events as materialized (  -- Does not make much sense in this example, but my original query was a union of a bunch of things
+      select * from batch
+  ), combined_deduplicated_events as (
+      select
+          entity,
+          min(start_ts) as start_ts,
+          max(end_ts) as end_ts
+      from
+          active_events
+      group by
+          entity
+  ), all_events as (
+      select  * from combined_deduplicated_events
+  )
+select
+  *
+from
+  new_events;

@@ -2,12 +2,11 @@
 # description: Test setting of the temporary directory
 # group: [storage]
 
-# FIXME: Fails with --force-storage for non-default block sizes.
-require block_size 262144
+require noforcestorage
 
 require skip_reload
 
-# set temporary directory to an empty directory
+# Set the temporary directory to an empty directory.
 statement ok
 PRAGMA temp_directory=''
 

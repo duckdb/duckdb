@@ -3,6 +3,6 @@ race:InsertMatchesAndIncrementMisses
 race:NextInnerJoin
 race:NextRightSemiOrAntiJoin
 race:duckdb_moodycamel
-race:duckdb_jemalloc
+race:*duckdb/extension/jemalloc/jemalloc/*
 race:AddToEvictionQueue
 race:ValidityAppend

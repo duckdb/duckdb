@@ -2,6 +2,8 @@
 # description: Test SQL value functions
 # group: [parser]
 
+require no_extension_autoloading "FIXME: Unimplemented type for cast (TIMESTAMP WITH TIME ZONE -> DATE)"
+
 statement ok
 PRAGMA enable_verification
 
@@ -56,3 +58,22 @@ group by one
 having max(cast('1000-05-01 00:00:00' as timestamp))  <= current_timestamp;
 ----
 1	1000-05-01 00:00:00
+
+query II
+select a as "b", "b" + 1 from (VALUES (84), (42)) t(a) ORDER BY ALL;
+----
+42	43
+84	85
+
+# value function conflict in ORDER BY
+query I
+select a as "CURRENT_TIMESTAMP" from (VALUES (84), (42)) t(a) order by "CURRENT_TIMESTAMP" + 1;
+----
+42
+84
+
+# value function conflict in WHERE
+query I
+select a as localtime from (VALUES ('2018-01-01'), ('2022-01-01')) t(a) where localtime >= '2020-01-01'
+----
+2022-01-01

@@ -17,17 +17,22 @@
 namespace duckdb {
 
 static DefaultMacro json_macros[] = {
-    {DEFAULT_SCHEMA, "json_group_array", {"x", nullptr}, {{nullptr, nullptr}}, "to_json(list(x))"},
+    {DEFAULT_SCHEMA,
+     "json_group_array",
+     {"x", nullptr},
+     {{nullptr, nullptr}},
+     "CAST('[' || string_agg(CASE WHEN x IS NULL THEN 'null'::JSON ELSE to_json(x) END, ',') || ']' AS JSON)"},
     {DEFAULT_SCHEMA,
      "json_group_object",
-     {"name", "value", nullptr},
+     {"n", "v", nullptr},
      {{nullptr, nullptr}},
-     "to_json(map(list(name), list(value)))"},
+     "CAST('{' || string_agg(to_json(n::VARCHAR) || ':' || CASE WHEN v IS NULL THEN 'null'::JSON ELSE to_json(v) END, "
+     "',') || '}' AS JSON)"},
     {DEFAULT_SCHEMA,
      "json_group_structure",
      {"x", nullptr},
      {{nullptr, nullptr}},
-     "json_structure(json_group_array(x))->'0'"},
+     "json_structure(json_group_array(x))->0"},
     {DEFAULT_SCHEMA, "json", {"x", nullptr}, {{nullptr, nullptr}}, "json_extract(x, '$')"},
     {nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}};
 

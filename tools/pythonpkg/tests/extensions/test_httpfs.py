@@ -62,7 +62,7 @@ class TestHTTPFS(object):
     def test_http_exception(self, require):
         connection = require('httpfs')
 
-        # Read from a bogus HTTPS url, assert that it errors with a non-succesfull status code
+        # Read from a bogus HTTPS url, assert that it errors with a non-successful status code
         with raises(duckdb.HTTPException) as exc:
             connection.execute("SELECT * FROM PARQUET_SCAN('https://example.com/userdata1.parquet')")
 

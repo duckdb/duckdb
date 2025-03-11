@@ -43,7 +43,7 @@ unique_ptr<LogicalOperator> Binder::BindUpdateSet(LogicalOperator &op, unique_pt
 			throw BinderException("Multiple assignments to same column \"%s\"", colname);
 		}
 		columns.push_back(column.Physical());
-		if (expr->type == ExpressionType::VALUE_DEFAULT) {
+		if (expr->GetExpressionType() == ExpressionType::VALUE_DEFAULT) {
 			op.expressions.push_back(make_uniq<BoundDefaultExpression>(column.Type()));
 		} else {
 			UpdateBinder binder(*this, context);
@@ -106,7 +106,9 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 		update->return_chunk = true;
 	}
 	// bind the default values
-	BindDefaultValues(table.GetColumns(), update->bound_defaults);
+	auto &catalog_name = table.ParentCatalog().GetName();
+	auto &schema_name = table.ParentSchema().name;
+	BindDefaultValues(table.GetColumns(), update->bound_defaults, catalog_name, schema_name);
 	update->bound_constraints = BindConstraints(table);
 
 	// project any additional columns required for the condition/expressions
@@ -131,9 +133,14 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	table.BindUpdateConstraints(*this, *get, *proj, *update, context);
 
 	// finally add the row id column to the projection list
+	auto virtual_columns = table.GetVirtualColumns();
+	auto row_id_entry = virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
+	if (row_id_entry == virtual_columns.end()) {
+		throw InternalException("BindDelete could not find the row id column in the virtual columns list of the table");
+	}
 	auto &column_ids = get->GetColumnIds();
-	proj->expressions.push_back(
-	    make_uniq<BoundColumnRefExpression>(LogicalType::ROW_TYPE, ColumnBinding(get->table_index, column_ids.size())));
+	proj->expressions.push_back(make_uniq<BoundColumnRefExpression>(
+	    row_id_entry->second.type, ColumnBinding(get->table_index, column_ids.size())));
 	get->AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
 
 	// set the projection as child of the update node and finalize the result

@@ -19,7 +19,7 @@ static unique_ptr<ParsedExpression> SummarizeWrapUnnest(vector<unique_ptr<Parsed
 	vector<unique_ptr<ParsedExpression>> unnest_children;
 	unnest_children.push_back(std::move(list_function));
 	auto unnest_function = make_uniq<FunctionExpression>("unnest", std::move(unnest_children));
-	unnest_function->alias = alias;
+	unnest_function->SetAlias(alias);
 	return std::move(unnest_function);
 }
 
@@ -120,11 +120,14 @@ unique_ptr<BoundTableRef> Binder::BindSummarize(ShowRef &ref) {
 		max_children.push_back(SummarizeCreateAggregate("max", plan.names[i]));
 		unique_children.push_back(make_uniq<CastExpression>(
 		    LogicalType::BIGINT, SummarizeCreateAggregate("approx_count_distinct", plan.names[i])));
-		if (plan.types[i].IsNumeric()) {
+		if (plan.types[i].IsNumeric() || plan.types[i].IsTemporal()) {
 			avg_children.push_back(SummarizeCreateAggregate("avg", plan.names[i]));
-			std_children.push_back(SummarizeCreateAggregate("stddev", plan.names[i]));
 		} else {
 			avg_children.push_back(make_uniq<ConstantExpression>(Value()));
+		}
+		if (plan.types[i].IsNumeric()) {
+			std_children.push_back(SummarizeCreateAggregate("stddev", plan.names[i]));
+		} else {
 			std_children.push_back(make_uniq<ConstantExpression>(Value()));
 		}
 		if (plan.types[i].IsNumeric() || plan.types[i].IsTemporal()) {

@@ -40,7 +40,9 @@ function _close_result(result::QueryResult)
     return
 end
 
-mutable struct ColumnConversionData{ChunksT <: Union{Vector{DataChunk}, Tuple{DataChunk}}}
+const DataChunks = Union{Vector{DataChunk}, Tuple{DataChunk}}
+
+mutable struct ColumnConversionData{ChunksT <: DataChunks}
     chunks::ChunksT
     col_idx::Int64
     logical_type::LogicalType
@@ -81,63 +83,18 @@ function convert_blob(column_data::ColumnConversionData, val::Ptr{Cvoid}, idx::U
     return Base.codeunits(convert_string(column_data, val, idx))
 end
 
-function convert_date(column_data::ColumnConversionData, val::Int32)::Date
-    return Dates.epochdays2date(val + ROUNDING_EPOCH_TO_UNIX_EPOCH_DAYS)
-end
+convert_date(column_data::ColumnConversionData, val) = convert(Date, val)
+convert_time(column_data::ColumnConversionData, val) = convert(Time, val)
+convert_time_tz(column_data::ColumnConversionData, val) = convert(Time, convert(duckdb_time_tz, val))
+convert_timestamp(column_data::ColumnConversionData, val) = convert(DateTime, convert(duckdb_timestamp, val))
+convert_timestamp_s(column_data::ColumnConversionData, val) = convert(DateTime, convert(duckdb_timestamp_s, val))
+convert_timestamp_ms(column_data::ColumnConversionData, val) = convert(DateTime, convert(duckdb_timestamp_ms, val))
+convert_timestamp_ns(column_data::ColumnConversionData, val) = convert(DateTime, convert(duckdb_timestamp_ns, val))
+convert_interval(column_data::ColumnConversionData, val::duckdb_interval) = convert(Dates.CompoundPeriod, val)
+convert_hugeint(column_data::ColumnConversionData, val::duckdb_hugeint) = convert(Int128, val)
+convert_uhugeint(column_data::ColumnConversionData, val::duckdb_uhugeint) = convert(UInt128, val)
+convert_uuid(column_data::ColumnConversionData, val::duckdb_hugeint) = convert(UUID, val)
 
-function convert_time(column_data::ColumnConversionData, val::Int64)::Time
-    return Dates.Time(Dates.Nanosecond(val * 1000))
-end
-
-function convert_time_tz(column_data::ColumnConversionData, val::UInt64)::Time
-    time_tz = duckdb_from_time_tz(val)
-    # TODO: how to preserve the offset?
-    return Dates.Time(
-        time_tz.time.hour,
-        time_tz.time.min,
-        time_tz.time.sec,
-        time_tz.time.micros ÷ 1000,
-        time_tz.time.micros % 1000
-    )
-end
-
-function convert_timestamp(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val ÷ 1000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
-end
-
-function convert_timestamp_s(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val * 1000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
-end
-
-function convert_timestamp_ms(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
-end
-
-function convert_timestamp_ns(column_data::ColumnConversionData, val::Int64)::DateTime
-    return Dates.epochms2datetime((val ÷ 1000000) + ROUNDING_EPOCH_TO_UNIX_EPOCH_MS)
-end
-
-function convert_interval(column_data::ColumnConversionData, val::duckdb_interval)::Dates.CompoundPeriod
-    return Dates.CompoundPeriod(Dates.Month(val.months), Dates.Day(val.days), Dates.Microsecond(val.micros))
-end
-
-function convert_hugeint(column_data::ColumnConversionData, val::duckdb_hugeint)::Int128
-    return Int128(val.lower) + Int128(val.upper) << 64
-end
-
-function convert_uhugeint(column_data::ColumnConversionData, val::duckdb_uhugeint)::UInt128
-    return UInt128(val.lower) + UInt128(val.upper) << 64
-end
-
-function convert_uuid(column_data::ColumnConversionData, val::duckdb_hugeint)::UUID
-    hugeint = convert_hugeint(column_data, val)
-    base_value = Int128(170141183460469231731687303715884105727)
-    if hugeint < 0
-        return UUID(UInt128(hugeint + base_value + 1))
-    else
-        return UUID(UInt128(hugeint) + base_value + 1)
-    end
-end
 
 function convert_enum(column_data::ColumnConversionData, val)::String
     return column_data.conversion_data[val + 1]
@@ -571,6 +528,15 @@ function convert_column(column_data::ColumnConversionData)
     return convert_column_loop(column_data, conversion_func, internal_type, target_type, conversion_loop_func)
 end
 
+function convert_columns(q::QueryResult, chunks::DataChunks, column_count::Integer = duckdb_column_count(q.handle))
+    return NamedTuple{Tuple(q.names)}(ntuple(column_count) do i
+        j = Int64(i)
+        logical_type = LogicalType(duckdb_column_logical_type(q.handle, j))
+        column_data = ColumnConversionData(chunks, j, logical_type, nothing)
+        return convert_column(column_data)
+    end)
+end
+
 function Tables.columns(q::QueryResult)
     if q.tbl === missing
         if q.chunk_index != 1
@@ -581,7 +547,6 @@ function Tables.columns(q::QueryResult)
             )
         end
         # gather all the data chunks
-        column_count = duckdb_column_count(q.handle)
         chunks::Vector{DataChunk} = []
         while true
             # fetch the next chunk
@@ -593,11 +558,7 @@ function Tables.columns(q::QueryResult)
             push!(chunks, chunk)
         end
 
-        q.tbl = NamedTuple{Tuple(q.names)}(ntuple(column_count) do i
-            logical_type = LogicalType(duckdb_column_logical_type(q.handle, i))
-            column_data = ColumnConversionData(chunks, i, logical_type, nothing)
-            return convert_column(column_data)
-        end)
+        q.tbl = convert_columns(q, chunks)
     end
     return Tables.CopiedColumns(q.tbl)
 end
@@ -819,7 +780,7 @@ Tables.schema(chunk::QueryResultChunk) = Tables.Schema(chunk.q.names, chunk.q.ty
 
 struct QueryResultChunkIterator
     q::QueryResult
-    column_count::UInt64
+    column_count::Int64
 end
 
 function next_chunk(iter::QueryResultChunkIterator)
@@ -828,13 +789,7 @@ function next_chunk(iter::QueryResultChunkIterator)
         return nothing
     end
 
-    return QueryResultChunk(
-        NamedTuple{Tuple(iter.q.names)}(ntuple(iter.column_count) do i
-            logical_type = LogicalType(duckdb_column_logical_type(iter.q.handle, i))
-            column_data = ColumnConversionData((chunk,), i, logical_type, nothing)
-            return convert_column(column_data)
-        end)
-    )
+    return QueryResultChunk(convert_columns(iter.q, (chunk,), iter.column_count))
 end
 
 Base.iterate(iter::QueryResultChunkIterator) = iterate(iter, 0x0000000000000001)
@@ -873,7 +828,6 @@ function nextDataChunk(q::QueryResult)::Union{Missing, DataChunk}
         if get_size(chunk) == 0
             return missing
         end
-        return chunk
     else
         chunk_count = duckdb_result_chunk_count(q.handle[])
         if q.chunk_index > chunk_count
@@ -916,7 +870,14 @@ The resultset iterator supports the [Tables.jl](https://github.com/JuliaData/Tab
 like `DataFrame(results)`, `CSV.write("results.csv", results)`, etc.
 """
 DBInterface.execute(stmt::Stmt, params::DBInterface.StatementParams) = execute(stmt, params)
-DBInterface.execute(con::Connection, sql::AbstractString, result_type::Type) = execute(Stmt(con, sql, result_type))
+function DBInterface.execute(con::Connection, sql::AbstractString, result_type::Type)
+    stmt = Stmt(con, sql, result_type)
+    try
+        return execute(stmt)
+    finally
+        _close_stmt(stmt) # immediately close, don't wait for GC
+    end
+end
 DBInterface.execute(con::Connection, sql::AbstractString) = DBInterface.execute(con, sql, MaterializedResult)
 DBInterface.execute(db::DB, sql::AbstractString, result_type::Type) =
     DBInterface.execute(db.main_connection, sql, result_type)

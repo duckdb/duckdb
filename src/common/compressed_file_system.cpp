@@ -7,11 +7,15 @@ StreamWrapper::~StreamWrapper() {
 }
 
 CompressedFile::CompressedFile(CompressedFileSystem &fs, unique_ptr<FileHandle> child_handle_p, const string &path)
-    : FileHandle(fs, path), compressed_fs(fs), child_handle(std::move(child_handle_p)) {
+    : FileHandle(fs, path, child_handle_p->GetFlags()), compressed_fs(fs), child_handle(std::move(child_handle_p)) {
 }
 
 CompressedFile::~CompressedFile() {
-	CompressedFile::Close();
+	try {
+		// stream_wrapper->Close() might throw
+		CompressedFile::Close();
+	} catch (...) { // NOLINT - cannot throw in exception
+	}
 }
 
 void CompressedFile::Initialize(bool write) {
@@ -26,6 +30,8 @@ void CompressedFile::Initialize(bool write) {
 	stream_data.out_buff = make_unsafe_uniq_array<data_t>(stream_data.out_buf_size);
 	stream_data.out_buff_start = stream_data.out_buff.get();
 	stream_data.out_buff_end = stream_data.out_buff.get();
+
+	current_position = 0;
 
 	stream_wrapper = compressed_fs.CreateStream();
 	stream_wrapper->Initialize(*this, write);
@@ -44,7 +50,7 @@ int64_t CompressedFile::ReadData(void *buffer, int64_t remaining) {
 			auto available =
 			    MinValue<idx_t>(UnsafeNumericCast<idx_t>(remaining),
 			                    UnsafeNumericCast<idx_t>(stream_data.out_buff_end - stream_data.out_buff_start));
-			memcpy(data_ptr_t(buffer) + total_read, stream_data.out_buff_start, available);
+			memcpy(static_cast<data_ptr_t>(buffer) + total_read, stream_data.out_buff_start, available);
 
 			// increment the total read variables as required
 			stream_data.out_buff_start += available;

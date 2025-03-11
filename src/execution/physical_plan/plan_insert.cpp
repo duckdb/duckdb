@@ -101,7 +101,7 @@ unique_ptr<PhysicalOperator> DuckCatalog::PlanInsert(ClientContext &context, Log
 		    std::move(op.expressions), std::move(op.set_columns), std::move(op.set_types), op.estimated_cardinality,
 		    op.return_chunk, parallel_streaming_insert && num_threads > 1, op.action_type,
 		    std::move(op.on_conflict_condition), std::move(op.do_update_condition), std::move(op.on_conflict_filter),
-		    std::move(op.columns_to_fetch));
+		    std::move(op.columns_to_fetch), op.update_is_del_and_insert);
 	}
 	D_ASSERT(plan);
 	insert->children.push_back(std::move(plan));

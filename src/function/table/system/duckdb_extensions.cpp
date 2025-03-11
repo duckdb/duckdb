@@ -84,7 +84,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 		info.loaded = false;
 		info.file_path = extension.statically_loaded ? "(BUILT-IN)" : string();
 		info.install_mode =
-		    extension.statically_loaded ? ExtensionInstallMode::STATICALLY_LINKED : ExtensionInstallMode::UNKNOWN;
+		    extension.statically_loaded ? ExtensionInstallMode::STATICALLY_LINKED : ExtensionInstallMode::NOT_INSTALLED;
 		info.description = extension.description;
 		for (idx_t k = 0; k < alias_count; k++) {
 			auto alias = ExtensionHelper::GetExtensionAlias(k);
@@ -97,7 +97,7 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 
 	// Secondly we scan all installed extensions and their install info
 #ifndef WASM_LOADABLE_EXTENSIONS
-	auto ext_directory = ExtensionHelper::ExtensionDirectory(context);
+	auto ext_directory = ExtensionHelper::GetExtensionDirectoryPath(context);
 	fs.ListFiles(ext_directory, [&](const string &path, bool is_directory) {
 		if (!StringUtil::EndsWith(path, ".duckdb_extension")) {
 			return;
@@ -149,11 +149,15 @@ unique_ptr<GlobalTableFunctionState> DuckDBExtensionsInit(ClientContext &context
 			auto entry = installed_extensions.find(ext_name);
 			if (entry == installed_extensions.end() || !entry->second.installed) {
 				ExtensionInformation &info = installed_extensions[ext_name];
+
 				info.name = ext_name;
 				info.loaded = true;
 				info.extension_version = ext_install_info->version;
 				info.installed = ext_install_info->mode == ExtensionInstallMode::STATICALLY_LINKED;
 				info.install_mode = ext_install_info->mode;
+				if (ext_data.install_info->mode == ExtensionInstallMode::STATICALLY_LINKED && info.file_path.empty()) {
+					info.file_path = "(BUILT-IN)";
+				}
 			} else {
 				entry->second.loaded = true;
 				entry->second.extension_version = ext_install_info->version;
@@ -202,7 +206,7 @@ void DuckDBExtensionsFunction(ClientContext &context, TableFunctionInput &data_p
 		// extension version     LogicalType::LIST(LogicalType::VARCHAR)
 		output.SetValue(6, count, Value(entry.extension_version));
 		// installed_mode LogicalType::VARCHAR
-		output.SetValue(7, count, entry.installed ? Value(EnumUtil::ToString(entry.install_mode)) : Value());
+		output.SetValue(7, count, EnumUtil::ToString(entry.install_mode));
 		// installed_source LogicalType::VARCHAR
 		output.SetValue(8, count, Value(entry.installed_from));
 

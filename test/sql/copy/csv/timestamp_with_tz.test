@@ -16,7 +16,7 @@ Error when converting column "ts". Could not convert string "2021-05-25 04:55:03
 
 require icu
 
-require no_extension_autoloading
+require no_extension_autoloading "FIXME: In CSV value conversion we don't autoload ICU"
 
 # we can load this into a timestamptz table
 statement ok

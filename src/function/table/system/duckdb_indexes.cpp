@@ -55,7 +55,7 @@ static unique_ptr<FunctionData> DuckDBIndexesBind(ClientContext &context, TableF
 	return_types.emplace_back(LogicalType::BOOLEAN);
 
 	names.emplace_back("expressions");
-	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("sql");
 	return_types.emplace_back(LogicalType::VARCHAR);
@@ -133,7 +133,7 @@ void DuckDBIndexesFunction(ClientContext &context, TableFunctionInput &data_p, D
 		// is_primary, BOOLEAN
 		output.SetValue(col++, count, Value::BOOLEAN(index.IsPrimary()));
 		// expressions, VARCHAR
-		output.SetValue(col++, count, GetIndexExpressions(index));
+		output.SetValue(col++, count, GetIndexExpressions(index).ToString());
 		// sql, VARCHAR
 		auto sql = index.ToSQL();
 		output.SetValue(col++, count, sql.empty() ? Value() : Value(std::move(sql)));

@@ -2,9 +2,6 @@
 # description: Test parallel insert from many groups
 # group: [insert]
 
-# FIXME: occasionally this test fails on the CI with a thread sanitizer failure
-mode skip
-
 statement ok
 CREATE TABLE integers AS SELECT i, i%2 as j FROM generate_series(0,999999,1) tbl(i);
 

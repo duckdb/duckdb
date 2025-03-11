@@ -1,0 +1,14 @@
+# name: test/sql/copy/csv/test_sniff_httpfs.test
+# description: Test sniff_csv functions over httpfs with auto-detection on compression
+# group: [csv]
+
+require httpfs
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+from sniff_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/who.csv.gz');
+
+statement ok
+from sniff_csv('https://github.com/duckdb/duckdb/raw/main/data/csv/who.csv.gz?v=1');

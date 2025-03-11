@@ -1,5 +1,4 @@
 #include "duckdb/planner/filter/null_filter.hpp"
-
 #include "duckdb/planner/expression/bound_operator_expression.hpp"
 #include "duckdb/storage/statistics/base_statistics.hpp"
 
@@ -20,8 +19,8 @@ FilterPropagateResult IsNullFilter::CheckStatistics(BaseStatistics &stats) {
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-string IsNullFilter::ToString(const string &column_name) {
-	return column_name + "IS NULL";
+string IsNullFilter::ToString(const string &column_name) const {
+	return column_name + " IS NULL";
 }
 
 unique_ptr<TableFilter> IsNullFilter::Copy() const {
@@ -49,7 +48,7 @@ FilterPropagateResult IsNotNullFilter::CheckStatistics(BaseStatistics &stats) {
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-string IsNotNullFilter::ToString(const string &column_name) {
+string IsNotNullFilter::ToString(const string &column_name) const {
 	return column_name + " IS NOT NULL";
 }
 

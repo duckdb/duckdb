@@ -14,6 +14,15 @@ CREATE TABLE IF NOT EXISTS integers2 AS SELECT 42
 statement ok
 CREATE TABLE IF NOT EXISTS integers2 AS SELECT 42
 
+# similar to Postgres, treat as NOOP if the entry exists but the type is different
+statement ok
+CREATE VIEW IF NOT EXISTS integers2 AS SELECT 42
+
+statement error
+DROP VIEW IF EXISTS integers
+----
+Catalog Error: Existing object integers is of type Table, trying to drop type View
+
 statement ok
 DROP TABLE IF EXISTS integers
 

@@ -100,7 +100,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionInstallInfo::TryReadInfoFile(FileSyste
 		} catch (std::exception &ex) {
 			ErrorData error(ex);
 			throw IOException(
-			    "Failed to read info file for '%s' extension: '%s'.\nA serialization error occured: '%s'\n%s",
+			    "Failed to read info file for '%s' extension: '%s'.\nA serialization error occurred: '%s'\n%s",
 			    extension_name, info_file_path, error.RawMessage(), hint);
 		}
 	}

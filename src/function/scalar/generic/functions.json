@@ -1,0 +1,31 @@
+[
+    {
+        "name": "constant_or_null",
+        "parameters": "arg1,arg2",
+        "description": "If arg2 is NULL, return NULL. Otherwise, return arg1.",
+        "example": "constant_or_null(42, NULL)",
+        "type": "scalar_function"
+    },
+    {
+        "name": "getvariable",
+        "parameters": "",
+        "description": "",
+        "example": "",
+        "type": "scalar_function",
+        "struct": "GetVariableFun"
+    },
+    {
+        "name": "error",
+        "parameters": "message",
+        "description": "Throws the given error message",
+        "example": "error('access_mode')",
+        "type": "scalar_function"
+    },
+    {
+        "name": "create_sort_key",
+        "parameters": "parameters...",
+        "description": "Constructs a binary-comparable sort key based on a set of input parameters and sort qualifiers",
+        "example": "create_sort_key('A', 'DESC')",
+        "type": "scalar_function"
+    }
+]

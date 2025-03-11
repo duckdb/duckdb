@@ -56,7 +56,7 @@ for dep in dependencies_str:
 
 data = {
     "description": f"Auto-generated vcpkg.json for combined DuckDB extension build",
-    "builtin-baseline": "a1a1cbc975abf909a6c8985a6a2b8fe20bbd9bd6",
+    "builtin-baseline": "5e5d0e1cd7785623065e77eff011afdeec1a3574",
     "dependencies": final_deduplicated_deps,
     "overrides": [{"name": "openssl", "version": "3.0.8"}],
 }

@@ -1,0 +1,21 @@
+# name: test/geoparquet/unsupported.test
+# group: [geoparquet]
+
+require spatial
+
+require parquet
+
+#------------------------------------------------------------------------------
+# Test unsupported geometry type
+#------------------------------------------------------------------------------
+
+statement error
+COPY (SELECT 'POINT ZM (0 1 2 3)'::GEOMETRY) TO '__TEST_DIR__/t1.parquet' (FORMAT 'parquet');
+----
+Invalid Input Error: Geoparquet does not support geometries with M coordinates
+
+
+statement error
+COPY (SELECT 'POINT M (0 1 2)'::GEOMETRY) TO '__TEST_DIR__/t1.parquet' (FORMAT 'parquet');
+----
+Invalid Input Error: Geoparquet does not support geometries with M coordinates

@@ -9,14 +9,17 @@
 #include "duckdb/common/types/vector_cache.hpp"
 #include "duckdb/common/unordered_map.hpp"
 #include "duckdb/common/vector.hpp"
-#include <list>
+#include "duckdb/main/config.hpp"
+
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/schema_metadata.hpp"
-
+#include "duckdb/main/client_context.hpp"
 namespace duckdb {
 
-void ArrowConverter::ToArrowArray(DataChunk &input, ArrowArray *out_array, ClientProperties options) {
-	ArrowAppender appender(input.GetTypes(), input.size(), std::move(options));
+void ArrowConverter::ToArrowArray(
+    DataChunk &input, ArrowArray *out_array, ClientProperties options,
+    const unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> &extension_type_cast) {
+	ArrowAppender appender(input.GetTypes(), input.size(), std::move(options), extension_type_cast);
 	appender.Append(input, 0, input.size(), input.size());
 	*out_array = appender.Finalize();
 }
@@ -29,24 +32,6 @@ unsafe_unique_array<char> AddName(const string &name) {
 	name_ptr[name.size()] = '\0';
 	return name_ptr;
 }
-
-//===--------------------------------------------------------------------===//
-// Arrow Schema
-//===--------------------------------------------------------------------===//
-struct DuckDBArrowSchemaHolder {
-	// unused in children
-	vector<ArrowSchema> children;
-	// unused in children
-	vector<ArrowSchema *> children_ptrs;
-	//! used for nested structures
-	std::list<vector<ArrowSchema>> nested_children;
-	std::list<vector<ArrowSchema *>> nested_children_ptr;
-	//! This holds strings created to represent decimal types
-	vector<unsafe_unique_array<char>> owned_type_names;
-	vector<unsafe_unique_array<char>> owned_column_names;
-	//! This holds any values created for metadata info
-	vector<unsafe_unique_array<char>> metadata_info;
-};
 
 static void ReleaseDuckDBArrowSchema(ArrowSchema *schema) {
 	if (!schema || !schema->release) {
@@ -74,10 +59,10 @@ void InitializeChild(ArrowSchema &child, DuckDBArrowSchemaHolder &root_holder, c
 }
 
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                    const ClientProperties &options);
+                    ClientProperties &options, ClientContext &context);
 
 void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                       const ClientProperties &options) {
+                       ClientProperties &options, ClientContext &context) {
 	child.format = "+m";
 	//! Map has one child which is a struct
 	child.n_children = 1;
@@ -88,14 +73,39 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	InitializeChild(root_holder.nested_children.back()[0], root_holder);
 	child.children = &root_holder.nested_children_ptr.back()[0];
 	child.children[0]->name = "entries";
-	SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), options);
+	child.children[0]->flags = 0; // Set the 'entries' field to non-nullable
+	SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), options, context);
+}
+
+bool SetArrowExtension(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
+                       ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	if (config.HasArrowExtension(type)) {
+		auto arrow_extension = config.GetArrowExtension(type);
+		arrow_extension.PopulateArrowSchema(root_holder, child, type, context, arrow_extension);
+		return true;
+	}
+	return false;
 }
 
 void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
-                    const ClientProperties &options) {
+                    ClientProperties &options, ClientContext &context) {
+	if (type.HasAlias()) {
+		// If it is a json type, we only export it as json if arrow_lossless_conversion = True
+		if (!(type.IsJSONType() && !options.arrow_lossless_conversion)) {
+			// If the type has an alias, we check if it is an Arrow-Type extension
+			if (SetArrowExtension(root_holder, child, type, context)) {
+				return;
+			}
+		}
+	}
 	switch (type.id()) {
 	case LogicalTypeId::BOOLEAN:
-		child.format = "b";
+		if (options.arrow_lossless_conversion) {
+			SetArrowExtension(root_holder, child, type, context);
+		} else {
+			child.format = "b";
+		}
 		break;
 	case LogicalTypeId::TINYINT:
 		child.format = "c";
@@ -124,30 +134,34 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::FLOAT:
 		child.format = "f";
 		break;
-	case LogicalTypeId::HUGEINT:
-		child.format = "d:38,0";
+	case LogicalTypeId::HUGEINT: {
+		if (options.arrow_lossless_conversion) {
+			SetArrowExtension(root_holder, child, type, context);
+		} else {
+			child.format = "d:38,0";
+		}
 		break;
+	}
 	case LogicalTypeId::DOUBLE:
 		child.format = "g";
 		break;
 	case LogicalTypeId::UUID: {
-		// This is a canonical extension, hence needs the "arrow." prefix
-		child.format = "w:16";
-		auto schema_metadata = ArrowSchemaMetadata();
-		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "arrow.uuid");
-		schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
-		root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-		child.metadata = root_holder.metadata_info.back().get();
+		if (options.arrow_lossless_conversion) {
+			SetArrowExtension(root_holder, child, type, context);
+		} else {
+			if (options.produce_arrow_string_view) {
+				child.format = "vu";
+			} else {
+				if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+					child.format = "U";
+				} else {
+					child.format = "u";
+				}
+			}
+		}
 		break;
 	}
 	case LogicalTypeId::VARCHAR:
-		if (type.IsJSONType()) {
-			auto schema_metadata = ArrowSchemaMetadata();
-			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_EXTENSION_NAME, "arrow.json");
-			schema_metadata.AddOption(ArrowSchemaMetadata::ARROW_METADATA_KEY, "");
-			root_holder.metadata_info.emplace_back(schema_metadata.SerializeMetadata());
-			child.metadata = root_holder.metadata_info.back().get();
-		}
 		if (options.produce_arrow_string_view) {
 			child.format = "vu";
 		} else {
@@ -161,7 +175,14 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 	case LogicalTypeId::DATE:
 		child.format = "tdD";
 		break;
-	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::TIME_TZ: {
+		if (options.arrow_lossless_conversion) {
+			SetArrowExtension(root_holder, child, type, context);
+		} else {
+			child.format = "ttu";
+		}
+		break;
+	}
 	case LogicalTypeId::TIME:
 		child.format = "ttu";
 		break;
@@ -199,15 +220,25 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		break;
 	}
 	case LogicalTypeId::BLOB:
-	case LogicalTypeId::BIT:
-
 		if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			child.format = "Z";
 		} else {
 			child.format = "z";
 		}
 		break;
+	case LogicalTypeId::BIT: {
+		if (options.arrow_lossless_conversion) {
+			SetArrowExtension(root_holder, child, type, context);
+		} else {
+			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				child.format = "Z";
+			} else {
+				child.format = "z";
+			}
+		}
 
+		break;
+	}
 	case LogicalTypeId::LIST: {
 		if (options.arrow_use_list_view) {
 			if (options.arrow_offset_size == ArrowOffsetSize::LARGE) {
@@ -230,7 +261,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		InitializeChild(root_holder.nested_children.back()[0], root_holder);
 		child.children = &root_holder.nested_children_ptr.back()[0];
 		child.children[0]->name = "l";
-		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), options);
+		SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), options, context);
 		break;
 	}
 	case LogicalTypeId::STRUCT: {
@@ -252,7 +283,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			root_holder.owned_type_names.push_back(AddName(child_types[type_idx].first));
 
 			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
-			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options);
+			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options, context);
 		}
 		break;
 	}
@@ -270,11 +301,11 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		root_holder.nested_children_ptr.back().push_back(&root_holder.nested_children.back()[0]);
 		InitializeChild(root_holder.nested_children.back()[0], root_holder);
 		child.children = &root_holder.nested_children_ptr.back()[0];
-		SetArrowFormat(root_holder, **child.children, child_type, options);
+		SetArrowFormat(root_holder, **child.children, child_type, options, context);
 		break;
 	}
 	case LogicalTypeId::MAP: {
-		SetArrowMapFormat(root_holder, child, type, options);
+		SetArrowMapFormat(root_holder, child, type, options, context);
 		break;
 	}
 	case LogicalTypeId::UNION: {
@@ -297,7 +328,7 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 			root_holder.owned_type_names.push_back(AddName(child_types[type_idx].first));
 
 			child.children[type_idx]->name = root_holder.owned_type_names.back().get();
-			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options);
+			SetArrowFormat(root_holder, *child.children[type_idx], child_types[type_idx].second, options, context);
 
 			format += to_string(type_idx) + ",";
 		}
@@ -333,17 +364,22 @@ void SetArrowFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, co
 		child.dictionary->format = "u";
 		break;
 	}
-	default:
-		throw NotImplementedException("Unsupported Arrow type " + type.ToString());
+	default: {
+		// It is possible we can export this type as a registered extension
+		auto success = SetArrowExtension(root_holder, child, type, context);
+		if (!success) {
+			throw NotImplementedException("Unsupported Arrow type %s", type.ToString());
+		}
+	}
 	}
 }
 
 void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<LogicalType> &types,
-                                   const vector<string> &names, const ClientProperties &options) {
+                                   const vector<string> &names, ClientProperties &options) {
 	D_ASSERT(out_schema);
 	D_ASSERT(types.size() == names.size());
-	idx_t column_count = types.size();
-	// Allocate as unique_ptr first to cleanup properly on error
+	const idx_t column_count = types.size();
+	// Allocate as unique_ptr first to clean-up properly on error
 	auto root_holder = make_uniq<DuckDBArrowSchemaHolder>();
 
 	// Allocate the children
@@ -367,7 +403,7 @@ void ArrowConverter::ToArrowSchema(ArrowSchema *out_schema, const vector<Logical
 		root_holder->owned_column_names.push_back(AddName(names[col_idx]));
 		auto &child = root_holder->children[col_idx];
 		InitializeChild(child, *root_holder, names[col_idx]);
-		SetArrowFormat(*root_holder, child, types[col_idx], options);
+		SetArrowFormat(*root_holder, child, types[col_idx], options, *options.client_context);
 	}
 
 	// Release ownership to caller

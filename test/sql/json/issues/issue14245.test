@@ -1,0 +1,10 @@
+# name: test/sql/json/issues/issue14245.test
+# description: Test issue 14245 - The JSONPointer '/'
+# group: [issues]
+
+require json
+
+query I
+SELECT '{ "foo": ["bar", "baz"], "": 0 }' -> '/'
+----
+0

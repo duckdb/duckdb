@@ -193,3 +193,8 @@ FROM employees;
 1030
 
 endloop
+
+query I
+SELECT max_by(c0, c1) FROM (values (1, null)) t(c0,c1);
+----
+NULL

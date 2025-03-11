@@ -1,5 +1,5 @@
 #include "duckdb/common/shared_ptr.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 
@@ -14,20 +14,20 @@ bool IsQuoteDefault(char quote) {
 	return false;
 }
 
-vector<char> DialectCandidates::GetDefaultDelimiter() {
-	return {',', '|', ';', '\t'};
+vector<string> DialectCandidates::GetDefaultDelimiter() {
+	return {",", "|", ";", "\t"};
 }
 
 vector<vector<char>> DialectCandidates::GetDefaultQuote() {
-	return {{'\"'}, {'\"', '\''}, {'\0'}};
+	return {{'\0'}, {'\"', '\''}, {'\"'}};
 }
 
 vector<QuoteRule> DialectCandidates::GetDefaultQuoteRule() {
-	return {QuoteRule::QUOTES_RFC, QuoteRule::QUOTES_OTHER, QuoteRule::NO_QUOTES};
+	return {QuoteRule::NO_QUOTES, QuoteRule::QUOTES_OTHER, QuoteRule::QUOTES_RFC};
 }
 
 vector<vector<char>> DialectCandidates::GetDefaultEscape() {
-	return {{'\"', '\0', '\''}, {'\\'}, {'\0'}};
+	return {{'\0'}, {'\\'}, {'\"', '\0', '\''}};
 }
 
 vector<char> DialectCandidates::GetDefaultComment() {
@@ -46,12 +46,24 @@ string DialectCandidates::Print() {
 	}
 	search_space << "\n";
 	search_space << "Quote/Escape Candidates: ";
-	for (uint8_t i = 0; i < static_cast<uint8_t>(quoterule_candidates.size()); i++) {
+	for (uint8_t i = 0; i < static_cast<uint8_t>(quote_rule_candidates.size()); i++) {
 		auto quote_candidate = quote_candidates_map[i];
 		auto escape_candidate = escape_candidates_map[i];
 		for (idx_t j = 0; j < quote_candidate.size(); j++) {
 			for (idx_t k = 0; k < escape_candidate.size(); k++) {
-				search_space << "[\'" << quote_candidate[j] << "\',\'" << escape_candidate[k] << "\']";
+				search_space << "[\'";
+				if (quote_candidate[j] == '\0') {
+					search_space << "(no quote)";
+				} else {
+					search_space << quote_candidate[j];
+				}
+				search_space << "\',\'";
+				if (escape_candidate[k] == '\0') {
+					search_space << "(no escape)";
+				} else {
+					search_space << escape_candidate[k];
+				}
+				search_space << "\']";
 				if (k < escape_candidate.size() - 1) {
 					search_space << ",";
 				}
@@ -60,7 +72,7 @@ string DialectCandidates::Print() {
 				search_space << ",";
 			}
 		}
-		if (i < quoterule_candidates.size() - 1) {
+		if (i < quote_rule_candidates.size() - 1) {
 			search_space << ",";
 		}
 	}
@@ -80,11 +92,11 @@ string DialectCandidates::Print() {
 
 DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 	// assert that quotes escapes and rules have equal size
-	auto default_quote = GetDefaultQuote();
-	auto default_escape = GetDefaultEscape();
-	auto default_quote_rule = GetDefaultQuoteRule();
-	auto default_delimiter = GetDefaultDelimiter();
-	auto default_comment = GetDefaultComment();
+	const auto default_quote = GetDefaultQuote();
+	const auto default_escape = GetDefaultEscape();
+	const auto default_quote_rule = GetDefaultQuoteRule();
+	const auto default_delimiter = GetDefaultDelimiter();
+	const auto default_comment = GetDefaultComment();
 
 	D_ASSERT(default_quote.size() == default_quote_rule.size() && default_quote_rule.size() == default_escape.size());
 	// fill the escapes
@@ -111,7 +123,7 @@ DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 		for (auto &quote_rule : default_quote_rule) {
 			quote_candidates_map[static_cast<uint8_t>(quote_rule)] = {options.quote.GetValue()};
 		}
-		// also add it as a escape rule
+		// also add it as an escape rule
 		if (!IsQuoteDefault(options.quote.GetValue())) {
 			escape_candidates_map[static_cast<uint8_t>(QuoteRule::QUOTES_RFC)].emplace_back(options.quote.GetValue());
 		}
@@ -124,14 +136,14 @@ DialectCandidates::DialectCandidates(const CSVStateMachineOptions &options) {
 	if (options.escape.IsSetByUser()) {
 		// user provided escape: use that escape rule
 		if (options.escape == '\0') {
-			quoterule_candidates = {QuoteRule::QUOTES_RFC};
+			quote_rule_candidates = {QuoteRule::QUOTES_RFC};
 		} else {
-			quoterule_candidates = {QuoteRule::QUOTES_OTHER};
+			quote_rule_candidates = {QuoteRule::QUOTES_OTHER};
 		}
-		escape_candidates_map[static_cast<uint8_t>(quoterule_candidates[0])] = {options.escape.GetValue()};
+		escape_candidates_map[static_cast<uint8_t>(quote_rule_candidates[0])] = {options.escape.GetValue()};
 	} else {
 		// no escape provided: try standard/common escapes
-		quoterule_candidates = default_quote_rule;
+		quote_rule_candidates = default_quote_rule;
 	}
 }
 
@@ -146,16 +158,18 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 	}
 	CSVIterator first_iterator;
 	bool iterator_set = false;
-	for (const auto quoterule : dialect_candidates.quoterule_candidates) {
-		const auto &quote_candidates = dialect_candidates.quote_candidates_map.at(static_cast<uint8_t>(quoterule));
+	for (const auto quote_rule : dialect_candidates.quote_rule_candidates) {
+		const auto &quote_candidates = dialect_candidates.quote_candidates_map.at(static_cast<uint8_t>(quote_rule));
 		for (const auto &quote : quote_candidates) {
 			for (const auto &delimiter : dialect_candidates.delim_candidates) {
 				const auto &escape_candidates =
-				    dialect_candidates.escape_candidates_map.at(static_cast<uint8_t>(quoterule));
+				    dialect_candidates.escape_candidates_map.at(static_cast<uint8_t>(quote_rule));
 				for (const auto &escape : escape_candidates) {
 					for (const auto &comment : dialect_candidates.comment_candidates) {
 						D_ASSERT(buffer_manager);
-						CSVStateMachineOptions state_machine_options(delimiter, quote, escape, comment, new_line_id);
+						CSVStateMachineOptions state_machine_options(
+						    delimiter, quote, escape, comment, new_line_id,
+						    options.dialect_options.state_machine_options.strict_mode.GetValue());
 						auto sniffing_state_machine =
 						    make_shared_ptr<CSVStateMachine>(options, state_machine_options, state_machine_cache);
 						if (options.dialect_options.skip_rows.IsSetByUser()) {
@@ -181,7 +195,10 @@ void CSVSniffer::GenerateStateMachineSearchSpace(vector<unique_ptr<ColumnCountSc
 
 // Returns true if a comment is acceptable
 bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, bool comment_set_by_user) {
-	// For a comment to be acceptable, we want 3/5th's majority of unmatches in the columns
+	if (comment_set_by_user) {
+		return true;
+	}
+	// For a comment to be acceptable, we want 3/5th's the majority of unmatched in the columns
 	constexpr double min_majority = 0.6;
 	// detected comments, are all lines that started with a comment character.
 	double detected_comments = 0;
@@ -202,7 +219,7 @@ bool AreCommentsAcceptable(const ColumnCountResult &result, idx_t num_cols, bool
 		}
 	}
 	// If we do not encounter at least one full line comment, we do not consider this comment option.
-	if (valid_comments == 0 || (!has_full_line_comment && !comment_set_by_user)) {
+	if (valid_comments == 0 || !has_full_line_comment) {
 		// this is only valid if our comment character is \0
 		if (result.state_machine.state_machine_options.comment.GetValue() == '\0') {
 			return true;
@@ -226,15 +243,21 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	}
 	idx_t consistent_rows = 0;
 	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[0].number_of_columns;
+	const bool ignore_errors = options.ignore_errors.GetValue();
+	// If we are ignoring errors and not null_padding , we pick the most frequent number of columns as the right one
+	const bool use_most_frequent_columns = ignore_errors && !options.null_padding;
+	if (use_most_frequent_columns) {
+		num_cols = sniffed_column_counts.GetMostFrequentColumnCount();
+	}
 	idx_t padding_count = 0;
 	idx_t comment_rows = 0;
 	idx_t ignored_rows = 0;
-	bool allow_padding = options.null_padding;
+	const bool allow_padding = options.null_padding;
 	bool first_valid = false;
 	if (sniffed_column_counts.result_position > rows_read) {
 		rows_read = sniffed_column_counts.result_position;
 	}
-	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, options.ignore_errors.GetValue(),
+	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, ignore_errors,
 	                                        sniffed_column_counts[0].last_value_always_empty)) {
 		// Not acceptable
 		return;
@@ -242,8 +265,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	idx_t header_idx = 0;
 	for (idx_t row = 0; row < sniffed_column_counts.result_position; row++) {
 		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row].number_of_columns, options.null_padding,
-		                                        options.ignore_errors.GetValue(),
-		                                        sniffed_column_counts[row].last_value_always_empty)) {
+		                                        ignore_errors, sniffed_column_counts[row].last_value_always_empty)) {
 			// Not acceptable
 			return;
 		}
@@ -258,7 +280,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			consistent_rows++;
 		} else if (num_cols < sniffed_column_counts[row].number_of_columns &&
 		           (!options.dialect_options.skip_rows.IsSetByUser() || comment_rows > 0) &&
-		           (!set_columns.IsSet() || options.null_padding)) {
+		           (!set_columns.IsSet() || options.null_padding) && (!first_valid || (!use_most_frequent_columns))) {
 			// all rows up to this point will need padding
 			if (!first_valid) {
 				first_valid = true;
@@ -268,15 +290,14 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			// we use the maximum amount of num_cols that we find
 			num_cols = sniffed_column_counts[row].number_of_columns;
 			dirty_notes = row;
-			// sniffed_column_counts.state_machine.dialect_options.rows_until_header = dirty_notes;
 			dirty_notes_minus_comments = dirty_notes - comment_rows;
 			header_idx = row;
 			consistent_rows = 1;
-		} else if (sniffed_column_counts[row].number_of_columns == num_cols ||
-		           (options.ignore_errors.GetValue() && !options.null_padding)) {
+		} else if (sniffed_column_counts[row].number_of_columns == num_cols || (use_most_frequent_columns)) {
 			if (!first_valid) {
 				first_valid = true;
 				sniffed_column_counts.state_machine.dialect_options.rows_until_header = row;
+				dirty_notes = row;
 			}
 			if (sniffed_column_counts[row].number_of_columns != num_cols) {
 				ignored_rows++;
@@ -296,61 +317,102 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	consistent_rows += padding_count;
 
 	// Whether there are more values (rows) available that are consistent, exceeding the current best.
-	bool more_values = consistent_rows > best_consistent_rows && num_cols >= max_columns_found;
+	const bool more_values = consistent_rows > best_consistent_rows && num_cols >= max_columns_found;
+
+	const bool more_columns = consistent_rows == best_consistent_rows && num_cols > max_columns_found;
 
 	// If additional padding is required when compared to the previous padding count.
-	bool require_more_padding = padding_count > prev_padding_count;
+	const bool require_more_padding = padding_count > prev_padding_count;
 
 	// If less padding is now required when compared to the previous padding count.
-	bool require_less_padding = padding_count < prev_padding_count;
+	const bool require_less_padding = padding_count < prev_padding_count;
 
 	// If there was only a single column before, and the new number of columns exceeds that.
-	bool single_column_before = max_columns_found < 2 && num_cols > max_columns_found * candidates.size();
+	const bool single_column_before = max_columns_found < 2 && num_cols > max_columns_found * candidates.size();
 
 	// If the number of rows is consistent with the calculated value after accounting for skipped rows and the
 	// start row.
-	bool rows_consistent =
+	const bool rows_consistent =
 	    consistent_rows + (dirty_notes_minus_comments - options.dialect_options.skip_rows.GetValue()) + comment_rows ==
 	    sniffed_column_counts.result_position - options.dialect_options.skip_rows.GetValue();
 	// If there are more than one consistent row.
-	bool more_than_one_row = consistent_rows > 1;
+	const bool more_than_one_row = consistent_rows > 1;
 
 	// If there are more than one column.
-	bool more_than_one_column = num_cols > 1;
+	const bool more_than_one_column = num_cols > 1;
 
 	// If the start position is valid.
-	bool start_good = !candidates.empty() &&
-	                  dirty_notes <= candidates.front()->GetStateMachine().dialect_options.skip_rows.GetValue();
+	const bool start_good = !candidates.empty() &&
+	                        dirty_notes <= candidates.front()->GetStateMachine().dialect_options.skip_rows.GetValue();
 
 	// If padding happened but it is not allowed.
-	bool invalid_padding = !allow_padding && padding_count > 0;
+	const bool invalid_padding = !allow_padding && padding_count > 0;
 
-	bool comments_are_acceptable = AreCommentsAcceptable(
+	const bool comments_are_acceptable = AreCommentsAcceptable(
 	    sniffed_column_counts, num_cols, options.dialect_options.state_machine_options.comment.IsSetByUser());
+
+	const bool quoted =
+	    scanner->ever_quoted &&
+	    sniffed_column_counts.state_machine.dialect_options.state_machine_options.quote.GetValue() != '\0';
+
+	// For our columns to match, we either don't have them manually set, or they match in value with the sniffed value
+	const bool columns_match_set =
+	    num_cols == set_columns.Size() ||
+	    (num_cols == set_columns.Size() + 1 && sniffed_column_counts[0].last_value_always_empty) ||
+	    !set_columns.IsSet();
 
 	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
 	// following is valid:
 	// - There's a single column before.
 	// - There are more values and no additional padding is required.
 	// - There's more than one column and less padding is required.
-	if (rows_consistent &&
-	    (single_column_before || (more_values && !require_more_padding) ||
-	     (more_than_one_column && require_less_padding)) &&
+	if (columns_match_set && (rows_consistent || (set_columns.IsSet() && ignore_errors)) &&
+	    (single_column_before || ((more_values || more_columns) && !require_more_padding) ||
+	     (more_than_one_column && require_less_padding) || quoted) &&
 	    !invalid_padding && comments_are_acceptable) {
-		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == candidates.size()) {
+		if (!candidates.empty() && set_columns.IsSet() && max_columns_found == set_columns.Size() &&
+		    consistent_rows <= best_consistent_rows) {
 			// We have a candidate that fits our requirements better
-			return;
+			if (candidates.front()->ever_quoted || !scanner->ever_quoted) {
+				return;
+			}
 		}
 		auto &sniffing_state_machine = scanner->GetStateMachine();
 
-		if (!candidates.empty() && candidates.front()->ever_quoted && !scanner->ever_quoted) {
+		if (!candidates.empty() && candidates.front()->ever_quoted) {
 			// Give preference to quoted boys.
+			if (!scanner->ever_quoted) {
+				return;
+			} else {
+				// Give preference to one that got escaped
+				if (!scanner->ever_escaped && candidates.front()->ever_escaped) {
+					return;
+				}
+				if (best_consistent_rows == consistent_rows && num_cols >= max_columns_found) {
+					// If both have not been escaped, this might get solved later on.
+					sniffing_state_machine.dialect_options.num_cols = num_cols;
+					candidates.emplace_back(std::move(scanner));
+					max_columns_found = num_cols;
+					return;
+				}
+			}
+		}
+		if (max_columns_found == num_cols && (ignored_rows > min_ignored_rows)) {
 			return;
 		}
-		if (max_columns_found == num_cols && ignored_rows > min_ignored_rows) {
+		if (max_columns_found > 1 && num_cols > max_columns_found && consistent_rows < best_consistent_rows / 2 &&
+		    options.null_padding) {
+			// When null_padding is true, we only give preference to a max number of columns if null padding is at least
+			// 50% as consistent as the best case scenario
 			return;
 		}
-
+		if (quoted && num_cols < max_columns_found) {
+			for (auto &candidate : candidates) {
+				if (candidate->ever_quoted) {
+					return;
+				}
+			}
+		}
 		best_consistent_rows = consistent_rows;
 		max_columns_found = num_cols;
 		prev_padding_count = padding_count;
@@ -369,42 +431,34 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 
 		candidates.clear();
 		sniffing_state_machine.dialect_options.num_cols = num_cols;
+		lines_sniffed = sniffed_column_counts.result_position;
 		candidates.emplace_back(std::move(scanner));
 		return;
 	}
 	// If there's more than one row and column, the start is good, rows are consistent,
 	// no additional padding is required, and there is no invalid padding, and there is not yet a candidate
 	// with the same quote, we add this state_machine as a suitable candidate.
-	if (more_than_one_row && more_than_one_column && start_good && rows_consistent && !require_more_padding &&
-	    !invalid_padding && num_cols == max_columns_found && comments_are_acceptable) {
+	if (columns_match_set && more_than_one_row && more_than_one_column && start_good && rows_consistent &&
+	    !require_more_padding && !invalid_padding && num_cols == max_columns_found && comments_are_acceptable) {
 		auto &sniffing_state_machine = scanner->GetStateMachine();
 
-		bool same_quote_is_candidate = false;
-		for (auto &candidate : candidates) {
-			if (sniffing_state_machine.dialect_options.state_machine_options.quote ==
-			    candidate->GetStateMachine().dialect_options.state_machine_options.quote) {
-				same_quote_is_candidate = true;
+		if (options.dialect_options.skip_rows.IsSetByUser()) {
+			// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
+			// ignore_errors is set
+			if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
+				return;
 			}
+			sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
+		} else if (!options.null_padding) {
+			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
 		}
-		if (!same_quote_is_candidate) {
-			if (options.dialect_options.skip_rows.IsSetByUser()) {
-				// If skip rows is set by user, and we found dirty notes, we only accept it if either null_padding or
-				// ignore_errors is set
-				if (dirty_notes != 0 && !options.null_padding && !options.ignore_errors.GetValue()) {
-					return;
-				}
-				sniffing_state_machine.dialect_options.skip_rows = options.dialect_options.skip_rows.GetValue();
-			} else if (!options.null_padding) {
-				sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
-			}
-
-			sniffing_state_machine.dialect_options.num_cols = num_cols;
-			candidates.emplace_back(std::move(scanner));
-		}
+		sniffing_state_machine.dialect_options.num_cols = num_cols;
+		lines_sniffed = sniffed_column_counts.result_position;
+		candidates.emplace_back(std::move(scanner));
 	}
 }
 
-bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) {
+bool CSVSniffer::RefineCandidateNextChunk(ColumnCountScanner &candidate) const {
 	auto &sniffed_column_counts = candidate.ParseChunk();
 	for (idx_t i = 0; i < sniffed_column_counts.result_position; i++) {
 		if (set_columns.IsSet()) {
@@ -431,24 +485,35 @@ void CSVSniffer::RefineCandidates() {
 		// Only one candidate nothing to refine or all candidates already checked
 		return;
 	}
-	vector<unique_ptr<ColumnCountScanner>> successful_candidates;
-	for (auto &cur_candidate : candidates) {
-		for (idx_t i = 1; i <= options.sample_size_chunks; i++) {
-			bool finished_file = cur_candidate->FinishedFile();
+
+	for (idx_t i = 1; i <= options.sample_size_chunks; i++) {
+		vector<unique_ptr<ColumnCountScanner>> successful_candidates;
+		bool done = candidates.empty();
+		for (auto &cur_candidate : candidates) {
+			const bool finished_file = cur_candidate->FinishedFile();
+			if (successful_candidates.empty()) {
+				lines_sniffed += cur_candidate->GetResult().result_position;
+			}
 			if (finished_file || i == options.sample_size_chunks) {
 				// we finished the file or our chunk sample successfully
+				if (!cur_candidate->GetResult().error) {
+					successful_candidates.push_back(std::move(cur_candidate));
+				}
+				done = true;
+				continue;
+			}
+			if (RefineCandidateNextChunk(*cur_candidate) && !cur_candidate->GetResult().error) {
 				successful_candidates.push_back(std::move(cur_candidate));
-				break;
 			}
-			if (!RefineCandidateNextChunk(*cur_candidate) || cur_candidate->GetResult().error) {
-				// This candidate failed, move to the next one
-				break;
-			}
+		}
+		candidates = std::move(successful_candidates);
+		if (done) {
+			break;
 		}
 	}
 	// If we have multiple candidates with quotes set, we will give the preference to ones
 	// that have actually quoted values, otherwise we will choose quotes = \0
-	candidates.clear();
+	vector<unique_ptr<ColumnCountScanner>> successful_candidates = std::move(candidates);
 	if (!successful_candidates.empty()) {
 		for (idx_t i = 0; i < successful_candidates.size(); i++) {
 			unique_ptr<ColumnCountScanner> cc_best_candidate = std::move(successful_candidates[i]);
@@ -518,8 +583,8 @@ void CSVSniffer::DetectDialect() {
 
 	// if no dialect candidate was found, we throw an exception
 	if (candidates.empty()) {
-		auto error = CSVError::DialectSniffingError(options, dialect_candidates.Print());
-		error_handler->Error(error);
+		auto error = CSVError::SniffingError(options, dialect_candidates.Print());
+		error_handler->Error(error, true);
 	}
 }
 } // namespace duckdb

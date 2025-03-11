@@ -105,6 +105,16 @@ date_t ParquetIntToDate(const int32_t &raw_date) {
 	return date_t(raw_date);
 }
 
+template <typename T>
+static T ParquetWrapTime(const T &raw, const T day) {
+	// Special case 24:00:00
+	if (raw == day) {
+		return raw;
+	}
+	const auto modulus = raw % day;
+	return modulus + (modulus < 0) * day;
+}
+
 dtime_t ParquetIntToTimeMs(const int32_t &raw_millis) {
 	return Time::FromTimeMs(raw_millis);
 }
@@ -118,15 +128,19 @@ dtime_t ParquetIntToTimeNs(const int64_t &raw_nanos) {
 }
 
 dtime_tz_t ParquetIntToTimeMsTZ(const int32_t &raw_millis) {
-	return dtime_tz_t(Time::FromTimeMs(raw_millis), 0);
+	const int32_t MSECS_PER_DAY = Interval::MSECS_PER_SEC * Interval::SECS_PER_DAY;
+	const auto millis = ParquetWrapTime(raw_millis, MSECS_PER_DAY);
+	return dtime_tz_t(Time::FromTimeMs(millis), 0);
 }
 
 dtime_tz_t ParquetIntToTimeTZ(const int64_t &raw_micros) {
-	return dtime_tz_t(dtime_t(raw_micros), 0);
+	const auto micros = ParquetWrapTime(raw_micros, Interval::MICROS_PER_DAY);
+	return dtime_tz_t(dtime_t(micros), 0);
 }
 
 dtime_tz_t ParquetIntToTimeNsTZ(const int64_t &raw_nanos) {
-	return dtime_tz_t(Time::FromTimeNs(raw_nanos), 0);
+	const auto nanos = ParquetWrapTime(raw_nanos, Interval::NANOS_PER_DAY);
+	return dtime_tz_t(Time::FromTimeNs(nanos), 0);
 }
 
 } // namespace duckdb

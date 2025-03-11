@@ -32,6 +32,8 @@ public:
 	//! Recursive CTEs require at least one ChunkScan, referencing the working_table.
 	//! This data structure is used to establish it.
 	unordered_map<idx_t, shared_ptr<ColumnDataCollection>> recursive_cte_tables;
+	//! Used to reference the recurring tables
+	unordered_map<idx_t, shared_ptr<ColumnDataCollection>> recurring_cte_tables;
 	//! Materialized CTE ids must be collected.
 	unordered_map<idx_t, vector<const_reference<PhysicalOperator>>> materialized_ctes;
 
@@ -44,8 +46,6 @@ public:
 	static bool UseBatchIndex(ClientContext &context, PhysicalOperator &plan);
 	//! Whether or not we should preserve insertion order for executing the given sink
 	static bool PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan);
-
-	static bool HasEquality(vector<JoinCondition> &conds, idx_t &range_count);
 
 protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOperator &op);

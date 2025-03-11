@@ -2,6 +2,7 @@
 
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/execution/operator/helper/physical_result_collector.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/execution/operator/set/physical_cte.hpp"
 #include "duckdb/execution/operator/set/physical_recursive_cte.hpp"
 #include "duckdb/execution/physical_operator.hpp"
@@ -26,7 +27,7 @@ Executor::Executor(ClientContext &context) : context(context), executor_tasks(0)
 }
 
 Executor::~Executor() {
-	D_ASSERT(executor_tasks == 0);
+	D_ASSERT(Exception::UncaughtException() || executor_tasks == 0);
 }
 
 Executor &Executor::Get(ClientContext &context) {
@@ -162,11 +163,14 @@ void Executor::SchedulePipeline(const shared_ptr<MetaPipeline> &meta_pipeline, S
 	event_map.insert(make_pair(reference<Pipeline>(*base_pipeline), base_stack));
 
 	for (auto &pipeline : pipelines) {
-		auto &config = DBConfig::GetConfig(context);
 		auto source = pipeline->GetSource();
-		if (source->type == PhysicalOperatorType::TABLE_SCAN && config.options.initialize_in_main_thread) {
-			// this is a work-around for the R client that requires the init to be called in the main thread
-			pipeline->ResetSource(true);
+		if (source->type == PhysicalOperatorType::TABLE_SCAN) {
+			auto &table_function = source->Cast<PhysicalTableScan>();
+			if (table_function.function.global_initialization == TableFunctionInitialization::INITIALIZE_ON_SCHEDULE) {
+				// certain functions have to be eagerly initialized during scheduling
+				// if that is the case - initialize the function here
+				pipeline->ResetSource(true);
+			}
 		}
 	}
 }
@@ -464,6 +468,7 @@ void Executor::SignalTaskRescheduled(lock_guard<mutex> &) {
 }
 
 void Executor::WaitForTask() {
+#ifndef DUCKDB_NO_THREADS
 	static constexpr std::chrono::milliseconds WAIT_TIME_MS = std::chrono::milliseconds(WAIT_TIME);
 	std::unique_lock<mutex> l(executor_lock);
 	if (to_be_rescheduled_tasks.empty()) {
@@ -476,6 +481,7 @@ void Executor::WaitForTask() {
 
 	blocked_thread_time++;
 	task_reschedule.wait_for(l, WAIT_TIME_MS);
+#endif
 }
 
 void Executor::RescheduleTask(shared_ptr<Task> &task_p) {
@@ -678,39 +684,21 @@ void Executor::Flush(ThreadContext &thread_context) {
 	}
 }
 
-bool Executor::GetPipelinesProgress(double &current_progress, uint64_t &current_cardinality,
-                                    uint64_t &total_cardinality) { // LCOV_EXCL_START
+idx_t Executor::GetPipelinesProgress(ProgressData &progress) { // LCOV_EXCL_START
 	lock_guard<mutex> elock(executor_lock);
 
-	vector<double> progress;
-	vector<idx_t> cardinality;
-	total_cardinality = 0;
-	current_cardinality = 0;
+	progress.done = 0;
+	progress.total = 0;
+	idx_t count_invalid = 0;
 	for (auto &pipeline : pipelines) {
-		double child_percentage;
-		idx_t child_cardinality;
-
-		if (!pipeline->GetProgress(child_percentage, child_cardinality)) {
-			return false;
+		ProgressData p;
+		if (!pipeline->GetProgress(p)) {
+			count_invalid++;
+		} else {
+			progress.Add(p);
 		}
-		progress.push_back(child_percentage);
-		cardinality.push_back(child_cardinality);
-		total_cardinality += child_cardinality;
 	}
-	if (total_cardinality == 0) {
-		return true;
-	}
-	current_progress = 0;
-
-	for (size_t i = 0; i < progress.size(); i++) {
-		progress[i] = MaxValue(0.0, MinValue(100.0, progress[i]));
-		current_cardinality = LossyNumericCast<idx_t>(static_cast<double>(
-		    static_cast<double>(current_cardinality) +
-		    static_cast<double>(progress[i]) * static_cast<double>(cardinality[i]) / static_cast<double>(100)));
-		current_progress += progress[i] * double(cardinality[i]) / double(total_cardinality);
-		D_ASSERT(current_cardinality <= total_cardinality);
-	}
-	return true;
+	return count_invalid;
 } // LCOV_EXCL_STOP
 
 bool Executor::HasResultCollector() {

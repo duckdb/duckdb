@@ -4537,6 +4537,7 @@ namespace Catch {
         virtual double minDuration() const = 0;
         virtual TestSpec const& testSpec() const = 0;
         virtual bool hasTestFilters() const = 0;
+        virtual std::string getTestListFile() const = 0;
         virtual std::vector<std::string> const& getTestsOrTags() const = 0;
         virtual RunTests::InWhatOrder runOrder() const = 0;
         virtual unsigned int rngSeed() const = 0;
@@ -5335,6 +5336,7 @@ namespace Catch {
 
         std::vector<std::string> testsOrTags;
         std::vector<std::string> sectionsToRun;
+        std::string testListFile;
     };
 
     class Config : public IConfig {
@@ -5354,6 +5356,7 @@ namespace Catch {
         std::string getProcessName() const;
         std::string const& getReporterName() const;
 
+        std::string getTestListFile() const override;
         std::vector<std::string> const& getTestsOrTags() const override;
         std::vector<std::string> const& getSectionsToRun() const override;
 
@@ -9771,7 +9774,7 @@ namespace Catch {
                 //Remove comma in the end
                 if(!config.testsOrTags.empty())
                     config.testsOrTags.erase( config.testsOrTags.end()-1 );
-
+                config.testListFile = filename;
                 return ParserResult::ok( ParseResultType::Matched );
             };
         auto const setTestOrder = [&]( std::string const& order ) {
@@ -10034,6 +10037,7 @@ namespace Catch {
     std::string Config::getProcessName() const { return m_data.processName; }
     std::string const& Config::getReporterName() const { return m_data.reporterName; }
 
+    std::string Config::getTestListFile() const { return m_data.testListFile; }
     std::vector<std::string> const& Config::getTestsOrTags() const { return m_data.testsOrTags; }
     std::vector<std::string> const& Config::getSectionsToRun() const { return m_data.sectionsToRun; }
 
@@ -11325,6 +11329,11 @@ namespace Catch {
             start_offset = config.startOffset();
         } else if (config.startOffsetPercentage() >= 0) {
             start_offset = int((config.startOffsetPercentage() / 100.0) * total_tests_run);
+        }
+        if (config.endOffset() >= 0) {
+            end_offset = config.endOffset();
+        } else if (config.endOffsetPercentage() >= 0) {
+            end_offset = int((config.endOffsetPercentage() / 100.0) * total_tests_run);
         }
         auto it = matchedTestCases.begin();
         for(int current_test = 0; it != matchedTestCases.end(); current_test++) {
@@ -16911,7 +16920,10 @@ void ConsoleReporter::printSummaryDivider() {
 void ConsoleReporter::printTestFilters() {
     if (m_config->testSpec().hasFilters()) {
         Colour guard(Colour::BrightYellow);
-        stream << "Filters: " << serializeFilters(m_config->getTestsOrTags()) << '\n';
+        auto test_list_file = m_config->getTestListFile();
+        if (test_list_file.empty()) {
+            stream << "Filters: " << serializeFilters(m_config->getTestsOrTags()) << '\n';
+        }
     }
 }
 

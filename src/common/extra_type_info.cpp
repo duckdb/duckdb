@@ -1,4 +1,5 @@
 #include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/extra_type_info/enum_type_info.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/numeric_utils.hpp"
@@ -9,6 +10,71 @@
 namespace duckdb {
 
 //===--------------------------------------------------------------------===//
+// Extension Type Info
+//===--------------------------------------------------------------------===//
+
+bool ExtensionTypeInfo::Equals(optional_ptr<ExtensionTypeInfo> lhs, optional_ptr<ExtensionTypeInfo> rhs) {
+	// Either both are null, or both are the same, so they are equal
+	if (lhs.get() == rhs.get()) {
+		return true;
+	}
+	// If one is null, then we cant compare them
+	if (lhs == nullptr || rhs == nullptr) {
+		return true;
+	}
+
+	// Both are not null, so we can compare them
+	D_ASSERT(lhs != nullptr && rhs != nullptr);
+
+	// Compare modifiers
+	const auto &lhs_mods = lhs->modifiers;
+	const auto &rhs_mods = rhs->modifiers;
+	const auto common_mods = MinValue(lhs_mods.size(), rhs_mods.size());
+	for (idx_t i = 0; i < common_mods; i++) {
+		// If the types are not strictly equal, they are not equal
+		auto &lhs_val = lhs_mods[i].value;
+		auto &rhs_val = rhs_mods[i].value;
+
+		if (lhs_val.type() != rhs_val.type()) {
+			return false;
+		}
+
+		// If both are null, its fine
+		if (lhs_val.IsNull() && rhs_val.IsNull()) {
+			continue;
+		}
+
+		// If one is null, the other must be null too
+		if (lhs_val.IsNull() != rhs_val.IsNull()) {
+			return false;
+		}
+
+		if (lhs_val != rhs_val) {
+			return false;
+		}
+	}
+
+	// Properties are optional, so only compare those present in both
+	const auto &lhs_props = lhs->properties;
+	const auto &rhs_props = rhs->properties;
+
+	for (const auto &kv : lhs_props) {
+		auto it = rhs_props.find(kv.first);
+		if (it == rhs_props.end()) {
+			// Continue
+			continue;
+		}
+		if (kv.second != it->second) {
+			// Mismatch!
+			return false;
+		}
+	}
+
+	// All ok!
+	return true;
+}
+
+//===--------------------------------------------------------------------===//
 // Extra Type Info
 //===--------------------------------------------------------------------===//
 ExtraTypeInfo::ExtraTypeInfo(ExtraTypeInfoType type) : type(type) {
@@ -17,27 +83,24 @@ ExtraTypeInfo::ExtraTypeInfo(ExtraTypeInfoType type, string alias) : type(type),
 }
 ExtraTypeInfo::~ExtraTypeInfo() {
 }
-shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Copy() const {
-	return make_shared_ptr<ExtraTypeInfo>(*this);
+
+ExtraTypeInfo::ExtraTypeInfo(const ExtraTypeInfo &other) : type(other.type), alias(other.alias) {
+	if (other.extension_info) {
+		extension_info = make_uniq<ExtensionTypeInfo>(*other.extension_info);
+	}
 }
 
-static bool CompareModifiers(const vector<Value> &left, const vector<Value> &right) {
-	// Check if the common prefix of the properties is the same for both types
-	auto common_props = MinValue(left.size(), right.size());
-	for (idx_t i = 0; i < common_props; i++) {
-		if (left[i].type() != right[i].type()) {
-			return false;
-		}
-		// Special case for nulls:
-		// For type modifiers, NULL is equivalent to ANY
-		if (left[i].IsNull() || right[i].IsNull()) {
-			continue;
-		}
-		if (left[i] != right[i]) {
-			return false;
-		}
+ExtraTypeInfo &ExtraTypeInfo::operator=(const ExtraTypeInfo &other) {
+	type = other.type;
+	alias = other.alias;
+	if (other.extension_info) {
+		extension_info = make_uniq<ExtensionTypeInfo>(*other.extension_info);
 	}
-	return true;
+	return *this;
+}
+
+shared_ptr<ExtraTypeInfo> ExtraTypeInfo::Copy() const {
+	return shared_ptr<ExtraTypeInfo>(new ExtraTypeInfo(*this));
 }
 
 bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
@@ -47,13 +110,16 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 			if (!alias.empty()) {
 				return false;
 			}
+			if (extension_info) {
+				return false;
+			}
 			//! We only need to compare aliases when both types have them in this case
 			return true;
 		}
 		if (alias != other_p->alias) {
 			return false;
 		}
-		if (!CompareModifiers(modifiers, other_p->modifiers)) {
+		if (!ExtensionTypeInfo::Equals(extension_info, other_p->extension_info)) {
 			return false;
 		}
 		return true;
@@ -67,7 +133,7 @@ bool ExtraTypeInfo::Equals(ExtraTypeInfo *other_p) const {
 	if (alias != other_p->alias) {
 		return false;
 	}
-	if (!CompareModifiers(modifiers, other_p->modifiers)) {
+	if (!ExtensionTypeInfo::Equals(extension_info, other_p->extension_info)) {
 		return false;
 	}
 	return EqualsInternal(other_p);
@@ -219,50 +285,6 @@ PhysicalType EnumTypeInfo::DictType(idx_t size) {
 		throw InternalException("Enum size must be lower than " + std::to_string(NumericLimits<uint32_t>::Maximum()));
 	}
 }
-
-template <class T>
-struct EnumTypeInfoTemplated : public EnumTypeInfo {
-	explicit EnumTypeInfoTemplated(Vector &values_insert_order_p, idx_t size_p)
-	    : EnumTypeInfo(values_insert_order_p, size_p) {
-		D_ASSERT(values_insert_order_p.GetType().InternalType() == PhysicalType::VARCHAR);
-
-		UnifiedVectorFormat vdata;
-		values_insert_order.ToUnifiedFormat(size_p, vdata);
-
-		auto data = UnifiedVectorFormat::GetData<string_t>(vdata);
-		for (idx_t i = 0; i < size_p; i++) {
-			auto idx = vdata.sel->get_index(i);
-			if (!vdata.validity.RowIsValid(idx)) {
-				throw InternalException("Attempted to create ENUM type with NULL value");
-			}
-			if (values.count(data[idx]) > 0) {
-				throw InvalidInputException("Attempted to create ENUM type with duplicate value %s",
-				                            data[idx].GetString());
-			}
-			values[data[idx]] = UnsafeNumericCast<T>(i);
-		}
-	}
-
-	static shared_ptr<EnumTypeInfoTemplated> Deserialize(Deserializer &deserializer, uint32_t size) {
-		Vector values_insert_order(LogicalType::VARCHAR, size);
-		auto strings = FlatVector::GetData<string_t>(values_insert_order);
-
-		deserializer.ReadList(201, "values", [&](Deserializer::List &list, idx_t i) {
-			strings[i] = StringVector::AddStringOrBlob(values_insert_order, list.ReadElement<string>());
-		});
-		return make_shared_ptr<EnumTypeInfoTemplated>(values_insert_order, size);
-	}
-
-	const string_map_t<T> &GetValues() const {
-		return values;
-	}
-
-	EnumTypeInfoTemplated(const EnumTypeInfoTemplated &) = delete;
-	EnumTypeInfoTemplated &operator=(const EnumTypeInfoTemplated &) = delete;
-
-private:
-	string_map_t<T> values;
-};
 
 EnumTypeInfo::EnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p)
     : ExtraTypeInfo(ExtraTypeInfoType::ENUM_TYPE_INFO), values_insert_order(values_insert_order_p),

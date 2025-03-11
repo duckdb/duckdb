@@ -74,6 +74,17 @@ AS tbl(s)
 2024-06-04 10:17:10.9
 2024-06-04 10:17:10
 
+statement error
+SELECT TIMESTAMP_NS '2262-04-11 23:47:16.854775808';
+----
+Conversion Error: Could not convert string
+
+# Negative timestamp_ns
+query I
+select '1969-01-01T23:59:59.9999999'::timestamp_ns;
+----
+1969-01-01 23:59:59.9999999
+
 # TIME conversions are now supported
 query I
 select sec::TIME from timestamp;
@@ -260,3 +271,15 @@ query I
 select '2008-01-01 00:00:11'::TIMESTAMP_NS = '2008-01-01 00:00:11'::TIMESTAMP_S
 ----
 true
+
+query I
+SELECT CAST(t0.c0 AS TIME)>=('12:34:56') FROM  values ('2030-01-01'::TIMESTAMP_S), ('1969-12-23 20:44:40'::TIMESTAMP_S) as t0(c0)
+----
+false
+true
+
+query I
+SELECT NOT CAST(t0.c0 AS TIME)>=('12:34:56') FROM  values ('2030-01-01'::TIMESTAMP_MS), ('1969-12-23 20:44:40'::TIMESTAMP_MS) as t0(c0)
+----
+true
+false

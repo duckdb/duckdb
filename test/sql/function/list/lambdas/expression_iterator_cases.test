@@ -103,17 +103,17 @@ SELECT list_filter([2], x -> x + x = 4)
 ----
 [2]
 
-# don't allow BOUND_SUBQUERY inside lambda expressions
+# BOUND_SUBQUERY
 
 statement error
 SELECT list_transform([2], x -> (SELECT 1 - x) * x)
 ----
-Invalid Input Error: Subqueries are not supported in lambda expressions!
+<REGEX>:Binder Error.*subqueries in lambda expressions are not supported.*
 
 statement error
 SELECT list_filter([2], x -> (SELECT 1 - x) * x > 2)
 ----
-Invalid Input Error: Subqueries are not supported in lambda expressions!
+<REGEX>:Binder Error.*subqueries in lambda expressions are not supported.*
 
 statement ok
 CREATE MACRO list_contains_macro(x, y) AS (SELECT list_contains(x, y))
@@ -121,19 +121,19 @@ CREATE MACRO list_contains_macro(x, y) AS (SELECT list_contains(x, y))
 statement error
 SELECT list_filter([[1, 2, 1], [1, 2, 3], [1, 1, 1]], x -> list_contains_macro(x, 3))
 ----
-Invalid Input Error: Subqueries are not supported in lambda expressions!
+<REGEX>:Binder Error.*subqueries in lambda expressions are not supported.*
 
 # BOUND_UNNEST
 
-query I
+statement error
 SELECT list_transform([1], x -> x = UNNEST([1]));
 ----
-[true]
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
 
-query I
+statement error
 SELECT list_filter([1], x -> x = UNNEST([1]));
 ----
-[1]
+<REGEX>:Binder Error.*UNNEST in lambda expressions is not supported.*
 
 # BOUND_WINDOW
 

@@ -16,15 +16,23 @@ static void InstallFromRepository(ClientContext &context, const LoadInfo &info) 
 		repository = ExtensionRepository::GetRepositoryByUrl(info.repository);
 	}
 
-	ExtensionHelper::InstallExtension(context, info.filename, info.load_type == LoadType::FORCE_INSTALL, repository,
-	                                  true, info.version);
+	ExtensionInstallOptions options;
+	options.force_install = info.load_type == LoadType::FORCE_INSTALL;
+	options.throw_on_origin_mismatch = true;
+	options.version = info.version;
+	options.repository = repository;
+
+	ExtensionHelper::InstallExtension(context, info.filename, options);
 }
 
 SourceResultType PhysicalLoad::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	if (info->load_type == LoadType::INSTALL || info->load_type == LoadType::FORCE_INSTALL) {
 		if (info->repository.empty()) {
-			ExtensionHelper::InstallExtension(context.client, info->filename,
-			                                  info->load_type == LoadType::FORCE_INSTALL, nullptr, true, info->version);
+			ExtensionInstallOptions options;
+			options.force_install = info->load_type == LoadType::FORCE_INSTALL;
+			options.throw_on_origin_mismatch = true;
+			options.version = info->version;
+			ExtensionHelper::InstallExtension(context.client, info->filename, options);
 		} else {
 			InstallFromRepository(context.client, *info);
 		}

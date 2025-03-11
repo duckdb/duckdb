@@ -1,4 +1,5 @@
 #include "duckdb/parser/expression/star_expression.hpp"
+#include "duckdb/parser/expression/operator_expression.hpp"
 
 #include "duckdb/common/exception.hpp"
 
@@ -13,10 +14,6 @@ StarExpression::StarExpression(string relation_name_p)
 
 string StarExpression::ToString() const {
 	string result;
-	if (unpacked) {
-		D_ASSERT(columns);
-		result += "*";
-	}
 	if (expr) {
 		D_ASSERT(columns);
 		result += "COLUMNS(" + expr->ToString() + ")";
@@ -33,7 +30,7 @@ string StarExpression::ToString() const {
 			if (!first_entry) {
 				result += ", ";
 			}
-			result += KeywordHelper::WriteOptionallyQuoted(entry);
+			result += entry.ToString();
 			first_entry = false;
 		}
 		result += ")";
@@ -52,6 +49,20 @@ string StarExpression::ToString() const {
 		}
 		result += ")";
 	}
+	if (!rename_list.empty()) {
+		result += " RENAME (";
+		bool first_entry = true;
+		for (auto &entry : rename_list) {
+			if (!first_entry) {
+				result += ", ";
+			}
+			result += entry.first.ToString();
+			result += " AS ";
+			result += KeywordHelper::WriteOptionallyQuoted(entry.second);
+			first_entry = false;
+		}
+		result += ")";
+	}
 	if (columns) {
 		result += ")";
 	}
@@ -59,13 +70,10 @@ string StarExpression::ToString() const {
 }
 
 bool StarExpression::Equal(const StarExpression &a, const StarExpression &b) {
-	if (a.relation_name != b.relation_name || a.exclude_list != b.exclude_list) {
+	if (a.relation_name != b.relation_name || a.exclude_list != b.exclude_list || a.rename_list != b.rename_list) {
 		return false;
 	}
 	if (a.columns != b.columns) {
-		return false;
-	}
-	if (a.unpacked != b.unpacked) {
 		return false;
 	}
 	if (a.replace_list.size() != b.replace_list.size()) {
@@ -99,15 +107,36 @@ bool StarExpression::IsColumns(const ParsedExpression &a) {
 		return false;
 	}
 	auto &star = a.Cast<StarExpression>();
-	return star.columns == true && star.unpacked == false;
+	return star.columns == true;
 }
 
 bool StarExpression::IsColumnsUnpacked(const ParsedExpression &a) {
-	if (a.GetExpressionClass() != ExpressionClass::STAR) {
+	if (a.GetExpressionType() != ExpressionType::OPERATOR_UNPACK) {
 		return false;
 	}
-	auto &star = a.Cast<StarExpression>();
-	return star.columns == true && star.unpacked == true;
+	return true;
+}
+
+unique_ptr<ParsedExpression>
+StarExpression::DeserializeStarExpression(string &&relation_name, const case_insensitive_set_t &exclude_list,
+                                          case_insensitive_map_t<unique_ptr<ParsedExpression>> &&replace_list,
+                                          bool columns, unique_ptr<ParsedExpression> expr, bool unpacked,
+                                          const qualified_column_set_t &qualified_exclude_list,
+                                          qualified_column_map_t<string> &&rename_list) {
+	auto result = duckdb::unique_ptr<StarExpression>(new StarExpression(exclude_list, qualified_exclude_list));
+	result->relation_name = std::move(relation_name);
+	result->replace_list = std::move(replace_list);
+	result->columns = columns;
+	result->expr = std::move(expr);
+	result->rename_list = std::move(rename_list);
+	if (unpacked) {
+		//! This was previously a member of StarExpression, but not anymore
+		//! We wrap it into an OPERATOR_UNPACK instead
+		vector<unique_ptr<ParsedExpression>> unpack_children;
+		unpack_children.push_back(std::move(result));
+		return make_uniq<OperatorExpression>(ExpressionType::OPERATOR_UNPACK, std::move(unpack_children));
+	}
+	return std::move(result);
 }
 
 unique_ptr<ParsedExpression> StarExpression::Copy() const {
@@ -116,11 +145,40 @@ unique_ptr<ParsedExpression> StarExpression::Copy() const {
 	for (auto &entry : replace_list) {
 		copy->replace_list[entry.first] = entry.second->Copy();
 	}
+	copy->rename_list = rename_list;
 	copy->columns = columns;
 	copy->expr = expr ? expr->Copy() : nullptr;
 	copy->CopyProperties(*this);
-	copy->unpacked = unpacked;
 	return std::move(copy);
+}
+
+StarExpression::StarExpression(const case_insensitive_set_t &exclude_list_p, qualified_column_set_t qualified_set)
+    : ParsedExpression(ExpressionType::STAR, ExpressionClass::STAR), exclude_list(std::move(qualified_set)) {
+	for (auto &entry : exclude_list_p) {
+		exclude_list.insert(QualifiedColumnName(entry));
+	}
+}
+
+case_insensitive_set_t StarExpression::SerializedExcludeList() const {
+	// we serialize non-qualified elements in a separate list of only column names for backwards compatibility
+	case_insensitive_set_t result;
+	for (auto &entry : exclude_list) {
+		if (!entry.IsQualified()) {
+			result.insert(entry.column);
+		}
+	}
+	return result;
+}
+
+qualified_column_set_t StarExpression::SerializedQualifiedExcludeList() const {
+	// we serialize only qualified elements in the qualified list for backwards compatibility
+	qualified_column_set_t result;
+	for (auto &entry : exclude_list) {
+		if (entry.IsQualified()) {
+			result.insert(entry);
+		}
+	}
+	return result;
 }
 
 } // namespace duckdb

@@ -76,7 +76,7 @@ void WeightedSumFinalize(duckdb_function_info info, duckdb_aggregate_state *sour
 
 static duckdb_aggregate_function CAPIGetAggregateFunction(duckdb_connection connection, const char *name,
                                                           idx_t parameter_count = 2) {
-	// create a scalar function
+	// create an aggregate function
 	auto function = duckdb_create_aggregate_function();
 	duckdb_aggregate_function_set_name(nullptr, name);
 	duckdb_aggregate_function_set_name(function, nullptr);
@@ -108,7 +108,7 @@ static duckdb_aggregate_function CAPIGetAggregateFunction(duckdb_connection conn
 static void CAPIRegisterWeightedSum(duckdb_connection connection, const char *name, duckdb_state expected_outcome) {
 	duckdb_state status;
 
-	// create a scalar function
+	// create an aggregate function
 	auto function = CAPIGetAggregateFunction(connection, name);
 	// register and cleanup
 	status = duckdb_register_aggregate_function(connection, function);
@@ -158,7 +158,7 @@ static void CAPIRegisterWeightedSumExtraInfo(duckdb_connection connection, const
                                              duckdb_state expected_outcome) {
 	duckdb_state status;
 
-	// create a scalar function
+	// create an aggregate function
 	auto function = duckdb_create_aggregate_function();
 	duckdb_aggregate_function_set_name(function, name);
 
@@ -336,7 +336,7 @@ void RepeatedStringAggDestructor(duckdb_aggregate_state *states, idx_t count) {
 static void CAPIRegisterRepeatedStringAgg(duckdb_connection connection) {
 	duckdb_state status;
 
-	// create a scalar function
+	// create an aggregate function
 	auto function = duckdb_create_aggregate_function();
 	duckdb_aggregate_function_set_name(function, "repeated_string_agg");
 
@@ -401,12 +401,12 @@ static void CAPIRegisterWeightedSumOverloads(duckdb_connection connection, const
 	duckdb_state status;
 
 	auto function_set = duckdb_create_aggregate_function_set(name);
-	// create a scalar function with 2 parameters
+	// create an aggregate function with 2 parameters
 	auto function = CAPIGetAggregateFunction(connection, name, 1);
 	duckdb_add_aggregate_function_to_set(function_set, function);
 	duckdb_destroy_aggregate_function(&function);
 
-	// create a scalar function with 3 parameters
+	// create an aggregate function with 3 parameters
 	function = CAPIGetAggregateFunction(connection, name, 2);
 	duckdb_add_aggregate_function_to_set(function_set, function);
 	duckdb_destroy_aggregate_function(&function);

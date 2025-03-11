@@ -56,7 +56,7 @@ class RegisteredStateManager;
 struct PendingQueryParameters {
 	//! Prepared statement parameters (if any)
 	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
-	//! Whether or not a stream result should be allowed
+	//! Whether a stream result should be allowed
 	bool allow_stream_result = false;
 };
 
@@ -80,6 +80,8 @@ public:
 	atomic<bool> interrupted;
 	//! Set of optional states (e.g. Caches) that can be held by the ClientContext
 	unique_ptr<RegisteredStateManager> registered_state;
+	//! The logger to be used by this ClientContext
+	unique_ptr<Logger> logger;
 	//! The client configuration
 	ClientConfig config;
 	//! The set of client-specific data
@@ -114,16 +116,31 @@ public:
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
 	                                                       bool allow_stream_result);
 
+	//! Create a pending query with a list of parameters
+	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(unique_ptr<SQLStatement> statement,
+	                                                       case_insensitive_map_t<BoundParameterData> &values,
+	                                                       bool allow_stream_result);
+	DUCKDB_API unique_ptr<PendingQueryResult>
+	PendingQuery(const string &query, case_insensitive_map_t<BoundParameterData> &values, bool allow_stream_result);
+
 	//! Destroy the client context
 	DUCKDB_API void Destroy();
 
-	//! Get the table info of a specific table, or nullptr if it cannot be found
+	//! Get the table info of a specific table, or nullptr if it cannot be found.
+	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &database_name, const string &schema_name,
+	                                                  const string &table_name);
+	//! Get the table info of a specific table, or nullptr if it cannot be found. Uses INVALID_CATALOG.
 	DUCKDB_API unique_ptr<TableDescription> TableInfo(const string &schema_name, const string &table_name);
-	//! Appends a DataChunk to the specified table. Returns whether or not the append was successful.
-	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection);
+	//! Appends a DataChunk and its default columns to the specified table.
+	DUCKDB_API void Append(TableDescription &description, ColumnDataCollection &collection,
+	                       optional_ptr<const vector<LogicalIndex>> column_ids = nullptr);
+
 	//! Try to bind a relation in the current client context; either throws an exception or fills the result_columns
 	//! list with the set of returned columns
 	DUCKDB_API void TryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
+
+	//! Internal function for try bind relation. It does not require a client-context lock.
+	DUCKDB_API void InternalTryBindRelation(Relation &relation, vector<ColumnDefinition> &result_columns);
 
 	//! Execute a relation
 	DUCKDB_API unique_ptr<PendingQueryResult> PendingQuery(const shared_ptr<Relation> &relation,
@@ -184,13 +201,18 @@ public:
 	//! Returns the current executor
 	Executor &GetExecutor();
 
+	//! Return the current logger
+	Logger &GetLogger() const;
+
 	//! Returns the current query string (if any)
 	const string &GetCurrentQuery();
+
+	connection_t GetConnectionId() const;
 
 	//! Fetch a list of table names that are required for a given query
 	DUCKDB_API unordered_set<string> GetTableNames(const string &query);
 
-	DUCKDB_API ClientProperties GetClientProperties() const;
+	DUCKDB_API ClientProperties GetClientProperties();
 
 	//! Returns true if execution of the current query is finished
 	DUCKDB_API bool ExecutionIsFinished();
@@ -211,7 +233,8 @@ private:
 	vector<unique_ptr<SQLStatement>> ParseStatementsInternal(ClientContextLock &lock, const string &query);
 	//! Perform aggressive query verification of a SELECT statement. Only called when query_verification_enabled is
 	//! true.
-	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement);
+	ErrorData VerifyQuery(ClientContextLock &lock, const string &query, unique_ptr<SQLStatement> statement,
+	                      optional_ptr<case_insensitive_map_t<BoundParameterData>> values = nullptr);
 
 	void InitialCleanup(ClientContextLock &lock);
 	//! Internal clean up, does not lock. Caller must hold the context_lock.
@@ -239,6 +262,7 @@ private:
 	                                                        const PendingQueryParameters &parameters);
 	unique_ptr<QueryResult> RunStatementInternal(ClientContextLock &lock, const string &query,
 	                                             unique_ptr<SQLStatement> statement, bool allow_stream_result,
+	                                             optional_ptr<case_insensitive_map_t<BoundParameterData>> params,
 	                                             bool verify = true);
 	unique_ptr<PreparedStatement> PrepareInternal(ClientContextLock &lock, unique_ptr<SQLStatement> statement);
 	void LogQueryInternal(ClientContextLock &lock, const string &query);
@@ -283,6 +307,8 @@ private:
 	unique_ptr<ActiveQueryContext> active_query;
 	//! The current query progress
 	QueryProgress query_progress;
+	//! The connection corresponding to this client context
+	connection_t connection_id;
 };
 
 class ClientContextLock {

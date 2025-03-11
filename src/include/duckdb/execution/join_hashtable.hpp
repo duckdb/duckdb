@@ -82,6 +82,14 @@ public:
 		bool finished;
 		bool is_null;
 
+		// it records the RHS pointers for the result chunk
+		Vector rhs_pointers;
+		// it records the LHS sel vector for the result chunk
+		SelectionVector lhs_sel_vector;
+		// these two variable records the last match results
+		idx_t last_match_count;
+		SelectionVector last_sel_vector;
+
 		explicit ScanStructure(JoinHashTable &ht, TupleDataChunkState &key_state);
 		//! Get the next batch of data from the scan structure
 		void Next(DataChunk &keys, DataChunk &left, DataChunk &result);
@@ -114,33 +122,35 @@ public:
 
 		idx_t ScanInnerJoin(DataChunk &keys, SelectionVector &result_vector);
 
+		//! Update the data chunk compaction buffer
+		void UpdateCompactionBuffer(idx_t base_count, SelectionVector &result_vector, idx_t result_count);
+
 	public:
 		void AdvancePointers();
 		void AdvancePointers(const SelectionVector &sel, idx_t sel_count);
 		void GatherResult(Vector &result, const SelectionVector &result_vector, const SelectionVector &sel_vector,
 		                  const idx_t count, const idx_t col_idx);
 		void GatherResult(Vector &result, const SelectionVector &sel_vector, const idx_t count, const idx_t col_idx);
+		void GatherResult(Vector &result, const idx_t count, const idx_t col_idx);
 		idx_t ResolvePredicates(DataChunk &keys, SelectionVector &match_sel, SelectionVector *no_match_sel);
 	};
 
 public:
 	struct SharedState {
-
 		SharedState();
 
 		// The ptrs to the row to which a key should be inserted into during building
 		// or matched against during probing
 		Vector rhs_row_locations;
+		Vector salt_v;
 
 		SelectionVector salt_match_sel;
 		SelectionVector key_no_match_sel;
 	};
 
 	struct ProbeState : SharedState {
-
 		ProbeState();
 
-		Vector salt_v;
 		Vector ht_offsets_v;
 		Vector ht_offsets_dense_v;
 
@@ -167,8 +177,10 @@ public:
 	void Merge(JoinHashTable &other);
 	//! Combines the partitions in sink_collection into data_collection, as if it were not partitioned
 	void Unpartition();
+	//! Allocate the pointer table for the probe
+	void AllocatePointerTable();
 	//! Initialize the pointer table for the probe
-	void InitializePointerTable();
+	void InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to);
 	//! Finalize the build of the HT, constructing the actual hash table and making the HT ready for probing.
 	//! Finalize must be called before any call to Probe, and after Finalize is called Build should no longer be
 	//! ever called.
@@ -200,6 +212,7 @@ public:
 		return null_values_are_equal[col_idx];
 	}
 
+	ClientContext &context;
 	//! BufferManager
 	BufferManager &buffer_manager;
 	//! The join conditions
@@ -371,21 +384,22 @@ public:
 		return radix_bits;
 	}
 
-	idx_t GetPartitionStart() const {
-		return partition_start;
-	}
+	//! For a LOAD_FACTOR of 2.0, the HT is between 25% and 50% full
+	static constexpr double DEFAULT_LOAD_FACTOR = 2.0;
+	//! For a LOAD_FACTOR of 1.5, the HT is between 33% and 67% full
+	static constexpr double EXTERNAL_LOAD_FACTOR = 1.5;
 
-	idx_t GetPartitionEnd() const {
-		return partition_end;
-	}
+	double load_factor = DEFAULT_LOAD_FACTOR;
 
 	//! Capacity of the pointer table given the ht count
-	//! (minimum of 1024 to prevent collision chance for small HT's)
-	static idx_t PointerTableCapacity(idx_t count) {
-		return MaxValue<idx_t>(NextPowerOfTwo(count * 2), 1 << 10);
+	idx_t PointerTableCapacity(idx_t count) const {
+		static constexpr idx_t MINIMUM_CAPACITY = 16384;
+
+		const auto capacity = NextPowerOfTwo(LossyNumericCast<idx_t>(static_cast<double>(count) * load_factor));
+		return MaxValue<idx_t>(capacity, MINIMUM_CAPACITY);
 	}
 	//! Size of the pointer table (in bytes)
-	static idx_t PointerTableSize(idx_t count) {
+	idx_t PointerTableSize(idx_t count) const {
 		return PointerTableCapacity(count) * sizeof(data_ptr_t);
 	}
 
@@ -399,6 +413,12 @@ public:
 	//! Sets number of radix bits according to the max ht size
 	void SetRepartitionRadixBits(const idx_t max_ht_size, const idx_t max_partition_size,
 	                             const idx_t max_partition_count);
+	//! Initialized "current_partitions" and "completed_partitions"
+	void InitializePartitionMasks();
+	//! How many partitions are currently active
+	idx_t CurrentPartitionCount() const;
+	//! How many partitions are fully done
+	idx_t FinishedPartitionCount() const;
 	//! Partition this HT
 	void Repartition(JoinHashTable &global_ht);
 
@@ -407,17 +427,18 @@ public:
 	//! Build HT for the next partitioned probe round
 	bool PrepareExternalFinalize(const idx_t max_ht_size);
 	//! Probe whatever we can, sink the rest into a thread-local HT
-	void ProbeAndSpill(ScanStructure &scan_structure, DataChunk &keys, TupleDataChunkState &key_state,
-	                   ProbeState &probe_state, DataChunk &payload, ProbeSpill &probe_spill,
+	void ProbeAndSpill(ScanStructure &scan_structure, DataChunk &probe_keys, TupleDataChunkState &key_state,
+	                   ProbeState &probe_state, DataChunk &probe_chunk, ProbeSpill &probe_spill,
 	                   ProbeSpillLocalAppendState &spill_state, DataChunk &spill_chunk);
 
 private:
 	//! The current number of radix bits used to partition
 	idx_t radix_bits;
 
-	//! First and last partition of the current probe round
-	idx_t partition_start;
-	idx_t partition_end;
+	//! Bits set to 1 for currently active partitions
+	ValidityMask current_partitions;
+	//! Bits set to 1 for completed partitions
+	ValidityMask completed_partitions;
 };
 
 } // namespace duckdb

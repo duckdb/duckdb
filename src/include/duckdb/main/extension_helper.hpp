@@ -35,6 +35,7 @@ struct ExtensionAlias {
 struct ExtensionInitResult {
 	string filename;
 	string filebase;
+	ExtensionABIType abi_type = ExtensionABIType::UNKNOWN;
 
 	// The deserialized install from the `<ext>.duckdb_extension.info` file
 	unique_ptr<ExtensionInstallInfo> install_info;
@@ -76,6 +77,20 @@ struct ExtensionUpdateResult {
 	string installed_version;
 };
 
+struct ExtensionInstallOptions {
+	//! Install from a different repository that the default one
+	optional_ptr<ExtensionRepository> repository;
+	//! Install a specific version of the extension
+	string version;
+
+	//! Overwrite existing installation
+	bool force_install = false;
+	//! Use etags to avoid downloading unchanged extension files
+	bool use_etags = false;
+	//! Throw an error when installing an extension with a different origin than the one that is installed
+	bool throw_on_origin_mismatch = false;
+};
+
 class ExtensionHelper {
 public:
 	static void LoadAllExtensions(DuckDB &db);
@@ -84,15 +99,9 @@ public:
 
 	//! Install an extension
 	static unique_ptr<ExtensionInstallInfo> InstallExtension(ClientContext &context, const string &extension,
-	                                                         bool force_install,
-	                                                         optional_ptr<ExtensionRepository> repository = nullptr,
-	                                                         bool throw_on_origin_mismatch = false,
-	                                                         const string &version = "");
-	static unique_ptr<ExtensionInstallInfo> InstallExtension(DBConfig &config, FileSystem &fs, const string &extension,
-	                                                         bool force_install,
-	                                                         optional_ptr<ExtensionRepository> repository = nullptr,
-	                                                         bool throw_on_origin_mismatch = false,
-	                                                         const string &version = "");
+	                                                         ExtensionInstallOptions &options);
+	static unique_ptr<ExtensionInstallInfo> InstallExtension(DatabaseInstance &db, FileSystem &fs,
+	                                                         const string &extension, ExtensionInstallOptions &options);
 	//! Load an extension
 	static void LoadExternalExtension(ClientContext &context, const string &extension);
 	static void LoadExternalExtension(DatabaseInstance &db, FileSystem &fs, const string &extension);
@@ -112,15 +121,19 @@ public:
 
 	//! Get the extension directory base on the current config
 	static string ExtensionDirectory(ClientContext &context);
-	static string ExtensionDirectory(DBConfig &config, FileSystem &fs);
+	static string ExtensionDirectory(DatabaseInstance &db, FileSystem &fs);
+
+	// Get the extension directory path
+	static string GetExtensionDirectoryPath(ClientContext &context);
+	static string GetExtensionDirectoryPath(DatabaseInstance &db, FileSystem &fs);
 
 	static bool CheckExtensionSignature(FileHandle &handle, ParsedExtensionMetaData &parsed_metadata,
 	                                    const bool allow_community_extensions);
-	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata);
+	static ParsedExtensionMetaData ParseExtensionMetaData(const char *metadata) noexcept;
 	static ParsedExtensionMetaData ParseExtensionMetaData(FileHandle &handle);
 
 	//! Get the extension url template, containing placeholders for version, platform and extension name
-	static string ExtensionUrlTemplate(optional_ptr<const DBConfig> config, const ExtensionRepository &repository,
+	static string ExtensionUrlTemplate(optional_ptr<const DatabaseInstance> db, const ExtensionRepository &repository,
 	                                   const string &version);
 	//! Return the extension url template with the variables replaced
 	static string ExtensionFinalizeUrlTemplate(const string &url, const string &name);
@@ -165,6 +178,19 @@ public:
 		return result;
 	}
 
+	template <idx_t N>
+	static idx_t ArraySize(const ExtensionEntry (&entries)[N]) {
+		return N;
+	}
+
+	template <idx_t N>
+	static const ExtensionEntry *GetArrayEntry(const ExtensionEntry (&entries)[N], idx_t entry) {
+		if (entry >= N) {
+			return nullptr;
+		}
+		return entries + entry;
+	}
+
 	//! Lookup a name in an ExtensionEntry list
 	template <idx_t N>
 	static string FindExtensionInEntries(const string &name, const ExtensionEntry (&entries)[N]) {
@@ -202,7 +228,7 @@ public:
 	                                            const string &extension_name);
 	static string AddExtensionInstallHintToErrorMsg(ClientContext &context, const string &base_error,
 	                                                const string &extension_name);
-	static string AddExtensionInstallHintToErrorMsg(DBConfig &config, const string &base_error,
+	static string AddExtensionInstallHintToErrorMsg(DatabaseInstance &db, const string &base_error,
 	                                                const string &extension_name);
 
 	//! For tagged releases we use the tag, else we use the git commit hash
@@ -210,18 +236,20 @@ public:
 
 	static bool IsRelease(const string &version_tag);
 	static bool CreateSuggestions(const string &extension_name, string &message);
+	static string ExtensionInstallDocumentationLink(const string &extension_name);
 
 private:
-	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(
-	    DBConfig &config, FileSystem &fs, const string &local_path, const string &extension, bool force_install,
-	    bool throw_on_origin_mismatch, const string &version, optional_ptr<ExtensionRepository> repository,
-	    optional_ptr<HTTPLogger> http_logger = nullptr, optional_ptr<ClientContext> context = nullptr);
+	static unique_ptr<ExtensionInstallInfo> InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,
+	                                                                 const string &local_path, const string &extension,
+	                                                                 ExtensionInstallOptions &options,
+	                                                                 optional_ptr<HTTPLogger> http_logger = nullptr,
+	                                                                 optional_ptr<ClientContext> context = nullptr);
 	static const vector<string> PathComponents();
 	static string DefaultExtensionFolder(FileSystem &fs);
 	static bool AllowAutoInstall(const string &extension);
-	static ExtensionInitResult InitialLoad(DBConfig &config, FileSystem &fs, const string &extension);
-	static bool TryInitialLoad(DBConfig &config, FileSystem &fs, const string &extension, ExtensionInitResult &result,
-	                           string &error);
+	static ExtensionInitResult InitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension);
+	static bool TryInitialLoad(DatabaseInstance &db, FileSystem &fs, const string &extension,
+	                           ExtensionInitResult &result, string &error);
 	//! Version tags occur with and without 'v', tag in extension path is always with 'v'
 	static const string NormalizeVersionTag(const string &version_tag);
 

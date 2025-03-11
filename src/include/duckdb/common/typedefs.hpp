@@ -31,6 +31,9 @@ typedef uint32_t sel_t;
 //! Type used for transaction timestamps
 typedef idx_t transaction_t;
 
+//! Type used to identify connections
+typedef idx_t connection_t;
+
 //! Type used for column identifiers
 typedef idx_t column_t;
 //! Type used for storage (column) identifiers
@@ -63,7 +66,17 @@ const unsigned char *const_uchar_ptr_cast(const SRC *src) { // NOLINT: naming
 
 template <class SRC>
 uintptr_t CastPointerToValue(SRC *src) {
-	return uintptr_t(src);
+	return reinterpret_cast<uintptr_t>(src);
+}
+
+template <class SRC>
+uint64_t cast_pointer_to_uint64(SRC *src) {
+	return static_cast<uint64_t>(reinterpret_cast<uintptr_t>(src));
+}
+
+template <class SRC = data_t>
+SRC *cast_uint64_to_pointer(uint64_t value) {
+	return reinterpret_cast<SRC *>(static_cast<uintptr_t>(value));
 }
 
 } // namespace duckdb

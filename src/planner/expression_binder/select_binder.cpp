@@ -8,6 +8,15 @@ SelectBinder::SelectBinder(Binder &binder, ClientContext &context, BoundSelectNo
     : BaseSelectBinder(binder, context, node, info) {
 }
 
+unique_ptr<ParsedExpression> SelectBinder::GetSQLValueFunction(const string &column_name) {
+	auto alias_entry = node.bind_state.alias_map.find(column_name);
+	if (alias_entry != node.bind_state.alias_map.end()) {
+		// don't replace SQL value functions if they are in the alias map
+		return nullptr;
+	}
+	return ExpressionBinder::GetSQLValueFunction(column_name);
+}
+
 BindResult SelectBinder::BindColumnRef(unique_ptr<ParsedExpression> &expr_ptr, idx_t depth, bool root_expression) {
 	// first try to bind the column reference regularly
 	auto result = BaseSelectBinder::BindColumnRef(expr_ptr, depth, root_expression);

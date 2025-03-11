@@ -8,6 +8,7 @@ add_subdirectory(subquery)
 add_library_unity(
   duckdb_planner
   OBJECT
+  binding_alias.cpp
   bound_result_modifier.cpp
   bound_parameter_map.cpp
   collation_binding.cpp
@@ -22,7 +23,8 @@ add_library_unity(
   planner.cpp
   pragma_handler.cpp
   logical_operator_visitor.cpp
-  table_filter.cpp)
+  table_filter.cpp
+  table_filter_state.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_planner>
     PARENT_SCOPE)

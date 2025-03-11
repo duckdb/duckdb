@@ -50,7 +50,7 @@ MetadataHandle MetadataManager::AllocateHandle() {
 	return Pin(pointer);
 }
 
-MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
+MetadataHandle MetadataManager::Pin(const MetadataPointer &pointer) {
 	D_ASSERT(pointer.index < METADATA_BLOCK_COUNT);
 	auto &block = blocks[UnsafeNumericCast<int64_t>(pointer.block_index)];
 
@@ -61,27 +61,28 @@ MetadataHandle MetadataManager::Pin(MetadataPointer pointer) {
 	return handle;
 }
 
-void MetadataManager::ConvertToTransient(MetadataBlock &block) {
+void MetadataManager::ConvertToTransient(MetadataBlock &metadata_block) {
 	// pin the old block
-	auto old_buffer = buffer_manager.Pin(block.block);
+	auto old_buffer = buffer_manager.Pin(metadata_block.block);
 
 	// allocate a new transient block to replace it
-	shared_ptr<BlockHandle> new_block;
-	auto new_buffer = buffer_manager.Allocate(MemoryTag::METADATA, block_manager.GetBlockSize(), false, &new_block);
+	auto new_buffer = buffer_manager.Allocate(MemoryTag::METADATA, block_manager.GetBlockSize(), false);
+	auto new_block = new_buffer.GetBlockHandle();
 
 	// copy the data to the transient block
 	memcpy(new_buffer.Ptr(), old_buffer.Ptr(), block_manager.GetBlockSize());
-	block.block = std::move(new_block);
+	metadata_block.block = std::move(new_block);
 
 	// unregister the old block
-	block_manager.UnregisterBlock(block.block_id, false);
+	block_manager.UnregisterBlock(metadata_block.block_id);
 }
 
 block_id_t MetadataManager::AllocateNewBlock() {
 	auto new_block_id = GetNextBlockId();
 
 	MetadataBlock new_block;
-	auto handle = buffer_manager.Allocate(MemoryTag::METADATA, block_manager.GetBlockSize(), false, &new_block.block);
+	auto handle = buffer_manager.Allocate(MemoryTag::METADATA, block_manager.GetBlockSize(), false);
+	new_block.block = handle.GetBlockHandle();
 	new_block.block_id = new_block_id;
 	for (idx_t i = 0; i < METADATA_BLOCK_COUNT; i++) {
 		new_block.free_blocks.push_back(NumericCast<uint8_t>(METADATA_BLOCK_COUNT - i - 1));
@@ -110,7 +111,7 @@ void MetadataManager::AddAndRegisterBlock(MetadataBlock block) {
 	AddBlock(std::move(block), true);
 }
 
-MetaBlockPointer MetadataManager::GetDiskPointer(MetadataPointer pointer, uint32_t offset) {
+MetaBlockPointer MetadataManager::GetDiskPointer(const MetadataPointer &pointer, uint32_t offset) {
 	idx_t block_pointer = idx_t(pointer.block_index);
 	block_pointer |= idx_t(pointer.index) << 56ULL;
 	return MetaBlockPointer(block_pointer, offset);
@@ -184,7 +185,7 @@ void MetadataManager::Flush() {
 		D_ASSERT(kv.first == block.block_id);
 		if (block.block->BlockId() >= MAXIMUM_BLOCK) {
 			// temporary block - convert to persistent
-			block.block = block_manager.ConvertToPersistent(kv.first, std::move(block.block));
+			block.block = block_manager.ConvertToPersistent(kv.first, std::move(block.block), std::move(handle));
 		} else {
 			// already a persistent block - only need to write it
 			D_ASSERT(block.block->BlockId() == block.block_id);

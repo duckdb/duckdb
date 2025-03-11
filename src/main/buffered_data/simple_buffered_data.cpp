@@ -53,7 +53,9 @@ StreamExecutionResult SimpleBufferedData::ExecuteTaskInternal(StreamQueryResult 
 	if (!cc) {
 		return StreamExecutionResult::EXECUTION_CANCELLED;
 	}
-
+	if (!cc->IsActiveResult(context_lock, result)) {
+		return StreamExecutionResult::EXECUTION_CANCELLED;
+	}
 	if (BufferIsFull()) {
 		// The buffer isn't empty yet, just return
 		return StreamExecutionResult::CHUNK_READY;

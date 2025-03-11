@@ -1,6 +1,7 @@
 #include "duckdb/common/types/row/tuple_data_allocator.hpp"
 
 #include "duckdb/common/fast_mem.hpp"
+#include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/common/types/row/tuple_data_segment.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
@@ -11,7 +12,8 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataBlock::TupleDataBlock(BufferManager &buffer_manager, idx_t capacity_p) : capacity(capacity_p), size(0) {
-	buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false, &handle);
+	auto buffer_handle = buffer_manager.Allocate(MemoryTag::HASH_TABLE, capacity, false);
+	handle = buffer_handle.GetBlockHandle();
 }
 
 TupleDataBlock::TupleDataBlock(TupleDataBlock &&other) noexcept : capacity(0), size(0) {
@@ -35,21 +37,21 @@ TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
     : buffer_manager(allocator.buffer_manager), layout(allocator.layout.Copy()) {
 }
 
-void TupleDataAllocator::SetCanDestroy() {
+void TupleDataAllocator::SetDestroyBufferUponUnpin() {
 	for (auto &block : row_blocks) {
 		if (block.handle) {
-			block.handle->SetCanDestroy(true);
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 		}
 	}
 	for (auto &block : heap_blocks) {
 		if (block.handle) {
-			block.handle->SetCanDestroy(true);
+			block.handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 		}
 	}
 }
 
 TupleDataAllocator::~TupleDataAllocator() {
-	SetCanDestroy();
+	SetDestroyBufferUponUnpin();
 }
 
 BufferManager &TupleDataAllocator::GetBufferManager() {
@@ -70,6 +72,12 @@ idx_t TupleDataAllocator::RowBlockCount() const {
 
 idx_t TupleDataAllocator::HeapBlockCount() const {
 	return heap_blocks.size();
+}
+
+void TupleDataAllocator::SetPartitionIndex(const idx_t index) {
+	D_ASSERT(!partition_index.IsValid());
+	D_ASSERT(row_blocks.empty() && heap_blocks.empty());
+	partition_index = index;
 }
 
 void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin_state,
@@ -141,6 +149,9 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 	// Allocate row block (if needed)
 	if (row_blocks.empty() || row_blocks.back().RemainingCapacity() < layout.GetRowWidth()) {
 		row_blocks.emplace_back(buffer_manager, block_size);
+		if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
+			row_blocks.back().handle->SetEvictionQueueIndex(RadixPartitioning::RadixBits(partition_index.GetIndex()));
+		}
 	}
 	result.row_block_index = NumericCast<uint32_t>(row_blocks.size() - 1);
 	auto &row_block = row_blocks[result.row_block_index];
@@ -187,6 +198,10 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 				if (heap_blocks.empty() || heap_blocks.back().RemainingCapacity() < heap_sizes[append_offset]) {
 					const auto size = MaxValue<idx_t>(block_size, heap_sizes[append_offset]);
 					heap_blocks.emplace_back(buffer_manager, size);
+					if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits
+						heap_blocks.back().handle->SetEvictionQueueIndex(
+						    RadixPartitioning::RadixBits(partition_index.GetIndex()));
+					}
 				}
 				result.heap_block_index = NumericCast<uint32_t>(heap_blocks.size() - 1);
 				auto &heap_block = heap_blocks[result.heap_block_index];
@@ -314,9 +329,9 @@ void TupleDataAllocator::InitializeChunkStateInternal(TupleDataPinState &pin_sta
 	D_ASSERT(offset <= STANDARD_VECTOR_SIZE);
 }
 
-static inline void VerifyStrings(const LogicalTypeId type_id, const data_ptr_t row_locations[], const idx_t col_idx,
-                                 const idx_t base_col_offset, const idx_t col_offset, const idx_t offset,
-                                 const idx_t count) {
+static inline void VerifyStrings(const TupleDataLayout &layout, const LogicalTypeId type_id,
+                                 const data_ptr_t row_locations[], const idx_t col_idx, const idx_t base_col_offset,
+                                 const idx_t col_offset, const idx_t offset, const idx_t count) {
 #ifdef DEBUG
 	if (type_id != LogicalTypeId::VARCHAR) {
 		// Make sure we don't verify BLOB / AGGREGATE_STATE
@@ -327,7 +342,7 @@ static inline void VerifyStrings(const LogicalTypeId type_id, const data_ptr_t r
 	ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &row_location = row_locations[offset + i] + base_col_offset;
-		ValidityBytes row_mask(row_location);
+		ValidityBytes row_mask(row_location, layout.ColumnCount());
 		if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
 			auto recomputed_string = Load<string_t>(row_location + col_offset);
 			recomputed_string.Verify();
@@ -361,7 +376,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = offset + i;
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				ValidityBytes row_mask(row_location);
+				ValidityBytes row_mask(row_location, layout.ColumnCount());
 				if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
 					continue;
 				}
@@ -378,7 +393,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 					Store<data_ptr_t>(new_heap_ptr + diff, string_ptr_location);
 				}
 			}
-			VerifyStrings(type.id(), row_locations, col_idx, base_col_offset, col_offset, offset, count);
+			VerifyStrings(layout, type.id(), row_locations, col_idx, base_col_offset, col_offset, offset, count);
 			break;
 		}
 		case PhysicalType::LIST:
@@ -386,7 +401,7 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 			for (idx_t i = 0; i < count; i++) {
 				const auto idx = offset + i;
 				const auto &row_location = row_locations[idx] + base_col_offset;
-				ValidityBytes row_mask(row_location);
+				ValidityBytes row_mask(row_location, layout.ColumnCount());
 				if (!row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
 					continue;
 				}
@@ -459,7 +474,7 @@ void TupleDataAllocator::ReleaseOrStoreHandlesInternal(
 				break;
 			case TupleDataPinProperties::DESTROY_AFTER_DONE:
 				// Prevent it from being added to the eviction queue
-				blocks[block_id].handle->SetCanDestroy(true);
+				blocks[block_id].handle->SetDestroyBufferUpon(DestroyBufferUpon::UNPIN);
 				// Destroy
 				blocks[block_id].handle.reset();
 				break;

@@ -1,10 +1,10 @@
 #include "duckdb/main/capi/capi_internal.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 
-using duckdb::DatabaseData;
+using duckdb::DatabaseWrapper;
 
 struct CAPITaskState {
-	CAPITaskState(duckdb::DatabaseInstance &db)
+	explicit CAPITaskState(duckdb::DatabaseInstance &db)
 	    : db(db), marker(duckdb::make_uniq<duckdb::atomic<bool>>(true)), execute_count(0) {
 	}
 
@@ -17,7 +17,7 @@ void duckdb_execute_tasks(duckdb_database database, idx_t max_tasks) {
 	if (!database) {
 		return;
 	}
-	auto wrapper = (DatabaseData *)database;
+	auto wrapper = reinterpret_cast<DatabaseWrapper *>(database);
 	auto &scheduler = duckdb::TaskScheduler::GetScheduler(*wrapper->database->instance);
 	scheduler.ExecuteTasks(max_tasks);
 }
@@ -26,7 +26,7 @@ duckdb_task_state duckdb_create_task_state(duckdb_database database) {
 	if (!database) {
 		return nullptr;
 	}
-	auto wrapper = (DatabaseData *)database;
+	auto wrapper = reinterpret_cast<DatabaseWrapper *>(database);
 	auto state = new CAPITaskState(*wrapper->database->instance);
 	return state;
 }

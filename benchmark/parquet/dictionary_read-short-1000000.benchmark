@@ -1,0 +1,7 @@
+# name: benchmark/parquet/dictionary_read-short-1000000.benchmark
+# description: Read dictionary-encoded data from Parquet, 1000000 unique short strings, 10% NULLs
+# group: [parquet]
+
+template benchmark/parquet/dictionary_read.benchmark.in
+UNIQUE_COUNT=1000000
+PREFIX=''

@@ -3,6 +3,69 @@
     "deprecated": false,
     "entries": [
         {
+            "name": "duckdb_create_instance_cache",
+            "return_type": "duckdb_instance_cache",
+            "params": [],
+            "comment": {
+                "description": "Creates a new database instance cache.\nThe instance cache is necessary if a client/program (re)opens multiple databases to the same file within the same process.\nMust be destroyed with 'duckdb_destroy_instance_cache'.\n\n",
+                "param_comments": {},
+                "return_value": "The database instance cache."
+            }
+        },
+        {
+            "name": "duckdb_get_or_create_from_cache",
+            "return_type": "duckdb_state",
+            "params": [
+                {
+                    "type": "duckdb_instance_cache",
+                    "name": "instance_cache"
+                },
+                {
+                    "type": "const char *",
+                    "name": "path"
+                },
+                {
+                    "type": "duckdb_database *",
+                    "name": "out_database"
+                },
+                {
+                    "type": "duckdb_config",
+                    "name": "config"
+                },
+                {
+                    "type": "char **",
+                    "name": "out_error"
+                }
+            ],
+            "comment": {
+                "description": "Creates a new database instance in the instance cache, or retrieves an existing database instance.\nMust be closed with 'duckdb_close'.\n\n",
+                "param_comments": {
+                    "instance_cache": "The instance cache in which to create the database, or from which to take the database.",
+                    "path": "Path to the database file on disk. Both `nullptr` and `:memory:` open or retrieve an in-memory database.",
+                    "out_database": "The resulting cached database.",
+                    "config": "(Optional) configuration used to create the database.",
+                    "out_error": "If set and the function returns `DuckDBError`, this contains the error message.\nNote that the error message must be freed using `duckdb_free`."
+                },
+                "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
+            }
+        },
+        {
+            "name": "duckdb_destroy_instance_cache",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_instance_cache *",
+                    "name": "instance_cache"
+                }
+            ],
+            "comment": {
+                "description": "Destroys an existing database instance cache and de-allocates its memory.\n\n",
+                "param_comments": {
+                    "instance_cache": "The instance cache to destroy."
+                }
+            }
+        },
+        {
             "name": "duckdb_open",
             "return_type": "duckdb_state",
             "params": [
@@ -16,9 +79,9 @@
                 }
             ],
             "comment": {
-                "description": "Creates a new database or opens an existing database file stored at the given path.\nIf no path is given a new in-memory database is created instead.\nThe instantiated database should be closed with 'duckdb_close'.\n\n",
+                "description": "Creates a new database or opens an existing database file stored at the given path.\nIf no path is given a new in-memory database is created instead.\nThe database must be closed with 'duckdb_close'.\n\n",
                 "param_comments": {
-                    "path": "Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.",
+                    "path": "Path to the database file on disk. Both `nullptr` and `:memory:` open an in-memory database.",
                     "out_database": "The result database object."
                 },
                 "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
@@ -46,12 +109,12 @@
                 }
             ],
             "comment": {
-                "description": "Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the given path.\nThe instantiated database should be closed with 'duckdb_close'.\n\n",
+                "description": "Extended version of duckdb_open. Creates a new database or opens an existing database file stored at the given path.\nThe database must be closed with 'duckdb_close'.\n\n",
                 "param_comments": {
-                    "path": "Path to the database file on disk, or `nullptr` or `:memory:` to open an in-memory database.",
+                    "path": "Path to the database file on disk. Both `nullptr` and `:memory:` open an in-memory database.",
                     "out_database": "The result database object.",
-                    "config": "(Optional) configuration used to start up the database system.",
-                    "out_error": "If set and the function returns DuckDBError, this will contain the reason why the start-up failed.\nNote that the error must be freed using `duckdb_free`."
+                    "config": "(Optional) configuration used to start up the database.",
+                    "out_error": "If set and the function returns `DuckDBError`, this contains the error message.\nNote that the error message must be freed using `duckdb_free`."
                 },
                 "return_value": "`DuckDBSuccess` on success or `DuckDBError` on failure."
             }

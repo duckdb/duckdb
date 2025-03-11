@@ -1,4 +1,5 @@
 #include "duckdb/planner/filter/conjunction_filter.hpp"
+
 #include "duckdb/planner/expression/bound_conjunction_expression.hpp"
 
 namespace duckdb {
@@ -20,7 +21,7 @@ FilterPropagateResult ConjunctionOrFilter::CheckStatistics(BaseStatistics &stats
 	return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 }
 
-string ConjunctionOrFilter::ToString(const string &column_name) {
+string ConjunctionOrFilter::ToString(const string &column_name) const {
 	string result;
 	for (idx_t i = 0; i < child_filters.size(); i++) {
 		if (i > 0) {
@@ -81,7 +82,7 @@ FilterPropagateResult ConjunctionAndFilter::CheckStatistics(BaseStatistics &stat
 	return result;
 }
 
-string ConjunctionAndFilter::ToString(const string &column_name) {
+string ConjunctionAndFilter::ToString(const string &column_name) const {
 	string result;
 	for (idx_t i = 0; i < child_filters.size(); i++) {
 		if (i > 0) {

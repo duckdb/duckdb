@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/table/list_column_data.hpp
+// duckdb/storage/table/array_column_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -21,7 +21,7 @@ public:
 
 	//! The child-column of the list
 	unique_ptr<ColumnData> child_column;
-	//! The validity column data of the struct
+	//! The validity column data of the array
 	ValidityColumnData validity;
 
 public:
@@ -36,8 +36,10 @@ public:
 	           idx_t scan_count) override;
 	idx_t ScanCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, bool allow_updates,
 	                    idx_t scan_count) override;
-	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count) override;
+	idx_t ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset = 0) override;
 
+	void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+	            SelectionVector &sel, idx_t sel_count) override;
 	void Skip(ColumnScanState &state, idx_t count = STANDARD_VECTOR_SIZE) override;
 
 	void InitializeAppend(ColumnAppendState &state) override;

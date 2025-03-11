@@ -1,7 +1,6 @@
 #include "duckdb/common/types/cast_helpers.hpp"
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
-#include "duckdb/common/types/value.hpp"
 
 #include "utf8proc.hpp"
 
@@ -18,8 +17,8 @@ static string GenerateColumnName(const idx_t total_cols, const idx_t col_number,
 // Helper function for UTF-8 aware space trimming
 static string TrimWhitespace(const string &col_name) {
 	utf8proc_int32_t codepoint;
-	auto str = reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str());
-	idx_t size = col_name.size();
+	const auto str = reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str());
+	const idx_t size = col_name.size();
 	// Find the first character that is not left trimmed
 	idx_t begin = 0;
 	while (begin < size) {
@@ -32,8 +31,7 @@ static string TrimWhitespace(const string &col_name) {
 	}
 
 	// Find the last character that is not right trimmed
-	idx_t end;
-	end = begin;
+	idx_t end = begin;
 	for (auto next = begin; next < col_name.size();) {
 		auto bytes = utf8proc_iterate(str + next, NumericCast<utf8proc_ssize_t>(size - next), &codepoint);
 		D_ASSERT(bytes > 0);
@@ -90,18 +88,63 @@ static string NormalizeColumnName(const string &col_name) {
 	}
 
 	// prepend _ if name starts with a digit or is a reserved keyword
-	if (KeywordHelper::IsKeyword(col_name_cleaned) || (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
+	auto keyword = KeywordHelper::KeywordCategoryType(col_name_cleaned);
+	if (keyword == KeywordCategory::KEYWORD_TYPE_FUNC || keyword == KeywordCategory::KEYWORD_RESERVED ||
+	    (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
 		col_name_cleaned = "_" + col_name_cleaned;
 	}
 	return col_name_cleaned;
 }
 
+static void ReplaceNames(vector<string> &detected_names, CSVStateMachine &state_machine,
+                         unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
+                         CSVReaderOptions &options, const MultiFileReaderOptions &file_options,
+                         const vector<HeaderValue> &best_header_row, CSVErrorHandler &error_handler) {
+	auto &dialect_options = state_machine.dialect_options;
+	if (!options.columns_set) {
+		if (file_options.hive_partitioning || file_options.union_by_name || options.multi_file_reader) {
+			// Just do the replacement
+			for (idx_t i = 0; i < MinValue<idx_t>(detected_names.size(), options.name_list.size()); i++) {
+				detected_names[i] = options.name_list[i];
+			}
+			return;
+		}
+		if (options.name_list.size() > dialect_options.num_cols) {
+			if (options.null_padding) {
+				// we increase our types
+				idx_t col = 0;
+				for (idx_t i = dialect_options.num_cols; i < options.name_list.size(); i++) {
+					detected_names.push_back(GenerateColumnName(options.name_list.size(), col++));
+					best_sql_types_candidates_per_column_idx[i] = {LogicalType::VARCHAR};
+				}
+				dialect_options.num_cols = options.name_list.size();
+			} else {
+				// we throw an error
+				const auto error = CSVError::HeaderSniffingError(
+				    options, best_header_row, options.name_list.size(),
+				    state_machine.dialect_options.state_machine_options.delimiter.GetValue());
+				error_handler.Error(error);
+			}
+		}
+		if (options.name_list.size() > detected_names.size()) {
+			// we throw an error
+			const auto error =
+			    CSVError::HeaderSniffingError(options, best_header_row, options.name_list.size(),
+			                                  state_machine.dialect_options.state_machine_options.delimiter.GetValue());
+			error_handler.Error(error);
+		} else {
+			for (idx_t i = 0; i < options.name_list.size(); i++) {
+				detected_names[i] = options.name_list[i];
+			}
+		}
+	}
+}
+
 // If our columns were set by the user, we verify if their names match with the first row
 bool CSVSniffer::DetectHeaderWithSetColumn(ClientContext &context, vector<HeaderValue> &best_header_row,
-                                           SetColumns &set_columns, CSVReaderOptions &options) {
+                                           const SetColumns &set_columns, CSVReaderOptions &options) {
 	bool has_header = true;
-	bool all_varchar = true;
-	bool first_row_consistent = true;
+
 	std::ostringstream error;
 	// User set the names, we must check if they match the first row
 	// We do a +1 to check for situations where the csv file has an extra all null column
@@ -115,9 +158,9 @@ bool CSVSniffer::DetectHeaderWithSetColumn(ClientContext &context, vector<Header
 			return false;
 		}
 		if (best_header_row[i].value != (*set_columns.names)[i]) {
-			error << "Header Mismatch at position:" << i << "\n";
-			error << "Expected Name: \"" << (*set_columns.names)[i] << "\".";
-			error << "Actual Name: \"" << best_header_row[i].value << "\"."
+			error << "Header mismatch at position: " << i << "\n";
+			error << "Expected name: \"" << (*set_columns.names)[i] << "\", ";
+			error << "Actual name: \"" << best_header_row[i].value << "\"."
 			      << "\n";
 			has_header = false;
 			break;
@@ -125,6 +168,8 @@ bool CSVSniffer::DetectHeaderWithSetColumn(ClientContext &context, vector<Header
 	}
 
 	if (!has_header) {
+		bool all_varchar = true;
+		bool first_row_consistent = true;
 		// We verify if the types are consistent
 		for (idx_t col = 0; col < set_columns.Size(); col++) {
 			// try cast to sql_type of column
@@ -166,44 +211,51 @@ bool EmptyHeader(const string &col_name, bool is_null, bool normalize) {
 	return true;
 }
 
-vector<string>
-CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row,
-                                 CSVStateMachine &state_machine, SetColumns &set_columns,
-                                 unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-                                 CSVReaderOptions &options, CSVErrorHandler &error_handler) {
+vector<string> CSVSniffer::DetectHeaderInternal(
+    ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
+    const SetColumns &set_columns, unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
+    CSVReaderOptions &options, const MultiFileReaderOptions &file_options, CSVErrorHandler &error_handler) {
 	vector<string> detected_names;
 	auto &dialect_options = state_machine.dialect_options;
+	dialect_options.num_cols = best_sql_types_candidates_per_column_idx.size();
 	if (best_header_row.empty()) {
 		dialect_options.header = false;
 		for (idx_t col = 0; col < dialect_options.num_cols; col++) {
 			detected_names.push_back(GenerateColumnName(dialect_options.num_cols, col));
 		}
 		// If the user provided names, we must replace our header with the user provided names
-		if (!options.columns_set) {
-			for (idx_t i = 0; i < MinValue<idx_t>(best_header_row.size(), options.name_list.size()); i++) {
-				detected_names[i] = options.name_list[i];
-			}
-		}
+		ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options, file_options,
+		             best_header_row, error_handler);
 		return detected_names;
 	}
 	// information for header detection
-	bool first_row_consistent = true;
 	// check if header row is all null and/or consistent with detected column data types
-	bool first_row_nulls = true;
 	// If null-padding is not allowed and there is a mismatch between our header candidate and the number of columns
 	// We can't detect the dialect/type options properly
 	if (!options.null_padding && best_sql_types_candidates_per_column_idx.size() != best_header_row.size()) {
+		if (options.ignore_errors.GetValue()) {
+			dialect_options.header = false;
+			for (idx_t col = 0; col < dialect_options.num_cols; col++) {
+				detected_names.push_back(GenerateColumnName(dialect_options.num_cols, col));
+			}
+			dialect_options.rows_until_header += 1;
+			ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options, file_options,
+			             best_header_row, error_handler);
+			return detected_names;
+		}
 		auto error =
 		    CSVError::HeaderSniffingError(options, best_header_row, best_sql_types_candidates_per_column_idx.size(),
 		                                  state_machine.dialect_options.state_machine_options.delimiter.GetValue());
 		error_handler.Error(error);
 	}
-	bool all_varchar = true;
 	bool has_header;
 
 	if (set_columns.IsSet()) {
 		has_header = DetectHeaderWithSetColumn(context, best_header_row, set_columns, options);
 	} else {
+		bool first_row_consistent = true;
+		bool all_varchar = true;
+		bool first_row_nulls = true;
 		for (idx_t col = 0; col < best_header_row.size(); col++) {
 			if (!best_header_row[col].IsNull()) {
 				first_row_nulls = false;
@@ -280,16 +332,24 @@ CSVSniffer::DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &be
 	}
 
 	// If the user provided names, we must replace our header with the user provided names
-	if (!options.columns_set) {
-		for (idx_t i = 0; i < MinValue<idx_t>(detected_names.size(), options.name_list.size()); i++) {
-			detected_names[i] = options.name_list[i];
-		}
-	}
+	ReplaceNames(detected_names, state_machine, best_sql_types_candidates_per_column_idx, options, file_options,
+	             best_header_row, error_handler);
 	return detected_names;
 }
 void CSVSniffer::DetectHeader() {
 	auto &sniffer_state_machine = best_candidate->GetStateMachine();
 	names = DetectHeaderInternal(buffer_manager->context, best_header_row, sniffer_state_machine, set_columns,
-	                             best_sql_types_candidates_per_column_idx, options, *error_handler);
+	                             best_sql_types_candidates_per_column_idx, options, file_options, *error_handler);
+	if (EmptyOrOnlyHeader()) {
+		// This file only contains a header, lets default to the lowest type of all.
+		detected_types.clear();
+		for (idx_t i = 0; i < names.size(); i++) {
+			detected_types.push_back(LogicalType::BOOLEAN);
+		}
+	}
+	for (idx_t i = max_columns_found; i < names.size(); i++) {
+		detected_types.push_back(LogicalType::VARCHAR);
+	}
+	max_columns_found = names.size();
 }
 } // namespace duckdb

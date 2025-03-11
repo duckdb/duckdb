@@ -1,5 +1,6 @@
 import duckdb
 import pytest
+import sys
 
 pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")
@@ -29,6 +30,10 @@ class TestPolars(object):
         con_result = con.execute('SELECT * FROM df').pl()
         pl_testing.assert_frame_equal(df, con_result)
 
+    def test_execute_polars(self, duckdb_cursor):
+        res1 = duckdb_cursor.execute("SELECT 1 AS a, 2 AS a").pl()
+        assert res1.columns == ['a', 'a_1']
+
     def test_register_polars(self, duckdb_cursor):
         con = duckdb.connect()
         df = pl.DataFrame(
@@ -57,3 +62,28 @@ class TestPolars(object):
             duckdb.InvalidInputException, match='Provided table/dataframe must have at least one column'
         ):
             duckdb_cursor.sql("from polars_empty_df")
+
+    def test_polars_from_json(self, duckdb_cursor):
+        from io import StringIO
+
+        duckdb_cursor.sql("set arrow_lossless_conversion=false")
+        string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
+        res = duckdb_cursor.read_json(string).pl()
+        assert str(res['entry'][0][0]) == "{'content': {'ManagedSystem': {'test': None}}}"
+
+    @pytest.mark.skipif(
+        not hasattr(pl.exceptions, "PanicException"), reason="Polars has no PanicException in this version"
+    )
+    def test_polars_from_json_error(self, duckdb_cursor):
+        from io import StringIO
+
+        duckdb_cursor.sql("set arrow_lossless_conversion=true")
+        string = StringIO("""{"entry":[{"content":{"ManagedSystem":{"test":null}}}]}""")
+        res = duckdb_cursor.read_json(string).pl()
+        assert duckdb_cursor.execute("FROM res").fetchall() == [([{'content': {'ManagedSystem': {'test': None}}}],)]
+
+    def test_polars_from_json_error(self, duckdb_cursor):
+        conn = duckdb.connect()
+        my_table = conn.query("select 'x' my_str").pl()
+        my_res = duckdb.query("select my_str from my_table where my_str != 'y'")
+        assert my_res.fetchall() == [('x',)]

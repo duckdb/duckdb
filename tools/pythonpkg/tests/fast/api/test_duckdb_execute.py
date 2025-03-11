@@ -74,3 +74,14 @@ class TestDuckDBExecute(object):
         duckdb_cursor.execute("CREATE TABLE unittest_generator (a INTEGER);")
         duckdb_cursor.executemany("INSERT into unittest_generator (a) VALUES (?)", gen)
         assert duckdb_cursor.table('unittest_generator').fetchall() == [(1,), (2,), (3,)]
+
+    def test_execute_multiple_statements(self, duckdb_cursor):
+        pd = pytest.importorskip("pandas")
+        df = pd.DataFrame({'a': [5, 6, 7, 8]})
+        sql = """
+            select * from df;
+            select * from VALUES (1),(2),(3),(4) t(a);
+        """
+        duckdb_cursor.execute(sql)
+        res = duckdb_cursor.fetchall()
+        assert res == [(1,), (2,), (3,), (4,)]

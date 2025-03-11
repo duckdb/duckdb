@@ -60,7 +60,7 @@ unique_ptr<ParsedExpression> Transformer::TransformArrayAccess(duckdb_libpgquery
 		case duckdb_libpgquery::T_PGFuncCall: {
 			auto func = PGCast<duckdb_libpgquery::PGFuncCall>(*target.get());
 			auto function = TransformFuncCall(func);
-			if (function->type != ExpressionType::FUNCTION) {
+			if (function->GetExpressionType() != ExpressionType::FUNCTION) {
 				throw ParserException("%s.%s() call must be a function", result->ToString(), function->ToString());
 			}
 			auto &function_expr = function->Cast<FunctionExpression>();

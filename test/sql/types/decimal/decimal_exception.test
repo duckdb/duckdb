@@ -1,0 +1,69 @@
+# name: test/sql/types/decimal/decimal_exception.test
+# description: Test casting to decimal, if it does not fit it should throw
+# group: [decimal]
+
+statement ok
+PRAGMA enable_verification
+
+statement error
+select cast('9.99' as decimal(1,0));
+----
+Could not convert string "9.99" to DECIMAL(1,0)
+
+statement error
+select cast(9.99::float as decimal(1,0));
+----
+Could not cast value
+
+statement error
+select cast(9.99::double as decimal(1,0));
+----
+Could not cast value
+
+statement error
+select cast(9.99 as decimal(1,0));
+----
+Casting value "9.99" to type DECIMAL(1,0) failed: value is out of range!
+
+query I
+select cast(9.49 as decimal(1,0));
+----
+9
+
+statement error
+select cast(9.5 as decimal(1,0));
+----
+Casting value "9.5" to type DECIMAL(1,0) failed: value is out of range!
+
+
+statement error
+select cast(-9.99 as decimal(1,0));
+----
+Casting value "-9.99" to type DECIMAL(1,0) failed: value is out of range!
+
+statement error
+select cast(-9.5 as decimal(1,0));
+----
+Casting value "-9.5" to type DECIMAL(1,0) failed: value is out of range!
+
+query I
+select cast(-9.01 as decimal(1,0));
+----
+-9
+
+# Test lots of decimal cases
+statement error
+select cast(-9.999999999 as decimal(1,0));
+----
+Casting value "-9.999999999" to type DECIMAL(1,0) failed: value is out of range!
+
+# Test hugeint values
+statement error
+select cast(9.9999999999999999999999999999999 as decimal(1,0));
+----
+Casting value "9.9999999999999999999999999999999" to type DECIMAL(1,0) failed: value is out of range!
+
+statement error
+select cast(-9.9999999999999999999999999999999 as decimal(1,0));
+----
+Casting value "-9.9999999999999999999999999999999" to type DECIMAL(1,0) failed: value is out of range!

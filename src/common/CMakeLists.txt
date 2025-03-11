@@ -46,15 +46,18 @@ add_library_unity(
   fsst.cpp
   gzip_file_system.cpp
   hive_partitioning.cpp
+  http_util.cpp
   pipe_file_system.cpp
   local_file_system.cpp
   multi_file_list.cpp
   multi_file_reader.cpp
   error_data.cpp
+  opener_file_system.cpp
   printer.cpp
   radix_partitioning.cpp
   re2_regex.cpp
   random_engine.cpp
+  stacktrace.cpp
   string_util.cpp
   enum_util.cpp
   symbols.cpp

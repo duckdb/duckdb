@@ -1,0 +1,30 @@
+CopyStatement <- 'COPY'i (CopyTable / CopySelect / CopyFromDatabase)
+
+CopyTable <- BaseTableName InsertColumnList? FromOrTo CopyFileName CopyOptions?
+FromOrTo <- 'FROM'i / 'TO'i
+
+CopySelect <- Parens(SelectStatement) 'TO'i CopyFileName CopyOptions?
+
+CopyFileName <- StringLiteral / Identifier
+CopyOptions <- 'WITH'i? (Parens(GenericCopyOptionList) / (SpecializedOptions*))
+SpecializedOptions <-
+	'BINARY'i / 'FREEZE'i / 'OIDS'i / 'CSV'i / 'HEADER'i /
+	SpecializedStringOption /
+	('ENCODING'i StringLiteral) /
+	('FORCE'i 'QUOTE'i StarOrColumnList) /
+	('PARTITION'i 'BY'i StarOrColumnList) /
+	('FORCE'i 'NOT'i? 'NULL'i ColumnList)
+
+SpecializedStringOption <- ('DELIMITER'i / 'NULL'i / 'QUOTE'i / 'ESCAPE'i) 'AS'i? StringLiteral
+
+StarOrColumnList <- '*' / ColumnList
+
+GenericCopyOptionList <- List(GenericCopyOption)
+GenericCopyOption <- GenericCopyOptionName Expression?
+# FIXME: should not need to hard-code options here
+GenericCopyOptionName <- 'ARRAY'i / 'NULL'i / 'ANALYZE'i / CopyOptionName
+
+CopyFromDatabase <- 'FROM'i 'DATABASE'i Identifier 'TO'i Identifier CopyDatabaseFlag?
+
+CopyDatabaseFlag <- Parens(SchemaOrData)
+SchemaOrData <- 'SCHEMA'i / 'DATA'i

@@ -8,6 +8,8 @@ pa = pytest.importorskip("pyarrow")
 def is_dunder_method(method_name: str) -> bool:
     if len(method_name) < 4:
         return False
+    if method_name.startswith('_pybind11'):
+        return True
     return method_name[:2] == '__' and method_name[:-3:-1] == '__'
 
 
@@ -153,7 +155,10 @@ class TestDuckDBConnection(object):
         assert duckdb.query(statements[1]).fetchall() == [(21,)]
         assert duckdb.execute(statements[1]).fetchall() == [(21,)]
 
-        with pytest.raises(duckdb.InvalidInputException, match='Expected 1 parameters, but none were supplied'):
+        with pytest.raises(
+            duckdb.InvalidInputException,
+            match='Values were not provided for the following prepared statement parameters: 1',
+        ):
             duckdb.execute(statements[0])
         assert duckdb.execute(statements[0], {'1': 42}).fetchall() == [(42,)]
 
@@ -264,15 +269,6 @@ class TestDuckDBConnection(object):
 
     def test_from_query(self):
         assert None != duckdb.from_query
-
-    def test_from_substrait(self):
-        assert None != duckdb.from_substrait
-
-    def test_get_substrait(self):
-        assert None != duckdb.get_substrait
-
-    def test_get_substrait_json(self):
-        assert None != duckdb.get_substrait_json
 
     def test_get_table_names(self):
         assert None != duckdb.get_table_names

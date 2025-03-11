@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/main/query_result.hpp"
 #include "duckdb/common/enums/statement_type.hpp"
 
 namespace duckdb {

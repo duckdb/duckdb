@@ -2,7 +2,6 @@
 # description: Test storage of structs with lists in it
 # group: [nested]
 
-# load the DB from disk
 load __TEST_DIR__/test_store_list_of_structs.db
 
 statement ok

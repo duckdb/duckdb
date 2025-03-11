@@ -131,7 +131,7 @@ an explicit cast is required
 query I
 SELECT list_transform([[1], [4], NULL, [1], [8]], x -> list_concat(list_transform(x, y -> CASE WHEN y > 1 THEN 'yay' ELSE 'nay' END), x::VARCHAR[]))
 ----
-[[nay, 1], [yay, 4], NULL, [nay, 1], [yay, 8]]
+[[nay, 1], [yay, 4], [], [nay, 1], [yay, 8]]
 
 # test aliases
 

@@ -6,8 +6,9 @@
 
 namespace duckdb {
 
-PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, const py::object &handle)
-    : FileHandle(file_system, path), handle(handle) {
+PythonFileHandle::PythonFileHandle(FileSystem &file_system, const string &path, const py::object &handle,
+                                   FileOpenFlags flags)
+    : FileHandle(file_system, path, flags), handle(handle) {
 }
 PythonFileHandle::~PythonFileHandle() {
 	try {
@@ -84,7 +85,7 @@ unique_ptr<FileHandle> PythonFilesystem::OpenFile(const string &path, FileOpenFl
 	string flags_s = DecodeFlags(flags);
 
 	const auto &handle = filesystem.attr("open")(path, py::str(flags_s));
-	return make_uniq<PythonFileHandle>(*this, path, handle);
+	return make_uniq<PythonFileHandle>(*this, path, handle, flags);
 }
 
 int64_t PythonFilesystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -146,12 +147,14 @@ string PythonFilesystem::PathSeparator(const string &path) {
 	return "/";
 }
 int64_t PythonFilesystem::GetFileSize(FileHandle &handle) {
+	D_ASSERT(!py::gil_check());
 	// TODO: this value should be cached on the PythonFileHandle
 	PythonGILWrapper gil;
 
 	return py::int_(filesystem.attr("size")(handle.path));
 }
 void PythonFilesystem::Seek(duckdb::FileHandle &handle, uint64_t location) {
+	D_ASSERT(!py::gil_check());
 	PythonGILWrapper gil;
 
 	auto seek = PythonFileHandle::GetHandle(handle).attr("seek");
@@ -170,18 +173,21 @@ bool PythonFilesystem::CanHandleFile(const string &fpath) {
 	return false;
 }
 void PythonFilesystem::MoveFile(const string &source, const string &dest, optional_ptr<FileOpener> opener) {
+	D_ASSERT(!py::gil_check());
 	PythonGILWrapper gil;
 
 	auto move = filesystem.attr("mv");
 	move(py::str(source), py::str(dest));
 }
 void PythonFilesystem::RemoveFile(const string &filename, optional_ptr<FileOpener> opener) {
+	D_ASSERT(!py::gil_check());
 	PythonGILWrapper gil;
 
 	auto remove = filesystem.attr("rm");
 	remove(py::str(filename));
 }
 time_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
+	D_ASSERT(!py::gil_check());
 	// TODO: this value should be cached on the PythonFileHandle
 	PythonGILWrapper gil;
 
@@ -190,6 +196,7 @@ time_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 	return py::int_(last_mod.attr("timestamp")());
 }
 void PythonFilesystem::FileSync(FileHandle &handle) {
+	D_ASSERT(!py::gil_check());
 	PythonGILWrapper gil;
 
 	PythonFileHandle::GetHandle(handle).attr("flush")();
@@ -198,11 +205,13 @@ bool PythonFilesystem::DirectoryExists(const string &directory, optional_ptr<Fil
 	return Exists(directory, "isdir");
 }
 void PythonFilesystem::RemoveDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	D_ASSERT(!py::gil_check());
 	PythonGILWrapper gil;
 
 	filesystem.attr("rm")(directory, py::arg("recursive") = true);
 }
 void PythonFilesystem::CreateDirectory(const string &directory, optional_ptr<FileOpener> opener) {
+	D_ASSERT(!py::gil_check());
 	PythonGILWrapper gil;
 
 	filesystem.attr("mkdir")(py::str(directory));
@@ -211,6 +220,7 @@ bool PythonFilesystem::ListFiles(const string &directory, const std::function<vo
                                  FileOpener *opener) {
 	static py::str DIRECTORY("directory");
 
+	D_ASSERT(!py::gil_check());
 	PythonGILWrapper gil;
 	bool nonempty = false;
 
@@ -223,6 +233,7 @@ bool PythonFilesystem::ListFiles(const string &directory, const std::function<vo
 	return nonempty;
 }
 void PythonFilesystem::Truncate(FileHandle &handle, int64_t new_size) {
+	D_ASSERT(!py::gil_check());
 	PythonGILWrapper gil;
 
 	filesystem.attr("touch")(handle.path, py::arg("truncate") = true);
@@ -231,6 +242,7 @@ bool PythonFilesystem::IsPipe(const string &filename, optional_ptr<FileOpener> o
 	return false;
 }
 idx_t PythonFilesystem::SeekPosition(FileHandle &handle) {
+	D_ASSERT(!py::gil_check());
 	PythonGILWrapper gil;
 
 	return py::int_(PythonFileHandle::GetHandle(handle).attr("tell")());

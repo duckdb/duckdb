@@ -63,6 +63,8 @@ struct ICUTableRange {
 		bool inclusive_bound;
 		bool greater_than_check;
 
+		bool empty_range = false;
+
 		bool Finished(timestamp_t current_value) const {
 			if (greater_than_check) {
 				if (inclusive_bound) {
@@ -113,14 +115,12 @@ struct ICUTableRange {
 			}
 			result.greater_than_check = true;
 			if (result.start > result.end) {
-				throw BinderException(
-				    "start is bigger than end, but increment is positive: cannot generate infinite series");
+				result.empty_range = true;
 			}
 		} else {
 			result.greater_than_check = false;
 			if (result.start < result.end) {
-				throw BinderException(
-				    "start is smaller than end, but increment is negative: cannot generate infinite series");
+				result.empty_range = true;
 			}
 		}
 		result.inclusive_bound = GENERATE_SERIES;
@@ -166,6 +166,13 @@ struct ICUTableRange {
 				state.initialized_row = true;
 				state.current_state = state.start;
 			}
+			if (state.empty_range) {
+				// empty range
+				output.SetCardinality(0);
+				state.current_input_row++;
+				state.initialized_row = false;
+				return OperatorResultType::HAVE_MORE_OUTPUT;
+			}
 			idx_t size = 0;
 			auto data = FlatVector::GetData<timestamp_t>(output.data[0]);
 			while (true) {
@@ -195,7 +202,7 @@ struct ICUTableRange {
 		                             nullptr, Bind<false>, nullptr, RangeDateTimeLocalInit);
 		range_function.in_out_function = ICUTableRangeFunction<false>;
 		range.AddFunction(range_function);
-		ExtensionUtil::AddFunctionOverload(db, range);
+		ExtensionUtil::RegisterFunction(db, range);
 
 		// generate_series: similar to range, but inclusive instead of exclusive bounds on the RHS
 		TableFunctionSet generate_series("generate_series");
@@ -204,7 +211,7 @@ struct ICUTableRange {
 		    RangeDateTimeLocalInit);
 		generate_series_function.in_out_function = ICUTableRangeFunction<true>;
 		generate_series.AddFunction(generate_series_function);
-		ExtensionUtil::AddFunctionOverload(db, generate_series);
+		ExtensionUtil::RegisterFunction(db, generate_series);
 	}
 };
 

@@ -84,7 +84,7 @@ public:
 
 	void Render(const LogicalOperator &op, std::ostream &ss);
 	void Render(const PhysicalOperator &op, std::ostream &ss);
-	void Render(const ProfilingNode &op, std::ostream &ss);
+	void Render(const ProfilingNode &op, std::ostream &ss) override;
 	void Render(const Pipeline &op, std::ostream &ss);
 
 	void ToStreamInternal(RenderTree &root, std::ostream &ss) override;
@@ -112,7 +112,8 @@ private:
 	bool CanSplitOnThisChar(char l);
 	bool IsPadding(char l);
 	string RemovePadding(string l);
-	void SplitUpExtraInfo(const InsertionOrderPreservingMap<string> &extra_info, vector<string> &result);
+	void SplitUpExtraInfo(const InsertionOrderPreservingMap<string> &extra_info, vector<string> &result,
+	                      idx_t max_lines);
 	void SplitStringBuffer(const string &source, vector<string> &result);
 };
 

@@ -197,7 +197,7 @@ NULL	4	4
 statement error
 SELECT x, x FROM t1 UNION ALL BY NAME SELECT y FROM t2;
 ----
-<REGEX>:Binder Error:.*doesn't support same name.*
+<REGEX>:Binder Error:.*doesn't support duplicate names.*
 
 query III
 SELECT x, x as a FROM t1 UNION ALL BY NAME SELECT y FROM t2;

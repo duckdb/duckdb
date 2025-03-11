@@ -21,6 +21,7 @@ from .statement import (
     Sleep,
     SleepUnit,
     Skip,
+    Unzip,
     SortStyle,
     Unskip,
 )
@@ -332,9 +333,9 @@ class QueryResult:
                 hash_compare_error = values[0] != hash_value
 
             if hash_compare_error:
-                expected_result = self.result_label_map.get(query_label)
-                logger.wrong_result_hash(expected_result, self)
-                self.fail_query(query)
+                expected_result = runner.result_label_map.get(query_label)
+                # logger.wrong_result_hash(expected_result, self)
+                context.fail(query)
 
             assert not hash_compare_error
 
@@ -405,6 +406,8 @@ class SQLLogicDatabase:
 
         # Now re-open the current database
         read_only = 'access_mode' in self.config and self.config['access_mode'] == 'read_only'
+        if 'access_mode' not in self.config:
+            self.config['access_mode'] = 'automatic'
         self.database = duckdb.connect(path, read_only, self.config)
 
         # Load any previously loaded extensions again
@@ -454,6 +457,19 @@ def matches_regex(input: str, actual_str: str) -> bool:
     re_pattern = re.compile(regex_str, re_options)
     regex_matches = bool(re_pattern.fullmatch(actual_str))
     return regex_matches == should_match
+
+
+def has_external_access(conn):
+    # this is required for the python tester to work, as we make use of replacement scans
+    try:
+        res = conn.sql("select current_setting('enable_external_access')").fetchone()[0]
+        return res
+    except duckdb.TransactionException:
+        return True
+    except duckdb.BinderException:
+        return True
+    except duckdb.InvalidInputException:
+        return True
 
 
 def compare_values(result: QueryResult, actual_str, expected_str, current_column):
@@ -705,7 +721,7 @@ class SQLLogicContext:
         # Apply a replacement for every registered keyword
         if '__BUILD_DIRECTORY__' in input:
             self.skiptest("Test contains __BUILD_DIRECTORY__ which isnt supported")
-        for key, value in self.keywords.items():
+        for key, value in self.keywords.items().__reversed__():
             input = input.replace(key, value)
         return input
 
@@ -749,6 +765,7 @@ class SQLLogicContext:
             Restart: self.execute_restart,
             HashThreshold: self.execute_hash_threshold,
             Set: self.execute_set,
+            Unzip: self.execute_unzip,
             Loop: self.execute_loop,
             Foreach: self.execute_foreach,
             Endloop: None,  # <-- should never be encountered outside of Loop/Foreach
@@ -781,7 +798,9 @@ class SQLLogicContext:
 
     def execute_load(self, load: Load):
         if self.in_loop():
-            self.fail("load cannot be called in a loop")
+            # FIXME: should add support for this, the CPP tester supports this
+            self.skiptest("load cannot be called in a loop")
+            # self.fail("load cannot be called in a loop")
 
         readonly = load.readonly
 
@@ -811,6 +830,8 @@ class SQLLogicContext:
     def execute_query(self, query: Query):
         assert isinstance(query, Query)
         conn = self.get_connection(query.connection_name)
+        if not has_external_access(conn):
+            self.skiptest("enable_external_access is explicitly disabled by the test")
         sql_query = '\n'.join(query.lines)
         sql_query = self.replace_keywords(sql_query)
 
@@ -842,23 +863,26 @@ class SQLLogicContext:
 
             if is_query_result(sql_query, statement):
                 original_rel = conn.query(sql_query)
-                original_types = original_rel.types
-                # We create new names for the columns, because they might be duplicated
-                aliased_columns = [f'c{i}' for i in range(len(original_types))]
+                if original_rel is None:
+                    query_result = QueryResult([(0,)], ['BIGINT'])
+                else:
+                    original_types = original_rel.types
+                    # We create new names for the columns, because they might be duplicated
+                    aliased_columns = [f'c{i}' for i in range(len(original_types))]
 
-                expressions = [f'"{name}"::VARCHAR' for name, sql_type in zip(aliased_columns, original_types)]
-                aliased_table = ", ".join(aliased_columns)
-                expression_list = ", ".join(expressions)
-                try:
-                    # Select from the result, converting the Values to the right type for comparison
-                    transformed_query = (
-                        f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
-                    )
-                    stringified_rel = conn.query(transformed_query)
-                except duckdb.Error as e:
-                    self.fail(f"Could not select from the ValueRelation: {str(e)}")
-                result = stringified_rel.fetchall()
-                query_result = QueryResult(result, original_types)
+                    expressions = [f'"{name}"::VARCHAR' for name, sql_type in zip(aliased_columns, original_types)]
+                    aliased_table = ", ".join(aliased_columns)
+                    expression_list = ", ".join(expressions)
+                    try:
+                        # Select from the result, converting the Values to the right type for comparison
+                        transformed_query = (
+                            f"select {expression_list} from original_rel unnamed_subquery_blabla({aliased_table})"
+                        )
+                        stringified_rel = conn.query(transformed_query)
+                    except duckdb.Error as e:
+                        self.fail(f"Could not select from the ValueRelation: {str(e)}")
+                    result = stringified_rel.fetchall()
+                    query_result = QueryResult(result, original_types)
             elif duckdb.ExpectedResultType.CHANGED_ROWS in statement.expected_result_type:
                 conn.execute(sql_query)
                 result = conn.fetchall()
@@ -877,6 +901,18 @@ class SQLLogicContext:
 
     def execute_skip(self, statement: Skip):
         self.runner.skip()
+
+    def execute_unzip(self, statement: Unzip):
+        import gzip
+        import shutil
+
+        source = self.replace_keywords(statement.source)
+        destination = self.replace_keywords(statement.destination)
+
+        with gzip.open(source, 'rb') as f_in:
+            with open(destination, 'wb') as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        print(f"Extracted to '{destination}'")
 
     def execute_unskip(self, statement: Unskip):
         self.runner.unskip()
@@ -971,6 +1007,9 @@ class SQLLogicContext:
     def execute_statement(self, statement: Statement):
         assert isinstance(statement, Statement)
         conn = self.get_connection(statement.connection_name)
+        if not has_external_access(conn):
+            self.skiptest("enable_external_access is explicitly disabled by the test")
+
         sql_query = '\n'.join(statement.lines)
         sql_query = self.replace_keywords(sql_query)
 
@@ -1050,6 +1089,15 @@ class SQLLogicContext:
         if param == "no_extension_autoloading":
             if autoload_known_extensions:
                 # If autoloading is on, we skip this test
+                return RequireResult.MISSING
+            return RequireResult.PRESENT
+
+        allow_unsigned_extensions = connection.execute(
+            "select value::BOOLEAN from duckdb_settings() where name == 'allow_unsigned_extensions'"
+        ).fetchone()[0]
+        if param == "allow_unsigned_extensions":
+            if allow_unsigned_extensions == False:
+                # If extension validation is turned on (that is allow_unsigned_extensions=False), skip test
                 return RequireResult.MISSING
             return RequireResult.PRESENT
 

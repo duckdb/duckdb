@@ -7,6 +7,7 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/list.hpp"
+#include "duckdb/function/table/arrow/arrow_duck_schema.hpp"
 
 namespace duckdb {
 
@@ -14,10 +15,17 @@ namespace duckdb {
 // ArrowAppender
 //===--------------------------------------------------------------------===//
 
-ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity, ClientProperties options)
-    : types(std::move(types_p)) {
-	for (auto &type : types) {
-		auto entry = InitializeChild(type, initial_capacity, options);
+ArrowAppender::ArrowAppender(vector<LogicalType> types_p, const idx_t initial_capacity, ClientProperties options,
+                             unordered_map<idx_t, const shared_ptr<ArrowTypeExtensionData>> extension_type_cast)
+    : types(std::move(types_p)), options(options) {
+	for (idx_t i = 0; i < types.size(); i++) {
+		unique_ptr<ArrowAppendData> entry;
+		bool bitshift_boolean = types[i].id() == LogicalTypeId::BOOLEAN && !options.arrow_lossless_conversion;
+		if (extension_type_cast.find(i) != extension_type_cast.end() && !bitshift_boolean) {
+			entry = InitializeChild(types[i], initial_capacity, options, extension_type_cast[i]);
+		} else {
+			entry = InitializeChild(types[i], initial_capacity, options);
+		}
 		root_data.push_back(std::move(entry));
 	}
 }
@@ -26,11 +34,18 @@ ArrowAppender::~ArrowAppender() {
 }
 
 //! Append a data chunk to the underlying arrow array
-void ArrowAppender::Append(DataChunk &input, idx_t from, idx_t to, idx_t input_size) {
+void ArrowAppender::Append(DataChunk &input, const idx_t from, const idx_t to, const idx_t input_size) {
 	D_ASSERT(types == input.GetTypes());
 	D_ASSERT(to >= from);
 	for (idx_t i = 0; i < input.ColumnCount(); i++) {
-		root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);
+		if (root_data[i]->extension_data && root_data[i]->extension_data->duckdb_to_arrow) {
+			Vector input_data(root_data[i]->extension_data->GetInternalType());
+			root_data[i]->extension_data->duckdb_to_arrow(*options.client_context, input.data[i], input_data,
+			                                              input_size);
+			root_data[i]->append_vector(*root_data[i], input_data, from, to, input_size);
+		} else {
+			root_data[i]->append_vector(*root_data[i], input.data[i], from, to, input_size);
+		}
 	}
 	row_count += to - from;
 }
@@ -142,9 +157,14 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 	case LogicalTypeId::INTEGER:
 		InitializeAppenderForType<ArrowScalarData<int32_t>>(append_data);
 		break;
-	case LogicalTypeId::TIME_TZ:
-		InitializeAppenderForType<ArrowScalarData<int64_t, dtime_tz_t, ArrowTimeTzConverter>>(append_data);
+	case LogicalTypeId::TIME_TZ: {
+		if (append_data.options.arrow_lossless_conversion) {
+			InitializeAppenderForType<ArrowScalarData<int64_t>>(append_data);
+		} else {
+			InitializeAppenderForType<ArrowScalarData<int64_t, dtime_tz_t, ArrowTimeTzConverter>>(append_data);
+		}
 		break;
+	}
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIMESTAMP_SEC:
 	case LogicalTypeId::TIMESTAMP_MS:
@@ -155,8 +175,21 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		InitializeAppenderForType<ArrowScalarData<int64_t>>(append_data);
 		break;
 	case LogicalTypeId::UUID:
+		if (append_data.options.arrow_lossless_conversion) {
+			InitializeAppenderForType<ArrowScalarData<hugeint_t, hugeint_t, ArrowUUIDBlobConverter>>(append_data);
+		} else {
+			if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
+				InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter>>(append_data);
+			} else {
+				InitializeAppenderForType<ArrowVarcharData<hugeint_t, ArrowUUIDConverter, int32_t>>(append_data);
+			}
+		}
+		break;
 	case LogicalTypeId::HUGEINT:
 		InitializeAppenderForType<ArrowScalarData<hugeint_t>>(append_data);
+		break;
+	case LogicalTypeId::UHUGEINT:
+		InitializeAppenderForType<ArrowScalarData<uhugeint_t>>(append_data);
 		break;
 	case LogicalTypeId::UTINYINT:
 		InitializeAppenderForType<ArrowScalarData<uint8_t>>(append_data);
@@ -207,6 +240,7 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 		break;
 	case LogicalTypeId::BLOB:
 	case LogicalTypeId::BIT:
+	case LogicalTypeId::VARINT:
 		if (append_data.options.arrow_offset_size == ArrowOffsetSize::LARGE) {
 			InitializeAppenderForType<ArrowVarcharData<>>(append_data);
 		} else {
@@ -266,13 +300,19 @@ static void InitializeFunctionPointers(ArrowAppendData &append_data, const Logic
 }
 
 unique_ptr<ArrowAppendData> ArrowAppender::InitializeChild(const LogicalType &type, const idx_t capacity,
-                                                           ClientProperties &options) {
+                                                           ClientProperties &options,
+                                                           const shared_ptr<ArrowTypeExtensionData> &extension_type) {
 	auto result = make_uniq<ArrowAppendData>(options);
-	InitializeFunctionPointers(*result, type);
+	LogicalType array_type = type;
+	if (extension_type) {
+		array_type = extension_type->GetInternalType();
+	}
+	InitializeFunctionPointers(*result, array_type);
+	result->extension_data = extension_type;
 
 	const auto byte_count = (capacity + 7) / 8;
 	result->GetValidityBuffer().reserve(byte_count);
-	result->initialize(*result, type, capacity);
+	result->initialize(*result, array_type, capacity);
 	return result;
 }
 

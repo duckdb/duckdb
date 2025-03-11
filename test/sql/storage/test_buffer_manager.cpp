@@ -14,6 +14,8 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 	auto config = GetTestConfig();
 	config->options.default_block_alloc_size = DEFAULT_BLOCK_ALLOC_SIZE;
 	config->options.maximum_threads = 1;
+	// ZSTD can store this in a smaller way, force uncompressed so the 5mb max test correctly fails
+	config->options.force_compression = CompressionType::COMPRESSION_UNCOMPRESSED;
 
 	uint64_t string_length = 64;
 	uint64_t desired_size = 10000000; // desired size is 10MB
@@ -28,8 +30,7 @@ TEST_CASE("Test storing a big string that exceeds buffer manager size", "[storag
 		REQUIRE_NO_FAIL(con.Query("CREATE TABLE test (a VARCHAR, j BIGINT);"));
 		REQUIRE_NO_FAIL(con.Query("INSERT INTO test VALUES ('" + big_string + "', 1)"));
 		while (string_length < desired_size) {
-			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT a||a||a||a||a||a||a||a||a||a, " + to_string(iteration) +
-			                          " FROM test"));
+			REQUIRE_NO_FAIL(con.Query("INSERT INTO test SELECT repeat(a, 10), " + to_string(iteration) + " FROM test"));
 			REQUIRE_NO_FAIL(con.Query("DELETE FROM test WHERE j=" + to_string(iteration - 1)));
 			iteration++;
 			string_length *= 10;
@@ -157,8 +158,8 @@ TEST_CASE("Test buffer reallocation", "[storage][.]") {
 
 	auto block_size = config->options.default_block_alloc_size - Storage::DEFAULT_BLOCK_HEADER_SIZE;
 	idx_t requested_size = block_size;
-	duckdb::shared_ptr<BlockHandle> block;
-	auto handle = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false, &block);
+	auto handle = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false);
+	auto block = handle.GetBlockHandle();
 	CHECK(buffer_manager.GetUsedMemory() == BufferManager::GetAllocSize(requested_size));
 
 	for (; requested_size < limit; requested_size *= 2) {
@@ -204,8 +205,8 @@ TEST_CASE("Test buffer manager variable size allocations", "[storage][.]") {
 	CHECK(buffer_manager.GetUsedMemory() == 0);
 
 	idx_t requested_size = 424242;
-	duckdb::shared_ptr<BlockHandle> block;
-	auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false, &block);
+	auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, requested_size, false);
+	auto block = pin.GetBlockHandle();
 	CHECK(buffer_manager.GetUsedMemory() >= requested_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
 
 	pin.Destroy();
@@ -238,8 +239,8 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	duckdb::vector<duckdb::shared_ptr<BlockHandle>> blocks;
 	blocks.reserve(block_count);
 	for (idx_t i = 0; i < block_count; i++) {
-		blocks.emplace_back();
-		buffer_manager.Allocate(MemoryTag::EXTENSION, block_size, false, &blocks.back());
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, block_size, false);
+		blocks.push_back(pin.GetBlockHandle());
 		// used memory should increment by exactly one block at a time, up to 10
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * block_alloc_size);
 	}
@@ -259,8 +260,8 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	auto alloc_size = BufferManager::GetAllocSize(variable_block_size);
 	REQUIRE_NO_FAIL(con.Query(StringUtil::Format("PRAGMA memory_limit='%lldB'", alloc_size * pin_count)));
 	for (idx_t i = 0; i < block_count; i++) {
-		blocks.emplace_back();
-		buffer_manager.Allocate(MemoryTag::EXTENSION, variable_block_size, false, &blocks.back());
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, variable_block_size, false);
+		blocks.push_back(pin.GetBlockHandle());
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 	}
 	for (idx_t i = 0; i < block_count; i++) {
@@ -272,8 +273,8 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 
 	// again, the same but incrementing variable_block_size by 1 for every block (has same alloc_size)
 	for (idx_t i = 0; i < block_count; i++) {
-		blocks.emplace_back();
-		buffer_manager.Allocate(MemoryTag::EXTENSION, variable_block_size, false, &blocks.back());
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, variable_block_size, false);
+		blocks.push_back(pin.GetBlockHandle());
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 		// increment variable_block_size
 		variable_block_size++;
@@ -289,8 +290,8 @@ TEST_CASE("Test buffer manager buffer re-use", "[storage][.]") {
 	// reset block size and do the same but decrement by 1 for every block (still same alloc_size)
 	variable_block_size = 424242;
 	for (idx_t i = 0; i < block_count; i++) {
-		blocks.emplace_back();
-		buffer_manager.Allocate(MemoryTag::EXTENSION, variable_block_size, false, &blocks.back());
+		auto pin = buffer_manager.Allocate(MemoryTag::EXTENSION, variable_block_size, false);
+		blocks.push_back(pin.GetBlockHandle());
 		CHECK(buffer_manager.GetUsedMemory() == MinValue<idx_t>(pin_count, i + 1) * alloc_size);
 		// increment variable_block_size
 		variable_block_size--;

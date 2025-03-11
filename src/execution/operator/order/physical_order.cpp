@@ -21,8 +21,8 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 //===--------------------------------------------------------------------===//
 class OrderGlobalSinkState : public GlobalSinkState {
 public:
-	OrderGlobalSinkState(BufferManager &buffer_manager, const PhysicalOrder &order, RowLayout &payload_layout)
-	    : order(order), global_sort_state(buffer_manager, order.orders, payload_layout) {
+	OrderGlobalSinkState(ClientContext &context, const PhysicalOrder &order, RowLayout &payload_layout)
+	    : order(order), global_sort_state(context, order.orders, payload_layout) {
 	}
 
 	const PhysicalOrder &order;
@@ -60,7 +60,7 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 	// Get the payload layout from the return types
 	RowLayout payload_layout;
 	payload_layout.Initialize(types);
-	auto state = make_uniq<OrderGlobalSinkState>(BufferManager::GetBufferManager(context), *this, payload_layout);
+	auto state = make_uniq<OrderGlobalSinkState>(context, *this, payload_layout);
 	// Set external (can be force with the PRAGMA)
 	state->global_sort_state.external = ClientConfig::GetConfig(context).force_external;
 	state->memory_per_thread = GetMaxThreadMemory(context);
@@ -264,10 +264,14 @@ SourceResultType PhysicalOrder::GetData(ExecutionContext &context, DataChunk &ch
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-idx_t PhysicalOrder::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate_p,
-                                   LocalSourceState &lstate_p) const {
+OperatorPartitionData PhysicalOrder::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+                                                      GlobalSourceState &gstate_p, LocalSourceState &lstate_p,
+                                                      const OperatorPartitionInfo &partition_info) const {
+	if (partition_info.RequiresPartitionColumns()) {
+		throw InternalException("PhysicalOrder::GetPartitionData: partition columns not supported");
+	}
 	auto &lstate = lstate_p.Cast<PhysicalOrderLocalSourceState>();
-	return lstate.batch_index;
+	return OperatorPartitionData(lstate.batch_index);
 }
 
 InsertionOrderPreservingMap<string> PhysicalOrder::ParamsToString() const {

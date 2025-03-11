@@ -157,10 +157,10 @@ makeIntervalNode(PGNode *arg, int location, PGList *typmods) {
 }
 
 static PGNode *
-makeSampleSize(PGValue *sample_size, bool is_percentage) {
+makeSampleSize(PGNode *sample_size, bool is_percentage) {
 	PGSampleSize *n = makeNode(PGSampleSize);
 
-	n->sample_size = *sample_size;
+	n->sample_size = sample_size;
 	n->is_percentage = is_percentage;
 
 	return (PGNode *)n;
@@ -366,7 +366,7 @@ static PGNode* makeNamedParamRef(char *name, int location)
 static void
 insertSelectOptions(PGSelectStmt *stmt,
 					PGList *sortClause, PGList *lockingClause,
-					PGNode *limitOffset, PGNode *limitCount,
+					PGNode *limitOffset, PGNode *limitCount, PGNode *isLimitOffsetFirst,
 					PGWithClause *withClause,
 					core_yyscan_t yyscanner)
 {
@@ -411,6 +411,9 @@ insertSelectOptions(PGSelectStmt *stmt,
 					 parser_errposition(exprLocation(limitCount))));
 		stmt->limitCount = limitCount;
 	}
+	if (limitOffset == isLimitOffsetFirst) {
+		stmt->offset_first = true;
+	}
 	if (withClause)
 	{
 		if (stmt->withClause)
@@ -429,8 +432,8 @@ makeSetOp(PGSetOperation op, bool all, PGNode *larg, PGNode *rarg)
 
 	n->op = op;
 	n->all = all;
-	n->larg = (PGSelectStmt *) larg;
-	n->rarg = (PGSelectStmt *) rarg;
+	n->larg = larg;
+	n->rarg = rarg;
 	return (PGNode *) n;
 }
 

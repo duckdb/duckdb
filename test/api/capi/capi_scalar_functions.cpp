@@ -280,11 +280,22 @@ void CountNULLValues(duckdb_function_info, duckdb_data_chunk input, duckdb_vecto
 	auto result_data = (uint64_t *)duckdb_vector_get_data(output);
 	for (idx_t row_idx = 0; row_idx < input_size; row_idx++) {
 		idx_t null_count = 0;
+		idx_t other_null_count = 0;
 		for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {
 			if (!duckdb_validity_row_is_valid(validity_masks[col_idx], row_idx)) {
 				null_count++;
 			}
+
+			// Alternative code path using SQLNULL.
+			auto duckdb_vector = duckdb_data_chunk_get_vector(input, col_idx);
+			auto logical_type = duckdb_vector_get_column_type(duckdb_vector);
+			auto type_id = duckdb_get_type_id(logical_type);
+			if (type_id == DUCKDB_TYPE_SQLNULL) {
+				other_null_count++;
+			}
+			duckdb_destroy_logical_type(&logical_type);
 		}
+		REQUIRE(null_count == other_null_count);
 		result_data[row_idx] = null_count;
 	}
 }
