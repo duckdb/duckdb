@@ -574,7 +574,7 @@ class NumericStatsUnifier : public ColumnStatsUnifier {
 		if (stats.empty()) {
 			return string();
 		}
-		return to_string(Load<T>(const_data_ptr_cast(stats.data())));
+		return Value::CreateValue<T>(Load<T>(const_data_ptr_cast(stats.data()))).ToString();
 	}
 };
 
@@ -617,20 +617,27 @@ unique_ptr<ColumnStatsUnifier> GetStatsUnifier(const LogicalType &type) {
 	case LogicalTypeId::TINYINT:
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
-	case LogicalTypeId::DATE:
 	case LogicalTypeId::UTINYINT:
 	case LogicalTypeId::USMALLINT:
 		return make_uniq<NumericStatsUnifier<int32_t>>();
-	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::TIME:
-	case LogicalTypeId::TIMESTAMP:
-	case LogicalTypeId::TIMESTAMP_TZ:
-	case LogicalTypeId::TIMESTAMP_MS:
-	case LogicalTypeId::TIMESTAMP_NS:
-	case LogicalTypeId::TIMESTAMP_SEC:
-	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::DATE:
+		return make_uniq<NumericStatsUnifier<date_t>>();
 	case LogicalTypeId::UINTEGER:
+	case LogicalTypeId::BIGINT:
 		return make_uniq<NumericStatsUnifier<int64_t>>();
+	case LogicalTypeId::TIME:
+		return make_uniq<NumericStatsUnifier<dtime_t>>();
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP:
+		return make_uniq<NumericStatsUnifier<timestamp_t>>();
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return make_uniq<NumericStatsUnifier<timestamp_tz_t>>();
+	case LogicalTypeId::TIMESTAMP_MS:
+		return make_uniq<NumericStatsUnifier<timestamp_ms_t>>();
+	case LogicalTypeId::TIMESTAMP_NS:
+		return make_uniq<NumericStatsUnifier<timestamp_ns_t>>();
+	case LogicalTypeId::TIME_TZ:
+		return make_uniq<NumericStatsUnifier<dtime_tz_t>>();
 	case LogicalTypeId::UBIGINT:
 		return make_uniq<NumericStatsUnifier<uint64_t>>();
 	case LogicalTypeId::FLOAT:
