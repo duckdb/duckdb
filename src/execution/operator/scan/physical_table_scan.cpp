@@ -103,6 +103,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 
 	if (function.function) {
 		function.function(context.client, data, chunk);
+		// TODO: Physical Window Operator for TableFunctions WITH ORDINALITY
 		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
@@ -110,6 +111,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		function.in_out_function_final(context, data, chunk);
 	}
 	switch (function.in_out_function(context, data, g_state.input_chunk, chunk)) {
+
 	case OperatorResultType::BLOCKED: {
 		auto guard = g_state.Lock();
 		return g_state.BlockSource(guard, input.interrupt_state);
@@ -119,6 +121,11 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		// might be relying on current behaviour. Needs a rework that is not in scope
 		break;
 	}
+
+	if (function.ordinality_data.ordinality_request == ordinality_request::NOT_REQUESTED) {
+		// TODO: call function.ordinality_data.SetOrdinality(...);
+	}
+
 
 	if (chunk.size() == 0 && function.in_out_function_final) {
 		function.in_out_function_final(context, data, chunk);

@@ -16,5 +16,26 @@ enum class ordinality_request : uint32_t {
   REQUESTED = 1
 };
 
+struct ordinality_data_t {
+
+  ordinality_request ordinality_request = ordinality_request::NOT_REQUESTED;
+  idx_t column_id;
+  idx_t idx = 1;
+  bool reset = false;
+
+    void ordinality_data_t::SetOrdinality(DataChunk &chunk, vector<column_t> &column_ids) {
+      const idx_t ordinality = chunk.size();
+      if (ordinality > 0) {
+        if (reset) {
+          idx = 1;
+          reset = false;
+        }
+        chunk.data[column_id].Sequence(idx, 1, ordinality);
+      }
+  }
+};
+
+
+
 } // namespace duckdb
 
