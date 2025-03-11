@@ -116,8 +116,11 @@ string CGroups::ReadMemoryCGroupPath(FileSystem &fs, const char *cgroup_file) {
 	string line;
 	while ((pos = content.find('\n')) != string::npos) {
 		line = content.substr(0, pos);
-		if (line.find("memory:") == 0) {
-			return line.substr(line.find(':') + 1);
+		auto memory_pos = line.find("memory:");
+		if (memory_pos != string::npos) {
+			auto memory_path = line.substr(memory_pos + 7);
+			Printer::PrintF("Memory path found: %s", memory_path);
+			return memory_path;
 		}
 		content.erase(0, pos + 1);
 	}
