@@ -15,8 +15,6 @@
 #include "duckdb/common/types/selection_vector.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
-#include <random>
-
 namespace duckdb {
 
 template <typename T>
@@ -109,7 +107,7 @@ private:
 	inline uint64_t block_id(uint64_t hash) const {
 		// The next set of hash bits following the bits used to select a mask is used to pick block id (index of 64-bit
 		// word in a bit vector).
-		return (hash >> (BloomFilterMasks::kLogNumMasks + LOG_BLOCK_SIZE)) & (num_blocks_ - 1);
+		return (hash >> (BloomFilterMasks::kLogNumMasks + 6)) & (num_blocks_ - 1);
 	}
 
 	static BloomFilterMasks masks_;

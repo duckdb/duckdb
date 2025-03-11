@@ -1,5 +1,8 @@
 #include "duckdb/optimizer/predicate_transfer/bloom_filter/bloom_filter.hpp"
 
+#include "duckdb/common/types/selection_vector.hpp"
+#include "duckdb/storage/buffer_manager.hpp"
+
 #include <random>
 #include <cmath>
 
@@ -60,8 +63,8 @@ void BlockedBloomFilter::Initialize(ClientContext &context_p, size_t est_num_row
 	context = &context_p;
 	buffer_manager = &BufferManager::GetBufferManager(*context);
 
-	uint64_t min_bits = std::max<uint64_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
-	uint64_t total_bits = 1LL << static_cast<int64_t>(std::ceil(std::log2(static_cast<double>(min_bits))));
+	uint64_t min_bits = std::max<uint64_t>(512, est_num_rows * 8);
+	uint64_t total_bits = 1LL << static_cast<uint64_t>(std::ceil(std::log2(static_cast<double>(min_bits))));
 	num_blocks_ = total_bits >> LOG_BLOCK_SIZE;
 
 	buf_ = buffer_manager->GetBufferAllocator().Allocate(num_blocks_ * sizeof(uint64_t));
