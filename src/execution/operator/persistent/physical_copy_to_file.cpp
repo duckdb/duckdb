@@ -610,7 +610,7 @@ SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChun
 					stats_values.emplace_back(std::move(stats_entry.second));
 				}
 				auto map_value = Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(stats_keys),
-											std::move(stats_values));
+				                            std::move(stats_values));
 				stats.insert(make_pair(entry.first, std::move(map_value)));
 			}
 			vector<Value> keys;

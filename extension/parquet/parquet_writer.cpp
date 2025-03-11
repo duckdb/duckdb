@@ -18,6 +18,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/common/types/blob.hpp"
 #endif
 
 namespace duckdb {
@@ -528,8 +529,6 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	FlushRowGroup(prepared_row_group);
 }
 
-
-
 class ColumnStatsUnifier {
 public:
 	virtual ~ColumnStatsUnifier() = default;
@@ -539,19 +538,22 @@ public:
 	idx_t null_count = 0;
 	bool all_min_max_set = true;
 	bool all_nulls_set = true;
+	bool min_is_set = false;
+	bool max_is_set = false;
 
 	virtual void UnifyMinMax(const string &new_min, const string &new_max) = 0;
 	virtual string StatsToString(const string &stats) = 0;
 };
 
-template<class T>
+template <class T>
 class NumericStatsUnifier : public ColumnStatsUnifier {
 	void UnifyMinMax(const string &new_min, const string &new_max) override {
 		if (new_min.size() != sizeof(T) || new_max.size() != sizeof(T)) {
 			throw InternalException("Incorrect size for stats in UnifyMinMax");
 		}
-		if (global_min.empty()) {
+		if (!min_is_set) {
 			global_min = new_min;
+			min_is_set = true;
 		} else {
 			auto min_val = Load<T>(const_data_ptr_cast(new_min.data()));
 			auto global_min_val = Load<T>(const_data_ptr_cast(global_min.data()));
@@ -559,8 +561,9 @@ class NumericStatsUnifier : public ColumnStatsUnifier {
 				global_min = new_min;
 			}
 		}
-		if (global_max.empty()) {
+		if (!max_is_set) {
 			global_max = new_max;
+			max_is_set = true;
 		} else {
 			auto max_val = Load<T>(const_data_ptr_cast(new_max.data()));
 			auto global_max_val = Load<T>(const_data_ptr_cast(global_max.data()));
@@ -578,26 +581,47 @@ class NumericStatsUnifier : public ColumnStatsUnifier {
 	}
 };
 
-class StringStatsUnifier : public ColumnStatsUnifier {
+class BaseStringStatsUnifier : public ColumnStatsUnifier {
 	void UnifyMinMax(const string &new_min, const string &new_max) override {
-		if (global_min.empty()) {
+		if (!min_is_set) {
 			global_min = new_min;
+			min_is_set = true;
 		} else {
 			if (LessThan::Operation(string_t(new_min), string_t(global_min))) {
 				global_min = new_min;
 			}
 		}
-		if (global_max.empty()) {
+		if (!max_is_set) {
 			global_max = new_max;
+			max_is_set = true;
 		} else {
 			if (GreaterThan::Operation(string_t(new_max), string_t(global_max))) {
 				global_max = new_max;
 			}
 		}
 	}
+};
 
+class StringStatsUnifier : public BaseStringStatsUnifier {
 	string StatsToString(const string &stats) override {
 		return stats;
+	}
+};
+
+class BlobStatsUnifier : public BaseStringStatsUnifier {
+	string StatsToString(const string &stats) override {
+		// convert blobs to hexadecimal
+		auto data = const_data_ptr_cast(stats.c_str());
+		auto len = stats.size();
+		string result;
+		result.reserve(len * 2);
+		for (idx_t i = 0; i < len; i++) {
+			auto byte_a = data[i] >> 4;
+			auto byte_b = data[i] & 0x0F;
+			result += Blob::HEX_TABLE[byte_a];
+			result += Blob::HEX_TABLE[byte_b];
+		}
+		return result;
 	}
 };
 
@@ -657,6 +681,7 @@ unique_ptr<ColumnStatsUnifier> GetStatsUnifier(const LogicalType &type) {
 			return make_uniq<NullStatsUnifier>();
 		}
 	case LogicalTypeId::BLOB:
+		return make_uniq<BlobStatsUnifier>();
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StringStatsUnifier>();
 	case LogicalTypeId::UUID:
@@ -672,7 +697,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 
 	// find the per-column stats
 	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
-	for(auto &column_writer : column_writers) {
+	for (auto &column_writer : column_writers) {
 		stats_unifiers.push_back(GetStatsUnifier(column_writer->Type()));
 	}
 	// unify the stats of all of the row groups
@@ -704,10 +729,10 @@ void ParquetWriter::GatherWrittenStatistics() {
 		if (stats_unifier->all_min_max_set) {
 			auto min_value = stats_unifier->StatsToString(stats_unifier->global_min);
 			auto max_value = stats_unifier->StatsToString(stats_unifier->global_max);
-			if (!min_value.empty()) {
+			if (stats_unifier->min_is_set) {
 				column_stats["min"] = min_value;
 			}
-			if (!max_value.empty()) {
+			if (stats_unifier->max_is_set) {
 				column_stats["max"] = max_value;
 			}
 		}

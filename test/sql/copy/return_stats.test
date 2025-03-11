@@ -10,32 +10,32 @@ SET preserve_insertion_order=false;
 statement ok
 SET threads=1
 
-# statement ok
-# CREATE VIEW integers AS SELECT range i FROM range(200000);
-#
-# # single column
-# query IIIIII
-# COPY integers TO '__TEST_DIR__/test_copy_to_file.parquet' (RETURN_STATS);
-# ----
-# <REGEX>:.*test_copy_to_file.parquet	200000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{i={max=199999, min=0, null_count=0}}
-#
-# # multi-column
-# statement ok
-# CREATE VIEW multi_column_test AS SELECT range i, range%10 j, case when range%2=0 then null else range end k FROM range(2500);
-#
-# query IIIIII
-# COPY multi_column_test TO '__TEST_DIR__/multi_column_copy.parquet' (RETURN_STATS);
-# ----
-# <REGEX>:.*multi_column_copy.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{i={max=2499, min=0, null_count=0}, j={max=9, min=0, null_count=0}, k={max=2499, min=1, null_count=1250}}
-#
-# # strings
-# statement ok
-# CREATE VIEW string_test AS SELECT concat('thisisalongstring_', range) s FROM range(2500);
-#
-# query IIIIII
-# COPY string_test TO '__TEST_DIR__/string_test.parquet' (RETURN_STATS);
-# ----
-# <REGEX>:.*string_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{s={max=thisisalongstring_999, min=thisisalongstring_0, null_count=0}}
+statement ok
+CREATE VIEW integers AS SELECT range i FROM range(200000);
+
+# single column
+query IIIIII
+COPY integers TO '__TEST_DIR__/test_copy_to_file.parquet' (RETURN_STATS);
+----
+<REGEX>:.*test_copy_to_file.parquet	200000	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{i={max=199999, min=0, null_count=0}}
+
+# multi-column
+statement ok
+CREATE VIEW multi_column_test AS SELECT range i, range%10 j, case when range%2=0 then null else range end k FROM range(2500);
+
+query IIIIII
+COPY multi_column_test TO '__TEST_DIR__/multi_column_copy.parquet' (RETURN_STATS);
+----
+<REGEX>:.*multi_column_copy.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{i={max=2499, min=0, null_count=0}, j={max=9, min=0, null_count=0}, k={max=2499, min=1, null_count=1250}}
+
+# strings
+statement ok
+CREATE VIEW string_test AS SELECT concat('thisisalongstring_', range) s FROM range(2500);
+
+query IIIIII
+COPY string_test TO '__TEST_DIR__/string_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*string_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{s={max=thisisalongstring_999, min=thisisalongstring_0, null_count=0}}
 
 # timestamps/dates
 statement ok
@@ -54,9 +54,36 @@ COPY date_test TO '__TEST_DIR__/date_test.parquet' (RETURN_STATS);
 <REGEX>:.*date_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{dt={max=2006-11-04, min=2000-01-01, null_count=0}, t={max=06:56:30, min=00:00:00, null_count=0}, ts={max=2006-11-04 12:12:12.123456, min=2000-01-01 12:12:12.123456, null_count=0}, ts_ms={max=2006-11-04 12:12:12.123, min=2000-01-01 12:12:12.123, null_count=0}, ts_ns={max=2006-11-04 12:12:12.123456789, min=2000-01-01 12:12:12.123456789, null_count=0}, ts_s={max=2006-11-04 12:12:12, min=2000-01-01 12:12:12, null_count=0}}
 
 # empty table
+statement ok
+CREATE VIEW empty_test AS FROM range(2500) LIMIT 0;
+
+query IIIIII
+COPY empty_test TO '__TEST_DIR__/empty_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*empty_test.parquet	0	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{range={null_count=0}}
+
+# blobs
+statement ok
+CREATE VIEW blob_test AS SELECT ''::BLOB AS bl UNION ALL SELECT '\x80\x00\x80'::BLOB
+
+query IIIIII
+COPY blob_test TO '__TEST_DIR__/blob_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*blob_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{bl={max=800080, min=, null_count=0}}
+
+# decimal
+
+# nested types
+
+# partition_by
 
 # test all types
+
 
 # quoted/funky column names
 
 # unsupported format (CSV)
+statement error
+COPY integers TO '__TEST_DIR__/test_copy_to_file.csv' (RETURN_STATS);
+----
+not supported
