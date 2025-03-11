@@ -425,7 +425,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 				    gstate.radix_ht.GetLayout().ColumnCount() - 1);
 			}
 			ht.SetRadixBits(gstate.config.GetRadixBits());
-			ht.AcquirePartitionedData()->Repartition(*lstate.abandoned_data);
+			ht.AcquirePartitionedData()->Repartition(context, *lstate.abandoned_data);
 		}
 	}
 

@@ -1127,4 +1127,8 @@ bool Catalog::IsTemporaryCatalog() const {
 	return db.IsTemporary();
 }
 
+void Catalog::Initialize(optional_ptr<ClientContext> context, bool load_builtin) {
+	Initialize(load_builtin);
+}
+
 } // namespace duckdb

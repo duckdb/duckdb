@@ -8,7 +8,8 @@ from duckdb import (
     ConstantExpression,
     Expression,
     FunctionExpression,
-    LambdaExpression
+    LambdaExpression,
+    SQLExpression,
 )
 if TYPE_CHECKING:
     from .dataframe import DataFrame
@@ -6055,6 +6056,37 @@ def instr(str: "ColumnOrName", substr: str) -> Column:
     [Row(s=2)]
     """
     return _invoke_function("instr", _to_column_expr(str), ConstantExpression(substr))
+
+def expr(str: str) -> Column:
+    """Parses the expression string into the column that it represents
+
+    .. versionadded:: 1.5.0
+
+    .. versionchanged:: 3.4.0
+        Supports Spark Connect.
+
+    Parameters
+    ----------
+    str : str
+        expression defined in string.
+
+    Returns
+    -------
+    :class:`~pyspark.sql.Column`
+        column representing the expression.
+
+    Examples
+    --------
+    >>> df = spark.createDataFrame([["Alice"], ["Bob"]], ["name"])
+    >>> df.select("name", expr("length(name)")).show()
+    +-----+------------+
+    | name|length(name)|
+    +-----+------------+
+    |Alice|           5|
+    |  Bob|           3|
+    +-----+------------+
+    """
+    return Column(SQLExpression(str))
 
 def broadcast(df: "DataFrame") -> "DataFrame":
     """

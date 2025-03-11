@@ -229,10 +229,10 @@ AdbcStatusCode ConnectionGetTableSchema(struct AdbcConnection *connection, const
 
 	std::string query = "SELECT * FROM ";
 	if (catalog != nullptr && strlen(catalog) > 0) {
-		query += std::string(catalog) + ".";
+		query += duckdb::KeywordHelper::WriteOptionallyQuoted(catalog) + ".";
 	}
-	query += std::string(db_schema) + ".";
-	query += std::string(table_name) + " LIMIT 0;";
+	query += duckdb::KeywordHelper::WriteOptionallyQuoted(db_schema) + ".";
+	query += duckdb::KeywordHelper::WriteOptionallyQuoted(table_name) + " LIMIT 0;";
 
 	auto success = QueryInternal(connection, &arrow_stream, query.c_str(), error);
 	if (success != ADBC_STATUS_OK) {
@@ -589,13 +589,12 @@ AdbcStatusCode Ingest(duckdb_connection connection, const char *table_name, cons
 			break;
 		case IngestionMode::APPEND: {
 			arrow_scan->CreateView("temp_adbc_view", true, true);
-			std::string query;
+			std::string query = "insert into ";
 			if (schema) {
-				query = duckdb::StringUtil::Format("insert into \"%s.%s\" select * from temp_adbc_view", schema,
-				                                   table_name);
-			} else {
-				query = duckdb::StringUtil::Format("insert into \"%s\" select * from temp_adbc_view", table_name);
+				query += duckdb::KeywordHelper::WriteOptionallyQuoted(schema) + ".";
 			}
+			query += duckdb::KeywordHelper::WriteOptionallyQuoted(table_name);
+			query += " select * from temp_adbc_view";
 			auto result = cconn->Query(query);
 			break;
 		}
