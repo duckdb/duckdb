@@ -132,6 +132,14 @@ statement ok
 COPY (FROM test_all_types()) TO '__TEST_DIR__/test_all_types.parquet' (RETURN_STATS);
 
 # partition_by
+statement ok
+CREATE VIEW partitioned_test AS SELECT range%2 as partition_key, range val FROM range(2500)
+
+query IIIIII rowsort
+COPY partitioned_test TO '__TEST_DIR__/partitioned_test' (FORMAT PARQUET, PARTITION_BY (partition_key), RETURN_STATS);
+----
+<REGEX>:.*partitioned_test/partition_key=0/.*.parquet	1250	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{"val"={max=2498, min=0, null_count=0}}
+<REGEX>:.*partitioned_test/partition_key=1/.*.parquet	1250	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{"val"={max=2499, min=1, null_count=0}}
 
 # unsupported format (CSV)
 statement error
