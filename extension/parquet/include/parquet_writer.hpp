@@ -157,6 +157,7 @@ private:
 	bool debug_use_openssl;
 	shared_ptr<EncryptionUtil> encryption_util;
 	ParquetVersion parquet_version;
+	vector<ParquetColumnSchema> column_schemas;
 
 	unique_ptr<BufferedFileWriter> writer;
 	std::shared_ptr<duckdb_apache::thrift::protocol::TProtocol> protocol;
