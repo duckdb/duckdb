@@ -1368,6 +1368,10 @@ void StringValueScanner::ProcessOverBufferValue() {
 						}
 						return;
 					}
+				} else {
+					if (iterator.pos.buffer_pos + 1 == cur_buffer_handle->actual_size) {
+						return;
+					}
 				}
 				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
 				iterator.pos.buffer_pos++;
