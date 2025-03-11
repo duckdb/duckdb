@@ -1108,7 +1108,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				auto id = filter_entry;
 				local_column_id_t local_col_id = reader_data.column_ids[id];
 
-				auto &result_vector = result.data[local_col_id];
+				auto &result_vector = result.data[id];
 				auto &child_reader = root_reader.GetChildReader(local_col_id);
 				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
 				                    *scan_filter.filter_state, state.sel, filter_count, i == 0);

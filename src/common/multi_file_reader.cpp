@@ -372,6 +372,7 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		auto global_id = global_idx.GetPrimaryIndex();
 		if (IsVirtualColumn(global_id)) {
 			// virtual column - these are emitted for every file
+			// FIXME: what to do here ???
 			expressions.push_back(make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR)));
 			continue;
 		}
@@ -491,7 +492,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 				reader_data.column_ids.push_back(field_id_map.size());
 				reader_data.column_indexes.emplace_back(field_id_map.size());
 				//! FIXME: what to do here???
-				expressions.push_back(make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR)));
+				expressions.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, local_idx));
 			} else {
 				throw InternalException("Unexpected generated column");
 			}
