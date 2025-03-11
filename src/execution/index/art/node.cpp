@@ -570,10 +570,8 @@ bool Node::MergeInternal(ART &art, Node &other, const GateStatus status) {
 
 		// Insert all row IDs.
 		ArenaAllocator allocator(Allocator::Get(art.db));
-		auto max_len = art.prefix_count * art.MAX_KEY_LEN;
 		for (idx_t i = 0; i < row_ids.size(); i++) {
 			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, row_ids[i]);
-			row_id.VerifyKeyLength(max_len);
 			art.Insert(*this, row_id, 0, row_id, GateStatus::GATE_SET, nullptr, IndexAppendMode::DEFAULT);
 		}
 		return true;
