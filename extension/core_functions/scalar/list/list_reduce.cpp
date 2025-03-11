@@ -121,7 +121,7 @@ static bool ExecuteReduce(const idx_t loops, ReduceExecuteInfo &execute_info, La
 	}
 
 	// create the index vector
-	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops_offset + 1)));
+	Vector index_vector(Value::BIGINT(UnsafeNumericCast<int64_t>(loops_offset)));
 
 	// slice the left and right slice
 	execute_info.left_slice->Slice(*execute_info.left_slice, execute_info.left_sel, reduced_row_idx);
