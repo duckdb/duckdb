@@ -134,9 +134,10 @@ struct MultiFileReaderData {
 	vector<global_idx_t> column_mapping;
 	//! Whether or not there are no columns to read. This can happen when a file only consists of constants
 	bool empty_columns = false;
-	//! vector containing a mapping from `global_idx_t` -> `local_idx_t` (or DConstants::INVALID_INDEX if constant)
+	//! Filters can point to either (1) local columns in the file, or (2) constant values in the `constant_map`
+	//! This map specifies where the to-be-filtered value can be found
 	vector<MultiFileFilterEntry> filter_map;
-	//! The set of table filters, which
+	//! The set of table filters
 	optional_ptr<TableFilterSet> filters;
 	//! The constants that should be applied at the various positions
 	//! `local_idx_t` -> `MultiFileConstantEntry`
