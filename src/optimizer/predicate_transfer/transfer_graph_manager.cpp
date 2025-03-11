@@ -144,7 +144,8 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 }
 
 void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
-	unordered_set<int> constructed_set, unconstructed_set;
+	unordered_set<idx_t> constructed_set;
+	unordered_set<idx_t> unconstructed_set;
 	int prior_flag = static_cast<int>(table_operator_manager.table_operators.size()) - 1;
 	uint32_t root = -1;
 
@@ -226,8 +227,8 @@ void TransferGraphManager::CreatePredicateTransferGraph() {
 	}
 }
 
-pair<int, int> TransferGraphManager::FindEdge(const unordered_set<int> &constructed_set,
-                                              const unordered_set<int> &unconstructed_set) {
+pair<idx_t, idx_t> TransferGraphManager::FindEdge(const unordered_set<idx_t> &constructed_set,
+                                                  const unordered_set<idx_t> &unconstructed_set) {
 	idx_t max_weight = 0, max_card = 0;
 	pair<int, int> result {-1, -1};
 

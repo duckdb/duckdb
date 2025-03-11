@@ -178,15 +178,15 @@ unique_ptr<LogicalUseBF> PredicateTransferOptimizer::BuildUseBFOperator(LogicalO
 	unique_ptr<LogicalUseBF> last_operator;
 
 	// This is important for performance, not use (int i = 0; i < temp_result_to_use.size(); i++)
-	int n_plan = static_cast<int>(bf_plans.size());
-	for (int i = n_plan - 1; i >= 0; i--) {
-		auto use_bf_operator = make_uniq<LogicalUseBF>(bf_plans[i]);
+	for (auto it = bf_plans.rbegin(); it != bf_plans.rend(); ++it) {
+		auto use_bf_operator = make_uniq<LogicalUseBF>(*it);
 		use_bf_operator->SetEstimatedCardinality(node.estimated_cardinality);
-		if (last_operator != nullptr) {
+		if (last_operator) {
 			use_bf_operator->AddChild(std::move(last_operator));
 		}
 		last_operator = std::move(use_bf_operator);
 	}
+
 	return last_operator;
 }
 

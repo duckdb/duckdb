@@ -41,7 +41,8 @@ private:
 	void LargestRoot(vector<LogicalOperator *> &sorted_nodes);
 	void CreatePredicateTransferGraph();
 
-	pair<int, int> FindEdge(const unordered_set<int> &constructed_set, const unordered_set<int> &unconstructed_set);
+	std::pair<idx_t, idx_t> FindEdge(const unordered_set<idx_t> &constructed_set,
+	                                 const unordered_set<idx_t> &unconstructed_set);
 
 private:
 	struct PairHash {

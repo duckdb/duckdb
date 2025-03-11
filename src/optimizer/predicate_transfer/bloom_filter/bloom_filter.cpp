@@ -11,7 +11,7 @@ BloomFilterMasks::BloomFilterMasks() {
 	std::mt19937 re(seed);
 	std::uniform_int_distribution<uint64_t> rd;
 
-	auto random = [&re, &rd](int min_value, int max_value) {
+	auto random = [&re, &rd](uint64_t min_value, uint64_t max_value) {
 		return min_value + rd(re) % (max_value - min_value + 1);
 	};
 
@@ -31,7 +31,7 @@ BloomFilterMasks::BloomFilterMasks() {
 
 	int64_t num_bits_total = kNumMasks + kBitsPerMask - 1;
 
-	for (int32_t i = kBitsPerMask; i < num_bits_total; ++i) {
+	for (uint64_t i = kBitsPerMask; i < num_bits_total; ++i) {
 		int bit_leaving = GetBit(masks_, i - kBitsPerMask) ? 1 : 0;
 
 		if (bit_leaving == 1 && num_bits_set == kMinBitsSet) {
@@ -60,8 +60,8 @@ void BlockedBloomFilter::Initialize(ClientContext &context_p, size_t est_num_row
 	context = &context_p;
 	buffer_manager = &BufferManager::GetBufferManager(*context);
 
-	int64_t min_bits = std::max<int64_t>(MIN_NUM_BITS, static_cast<int64_t>(est_num_rows) * MIN_NUM_BITS_PER_KEY);
-	int64_t total_bits = 1LL << static_cast<int64_t>(std::ceil(std::log2(static_cast<double>(min_bits))));
+	uint64_t min_bits = std::max<uint64_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
+	uint64_t total_bits = 1LL << static_cast<int64_t>(std::ceil(std::log2(static_cast<double>(min_bits))));
 	num_blocks_ = total_bits >> LOG_BLOCK_SIZE;
 
 	buf_ = buffer_manager->GetBufferAllocator().Allocate(num_blocks_ * sizeof(uint64_t));

@@ -34,7 +34,7 @@ struct BloomFilterMasks {
 		return (SafeLoadAs<uint64_t>(masks_ + bit_offset / 8) >> (bit_offset % 8)) & kFullMask;
 	}
 
-	static constexpr int kBitsPerMask = 57;
+	static constexpr uint64_t kBitsPerMask = 57;
 	static constexpr uint64_t kFullMask = (1ULL << kBitsPerMask) - 1;
 
 	static constexpr uint64_t kMinBitsSet = 4;
@@ -47,20 +47,20 @@ struct BloomFilterMasks {
 	uint8_t masks_[kTotalBytes];
 
 private:
-	inline bool GetBit(const uint8_t *data, int bit_pos) const {
+	inline bool GetBit(const uint8_t *data, uint64_t bit_pos) const {
 		return (data[bit_pos / 8] >> (bit_pos % 8)) & 1;
 	}
 
-	inline void SetBit(uint8_t *data, int bit_pos) {
+	inline void SetBit(uint8_t *data, uint64_t bit_pos) {
 		data[bit_pos / 8] |= (1 << (bit_pos % 8));
 	}
 };
 
 class BlockedBloomFilter {
 public:
-	static constexpr const int64_t MIN_NUM_BITS_PER_KEY = 8;
-	static constexpr const int64_t MIN_NUM_BITS = 512;
-	static constexpr const int64_t LOG_BLOCK_SIZE = 6;
+	static constexpr const uint64_t MIN_NUM_BITS_PER_KEY = 8;
+	static constexpr const uint64_t MIN_NUM_BITS = 512;
+	static constexpr const uint64_t LOG_BLOCK_SIZE = 6;
 
 public:
 	BlockedBloomFilter() = default;
