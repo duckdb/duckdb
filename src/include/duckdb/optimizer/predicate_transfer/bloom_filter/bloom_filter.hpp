@@ -10,7 +10,6 @@
 #include <atomic>
 #include <cstdint>
 #include <memory>
-#include <unordered_map>
 
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/common/types/selection_vector.hpp"
@@ -35,16 +34,16 @@ struct BloomFilterMasks {
 		return (SafeLoadAs<uint64_t>(masks_ + bit_offset / 8) >> (bit_offset % 8)) & kFullMask;
 	}
 
-	static constexpr int kBitsPerMask = 57;
+	static constexpr uint64_t kBitsPerMask = 57;
 	static constexpr uint64_t kFullMask = (1ULL << kBitsPerMask) - 1;
 
-	static constexpr int kMinBitsSet = 4;
-	static constexpr int kMaxBitsSet = 5;
+	static constexpr uint64_t kMinBitsSet = 4;
+	static constexpr uint64_t kMaxBitsSet = 5;
 
-	static constexpr int kLogNumMasks = 10;
-	static constexpr int kNumMasks = 1 << kLogNumMasks;
+	static constexpr uint64_t kLogNumMasks = 10;
+	static constexpr uint64_t kNumMasks = 1 << kLogNumMasks;
 
-	static constexpr int kTotalBytes = (kNumMasks + 64) / 8;
+	static constexpr uint64_t kTotalBytes = (kNumMasks + 64) / 8;
 	uint8_t masks_[kTotalBytes];
 
 private:
@@ -72,7 +71,7 @@ public:
 	BufferManager *buffer_manager;
 
 	bool finalized_;
-	int64_t num_blocks_;
+	uint64_t num_blocks_;
 
 public:
 	bool Find(uint64_t hash) const {
@@ -103,11 +102,11 @@ private:
 		uint64_t result = masks_.mask(mask_id);
 
 		// The next set of hash bits is used to pick the amount of bit rotation of the mask.
-		int rotation = (hash >> BloomFilterMasks::kLogNumMasks) & 63;
+		uint64_t rotation = (hash >> BloomFilterMasks::kLogNumMasks) & 63;
 		return (result << rotation) | (result >> (64 - rotation));
 	}
 
-	inline int64_t block_id(uint64_t hash) const {
+	inline uint64_t block_id(uint64_t hash) const {
 		// The next set of hash bits following the bits used to select a mask is used to pick block id (index of 64-bit
 		// word in a bit vector).
 		return (hash >> (BloomFilterMasks::kLogNumMasks + LOG_BLOCK_SIZE)) & (num_blocks_ - 1);
