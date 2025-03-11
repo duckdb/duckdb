@@ -41,7 +41,7 @@ idx_t TableOperatorManager::GetTableOperatorOrder(const LogicalOperator *node) {
 			return i;
 		}
 	}
-	return -1; // fallback if not found
+	return static_cast<idx_t>(-1); // fallback if not found
 }
 
 ColumnBinding TableOperatorManager::GetRenaming(ColumnBinding binding) {

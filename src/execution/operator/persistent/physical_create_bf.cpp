@@ -215,10 +215,9 @@ public:
 		collection.InitializeScan(global_scan_state);
 	}
 
+	const idx_t max_threads;
 	const ColumnDataCollection &data_collection;
 	ColumnDataParallelScanState global_scan_state;
-
-	const idx_t max_threads;
 };
 
 class CreateBFLocalSourceState : public LocalSourceState {

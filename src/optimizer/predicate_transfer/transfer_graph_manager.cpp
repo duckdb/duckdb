@@ -146,7 +146,7 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
 	unordered_set<int> constructed_set, unconstructed_set;
 	int prior_flag = static_cast<int>(table_operator_manager.table_operators.size()) - 1;
-	int root = -1;
+	uint32_t root = -1;
 
 	// Create table operators
 	for (auto &table_operator : table_operator_manager.table_operators) {
@@ -169,8 +169,9 @@ void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) 
 
 	while (!unconstructed_set.empty()) {
 		auto selected_edge = FindEdge(constructed_set, unconstructed_set);
-		if (selected_edge.first == -1)
+		if (selected_edge.first == -1) {
 			break;
+		}
 
 		if (edges_info.count(selected_edge)) {
 			for (auto &v : edges_info[selected_edge]) {
