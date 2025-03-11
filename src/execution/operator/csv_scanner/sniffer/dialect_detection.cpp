@@ -520,17 +520,12 @@ void CSVSniffer::RefineCandidates() {
 			if (cc_best_candidate->state_machine->state_machine_options.quote != '\0' &&
 			    cc_best_candidate->ever_quoted) {
 				// If we have multiple candidates with the same quote, but different escapes
-
 				for (idx_t j = i + 1; j < successful_candidates.size(); j++) {
-					if (successful_candidates[j]->ever_escaped) {
-						// we give preference to one that has actually been escaped.
-						cc_best_candidate = std::move(successful_candidates[j]);
-						break;
-					}
-					// otherwise we give preference if it has the same character between escape and quote
+					// we give preference if it has the same character between escape and quote
 					if (successful_candidates[j]->state_machine->state_machine_options.escape ==
 					    successful_candidates[j]->state_machine->state_machine_options.quote) {
 						cc_best_candidate = std::move(successful_candidates[j]);
+						break;
 					}
 				}
 				candidates.clear();
