@@ -221,7 +221,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 			return_types.emplace_back(LogicalType::BIGINT);
 			return_names.emplace_back("ordinality");
 			D_ASSERT(return_names.size() == return_types.size());
-			table_function.ordinality_data.column_id = return_types.size();
+			table_function.ordinality_data.column_id = return_types.size()-1;
 		}
 	} else {
 		throw InvalidInputException("Cannot call function \"%s\" directly - it has no bind function",
