@@ -616,18 +616,18 @@ SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, Dat
                                                   OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
 	chunk.SetCardinality(1);
+	auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 		break;
 	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
 		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
-		auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
 		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, {fp}));
 		break;
 	}
 	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS: {
-		PhysicalCopyToFile::ReturnStatistics(chunk, 0, file_path, *g.file_stats);
+		PhysicalCopyToFile::ReturnStatistics(chunk, 0, fp, *g.file_stats);
 		break;
 	}
 	default:
