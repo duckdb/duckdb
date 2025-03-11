@@ -280,9 +280,9 @@ public:
 		// 1. The MultiFileReader::Bind call
 		// 2. The 'schema' parquet option
 		auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
-		bind_data.multi_file_reader->InitializeReader(reader, bind_data.file_options, bind_data.reader_bind,
-		                                              global_columns, global_column_ids, table_filters,
-		                                              bind_data.file_list->GetFirstFile(), context, reader_state);
+		bind_data.multi_file_reader->InitializeReader(
+		    reader, bind_data.file_options, bind_data.reader_bind, bind_data.virtual_columns, global_columns,
+		    global_column_ids, table_filters, bind_data.file_list->GetFirstFile(), context, reader_state);
 	}
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.

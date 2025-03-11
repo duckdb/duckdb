@@ -349,7 +349,8 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
                                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
                                                 const vector<ColumnIndex> &global_column_ids,
                                                 MultiFileReaderData &reader_data,
-                                                const MultiFileReaderBindData &bind_data, const string &initial_file,
+                                                const MultiFileReaderBindData &bind_data,
+                                                const virtual_column_map_t &virtual_columns, const string &initial_file,
                                                 optional_ptr<MultiFileReaderGlobalState> global_state) {
 
 	// we have expected types: create a map of name -> (local) column id
@@ -372,8 +373,11 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		auto global_id = global_idx.GetPrimaryIndex();
 		if (IsVirtualColumn(global_id)) {
 			// virtual column - these are emitted for every file
-			// FIXME: what to do here ???
-			expressions.push_back(make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR)));
+			auto virtual_entry = virtual_columns.find(global_id);
+			if (virtual_entry == virtual_columns.end()) {
+				throw InternalException("Virtual column id %d not found in virtual columns map", global_id);
+			}
+			expressions.push_back(make_uniq<BoundConstantExpression>(Value(virtual_entry->second.type)));
 			continue;
 		}
 		if (global_id >= global_columns.size()) {
@@ -438,13 +442,12 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 	reader_data.empty_columns = reader_data.column_indexes.empty();
 }
 
-void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
-                                                   const vector<MultiFileReaderColumnDefinition> &local_columns,
-                                                   const vector<MultiFileReaderColumnDefinition> &global_columns,
-                                                   const vector<ColumnIndex> &global_column_ids,
-                                                   MultiFileReaderData &reader_data,
-                                                   const MultiFileReaderBindData &bind_data, const string &initial_file,
-                                                   optional_ptr<MultiFileReaderGlobalState> global_state) {
+void MultiFileReader::CreateColumnMappingByFieldId(
+    const string &file_name, const vector<MultiFileReaderColumnDefinition> &local_columns,
+    const vector<MultiFileReaderColumnDefinition> &global_columns, const vector<ColumnIndex> &global_column_ids,
+    MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
+    const virtual_column_map_t &virtual_columns, const string &initial_file,
+    optional_ptr<MultiFileReaderGlobalState> global_state) {
 #ifdef DEBUG
 	//! Make sure the global columns have field_ids to match on
 	for (auto &column : global_columns) {
@@ -479,8 +482,12 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 		auto &global_idx = global_column_ids[i];
 		auto global_id = global_column_ids[i].GetPrimaryIndex();
 		if (IsVirtualColumn(global_id)) {
-			//! FIXME: what to do here???
-			expressions.push_back(make_uniq<BoundConstantExpression>(Value(LogicalType::VARCHAR)));
+			// virtual column - these are emitted for every file
+			auto virtual_entry = virtual_columns.find(global_id);
+			if (virtual_entry == virtual_columns.end()) {
+				throw InternalException("Virtual column id %d not found in virtual columns map", global_id);
+			}
+			expressions.push_back(make_uniq<BoundConstantExpression>(Value(virtual_entry->second.type)));
 			continue;
 		}
 		auto local_idx = reader_data.column_ids.size();
@@ -544,17 +551,17 @@ void MultiFileReader::CreateColumnMapping(const string &file_name,
                                           const vector<MultiFileReaderColumnDefinition> &global_columns,
                                           const vector<ColumnIndex> &global_column_ids,
                                           MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
-                                          const string &initial_file,
+                                          const virtual_column_map_t &virtual_columns, const string &initial_file,
                                           optional_ptr<MultiFileReaderGlobalState> global_state) {
 	switch (bind_data.mapping) {
 	case MultiFileReaderColumnMappingMode::BY_NAME: {
 		CreateColumnMappingByName(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
-		                          initial_file, global_state);
+		                          virtual_columns, initial_file, global_state);
 		break;
 	}
 	case MultiFileReaderColumnMappingMode::BY_FIELD_ID: {
 		CreateColumnMappingByFieldId(file_name, local_columns, global_columns, global_column_ids, reader_data,
-		                             bind_data, initial_file, global_state);
+		                             bind_data, virtual_columns, initial_file, global_state);
 		break;
 	}
 	default: {
@@ -569,10 +576,11 @@ void MultiFileReader::CreateMapping(const string &file_name,
                                     const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
                                     MultiFileReaderData &reader_data, const string &initial_file,
                                     const MultiFileReaderBindData &bind_data,
+                                    const virtual_column_map_t &virtual_columns,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// copy global columns and inject any different defaults
 	CreateColumnMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
-	                    initial_file, global_state);
+	                    virtual_columns, initial_file, global_state);
 	CreateFilterMap(global_column_ids, filters, reader_data, global_state);
 }
 
