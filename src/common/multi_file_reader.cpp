@@ -344,10 +344,14 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		// check if this is a constant column
-		auto constant_entry =
-		    std::find_if(reader_data.constant_map.begin(), reader_data.constant_map.end(),
-		                 [&i](const MultiFileConstantEntry &constant) { return constant.column_id == i; });
-		if (constant_entry != reader_data.constant_map.end()) {
+		bool constant = false;
+		for (auto &entry : reader_data.constant_map) {
+			if (entry.column_id == i) {
+				constant = true;
+				break;
+			}
+		}
+		if (constant) {
 			// this column is constant for this file
 			continue;
 		}
@@ -439,10 +443,14 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 
 		// check if this is a constant column
-		auto constant_entry =
-		    std::find_if(reader_data.constant_map.begin(), reader_data.constant_map.end(),
-		                 [&i](const MultiFileConstantEntry &constant) { return constant.column_id == i; });
-		if (constant_entry != reader_data.constant_map.end()) {
+		bool constant = false;
+		for (auto &entry : reader_data.constant_map) {
+			if (entry.column_id == i) {
+				constant = true;
+				break;
+			}
+		}
+		if (constant) {
 			// this column is constant for this file
 			continue;
 		}
@@ -570,14 +578,18 @@ void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileRe
                                        const OperatorPartitionInfo &partition_info,
                                        OperatorPartitionData &partition_data) {
 	for (auto &col : partition_info.partition_columns) {
-		auto constant_entry =
-		    std::find_if(reader_data.constant_map.begin(), reader_data.constant_map.end(),
-		                 [&col](const MultiFileConstantEntry &constant) { return constant.column_id == col; });
-		if (constant_entry == reader_data.constant_map.end()) {
+		bool found_constant = false;
+		for (auto &constant : reader_data.constant_map) {
+			if (constant.column_id == col) {
+				found_constant = true;
+				partition_data.partition_data.emplace_back(constant.value);
+				break;
+			}
+		}
+		if (!found_constant) {
 			throw InternalException(
 			    "MultiFileReader::GetPartitionData - did not find constant for the given partition");
 		}
-		partition_data.partition_data.emplace_back(constant_entry->value);
 	}
 }
 
