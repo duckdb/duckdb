@@ -18,10 +18,10 @@ BloomFilterMasks::BloomFilterMasks() {
 	memset(masks_, 0, kTotalBytes);
 
 	// Prepare the first mask
-	int num_bits_set = random(kMinBitsSet, kMaxBitsSet);
+	int num_bits_set = static_cast<int>(random(kMinBitsSet, kMaxBitsSet));
 	for (int i = 0; i < num_bits_set; ++i) {
 		for (;;) {
-			int bit_pos = random(0, kBitsPerMask - 1);
+			int bit_pos = static_cast<int>(random(0, kBitsPerMask - 1));
 			if (!GetBit(masks_, bit_pos)) {
 				SetBit(masks_, bit_pos);
 				break;
@@ -31,7 +31,7 @@ BloomFilterMasks::BloomFilterMasks() {
 
 	int64_t num_bits_total = kNumMasks + kBitsPerMask - 1;
 
-	for (int64_t i = kBitsPerMask; i < num_bits_total; ++i) {
+	for (int32_t i = kBitsPerMask; i < num_bits_total; ++i) {
 		int bit_leaving = GetBit(masks_, i - kBitsPerMask) ? 1 : 0;
 
 		if (bit_leaving == 1 && num_bits_set == kMinBitsSet) {

@@ -34,7 +34,7 @@ struct BloomFilterMasks {
 		return (SafeLoadAs<uint64_t>(masks_ + bit_offset / 8) >> (bit_offset % 8)) & kFullMask;
 	}
 
-	static constexpr uint64_t kBitsPerMask = 57;
+	static constexpr int kBitsPerMask = 57;
 	static constexpr uint64_t kFullMask = (1ULL << kBitsPerMask) - 1;
 
 	static constexpr uint64_t kMinBitsSet = 4;
