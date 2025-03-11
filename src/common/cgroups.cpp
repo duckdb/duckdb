@@ -187,9 +187,8 @@ idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 	for (idx_t i = 0; i < cgroup_entries.size(); i++) {
 		auto &entry = cgroup_entries[i];
 		auto &controller_list = entry.controller_list;
-		if (controller_list.empty()) {
+		if (entry.hierarchy_id == 0 && controller_list.empty()) {
 			root_entry = i;
-			D_ASSERT(entry.hierarchy_id == 0);
 			continue;
 		}
 		for (auto &controller : controller_list) {
