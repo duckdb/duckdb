@@ -442,12 +442,12 @@ void WindowGlobalSourceState::CreateTaskList() {
 	}
 
 	//	TODO: Generate dynamically instead of building a big list?
-	vector<WindowGroupStage> states {WindowGroupStage::SINK, WindowGroupStage::FINALIZE, WindowGroupStage::GETDATA};
+	vector<WindowGroupStage> stages {WindowGroupStage::SINK, WindowGroupStage::FINALIZE, WindowGroupStage::GETDATA};
 	for (const auto &b : partition_blocks) {
 		auto &window_hash_group = *window_hash_groups[b.second];
-		for (const auto &state : states) {
+		for (const auto &stage : stages) {
 			idx_t thread_count = 0;
-			for (Task task(state, b.second, b.first); task.begin_idx < task.max_idx; task.begin_idx += per_thread) {
+			for (Task task(stage, b.second, b.first); task.begin_idx < task.max_idx; task.begin_idx += per_thread) {
 				task.end_idx = MinValue<idx_t>(task.begin_idx + per_thread, task.max_idx);
 				tasks.emplace_back(task);
 				window_hash_group.tasks_remaining++;
