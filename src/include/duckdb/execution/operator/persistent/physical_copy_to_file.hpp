@@ -76,10 +76,14 @@ public:
 		return per_thread_output || partition_output || parallel;
 	}
 
+public:
 	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
 	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
 
 	string GetTrimmedPath(ClientContext &context) const;
+
+	static void ReturnStatistics(DataChunk &chunk, idx_t row_idx, const string &file_name,
+	                             CopyFunctionFileStatistics &file_stats);
 
 private:
 	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink,
