@@ -279,11 +279,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 		auto column_id = col_idx.GetPrimaryIndex();
 		if (column_id == options.filename_idx) {
 			// filename
-			auto emplace_result = reader_data.constant_map.emplace(i, Value(filename));
-			if (!emplace_result.second) {
-				throw InternalException(
-				    "Tried to create a constant value for column_id %d but it already has a constant assigned!", i);
-			}
+			reader_data.constant_map.emplace_back(i, Value(filename));
 			continue;
 		}
 		if (IsVirtualColumn(column_id)) {
@@ -297,12 +293,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			for (auto &entry : options.hive_partitioning_indexes) {
 				if (column_id == entry.index) {
 					Value value = file_options.GetHivePartitionValue(partitions[entry.value], entry.value, context);
-					auto emplace_result = reader_data.constant_map.emplace(i, value);
-					if (!emplace_result.second) {
-						throw InternalException(
-						    "Tried to create a constant value for column_id %d but it already has a constant assigned!",
-						    i);
-					}
+					reader_data.constant_map.emplace_back(i, value);
 					found_partition = true;
 					break;
 				}
@@ -321,11 +312,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			if (not_present_in_file) {
 				// we need to project a column with name \"global_name\" - but it does not exist in the current file
 				// push a NULL value of the specified type
-				auto emplace_result = reader_data.constant_map.emplace(i, Value(type));
-				if (!emplace_result.second) {
-					throw InternalException(
-					    "Tried to create a constant value for column_id %d but it already has a constant assigned!", i);
-				}
+				reader_data.constant_map.emplace_back(i, Value(type));
 				continue;
 			}
 		}
@@ -355,9 +342,12 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		auto &column = local_columns[col_idx];
 		name_map[column.name] = col_idx;
 	}
-
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		if (reader_data.constant_map.count(i)) {
+		// check if this is a constant column
+		auto constant_entry =
+		    std::find_if(reader_data.constant_map.begin(), reader_data.constant_map.end(),
+		                 [&i](const MultiFileConstantEntry &constant) { return constant.column_id == i; });
+		if (constant_entry != reader_data.constant_map.end()) {
 			// this column is constant for this file
 			continue;
 		}
@@ -378,11 +368,7 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		if (entry == name_map.end()) {
 			// identiier not present in file, use default value
 			if (global_column.default_expression) {
-				auto emplace_result = reader_data.constant_map.emplace(i, global_column.GetDefaultValue());
-				if (!emplace_result.second) {
-					throw InternalException(
-					    "Tried to create a constant value for column_id %d but it already has a constant assigned!", i);
-				}
+				reader_data.constant_map.emplace_back(i, global_column.GetDefaultValue());
 				continue;
 			} else {
 				string candidate_names;
@@ -451,7 +437,12 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 
 	// loop through the schema definition
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		if (reader_data.constant_map.count(i)) {
+
+		// check if this is a constant column
+		auto constant_entry =
+		    std::find_if(reader_data.constant_map.begin(), reader_data.constant_map.end(),
+		                 [&i](const MultiFileConstantEntry &constant) { return constant.column_id == i; });
+		if (constant_entry != reader_data.constant_map.end()) {
 			// this column is constant for this file
 			continue;
 		}
@@ -482,11 +473,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 				throw NotImplementedException("Default expression that isn't constant is not supported yet");
 			}
 			auto &constant_expr = default_val->Cast<ConstantExpression>();
-			auto emplace_result = reader_data.constant_map.emplace(i, constant_expr.value);
-			if (!emplace_result.second) {
-				throw InternalException(
-				    "Tried to create a constant value for column_id %d but it already has a constant assigned!", i);
-			}
+			reader_data.constant_map.emplace_back(i, constant_expr.value);
 			continue;
 		}
 
@@ -556,11 +543,13 @@ void MultiFileReader::CreateFilterMap(const vector<ColumnIndex> &global_column_i
 
 		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
 			auto map_index = reader_data.column_mapping[c];
-			reader_data.filter_map[map_index] = c;
+			reader_data.filter_map[map_index].index = c;
+			reader_data.filter_map[map_index].is_constant = false;
 		}
-		for (auto &entry : reader_data.constant_map) {
-			auto constant_index = entry.first;
-			reader_data.filter_map[constant_index] = DConstants::INVALID_INDEX;
+		for (idx_t c = 0; c < reader_data.constant_map.size(); c++) {
+			auto constant_index = reader_data.constant_map[c].column_id;
+			reader_data.filter_map[constant_index].index = c;
+			reader_data.filter_map[constant_index].is_constant = true;
 		}
 	}
 }
@@ -570,7 +559,7 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReade
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
 	for (auto &entry : reader_data.constant_map) {
-		chunk.data[entry.first].Reference(entry.second);
+		chunk.data[entry.column_id].Reference(entry.value);
 	}
 	chunk.Verify();
 }
@@ -581,12 +570,14 @@ void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileRe
                                        const OperatorPartitionInfo &partition_info,
                                        OperatorPartitionData &partition_data) {
 	for (auto &col : partition_info.partition_columns) {
-		auto entry = reader_data.constant_map.find(col);
-		if (entry == reader_data.constant_map.end()) {
+		auto constant_entry =
+		    std::find_if(reader_data.constant_map.begin(), reader_data.constant_map.end(),
+		                 [&col](const MultiFileConstantEntry &constant) { return constant.column_id == col; });
+		if (constant_entry == reader_data.constant_map.end()) {
 			throw InternalException(
 			    "MultiFileReader::GetPartitionData - did not find constant for the given partition");
 		}
-		partition_data.partition_data.emplace_back(entry->second);
+		partition_data.partition_data.emplace_back(constant_entry->value);
 	}
 }
 

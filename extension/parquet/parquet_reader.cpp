@@ -1104,15 +1104,14 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 			}
 			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
 			auto filter_entry = reader_data.filter_map[scan_filter.filter_idx];
-			if (filter_entry == DConstants::INVALID_INDEX) {
+			if (filter_entry.is_constant) {
 				// this is a constant vector, look for the constant
-				D_ASSERT(reader_data.constant_map.count(scan_filter.filter_idx));
-				auto &constant = reader_data.constant_map[scan_filter.filter_idx];
+				auto &constant = reader_data.constant_map[filter_entry.index].value;
 				Vector constant_vector(constant);
 				ColumnReader::ApplyFilter(constant_vector, scan_filter.filter, *scan_filter.filter_state, scan_count,
 				                          state.sel, filter_count);
 			} else {
-				auto id = filter_entry;
+				auto id = filter_entry.index;
 				auto file_col_idx = reader_data.column_ids[id];
 				auto result_idx = reader_data.column_mapping[id];
 
