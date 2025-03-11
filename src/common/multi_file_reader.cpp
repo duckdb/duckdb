@@ -419,16 +419,15 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		ColumnIndex local_index(local_id);
 
 		auto local_idx = reader_data.column_ids.size();
-		unique_ptr<Expression> expression;
-		expression = make_uniq<BoundReferenceExpression>(local_type, local_idx);
+		auto expected_type = local_type;
 		if (global_type != local_type) {
 			// the types are not the same - add a cast
-			auto cast_expression = BoundCastExpression::AddDefaultCastToType(std::move(expression), global_type);
-			expression = std::move(cast_expression);
+			reader_data.cast_map[local_id] = global_type;
+			expected_type = global_type;
 		} else {
 			local_index = ColumnIndex(local_id, global_idx.GetChildIndexes());
 		}
-		expressions.push_back(std::move(expression));
+		expressions.push_back(make_uniq<BoundReferenceExpression>(expected_type, local_idx));
 		// create the mapping
 		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
@@ -523,16 +522,15 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 		auto &local_column = local_columns[local_id];
 		ColumnIndex local_index(local_id);
 
-		unique_ptr<Expression> expression;
-		expression = make_uniq<BoundReferenceExpression>(local_column.type, local_idx);
+		auto expected_type = local_column.type;
 		if (global_column.type != local_column.type) {
 			// differing types, wrap in a cast column reader
-			auto cast_expression = BoundCastExpression::AddDefaultCastToType(std::move(expression), global_column.type);
-			expression = std::move(cast_expression);
+			reader_data.cast_map[local_id] = global_column.type;
+			expected_type = global_column.type;
 		} else {
 			local_index = ColumnIndex(local_id, global_idx.GetChildIndexes());
 		}
-		expressions.push_back(std::move(expression));
+		expressions.push_back(make_uniq<BoundReferenceExpression>(expected_type, local_idx));
 
 		reader_data.column_mapping.push_back(i);
 		reader_data.column_ids.push_back(local_id);
