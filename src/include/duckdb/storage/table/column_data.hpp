@@ -124,7 +124,7 @@ public:
 
 	//! Select
 	virtual void Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-	                    SelectionVector &sel, idx_t &count, const TableFilter &filter);
+	                    SelectionVector &sel, idx_t &count, const TableFilter &filter, TableFilterState &filter_state);
 	virtual void Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
 	                    SelectionVector &sel, idx_t count);
 	virtual void SelectCommitted(idx_t vector_index, ColumnScanState &state, Vector &result, SelectionVector &sel,
@@ -206,7 +206,7 @@ protected:
 	void SelectVector(ColumnScanState &state, Vector &result, idx_t target_count, const SelectionVector &sel,
 	                  idx_t sel_count);
 	void FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
-	                  idx_t &sel_count, const TableFilter &filter);
+	                  idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state);
 
 	void ClearUpdates();
 	void FetchUpdates(TransactionData transaction, idx_t vector_index, Vector &result, idx_t scan_count,

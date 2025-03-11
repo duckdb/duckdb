@@ -420,9 +420,16 @@ def get_git_describe():
         return override_git_describe + "-g" + "deadbeeff"
 
 
+def prefix_version(version):
+    """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
+    if version.startswith('v'):
+        return version
+    return 'v' + version
+
+
 def git_dev_version():
-    # if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
-    #    return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
+    if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
+        return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
     try:
         long_version = get_git_describe()
         version_splits = long_version.split('-')[0].lstrip('v').split('.')

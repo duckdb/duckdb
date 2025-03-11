@@ -46,7 +46,7 @@ FilterPropagateResult InFilter::CheckStatistics(BaseStatistics &stats) {
 	}
 }
 
-string InFilter::ToString(const string &column_name) {
+string InFilter::ToString(const string &column_name) const {
 	string in_list;
 	for (auto &val : values) {
 		if (!in_list.empty()) {

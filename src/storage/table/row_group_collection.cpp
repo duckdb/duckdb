@@ -141,7 +141,7 @@ void RowGroupCollection::Verify() {
 // Scan
 //===--------------------------------------------------------------------===//
 void RowGroupCollection::InitializeScan(CollectionScanState &state, const vector<StorageIndex> &column_ids,
-                                        TableFilterSet *table_filters) {
+                                        optional_ptr<TableFilterSet> table_filters) {
 	auto row_group = row_groups->GetRootSegment();
 	D_ASSERT(row_group);
 	state.row_groups = row_groups.get();

@@ -13,6 +13,7 @@
 #include "duckdb/storage/table/append_state.hpp"
 #include "duckdb/storage/table/scan_state.hpp"
 #include "duckdb/storage/table/update_segment.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 
 #include <cstring>
 
@@ -132,11 +133,11 @@ void ColumnSegment::Select(ColumnScanState &state, idx_t scan_count, Vector &res
 }
 
 void ColumnSegment::Filter(ColumnScanState &state, idx_t scan_count, Vector &result, SelectionVector &sel,
-                           idx_t &sel_count, const TableFilter &filter) {
+                           idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
 	if (!function.get().filter) {
 		throw InternalException("ColumnSegment::Filter not implemented for this compression method");
 	}
-	function.get().filter(*this, state, scan_count, result, sel, sel_count, filter);
+	function.get().filter(*this, state, scan_count, result, sel, sel_count, filter, filter_state);
 }
 
 void ColumnSegment::Skip(ColumnScanState &state) {
@@ -407,21 +408,25 @@ static idx_t TemplatedNullSelection(UnifiedVectorFormat &vdata, SelectionVector 
 }
 
 idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, UnifiedVectorFormat &vdata,
-                                     const TableFilter &filter, idx_t scan_count, idx_t &approved_tuple_count) {
+                                     const TableFilter &filter, TableFilterState &filter_state, idx_t scan_count,
+                                     idx_t &approved_tuple_count) {
 	switch (filter.filter_type) {
 	case TableFilterType::OPTIONAL_FILTER: {
 		return scan_count;
 	}
 	case TableFilterType::CONJUNCTION_OR: {
 		// similar to the CONJUNCTION_AND, but we need to take care of the SelectionVectors (OR all of them)
+		auto &state = filter_state.Cast<ConjunctionOrFilterState>();
 		idx_t count_total = 0;
 		SelectionVector result_sel(approved_tuple_count);
 		auto &conjunction_or = filter.Cast<ConjunctionOrFilter>();
-		for (auto &child_filter : conjunction_or.child_filters) {
+		for (idx_t child_idx = 0; child_idx < conjunction_or.child_filters.size(); child_idx++) {
+			auto &child_filter = *conjunction_or.child_filters[child_idx];
 			SelectionVector temp_sel;
 			temp_sel.Initialize(sel);
 			idx_t temp_tuple_count = approved_tuple_count;
-			idx_t temp_count = FilterSelection(temp_sel, vector, vdata, *child_filter, scan_count, temp_tuple_count);
+			idx_t temp_count = FilterSelection(temp_sel, vector, vdata, child_filter, *state.child_states[child_idx],
+			                                   scan_count, temp_tuple_count);
 			// tuples passed, move them into the actual result vector
 			for (idx_t i = 0; i < temp_count; i++) {
 				auto new_idx = temp_sel.get_index(i);
@@ -443,8 +448,11 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 	}
 	case TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction_and = filter.Cast<ConjunctionAndFilter>();
-		for (auto &child_filter : conjunction_and.child_filters) {
-			FilterSelection(sel, vector, vdata, *child_filter, scan_count, approved_tuple_count);
+		auto &state = filter_state.Cast<ConjunctionAndFilterState>();
+		for (idx_t child_idx = 0; child_idx < conjunction_and.child_filters.size(); child_idx++) {
+			auto &child_filter = *conjunction_and.child_filters[child_idx];
+			FilterSelection(sel, vector, vdata, child_filter, *state.child_states[child_idx], scan_count,
+			                approved_tuple_count);
 		}
 		return approved_tuple_count;
 	}
@@ -536,17 +544,19 @@ idx_t ColumnSegment::FilterSelection(SelectionVector &sel, Vector &vector, Unifi
 		}
 		return approved_tuple_count;
 	}
-	case TableFilterType::IS_NULL:
+	case TableFilterType::IS_NULL: {
 		return TemplatedNullSelection<true>(vdata, sel, approved_tuple_count);
-	case TableFilterType::IS_NOT_NULL:
+	}
+	case TableFilterType::IS_NOT_NULL: {
 		return TemplatedNullSelection<false>(vdata, sel, approved_tuple_count);
+	}
 	case TableFilterType::STRUCT_EXTRACT: {
 		auto &struct_filter = filter.Cast<StructFilter>();
 		// Apply the filter on the child vector
 		auto &child_vec = StructVector::GetEntries(vector)[struct_filter.child_idx];
 		UnifiedVectorFormat child_data;
 		child_vec->ToUnifiedFormat(scan_count, child_data);
-		return FilterSelection(sel, *child_vec, child_data, *struct_filter.child_filter, scan_count,
+		return FilterSelection(sel, *child_vec, child_data, *struct_filter.child_filter, filter_state, scan_count,
 		                       approved_tuple_count);
 	}
 	default:

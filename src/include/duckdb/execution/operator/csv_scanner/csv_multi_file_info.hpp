@@ -19,7 +19,8 @@ public:
 };
 
 struct CSVMultiFileInfo {
-	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context);
+	static unique_ptr<BaseFileReaderOptions> InitializeOptions(ClientContext &context,
+	                                                           optional_ptr<TableFunctionInfo> info);
 	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
 	                            BaseFileReaderOptions &options, vector<string> &expected_names,
 	                            vector<LogicalType> &expected_types);
@@ -37,7 +38,7 @@ struct CSVMultiFileInfo {
 	                               FileExpandResult expand_result);
 	static unique_ptr<GlobalTableFunctionState>
 	InitializeGlobalState(ClientContext &context, MultiFileBindData &bind_data, MultiFileGlobalState &global_state);
-	static unique_ptr<LocalTableFunctionState> InitializeLocalState();
+	static unique_ptr<LocalTableFunctionState> InitializeLocalState(ExecutionContext &, GlobalTableFunctionState &);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
@@ -47,7 +48,7 @@ struct CSVMultiFileInfo {
 	                                               CSVReaderOptions &options,
 	                                               const MultiFileReaderOptions &file_options);
 	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
-	static void FinalizeReader(ClientContext &context, BaseFileReader &reader);
+	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &);
 	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,
 	                              GlobalTableFunctionState &gstate, LocalTableFunctionState &lstate);
 	static void Scan(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &global_state,

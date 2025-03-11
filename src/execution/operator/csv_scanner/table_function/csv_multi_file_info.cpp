@@ -8,7 +8,8 @@
 
 namespace duckdb {
 
-unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientContext &context) {
+unique_ptr<BaseFileReaderOptions> CSVMultiFileInfo::InitializeOptions(ClientContext &context,
+                                                                      optional_ptr<TableFunctionInfo> info) {
 	return make_uniq<CSVFileReaderOptions>();
 }
 
@@ -255,7 +256,8 @@ public:
 	bool done = false;
 };
 
-unique_ptr<LocalTableFunctionState> CSVMultiFileInfo::InitializeLocalState() {
+unique_ptr<LocalTableFunctionState> CSVMultiFileInfo::InitializeLocalState(ExecutionContext &,
+                                                                           GlobalTableFunctionState &) {
 	return make_uniq<CSVLocalState>();
 }
 
@@ -321,7 +323,7 @@ shared_ptr<BaseUnionData> CSVMultiFileInfo::GetUnionData(shared_ptr<BaseFileRead
 	return data;
 }
 
-void CSVMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader) {
+void CSVMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &) {
 	auto &csv_file_scan = reader.Cast<CSVFileScan>();
 	csv_file_scan.InitializeFileNamesTypes();
 	csv_file_scan.SetStart();

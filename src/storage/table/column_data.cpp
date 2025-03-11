@@ -230,12 +230,12 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 }
 
 void ColumnData::FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
-                              idx_t &sel_count, const TableFilter &filter) {
+                              idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
 	BeginScanVectorInternal(state);
 	if (state.current->start + state.current->count - state.row_index < target_count) {
 		throw InternalException("ColumnData::Filter should be able to fetch everything from one segment");
 	}
-	state.current->Filter(state, target_count, result, sel, sel_count, filter);
+	state.current->Filter(state, target_count, result, sel, sel_count, filter, filter_state);
 	state.row_index += target_count;
 	state.internal_index = state.row_index;
 }
@@ -346,12 +346,13 @@ idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_c
 }
 
 void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t &s_count, const TableFilter &filter) {
+                        SelectionVector &sel, idx_t &s_count, const TableFilter &filter,
+                        TableFilterState &filter_state) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
 
 	UnifiedVectorFormat vdata;
 	result.ToUnifiedFormat(scan_count, vdata);
-	ColumnSegment::FilterSelection(sel, result, vdata, filter, scan_count, s_count);
+	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, scan_count, s_count);
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
