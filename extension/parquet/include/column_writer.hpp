@@ -125,8 +125,6 @@ public:
 	virtual void Write(ColumnWriterState &state, Vector &vector, idx_t count) = 0;
 	virtual void FinalizeWrite(ColumnWriterState &state) = 0;
 
-	string GetColumnName() const;
-
 protected:
 	void HandleDefineLevels(ColumnWriterState &state, ColumnWriterState *parent, const ValidityMask &validity,
 	                        const idx_t count, const uint16_t define_value, const uint16_t null_value) const;
