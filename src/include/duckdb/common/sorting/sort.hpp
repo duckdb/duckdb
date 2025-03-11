@@ -13,8 +13,18 @@
 
 namespace duckdb {
 
+class SortLocalSinkState;
+class SortGlobalSinkState;
+class SortLocalSourceState;
+class SortGlobalSourceState;
+
+//! Class that sorts the data, follows the PhysicalOperator interface
 class Sort {
-private:
+	friend class SortLocalSinkState;
+	friend class SortGlobalSinkState;
+	friend class SortLocalSourceState;
+	friend class SortGlobalSourceState;
+
 	struct SortProjectionColumn {
 		bool is_payload;
 		idx_t layout_col_idx;

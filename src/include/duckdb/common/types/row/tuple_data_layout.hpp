@@ -14,9 +14,10 @@
 #include "duckdb/execution/operator/aggregate/aggregate_object.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/planner/bound_result_modifier.hpp"
-#include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {
+
+enum class SortKeyType : uint8_t;
 
 class TupleDataLayout {
 public:
@@ -57,6 +58,12 @@ public:
 	const inline Aggregates &GetAggregates() const {
 		return aggregates;
 	}
+	//! Gets the sort key type of this layout (if applicable)
+	inline SortKeyType GetSortKeyType() const {
+		return sort_key_type;
+	}
+	//! Returns whether this is a sort key layout (in implementation file to avoid including here)
+	bool IsSortKeyLayout() const;
 	//! Returns a map from column id to the struct TupleDataLayout
 	const inline TupleDataLayout &GetStructLayout(idx_t col_idx) const {
 		D_ASSERT(struct_layouts->find(col_idx) != struct_layouts->end());

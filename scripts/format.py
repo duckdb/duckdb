@@ -87,6 +87,7 @@ ignored_files = [
     'yyjson.cpp',
     'yyjson.hpp',
     'duckdb_pdqsort.hpp',
+    'pdqsort.h',
     'stubdata.cpp',
     'nf_calendar.cpp',
     'nf_calendar.h',

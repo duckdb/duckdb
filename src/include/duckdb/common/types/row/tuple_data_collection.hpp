@@ -58,6 +58,8 @@ public:
 public:
 	//! The layout of the stored rows
 	const TupleDataLayout &GetLayout() const;
+	//! How many tuples fit per block
+	idx_t TuplesPerBlock() const;
 	//! The number of rows stored in the tuple data collection
 	const idx_t &Count() const;
 	//! The number of chunks stored in the tuple data collection
@@ -68,11 +70,18 @@ public:
 	void Unpin();
 	//! Sets the partition index of this tuple data collection
 	void SetPartitionIndex(idx_t index);
+	//! Gets the pointers to the start of every block
+	vector<data_ptr_t> GetRowBlockPointers() const;
 
 	//! Gets the scatter function for the given type
 	static TupleDataScatterFunction GetScatterFunction(const LogicalType &type, bool within_collection = false);
 	//! Gets the gather function for the given type
 	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type);
+
+	//! Gets the scatter function for the given sort key type
+	static TupleDataScatterFunction GetSortKeyScatterFunction(SortKeyType sort_key_type);
+	//! Gets the gather function for the given sort key type
+	static TupleDataGatherFunction GetSortKeyGatherFunction(SortKeyType sort_key_type);
 
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state,
@@ -121,6 +130,10 @@ public:
 	//! Computes the heap sizes for the new DataChunk that will be appended
 	static void ComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
 	                             const SelectionVector &append_sel, const idx_t append_count);
+	//! Computes the heap sizes for a SortKey layout
+	static void SortKeyComputeHeapSizes(TupleDataChunkState &chunk_state, const DataChunk &new_chunk,
+	                                    const SelectionVector &append_sel, const idx_t append_count,
+	                                    const SortKeyType sort_key_type);
 
 	//! Builds out the buffer space for the specified Chunk state
 	void Build(TupleDataPinState &pin_state, TupleDataChunkState &chunk_state, const idx_t append_offset,

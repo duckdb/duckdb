@@ -1,6 +1,7 @@
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
+#include "duckdb/common/sorting/sort_key.hpp"
 
 namespace duckdb {
 
@@ -188,6 +189,10 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, bool ha
 		heap_size_offset = has_payload ? SortKey<SortKeyType::PAYLOAD_VARIABLE_32>::HEAP_SIZE_OFFSET
 		                               : SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>::HEAP_SIZE_OFFSET;
 	}
+}
+
+bool TupleDataLayout::IsSortKeyLayout() const {
+	return sort_key_type != SortKeyType::INVALID;
 }
 
 } // namespace duckdb

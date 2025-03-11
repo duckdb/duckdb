@@ -29,12 +29,17 @@ void TupleDataCollection::Initialize() {
 	D_ASSERT(!layout.GetTypes().empty());
 	this->count = 0;
 	this->data_size = 0;
-	scatter_functions.reserve(layout.ColumnCount());
-	gather_functions.reserve(layout.ColumnCount());
-	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
-		auto &type = layout.GetTypes()[col_idx];
-		scatter_functions.emplace_back(GetScatterFunction(type));
-		gather_functions.emplace_back(GetGatherFunction(type));
+	if (layout.IsSortKeyLayout()) {
+		scatter_functions.emplace_back(GetSortKeyScatterFunction(layout.GetSortKeyType()));
+		gather_functions.emplace_back(GetSortKeyGatherFunction(layout.GetSortKeyType()));
+	} else {
+		scatter_functions.reserve(layout.ColumnCount());
+		gather_functions.reserve(layout.ColumnCount());
+		for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+			auto &type = layout.GetTypes()[col_idx];
+			scatter_functions.emplace_back(GetScatterFunction(type));
+			gather_functions.emplace_back(GetGatherFunction(type));
+		}
 	}
 }
 
@@ -51,6 +56,10 @@ void TupleDataCollection::GetAllColumnIDs(vector<column_t> &column_ids) {
 
 const TupleDataLayout &TupleDataCollection::GetLayout() const {
 	return layout;
+}
+
+idx_t TupleDataCollection::TuplesPerBlock() const {
+	return allocator->GetBufferManager().GetBlockSize() / layout.GetRowWidth();
 }
 
 const idx_t &TupleDataCollection::Count() const {
@@ -84,6 +93,17 @@ void TupleDataCollection::SetPartitionIndex(const idx_t index) {
 	D_ASSERT(Count() == 0);
 	partition_index = index;
 	allocator->SetPartitionIndex(index);
+}
+
+vector<data_ptr_t> TupleDataCollection::GetRowBlockPointers() const {
+	D_ASSERT(segments.size() == 1);
+	const auto &segment = segments[0];
+	vector<data_ptr_t> result;
+	result.reserve(segment.pinned_row_handles.size());
+	for (const auto &pinned_row_handle : segment.pinned_row_handles) {
+		result.emplace_back(pinned_row_handle.Ptr());
+	}
+	return result;
 }
 
 // LCOV_EXCL_START
@@ -220,7 +240,12 @@ void TupleDataCollection::AppendUnified(TupleDataPinState &pin_state, TupleDataC
 	}
 
 	if (!layout.AllConstant()) {
-		TupleDataCollection::ComputeHeapSizes(chunk_state, new_chunk, append_sel, actual_append_count);
+		if (layout.IsSortKeyLayout()) {
+			TupleDataCollection::ComputeHeapSizes(chunk_state, new_chunk, append_sel, actual_append_count);
+		} else {
+			TupleDataCollection::SortKeyComputeHeapSizes(chunk_state, new_chunk, append_sel, actual_append_count,
+			                                             layout.GetSortKeyType());
+		}
 	}
 
 	Build(pin_state, chunk_state, 0, actual_append_count);

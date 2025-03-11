@@ -71,6 +71,7 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
+#include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/column/column_data_scan_states.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
@@ -3582,6 +3583,32 @@ const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value) {
 template<>
 SinkResultType EnumUtil::FromString<SinkResultType>(const char *value) {
 	return static_cast<SinkResultType>(StringUtil::StringToEnum(GetSinkResultTypeValues(), 3, "SinkResultType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetSortKeyTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(SortKeyType::INVALID), "INVALID" },
+		{ static_cast<uint32_t>(SortKeyType::NO_PAYLOAD_FIXED_8), "NO_PAYLOAD_FIXED_8" },
+		{ static_cast<uint32_t>(SortKeyType::NO_PAYLOAD_FIXED_16), "NO_PAYLOAD_FIXED_16" },
+		{ static_cast<uint32_t>(SortKeyType::NO_PAYLOAD_FIXED_24), "NO_PAYLOAD_FIXED_24" },
+		{ static_cast<uint32_t>(SortKeyType::NO_PAYLOAD_FIXED_32), "NO_PAYLOAD_FIXED_32" },
+		{ static_cast<uint32_t>(SortKeyType::NO_PAYLOAD_VARIABLE_32), "NO_PAYLOAD_VARIABLE_32" },
+		{ static_cast<uint32_t>(SortKeyType::PAYLOAD_FIXED_16), "PAYLOAD_FIXED_16" },
+		{ static_cast<uint32_t>(SortKeyType::PAYLOAD_FIXED_24), "PAYLOAD_FIXED_24" },
+		{ static_cast<uint32_t>(SortKeyType::PAYLOAD_FIXED_32), "PAYLOAD_FIXED_32" },
+		{ static_cast<uint32_t>(SortKeyType::PAYLOAD_VARIABLE_32), "PAYLOAD_VARIABLE_32" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<SortKeyType>(SortKeyType value) {
+	return StringUtil::EnumToString(GetSortKeyTypeValues(), 10, "SortKeyType", static_cast<uint32_t>(value));
+}
+
+template<>
+SortKeyType EnumUtil::FromString<SortKeyType>(const char *value) {
+	return static_cast<SortKeyType>(StringUtil::StringToEnum(GetSortKeyTypeValues(), 10, "SortKeyType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetSourceResultTypeValues() {

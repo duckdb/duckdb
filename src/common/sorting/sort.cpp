@@ -1,6 +1,8 @@
 #include "duckdb/common/sorting/sort.hpp"
 
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
+#include "duckdb/common/sorting/sort_key.hpp"
+#include "duckdb/common/sorting/sorted_run.hpp"
 
 namespace duckdb {
 
@@ -67,12 +69,14 @@ Sort::Sort(const vector<BoundOrderByNode> &orders, const vector<LogicalType> &ty
 class SortLocalSinkState : public LocalSinkState {
 public:
 	SortLocalSinkState(const Sort &sort, ClientContext &context) {
+		throw NotImplementedException("Sort");
 	}
 };
 
 class SortGlobalSinkState : public GlobalSinkState {
 public:
 	SortGlobalSinkState(const Sort &sort, ClientContext &context) {
+		throw NotImplementedException("Sort");
 	}
 };
 
@@ -88,6 +92,15 @@ SinkResultType Sort::Sink(ExecutionContext &context, DataChunk &chunk, OperatorS
 	auto &gstate = input.global_state.Cast<SortGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<SortGlobalSinkState>();
 
+	// TODO: Keep a "Value" min/max per sorted run:
+	//  1. Allows runs to be concatenated without merging
+	//  2. Can identify sets of runs that overlap within the set, but the sets might not overlap with another set
+	//    * For example, this could reduce one 100-ary merge into five 20-ary merges
+	//    * This is probably going to be a really complicated algorithm (lots of trade-offs)
+	//  3. Need C++ iterator over fixed-size blocks, use FastMod to reduce cost of modulo tuples per block
+
+	throw NotImplementedException("Sort");
+
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -95,20 +108,27 @@ SinkCombineResultType Sort::Combine(ExecutionContext &context, OperatorSinkCombi
 	auto &gstate = input.global_state.Cast<SortGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<SortGlobalSinkState>();
 
+	throw NotImplementedException("Sort");
+
 	return SinkCombineResultType::FINISHED;
 }
 
 SinkFinalizeType Sort::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                 OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<SortGlobalSinkState>();
-	// if empty return SinkFinalizeType::NO_OUTPUT_POSSIBLE
 
+	throw NotImplementedException("Sort");
+
+	// if empty return SinkFinalizeType::NO_OUTPUT_POSSIBLE
 	return SinkFinalizeType::READY;
 }
 
 ProgressData Sort::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate_p,
                                    const ProgressData source_progress) const {
 	auto &gstate = gstate_p.Cast<SortGlobalSinkState>();
+
+	throw NotImplementedException("Sort");
+
 	return source_progress;
 }
 
@@ -121,7 +141,7 @@ public:
 	}
 
 	idx_t MaxThreads() override {
-		throw NotImplementedException("SortGlobalSourceState::MaxThreads");
+		throw NotImplementedException("Sort");
 	}
 
 	SortGlobalSinkState &sink;
@@ -130,6 +150,7 @@ public:
 class SortLocalSourceState : public LocalSourceState {
 public:
 	SortLocalSourceState(const Sort &sort, ClientContext &context, SortGlobalSourceState &gstate) {
+		throw NotImplementedException("Sort");
 	}
 };
 
@@ -146,17 +167,19 @@ SourceResultType Sort::GetData(ExecutionContext &context, DataChunk &chunk, Oper
 	auto &lstate = input.local_state.Cast<SortGlobalSourceState>();
 	// return SourceResultType::BLOCKED as needed
 
+	throw NotImplementedException("Sort");
+
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
 ProgressData Sort::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
-	throw NotImplementedException("Sort::GetProgress");
+	throw NotImplementedException("Sort");
 }
 
 OperatorPartitionData Sort::GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
                                              LocalSourceState &lstate,
                                              const OperatorPartitionInfo &partition_info) const {
-	throw NotImplementedException("Sort::GetPartitionData");
+	throw NotImplementedException("Sort");
 }
 
 } // namespace duckdb
