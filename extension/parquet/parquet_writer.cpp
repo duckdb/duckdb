@@ -528,57 +528,184 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	FlushRowGroup(prepared_row_group);
 }
 
+
+
+class ColumnStatsUnifier {
+public:
+	virtual ~ColumnStatsUnifier() = default;
+
+	string global_min;
+	string global_max;
+	idx_t null_count = 0;
+	bool all_min_max_set = true;
+	bool all_nulls_set = true;
+
+	virtual void UnifyMinMax(const string &new_min, const string &new_max) = 0;
+	virtual string StatsToString(const string &stats) = 0;
+};
+
+template<class T>
+class NumericStatsUnifier : public ColumnStatsUnifier {
+	void UnifyMinMax(const string &new_min, const string &new_max) override {
+		if (new_min.size() != sizeof(T) || new_max.size() != sizeof(T)) {
+			throw InternalException("Incorrect size for stats in UnifyMinMax");
+		}
+		if (global_min.empty()) {
+			global_min = new_min;
+		} else {
+			auto min_val = Load<T>(const_data_ptr_cast(new_min.data()));
+			auto global_min_val = Load<T>(const_data_ptr_cast(global_min.data()));
+			if (LessThan::Operation(min_val, global_min_val)) {
+				global_min = new_min;
+			}
+		}
+		if (global_max.empty()) {
+			global_max = new_max;
+		} else {
+			auto max_val = Load<T>(const_data_ptr_cast(new_max.data()));
+			auto global_max_val = Load<T>(const_data_ptr_cast(global_max.data()));
+			if (GreaterThan::Operation(max_val, global_max_val)) {
+				global_max = new_max;
+			}
+		}
+	}
+
+	string StatsToString(const string &stats) override {
+		if (stats.empty()) {
+			return string();
+		}
+		return to_string(Load<T>(const_data_ptr_cast(stats.data())));
+	}
+};
+
+class StringStatsUnifier : public ColumnStatsUnifier {
+	void UnifyMinMax(const string &new_min, const string &new_max) override {
+		if (global_min.empty()) {
+			global_min = new_min;
+		} else {
+			if (LessThan::Operation(string_t(new_min), string_t(global_min))) {
+				global_min = new_min;
+			}
+		}
+		if (global_max.empty()) {
+			global_max = new_max;
+		} else {
+			if (GreaterThan::Operation(string_t(new_max), string_t(global_max))) {
+				global_max = new_max;
+			}
+		}
+	}
+
+	string StatsToString(const string &stats) override {
+		return stats;
+	}
+};
+
+class NullStatsUnifier : public ColumnStatsUnifier {
+	void UnifyMinMax(const string &new_min, const string &new_max) override {
+	}
+
+	string StatsToString(const string &stats) override {
+		return string();
+	}
+};
+
+unique_ptr<ColumnStatsUnifier> GetStatsUnifier(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return make_uniq<NullStatsUnifier>();
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::DATE:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+		return make_uniq<NumericStatsUnifier<int32_t>>();
+	case LogicalTypeId::BIGINT:
+	case LogicalTypeId::TIME:
+	case LogicalTypeId::TIMESTAMP:
+	case LogicalTypeId::TIMESTAMP_TZ:
+	case LogicalTypeId::TIMESTAMP_MS:
+	case LogicalTypeId::TIMESTAMP_NS:
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIME_TZ:
+	case LogicalTypeId::UINTEGER:
+		return make_uniq<NumericStatsUnifier<int64_t>>();
+	case LogicalTypeId::UBIGINT:
+		return make_uniq<NumericStatsUnifier<uint64_t>>();
+	case LogicalTypeId::FLOAT:
+		return make_uniq<NumericStatsUnifier<float>>();
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::DOUBLE:
+		return make_uniq<NumericStatsUnifier<double>>();
+	case LogicalTypeId::DECIMAL:
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+		case PhysicalType::INT32:
+			return make_uniq<NumericStatsUnifier<int32_t>>();
+		case PhysicalType::INT64:
+			return make_uniq<NumericStatsUnifier<int64_t>>();
+		default:
+			return make_uniq<NullStatsUnifier>();
+		}
+	case LogicalTypeId::BLOB:
+	case LogicalTypeId::VARCHAR:
+		return make_uniq<StringStatsUnifier>();
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::INTERVAL:;
+	case LogicalTypeId::ENUM:
+	default:
+		return make_uniq<NullStatsUnifier>();
+	}
+}
+
 void ParquetWriter::GatherWrittenStatistics() {
 	written_stats->row_count = file_meta_data.num_rows;
 
 	// find the per-column stats
-	vector<string> min_values;
-	vector<string> max_values;
-	vector<idx_t> null_counts;
-	vector<bool> all_min_max_set;
-	vector<bool> all_nulls_set;
-	min_values.resize(column_writers.size());
-	max_values.resize(column_writers.size());
-	null_counts.resize(column_writers.size());
-	all_min_max_set.resize(column_writers.size(), true);
-	all_nulls_set.resize(column_writers.size(), true);
+	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
+	for(auto &column_writer : column_writers) {
+		stats_unifiers.push_back(GetStatsUnifier(column_writer->Type()));
+	}
 	// unify the stats of all of the row groups
 	for (auto &row_group : file_meta_data.row_groups) {
 		for (idx_t c = 0; c < row_group.columns.size(); c++) {
 			auto &column = row_group.columns[c];
-			auto &column_writer = column_writers[c];
+			auto &stats_unifier = stats_unifiers[c];
 			if (column.meta_data.__isset.statistics) {
 				if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
-					column_writer->UnifyMinMax(column.meta_data.statistics.min_value,
-					                           column.meta_data.statistics.max_value, min_values[c], max_values[c]);
+					stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value,
+					                           column.meta_data.statistics.max_value);
 				} else {
-					all_min_max_set[c] = false;
+					stats_unifier->all_min_max_set = false;
 				}
 				if (column.meta_data.statistics.__isset.null_count) {
-					null_counts[c] += column.meta_data.statistics.null_count;
+					stats_unifier->null_count += column.meta_data.statistics.null_count;
 				} else {
-					all_nulls_set[c] = false;
+					stats_unifier->all_nulls_set = false;
 				}
 			}
 		}
 	}
 	// finalize the min/max values and write to column stats
-	for (idx_t c = 0; c < column_writers.size(); c++) {
+	for (idx_t c = 0; c < stats_unifiers.size(); c++) {
 		auto &column_writer = column_writers[c];
+		auto &stats_unifier = stats_unifiers[c];
 		string column_name = column_writer->GetColumnName();
 		case_insensitive_map_t<Value> column_stats;
-		if (all_min_max_set[c]) {
-			min_values[c] = column_writer->StatsToString(min_values[c]);
-			max_values[c] = column_writer->StatsToString(max_values[c]);
-			if (!min_values[c].empty()) {
-				column_stats["min"] = min_values[c];
+		if (stats_unifier->all_min_max_set) {
+			auto min_value = stats_unifier->StatsToString(stats_unifier->global_min);
+			auto max_value = stats_unifier->StatsToString(stats_unifier->global_max);
+			if (!min_value.empty()) {
+				column_stats["min"] = min_value;
 			}
-			if (!max_values[c].empty()) {
-				column_stats["max"] = max_values[c];
+			if (!max_value.empty()) {
+				column_stats["max"] = max_value;
 			}
 		}
-		if (all_nulls_set[c]) {
-			column_stats["null_count"] = Value::UBIGINT(null_counts[c]);
+		if (stats_unifier->all_nulls_set) {
+			column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
 		}
 		written_stats->column_statistics[column_name] = std::move(column_stats);
 	}

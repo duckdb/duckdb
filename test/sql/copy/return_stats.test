@@ -38,6 +38,17 @@ COPY string_test TO '__TEST_DIR__/string_test.parquet' (RETURN_STATS);
 <REGEX>:.*string_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{s={max=thisisalongstring_999, min=0, null_count=thisisalongstring_0}}
 
 # timestamps/dates
+statement ok
+CREATE VIEW date_test AS
+SELECT DATE '2000-01-01' + interval (range) day dt,
+       TIMESTAMP '2000-01-01 12:12:12' + interval (range) day dt
+FROM range(2500);
+
+query IIIIII
+COPY date_test TO '__TEST_DIR__/date_test.parquet' (RETURN_STATS);
+----
+<REGEX>:.*date_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:\d+	{s={max=thisisalongstring_999, min=0, null_count=thisisalongstring_0}}
+
 
 # empty table
 

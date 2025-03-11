@@ -43,15 +43,6 @@ struct BaseParquetOperator {
 	static idx_t GetRowSize(const Vector &, idx_t) {
 		return sizeof(TGT);
 	}
-
-	template <class SRC, class TGT>
-	static void UnifyMinMax(const string &new_min, const string &new_max, string &global_min, string &global_max) {
-	}
-
-	template <class SRC, class TGT>
-	static string StatsToString(const string &stats) {
-		return string();
-	}
 };
 
 struct ParquetCastOperator : public BaseParquetOperator {
@@ -73,36 +64,6 @@ struct ParquetCastOperator : public BaseParquetOperator {
 		if (GreaterThan::Operation(target_value, numeric_stats.max)) {
 			numeric_stats.max = target_value;
 		}
-	}
-
-	template <class SRC, class TGT>
-	static void UnifyMinMax(const string &new_min, const string &new_max, string &global_min, string &global_max) {
-		if (global_min.empty()) {
-			global_min = new_min;
-		} else {
-			auto min_val = Load<TGT>(const_data_ptr_cast(new_min.data()));
-			auto global_min_val = Load<TGT>(const_data_ptr_cast(global_min.data()));
-			if (LessThan::Operation(min_val, global_min_val)) {
-				global_min = new_min;
-			}
-		}
-		if (global_max.empty()) {
-			global_max = new_max;
-		} else {
-			auto max_val = Load<TGT>(const_data_ptr_cast(new_max.data()));
-			auto global_max_val = Load<TGT>(const_data_ptr_cast(global_max.data()));
-			if (GreaterThan::Operation(max_val, global_max_val)) {
-				global_max = new_max;
-			}
-		}
-	}
-
-	template <class SRC, class TGT>
-	static string StatsToString(const string &stats) {
-		if (stats.empty()) {
-			return string();
-		}
-		return to_string(Load<TGT>(const_data_ptr_cast(stats.data())));
 	}
 };
 
@@ -156,29 +117,6 @@ struct ParquetStringOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static idx_t GetRowSize(const Vector &vector, idx_t index) {
 		return FlatVector::GetData<string_t>(vector)[index].GetSize();
-	}
-
-	template <class SRC, class TGT>
-	static void UnifyMinMax(const string &new_min, const string &new_max, string &global_min, string &global_max) {
-		if (global_min.empty()) {
-			global_min = new_min;
-		} else {
-			if (LessThan::Operation(string_t(new_min), string_t(global_min))) {
-				global_min = new_min;
-			}
-		}
-		if (global_max.empty()) {
-			global_max = new_max;
-		} else {
-			if (GreaterThan::Operation(string_t(new_max), string_t(global_max))) {
-				global_max = new_max;
-			}
-		}
-	}
-
-	template <class SRC, class TGT>
-	static string StatsToString(const string &stats) {
-		return stats;
 	}
 };
 
