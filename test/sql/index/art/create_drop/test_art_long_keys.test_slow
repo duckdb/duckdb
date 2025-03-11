@@ -31,19 +31,19 @@ statement ok
 CREATE TABLE medium_strings (id BLOB);
 
 statement ok
-INSERT INTO medium_strings SELECT repeat('k', 491520);
+INSERT INTO medium_strings SELECT repeat('k', 491519);
 
 statement ok
 INSERT INTO medium_strings SELECT range::VARCHAR::BLOB FROM range(100000);
 
 statement ok
-INSERT INTO medium_strings SELECT repeat('k', 491520);
+INSERT INTO medium_strings SELECT repeat('k', 491519);
 
 statement ok
 INSERT INTO medium_strings SELECT range::VARCHAR::BLOB || 'other' FROM range(100000);
 
 statement ok
-INSERT INTO medium_strings SELECT repeat('k', 491520);
+INSERT INTO medium_strings SELECT repeat('k', 491519);
 
 statement ok
 CREATE INDEX idx ON medium_strings(id);
