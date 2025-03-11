@@ -389,6 +389,7 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InternalException("Root element of Parquet file must be a struct");
 	}
+
 	// add casts if required
 	auto &root_struct_reader = ret->Cast<StructColumnReader>();
 	for (auto &entry : reader_data.cast_map) {
@@ -867,62 +868,65 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, local_i
 	auto column_id = reader_data.column_ids[col_idx];
 	auto &column_reader = state.root_reader->Cast<StructColumnReader>().GetChildReader(column_id);
 
-	if (reader_data.filters) {
+	do {
+		if (!reader_data.filters) {
+			break;
+		}
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
 		// filters contain output chunk index, not file col idx!
 		auto global_index = reader_data.column_mapping[col_idx];
 		auto filter_entry = reader_data.filters->filters.find(global_index);
 
-		if (stats && filter_entry != reader_data.filters->filters.end()) {
-			auto &filter = *filter_entry->second;
-
-			FilterPropagateResult prune_result;
-			// TODO we might not have stats but STILL a bloom filter so move this up
-			// check the bloom filter if present
-			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
-			bool is_cast = column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::CAST;
-			if (!column_reader.Type().IsNested() && !is_generated_column && !is_cast &&
-			    ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
-			    ParquetStatisticsUtils::BloomFilterExcludes(filter,
-			                                                group.columns[column_reader.ColumnIndex()].meta_data,
-			                                                *state.thrift_file_proto, allocator)) {
-				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column && !is_cast &&
-			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
-			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value) {
-
-				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
-				// however, when reading remote Parquet files, skipping row groups is really important
-				// here, we implement a special case to check the full length for string filters
-				if (filter.filter_type == TableFilterType::CONJUNCTION_AND) {
-					const auto &and_filter = filter.Cast<ConjunctionAndFilter>();
-					auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-					for (auto &child_filter : and_filter.child_filters) {
-						auto child_prune_result = CheckParquetStringFilter(
-						    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, *child_filter);
-						if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-							and_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-							break;
-						} else if (child_prune_result != and_result) {
-							and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-						}
-					}
-					prune_result = and_result;
-				} else {
-					prune_result = CheckParquetStringFilter(
-					    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
-				}
-			} else {
-				prune_result = filter.CheckStatistics(*stats);
-			}
-
-			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-				// this effectively will skip this chunk
-				state.group_offset = group.num_rows;
-				return;
-			}
+		if (!stats || filter_entry == reader_data.filters->filters.end()) {
+			break;
 		}
-	}
+		auto &filter = *filter_entry->second;
+
+		FilterPropagateResult prune_result;
+		// TODO we might not have stats but STILL a bloom filter so move this up
+		// check the bloom filter if present
+		bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
+		bool is_cast = column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::CAST;
+		if (!column_reader.Type().IsNested() && !is_generated_column && !is_cast &&
+		    ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
+		    ParquetStatisticsUtils::BloomFilterExcludes(filter, group.columns[column_reader.ColumnIndex()].meta_data,
+		                                                *state.thrift_file_proto, allocator)) {
+			prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+		} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column && !is_cast &&
+		           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
+		           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value) {
+
+			// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
+			// however, when reading remote Parquet files, skipping row groups is really important
+			// here, we implement a special case to check the full length for string filters
+			if (filter.filter_type == TableFilterType::CONJUNCTION_AND) {
+				const auto &and_filter = filter.Cast<ConjunctionAndFilter>();
+				auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
+				for (auto &child_filter : and_filter.child_filters) {
+					auto child_prune_result = CheckParquetStringFilter(
+					    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, *child_filter);
+					if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+						and_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
+						break;
+					} else if (child_prune_result != and_result) {
+						and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+					}
+				}
+				prune_result = and_result;
+			} else {
+				prune_result = CheckParquetStringFilter(
+				    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
+			}
+		} else {
+			prune_result = filter.CheckStatistics(*stats);
+		}
+
+		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+			// this effectively will skip this chunk
+			state.group_offset = group.num_rows;
+			return;
+		}
+	} while (false);
 
 	state.root_reader->InitializeRead(state.group_idx_list[state.current_group], group.columns,
 	                                  *state.thrift_file_proto);
@@ -1113,10 +1117,10 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				                          state.sel, filter_count);
 			} else {
 				auto id = filter_entry;
-				local_column_id_t local_col_idx = reader_data.column_ids[id];
+				local_column_id_t local_col_id = reader_data.column_ids[id];
 
 				auto &result_vector = result.data[id];
-				auto &child_reader = root_reader.GetChildReader(local_col_idx);
+				auto &child_reader = root_reader.GetChildReader(local_col_id);
 				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
 				                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
 				need_to_read[id] = false;
@@ -1134,7 +1138,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				root_reader.GetChildReader(file_col_idx).Skip(result.size());
 				continue;
 			}
-			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
+			auto &result_vector = result.data[col_idx];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
 			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count);
 		}
