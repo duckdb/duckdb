@@ -25,7 +25,7 @@ struct ordinality_data_t {
 				ordinality_current_idx = 1;
 				reset = false;
 			}
-			chunk.data[column_id].Sequence(ordinality_current_idx, 1, ordinality);
+			chunk.data[column_id].Sequence(static_cast<int64_t>(ordinality_current_idx), 1, ordinality);
 		}
 	}
 
