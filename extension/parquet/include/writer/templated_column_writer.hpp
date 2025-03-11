@@ -112,9 +112,10 @@ public:
 template <class SRC, class TGT, class OP = ParquetCastOperator>
 class StandardColumnWriter : public PrimitiveColumnWriter {
 public:
-	StandardColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path_p, // NOLINT
-	                     idx_t max_repeat, idx_t max_define, bool can_have_nulls)
-	    : PrimitiveColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls) {
+	StandardColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
+	                     vector<string> schema_path_p, // NOLINT
+	                     bool can_have_nulls)
+	    : PrimitiveColumnWriter(writer, column_schema, std::move(schema_path_p), can_have_nulls) {
 	}
 	~StandardColumnWriter() override = default;
 
@@ -131,7 +132,8 @@ public:
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
 		const auto &page_info = state_p.page_info[page_idx];
 		auto result = make_uniq<StandardWriterPageState<SRC, TGT, OP>>(
-		    page_info.row_count - page_info.empty_count, state.total_string_size, state.encoding, state.dictionary);
+		    page_info.row_count - (page_info.empty_count + page_info.null_count), state.total_string_size,
+		    state.encoding, state.dictionary);
 		return std::move(result);
 	}
 
@@ -218,7 +220,7 @@ public:
 	}
 
 	void FinalizeAnalyze(ColumnWriterState &state_p) override {
-		const auto type = writer.GetType(schema_idx);
+		const auto type = writer.GetType(SchemaIndex());
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
 		if (state.dictionary.GetSize() == 0 || state.dictionary.IsFull()) {

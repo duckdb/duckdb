@@ -127,8 +127,8 @@ struct DiscreteAverageOperation : public BaseSumOperation<AverageSetOperation, A
 		if (state.count == 0) {
 			finalize_data.ReturnNull();
 		} else {
-			uint64_t remainder;
-			target = Hugeint::Cast<T>(Hugeint::DivModPositive(state.value, state.count, remainder));
+			hugeint_t remainder;
+			target = Hugeint::Cast<T>(Hugeint::DivMod(state.value, state.count, remainder));
 			// Round the result
 			target += (remainder > (state.count / 2));
 		}

@@ -14,7 +14,7 @@ ATTACH '__TEST_DIR__/version_1_2_0.db' (STORAGE_VERSION 'v1.2.0');
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='version_1_2_0'
 ----
-v1.2.0
+v1.2.0 - v1.2.1
 
 statement ok
 DETACH version_1_2_0
@@ -38,7 +38,7 @@ ATTACH '__TEST_DIR__/version_1_2_0.db' (STORAGE_VERSION 'v1.2.0');
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='version_1_2_0'
 ----
-v1.2.0
+v1.2.0 - v1.2.1
 
 statement ok
 DETACH version_1_2_0
@@ -51,7 +51,7 @@ ATTACH '__TEST_DIR__/version_1_2_0.db';
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='version_1_2_0'
 ----
-v1.2.0
+v1.2.0 - v1.2.1
 
 statement ok
 DETACH version_1_2_0
@@ -83,7 +83,7 @@ ATTACH '__TEST_DIR__/default_version.db' (STORAGE_VERSION 'v1.2.0');
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='default_version'
 ----
-v1.2.0
+v1.2.0 - v1.2.1
 
 statement ok
 SET force_compression = 'zstd';
@@ -105,7 +105,7 @@ ATTACH '__TEST_DIR__/default_version.db'
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='default_version'
 ----
-v1.2.0
+v1.2.0 - v1.2.1
 
 query I
 FROM default_version.tbl
@@ -151,4 +151,4 @@ ATTACH '__TEST_DIR__/modified_default_setting.db';
 query I
 SELECT tags['storage_version'] FROM duckdb_databases() WHERE database_name='modified_default_setting'
 ----
-v1.2.0
+v1.2.0 - v1.2.1

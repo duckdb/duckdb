@@ -27,6 +27,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
+#include "duckdb/planner/table_filter_state.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -935,6 +936,14 @@ idx_t ParquetReader::NumRowGroups() const {
 	return GetFileMetadata()->row_groups.size();
 }
 
+ParquetScanFilter::ParquetScanFilter(ClientContext &context, idx_t filter_idx, TableFilter &filter)
+    : filter_idx(filter_idx), filter(filter) {
+	filter_state = TableFilterState::Initialize(filter);
+}
+
+ParquetScanFilter::~ParquetScanFilter() {
+}
+
 void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanState &state,
                                    vector<idx_t> groups_to_read) {
 	state.current_group = -1;
@@ -967,8 +976,8 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	state.repeat_buf.resize(allocator, STANDARD_VECTOR_SIZE);
 }
 
-void ParquetReader::Scan(ParquetReaderScanState &state, DataChunk &result) {
-	while (ScanInternal(state, result)) {
+void ParquetReader::Scan(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
+	while (ScanInternal(context, state, result)) {
 		if (result.size() > 0) {
 			break;
 		}
@@ -976,7 +985,7 @@ void ParquetReader::Scan(ParquetReaderScanState &state, DataChunk &result) {
 	}
 }
 
-bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &result) {
+bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState &state, DataChunk &result) {
 	if (state.finished) {
 		return false;
 	}
@@ -1081,7 +1090,7 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 		if (state.scan_filters.empty()) {
 			state.adaptive_filter = make_uniq<AdaptiveFilter>(*reader_data.filters);
 			for (auto &entry : reader_data.filters->filters) {
-				state.scan_filters.emplace_back(entry.first, *entry.second);
+				state.scan_filters.emplace_back(context, entry.first, *entry.second);
 			}
 		}
 		D_ASSERT(state.scan_filters.size() == reader_data.filters->filters.size());
@@ -1099,7 +1108,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 				// this is a constant vector, look for the constant
 				auto &constant = reader_data.constant_map[filter_entry.index].value;
 				Vector constant_vector(constant);
-				ColumnReader::ApplyFilter(constant_vector, scan_filter.filter, scan_count, state.sel, filter_count);
+				ColumnReader::ApplyFilter(constant_vector, scan_filter.filter, *scan_filter.filter_state, scan_count,
+				                          state.sel, filter_count);
 			} else {
 				auto id = filter_entry.index;
 				auto file_col_idx = reader_data.column_ids[id];
@@ -1107,8 +1117,8 @@ bool ParquetReader::ScanInternal(ParquetReaderScanState &state, DataChunk &resul
 
 				auto &result_vector = result.data[result_idx];
 				auto &child_reader = root_reader.GetChildReader(file_col_idx);
-				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter, state.sel,
-				                    filter_count, i == 0);
+				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
+				                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
 				need_to_read[id] = false;
 			}
 		}

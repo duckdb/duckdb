@@ -116,7 +116,7 @@ class BaseScanner {
 public:
 	explicit BaseScanner(shared_ptr<CSVBufferManager> buffer_manager, shared_ptr<CSVStateMachine> state_machine,
 	                     shared_ptr<CSVErrorHandler> error_handler, bool sniffing = false,
-	                     shared_ptr<CSVFileScan> csv_file_scan = nullptr, CSVIterator iterator = {});
+	                     shared_ptr<CSVFileScan> csv_file_scan = nullptr, const CSVIterator &iterator = {});
 
 	virtual ~BaseScanner() = default;
 

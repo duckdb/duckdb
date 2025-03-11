@@ -65,8 +65,8 @@ void StructColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *
 			state.is_empty.push_back(parent->is_empty[state.is_empty.size()]);
 		}
 	}
-	HandleRepeatLevels(state_p, parent, count, max_repeat);
-	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, max_define - 1);
+	HandleRepeatLevels(state_p, parent, count, MaxRepeat());
+	HandleDefineLevels(state_p, parent, validity, count, PARQUET_DEFINE_VALID, MaxDefine() - 1);
 	auto &child_vectors = StructVector::GetEntries(vector);
 	for (idx_t child_idx = 0; child_idx < child_writers.size(); child_idx++) {
 		child_writers[child_idx]->Prepare(*state.child_states[child_idx], &state_p, *child_vectors[child_idx], count);

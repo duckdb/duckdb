@@ -4,9 +4,13 @@ on:
     inputs:
       override_git_describe:
         type: string
+      twine_upload:
+        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
+        type: string
+      twine_upload:
         type: string
 
 env:
@@ -47,12 +51,13 @@ jobs:
           aws s3 cp --recursive "s3://duckdb-staging/$TARGET/$GITHUB_REPOSITORY/twine_upload" to_be_uploaded --region us-east-2
 
       - name: Deploy
+        if: ${{ inputs.twine_upload == 'true' }}
         env:
           TWINE_USERNAME: '__token__'
           TWINE_PASSWORD: ${{ secrets.TWINE_TOKEN }}
         shell: bash
         run: |
           cd tools/pythonpkg
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
+          if [[ "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
             twine upload --non-interactive --disable-progress-bar --skip-existing to_be_uploaded/*
           fi

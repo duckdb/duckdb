@@ -13,7 +13,7 @@ DictionaryDecoder::DictionaryDecoder(ColumnReader &reader)
 }
 
 void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional_ptr<const TableFilter> filter,
-                                             bool has_defines) {
+                                             optional_ptr<TableFilterState> filter_state, bool has_defines) {
 	auto old_dict_size = dictionary_size;
 	dictionary_size = new_dictionary_size;
 	filter_result.reset();
@@ -45,7 +45,8 @@ void DictionaryDecoder::InitializeDictionary(idx_t new_dictionary_size, optional
 		dictionary->ToUnifiedFormat(dictionary_size, vdata);
 		SelectionVector dict_sel;
 		filter_count = dictionary_size;
-		ColumnSegment::FilterSelection(dict_sel, *dictionary, vdata, *filter, dictionary_size, filter_count);
+		ColumnSegment::FilterSelection(dict_sel, *dictionary, vdata, *filter, *filter_state, dictionary_size,
+		                               filter_count);
 
 		// now set all matching tuples to true
 		for (idx_t i = 0; i < filter_count; i++) {
@@ -177,8 +178,8 @@ bool DictionaryDecoder::CanFilter(const TableFilter &filter) {
 	return true;
 }
 
-void DictionaryDecoder::Filter(uint8_t *defines, const idx_t read_count, Vector &result, const TableFilter &filter,
-                               SelectionVector &sel, idx_t &approved_tuple_count) {
+void DictionaryDecoder::Filter(uint8_t *defines, const idx_t read_count, Vector &result, SelectionVector &sel,
+                               idx_t &approved_tuple_count) {
 	if (!dictionary || dictionary_size < 0) {
 		throw std::runtime_error("Parquet file is likely corrupted, missing dictionary");
 	}
