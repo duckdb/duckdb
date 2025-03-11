@@ -30,7 +30,6 @@ unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(CatalogTransacti
 	new_info.descriptions = descriptions;
 	new_info.descriptions.insert(new_info.descriptions.end(), add_overloads.new_overloads->descriptions.begin(),
 	                             add_overloads.new_overloads->descriptions.end());
-	new_info.canonical_name = canonical_name;
 	return make_uniq<ScalarFunctionCatalogEntry>(catalog, schema, new_info);
 }
 
