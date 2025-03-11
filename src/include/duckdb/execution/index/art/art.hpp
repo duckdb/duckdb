@@ -36,7 +36,7 @@ public:
 	//! FixedSizeAllocator count of deprecated ARTs.
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 3;
 	//! Keys must not exceed MAX_KEY_LEN * prefix_count.
-	static constexpr idx_t MAX_KEY_LEN = 32768;
+	static constexpr idx_t MAX_KEY_LEN = 8192;
 
 public:
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
