@@ -16,12 +16,10 @@ public:
 	bool written_value;
 };
 
-EnumColumnWriter::EnumColumnWriter(ParquetWriter &writer, LogicalType enum_type_p, idx_t schema_idx,
-                                   vector<string> schema_path_p, idx_t max_repeat, idx_t max_define,
-                                   bool can_have_nulls)
-    : PrimitiveColumnWriter(writer, schema_idx, std::move(schema_path_p), max_repeat, max_define, can_have_nulls),
-      enum_type(std::move(enum_type_p)) {
-	bit_width = RleBpDecoder::ComputeBitWidth(EnumType::GetSize(enum_type));
+EnumColumnWriter::EnumColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
+                                   vector<string> schema_path_p, bool can_have_nulls)
+    : PrimitiveColumnWriter(writer, column_schema, std::move(schema_path_p), can_have_nulls) {
+	bit_width = RleBpDecoder::ComputeBitWidth(EnumType::GetSize(Type()));
 }
 
 unique_ptr<ColumnWriterStatistics> EnumColumnWriter::InitializeStatsState() {
@@ -50,7 +48,7 @@ void EnumColumnWriter::WriteVector(WriteStream &temp_writer, ColumnWriterStatist
                                    ColumnWriterPageState *page_state_p, Vector &input_column, idx_t chunk_start,
                                    idx_t chunk_end) {
 	auto &page_state = page_state_p->Cast<EnumWriterPageState>();
-	switch (enum_type.InternalType()) {
+	switch (Type().InternalType()) {
 	case PhysicalType::UINT8:
 		WriteEnumInternal<uint8_t>(temp_writer, input_column, chunk_start, chunk_end, page_state);
 		break;
@@ -90,14 +88,14 @@ bool EnumColumnWriter::HasDictionary(PrimitiveColumnWriterState &state) {
 }
 
 idx_t EnumColumnWriter::DictionarySize(PrimitiveColumnWriterState &state_p) {
-	return EnumType::GetSize(enum_type);
+	return EnumType::GetSize(Type());
 }
 
 void EnumColumnWriter::FlushDictionary(PrimitiveColumnWriterState &state, ColumnWriterStatistics *stats_p) {
 	auto &stats = stats_p->Cast<StringStatisticsState>();
 	// write the enum values to a dictionary page
-	auto &enum_values = EnumType::GetValuesInsertOrder(enum_type);
-	auto enum_count = EnumType::GetSize(enum_type);
+	auto &enum_values = EnumType::GetValuesInsertOrder(Type());
+	auto enum_count = EnumType::GetSize(Type());
 	auto string_values = FlatVector::GetData<string_t>(enum_values);
 	// first write the contents of the dictionary page to a temporary buffer
 	auto temp_writer = make_uniq<MemoryStream>(Allocator::Get(writer.GetContext()));
