@@ -147,7 +147,7 @@ void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) 
 	unordered_set<idx_t> constructed_set;
 	unordered_set<idx_t> unconstructed_set;
 	int prior_flag = static_cast<int>(table_operator_manager.table_operators.size()) - 1;
-	uint32_t root = -1;
+	idx_t root = std::numeric_limits<idx_t>::max();
 
 	// Create table operators
 	for (auto &table_operator : table_operator_manager.table_operators) {
@@ -170,7 +170,7 @@ void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) 
 
 	while (!unconstructed_set.empty()) {
 		auto selected_edge = FindEdge(constructed_set, unconstructed_set);
-		if (selected_edge.first == -1) {
+		if (selected_edge.first == std::numeric_limits<idx_t>::max()) {
 			break;
 		}
 
@@ -230,7 +230,7 @@ void TransferGraphManager::CreatePredicateTransferGraph() {
 pair<idx_t, idx_t> TransferGraphManager::FindEdge(const unordered_set<idx_t> &constructed_set,
                                                   const unordered_set<idx_t> &unconstructed_set) {
 	idx_t max_weight = 0, max_card = 0;
-	pair<int, int> result {-1, -1};
+	pair<idx_t, idx_t> result {std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()};
 
 	for (auto i : unconstructed_set) {
 		for (auto j : constructed_set) {
