@@ -237,7 +237,8 @@ static void TemplatedGenerateKeys(ArenaAllocator &allocator, Vector &input, idx_
 	for (idx_t i = 0; i < count; i++) {
 		auto idx = data.sel->get_index(i);
 		if (IS_NOT_NULL || data.validity.RowIsValid(idx)) {
-			ARTKey::CreateARTKey<T>(allocator, keys[i], input_data[idx], max_len);
+			ARTKey::CreateARTKey<T>(allocator, keys[i], input_data[idx]);
+			keys[i].VerifyKeyLength(max_len);
 			continue;
 		}
 
@@ -257,8 +258,9 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 		auto idx = data.sel->get_index(i);
 
 		if (IS_NOT_NULL) {
-			auto other_key = ARTKey::CreateARTKey<T>(allocator, input_data[idx], max_len);
-			keys[i].Concat(allocator, other_key, max_len);
+			auto other_key = ARTKey::CreateARTKey<T>(allocator, input_data[idx]);
+			keys[i].Concat(allocator, other_key);
+			keys[i].VerifyKeyLength(max_len);
 			continue;
 		}
 
@@ -274,8 +276,9 @@ static void ConcatenateKeys(ArenaAllocator &allocator, Vector &input, idx_t coun
 		}
 
 		// Concatenate the keys.
-		auto other_key = ARTKey::CreateARTKey<T>(allocator, input_data[idx], max_len);
-		keys[i].Concat(allocator, other_key, max_len);
+		auto other_key = ARTKey::CreateARTKey<T>(allocator, input_data[idx]);
+		keys[i].Concat(allocator, other_key);
+		keys[i].VerifyKeyLength(max_len);
 	}
 }
 
@@ -980,8 +983,9 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, unsafe_vector<row_t
 	auto &scan_state = state.Cast<ARTIndexScanState>();
 	D_ASSERT(scan_state.values[0].type().InternalType() == types[0]);
 	ArenaAllocator arena_allocator(Allocator::Get(db));
+	auto key = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[0]);
 	auto max_len = MAX_KEY_LEN * prefix_count;
-	auto key = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[0], max_len);
+	key.VerifyKeyLength(max_len);
 
 	if (scan_state.values[1].IsNull()) {
 		// Single predicate.
@@ -1005,7 +1009,9 @@ bool ART::Scan(IndexScanState &state, const idx_t max_count, unsafe_vector<row_t
 	// Two predicates.
 	lock_guard<mutex> l(lock);
 	D_ASSERT(scan_state.values[1].type().InternalType() == types[0]);
-	auto upper_bound = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[1], max_len);
+	auto upper_bound = ARTKey::CreateKey(arena_allocator, types[0], scan_state.values[1]);
+	upper_bound.VerifyKeyLength(max_len);
+
 	bool left_equal = scan_state.expressions[0] == ExpressionType ::COMPARE_GREATERTHANOREQUALTO;
 	bool right_equal = scan_state.expressions[1] == ExpressionType ::COMPARE_LESSTHANOREQUALTO;
 	return SearchCloseRange(key, upper_bound, left_equal, right_equal, max_count, row_ids);

@@ -47,8 +47,8 @@ static void TestKeys(duckdb::vector<ARTKey> &keys) {
 
 static ARTKey CreateCompoundKey(ArenaAllocator &arena_allocator, const string &str_val, int32_t int_val) {
 
-	auto key_left = ARTKey::CreateARTKey<string_t>(arena_allocator, string_t(str_val.c_str(), str_val.size()), 4096);
-	auto key_right = ARTKey::CreateARTKey<int32_t>(arena_allocator, int_val, 4096);
+	auto key_left = ARTKey::CreateARTKey<string_t>(arena_allocator, string_t(str_val.c_str(), str_val.size()));
+	auto key_right = ARTKey::CreateARTKey<int32_t>(arena_allocator, int_val);
 
 	auto data = arena_allocator.Allocate(key_left.len + key_right.len);
 	memcpy(data, key_left.data, key_left.len);
@@ -62,124 +62,124 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 
 	// Test tiny int
 	duckdb::vector<ARTKey> keys;
-	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, -127, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, -55, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, -1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, 0, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, 1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, 55, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, 127, 4096));
+	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, -127));
+	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, -55));
+	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, -1));
+	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, 0));
+	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, 1));
+	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, 55));
+	keys.push_back(ARTKey::CreateARTKey<int8_t>(arena_allocator, 127));
 	TestKeys(keys);
 
 	keys.clear();
 
 	// Test small int
-	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, -32767, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, -127, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, -55, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, -1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, 0, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, 1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, 55, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, 127, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, 32767, 4096));
+	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, -32767));
+	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, -127));
+	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, -55));
+	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, -1));
+	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, 0));
+	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, 1));
+	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, 55));
+	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, 127));
+	keys.push_back(ARTKey::CreateARTKey<int16_t>(arena_allocator, 32767));
 	TestKeys(keys);
 
 	keys.clear();
 
 	// Test int
-	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, -2147483647, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, -8388608, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, -32767, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, -1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, 0, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, 1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, 32767, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, 8388608, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, 2147483647, 4096));
+	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, -2147483647));
+	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, -8388608));
+	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, -32767));
+	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, -1));
+	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, 0));
+	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, 1));
+	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, 32767));
+	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, 8388608));
+	keys.push_back(ARTKey::CreateARTKey<int32_t>(arena_allocator, 2147483647));
 	TestKeys(keys);
 
 	keys.clear();
 
 	// Test big int
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -9223372036854775807, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -72057594037927936, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -281474976710656, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -1099511627776, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -2147483647, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -8388608, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -32767, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 0, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 32767, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 8388608, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 2147483647, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 1099511627776, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 281474976710656, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 72057594037927936, 4096));
-	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 9223372036854775807, 4096));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -9223372036854775807));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -72057594037927936));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -281474976710656));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -1099511627776));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -2147483647));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -8388608));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -32767));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, -1));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 0));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 1));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 32767));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 8388608));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 2147483647));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 1099511627776));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 281474976710656));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 72057594037927936));
+	keys.push_back(ARTKey::CreateARTKey<int64_t>(arena_allocator, 9223372036854775807));
 	TestKeys(keys);
 
 	keys.clear();
 
 	// Test utiny int
-	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 0, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 55, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 127, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 200, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 250, 4096));
+	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 0));
+	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 1));
+	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 55));
+	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 127));
+	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 200));
+	keys.push_back(ARTKey::CreateARTKey<uint8_t>(arena_allocator, 250));
 	TestKeys(keys);
 
 	keys.clear();
 
 	// Test usmall int
-	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 0, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 55, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 127, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 32767, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 40000, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 60000, 4096));
+	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 0));
+	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 1));
+	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 55));
+	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 127));
+	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 32767));
+	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 40000));
+	keys.push_back(ARTKey::CreateARTKey<uint16_t>(arena_allocator, 60000));
 
 	TestKeys(keys);
 
 	keys.clear();
 
 	// Test uint
-	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 0, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 32767, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 8388608, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 2147483647, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 3047483647, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 4047483647, 4096));
+	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 0));
+	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 1));
+	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 32767));
+	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 8388608));
+	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 2147483647));
+	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 3047483647));
+	keys.push_back(ARTKey::CreateARTKey<uint32_t>(arena_allocator, 4047483647));
 	TestKeys(keys);
 
 	keys.clear();
 
 	// Test ubig int
-	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 0, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 32767, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 8388608, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 2147483647, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 1099511627776, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 281474976710656, 4096));
-	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 72057594037927936, 4096));
+	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 0));
+	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 1));
+	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 32767));
+	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 8388608));
+	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 2147483647));
+	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 1099511627776));
+	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 281474976710656));
+	keys.push_back(ARTKey::CreateARTKey<uint64_t>(arena_allocator, 72057594037927936));
 	TestKeys(keys);
 
 	keys.clear();
 
 	// Test strings
-	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "abc", 4096));
-	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "babababa", 4096));
-	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "hello", 4096));
-	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "hellow", 4096));
-	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "torororororo", 4096));
-	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "torororororp", 4096));
-	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "z", 4096));
+	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "abc"));
+	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "babababa"));
+	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "hello"));
+	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "hellow"));
+	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "torororororo"));
+	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "torororororp"));
+	keys.push_back(ARTKey::CreateARTKey<const char *>(arena_allocator, "z"));
 
 	TestKeys(keys);
 
@@ -200,10 +200,10 @@ TEST_CASE("Test correct functioning of art keys", "[art]") {
 
 	keys.clear();
 
-	keys.push_back(ARTKey::CreateARTKey<double>(arena_allocator, 0, 4096));
-	keys.push_back(ARTKey::CreateARTKey<double>(arena_allocator, 0.1, 4096));
-	keys.push_back(ARTKey::CreateARTKey<double>(arena_allocator, 488566, 4096));
-	keys.push_back(ARTKey::CreateARTKey<double>(arena_allocator, 1163404482, 4096));
+	keys.push_back(ARTKey::CreateARTKey<double>(arena_allocator, 0));
+	keys.push_back(ARTKey::CreateARTKey<double>(arena_allocator, 0.1));
+	keys.push_back(ARTKey::CreateARTKey<double>(arena_allocator, 488566));
+	keys.push_back(ARTKey::CreateARTKey<double>(arena_allocator, 1163404482));
 
 	TestKeys(keys);
 

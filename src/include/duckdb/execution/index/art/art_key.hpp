@@ -28,29 +28,29 @@ public:
 
 public:
 	template <class T>
-	static inline ARTKey CreateARTKey(ArenaAllocator &allocator, T value, const idx_t) {
+	static inline ARTKey CreateARTKey(ArenaAllocator &allocator, T value) {
 		auto data = ARTKey::CreateData<T>(allocator, value);
 		return ARTKey(data, sizeof(value));
 	}
 
 	template <class T>
-	static inline ARTKey CreateARTKey(ArenaAllocator &allocator, Value &value, const idx_t max_len) {
-		return CreateARTKey(allocator, value.GetValueUnsafe<T>(), max_len);
+	static inline ARTKey CreateARTKey(ArenaAllocator &allocator, Value &value) {
+		return CreateARTKey(allocator, value.GetValueUnsafe<T>());
 	}
 
 	template <class T>
-	static inline void CreateARTKey(ArenaAllocator &allocator, ARTKey &key, T value, const idx_t) {
+	static inline void CreateARTKey(ArenaAllocator &allocator, ARTKey &key, T value) {
 		key.data = ARTKey::CreateData<T>(allocator, value);
 		key.len = sizeof(value);
 	}
 
 	template <class T>
-	static inline void CreateARTKey(ArenaAllocator &allocator, ARTKey &key, Value value, const idx_t) {
+	static inline void CreateARTKey(ArenaAllocator &allocator, ARTKey &key, Value value) {
 		key.data = ARTKey::CreateData<T>(allocator, value.GetValueUnsafe<T>());
 		key.len = sizeof(value);
 	}
 
-	static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value, const idx_t max_len);
+	static ARTKey CreateKey(ArenaAllocator &allocator, PhysicalType type, Value &value);
 
 public:
 	data_t &operator[](idx_t i) {
@@ -70,9 +70,10 @@ public:
 		return len == 0;
 	}
 
-	void Concat(ArenaAllocator &allocator, const ARTKey &other, const idx_t max_len);
+	void Concat(ArenaAllocator &allocator, const ARTKey &other);
 	row_t GetRowId() const;
 	idx_t GetMismatchPos(const ARTKey &other, const idx_t start) const;
+	void VerifyKeyLength(const idx_t max_len) const;
 
 private:
 	template <class T>
@@ -84,11 +85,11 @@ private:
 };
 
 template <>
-ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value, const idx_t max_len);
+ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, string_t value);
 template <>
-ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const char *value, const idx_t max_len);
+ARTKey ARTKey::CreateARTKey(ArenaAllocator &allocator, const char *value);
 template <>
-void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, string_t value, const idx_t max_len);
+void ARTKey::CreateARTKey(ArenaAllocator &allocator, ARTKey &key, string_t value);
 
 class ARTKeySection {
 public:
