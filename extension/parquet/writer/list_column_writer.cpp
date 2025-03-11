@@ -76,7 +76,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 			continue;
 		}
 		auto first_repeat_level =
-		    parent && !parent->repetition_levels.empty() ? parent->repetition_levels[parent_index] : max_repeat;
+		    parent && !parent->repetition_levels.empty() ? parent->repetition_levels[parent_index] : MaxRepeat();
 		if (parent && parent->definition_levels[parent_index] != PARQUET_DEFINE_VALID) {
 			state.definition_levels.push_back(parent->definition_levels[parent_index]);
 			state.repetition_levels.push_back(first_repeat_level);
@@ -84,7 +84,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 		} else if (validity.RowIsValid(vector_index)) {
 			// push the repetition levels
 			if (list_data[vector_index].length == 0) {
-				state.definition_levels.push_back(max_define);
+				state.definition_levels.push_back(MaxDefine());
 				state.is_empty.push_back(true);
 			} else {
 				state.definition_levels.push_back(PARQUET_DEFINE_VALID);
@@ -92,7 +92,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 			}
 			state.repetition_levels.push_back(first_repeat_level);
 			for (idx_t k = 1; k < list_data[vector_index].length; k++) {
-				state.repetition_levels.push_back(max_repeat + 1);
+				state.repetition_levels.push_back(MaxRepeat() + 1);
 				state.definition_levels.push_back(PARQUET_DEFINE_VALID);
 				state.is_empty.push_back(false);
 			}
@@ -100,7 +100,7 @@ void ListColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterState *pa
 			if (!can_have_nulls) {
 				throw IOException("Parquet writer: map key column is not allowed to contain NULL values");
 			}
-			state.definition_levels.push_back(max_define - 1);
+			state.definition_levels.push_back(MaxDefine() - 1);
 			state.repetition_levels.push_back(first_repeat_level);
 			state.is_empty.push_back(true);
 		}
