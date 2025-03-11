@@ -113,10 +113,10 @@ struct MultiFileFilterEntry {
 };
 
 struct MultiFileConstantEntry {
-	MultiFileConstantEntry(idx_t column_id, Value value_p) : column_id(column_id), value(std::move(value_p)) {
+	MultiFileConstantEntry(idx_t column_idx, Value value_p) : column_idx(column_idx), value(std::move(value_p)) {
 	}
-	//! The (global) column id to apply the constant value to
-	global_column_id_t column_id;
+	//! The (global) column idx to apply the constant value to
+	global_idx_t column_idx;
 	//! The constant value
 	Value value;
 };
@@ -136,11 +136,11 @@ struct MultiFileReaderData {
 	bool empty_columns = false;
 	//! Filters can point to either (1) local columns in the file, or (2) constant values in the `constant_map`
 	//! This map specifies where the to-be-filtered value can be found
+	//! `global_idx_t` -> `MultiFileFilterEntry`
 	vector<MultiFileFilterEntry> filter_map;
 	//! The set of table filters
 	optional_ptr<TableFilterSet> filters;
 	//! The constants that should be applied at the various positions
-	//! `local_idx_t` -> `MultiFileConstantEntry`
 	vector<MultiFileConstantEntry> constant_map;
 	//! Map of (local) column_id -> cast, used when reading multiple files when files have diverging types
 	//! for the same column

@@ -342,11 +342,11 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		auto &column = local_columns[col_idx];
 		name_map[column.name] = col_idx;
 	}
-	for (idx_t i = 0; i < global_column_ids.size(); i++) {
+	for (global_idx_t i = 0; i < global_column_ids.size(); i++) {
 		// check if this is a constant column
 		bool constant = false;
 		for (auto &entry : reader_data.constant_map) {
-			if (entry.column_id == i) {
+			if (entry.column_idx == i) {
 				constant = true;
 				break;
 			}
@@ -429,7 +429,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 
 	// we have expected types: create a map of field_id -> column index
 	unordered_map<int32_t, local_column_id_t> field_id_map;
-	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
+	for (local_column_id_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 		auto &column = local_columns[col_idx];
 		if (column.identifier.IsNull()) {
 			// Extra columns at the end will not have a field_id
@@ -440,12 +440,12 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 	}
 
 	// loop through the schema definition
-	for (idx_t i = 0; i < global_column_ids.size(); i++) {
+	for (global_idx_t i = 0; i < global_column_ids.size(); i++) {
 
 		// check if this is a constant column
 		bool constant = false;
 		for (auto &entry : reader_data.constant_map) {
-			if (entry.column_id == i) {
+			if (entry.column_idx == i) {
 				constant = true;
 				break;
 			}
@@ -542,23 +542,24 @@ void MultiFileReader::CreateMapping(const string &file_name,
 void MultiFileReader::CreateFilterMap(const vector<ColumnIndex> &global_column_ids,
                                       optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
                                       optional_ptr<MultiFileReaderGlobalState> global_state) {
-	if (filters) {
-		auto filter_map_size = global_column_ids.size();
-		if (global_state) {
-			filter_map_size += global_state->extra_columns.size();
-		}
-		reader_data.filter_map.resize(filter_map_size);
+	if (!filters) {
+		return;
+	}
+	auto filter_map_size = global_column_ids.size();
+	if (global_state) {
+		filter_map_size += global_state->extra_columns.size();
+	}
+	reader_data.filter_map.resize(filter_map_size);
 
-		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
-			auto map_index = reader_data.column_mapping[c];
-			reader_data.filter_map[map_index].index = c;
-			reader_data.filter_map[map_index].is_constant = false;
-		}
-		for (idx_t c = 0; c < reader_data.constant_map.size(); c++) {
-			auto constant_index = reader_data.constant_map[c].column_id;
-			reader_data.filter_map[constant_index].index = c;
-			reader_data.filter_map[constant_index].is_constant = true;
-		}
+	for (local_idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
+		global_idx_t global_idx = reader_data.column_mapping[c];
+		reader_data.filter_map[global_idx].index = c;
+		reader_data.filter_map[global_idx].is_constant = false;
+	}
+	for (idx_t c = 0; c < reader_data.constant_map.size(); c++) {
+		auto global_idx = reader_data.constant_map[c].column_idx;
+		reader_data.filter_map[global_idx].index = c;
+		reader_data.filter_map[global_idx].is_constant = true;
 	}
 }
 
@@ -567,7 +568,7 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReade
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
 	for (auto &entry : reader_data.constant_map) {
-		chunk.data[entry.column_id].Reference(entry.value);
+		chunk.data[entry.column_idx].Reference(entry.value);
 	}
 	chunk.Verify();
 }
@@ -577,10 +578,10 @@ void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileRe
                                        optional_ptr<MultiFileReaderGlobalState> global_state,
                                        const OperatorPartitionInfo &partition_info,
                                        OperatorPartitionData &partition_data) {
-	for (auto &col : partition_info.partition_columns) {
+	for (global_idx_t col : partition_info.partition_columns) {
 		bool found_constant = false;
 		for (auto &constant : reader_data.constant_map) {
-			if (constant.column_id == col) {
+			if (constant.column_idx == col) {
 				found_constant = true;
 				partition_data.partition_data.emplace_back(constant.value);
 				break;
