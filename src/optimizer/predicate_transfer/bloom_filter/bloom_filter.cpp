@@ -83,7 +83,7 @@ void BlockedBloomFilter::InsertHashedData(DataChunk &chunk, const vector<idx_t> 
 
 	// Loop through all hash values and insert them one by one
 	auto hash_data = reinterpret_cast<hash_t *>(hashes.GetData());
-	for (idx_t i = 0; i < chunk.size(); i++) {
+	for (size_t i = 0; i < chunk.size(); i++) {
 		Insert(hash_data[i]);
 	}
 }
