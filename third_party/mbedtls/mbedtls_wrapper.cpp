@@ -247,6 +247,7 @@ void MbedTlsWrapper::AESGCMStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t d
 		data += next;
 		len -= next;
 	}
+	mbedtls_entropy_free(&entropy);
 #endif
 }
 
