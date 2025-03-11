@@ -4,22 +4,31 @@
 
 namespace duckdb {
 namespace {
-static void BloomFilterExecute(const vector<Vector> &result, const shared_ptr<BlockedBloomFilter> &bloom_filter,
-                               SelectionVector &sel, idx_t &approved_tuple_count, idx_t row_num) {
+void BloomFilterExecute(const vector<Vector> &result, const shared_ptr<BlockedBloomFilter> &bloom_filter,
+                        SelectionVector &sel, idx_t &approved_tuple_count, idx_t row_num) {
 	if (!bloom_filter->finalized_) {
 		approved_tuple_count = 0;
 		return;
 	}
-	idx_t result_count = 0;
+
+	// Compute hash values
 	Vector hashes(LogicalType::HASH);
 	VectorOperations::Hash(const_cast<Vector &>(result[bloom_filter->BoundColsApplied[0]]), hashes, row_num);
-	for (int i = 1; i < bloom_filter->BoundColsApplied.size(); i++) {
+	for (size_t i = 1; i < bloom_filter->BoundColsApplied.size(); i++) {
 		VectorOperations::CombineHash(hashes, const_cast<Vector &>(result[bloom_filter->BoundColsApplied[i]]), row_num);
 	}
 	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		hashes.Flatten(row_num);
 	}
-	bloom_filter->Find(row_num, (hash_t *)hashes.GetData(), sel, result_count, false, arrow::internal::CpuInfo::AVX2);
+
+	// Perform Bloom filter lookup
+	idx_t result_count = 0;
+	const hash_t *hash_data = reinterpret_cast<const hash_t *>(hashes.GetData());
+	for (idx_t i = 0; i < row_num; i++) {
+		if (bloom_filter->Find(hash_data[i])) {
+			sel.set_index(result_count++, i);
+		}
+	}
 
 	approved_tuple_count = result_count;
 }

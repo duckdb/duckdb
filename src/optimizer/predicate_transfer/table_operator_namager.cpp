@@ -136,7 +136,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		case JoinType::RIGHT:
 		case JoinType::SEMI:
 		case JoinType::RIGHT_SEMI: {
-			if (std::any_of(join.conditions.begin(), join.conditions.end(), [](const auto &jc) {
+			if (std::any_of(join.conditions.begin(), join.conditions.end(), [](const JoinCondition &jc) {
 				    return jc.comparison == ExpressionType::COMPARE_EQUAL &&
 				           jc.left->type == ExpressionType::BOUND_COLUMN_REF &&
 				           jc.right->type == ExpressionType::BOUND_COLUMN_REF;
@@ -145,8 +145,9 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 			}
 			break;
 		}
+
 		case JoinType::MARK: {
-			if (std::any_of(join.conditions.begin(), join.conditions.end(), [](const auto &jc) {
+			if (std::any_of(join.conditions.begin(), join.conditions.end(), [](const JoinCondition &jc) {
 				    return jc.comparison == ExpressionType::COMPARE_EQUAL &&
 				           jc.left->type == ExpressionType::BOUND_COLUMN_REF &&
 				           jc.right->type == ExpressionType::BOUND_COLUMN_REF;

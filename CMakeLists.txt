@@ -24,8 +24,6 @@ project(DuckDB)
 
 find_package(Threads REQUIRED)
 
-# To use apache arrow
-set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
 
 set(DUCKDB_MODULE_BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")

@@ -50,7 +50,6 @@ public:
 	const PhysicalCreateBF &op;
 
 	const idx_t num_threads;
-	vector<shared_ptr<BloomFilterBuilderParallel>> builders;
 	unique_ptr<ColumnDataCollection> data_collection;
 	vector<unique_ptr<ColumnDataCollection>> local_data_collections;
 };
@@ -85,15 +84,6 @@ SinkCombineResultType PhysicalCreateBF::Combine(ExecutionContext &context, Opera
 //===--------------------------------------------------------------------===//
 static constexpr const idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
 
-struct SchedulerThread {
-#ifndef DUCKDB_NO_THREADS
-	explicit SchedulerThread(unique_ptr<std::thread> thread_p) : internal_thread(std::move(thread_p)) {
-	}
-
-	unique_ptr<std::thread> internal_thread;
-#endif
-};
-
 //! If we have only one thread, always finalize single-threaded.
 static bool FinalizeSingleThreaded(const CreateBFGlobalSinkState &sink) {
 
@@ -120,34 +110,16 @@ public:
 	CreateBFFinalizeTask(shared_ptr<Event> event_p, ClientContext &context, CreateBFGlobalSinkState &sink_p,
 	                     idx_t chunk_idx_from_p, idx_t chunk_idx_to_p)
 	    : ExecutorTask(context, std::move(event_p), sink_p.op), sink(sink_p), chunk_idx_from(chunk_idx_from_p),
-	      chunk_idx_to(chunk_idx_to_p), threads(TaskScheduler::GetScheduler(context).threads) {
+	      chunk_idx_to(chunk_idx_to_p) {
 	}
 
 	TaskExecutionResult ExecuteTask(TaskExecutionMode mode) override {
-		size_t thread_id = 0;
-		std::thread::id threadId = std::this_thread::get_id();
-		for (size_t i = 0; i < threads.size(); i++) {
-			if (threadId == threads[i]->internal_thread->get_id()) {
-				thread_id = i + 1;
-				break;
-			}
-		}
+		DataChunk chunk;
+		sink.data_collection->InitializeScanChunk(chunk);
 		for (idx_t i = chunk_idx_from; i < chunk_idx_to; i++) {
-			DataChunk chunk;
-			sink.data_collection->InitializeScanChunk(chunk);
 			sink.data_collection->FetchChunk(i, chunk);
-			for (auto &builder : sink.builders) {
-				auto cols = builder->BuiltCols();
-
-				Vector hashes(LogicalType::HASH);
-				VectorOperations::Hash(chunk.data[cols[0]], hashes, chunk.size());
-				for (int i = 1; i < cols.size(); i++) {
-					VectorOperations::CombineHash(hashes, chunk.data[cols[i]], chunk.size());
-				}
-				if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-					hashes.Flatten(chunk.size());
-				}
-				builder->PushNextBatch(thread_id, chunk.size(), (hash_t *)hashes.GetData());
+			for (auto &bf : sink.op.bf_to_create) {
+				bf->InsertHashedData(chunk, bf->BoundColsBuilt);
 			}
 		}
 		event->FinishTask();
@@ -158,7 +130,6 @@ private:
 	CreateBFGlobalSinkState &sink;
 	idx_t chunk_idx_from;
 	idx_t chunk_idx_to;
-	vector<duckdb::unique_ptr<duckdb::SchedulerThread>> &threads;
 };
 
 class CreateBFFinalizeEvent : public BasePipelineEvent {
@@ -217,12 +188,9 @@ SinkFinalizeType PhysicalCreateBF::Finalize(Pipeline &pipeline, Event &event, Cl
 	}
 	sink.local_data_collections.clear();
 
-	// prepare for building BF
+	// initialize the bloom filter
 	for (auto &filter : bf_to_create) {
-		auto builder = make_shared_ptr<BloomFilterBuilderParallel>();
-		builder->Begin(TaskScheduler::GetScheduler(context).NumberOfThreads(), arrow::internal::CpuInfo::AVX2,
-		               arrow::default_memory_pool(), sink.data_collection->Count(), 0, filter.get());
-		sink.builders.emplace_back(builder);
+		filter->Initialize(context, sink.data_collection->Count());
 	}
 
 	sink.ScheduleFinalize(pipeline, event);
