@@ -93,8 +93,8 @@ struct BloomFilterMasks {
 // querying and the rate of false positives.
 //
 class BlockedBloomFilter {
-	friend class BloomFilterBuilder_SingleThreaded;
-	friend class BloomFilterBuilder_Parallel;
+	friend class BloomFilterBuilderSingleThreaded;
+	friend class BloomFilterBuilderParallel;
 
 public:
 	BlockedBloomFilter()
@@ -331,7 +331,7 @@ public:
 	}
 };
 
-class BloomFilterBuilder_SingleThreaded : public BloomFilterBuilder {
+class BloomFilterBuilderSingleThreaded : public BloomFilterBuilder {
 public:
 	arrow::Status Begin(size_t num_threads, int64_t hardware_flags, arrow::MemoryPool *pool, int64_t num_rows,
 	                    int64_t num_batches, BlockedBloomFilter *build_target) override;
@@ -347,7 +347,7 @@ private:
 	BlockedBloomFilter *build_target_;
 };
 
-class ARROW_ACERO_EXPORT BloomFilterBuilder_Parallel : public BloomFilterBuilder {
+class ARROW_ACERO_EXPORT BloomFilterBuilderParallel : public BloomFilterBuilder {
 public:
 	arrow::Status Begin(size_t num_threads, int64_t hardware_flags, arrow::MemoryPool *pool, int64_t num_rows,
 	                    int64_t num_batches, BlockedBloomFilter *build_target) override;
