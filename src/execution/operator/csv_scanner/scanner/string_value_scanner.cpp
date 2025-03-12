@@ -1043,7 +1043,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		if (result_idx.GetIndex() >= parse_chunk.ColumnCount()) {
 			throw InvalidInputException("Mismatch between the schema of different files");
 		}
-		auto &parse_vector = parse_chunk.data[result_idx];
+		auto &parse_vector = parse_chunk.data[i];
 		auto &result_vector = insert_chunk.data[result_idx];
 		auto &type = result_vector.GetType();
 		auto &parse_type = parse_vector.GetType();
@@ -1090,8 +1090,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					string error_msg = error.str();
 					SanitizeError(error_msg);
 					auto csv_error = CSVError::CastError(
-					    state_machine->options, names[result_idx.GetIndex()], error_msg, result_idx.GetIndex(),
-					    borked_line, lines_per_batch,
+					    state_machine->options, names[i], error_msg, i, borked_line, lines_per_batch,
 					    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
 					    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 					error_handler->Error(csv_error);
@@ -1120,12 +1119,11 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						      << LogicalTypeIdToString(type.id()) << "\'";
 						string error_msg = error.str();
 						SanitizeError(error_msg);
-						auto csv_error =
-						    CSVError::CastError(state_machine->options, names[result_idx.GetIndex()], error_msg,
-						                        result_idx.GetIndex(), borked_line, lines_per_batch,
-						                        result.line_positions_per_row[line_error].begin.GetGlobalPosition(
-						                            result.result_size, first_nl),
-						                        optional_idx::Invalid(), result_vector.GetType().id(), result.path);
+						auto csv_error = CSVError::CastError(
+						    state_machine->options, names[i], error_msg, i, borked_line, lines_per_batch,
+						    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size,
+						                                                                      first_nl),
+						    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 						error_handler->Error(csv_error);
 					}
 				}
