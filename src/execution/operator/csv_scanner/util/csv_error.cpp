@@ -5,6 +5,7 @@
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/main/appender.hpp"
+#include "duckdb/common/multi_file_reader_function.hpp"
 #include <sstream>
 
 namespace duckdb {
@@ -65,6 +66,18 @@ void CSVErrorHandler::ErrorIfNeeded() {
 	if (CanGetLine(errors[0].error_info.boundary_idx)) {
 		ThrowError(errors[0]);
 	}
+}
+
+void CSVErrorHandler::ErrorIfAny() {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	if (ignore_errors || errors.empty()) {
+		// Nothing to error
+		return;
+	}
+	if (!CanGetLine(errors[0].error_info.boundary_idx)) {
+		throw InternalException("Failed to get error information for boundary index");
+	}
+	ThrowError(errors[0]);
 }
 
 void CSVErrorHandler::ErrorIfTypeExists(CSVErrorType error_type) {
@@ -147,8 +160,8 @@ string CSVErrorTypeToEnum(CSVErrorType type) {
 }
 
 void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const idx_t file_idx, const idx_t scan_idx,
-                                       const CSVFileScan &file, CSVRejectsTable &rejects, const ReadCSVData &bind_data,
-                                       const idx_t limit) {
+                                       const CSVFileScan &file, CSVRejectsTable &rejects,
+                                       const MultiFileBindData &bind_data, const idx_t limit) {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	// We first insert the file into the file scans table
 	for (auto &error : file.error_handler->errors) {
@@ -194,15 +207,15 @@ void CSVErrorHandler::FillRejectsTable(InternalAppender &errors_appender, const 
 				errors_appender.Append(Value());
 				break;
 			case CSVErrorType::TOO_FEW_COLUMNS:
-				if (col_idx + 1 < bind_data.return_names.size()) {
-					errors_appender.Append(string_t(bind_data.return_names[col_idx + 1]));
+				if (col_idx + 1 < bind_data.names.size()) {
+					errors_appender.Append(string_t(bind_data.names[col_idx + 1]));
 				} else {
 					errors_appender.Append(Value());
 				}
 				break;
 			default:
-				if (col_idx < bind_data.return_names.size()) {
-					errors_appender.Append(string_t(bind_data.return_names[col_idx]));
+				if (col_idx < bind_data.names.size()) {
+					errors_appender.Append(string_t(bind_data.names[col_idx]));
 				} else {
 					errors_appender.Append(Value());
 				}
@@ -397,7 +410,8 @@ CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const ve
 	return CSVError(error.str(), SNIFFING, {});
 }
 
-CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &search_space) {
+CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &search_space, idx_t max_columns_found,
+                                 SetColumns &set_columns) {
 	std::ostringstream error;
 	// 1. Which file
 	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
@@ -409,6 +423,13 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	error << search_space;
 	// 3. Suggest how to fix it!
 	error << "Possible fixes:" << '\n';
+
+	if (options.columns_set) {
+		// If columns are set, suggest to either unset it or validate that it matches the schema
+		error << "* Columns are set as: \"" << set_columns.ToString() << "\", and they contain: " << set_columns.Size()
+		      << " columns. It does not match the number of columns found by the sniffer: " << max_columns_found << "."
+		      << " Verify the columns parameter is correctly set." << '\n';
+	}
 	// 3.1 Inform the reader of the dialect
 	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
 		error << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with "

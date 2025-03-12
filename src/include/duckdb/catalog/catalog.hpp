@@ -117,6 +117,7 @@ public:
 		return false;
 	}
 	virtual void Initialize(bool load_builtin) = 0;
+	virtual void Initialize(optional_ptr<ClientContext> context, bool load_builtin);
 
 	bool IsSystemCatalog() const;
 	bool IsTemporaryCatalog() const;

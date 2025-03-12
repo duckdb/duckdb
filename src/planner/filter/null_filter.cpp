@@ -19,7 +19,7 @@ FilterPropagateResult IsNullFilter::CheckStatistics(BaseStatistics &stats) {
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-string IsNullFilter::ToString(const string &column_name) {
+string IsNullFilter::ToString(const string &column_name) const {
 	return column_name + " IS NULL";
 }
 
@@ -48,7 +48,7 @@ FilterPropagateResult IsNotNullFilter::CheckStatistics(BaseStatistics &stats) {
 	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
-string IsNotNullFilter::ToString(const string &column_name) {
+string IsNotNullFilter::ToString(const string &column_name) const {
 	return column_name + " IS NOT NULL";
 }
 

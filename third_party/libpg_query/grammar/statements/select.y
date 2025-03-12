@@ -73,14 +73,14 @@ select_no_parens:
 			| select_clause sort_clause
 				{
 					insertSelectOptions((PGSelectStmt *) $1, $2, NIL,
-										NULL, NULL, NULL,
+										NULL, NULL, NULL, NULL,
 										yyscanner);
 					$$ = $1;
 				}
 			| select_clause opt_sort_clause for_locking_clause opt_select_limit
 				{
 					insertSelectOptions((PGSelectStmt *) $1, $2, $3,
-										(PGNode*) list_nth($4, 0), (PGNode*) list_nth($4, 1),
+										(PGNode*) list_nth($4, 0), (PGNode*) list_nth($4, 1), (PGNode*) list_nth($4, 2),
 										NULL,
 										yyscanner);
 					$$ = $1;
@@ -88,7 +88,7 @@ select_no_parens:
 			| select_clause opt_sort_clause select_limit opt_for_locking_clause
 				{
 					insertSelectOptions((PGSelectStmt *) $1, $2, $4,
-										(PGNode*) list_nth($3, 0), (PGNode*) list_nth($3, 1),
+										(PGNode*) list_nth($3, 0), (PGNode*) list_nth($3, 1), (PGNode*) list_nth($3, 2),
 										NULL,
 										yyscanner);
 					$$ = $1;
@@ -96,7 +96,7 @@ select_no_parens:
 			| with_clause select_clause
 				{
 					insertSelectOptions((PGSelectStmt *) $2, NULL, NIL,
-										NULL, NULL,
+										NULL, NULL, NULL,
 										$1,
 										yyscanner);
 					$$ = $2;
@@ -104,7 +104,7 @@ select_no_parens:
 			| with_clause select_clause sort_clause
 				{
 					insertSelectOptions((PGSelectStmt *) $2, $3, NIL,
-										NULL, NULL,
+										NULL, NULL, NULL,
 										$1,
 										yyscanner);
 					$$ = $2;
@@ -112,7 +112,7 @@ select_no_parens:
 			| with_clause select_clause opt_sort_clause for_locking_clause opt_select_limit
 				{
 					insertSelectOptions((PGSelectStmt *) $2, $3, $4,
-										(PGNode*) list_nth($5, 0), (PGNode*) list_nth($5, 1),
+										(PGNode*) list_nth($5, 0), (PGNode*) list_nth($5, 1), (PGNode*) list_nth($5, 2),
 										$1,
 										yyscanner);
 					$$ = $2;
@@ -120,7 +120,7 @@ select_no_parens:
 			| with_clause select_clause opt_sort_clause select_limit opt_for_locking_clause
 				{
 					insertSelectOptions((PGSelectStmt *) $2, $3, $5,
-										(PGNode*) list_nth($4, 0), (PGNode*) list_nth($4, 1),
+										(PGNode*) list_nth($4, 0), (PGNode*) list_nth($4, 1), (PGNode*) list_nth($4, 2),
 										$1,
 										yyscanner);
 					$$ = $2;
@@ -458,17 +458,33 @@ cte_list:
 		| cte_list ',' common_table_expr		{ $$ = lappend($1, $3); }
 		;
 
-common_table_expr:  name opt_name_list AS opt_materialized '(' PreparableStmt ')'
+common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' PreparableStmt ')'
 			{
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->ctematerialized = $4;
-				n->ctequery = $6;
+				n->recursive_keys = $3;
+				n->ctematerialized = $5;
+				n->ctequery = $7;
 				n->location = @1;
 				$$ = (PGNode *) n;
 			}
 		;
+
+opt_on_key:
+		USING KEY '(' column_ref_list_opt_comma ')' 				{ $$ = $4; }
+		| /*EMPTY*/												{ $$ = list_make1(NIL); }
+		;
+
+column_ref_list_opt_comma:
+		column_ref_list	 						{ $$ = $1; }
+		| column_ref_list ','					{ $$ = $1; }
+		;
+
+column_ref_list:
+		columnref								{ $$ = list_make1($1); }
+        | column_ref_list ',' columnref		{ $$ = lappend($1, $3); }
+        ;
 
 opt_materialized:
 		MATERIALIZED							{ $$ = PGCTEMaterializeAlways; }
@@ -640,15 +656,15 @@ opt_nulls_order: NULLS_LA FIRST_P			{ $$ = PG_SORTBY_NULLS_FIRST; }
 		;
 
 select_limit:
-			limit_clause offset_clause			{ $$ = list_make2($2, $1); }
-			| offset_clause limit_clause		{ $$ = list_make2($1, $2); }
-			| limit_clause						{ $$ = list_make2(NULL, $1); }
-			| offset_clause						{ $$ = list_make2($1, NULL); }
+			limit_clause offset_clause			{ $$ = list_make3($2, $1, NULL); }
+			| offset_clause limit_clause		{ $$ = list_make3($1, $2, $1); }
+			| limit_clause						{ $$ = list_make3(NULL, $1, NULL); }
+			| offset_clause						{ $$ = list_make3($1, NULL, $1); }
 		;
 
 opt_select_limit:
 			select_limit						{ $$ = $1; }
-			| /* EMPTY */						{ $$ = list_make2(NULL,NULL); }
+			| /* EMPTY */						{ $$ = list_make3(NULL,NULL,NULL); }
 		;
 
 limit_clause:
@@ -2604,15 +2620,6 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
-			| '*' COLUMNS '(' a_expr ')'
-				{
-					PGAStar *star = makeNode(PGAStar);
-					star->expr = $4;
-					star->columns = true;
-					star->unpacked = true;
-					star->location = @1;
-					$$ = (PGNode *) star;
-				}
 			| COLUMNS '(' a_expr ')'
 				{
 					PGAStar *star = makeNode(PGAStar);
@@ -2620,6 +2627,21 @@ a_expr:		c_expr									{ $$ = $1; }
 					star->columns = true;
 					star->location = @1;
 					$$ = (PGNode *) star;
+				}
+			| UNPACK '(' a_expr ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("unpack"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| '*' COLUMNS '(' a_expr ')'
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->expr = $4;
+					star->columns = true;
+					star->location = @1;
+
+					PGFuncCall *n = makeFuncCall(SystemFuncName("unpack"), list_make1((PGNode *)star), @1);
+					$$ = (PGNode *) n;
 				}
 			| '*' opt_except_list opt_replace_list opt_rename_list
 				{

@@ -589,3 +589,9 @@ statement error
 SELECT TIMESTAMPTZ '294247-01-10 04:00:54.7758';
 ----
 Conversion Error: ICU date overflows timestamp range
+
+# Invalid time zones should produce NULL, not an error
+query I
+select try_strptime('2015-01-05 00:00:00 FNORD', '%Y-%m-%d %H:%M:%S %Z');
+----
+NULL

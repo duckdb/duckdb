@@ -226,6 +226,8 @@ enum class MetaPipelineType : uint8_t;
 
 enum class MetricsType : uint8_t;
 
+enum class MultiFileFileState : uint8_t;
+
 enum class MultiFileReaderColumnMappingMode : uint8_t;
 
 enum class NType : uint8_t;
@@ -327,6 +329,8 @@ enum class SinkNextBatchType : uint8_t;
 enum class SinkResultType : uint8_t;
 
 enum class SourceResultType : uint8_t;
+
+enum class StarExpressionType : uint8_t;
 
 enum class StatementReturnType : uint8_t;
 
@@ -683,6 +687,9 @@ template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
 
 template<>
+const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value);
+
+template<>
 const char* EnumUtil::ToChars<MultiFileReaderColumnMappingMode>(MultiFileReaderColumnMappingMode value);
 
 template<>
@@ -834,6 +841,9 @@ const char* EnumUtil::ToChars<SinkResultType>(SinkResultType value);
 
 template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
+
+template<>
+const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value);
 
 template<>
 const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value);
@@ -1221,6 +1231,9 @@ template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value);
 
 template<>
+MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value);
+
+template<>
 MultiFileReaderColumnMappingMode EnumUtil::FromString<MultiFileReaderColumnMappingMode>(const char *value);
 
 template<>
@@ -1372,6 +1385,9 @@ SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);
+
+template<>
+StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value);
 
 template<>
 StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value);

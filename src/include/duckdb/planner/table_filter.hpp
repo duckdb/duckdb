@@ -13,7 +13,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/unordered_map.hpp"
+#include "duckdb/common/map.hpp"
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/common/column_index.hpp"
 
@@ -48,7 +48,7 @@ public:
 public:
 	//! Returns true if the statistics indicate that the segment can contain values that satisfy that filter
 	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) = 0;
-	virtual string ToString(const string &column_name) = 0;
+	virtual string ToString(const string &column_name) const = 0;
 	string DebugToString();
 	virtual unique_ptr<TableFilter> Copy() const = 0;
 	virtual bool Equals(const TableFilter &other) const {
@@ -79,7 +79,7 @@ public:
 
 class TableFilterSet {
 public:
-	unordered_map<idx_t, unique_ptr<TableFilter>> filters;
+	map<idx_t, unique_ptr<TableFilter>> filters;
 
 public:
 	void PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilter> filter);

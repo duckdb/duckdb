@@ -32,7 +32,7 @@ string Exception::ToJSON(ExceptionType type, const string &message) {
 string Exception::ToJSON(ExceptionType type, const string &message, const unordered_map<string, string> &extra_info) {
 #ifndef DUCKDB_DEBUG_STACKTRACE
 	// by default we only enable stack traces for internal exceptions
-	if (type == ExceptionType::INTERNAL)
+	if (type == ExceptionType::INTERNAL || type == ExceptionType::FATAL)
 #endif
 	{
 		auto extended_extra_info = extra_info;
@@ -192,6 +192,17 @@ unordered_map<string, string> Exception::InitializeExtraInfo(optional_idx error_
 	unordered_map<string, string> result;
 	SetQueryLocation(error_location, result);
 	return result;
+}
+
+bool Exception::IsExecutionError(ExceptionType type) {
+	switch (type) {
+	case ExceptionType::INVALID_INPUT:
+	case ExceptionType::OUT_OF_RANGE:
+	case ExceptionType::CONVERSION:
+		return true;
+	default:
+		return false;
+	}
 }
 
 unordered_map<string, string> Exception::InitializeExtraInfo(const string &subtype, optional_idx error_location) {

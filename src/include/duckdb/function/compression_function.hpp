@@ -11,6 +11,7 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/compression_type.hpp"
 #include "duckdb/common/map.hpp"
+#include "duckdb/common/insertion_order_preserving_map.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/function/function.hpp"
 #include "duckdb/storage/data_pointer.hpp"
@@ -23,6 +24,7 @@ struct ColumnDataCheckpointData;
 class ColumnSegment;
 class SegmentStatistics;
 class TableFilter;
+struct TableFilterState;
 struct ColumnSegmentState;
 
 struct ColumnFetchState;
@@ -174,7 +176,8 @@ typedef void (*compression_select_t)(ColumnSegment &segment, ColumnScanState &st
                                      const SelectionVector &sel, idx_t sel_count);
 //! Function prototype used for applying a filter to a vector while scanning that vector
 typedef void (*compression_filter_t)(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                                     SelectionVector &sel, idx_t &sel_count, const TableFilter &filter);
+                                     SelectionVector &sel, idx_t &sel_count, const TableFilter &filter,
+                                     TableFilterState &filter_state);
 //! Function prototype used for reading a single value
 typedef void (*compression_fetch_row_t)(ColumnSegment &segment, ColumnFetchState &state, row_t row_id, Vector &result,
                                         idx_t result_idx);
@@ -202,6 +205,12 @@ typedef unique_ptr<ColumnSegmentState> (*compression_serialize_state_t)(ColumnSe
 typedef unique_ptr<ColumnSegmentState> (*compression_deserialize_state_t)(Deserializer &deserializer);
 //! Function prototype for cleaning up the segment state when the column data is dropped
 typedef void (*compression_cleanup_state_t)(ColumnSegment &segment);
+
+//===--------------------------------------------------------------------===//
+// GetSegmentInfo (optional)
+//===--------------------------------------------------------------------===//
+//! Function prototype for retrieving segment information straight from the column segment
+typedef InsertionOrderPreservingMap<string> (*compression_get_segment_info_t)(ColumnSegment &segment);
 
 enum class CompressionValidity : uint8_t { REQUIRES_VALIDITY, NO_VALIDITY_REQUIRED };
 
@@ -299,6 +308,13 @@ public:
 	compression_deserialize_state_t deserialize_state;
 	//! Cleanup the segment state (optional)
 	compression_cleanup_state_t cleanup_state;
+
+	// Get Segment Info
+	//! This is only necessary if you want to convey more information about the segment in the 'pragma_storage_info'
+	//! result
+
+	//! Get stringified segment information directly from reading the column segment
+	compression_get_segment_info_t get_segment_info = nullptr;
 
 	//! Whether the validity mask should be separately compressed
 	//! or this compression function can also be used to decompress the validity

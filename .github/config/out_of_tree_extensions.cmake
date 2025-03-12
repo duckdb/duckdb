@@ -56,7 +56,7 @@ endif()
 if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT ${WASM_ENABLED})
     duckdb_extension_load(delta
             GIT_URL https://github.com/duckdb/duckdb-delta
-            GIT_TAG 846019edcc27000721ff9c4281e85a63d1aa10de
+            GIT_TAG 6d626173e9efa6615c25eb08d979d1372100d5db
     )
 endif()
 
@@ -100,7 +100,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
-            GIT_TAG 79fcce4a7478d245189d851ce289def2b42f4f93
+            GIT_TAG 8461ed8b6f726564934e9c831cdc88d431e3148f
             )
 endif()
 
@@ -113,6 +113,7 @@ duckdb_extension_load(spatial
     GIT_TAG 919c69fe47443b4eafbd883e2fcac0b2ec448725
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 endif()
 
@@ -133,7 +134,7 @@ duckdb_extension_load(sqlite_scanner
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlsmith
-        GIT_TAG b13723fe701f1e38d2cd65b3b6eb587c6553a251
+        GIT_TAG e1eb0ae02a258f176d6e06b84c0d6c7a09c6b4da
         )
 
 ################# VSS
@@ -143,6 +144,7 @@ duckdb_extension_load(vss
         GIT_URL https://github.com/duckdb/duckdb-vss
         GIT_TAG 580e8918eb89f478cf2d233ca908ffbd3ec752c5
         TEST_DIR test/sql
+        APPLY_PATCHES
     )
 
 ################# MYSQL
@@ -160,6 +162,6 @@ duckdb_extension_load(fts
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb-fts
-        GIT_TAG 0477abaf2484aa7b9aabf8ace9dc0bde80a15554
+        GIT_TAG 3aa6a180b9c101d78070f5f7214c27552bb091c8
         TEST_DIR test/sql
 )

@@ -280,7 +280,7 @@ select regexp_extract_all('abc', '(a)(b)')
 statement error
 select regexp_extract_all('', '(')
 ----
-Invalid Input Error: Pattern failed to parse, error: 'missing ): ('
+Invalid Input Error: missing )
 
 query I
 select regexp_extract_all('abcdef', 'ac.*e.')
@@ -546,7 +546,7 @@ FROM (
   VALUES ('acd'), ('abcd'), ('abbcd'), ('abbbcd')
 ) AS t(str)
 ----
-Invalid Input Error: Pattern failed to parse, error: 'bad repetition operator: ++'
+Invalid Input Error: bad repetition operator: ++
 
 query IIIIIII
 SELECT

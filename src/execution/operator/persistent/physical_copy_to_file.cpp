@@ -45,6 +45,14 @@ struct VectorOfValuesEquality {
 template <class T>
 using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHashFunction, VectorOfValuesEquality>;
 
+struct CopyToFileInfo {
+	explicit CopyToFileInfo(string file_path_p) : file_path(std::move(file_path_p)) {
+	}
+
+	string file_path;
+	unique_ptr<CopyFunctionFileStatistics> file_stats;
+};
+
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
 	explicit CopyToFunctionGlobalState(ClientContext &context, unique_ptr<GlobalFunctionData> global_state)
@@ -60,7 +68,7 @@ public:
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
 	//! File names
-	vector<Value> file_names;
+	vector<CopyToFileInfo> file_names;
 	//! Max open files
 	idx_t max_open_files;
 
@@ -91,9 +99,17 @@ public:
 		return path;
 	}
 
-	void AddFileName(const StorageLockKey &l, const string &file_name) {
+	optional_ptr<CopyFunctionFileStatistics> AddFile(const StorageLockKey &l, const string &file_name,
+	                                                 CopyFunctionReturnType return_type) {
 		D_ASSERT(l.GetType() == StorageLockType::EXCLUSIVE);
-		file_names.emplace_back(file_name);
+		optional_ptr<CopyFunctionFileStatistics> result;
+		CopyToFileInfo file_info(file_name);
+		if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
+			file_info.file_stats = make_uniq<CopyFunctionFileStatistics>();
+			result = file_info.file_stats.get();
+		}
+		file_names.push_back(std::move(file_info));
+		return result;
 	}
 
 	void FinalizePartition(ClientContext &context, const PhysicalCopyToFile &op, PartitionWriteInfo &info) {
@@ -156,12 +172,16 @@ public:
 				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
 			}
 		}
-		if (op.return_type == CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST) {
-			AddFileName(*global_lock, full_path);
+		optional_ptr<CopyFunctionFileStatistics> file_stats;
+		if (op.return_type != CopyFunctionReturnType::CHANGED_ROWS) {
+			file_stats = AddFile(*global_lock, full_path, op.return_type);
 		}
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
 		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
+		if (file_stats) {
+			op.function.copy_to_get_written_statistics(context.client, *op.bind_data, *info->global_state, *file_stats);
+		}
 		auto &result = *info;
 		info->active_writes = 1;
 		// store in active write map
@@ -288,10 +308,15 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 	idx_t this_file_offset = g.last_file_offset++;
 	auto &fs = FileSystem::GetFileSystem(context);
 	string output_path(filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset));
-	if (return_type == CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST) {
-		g.AddFileName(global_lock, output_path);
+	optional_ptr<CopyFunctionFileStatistics> file_stats;
+	if (return_type != CopyFunctionReturnType::CHANGED_ROWS) {
+		file_stats = g.AddFile(global_lock, output_path, return_type);
 	}
-	return function.copy_to_initialize_global(context, *bind_data, output_path);
+	auto result = function.copy_to_initialize_global(context, *bind_data, output_path);
+	if (file_stats) {
+		function.copy_to_get_written_statistics(context, *bind_data, *result, *file_stats);
+	}
+	return result;
 }
 
 unique_ptr<LocalSinkState> PhysicalCopyToFile::GetLocalSinkState(ExecutionContext &context) const {
@@ -384,11 +409,10 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 
 	auto state = make_uniq<CopyToFunctionGlobalState>(
 	    context, function.copy_to_initialize_global(context, *bind_data, file_path));
-	if (use_tmp_file) {
-		auto global_lock = state->lock.GetExclusiveLock();
-		state->AddFileName(*global_lock, file_path);
-	} else {
-		state->file_names.emplace_back(file_path);
+	auto global_lock = state->lock.GetExclusiveLock();
+	auto file_stats = state->AddFile(*global_lock, file_path, return_type);
+	if (file_stats) {
+		function.copy_to_get_written_statistics(context, *bind_data, *state->global_state, *file_stats);
 	}
 	return std::move(state);
 }
@@ -536,19 +560,93 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 // Source
 //===--------------------------------------------------------------------===//
 
+class CopyToFileGlobalSourceState : public GlobalSourceState {
+public:
+	CopyToFileGlobalSourceState() {
+	}
+
+	idx_t offset = 0;
+
+	idx_t MaxThreads() override {
+		return 1;
+	}
+};
+
+unique_ptr<GlobalSourceState> PhysicalCopyToFile::GetGlobalSourceState(ClientContext &context) const {
+	return make_uniq<CopyToFileGlobalSourceState>();
+}
+
+void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, idx_t row_idx, const string &file_name,
+                                          CopyFunctionFileStatistics &file_stats) {
+	// filename VARCHAR
+	chunk.SetValue(0, row_idx, file_name);
+	// count BIGINT
+	chunk.SetValue(1, row_idx, Value::UBIGINT(file_stats.row_count));
+	// file size bytes BIGINT
+	chunk.SetValue(2, row_idx, Value::UBIGINT(file_stats.file_size_bytes));
+	// footer offset BIGINT
+	chunk.SetValue(3, row_idx, file_stats.footer_offset);
+	// footer size BIGINT
+	chunk.SetValue(4, row_idx, file_stats.footer_size);
+	// column statistics map(varchar, map(varchar, varchar))
+	map<string, Value> stats;
+	for (auto &entry : file_stats.column_statistics) {
+		map<string, Value> per_column_stats;
+		for (auto &stats_entry : entry.second) {
+			per_column_stats.insert(make_pair(stats_entry.first, stats_entry.second));
+		}
+		vector<Value> stats_keys;
+		vector<Value> stats_values;
+		for (auto &stats_entry : per_column_stats) {
+			stats_keys.emplace_back(stats_entry.first);
+			stats_values.emplace_back(std::move(stats_entry.second));
+		}
+		auto map_value =
+		    Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR, std::move(stats_keys), std::move(stats_values));
+		stats.insert(make_pair(entry.first, std::move(map_value)));
+	}
+	vector<Value> keys;
+	vector<Value> values;
+	for (auto &entry : stats) {
+		keys.emplace_back(entry.first);
+		values.emplace_back(std::move(entry.second));
+	}
+	auto map_val_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
+	chunk.SetValue(5, row_idx, Value::MAP(LogicalType::VARCHAR, map_val_type, std::move(keys), std::move(values)));
+}
+
 SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk,
                                              OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
+	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
+		auto &source_state = input.global_state.Cast<CopyToFileGlobalSourceState>();
+		idx_t next_end = MinValue<idx_t>(source_state.offset + STANDARD_VECTOR_SIZE, g.file_names.size());
+		idx_t count = next_end - source_state.offset;
+		for (idx_t i = 0; i < count; i++) {
+			auto &file_entry = g.file_names[source_state.offset + i];
+			auto &file_stats = *file_entry.file_stats;
+			ReturnStatistics(chunk, i, file_entry.file_path, file_stats);
+		}
+		chunk.SetCardinality(count);
+		source_state.offset += count;
+		return source_state.offset < g.file_names.size() ? SourceResultType::HAVE_MORE_OUTPUT
+		                                                 : SourceResultType::FINISHED;
+	}
 
 	chunk.SetCardinality(1);
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 		break;
-	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
+	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
 		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
-		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, g.file_names));
+		vector<Value> file_name_list;
+		for (auto &file_names : g.file_names) {
+			file_name_list.emplace_back(file_names.file_path);
+		}
+		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, std::move(file_name_list)));
 		break;
+	}
 	default:
 		throw NotImplementedException("Unknown CopyFunctionReturnType");
 	}

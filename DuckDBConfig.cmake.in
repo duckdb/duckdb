@@ -4,6 +4,12 @@
 #  DuckDB_INCLUDE_DIRS - include directories for DuckDB
 #  DuckDB_LIBRARIES    - libraries to link against
 
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+if(NOT @WITH_INTERNAL_ICU@)
+    find_dependency(ICU COMPONENTS i18n uc)
+endif()
+
 # Compute paths
 get_filename_component(DuckDB_CMAKE_DIR "${CMAKE_CURRENT_LIST_FILE}" PATH)
 set(DuckDB_INCLUDE_DIRS "@CONF_INCLUDE_DIRS@")

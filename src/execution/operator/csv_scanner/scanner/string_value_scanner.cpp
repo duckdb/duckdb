@@ -970,7 +970,8 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
       result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
-             buffer_manager->GetFilePath(), scanner_idx_p) {
+             buffer_manager->GetFilePath(), scanner_idx_p),
+      start_pos(0) {
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
 
@@ -982,11 +983,13 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
       result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
-             buffer_manager->GetFilePath(), 0) {
+             buffer_manager->GetFilePath(), 0),
+      start_pos(0) {
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
 
-unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
+unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options,
+                                                                 const MultiFileReaderOptions &file_options) {
 	auto state_machine = make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options,
 	                                                      CSVStateMachineCache::Get(context));
 
@@ -999,7 +1002,7 @@ unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &
 	auto it = BaseScanner::SkipCSVRows(buffer_manager, state_machine, rows_to_skip);
 	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(),
 	                                             STANDARD_VECTOR_SIZE, it);
-	scanner->csv_file_scan = make_shared_ptr<CSVFileScan>(context, options.file_path, options);
+	scanner->csv_file_scan = make_shared_ptr<CSVFileScan>(context, options.file_path, options, file_options);
 	scanner->csv_file_scan->InitializeProjection();
 	return scanner;
 }
