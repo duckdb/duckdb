@@ -18,6 +18,8 @@ public:
 	TableInOutGlobalState() {
 	}
 
+	idx_t ordinality_current_idx = 1;
+	bool reset_ordinality = false;
 	unique_ptr<GlobalTableFunctionState> global_state;
 };
 
@@ -98,6 +100,9 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		ConstantVector::Reference(chunk.data[target_idx], input.data[source_idx], state.row_index - 1, 1);
 	}
 	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
+	if (function.ordinality_data.ordinality_request == ordinality_request::REQUESTED) {
+		function.ordinality_data.SetOrdinality(chunk, gstate.ordinality_current_idx, gstate.reset_ordinality);
+	}
 	if (result == OperatorResultType::FINISHED) {
 		return result;
 	}

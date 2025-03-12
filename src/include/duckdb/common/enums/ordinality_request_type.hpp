@@ -17,7 +17,7 @@ struct ordinality_data_t {
 	ordinality_request ordinality_request = ordinality_request::NOT_REQUESTED;
 	idx_t column_id;
 
-	void SetOrdinality(DataChunk &chunk, const vector<ColumnIndex> &column_ids, idx_t &ordinality_current_idx,
+	void SetOrdinality(DataChunk &chunk, idx_t &ordinality_current_idx,
 	                   bool &reset) const {
 		const idx_t ordinality = chunk.size();
 		if (ordinality > 0) {
