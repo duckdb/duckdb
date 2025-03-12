@@ -88,7 +88,7 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
 
 #define S(x, n) (((x) << (n)) | (((x) & 0xFFFFFFFF) >> (32 - (n))))
 
-#define R(t)                                                    \
+#define SHA1R(t)                                                    \
     (                                                           \
         local.temp = local.W[((t) -  3) & 0x0F] ^             \
                      local.W[((t) -  8) & 0x0F] ^             \
@@ -97,7 +97,7 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
         (local.W[(t) & 0x0F] = S(local.temp, 1))               \
     )
 
-#define P(a, b, c, d, e, x)                                          \
+#define SHA1P(a, b, c, d, e, x)                                          \
     do                                                          \
     {                                                           \
         (e) += S((a), 5) + F((b), (c), (d)) + K + (x);             \
@@ -113,26 +113,26 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
 #define F(x, y, z) ((z) ^ ((x) & ((y) ^ (z))))
 #define K 0x5A827999
 
-    P(local.A, local.B, local.C, local.D, local.E, local.W[0]);
-    P(local.E, local.A, local.B, local.C, local.D, local.W[1]);
-    P(local.D, local.E, local.A, local.B, local.C, local.W[2]);
-    P(local.C, local.D, local.E, local.A, local.B, local.W[3]);
-    P(local.B, local.C, local.D, local.E, local.A, local.W[4]);
-    P(local.A, local.B, local.C, local.D, local.E, local.W[5]);
-    P(local.E, local.A, local.B, local.C, local.D, local.W[6]);
-    P(local.D, local.E, local.A, local.B, local.C, local.W[7]);
-    P(local.C, local.D, local.E, local.A, local.B, local.W[8]);
-    P(local.B, local.C, local.D, local.E, local.A, local.W[9]);
-    P(local.A, local.B, local.C, local.D, local.E, local.W[10]);
-    P(local.E, local.A, local.B, local.C, local.D, local.W[11]);
-    P(local.D, local.E, local.A, local.B, local.C, local.W[12]);
-    P(local.C, local.D, local.E, local.A, local.B, local.W[13]);
-    P(local.B, local.C, local.D, local.E, local.A, local.W[14]);
-    P(local.A, local.B, local.C, local.D, local.E, local.W[15]);
-    P(local.E, local.A, local.B, local.C, local.D, R(16));
-    P(local.D, local.E, local.A, local.B, local.C, R(17));
-    P(local.C, local.D, local.E, local.A, local.B, R(18));
-    P(local.B, local.C, local.D, local.E, local.A, R(19));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, local.W[0]);
+    SHA1P(local.E, local.A, local.B, local.C, local.D, local.W[1]);
+    SHA1P(local.D, local.E, local.A, local.B, local.C, local.W[2]);
+    SHA1P(local.C, local.D, local.E, local.A, local.B, local.W[3]);
+    SHA1P(local.B, local.C, local.D, local.E, local.A, local.W[4]);
+    SHA1P(local.A, local.B, local.C, local.D, local.E, local.W[5]);
+    SHA1P(local.E, local.A, local.B, local.C, local.D, local.W[6]);
+    SHA1P(local.D, local.E, local.A, local.B, local.C, local.W[7]);
+    SHA1P(local.C, local.D, local.E, local.A, local.B, local.W[8]);
+    SHA1P(local.B, local.C, local.D, local.E, local.A, local.W[9]);
+    SHA1P(local.A, local.B, local.C, local.D, local.E, local.W[10]);
+    SHA1P(local.E, local.A, local.B, local.C, local.D, local.W[11]);
+    SHA1P(local.D, local.E, local.A, local.B, local.C, local.W[12]);
+    SHA1P(local.C, local.D, local.E, local.A, local.B, local.W[13]);
+    SHA1P(local.B, local.C, local.D, local.E, local.A, local.W[14]);
+    SHA1P(local.A, local.B, local.C, local.D, local.E, local.W[15]);
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(16));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(17));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(18));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(19));
 
 #undef K
 #undef F
@@ -140,26 +140,26 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
 #define F(x, y, z) ((x) ^ (y) ^ (z))
 #define K 0x6ED9EBA1
 
-    P(local.A, local.B, local.C, local.D, local.E, R(20));
-    P(local.E, local.A, local.B, local.C, local.D, R(21));
-    P(local.D, local.E, local.A, local.B, local.C, R(22));
-    P(local.C, local.D, local.E, local.A, local.B, R(23));
-    P(local.B, local.C, local.D, local.E, local.A, R(24));
-    P(local.A, local.B, local.C, local.D, local.E, R(25));
-    P(local.E, local.A, local.B, local.C, local.D, R(26));
-    P(local.D, local.E, local.A, local.B, local.C, R(27));
-    P(local.C, local.D, local.E, local.A, local.B, R(28));
-    P(local.B, local.C, local.D, local.E, local.A, R(29));
-    P(local.A, local.B, local.C, local.D, local.E, R(30));
-    P(local.E, local.A, local.B, local.C, local.D, R(31));
-    P(local.D, local.E, local.A, local.B, local.C, R(32));
-    P(local.C, local.D, local.E, local.A, local.B, R(33));
-    P(local.B, local.C, local.D, local.E, local.A, R(34));
-    P(local.A, local.B, local.C, local.D, local.E, R(35));
-    P(local.E, local.A, local.B, local.C, local.D, R(36));
-    P(local.D, local.E, local.A, local.B, local.C, R(37));
-    P(local.C, local.D, local.E, local.A, local.B, R(38));
-    P(local.B, local.C, local.D, local.E, local.A, R(39));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(20));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(21));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(22));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(23));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(24));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(25));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(26));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(27));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(28));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(29));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(30));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(31));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(32));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(33));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(34));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(35));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(36));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(37));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(38));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(39));
 
 #undef K
 #undef F
@@ -167,26 +167,26 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
 #define F(x, y, z) (((x) & (y)) | ((z) & ((x) | (y))))
 #define K 0x8F1BBCDC
 
-    P(local.A, local.B, local.C, local.D, local.E, R(40));
-    P(local.E, local.A, local.B, local.C, local.D, R(41));
-    P(local.D, local.E, local.A, local.B, local.C, R(42));
-    P(local.C, local.D, local.E, local.A, local.B, R(43));
-    P(local.B, local.C, local.D, local.E, local.A, R(44));
-    P(local.A, local.B, local.C, local.D, local.E, R(45));
-    P(local.E, local.A, local.B, local.C, local.D, R(46));
-    P(local.D, local.E, local.A, local.B, local.C, R(47));
-    P(local.C, local.D, local.E, local.A, local.B, R(48));
-    P(local.B, local.C, local.D, local.E, local.A, R(49));
-    P(local.A, local.B, local.C, local.D, local.E, R(50));
-    P(local.E, local.A, local.B, local.C, local.D, R(51));
-    P(local.D, local.E, local.A, local.B, local.C, R(52));
-    P(local.C, local.D, local.E, local.A, local.B, R(53));
-    P(local.B, local.C, local.D, local.E, local.A, R(54));
-    P(local.A, local.B, local.C, local.D, local.E, R(55));
-    P(local.E, local.A, local.B, local.C, local.D, R(56));
-    P(local.D, local.E, local.A, local.B, local.C, R(57));
-    P(local.C, local.D, local.E, local.A, local.B, R(58));
-    P(local.B, local.C, local.D, local.E, local.A, R(59));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(40));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(41));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(42));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(43));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(44));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(45));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(46));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(47));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(48));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(49));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(50));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(51));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(52));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(53));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(54));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(55));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(56));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(57));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(58));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(59));
 
 #undef K
 #undef F
@@ -194,26 +194,26 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
 #define F(x, y, z) ((x) ^ (y) ^ (z))
 #define K 0xCA62C1D6
 
-    P(local.A, local.B, local.C, local.D, local.E, R(60));
-    P(local.E, local.A, local.B, local.C, local.D, R(61));
-    P(local.D, local.E, local.A, local.B, local.C, R(62));
-    P(local.C, local.D, local.E, local.A, local.B, R(63));
-    P(local.B, local.C, local.D, local.E, local.A, R(64));
-    P(local.A, local.B, local.C, local.D, local.E, R(65));
-    P(local.E, local.A, local.B, local.C, local.D, R(66));
-    P(local.D, local.E, local.A, local.B, local.C, R(67));
-    P(local.C, local.D, local.E, local.A, local.B, R(68));
-    P(local.B, local.C, local.D, local.E, local.A, R(69));
-    P(local.A, local.B, local.C, local.D, local.E, R(70));
-    P(local.E, local.A, local.B, local.C, local.D, R(71));
-    P(local.D, local.E, local.A, local.B, local.C, R(72));
-    P(local.C, local.D, local.E, local.A, local.B, R(73));
-    P(local.B, local.C, local.D, local.E, local.A, R(74));
-    P(local.A, local.B, local.C, local.D, local.E, R(75));
-    P(local.E, local.A, local.B, local.C, local.D, R(76));
-    P(local.D, local.E, local.A, local.B, local.C, R(77));
-    P(local.C, local.D, local.E, local.A, local.B, R(78));
-    P(local.B, local.C, local.D, local.E, local.A, R(79));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(60));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(61));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(62));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(63));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(64));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(65));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(66));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(67));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(68));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(69));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(70));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(71));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(72));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(73));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(74));
+    SHA1P(local.A, local.B, local.C, local.D, local.E, SHA1R(75));
+    SHA1P(local.E, local.A, local.B, local.C, local.D, SHA1R(76));
+    SHA1P(local.D, local.E, local.A, local.B, local.C, SHA1R(77));
+    SHA1P(local.C, local.D, local.E, local.A, local.B, SHA1R(78));
+    SHA1P(local.B, local.C, local.D, local.E, local.A, SHA1R(79));
 
 #undef K
 #undef F
