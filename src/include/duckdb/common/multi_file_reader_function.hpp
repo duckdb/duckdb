@@ -550,7 +550,8 @@ public:
 		auto &local_column_ids = reader_data.column_ids;
 		auto &local_columns = lstate.reader->GetColumns();
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
-			auto local_id = local_column_ids[i];
+			auto local_idx = MultiFileLocalIndex(i);
+			auto local_id = local_column_ids[local_idx];
 			auto cast_entry = reader_data.cast_map.find(local_id);
 			if (cast_entry == reader_data.cast_map.end()) {
 				auto &col = local_columns[local_id];
