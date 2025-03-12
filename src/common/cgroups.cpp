@@ -37,7 +37,7 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 
 	auto handle = fs.OpenFile(CGROUP_PATH, FileFlags::FILE_FLAGS_READ);
 	string cgroup_file_content;
-	auto file_size = handle->GetFileSize();
+	int64_t file_size = handle->GetFileSize();
 	if (file_size != 0) {
 		auto buffer = make_unsafe_uniq_array_uninitialized<char>(file_size + 1);
 		auto bytes_read = fs.Read(*handle, buffer.get(), file_size);
