@@ -10,7 +10,7 @@ namespace duckdb {
 template <class T>
 static void FillExtraInfo(const StaticFunctionDefinition &function, T &info) {
 	info.internal = true;
-	info.canonical_name = function.canonical_name;
+	info.alias_of = function.alias_of;
 	FillFunctionDescriptions(function, info);
 }
 

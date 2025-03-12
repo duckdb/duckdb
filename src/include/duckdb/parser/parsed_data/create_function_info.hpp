@@ -29,8 +29,8 @@ struct CreateFunctionInfo : public CreateInfo {
 
 	//! Function name
 	string name;
-	//! The canonical name of the function, differs from name for alias functions
-	string canonical_name;
+	//! The function name of which this function is an alias
+	string alias_of;
 	//! Function description
 	vector<FunctionDescription> descriptions;
 
