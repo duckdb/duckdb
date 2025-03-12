@@ -57,8 +57,8 @@ public:
 //! Base class for writing non-compound types (ex. numerics, strings)
 class PrimitiveColumnWriter : public ColumnWriter {
 public:
-	PrimitiveColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path, idx_t max_repeat,
-	                      idx_t max_define, bool can_have_nulls);
+	PrimitiveColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path,
+	                      bool can_have_nulls);
 	~PrimitiveColumnWriter() override = default;
 
 	//! We limit the uncompressed page size to 100MB

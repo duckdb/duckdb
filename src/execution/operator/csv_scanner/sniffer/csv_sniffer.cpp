@@ -23,20 +23,6 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, const MultiFileReaderOptions
 	}
 }
 
-bool SetColumns::IsSet() const {
-	if (!types) {
-		return false;
-	}
-	return !types->empty();
-}
-
-idx_t SetColumns::Size() const {
-	if (!types) {
-		return 0;
-	}
-	return types->size();
-}
-
 template <class T>
 void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, const string &name, string &error) {
 	if (original.IsSetByUser()) {
