@@ -7,9 +7,9 @@ namespace duckdb {
 using duckdb_parquet::Encoding;
 using duckdb_parquet::PageType;
 
-PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path,
-                                             idx_t max_repeat, idx_t max_define, bool can_have_nulls)
-    : ColumnWriter(writer, schema_idx, std::move(schema_path), max_repeat, max_define, can_have_nulls) {
+PrimitiveColumnWriter::PrimitiveColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema,
+                                             vector<string> schema_path, bool can_have_nulls)
+    : ColumnWriter(writer, column_schema, std::move(schema_path), can_have_nulls) {
 }
 
 unique_ptr<ColumnWriterState> PrimitiveColumnWriter::InitializeWriteState(duckdb_parquet::RowGroup &row_group) {
@@ -24,7 +24,7 @@ void PrimitiveColumnWriter::RegisterToRowGroup(duckdb_parquet::RowGroup &row_gro
 	column_chunk.meta_data.codec = writer.GetCodec();
 	column_chunk.meta_data.path_in_schema = schema_path;
 	column_chunk.meta_data.num_values = 0;
-	column_chunk.meta_data.type = writer.GetType(schema_idx);
+	column_chunk.meta_data.type = writer.GetType(SchemaIndex());
 	row_group.columns.push_back(std::move(column_chunk));
 }
 
@@ -44,8 +44,8 @@ void PrimitiveColumnWriter::Prepare(ColumnWriterState &state_p, ColumnWriterStat
 	idx_t vcount = parent ? parent->definition_levels.size() - state.definition_levels.size() : count;
 	idx_t parent_index = state.definition_levels.size();
 	auto &validity = FlatVector::Validity(vector);
-	HandleRepeatLevels(state, parent, count, max_repeat);
-	HandleDefineLevels(state, parent, validity, count, max_define, max_define - 1);
+	HandleRepeatLevels(state, parent, count, MaxRepeat());
+	HandleDefineLevels(state, parent, validity, count, MaxDefine(), MaxDefine() - 1);
 
 	idx_t vector_index = 0;
 	reference<PageInformation> page_info_ref = state.page_info.back();
@@ -175,10 +175,10 @@ void PrimitiveColumnWriter::NextPage(PrimitiveColumnWriterState &state) {
 	auto &temp_writer = *write_info.temp_writer;
 
 	// write the repetition levels
-	WriteLevels(temp_writer, state.repetition_levels, max_repeat, page_info.offset, page_info.row_count);
+	WriteLevels(temp_writer, state.repetition_levels, MaxRepeat(), page_info.offset, page_info.row_count);
 
 	// write the definition levels
-	WriteLevels(temp_writer, state.definition_levels, max_define, page_info.offset, page_info.row_count,
+	WriteLevels(temp_writer, state.definition_levels, MaxDefine(), page_info.offset, page_info.row_count,
 	            state.null_count + state.parent_null_count);
 }
 
@@ -255,7 +255,7 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 	if (!state.stats_state) {
 		return;
 	}
-	if (max_repeat == 0) {
+	if (MaxRepeat() == 0) {
 		column_chunk.meta_data.statistics.null_count = NumericCast<int64_t>(state.null_count);
 		column_chunk.meta_data.statistics.__isset.null_count = true;
 		column_chunk.meta_data.__isset.statistics = true;
