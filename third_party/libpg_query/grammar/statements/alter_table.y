@@ -171,6 +171,14 @@ alter_table_cmd:
 					n->missing_ok = true;
 					$$ = (PGNode *)n;
 				}
+			/* ALTER TABLE <name> SET PARTITIONED BY ( <partition_key_list> ) */
+			| SET PARTITIONED BY '(' expr_list_opt_comma ')'
+				{
+					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
+					n->subtype = PG_AT_SetPartitionedBy;
+					n->def_list = $5;
+					$$ = (PGNode *)n;
+				}
 			/* ALTER TABLE <name> ALTER [COLUMN] <colname> {SET DEFAULT <expr>|DROP DEFAULT} */
 			| ALTER opt_column ColId alter_column_default
 				{

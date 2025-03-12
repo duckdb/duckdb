@@ -98,6 +98,8 @@ public:
 	atomic<bool> any_finished;
 	//! Minimum memory per thread
 	idx_t minimum_memory_per_thread;
+	//! File stats (for RETURN_STATS)
+	unique_ptr<CopyFunctionFileStatistics> file_stats;
 
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage) {
 		// move the batch data to the set of prepared batch data
@@ -599,6 +601,10 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0]->types.size();
 	auto result = make_uniq<FixedBatchCopyGlobalState>(
 	    context, function.copy_to_initialize_global(context, *bind_data, file_path), minimum_memory_per_thread);
+	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
+		result->file_stats = make_uniq<CopyFunctionFileStatistics>();
+		function.copy_to_get_written_statistics(context, *bind_data, *result->global_state, *result->file_stats);
+	}
 	result->batch_size = function.desired_batch_size ? function.desired_batch_size(context, *bind_data) : 0;
 	return std::move(result);
 }
@@ -609,16 +615,19 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk,
                                                   OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
-
 	chunk.SetCardinality(1);
+	auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 		break;
 	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
 		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
-		auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
 		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, {fp}));
+		break;
+	}
+	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS: {
+		PhysicalCopyToFile::ReturnStatistics(chunk, 0, fp, *g.file_stats);
 		break;
 	}
 	default:
