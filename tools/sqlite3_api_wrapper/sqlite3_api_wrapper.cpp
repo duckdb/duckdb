@@ -119,6 +119,9 @@ int sqlite3_open_v2(const char *filename, /* Database filename (UTF-8) */
 		if (flags & DUCKDB_UNREDACTED_SECRETS) {
 			config.options.allow_unredacted_secrets = true;
 		}
+		if (flags & DUCKDB_LATEST_STORAGE_VERSION) {
+			config.options.serialization_compatibility = SerializationCompatibility::FromString("latest");
+		}
 
 		config.error_manager->AddCustomError(
 		    ErrorType::UNSIGNED_EXTENSION,
