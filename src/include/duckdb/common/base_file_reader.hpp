@@ -101,7 +101,7 @@ struct MultiFileCastMap;
 struct MultiFileFilterEntry;
 
 struct MultiFileLocalColumnId {
-	friend class MultiFileCastMap;
+	friend struct MultiFileCastMap;
 
 public:
 	explicit MultiFileLocalColumnId(column_t column_id) : column_id(column_id) {
@@ -130,9 +130,9 @@ struct MultiFileConstantMap;
 struct MultiFileLocalIndex {
 	//! these are allowed to access the index
 	template <class T>
-	friend class MultiFileLocalColumnIds;
-	friend class MultiFileColumnMapping;
-	friend class MultiFileFilterEntry;
+	friend struct MultiFileLocalColumnIds;
+	friend struct MultiFileColumnMapping;
+	friend struct MultiFileFilterEntry;
 
 public:
 	explicit MultiFileLocalIndex(idx_t index) : index(index) {
@@ -151,8 +151,8 @@ private:
 };
 
 struct MultiFileGlobalIndex {
-	friend class MultiFileGlobalColumnIds;
-	friend class MultiFileFilterMap;
+	friend struct MultiFileGlobalColumnIds;
+	friend struct MultiFileFilterMap;
 
 public:
 	explicit MultiFileGlobalIndex(idx_t index) : index(index) {
@@ -182,8 +182,8 @@ struct MultiFileConstantEntry {
 
 //! index used to access the constant map
 struct MultiFileConstantMapIndex {
-	friend class MultiFileConstantMap;
-	friend class MultiFileFilterEntry;
+	friend struct MultiFileConstantMap;
+	friend struct MultiFileFilterEntry;
 
 public:
 	explicit MultiFileConstantMapIndex(idx_t index) : index(index) {
