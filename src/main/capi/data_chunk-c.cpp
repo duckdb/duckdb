@@ -217,7 +217,7 @@ void duckdb_destroy_selection_vector(duckdb_selection_vector vector) {
 	delete reinterpret_cast<duckdb::SelectionVector *>(vector);
 }
 
-sel_t *duckdb_selection_vector_get_data(duckdb_selection_vector vector) {
+sel_t *duckdb_selection_vector_get_data_ptr(duckdb_selection_vector vector) {
 	return reinterpret_cast<duckdb::SelectionVector *>(vector)->data();
 }
 

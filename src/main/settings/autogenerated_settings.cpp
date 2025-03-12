@@ -949,8 +949,7 @@ void PartitionedWriteFlushThresholdSetting::SetLocal(ClientContext &context, con
 }
 
 void PartitionedWriteFlushThresholdSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).partitioned_write_flush_threshold =
-	    ClientConfig().partitioned_write_flush_threshold;
+	ClientConfig::GetConfig(context).partitioned_write_flush_threshold = ClientConfig().partitioned_write_flush_threshold;
 }
 
 Value PartitionedWriteFlushThresholdSetting::GetSetting(const ClientContext &context) {
@@ -1091,8 +1090,7 @@ void ScalarSubqueryErrorOnMultipleRowsSetting::SetLocal(ClientContext &context, 
 }
 
 void ScalarSubqueryErrorOnMultipleRowsSetting::ResetLocal(ClientContext &context) {
-	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows =
-	    ClientConfig().scalar_subquery_error_on_multiple_rows;
+	ClientConfig::GetConfig(context).scalar_subquery_error_on_multiple_rows = ClientConfig().scalar_subquery_error_on_multiple_rows;
 }
 
 Value ScalarSubqueryErrorOnMultipleRowsSetting::GetSetting(const ClientContext &context) {

@@ -63,6 +63,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'logical_type_interface',
     'data_chunk_interface',
     'vector_interface',
+    'selection_vector_interface',
     'validity_mask_functions',
     'scalar_functions',
     'aggregate_functions',
