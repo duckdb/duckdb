@@ -269,7 +269,7 @@ def create_function_comment(function_obj):
         if 'params' in function_obj:
             for param in function_obj['params']:
                 param_name = param['name']
-                if not 'param_comments' in comment:
+                if 'param_comments' not in comment:
                     if not ALLOW_UNCOMMENTED_PARAMS:
                         print(comment)
                         print(f'\nMissing param comments for function {function_name}')
