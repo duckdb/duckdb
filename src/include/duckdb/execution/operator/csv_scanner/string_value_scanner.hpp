@@ -90,6 +90,7 @@ public:
 	}
 	//! Dirty hack for adding cast message
 	void ModifyErrorMessageOfLastError(string error_message) {
+		D_ASSERT(!current_errors.empty() && current_errors.back().type == CSVErrorType::CAST_ERROR);
 		current_errors.back().error_message = std::move(error_message);
 	}
 
@@ -110,9 +111,6 @@ public:
 
 	idx_t Size() const {
 		return current_errors.size();
-	}
-	CurrentError LastError() const {
-		return current_errors.back();
 	}
 
 private:

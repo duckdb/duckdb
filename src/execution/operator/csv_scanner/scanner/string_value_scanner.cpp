@@ -824,6 +824,8 @@ bool StringValueResult::AddRowInternal() {
 	}
 
 	if (current_errors.HandleErrors(*this)) {
+		D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
+		D_ASSERT(buffer_handles.find(current_line_position.end.buffer_idx) != buffer_handles.end());
 		line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
 		number_of_rows++;
 		if (static_cast<idx_t>(number_of_rows) >= result_size) {
@@ -883,6 +885,11 @@ bool StringValueResult::AddRowInternal() {
 			RemoveLastLine();
 		}
 	}
+	D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
+	D_ASSERT(buffer_handles.find(current_line_position.end.buffer_idx) != buffer_handles.end());
+	D_ASSERT(!(current_line_position.begin.buffer_idx == 0 && current_line_position.begin.buffer_pos == 0 &&
+	           current_line_position.begin.buffer_size == 0 && current_line_position.end.buffer_idx == 0 &&
+	           current_line_position.end.buffer_pos == 0 && current_line_position.end.buffer_size == 0));
 	line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
 	cur_col_id = 0;
 	chunk_col_id = 0;
@@ -1083,9 +1090,16 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				if (!state_machine->options.IgnoreErrors()) {
 					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 					                                 lines_read - parse_chunk.size() + line_error);
-					bool first_nl;
-					auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
-					    first_nl, result.buffer_handles, result.PrintErrorLine());
+					string borked_line;
+					idx_t byte_position = 0;
+					if (result.line_positions_per_row.find(line_error) != result.line_positions_per_row.end()) {
+						// We can't get the result of later borked line casts.
+						bool first_nl;
+						borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
+						    first_nl, result.buffer_handles, result.PrintErrorLine());
+						byte_position = result.line_positions_per_row[line_error].begin.GetGlobalPosition(
+						    result.result_size, first_nl);
+					}
 					std::ostringstream error;
 					error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
 					      << type.ToString() << "\'";
@@ -1093,8 +1107,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					SanitizeError(error_msg);
 					auto csv_error = CSVError::CastError(
 					    state_machine->options, names[col_idx], error_msg, col_idx, borked_line, lines_per_batch,
-					    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
-					    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
+					    byte_position, optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 					error_handler->Error(csv_error);
 				}
 			}
@@ -1112,9 +1125,17 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					if (!state_machine->options.IgnoreErrors()) {
 						LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 						                                 lines_read - parse_chunk.size() + line_error);
-						bool first_nl;
-						auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
-						    first_nl, result.buffer_handles, result.PrintErrorLine());
+
+						string borked_line;
+						idx_t byte_position = 0;
+						if (result.line_positions_per_row.find(line_error) != result.line_positions_per_row.end()) {
+							// We can't get the result of later borked line casts.
+							bool first_nl;
+							borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
+							    first_nl, result.buffer_handles, result.PrintErrorLine());
+							byte_position = result.line_positions_per_row[line_error].begin.GetGlobalPosition(
+							    result.result_size, first_nl);
+						}
 						std::ostringstream error;
 						// Casting Error Message
 						error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
@@ -1123,9 +1144,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						SanitizeError(error_msg);
 						auto csv_error = CSVError::CastError(
 						    state_machine->options, names[col_idx], error_msg, col_idx, borked_line, lines_per_batch,
-						    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size,
-						                                                                      first_nl),
-						    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
+						    byte_position, optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 						error_handler->Error(csv_error);
 					}
 				}
