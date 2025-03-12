@@ -410,7 +410,8 @@ CSVError CSVError::HeaderSniffingError(const CSVReaderOptions &options, const ve
 	return CSVError(error.str(), SNIFFING, {});
 }
 
-CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &search_space) {
+CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &search_space, idx_t max_columns_found,
+                                 SetColumns &set_columns) {
 	std::ostringstream error;
 	// 1. Which file
 	error << "Error when sniffing file \"" << options.file_path << "\"." << '\n';
@@ -422,6 +423,13 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	error << search_space;
 	// 3. Suggest how to fix it!
 	error << "Possible fixes:" << '\n';
+
+	if (options.columns_set) {
+		// If columns are set, suggest to either unset it or validate that it matches the schema
+		error << "* Columns are set as: \"" << set_columns.ToString() << "\", and they contain: " << set_columns.Size()
+		      << " columns. It does not match the number of columns found by the sniffer: " << max_columns_found << "."
+		      << " Verify the columns parameter is correctly set." << '\n';
+	}
 	// 3.1 Inform the reader of the dialect
 	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
 		error << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with "
