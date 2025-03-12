@@ -295,14 +295,12 @@ public:
 	}
 
 	//! JSON method that parses a { string: value } JSON blob
-	//! NOTE: this method ONLY parses a JSON {"key": "value"} object, it does not support ANYTHING else
 	//! NOTE: this method is not efficient
 	//! NOTE: this method is used in Exception construction - as such it does NOT throw on invalid JSON, instead an
 	//! empty map is returned
-	DUCKDB_API static unordered_map<string, string> ParseJSONMap(const string &json);
-
 	//! Parses complex (i.e., nested) Json maps, it also parses invalid JSONs, as a pure string.
-	DUCKDB_API static unique_ptr<ComplexJSON> ParseComplexJSONMap(const string &json, bool ignore_errors);
+	DUCKDB_API static unique_ptr<ComplexJSON> ParseJSONMap(const string &json, bool ignore_errors = false);
+
 	//! JSON method that constructs a { string: value } JSON map
 	//! This is the inverse of ParseJSONMap
 	//! NOTE: this method is not efficient

@@ -22,4 +22,13 @@ ComplexJSON &ComplexJSON::GetObject(const string &key) {
 	}
 	throw InvalidInputException("ComplexJson is not an object");
 }
+
+unordered_map<string, string> ComplexJSON::Flatten() const {
+	unordered_map<string, string> result;
+	for (auto &obj : obj_value) {
+		result[obj.first] = obj.second->GetValueRecursive(*obj.second);
+	}
+	return result;
+}
+
 } // namespace duckdb

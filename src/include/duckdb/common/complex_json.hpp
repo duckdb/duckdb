@@ -29,6 +29,8 @@ struct ComplexJSON {
 	string GetValue(const string &key) const;
 	//! Recursive function for GetValue
 	static string GetValueRecursive(const ComplexJSON &child);
+	//! Flattens this json to a top level key -> nested json
+	unordered_map<string, string> Flatten() const;
 
 private:
 	//! Basic string value, in case this is the last value of a nested json

@@ -532,7 +532,7 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
 	return StringUtil::CandidatesMessage(closest_strings, message_prefix);
 }
 
-unique_ptr<ComplexJSON> StringUtil::ParseComplexJSONMap(const string &json, bool ignore_errors) {
+unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore_errors) {
 	auto result = make_uniq<ComplexJSON>(json, ignore_errors);
 	if (json.empty()) {
 		return result;
@@ -575,7 +575,7 @@ unique_ptr<ComplexJSON> StringUtil::ParseComplexJSONMap(const string &json, bool
 			size_t json_str_len;
 			char *json_str = yyjson_val_write(value, 0, &json_str_len);
 			if (json_str) {
-				auto nested_result = ParseComplexJSONMap(string(json_str, json_str_len), ignore_errors);
+				auto nested_result = ParseJSONMap(string(json_str, json_str_len), ignore_errors);
 				result->AddObject(string(key_val, key_len), std::move(nested_result));
 				free(json_str); // Clean up the allocated string
 			} else {
@@ -593,40 +593,6 @@ unique_ptr<ComplexJSON> StringUtil::ParseComplexJSONMap(const string &json, bool
 			}
 			throw SerializationException("Failed to parse JSON string: %s", json);
 		}
-	}
-	yyjson_doc_free(doc);
-	return result;
-}
-
-unordered_map<string, string> StringUtil::ParseJSONMap(const string &json) {
-	unordered_map<string, string> result;
-	if (json.empty()) {
-		return result;
-	}
-	yyjson_read_flag flags = YYJSON_READ_ALLOW_INVALID_UNICODE;
-	yyjson_doc *doc = yyjson_read(json.c_str(), json.size(), flags);
-	if (!doc) {
-		throw SerializationException("Failed to parse JSON string: %s", json);
-	}
-	yyjson_val *root = yyjson_doc_get_root(doc);
-	if (!root || yyjson_get_type(root) != YYJSON_TYPE_OBJ) {
-		yyjson_doc_free(doc);
-		throw SerializationException("Failed to parse JSON string: %s", json);
-	}
-	yyjson_obj_iter iter;
-	yyjson_obj_iter_init(root, &iter);
-	yyjson_val *key, *value;
-	while ((key = yyjson_obj_iter_next(&iter))) {
-		value = yyjson_obj_iter_get_val(key);
-		if (yyjson_get_type(value) != YYJSON_TYPE_STR) {
-			yyjson_doc_free(doc);
-			throw SerializationException("Failed to parse JSON string: %s", json);
-		}
-		auto key_val = yyjson_get_str(key);
-		auto key_len = yyjson_get_len(key);
-		auto value_val = yyjson_get_str(value);
-		auto value_len = yyjson_get_len(value);
-		result.emplace(string(key_val, key_len), string(value_val, value_len));
 	}
 	yyjson_doc_free(doc);
 	return result;

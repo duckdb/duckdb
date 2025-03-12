@@ -34,7 +34,7 @@ ArrowSchemaMetadata::ArrowSchemaMetadata(const char *metadata) {
 	// We ignore errors of the metadata parsing if the extension is different from arrow.opaque
 	const bool ignore_errors =
 	    schema_metadata_map[ARROW_EXTENSION_NAME] != ArrowExtensionMetadata::ARROW_EXTENSION_NON_CANONICAL;
-	extension_metadata_map = StringUtil::ParseComplexJSONMap(schema_metadata_map[ARROW_METADATA_KEY], ignore_errors);
+	extension_metadata_map = StringUtil::ParseJSONMap(schema_metadata_map[ARROW_METADATA_KEY], ignore_errors);
 }
 
 ArrowSchemaMetadata::ArrowSchemaMetadata() {
