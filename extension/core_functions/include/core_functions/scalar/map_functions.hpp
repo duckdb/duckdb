@@ -66,6 +66,7 @@ struct MapExtractValueFun {
 	static constexpr const char *Parameters = "map,key";
 	static constexpr const char *Description = "Returns the value for a given key or NULL if the key is not contained in the map. The type of the key provided in the second parameter must match the type of the map’s keys else an error is returned";
 	static constexpr const char *Example = "map_extract_value(map(['key'], ['val']), 'key')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };

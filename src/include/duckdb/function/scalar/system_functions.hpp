@@ -50,6 +50,7 @@ struct CurrentConnectionId {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Get the current connection_id";
 	static constexpr const char *Example = "current_connection_id()";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -59,6 +60,7 @@ struct CurrentTransactionId {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Get the current global transaction_id";
 	static constexpr const char *Example = "current_transaction_id()";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -68,6 +70,7 @@ struct CurrentQueryId {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Get the current query_id";
 	static constexpr const char *Example = "current_transaction_id('Hello')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
