@@ -162,7 +162,7 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 
 	if (root_entry.IsValid()) {
 		auto &entry = cgroup_entries[root_entry.GetIndex()];
-		auto path = StringUtil::Format("/sys/fs/cgroup/%s/memory.max", entry.cgroup_path);
+		auto path = StringUtil::Format("/sys/fs/cgroup%s/memory.max", entry.cgroup_path);
 		auto memory_limit = ReadMemoryLimit(fs, path.c_str());
 		if (memory_limit.IsValid()) {
 			return memory_limit;
@@ -170,7 +170,7 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 	}
 	if (memory_entry.IsValid()) {
 		auto &entry = cgroup_entries[memory_entry.GetIndex()];
-		auto path = StringUtil::Format("/sys/fs/cgroup/memory/%s/memory.limit_in_bytes", entry.cgroup_path);
+		auto path = StringUtil::Format("/sys/fs/cgroup/memory%s/memory.limit_in_bytes", entry.cgroup_path);
 		auto memory_limit = ReadMemoryLimit(fs, path.c_str());
 		if (memory_limit.IsValid()) {
 			return memory_limit;
