@@ -17,8 +17,6 @@ add_library(duckdb_mbedtls STATIC
         library/cipher.cpp
         library/cipher_wrap.cpp
         library/constant_time.cpp
-        library/entropy.cpp
-        library/entropy_poll.cpp
         library/gcm.cpp
         library/md.cpp
         library/oid.cpp
