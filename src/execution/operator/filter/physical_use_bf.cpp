@@ -4,7 +4,7 @@
 
 namespace duckdb {
 namespace {
-void BloomFilterExecute(const vector<Vector> &result, const shared_ptr<BlockedBloomFilter> &bloom_filter,
+void BloomFilterExecute(vector<Vector> &result, const shared_ptr<BlockedBloomFilter> &bloom_filter,
                         SelectionVector &sel, idx_t &approved_tuple_count, idx_t row_num) {
 	if (!bloom_filter->finalized_) {
 		approved_tuple_count = 0;
@@ -13,9 +13,9 @@ void BloomFilterExecute(const vector<Vector> &result, const shared_ptr<BlockedBl
 
 	// Compute hash values
 	Vector hashes(LogicalType::HASH);
-	VectorOperations::Hash(const_cast<Vector &>(result[bloom_filter->BoundColsApplied[0]]), hashes, row_num);
+	VectorOperations::Hash(result[bloom_filter->BoundColsApplied[0]], hashes, row_num);
 	for (size_t i = 1; i < bloom_filter->BoundColsApplied.size(); i++) {
-		VectorOperations::CombineHash(hashes, const_cast<Vector &>(result[bloom_filter->BoundColsApplied[i]]), row_num);
+		VectorOperations::CombineHash(hashes, result[bloom_filter->BoundColsApplied[i]], row_num);
 	}
 	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		hashes.Flatten(row_num);

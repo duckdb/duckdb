@@ -157,7 +157,7 @@ void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id,
 				bf_plan->apply.push_back(binding0);
 			}
 		}
-		if (bf_plan->build.size() > 0) {
+		if (!bf_plan->build.empty()) {
 			bfs_to_create_plan.emplace_back(std::move(bf_plan));
 		} else {
 			throw InternalException("No built column found!");

@@ -52,7 +52,7 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 				continue;
 			}
 
-			unique_ptr<BoundComparisonExpression> comparison(
+			shared_ptr<BoundComparisonExpression> comparison(
 			    new BoundComparisonExpression(cond.comparison, cond.left->Copy(), cond.right->Copy()));
 			if (!conditions.insert(*comparison).second) {
 				continue;
@@ -70,6 +70,7 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			// Determine table indices and corresponding nodes
 			idx_t left_table = table_operator_manager.GetRenaming(left_binding).table_index;
 			idx_t right_table = table_operator_manager.GetRenaming(right_binding).table_index;
+
 			auto left_node = table_operator_manager.GetTableOperator(left_table);
 			auto right_node = table_operator_manager.GetTableOperator(right_table);
 			if (!left_node || !right_node) {
@@ -84,7 +85,7 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			LogicalOperator *small_table = left_is_larger ? right_node : left_node;
 
 			// Create edge
-			shared_ptr<EdgeInfo> edge(new EdgeInfo(std::move(comparison), *big_table, *small_table));
+			shared_ptr<EdgeInfo> edge(new EdgeInfo(comparison->Copy(), *big_table, *small_table));
 
 			// Set protection flags
 			switch (comp_join.type) {

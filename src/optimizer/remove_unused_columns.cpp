@@ -19,6 +19,8 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_set_operation.hpp"
 #include "duckdb/planner/operator/logical_simple.hpp"
+#include "duckdb/planner/operator/logical_use_bf.hpp"
+#include "duckdb/planner/operator/logical_create_bf.hpp"
 #include "duckdb/function/scalar/struct_utils.hpp"
 
 namespace duckdb {
@@ -345,7 +347,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 
 	if (op.type == LogicalOperatorType::LOGICAL_CREATE_BF) {
 		auto &create_bf = op.Cast<LogicalCreateBF>();
-		for (auto cell : create_bf.bf_to_create_plans) {
+		for (const auto& cell : create_bf.bf_to_create_plans) {
 			for (auto &v : cell->build) {
 				if (column_references.find(v) != column_references.end()) {
 					auto exprs = column_references[v];
