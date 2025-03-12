@@ -188,7 +188,7 @@ jobs:
           -e FORCE_WARN_UNUSED=1                                                 \
           -e DUCKDB_PLATFORM=linux_arm64                                         \
           ubuntu:18.04                                                           \
-          bash -c "/duckdb/scripts/setup_ubuntu1804.sh && git config --global --add safe.directory /duckdb && make bundle-library -C /duckdb"\
+          bash -c "/duckdb/scripts/setup_ubuntu1804.sh && git config --global --add safe.directory /duckdb && make bundle-library -C /duckdb"
           bash -c "/duckdb/scripts/setup_ubuntu1804.sh && git config --global --add safe.directory /duckdb && make gather-libs -C /duckdb"
       - name: Deploy
         shell: bash
