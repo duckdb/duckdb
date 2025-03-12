@@ -14,6 +14,9 @@
 
 #include <string>
 
+typedef struct mbedtls_cipher_context_t mbedtls_cipher_context_t;
+typedef struct mbedtls_cipher_info_t mbedtls_cipher_info_t;
+
 namespace duckdb_mbedtls {
 
 class MbedTlsWrapper {
@@ -55,13 +58,12 @@ public:
 		void *sha_context;
 	};
 
-class AESGCMStateMBEDTLS : public duckdb::EncryptionState {
+class AESStateMBEDTLS : public duckdb::EncryptionState {
 	public:
-		DUCKDB_API explicit AESGCMStateMBEDTLS();
-		DUCKDB_API ~AESGCMStateMBEDTLS() override;
+		DUCKDB_API explicit AESStateMBEDTLS(const std::string *key = nullptr);
+		DUCKDB_API ~AESStateMBEDTLS() override;
 
 	public:
-		DUCKDB_API bool IsOpenSSL() override;
 		DUCKDB_API void InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) override;
 		DUCKDB_API void InitializeDecryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) override;
 		DUCKDB_API size_t Process(duckdb::const_data_ptr_t in, duckdb::idx_t in_len, duckdb::data_ptr_t out,
@@ -70,19 +72,23 @@ class AESGCMStateMBEDTLS : public duckdb::EncryptionState {
 		DUCKDB_API void GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) override;
 		DUCKDB_API const std::string GetLib();
 
+		DUCKDB_API const mbedtls_cipher_info_t *GetCipher(size_t key_len);
+
 	private:
-		bool ssl = false;
-		void *gcm_context;
+		Mode mode;
+		// default is GCM
+		Algorithm algorithm = GCM;
+		duckdb::unique_ptr<mbedtls_cipher_context_t> context;
 	};
 
-	class AESGCMStateMBEDTLSFactory : public duckdb::EncryptionUtil {
+	class AESStateMBEDTLSFactory : public duckdb::EncryptionUtil {
 
 	public:
-		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState() const override {
-			return duckdb::make_shared_ptr<MbedTlsWrapper::AESGCMStateMBEDTLS>();
+		duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(const std::string *key = nullptr) const override {
+			return duckdb::make_shared_ptr<MbedTlsWrapper::AESStateMBEDTLS>(key);
 		}
 
-		~AESGCMStateMBEDTLSFactory() override {} //
+		~AESStateMBEDTLSFactory() override {} //
 	};
 };
 
