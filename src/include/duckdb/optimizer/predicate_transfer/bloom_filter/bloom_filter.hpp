@@ -101,7 +101,7 @@ private:
 
 		// The next set of hash bits is used to pick the amount of bit rotation of the mask.
 		uint64_t rotation = (hash >> BloomFilterMasks::kLogNumMasks) & 63;
-		return (result << rotation) | (result >> (64 - rotation));
+		return (result << rotation) | (result >> ((64 - rotation) & 63)); // Ensures valid shift
 	}
 
 	inline uint64_t block_id(uint64_t hash) const {
