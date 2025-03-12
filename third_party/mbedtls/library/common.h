@@ -135,7 +135,7 @@ void mbedtls_zeroize_and_free(void *buf, size_t len);
  *              Note that this is only a valid pointer if the size of the
  *              buffer is at least \p n + 1.
  */
-static inline unsigned char *mbedtls_buffer_offset(
+inline unsigned char *mbedtls_buffer_offset(
     unsigned char *p, size_t n)
 {
     return p == NULL ? NULL : p + n;
@@ -152,7 +152,7 @@ static inline unsigned char *mbedtls_buffer_offset(
  *              Note that this is only a valid pointer if the size of the
  *              buffer is at least \p n + 1.
  */
-static inline const unsigned char *mbedtls_buffer_offset_const(
+inline const unsigned char *mbedtls_buffer_offset_const(
     const unsigned char *p, size_t n)
 {
     return p == NULL ? NULL : p + n;
@@ -183,7 +183,7 @@ __attribute__((always_inline))
  *            the result is not used immediately (e.g., in AES-CTR), mbedtls_xor() may be faster.
  *            For targets without SIMD support, they will behave the same.
  */
-static inline void mbedtls_xor(unsigned char *r,
+inline void mbedtls_xor(unsigned char *r,
                                const unsigned char *a,
                                const unsigned char *b,
                                size_t n)
@@ -265,7 +265,7 @@ __attribute__((always_inline))
  *            the result is not used immediately (e.g., in AES-CTR), mbedtls_xor() may be faster.
  *            For targets without SIMD support, they will behave the same.
  */
-static inline void mbedtls_xor_no_simd(unsigned char *r,
+inline void mbedtls_xor_no_simd(unsigned char *r,
                                        const unsigned char *a,
                                        const unsigned char *b,
                                        size_t n)

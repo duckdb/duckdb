@@ -55,7 +55,7 @@
 
 static int supported_init = 0;
 
-static inline const mbedtls_cipher_base_t *mbedtls_cipher_get_base(
+inline const mbedtls_cipher_base_t *mbedtls_cipher_get_base(
     const mbedtls_cipher_info_t *info)
 {
     return mbedtls_cipher_base_lookup_table[info->base_idx];
@@ -133,7 +133,7 @@ const mbedtls_cipher_info_t *mbedtls_cipher_info_from_values(
 }
 
 #if defined(MBEDTLS_USE_PSA_CRYPTO) && !defined(MBEDTLS_DEPRECATED_REMOVED)
-static inline psa_key_type_t mbedtls_psa_translate_cipher_type(
+inline psa_key_type_t mbedtls_psa_translate_cipher_type(
     mbedtls_cipher_type_t cipher)
 {
     switch (cipher) {
@@ -174,7 +174,7 @@ static inline psa_key_type_t mbedtls_psa_translate_cipher_type(
     }
 }
 
-static inline psa_algorithm_t mbedtls_psa_translate_cipher_mode(
+inline psa_algorithm_t mbedtls_psa_translate_cipher_mode(
     mbedtls_cipher_mode_t mode, size_t taglen)
 {
     switch (mode) {

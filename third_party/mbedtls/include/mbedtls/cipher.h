@@ -434,7 +434,7 @@ const mbedtls_cipher_info_t *mbedtls_cipher_info_from_values(const mbedtls_ciphe
  * \return              The full cipher identifier (\c MBEDTLS_CIPHER_xxx).
  * \return              #MBEDTLS_CIPHER_NONE if \p info is \c NULL.
  */
-static inline mbedtls_cipher_type_t mbedtls_cipher_info_get_type(
+inline mbedtls_cipher_type_t mbedtls_cipher_info_get_type(
     const mbedtls_cipher_info_t *info)
 {
     if (info == NULL) {
@@ -453,7 +453,7 @@ static inline mbedtls_cipher_type_t mbedtls_cipher_info_get_type(
  * \return              The cipher mode (\c MBEDTLS_MODE_xxx).
  * \return              #MBEDTLS_MODE_NONE if \p info is \c NULL.
  */
-static inline mbedtls_cipher_mode_t mbedtls_cipher_info_get_mode(
+inline mbedtls_cipher_mode_t mbedtls_cipher_info_get_mode(
     const mbedtls_cipher_info_t *info)
 {
     if (info == NULL) {
@@ -474,7 +474,7 @@ static inline mbedtls_cipher_mode_t mbedtls_cipher_info_get_mode(
  *                      For DES, this includes the parity bits.
  * \return              \c 0 if \p info is \c NULL.
  */
-static inline size_t mbedtls_cipher_info_get_key_bitlen(
+inline size_t mbedtls_cipher_info_get_key_bitlen(
     const mbedtls_cipher_info_t *info)
 {
     if (info == NULL) {
@@ -495,7 +495,7 @@ static inline size_t mbedtls_cipher_info_get_key_bitlen(
  *                      with static storage duration.
  * \return              \c NULL if \p info is \c NULL.
  */
-static inline const char *mbedtls_cipher_info_get_name(
+inline const char *mbedtls_cipher_info_get_name(
     const mbedtls_cipher_info_t *info)
 {
     if (info == NULL) {
@@ -515,7 +515,7 @@ static inline const char *mbedtls_cipher_info_get_name(
  * \return      \c 0 for ciphers not using an IV or a nonce.
  * \return      \c 0 if \p info is \c NULL.
  */
-static inline size_t mbedtls_cipher_info_get_iv_size(
+inline size_t mbedtls_cipher_info_get_iv_size(
     const mbedtls_cipher_info_t *info)
 {
     if (info == NULL) {
@@ -535,7 +535,7 @@ static inline size_t mbedtls_cipher_info_get_iv_size(
  * \return       \c 1 if the cipher is a stream cipher.
  * \return       \c 0 if \p info is \c NULL.
  */
-static inline size_t mbedtls_cipher_info_get_block_size(
+inline size_t mbedtls_cipher_info_get_block_size(
     const mbedtls_cipher_info_t *info)
 {
     if (info == NULL) {
@@ -554,7 +554,7 @@ static inline size_t mbedtls_cipher_info_get_block_size(
  * \return       Non-zero if the key length is variable, \c 0 otherwise.
  * \return       \c 0 if the given pointer is \c NULL.
  */
-static inline int mbedtls_cipher_info_has_variable_key_bitlen(
+inline int mbedtls_cipher_info_has_variable_key_bitlen(
     const mbedtls_cipher_info_t *info)
 {
     if (info == NULL) {
@@ -573,7 +573,7 @@ static inline int mbedtls_cipher_info_has_variable_key_bitlen(
  * \return       Non-zero if the IV size is variable, \c 0 otherwise.
  * \return       \c 0 if the given pointer is \c NULL.
  */
-static inline int mbedtls_cipher_info_has_variable_iv_size(
+inline int mbedtls_cipher_info_has_variable_iv_size(
     const mbedtls_cipher_info_t *info)
 {
     if (info == NULL) {
@@ -675,7 +675,7 @@ int MBEDTLS_DEPRECATED mbedtls_cipher_setup_psa(mbedtls_cipher_context_t *ctx,
  * \return       \c 1 if the cipher is a stream cipher.
  * \return       \c 0 if \p ctx has not been initialized.
  */
-static inline unsigned int mbedtls_cipher_get_block_size(
+inline unsigned int mbedtls_cipher_get_block_size(
     const mbedtls_cipher_context_t *ctx)
 {
     if (ctx->MBEDTLS_PRIVATE(cipher_info) == NULL) {
@@ -694,7 +694,7 @@ static inline unsigned int mbedtls_cipher_get_block_size(
  * \return       The mode of operation.
  * \return       #MBEDTLS_MODE_NONE if \p ctx has not been initialized.
  */
-static inline mbedtls_cipher_mode_t mbedtls_cipher_get_cipher_mode(
+inline mbedtls_cipher_mode_t mbedtls_cipher_get_cipher_mode(
     const mbedtls_cipher_context_t *ctx)
 {
     if (ctx->MBEDTLS_PRIVATE(cipher_info) == NULL) {
@@ -714,7 +714,7 @@ static inline mbedtls_cipher_mode_t mbedtls_cipher_get_cipher_mode(
  * \return      \c 0 for ciphers not using an IV or a nonce.
  * \return      The actual size if an IV has been set.
  */
-static inline int mbedtls_cipher_get_iv_size(
+inline int mbedtls_cipher_get_iv_size(
     const mbedtls_cipher_context_t *ctx)
 {
     if (ctx->MBEDTLS_PRIVATE(cipher_info) == NULL) {
@@ -737,7 +737,7 @@ static inline int mbedtls_cipher_get_iv_size(
  * \return              The type of the cipher.
  * \return              #MBEDTLS_CIPHER_NONE if \p ctx has not been initialized.
  */
-static inline mbedtls_cipher_type_t mbedtls_cipher_get_type(
+inline mbedtls_cipher_type_t mbedtls_cipher_get_type(
     const mbedtls_cipher_context_t *ctx)
 {
     if (ctx->MBEDTLS_PRIVATE(cipher_info) == NULL) {
@@ -756,7 +756,7 @@ static inline mbedtls_cipher_type_t mbedtls_cipher_get_type(
  * \return              The name of the cipher.
  * \return              NULL if \p ctx has not been not initialized.
  */
-static inline const char *mbedtls_cipher_get_name(
+inline const char *mbedtls_cipher_get_name(
     const mbedtls_cipher_context_t *ctx)
 {
     if (ctx->MBEDTLS_PRIVATE(cipher_info) == NULL) {
@@ -775,7 +775,7 @@ static inline const char *mbedtls_cipher_get_name(
  * \return              #MBEDTLS_KEY_LENGTH_NONE if \p ctx has not been
  *                      initialized.
  */
-static inline int mbedtls_cipher_get_key_bitlen(
+inline int mbedtls_cipher_get_key_bitlen(
     const mbedtls_cipher_context_t *ctx)
 {
     if (ctx->MBEDTLS_PRIVATE(cipher_info) == NULL) {
@@ -794,7 +794,7 @@ static inline int mbedtls_cipher_get_key_bitlen(
  * \return         The type of operation: #MBEDTLS_ENCRYPT or #MBEDTLS_DECRYPT.
  * \return         #MBEDTLS_OPERATION_NONE if \p ctx has not been initialized.
  */
-static inline mbedtls_operation_t mbedtls_cipher_get_operation(
+inline mbedtls_operation_t mbedtls_cipher_get_operation(
     const mbedtls_cipher_context_t *ctx)
 {
     if (ctx->MBEDTLS_PRIVATE(cipher_info) == NULL) {

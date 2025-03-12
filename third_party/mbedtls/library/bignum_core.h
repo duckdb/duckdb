@@ -737,7 +737,7 @@ mbedtls_ct_condition_t mbedtls_mpi_core_check_zero_ct(const mbedtls_mpi_uint *A,
  * \return         The number of limbs of working memory required by
  *                 `mbedtls_mpi_core_montmul()` (or other similar function).
  */
-static inline size_t mbedtls_mpi_core_montmul_working_limbs(size_t AN_limbs)
+inline size_t mbedtls_mpi_core_montmul_working_limbs(size_t AN_limbs)
 {
     return 2 * AN_limbs + 1;
 }
@@ -823,7 +823,7 @@ void mbedtls_mpi_core_from_mont_rep(mbedtls_mpi_uint *X,
 #if defined(MBEDTLS_TEST_HOOKS) && !defined(MBEDTLS_THREADING_C)
 extern int mbedtls_mpi_optionally_safe_codepath;
 
-static inline void mbedtls_mpi_optionally_safe_codepath_reset(void)
+inline void mbedtls_mpi_optionally_safe_codepath_reset(void)
 {
     // Set to a default that is neither MBEDTLS_MPI_IS_PUBLIC nor MBEDTLS_MPI_IS_SECRET
     mbedtls_mpi_optionally_safe_codepath = MBEDTLS_MPI_IS_PUBLIC + MBEDTLS_MPI_IS_SECRET + 1;

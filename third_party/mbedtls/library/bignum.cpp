@@ -45,7 +45,7 @@
  * (MPI sign is the field s in mbedtls_mpi. It is unsigned short and only 1 and -1 are valid
  * values.)
  */
-static inline signed short mbedtls_ct_mpi_sign_if(mbedtls_ct_condition_t cond,
+inline signed short mbedtls_ct_mpi_sign_if(mbedtls_ct_condition_t cond,
                                                   signed short sign1, signed short sign2)
 {
     return (signed short) mbedtls_ct_uint_if(cond, sign1 + 1, sign2 + 1) - 1;
@@ -355,7 +355,7 @@ void mbedtls_mpi_swap(mbedtls_mpi *X, mbedtls_mpi *Y)
     memcpy(Y, &T, sizeof(mbedtls_mpi));
 }
 
-static inline mbedtls_mpi_uint mpi_sint_abs(mbedtls_mpi_sint z)
+inline mbedtls_mpi_uint mpi_sint_abs(mbedtls_mpi_sint z)
 {
     if (z >= 0) {
         return z;

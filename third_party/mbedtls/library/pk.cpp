@@ -994,7 +994,7 @@ int mbedtls_pk_copy_public_from_psa(mbedtls_svc_key_id_t key_id,
 /*
  * Helper for mbedtls_pk_sign and mbedtls_pk_verify
  */
-static inline int pk_hashlen_helper(mbedtls_md_type_t md_alg, size_t *hash_len)
+inline int pk_hashlen_helper(mbedtls_md_type_t md_alg, size_t *hash_len)
 {
     if (*hash_len != 0) {
         return 0;

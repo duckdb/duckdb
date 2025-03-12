@@ -33,8 +33,6 @@ add_library(duckdb_mbedtls STATIC
         library/sha1.cpp
         library/sha256.cpp)
 
-set_property(TARGET duckdb_mbedtls PROPERTY C_STANDARD 99)
-
 install(TARGETS duckdb_mbedtls
         EXPORT "${DUCKDB_EXPORT_SET}"
         LIBRARY DESTINATION "${INSTALL_LIB_DIR}"

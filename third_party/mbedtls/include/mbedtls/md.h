@@ -243,7 +243,7 @@ unsigned char mbedtls_md_get_size(const mbedtls_md_info_t *md_info);
  * \return          The size of the message-digest output in Bytes,
  *                  or 0 if the message-digest type is not known.
  */
-static inline unsigned char mbedtls_md_get_size_from_type(mbedtls_md_type_t md_type)
+inline unsigned char mbedtls_md_get_size_from_type(mbedtls_md_type_t md_type)
 {
     return mbedtls_md_get_size(mbedtls_md_info_from_type(md_type));
 }

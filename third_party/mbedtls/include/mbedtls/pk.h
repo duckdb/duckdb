@@ -436,7 +436,7 @@ size_t mbedtls_pk_get_bitlen(const mbedtls_pk_context *ctx);
  *
  * \return          Key length in bytes, or 0 on error
  */
-static inline size_t mbedtls_pk_get_len(const mbedtls_pk_context *ctx)
+inline size_t mbedtls_pk_get_len(const mbedtls_pk_context *ctx)
 {
     return (mbedtls_pk_get_bitlen(ctx) + 7) / 8;
 }
@@ -1034,7 +1034,7 @@ mbedtls_pk_type_t mbedtls_pk_get_type(const mbedtls_pk_context *ctx);
  *
  * \return The internal RSA context held by the PK context, or NULL.
  */
-static inline mbedtls_rsa_context *mbedtls_pk_rsa(const mbedtls_pk_context pk)
+inline mbedtls_rsa_context *mbedtls_pk_rsa(const mbedtls_pk_context pk)
 {
     switch (mbedtls_pk_get_type(&pk)) {
         case MBEDTLS_PK_RSA:
@@ -1057,7 +1057,7 @@ static inline mbedtls_rsa_context *mbedtls_pk_rsa(const mbedtls_pk_context pk)
  *
  * \return The internal EC context held by the PK context, or NULL.
  */
-static inline mbedtls_ecp_keypair *mbedtls_pk_ec(const mbedtls_pk_context pk)
+inline mbedtls_ecp_keypair *mbedtls_pk_ec(const mbedtls_pk_context pk)
 {
     switch (mbedtls_pk_get_type(&pk)) {
         case MBEDTLS_PK_ECKEY:

@@ -757,7 +757,7 @@ int mbedtls_mpi_optionally_safe_codepath = MBEDTLS_MPI_IS_PUBLIC + MBEDTLS_MPI_I
  * Warning! If the parameter E_public has MBEDTLS_MPI_IS_PUBLIC as its value,
  * this function is not constant time with respect to the exponent (parameter E).
  */
-static inline void exp_mod_calc_first_bit_optionally_safe(const mbedtls_mpi_uint *E,
+inline void exp_mod_calc_first_bit_optionally_safe(const mbedtls_mpi_uint *E,
                                                           size_t E_limbs,
                                                           int E_public,
                                                           size_t *E_limb_index,
@@ -803,7 +803,7 @@ static inline void exp_mod_calc_first_bit_optionally_safe(const mbedtls_mpi_uint
  * not constant time with respect to the window parameter and consequently the exponent of the
  * exponentiation (parameter E of mbedtls_mpi_core_exp_mod_optionally_safe).
  */
-static inline void exp_mod_table_lookup_optionally_safe(mbedtls_mpi_uint *Wselect,
+inline void exp_mod_table_lookup_optionally_safe(mbedtls_mpi_uint *Wselect,
                                                         mbedtls_mpi_uint *Wtable,
                                                         size_t AN_limbs, size_t welem,
                                                         mbedtls_mpi_uint window,

@@ -139,7 +139,7 @@ extern void (*mbedtls_test_hook_error_add)(int, int, const char *, int);
  * \param file      file where this error code addition occurred.
  * \param line      line where this error code addition occurred.
  */
-static inline int mbedtls_error_add(int high, int low,
+inline int mbedtls_error_add(int high, int low,
                                     const char *file, int line)
 {
 #if defined(MBEDTLS_TEST_HOOKS)

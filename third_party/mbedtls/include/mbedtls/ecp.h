@@ -1019,7 +1019,7 @@ int mbedtls_ecp_mul_restartable(mbedtls_ecp_group *grp, mbedtls_ecp_point *R,
  * \return          \c 1 if <code>A = -3</code>.
  * \return          \c 0 Otherwise.
  */
-static inline int mbedtls_ecp_group_a_is_minus_3(const mbedtls_ecp_group *grp)
+inline int mbedtls_ecp_group_a_is_minus_3(const mbedtls_ecp_group *grp)
 {
     return grp->A.MBEDTLS_PRIVATE(p) == NULL;
 }
