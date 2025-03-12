@@ -108,7 +108,7 @@ public:
 	}
 
 public:
-	operator idx_t() {
+	operator idx_t() { // NOLINT: allow implicit conversion
 		return column_id;
 	}
 	idx_t GetId() const {
@@ -139,7 +139,7 @@ public:
 	}
 
 public:
-	operator idx_t() {
+	operator idx_t() { // NOLINT: allow implicit conversion
 		return index;
 	}
 	idx_t GetIndex() const {
@@ -159,7 +159,7 @@ public:
 	}
 
 public:
-	operator idx_t() {
+	operator idx_t() { // NOLINT: allow implicit conversion
 		return index;
 	}
 	idx_t GetIndex() const {
@@ -279,8 +279,8 @@ private:
 
 struct MultiFileFilterMap {
 public:
-	void push_back(MultiFileFilterEntry &&filter_entry) { // NOLINT: matching name of std
-		filter_map.push_back(std::move(filter_entry));
+	void push_back(const MultiFileFilterEntry &filter_entry) { // NOLINT: matching name of std
+		filter_map.push_back(filter_entry);
 	}
 	MultiFileFilterEntry &operator[](MultiFileGlobalIndex global_index) {
 		return filter_map[global_index.index];
