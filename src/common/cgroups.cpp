@@ -69,57 +69,74 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 	return result;
 }
 
-static optional_idx GetCPUCountFromQuotaAndPeriod(const CGroupEntry &entry, FileSystem &fs) {
+static optional_idx GetCPUCountV2(const CGroupEntry &entry, FileSystem &fs) {
 	static constexpr const char *CPU_MAX = "/sys/fs/cgroup%s/cpu.max";
-	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu%s/cpu.cfs_quota_us";
-	static constexpr const char *CFS_PERIOD = "/sys/fs/cgroup/cpu%s/cpu.cfs_period_us";
 
 	auto cpu_max = StringUtil::Format(CPU_MAX, entry.cgroup_path);
-	auto cfs_quota = StringUtil::Format(CFS_QUOTA, entry.cgroup_path);
-	auto cfs_period = StringUtil::Format(CFS_PERIOD, entry.cgroup_path);
 
 	//! See https://docs.kernel.org/scheduler/sched-bwc.html
 	//! run-time replenished within a period (in microseconds)
 	int64_t quota;
 	//! the length of a period (in microseconds)
 	int64_t period;
+
+	if (!fs.FileExists(cpu_max)) {
+		return optional_idx();
+	}
+
+	// cgroup v2
 	char byte_buffer[1000];
-	if (fs.FileExists(cpu_max)) {
-		// cgroup v2
-		auto handle = fs.OpenFile(cpu_max, FileFlags::FILE_FLAGS_READ);
+	auto handle = fs.OpenFile(cpu_max, FileFlags::FILE_FLAGS_READ);
+	int64_t read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
+	byte_buffer[read_bytes] = '\0';
+	if (std::sscanf(byte_buffer, "%" SCNd64 " %" SCNd64 "", &quota, &period) != 2) {
+		return optional_idx();
+	}
+
+	if (quota > 0 && period > 0) {
+		return idx_t(std::ceil((double)quota / (double)period));
+	}
+	return optional_idx();
+}
+
+static optional_idx GetCPUCountV1(const CGroupEntry &entry, FileSystem &fs) {
+	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu%s/cpu.cfs_quota_us";
+	static constexpr const char *CFS_PERIOD = "/sys/fs/cgroup/cpu%s/cpu.cfs_period_us";
+
+	auto cfs_quota = StringUtil::Format(CFS_QUOTA, entry.cgroup_path);
+	auto cfs_period = StringUtil::Format(CFS_PERIOD, entry.cgroup_path);
+
+	if (!fs.FileExists(cfs_quota) || !fs.FileExists(cfs_period)) {
+		return optional_idx();
+	}
+
+	//! See https://docs.kernel.org/scheduler/sched-bwc.html
+	//! run-time replenished within a period (in microseconds)
+	int64_t quota;
+	//! the length of a period (in microseconds)
+	int64_t period;
+
+	// cgroup v1
+	char byte_buffer[1000];
+	{
+		auto handle = fs.OpenFile(cfs_quota, FileFlags::FILE_FLAGS_READ);
 		int64_t read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
 		byte_buffer[read_bytes] = '\0';
-		if (std::sscanf(byte_buffer, "%" SCNd64 " %" SCNd64 "", &quota, &period) == 2) {
-			if (quota > 0 && period > 0) {
-				return idx_t(std::ceil((double)quota / (double)period));
-			}
+		if (std::sscanf(byte_buffer, "%" SCNd64 "", &quota) != 1) {
+			return optional_idx();
+		}
+	}
+	{
+		auto handle = fs.OpenFile(cfs_period, FileFlags::FILE_FLAGS_READ);
+		int64_t read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
+		byte_buffer[read_bytes] = '\0';
+		if (std::sscanf(byte_buffer, "%" SCNd64 "", &period) != 1) {
+			return optional_idx();
 		}
 	}
 
-	if (fs.FileExists(cfs_quota) && fs.FileExists(cfs_period)) {
-		// cgroup v1
-		bool has_quota = false;
-		bool has_period = false;
-		{
-			auto handle = fs.OpenFile(cfs_quota, FileFlags::FILE_FLAGS_READ);
-			int64_t read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
-			byte_buffer[read_bytes] = '\0';
-			if (std::sscanf(byte_buffer, "%" SCNd64 "", &quota) == 1) {
-				has_quota = true;
-			}
-		}
-		{
-			auto handle = fs.OpenFile(cfs_period, FileFlags::FILE_FLAGS_READ);
-			int64_t read_bytes = fs.Read(*handle, (void *)byte_buffer, 999);
-			byte_buffer[read_bytes] = '\0';
-			if (std::sscanf(byte_buffer, "%" SCNd64 "", &period) == 1) {
-				has_period = true;
-			}
-		}
-
-		if (has_quota && has_period && quota > 0 && period > 0) {
-			return idx_t(std::ceil((double)quota / (double)period));
-		}
+	if (quota > 0 && period > 0) {
+		return idx_t(std::ceil((double)quota / (double)period));
 	}
 	return optional_idx();
 }
@@ -206,14 +223,14 @@ idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 
 	if (root_entry.IsValid()) {
 		auto &entry = cgroup_entries[root_entry.GetIndex()];
-		auto res = GetCPUCountFromQuotaAndPeriod(entry, fs);
+		auto res = GetCPUCountV2(entry, fs);
 		if (res.IsValid()) {
 			return res.GetIndex();
 		}
 	}
 	if (cpu_entry.IsValid()) {
 		auto &entry = cgroup_entries[cpu_entry.GetIndex()];
-		auto res = GetCPUCountFromQuotaAndPeriod(entry, fs);
+		auto res = GetCPUCountV1(entry, fs);
 		if (res.IsValid()) {
 			return res.GetIndex();
 		}
