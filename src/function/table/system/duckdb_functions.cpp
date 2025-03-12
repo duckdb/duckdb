@@ -602,7 +602,9 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 	output.SetValue(col++, output_offset, Value(function.name));
 
 	// alias_of, LogicalType::VARCHAR
-	output.SetValue(col++, output_offset, (function.name != function.alias_of) ? Value(function.alias_of) : Value());
+	output.SetValue(col++, output_offset,
+	                function.alias_of.empty() || function.alias_of == function.name ? Value()
+	                                                                                : Value(function.alias_of));
 
 	// function_type, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(OP::GetFunctionType()));
