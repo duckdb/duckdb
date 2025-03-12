@@ -68,6 +68,7 @@ public:
 	//! Creates and returns the physical plan from the logical operator.
 	//! Performs a verification pass.
 	unique_ptr<PhysicalPlan> Plan(unique_ptr<LogicalOperator> logical);
+	PhysicalOperator &CreatePlan(LogicalOperator &op);
 
 	//! Whether or not we can (or should) use a batch-index based operator for executing the given sink
 	static bool UseBatchIndex(ClientContext &context, PhysicalOperator &plan);
@@ -80,7 +81,6 @@ public:
 	}
 
 protected:
-	PhysicalOperator &CreatePlan(LogicalOperator &op);
 	PhysicalOperator &CreatePlan(LogicalAggregate &op);
 	PhysicalOperator &CreatePlan(LogicalAnyJoin &op);
 	PhysicalOperator &CreatePlan(LogicalColumnDataGet &op);
