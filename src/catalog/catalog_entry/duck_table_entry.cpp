@@ -223,6 +223,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &add_constraint_info = table_info.Cast<AddConstraintInfo>();
 		return AddConstraint(context, add_constraint_info);
 	}
+	case AlterTableType::SET_PARTITIONED_BY:
+		throw NotImplementedException("SET PARTITIONED BY is not supported for DuckDB tables");
 	default:
 		throw InternalException("Unrecognized alter table type!");
 	}

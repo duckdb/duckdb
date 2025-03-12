@@ -473,4 +473,39 @@ string AddConstraintInfo::ToString() const {
 	return result;
 }
 
+//===--------------------------------------------------------------------===//
+// SetPartitionedByInfo
+//===--------------------------------------------------------------------===//
+SetPartitionedByInfo::SetPartitionedByInfo() : AlterTableInfo(AlterTableType::SET_PARTITIONED_BY) {
+}
+
+SetPartitionedByInfo::SetPartitionedByInfo(AlterEntryData data, vector<unique_ptr<ParsedExpression>> partition_keys_p)
+    : AlterTableInfo(AlterTableType::SET_PARTITIONED_BY, std::move(data)), partition_keys(std::move(partition_keys_p)) {
+}
+
+SetPartitionedByInfo::~SetPartitionedByInfo() {
+}
+
+unique_ptr<AlterInfo> SetPartitionedByInfo::Copy() const {
+	vector<unique_ptr<ParsedExpression>> copied_partition_keys;
+	for (auto &partition_key : partition_keys) {
+		copied_partition_keys.push_back(partition_key->Copy());
+	}
+	return make_uniq_base<AlterInfo, SetPartitionedByInfo>(GetAlterEntryData(), std::move(copied_partition_keys));
+}
+
+string SetPartitionedByInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " SET PARTITIONED BY (";
+	for (idx_t i = 0; i < partition_keys.size(); i++) {
+		if (i > 0) {
+			result += ", ";
+		}
+		result += partition_keys[i]->ToString();
+	}
+	result += ")";
+	return result;
+}
+
 } // namespace duckdb
