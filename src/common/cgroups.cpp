@@ -62,7 +62,8 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 		}
 		auto hierarchy_id = std::stoi(parts[0]);
 		auto controller_list = StringUtil::Split(parts[1], ",");
-		result.emplace_back(hierarchy_id, std::move(controller_list), parts[2]);
+		auto cgroup_path = parts[2] == "/" ? "" : parts[2];
+		result.emplace_back(hierarchy_id, std::move(controller_list), cgroup_path);
 		cgroup_file_content.erase(0, pos + 1);
 	}
 	return result;
