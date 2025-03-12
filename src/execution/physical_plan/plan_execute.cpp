@@ -11,10 +11,9 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalExecute &op) {
 	}
 
 	D_ASSERT(op.children.size() == 1);
-	auto &owned_plan = CreatePlan(*op.children[0]);
-	auto &execute = Make<PhysicalExecute>(owned_plan);
+	auto &plan = CreatePlan(*op.children[0]);
+	auto &execute = Make<PhysicalExecute>(plan);
 	auto &cast_execute = execute.Cast<PhysicalExecute>();
-	cast_execute.owned_plan = owned_plan;
 	cast_execute.prepared = op.prepared;
 	return execute;
 }

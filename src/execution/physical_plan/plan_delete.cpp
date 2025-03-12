@@ -17,14 +17,18 @@ PhysicalOperator &DuckCatalog::PlanDelete(ClientContext &context, PhysicalPlanGe
 	return del;
 }
 
+PhysicalOperator &Catalog::PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op) {
+	auto &plan = planner.CreatePlan(*op.children[0]);
+	return PlanDelete(context, planner, op, plan);
+}
+
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDelete &op) {
 	D_ASSERT(op.children.size() == 1);
 	D_ASSERT(op.expressions.size() == 1);
 	D_ASSERT(op.expressions[0]->GetExpressionType() == ExpressionType::BOUND_REF);
 
-	auto &plan = CreatePlan(*op.children[0]);
 	dependencies.AddDependency(op.table);
-	return op.table.catalog.PlanDelete(context, *this, op, plan);
+	return op.table.catalog.PlanDelete(context, *this, op);
 }
 
 } // namespace duckdb

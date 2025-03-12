@@ -17,11 +17,15 @@ PhysicalOperator &DuckCatalog::PlanUpdate(ClientContext &context, PhysicalPlanGe
 	return update;
 }
 
+PhysicalOperator &Catalog::PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op) {
+	auto &plan = planner.CreatePlan(*op.children[0]);
+	return PlanUpdate(context, planner, op, plan);
+}
+
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalUpdate &op) {
 	D_ASSERT(op.children.size() == 1);
-	auto &plan = CreatePlan(*op.children[0]);
 	dependencies.AddDependency(op.table);
-	return op.table.catalog.PlanUpdate(context, *this, op, plan);
+	return op.table.catalog.PlanUpdate(context, *this, op);
 }
 
 } // namespace duckdb
