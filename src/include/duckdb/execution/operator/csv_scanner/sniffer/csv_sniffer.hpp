@@ -54,51 +54,6 @@ struct DialectCandidates {
 	unordered_map<uint8_t, vector<char>> escape_candidates_map;
 };
 
-//! This represents the data related to columns that have been set by the user
-//! e.g., from a copy command
-struct SetColumns {
-	SetColumns(const vector<LogicalType> *types_p, const vector<string> *names_p) : types(types_p), names(names_p) {
-		if (!types) {
-			D_ASSERT(!types && !names);
-		} else {
-			D_ASSERT(types->size() == names->size());
-		}
-	}
-	SetColumns() {};
-	//! Return Types that were detected
-	const vector<LogicalType> *types = nullptr;
-	//! Column Names that were detected
-	const vector<string> *names = nullptr;
-	//! If columns are set
-	bool IsSet() const;
-	//! How many columns
-	idx_t Size() const;
-	//! Helper function that checks if candidate is acceptable based on the number of columns it produces
-	inline bool IsCandidateUnacceptable(const idx_t num_cols, bool null_padding, bool ignore_errors,
-	                                    bool last_value_always_empty) const {
-		if (!IsSet() || ignore_errors) {
-			// We can't say its unacceptable if it's not set or if we ignore errors
-			return false;
-		}
-		idx_t size = Size();
-		// If the columns are set and there is a mismatch with the expected number of columns, with null_padding and
-		// ignore_errors not set, we don't have a suitable candidate.
-		// Note that we compare with max_columns_found + 1, because some broken files have the behaviour where two
-		// columns are represented as: | col 1 | col_2 |
-		if (num_cols == size || num_cols == size + last_value_always_empty) {
-			// Good Candidate
-			return false;
-		}
-		// if we detected more columns than we have set, it's all good because we can null-pad them
-		if (null_padding && num_cols > size) {
-			return false;
-		}
-
-		// Unacceptable
-		return true;
-	}
-};
-
 //! Struct used to know if we have a date or timestamp type already identified in this CSV File
 struct HasType {
 	bool date = false;
@@ -146,6 +101,7 @@ private:
 	CSVStateMachineCache &state_machine_cache;
 	//! Highest number of columns found
 	idx_t max_columns_found = 0;
+	idx_t max_columns_found_error = 0;
 	//! Current Candidates being considered
 	vector<unique_ptr<ColumnCountScanner>> candidates;
 	//! Reference to original CSV Options, it will be modified as a result of the sniffer.
