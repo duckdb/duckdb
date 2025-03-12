@@ -212,6 +212,18 @@ struct SortKeyUtils {
 			return true;
 		}
 	}
+
+	static bool HasPayload(const SortKeyType sort_key_type) {
+		switch (sort_key_type) {
+		case SortKeyType::PAYLOAD_FIXED_16:
+		case SortKeyType::PAYLOAD_FIXED_24:
+		case SortKeyType::PAYLOAD_FIXED_32:
+		case SortKeyType::PAYLOAD_VARIABLE_32:
+			return true;
+		default:
+			return false;
+		}
+	}
 };
 
 } // namespace duckdb

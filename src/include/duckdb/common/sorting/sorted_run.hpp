@@ -19,7 +19,7 @@ public:
 public:
 	//! Appends data to key/data collections
 	void Sink(DataChunk &key, DataChunk &payload);
-	//! Sorts the data (reorders payload and unpins data if external
+	//! Sorts the data (reorders payload and unpins data if external)
 	void Finalize(bool external);
 
 private:

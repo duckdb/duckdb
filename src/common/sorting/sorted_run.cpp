@@ -47,6 +47,7 @@ static void SetPayloadPointer(Vector &key_locations, Vector &payload_locations, 
 }
 
 void SortedRun::Sink(DataChunk &key, DataChunk &payload) {
+	D_ASSERT(!finalized);
 	key_data->Append(key_append_state, key);
 	if (payload_data) {
 		D_ASSERT(key.size() == payload.size());
@@ -60,8 +61,8 @@ template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSort(const TupleDataCollection &key_data) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	D_ASSERT(SORT_KEY_TYPE == key_data.GetLayout().GetSortKeyType());
-	BlockIteratorState<SORT_KEY> block_iterator_state(key_data.GetRowBlockPointers(), key_data.TuplesPerBlock(),
-	                                                  key_data.Count());
+	block_iterator_state_t<SORT_KEY> block_iterator_state(key_data.GetRowBlockPointers(), key_data.TuplesPerBlock(),
+	                                                      key_data.Count());
 	duckdb_pdqsort::pdqsort_branchless(block_iterator_t<SORT_KEY>(block_iterator_state, 0),
 	                                   block_iterator_t<SORT_KEY>(block_iterator_state, key_data.Count()));
 }
@@ -92,8 +93,29 @@ static void Sort(const TupleDataCollection &key_data) {
 	}
 }
 
+template <SortKeyType SORT_KEY_TYPE>
+static void TemplatedReorderPayload(TupleDataCollection &key_data, TupleDataCollection &payload_data) {
+	throw NotImplementedException("Sort");
+}
+
+static void ReorderPayload(TupleDataCollection &key_data, TupleDataCollection &payload_data) {
+	const auto sort_key_type = key_data.GetLayout().GetSortKeyType();
+	switch (sort_key_type) {
+	case SortKeyType::PAYLOAD_FIXED_16:
+		return TemplatedReorderPayload<SortKeyType::PAYLOAD_FIXED_16>(key_data, payload_data);
+	case SortKeyType::PAYLOAD_FIXED_24:
+		return TemplatedReorderPayload<SortKeyType::PAYLOAD_FIXED_24>(key_data, payload_data);
+	case SortKeyType::PAYLOAD_FIXED_32:
+		return TemplatedReorderPayload<SortKeyType::PAYLOAD_FIXED_32>(key_data, payload_data);
+	case SortKeyType::PAYLOAD_VARIABLE_32:
+		return TemplatedReorderPayload<SortKeyType::PAYLOAD_VARIABLE_32>(key_data, payload_data);
+	default:
+		throw NotImplementedException("TemplatedReorderPayload for %s", EnumUtil::ToString(sort_key_type));
+	}
+}
+
 void SortedRun::Finalize(bool external) {
-	// Finish appending
+	D_ASSERT(!finalized);
 	key_data->FinalizePinState(key_append_state.pin_state);
 	key_data->VerifyEverythingPinned();
 	if (payload_data) {
@@ -102,6 +124,22 @@ void SortedRun::Finalize(bool external) {
 	}
 
 	Sort(*key_data);
+
+	if (external) {
+		const auto sort_key_type = key_data->GetLayout().GetSortKeyType();
+		if (!SortKeyUtils::IsConstantSize(sort_key_type)) {
+			throw NotImplementedException("Sort"); // TODO reorder sort key heap
+		}
+		if (payload_data) {
+			ReorderPayload(*key_data, *payload_data);
+		}
+		// TODO maybe reorder sort key heap and payload in one go
+		//  reordering sort key heap is tricky because we don't want to move the row data
+		//  reordering payload is easy because we're just reconstructing an entire collection
+	}
+
+	key_data->Unpin();
+	finalized = true;
 }
 
 } // namespace duckdb

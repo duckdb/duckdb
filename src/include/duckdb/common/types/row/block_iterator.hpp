@@ -13,33 +13,35 @@
 namespace duckdb {
 
 //! Shared state for block iterators that iterate over the same data
-template <class TUPLE>
-class BlockIteratorState {
+template <class T>
+class block_iterator_state_t { // NOLINT: not using camelcase on purpose here
+	using value_type = T;
+
 public:
-	BlockIteratorState(const vector<data_ptr_t> &block_ptrs_p, const idx_t &tuples_per_block,
-	                   const idx_t &tuple_count_p)
+	block_iterator_state_t(const vector<data_ptr_t> &block_ptrs_p, const idx_t &tuples_per_block,
+	                       const idx_t &tuple_count_p)
 	    : block_ptrs(ConvertBlockPointers(block_ptrs_p)), fast_mod(tuples_per_block), tuple_count(tuple_count_p) {
 	}
 
 private:
-	static unsafe_vector<TUPLE *const> ConvertBlockPointers(const vector<data_ptr_t> &block_ptrs_p) {
-		unsafe_vector<TUPLE *const> converted_block_ptrs;
+	static unsafe_vector<value_type *const> ConvertBlockPointers(const vector<data_ptr_t> &block_ptrs_p) {
+		unsafe_vector<value_type *const> converted_block_ptrs;
 		converted_block_ptrs.reserve(block_ptrs_p.size());
 		for (const auto &block_ptr : block_ptrs_p) {
-			converted_block_ptrs.emplace_back(reinterpret_cast<TUPLE *const>(block_ptr));
+			converted_block_ptrs.emplace_back(reinterpret_cast<value_type *const>(block_ptr));
 		}
 		return converted_block_ptrs;
 	}
 
 public:
-	const unsafe_vector<TUPLE *const> block_ptrs;
+	const unsafe_vector<value_type *const> block_ptrs;
 	const FastMod<idx_t> fast_mod;
 	const idx_t tuple_count;
 };
 
 //! Iterator for data spread out over multiple blocks
 template <class T>
-class block_iterator_t {
+class block_iterator_t { // NOLINT: not using camelcase on purpose here
 public:
 	using iterator_category = std::random_access_iterator_tag;
 	using value_type = T;
@@ -49,7 +51,7 @@ public:
 	using traits = std::iterator_traits<block_iterator_t>;
 
 public:
-	block_iterator_t(const BlockIteratorState<value_type> &state_p, const difference_type &index_p)
+	block_iterator_t(const block_iterator_state_t<value_type> &state_p, const difference_type &index_p)
 	    : state(state_p), index(index_p) {
 	}
 
@@ -142,7 +144,7 @@ public:
 	}
 
 private:
-	const BlockIteratorState<value_type> &state;
+	const block_iterator_state_t<value_type> &state;
 	difference_type index;
 };
 
