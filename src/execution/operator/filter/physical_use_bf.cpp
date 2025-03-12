@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "duckdb/execution/operator/filter/physical_use_bf.hpp"
 
 #include "duckdb/parallel/meta_pipeline.hpp"
@@ -34,10 +36,10 @@ void BloomFilterExecute(vector<Vector> &result, const shared_ptr<BlockedBloomFil
 }
 } // namespace
 
-PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, vector<shared_ptr<BlockedBloomFilter>> bf,
-                             const vector<PhysicalCreateBF *> &related_create_bfs, idx_t estimated_cardinality)
+PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, shared_ptr<BlockedBloomFilter> bf,
+                             PhysicalCreateBF *related_create_bfs, idx_t estimated_cardinality)
     : CachingPhysicalOperator(PhysicalOperatorType::USE_BF, std::move(types), estimated_cardinality),
-      bf_to_use(std::move(bf)), related_create_bfs(related_create_bfs) {
+      bf_to_use(std::move(bf)), related_creator(related_create_bfs) {
 }
 
 unique_ptr<OperatorState> PhysicalUseBF::GetOperatorState(ExecutionContext &context) const {
@@ -47,13 +49,10 @@ unique_ptr<OperatorState> PhysicalUseBF::GetOperatorState(ExecutionContext &cont
 InsertionOrderPreservingMap<string> PhysicalUseBF::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 
-	result["BF Number"] = std::to_string(bf_to_use.size());
-	result["Hash Column Number"] = std::to_string(bf_to_use[0]->BoundColsApplied.size());
-	string bfs;
-	for (auto *bf : related_create_bfs) {
-		bfs += "0x" + std::to_string(reinterpret_cast<size_t>(bf)) + "\n";
-	}
-	result["BF Creators"] = bfs;
+	// result["BF Number"] = std::to_string(bf_to_use.size());
+	// result["Hash Column Number"] = std::to_string(bf_to_use[0]->BoundColsApplied.size());
+	// string bfs = "0x" + std::to_string(reinterpret_cast<size_t>(related_creator)) + "\n";
+	result["BF Creators"] = "0x" + std::to_string(reinterpret_cast<size_t>(related_creator)) + "\n";
 	return result;
 }
 
@@ -62,9 +61,7 @@ void PhysicalUseBF::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 
 	auto &state = meta_pipeline.GetState();
 	state.AddPipelineOperator(current, *this);
-	for (auto cell : related_create_bfs) {
-		cell->BuildPipelinesFromRelated(current, meta_pipeline);
-	}
+	related_creator->BuildPipelinesFromRelated(current, meta_pipeline);
 	children[0]->BuildPipelines(current, meta_pipeline);
 }
 
@@ -73,9 +70,8 @@ OperatorResultType PhysicalUseBF::ExecuteInternal(ExecutionContext &context, Dat
 	idx_t row_num = input.size();
 	idx_t result_count = input.size();
 	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	auto bf = bf_to_use[0];
 
-	BloomFilterExecute(input.data, bf, sel, result_count, row_num);
+	BloomFilterExecute(input.data, bf_to_use, sel, result_count, row_num);
 
 	if (result_count == row_num) {
 		// nothing was filtered: skip adding any selection vectors

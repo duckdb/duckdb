@@ -12,7 +12,7 @@ public:
 	explicit LogicalUseBF(shared_ptr<BloomFilterPlan> bloom_filter);
 
 	shared_ptr<BloomFilterPlan> bf_to_use_plan;
-	LogicalCreateBF *related_create_bf;
+	LogicalCreateBF *related_create_bf = nullptr;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

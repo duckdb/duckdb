@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/predicate_transfer_bf_linker.hpp
+// duckdb/execution/transfer_bf_linker.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -11,21 +11,35 @@
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/operator/logical_use_bf.hpp"
 #include "duckdb/planner/operator/logical_create_bf.hpp"
+#include "operator/filter/physical_use_bf.hpp"
+#include "operator/helper/physical_execute.hpp"
+#include "operator/join/physical_delim_join.hpp"
 
 namespace duckdb {
 
-//! This class is to link each LogicalUseBF with its LogicalCreateBF. It uses the FilterPlan information instead of
+//! This class is to link each PhysicalUseBF with its PhysicalCreateBF. It uses the FilterPlan information instead of
 //! shared ptr to link.
-class TransferBFLinker : public LogicalOperatorVisitor {
+class TransferBFLinker {
 public:
 	TransferBFLinker() : state(State::COLLECT_BF_CREATORS) {
 	}
 
-	void LinkBloomFilters(LogicalOperator &op);
-	void VisitOperator(LogicalOperator &op) override;
+	void RemoveUselessOperators(LogicalOperator &op) {
+		state = State::COLLECT_BF_CREATORS;
+		VisitOperator(op);
+
+		state = State::LINK_BF_USERS;
+		VisitOperator(op);
+
+		state = State::CLEAN_USELESS_OPERATORS;
+		VisitOperator(op);
+	}
 
 protected:
-	enum class State { COLLECT_BF_CREATORS, LINK_BF_USERS };
+	void VisitOperator(LogicalOperator &op);
+
+protected:
+	enum class State { COLLECT_BF_CREATORS, LINK_BF_USERS, CLEAN_USELESS_OPERATORS };
 	State state;
 
 	struct FilterPlanHash {
@@ -40,6 +54,7 @@ protected:
 			return h;
 		}
 	};
-	unordered_map<BloomFilterPlan, LogicalCreateBF *, FilterPlanHash> filter_creators;
+	unordered_set<LogicalOperator *> useful_creator;
+	unordered_map<BloomFilterPlan, LogicalCreateBF *, FilterPlanHash> bf_creators;
 };
 } // namespace duckdb

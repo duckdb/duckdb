@@ -179,8 +179,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = PT.Optimize(std::move(plan));
 	}
 
-	// plan->Print();
-
 	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
 		InClauseRewriter ic_rewriter(context, *this);
 		plan = ic_rewriter.Rewrite(std::move(plan));
