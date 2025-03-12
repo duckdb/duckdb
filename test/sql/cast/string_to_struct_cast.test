@@ -205,7 +205,7 @@ SELECT ' {      }   '::STRUCT(a INT, b DATE);
 statement error
 SELECT '{  key_A:     2, key_B: {key_C: hello world    }     X   }'::STRUCT(key_A INT, key_B STRUCT(key_C VARCHAR));
 ----
-
+can't be cast to the destination type STRUCT(key_C VARCHAR)
 
 
 #               NULL values
@@ -319,50 +319,62 @@ NULL
 statement error
 SELECT CAST('[{a:3}]' AS STRUCT(a INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER)
 
 statement error
 SELECT CAST('Hello World' AS STRUCT(a VARCHAR));
 ----
+can't be cast to the destination type STRUCT(a VARCHAR)
 
 statement error
 SELECT CAST('{a: 3}}' AS STRUCT(a INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER)
 
 statement error
 SELECT CAST('{a: 3, b:{c: 8}}}' AS STRUCT(a INT, b STRUCT(c INT)));
 ----
+can't be cast to the destination type STRUCT(a INTEGER, b STRUCT(c INTEGER))
 
 statement error
 SELECT CAST('{{a: 3}' AS STRUCT(a INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER)
 
 statement error
 SELECT CAST('{a:3}, {b:1}' AS STRUCT(a INT, b INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER, b INTEGER)
 
 statement error
 SELECT CAST('{a:{a:3}, b:{{b:1}}}' AS STRUCT(a STRUCT(a INT), b STRUCT(b INT)));
 ----
+can't be cast to the destination type STRUCT(b INTEGER)
 
 statement error
 SELECT CAST('{a: 3 1}' AS STRUCT(a INT));
 ----
+Could not convert string '3 1' to INT32
 
 statement error
 SELECT CAST('{a:3,, b:1}' AS STRUCT(a INT, b INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER, b INTEGER)
 
 statement error
 SELECT CAST('}{a:5}' AS STRUCT(a INT));
 ----
+can't be cast to the destination type STRUCT(a INTEGER)
 
 statement error
 SELECT CAST('{a:{b:{d: 800}, {c: "Duck"}}}' AS STRUCT(a STRUCT(b STRUCT(d INT), c STRUCT(c VARCHAR))));
 ----
+can't be cast to the destination type STRUCT(b STRUCT(d INTEGER), c STRUCT(c VARCHAR))
 
 statement error
 SELECT CAST('{[{]}}' AS STRUCT(a VARCHAR[]));
 ----
+can't be cast to the destination type STRUCT(a VARCHAR[])
 
 
 

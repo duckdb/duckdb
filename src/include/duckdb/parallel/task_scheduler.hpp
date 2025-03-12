@@ -68,6 +68,10 @@ public:
 	//! Returns the number of threads
 	DUCKDB_API int32_t NumberOfThreads();
 
+	idx_t GetNumberOfTasks() const;
+	idx_t GetProducerCount() const;
+	idx_t GetTaskCountForProducer(ProducerToken &token) const;
+
 	//! Send signals to n threads, signalling for them to wake up and attempt to execute a task
 	void Signal(idx_t n);
 

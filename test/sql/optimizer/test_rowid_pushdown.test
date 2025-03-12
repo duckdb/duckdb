@@ -40,3 +40,27 @@ SELECT * FROM t1 where rowid IN (SELECT rowid FROM t1 ORDER BY rowid DESC LIMIT 
 250097
 250098
 250099
+
+# IN filter
+query I
+SELECT * FROM t1 where rowid IN (6, 9) ORDER BY ALL;
+----
+106
+109
+
+query II
+EXPLAIN SELECT * FROM t1 where rowid IN (6, 9);
+----
+physical_plan	<REGEX>:.*Filters:.*rowid.*IN.*(6.*9).*
+
+# OR clause
+query I
+SELECT * FROM t1 where rowid = 6 OR rowid = 9 ORDER BY ALL;
+----
+106
+109
+
+query II
+EXPLAIN SELECT * FROM t1 where rowid = 6 OR rowid = 9 ORDER BY ALL;
+----
+physical_plan	<REGEX>:.*Filters:.*rowid.*6.*rowid.*9.*

@@ -314,7 +314,8 @@ vector<string> TestResultHelper::LoadResultFromFile(string fname, vector<string>
                                                     string &error) {
 	DuckDB db(nullptr);
 	Connection con(db);
-	con.Query("PRAGMA threads=" + to_string(std::thread::hardware_concurrency()));
+	auto threads = MaxValue<idx_t>(std::thread::hardware_concurrency(), 1);
+	con.Query("PRAGMA threads=" + to_string(threads));
 	fname = StringUtil::Replace(fname, "<FILE>:", "");
 
 	string struct_definition = "STRUCT_PACK(";

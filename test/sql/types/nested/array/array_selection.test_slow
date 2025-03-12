@@ -1,0 +1,34 @@
+# name: test/sql/types/nested/array/array_selection.test_slow
+# description: Test selecting arrays
+# group: [array]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl AS
+SELECT i%2000 sparse_id,
+		i%200 as avg_id,
+		i%20 as dense_id,
+      [i + x for x in range(16)]::INT[16] as int_array,
+      [concat('thisisalongstring_', i + x) for x in range(16)]::VARCHAR[16] as str_array,
+      [{'x': i + x} for x in range(16)]::STRUCT(x INT)[16] as struct_array,
+FROM range(100000) t(i);
+
+query III
+SELECT SUM(LIST_SUM(int_array)), SUM(LIST_SUM([replace(x, 'thisisalongstring_', '')::INT for x in str_array])), SUM(LIST_SUM([x.x for x in struct_array]))
+FROM tbl WHERE sparse_id=0
+----
+39206000	39206000	39206000
+
+query III
+SELECT SUM(LIST_SUM(int_array)), SUM(LIST_SUM([replace(x, 'thisisalongstring_', '')::INT for x in str_array])), SUM(LIST_SUM([x.x for x in struct_array]))
+FROM tbl WHERE avg_id=0
+----
+399260000	399260000	399260000
+
+query III
+SELECT SUM(LIST_SUM(int_array)), SUM(LIST_SUM([replace(x, 'thisisalongstring_', '')::INT for x in str_array])), SUM(LIST_SUM([x.x for x in struct_array]))
+FROM tbl WHERE dense_id=0
+----
+3999800000	3999800000	3999800000

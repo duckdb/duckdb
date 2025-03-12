@@ -57,8 +57,12 @@ public:
 	FileHandle(const FileHandle &) = delete;
 	DUCKDB_API virtual ~FileHandle();
 
+	// Read at [nr_bytes] bytes into [buffer], and return the bytes actually read.
+	// File offset will be changed, which advances for number of bytes read.
 	DUCKDB_API int64_t Read(void *buffer, idx_t nr_bytes);
 	DUCKDB_API int64_t Write(void *buffer, idx_t nr_bytes);
+	// Read at [nr_bytes] bytes into [buffer].
+	// File offset will not be changed.
 	DUCKDB_API void Read(void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Write(void *buffer, idx_t nr_bytes, idx_t location);
 	DUCKDB_API void Seek(idx_t location);
@@ -214,6 +218,10 @@ public:
 
 	//! Unregister a sub-filesystem by name
 	DUCKDB_API virtual void UnregisterSubSystem(const string &name);
+
+	// !Extract a sub-filesystem by name, with ownership transfered, return nullptr if not registered or the subsystem
+	// has been disabled.
+	DUCKDB_API virtual unique_ptr<FileSystem> ExtractSubSystem(const string &name);
 
 	//! List registered sub-filesystems, including builtin ones
 	DUCKDB_API virtual vector<string> ListSubSystems();

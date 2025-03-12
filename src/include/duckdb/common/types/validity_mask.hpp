@@ -188,7 +188,7 @@ public:
 		D_ASSERT(validity_mask);
 		idx_t entry_idx, idx_in_entry;
 		GetEntryIndex(row_idx, entry_idx, idx_in_entry);
-		auto entry = GetValidityEntry(entry_idx);
+		auto entry = GetValidityEntryUnsafe(entry_idx);
 		return RowIsValid(entry, idx_in_entry);
 	}
 

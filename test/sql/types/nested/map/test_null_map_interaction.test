@@ -37,9 +37,20 @@ STRUCT("key" "NULL", "value" "NULL")[]
 query I
 SELECT TYPEOF(MAP_EXTRACT(NULL::MAP(TEXT, BIGINT), 'a'));
 ----
+BIGINT[]
+
+query I
+SELECT TYPEOF((NULL::MAP(TEXT, BIGINT))['a']);
+----
 BIGINT
 
 query I
 SELECT TYPEOF(MAP_EXTRACT(NULL, 'a'));
+----
+"NULL"[]
+
+
+query I
+SELECT TYPEOF(MAP_EXTRACT_VALUE(NULL, 'a'));
 ----
 "NULL"

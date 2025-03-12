@@ -117,6 +117,7 @@ public:
 		return false;
 	}
 	virtual void Initialize(bool load_builtin) = 0;
+	virtual void Initialize(optional_ptr<ClientContext> context, bool load_builtin);
 
 	bool IsSystemCatalog() const;
 	bool IsTemporaryCatalog() const;
@@ -315,7 +316,11 @@ public:
 		return CatalogLookupBehavior::STANDARD;
 	}
 
+	//! Returns the default schema of the catalog
+	virtual string GetDefaultSchema() const;
+
 	//! The default table is used for `SELECT * FROM <catalog_name>;`
+	//! FIXME: these should be virtual methods
 	DUCKDB_API bool HasDefaultTable() const;
 	DUCKDB_API void SetDefaultTable(const string &schema, const string &name);
 	DUCKDB_API string GetDefaultTable() const;

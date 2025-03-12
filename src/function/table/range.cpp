@@ -73,6 +73,8 @@ struct RangeFunctionLocalState : public LocalTableFunctionState {
 	hugeint_t start;
 	hugeint_t end;
 	hugeint_t increment;
+
+	bool empty_range = false;
 };
 
 static unique_ptr<LocalTableFunctionState> RangeFunctionLocalInit(ExecutionContext &context,
@@ -104,10 +106,10 @@ static void GenerateRangeParameters(DataChunk &input, idx_t row_id, RangeFunctio
 		throw BinderException("interval cannot be 0!");
 	}
 	if (result.start > result.end && result.increment > 0) {
-		throw BinderException("start is bigger than end, but increment is positive: cannot generate infinite series");
+		result.empty_range = true;
 	}
 	if (result.start < result.end && result.increment < 0) {
-		throw BinderException("start is smaller than end, but increment is negative: cannot generate infinite series");
+		result.empty_range = true;
 	}
 	if (GENERATE_SERIES) {
 		// generate_series has inclusive bounds on the RHS
@@ -135,6 +137,13 @@ static OperatorResultType RangeFunction(ExecutionContext &context, TableFunction
 			GenerateRangeParameters<GENERATE_SERIES>(input, state.current_input_row, state);
 			state.initialized_row = true;
 			state.current_idx = 0;
+		}
+		if (state.empty_range) {
+			// empty range
+			output.SetCardinality(0);
+			state.current_input_row++;
+			state.initialized_row = false;
+			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}
 		auto increment = state.increment;
 		auto end = state.end;
@@ -201,6 +210,8 @@ struct RangeDateTimeLocalState : public LocalTableFunctionState {
 	bool inclusive_bound;
 	bool greater_than_check;
 
+	bool empty_range = false;
+
 	bool Finished(timestamp_t current_value) const {
 		if (greater_than_check) {
 			if (inclusive_bound) {
@@ -252,14 +263,12 @@ static void GenerateRangeDateTimeParameters(DataChunk &input, idx_t row_id, Rang
 		}
 		result.greater_than_check = true;
 		if (result.start > result.end) {
-			throw BinderException(
-			    "start is bigger than end, but increment is positive: cannot generate infinite series");
+			result.empty_range = true;
 		}
 	} else {
 		result.greater_than_check = false;
 		if (result.start < result.end) {
-			throw BinderException(
-			    "start is smaller than end, but increment is negative: cannot generate infinite series");
+			result.empty_range = true;
 		}
 	}
 	result.inclusive_bound = GENERATE_SERIES;
@@ -287,6 +296,13 @@ static OperatorResultType RangeDateTimeFunction(ExecutionContext &context, Table
 			GenerateRangeDateTimeParameters<GENERATE_SERIES>(input, state.current_input_row, state);
 			state.initialized_row = true;
 			state.current_state = state.start;
+		}
+		if (state.empty_range) {
+			// empty range
+			output.SetCardinality(0);
+			state.current_input_row++;
+			state.initialized_row = false;
+			return OperatorResultType::HAVE_MORE_OUTPUT;
 		}
 		idx_t size = 0;
 		auto data = FlatVector::GetData<timestamp_t>(output.data[0]);

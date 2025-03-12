@@ -218,6 +218,17 @@ struct ArrowOutputListViewSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct AsofLoopJoinThresholdSetting {
+	using RETURN_TYPE = idx_t;
+	static constexpr const char *Name = "asof_loop_join_threshold";
+	static constexpr const char *Description =
+	    "The maximum number of rows we need on the left side of an ASOF join to use a nested loop join";
+	static constexpr const char *InputType = "UBIGINT";
+	static void SetLocal(ClientContext &context, const Value &parameter);
+	static void ResetLocal(ClientContext &context);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct AutoinstallExtensionRepositorySetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "autoinstall_extension_repository";
@@ -413,6 +424,16 @@ struct DefaultSecretStorageSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "default_secret_storage";
 	static constexpr const char *Description = "Allows switching the default storage for secrets";
+	static constexpr const char *InputType = "VARCHAR";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
+struct DisabledCompressionMethodsSetting {
+	using RETURN_TYPE = string;
+	static constexpr const char *Name = "disabled_compression_methods";
+	static constexpr const char *Description = "Disable a specific set of compression methods (comma separated)";
 	static constexpr const char *InputType = "VARCHAR";
 	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
 	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);

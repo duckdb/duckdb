@@ -94,6 +94,10 @@ static void PragmaForceCheckpoint(ClientContext &context, const FunctionParamete
 	DBConfig::GetConfig(context).options.force_checkpoint = true;
 }
 
+static void PragmaTruncateDuckDBLogs(ClientContext &context, const FunctionParameters &parameters) {
+	context.db->GetLogManager().TruncateLogStorage();
+}
+
 static void PragmaDisableForceParallelism(ClientContext &context, const FunctionParameters &parameters) {
 	ClientConfig::GetConfig(context).verify_parallelism = false;
 }
@@ -110,6 +114,14 @@ static void PragmaEnableCheckpointOnShutdown(ClientContext &context, const Funct
 
 static void PragmaDisableCheckpointOnShutdown(ClientContext &context, const FunctionParameters &parameters) {
 	DBConfig::GetConfig(context).options.checkpoint_on_shutdown = false;
+}
+
+static void PragmaEnableLogging(ClientContext &context, const FunctionParameters &parameters) {
+	context.db->GetLogManager().SetEnableLogging(true);
+}
+
+static void PragmaDisableLogging(ClientContext &context, const FunctionParameters &parameters) {
+	context.db->GetLogManager().SetEnableLogging(false);
 }
 
 static void PragmaEnableOptimizer(ClientContext &context, const FunctionParameters &parameters) {
@@ -144,10 +156,15 @@ void PragmaFunctions::RegisterFunction(BuiltinFunctions &set) {
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_object_cache", PragmaEnableObjectCache));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_object_cache", PragmaDisableObjectCache));
 
+	set.AddFunction(PragmaFunction::PragmaStatement("enable_logging", PragmaEnableLogging));
+	set.AddFunction(PragmaFunction::PragmaStatement("disable_logging", PragmaDisableLogging));
+
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_optimizer", PragmaEnableOptimizer));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_optimizer", PragmaDisableOptimizer));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("force_checkpoint", PragmaForceCheckpoint));
+
+	set.AddFunction(PragmaFunction::PragmaStatement("truncate_duckdb_logs", PragmaTruncateDuckDBLogs));
 
 	set.AddFunction(PragmaFunction::PragmaStatement("enable_progress_bar", PragmaEnableProgressBar));
 	set.AddFunction(PragmaFunction::PragmaStatement("disable_progress_bar", PragmaDisableProgressBar));

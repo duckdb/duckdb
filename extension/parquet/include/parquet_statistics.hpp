@@ -13,6 +13,7 @@
 #include "duckdb/storage/statistics/base_statistics.hpp"
 #endif
 #include "parquet_types.h"
+#include "resizable_buffer.hpp"
 
 namespace duckdb {
 
@@ -20,16 +21,15 @@ using duckdb_parquet::ColumnChunk;
 using duckdb_parquet::SchemaElement;
 
 struct LogicalType;
-class ColumnReader;
+struct ParquetColumnSchema;
 class ResizeableBuffer;
 
 struct ParquetStatisticsUtils {
 
-	static unique_ptr<BaseStatistics> TransformColumnStatistics(const ColumnReader &reader,
+	static unique_ptr<BaseStatistics> TransformColumnStatistics(const ParquetColumnSchema &reader,
 	                                                            const vector<ColumnChunk> &columns);
 
-	static Value ConvertValue(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele,
-	                          const std::string &stats);
+	static Value ConvertValue(const LogicalType &type, const ParquetColumnSchema &schema_ele, const std::string &stats);
 
 	static bool BloomFilterSupported(const LogicalTypeId &type_id);
 
@@ -37,7 +37,7 @@ struct ParquetStatisticsUtils {
 	                                duckdb_apache::thrift::protocol::TProtocol &file_proto, Allocator &allocator);
 
 private:
-	static Value ConvertValueInternal(const LogicalType &type, const duckdb_parquet::SchemaElement &schema_ele,
+	static Value ConvertValueInternal(const LogicalType &type, const ParquetColumnSchema &schema_ele,
 	                                  const std::string &stats);
 };
 

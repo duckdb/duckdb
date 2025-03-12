@@ -34,26 +34,26 @@
 #define CHECK_EQ(x, y)	CHECK((x) == (y))
 #define CHECK_NE(x, y)	CHECK((x) != (y))
 
-#define LOG_INFO LogMessage(__FILE__, __LINE__)
-#define LOG_WARNING LogMessage(__FILE__, __LINE__)
-#define LOG_ERROR LogMessage(__FILE__, __LINE__)
-#define LOG_FATAL LogMessageFatal(__FILE__, __LINE__)
-#define LOG_QFATAL LOG_FATAL
+#define RE2_LOG_INFO LogMessage(__FILE__, __LINE__)
+#define RE2_LOG_WARNING LogMessage(__FILE__, __LINE__)
+#define RE2_LOG_ERROR LogMessage(__FILE__, __LINE__)
+#define RE2_LOG_FATAL LogMessageFatal(__FILE__, __LINE__)
+#define RE2_LOG_QFATAL RE2_LOG_FATAL
 
 // It seems that one of the Windows header files defines ERROR as 0.
 #ifdef _WIN32
-#define LOG_0 LOG_INFO
+#define LOG_0 RE2_LOG_INFO
 #endif
 
 #ifdef NDEBUG
-#define LOG_DFATAL LOG_ERROR
+#define RE2_LOG_DFATAL RE2_LOG_ERROR
 #else
-#define LOG_DFATAL LOG_FATAL
+#define RE2_LOG_DFATAL RE2_LOG_FATAL
 #endif
 
-#define LOG(severity) LOG_ ## severity.stream()
+#define LOG(severity) RE2_LOG_ ## severity.stream()
 
-#define VLOG(x) if((x)>0){}else LOG_INFO.stream()
+#define VLOG(x) if((x)>0){}else RE2_LOG_INFO.stream()
 
 class LogMessage {
  public:

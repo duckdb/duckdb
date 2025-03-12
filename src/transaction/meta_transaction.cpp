@@ -7,9 +7,10 @@
 
 namespace duckdb {
 
-MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p)
-    : context(context_p), start_timestamp(start_timestamp_p), active_query(MAXIMUM_QUERY_ID),
-      modified_database(nullptr), is_read_only(false) {
+MetaTransaction::MetaTransaction(ClientContext &context_p, timestamp_t start_timestamp_p,
+                                 transaction_t transaction_id_p)
+    : context(context_p), start_timestamp(start_timestamp_p), global_transaction_id(transaction_id_p),
+      active_query(MAXIMUM_QUERY_ID), modified_database(nullptr), is_read_only(false) {
 }
 
 MetaTransaction &MetaTransaction::Get(ClientContext &context) {
@@ -55,7 +56,7 @@ Transaction &MetaTransaction::GetTransaction(AttachedDatabase &db) {
 	auto entry = transactions.find(db);
 	if (entry == transactions.end()) {
 		auto &new_transaction = db.GetTransactionManager().StartTransaction(context);
-		new_transaction.active_query = active_query;
+		new_transaction.active_query = active_query.load();
 #ifdef DEBUG
 		VerifyAllTransactionsUnique(db, all_transactions);
 #endif

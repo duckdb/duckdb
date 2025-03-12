@@ -20,7 +20,10 @@ namespace duckdb {
 
 Connection::Connection(DatabaseInstance &database)
     : context(make_shared_ptr<ClientContext>(database.shared_from_this())), warning_cb(nullptr) {
-	ConnectionManager::Get(database).AddConnection(*context);
+	auto &connection_manager = ConnectionManager::Get(database);
+	connection_manager.AddConnection(*context);
+	connection_manager.AssignConnectionId(*this);
+
 #ifdef DEBUG
 	EnableProfiling();
 	context->config.emit_profiler_output = false;
@@ -28,16 +31,19 @@ Connection::Connection(DatabaseInstance &database)
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
+	// Initialization of warning_cb happens in the other constructor
 }
 
-Connection::Connection(Connection &&other) noexcept {
+Connection::Connection(Connection &&other) noexcept : warning_cb(nullptr) {
 	std::swap(context, other.context);
 	std::swap(warning_cb, other.warning_cb);
+	std::swap(connection_id, other.connection_id);
 }
 
 Connection &Connection::operator=(Connection &&other) noexcept {
 	std::swap(context, other.context);
 	std::swap(warning_cb, other.warning_cb);
+	std::swap(connection_id, other.connection_id);
 	return *this;
 }
 
@@ -96,34 +102,6 @@ unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
 	auto result = context->Query(query, false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
-}
-
-DUCKDB_API string Connection::GetSubstrait(const string &query) {
-	vector<Value> params;
-	params.emplace_back(query);
-	auto result = TableFunction("get_substrait", params)->Execute();
-	auto protobuf = result->FetchRaw()->GetValue(0, 0);
-	return protobuf.GetValueUnsafe<string_t>().GetString();
-}
-
-DUCKDB_API unique_ptr<QueryResult> Connection::FromSubstrait(const string &proto) {
-	vector<Value> params;
-	params.emplace_back(Value::BLOB_RAW(proto));
-	return TableFunction("from_substrait", params)->Execute();
-}
-
-DUCKDB_API string Connection::GetSubstraitJSON(const string &query) {
-	vector<Value> params;
-	params.emplace_back(query);
-	auto result = TableFunction("get_substrait_json", params)->Execute();
-	auto protobuf = result->FetchRaw()->GetValue(0, 0);
-	return protobuf.GetValueUnsafe<string_t>().GetString();
-}
-
-DUCKDB_API unique_ptr<QueryResult> Connection::FromSubstraitJSON(const string &json) {
-	vector<Value> params;
-	params.emplace_back(json);
-	return TableFunction("from_substrait_json", params)->Execute();
 }
 
 unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement) {
@@ -231,7 +209,28 @@ shared_ptr<Relation> Connection::Table(const string &table_name) {
 shared_ptr<Relation> Connection::Table(const string &schema_name, const string &table_name) {
 	auto table_info = TableInfo(INVALID_CATALOG, schema_name, table_name);
 	if (!table_info) {
-		throw CatalogException("Table '%s' does not exist!", table_name);
+		throw CatalogException("Table %s does not exist!", ParseInfo::QualifierToString("", schema_name, table_name));
+	}
+	return make_shared_ptr<TableRelation>(context, std::move(table_info));
+}
+
+shared_ptr<Relation> Connection::Table(const string &catalog_name, const string &schema_name,
+                                       const string &table_name) {
+	unique_ptr<TableDescription> table_info;
+	do {
+		table_info = TableInfo(catalog_name, schema_name, table_name);
+		if (table_info) {
+			break;
+		}
+
+		if (catalog_name.empty() && !schema_name.empty()) {
+			table_info = TableInfo(schema_name, DEFAULT_SCHEMA, table_name);
+		}
+	} while (false);
+
+	if (!table_info) {
+		throw CatalogException("Table %s does not exist!",
+		                       ParseInfo::QualifierToString(catalog_name, schema_name, table_name));
 	}
 	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }

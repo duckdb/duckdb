@@ -140,6 +140,12 @@ public:
 };
 
 unique_ptr<AnalyzeState> ZSTDStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
+	// check if the storage version we are writing to supports sztd
+	auto &storage = col_data.GetStorageManager();
+	if (storage.GetStorageVersion() < 4) {
+		// compatibility mode with old versions - disable zstd
+		return nullptr;
+	}
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	auto &data_table_info = col_data.info;
 	auto &attached_db = data_table_info.GetDB();
@@ -468,10 +474,6 @@ public:
 		// Write the current page to disk
 		auto &block_manager = partial_block_manager.GetBlockManager();
 		block_manager.Write(buffer.GetFileBuffer(), block_id);
-		{
-			auto lock = partial_block_manager.GetLock();
-			partial_block_manager.AddWrittenBlock(block_id);
-		}
 	}
 
 	void FlushVector() {

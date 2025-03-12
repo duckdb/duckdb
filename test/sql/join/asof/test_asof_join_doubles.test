@@ -9,6 +9,9 @@ PRAGMA enable_verification
 # Inequality only
 #
 
+statement ok
+PRAGMA asof_loop_join_threshold=0;
+
 # Use doubles for readable infinities
 statement ok
 CREATE TABLE events0 (begin DOUBLE, value INTEGER);
@@ -324,3 +327,4 @@ ASOF RIGHT JOIN
 USING (key, begin)
 ORDER BY 1 ASC NULLS FIRST, 2
 ----
+

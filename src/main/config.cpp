@@ -7,6 +7,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/main/settings.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/common/serializer/serializer.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -71,6 +72,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(ArrowLargeBufferSizeSetting),
     DUCKDB_GLOBAL(ArrowLosslessConversionSetting),
     DUCKDB_GLOBAL(ArrowOutputListViewSetting),
+    DUCKDB_LOCAL(AsofLoopJoinThresholdSetting),
     DUCKDB_GLOBAL(AutoinstallExtensionRepositorySetting),
     DUCKDB_GLOBAL(AutoinstallKnownExtensionsSetting),
     DUCKDB_GLOBAL(AutoloadKnownExtensionsSetting),
@@ -92,6 +94,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL_ALIAS("null_order", DefaultNullOrderSetting),
     DUCKDB_GLOBAL(DefaultOrderSetting),
     DUCKDB_GLOBAL(DefaultSecretStorageSetting),
+    DUCKDB_GLOBAL(DisabledCompressionMethodsSetting),
     DUCKDB_GLOBAL(DisabledFilesystemsSetting),
     DUCKDB_GLOBAL(DisabledLogTypes),
     DUCKDB_GLOBAL(DisabledOptimizersSetting),
@@ -378,7 +381,13 @@ void DBConfig::AddExtensionOption(const string &name, string description, Logica
                                   const Value &default_value, set_option_callback_t function) {
 	extension_parameters.insert(
 	    make_pair(name, ExtensionOption(std::move(description), std::move(parameter), function, default_value)));
-	if (!default_value.IsNull()) {
+	// copy over unrecognized options, if they match the new extension option
+	auto iter = options.unrecognized_options.find(name);
+	if (iter != options.unrecognized_options.end()) {
+		options.set_variables[name] = iter->second;
+		options.unrecognized_options.erase(iter);
+	}
+	if (!default_value.IsNull() && options.set_variables.find(name) == options.set_variables.end()) {
 		// Default value is set, insert it into the 'set_variables' list
 		options.set_variables[name] = default_value;
 	}
@@ -460,7 +469,7 @@ idx_t DBConfig::GetSystemMaxThreads(FileSystem &fs) {
 	}
 	return MaxValue<idx_t>(CGroups::GetCPULimit(fs, physical_cores), 1);
 #else
-	return physical_cores;
+	return MaxValue<idx_t>(physical_cores, 1);
 #endif
 #endif
 }
@@ -740,6 +749,22 @@ bool DBConfig::CanAccessFile(const string &input_path, FileType type) {
 	return true;
 }
 
+SerializationOptions::SerializationOptions(AttachedDatabase &db) {
+	serialization_compatibility = SerializationCompatibility::FromDatabase(db);
+}
+
+SerializationCompatibility SerializationCompatibility::FromDatabase(AttachedDatabase &db) {
+	return FromIndex(db.GetStorageManager().GetStorageVersion());
+}
+
+SerializationCompatibility SerializationCompatibility::FromIndex(const idx_t version) {
+	SerializationCompatibility result;
+	result.duckdb_version = "";
+	result.serialization_version = version;
+	result.manually_set = false;
+	return result;
+}
+
 SerializationCompatibility SerializationCompatibility::FromString(const string &input) {
 	if (input.empty()) {
 		throw InvalidInputException("Version string can not be empty");
@@ -748,7 +773,7 @@ SerializationCompatibility SerializationCompatibility::FromString(const string &
 	auto serialization_version = GetSerializationVersion(input.c_str());
 	if (!serialization_version.IsValid()) {
 		auto candidates = GetSerializationCandidates();
-		throw InvalidInputException("The version string '%s' is not a valid DuckDB version, valid options are: %s",
+		throw InvalidInputException("The version string '%s' is not a known DuckDB version, valid options are: %s",
 		                            input, StringUtil::Join(candidates, ", "));
 	}
 	SerializationCompatibility result;

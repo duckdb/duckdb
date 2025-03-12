@@ -73,14 +73,15 @@ void SetArrowMapFormat(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child,
 	InitializeChild(root_holder.nested_children.back()[0], root_holder);
 	child.children = &root_holder.nested_children_ptr.back()[0];
 	child.children[0]->name = "entries";
+	child.children[0]->flags = 0; // Set the 'entries' field to non-nullable
 	SetArrowFormat(root_holder, **child.children, ListType::GetChildType(type), options, context);
 }
 
 bool SetArrowExtension(DuckDBArrowSchemaHolder &root_holder, ArrowSchema &child, const LogicalType &type,
                        ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
-	if (config.HasArrowExtension(type.id())) {
-		auto arrow_extension = config.GetArrowExtension(type.id());
+	if (config.HasArrowExtension(type)) {
+		auto arrow_extension = config.GetArrowExtension(type);
 		arrow_extension.PopulateArrowSchema(root_holder, child, type, context, arrow_extension);
 		return true;
 	}

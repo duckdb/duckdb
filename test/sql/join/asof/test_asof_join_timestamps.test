@@ -32,6 +32,12 @@ INSERT INTO probe0 VALUES
 	('infinity')
 ;
 
+# Compare NLJ optimisation to operator
+foreach threshold 0 32
+
+statement ok
+PRAGMA asof_loop_join_threshold = ${threshold};
+
 # INNER ON inequality only
 query II nosort
 SELECT p.begin, e.value
@@ -204,3 +210,5 @@ ON p.begin >= e.begin
 ORDER BY p.begin ASC
 ----
 2023-03-21 12:00:00
+
+endloop

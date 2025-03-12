@@ -1,5 +1,9 @@
 #include "duckdb_python/arrow/arrow_array_stream.hpp"
 
+#include "duckdb/common/types/value_map.hpp"
+#include "duckdb/planner/filter/in_filter.hpp"
+#include "duckdb/planner/filter/optional_filter.hpp"
+
 #include "duckdb/common/assert.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/limits.hpp"
@@ -305,23 +309,21 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		auto constant_field = field(py::tuple(py::cast(column_ref)));
 		auto constant_value = GetScalar(constant_filter.constant, timezone_config, type);
 		switch (constant_filter.comparison_type) {
-		case ExpressionType::COMPARE_EQUAL: {
+		case ExpressionType::COMPARE_EQUAL:
 			return constant_field.attr("__eq__")(constant_value);
-		}
-		case ExpressionType::COMPARE_LESSTHAN: {
+		case ExpressionType::COMPARE_LESSTHAN:
 			return constant_field.attr("__lt__")(constant_value);
-		}
-		case ExpressionType::COMPARE_GREATERTHAN: {
+		case ExpressionType::COMPARE_GREATERTHAN:
 			return constant_field.attr("__gt__")(constant_value);
-		}
-		case ExpressionType::COMPARE_LESSTHANOREQUALTO: {
+		case ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			return constant_field.attr("__le__")(constant_value);
-		}
-		case ExpressionType::COMPARE_GREATERTHANOREQUALTO: {
+		case ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			return constant_field.attr("__ge__")(constant_value);
-		}
+		case ExpressionType::COMPARE_NOTEQUAL:
+			return constant_field.attr("__ne__")(constant_value);
 		default:
-			throw NotImplementedException("Comparison Type can't be an Arrow Scan Pushdown Filter");
+			throw NotImplementedException("Comparison Type %s can't be an Arrow Scan Pushdown Filter",
+			                              EnumUtil::ToString(constant_filter.comparison_type));
 		}
 	}
 	//! We do not pushdown is null yet
@@ -373,10 +375,30 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		                                           struct_child_type);
 		return child_expr;
 	}
-	case TableFilterType::OPTIONAL_FILTER:
-		return py::none();
+	case TableFilterType::OPTIONAL_FILTER: {
+		auto &optional_filter = filter.Cast<OptionalFilter>();
+		if (!optional_filter.child_filter) {
+			return py::none();
+		}
+		return TransformFilterRecursive(*optional_filter.child_filter, column_ref, timezone_config, type);
+	}
+	case TableFilterType::IN_FILTER: {
+		auto &in_filter = filter.Cast<InFilter>();
+		ConjunctionOrFilter or_filter;
+		value_set_t unique_values;
+		for (const auto &value : in_filter.values) {
+			if (unique_values.find(value) == unique_values.end()) {
+				unique_values.insert(value);
+			}
+		}
+		for (const auto &value : unique_values) {
+			or_filter.child_filters.push_back(make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, value));
+		}
+		return TransformFilterRecursive(or_filter, column_ref, timezone_config, type);
+	}
 	default:
-		throw NotImplementedException("Pushdown Filter Type not supported in Arrow Scans");
+		throw NotImplementedException("Pushdown Filter Type %s is not currently supported in PyArrow Scans",
+		                              EnumUtil::ToString(filter.filter_type));
 	}
 }
 

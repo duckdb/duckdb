@@ -36,10 +36,11 @@ namespace duckdb {
 
 void ReorderTableEntries(catalog_entry_vector_t &tables);
 
-SingleFileCheckpointWriter::SingleFileCheckpointWriter(AttachedDatabase &db, BlockManager &block_manager,
+SingleFileCheckpointWriter::SingleFileCheckpointWriter(optional_ptr<ClientContext> client_context_p,
+                                                       AttachedDatabase &db, BlockManager &block_manager,
                                                        CheckpointType checkpoint_type)
-    : CheckpointWriter(db), partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT),
-      checkpoint_type(checkpoint_type) {
+    : CheckpointWriter(db), client_context(client_context_p),
+      partial_block_manager(block_manager, PartialBlockType::FULL_CHECKPOINT), checkpoint_type(checkpoint_type) {
 }
 
 BlockManager &SingleFileCheckpointWriter::GetBlockManager() {
@@ -178,11 +179,7 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 	        ]
 	    }
 	 */
-	SerializationOptions serialization_options;
-
-	serialization_options.serialization_compatibility = config.options.serialization_compatibility;
-
-	BinarySerializer serializer(*metadata_writer, serialization_options);
+	BinarySerializer serializer(*metadata_writer, SerializationOptions(db));
 	serializer.Begin();
 	serializer.WriteList(100, "catalog_entries", catalog_entries.size(), [&](Serializer::List &list, idx_t i) {
 		auto &entry = catalog_entries[i];
@@ -259,11 +256,13 @@ void SingleFileCheckpointWriter::CreateCheckpoint() {
 
 void CheckpointReader::LoadCheckpoint(CatalogTransaction transaction, MetadataReader &reader) {
 	BinaryDeserializer deserializer(reader);
+	deserializer.Set<Catalog &>(catalog);
 	deserializer.Begin();
 	deserializer.ReadList(100, "catalog_entries", [&](Deserializer::List &list, idx_t i) {
 		return list.ReadObject([&](Deserializer &obj) { ReadEntry(transaction, obj); });
 	});
 	deserializer.End();
+	deserializer.Unset<Catalog>();
 }
 
 MetadataManager &SingleFileCheckpointReader::GetMetadataManager() {

@@ -1,5 +1,6 @@
 #include "duckdb/optimizer/late_materialization.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/operator/logical_limit.hpp"
 #include "duckdb/planner/operator/logical_order.hpp"
@@ -12,6 +13,7 @@
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/main/client_config.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
@@ -34,7 +36,7 @@ idx_t LateMaterialization::GetOrInsertRowId(LogicalGet &get) {
 		get.projection_ids.push_back(column_ids.size() - 1);
 	}
 	if (!get.types.empty()) {
-		get.types.push_back(get.GetRowIdType());
+		get.types.push_back(row_id_type);
 	}
 	return column_ids.size() - 1;
 }
@@ -43,7 +45,7 @@ unique_ptr<LogicalGet> LateMaterialization::ConstructLHS(LogicalGet &get) {
 	// we need to construct a new scan of the same table
 	auto table_index = optimizer.binder.GenerateTableIndex();
 	auto new_get = make_uniq<LogicalGet>(table_index, get.function, get.bind_data->Copy(), get.returned_types,
-	                                     get.names, get.GetRowIdType());
+	                                     get.names, get.virtual_columns);
 	new_get->GetMutableColumnIds() = get.GetColumnIds();
 	new_get->projection_ids = get.projection_ids;
 	return new_get;
@@ -61,6 +63,8 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 	// we have reached the logical get - now we need to push the row-id column (if it is not yet projected out)
 	auto &get = child.get().Cast<LogicalGet>();
 	auto row_id_idx = GetOrInsertRowId(get);
+	idx_t column_count = get.projection_ids.empty() ? get.GetColumnIds().size() : get.projection_ids.size();
+	D_ASSERT(column_count == get.GetColumnBindings().size());
 
 	// the row id has been projected - now project it up the stack
 	ColumnBinding row_id_binding(get.table_index, row_id_idx);
@@ -70,15 +74,21 @@ ColumnBinding LateMaterialization::ConstructRHS(unique_ptr<LogicalOperator> &op)
 		case LogicalOperatorType::LOGICAL_PROJECTION: {
 			auto &proj = op.Cast<LogicalProjection>();
 			// push a projection of the row-id column
-			proj.expressions.push_back(
-			    make_uniq<BoundColumnRefExpression>("rowid", get.GetRowIdType(), row_id_binding));
+			proj.expressions.push_back(make_uniq<BoundColumnRefExpression>("rowid", row_id_type, row_id_binding));
 			// modify the row-id-binding to push to the new projection
 			row_id_binding = ColumnBinding(proj.table_index, proj.expressions.size() - 1);
+			column_count = proj.expressions.size();
 			break;
 		}
-		case LogicalOperatorType::LOGICAL_FILTER:
-			// column bindings pass-through this operator as-is
+		case LogicalOperatorType::LOGICAL_FILTER: {
+			auto &filter = op.Cast<LogicalFilter>();
+			// column bindings pass-through this operator as-is UNLESS the filter has a projection map
+			if (filter.HasProjectionMap()) {
+				// if the filter has a projection map, we need to project the new column
+				filter.projection_map.push_back(column_count - 1);
+			}
 			break;
+		}
 		default:
 			throw InternalException("Unsupported logical operator in LateMaterialization::ConstructRHS");
 		}
@@ -143,9 +153,8 @@ unique_ptr<Expression> LateMaterialization::GetExpression(LogicalOperator &op, i
 	case LogicalOperatorType::LOGICAL_GET: {
 		auto &get = op.Cast<LogicalGet>();
 		auto &column_id = get.GetColumnIds()[column_index];
-		auto is_row_id = column_id.IsRowIdColumn();
-		auto column_name = is_row_id ? "rowid" : get.names[column_id.GetPrimaryIndex()];
-		auto &column_type = is_row_id ? get.GetRowIdType() : get.returned_types[column_id.GetPrimaryIndex()];
+		auto column_name = get.GetColumnName(column_id);
+		auto &column_type = get.GetColumnType(column_id);
 		auto expr =
 		    make_uniq<BoundColumnRefExpression>(column_name, column_type, ColumnBinding(get.table_index, column_index));
 		return std::move(expr);
@@ -212,28 +221,33 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 			child = *child.get().children[0];
 			break;
 		}
-		case LogicalOperatorType::LOGICAL_FILTER:
+		case LogicalOperatorType::LOGICAL_FILTER: {
 			// visit filter expressions - we need these columns
 			VisitOperatorExpressions(child.get());
 			// continue into child
 			child = *child.get().children[0];
 			break;
+		}
 		default:
 			// unsupported operator for late materialization
 			return false;
 		}
 	}
 	auto &get = child.get().Cast<LogicalGet>();
-	auto table = get.GetTable();
-	if (!table || !table->IsDuckTable()) {
-		// we can only do the late-materialization optimization for DuckDB tables currently
-		return false;
-	}
 	if (column_references.size() >= get.GetColumnIds().size()) {
 		// we do not benefit from late materialization
 		// we need all of the columns to compute the root node anyway (Top-N/Limit/etc)
 		return false;
 	}
+	if (!get.function.late_materialization) {
+		// this function does not support late materialization
+		return false;
+	}
+	auto entry = get.virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
+	if (entry == get.virtual_columns.end()) {
+		throw InternalException("Table function supports late materialization but does not expose a rowid column");
+	}
+	row_id_type = entry->second.type;
 	// we benefit from late materialization
 	// we need to transform this plan into a semi-join with the row-id
 	// we need to ensure the operator returns exactly the same column bindings as before
@@ -246,8 +260,6 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	auto lhs_columns = lhs_get.GetColumnIds().size();
 	auto lhs_row_idx = GetOrInsertRowId(lhs_get);
 	ColumnBinding lhs_binding(lhs_index, lhs_row_idx);
-
-	auto &row_id_type = get.GetRowIdType();
 
 	// after constructing the LHS but before constructing the RHS we construct the final projections/orders
 	// - we do this before constructing the RHS because that alter the original plan
@@ -346,9 +358,22 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	return true;
 }
 
-bool LateMaterialization::OptimizeLargeLimit(LogicalOperator &child) {
-	// we only support large limits if the only
-	reference<LogicalOperator> current_op = child;
+bool LateMaterialization::OptimizeLargeLimit(LogicalLimit &limit, idx_t limit_val, bool has_offset) {
+	auto &config = DBConfig::GetConfig(optimizer.context);
+	if (!has_offset && !config.options.preserve_insertion_order) {
+		// we avoid optimizing large limits if preserve insertion order is false
+		// since the limit is executed in parallel anyway
+		return false;
+	}
+	// we only perform this optimization until a certain amount of maximum values to reduce memory constraints
+	// since we still materialize the set of row-ids in the hash table this optimization can increase memory pressure
+	// FIXME: make this configurable as well
+	static constexpr const idx_t LIMIT_MAX_VAL = 1000000;
+	if (limit_val > LIMIT_MAX_VAL) {
+		return false;
+	}
+	// we only support large limits if they are directly below the source
+	reference<LogicalOperator> current_op = *limit.children[0];
 	while (current_op.get().type != LogicalOperatorType::LOGICAL_GET) {
 		if (current_op.get().type != LogicalOperatorType::LOGICAL_PROJECTION) {
 			return false;
@@ -365,11 +390,18 @@ unique_ptr<LogicalOperator> LateMaterialization::Optimize(unique_ptr<LogicalOper
 		if (limit.limit_val.Type() != LimitNodeType::CONSTANT_VALUE) {
 			break;
 		}
-		if (limit.limit_val.GetConstantValue() > max_row_count) {
+		auto limit_val = limit.limit_val.GetConstantValue();
+		bool has_offset = limit.offset_val.Type() != LimitNodeType::UNSET;
+		if (limit_val > max_row_count) {
 			// for large limits - we may still want to do this optimization if the limit is consecutive
 			// this is the case if there are only projections/get below the limit
 			// if the row-ids are not consecutive doing the join can worsen performance
-			if (!OptimizeLargeLimit(*limit.children[0])) {
+			if (!OptimizeLargeLimit(limit, limit_val, has_offset)) {
+				break;
+			}
+		} else {
+			// optimizing small limits really only makes sense if we have an offset
+			if (!has_offset) {
 				break;
 			}
 		}

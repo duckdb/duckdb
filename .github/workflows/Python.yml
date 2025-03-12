@@ -8,6 +8,10 @@ on:
         type: string
       skip_tests:
         type: string
+      run_all:
+        type: string
+      override_twine_upload:
+        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -16,12 +20,15 @@ on:
         type: string
       skip_tests:
         type: string
-  repository_dispatch:
+      run_all:
+        type: string
+      override_twine_upload:
+        type: string
   push:
-    branches:
-      - '**'
-      - '!main'
-      - '!feature'
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
     paths-ignore:
       - '**.md'
       - 'examples/**'
@@ -58,7 +65,7 @@ jobs:
 # This is just a sanity check of Python 3.10 running with Arrow
   linux-python3-10:
     name: Python 3.10 Linux
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     env:
       CIBW_BUILD: 'cp39-manylinux_x86_64'
@@ -142,10 +149,11 @@ jobs:
         with:
           vcpkg_target_triplet: x64-linux
           duckdb_arch: linux_amd64_gcc4
+          run_tests: ${{ inputs.skip_tests != 'true' }}
 
       - uses: actions/upload-artifact@v4
         with:
-          name: manylinux-extensions-x64
+          name: duckdb-extensions-${{ matrix.duckdb_arch }}
           path: |
             build/release/extension/*/*.duckdb_extension
 
@@ -153,24 +161,29 @@ jobs:
     ## TODO: Add a if: github.ref == main, for now this is explicitly missing to be able to test on PR, expected is this should fail due to missing secrets
     name: Upload Linux Extensions (gcc4)
     needs: manylinux-extensions-x64
+    strategy:
+      matrix:
+        duckdb_arch: [linux_amd64_gcc4]
     uses: ./.github/workflows/_sign_deploy_extensions.yml
     secrets: inherit
     with:
-      extension_artifact_name: manylinux-extensions-x64
-      duckdb_arch: linux_amd64_gcc4
+      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
+      duckdb_arch: ${{ matrix.duckdb_arch }}
       duckdb_sha: ${{ github.sha }}
 
   linux-python3:
     name: Python 3 Linux
     needs: manylinux-extensions-x64
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     strategy:
+      fail-fast: false
       matrix:
+        duckdb_arch: [linux_amd64_gcc4]
         arch: [x86_64, aarch64]
         python_build: [cp37-*, cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         manylinux: [manylinux2014, manylinux_2_28]
         isRelease:
-          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
         exclude:
           # For now we don't distribute the 2_28 wheels on x64
           - arch: x86_64
@@ -226,7 +239,7 @@ jobs:
 
     - uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.11'
 
     - name: Install
       shell: bash
@@ -237,7 +250,7 @@ jobs:
     - uses: actions/download-artifact@v4
       if: ${{ matrix.arch == 'x86_64' }}
       with:
-        name: manylinux-extensions-x64
+        name: duckdb-extensions-${{ matrix.duckdb_arch }}
         path: tools/pythonpkg
 
     - name: List extensions to be tested
@@ -277,7 +290,7 @@ jobs:
         ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/dist/duckdb-*.tar.gz tools/pythonpkg/wheelhouse/*.whl
 
   osx-python3:
-      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true'
       name: Python 3 OSX
       needs: linux-python3-10
       runs-on: macos-latest
@@ -319,19 +332,12 @@ jobs:
         shell: bash
         run: pip install 'cibuildwheel>=2.16.2' build
 
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}-${{ matrix.python_build }}
-          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
-
       - name: Build
         shell: bash
         run: |
           cd tools/pythonpkg
           pyproject-build . --sdist
           mkdir duckdb_tarball && tar xvf dist/duckdb-*.tar.gz --strip-components=1 -C duckdb_tarball
-          export DISTUTILS_C_COMPILER_LAUNCHER=ccache
           # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
           if [[ "$GITHUB_REF" =~ ^refs/tags/v.+$ ]] ; then
             export CIBW_TEST_COMMAND='python -m pytest {project}/tests/fast/api/test_dbapi00.py  --verbose'
@@ -354,7 +360,7 @@ jobs:
        matrix:
         python_build: [cp38-*, cp39-*, cp310-*, cp311-*, cp312-*, cp313-*]
         isRelease:
-          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' }}
+          - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
         exclude:
           - isRelease: false
             python_build: 'cp39-*'
@@ -429,7 +435,7 @@ jobs:
      if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
      name: PyPi Release Cleanup
      needs: twine-upload
-     runs-on: ubuntu-20.04
+     runs-on: ubuntu-22.04
      env:
        PYPI_CLEANUP_USERNAME: 'mytherin'
        PYPI_CLEANUP_PASSWORD: ${{secrets.PYPI_CLEANUP_PASSWORD}}
@@ -460,8 +466,10 @@ jobs:
       - win-python3
       - linux-python3
     # Note that want to run this by default ONLY if no override_git_describe is provided
-    # This means we are not staging a release
-    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
+    # This means we are not staging a release, or we explicitly set `twine_upload`
+    # Why? If present, it means we are staging releases, and we want to do the upload manually
+    if: (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.override_twine_upload == 'true' )) && (( inputs.override_git_describe == '' )) && (( github.repository == 'duckdb/duckdb' ))
     uses: ./.github/workflows/TwineUpload.yml
     secrets: inherit
-    # Why? If present, it means we are staging releases, and we want to do the upload manually
+    with:
+      twine_upload: 'true'
