@@ -533,7 +533,7 @@ string StringUtil::CandidatesErrorMessage(const vector<string> &strings, const s
 }
 
 unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore_errors) {
-	auto result = make_uniq<ComplexJSON>(json, ignore_errors);
+	auto result = make_uniq<ComplexJSON>(json);
 	if (json.empty()) {
 		return result;
 	}
@@ -565,8 +565,7 @@ unique_ptr<ComplexJSON> StringUtil::ParseJSONMap(const string &json, bool ignore
 			const auto key_len = yyjson_get_len(key);
 			const auto value_val = yyjson_get_str(value);
 			const auto value_len = yyjson_get_len(value);
-			result->AddObject(string(key_val, key_len),
-			                  make_uniq<ComplexJSON>(string(value_val, value_len), ignore_errors));
+			result->AddObject(string(key_val, key_len), make_uniq<ComplexJSON>(string(value_val, value_len)));
 		} else if (type == YYJSON_TYPE_OBJ) {
 			// We recurse, this is a complex json
 			const auto key_val = yyjson_get_str(key);

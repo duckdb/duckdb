@@ -18,7 +18,7 @@ namespace duckdb {
 //! Custom struct to handle both strings and nested JSON objects
 struct ComplexJSON {
 	//! Constructor for string values
-	ComplexJSON(const string &str, bool ignore_errors);
+	explicit ComplexJSON(const string &str);
 	//! Basic empty constructor
 	ComplexJSON();
 	//! Adds Object to the underlying map, also sets the is_object flag to True
@@ -39,8 +39,6 @@ private:
 	unordered_map<string, unique_ptr<ComplexJSON>> obj_value;
 	//! If this json is an object (i.e., map or not)
 	bool is_object;
-	//! If this json is malformed, should it be ignored, or should we throw an error during parsing.
-	bool ignore_errors;
 };
 
 } // namespace duckdb

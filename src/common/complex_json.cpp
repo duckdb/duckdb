@@ -1,11 +1,10 @@
 #include "duckdb/common/complex_json.hpp"
 
 namespace duckdb {
-ComplexJSON::ComplexJSON(const string &str, bool ignore_errors)
-    : str_value(str), is_object(false), ignore_errors(ignore_errors) {
+ComplexJSON::ComplexJSON(const string &str) : str_value(str), is_object(false) {
 }
 
-ComplexJSON::ComplexJSON() : is_object(false), ignore_errors(false) {
+ComplexJSON::ComplexJSON() : is_object(false) {
 }
 
 void ComplexJSON::AddObject(const string &key, unique_ptr<ComplexJSON> object) {
