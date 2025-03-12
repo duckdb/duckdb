@@ -3037,17 +3037,11 @@ The resulting vector has the size of the parent vector multiplied by the array s
 DUCKDB_C_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 
 /*!
-The resulting vector is valid as long as the `dict` vector is valid (and coecerable into a dictionary vector).
-The resulting vector has the size of `len` the selection vector.
-All values in the max value of the selection vector must be smaller than vector_len.* @param dict The vector which is to
-become a dictionary
-* @param values The values vector in the dictionary
-* @param vector_len The length of the values vector
+todo...* @param vector The vector which is to become a dictionary
 * @param selection The selection vector
 * @param len The length of the selection vector
 */
-DUCKDB_C_API void duckdb_dictionary_vector(duckdb_vector dict, duckdb_vector values, idx_t vector_len,
-                                           duckdb_selection_vector selection, idx_t len);
+DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
 
 //===--------------------------------------------------------------------===//
 // Selection Vector Interface

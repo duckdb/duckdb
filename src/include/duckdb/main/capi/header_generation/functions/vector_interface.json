@@ -244,20 +244,12 @@
       }
     },
     {
-      "name": "duckdb_dictionary_vector",
+      "name": "duckdb_slice_vector",
       "return_type": "void",
       "params": [
         {
           "type": "duckdb_vector",
-          "name": "dict"
-        },
-        {
-          "type": "duckdb_vector",
-          "name": "values"
-        },
-        {
-          "type": "idx_t",
-          "name": "vector_len"
+          "name": "vector"
         },
         {
           "type": "duckdb_selection_vector",
@@ -269,11 +261,9 @@
         }
       ],
       "comment": {
-        "description": "The resulting vector is valid as long as the `dict` vector is valid (and coecerable into a dictionary vector).\nThe resulting vector has the size of `len` the selection vector.\nAll values in the max value of the selection vector must be smaller than vector_len.",
+        "description": "todo...",
         "param_comments": {
-          "dict": "The vector which is to become a dictionary",
-          "values": "The values vector in the dictionary",
-          "vector_len": "The length of the values vector",
+          "vector": "The vector which is to become a dictionary",
           "selection": "The selection vector",
           "len": "The length of the selection vector"
         }
