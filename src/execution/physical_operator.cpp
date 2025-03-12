@@ -36,7 +36,7 @@ void PhysicalOperator::Print() const {
 vector<const_reference<PhysicalOperator>> PhysicalOperator::GetChildren() const {
 	vector<const_reference<PhysicalOperator>> result;
 	for (auto &child : children) {
-		result.push_back(child);
+		result.push_back(child.get());
 	}
 	return result;
 }
