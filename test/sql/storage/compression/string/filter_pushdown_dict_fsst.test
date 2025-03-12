@@ -1,14 +1,12 @@
-# name: test/sql/storage/compression/string/filter_pushdown.test
+# name: test/sql/storage/compression/string/filter_pushdown_dict_fsst.test
 # description: Filter pushdown with string compressed columns
 # group: [string]
 
 # load the DB from disk
-load __TEST_DIR__/test_string_compression.db
+load __TEST_DIR__/test_string_compression.db readwrite v1.3.0
 
 statement ok
 pragma verify_fetch_row
-
-foreach compression fsst dictionary
 
 foreach enable_fsst_vector true false
 
@@ -16,7 +14,7 @@ statement ok
 SET enable_fsst_vectors='${enable_fsst_vector}'
 
 statement ok
-PRAGMA force_compression='${compression}'
+PRAGMA force_compression='dict_fsst'
 
 statement ok
 CREATE TABLE test (id INT, col VARCHAR)
@@ -40,13 +38,11 @@ SELECT MIN(id), MAX(id), MIN(col), MAX(col), COUNT(*) FROM test WHERE id='5000'
 5000	5000	BLEEPBLOOP-0	BLEEPBLOOP-0	1
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT lower(compression)='dict_fsst' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
 1
 
 statement ok
 DROP TABLE test;
-
-endloop
 
 endloop

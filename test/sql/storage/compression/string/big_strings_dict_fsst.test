@@ -1,9 +1,9 @@
-# name: test/sql/storage/compression/string/big_strings.test
+# name: test/sql/storage/compression/string/big_strings_dict_fsst.test
 # description: Test string compression with big strings, which are currently unsupported by the compression algorithms
 # group: [string]
 
 # load the DB from disk
-load __TEST_DIR__/test_string_compression.db
+load __TEST_DIR__/test_string_compression.db readwrite v1.3.0
 
 statement ok
 pragma verify_fetch_row
@@ -13,10 +13,8 @@ foreach enable_fsst_vector true false
 statement ok
 SET enable_fsst_vectors='${enable_fsst_vector}'
 
-foreach compression fsst dictionary
-
 statement ok
-PRAGMA force_compression='${compression}'
+PRAGMA force_compression='dict_fsst'
 
 # Baseline, non big string, dictionary compression should work
 statement ok
@@ -40,7 +38,7 @@ a	a	3900
 b	b	3900
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('normal_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT lower(compression)='dict_fsst' FROM pragma_storage_info('normal_string') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
 1
 
@@ -78,7 +76,5 @@ DROP TABLE big_string;
 
 statement ok
 DROP TABLE normal_string;
-
-endloop
 
 endloop
