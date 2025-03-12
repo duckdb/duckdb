@@ -78,7 +78,11 @@ static optional_idx GetCPUCountFromQuotaAndPeriod(const CGroupEntry &entry, File
 	auto cfs_quota = StringUtil::Format(CFS_QUOTA, entry.cgroup_path);
 	auto cfs_period = StringUtil::Format(CFS_PERIOD, entry.cgroup_path);
 
-	int64_t quota, period;
+	//! See https://docs.kernel.org/scheduler/sched-bwc.html
+	//! run-time replenished within a period (in microseconds)
+	int64_t quota;
+	//! the length of a period (in microseconds)
+	int64_t period;
 	char byte_buffer[1000];
 	if (fs.FileExists(cpu_max)) {
 		// cgroup v2
