@@ -98,6 +98,7 @@ public:
 
 //! fwd declare
 struct MultiFileCastMap;
+struct MultiFileFilterEntry;
 
 struct MultiFileLocalColumnId {
 	friend class MultiFileCastMap;
@@ -131,6 +132,7 @@ struct MultiFileLocalIndex {
 	template <class T>
 	friend class MultiFileLocalColumnIds;
 	friend class MultiFileColumnMapping;
+	friend class MultiFileFilterEntry;
 
 public:
 	explicit MultiFileLocalIndex(idx_t index) : index(index) {
@@ -181,6 +183,7 @@ struct MultiFileConstantEntry {
 //! index used to access the constant map
 struct MultiFileConstantMapIndex {
 	friend class MultiFileConstantMap;
+	friend class MultiFileFilterEntry;
 
 public:
 	explicit MultiFileConstantMapIndex(idx_t index) : index(index) {
@@ -193,19 +196,45 @@ private:
 
 struct MultiFileFilterEntry {
 public:
+	MultiFileFilterEntry() : is_set(false), is_constant(false), index(DConstants::INVALID_INDEX) {
+	}
+
+public:
+	void Set(MultiFileConstantMapIndex constant_index) {
+		is_set = true;
+		is_constant = true;
+		index = constant_index.index;
+	}
+	void Set(MultiFileLocalIndex local_index) {
+		is_set = true;
+		is_constant = false;
+		index = local_index.index;
+	}
+
+	bool IsSet() const {
+		return is_set;
+	}
+	bool IsConstant() const {
+		D_ASSERT(is_set);
+		return is_constant;
+	}
+
 	MultiFileConstantMapIndex GetConstantIndex() const {
+		D_ASSERT(is_set);
 		D_ASSERT(is_constant);
 		return MultiFileConstantMapIndex(index);
 	}
 	MultiFileLocalIndex GetLocalIndex() const {
+		D_ASSERT(is_set);
 		D_ASSERT(!is_constant);
 		return MultiFileLocalIndex(index);
 	}
 
-public:
+private:
+	bool is_set;
+	bool is_constant;
 	//! ConstantMapIndex if 'is_constant' else this is a LocalIndex
-	idx_t index = DConstants::INVALID_INDEX;
-	bool is_constant = false;
+	idx_t index;
 };
 
 template <class T>

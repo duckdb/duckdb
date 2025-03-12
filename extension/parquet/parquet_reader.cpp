@@ -1109,7 +1109,8 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
 			auto global_idx = MultiFileGlobalIndex(scan_filter.filter_idx);
 			auto filter_entry = reader_data.filter_map[global_idx];
-			if (filter_entry.is_constant) {
+			D_ASSERT(filter_entry.IsSet());
+			if (filter_entry.IsConstant()) {
 				// this is a constant vector, look for the constant
 				auto constant_index = filter_entry.GetConstantIndex();
 				auto &constant = reader_data.constant_map[constant_index].value;

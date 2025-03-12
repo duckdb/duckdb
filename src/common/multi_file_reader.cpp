@@ -552,20 +552,19 @@ void MultiFileReader::CreateFilterMap(const vector<ColumnIndex> &global_column_i
 	if (global_state) {
 		filter_map_size += global_state->extra_columns.size();
 	}
+
 	reader_data.filter_map.resize(filter_map_size);
 
 	D_ASSERT(reader_data.column_mapping.size() == reader_data.column_ids.size());
 	for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
 		auto col_idx = MultiFileLocalIndex(c);
 		auto global_idx = reader_data.column_mapping[col_idx];
-		reader_data.filter_map[global_idx].index = c;
-		reader_data.filter_map[global_idx].is_constant = false;
+		reader_data.filter_map[global_idx].Set(col_idx);
 	}
 	for (idx_t c = 0; c < reader_data.constant_map.size(); c++) {
 		auto constant_idx = MultiFileConstantMapIndex(c);
 		auto global_idx = reader_data.constant_map[constant_idx].column_idx;
-		reader_data.filter_map[global_idx].index = c;
-		reader_data.filter_map[global_idx].is_constant = true;
+		reader_data.filter_map[global_idx].Set(constant_idx);
 	}
 }
 
