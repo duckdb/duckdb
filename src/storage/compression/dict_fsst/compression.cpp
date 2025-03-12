@@ -39,6 +39,8 @@ static DictFSSTMode ConvertToMode(DictionaryAppendState &state) {
 		return DictFSSTMode::DICTIONARY;
 	case DictionaryAppendState::ENCODED_ALL_UNIQUE:
 		return DictFSSTMode::FSST_ONLY;
+	default:
+		throw InternalException("DictFSSTMode not handled!");
 	}
 }
 
@@ -197,7 +199,7 @@ void DictFSSTCompressionState::FlushEncodingBuffer() {
 		dictionary_offset += str_len;
 	}
 	D_ASSERT(compressed_sum <= to_encode_string_sum);
-	if (biggest_strlen >= 1 << string_lengths_width) {
+	if (biggest_strlen >= NumericCast<uint32_t>(1 << string_lengths_width)) {
 		string_lengths_width = BitpackingPrimitives::MinimumBitWidth(biggest_strlen);
 	}
 	real_string_lengths_width = string_lengths_width;
@@ -296,7 +298,7 @@ void DictFSSTCompressionState::Flush(bool final) {
 }
 
 static inline bool RequiresHigherBitWidth(bitpacking_width_t bitwidth, uint32_t other) {
-	return other >= (1 << bitwidth);
+	return other >= NumericCast<uint32_t>(1 << bitwidth);
 }
 
 template <DictionaryAppendState APPEND_STATE>
