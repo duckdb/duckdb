@@ -208,3 +208,22 @@ void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row) {
 	idx_t idx_in_entry = row % 64;
 	validity[entry_idx] |= (uint64_t)1 << idx_in_entry;
 }
+
+duckdb_selection_vector duckdb_create_selection_vector(idx_t size) {
+	return reinterpret_cast<duckdb_selection_vector>(new duckdb::SelectionVector(size));
+}
+
+void duckdb_destroy_selection_vector(duckdb_selection_vector vector) {
+	delete reinterpret_cast<duckdb::SelectionVector *>(vector);
+}
+
+sel_t *duckdb_selection_vector_get_data(duckdb_selection_vector vector) {
+	return reinterpret_cast<duckdb::SelectionVector *>(vector)->data();
+}
+
+void duckdb_dictionary_vector(duckdb_vector dict, duckdb_vector values, idx_t vector_len, duckdb_selection_vector selection, idx_t len) {
+	auto ddict = reinterpret_cast<duckdb::Vector *>(dict);
+	auto dvalues = reinterpret_cast<duckdb::Vector *>(values);
+	auto dselection = reinterpret_cast<duckdb::SelectionVector *>(selection);
+	ddict->Dictionary(*dvalues, vector_len, *dselection, len);
+}

@@ -242,6 +242,9 @@ typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } du
 //! DuckDB's index type.
 typedef uint64_t idx_t;
 
+//! DuckDB selection index type
+typedef uint32_t sel_t;
+
 //! The callback that will be called to destroy data, e.g.,
 //! bind data (if any), init data (if any), extra data for replacement scans (if any)
 typedef void (*duckdb_delete_callback_t)(void *data);
@@ -390,6 +393,10 @@ typedef struct {
 typedef struct _duckdb_vector {
 	void *internal_ptr;
 } * duckdb_vector;
+
+typedef struct _duckdb_selection_vector {
+	void *internal_ptr;
+} * duckdb_selection_vector;
 
 //===--------------------------------------------------------------------===//
 // Types (explicit freeing/destroying)
@@ -3030,6 +3037,23 @@ The resulting vector has the size of the parent vector multiplied by the array s
 */
 DUCKDB_C_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 
+
+/*!
+Creates a dictionary vector from a values vector and a selection vector.
+
+The resulting vector is valid as long as the `dict` vector is valid (and coecerable into a dictionary vector).
+The resulting vector has the size of `len` the selection vector.
+All values in the max value of the selection vector must be smaller than vector_len
+
+* @param dict The vector which is to become a dictionary.
+* @param values The values vector in the dictionary.
+* @param vector_len The length of the values vector.
+* @param selection The selection vector.
+* @param len The length of the selection vector.
+*/
+
+DUCKDB_C_API void duckdb_dictionary_vector(duckdb_vector dict, duckdb_vector values, idx_t vector_len, duckdb_selection_vector selection, idx_t len);
+
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
 //===--------------------------------------------------------------------===//
@@ -3074,6 +3098,19 @@ Equivalent to `duckdb_validity_set_row_validity` with valid set to true.
 * @param row The row index
 */
 DUCKDB_C_API void duckdb_validity_set_row_valid(uint64_t *validity, idx_t row);
+
+//===--------------------------------------------------------------------===//
+// Selection Vector Functions
+//===--------------------------------------------------------------------===//
+
+// TODO(joe)
+DUCKDB_C_API duckdb_selection_vector duckdb_create_selection_vector(idx_t size);
+
+// TODO(joe)
+DUCKDB_C_API void duckdb_destroy_selection_vector(duckdb_selection_vector vector);
+
+// TODO(joe)
+DUCKDB_C_API sel_t *duckdb_selection_vector_get_data(duckdb_selection_vector vector);
 
 //===--------------------------------------------------------------------===//
 // Scalar Functions
