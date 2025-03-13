@@ -87,10 +87,10 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 	return result;
 }
 
-static optional_idx GetCPUCountV2(const CGroupEntry &entry, FileSystem &fs) {
+static optional_idx GetCPUCountV2(const string &cgroup_path, FileSystem &fs) {
 	static constexpr const char *CPU_MAX = "/sys/fs/cgroup%s/cpu.max";
 
-	auto cpu_max = StringUtil::Format(CPU_MAX, entry.cgroup_path);
+	auto cpu_max = StringUtil::Format(CPU_MAX, cgroup_path);
 
 	//! See https://docs.kernel.org/scheduler/sched-bwc.html
 	//! run-time replenished within a period (in microseconds)
@@ -117,12 +117,12 @@ static optional_idx GetCPUCountV2(const CGroupEntry &entry, FileSystem &fs) {
 	return optional_idx();
 }
 
-static optional_idx GetCPUCountV1(const CGroupEntry &entry, FileSystem &fs) {
+static optional_idx GetCPUCountV1(const string &cgroup_path, FileSystem &fs) {
 	static constexpr const char *CFS_QUOTA = "/sys/fs/cgroup/cpu%s/cpu.cfs_quota_us";
 	static constexpr const char *CFS_PERIOD = "/sys/fs/cgroup/cpu%s/cpu.cfs_period_us";
 
-	auto cfs_quota = StringUtil::Format(CFS_QUOTA, entry.cgroup_path);
-	auto cfs_period = StringUtil::Format(CFS_PERIOD, entry.cgroup_path);
+	auto cfs_quota = StringUtil::Format(CFS_QUOTA, cgroup_path);
+	auto cfs_period = StringUtil::Format(CFS_PERIOD, cgroup_path);
 
 	if (!fs.FileExists(cfs_quota) || !fs.FileExists(cfs_period)) {
 		return optional_idx();
@@ -180,6 +180,9 @@ static optional_idx ReadMemoryLimit(FileSystem &fs, const string &file_path) {
 } // namespace
 
 optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
+	static constexpr const char *MEMORY_LIMIT_IN_BYTES = "/sys/fs/cgroup/memory%s/memory.limit_in_bytes";
+	static constexpr const char *MEMORY_MAX = "/sys/fs/cgroup%s/memory.max";
+
 	optional_idx root_entry;
 	optional_idx memory_entry;
 
@@ -199,18 +202,33 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 		}
 	}
 
+	// TODO: we currently fall back to the root directory, because in virtual environments
+	// the cgroups are often mapped to the root directory.
+	// To properly handle this, we should parse and use the mapping in `/proc/self/mountinfo`
 	if (memory_entry.IsValid()) {
 		auto &entry = cgroup_entries[memory_entry.GetIndex()];
-		auto path = StringUtil::Format("/sys/fs/cgroup/memory%s/memory.limit_in_bytes", entry.cgroup_path);
+		auto path = StringUtil::Format(MEMORY_LIMIT_IN_BYTES, entry.cgroup_path);
 		auto memory_limit = ReadMemoryLimit(fs, path.c_str());
+		if (memory_limit.IsValid()) {
+			return memory_limit;
+		}
+		//! try falling back to the root directory
+		path = StringUtil::Format(MEMORY_LIMIT_IN_BYTES, "");
+		memory_limit = ReadMemoryLimit(fs, path.c_str());
 		if (memory_limit.IsValid()) {
 			return memory_limit;
 		}
 	}
 	if (root_entry.IsValid()) {
 		auto &entry = cgroup_entries[root_entry.GetIndex()];
-		auto path = StringUtil::Format("/sys/fs/cgroup%s/memory.max", entry.cgroup_path);
+		auto path = StringUtil::Format(MEMORY_MAX, entry.cgroup_path);
 		auto memory_limit = ReadMemoryLimit(fs, path.c_str());
+		if (memory_limit.IsValid()) {
+			return memory_limit;
+		}
+		//! try falling back to the root directory
+		path = StringUtil::Format(MEMORY_MAX, "");
+		memory_limit = ReadMemoryLimit(fs, path.c_str());
 		if (memory_limit.IsValid()) {
 			return memory_limit;
 		}
@@ -238,16 +256,29 @@ idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 		}
 	}
 
+	// TODO: we currently fall back to the root directory, because in virtual environments
+	// the cgroups are often mapped to the root directory.
+	// To properly handle this, we should parse and use the mapping in `/proc/self/mountinfo`
 	if (cpu_entry.IsValid()) {
 		auto &entry = cgroup_entries[cpu_entry.GetIndex()];
-		auto res = GetCPUCountV1(entry, fs);
+		auto res = GetCPUCountV1(entry.cgroup_path, fs);
+		if (res.IsValid()) {
+			return res.GetIndex();
+		}
+		//! try falling back to the root directory
+		res = GetCPUCountV1("", fs);
 		if (res.IsValid()) {
 			return res.GetIndex();
 		}
 	}
 	if (root_entry.IsValid()) {
 		auto &entry = cgroup_entries[root_entry.GetIndex()];
-		auto res = GetCPUCountV2(entry, fs);
+		auto res = GetCPUCountV2(entry.cgroup_path, fs);
+		if (res.IsValid()) {
+			return res.GetIndex();
+		}
+		//! try falling back to the root directory
+		res = GetCPUCountV2("", fs);
 		if (res.IsValid()) {
 			return res.GetIndex();
 		}
