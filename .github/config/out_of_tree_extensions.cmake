@@ -38,6 +38,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
             GIT_TAG b3050f35c6e99fa35465230493eeab14a78a0409
+            APPLY_PATCHES
             )
 endif()
 
