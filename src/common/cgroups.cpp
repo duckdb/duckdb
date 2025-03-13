@@ -172,10 +172,11 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 	auto cgroup_entries = ParseGroupEntries(fs);
 	for (idx_t i = 0; i < cgroup_entries.size(); i++) {
 		auto &entry = cgroup_entries[i];
+		Printer::PrintF("HierarchyId: %d | ControllerList: %s | CGroupPath: %s", entry.hierarchy_id,
+		                StringUtil::Join(entry.controller_list, ", "), entry.cgroup_path);
 		auto &controller_list = entry.controller_list;
-		if (controller_list.empty()) {
+		if (entry.hierarchy_id == 0 && controller_list.empty()) {
 			root_entry = i;
-			D_ASSERT(entry.hierarchy_id == 0);
 			continue;
 		}
 		for (auto &controller : controller_list) {
