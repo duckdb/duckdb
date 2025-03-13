@@ -220,7 +220,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		}
 		bind_data = table_function.bind(context, bind_input, return_types, return_names);
 
-		if (table_function.ordinality_data.ordinality_request == ordinality_request::REQUESTED &&
+		if (table_function.ordinality_data.ordinality_request == ordinality_request_t::REQUESTED &&
 		    table_function.in_out_function) {
 			return_types.emplace_back(LogicalType::BIGINT);
 			return_names.emplace_back("ordinality");
@@ -264,7 +264,7 @@ unique_ptr<LogicalOperator> Binder::BindTableFunctionInternal(TableFunction &tab
 		}
 	}
 
-	if (table_function.ordinality_data.ordinality_request == ordinality_request::REQUESTED &&
+	if (table_function.ordinality_data.ordinality_request == ordinality_request_t::REQUESTED &&
 	    !table_function.in_out_function) {
 		auto window_index = GenerateTableIndex();
 		auto window = make_uniq<duckdb::LogicalWindow>(window_index);

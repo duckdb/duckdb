@@ -100,7 +100,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		ConstantVector::Reference(chunk.data[target_idx], input.data[source_idx], state.row_index - 1, 1);
 	}
 	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
-	if (function.ordinality_data.ordinality_request == ordinality_request::REQUESTED) {
+	if (function.ordinality_data.ordinality_request == ordinality_request_t::REQUESTED) {
 		function.ordinality_data.SetOrdinality(chunk, gstate.ordinality_current_idx, gstate.reset_ordinality);
 	}
 	if (result == OperatorResultType::FINISHED) {

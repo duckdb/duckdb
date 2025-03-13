@@ -10,11 +10,11 @@
 
 namespace duckdb {
 
-enum class ordinality_request : uint32_t { NOT_REQUESTED = 0, REQUESTED = 1 };
+enum class ordinality_request_t : uint32_t { NOT_REQUESTED = 0, REQUESTED = 1 };
 
 struct ordinality_data_t {
 
-	ordinality_request ordinality_request = ordinality_request::NOT_REQUESTED;
+	ordinality_request_t ordinality_request = ordinality_request_t::NOT_REQUESTED;
 	idx_t column_id;
 
 	void SetOrdinality(DataChunk &chunk, idx_t &ordinality_current_idx, bool &reset) const {
