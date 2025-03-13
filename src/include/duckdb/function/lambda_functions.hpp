@@ -35,13 +35,13 @@ public:
 public:
 	unique_ptr<FunctionData> Copy() const override {
 		auto lambda_expr_copy = lambda_expr ? lambda_expr->Copy() : nullptr;
-		return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr_copy), has_index);
+		return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr_copy), has_index, has_initial);
 	}
 
 	bool Equals(const FunctionData &other_p) const override {
 		auto &other = other_p.Cast<ListLambdaBindData>();
 		return Expression::Equals(lambda_expr, other.lambda_expr) && return_type == other.return_type &&
-		       has_index == other.has_index;
+		       has_index == other.has_index && has_initial == other.has_initial;
 	}
 
 	//! Serializes a lambda function's bind data
