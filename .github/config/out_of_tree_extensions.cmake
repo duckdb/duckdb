@@ -57,6 +57,7 @@ if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT ${WASM_ENABLED})
     duckdb_extension_load(delta
             GIT_URL https://github.com/duckdb/duckdb-delta
             GIT_TAG 6d626173e9efa6615c25eb08d979d1372100d5db
+            APPLY_PATCHES
     )
 endif()
 
@@ -101,6 +102,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
             GIT_TAG 8461ed8b6f726564934e9c831cdc88d431e3148f
+            APPLY_PATCHES
             )
 endif()
 
@@ -129,6 +131,7 @@ duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlite
         GIT_TAG 96e451c043afa40ee39b7581009ba0c72a523a12
+        APPLY_PATCHES
         )
 
 duckdb_extension_load(sqlsmith
