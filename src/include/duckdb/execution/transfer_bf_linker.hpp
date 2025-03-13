@@ -9,11 +9,7 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/operator/logical_use_bf.hpp"
 #include "duckdb/planner/operator/logical_create_bf.hpp"
-#include "operator/filter/physical_use_bf.hpp"
-#include "operator/helper/physical_execute.hpp"
-#include "operator/join/physical_delim_join.hpp"
 
 namespace duckdb {
 
@@ -24,16 +20,7 @@ public:
 	TransferBFLinker() : state(State::COLLECT_BF_CREATORS) {
 	}
 
-	void RemoveUselessOperators(LogicalOperator &op) {
-		state = State::COLLECT_BF_CREATORS;
-		VisitOperator(op);
-
-		state = State::LINK_BF_USERS;
-		VisitOperator(op);
-
-		state = State::CLEAN_USELESS_OPERATORS;
-		VisitOperator(op);
-	}
+	void RemoveUselessOperators(LogicalOperator &op);
 
 protected:
 	void VisitOperator(LogicalOperator &op);

@@ -1,11 +1,19 @@
 #include "duckdb/execution/transfer_bf_linker.hpp"
 
-#include <duckdb/execution/operator/filter/physical_use_bf.hpp>
-#include <duckdb/execution/operator/join/physical_delim_join.hpp>
-#include <duckdb/execution/operator/scan/physical_empty_result.hpp>
-#include <duckdb/execution/operator/aggregate/physical_hash_aggregate.hpp>
+#include "duckdb/planner/operator/logical_empty_result.hpp"
 
 namespace duckdb {
+
+void TransferBFLinker::RemoveUselessOperators(LogicalOperator &op) {
+	state = State::COLLECT_BF_CREATORS;
+	VisitOperator(op);
+
+	state = State::LINK_BF_USERS;
+	VisitOperator(op);
+
+	state = State::CLEAN_USELESS_OPERATORS;
+	VisitOperator(op);
+}
 
 void TransferBFLinker::VisitOperator(LogicalOperator &op) {
 	switch (state) {
@@ -42,7 +50,8 @@ void TransferBFLinker::VisitOperator(LogicalOperator &op) {
 				if (child->type == LogicalOperatorType::LOGICAL_USE_BF) {
 					auto &user = child->Cast<LogicalUseBF>();
 					if (user.related_create_bf == nullptr) {
-						child = make_uniq<LogicalEmptyResult>(std::move(child));
+						auto moved_child = std::move(child); // Avoid use-after-move
+						child = make_uniq<LogicalEmptyResult>(std::move(moved_child));
 						break;
 					}
 				}
