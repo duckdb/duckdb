@@ -3044,6 +3044,10 @@ todo...* @param vector The vector which is to become a dictionary
 */
 DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
 
+/*!
+Copies the value from `value` to `vector`.*/
+DUCKDB_C_API void duckdb_assign_constant_vector(duckdb_vector vector, duckdb_value value);
+
 //===--------------------------------------------------------------------===//
 // Selection Vector Interface
 //===--------------------------------------------------------------------===//

@@ -226,3 +226,9 @@ void duckdb_slice_vector(duckdb_vector dict, duckdb_selection_vector selection, 
 	auto dselection = reinterpret_cast<duckdb::SelectionVector *>(selection);
 	ddict->Slice(*dselection, len);
 }
+
+void duckdb_assign_constant_vector(duckdb_vector vector, duckdb_value value) {
+	auto dvector = reinterpret_cast<duckdb::Vector *>(vector);
+	auto dvalue = reinterpret_cast<duckdb::Value *>(value);
+	dvector->Reference(*dvalue);
+}
