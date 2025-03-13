@@ -5,7 +5,7 @@
 
 namespace duckdb {
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUseBF &op) {
-	auto plan = CreatePlan(*op.children[0]);  // Generate child plan
+	auto plan = CreatePlan(*op.children[0]); // Generate child plan
 	auto create_bf_op = CreatePlanFromRelated(*op.related_create_bf);
 	auto &bf_plan = op.bf_to_use_plan;
 
@@ -14,7 +14,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUseBF &op)
 		if (bf->column_bindings_applied_ == bf_plan->apply) {
 			bf->BoundColsApplied = bf_plan->bound_cols_apply;
 			target_bf = bf;
-			break;  // Found the target, exit loop
+			break; // Found the target, exit loop
 		}
 	}
 

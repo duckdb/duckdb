@@ -1,6 +1,7 @@
 #include "duckdb/execution/transfer_bf_linker.hpp"
 
 #include "duckdb/planner/operator/logical_empty_result.hpp"
+#include "duckdb/planner/operator/logical_use_bf.hpp"
 
 namespace duckdb {
 
