@@ -52,7 +52,7 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 		Printer::PrintF("cgroup file bytes read: %d | buffer_size: %d", bytes_read, buffer_size);
 	}
 	buffer[bytes_read] = '\0';
-	auto cgroup_file_content = string(buffer);
+	auto cgroup_file_content = string(buffer.get());
 
 	Printer::PrintF("cgroup_file_content size: %d", cgroup_file_content.size());
 	Printer::PrintF("cgroup_file_content:\n%s", cgroup_file_content);
