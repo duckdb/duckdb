@@ -9,7 +9,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUseBF &op)
 	auto create_bf_op = CreatePlanFromRelated(*op.related_create_bf);
 	auto &bf_plan = op.bf_to_use_plan;
 
-	shared_ptr<BlockedBloomFilter> target_bf;
+	shared_ptr<BloomFilter> target_bf;
 	for (auto &bf : create_bf_op->bf_to_create) {
 		if (bf->column_bindings_applied_ == bf_plan->apply) {
 			bf->BoundColsApplied = bf_plan->bound_cols_apply;

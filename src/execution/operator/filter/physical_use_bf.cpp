@@ -1,57 +1,37 @@
-#include <utility>
-
 #include "duckdb/execution/operator/filter/physical_use_bf.hpp"
 
 #include "duckdb/parallel/meta_pipeline.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+
+#include <utility>
 
 namespace duckdb {
-namespace {
-void BloomFilterExecute(vector<Vector> &result, const shared_ptr<BlockedBloomFilter> &bloom_filter,
-                        SelectionVector &sel, idx_t &approved_tuple_count, idx_t row_num) {
-	if (!bloom_filter->finalized_) {
-		approved_tuple_count = 0;
-		return;
-	}
-
-	// Compute hash values
-	Vector hashes(LogicalType::HASH);
-	VectorOperations::Hash(result[bloom_filter->BoundColsApplied[0]], hashes, row_num);
-	for (size_t i = 1; i < bloom_filter->BoundColsApplied.size(); i++) {
-		VectorOperations::CombineHash(hashes, result[bloom_filter->BoundColsApplied[i]], row_num);
-	}
-	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		hashes.Flatten(row_num);
-	}
-
-	// Perform Bloom filter lookup
-	idx_t result_count = 0;
-	const hash_t *hash_data = reinterpret_cast<const hash_t *>(hashes.GetData());
-	for (idx_t i = 0; i < row_num; i++) {
-		if (bloom_filter->Find(hash_data[i])) {
-			sel.set_index(result_count++, i);
-		}
-	}
-
-	approved_tuple_count = result_count;
-}
-} // namespace
-
-PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, shared_ptr<BlockedBloomFilter> bf,
+PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, shared_ptr<BloomFilter> bf,
                              PhysicalCreateBF *related_create_bfs, idx_t estimated_cardinality)
     : CachingPhysicalOperator(PhysicalOperatorType::USE_BF, std::move(types), estimated_cardinality),
       bf_to_use(std::move(bf)), related_creator(related_create_bfs) {
 }
 
+class UseBFState : public CachingOperatorState {
+public:
+	explicit UseBFState() : sel_vector(STANDARD_VECTOR_SIZE), lookup_results(STANDARD_VECTOR_SIZE) {
+	}
+
+	SelectionVector sel_vector;
+	vector<uint64_t> lookup_results;
+
+public:
+	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
+		context.thread.profiler.Flush(op);
+	}
+};
+
 unique_ptr<OperatorState> PhysicalUseBF::GetOperatorState(ExecutionContext &context) const {
-	return make_uniq<CachingOperatorState>();
+	return make_uniq<UseBFState>();
 }
 
 InsertionOrderPreservingMap<string> PhysicalUseBF::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-
-	// result["BF Number"] = std::to_string(bf_to_use.size());
-	// result["Hash Column Number"] = std::to_string(bf_to_use[0]->BoundColsApplied.size());
-	// string bfs = "0x" + std::to_string(reinterpret_cast<size_t>(related_creator)) + "\n";
 	result["BF Creators"] = "0x" + std::to_string(reinterpret_cast<size_t>(related_creator)) + "\n";
 	return result;
 }
@@ -67,13 +47,27 @@ void PhysicalUseBF::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 
 OperatorResultType PhysicalUseBF::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                   GlobalOperatorState &gstate, OperatorState &state_p) const {
-	idx_t row_num = input.size();
-	idx_t result_count = input.size();
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
+	auto &state = state_p.Cast<UseBFState>();
 
-	BloomFilterExecute(input.data, bf_to_use, sel, result_count, row_num);
+	// This operator has no BloomFilter to use
+	if (!bf_to_use || !bf_to_use->finalized_) {
+		chunk.Reference(input);
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
 
-	if (result_count == row_num) {
+	auto count = input.size();
+	auto &results = state.lookup_results;
+	bf_to_use->Lookup(input, results);
+
+	// 2. Fill results
+	idx_t result_count = 0;
+	auto &sel = state.sel_vector;
+	for (size_t i = 0; i < count; i++) {
+		if (results[i]) {
+			sel.set_index(result_count++, i);
+		}
+	}
+	if (result_count == count) {
 		// nothing was filtered: skip adding any selection vectors
 		chunk.Reference(input);
 	} else {

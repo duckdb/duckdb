@@ -9,10 +9,10 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::USE_BF;
 
 public:
-	PhysicalUseBF(vector<LogicalType> types, shared_ptr<BlockedBloomFilter> bf, PhysicalCreateBF *related_create_bfs,
+	PhysicalUseBF(vector<LogicalType> types, shared_ptr<BloomFilter> bf, PhysicalCreateBF *related_create_bfs,
 	              idx_t estimated_cardinality);
 
-	shared_ptr<BlockedBloomFilter> bf_to_use;
+	shared_ptr<BloomFilter> bf_to_use;
 	PhysicalCreateBF *related_creator = nullptr;
 
 public:

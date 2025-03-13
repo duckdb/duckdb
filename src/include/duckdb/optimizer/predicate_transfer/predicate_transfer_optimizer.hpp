@@ -5,7 +5,7 @@
 #include "duckdb/planner/operator/logical_use_bf.hpp"
 
 namespace duckdb {
-using BloomFilters = vector<shared_ptr<BlockedBloomFilter>>;
+using BloomFilters = vector<shared_ptr<BloomFilter>>;
 
 class PredicateTransferOptimizer {
 public:

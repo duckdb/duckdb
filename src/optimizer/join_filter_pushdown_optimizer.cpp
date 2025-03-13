@@ -35,6 +35,8 @@ void JoinFilterPushdownOptimizer::GetPushdownFilterTargets(LogicalOperator &op,
                                                            vector<PushdownFilterTarget> &targets) {
 	auto &probe_child = op;
 	switch (probe_child.type) {
+	case LogicalOperatorType::LOGICAL_USE_BF:
+	case LogicalOperatorType::LOGICAL_CREATE_BF:
 	case LogicalOperatorType::LOGICAL_LIMIT:
 	case LogicalOperatorType::LOGICAL_FILTER:
 	case LogicalOperatorType::LOGICAL_ORDER_BY:

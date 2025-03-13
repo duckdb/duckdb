@@ -20,8 +20,8 @@ PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<share
 	}
 }
 
-shared_ptr<BlockedBloomFilter> PhysicalCreateBF::BuildBloomFilter(BloomFilterPlan &bf_plan) {
-	auto BF = make_shared_ptr<BlockedBloomFilter>();
+shared_ptr<BloomFilter> PhysicalCreateBF::BuildBloomFilter(BloomFilterPlan &bf_plan) {
+	auto BF = make_shared_ptr<BloomFilter>();
 	for (auto &apply_col : bf_plan.apply) {
 		BF->column_bindings_applied_.emplace_back(apply_col);
 	}
@@ -85,7 +85,6 @@ SinkCombineResultType PhysicalCreateBF::Combine(ExecutionContext &context, Opera
 //===--------------------------------------------------------------------===//
 //! If we have only one thread, always finalize single-threaded.
 static bool FinalizeSingleThreaded(const CreateBFGlobalSinkState &sink) {
-
 	// if only one thread, finalize single-threaded
 	const auto num_threads = NumericCast<idx_t>(sink.num_threads);
 	if (num_threads == 1) {
@@ -118,7 +117,7 @@ public:
 		for (idx_t i = chunk_idx_from; i < chunk_idx_to; i++) {
 			sink.data_collection->FetchChunk(i, chunk);
 			for (auto &bf : sink.op.bf_to_create) {
-				bf->InsertHashedData(chunk, bf->BoundColsBuilt);
+				bf->Insert(chunk);
 			}
 		}
 		event->FinishTask();
