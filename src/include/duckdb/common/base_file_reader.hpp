@@ -14,6 +14,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
