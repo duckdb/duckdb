@@ -213,9 +213,9 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 }
 
 static void SanitizeError(string &value) {
-	 std::vector<char> char_array(value.begin(), value.end());
-	 char_array.push_back('\0'); // Null-terminate the character array
-	 Utf8Proc::MakeValid(&char_array[0], char_array.size());
+	std::vector<char> char_array(value.begin(), value.end());
+	char_array.push_back('\0'); // Null-terminate the character array
+	Utf8Proc::MakeValid(&char_array[0], char_array.size());
 	value = {char_array.begin(), char_array.end() - 1};
 }
 
@@ -1026,28 +1026,24 @@ StringValueResult &StringValueScanner::ParseChunk() {
 }
 
 void GenerateError(StringValueResult &result, CSVIterator &iterator, idx_t line_error, idx_t lines_read, idx_t col_idx,
-                   const LogicalType &type, DataChunk &parse_chunk, Vector &parse_vector, Vector &result_vector) {
-	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read - parse_chunk.size() + line_error);
-	string borked_line;
-	idx_t byte_position = 0;
-	if (result.line_positions_per_row.find(line_error) != result.line_positions_per_row.end()) {
-		// We can't get the result of later borked line casts.
-		bool first_nl;
-		borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(first_nl, result.buffer_handles,
-		                                                                               result.PrintErrorLine());
-		byte_position = result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl);
-	}
+                   const LogicalType &type, Vector &parse_vector, Vector &result_vector, const vector<string> &names) {
+	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read + line_error);
+	bool first_nl;
+	auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(first_nl, result.buffer_handles,
+	                                                                                    result.PrintErrorLine());
 	std::ostringstream error;
 	error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'" << type.ToString()
 	      << "\'";
 	string error_msg = error.str();
 	SanitizeError(error_msg);
-	auto csv_error = CSVError::CastError(result.state_machine.options, result.names[col_idx], error_msg, col_idx,
-	                                     borked_line, lines_per_batch, byte_position, optional_idx::Invalid(),
-	                                     result_vector.GetType().id(), result.path);
+	auto csv_error = CSVError::CastError(
+	    result.state_machine.options, names[col_idx], error_msg, col_idx, borked_line, lines_per_batch,
+	    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size, first_nl),
+	    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 	result.error_handler.Error(csv_error);
 }
 void StringValueScanner::Flush(DataChunk &insert_chunk) {
+	insert_chunk.Reset();
 	auto &process_result = ParseChunk();
 	// First Get Parsed Chunk
 	auto &parse_chunk = process_result.ToChunk();
@@ -1110,8 +1106,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					}
 				}
 				if (!state_machine->options.IgnoreErrors()) {
-					GenerateError(result, iterator, line_error, lines_read, col_idx, type, parse_chunk, parse_vector,
-					              result_vector);
+					GenerateError(result, iterator, line_error, lines_read, col_idx, type, parse_vector, result_vector,
+					              names);
 				}
 			}
 			result.borked_rows.insert(line_error++);
@@ -1126,25 +1122,26 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						row.push_back(parse_chunk.GetValue(col, line_error));
 					}
 					if (!state_machine->options.IgnoreErrors()) {
-						GenerateError(result, iterator, line_error, lines_read, col_idx, type, parse_chunk,
-						              parse_vector, result_vector);
+						GenerateError(result, iterator, line_error, lines_read, col_idx, type, parse_vector,
+						              result_vector, names);
 					}
 				}
 			}
 		}
 	}
-	// if (!result.borked_rows.empty()) {
-	// 	// We must remove the borked lines from our chunk
-	// 	SelectionVector successful_rows(parse_chunk.size());
-	// 	idx_t sel_idx = 0;
-	// 	for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-	// 		if (result.borked_rows.find(row_idx) == result.borked_rows.end()) {
-	// 			successful_rows.set_index(sel_idx++, row_idx);
-	// 		}
-	// 	}
-	// 	// Now we slice the result
-	// 	insert_chunk.Slice(successful_rows, sel_idx);
-	// }
+	if (!result.borked_rows.empty()) {
+		// We must remove the borked lines from our chunk
+		SelectionVector successful_rows(insert_chunk.size() - result.borked_rows.size());
+		idx_t sel_idx = 0;
+		for (idx_t row_idx = 0; row_idx < insert_chunk.size(); row_idx++) {
+			if (result.borked_rows.find(row_idx) == result.borked_rows.end()) {
+				successful_rows.set_index(sel_idx++, row_idx);
+			}
+		}
+		// Now we slice the result
+		insert_chunk.Slice(successful_rows, sel_idx);
+		result.borked_rows.clear();
+	}
 }
 
 void StringValueScanner::Initialize() {
