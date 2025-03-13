@@ -193,7 +193,7 @@ public:
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
 	                                      const MultiFileReaderData &reader_data, DataChunk &input_chunk,
-	                                      DataChunk &output_chunk, const vector<idx_t> &projection_ids,
+	                                      DataChunk &output_chunk, ExpressionExecutor &executor,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Fetch the partition data for the current chunk

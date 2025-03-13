@@ -619,18 +619,8 @@ void MultiFileReader::CreateFilterMap(const vector<ColumnIndex> &global_column_i
 
 void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
                                     const MultiFileReaderData &reader_data, DataChunk &input_chunk,
-                                    DataChunk &output_chunk, const vector<idx_t> &projection_ids,
+                                    DataChunk &output_chunk, ExpressionExecutor &executor,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
-	ExpressionExecutor executor(context);
-	if (!projection_ids.empty()) {
-		for (auto &id : projection_ids) {
-			executor.AddExpression(*reader_data.expressions[id]);
-		}
-	} else {
-		for (auto &expr : reader_data.expressions) {
-			executor.AddExpression(*expr);
-		}
-	}
 	executor.Execute(input_chunk, output_chunk);
 	output_chunk.SetCardinality(input_chunk.size());
 	output_chunk.Verify();

@@ -19,6 +19,11 @@ namespace duckdb {
 enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
 
 struct MultiFileLocalState : public LocalTableFunctionState {
+public:
+	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
+	}
+
+public:
 	shared_ptr<BaseFileReader> reader;
 	bool is_parallel;
 	idx_t batch_index;
@@ -26,6 +31,8 @@ struct MultiFileLocalState : public LocalTableFunctionState {
 	unique_ptr<LocalTableFunctionState> local_state;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
 	DataChunk scan_chunk;
+	//! The executor to transform scan_chunk into the final result with FinalizeChunk
+	ExpressionExecutor executor;
 };
 
 struct MultiFileFileReaderData {
@@ -422,7 +429,7 @@ public:
 		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 		auto &gstate = gstate_p->Cast<MultiFileGlobalState>();
 
-		auto result = make_uniq<MultiFileLocalState>();
+		auto result = make_uniq<MultiFileLocalState>(context.client);
 		result->is_parallel = true;
 		result->batch_index = 0;
 		result->local_state = OP::InitializeLocalState(context, *gstate.global_state);
@@ -543,7 +550,8 @@ public:
 		return partition_data;
 	}
 
-	static void InitializeScanChunk(ClientContext &context, MultiFileLocalState &lstate) {
+	static void InitializeFileScanState(ClientContext &context, MultiFileLocalState &lstate,
+	                                    vector<idx_t> &projection_ids) {
 		auto &reader_data = lstate.reader->reader_data;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
 		vector<LogicalType> intermediate_chunk_types;
@@ -562,6 +570,18 @@ public:
 		}
 		lstate.scan_chunk.Destroy();
 		lstate.scan_chunk.Initialize(context, intermediate_chunk_types);
+
+		auto &executor = lstate.executor;
+		executor.ClearExpressions();
+		if (!projection_ids.empty()) {
+			for (auto &id : projection_ids) {
+				executor.AddExpression(*reader_data.expressions[id]);
+			}
+		} else {
+			for (auto &expr : reader_data.expressions) {
+				executor.AddExpression(*expr);
+			}
+		}
 	}
 
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
@@ -571,7 +591,7 @@ public:
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
-		InitializeScanChunk(context, data);
+		InitializeFileScanState(context, data, gstate.projection_ids);
 
 		do {
 			idx_t previous_file_index = data.file_index;
@@ -582,7 +602,7 @@ public:
 			output.SetCardinality(scan_chunk.size());
 			if (scan_chunk.size() > 0) {
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           scan_chunk, output, gstate.projection_ids,
+				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
 				return;
 			}
@@ -592,7 +612,7 @@ public:
 			}
 			if (data.file_index != previous_file_index) {
 				//! The schema could be different, reinitialize the chunk with the new schema
-				InitializeScanChunk(context, data);
+				InitializeFileScanState(context, data, gstate.projection_ids);
 			}
 		} while (true);
 	}
