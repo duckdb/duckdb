@@ -1,6 +1,6 @@
-#include <utility>
-
 #include "duckdb/planner/operator/logical_create_bf.hpp"
+
+#include <utility>
 
 namespace duckdb {
 

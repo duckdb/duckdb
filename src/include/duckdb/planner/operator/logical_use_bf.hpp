@@ -1,9 +1,11 @@
 #pragma once
 
 #include "duckdb/planner/logical_operator.hpp"
-#include "duckdb/planner/operator/logical_create_bf.hpp"
+#include "duckdb/optimizer/predicate_transfer/dag.hpp"
 
 namespace duckdb {
+class LogicalCreateBF;
+
 class LogicalUseBF : public LogicalOperator {
 public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_USE_BF;

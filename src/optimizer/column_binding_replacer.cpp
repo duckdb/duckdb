@@ -50,7 +50,6 @@ void ColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
 				}
 			}
 		}
-
 		VisitOperatorExpressions(op);
 		return;
 	}

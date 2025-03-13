@@ -1,4 +1,5 @@
 #include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
+
 #include "duckdb/parallel/base_pipeline_event.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
@@ -82,8 +83,6 @@ SinkCombineResultType PhysicalCreateBF::Combine(ExecutionContext &context, Opera
 //===--------------------------------------------------------------------===//
 // Finalize
 //===--------------------------------------------------------------------===//
-static constexpr const idx_t PARALLEL_CONSTRUCT_THRESHOLD = 1048576;
-
 //! If we have only one thread, always finalize single-threaded.
 static bool FinalizeSingleThreaded(const CreateBFGlobalSinkState &sink) {
 
@@ -98,7 +97,7 @@ static bool FinalizeSingleThreaded(const CreateBFGlobalSinkState &sink) {
 		return false;
 	}
 
-	if (sink.data_collection->Count() < PARALLEL_CONSTRUCT_THRESHOLD) {
+	if (sink.data_collection->Count() < 1048576) {
 		return true;
 	}
 
