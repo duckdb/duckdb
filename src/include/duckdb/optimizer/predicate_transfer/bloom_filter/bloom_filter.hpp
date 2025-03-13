@@ -17,7 +17,7 @@ namespace duckdb {
 inline size_t BloomFilterLookup(size_t num, size_t num_blocks_log, uint64_t *__restrict__ key,
                                 uint64_t *__restrict__ bf, uint64_t *__restrict__ out) {
 	for (size_t i = 0; i < num; i++) {
-		uint32_t block = (key[i] >> (64 - num_blocks_log)) & ((1 << num_blocks_log) - 1);
+		uint64_t block = (key[i] >> (64 - num_blocks_log)) & ((1 << num_blocks_log) - 1);
 		uint64_t mask = (1ULL << ((key[i] >> 0) & 63)) | (1ULL << ((key[i] >> 6) & 63)) |
 		                (1ULL << ((key[i] >> 12) & 63)) | (1ULL << ((key[i] >> 18) & 63)) |
 		                (1ULL << ((key[i] >> 24) & 63)) | (1ULL << ((key[i] >> 30) & 63)) |

@@ -55,7 +55,7 @@ void BloomFilter::Initialize(ClientContext &context_p, size_t est_num_rows) {
 }
 
 size_t BloomFilter::Lookup(DataChunk &chunk, vector<uint64_t> &results) {
-	int count = static_cast<int>(chunk.size());
+	size_t count = chunk.size();
 	Vector hashes = HashColumns(chunk, BoundColsApplied);
 	BloomFilterLookup(count, num_blocks_log, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks_, results.data());
 	return count;
