@@ -72,9 +72,9 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 			it = std::next(next);
 		}
 
-		if (parts.size() != 3) {
+		if (parts.size() < 3) {
 			//! cgroup entries are in this format:
-			// hierarchy-ID:controller-list:cgroup-path
+			// hierarchy-ID:controller-list:cgroup-path[:additional_metadata]
 			break;
 		}
 		auto hierarchy_id = std::stoi(parts[0]);
