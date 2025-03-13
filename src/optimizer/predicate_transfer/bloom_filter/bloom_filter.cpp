@@ -41,7 +41,7 @@ static Vector HashColumns(DataChunk &chunk, vector<uint64_t> &cols) {
 }
 } // namespace
 
-void BloomFilter::Initialize(ClientContext &context_p, size_t est_num_rows) {
+void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows) {
 	context = &context_p;
 	buffer_manager = &BufferManager::GetBufferManager(*context);
 

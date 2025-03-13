@@ -42,7 +42,7 @@ inline void BloomFilterInsert(size_t num, size_t num_blocks_log, uint64_t *__res
 class BloomFilter {
 public:
 	BloomFilter() = default;
-	void Initialize(ClientContext &context_p, size_t est_num_rows);
+	void Initialize(ClientContext &context_p, uint32_t est_num_rows);
 
 	ClientContext *context;
 	BufferManager *buffer_manager;
