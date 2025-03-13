@@ -50,8 +50,18 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 	Printer::PrintF("cgroup_file_content:\n%s", cgroup_file_content);
 	auto lines = StringUtil::Split(cgroup_file_content, "\n");
 	for (auto &line : lines) {
-		auto parts = StringUtil::Split(line, ":");
+		vector<string> parts;
+		auto it = line.begin();
+		while (it != line.end()) {
+			auto next = std::find_if(it, line.end(), [](char c) { return c == ':'; });
+			parts.emplace_back(it, next);
+			if (next == line.end())
+				break;
+			it = std::next(next);
+		}
+
 		if (parts.size() != 3) {
+			Printer::PrintF("Part count not correct, expected 3, found %d", parts.size());
 			//! cgroup entries are in this format:
 			// hierarchy-ID:controller-list:cgroup-path
 			break;
