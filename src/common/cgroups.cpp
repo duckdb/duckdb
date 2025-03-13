@@ -183,18 +183,17 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 	auto cgroup_entries = ParseGroupEntries(fs);
 	for (idx_t i = 0; i < cgroup_entries.size(); i++) {
 		auto &entry = cgroup_entries[i];
-		                StringUtil::Join(entry.controller_list, ", "), entry.controller_list.size(), entry.cgroup_path);
-		                auto &controller_list = entry.controller_list;
-		                if (entry.IsRoot()) {
-			                root_entry = i;
-			                continue;
-		                }
-		                for (auto &controller : controller_list) {
-			                if (controller == "memory") {
-				                memory_entry = i;
-				                break;
-			                }
-		                }
+		auto &controller_list = entry.controller_list;
+		if (entry.IsRoot()) {
+			root_entry = i;
+			continue;
+		}
+		for (auto &controller : controller_list) {
+			if (controller == "memory") {
+				memory_entry = i;
+				break;
+			}
+		}
 	}
 
 	if (memory_entry.IsValid()) {
