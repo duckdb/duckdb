@@ -242,6 +242,7 @@ typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } du
 //! DuckDB's index type.
 typedef uint64_t idx_t;
 
+//! Type used for the selection vector
 typedef uint32_t sel_t;
 
 //! The callback that will be called to destroy data, e.g.,
