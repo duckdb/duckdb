@@ -50,6 +50,7 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 	Printer::PrintF("cgroup_file_content:\n%s", cgroup_file_content);
 	auto lines = StringUtil::Split(cgroup_file_content, "\n");
 	for (auto &line : lines) {
+		//! NOTE: this can not use StringUtil::Split, as it counts '::' as a single delimiter
 		vector<string> parts;
 		auto it = line.begin();
 		while (it != line.end()) {
@@ -61,7 +62,6 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 		}
 
 		if (parts.size() != 3) {
-			Printer::PrintF("Part count not correct, expected 3, found %d", parts.size());
 			//! cgroup entries are in this format:
 			// hierarchy-ID:controller-list:cgroup-path
 			break;
@@ -176,8 +176,8 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 	auto cgroup_entries = ParseGroupEntries(fs);
 	for (idx_t i = 0; i < cgroup_entries.size(); i++) {
 		auto &entry = cgroup_entries[i];
-		Printer::PrintF("HierarchyId: %d | ControllerList: %s | CGroupPath: %s", entry.hierarchy_id,
-		                StringUtil::Join(entry.controller_list, ", "), entry.cgroup_path);
+		Printer::PrintF("HierarchyId: %d | ControllerList: %s (Size %d) | CGroupPath: %s", entry.hierarchy_id,
+		                StringUtil::Join(entry.controller_list, ", "), entry.controller_list.size(), entry.cgroup_path);
 		auto &controller_list = entry.controller_list;
 		if (entry.hierarchy_id == 0 && controller_list.empty()) {
 			root_entry = i;
@@ -186,7 +186,7 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 		for (auto &controller : controller_list) {
 			if (controller == "memory") {
 				memory_entry = i;
-				continue;
+				break;
 			}
 		}
 	}
