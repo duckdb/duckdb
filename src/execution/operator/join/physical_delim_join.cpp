@@ -16,7 +16,7 @@ PhysicalDelimJoin::PhysicalDelimJoin(PhysicalOperatorType type, vector<LogicalTy
 vector<const_reference<PhysicalOperator>> PhysicalDelimJoin::GetChildren() const {
 	vector<const_reference<PhysicalOperator>> result;
 	for (auto &child : children) {
-		result.push_back(child);
+		result.push_back(child.get());
 	}
 	result.push_back(join);
 	result.push_back(distinct);
