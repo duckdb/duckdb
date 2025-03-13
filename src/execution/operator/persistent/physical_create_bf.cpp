@@ -188,7 +188,7 @@ SinkFinalizeType PhysicalCreateBF::Finalize(Pipeline &pipeline, Event &event, Cl
 
 	// initialize the bloom filter
 	for (auto &filter : bf_to_create) {
-		filter->Initialize(context, sink.data_collection->Count());
+		filter->Initialize(context, static_cast<uint32_t>(sink.data_collection->Count()));
 	}
 
 	sink.ScheduleFinalize(pipeline, event);
