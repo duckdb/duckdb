@@ -1,9 +1,0 @@
-blank_issues_enabled: false
-contact_links:
-  - name: Feature Request
-    # manual template until discussion templates are GA
-    url: https://github.com/duckdb/duckdb/discussions/new?category=ideas&title=Feature%20Request:%20...&labels=feature&body=Why%20do%20you%20want%20this%20feature%3F
-    about: Submit feature requests here
-  - name: Discussions
-    url: https://github.com/duckdb/duckdb/discussions
-    about: Please ask and answer general questions here.

@@ -1,9 +1,0 @@
-benchmark/csv/sniffer.benchmark
-benchmark/csv/read.benchmark
-benchmark/csv/small_csv.benchmark
-benchmark/csv/null_padding.benchmark
-benchmark/csv/projection_pushdown.benchmark
-benchmark/csv/1_byte_values.benchmark
-benchmark/csv/16_byte_values.benchmark
-benchmark/csv/multiple_small_files.benchmark
-benchmark/csv/time_type.benchmark
