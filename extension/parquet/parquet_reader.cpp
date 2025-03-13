@@ -389,7 +389,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InternalException("Root element of Parquet file must be a struct");
 	}
-
 	// add casts if required
 	auto &root_struct_reader = ret->Cast<StructColumnReader>();
 	for (auto &entry : reader_data.cast_map) {
@@ -875,7 +874,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 		auto global_index = reader_data.column_mapping[col_idx];
 		auto filter_entry = reader_data.filters->filters.find(global_index);
 
-		if (stats && filter_entry == reader_data.filters->filters.end()) {
+		if (stats && filter_entry != reader_data.filters->filters.end()) {
 			auto &filter = *filter_entry->second;
 
 			FilterPropagateResult prune_result;
