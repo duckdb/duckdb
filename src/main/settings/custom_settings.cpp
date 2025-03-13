@@ -332,7 +332,7 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	// parse the file content
 	unordered_map<string, string> json;
 	try {
-		json = StringUtil::ParseJSONMap(input.ToString());
+		json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
 	} catch (std::exception &ex) {
 		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make sure "
 		                  "all the keys and values start with a quote. ",
