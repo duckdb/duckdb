@@ -16,7 +16,7 @@ from requests.exceptions import RequestException
 # how many days to retain dev releases - all dev releases older than 5 days are deleted
 retain_days = 5
 duckdb_version_base = os.getenv('DUCKDB_BASE_VERSION', "")
-patterns = [re.compile(rf"{duckdb_version_base}.*\.dev\d+$")]
+patterns = [re.compile(rf"^{duckdb_version_base}.*\.dev\d+$")]
 actually_delete = True
 host = 'https://pypi.org/'
 
@@ -26,7 +26,7 @@ pypi_otp = os.getenv("PYPI_CLEANUP_OTP", "")
 if not duckdb_version_base:
     print(f'need duckdb version in DUCKDB_BASE_VERSION env variable')
     exit(1)
-if len(duckdb_version_base) < 3:
+if len(duckdb_version_base) < 3 or not duckdb_version_base.count(".") == 1:
     print(f'need duckdb version in format "major.minor" version in DUCKDB_BASE_VERSION env variable')
     exit(1)
 if pypi_username == "":
