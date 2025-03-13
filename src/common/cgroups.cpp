@@ -25,6 +25,17 @@ public:
 	}
 
 public:
+	bool IsRoot() const {
+		if (hierarchy_id != 0) {
+			return false;
+		}
+		if (controller_list.size() != 1) {
+			return false;
+		}
+		return controller_list[0].empty();
+	}
+
+public:
 	idx_t hierarchy_id;
 	vector<string> controller_list;
 	string cgroup_path;
@@ -179,7 +190,7 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 		Printer::PrintF("HierarchyId: %d | ControllerList: %s (Size %d) | CGroupPath: %s", entry.hierarchy_id,
 		                StringUtil::Join(entry.controller_list, ", "), entry.controller_list.size(), entry.cgroup_path);
 		auto &controller_list = entry.controller_list;
-		if (entry.hierarchy_id == 0 && controller_list.empty()) {
+		if (entry.IsRoot()) {
 			root_entry = i;
 			continue;
 		}
@@ -224,7 +235,7 @@ idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 	for (idx_t i = 0; i < cgroup_entries.size(); i++) {
 		auto &entry = cgroup_entries[i];
 		auto &controller_list = entry.controller_list;
-		if (entry.hierarchy_id == 0 && controller_list.empty()) {
+		if (entry.IsRoot()) {
 			root_entry = i;
 			continue;
 		}
