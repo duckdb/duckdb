@@ -6,30 +6,24 @@
 
 namespace duckdb {
 PhysicalCreateBF *PhysicalPlanGenerator::CreatePlanFromRelated(LogicalCreateBF &op) {
-	if (op.physical == nullptr) {
-		unique_ptr<PhysicalOperator> plan = CreatePlan(*op.children[0]);
-		PhysicalCreateBF *create_bf =
-		    new PhysicalCreateBF(plan->types, op.bf_to_create_plans, op.estimated_cardinality);
+	if (!op.physical) {
+		auto plan = CreatePlan(*op.children[0]);
+		auto create_bf = new PhysicalCreateBF(plan->types, op.bf_to_create_plans, op.estimated_cardinality);
 		create_bf->children.emplace_back(std::move(plan));
-		op.physical = create_bf;
-		return create_bf;
-	} else {
-		return op.physical;
+		op.physical = create_bf; // Store the pointer safely
 	}
+	return op.physical;
 }
 
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateBF &op) {
-	unique_ptr<PhysicalCreateBF> create_bf;
-	unique_ptr<PhysicalOperator> plan;
-	if (op.physical == nullptr) {
-		plan = CreatePlan(*op.children[0]);
-		create_bf = make_uniq<PhysicalCreateBF>(plan->types, op.bf_to_create_plans, op.estimated_cardinality);
-		op.physical = create_bf.get();
+	if (!op.physical) {
+		auto plan = CreatePlan(*op.children[0]);
+		auto create_bf = make_uniq<PhysicalCreateBF>(plan->types, op.bf_to_create_plans, op.estimated_cardinality);
+		op.physical = create_bf.get(); // Ensure safe raw pointer storage
 		create_bf->children.emplace_back(std::move(plan));
-	} else {
-		create_bf = unique_ptr<PhysicalCreateBF>(op.physical);
+		return std::move(create_bf); // Transfer ownership safely
 	}
-	plan = std::move(create_bf);
-	return plan;
+	return unique_ptr<PhysicalOperator>(op.physical); // Ensure correct ownership
 }
+
 } // namespace duckdb
