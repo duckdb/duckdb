@@ -48,10 +48,8 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 	} while (bytes_read >= DEFAULT_CGROUP_FILE_BUFFER_SIZE - 1);
 
 	Printer::PrintF("cgroup_file_content:\n%s", cgroup_file_content);
-	size_t pos = 0;
-	string line;
-	while ((pos = cgroup_file_content.find('\n')) != string::npos) {
-		line = cgroup_file_content.substr(0, pos);
+	auto lines = StringUtil::Split(cgroup_file_content, "\n");
+	for (auto &line : lines) {
 		auto parts = StringUtil::Split(line, ":");
 		if (parts.size() != 3) {
 			//! cgroup entries are in this format:
@@ -62,7 +60,6 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 		auto controller_list = StringUtil::Split(parts[1], ",");
 		auto cgroup_path = parts[2] == "/" ? "" : parts[2];
 		result.emplace_back(hierarchy_id, std::move(controller_list), cgroup_path);
-		cgroup_file_content.erase(0, pos + 1);
 	}
 	return result;
 }
