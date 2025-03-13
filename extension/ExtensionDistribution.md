@@ -1,11 +1,11 @@
 ## Extension served via URLs
 
 When performing `INSTALL name`, if the file is not present locally or bundled via static linking, it will be downloaded from the network.
-Extensions are served from URLs like: http://extensions.duckdb.org/v0.8.1/windows_arm64/name.duckdb_extension.gz
+Extensions are served from URLs like: https://extensions.duckdb.org/v0.8.1/windows_arm64/name.duckdb_extension.gz
 
 Unpacking this:
 ```
-http://extensions.duckdb.org/              The extension registry URL (can have subfolders)
+https://extensions.duckdb.org/              The extension registry URL (can have subfolders)
 v0.8.1/                                     The version identifier
 osx_arm64/                                  The platform this extension is compatible with
 name                                        The default name of a given extension
