@@ -1111,13 +1111,13 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					error_handler->Error(csv_error);
 				}
 			}
-			result.borked_rows.insert(line_error++);
+			// result.borked_rows.insert(line_error++);
 			D_ASSERT(state_machine->options.ignore_errors.GetValue());
 			// We are ignoring errors. We must continue but ignoring borked-rows
 			for (; line_error < parse_chunk.size(); line_error++) {
 				if (!inserted_column_data.validity.RowIsValid(line_error) &&
 				    parse_column_data.validity.RowIsValid(line_error)) {
-					result.borked_rows.insert(line_error);
+					// result.borked_rows.insert(line_error);
 					vector<Value> row;
 					for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 						row.push_back(parse_chunk.GetValue(col, line_error));
