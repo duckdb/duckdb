@@ -18,6 +18,7 @@
 #include "duckdb/main/connection.hpp"
 #include "duckdb/parser/parsed_data/create_copy_function_info.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/common/types/blob.hpp"
 #endif
 
 namespace duckdb {
@@ -378,10 +379,17 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 	auto &unique_names = column_names;
 	VerifyUniqueNames(unique_names);
 
-	vector<string> schema_path;
+	// construct the child schemas
 	for (idx_t i = 0; i < sql_types.size(); i++) {
-		column_writers.push_back(ColumnWriter::CreateWriterRecursive(
-		    context, file_meta_data.schema, *this, sql_types[i], unique_names[i], schema_path, &field_ids));
+		auto child_schema =
+		    ColumnWriter::FillParquetSchema(file_meta_data.schema, sql_types[i], unique_names[i], &field_ids);
+		column_schemas.push_back(std::move(child_schema));
+	}
+	// now construct the writers based on the schemas
+	for (auto &child_schema : column_schemas) {
+		vector<string> path_in_schema;
+		column_writers.push_back(
+		    ColumnWriter::CreateWriterRecursive(context, *this, file_meta_data.schema, child_schema, path_in_schema));
 	}
 }
 
@@ -521,6 +529,259 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 	FlushRowGroup(prepared_row_group);
 }
 
+struct ColumnStatsUnifier {
+	virtual ~ColumnStatsUnifier() = default;
+
+	string column_name;
+	string global_min;
+	string global_max;
+	idx_t null_count = 0;
+	bool all_min_max_set = true;
+	bool all_nulls_set = true;
+	bool min_is_set = false;
+	bool max_is_set = false;
+
+	virtual void UnifyMinMax(const string &new_min, const string &new_max) = 0;
+	virtual string StatsToString(const string &stats) = 0;
+};
+
+template <class T>
+struct BaseNumericStatsUnifier : public ColumnStatsUnifier {
+	void UnifyMinMax(const string &new_min, const string &new_max) override {
+		if (new_min.size() != sizeof(T) || new_max.size() != sizeof(T)) {
+			throw InternalException("Incorrect size for stats in UnifyMinMax");
+		}
+		if (!min_is_set) {
+			global_min = new_min;
+			min_is_set = true;
+		} else {
+			auto min_val = Load<T>(const_data_ptr_cast(new_min.data()));
+			auto global_min_val = Load<T>(const_data_ptr_cast(global_min.data()));
+			if (LessThan::Operation(min_val, global_min_val)) {
+				global_min = new_min;
+			}
+		}
+		if (!max_is_set) {
+			global_max = new_max;
+			max_is_set = true;
+		} else {
+			auto max_val = Load<T>(const_data_ptr_cast(new_max.data()));
+			auto global_max_val = Load<T>(const_data_ptr_cast(global_max.data()));
+			if (GreaterThan::Operation(max_val, global_max_val)) {
+				global_max = new_max;
+			}
+		}
+	}
+};
+
+template <class T>
+struct NumericStatsUnifier : public BaseNumericStatsUnifier<T> {
+	string StatsToString(const string &stats) override {
+		if (stats.empty()) {
+			return string();
+		}
+		return Value::CreateValue<T>(Load<T>(const_data_ptr_cast(stats.data()))).ToString();
+	}
+};
+
+template <class T>
+struct DecimalStatsUnifier : public NumericStatsUnifier<T> {
+	DecimalStatsUnifier(uint8_t width, uint8_t scale) : width(width), scale(scale) {
+	}
+
+	uint8_t width;
+	uint8_t scale;
+
+	string StatsToString(const string &stats) override {
+		if (stats.empty()) {
+			return string();
+		}
+		auto numeric_val = Load<T>(const_data_ptr_cast(stats.data()));
+		return Value::DECIMAL(numeric_val, width, scale).ToString();
+	}
+};
+
+struct BaseStringStatsUnifier : public ColumnStatsUnifier {
+	void UnifyMinMax(const string &new_min, const string &new_max) override {
+		if (!min_is_set) {
+			global_min = new_min;
+			min_is_set = true;
+		} else {
+			if (LessThan::Operation(string_t(new_min), string_t(global_min))) {
+				global_min = new_min;
+			}
+		}
+		if (!max_is_set) {
+			global_max = new_max;
+			max_is_set = true;
+		} else {
+			if (GreaterThan::Operation(string_t(new_max), string_t(global_max))) {
+				global_max = new_max;
+			}
+		}
+	}
+};
+
+struct StringStatsUnifier : public BaseStringStatsUnifier {
+	string StatsToString(const string &stats) override {
+		return stats;
+	}
+};
+
+struct BlobStatsUnifier : public BaseStringStatsUnifier {
+	string StatsToString(const string &stats) override {
+		// convert blobs to hexadecimal
+		auto data = const_data_ptr_cast(stats.c_str());
+		auto len = stats.size();
+		string result;
+		result.reserve(len * 2);
+		for (idx_t i = 0; i < len; i++) {
+			auto byte_a = data[i] >> 4;
+			auto byte_b = data[i] & 0x0F;
+			result += Blob::HEX_TABLE[byte_a];
+			result += Blob::HEX_TABLE[byte_b];
+		}
+		return result;
+	}
+};
+
+struct NullStatsUnifier : public ColumnStatsUnifier {
+	void UnifyMinMax(const string &new_min, const string &new_max) override {
+	}
+
+	string StatsToString(const string &stats) override {
+		return string();
+	}
+};
+
+unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::BOOLEAN:
+		return make_uniq<NullStatsUnifier>();
+	case LogicalTypeId::TINYINT:
+	case LogicalTypeId::SMALLINT:
+	case LogicalTypeId::INTEGER:
+	case LogicalTypeId::UTINYINT:
+	case LogicalTypeId::USMALLINT:
+		return make_uniq<NumericStatsUnifier<int32_t>>();
+	case LogicalTypeId::DATE:
+		return make_uniq<NumericStatsUnifier<date_t>>();
+	case LogicalTypeId::BIGINT:
+		return make_uniq<NumericStatsUnifier<int64_t>>();
+	case LogicalTypeId::TIME:
+		return make_uniq<NumericStatsUnifier<dtime_t>>();
+	case LogicalTypeId::TIMESTAMP_SEC:
+	case LogicalTypeId::TIMESTAMP:
+		return make_uniq<NumericStatsUnifier<timestamp_t>>();
+	case LogicalTypeId::TIMESTAMP_TZ:
+		return make_uniq<NumericStatsUnifier<timestamp_tz_t>>();
+	case LogicalTypeId::TIMESTAMP_MS:
+		return make_uniq<NumericStatsUnifier<timestamp_ms_t>>();
+	case LogicalTypeId::TIMESTAMP_NS:
+		return make_uniq<NumericStatsUnifier<timestamp_ns_t>>();
+	case LogicalTypeId::TIME_TZ:
+		return make_uniq<NumericStatsUnifier<dtime_tz_t>>();
+	case LogicalTypeId::UINTEGER:
+		return make_uniq<NumericStatsUnifier<uint32_t>>();
+	case LogicalTypeId::UBIGINT:
+		return make_uniq<NumericStatsUnifier<uint64_t>>();
+	case LogicalTypeId::FLOAT:
+		return make_uniq<NumericStatsUnifier<float>>();
+	case LogicalTypeId::HUGEINT:
+	case LogicalTypeId::UHUGEINT:
+	case LogicalTypeId::DOUBLE:
+		return make_uniq<NumericStatsUnifier<double>>();
+	case LogicalTypeId::DECIMAL: {
+		auto width = DecimalType::GetWidth(type);
+		auto scale = DecimalType::GetScale(type);
+		switch (type.InternalType()) {
+		case PhysicalType::INT16:
+		case PhysicalType::INT32:
+			return make_uniq<DecimalStatsUnifier<int32_t>>(width, scale);
+		case PhysicalType::INT64:
+			return make_uniq<DecimalStatsUnifier<int64_t>>(width, scale);
+		default:
+			return make_uniq<NullStatsUnifier>();
+		}
+	}
+	case LogicalTypeId::BLOB:
+		return make_uniq<BlobStatsUnifier>();
+	case LogicalTypeId::VARCHAR:
+		return make_uniq<StringStatsUnifier>();
+	case LogicalTypeId::UUID:
+	case LogicalTypeId::INTERVAL:;
+	case LogicalTypeId::ENUM:
+	default:
+		return make_uniq<NullStatsUnifier>();
+	}
+}
+
+void GetStatsUnifier(const ParquetColumnSchema &schema, vector<unique_ptr<ColumnStatsUnifier>> &unifiers,
+                     string base_name = string()) {
+	if (!base_name.empty()) {
+		base_name += ".";
+	}
+	base_name += KeywordHelper::WriteQuoted(schema.name, '\"');
+	if (schema.children.empty()) {
+		auto unifier = GetBaseStatsUnifier(schema.type);
+		unifier->column_name = std::move(base_name);
+		unifiers.push_back(std::move(unifier));
+		return;
+	}
+	for (auto &child_schema : schema.children) {
+		GetStatsUnifier(child_schema, unifiers, base_name);
+	}
+}
+
+void ParquetWriter::GatherWrittenStatistics() {
+	written_stats->row_count = file_meta_data.num_rows;
+
+	// find the per-column stats
+	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
+	for (auto &column_writer : column_writers) {
+		GetStatsUnifier(column_writer->Schema(), stats_unifiers);
+	}
+	// unify the stats of all of the row groups
+	for (auto &row_group : file_meta_data.row_groups) {
+		for (idx_t c = 0; c < row_group.columns.size(); c++) {
+			auto &column = row_group.columns[c];
+			auto &stats_unifier = stats_unifiers[c];
+			if (column.meta_data.__isset.statistics) {
+				if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
+					stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value,
+					                           column.meta_data.statistics.max_value);
+				} else {
+					stats_unifier->all_min_max_set = false;
+				}
+				if (column.meta_data.statistics.__isset.null_count) {
+					stats_unifier->null_count += column.meta_data.statistics.null_count;
+				} else {
+					stats_unifier->all_nulls_set = false;
+				}
+			}
+		}
+	}
+	// finalize the min/max values and write to column stats
+	for (idx_t c = 0; c < stats_unifiers.size(); c++) {
+		auto &stats_unifier = stats_unifiers[c];
+		case_insensitive_map_t<Value> column_stats;
+		if (stats_unifier->all_min_max_set) {
+			auto min_value = stats_unifier->StatsToString(stats_unifier->global_min);
+			auto max_value = stats_unifier->StatsToString(stats_unifier->global_max);
+			if (stats_unifier->min_is_set) {
+				column_stats["min"] = min_value;
+			}
+			if (stats_unifier->max_is_set) {
+				column_stats["max"] = max_value;
+			}
+		}
+		if (stats_unifier->all_nulls_set) {
+			column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
+		}
+		written_stats->column_statistics.insert(make_pair(stats_unifier->column_name, std::move(column_stats)));
+	}
+}
+
 void ParquetWriter::Finalize() {
 
 	// dump the bloom filters right before footer, not if stuff is encrypted
@@ -569,7 +830,8 @@ void ParquetWriter::Finalize() {
 
 	Write(file_meta_data);
 
-	writer->Write<uint32_t>(writer->GetTotalWritten() - metadata_start_offset);
+	uint32_t footer_size = writer->GetTotalWritten() - metadata_start_offset;
+	writer->Write<uint32_t>(footer_size);
 
 	if (encryption_config) {
 		// encrypted parquet files also end with the string "PARE"
@@ -577,6 +839,13 @@ void ParquetWriter::Finalize() {
 	} else {
 		// parquet files also end with the string "PAR1"
 		writer->WriteData(const_data_ptr_cast("PAR1"), 4);
+	}
+	if (written_stats) {
+		// gather written statistics from the metadata
+		GatherWrittenStatistics();
+		written_stats->file_size_bytes = writer->GetTotalWritten();
+		written_stats->footer_offset = Value::UBIGINT(metadata_start_offset);
+		written_stats->footer_size = Value::UBIGINT(footer_size);
 	}
 
 	// flush to disk
@@ -600,6 +869,10 @@ void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilt
 	new_entry.column_idx = col_idx;
 	new_entry.row_group_idx = file_meta_data.row_groups.size();
 	bloom_filters.push_back(std::move(new_entry));
+}
+
+void ParquetWriter::SetWrittenStatistics(CopyFunctionFileStatistics &written_stats_p) {
+	written_stats = written_stats_p;
 }
 
 } // namespace duckdb
