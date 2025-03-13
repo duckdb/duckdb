@@ -213,9 +213,9 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 }
 
 static void SanitizeError(string &value) {
-	std::vector<char> char_array(value.begin(), value.end());
-	char_array.push_back('\0'); // Null-terminate the character array
-	Utf8Proc::MakeValid(&char_array[0], char_array.size());
+	 std::vector<char> char_array(value.begin(), value.end());
+	 char_array.push_back('\0'); // Null-terminate the character array
+	 Utf8Proc::MakeValid(&char_array[0], char_array.size());
 	value = {char_array.begin(), char_array.end() - 1};
 }
 
@@ -1114,13 +1114,13 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					              result_vector);
 				}
 			}
-			// result.borked_rows.insert(line_error++);
+			result.borked_rows.insert(line_error++);
 			D_ASSERT(state_machine->options.ignore_errors.GetValue());
 			// We are ignoring errors. We must continue but ignoring borked-rows
 			for (; line_error < parse_chunk.size(); line_error++) {
 				if (!inserted_column_data.validity.RowIsValid(line_error) &&
 				    parse_column_data.validity.RowIsValid(line_error)) {
-					// result.borked_rows.insert(line_error);
+					result.borked_rows.insert(line_error);
 					vector<Value> row;
 					for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
 						row.push_back(parse_chunk.GetValue(col, line_error));
@@ -1133,18 +1133,18 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			}
 		}
 	}
-	if (!result.borked_rows.empty()) {
-		// We must remove the borked lines from our chunk
-		SelectionVector successful_rows(parse_chunk.size());
-		idx_t sel_idx = 0;
-		for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
-			if (result.borked_rows.find(row_idx) == result.borked_rows.end()) {
-				successful_rows.set_index(sel_idx++, row_idx);
-			}
-		}
-		// Now we slice the result
-		insert_chunk.Slice(successful_rows, sel_idx);
-	}
+	// if (!result.borked_rows.empty()) {
+	// 	// We must remove the borked lines from our chunk
+	// 	SelectionVector successful_rows(parse_chunk.size());
+	// 	idx_t sel_idx = 0;
+	// 	for (idx_t row_idx = 0; row_idx < parse_chunk.size(); row_idx++) {
+	// 		if (result.borked_rows.find(row_idx) == result.borked_rows.end()) {
+	// 			successful_rows.set_index(sel_idx++, row_idx);
+	// 		}
+	// 	}
+	// 	// Now we slice the result
+	// 	insert_chunk.Slice(successful_rows, sel_idx);
+	// }
 }
 
 void StringValueScanner::Initialize() {
