@@ -15,8 +15,9 @@
 
 namespace duckdb {
 
-class Binder;
 struct BoundStatement;
+struct CopyFunctionFileStatistics;
+class Binder;
 class ColumnDataCollection;
 class ExecutionContext;
 
@@ -117,20 +118,39 @@ typedef bool (*copy_rotate_files_t)(FunctionData &bind_data, const optional_idx 
 typedef bool (*copy_rotate_next_file_t)(GlobalFunctionData &gstate, FunctionData &bind_data,
                                         const optional_idx &file_size_bytes);
 
+typedef void (*copy_to_get_written_statistics_t)(ClientContext &context, FunctionData &bind_data,
+                                                 GlobalFunctionData &gstate, CopyFunctionFileStatistics &statistics);
+
 typedef vector<unique_ptr<Expression>> (*copy_to_select_t)(CopyToSelectInput &input);
 
-enum class CopyFunctionReturnType : uint8_t { CHANGED_ROWS = 0, CHANGED_ROWS_AND_FILE_LIST = 1 };
+enum class CopyFunctionReturnType : uint8_t {
+	CHANGED_ROWS = 0,
+	CHANGED_ROWS_AND_FILE_LIST = 1,
+	WRITTEN_FILE_STATISTICS = 2
+};
 vector<string> GetCopyFunctionReturnNames(CopyFunctionReturnType return_type);
 vector<LogicalType> GetCopyFunctionReturnLogicalTypes(CopyFunctionReturnType return_type);
+
+struct CopyFunctionFileStatistics {
+	idx_t row_count = 0;
+	idx_t file_size_bytes = 0;
+	//! Footer offset in the file (in bytes)
+	Value footer_offset;
+	//! Footer size (in bytes)
+	Value footer_size;
+	// map of column name -> statistics name -> statistics value
+	case_insensitive_map_t<case_insensitive_map_t<Value>> column_statistics;
+};
 
 class CopyFunction : public Function { // NOLINT: work-around bug in clang-tidy
 public:
 	explicit CopyFunction(const string &name)
 	    : Function(name), plan(nullptr), copy_to_select(nullptr), copy_to_bind(nullptr),
-	      copy_to_initialize_local(nullptr), copy_to_initialize_global(nullptr), copy_to_sink(nullptr),
-	      copy_to_combine(nullptr), copy_to_finalize(nullptr), execution_mode(nullptr), prepare_batch(nullptr),
-	      flush_batch(nullptr), desired_batch_size(nullptr), rotate_files(nullptr), rotate_next_file(nullptr),
-	      serialize(nullptr), deserialize(nullptr), copy_from_bind(nullptr) {
+	      copy_to_initialize_local(nullptr), copy_to_initialize_global(nullptr),
+	      copy_to_get_written_statistics(nullptr), copy_to_sink(nullptr), copy_to_combine(nullptr),
+	      copy_to_finalize(nullptr), execution_mode(nullptr), prepare_batch(nullptr), flush_batch(nullptr),
+	      desired_batch_size(nullptr), rotate_files(nullptr), rotate_next_file(nullptr), serialize(nullptr),
+	      deserialize(nullptr), copy_from_bind(nullptr) {
 	}
 
 	//! Plan rewrite copy function
@@ -140,6 +160,7 @@ public:
 	copy_to_bind_t copy_to_bind;
 	copy_to_initialize_local_t copy_to_initialize_local;
 	copy_to_initialize_global_t copy_to_initialize_global;
+	copy_to_get_written_statistics_t copy_to_get_written_statistics;
 	copy_to_sink_t copy_to_sink;
 	copy_to_combine_t copy_to_combine;
 	copy_to_finalize_t copy_to_finalize;

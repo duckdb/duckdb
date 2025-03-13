@@ -393,17 +393,20 @@ void RecursiveDependentJoinPlanner::VisitOperator(LogicalOperator &op) {
 			auto &rec_cte = op.Cast<LogicalRecursiveCTE>();
 			binder.recursive_ctes[rec_cte.table_index] = &op;
 		}
-		root = std::move(op.children[0]);
-		D_ASSERT(root);
-		if (root->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
-			// Found a dependent join, flatten it
-			auto &new_root = root->Cast<LogicalDependentJoin>();
-			root = binder.PlanLateralJoin(std::move(new_root.children[0]), std::move(new_root.children[1]),
-			                              new_root.correlated_columns, new_root.join_type,
-			                              std::move(new_root.join_condition));
+		for (idx_t i = 0; i < op.children.size(); i++) {
+			root = std::move(op.children[i]);
+			D_ASSERT(root);
+			if (root->type == LogicalOperatorType::LOGICAL_DEPENDENT_JOIN) {
+				// Found a dependent join, flatten it
+				auto &new_root = root->Cast<LogicalDependentJoin>();
+				root = binder.PlanLateralJoin(std::move(new_root.children[0]), std::move(new_root.children[1]),
+				                              new_root.correlated_columns, new_root.join_type,
+				                              std::move(new_root.join_condition));
+			}
+			VisitOperatorExpressions(op);
+			op.children[i] = std::move(root);
 		}
-		VisitOperatorExpressions(op);
-		op.children[0] = std::move(root);
+
 		for (idx_t i = 0; i < op.children.size(); i++) {
 			D_ASSERT(op.children[i]);
 			VisitOperator(*op.children[i]);

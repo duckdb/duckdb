@@ -1593,7 +1593,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 				auto oidx = sel->get_index(i);
 				if (validity.RowIsValid(oidx)) {
 					auto buf = strings[oidx].GetData();
-					D_ASSERT(*buf >= 0 && *buf < 8);
+					D_ASSERT(idx_t(*buf) < 8);
 					Bit::Verify(strings[oidx]);
 				}
 			}
