@@ -16,7 +16,7 @@ namespace duckdb {
 namespace {
 
 static constexpr const char *CGROUP_PATH = "/proc/self/cgroup";
-static constexpr const idx_t DEFAULT_CGROUP_FILE_BUFFER_SIZE = 1024;
+static constexpr const int64_t DEFAULT_CGROUP_FILE_BUFFER_SIZE = 1024;
 
 struct CGroupEntry {
 public:
@@ -66,8 +66,9 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 		while (it != line.end()) {
 			auto next = std::find_if(it, line.end(), [](char c) { return c == ':'; });
 			parts.emplace_back(it, next);
-			if (next == line.end())
+			if (next == line.end()) {
 				break;
+			}
 			it = std::next(next);
 		}
 
