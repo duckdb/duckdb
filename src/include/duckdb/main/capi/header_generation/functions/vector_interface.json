@@ -281,7 +281,10 @@
                     "type": "duckdb_value",
                     "name": "value"
                 }
-            ]
+            ],
+            "comment": {
+                "description": "Copies the value from `value` to `vector`."
+            }
         }
     ]
 }
