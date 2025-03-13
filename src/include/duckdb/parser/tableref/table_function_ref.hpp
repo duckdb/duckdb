@@ -31,7 +31,6 @@ public:
 	//! Whether or not WITH ORDINALITY has been invoked
 	ordinality_request with_ordinality = ordinality_request::NOT_REQUESTED;
 
-
 public:
 	string ToString() const override;
 

@@ -128,7 +128,6 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 		function.ordinality_data.SetOrdinality(chunk, g_state.ordinality_current_idx, g_state.reset_ordinality);
 	}
 
-
 	if (chunk.size() == 0 && function.in_out_function_final) {
 		function.in_out_function_final(context, data, chunk);
 		g_state.in_out_final = true;

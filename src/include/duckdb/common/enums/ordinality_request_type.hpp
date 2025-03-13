@@ -17,8 +17,7 @@ struct ordinality_data_t {
 	ordinality_request ordinality_request = ordinality_request::NOT_REQUESTED;
 	idx_t column_id;
 
-	void SetOrdinality(DataChunk &chunk, idx_t &ordinality_current_idx,
-	                   bool &reset) const {
+	void SetOrdinality(DataChunk &chunk, idx_t &ordinality_current_idx, bool &reset) const {
 		const idx_t ordinality = chunk.size();
 		if (ordinality > 0) {
 			if (reset) {
@@ -29,11 +28,11 @@ struct ordinality_data_t {
 		}
 	}
 
-	bool operator==(const ordinality_data_t& rhs) const{
+	bool operator==(const ordinality_data_t &rhs) const {
 		return (this->ordinality_request == rhs.ordinality_request && this->column_id == rhs.column_id);
 	}
 
-	bool operator!=(const ordinality_data_t& rhs) const{
+	bool operator!=(const ordinality_data_t &rhs) const {
 		return !(this == &rhs);
 	}
 };
