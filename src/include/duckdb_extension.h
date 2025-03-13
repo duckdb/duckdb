@@ -545,6 +545,7 @@ typedef struct {
 // Vortex duckdb extensions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+	void (*duckdb_assign_constant_vector)(duckdb_vector vector, duckdb_value value);
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
 	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
@@ -974,6 +975,7 @@ typedef struct {
 
 // Version unstable_vortex_ext
 #define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector
+#define duckdb_assign_constant_vector        duckdb_ext_api.duckdb_assign_constant_vector
 #define duckdb_create_selection_vector       duckdb_ext_api.duckdb_create_selection_vector
 #define duckdb_destroy_selection_vector      duckdb_ext_api.duckdb_destroy_selection_vector
 #define duckdb_selection_vector_get_data_ptr duckdb_ext_api.duckdb_selection_vector_get_data_ptr
