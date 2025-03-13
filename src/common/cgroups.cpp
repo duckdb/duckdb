@@ -38,20 +38,16 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 
 	auto handle = fs.OpenFile(CGROUP_PATH, FileFlags::FILE_FLAGS_READ);
 
-	int64_t buffer_size = DEFAULT_CGROUP_FILE_BUFFER_SIZE;
-	unsafe_unique_array<char> buffer = make_unsafe_uniq_array_uninitialized<char>(buffer_size);
+	char buffer[DEFAULT_CGROUP_FILE_BUFFER_SIZE];
 	int64_t bytes_read;
 	string cgroup_file_content;
 	do {
-		bytes_read = fs.Read(*handle, buffer.get(), buffer_size - 1);
-		Printer::PrintF("cgroup file bytes read: %d | buffer_size: %d", bytes_read, buffer_size);
+		bytes_read = fs.Read(*handle, buffer, DEFAULT_CGROUP_FILE_BUFFER_SIZE - 1);
 		buffer[bytes_read] = '\0';
-		cgroup_file_content += string(buffer.get());
-	} while (bytes_read >= buffer_size - 1);
+		cgroup_file_content += string(buffer);
+	} while (bytes_read >= DEFAULT_CGROUP_FILE_BUFFER_SIZE - 1);
 
-	Printer::PrintF("cgroup_file_content size: %d", cgroup_file_content.size());
 	Printer::PrintF("cgroup_file_content:\n%s", cgroup_file_content);
-
 	size_t pos = 0;
 	string line;
 	while ((pos = cgroup_file_content.find('\n')) != string::npos) {
