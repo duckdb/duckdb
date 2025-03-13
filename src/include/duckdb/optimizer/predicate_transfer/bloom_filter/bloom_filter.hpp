@@ -14,10 +14,10 @@
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
-static size_t BloomFilterLookup(size_t num, size_t num_blocks_log, uint64_t *__restrict__ key,
+inline size_t BloomFilterLookup(size_t num, size_t num_blocks_log, uint64_t *__restrict__ key,
                                 uint64_t *__restrict__ bf, uint64_t *__restrict__ out) {
-	for (int i = 0; i < num; i++) {
-		uint64_t block = (key[i] >> (64 - num_blocks_log)) & ((1 << num_blocks_log) - 1);
+	for (size_t i = 0; i < num; i++) {
+		uint32_t block = (key[i] >> (64 - num_blocks_log)) & ((1 << num_blocks_log) - 1);
 		uint64_t mask = (1ULL << ((key[i] >> 0) & 63)) | (1ULL << ((key[i] >> 6) & 63)) |
 		                (1ULL << ((key[i] >> 12) & 63)) | (1ULL << ((key[i] >> 18) & 63)) |
 		                (1ULL << ((key[i] >> 24) & 63)) | (1ULL << ((key[i] >> 30) & 63)) |
@@ -27,9 +27,9 @@ static size_t BloomFilterLookup(size_t num, size_t num_blocks_log, uint64_t *__r
 	return num;
 }
 
-static void BloomFilterInsert(size_t num, size_t num_blocks_log, uint64_t *__restrict__ key,
+inline void BloomFilterInsert(size_t num, size_t num_blocks_log, uint64_t *__restrict__ key,
                               uint64_t *__restrict__ bf) {
-	for (int i = 0; i < num; i++) {
+	for (size_t i = 0; i < num; i++) {
 		uint64_t block = (key[i] >> (64 - num_blocks_log)) & ((1 << num_blocks_log) - 1);
 		uint64_t mask = (1ULL << ((key[i] >> 0) & 63)) | (1ULL << ((key[i] >> 6) & 63)) |
 		                (1ULL << ((key[i] >> 12) & 63)) | (1ULL << ((key[i] >> 18) & 63)) |
@@ -54,7 +54,7 @@ public:
 	void Insert(DataChunk &chunk);
 
 	uint32_t num_blocks_;
-	size_t num_blocks_log;
+	uint32_t num_blocks_log;
 
 	std::mutex insert_lock;
 	uint64_t *blocks_;

@@ -8,8 +8,8 @@
 
 namespace duckdb {
 namespace {
-static constexpr const uint64_t MIN_NUM_BITS_PER_KEY = 8;
-static constexpr const uint64_t MIN_NUM_BITS = 512;
+static constexpr const uint32_t MIN_NUM_BITS_PER_KEY = 16;
+static constexpr const uint32_t MIN_NUM_BITS = 512;
 static constexpr const uint32_t LOG_BLOCK_SIZE = 6;
 
 static uint32_t CeilPowerOfTwo(uint32_t n) {
@@ -45,7 +45,7 @@ void BloomFilter::Initialize(ClientContext &context_p, size_t est_num_rows) {
 	context = &context_p;
 	buffer_manager = &BufferManager::GetBufferManager(*context);
 
-	uint64_t min_bits = std::max<uint64_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
+	uint32_t min_bits = std::max<uint32_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
 	num_blocks_ = CeilPowerOfTwo(min_bits) >> LOG_BLOCK_SIZE;
 	num_blocks_log = static_cast<uint32_t>(std::log2(num_blocks_));
 
@@ -55,7 +55,7 @@ void BloomFilter::Initialize(ClientContext &context_p, size_t est_num_rows) {
 }
 
 size_t BloomFilter::Lookup(DataChunk &chunk, vector<uint64_t> &results) {
-	auto count = chunk.size();
+	int count = static_cast<int>(chunk.size());
 	Vector hashes = HashColumns(chunk, BoundColsApplied);
 	BloomFilterLookup(count, num_blocks_log, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks_, results.data());
 	return count;

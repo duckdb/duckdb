@@ -25,6 +25,7 @@ PhysicalPlanGenerator::~PhysicalPlanGenerator() {
 unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<LogicalOperator> op) {
 	auto &profiler = QueryProfiler::Get(context);
 
+	// Create and link BloomFilters for UseBFOperator and CreateBFOperator
 	TransferBFLinker linker;
 	linker.RemoveUselessOperators(*op);
 
@@ -43,9 +44,6 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_CREATE_PLAN);
 	auto plan = CreatePlan(*op);
 	profiler.EndPhase();
-
-	// Create and link BloomFilters for UseBFOperator and CreateBFOperator
-	// linker.LinkBloomFilters(*plan);
 
 	plan->Verify();
 	return plan;

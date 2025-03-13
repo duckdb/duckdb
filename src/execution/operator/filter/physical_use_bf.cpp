@@ -55,6 +55,7 @@ OperatorResultType PhysicalUseBF::ExecuteInternal(ExecutionContext &context, Dat
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
 
+	// 1. Lookup the BloomFilter
 	auto count = input.size();
 	auto &results = state.lookup_results;
 	bf_to_use->Lookup(input, results);
@@ -63,9 +64,8 @@ OperatorResultType PhysicalUseBF::ExecuteInternal(ExecutionContext &context, Dat
 	idx_t result_count = 0;
 	auto &sel = state.sel_vector;
 	for (size_t i = 0; i < count; i++) {
-		if (results[i]) {
-			sel.set_index(result_count++, i);
-		}
+		result_count += results[i];
+		sel.set_index(result_count, i);
 	}
 	if (result_count == count) {
 		// nothing was filtered: skip adding any selection vectors
