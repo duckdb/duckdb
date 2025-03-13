@@ -58,7 +58,6 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 		cgroup_file_content += string(buffer);
 	} while (bytes_read >= DEFAULT_CGROUP_FILE_BUFFER_SIZE - 1);
 
-	Printer::PrintF("cgroup_file_content:\n%s", cgroup_file_content);
 	auto lines = StringUtil::Split(cgroup_file_content, "\n");
 	for (auto &line : lines) {
 		//! NOTE: this can not use StringUtil::Split, as it counts '::' as a single delimiter
@@ -202,10 +201,10 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 		}
 	}
 
-	if (root_entry.IsValid()) {
-		Printer::PrintF("Has root_entry");
-		auto &entry = cgroup_entries[root_entry.GetIndex()];
-		auto path = StringUtil::Format("/sys/fs/cgroup%s/memory.max", entry.cgroup_path);
+	if (memory_entry.IsValid()) {
+		Printer::PrintF("Has memory_entry");
+		auto &entry = cgroup_entries[memory_entry.GetIndex()];
+		auto path = StringUtil::Format("/sys/fs/cgroup/memory%s/memory.limit_in_bytes", entry.cgroup_path);
 		auto memory_limit = ReadMemoryLimit(fs, path.c_str());
 		if (memory_limit.IsValid()) {
 			Printer::PrintF("Found limit at %s", path);
@@ -213,10 +212,10 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 		}
 		Printer::PrintF("Could not read limit from %s", path);
 	}
-	if (memory_entry.IsValid()) {
-		Printer::PrintF("Has memory_entry");
-		auto &entry = cgroup_entries[memory_entry.GetIndex()];
-		auto path = StringUtil::Format("/sys/fs/cgroup/memory%s/memory.limit_in_bytes", entry.cgroup_path);
+	if (root_entry.IsValid()) {
+		Printer::PrintF("Has root_entry");
+		auto &entry = cgroup_entries[root_entry.GetIndex()];
+		auto path = StringUtil::Format("/sys/fs/cgroup%s/memory.max", entry.cgroup_path);
 		auto memory_limit = ReadMemoryLimit(fs, path.c_str());
 		if (memory_limit.IsValid()) {
 			Printer::PrintF("Found limit at %s", path);
@@ -247,6 +246,15 @@ idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 		}
 	}
 
+	if (cpu_entry.IsValid()) {
+		auto &entry = cgroup_entries[cpu_entry.GetIndex()];
+		auto res = GetCPUCountV1(entry, fs);
+		if (res.IsValid()) {
+			Printer::PrintF("Found limit with cpu_entry");
+			return res.GetIndex();
+		}
+		Printer::PrintF("Could not find limit with cpu_entry");
+	}
 	if (root_entry.IsValid()) {
 		Printer::PrintF("Has root_entry");
 		auto &entry = cgroup_entries[root_entry.GetIndex()];
@@ -256,15 +264,6 @@ idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 			return res.GetIndex();
 		}
 		Printer::PrintF("Could not find limit with root_entry");
-	}
-	if (cpu_entry.IsValid()) {
-		auto &entry = cgroup_entries[cpu_entry.GetIndex()];
-		auto res = GetCPUCountV1(entry, fs);
-		if (res.IsValid()) {
-			Printer::PrintF("Found limit with cpu_entry");
-			return res.GetIndex();
-		}
-		Printer::PrintF("Could not find limit with cpu_entry");
 	}
 	return physical_cores;
 }
