@@ -432,7 +432,7 @@ jobs:
           ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
 
   linux-release-cleanup:
-     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+     if: github.ref == 'refs/heads/v1.2-histrionicus' || github.ref == 'refs/heads/main'
      name: PyPi Release Cleanup
      needs: twine-upload
      runs-on: ubuntu-22.04
@@ -440,6 +440,7 @@ jobs:
        PYPI_CLEANUP_USERNAME: 'mytherin'
        PYPI_CLEANUP_PASSWORD: ${{secrets.PYPI_CLEANUP_PASSWORD}}
        PYPI_CLEANUP_OTP: ${{secrets.PYPI_CLEANUP_OTP}}
+       DUCKDB_BASE_VERSION: ${{github.ref == 'refs/heads/main' && '1.3' || '1.2'}}
 
      steps:
      - uses: actions/checkout@v4
@@ -457,7 +458,7 @@ jobs:
 
      - name: Cleanup Releases
        shell: bash
-       if: ${{ github.ref == 'refs/heads/main' && github.repository == 'duckdb/duckdb' }}
+       if: ${{ github.repository == 'duckdb/duckdb' }}
        run: python3 scripts/pypi_cleanup.py
 
   twine-upload:
