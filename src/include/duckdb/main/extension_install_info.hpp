@@ -55,9 +55,9 @@ public:
 
 struct ExtensionRepository {
 	//! All currently available repositories
-	static constexpr const char *CORE_REPOSITORY_URL = "http://extensions.duckdb.org";
-	static constexpr const char *CORE_NIGHTLY_REPOSITORY_URL = "http://nightly-extensions.duckdb.org";
-	static constexpr const char *COMMUNITY_REPOSITORY_URL = "http://community-extensions.duckdb.org";
+	static constexpr const char *CORE_REPOSITORY_URL = "https://extensions.duckdb.org";
+	static constexpr const char *CORE_NIGHTLY_REPOSITORY_URL = "https://nightly-extensions.duckdb.org";
+	static constexpr const char *COMMUNITY_REPOSITORY_URL = "https://community-extensions.duckdb.org";
 
 	//! Debugging repositories (target local, relative paths that are produced by DuckDB's build system)
 	static constexpr const char *BUILD_DEBUG_REPOSITORY_PATH = "./build/debug/repository";
