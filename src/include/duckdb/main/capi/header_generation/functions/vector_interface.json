@@ -285,6 +285,26 @@
             "comment": {
                 "description": "Copies the value from `value` to `vector`."
             }
+        },
+        {
+            "name": "duckdb_stringify_data_chunk",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                }
+                ]
+        },
+        {
+            "name": "duckdb_verify_data_chunk",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                }
+            ]
         }
     ]
 }
