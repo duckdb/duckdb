@@ -4695,6 +4695,7 @@ static const char zOptions[] = "   -ascii               set output mode to 'asci
                                "   -separator SEP       set output column separator. Default: '|'\n"
                                "   -table               set output mode to 'table'\n"
                                "   -unredacted          allow printing unredacted secrets\n"
+                               "   -ui                  open a web interface\n"
                                "   -unsigned            allow loading of unsigned extensions\n"
                                "   -version             show DuckDB version\n";
 static void usage(int showDetail) {
