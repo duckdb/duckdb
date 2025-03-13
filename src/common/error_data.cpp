@@ -36,7 +36,7 @@ ErrorData::ErrorData(const string &message)
 			raw_message = message;
 		}
 	} else {
-		auto info = StringUtil::ParseJSONMap(message);
+		auto info = StringUtil::ParseJSONMap(message)->Flatten();
 		for (auto &entry : info) {
 			if (entry.first == "exception_type") {
 				type = Exception::StringToExceptionType(entry.second);
