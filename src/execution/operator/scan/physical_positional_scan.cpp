@@ -212,7 +212,7 @@ bool PhysicalPositionalScan::Equals(const PhysicalOperator &other_p) const {
 vector<const_reference<PhysicalOperator>> PhysicalPositionalScan::GetChildren() const {
 	auto result = PhysicalOperator::GetChildren();
 	for (auto &entry : child_tables) {
-		result.push_back(entry);
+		result.push_back(entry.get());
 	}
 	return result;
 }
