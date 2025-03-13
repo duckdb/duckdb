@@ -64,7 +64,9 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 		vector<string> parts;
 		auto it = line.begin();
 		while (it != line.end()) {
-			auto next = std::find_if(it, line.end(), [](char c) { return c == ':'; });
+			//! Don't make more than 3 splits
+			auto next = parts.size() == 2 ? line.end() : std::find_if(it, line.end(), [](char c) { return c == ':'; });
+
 			parts.emplace_back(it, next);
 			if (next == line.end()) {
 				break;
@@ -74,7 +76,7 @@ static vector<CGroupEntry> ParseGroupEntries(FileSystem &fs) {
 
 		if (parts.size() < 3) {
 			//! cgroup entries are in this format:
-			// hierarchy-ID:controller-list:cgroup-path[:additional_metadata]
+			// hierarchy-ID:controller-list:cgroup-path
 			break;
 		}
 		auto hierarchy_id = std::stoi(parts[0]);
