@@ -5,6 +5,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/types/cast_helpers.hpp"
 #include "duckdb/common/operator/cast_operators.hpp"
+#include "duckdb/common/printer.hpp"
 
 #include <cinttypes>
 
@@ -73,6 +74,7 @@ static optional_idx GetCPUCountV2(const CGroupEntry &entry, FileSystem &fs) {
 	static constexpr const char *CPU_MAX = "/sys/fs/cgroup%s/cpu.max";
 
 	auto cpu_max = StringUtil::Format(CPU_MAX, entry.cgroup_path);
+	Printer::PrintF("Reading CPU cgroupsv2 from %s", cpu_max);
 
 	//! See https://docs.kernel.org/scheduler/sched-bwc.html
 	//! run-time replenished within a period (in microseconds)
@@ -105,6 +107,8 @@ static optional_idx GetCPUCountV1(const CGroupEntry &entry, FileSystem &fs) {
 
 	auto cfs_quota = StringUtil::Format(CFS_QUOTA, entry.cgroup_path);
 	auto cfs_period = StringUtil::Format(CFS_PERIOD, entry.cgroup_path);
+	Printer::PrintF("Reading CPU quota cgroupsv1 from %s", cfs_quota);
+	Printer::PrintF("Reading CPU period cgroupsv1 from %s", cfs_period);
 
 	if (!fs.FileExists(cfs_quota) || !fs.FileExists(cfs_period)) {
 		return optional_idx();
@@ -183,20 +187,26 @@ optional_idx CGroups::GetMemoryLimit(FileSystem &fs) {
 	}
 
 	if (root_entry.IsValid()) {
+		Printer::PrintF("Has root_entry");
 		auto &entry = cgroup_entries[root_entry.GetIndex()];
 		auto path = StringUtil::Format("/sys/fs/cgroup%s/memory.max", entry.cgroup_path);
 		auto memory_limit = ReadMemoryLimit(fs, path.c_str());
 		if (memory_limit.IsValid()) {
+			Printer::PrintF("Found limit at %s", path);
 			return memory_limit;
 		}
+		Printer::PrintF("Could not read limit from %s", path);
 	}
 	if (memory_entry.IsValid()) {
+		Printer::PrintF("Has memory_entry");
 		auto &entry = cgroup_entries[memory_entry.GetIndex()];
 		auto path = StringUtil::Format("/sys/fs/cgroup/memory%s/memory.limit_in_bytes", entry.cgroup_path);
 		auto memory_limit = ReadMemoryLimit(fs, path.c_str());
 		if (memory_limit.IsValid()) {
+			Printer::PrintF("Found limit at %s", path);
 			return memory_limit;
 		}
+		Printer::PrintF("Could not read limit from %s", path);
 	}
 	return optional_idx();
 }
@@ -222,18 +232,23 @@ idx_t CGroups::GetCPULimit(FileSystem &fs, idx_t physical_cores) {
 	}
 
 	if (root_entry.IsValid()) {
+		Printer::PrintF("Has root_entry");
 		auto &entry = cgroup_entries[root_entry.GetIndex()];
 		auto res = GetCPUCountV2(entry, fs);
 		if (res.IsValid()) {
+			Printer::PrintF("Found limit with root_entry");
 			return res.GetIndex();
 		}
+		Printer::PrintF("Could not find limit with root_entry");
 	}
 	if (cpu_entry.IsValid()) {
 		auto &entry = cgroup_entries[cpu_entry.GetIndex()];
 		auto res = GetCPUCountV1(entry, fs);
 		if (res.IsValid()) {
+			Printer::PrintF("Found limit with cpu_entry");
 			return res.GetIndex();
 		}
+		Printer::PrintF("Could not find limit with cpu_entry");
 	}
 	return physical_cores;
 }
