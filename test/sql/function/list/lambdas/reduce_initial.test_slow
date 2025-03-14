@@ -1,0 +1,34 @@
+# name: test/sql/function/list/lambdas/reduce_initial.test_slow
+# description: Test list_reduce function with an intial value on a larger data set
+# group: [lambdas]
+
+# very large lists
+
+statement ok
+CREATE TABLE large_lists AS SELECT range % 4 g, list(range) l, 100 AS initial FROM range(10000) GROUP BY range % 4;
+
+query I
+SELECT list_reduce(l, (x, y) -> least(x, y), initial) FROM large_lists ORDER BY g;
+----
+0
+1
+2
+3
+
+query I
+SELECT list_reduce(l, (x, y) -> x + y, initial) FROM large_lists ORDER BY g;
+----
+12495100
+12497600
+12500100
+12502600
+
+# very large table
+
+statement ok
+CREATE TABLE large_table AS SELECT list_reduce(range(5000), (x, y) -> x + y, 1) as l FROM range(1000);
+
+query I
+SELECT count(*) from large_table where l = 12497501;
+----
+1000
