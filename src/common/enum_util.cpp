@@ -41,6 +41,7 @@
 #include "duckdb/common/enums/optimizer_type.hpp"
 #include "duckdb/common/enums/order_preservation_type.hpp"
 #include "duckdb/common/enums/order_type.hpp"
+#include "duckdb/common/enums/ordinality_request_type.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
@@ -4367,6 +4368,24 @@ const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value) {
 template<>
 WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value) {
 	return static_cast<WindowExcludeMode>(StringUtil::StringToEnum(GetWindowExcludeModeValues(), 4, "WindowExcludeMode", value));
+}
+
+const StringUtil::EnumStringLiteral *Getordinality_request_tValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ordinality_request_t::NOT_REQUESTED), "NOT_REQUESTED" },
+		{ static_cast<uint32_t>(ordinality_request_t::REQUESTED), "REQUESTED" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ordinality_request_t>(ordinality_request_t value) {
+	return StringUtil::EnumToString(Getordinality_request_tValues(), 2, "ordinality_request_t", static_cast<uint32_t>(value));
+}
+
+template<>
+ordinality_request_t EnumUtil::FromString<ordinality_request_t>(const char *value) {
+	return static_cast<ordinality_request_t>(StringUtil::StringToEnum(Getordinality_request_tValues(), 2, "ordinality_request_t", value));
 }
 
 }

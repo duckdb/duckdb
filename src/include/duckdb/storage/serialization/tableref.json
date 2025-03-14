@@ -139,7 +139,7 @@
       {
         "id": 202,
         "name": "with_ordinality",
-        "type": "ordinality_data_t"
+        "type": "ordinality_request_t"
       }
     ]
   },
@@ -253,5 +253,12 @@
         "type": "ShowType"
       }
     ]
+  },
+  {
+    "class": "ordinality_request_t"
+  },
+  {
+    "class": "REQUESTED",
+    "enum":
   }
 ]
