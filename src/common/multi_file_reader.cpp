@@ -391,6 +391,7 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 			// identiier not present in file, use default value
 			if (global_column.default_expression) {
 				reader_data.constant_map.Add(global_idx, global_column.GetDefaultValue());
+				expressions.push_back(make_uniq<BoundConstantExpression>(global_column.GetDefaultValue()));
 				continue;
 			} else {
 				string candidate_names;
