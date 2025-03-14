@@ -335,9 +335,12 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		for (idx_t i = 0; i < or_filter.child_filters.size(); i++) {
 			auto &child_filter = *or_filter.child_filters[i];
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
+			if (child_expression.is(py::none())) {
+				continue;
+			}
 			if (expression.is(py::none())) {
 				expression = std::move(child_expression);
-			} else if (!child_expression.is(py::none())) {
+			} else {
 				expression = expression.attr("__or__")(child_expression);
 			}
 		}
@@ -349,9 +352,12 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		for (idx_t i = 0; i < and_filter.child_filters.size(); i++) {
 			auto &child_filter = *and_filter.child_filters[i];
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
+			if (child_expression.is(py::none())) {
+				continue;
+			}
 			if (expression.is(py::none())) {
 				expression = std::move(child_expression);
-			} else if (!child_expression.is(py::none())) {
+			} else {
 				expression = expression.attr("__and__")(child_expression);
 			}
 		}
