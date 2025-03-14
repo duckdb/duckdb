@@ -5,6 +5,7 @@ import platform
 import duckdb
 from io import StringIO, BytesIO
 from duckdb import CSVLineTerminator
+import sys
 
 
 def TestFile(name):
@@ -620,6 +621,7 @@ class TestReadCSV(object):
             {'hive_types': {'one': 'INTEGER', 'two': 'VARCHAR'}},
         ],
     )
+    @pytest.mark.skipif(sys.platform.startswith("win"), reason="Skipping on Windows because of lineterminator option")
     def test_read_csv_options(self, duckdb_cursor, options, tmp_path):
         file = tmp_path / "file.csv"
         file.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')

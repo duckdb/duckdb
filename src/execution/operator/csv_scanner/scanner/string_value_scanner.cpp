@@ -1344,8 +1344,39 @@ void StringValueScanner::ProcessOverBufferValue() {
 	}
 	if (over_buffer_string.empty() &&
 	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
-		if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
-			iterator.pos.buffer_pos++;
+		if (!iterator.IsBoundarySet()) {
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+				iterator.pos.buffer_pos++;
+			}
+		} else {
+			while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+			       (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' ||
+			        buffer_handle_ptr[iterator.pos.buffer_pos] == '\r')) {
+				if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
+					if (result.last_position.buffer_pos <= previous_buffer_handle->actual_size) {
+						// we add the value
+						result.AddValue(result, previous_buffer_handle->actual_size);
+						if (result.IsCommentSet(result)) {
+							result.UnsetComment(result, iterator.pos.buffer_pos);
+						} else {
+							result.AddRow(result, previous_buffer_handle->actual_size);
+						}
+						state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+						while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+						       (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r' ||
+						        buffer_handle_ptr[iterator.pos.buffer_pos] == '\n')) {
+							state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+						}
+						return;
+					}
+				} else {
+					if (iterator.pos.buffer_pos + 1 == cur_buffer_handle->actual_size) {
+						return;
+					}
+				}
+				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
+				iterator.pos.buffer_pos++;
+			}
 		}
 	}
 	// second buffer
@@ -1820,18 +1851,18 @@ void StringValueScanner::FinalizeChunkProcess() {
 			if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
 				MoveToNextBuffer();
 			}
-		} else {
-			if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
-				found_error = true;
-				type = UNTERMINATED_QUOTES;
-			} else if (result.current_errors.HasErrorType(INVALID_STATE)) {
-				found_error = true;
-				type = INVALID_STATE;
-			}
-			if (result.current_errors.HandleErrors(result)) {
-				result.number_of_rows++;
-			}
 		}
+		if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
+			found_error = true;
+			type = UNTERMINATED_QUOTES;
+		} else if (result.current_errors.HasErrorType(INVALID_STATE)) {
+			found_error = true;
+			type = INVALID_STATE;
+		}
+		if (result.current_errors.HandleErrors(result)) {
+			result.number_of_rows++;
+		}
+
 		if (states.IsQuotedCurrent() && !found_error &&
 		    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
