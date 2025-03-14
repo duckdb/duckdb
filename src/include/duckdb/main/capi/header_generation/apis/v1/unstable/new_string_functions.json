@@ -1,0 +1,7 @@
+{
+    "version": "unstable_new_string_functions",
+    "description": "New string functions that are added",
+    "entries": [
+        "duckdb_value_to_string"
+    ]
+}
