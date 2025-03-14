@@ -232,3 +232,17 @@ void duckdb_assign_constant_vector(duckdb_vector vector, duckdb_value value) {
 	auto dvalue = reinterpret_cast<duckdb::Value *>(value);
 	dvector->Reference(*dvalue);
 }
+
+const char *duckdb_stringify_data_chunk(duckdb_data_chunk chunk) {
+	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
+	auto str = dchunk->ToString();
+	auto result = reinterpret_cast<char *>(malloc(sizeof(char) * (str.size() + 1)));
+	memcpy(result, str.c_str(), str.size());
+	result[str.size()] = '\0';
+	return result;
+}
+
+void duckdb_verify_data_chunk(duckdb_data_chunk chunk) {
+	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
+	dchunk->Verify();
+}

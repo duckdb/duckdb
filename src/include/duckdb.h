@@ -3048,6 +3048,10 @@ DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vec
 Copies the value from `value` to `vector`.*/
 DUCKDB_C_API void duckdb_assign_constant_vector(duckdb_vector vector, duckdb_value value);
 
+DUCKDB_C_API const char *duckdb_stringify_data_chunk(duckdb_data_chunk chunk);
+
+DUCKDB_C_API void duckdb_verify_data_chunk(duckdb_data_chunk chunk);
+
 //===--------------------------------------------------------------------===//
 // Selection Vector Interface
 //===--------------------------------------------------------------------===//
