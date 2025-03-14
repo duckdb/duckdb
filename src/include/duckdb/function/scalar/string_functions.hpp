@@ -97,9 +97,9 @@ struct ArrayCatFun {
 
 struct ConcatOperatorFun {
 	static constexpr const char *Name = "||";
-	static constexpr const char *Parameters = "list1,list2";
-	static constexpr const char *Description = "Concatenates two lists.";
-	static constexpr const char *Example = "list_concat([2, 3], [4, 5, 6])";
+	static constexpr const char *Parameters = "string,string";
+	static constexpr const char *Description = "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(string, ...)` and `list_concat(list1, list2)`";
+	static constexpr const char *Example = "'Duck' || 'DB'\2[1, 2, 3] || [4, 5, 6]\2'\\xAA'::BLOB || '\\xBB'::BLOB";
 	static constexpr const char *Categories = "string,list,blob";
 
 	static ScalarFunction GetFunction();

@@ -41,9 +41,13 @@
     },
     {
         "name": "||",
-        "parameters": "list1,list2",
-        "description": "Concatenates two lists.",
-        "example": "list_concat([2, 3], [4, 5, 6])",
+        "parameters": "string,string",
+        "description": "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(string, ...)` and `list_concat(list1, list2)`",
+        "examples": [
+            "'Duck' || 'DB'",
+            "[1, 2, 3] || [4, 5, 6]",
+            "'\\xAA'::BLOB || '\\xBB'::BLOB"
+        ],
         "type": "scalar_function",
         "categories": ["string","list","blob"],
         "struct": "ConcatOperatorFun"
