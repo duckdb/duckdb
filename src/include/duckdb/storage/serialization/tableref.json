@@ -135,6 +135,11 @@
         "id": 201,
         "name": "column_name_alias",
         "type": "vector<string>"
+      },
+      {
+        "id": 202,
+        "name": "with_ordinality",
+        "type": "ordinality_data_t"
       }
     ]
   },
