@@ -71,6 +71,16 @@ class TestRelation(object):
         rel = get_relation(conn)
         assert rel.order('j').execute().fetchall() == [(4, 'four'), (1, 'one'), (3, 'three'), (2, 'two')]
 
+    def test_projection_mixed_types(self):
+        conn = duckdb.connect()
+        rel = get_relation(conn)
+        assert rel.project('i', duckdb.ColumnExpression('j')).execute().fetchall() == [
+            (1, 'one'),
+            (2, 'two'),
+            (3, 'three'),
+            (4, 'four'),
+        ]
+
     def test_limit_operator(self):
         conn = duckdb.connect()
         rel = get_relation(conn)
