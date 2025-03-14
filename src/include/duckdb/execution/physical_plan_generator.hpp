@@ -44,6 +44,9 @@ public:
 	static bool UseBatchIndex(ClientContext &context, PhysicalOperator &plan);
 	//! Whether or not we should preserve insertion order for executing the given sink
 	static bool PreserveInsertionOrder(ClientContext &context, PhysicalOperator &plan);
+	//! The order preservation type of the given operator decided by recursively looking at its children
+	static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op);
+
 
 protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOperator &op);
