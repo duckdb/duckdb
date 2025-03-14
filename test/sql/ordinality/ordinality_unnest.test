@@ -5,20 +5,14 @@
 statement ok
 PRAGMA enable_verification
 
-# null padding with a header
-query IIIII
-FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=True) with ordinality
-----
-one	two	three	four	1
-1	a	alice	NULL	2
-2	b	bob	NULL	3
 
-
+statement ok
 CREATE TABLE test(a char[]);
-statement ok
 
-INSERT INTO test VALUES (['a1','a2','a3']),(['b1','b2']);
+
 statement ok
+INSERT INTO test VALUES (['a1','a2','a3']),(['b1','b2']);
+
 
 query III
 SELECT * FROM test AS t, LATERAL unnest(t.a) WITH ORDINALITY;

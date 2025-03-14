@@ -1,0 +1,12 @@
+# name: test/sql/ordinality/ordinality_basic.test
+# description: Test with ordinality
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification
+
+query II
+SELECT * FROM range(1) WITH ORDINALITY;
+----
+range	ordinality
+0	1
