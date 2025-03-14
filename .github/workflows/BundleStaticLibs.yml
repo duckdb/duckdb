@@ -188,8 +188,7 @@ jobs:
           -e FORCE_WARN_UNUSED=1                                                 \
           -e DUCKDB_PLATFORM=linux_arm64                                         \
           ubuntu:18.04                                                           \
-          bash -c "/duckdb/scripts/setup_ubuntu1804.sh && git config --global --add safe.directory /duckdb && make bundle-library -C /duckdb"
-          bash -c "/duckdb/scripts/setup_ubuntu1804.sh && git config --global --add safe.directory /duckdb && make gather-libs -C /duckdb"
+          bash -c "/duckdb/scripts/setup_ubuntu1804.sh && git config --global --add safe.directory /duckdb && make bundle-library -C /duckdb && make gather-libs -C /duckdb"
       - name: Deploy
         shell: bash
         env:
@@ -232,8 +231,7 @@ jobs:
           -e BUILD_BENCHMARK=1                                                   \
           -e FORCE_WARN_UNUSED=1                                                 \
           quay.io/pypa/manylinux2014_x86_64                                      \
-          bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make bundle-library -C $PWD"
-          bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make gather-libs -C $PWD"
+          bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make bundle-library -C $PWD && make gather-libs -C $PWD"
       - name: Print platform
         shell: bash
         run: ./build/release/duckdb -c "PRAGMA platform;"
