@@ -62,7 +62,6 @@ public:
 	//! Combined table filters, if we have dynamic filters
 	unique_ptr<TableFilterSet> table_filters;
 	idx_t ordinality_current_idx = 1;
-	bool reset_ordinality = false;
 
 	optional_ptr<TableFilterSet> GetTableFilters(const PhysicalTableScan &op) const {
 		return table_filters ? table_filters.get() : op.table_filters.get();

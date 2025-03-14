@@ -19,7 +19,6 @@ public:
 	}
 
 	idx_t ordinality_current_idx = 1;
-	bool reset_ordinality = false;
 	unique_ptr<GlobalTableFunctionState> global_state;
 };
 
