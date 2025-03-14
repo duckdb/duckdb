@@ -1,3 +1,10 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/planner/operator/logical_use_bf.hpp
+//
+//
+//===----------------------------------------------------------------------===//
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
