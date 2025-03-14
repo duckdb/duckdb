@@ -275,11 +275,12 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 		}
 	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-		auto &col_idx = global_column_ids[i];
-		auto column_id = col_idx.GetPrimaryIndex();
+		auto global_idx = MultiFileGlobalIndex(i);
+		auto &col_id = global_column_ids[i];
+		auto column_id = col_id.GetPrimaryIndex();
 		if (column_id == options.filename_idx) {
 			// filename
-			reader_data.constant_map.emplace_back(i, Value(filename));
+			reader_data.constant_map.Add(global_idx, Value(filename));
 			continue;
 		}
 		if (IsVirtualColumn(column_id)) {
@@ -293,7 +294,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			for (auto &entry : options.hive_partitioning_indexes) {
 				if (column_id == entry.index) {
 					Value value = file_options.GetHivePartitionValue(partitions[entry.value], entry.value, context);
-					reader_data.constant_map.emplace_back(i, value);
+					reader_data.constant_map.Add(global_idx, value);
 					found_partition = true;
 					break;
 				}
@@ -312,7 +313,7 @@ void MultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_options, c
 			if (not_present_in_file) {
 				// we need to project a column with name \"global_name\" - but it does not exist in the current file
 				// push a NULL value of the specified type
-				reader_data.constant_map.emplace_back(i, Value(type));
+				reader_data.constant_map.Add(global_idx, Value(type));
 				continue;
 			}
 		}
@@ -336,17 +337,18 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
                                                 const MultiFileReaderBindData &bind_data, const string &initial_file,
                                                 optional_ptr<MultiFileReaderGlobalState> global_state) {
 
-	// we have expected types: create a map of name -> column index
-	case_insensitive_map_t<idx_t> name_map;
+	// we have expected types: create a map of name -> (local) column id
+	case_insensitive_map_t<MultiFileLocalColumnId> name_map;
 	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 		auto &column = local_columns[col_idx];
-		name_map[column.name] = col_idx;
+		name_map.emplace(column.name, MultiFileLocalColumnId(col_idx));
 	}
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
+		auto global_idx = MultiFileGlobalIndex(i);
 		// check if this is a constant column
 		bool constant = false;
 		for (auto &entry : reader_data.constant_map) {
-			if (entry.column_id == i) {
+			if (entry.column_idx.GetIndex() == i) {
 				constant = true;
 				break;
 			}
@@ -356,23 +358,23 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 			continue;
 		}
 		// not constant - look up the column in the name map
-		auto &global_idx = global_column_ids[i];
-		auto global_id = global_idx.GetPrimaryIndex();
-		if (IsVirtualColumn(global_id)) {
+		auto &global_id = global_column_ids[i];
+		auto global_column_id = global_id.GetPrimaryIndex();
+		if (IsVirtualColumn(global_column_id)) {
 			// virtual column - these are emitted for every file
 			continue;
 		}
-		if (global_id >= global_columns.size()) {
+		if (global_column_id >= global_columns.size()) {
 			throw InternalException(
 			    "MultiFileReader::CreateColumnMappingByName - global_id is out of range in global_types for this file");
 		}
-		auto &global_column = global_columns[global_id];
+		auto &global_column = global_columns[global_column_id];
 		auto identifier = global_column.GetIdentifierName();
 		auto entry = name_map.find(identifier);
 		if (entry == name_map.end()) {
 			// identiier not present in file, use default value
 			if (global_column.default_expression) {
-				reader_data.constant_map.emplace_back(i, global_column.GetDefaultValue());
+				reader_data.constant_map.Add(global_idx, global_column.GetDefaultValue());
 				continue;
 			} else {
 				string candidate_names;
@@ -392,19 +394,19 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 		}
 		// we found the column in the local file - check if the types are the same
 		auto local_id = entry->second;
-		D_ASSERT(global_id < global_columns.size());
-		D_ASSERT(local_id < local_columns.size());
-		auto &global_type = global_columns[global_id].type;
-		auto &local_type = local_columns[local_id].type;
-		ColumnIndex local_index(local_id);
+		D_ASSERT(global_column_id < global_columns.size());
+		D_ASSERT(local_id.GetId() < local_columns.size());
+		auto &global_type = global_columns[global_column_id].type;
+		auto &local_type = local_columns[local_id.GetId()].type;
+		ColumnIndex local_index(local_id.GetId());
 		if (global_type != local_type) {
 			// the types are not the same - add a cast
 			reader_data.cast_map[local_id] = global_type;
 		} else {
-			local_index = ColumnIndex(local_id, global_idx.GetChildIndexes());
+			local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
 		}
 		// create the mapping
-		reader_data.column_mapping.push_back(i);
+		reader_data.column_mapping.push_back(global_idx);
 		reader_data.column_ids.push_back(local_id);
 		reader_data.column_indexes.push_back(std::move(local_index));
 	}
@@ -428,7 +430,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 #endif
 
 	// we have expected types: create a map of field_id -> column index
-	unordered_map<int32_t, idx_t> field_id_map;
+	unordered_map<int32_t, MultiFileLocalColumnId> field_id_map;
 	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
 		auto &column = local_columns[col_idx];
 		if (column.identifier.IsNull()) {
@@ -436,16 +438,16 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 			break;
 		}
 		auto field_id = column.GetIdentifierFieldId();
-		field_id_map[field_id] = col_idx;
+		field_id_map.emplace(field_id, MultiFileLocalColumnId(col_idx));
 	}
 
 	// loop through the schema definition
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
-
+		auto global_idx = MultiFileGlobalIndex(i);
 		// check if this is a constant column
 		bool constant = false;
 		for (auto &entry : reader_data.constant_map) {
-			if (entry.column_id == i) {
+			if (entry.column_idx.GetIndex() == i) {
 				constant = true;
 				break;
 			}
@@ -456,13 +458,14 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 		}
 
 		// Handle any generate columns that are not in the schema (currently only file_row_number)
-		auto &global_idx = global_column_ids[i];
-		auto global_id = global_column_ids[i].GetPrimaryIndex();
-		if (global_id >= global_columns.size()) {
-			if (bind_data.file_row_number_idx == global_id) {
-				reader_data.column_mapping.push_back(i);
+		auto &global_id = global_column_ids[i];
+		auto global_column_id = global_column_ids[i].GetPrimaryIndex();
+		if (global_column_id >= global_columns.size()) {
+			if (bind_data.file_row_number_idx == global_column_id) {
+				reader_data.column_mapping.push_back(MultiFileGlobalIndex(i));
 				// FIXME: this needs a more extensible solution
-				reader_data.column_ids.push_back(field_id_map.size());
+				auto new_column_id = MultiFileLocalColumnId(field_id_map.size());
+				reader_data.column_ids.push_back(new_column_id);
 				reader_data.column_indexes.emplace_back(field_id_map.size());
 			} else {
 				throw InternalException("Unexpected generated column");
@@ -470,7 +473,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 			continue;
 		}
 
-		const auto &global_column = global_columns[global_id];
+		const auto &global_column = global_columns[global_column_id];
 		D_ASSERT(!global_column.identifier.IsNull());
 		auto it = field_id_map.find(global_column.GetIdentifierFieldId());
 		if (it == field_id_map.end()) {
@@ -481,21 +484,21 @@ void MultiFileReader::CreateColumnMappingByFieldId(const string &file_name,
 				throw NotImplementedException("Default expression that isn't constant is not supported yet");
 			}
 			auto &constant_expr = default_val->Cast<ConstantExpression>();
-			reader_data.constant_map.emplace_back(i, constant_expr.value);
+			reader_data.constant_map.Add(global_idx, constant_expr.value);
 			continue;
 		}
 
 		const auto &local_id = it->second;
-		auto &local_column = local_columns[local_id];
-		ColumnIndex local_index(local_id);
+		auto &local_column = local_columns[local_id.GetId()];
+		ColumnIndex local_index(local_id.GetId());
 		if (local_column.type != global_column.type) {
 			// differing types, wrap in a cast column reader
 			reader_data.cast_map[local_id] = global_column.type;
 		} else {
-			local_index = ColumnIndex(local_id, global_idx.GetChildIndexes());
+			local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
 		}
 
-		reader_data.column_mapping.push_back(i);
+		reader_data.column_mapping.push_back(MultiFileGlobalIndex(i));
 		reader_data.column_ids.push_back(local_id);
 		reader_data.column_indexes.push_back(std::move(local_index));
 	}
@@ -542,23 +545,26 @@ void MultiFileReader::CreateMapping(const string &file_name,
 void MultiFileReader::CreateFilterMap(const vector<ColumnIndex> &global_column_ids,
                                       optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
                                       optional_ptr<MultiFileReaderGlobalState> global_state) {
-	if (filters) {
-		auto filter_map_size = global_column_ids.size();
-		if (global_state) {
-			filter_map_size += global_state->extra_columns.size();
-		}
-		reader_data.filter_map.resize(filter_map_size);
+	if (!filters) {
+		return;
+	}
+	auto filter_map_size = global_column_ids.size();
+	if (global_state) {
+		filter_map_size += global_state->extra_columns.size();
+	}
 
-		for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
-			auto map_index = reader_data.column_mapping[c];
-			reader_data.filter_map[map_index].index = c;
-			reader_data.filter_map[map_index].is_constant = false;
-		}
-		for (idx_t c = 0; c < reader_data.constant_map.size(); c++) {
-			auto constant_index = reader_data.constant_map[c].column_id;
-			reader_data.filter_map[constant_index].index = c;
-			reader_data.filter_map[constant_index].is_constant = true;
-		}
+	reader_data.filter_map.resize(filter_map_size);
+
+	D_ASSERT(reader_data.column_mapping.size() == reader_data.column_ids.size());
+	for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
+		auto col_idx = MultiFileLocalIndex(c);
+		auto global_idx = reader_data.column_mapping[col_idx];
+		reader_data.filter_map[global_idx].Set(col_idx);
+	}
+	for (idx_t c = 0; c < reader_data.constant_map.size(); c++) {
+		auto constant_idx = MultiFileConstantMapIndex(c);
+		auto global_idx = reader_data.constant_map[constant_idx].column_idx;
+		reader_data.filter_map[global_idx].Set(constant_idx);
 	}
 }
 
@@ -567,7 +573,7 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReade
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// reference all the constants set up in MultiFileReader::FinalizeBind
 	for (auto &entry : reader_data.constant_map) {
-		chunk.data[entry.column_id].Reference(entry.value);
+		chunk.data[entry.column_idx.GetIndex()].Reference(entry.value);
 	}
 	chunk.Verify();
 }
@@ -577,10 +583,10 @@ void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileRe
                                        optional_ptr<MultiFileReaderGlobalState> global_state,
                                        const OperatorPartitionInfo &partition_info,
                                        OperatorPartitionData &partition_data) {
-	for (auto &col : partition_info.partition_columns) {
+	for (idx_t col : partition_info.partition_columns) {
 		bool found_constant = false;
 		for (auto &constant : reader_data.constant_map) {
-			if (constant.column_id == col) {
+			if (constant.column_idx.GetIndex() == col) {
 				found_constant = true;
 				partition_data.partition_data.emplace_back(constant.value);
 				break;
