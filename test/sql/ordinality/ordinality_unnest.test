@@ -1,0 +1,31 @@
+# name: test/sql/ordinality/ordinality_unnest.test
+# description: Test unnest function
+# group: [ordinality]
+
+statement ok
+PRAGMA enable_verification
+
+# null padding with a header
+query IIIII
+FROM read_csv_auto('data/csv/nullpadding_header.csv', null_padding=True) with ordinality
+----
+one	two	three	four	1
+1	a	alice	NULL	2
+2	b	bob	NULL	3
+
+
+CREATE TABLE test(a char[]);
+statement ok
+
+INSERT INTO test VALUES (['a1','a2','a3']),(['b1','b2']);
+statement ok
+
+query III
+SELECT * FROM test AS t, LATERAL unnest(t.a) WITH ORDINALITY;
+----
+a unnest ordinality
+[a1,a2,a3]	a1	1
+[a1,a2,a3]	a2	2
+[a1,a2,a3]	a3	3
+[b1,b2]	b1	1
+[b1,b2]	b2	2

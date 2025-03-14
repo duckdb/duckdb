@@ -253,12 +253,5 @@
         "type": "ShowType"
       }
     ]
-  },
-  {
-    "class": "ordinality_request_t"
-  },
-  {
-    "class": "REQUESTED",
-    "enum":
   }
 ]
