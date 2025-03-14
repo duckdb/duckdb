@@ -171,10 +171,10 @@ struct CharLengthFun {
 	static constexpr const char *Name = "char_length";
 };
 
-struct CharacterLengthFun {
+struct LengthFunAlias {
 	using ALIAS = LengthFun;
 
-	static constexpr const char *Name = "character_length";
+	static constexpr const char *Name = "character_length`";
 };
 
 struct StrlenFun {
