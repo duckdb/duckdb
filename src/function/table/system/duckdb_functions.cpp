@@ -87,8 +87,7 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	return_types.emplace_back(LogicalType::VARCHAR);
 
 	names.emplace_back("categories");
-	// return_types.emplace_back(LogicalType::VARCHAR);
-	return_types.push_back(LogicalType::LIST(LogicalType::VARCHAR));
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
 
 	return nullptr;
 }
