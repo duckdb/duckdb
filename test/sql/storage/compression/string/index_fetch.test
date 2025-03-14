@@ -8,6 +8,15 @@ load __TEST_DIR__/test_string_compression.db
 statement ok
 pragma verify_fetch_row
 
+statement ok
+create type test_result as UNION(
+    ok BOOL,
+    err STRUCT(
+        expected VARCHAR,
+        actual VARCHAR
+    )
+);
+
 foreach compression fsst dictionary
 
 foreach enable_fsst_vector true false
@@ -33,9 +42,17 @@ SELECT MIN(id), MAX(id), SUM(col::INT), MIN(col::INT), MAX(col::INT), COUNT(*) F
 5000	5000	5000	5000	5000	1
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT
+	CASE WHEN lower(compression)='${compression}'
+		THEN true::test_result
+	ELSE {
+		'expected': '${compression}',
+		'actual': lower(compression)
+	}::test_result
+	END
+FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
-1
+true
 
 statement ok
 DROP TABLE test;

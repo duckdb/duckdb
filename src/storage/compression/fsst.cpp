@@ -98,6 +98,12 @@ struct FSSTAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> FSSTStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
+	auto &storage_manager = col_data.GetStorageManager();
+	if (storage_manager.GetStorageVersion() >= 5) {
+		// dict_fsst introduced - disable fsst
+		return nullptr;
+	}
+
 	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
 	return make_uniq<FSSTAnalyzeState>(info);
 }
@@ -199,7 +205,7 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	auto symtable_size = num_blocks * sizeof(duckdb_fsst_decoder_t);
 	auto estimated_size = estimated_base_size + symtable_size;
 
-	return LossyNumericCast<idx_t>(estimated_size * MINIMUM_COMPRESSION_RATIO);
+	return LossyNumericCast<idx_t>(estimated_size * MINIMUM_COMPRESSION_RATIO) * 5;
 }
 
 //===--------------------------------------------------------------------===//
