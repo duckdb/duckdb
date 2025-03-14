@@ -113,6 +113,18 @@ protected:
 	const vector<string> paths;
 	//! Whether paths can expand to 0 files
 	const FileGlobOptions glob_options;
+
+public:
+	template <class TARGET>
+	TARGET &Cast() {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<TARGET &>(*this);
+	}
+	template <class TARGET>
+	const TARGET &Cast() const {
+		DynamicCastCheck<TARGET>(this);
+		return reinterpret_cast<const TARGET &>(*this);
+	}
 };
 
 //! MultiFileList that takes a list of files and produces the same list of paths. Useful for quickly wrapping

@@ -33,6 +33,7 @@ body:
             * [Postgres scanner](https://github.com/duckdb/duckdb-postgres/issues/new)
             * [Spatial extension](https://github.com/duckdb/duckdb-spatial/issues/new)
             * [SQLite scanner](https://github.com/duckdb/duckdb-sqlite/issues/new)
+            * [UI](https://github.com/duckdb/duckdb-ui/issues/new)
             * [VSS extension](https://github.com/duckdb/duckdb-vss/issues/new)
           * Connectors:
             * [dbt-duckdb](https://github.com/duckdb/dbt-duckdb)

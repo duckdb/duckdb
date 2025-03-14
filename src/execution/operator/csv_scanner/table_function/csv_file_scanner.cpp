@@ -112,10 +112,11 @@ void CSVFileScan::InitializeFileNamesTypes() {
 	}
 
 	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
-		idx_t result_idx = reader_data.column_ids[i];
-		file_types.emplace_back(types[result_idx]);
-		projected_columns.insert(result_idx);
-		projection_ids.emplace_back(result_idx, i);
+		auto col_idx = MultiFileLocalIndex(i);
+		auto column_id = reader_data.column_ids[col_idx];
+		file_types.emplace_back(types[column_id.GetId()]);
+		projected_columns.insert(column_id.GetId());
+		projection_ids.emplace_back(column_id.GetId(), col_idx);
 	}
 
 	if (reader_data.column_ids.empty()) {
@@ -125,8 +126,10 @@ void CSVFileScan::InitializeFileNamesTypes() {
 	// We need to be sure that our types are also following the cast_map
 	if (!reader_data.cast_map.empty()) {
 		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
-			if (reader_data.cast_map.find(reader_data.column_ids[i]) != reader_data.cast_map.end()) {
-				file_types[i] = reader_data.cast_map[reader_data.column_ids[i]];
+			auto local_idx = MultiFileLocalIndex(i);
+			auto entry = reader_data.cast_map.find(reader_data.column_ids[local_idx]);
+			if (entry != reader_data.cast_map.end()) {
+				file_types[i] = entry->second;
 			}
 		}
 	}
@@ -149,8 +152,9 @@ const vector<LogicalType> &CSVFileScan::GetTypes() {
 
 void CSVFileScan::InitializeProjection() {
 	for (idx_t i = 0; i < options.dialect_options.num_cols; i++) {
-		reader_data.column_ids.push_back(i);
-		reader_data.column_mapping.push_back(i);
+		reader_data.column_ids.push_back(MultiFileLocalColumnId(i));
+		//! FIXME: where is this mapping to???
+		reader_data.column_mapping.push_back(MultiFileGlobalIndex(i));
 	}
 }
 
