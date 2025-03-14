@@ -26,7 +26,7 @@ SELECT CAST('[Hello World!]' AS VARCHAR[]);
 query I
 SELECT CAST('[[Hello World!], hello, universe]' AS VARCHAR[]);
 ----
-[[Hello World!], hello, universe]
+['[Hello World!]', hello, universe]
 
 query I
 SELECT '[Cast like this]':: VARCHAR[];
@@ -78,10 +78,10 @@ NULL
 
 #               Nested lists
 # ---------------------------------------------------
-query I
-SELECT CAST('[ [12,13,14], [8, 9], [4], [2, 1, 0] ]' AS INT[][]);
+query III
+SELECT CAST('[ [12,13,14], [8, 9], [4], [2, 1, 0] ]' AS INT[][]) a, a::VARCHAR::INT[][] b, a == b;
 ----
-[[12, 13, 14], [8, 9], [4], [2, 1, 0]]
+[[12, 13, 14], [8, 9], [4], [2, 1, 0]]	[[12, 13, 14], [8, 9], [4], [2, 1, 0]]	true
 
 query I
 SELECT CAST('[ [[12,13,14], [8, 9]], [[4]], [[2, 1, 0], [99]] ]' AS INT[][][]);
@@ -91,7 +91,7 @@ SELECT CAST('[ [[12,13,14], [8, 9]], [[4]], [[2, 1, 0], [99]] ]' AS INT[][][]);
 query I
 SELECT CAST('[ [12,13,14], [8, 9], [4], [2,  1,  0] ]' AS VARCHAR[]);
 ----
-[[12,13,14], [8, 9], [4], [2,  1,  0]]
+['[12,13,14]', '[8, 9]', '[4]', '[2,  1,  0]']
 
 query I
 SELECT CAST('[[ [🦆, 🦆, 🦆]], [[duck, db, 🦆], [🦆]], [[🦆, duck, db]]]' AS VARCHAR[][][]);
@@ -208,32 +208,27 @@ SELECT CAST($$['hello','world', '!']$$ AS VARCHAR[]);
 query I
 SELECT CAST($$[\'hello\',\'world\', \'!\']$$ AS VARCHAR[]);
 ----
-['hello', 'world', '!']
+['\'hello\'', '\'world\'', '\'!\'']
 
 query I
 SELECT CAST($$[[ ['🦆, 🦆, 🦆']], [[duck, db, '🦆'] ]]$$ AS VARCHAR[][][]);
 ----
-[[[🦆, 🦆, 🦆]], [[duck, db, 🦆]]]
+[[['🦆, 🦆, 🦆']], [[duck, db, 🦆]]]
 
 query I
 SELECT CAST($$[can\'t, you\'re, i\'m]$$ AS VARCHAR[]);
 ----
-[can't, you're, i'm]
-
-query I
-SELECT CAST($$[can\'t, you\'re, i\'m]$$ AS VARCHAR[]);
-----
-[can't, you're, i'm]
+['can\'t', 'you\'re', 'i\'m']
 
 query I
 SELECT CAST($$["]", "hello", "world"]$$ AS VARCHAR[]);
 ----
-[], hello, world]
+[']', hello, world]
 
 query I
 SELECT CAST($$[']', "hello", "world"]$$ AS VARCHAR[]);
 ----
-[], hello, world]
+[']', hello, world]
 
 
 #               Test for whitespaces
@@ -251,7 +246,7 @@ SELECT CAST('[          [ [12,     13,14], [8, 9         ]  ],[[ 4    ]   ],    
 query I
 SELECT CAST($$["   hello","          \"'  world", "!         "]$$ AS VARCHAR[]);
 ----
-[   hello,           "'  world, !         ]
+['   hello', '          "\'  world', '!         ']
 
 query I
 SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);     
@@ -261,7 +256,7 @@ SELECT CAST('[   hello     ,   world      , !         ]' AS VARCHAR[]);
 query I
 SELECT CAST($$[    [ "   hello"]  ,["            world"        ],[ "!        "           ]      ]$$ AS VARCHAR[][]);
 ----
-[[   hello], [            world], [!        ]]
+[['   hello'], ['            world'], ['!        ']]
 
 
 #               Empty list
@@ -453,7 +448,7 @@ SELECT CAST('[{a:[12,13,14], b:"🦆", c:{a:[[a], [b, c]], b:[123]}}]' AS STRUCT
 query I
 SELECT '[{a: hii}, {a: "{" }]'::STRUCT(a VARCHAR)[] FROM struct_tbl1;
 ----
-[{'a': hii}, {'a': {}]
+[{'a': hii}, {'a': '{'}]
 
 
 # ---------------------------------------------------
@@ -496,16 +491,17 @@ COPY assorted_lists FROM '__TEST_DIR__/assorted_lists.csv';
 query III
 SELECT * FROM assorted_lists;
 ----
-[8, 7, 6]	[hello, Duck'DB]	[2022-12-02, 1929-01-25]
+[8, 7, 6]	[hello, 'Duck\'DB']	[2022-12-02, 1929-01-25]
 
 #              Escape tests
 #---------------------------------------------------
 
 # regular escape
+# FIXME: this is weird behavior
 query I
 select '[{"bar":"\""}]'::VARCHAR[];
 ----
-[{"bar":"\""}]
+['{"bar":"\\""}']
 
 statement error
 select '[{"bar":"\\""}]'::VARCHAR[];
@@ -521,13 +517,13 @@ can't be cast to the destination type STRUCT(bar VARCHAR)[]
 query I
 select '[{"bar":"\\\""}]'::STRUCT(bar VARCHAR)[];
 ----
-[{'bar': \"}]
+[{'bar': '\\"'}]
 
 # all are escaped except for the last one
-query I
-select '[{"bar":"\"\"\\\"\"\"\\"}]'::STRUCT(bar VARCHAR)[];
+query III
+select '[{"bar":"\"\"\\\"\"\"\\"}]'::STRUCT(bar VARCHAR)[] a, CAST(a::VARCHAR AS STRUCT(bar VARCHAR)[]) b, a == b;
 ----
-[{'bar': ""\"""\}]
+[{'bar': '""\\"""\\'}]	[{'bar': '""\\"""\\'}]	true
 
 query III
 select $$[\  \\abc\\ \ , def, ghi]$$::VARCHAR[] a, a[1], len(a[1])
@@ -537,4 +533,4 @@ select $$[\  \\abc\\ \ , def, ghi]$$::VARCHAR[] a, a[1], len(a[1])
 query III
 select $$["\  \\abc\\ \ ", def, ghi]$$::VARCHAR[] a, a[1], len(a[1])
 ----
-[  \abc\  , def, ghi]	  \abc\  	9
+['  \\abc\\  ', def, ghi]	  \abc\  	9

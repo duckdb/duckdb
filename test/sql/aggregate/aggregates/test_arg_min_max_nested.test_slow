@@ -63,26 +63,26 @@ query I
 SELECT arg_min({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
 FROM tbl;
 ----
-{'d': 1992-01-01, 'ts': 1992-01-01 23:20:11, 'i': 42, 'b': 0, 'f': 0.5}
+{'d': 1992-01-01, 'ts': '1992-01-01 23:20:11', 'i': 42, 'b': 0, 'f': 0.5}
 
 query I
 SELECT arg_max({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
 FROM tbl;
 ----
-{'d': 1993-01-01, 'ts': 1993-01-01 23:20:11, 'i': 8400, 'b': 999999999, 'f': 100.5}
+{'d': 1993-01-01, 'ts': '1993-01-01 23:20:11', 'i': 8400, 'b': 999999999, 'f': 100.5}
 
 # By Scalar
 query I
 SELECT arg_min({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
 FROM tbl;
 ----
-{'d': 1992-01-01, 'ts': 1992-01-01 23:20:11, 'i': 42, 'b': 0, 's': aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+{'d': 1992-01-01, 'ts': '1992-01-01 23:20:11', 'i': 42, 'b': 0, 's': aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 
 query I
 SELECT arg_max({d: "DATE", ts: "TIMESTAMP", i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
 FROM tbl;
 ----
-{'d': 1993-01-01, 'ts': 1993-01-01 23:20:11, 'i': 8400, 'b': 999999999, 's': zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
+{'d': 1993-01-01, 'ts': '1993-01-01 23:20:11', 'i': 8400, 'b': 999999999, 's': zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
 
 #
 # Lists
@@ -93,13 +93,13 @@ query I
 SELECT arg_min(["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], "VARCHAR")
 FROM tbl;
 ----
-[1992-01-01 00:00:00, 1992-01-02 00:00:00, NULL, 1992-01-01 23:20:11]
+['1992-01-01 00:00:00', '1992-01-02 00:00:00', NULL, '1992-01-01 23:20:11']
 
 query I
 SELECT arg_max(["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], "VARCHAR")
 FROM tbl;
 ----
-[1993-01-01 00:00:00, 1993-01-02 00:00:00, NULL, 1993-01-01 23:20:11]
+['1993-01-01 00:00:00', '1993-01-02 00:00:00', NULL, '1993-01-01 23:20:11']
 
 
 # By Scalar
@@ -107,13 +107,13 @@ query I
 SELECT arg_min(["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], "DOUBLE")
 FROM tbl;
 ----
-[1992-01-01 00:00:00, 1992-01-02 00:00:00, NULL, 1992-01-01 23:20:11]
+['1992-01-01 00:00:00', '1992-01-02 00:00:00', NULL, '1992-01-01 23:20:11']
 
 query I
 SELECT arg_max(["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], "DOUBLE")
 FROM tbl;
 ----
-[1993-01-01 00:00:00, 1993-01-02 00:00:00, NULL, 1993-01-01 23:20:11]
+['1993-01-01 00:00:00', '1993-01-02 00:00:00', NULL, '1993-01-01 23:20:11']
 
 #
 # Nested
@@ -124,13 +124,13 @@ query I
 SELECT arg_min({l: ["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
 FROM tbl;
 ----
-{'l': [1992-01-01 00:00:00, 1992-01-02 00:00:00, NULL, 1992-01-01 23:20:11], 'i': 42, 'b': 0, 'f': 0.5}
+{'l': ['1992-01-01 00:00:00', '1992-01-02 00:00:00', NULL, '1992-01-01 23:20:11'], 'i': 42, 'b': 0, 'f': 0.5}
 
 query I
 SELECT arg_max({l: ["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], i: "INTEGER", b: "BIGINT", f: "DOUBLE"}, "VARCHAR")
 FROM tbl;
 ----
-{'l': [1993-01-01 00:00:00, 1993-01-02 00:00:00, NULL, 1993-01-01 23:20:11], 'i': 8400, 'b': 999999999, 'f': 100.5}
+{'l': ['1993-01-01 00:00:00', '1993-01-02 00:00:00', NULL, '1993-01-01 23:20:11'], 'i': 8400, 'b': 999999999, 'f': 100.5}
 
 
 # By Scalar
@@ -138,10 +138,10 @@ query I
 SELECT arg_min({l: ["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
 FROM tbl;
 ----
-{'l': [1992-01-01 00:00:00, 1992-01-02 00:00:00, NULL, 1992-01-01 23:20:11], 'i': 42, 'b': 0, 's': aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
+{'l': ['1992-01-01 00:00:00', '1992-01-02 00:00:00', NULL, '1992-01-01 23:20:11'], 'i': 42, 'b': 0, 's': aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa}
 
 query I
 SELECT arg_max({l: ["DATE", "DATE" + INTERVAL 1 DAY, NULL, "TIMESTAMP"], i: "INTEGER", b: "BIGINT", s: "VARCHAR"}, "DOUBLE")
 FROM tbl;
 ----
-{'l': [1993-01-01 00:00:00, 1993-01-02 00:00:00, NULL, 1993-01-01 23:20:11], 'i': 8400, 'b': 999999999, 's': zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}
+{'l': ['1993-01-01 00:00:00', '1993-01-02 00:00:00', NULL, '1993-01-01 23:20:11'], 'i': 8400, 'b': 999999999, 's': zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz}

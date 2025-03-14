@@ -54,31 +54,31 @@ select list_histogram()
 query I
 SELECT list_histogram(['2021-08-20'::TIMESTAMP])
 ----
-{2021-08-20 00:00:00=1}
+{'2021-08-20 00:00:00'=1}
 
 # timestamp_s
 query I
 SELECT list_histogram(['2021-08-20'::TIMESTAMP_S])
 ----
-{2021-08-20 00:00:00=1}
+{'2021-08-20 00:00:00'=1}
 
 # timestamp_ms
 query I
 SELECT list_histogram(['2021-08-20'::TIMESTAMP_MS])
 ----
-{2021-08-20 00:00:00=1}
+{'2021-08-20 00:00:00'=1}
 
 # timestamp_ns
 query I
 SELECT list_histogram(['2021-08-20'::TIMESTAMP_NS])
 ----
-{2021-08-20 00:00:00=1}
+{'2021-08-20 00:00:00'=1}
 
 # timestamp with time zone
 query I
 SELECT list_histogram(['2021-08-20'::TIMESTAMPTZ])
 ----
-{2021-08-20 00:00:00+00=1}
+{'2021-08-20 00:00:00+00'=1}
 
 # date
 query I
@@ -90,13 +90,13 @@ SELECT list_histogram(['2022-01-02'::DATE])
 query I
 SELECT list_histogram(['15:00:07'::TIME])
 ----
-{15:00:07=1}
+{'15:00:07'=1}
 
 # timetz
 query I
 SELECT list_histogram(['15:00:07'::TIMETZ])
 ----
-{15:00:07+00=1}
+{'15:00:07+00'=1}
 
 # interval
 query I
