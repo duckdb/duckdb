@@ -47,7 +47,6 @@ public:
 	//! The order preservation type of the given operator decided by recursively looking at its children
 	static OrderPreservationType OrderPreservationRecursive(PhysicalOperator &op);
 
-
 protected:
 	unique_ptr<PhysicalOperator> CreatePlan(LogicalOperator &op);
 
