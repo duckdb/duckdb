@@ -9,37 +9,16 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 
 #include "duckdb/planner/column_binding.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
 namespace duckdb {
-inline size_t BloomFilterLookup(size_t num, size_t num_blocks_log, uint64_t *__restrict__ key,
-                                uint64_t *__restrict__ bf, uint64_t *__restrict__ out) {
-	for (size_t i = 0; i < num; i++) {
-		uint64_t block = (key[i] >> (64 - num_blocks_log)) & ((1 << num_blocks_log) - 1);
-		uint64_t mask = (1ULL << ((key[i] >> 0) & 63)) | (1ULL << ((key[i] >> 6) & 63)) |
-		                (1ULL << ((key[i] >> 12) & 63)) | (1ULL << ((key[i] >> 18) & 63)) |
-		                (1ULL << ((key[i] >> 24) & 63)) | (1ULL << ((key[i] >> 30) & 63)) |
-		                (1ULL << ((key[i] >> 36) & 63));
-		out[i] = (bf[block] & mask) == mask;
-	}
-	return num;
-}
-
-inline void BloomFilterInsert(size_t num, size_t num_blocks_log, uint64_t *__restrict__ key,
-                              uint64_t *__restrict__ bf) {
-	for (size_t i = 0; i < num; i++) {
-		uint64_t block = (key[i] >> (64 - num_blocks_log)) & ((1 << num_blocks_log) - 1);
-		uint64_t mask = (1ULL << ((key[i] >> 0) & 63)) | (1ULL << ((key[i] >> 6) & 63)) |
-		                (1ULL << ((key[i] >> 12) & 63)) | (1ULL << ((key[i] >> 18) & 63)) |
-		                (1ULL << ((key[i] >> 24) & 63)) | (1ULL << ((key[i] >> 30) & 63)) |
-		                (1ULL << ((key[i] >> 36) & 63));
-		bf[block] |= mask;
-	}
-}
-
 class BloomFilter {
+public:
+	static constexpr uint32_t MAX_NUM_BLOCKS = 1 << 24;
+
 public:
 	BloomFilter() = default;
 	void Initialize(ClientContext &context_p, uint32_t est_num_rows);
@@ -69,4 +48,25 @@ public:
 private:
 	AllocatedData buf_;
 };
+
+inline size_t BloomFilterLookup(size_t num, size_t num_blocks_log, uint64_t *__restrict__ key,
+                                uint64_t *__restrict__ bf, uint64_t *__restrict__ out) {
+	for (size_t i = 0; i < num; i++) {
+		uint32_t block = (key[i] >> (64 - num_blocks_log)) & (BloomFilter::MAX_NUM_BLOCKS - 1);
+		uint64_t mask = (1ULL << ((key[i] >> 0) & 63)) | (1ULL << ((key[i] >> 6) & 63)) |
+		                (1ULL << ((key[i] >> 12) & 63)) | (1ULL << ((key[i] >> 18) & 63));
+		out[i] = (bf[block] & mask) == mask;
+	}
+	return num;
+}
+
+inline void BloomFilterInsert(size_t num, size_t num_blocks_log, uint64_t *__restrict__ key,
+                              uint64_t *__restrict__ bf) {
+	for (size_t i = 0; i < num; i++) {
+		uint32_t block = (key[i] >> (64 - num_blocks_log)) & (BloomFilter::MAX_NUM_BLOCKS - 1);
+		uint64_t mask = (1ULL << ((key[i] >> 0) & 63)) | (1ULL << ((key[i] >> 6) & 63)) |
+		                (1ULL << ((key[i] >> 12) & 63)) | (1ULL << ((key[i] >> 18) & 63));
+		bf[block] |= mask;
+	}
+}
 } // namespace duckdb

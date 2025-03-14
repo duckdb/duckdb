@@ -5,6 +5,7 @@
 
 #include <random>
 #include <cmath>
+#include <iostream>
 
 namespace duckdb {
 namespace {
@@ -25,7 +26,7 @@ static uint32_t CeilPowerOfTwo(uint32_t n) {
 	return n + 1;
 }
 
-static Vector HashColumns(DataChunk &chunk, vector<uint64_t> &cols) {
+static Vector HashColumns(DataChunk &chunk, vector<idx_t> &cols) {
 	auto count = chunk.size();
 	Vector hashes(LogicalType::HASH);
 	VectorOperations::Hash(chunk.data[cols[0]], hashes, count);
@@ -46,7 +47,7 @@ void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows) {
 	buffer_manager = &BufferManager::GetBufferManager(*context);
 
 	uint32_t min_bits = std::max<uint32_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
-	num_blocks_ = CeilPowerOfTwo(min_bits) >> LOG_BLOCK_SIZE;
+	num_blocks_ = std::min(CeilPowerOfTwo(min_bits) >> LOG_BLOCK_SIZE, MAX_NUM_BLOCKS);
 	num_blocks_log = static_cast<uint32_t>(std::log2(num_blocks_));
 
 	buf_ = buffer_manager->GetBufferAllocator().Allocate(num_blocks_ * sizeof(uint64_t));
