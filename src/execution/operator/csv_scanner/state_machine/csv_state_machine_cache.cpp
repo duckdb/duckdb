@@ -50,7 +50,7 @@ void CSVStateMachineCache::Insert(const CSVStateMachineOptions &state_machine_op
 
 	const auto delimiter_value = state_machine_options.delimiter.GetValue();
 	uint8_t delimiter_first_byte;
-	if (delimiter_value.size() > 0) {
+	if (!delimiter_value.empty()) {
 		delimiter_first_byte = static_cast<uint8_t>(delimiter_value[0]);
 	} else {
 		delimiter_first_byte = static_cast<uint8_t>('\0');
