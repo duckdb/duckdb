@@ -5,7 +5,7 @@ AlterOptions <- AlterTableStmt / AlterViewStmt / AlterSequenceStmt
 
 AlterTableStmt <- 'TABLE'i IfExists? BaseTableName AlterTableOptions
 
-AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability / RenameColumn / RenameAlter
+AlterTableOptions <- AddColumn / DropColumn / AlterColumn / AddConstraint / ChangeNullability / RenameColumn / RenameAlter / SetPartitionedBy
 
 AddConstraint <- 'ADD'i TopLevelConstraint
 AddColumn <- 'ADD'i 'COLUMN'i? IfNotExists? ColumnDefinition
@@ -13,6 +13,7 @@ DropColumn <- 'DROP'i 'COLUMN'i? IfExists? ColumnName DropBehavior?
 AlterColumn <- 'ALTER'i 'COLUMN'i? Identifier AlterColumnEntry
 RenameColumn <- 'RENAME'i 'COLUMN'i? ColumnName 'TO'i Identifier
 RenameAlter <- 'RENAME'i 'TO'i Identifier
+SetPartitionedBy <- 'SET'i 'PARTITIONED'i 'BY'i Parens(List(Expression))
 
 AlterColumnEntry <- AddOrDropDefault / ChangeNullability / AlterType
 
