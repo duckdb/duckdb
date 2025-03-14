@@ -72,7 +72,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		// straightforward case - no need to project input
 		auto result = function.in_out_function(context, data, input, chunk);
 		if (function.ordinality_data.ordinality_request == ordinality_request_t::REQUESTED) {
-			function.ordinality_data.SetOrdinality(chunk, gstate.ordinality_current_idx, gstate.reset_ordinality);
+			function.ordinality_data.SetOrdinality(chunk, gstate.ordinality_current_idx);
 		}
 		return result;
 	}
@@ -105,7 +105,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	}
 	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
 	if (function.ordinality_data.ordinality_request == ordinality_request_t::REQUESTED) {
-		function.ordinality_data.SetOrdinality(chunk, gstate.ordinality_current_idx, gstate.reset_ordinality);
+		function.ordinality_data.SetOrdinality(chunk, gstate.ordinality_current_idx);
 	}
 	if (result == OperatorResultType::FINISHED) {
 		return result;

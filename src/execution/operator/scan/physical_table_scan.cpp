@@ -105,7 +105,6 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 
 	if (function.function) {
 		function.function(context.client, data, chunk);
-		// TODO: Physical Window Operator for TableFunctions WITH ORDINALITY
 		return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 	}
 
@@ -125,7 +124,7 @@ SourceResultType PhysicalTableScan::GetData(ExecutionContext &context, DataChunk
 	}
 
 	if (function.ordinality_data.ordinality_request == ordinality_request_t::REQUESTED) {
-		function.ordinality_data.SetOrdinality(chunk, g_state.ordinality_current_idx, g_state.reset_ordinality);
+		function.ordinality_data.SetOrdinality(chunk, g_state.ordinality_current_idx);
 	}
 
 	if (chunk.size() == 0 && function.in_out_function_final) {
