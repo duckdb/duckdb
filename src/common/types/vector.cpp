@@ -1351,7 +1351,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 	auto &logical_type = GetType();
 	const auto vtype = // older versions that only supported flat vectors did not serialize vector_type,
-	    deserializer.ReadPropertyWithExplicitDefault<VectorType>(99, "vector_type", VectorType::FLAT_VECTOR);
+	    deserializer.ReadPropertyWithExplicitDefault<VectorType>(200, "vector_type", VectorType::FLAT_VECTOR);
 
 	// first handle deserialization of compressed vector types
 	if (vtype == VectorType::CONSTANT_VECTOR) {
@@ -1360,14 +1360,14 @@ void Vector::Deserialize(Deserializer &deserializer, idx_t count) {
 		return;
 	} else if (vtype == VectorType::DICTIONARY_VECTOR) {
 		SelectionVector sel(count);
-		deserializer.ReadProperty(100, "sel_vector", reinterpret_cast<data_ptr_t>(sel.data()), sizeof(sel_t) * count);
-		const auto dict_count = deserializer.ReadProperty<idx_t>(101, "dict_count");
+		deserializer.ReadProperty(201, "sel_vector", reinterpret_cast<data_ptr_t>(sel.data()), sizeof(sel_t) * count);
+		const auto dict_count = deserializer.ReadProperty<idx_t>(202, "dict_count");
 		Vector::Deserialize(deserializer, dict_count); // deserialize the dictionary in this vector
 		Vector::Slice(sel, count);                     // will create a dictionary vector
 		return;
 	} else if (vtype == VectorType::SEQUENCE_VECTOR) {
-		const int64_t seq_start = deserializer.ReadProperty<int64_t>(100, "seq_start");
-		const int64_t seq_increment = deserializer.ReadProperty<int64_t>(101, "seq_increment");
+		const int64_t seq_start = deserializer.ReadProperty<int64_t>(201, "seq_start");
+		const int64_t seq_increment = deserializer.ReadProperty<int64_t>(202, "seq_increment");
 		Vector::Sequence(seq_start, seq_increment, count);
 		return;
 	}
