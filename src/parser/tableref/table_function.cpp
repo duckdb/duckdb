@@ -13,6 +13,7 @@ string TableFunctionRef::ToString() const {
 	if (with_ordinality == ordinality_request_t::REQUESTED) {
 		result += " WITH ORDINALITY";
 	}
+	return result;
 }
 
 bool TableFunctionRef::Equals(const TableRef &other_p) const {
