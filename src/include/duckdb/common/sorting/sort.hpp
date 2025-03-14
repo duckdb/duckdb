@@ -8,8 +8,8 @@
 
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/execution/physical_operator_states.hpp"
 
 namespace duckdb {
 

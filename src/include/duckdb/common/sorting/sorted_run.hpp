@@ -8,21 +8,30 @@
 
 #pragma once
 
-#include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/common/types/row/tuple_data_states.hpp"
 
 namespace duckdb {
+
+class BufferManager;
+class DataChunk;
+class TupleDataCollection;
+class TupleDataLayout;
 
 class SortedRun {
 public:
 	SortedRun(BufferManager &buffer_manager, const TupleDataLayout &key_layout, const TupleDataLayout &payload_layout);
 
+	~SortedRun();
+
 public:
 	//! Appends data to key/data collections
 	void Sink(DataChunk &key, DataChunk &payload);
-	//! Sorts the data (reorders payload and unpins data if external)
+	//! Sorts the data (physically reorder data if external)
 	void Finalize(bool external);
 
-private:
+	idx_t Count() const;
+
+public:
 	//! Key and payload collections (and append states)
 	unique_ptr<TupleDataCollection> key_data;
 	unique_ptr<TupleDataCollection> payload_data;

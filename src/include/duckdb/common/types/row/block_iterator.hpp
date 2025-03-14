@@ -8,39 +8,70 @@
 
 #pragma once
 
+#include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/vector.hpp"
 
 namespace duckdb {
 
-//! Shared state for block iterators that iterate over the same data
-template <class T>
-class block_iterator_state_t { // NOLINT: not using camelcase on purpose here
-	using value_type = T;
+class TupleDataCollection;
+
+enum class BlockIteratorStateType : int8_t {
+	//! For fixed_in_memory_block_iterator_state_t
+	FIXED_IN_MEMORY,
+	//! For variable_in_memory_block_iterator_state_t
+	VARIABLE_IN_MEMORY,
+	//! For fixed_external_block_iterator_state_t
+	FIXED_EXTERNAL,
+	//! For variable_external_block_iterator_state_t
+	VARIABLE_EXTERNAL,
+};
+
+BlockIteratorStateType GetBlockIteratorStateType(const bool &fixed_blocks, const bool &external);
+
+class fixed_in_memory_block_iterator_state_t { // NOLINT: not using camelcase on purpose here
+public:
+	explicit fixed_in_memory_block_iterator_state_t(const TupleDataCollection &data);
 
 public:
-	block_iterator_state_t(const vector<data_ptr_t> &block_ptrs_p, const idx_t &tuples_per_block,
-	                       const idx_t &tuple_count_p)
-	    : block_ptrs(ConvertBlockPointers(block_ptrs_p)), fast_mod(tuples_per_block), tuple_count(tuple_count_p) {
+	template <class T>
+	T &GetValueAtIndex(const idx_t &n) const {
+		D_ASSERT(n < tuple_count);
+		const auto quotient = fast_mod.Div(n);
+		return reinterpret_cast<T *const>(block_ptrs[quotient])[fast_mod.Mod(n, quotient)];
 	}
 
 private:
-	static unsafe_vector<value_type *const> ConvertBlockPointers(const vector<data_ptr_t> &block_ptrs_p) {
-		unsafe_vector<value_type *const> converted_block_ptrs;
-		converted_block_ptrs.reserve(block_ptrs_p.size());
-		for (const auto &block_ptr : block_ptrs_p) {
-			converted_block_ptrs.emplace_back(reinterpret_cast<value_type *const>(block_ptr));
-		}
-		return converted_block_ptrs;
-	}
+	static unsafe_vector<const data_ptr_t> ConvertBlockPointers(const vector<data_ptr_t> &block_ptrs);
 
-public:
-	const unsafe_vector<value_type *const> block_ptrs;
+private:
+	const unsafe_vector<const data_ptr_t> block_ptrs;
 	const FastMod<idx_t> fast_mod;
 	const idx_t tuple_count;
 };
 
+class variable_in_memory_block_iterator_state_t { // NOLINT: not using camelcase on purpose here
+};
+
+class fixed_external_block_iterator_state_t { // NOLINT: not using camelcase on purpose here
+};
+
+class variable_external_block_iterator_state_t { // NOLINT: not using camelcase on purpose here
+};
+
+//! Utility so we can get the state using the type
+template <BlockIteratorStateType T>
+using block_iterator_state_t = typename std::conditional<
+    T == BlockIteratorStateType::FIXED_IN_MEMORY, fixed_in_memory_block_iterator_state_t,
+    typename std::conditional<
+        T == BlockIteratorStateType::VARIABLE_IN_MEMORY, variable_in_memory_block_iterator_state_t,
+        typename std::conditional<T == BlockIteratorStateType::FIXED_EXTERNAL, fixed_external_block_iterator_state_t,
+                                  typename std::conditional<T == BlockIteratorStateType::VARIABLE_EXTERNAL,
+                                                            variable_external_block_iterator_state_t,
+                                                            void // Throws error if we get here
+                                                            >::type>::type>::type>::type;
+
 //! Iterator for data spread out over multiple blocks
-template <class T>
+template <class STATE, class T>
 class block_iterator_t { // NOLINT: not using camelcase on purpose here
 public:
 	using iterator_category = std::random_access_iterator_tag;
@@ -51,8 +82,10 @@ public:
 	using traits = std::iterator_traits<block_iterator_t>;
 
 public:
-	block_iterator_t(const block_iterator_state_t<value_type> &state_p, const difference_type &index_p)
-	    : state(state_p), index(index_p) {
+	explicit block_iterator_t(STATE &state_p) : state(state_p), index(0) {
+	}
+
+	block_iterator_t(STATE &state_p, const difference_type &index_p) : state(state_p), index(index_p) {
 	}
 
 	block_iterator_t(const block_iterator_t &other) : state(other.state), index(other.index) {
@@ -112,9 +145,7 @@ public:
 	}
 
 	reference operator[](const difference_type &n) const {
-		D_ASSERT(n < state.tuple_count);
-		const auto quotient = state.fast_mod.Div(n);
-		return state.block_ptrs[quotient][state.fast_mod.Mod(n, quotient)];
+		return state.template GetValueAtIndex<T>(n);
 	}
 
 	//! Difference between iterators
@@ -144,7 +175,7 @@ public:
 	}
 
 private:
-	const block_iterator_state_t<value_type> &state;
+	STATE &state;
 	difference_type index;
 };
 

@@ -8,11 +8,42 @@
 
 #pragma once
 
+#include "duckdb/execution/physical_operator_states.hpp"
+
 namespace duckdb {
 
+struct ProgressData;
+class SortedRun;
+class SortedRunMergerLocalState;
+class SortedRunMergerGlobalState;
+enum class SortKeyType : uint8_t;
+
 class SortedRunMerger {
+	friend class SortedRunMergerLocalState;
+	friend class SortedRunMergerGlobalState;
+
 public:
-	SortedRunMerger();
+	SortedRunMerger(vector<unique_ptr<SortedRun>> &&sorted_runs, idx_t partition_size, bool external,
+	                bool fixed_blocks);
+
+public:
+	//===--------------------------------------------------------------------===//
+	// Source Interface
+	//===--------------------------------------------------------------------===//
+	unique_ptr<LocalSourceState> GetLocalSourceState(ExecutionContext &context, GlobalSourceState &gstate) const;
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const;
+	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const;
+	OperatorPartitionData GetPartitionData(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
+	                                       LocalSourceState &lstate, const OperatorPartitionInfo &partition_info) const;
+	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
+
+public:
+	vector<unique_ptr<SortedRun>> sorted_runs;
+	const idx_t total_count;
+
+	const idx_t partition_size;
+	const bool external;
+	const bool fixed_blocks;
 };
 
 } // namespace duckdb

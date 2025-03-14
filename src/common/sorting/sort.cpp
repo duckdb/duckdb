@@ -1,8 +1,9 @@
 #include "duckdb/common/sorting/sort.hpp"
 
-#include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/sorting/sorted_run.hpp"
+#include "duckdb/common/types/row/tuple_data_collection.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 

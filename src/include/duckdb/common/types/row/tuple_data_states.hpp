@@ -11,6 +11,7 @@
 #include "duckdb/common/mutex.hpp"
 #include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
 
 namespace duckdb {

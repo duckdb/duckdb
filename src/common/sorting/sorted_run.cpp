@@ -1,5 +1,6 @@
 #include "duckdb/common/sorting/sorted_run.hpp"
 
+#include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/sorting/sort_key.hpp"
 #include "duckdb/common/types/row/block_iterator.hpp"
 #include "pdqsort.h"
@@ -16,6 +17,9 @@ SortedRun::SortedRun(BufferManager &buffer_manager, const TupleDataLayout &key_l
 	if (payload_data) {
 		payload_data->InitializeAppend(payload_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 	}
+}
+
+SortedRun::~SortedRun() {
 }
 
 template <SortKeyType SORT_KEY_TYPE>
@@ -59,12 +63,13 @@ void SortedRun::Sink(DataChunk &key, DataChunk &payload) {
 
 template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSort(const TupleDataCollection &key_data) {
-	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	D_ASSERT(SORT_KEY_TYPE == key_data.GetLayout().GetSortKeyType());
-	block_iterator_state_t<SORT_KEY> block_iterator_state(key_data.GetRowBlockPointers(), key_data.TuplesPerBlock(),
-	                                                      key_data.Count());
-	duckdb_pdqsort::pdqsort_branchless(block_iterator_t<SORT_KEY>(block_iterator_state, 0),
-	                                   block_iterator_t<SORT_KEY>(block_iterator_state, key_data.Count()));
+	using BLOCK_ITERATOR_STATE = block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>;
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	const BLOCK_ITERATOR_STATE state(key_data);
+	auto begin = block_iterator_t<const BLOCK_ITERATOR_STATE, SORT_KEY>(state, 0);
+	auto end = block_iterator_t<const BLOCK_ITERATOR_STATE, SORT_KEY>(state, key_data.Count());
+	duckdb_pdqsort::pdqsort_branchless(begin, end);
 }
 
 static void Sort(const TupleDataCollection &key_data) {
@@ -119,6 +124,7 @@ void SortedRun::Finalize(bool external) {
 	key_data->FinalizePinState(key_append_state.pin_state);
 	key_data->VerifyEverythingPinned();
 	if (payload_data) {
+		D_ASSERT(key_data->Count() == payload_data->Count());
 		payload_data->FinalizePinState(payload_append_state.pin_state);
 		payload_data->VerifyEverythingPinned();
 	}
@@ -140,6 +146,10 @@ void SortedRun::Finalize(bool external) {
 
 	key_data->Unpin();
 	finalized = true;
+}
+
+idx_t SortedRun::Count() const {
+	return key_data->Count();
 }
 
 } // namespace duckdb

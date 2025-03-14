@@ -91,7 +91,7 @@ public:
 };
 
 template <SortKeyType>
-struct SortKey {};
+struct SortKey;
 
 template <>
 struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_8> : FixedSortKey<SortKey<SortKeyType::NO_PAYLOAD_FIXED_8>> {
