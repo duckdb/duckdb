@@ -1,0 +1,213 @@
+diff --git a/src/include/storage/mysql_catalog.hpp b/src/include/storage/mysql_catalog.hpp
+index 58975f3..b189814 100644
+--- a/src/include/storage/mysql_catalog.hpp
++++ b/src/include/storage/mysql_catalog.hpp
+@@ -41,14 +41,11 @@ public:
+ 	                                           OnEntryNotFound if_not_found,
+ 	                                           QueryErrorContext error_context = QueryErrorContext()) override;
+ 
+-	unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
+-	                                        unique_ptr<PhysicalOperator> plan) override;
+-	unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
+-	                                               unique_ptr<PhysicalOperator> plan) override;
+-	unique_ptr<PhysicalOperator> PlanDelete(ClientContext &context, LogicalDelete &op,
+-	                                        unique_ptr<PhysicalOperator> plan) override;
+-	unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
+-	                                        unique_ptr<PhysicalOperator> plan) override;
++    PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner, LogicalCreateTable &op, PhysicalOperator &plan) override;
++    PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op, optional_ptr<PhysicalOperator> plan) override;
++    PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op, PhysicalOperator &plan) override;
++    PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op, PhysicalOperator &plan) override;
++
+ 	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
+ 	                                            unique_ptr<LogicalOperator> plan) override;
+ 
+diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
+index 8dcac4c..eefbd59 100644
+--- a/src/storage/mysql_execute_query.cpp
++++ b/src/storage/mysql_execute_query.cpp
+@@ -85,7 +85,7 @@ string ExtractFilters(PhysicalOperator &child, const string &statement) {
+ 	// in the planning process to convert this into a SQL statement
+ 	if (child.type == PhysicalOperatorType::FILTER) {
+ 		auto &filter = child.Cast<PhysicalFilter>();
+-		auto result = ExtractFilters(*child.children[0], statement);
++		auto result = ExtractFilters(child.children[0], statement);
+ 		auto filter_str = filter.expression->ToString();
+ 		if (result.empty()) {
+ 			return filter_str;
+@@ -105,7 +105,7 @@ string ExtractFilters(PhysicalOperator &child, const string &statement) {
+ 				                              "are supported in the MySQL connector");
+ 			}
+ 		}
+-		return ExtractFilters(*child.children[0], statement);
++		return ExtractFilters(child.children[0], statement);
+ 	} else if (child.type == PhysicalOperatorType::TABLE_SCAN) {
+ 		auto &table_scan = child.Cast<PhysicalTableScan>();
+ 		if (!table_scan.table_filters) {
+@@ -154,15 +154,14 @@ string ConstructDeleteStatement(LogicalDelete &op, PhysicalOperator &child) {
+ 	return result;
+ }
+ 
+-unique_ptr<PhysicalOperator> MySQLCatalog::PlanDelete(ClientContext &context, LogicalDelete &op,
+-                                                      unique_ptr<PhysicalOperator> plan) {
++PhysicalOperator &MySQLCatalog::PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op, PhysicalOperator &plan) {
+ 	if (op.return_chunk) {
+ 		throw BinderException("RETURNING clause not yet supported for deletion of a MySQL table");
+ 	}
+ 
+-	auto result = make_uniq<MySQLExecuteQuery>(op, "DELETE", op.table, ConstructDeleteStatement(op, *plan));
+-	result->children.push_back(std::move(plan));
+-	return std::move(result);
++	auto &execute = planner.Make<MySQLExecuteQuery>(op, "DELETE", op.table, ConstructDeleteStatement(op, plan));
++    execute.children.push_back(plan);
++	return execute;
+ }
+ 
+ string ConstructUpdateStatement(LogicalUpdate &op, PhysicalOperator &child) {
+@@ -196,21 +195,21 @@ string ConstructUpdateStatement(LogicalUpdate &op, PhysicalOperator &child) {
+ 		result += proj.select_list[ref.index]->ToString();
+ 	}
+ 	result += " ";
+-	auto filters = ExtractFilters(*child.children[0], "UPDATE");
++	auto filters = ExtractFilters(child.children[0], "UPDATE");
+ 	if (!filters.empty()) {
+ 		result += " WHERE " + filters;
+ 	}
+ 	return result;
+ }
+ 
+-unique_ptr<PhysicalOperator> MySQLCatalog::PlanUpdate(ClientContext &context, LogicalUpdate &op,
+-                                                      unique_ptr<PhysicalOperator> plan) {
++PhysicalOperator &MySQLCatalog::PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op, PhysicalOperator &plan) {
+ 	if (op.return_chunk) {
+ 		throw BinderException("RETURNING clause not yet supported for updates of a MySQL table");
+ 	}
+-	auto result = make_uniq<MySQLExecuteQuery>(op, "UPDATE", op.table, ConstructUpdateStatement(op, *plan));
+-	result->children.push_back(std::move(plan));
+-	return std::move(result);
++
++	auto &execute = planner.Make<MySQLExecuteQuery>(op, "UPDATE", op.table, ConstructUpdateStatement(op, plan));
++    execute.children.push_back(plan);
++	return execute;
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/storage/mysql_index.cpp b/src/storage/mysql_index.cpp
+index 1381630..587cdf2 100644
+--- a/src/storage/mysql_index.cpp
++++ b/src/storage/mysql_index.cpp
+@@ -37,8 +37,8 @@ public:
+ 	unique_ptr<CreateIndexInfo> info;
+ 	TableCatalogEntry &table;
+ 
+-	unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) override {
+-		return make_uniq<MySQLCreateIndex>(std::move(info), table);
++	PhysicalOperator &CreatePlan(ClientContext &context, PhysicalPlanGenerator &planner) override {
++		return planner.Make<MySQLCreateIndex>(std::move(info), table);
+ 	}
+ 
+ 	void Serialize(Serializer &serializer) const override {
+diff --git a/src/storage/mysql_insert.cpp b/src/storage/mysql_insert.cpp
+index 7a62b23..19e6586 100644
+--- a/src/storage/mysql_insert.cpp
++++ b/src/storage/mysql_insert.cpp
+@@ -265,10 +265,10 @@ InsertionOrderPreservingMap<string> MySQLInsert::ParamsToString() const {
+ //===--------------------------------------------------------------------===//
+ // Plan
+ //===--------------------------------------------------------------------===//
+-unique_ptr<PhysicalOperator> AddCastToMySQLTypes(ClientContext &context, unique_ptr<PhysicalOperator> plan) {
++PhysicalOperator &AddCastToMySQLTypes(ClientContext &context, PhysicalPlanGenerator &planner, PhysicalOperator &plan) {
+ 	// check if we need to cast anything
+ 	bool require_cast = false;
+-	auto &child_types = plan->GetTypes();
++	auto &child_types = plan.GetTypes();
+ 	for (auto &type : child_types) {
+ 		auto mysql_type = MySQLUtils::ToMySQLType(type);
+ 		if (mysql_type != type) {
+@@ -276,54 +276,51 @@ unique_ptr<PhysicalOperator> AddCastToMySQLTypes(ClientContext &context, unique_
+ 			break;
+ 		}
+ 	}
+-	if (require_cast) {
+-		vector<LogicalType> mysql_types;
+-		vector<unique_ptr<Expression>> select_list;
+-		for (idx_t i = 0; i < child_types.size(); i++) {
+-			auto &type = child_types[i];
+-			unique_ptr<Expression> expr;
+-			expr = make_uniq<BoundReferenceExpression>(type, i);
++    if (!require_cast) {
++        return plan;
++    }
+ 
+-			auto mysql_type = MySQLUtils::ToMySQLType(type);
+-			if (mysql_type != type) {
+-				// add a cast
+-				expr = BoundCastExpression::AddCastToType(context, std::move(expr), mysql_type);
+-			}
+-			mysql_types.push_back(std::move(mysql_type));
+-			select_list.push_back(std::move(expr));
+-		}
+-		// we need to cast: add casts
+-		auto proj =
+-		    make_uniq<PhysicalProjection>(std::move(mysql_types), std::move(select_list), plan->estimated_cardinality);
+-		proj->children.push_back(std::move(plan));
+-		plan = std::move(proj);
+-	}
++    vector<LogicalType> mysql_types;
++    vector<unique_ptr<Expression>> select_list;
++    for (idx_t i = 0; i < child_types.size(); i++) {
++        auto &type = child_types[i];
++        unique_ptr<Expression> expr;
++        expr = make_uniq<BoundReferenceExpression>(type, i);
+ 
+-	return plan;
++        auto mysql_type = MySQLUtils::ToMySQLType(type);
++        if (mysql_type != type) {
++            // add a cast
++            expr = BoundCastExpression::AddCastToType(context, std::move(expr), mysql_type);
++        }
++        mysql_types.push_back(std::move(mysql_type));
++        select_list.push_back(std::move(expr));
++    }
++    // we need to cast: add casts
++    auto &proj = planner.Make<PhysicalProjection>(std::move(mysql_types), std::move(select_list), plan.estimated_cardinality);
++    proj.children.push_back(plan);
++    return proj;
+ }
+ 
+-unique_ptr<PhysicalOperator> MySQLCatalog::PlanInsert(ClientContext &context, LogicalInsert &op,
+-                                                      unique_ptr<PhysicalOperator> plan) {
++PhysicalOperator &MySQLCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op, optional_ptr<PhysicalOperator> plan) {
+ 	if (op.return_chunk) {
+ 		throw BinderException("RETURNING clause not yet supported for insertion into MySQL table");
+ 	}
+ 	if (op.action_type != OnConflictAction::THROW) {
+ 		throw BinderException("ON CONFLICT clause not yet supported for insertion into MySQL table");
+ 	}
+-	plan = AddCastToMySQLTypes(context, std::move(plan));
+ 
+-	auto insert = make_uniq<MySQLInsert>(op, op.table, op.column_index_map);
+-	insert->children.push_back(std::move(plan));
+-	return std::move(insert);
++    D_ASSERT(plan);
++	auto &inner_plan = AddCastToMySQLTypes(context, planner, *plan);
++	auto &insert = planner.Make<MySQLInsert>(op, op.table, op.column_index_map);
++	insert.children.push_back(inner_plan);
++	return insert;
+ }
+ 
+-unique_ptr<PhysicalOperator> MySQLCatalog::PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
+-                                                             unique_ptr<PhysicalOperator> plan) {
+-	plan = AddCastToMySQLTypes(context, std::move(plan));
+-
+-	auto insert = make_uniq<MySQLInsert>(op, op.schema, std::move(op.info));
+-	insert->children.push_back(std::move(plan));
+-	return std::move(insert);
++PhysicalOperator &MySQLCatalog::PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner, LogicalCreateTable &op, PhysicalOperator &plan) {
++	auto &inner_plan = AddCastToMySQLTypes(context, planner, plan);
++	auto &insert = planner.Make<MySQLInsert>(op, op.schema, std::move(op.info));
++	insert.children.push_back(plan);
++	return insert;
+ }
+ 
+ } // namespace duckdb

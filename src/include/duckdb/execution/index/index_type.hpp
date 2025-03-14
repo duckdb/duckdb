@@ -14,6 +14,7 @@
 #include "duckdb/common/string.hpp"
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 
 namespace duckdb {
 
@@ -48,15 +49,17 @@ struct CreateIndexInput {
 struct PlanIndexInput {
 	ClientContext &context;
 	LogicalCreateIndex &op;
-	unique_ptr<PhysicalOperator> &table_scan;
+	PhysicalPlanGenerator &planner;
+	PhysicalOperator &table_scan;
 
-	PlanIndexInput(ClientContext &context_p, LogicalCreateIndex &op_p, unique_ptr<PhysicalOperator> &table_scan_p)
-	    : context(context_p), op(op_p), table_scan(table_scan_p) {
+	PlanIndexInput(ClientContext &context_p, LogicalCreateIndex &op_p, PhysicalPlanGenerator &planner,
+	               PhysicalOperator &table_scan_p)
+	    : context(context_p), op(op_p), planner(planner), table_scan(table_scan_p) {
 	}
 };
 
 typedef unique_ptr<BoundIndex> (*index_create_function_t)(CreateIndexInput &input);
-typedef unique_ptr<PhysicalOperator> (*index_plan_function_t)(PlanIndexInput &input);
+typedef PhysicalOperator &(*index_plan_function_t)(PlanIndexInput &input);
 
 //! A index "type"
 class IndexType {

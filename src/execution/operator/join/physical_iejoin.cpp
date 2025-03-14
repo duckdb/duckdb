@@ -17,11 +17,10 @@
 
 namespace duckdb {
 
-PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, unique_ptr<PhysicalOperator> left,
-                               unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                               idx_t estimated_cardinality)
-    : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, std::move(left), std::move(right), std::move(cond),
-                        join_type, estimated_cardinality) {
+PhysicalIEJoin::PhysicalIEJoin(LogicalComparisonJoin &op, PhysicalOperator &left, PhysicalOperator &right,
+                               vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalRangeJoin(op, PhysicalOperatorType::IE_JOIN, left, right, std::move(cond), join_type,
+                        estimated_cardinality) {
 
 	// 1. let L1 (resp. L2) be the array of column X (resp. Y)
 	D_ASSERT(conditions.size() >= 2);
@@ -85,13 +84,13 @@ public:
 	IEJoinGlobalState(ClientContext &context, const PhysicalIEJoin &op) : child(0) {
 		tables.resize(2);
 		RowLayout lhs_layout;
-		lhs_layout.Initialize(op.children[0]->types);
+		lhs_layout.Initialize(op.children[0].get().GetTypes());
 		vector<BoundOrderByNode> lhs_order;
 		lhs_order.emplace_back(op.lhs_orders[0].Copy());
 		tables[0] = make_uniq<GlobalSortedTable>(context, lhs_order, lhs_layout, op);
 
 		RowLayout rhs_layout;
-		rhs_layout.Initialize(op.children[1]->types);
+		rhs_layout.Initialize(op.children[1].get().GetTypes());
 		vector<BoundOrderByNode> rhs_order;
 		rhs_order.emplace_back(op.rhs_orders[0].Copy());
 		tables[1] = make_uniq<GlobalSortedTable>(context, rhs_order, rhs_layout, op);
@@ -692,7 +691,7 @@ void PhysicalIEJoin::ResolveComplexJoin(ExecutionContext &context, DataChunk &re
 	auto &left_table = *ie_sink.tables[0];
 	auto &right_table = *ie_sink.tables[1];
 
-	const auto left_cols = children[0]->GetTypes().size();
+	const auto left_cols = children[0].get().GetTypes().size();
 	auto &chunk = state.unprojected;
 	do {
 		SelectionVector lsel(STANDARD_VECTOR_SIZE);
@@ -973,7 +972,7 @@ SourceResultType PhysicalIEJoin::GetData(ExecutionContext &context, DataChunk &r
 	}
 
 	// Process LEFT OUTER results
-	const auto left_cols = children[0]->GetTypes().size();
+	const auto left_cols = children[0].get().GetTypes().size();
 	while (ie_lstate.left_matches) {
 		const idx_t count = ie_lstate.SelectOuterRows(ie_lstate.left_matches);
 		if (!count) {
@@ -1044,11 +1043,11 @@ void PhysicalIEJoin::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeli
 
 	// Build out LHS
 	auto lhs_pipeline = child_meta_pipeline.GetBasePipeline();
-	children[0]->BuildPipelines(*lhs_pipeline, child_meta_pipeline);
+	children[0].get().BuildPipelines(*lhs_pipeline, child_meta_pipeline);
 
 	// Build out RHS
 	auto &rhs_pipeline = child_meta_pipeline.CreatePipeline();
-	children[1]->BuildPipelines(rhs_pipeline, child_meta_pipeline);
+	children[1].get().BuildPipelines(rhs_pipeline, child_meta_pipeline);
 
 	// Despite having the same sink, RHS and everything created after it need their own (same) PipelineFinishEvent
 	child_meta_pipeline.AddFinishEvent(rhs_pipeline);

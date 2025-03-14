@@ -51,7 +51,7 @@ public:
 	}
 
 	//! Plan index construction.
-	static unique_ptr<PhysicalOperator> CreatePlan(PlanIndexInput &input);
+	static PhysicalOperator &CreatePlan(PlanIndexInput &input);
 
 	//! Root of the tree.
 	Node tree = Node();

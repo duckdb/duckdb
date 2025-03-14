@@ -5,17 +5,16 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalPrepare &op) {
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalPrepare &op) {
+	// Generate the physical plan only if all parameters are bound.
+	// Otherwise, the physical plan is never used.
 	D_ASSERT(op.children.size() <= 1);
-
-	// generate physical plan only when all parameters are bound (otherwise the physical plan won't be used anyway)
 	if (op.prepared->properties.bound_all_parameters && !op.children.empty()) {
-		auto plan = CreatePlan(*op.children[0]);
-		op.prepared->types = plan->types;
-		op.prepared->plan = std::move(plan);
+		PhysicalPlanGenerator inner_planner(context);
+		op.prepared->physical_plan = inner_planner.PlanInternal(*op.children[0]);
+		op.prepared->types = op.prepared->physical_plan->Root().types;
 	}
-
-	return make_uniq<PhysicalPrepare>(op.name, std::move(op.prepared), op.estimated_cardinality);
+	return Make<PhysicalPrepare>(op.name, std::move(op.prepared), op.estimated_cardinality);
 }
 
 } // namespace duckdb

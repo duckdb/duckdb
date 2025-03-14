@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCreateSecret &op) {
-	return make_uniq<PhysicalCreateSecret>(op.info, op.estimated_cardinality);
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateSecret &op) {
+	return Make<PhysicalCreateSecret>(op.info, op.estimated_cardinality);
 }
 
 } // namespace duckdb

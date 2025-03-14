@@ -19,9 +19,9 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::LEFT_DELIM_JOIN;
 
 public:
-	PhysicalLeftDelimJoin(vector<LogicalType> types, unique_ptr<PhysicalOperator> original_join,
-	                      vector<const_reference<PhysicalOperator>> delim_scans, idx_t estimated_cardinality,
-	                      optional_idx delim_idx);
+	PhysicalLeftDelimJoin(PhysicalPlanGenerator &planner, vector<LogicalType> types, PhysicalOperator &original_join,
+	                      PhysicalOperator &distinct, const vector<const_reference<PhysicalOperator>> &delim_scans,
+	                      idx_t estimated_cardinality, optional_idx delim_idx);
 
 public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
