@@ -46,7 +46,7 @@ struct IndexScanLocalState : public LocalTableFunctionState {
 	ColumnFetchState fetch_state;
 	//! The current position in the local storage scan.
 	TableScanState scan_state;
-	//! The column IDs or the local storage scan.
+	//! The column IDs of the local storage scan.
 	vector<StorageIndex> column_ids;
 };
 
