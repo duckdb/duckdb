@@ -137,7 +137,6 @@ public:
 		auto &storage = duck_table.GetStorage();
 		auto &local_storage = LocalStorage::Get(context.client, duck_table.catalog);
 
-		const auto &columns = duck_table.GetColumns();
 		for (const auto &col_idx : input.column_indexes) {
 			l_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
 		}
