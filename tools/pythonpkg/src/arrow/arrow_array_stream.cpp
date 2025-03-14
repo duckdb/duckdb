@@ -339,7 +339,7 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
 			if (expression.is(py::none())) {
 				expression = std::move(child_expression);
-			} else {
+			} else if (!child_expression.is(py::none())) {
 				expression = expression.attr("__or__")(child_expression);
 			}
 		}
@@ -353,7 +353,7 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
 			if (expression.is(py::none())) {
 				expression = std::move(child_expression);
-			} else {
+			} else if (!child_expression.is(py::none())) {
 				expression = expression.attr("__and__")(child_expression);
 			}
 		}
