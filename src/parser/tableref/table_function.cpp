@@ -9,7 +9,11 @@ TableFunctionRef::TableFunctionRef() : TableRef(TableReferenceType::TABLE_FUNCTI
 }
 
 string TableFunctionRef::ToString() const {
-	return BaseToString(function->ToString(), column_name_alias);
+	auto result = BaseToString(function->ToString(), column_name_alias);
+	if (with_ordinality == ordinality_request_t::REQUESTED) {
+		result += " WITH ORDINALITY";
+	}
+	return result;
 }
 
 bool TableFunctionRef::Equals(const TableRef &other_p) const {
@@ -25,6 +29,7 @@ unique_ptr<TableRef> TableFunctionRef::Copy() {
 
 	copy->function = function->Copy();
 	copy->column_name_alias = column_name_alias;
+	copy->with_ordinality = with_ordinality;
 	CopyProperties(*copy);
 
 	return std::move(copy);
