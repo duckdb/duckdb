@@ -26,7 +26,6 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'brotli', 'common')]
     includes += [os.path.join('third_party', 'brotli', 'dec')]
     includes += [os.path.join('third_party', 'brotli', 'enc')]
-    includes += [os.path.join('third_party', 'mbedtls')]
     includes += [os.path.join('third_party', 'mbedtls', 'include')]
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
     includes += [os.path.join('third_party', 'miniz')]
