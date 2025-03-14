@@ -48,23 +48,21 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(DBConfig &config, 
 	py::list projection_list = py::cast(column_list);
 
 	bool has_filter = filters && !filters->filters.empty();
+	py::dict kwargs;
+	if (!column_list.empty()) {
+		kwargs["columns"] = projection_list;
+	}
 
 	if (has_filter) {
 		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, filter_to_col,
 		                              client_properties, arrow_table);
-		if (column_list.empty()) {
-			return arrow_scanner(arrow_obj_handle, py::arg("filter") = filter);
-		} else {
-			return arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list, py::arg("filter") = filter);
-		}
-	} else {
-		if (column_list.empty()) {
-			return arrow_scanner(arrow_obj_handle);
-		} else {
-			return arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list);
+		if (!filter.is(py::none())) {
+			kwargs["filter"] = filter;
 		}
 	}
+	return arrow_scanner(arrow_obj_handle, **kwargs);
 }
+
 unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr,
                                                                                 ArrowStreamParameters &parameters) {
 	py::gil_scoped_acquire acquire;
