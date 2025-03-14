@@ -41,6 +41,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("function_name");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("alias_of");
+	return_types.emplace_back(LogicalType::VARCHAR);
+
 	names.emplace_back("function_type");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
@@ -597,6 +600,11 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 
 	// function_name, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(function.name));
+
+	// alias_of, LogicalType::VARCHAR
+	output.SetValue(col++, output_offset,
+	                function.alias_of.empty() || function.alias_of == function.name ? Value()
+	                                                                                : Value(function.alias_of));
 
 	// function_type, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, Value(OP::GetFunctionType()));
