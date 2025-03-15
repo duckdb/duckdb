@@ -15,6 +15,16 @@
 #include <mutex>
 #include <random>
 
+#ifndef RESTRICT
+#if defined(_MSC_VER)
+#define RESTRICT __restrict
+#elif defined(__GNUC__) || defined(__clang__)
+#define RESTRICT __restrict__
+#else
+#define RESTRICT
+#endif
+#endif
+
 namespace duckdb {
 
 // A BF is at most (1 << 21) * 8 = 8 MB
@@ -116,7 +126,7 @@ public:
 	vector<idx_t> BoundColsBuilt;
 
 private:
-	inline size_t BloomFilterLookup(size_t num, uint64_t *__restrict__ key, uint64_t *__restrict__ bf,
+	inline size_t BloomFilterLookup(size_t num, uint64_t *RESTRICT key, uint64_t *RESTRICT bf,
 	                                uint64_t *__restrict__ out) const {
 		for (size_t i = 0; i < num; i++) {
 			uint32_t block = (key[i] >> (64 - num_blocks_log)) & (MAX_NUM_BLOCKS - 1);
@@ -126,7 +136,7 @@ private:
 		return num;
 	}
 
-	inline void BloomFilterInsert(size_t num, uint64_t *__restrict__ key, uint64_t *__restrict__ bf) const {
+	inline void BloomFilterInsert(size_t num, uint64_t *RESTRICT key, uint64_t *RESTRICT bf) const {
 		for (size_t i = 0; i < num; i++) {
 			uint32_t block = (key[i] >> (64 - num_blocks_log)) & (MAX_NUM_BLOCKS - 1);
 			uint64_t mask = masks_.Mask(key[i]);
