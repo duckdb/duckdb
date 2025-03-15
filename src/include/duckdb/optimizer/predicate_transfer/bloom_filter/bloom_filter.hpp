@@ -78,7 +78,7 @@ private:
 	}
 
 	inline uint64_t ROTL64(uint64_t x, int r) {
-		return (x << r) | (x >> (64 - r));
+		return (x << r) | (x >> ((64 - r) & 63));
 	}
 
 	inline uint64_t Mask(int bit_offset) {
