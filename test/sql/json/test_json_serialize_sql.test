@@ -15,6 +15,10 @@ SELECT json_serialize_sql('SELECT *, 1 + 2 FROM tbl1', skip_null := true, skip_e
 statement ok
 SELECT json_serialize_sql('SELECT * FROM (SELECT 1 + 2)', skip_null := true, skip_empty := true);
 
+# Example with all parameters
+statement ok
+SELECT json_serialize_sql('SELECT * FROM (SELECT 1 + 2)', skip_default := true, skip_empty := true, skip_null := true, format := true);
+
 # Example with syntax error
 query I
 SELECT json_serialize_sql('SELECT AND LAUNCH ROCKETS WHERE 1 = 1');
