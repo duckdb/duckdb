@@ -14,14 +14,15 @@
 #include <memory>
 #include <mutex>
 #include <random>
+#include <cstring>
 
-#ifndef RESTRICT
+#ifndef BF_RESTRICT
 #if defined(_MSC_VER)
-#define RESTRICT __restrict
+#define BF_RESTRICT __restrict
 #elif defined(__GNUC__) || defined(__clang__)
-#define RESTRICT __restrict__
+#define BF_RESTRICT __restrict__
 #else
-#define RESTRICT
+#define BF_RESTRICT
 #endif
 #endif
 
@@ -41,10 +42,10 @@ struct BloomFilterMasks {
 	// kMinBitsSet and kMaxBitsSet bits set.
 	BloomFilterMasks();
 
-	inline uint64_t Mask(uint64_t hash) {
+	uint64_t Mask(uint64_t hash) {
 		// (Last kNumMasks Used) The lowest bits of hash are used to pick mask index.
 		int mask_id = static_cast<int>(hash & (kNumMasks - 1));
-		uint64_t result = Mask(mask_id);
+		uint64_t result = GetMask(mask_id);
 
 		// () The next set of hash bits is used to pick the amount of bit rotation of the mask.
 		int rotation = static_cast<int>((hash >> kLogNumMasks) & 63);
@@ -80,18 +81,18 @@ struct BloomFilterMasks {
 	uint8_t masks_[kTotalBytes];
 
 private:
-	inline bool GetBit(const uint8_t *data, uint64_t bit_pos) const {
+	bool GetBit(const uint8_t *data, uint64_t bit_pos) const {
 		return (data[bit_pos / 8] >> (bit_pos % 8)) & 1;
 	}
-	inline void SetBit(uint8_t *data, uint64_t bit_pos) {
+	void SetBit(uint8_t *data, uint64_t bit_pos) {
 		data[bit_pos / 8] |= (1 << (bit_pos % 8));
 	}
 
-	inline uint64_t ROTL64(uint64_t x, int r) {
+	uint64_t ROTL64(uint64_t x, int r) {
 		return (x << r) | (x >> ((64 - r) & 63));
 	}
 
-	inline uint64_t Mask(int bit_offset) {
+	uint64_t GetMask(int bit_offset) {
 		uint64_t value;
 		std::memcpy(&value, masks_ + bit_offset / 8, sizeof(uint64_t));
 		return (value >> (bit_offset % 8)) & kFullMask;
@@ -126,8 +127,8 @@ public:
 	vector<idx_t> BoundColsBuilt;
 
 private:
-	inline size_t BloomFilterLookup(size_t num, uint64_t *RESTRICT key, uint64_t *RESTRICT bf,
-	                                uint64_t *__restrict__ out) const {
+	size_t BloomFilterLookup(size_t num, uint64_t *BF_RESTRICT key, uint64_t *BF_RESTRICT bf,
+	                         uint64_t *BF_RESTRICT out) const {
 		for (size_t i = 0; i < num; i++) {
 			uint32_t block = (key[i] >> (64 - num_blocks_log)) & (MAX_NUM_BLOCKS - 1);
 			uint64_t mask = masks_.Mask(key[i]);
@@ -136,7 +137,7 @@ private:
 		return num;
 	}
 
-	inline void BloomFilterInsert(size_t num, uint64_t *RESTRICT key, uint64_t *RESTRICT bf) const {
+	void BloomFilterInsert(size_t num, uint64_t *BF_RESTRICT key, uint64_t *BF_RESTRICT bf) const {
 		for (size_t i = 0; i < num; i++) {
 			uint32_t block = (key[i] >> (64 - num_blocks_log)) & (MAX_NUM_BLOCKS - 1);
 			uint64_t mask = masks_.Mask(key[i]);
