@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.5...3.29)
 project(CoreFunctionsExtension)
 
 include_directories(include)
+include_directories(../../third_party/parallel_hashmap)
 
 add_subdirectory(aggregate)
 add_subdirectory(scalar)

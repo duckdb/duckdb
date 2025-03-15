@@ -1,0 +1,12 @@
+# name: benchmark/micro/aggregate/mode_aggregate_string.benchmark
+# description: MODE(i) over string
+# group: [aggregate]
+
+name Mode (grouped string)
+group aggregate
+
+load
+CREATE TABLE rank100 AS SELECT i%100 AS a, CONCAT('thisisastringwithrepetitions',i) AS b FROM range(10000000) tbl(i)
+
+run
+SELECT MODE(b) FROM rank100 GROUP BY a

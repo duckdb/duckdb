@@ -1,0 +1,12 @@
+# name: benchmark/micro/aggregate/mode_aggregate_integer.benchmark
+# description: MODE(i) over integer
+# group: [aggregate]
+
+name Mode (grouped integer)
+group aggregate
+
+load
+CREATE TABLE rank100 AS SELECT i%100 AS a, i FROM range(10000000) tbl(i)
+
+run
+SELECT MODE(i) FROM rank100 GROUP BY a
