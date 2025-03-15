@@ -434,7 +434,6 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 	D_ASSERT(val.IsNull() || (val.type().InternalType() == GetType().InternalType()));
 
-	validity.EnsureWritable();
 	validity.Set(index, !val.IsNull());
 	auto physical_type = GetType().InternalType();
 	if (val.IsNull() && !IsStructOrArrayRecursive(GetType())) {
