@@ -33,7 +33,7 @@ struct ModeAttr {
 
 template <class T>
 struct ModeStandard {
-	using MAP_TYPE = phmap::flat_hash_map<T, ModeAttr>;
+	using MAP_TYPE = duckdb_phmap::flat_hash_map<T, ModeAttr>;
 	static MAP_TYPE *CreateEmpty(ArenaAllocator &) {
 		return new MAP_TYPE();
 	}
@@ -48,7 +48,7 @@ struct ModeStandard {
 };
 
 struct ModeString {
-	using MAP_TYPE = OwningStringMap<ModeAttr, phmap::flat_hash_map<string_t, ModeAttr, StringHash, StringEquality>>;
+	using MAP_TYPE = OwningStringMap<ModeAttr, duckdb_phmap::flat_hash_map<string_t, ModeAttr, StringHash, StringEquality>>;
 
 	static MAP_TYPE *CreateEmpty(ArenaAllocator &allocator) {
 		return new MAP_TYPE(allocator);

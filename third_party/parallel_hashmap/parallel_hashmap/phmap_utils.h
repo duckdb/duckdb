@@ -4,9 +4,9 @@
 // ---------------------------------------------------------------------------
 // Copyright (c) 2019, Gregory Popovitch - greg7mdp@gmail.com
 //
-//       minimal header providing phmap::HashState
+//       minimal header providing duckdb_phmap::HashState
 //
-//       use as:  phmap::HashState().combine(0, _first_name, _last_name, _age);
+//       use as:  duckdb_phmap::HashState().combine(0, _first_name, _last_name, _age);
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,7 +40,7 @@
     namespace absl { template <class T> struct Hash; };
 #endif
 
-namespace phmap
+namespace duckdb_phmap
 {
 
 // ---------------------------------------------------------------
@@ -140,7 +140,7 @@ public:
     template <class T> using Hash = ::absl::Hash<T>;
 #elif !defined(PHMAP_USE_ABSL_HASH)
 // ---------------------------------------------------------------
-//               phmap::Hash
+//               duckdb_phmap::Hash
 // ---------------------------------------------------------------
 template <class T>
 struct Hash
@@ -351,7 +351,7 @@ template <typename T, typename... Ts>
 H HashStateBase<H>::combine(H seed, const T& v, const Ts&... vs)
 {
     return HashStateBase<H>::combine(Combiner<H, sizeof(H)>()(
-                                         seed, phmap::Hash<T>()(v)), 
+                                         seed, duckdb_phmap::Hash<T>()(v)), 
                                      vs...);
 }
 
@@ -366,7 +366,7 @@ using HashState = HashStateBase<size_t>;
 template<class T1, class T2> 
 struct Hash<std::pair<T1, T2>> {
     size_t operator()(std::pair<T1, T2> const& p) const noexcept {
-        return phmap::HashState().combine(phmap::Hash<T1>()(p.first), p.second);
+        return duckdb_phmap::HashState().combine(duckdb_phmap::Hash<T1>()(p.first), p.second);
     }
 };
 
@@ -389,7 +389,7 @@ private:
     _hash_helper(size_t seed, const TUP &t) const noexcept {
         const auto &el = std::get<I>(t);
         using el_type = typename std::remove_cv<typename std::remove_reference<decltype(el)>::type>::type;
-        seed = Combiner<size_t, sizeof(size_t)>()(seed, phmap::Hash<el_type>()(el));
+        seed = Combiner<size_t, sizeof(size_t)>()(seed, duckdb_phmap::Hash<el_type>()(el));
         return _hash_helper<I + 1>(seed, t);
     }
 };
@@ -398,7 +398,7 @@ private:
 #endif
 
 
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 #ifdef _MSC_VER
      #pragma warning(pop)  

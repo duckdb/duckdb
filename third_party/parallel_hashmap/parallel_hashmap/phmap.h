@@ -124,7 +124,7 @@
     #include <string_view>
 #endif
 
-namespace phmap {
+namespace duckdb_phmap {
 
 namespace priv {
 
@@ -185,7 +185,7 @@ struct IsDecomposable : std::false_type {};
 
 template <class Policy, class Hash, class Eq, class... Ts>
 struct IsDecomposable<
-    phmap::void_t<decltype(
+    duckdb_phmap::void_t<decltype(
         Policy::apply(RequireUsableKey<typename Policy::key_type, Hash, Eq>(),
                       std::declval<Ts>()...))>,
     Policy, Hash, Eq, Ts...> : std::true_type {};
@@ -708,8 +708,8 @@ namespace memory_internal {
 // ----------------------------------------------------------------------------
 template <class Alloc, class T, class Tuple, size_t... I>
 void ConstructFromTupleImpl(Alloc* alloc, T* ptr, Tuple&& t,
-                            phmap::index_sequence<I...>) {
-    phmap::allocator_traits<Alloc>::construct(
+                            duckdb_phmap::index_sequence<I...>) {
+    duckdb_phmap::allocator_traits<Alloc>::construct(
         *alloc, ptr, std::get<I>(std::forward<Tuple>(t))...);
 }
 
@@ -725,13 +725,13 @@ struct WithConstructedImplF {
 
 template <class T, class Tuple, size_t... Is, class F>
 decltype(std::declval<F>()(std::declval<T>())) WithConstructedImpl(
-    Tuple&& t, phmap::index_sequence<Is...>, F&& f) {
+    Tuple&& t, duckdb_phmap::index_sequence<Is...>, F&& f) {
     return WithConstructedImplF<T, F>{std::forward<F>(f)}(
         std::get<Is>(std::forward<Tuple>(t))...);
 }
 
 template <class T, size_t... Is>
-auto TupleRefImpl(T&& t, phmap::index_sequence<Is...>)
+auto TupleRefImpl(T&& t, duckdb_phmap::index_sequence<Is...>)
     -> decltype(std::forward_as_tuple(std::get<Is>(std::forward<T>(t))...)) {
   return std::forward_as_tuple(std::get<Is>(std::forward<T>(t))...);
 }
@@ -742,11 +742,11 @@ auto TupleRefImpl(T&& t, phmap::index_sequence<Is...>)
 template <class T>
 auto TupleRef(T&& t) -> decltype(
     TupleRefImpl(std::forward<T>(t),
-                 phmap::make_index_sequence<
+                 duckdb_phmap::make_index_sequence<
                      std::tuple_size<typename std::decay<T>::type>::value>())) {
   return TupleRefImpl(
       std::forward<T>(t),
-      phmap::make_index_sequence<
+      duckdb_phmap::make_index_sequence<
           std::tuple_size<typename std::decay<T>::type>::value>());
 }
 
@@ -863,9 +863,9 @@ public:
     using value_type = typename PolicyTraits::value_type;
     using reference = value_type&;
     using const_reference = const value_type&;
-    using pointer = typename phmap::allocator_traits<
+    using pointer = typename duckdb_phmap::allocator_traits<
         allocator_type>::template rebind_traits<value_type>::pointer;
-    using const_pointer = typename phmap::allocator_traits<
+    using const_pointer = typename duckdb_phmap::allocator_traits<
         allocator_type>::template rebind_traits<value_type>::const_pointer;
 
     // Alias used for heterogeneous lookup functions.
@@ -875,24 +875,24 @@ public:
     template <class K>
     using key_arg = typename KeyArgImpl::template type<K, key_type>;
 
-    using std_alloc_t = std::is_same<typename std::decay<Alloc>::type, phmap::priv::Allocator<value_type>>;
+    using std_alloc_t = std::is_same<typename std::decay<Alloc>::type, duckdb_phmap::priv::Allocator<value_type>>;
 
 private:
     // Give an early error when key_type is not hashable/eq.
     auto KeyTypeCanBeHashed(const Hash& h, const key_type& k) -> decltype(h(k));
     auto KeyTypeCanBeEq(const Eq& eq, const key_type& k) -> decltype(eq(k, k));
 
-    using Layout = phmap::priv::Layout<ctrl_t, slot_type>;
+    using Layout = duckdb_phmap::priv::Layout<ctrl_t, slot_type>;
 
     static Layout MakeLayout(size_t capacity) {
         assert(IsValidCapacity(capacity));
         return Layout(capacity + Group::kWidth + 1, capacity);
     }
 
-    using AllocTraits = phmap::allocator_traits<allocator_type>;
-    using SlotAlloc = typename phmap::allocator_traits<
+    using AllocTraits = duckdb_phmap::allocator_traits<allocator_type>;
+    using SlotAlloc = typename duckdb_phmap::allocator_traits<
         allocator_type>::template rebind_alloc<slot_type>;
-    using SlotAllocTraits = typename phmap::allocator_traits<
+    using SlotAllocTraits = typename duckdb_phmap::allocator_traits<
         allocator_type>::template rebind_traits<slot_type>;
 
     static_assert(std::is_lvalue_reference<reference>::value,
@@ -912,7 +912,7 @@ private:
     // cases.
     template <class T>
     using RequiresInsertable = typename std::enable_if<
-        phmap::disjunction<std::is_convertible<T, init_type>,
+        duckdb_phmap::disjunction<std::is_convertible<T, init_type>,
                            SameAsElementReference<T>>::value,
         int>::type;
 
@@ -934,9 +934,9 @@ public:
         using iterator_category = std::forward_iterator_tag;
         using value_type = typename raw_hash_set::value_type;
         using reference =
-            phmap::conditional_t<PolicyTraits::constant_iterators::value,
+            duckdb_phmap::conditional_t<PolicyTraits::constant_iterators::value,
                                  const value_type&, value_type&>;
-        using pointer = phmap::remove_reference_t<reference>*;
+        using pointer = duckdb_phmap::remove_reference_t<reference>*;
         using difference_type = typename raw_hash_set::difference_type;
 
         iterator() {}
@@ -1117,14 +1117,14 @@ public:
     //
     //   // Turns {"abc", "def"} into std::initializer_list<const char*>, then
     //   // copies the strings into the set.
-    //   phmap::flat_hash_set<std::string> s = {"abc", "def"};
+    //   duckdb_phmap::flat_hash_set<std::string> s = {"abc", "def"};
     //
     // The same trick is used in insert().
     //
     // The enabler is necessary to prevent this constructor from triggering where
     // the copy constructor is meant to be called.
     //
-    //   phmap::flat_hash_set<int> a, b{a};
+    //   duckdb_phmap::flat_hash_set<int> a, b{a};
     //
     // RequiresNotInit<T> is a workaround for gcc prior to 7.1.
     template <class T, RequiresNotInit<T> = 0, RequiresInsertable<T> = 0>
@@ -1188,11 +1188,11 @@ public:
         std::is_nothrow_copy_constructible<hasher>::value&&
         std::is_nothrow_copy_constructible<key_equal>::value&&
         std::is_nothrow_copy_constructible<allocator_type>::value)
-        : ctrl_(phmap::exchange(that.ctrl_, EmptyGroup<std_alloc_t>())),
-        slots_(phmap::exchange(that.slots_, nullptr)),
-        size_(phmap::exchange(that.size_, 0)),
-        capacity_(phmap::exchange(that.capacity_, 0)),
-        infoz_(phmap::exchange(that.infoz_, HashtablezInfoHandle())),
+        : ctrl_(duckdb_phmap::exchange(that.ctrl_, EmptyGroup<std_alloc_t>())),
+        slots_(duckdb_phmap::exchange(that.slots_, nullptr)),
+        size_(duckdb_phmap::exchange(that.size_, 0)),
+        capacity_(duckdb_phmap::exchange(that.capacity_, 0)),
+        infoz_(duckdb_phmap::exchange(that.infoz_, HashtablezInfoHandle())),
         // Hash, equality and allocator are copied instead of moved because
         // `that` must be left valid. If Hash is std::function<Key>, moving it
         // would create a nullptr functor that cannot be called.
@@ -1232,7 +1232,7 @@ public:
     }
 
     raw_hash_set& operator=(raw_hash_set&& that) noexcept(
-        phmap::allocator_traits<allocator_type>::is_always_equal::value&&
+        duckdb_phmap::allocator_traits<allocator_type>::is_always_equal::value&&
         std::is_nothrow_move_assignable<hasher>::value&&
         std::is_nothrow_move_assignable<key_equal>::value) {
         // TODO(sbenza): We should only use the operations from the noexcept clause
@@ -1371,14 +1371,14 @@ public:
         static constexpr bool value = std::is_same<decltype(test<T>(0)), yes>::value;
     };
 
-    template <class InputIt, typename phmap::enable_if_t<has_difference_operator<InputIt>::value, int> = 0>
+    template <class InputIt, typename duckdb_phmap::enable_if_t<has_difference_operator<InputIt>::value, int> = 0>
     void insert(InputIt first, InputIt last) {
         this->reserve(this->size() + (last - first));
         for (; first != last; ++first) 
             emplace(*first);
     }
 
-    template <class InputIt, typename phmap::enable_if_t<!has_difference_operator<InputIt>::value, int> = 0>
+    template <class InputIt, typename duckdb_phmap::enable_if_t<!has_difference_operator<InputIt>::value, int> = 0>
     void insert(InputIt first, InputIt last) {
         for (; first != last; ++first) 
             emplace(*first);
@@ -1453,7 +1453,7 @@ public:
     // destroys.
     template <class... Args, typename std::enable_if<!IsDecomposable<Args...>::value, int>::type = 0>
     std::pair<iterator, bool> emplace(Args&&... args) {
-        typename phmap::aligned_storage<sizeof(slot_type), alignof(slot_type)>::type
+        typename duckdb_phmap::aligned_storage<sizeof(slot_type), alignof(slot_type)>::type
             raw;
         slot_type* slot = reinterpret_cast<slot_type*>(&raw);
 
@@ -1464,7 +1464,7 @@ public:
 
     template <class... Args, typename std::enable_if<!IsDecomposable<Args...>::value, int>::type = 0>
     std::pair<iterator, bool> emplace_with_hash(size_t hashval, Args&&... args) {
-        typename phmap::aligned_storage<sizeof(slot_type), alignof(slot_type)>::type raw;
+        typename duckdb_phmap::aligned_storage<sizeof(slot_type), alignof(slot_type)>::type raw;
         slot_type* slot = reinterpret_cast<slot_type*>(&raw);
 
         PolicyTraits::construct(&alloc_ref(), slot, std::forward<Args>(args)...);
@@ -1854,7 +1854,7 @@ public:
 
 private:
     template <class Container, typename Enabler>
-    friend struct phmap::priv::hashtable_debug_internal::HashtableDebugAccess;
+    friend struct duckdb_phmap::priv::hashtable_debug_internal::HashtableDebugAccess;
 
     template <class K = key_type>
     bool find_impl(const key_arg<K>& PHMAP_RESTRICT key, size_t hashval, size_t& PHMAP_RESTRICT offset) {
@@ -2098,7 +2098,7 @@ private:
         //       mark target as FULL
         //       repeat procedure for current slot with moved from element (target)
         ConvertDeletedToEmptyAndFullToDeleted(ctrl_, capacity_);
-        typename phmap::aligned_storage<sizeof(slot_type), alignof(slot_type)>::type
+        typename duckdb_phmap::aligned_storage<sizeof(slot_type), alignof(slot_type)>::type
             raw;
         slot_type* slot = reinterpret_cast<slot_type*>(&raw);
         for (size_t i = 0; i != capacity_; ++i) {
@@ -2497,7 +2497,7 @@ public:
     MappedReference<P> at(const key_arg<K>& key) {
         auto it = this->find(key);
         if (it == this->end()) 
-            phmap::base_internal::ThrowStdOutOfRange("phmap at(): lookup non-existent key");
+            duckdb_phmap::base_internal::ThrowStdOutOfRange("phmap at(): lookup non-existent key");
         return Policy::value(&*it);
     }
 
@@ -2505,7 +2505,7 @@ public:
     MappedConstReference<P> at(const key_arg<K>& key) const {
         auto it = this->find(key);
         if (it == this->end())
-            phmap::base_internal::ThrowStdOutOfRange("phmap at(): lookup non-existent key");
+            duckdb_phmap::base_internal::ThrowStdOutOfRange("phmap at(): lookup non-existent key");
         return Policy::value(&*it);
     }
 
@@ -2598,9 +2598,9 @@ public:
     using value_type      = typename PolicyTraits::value_type;
     using reference       = value_type&;
     using const_reference = const value_type&;
-    using pointer         = typename phmap::allocator_traits<
+    using pointer         = typename duckdb_phmap::allocator_traits<
         allocator_type>::template rebind_traits<value_type>::pointer;
-    using const_pointer   = typename phmap::allocator_traits<
+    using const_pointer   = typename duckdb_phmap::allocator_traits<
         allocator_type>::template rebind_traits<value_type>::const_pointer;
 
     // Alias used for heterogeneous lookup functions.
@@ -2612,7 +2612,7 @@ public:
     using key_arg         = typename KeyArgImpl::template type<K, key_type>;
 
 protected:
-    using Lockable      = phmap::LockableImpl<Mtx_>;
+    using Lockable      = duckdb_phmap::LockableImpl<Mtx_>;
     using UniqueLock    = typename Lockable::UniqueLock;
     using SharedLock    = typename Lockable::SharedLock;
     using ReadWriteLock = typename Lockable::ReadWriteLock;
@@ -2648,7 +2648,7 @@ private:
     auto KeyTypeCanBeHashed(const Hash& h, const key_type& k) -> decltype(h(k));
     auto KeyTypeCanBeEq(const Eq& eq, const key_type& k)      -> decltype(eq(k, k));
 
-    using AllocTraits     = phmap::allocator_traits<allocator_type>;
+    using AllocTraits     = duckdb_phmap::allocator_traits<allocator_type>;
 
     static_assert(std::is_lvalue_reference<reference>::value,
                   "Policy::element() must return a reference");
@@ -2666,7 +2666,7 @@ private:
     // --------------------------------------------------------------------
     template <class T>
     using RequiresInsertable = typename std::enable_if<
-        phmap::disjunction<std::is_convertible<T, init_type>, SameAsElementReference<T>>::value, int>::type;
+        duckdb_phmap::disjunction<std::is_convertible<T, init_type>, SameAsElementReference<T>>::value, int>::type;
 
     // RequiresNotInit is a workaround for gcc prior to 7.1.
     // See https://godbolt.org/g/Y4xsUh.
@@ -2692,9 +2692,9 @@ public:
         using iterator_category = std::forward_iterator_tag;
         using value_type        = typename parallel_hash_set::value_type;
         using reference         =
-            phmap::conditional_t<PolicyTraits::constant_iterators::value,
+            duckdb_phmap::conditional_t<PolicyTraits::constant_iterators::value,
                                 const value_type&, value_type&>;
-        using pointer           = phmap::remove_reference_t<reference>*;
+        using pointer           = duckdb_phmap::remove_reference_t<reference>*;
         using difference_type   = typename parallel_hash_set::difference_type;
         using Inner             = typename parallel_hash_set::Inner;
         using EmbeddedSet       = typename parallel_hash_set::EmbeddedSet;
@@ -2811,12 +2811,12 @@ public:
                                const key_equal& eq         = key_equal(),
                                const allocator_type& alloc = allocator_type()) :
         parallel_hash_set(typename Inner::Params{bucket_cnt, hash_param, eq, alloc}, 
-                          phmap::make_index_sequence<num_tables>{})
+                          duckdb_phmap::make_index_sequence<num_tables>{})
     {}
 
     template <std::size_t... i>
     parallel_hash_set(typename Inner::Params const &p,
-                      phmap::index_sequence<i...>) : sets_{((void)i, p)...}
+                      duckdb_phmap::index_sequence<i...>) : sets_{((void)i, p)...}
     {}
 #else
     explicit parallel_hash_set(size_t bucket_cnt, 
@@ -2872,14 +2872,14 @@ public:
     //
     //   // Turns {"abc", "def"} into std::initializer_list<const char*>, then
     //   // copies the strings into the set.
-    //   phmap::flat_hash_set<std::string> s = {"abc", "def"};
+    //   duckdb_phmap::flat_hash_set<std::string> s = {"abc", "def"};
     //
     // The same trick is used in insert().
     //
     // The enabler is necessary to prevent this constructor from triggering where
     // the copy constructor is meant to be called.
     //
-    //   phmap::flat_hash_set<int> a, b{a};
+    //   duckdb_phmap::flat_hash_set<int> a, b{a};
     //
     // RequiresNotInit<T> is a workaround for gcc prior to 7.1.
     // --------------------------------------------------------------------
@@ -2950,7 +2950,7 @@ public:
     }
 
     parallel_hash_set& operator=(parallel_hash_set&& that) noexcept(
-        phmap::allocator_traits<allocator_type>::is_always_equal::value &&
+        duckdb_phmap::allocator_traits<allocator_type>::is_always_equal::value &&
         std::is_nothrow_move_assignable<hasher>::value &&
         std::is_nothrow_move_assignable<key_equal>::value) {
         for (size_t i=0; i<num_tables; ++i)
@@ -3151,7 +3151,7 @@ public:
     // --------------------------------------------------------------------
     template <class... Args, typename std::enable_if<!IsDecomposable<Args...>::value, int>::type = 0>
     std::pair<iterator, bool> emplace_with_hash(size_t hashval, Args&&... args) {
-        typename phmap::aligned_storage<sizeof(slot_type), alignof(slot_type)>::type raw;
+        typename duckdb_phmap::aligned_storage<sizeof(slot_type), alignof(slot_type)>::type raw;
         slot_type* slot = reinterpret_cast<slot_type*>(&raw);
 
         PolicyTraits::construct(&alloc_ref(), slot, std::forward<Args>(args)...);
@@ -3225,7 +3225,7 @@ public:
     // --------------------------------------------------------------------
     template <class... Args, typename std::enable_if<!IsDecomposable<Args...>::value, int>::type = 0>
     std::pair<iterator, bool> emplace(Args&&... args) {
-        typename phmap::aligned_storage<sizeof(slot_type), alignof(slot_type)>::type raw;
+        typename duckdb_phmap::aligned_storage<sizeof(slot_type), alignof(slot_type)>::type raw;
         slot_type* slot = reinterpret_cast<slot_type*>(&raw);
         size_t hashval  = this->hash(PolicyTraits::key(slot));
 
@@ -3308,7 +3308,7 @@ public:
     template <class K = key_type, class F>
     bool if_contains_unsafe(const key_arg<K>& key, F&& f) const {
         return const_cast<parallel_hash_set*>(this)->template 
-            modify_if_impl<K, F, LockableBaseImpl<phmap::NullMutex>::DoNothing>(key, std::forward<F>(f));
+            modify_if_impl<K, F, LockableBaseImpl<duckdb_phmap::NullMutex>::DoNothing>(key, std::forward<F>(f));
     }
 
     // if map contains key, lambda is called with the value_type  (under write lock protection),
@@ -3570,7 +3570,7 @@ public:
                   IsNoThrowSwappable<allocator_type>(typename AllocTraits::propagate_on_container_swap{})))
     {
         using std::swap;
-        using Lockable2 = phmap::LockableImpl<Mtx2_>;
+        using Lockable2 = duckdb_phmap::LockableImpl<Mtx2_>;
          
         for (size_t i=0; i<num_tables; ++i)
         {
@@ -3738,7 +3738,7 @@ public:
 
 private:
     template <class Container, typename Enabler>
-    friend struct phmap::priv::hashtable_debug_internal::HashtableDebugAccess;
+    friend struct duckdb_phmap::priv::hashtable_debug_internal::HashtableDebugAccess;
 
     struct FindElement 
     {
@@ -3918,7 +3918,7 @@ class parallel_hash_map : public parallel_hash_set<N, RefSet, Mtx_, Policy, Hash
         KeyArg<IsTransparent<Eq>::value && IsTransparent<Hash>::value>;
 
     using Base = typename parallel_hash_map::parallel_hash_set;
-    using Lockable      = phmap::LockableImpl<Mtx_>;
+    using Lockable      = duckdb_phmap::LockableImpl<Mtx_>;
     using UniqueLock    = typename Lockable::UniqueLock;
     using SharedLock    = typename Lockable::SharedLock;
     using ReadWriteLock = typename Lockable::ReadWriteLock;
@@ -4024,7 +4024,7 @@ public:
     MappedReference<P> at(const key_arg<K>& key) {
         auto it = this->find(key);
         if (it == this->end()) 
-            phmap::base_internal::ThrowStdOutOfRange("phmap at(): lookup non-existent key");
+            duckdb_phmap::base_internal::ThrowStdOutOfRange("phmap at(): lookup non-existent key");
         return Policy::value(&*it);
     }
 
@@ -4032,7 +4032,7 @@ public:
     MappedConstReference<P> at(const key_arg<K>& key) const {
         auto it = this->find(key);
         if (it == this->end()) 
-            phmap::base_internal::ThrowStdOutOfRange("phmap at(): lookup non-existent key");
+            duckdb_phmap::base_internal::ThrowStdOutOfRange("phmap at(): lookup non-existent key");
         return Policy::value(&*it);
     }
 
@@ -4167,7 +4167,7 @@ template <class Alloc, class T, class Tuple>
 void ConstructFromTuple(Alloc* alloc, T* ptr, Tuple&& t) {
     memory_internal::ConstructFromTupleImpl(
         alloc, ptr, std::forward<Tuple>(t),
-        phmap::make_index_sequence<
+        duckdb_phmap::make_index_sequence<
         std::tuple_size<typename std::decay<Tuple>::type>::value>());
 }
 
@@ -4179,7 +4179,7 @@ decltype(std::declval<F>()(std::declval<T>())) WithConstructed(
     Tuple&& t, F&& f) {
     return memory_internal::WithConstructedImpl<T>(
         std::forward<Tuple>(t),
-        phmap::make_index_sequence<
+        duckdb_phmap::make_index_sequence<
         std::tuple_size<typename std::decay<Tuple>::type>::value>(),
         std::forward<F>(f));
 }
@@ -4274,13 +4274,13 @@ struct FlatHashSetPolicy
 
     template <class Allocator, class... Args>
     static void construct(Allocator* alloc, slot_type* slot, Args&&... args) {
-        phmap::allocator_traits<Allocator>::construct(*alloc, slot,
+        duckdb_phmap::allocator_traits<Allocator>::construct(*alloc, slot,
                                                       std::forward<Args>(args)...);
     }
 
     template <class Allocator>
     static void destroy(Allocator* alloc, slot_type* slot) {
-        phmap::allocator_traits<Allocator>::destroy(*alloc, slot);
+        duckdb_phmap::allocator_traits<Allocator>::destroy(*alloc, slot);
     }
 
     template <class Allocator>
@@ -4293,10 +4293,10 @@ struct FlatHashSetPolicy
     static T& element(slot_type* slot) { return *slot; }
 
     template <class F, class... Args>
-    static decltype(phmap::priv::DecomposeValue(
+    static decltype(duckdb_phmap::priv::DecomposeValue(
                         std::declval<F>(), std::declval<Args>()...))
     apply(F&& f, Args&&... args) {
-        return phmap::priv::DecomposeValue(
+        return duckdb_phmap::priv::DecomposeValue(
             std::forward<F>(f), std::forward<Args>(args)...);
     }
 
@@ -4332,10 +4332,10 @@ struct FlatHashMapPolicy
     }
 
     template <class F, class... Args>
-    static decltype(phmap::priv::DecomposePair(
+    static decltype(duckdb_phmap::priv::DecomposePair(
                         std::declval<F>(), std::declval<Args>()...))
     apply(F&& f, Args&&... args) {
-        return phmap::priv::DecomposePair(std::forward<F>(f),
+        return duckdb_phmap::priv::DecomposePair(std::forward<F>(f),
                                                         std::forward<Args>(args)...);
     }
 
@@ -4391,7 +4391,7 @@ struct node_hash_policy {
 // --------------------------------------------------------------------------
 template <class T>
 struct NodeHashSetPolicy
-    : phmap::priv::node_hash_policy<T&, NodeHashSetPolicy<T>> 
+    : duckdb_phmap::priv::node_hash_policy<T&, NodeHashSetPolicy<T>> 
 {
     using key_type = T;
     using init_type = T;
@@ -4401,10 +4401,10 @@ struct NodeHashSetPolicy
     template <class Allocator, class... Args>
         static T* new_element(Allocator* alloc, Args&&... args) {
         using ValueAlloc =
-            typename phmap::allocator_traits<Allocator>::template rebind_alloc<T>;
+            typename duckdb_phmap::allocator_traits<Allocator>::template rebind_alloc<T>;
         ValueAlloc value_alloc(*alloc);
-        T* res = phmap::allocator_traits<ValueAlloc>::allocate(value_alloc, 1);
-        phmap::allocator_traits<ValueAlloc>::construct(value_alloc, res,
+        T* res = duckdb_phmap::allocator_traits<ValueAlloc>::allocate(value_alloc, 1);
+        duckdb_phmap::allocator_traits<ValueAlloc>::construct(value_alloc, res,
                                                        std::forward<Args>(args)...);
         return res;
     }
@@ -4412,17 +4412,17 @@ struct NodeHashSetPolicy
     template <class Allocator>
         static void delete_element(Allocator* alloc, T* elem) {
         using ValueAlloc =
-            typename phmap::allocator_traits<Allocator>::template rebind_alloc<T>;
+            typename duckdb_phmap::allocator_traits<Allocator>::template rebind_alloc<T>;
         ValueAlloc value_alloc(*alloc);
-        phmap::allocator_traits<ValueAlloc>::destroy(value_alloc, elem);
-        phmap::allocator_traits<ValueAlloc>::deallocate(value_alloc, elem, 1);
+        duckdb_phmap::allocator_traits<ValueAlloc>::destroy(value_alloc, elem);
+        duckdb_phmap::allocator_traits<ValueAlloc>::deallocate(value_alloc, elem, 1);
     }
 
     template <class F, class... Args>
-        static decltype(phmap::priv::DecomposeValue(
+        static decltype(duckdb_phmap::priv::DecomposeValue(
                             std::declval<F>(), std::declval<Args>()...))
         apply(F&& f, Args&&... args) {
-        return phmap::priv::DecomposeValue(
+        return duckdb_phmap::priv::DecomposeValue(
             std::forward<F>(f), std::forward<Args>(args)...);
     }
 
@@ -4433,7 +4433,7 @@ struct NodeHashSetPolicy
 // --------------------------------------------------------------------------
 template <class Key, class Value>
 class NodeHashMapPolicy
-    : public phmap::priv::node_hash_policy<
+    : public duckdb_phmap::priv::node_hash_policy<
           std::pair<const Key, Value>&, NodeHashMapPolicy<Key, Value>> 
 {
     using value_type = std::pair<const Key, Value>;
@@ -4446,30 +4446,30 @@ public:
 
     template <class Allocator, class... Args>
         static value_type* new_element(Allocator* alloc, Args&&... args) {
-        using PairAlloc = typename phmap::allocator_traits<
+        using PairAlloc = typename duckdb_phmap::allocator_traits<
             Allocator>::template rebind_alloc<value_type>;
         PairAlloc pair_alloc(*alloc);
         value_type* res =
-            phmap::allocator_traits<PairAlloc>::allocate(pair_alloc, 1);
-        phmap::allocator_traits<PairAlloc>::construct(pair_alloc, res,
+            duckdb_phmap::allocator_traits<PairAlloc>::allocate(pair_alloc, 1);
+        duckdb_phmap::allocator_traits<PairAlloc>::construct(pair_alloc, res,
                                                       std::forward<Args>(args)...);
         return res;
     }
 
     template <class Allocator>
         static void delete_element(Allocator* alloc, value_type* pair) {
-        using PairAlloc = typename phmap::allocator_traits<
+        using PairAlloc = typename duckdb_phmap::allocator_traits<
             Allocator>::template rebind_alloc<value_type>;
         PairAlloc pair_alloc(*alloc);
-        phmap::allocator_traits<PairAlloc>::destroy(pair_alloc, pair);
-        phmap::allocator_traits<PairAlloc>::deallocate(pair_alloc, pair, 1);
+        duckdb_phmap::allocator_traits<PairAlloc>::destroy(pair_alloc, pair);
+        duckdb_phmap::allocator_traits<PairAlloc>::deallocate(pair_alloc, pair, 1);
     }
 
     template <class F, class... Args>
-        static decltype(phmap::priv::DecomposePair(
+        static decltype(duckdb_phmap::priv::DecomposePair(
                             std::declval<F>(), std::declval<Args>()...))
         apply(F&& f, Args&&... args) {
-        return phmap::priv::DecomposePair(std::forward<F>(f),
+        return duckdb_phmap::priv::DecomposePair(std::forward<F>(f),
                                                         std::forward<Args>(args)...);
     }
 
@@ -4544,9 +4544,9 @@ struct HashEq<T*>
         using is_transparent = void;
         template <class U>
         size_t operator()(const U& ptr) const {
-            // we want phmap::Hash<T*> and not phmap::Hash<const T*>
+            // we want duckdb_phmap::Hash<T*> and not duckdb_phmap::Hash<const T*>
             // so "struct std::hash<T*> " override works
-            return phmap::Hash<T*>{}((T*)(uintptr_t)HashEq::ToPtr(ptr));
+            return duckdb_phmap::Hash<T*>{}((T*)(uintptr_t)HashEq::ToPtr(ptr));
         }
     };
 
@@ -4587,7 +4587,7 @@ template<typename, typename = void >
 struct has_member_type_raw_hash_set : std::false_type
 {};
 template<typename T>
-struct has_member_type_raw_hash_set<T, phmap::void_t<typename T::raw_hash_set>> : std::true_type
+struct has_member_type_raw_hash_set<T, duckdb_phmap::void_t<typename T::raw_hash_set>> : std::true_type
 {};
 
 template <typename Set>
@@ -4656,7 +4656,7 @@ template<typename, typename = void >
 struct has_member_type_EmbeddedSet : std::false_type
 {};
 template<typename T>
-struct has_member_type_EmbeddedSet<T, phmap::void_t<typename T::EmbeddedSet>> : std::true_type
+struct has_member_type_EmbeddedSet<T, duckdb_phmap::void_t<typename T::EmbeddedSet>> : std::true_type
 {};
 
 template <typename Set>
@@ -4677,9 +4677,9 @@ struct HashtableDebugAccess<Set, typename std::enable_if<has_member_type_Embedde
 }  // namespace priv
 
 // -----------------------------------------------------------------------------
-// phmap::flat_hash_set
+// duckdb_phmap::flat_hash_set
 // -----------------------------------------------------------------------------
-// An `phmap::flat_hash_set<T>` is an unordered associative container which has
+// An `duckdb_phmap::flat_hash_set<T>` is an unordered associative container which has
 // been optimized for both speed and memory footprint in most common use cases.
 // Its interface is similar to that of `std::unordered_set<T>` with the
 // following notable differences:
@@ -4695,8 +4695,8 @@ struct HashtableDebugAccess<Set, typename std::enable_if<has_member_type_Embedde
 // -----------------------------------------------------------------------------
 template <class T, class Hash, class Eq, class Alloc> // default values in phmap_fwd_decl.h
 class flat_hash_set
-    : public phmap::priv::raw_hash_set<
-          phmap::priv::FlatHashSetPolicy<T>, Hash, Eq, Alloc> 
+    : public duckdb_phmap::priv::raw_hash_set<
+          duckdb_phmap::priv::FlatHashSetPolicy<T>, Hash, Eq, Alloc> 
 {
     using Base = typename flat_hash_set::raw_hash_set;
 
@@ -4739,10 +4739,10 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-// phmap::flat_hash_map
+// duckdb_phmap::flat_hash_map
 // -----------------------------------------------------------------------------
 //
-// An `phmap::flat_hash_map<K, V>` is an unordered associative container which
+// An `duckdb_phmap::flat_hash_map<K, V>` is an unordered associative container which
 // has been optimized for both speed and memory footprint in most common use
 // cases. Its interface is similar to that of `std::unordered_map<K, V>` with
 // the following notable differences:
@@ -4757,8 +4757,8 @@ public:
 // * Returns `void` from the `_erase(iterator)` overload.
 // -----------------------------------------------------------------------------
 template <class K, class V, class Hash, class Eq, class Alloc> // default values in phmap_fwd_decl.h
-class flat_hash_map : public phmap::priv::raw_hash_map<
-                          phmap::priv::FlatHashMapPolicy<K, V>,
+class flat_hash_map : public duckdb_phmap::priv::raw_hash_map<
+                          duckdb_phmap::priv::FlatHashMapPolicy<K, V>,
                           Hash, Eq, Alloc> {
     using Base = typename flat_hash_map::raw_hash_map;
 
@@ -4805,9 +4805,9 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-// phmap::node_hash_set
+// duckdb_phmap::node_hash_set
 // -----------------------------------------------------------------------------
-// An `phmap::node_hash_set<T>` is an unordered associative container which
+// An `duckdb_phmap::node_hash_set<T>` is an unordered associative container which
 // has been optimized for both speed and memory footprint in most common use
 // cases. Its interface is similar to that of `std::unordered_set<T>` with the
 // following notable differences:
@@ -4821,8 +4821,8 @@ public:
 // -----------------------------------------------------------------------------
 template <class T, class Hash, class Eq, class Alloc> // default values in phmap_fwd_decl.h
 class node_hash_set
-    : public phmap::priv::raw_hash_set<
-          phmap::priv::NodeHashSetPolicy<T>, Hash, Eq, Alloc> 
+    : public duckdb_phmap::priv::raw_hash_set<
+          duckdb_phmap::priv::NodeHashSetPolicy<T>, Hash, Eq, Alloc> 
 {
     using Base = typename node_hash_set::raw_hash_set;
 
@@ -4869,10 +4869,10 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-// phmap::node_hash_map
+// duckdb_phmap::node_hash_map
 // -----------------------------------------------------------------------------
 //
-// An `phmap::node_hash_map<K, V>` is an unordered associative container which
+// An `duckdb_phmap::node_hash_map<K, V>` is an unordered associative container which
 // has been optimized for both speed and memory footprint in most common use
 // cases. Its interface is similar to that of `std::unordered_map<K, V>` with
 // the following notable differences:
@@ -4886,8 +4886,8 @@ public:
 // -----------------------------------------------------------------------------
 template <class Key, class Value, class Hash, class Eq, class Alloc>  // default values in phmap_fwd_decl.h
 class node_hash_map
-    : public phmap::priv::raw_hash_map<
-          phmap::priv::NodeHashMapPolicy<Key, Value>, Hash, Eq,
+    : public duckdb_phmap::priv::raw_hash_map<
+          duckdb_phmap::priv::NodeHashMapPolicy<Key, Value>, Hash, Eq,
           Alloc> 
 {
     using Base = typename node_hash_map::raw_hash_map;
@@ -4937,13 +4937,13 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-// phmap::parallel_flat_hash_set
+// duckdb_phmap::parallel_flat_hash_set
 // -----------------------------------------------------------------------------
 template <class T, class Hash, class Eq, class Alloc, size_t N, class Mtx_> // default values in phmap_fwd_decl.h
 class parallel_flat_hash_set
-    : public phmap::priv::parallel_hash_set<
-         N, phmap::priv::raw_hash_set, Mtx_,
-         phmap::priv::FlatHashSetPolicy<T>, 
+    : public duckdb_phmap::priv::parallel_hash_set<
+         N, duckdb_phmap::priv::raw_hash_set, Mtx_,
+         duckdb_phmap::priv::FlatHashSetPolicy<T>, 
          Hash, Eq, Alloc> 
 {
     using Base = typename parallel_flat_hash_set::parallel_hash_set;
@@ -4991,12 +4991,12 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-// phmap::parallel_flat_hash_map - default values in phmap_fwd_decl.h
+// duckdb_phmap::parallel_flat_hash_map - default values in phmap_fwd_decl.h
 // -----------------------------------------------------------------------------
 template <class K, class V, class Hash, class Eq, class Alloc, size_t N, class Mtx_>
-class parallel_flat_hash_map : public phmap::priv::parallel_hash_map<
-                N, phmap::priv::raw_hash_set, Mtx_,
-                phmap::priv::FlatHashMapPolicy<K, V>,
+class parallel_flat_hash_map : public duckdb_phmap::priv::parallel_hash_map<
+                N, duckdb_phmap::priv::raw_hash_set, Mtx_,
+                duckdb_phmap::priv::FlatHashMapPolicy<K, V>,
                 Hash, Eq, Alloc> 
 {
     using Base = typename parallel_flat_hash_map::parallel_hash_map;
@@ -5049,13 +5049,13 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-// phmap::parallel_node_hash_set
+// duckdb_phmap::parallel_node_hash_set
 // -----------------------------------------------------------------------------
 template <class T, class Hash, class Eq, class Alloc, size_t N, class Mtx_>
 class parallel_node_hash_set
-    : public phmap::priv::parallel_hash_set<
-             N, phmap::priv::raw_hash_set, Mtx_,
-             phmap::priv::NodeHashSetPolicy<T>, Hash, Eq, Alloc> 
+    : public duckdb_phmap::priv::parallel_hash_set<
+             N, duckdb_phmap::priv::raw_hash_set, Mtx_,
+             duckdb_phmap::priv::NodeHashSetPolicy<T>, Hash, Eq, Alloc> 
 {
     using Base = typename parallel_node_hash_set::parallel_hash_set;
 
@@ -5104,13 +5104,13 @@ public:
 };
 
 // -----------------------------------------------------------------------------
-// phmap::parallel_node_hash_map
+// duckdb_phmap::parallel_node_hash_map
 // -----------------------------------------------------------------------------
 template <class Key, class Value, class Hash, class Eq, class Alloc, size_t N, class Mtx_>
 class parallel_node_hash_map
-    : public phmap::priv::parallel_hash_map<
-          N, phmap::priv::raw_hash_set, Mtx_,
-          phmap::priv::NodeHashMapPolicy<Key, Value>, Hash, Eq,
+    : public duckdb_phmap::priv::parallel_hash_map<
+          N, duckdb_phmap::priv::raw_hash_set, Mtx_,
+          duckdb_phmap::priv::NodeHashMapPolicy<Key, Value>, Hash, Eq,
           Alloc> 
 {
     using Base = typename parallel_node_hash_map::parallel_hash_map;
@@ -5164,10 +5164,10 @@ public:
     void resize(typename Base::size_type hint) { this->rehash(hint); }
 };
 
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 
-namespace phmap {
+namespace duckdb_phmap {
     namespace priv {
         template <class C, class Pred> 
         std::size_t erase_if(C &c, Pred pred) {
@@ -5185,44 +5185,44 @@ namespace phmap {
 
     // ======== erase_if for phmap set containers ==================================
     template <class T, class Hash, class Eq, class Alloc, class Pred> 
-    std::size_t erase_if(phmap::flat_hash_set<T, Hash, Eq, Alloc>& c, Pred pred) {
-        return phmap::priv::erase_if(c, std::move(pred));
+    std::size_t erase_if(duckdb_phmap::flat_hash_set<T, Hash, Eq, Alloc>& c, Pred pred) {
+        return duckdb_phmap::priv::erase_if(c, std::move(pred));
     }
 
     template <class T, class Hash, class Eq, class Alloc, class Pred> 
-    std::size_t erase_if(phmap::node_hash_set<T, Hash, Eq, Alloc>& c, Pred pred) {
-        return phmap::priv::erase_if(c, std::move(pred));
+    std::size_t erase_if(duckdb_phmap::node_hash_set<T, Hash, Eq, Alloc>& c, Pred pred) {
+        return duckdb_phmap::priv::erase_if(c, std::move(pred));
     }
 
     template <class T, class Hash, class Eq, class Alloc, size_t N, class Mtx_, class Pred> 
-    std::size_t erase_if(phmap::parallel_flat_hash_set<T, Hash, Eq, Alloc, N, Mtx_>& c, Pred pred) {
-        return phmap::priv::erase_if(c, std::move(pred));
+    std::size_t erase_if(duckdb_phmap::parallel_flat_hash_set<T, Hash, Eq, Alloc, N, Mtx_>& c, Pred pred) {
+        return duckdb_phmap::priv::erase_if(c, std::move(pred));
     }
 
     template <class T, class Hash, class Eq, class Alloc, size_t N, class Mtx_, class Pred> 
-    std::size_t erase_if(phmap::parallel_node_hash_set<T, Hash, Eq, Alloc, N, Mtx_>& c, Pred pred) {
-        return phmap::priv::erase_if(c, std::move(pred));
+    std::size_t erase_if(duckdb_phmap::parallel_node_hash_set<T, Hash, Eq, Alloc, N, Mtx_>& c, Pred pred) {
+        return duckdb_phmap::priv::erase_if(c, std::move(pred));
     }
 
     // ======== erase_if for phmap map containers ==================================
     template <class K, class V, class Hash, class Eq, class Alloc, class Pred> 
-    std::size_t erase_if(phmap::flat_hash_map<K, V, Hash, Eq, Alloc>& c, Pred pred) {
-        return phmap::priv::erase_if(c, std::move(pred));
+    std::size_t erase_if(duckdb_phmap::flat_hash_map<K, V, Hash, Eq, Alloc>& c, Pred pred) {
+        return duckdb_phmap::priv::erase_if(c, std::move(pred));
     }
 
     template <class K, class V, class Hash, class Eq, class Alloc, class Pred> 
-    std::size_t erase_if(phmap::node_hash_map<K, V, Hash, Eq, Alloc>& c, Pred pred) {
-        return phmap::priv::erase_if(c, std::move(pred));
+    std::size_t erase_if(duckdb_phmap::node_hash_map<K, V, Hash, Eq, Alloc>& c, Pred pred) {
+        return duckdb_phmap::priv::erase_if(c, std::move(pred));
     }
 
     template <class K, class V, class Hash, class Eq, class Alloc, size_t N, class Mtx_, class Pred> 
-    std::size_t erase_if(phmap::parallel_flat_hash_map<K, V, Hash, Eq, Alloc, N, Mtx_>& c, Pred pred) {
-        return phmap::priv::erase_if(c, std::move(pred));
+    std::size_t erase_if(duckdb_phmap::parallel_flat_hash_map<K, V, Hash, Eq, Alloc, N, Mtx_>& c, Pred pred) {
+        return duckdb_phmap::priv::erase_if(c, std::move(pred));
     }
 
     template <class K, class V, class Hash, class Eq, class Alloc, size_t N, class Mtx_, class Pred> 
-    std::size_t erase_if(phmap::parallel_node_hash_map<K, V, Hash, Eq, Alloc, N, Mtx_>& c, Pred pred) {
-        return phmap::priv::erase_if(c, std::move(pred));
+    std::size_t erase_if(duckdb_phmap::parallel_node_hash_map<K, V, Hash, Eq, Alloc, N, Mtx_>& c, Pred pred) {
+        return duckdb_phmap::priv::erase_if(c, std::move(pred));
     }
 
 } // phmap

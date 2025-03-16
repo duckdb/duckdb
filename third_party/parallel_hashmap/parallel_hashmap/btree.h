@@ -75,7 +75,7 @@
     #define PHMAP_META_INTERNAL_STD_CONSTRUCTION_TRAITS_DONT_CHECK_DESTRUCTION 1
 #endif
 
-namespace phmap {
+namespace duckdb_phmap {
 
     namespace type_traits_internal {
 
@@ -143,13 +143,13 @@ namespace phmap {
                 std::is_copy_constructible<ExtentsRemoved>::value ||
                 std::is_move_constructible<ExtentsRemoved>::value;
             static constexpr bool kIsCopyOrMoveAssignable =
-                phmap::is_copy_assignable<ExtentsRemoved>::value ||
-                phmap::is_move_assignable<ExtentsRemoved>::value;
+                duckdb_phmap::is_copy_assignable<ExtentsRemoved>::value ||
+                duckdb_phmap::is_move_assignable<ExtentsRemoved>::value;
 
         public:
             static constexpr bool kValue =
-                (phmap::is_trivially_copyable<ExtentsRemoved>::value || !kIsCopyOrMoveConstructible) &&
-                (phmap::is_trivially_copy_assignable<ExtentsRemoved>::value || !kIsCopyOrMoveAssignable) &&
+                (duckdb_phmap::is_trivially_copyable<ExtentsRemoved>::value || !kIsCopyOrMoveConstructible) &&
+                (duckdb_phmap::is_trivially_copy_assignable<ExtentsRemoved>::value || !kIsCopyOrMoveAssignable) &&
                 (kIsCopyOrMoveConstructible || kIsCopyOrMoveAssignable) &&
                 std::is_trivially_destructible<ExtentsRemoved>::value &&
                 // We need to check for this explicitly because otherwise we'll say
@@ -168,7 +168,7 @@ namespace phmap {
         // Necessary for the traits.
         using std::swap;
 
-        // This declaration prevents global `swap` and `phmap::swap` overloads from being
+        // This declaration prevents global `swap` and `duckdb_phmap::swap` overloads from being
         // considered unless ADL picks them up.
         void swap();
 
@@ -183,13 +183,13 @@ namespace phmap {
 
         template <class T>
         struct IsSwappable
-            : phmap::type_traits_internal::is_detected<IsSwappableImpl, T> {};
+            : duckdb_phmap::type_traits_internal::is_detected<IsSwappableImpl, T> {};
 
         template <class T>
         struct IsNothrowSwappable
-            : phmap::type_traits_internal::is_detected<IsNothrowSwappableImpl, T> {};
+            : duckdb_phmap::type_traits_internal::is_detected<IsNothrowSwappableImpl, T> {};
 
-        template <class T, phmap::enable_if_t<IsSwappable<T>::value, int> = 0>
+        template <class T, duckdb_phmap::enable_if_t<IsSwappable<T>::value, int> = 0>
         void Swap(T& lhs, T& rhs) noexcept(IsNothrowSwappable<T>::value) {
             swap(lhs, rhs);
         }
@@ -663,9 +663,9 @@ namespace phmap {
         // or three-way comparator.
         // SFINAE prevents implicit conversions to bool (such as from int).
         template <typename BoolType,
-                  phmap::enable_if_t<std::is_same<bool, BoolType>::value, int> = 0>
+                  duckdb_phmap::enable_if_t<std::is_same<bool, BoolType>::value, int> = 0>
         constexpr bool compare_result_as_less_than(const BoolType r) { return r; }
-        constexpr bool compare_result_as_less_than(const phmap::weak_ordering r) {
+        constexpr bool compare_result_as_less_than(const duckdb_phmap::weak_ordering r) {
             return r < 0;
         }
 
@@ -679,43 +679,43 @@ namespace phmap {
         // three-way comparator.
         // SFINAE prevents implicit conversions to int (such as from bool).
         template <typename Int,
-                  phmap::enable_if_t<std::is_same<int, Int>::value, int> = 0>
-        constexpr phmap::weak_ordering compare_result_as_ordering(const Int c) {
-            return c < 0 ? phmap::weak_ordering::less
-                       : c == 0 ? phmap::weak_ordering::equivalent
-                       : phmap::weak_ordering::greater;
+                  duckdb_phmap::enable_if_t<std::is_same<int, Int>::value, int> = 0>
+        constexpr duckdb_phmap::weak_ordering compare_result_as_ordering(const Int c) {
+            return c < 0 ? duckdb_phmap::weak_ordering::less
+                       : c == 0 ? duckdb_phmap::weak_ordering::equivalent
+                       : duckdb_phmap::weak_ordering::greater;
         }
-        constexpr phmap::weak_ordering compare_result_as_ordering(
-            const phmap::weak_ordering c) {
+        constexpr duckdb_phmap::weak_ordering compare_result_as_ordering(
+            const duckdb_phmap::weak_ordering c) {
             return c;
         }
 
         template <
             typename Compare, typename K, typename LK,
-            phmap::enable_if_t<!std::is_same<bool, phmap::invoke_result_t<
+            duckdb_phmap::enable_if_t<!std::is_same<bool, duckdb_phmap::invoke_result_t<
                                                        Compare, const K &, const LK &>>::value,
                                int> = 0>
-            constexpr phmap::weak_ordering do_three_way_comparison(const Compare &compare,
+            constexpr duckdb_phmap::weak_ordering do_three_way_comparison(const Compare &compare,
                                                                    const K &x, const LK &y) {
             return compare_result_as_ordering(compare(x, y));
         }
         template <
             typename Compare, typename K, typename LK,
-            phmap::enable_if_t<std::is_same<bool, phmap::invoke_result_t<Compare,
+            duckdb_phmap::enable_if_t<std::is_same<bool, duckdb_phmap::invoke_result_t<Compare,
             const K &, const LK &>>::value,
                                int> = 0>
-            constexpr phmap::weak_ordering do_three_way_comparison(const Compare &compare,
+            constexpr duckdb_phmap::weak_ordering do_three_way_comparison(const Compare &compare,
                                                                    const K &x, const LK &y) {
-            return compare(x, y) ? phmap::weak_ordering::less
-                : compare(y, x) ? phmap::weak_ordering::greater
-                : phmap::weak_ordering::equivalent;
+            return compare(x, y) ? duckdb_phmap::weak_ordering::less
+                : compare(y, x) ? duckdb_phmap::weak_ordering::greater
+                : duckdb_phmap::weak_ordering::equivalent;
         }
 
     }  // namespace compare_internal
 }
 
 
-namespace phmap {
+namespace duckdb_phmap {
 
 namespace priv {
 
@@ -723,8 +723,8 @@ namespace priv {
     // comparator.
     template <typename Compare, typename T>
     using btree_is_key_compare_to =
-        std::is_convertible<phmap::invoke_result_t<Compare, const T &, const T &>,
-                            phmap::weak_ordering>;
+        std::is_convertible<duckdb_phmap::invoke_result_t<Compare, const T &, const T &>,
+                            duckdb_phmap::weak_ordering>;
 
     struct StringBtreeDefaultLess {
         using is_transparent = void;
@@ -735,14 +735,14 @@ namespace priv {
         StringBtreeDefaultLess(std::less<std::string>) {}       // NOLINT
 #if PHMAP_HAVE_STD_STRING_VIEW
         StringBtreeDefaultLess(std::less<std::string_view>) {}  // NOLINT
-        StringBtreeDefaultLess(phmap::Less<std::string_view>) {}  // NOLINT
+        StringBtreeDefaultLess(duckdb_phmap::Less<std::string_view>) {}  // NOLINT
 
-        phmap::weak_ordering operator()(const std::string_view &lhs,
+        duckdb_phmap::weak_ordering operator()(const std::string_view &lhs,
                                         const std::string_view &rhs) const {
             return compare_internal::compare_result_as_ordering(lhs.compare(rhs));
         }
 #else
-        phmap::weak_ordering operator()(const std::string &lhs,
+        duckdb_phmap::weak_ordering operator()(const std::string &lhs,
                                         const std::string &rhs) const {
             return compare_internal::compare_result_as_ordering(lhs.compare(rhs));
         }
@@ -758,12 +758,12 @@ namespace priv {
 #if PHMAP_HAVE_STD_STRING_VIEW
         StringBtreeDefaultGreater(std::greater<std::string_view>) {}  // NOLINT
 
-        phmap::weak_ordering operator()(std::string_view lhs,
+        duckdb_phmap::weak_ordering operator()(std::string_view lhs,
                                         std::string_view rhs) const {
             return compare_internal::compare_result_as_ordering(rhs.compare(lhs));
         }
 #else
-        phmap::weak_ordering operator()(const std::string &lhs,
+        duckdb_phmap::weak_ordering operator()(const std::string &lhs,
                                         const std::string &rhs) const {
             return compare_internal::compare_result_as_ordering(rhs.compare(lhs));
         }
@@ -792,7 +792,7 @@ namespace priv {
     };
 
     template <>
-    struct key_compare_to_adapter<phmap::Less<std::string>> {
+    struct key_compare_to_adapter<duckdb_phmap::Less<std::string>> {
         using type = StringBtreeDefaultLess;
     };
 
@@ -808,7 +808,7 @@ namespace priv {
     };
 
     template <>
-    struct key_compare_to_adapter<phmap::Less<std::string_view>> {
+    struct key_compare_to_adapter<duckdb_phmap::Less<std::string_view>> {
         using type = StringBtreeDefaultLess;
     };
 
@@ -858,7 +858,7 @@ namespace priv {
         // This is an integral type large enough to hold as many
         // ValueSize-values as will fit a node of TargetNodeSize bytes.
         using node_count_type =
-            phmap::conditional_t<(kNodeSlotSpace / sizeof(slot_type) >
+            duckdb_phmap::conditional_t<(kNodeSlotSpace / sizeof(slot_type) >
                                    (std::numeric_limits<uint8_t>::max)()),
             uint16_t, uint8_t>;  // NOLINT
 
@@ -901,7 +901,7 @@ namespace priv {
     template <typename Key, typename Data, typename Compare, typename Alloc,
               int TargetNodeSize, bool Multi>
     struct map_params : common_params<Key, Compare, Alloc, TargetNodeSize, Multi,
-                                      phmap::priv::map_slot_policy<Key, Data>> {
+                                      duckdb_phmap::priv::map_slot_policy<Key, Data>> {
         using super_type = typename map_params::common_params;
         using mapped_type = Data;
         // This type allows us to move keys when it is safe to do so. It is safe
@@ -944,18 +944,18 @@ namespace priv {
 
         template <typename Alloc, class... Args>
         static void construct(Alloc *alloc, slot_type *slot, Args &&... args) {
-            phmap::allocator_traits<Alloc>::construct(*alloc, slot,
+            duckdb_phmap::allocator_traits<Alloc>::construct(*alloc, slot,
                                                        std::forward<Args>(args)...);
         }
 
         template <typename Alloc>
         static void construct(Alloc *alloc, slot_type *slot, slot_type *other) {
-            phmap::allocator_traits<Alloc>::construct(*alloc, slot, std::move(*other));
+            duckdb_phmap::allocator_traits<Alloc>::construct(*alloc, slot, std::move(*other));
         }
 
         template <typename Alloc>
         static void destroy(Alloc *alloc, slot_type *slot) {
-            phmap::allocator_traits<Alloc>::destroy(*alloc, slot);
+            duckdb_phmap::allocator_traits<Alloc>::destroy(*alloc, slot);
         }
 
         template <typename Alloc>
@@ -1002,7 +1002,7 @@ namespace priv {
         template <typename K, typename LK>
         bool operator()(const K &a, const LK &b) const {
             // Returns true when a is not greater than b.
-            return !phmap::compare_internal::compare_result_as_less_than(comp(b, a));
+            return !duckdb_phmap::compare_internal::compare_result_as_less_than(comp(b, a));
         }
 
     private:
@@ -1062,7 +1062,7 @@ namespace priv {
         using use_linear_search = std::integral_constant<
             bool,
             std::is_arithmetic<key_type>::value &&
-            (std::is_same<phmap::Less<key_type>, key_compare>::value ||
+            (std::is_same<duckdb_phmap::Less<key_type>, key_compare>::value ||
              std::is_same<std::less<key_type>, key_compare>::value ||
              std::is_same<std::greater<key_type>, key_compare>::value)>;
 
@@ -1082,7 +1082,7 @@ namespace priv {
         btree_node() = default;
 
     private:
-        using layout_type = phmap::priv::Layout<btree_node *, field_type,
+        using layout_type = duckdb_phmap::priv::Layout<btree_node *, field_type,
                                                                slot_type, btree_node *>;
         constexpr static size_type SizeWithNValues(size_type n) {
             return (size_type)layout_type(/*parent*/ 1,
@@ -1211,10 +1211,10 @@ namespace priv {
         btree_node *child(size_type i) const { return GetField<3>()[i]; }
         btree_node *&mutable_child(size_type i) { return GetField<3>()[i]; }
         void clear_child(size_type i) {
-            phmap::priv::SanitizerPoisonObject(&mutable_child(i));
+            duckdb_phmap::priv::SanitizerPoisonObject(&mutable_child(i));
         }
         void set_child(size_type i, btree_node *c) {
-            phmap::priv::SanitizerUnpoisonObject(&mutable_child(i));
+            duckdb_phmap::priv::SanitizerUnpoisonObject(&mutable_child(i));
             mutable_child(i) = c;
             c->set_position((field_type)i);
         }
@@ -1277,7 +1277,7 @@ namespace priv {
             const K &k, int s, const int e, const Compare &comp,
             std::true_type /* IsCompareTo */) const {
             while (s < e) {
-                const phmap::weak_ordering c = comp(key(s), k);
+                const duckdb_phmap::weak_ordering c = comp(key(s), k);
                 if (c == 0) {
                     return {s, MatchKind::kEq};
                 } else if (c > 0) {
@@ -1315,7 +1315,7 @@ namespace priv {
                 MatchKind exact_match = MatchKind::kNe;
                 while (s != e) {
                     const int mid = (s + e) >> 1;
-                    const phmap::weak_ordering c = comp(key(mid), k);
+                    const duckdb_phmap::weak_ordering c = comp(key(mid), k);
                     if (c < 0) {
                         s = mid + 1;
                     } else {
@@ -1332,7 +1332,7 @@ namespace priv {
             } else {  // Not a multi-container.
                 while (s != e) {
                     const int mid = (s + e) >> 1;
-                    const phmap::weak_ordering c = comp(key(mid), k);
+                    const duckdb_phmap::weak_ordering c = comp(key(mid), k);
                     if (c < 0) {
                         s = mid + 1;
                     } else if (c > 0) {
@@ -1383,7 +1383,7 @@ namespace priv {
             n->set_start(0);
             n->set_count(0);
             n->set_max_count((field_type)max_cnt);
-            phmap::priv::SanitizerPoisonMemoryRegion(
+            duckdb_phmap::priv::SanitizerPoisonMemoryRegion(
                 n->slot(0), max_cnt * sizeof(slot_type));
             return n;
         }
@@ -1392,7 +1392,7 @@ namespace priv {
             // Set `max_count` to a sentinel value to indicate that this node is
             // internal.
             n->set_max_count(kInternalNodeMaxCount);
-            phmap::priv::SanitizerPoisonMemoryRegion(
+            duckdb_phmap::priv::SanitizerPoisonMemoryRegion(
                 &n->mutable_child(0), (kNodeValues + 1) * sizeof(btree_node *));
             return n;
         }
@@ -1411,12 +1411,12 @@ namespace priv {
     private:
         template <typename... Args>
         void value_init(const size_type i, allocator_type *alloc, Args &&... args) {
-            phmap::priv::SanitizerUnpoisonObject(slot(i));
+            duckdb_phmap::priv::SanitizerUnpoisonObject(slot(i));
             params_type::construct(alloc, slot(i), std::forward<Args>(args)...);
         }
         void value_destroy(const size_type i, allocator_type *alloc) {
             params_type::destroy(alloc, slot(i));
-            phmap::priv::SanitizerPoisonObject(slot(i));
+            duckdb_phmap::priv::SanitizerPoisonObject(slot(i));
         }
 
         // Move n values starting at value i in this node into the values starting at
@@ -1424,7 +1424,7 @@ namespace priv {
         void uninitialized_move_n(const size_type n, const size_type i,
                                   const size_type j, btree_node *x,
                                   allocator_type *alloc) {
-            phmap::priv::SanitizerUnpoisonMemoryRegion(
+            duckdb_phmap::priv::SanitizerUnpoisonMemoryRegion(
                 x->slot(j), n * sizeof(slot_type));
             for (slot_type *src = slot(i), *end = src + n, *dest = x->slot(j);
                  src != end; ++src, ++dest) {
@@ -1484,7 +1484,7 @@ namespace priv {
         // that btree_iterator can be trivially copyable. This is for performance and
         // binary size reasons.
         template <typename N, typename R, typename P,
-                  phmap::enable_if_t<
+                  duckdb_phmap::enable_if_t<
                       std::is_same<btree_iterator<N, R, P>, iterator>::value &&
                       std::is_same<btree_iterator, const_iterator>::value,
                       int> = 0>
@@ -1497,7 +1497,7 @@ namespace priv {
         // NOTE: the const_cast is safe because this constructor is only called by
         // non-const methods and the container owns the nodes.
         template <typename N, typename R, typename P,
-                  phmap::enable_if_t<
+                  duckdb_phmap::enable_if_t<
                       std::is_same<btree_iterator<N, R, P>, const_iterator>::value &&
                       std::is_same<btree_iterator, iterator>::value,
                       int> = 0>
@@ -1692,8 +1692,8 @@ namespace priv {
         btree(const btree &x);
         btree(btree &&x) noexcept
             : root_(std::move(x.root_)),
-            rightmost_(phmap::exchange(x.rightmost_, EmptyNode())),
-            size_(phmap::exchange(x.size_, 0)) {
+            rightmost_(duckdb_phmap::exchange(x.rightmost_, EmptyNode())),
+            size_(duckdb_phmap::exchange(x.size_, 0)) {
             x.mutable_root() = EmptyNode();
         }
 
@@ -1975,7 +1975,7 @@ namespace priv {
         // allocator.
         node_type *allocate(const size_type sz) {
             return reinterpret_cast<node_type *>(
-                phmap::priv::Allocate<node_type::Alignment()>(
+                duckdb_phmap::priv::Allocate<node_type::Alignment()>(
                     mutable_allocator(), (size_t)sz));
         }
 
@@ -2000,7 +2000,7 @@ namespace priv {
 
         // Deallocates a node of a certain size in bytes using the allocator.
         void deallocate(const size_type sz, node_type *node) {
-            phmap::priv::Deallocate<node_type::Alignment()>(
+            duckdb_phmap::priv::Deallocate<node_type::Alignment()>(
                 mutable_allocator(), node, (size_t)sz);
         }
 
@@ -2496,13 +2496,13 @@ namespace priv {
             kNodeValues < (1 << (8 * sizeof(typename node_type::field_type))),
             "target node size too large");
 
-        // Verify that key_compare returns an phmap::{weak,strong}_ordering or bool.
+        // Verify that key_compare returns an duckdb_phmap::{weak,strong}_ordering or bool.
         using compare_result_type =
-            phmap::invoke_result_t<key_compare, key_type, key_type>;
+            duckdb_phmap::invoke_result_t<key_compare, key_type, key_type>;
         static_assert(
             std::is_same<compare_result_type, bool>::value ||
-            std::is_convertible<compare_result_type, phmap::weak_ordering>::value,
-            "key comparison function must return phmap::{weak,strong}_ordering or "
+            std::is_convertible<compare_result_type, duckdb_phmap::weak_ordering>::value,
+            "key comparison function must return duckdb_phmap::{weak,strong}_ordering or "
             "bool.");
 
         // Test the assumption made in setting kNodeSlotSpace.
@@ -2632,7 +2632,7 @@ namespace priv {
             clear();
 
             *mutable_key_comp() = x.key_comp();
-            if (phmap::allocator_traits<
+            if (duckdb_phmap::allocator_traits<
                 allocator_type>::propagate_on_container_copy_assignment::value) {
                 *mutable_allocator() = x.allocator();
             }
@@ -2648,7 +2648,7 @@ namespace priv {
             clear();
 
             using std::swap;
-            if (phmap::allocator_traits<
+            if (duckdb_phmap::allocator_traits<
                 allocator_type>::propagate_on_container_copy_assignment::value) {
                 // Note: `root_` also contains the allocator and the key comparator.
                 swap(root_, x.root_);
@@ -2866,7 +2866,7 @@ namespace priv {
     template <typename P>
     void btree<P>::swap(btree &x) {
         using std::swap;
-        if (phmap::allocator_traits<
+        if (duckdb_phmap::allocator_traits<
             allocator_type>::propagate_on_container_swap::value) {
             // Note: `root_` also contains the allocator and the key comparator.
             swap(root_, x.root_);
@@ -3554,8 +3554,8 @@ namespace priv {
         // `this`, it is left unmodified in `src`.
         template <
             typename T,
-            typename phmap::enable_if_t<
-                phmap::conjunction<
+            typename duckdb_phmap::enable_if_t<
+                duckdb_phmap::conjunction<
                     std::is_same<value_type, typename T::value_type>,
                     std::is_same<allocator_type, typename T::allocator_type>,
                     std::is_same<typename params_type::is_map_container,
@@ -3573,8 +3573,8 @@ namespace priv {
 
         template <
             typename T,
-            typename phmap::enable_if_t<
-                phmap::conjunction<
+            typename duckdb_phmap::enable_if_t<
+                duckdb_phmap::conjunction<
                     std::is_same<value_type, typename T::value_type>,
                     std::is_same<allocator_type, typename T::allocator_type>,
                     std::is_same<typename params_type::is_map_container,
@@ -3660,14 +3660,14 @@ namespace priv {
         mapped_type &at(const key_arg<K> &key) {
             auto it = this->find(key);
             if (it == this->end())
-                base_internal::ThrowStdOutOfRange("phmap::btree_map::at");
+                base_internal::ThrowStdOutOfRange("duckdb_phmap::btree_map::at");
             return it->second;
         }
         template <typename K = key_type>
         const mapped_type &at(const key_arg<K> &key) const {
             auto it = this->find(key);
             if (it == this->end())
-                base_internal::ThrowStdOutOfRange("phmap::btree_map::at");
+                base_internal::ThrowStdOutOfRange("duckdb_phmap::btree_map::at");
             return it->second;
         }
     };
@@ -3781,8 +3781,8 @@ namespace priv {
         // Moves all elements from `src` into `this`.
         template <
             typename T,
-            typename phmap::enable_if_t<
-                phmap::conjunction<
+            typename duckdb_phmap::enable_if_t<
+                duckdb_phmap::conjunction<
                     std::is_same<value_type, typename T::value_type>,
                     std::is_same<allocator_type, typename T::allocator_type>,
                     std::is_same<typename params_type::is_map_container,
@@ -3796,8 +3796,8 @@ namespace priv {
 
         template <
             typename T,
-            typename phmap::enable_if_t<
-                phmap::conjunction<
+            typename duckdb_phmap::enable_if_t<
+                duckdb_phmap::conjunction<
                     std::is_same<value_type, typename T::value_type>,
                     std::is_same<allocator_type, typename T::allocator_type>,
                     std::is_same<typename params_type::is_map_container,
@@ -3865,7 +3865,7 @@ namespace priv {
         using Base::value_comp;
     };
 
-    // Swaps the contents of two `phmap::btree_set` containers.
+    // Swaps the contents of two `duckdb_phmap::btree_set` containers.
     // -------------------------------------------------------
     template <typename K, typename C, typename A>
     void swap(btree_set<K, C, A> &x, btree_set<K, C, A> &y) {
@@ -3924,7 +3924,7 @@ namespace priv {
         using Base::value_comp;
     };
 
-    // Swaps the contents of two `phmap::btree_multiset` containers.
+    // Swaps the contents of two `duckdb_phmap::btree_multiset` containers.
     // ------------------------------------------------------------
     template <typename K, typename C, typename A>
     void swap(btree_multiset<K, C, A> &x, btree_multiset<K, C, A> &y) {
@@ -3987,7 +3987,7 @@ namespace priv {
         using Base::value_comp;
     };
 
-    // Swaps the contents of two `phmap::btree_map` containers.
+    // Swaps the contents of two `duckdb_phmap::btree_map` containers.
     // -------------------------------------------------------
     template <typename K, typename V, typename C, typename A>
     void swap(btree_map<K, V, C, A> &x, btree_map<K, V, C, A> &y) {
@@ -4045,7 +4045,7 @@ namespace priv {
         using Base::value_comp;
     };
 
-    // Swaps the contents of two `phmap::btree_multimap` containers.
+    // Swaps the contents of two `duckdb_phmap::btree_multimap` containers.
     // ------------------------------------------------------------
     template <typename K, typename V, typename C, typename A>
     void swap(btree_multimap<K, V, C, A> &x, btree_multimap<K, V, C, A> &y) {

@@ -65,7 +65,7 @@
     #pragma warning(disable : 4820) // '6' bytes padding added after data member
 #endif  // _MSC_VER
 
-namespace phmap {
+namespace duckdb_phmap {
 
 template <class T> using Allocator = typename std::allocator<T>;
 
@@ -165,7 +165,7 @@ struct is_move_assignable : type_traits_internal::is_detected<
 // This metafunction is designed to be a drop-in replacement for the C++17
 // `std::void_t` metafunction.
 //
-// NOTE: `phmap::void_t` does not use the standard-specified implementation so
+// NOTE: `duckdb_phmap::void_t` does not use the standard-specified implementation so
 // that it can remain compatible with gcc < 5.1. This can introduce slightly
 // different behavior, such as when ordering partial specializations.
 // ---------------------------------------------------------------------------
@@ -241,7 +241,7 @@ struct negation : std::integral_constant<bool, !T::value> {};
   struct is_trivially_copy_assignable :
      std::integral_constant<bool,
                             __has_trivial_assign(typename std::remove_reference<T>::type) &&
-                            phmap::is_copy_assignable<T>::value> {};
+                            duckdb_phmap::is_copy_assignable<T>::value> {};
 
   template <typename T>
   struct is_trivially_copyable :
@@ -358,7 +358,7 @@ namespace type_traits_internal {
 
     template <typename Key>
     struct IsHashable<Key,
-        phmap::enable_if_t<std::is_convertible<
+        duckdb_phmap::enable_if_t<std::is_convertible<
             decltype(std::declval<std::hash<Key>&>()(std::declval<Key const&>())),
             std::size_t>::value>> : std::true_type {};
 #endif
@@ -385,7 +385,7 @@ private:
         static_assert(
             std::is_copy_constructible<std::hash<Key>>::value,
             "std::hash<Key> must be copy constructible when it is enabled");
-        static_assert(phmap::is_copy_assignable<std::hash<Key>>::value,
+        static_assert(duckdb_phmap::is_copy_assignable<std::hash<Key>>::value,
                       "std::hash<Key> must be copy assignable when it is enabled");
         // is_destructible is unchecked as it's implied by each of the
         // is_constructible checks.
@@ -410,13 +410,13 @@ inline void AssertHashEnabled
 
 }  // namespace type_traits_internal
 
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 
 // -----------------------------------------------------------------------------
 //          hash_policy_traits
 // -----------------------------------------------------------------------------
-namespace phmap {
+namespace duckdb_phmap {
 namespace priv {
 
 // Defines how slots are initialized/destroyed/moved.
@@ -440,7 +440,7 @@ private:
     struct ConstantIteratorsImpl : std::false_type {};
 
     template <class P>
-    struct ConstantIteratorsImpl<P, phmap::void_t<typename P::constant_iterators>>
+    struct ConstantIteratorsImpl<P, duckdb_phmap::void_t<typename P::constant_iterators>>
         : P::constant_iterators {};
 
 public:
@@ -582,14 +582,14 @@ private:
 };
 
 }  // namespace priv
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 // -----------------------------------------------------------------------------
 // file utility.h
 // -----------------------------------------------------------------------------
 
 // --------- identity.h
-namespace phmap {
+namespace duckdb_phmap {
 namespace internal {
 
 template <typename T>
@@ -601,7 +601,7 @@ template <typename T>
 using identity_t = typename identity<T>::type;
 
 }  // namespace internal
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 
 // --------- inline_variable.h
@@ -610,7 +610,7 @@ using identity_t = typename identity<T>::type;
 
 #if defined(__clang__)
     #define PHMAP_INTERNAL_EXTERN_DECL(type, name) \
-      extern const ::phmap::internal::identity_t<type> name;
+      extern const ::duckdb_phmap::internal::identity_t<type> name;
 #else  // Otherwise, just define the macro to do nothing.
     #define PHMAP_INTERNAL_EXTERN_DECL(type, name)
 #endif  // defined(__clang__)
@@ -618,7 +618,7 @@ using identity_t = typename identity<T>::type;
 // See above comment at top of file for details.
 #define PHMAP_INTERNAL_INLINE_CONSTEXPR(type, name, init) \
   PHMAP_INTERNAL_EXTERN_DECL(type, name)                  \
-  inline constexpr ::phmap::internal::identity_t<type> name = init
+  inline constexpr ::duckdb_phmap::internal::identity_t<type> name = init
 
 #else
 
@@ -631,14 +631,14 @@ using identity_t = typename identity<T>::type;
 #define PHMAP_INTERNAL_INLINE_CONSTEXPR(var_type, name, init)                  \
   template <class /*PhmapInternalDummy*/ = void>                               \
   struct PhmapInternalInlineVariableHolder##name {                             \
-    static constexpr ::phmap::internal::identity_t<var_type> kInstance = init; \
+    static constexpr ::duckdb_phmap::internal::identity_t<var_type> kInstance = init; \
   };                                                                          \
                                                                               \
   template <class PhmapInternalDummy>                                          \
-  constexpr ::phmap::internal::identity_t<var_type>                            \
+  constexpr ::duckdb_phmap::internal::identity_t<var_type>                            \
       PhmapInternalInlineVariableHolder##name<PhmapInternalDummy>::kInstance;   \
                                                                               \
-  static constexpr const ::phmap::internal::identity_t<var_type>&              \
+  static constexpr const ::duckdb_phmap::internal::identity_t<var_type>&              \
       name = /* NOLINT */                                                     \
       PhmapInternalInlineVariableHolder##name<>::kInstance;                    \
   static_assert(sizeof(void (*)(decltype(name))) != 0,                        \
@@ -648,7 +648,7 @@ using identity_t = typename identity<T>::type;
 
 // ----------- throw_delegate
 
-namespace phmap {
+namespace duckdb_phmap {
 namespace base_internal {
 
 namespace {
@@ -735,11 +735,11 @@ static inline void ThrowStdBadAlloc() {
 }
 
 }  // namespace base_internal
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 // ----------- invoke.h
 
-namespace phmap {
+namespace duckdb_phmap {
 namespace base_internal {
 
 template <typename Derived>
@@ -879,19 +879,19 @@ InvokeT<F, Args...> Invoke(F&& f, Args&&... args) {
                                            std::forward<Args>(args)...);
 }
 }  // namespace base_internal
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 
 // ----------- utility.h
 
-namespace phmap {
+namespace duckdb_phmap {
 
 // integer_sequence
 //
 // Class template representing a compile-time integer sequence. An instantiation
 // of `integer_sequence<T, Ints...>` has a sequence of integers encoded in its
 // type through its template arguments (which is a common need when
-// working with C++11 variadic templates). `phmap::integer_sequence` is designed
+// working with C++11 variadic templates). `duckdb_phmap::integer_sequence` is designed
 // to be a drop-in replacement for C++14's `std::integer_sequence`.
 //
 // Example:
@@ -915,7 +915,7 @@ struct integer_sequence
 // index_sequence
 //
 // A helper template for an `integer_sequence` of `size_t`,
-// `phmap::index_sequence` is designed to be a drop-in replacement for C++14's
+// `duckdb_phmap::index_sequence` is designed to be a drop-in replacement for C++14's
 // `std::index_sequence`.
 template <size_t... Ints>
 using index_sequence = integer_sequence<size_t, Ints...>;
@@ -989,7 +989,7 @@ using std::in_place;
 // in_place_t
 //
 // Tag type used to specify in-place construction, such as with
-// `phmap::optional`, designed to be a drop-in replacement for C++17's
+// `duckdb_phmap::optional`, designed to be a drop-in replacement for C++17's
 // `std::in_place_t`.
 struct in_place_t {};
 
@@ -1004,7 +1004,7 @@ using std::in_place_type_t;
 // in_place_type_t
 //
 // Tag type used for in-place construction when the type to construct needs to
-// be specified, such as with `phmap::any`, designed to be a drop-in replacement
+// be specified, such as with `duckdb_phmap::any`, designed to be a drop-in replacement
 // for C++17's `std::in_place_type_t`.
 template <typename T>
 struct in_place_type_t {};
@@ -1017,7 +1017,7 @@ using std::in_place_index_t;
 // in_place_index_t
 //
 // Tag type used for in-place construction when the type to construct needs to
-// be specified, such as with `phmap::any`, designed to be a drop-in replacement
+// be specified, such as with `duckdb_phmap::any`, designed to be a drop-in replacement
 // for C++17's `std::in_place_index_t`.
 template <size_t I>
 struct in_place_index_t {};
@@ -1030,8 +1030,8 @@ struct in_place_index_t {};
 // A constexpr version of `std::move()`, designed to be a drop-in replacement
 // for C++14's `std::move()`.
 template <typename T>
-constexpr phmap::remove_reference_t<T>&& move(T&& t) noexcept {
-  return static_cast<phmap::remove_reference_t<T>&&>(t);
+constexpr duckdb_phmap::remove_reference_t<T>&& move(T&& t) noexcept {
+  return static_cast<duckdb_phmap::remove_reference_t<T>&&>(t);
 }
 
 // forward()
@@ -1040,7 +1040,7 @@ constexpr phmap::remove_reference_t<T>&& move(T&& t) noexcept {
 // for C++14's `std::forward()`.
 template <typename T>
 constexpr T&& forward(
-    phmap::remove_reference_t<T>& t) noexcept {  // NOLINT(runtime/references)
+    duckdb_phmap::remove_reference_t<T>& t) noexcept {  // NOLINT(runtime/references)
   return static_cast<T&&>(t);
 }
 
@@ -1048,12 +1048,12 @@ namespace utility_internal {
 // Helper method for expanding tuple into a called method.
 template <typename Functor, typename Tuple, std::size_t... Indexes>
 auto apply_helper(Functor&& functor, Tuple&& t, index_sequence<Indexes...>)
-    -> decltype(phmap::base_internal::Invoke(
-        phmap::forward<Functor>(functor),
-        std::get<Indexes>(phmap::forward<Tuple>(t))...)) {
-  return phmap::base_internal::Invoke(
-      phmap::forward<Functor>(functor),
-      std::get<Indexes>(phmap::forward<Tuple>(t))...);
+    -> decltype(duckdb_phmap::base_internal::Invoke(
+        duckdb_phmap::forward<Functor>(functor),
+        std::get<Indexes>(duckdb_phmap::forward<Tuple>(t))...)) {
+  return duckdb_phmap::base_internal::Invoke(
+      duckdb_phmap::forward<Functor>(functor),
+      std::get<Indexes>(duckdb_phmap::forward<Tuple>(t))...);
 }
 
 }  // namespace utility_internal
@@ -1064,7 +1064,7 @@ auto apply_helper(Functor&& functor, Tuple&& t, index_sequence<Indexes...>)
 // Each element of the tuple corresponds to an argument of the call (in order).
 // Both the Callable argument and the tuple argument are perfect-forwarded.
 // For member-function Callables, the first tuple element acts as the `this`
-// pointer. `phmap::apply` is designed to be a drop-in replacement for C++17's
+// pointer. `duckdb_phmap::apply` is designed to be a drop-in replacement for C++17's
 // `std::apply`. Unlike C++17's `std::apply`, this is not currently `constexpr`.
 //
 // Example:
@@ -1081,31 +1081,31 @@ auto apply_helper(Functor&& functor, Tuple&& t, index_sequence<Indexes...>)
 //   {
 //       std::tuple<int, std::string> tuple1(42, "bar");
 //       // Invokes the first user function on int, std::string.
-//       phmap::apply(&user_function1, tuple1);
+//       duckdb_phmap::apply(&user_function1, tuple1);
 //
-//       std::tuple<std::unique_ptr<Foo>> tuple2(phmap::make_unique<Foo>());
+//       std::tuple<std::unique_ptr<Foo>> tuple2(duckdb_phmap::make_unique<Foo>());
 //       // Invokes the user function that takes ownership of the unique
 //       // pointer.
-//       phmap::apply(&user_function2, std::move(tuple2));
+//       duckdb_phmap::apply(&user_function2, std::move(tuple2));
 //
-//       auto foo = phmap::make_unique<Foo>();
+//       auto foo = duckdb_phmap::make_unique<Foo>();
 //       std::tuple<Foo*, int> tuple3(foo.get(), 42);
 //       // Invokes the method Bar on foo with one argument, 42.
-//       phmap::apply(&Foo::Bar, tuple3);
+//       duckdb_phmap::apply(&Foo::Bar, tuple3);
 //
 //       std::tuple<int, int> tuple4(8, 9);
 //       // Invokes a lambda.
-//       phmap::apply(user_lambda, tuple4);
+//       duckdb_phmap::apply(user_lambda, tuple4);
 //   }
 template <typename Functor, typename Tuple>
 auto apply(Functor&& functor, Tuple&& t)
     -> decltype(utility_internal::apply_helper(
-        phmap::forward<Functor>(functor), phmap::forward<Tuple>(t),
-        phmap::make_index_sequence<std::tuple_size<
+        duckdb_phmap::forward<Functor>(functor), duckdb_phmap::forward<Tuple>(t),
+        duckdb_phmap::make_index_sequence<std::tuple_size<
             typename std::remove_reference<Tuple>::type>::value>{})) {
   return utility_internal::apply_helper(
-      phmap::forward<Functor>(functor), phmap::forward<Tuple>(t),
-      phmap::make_index_sequence<std::tuple_size<
+      duckdb_phmap::forward<Functor>(functor), duckdb_phmap::forward<Tuple>(t),
+      duckdb_phmap::make_index_sequence<std::tuple_size<
           typename std::remove_reference<Tuple>::type>::value>{});
 }
 
@@ -1117,21 +1117,21 @@ auto apply(Functor&& functor, Tuple&& t)
 // exchange
 //
 // Replaces the value of `obj` with `new_value` and returns the old value of
-// `obj`.  `phmap::exchange` is designed to be a drop-in replacement for C++14's
+// `obj`.  `duckdb_phmap::exchange` is designed to be a drop-in replacement for C++14's
 // `std::exchange`.
 //
 // Example:
 //
 //   Foo& operator=(Foo&& other) {
-//     ptr1_ = phmap::exchange(other.ptr1_, nullptr);
-//     int1_ = phmap::exchange(other.int1_, -1);
+//     ptr1_ = duckdb_phmap::exchange(other.ptr1_, nullptr);
+//     int1_ = duckdb_phmap::exchange(other.int1_, -1);
 //     return *this;
 //   }
 template <typename T, typename U = T>
 T exchange(T& obj, U&& new_value)
 {
-    T old_value = phmap::move(obj);
-    obj = phmap::forward<U>(new_value);
+    T old_value = duckdb_phmap::move(obj);
+    obj = duckdb_phmap::forward<U>(new_value);
     return old_value;
 }
 
@@ -1140,13 +1140,13 @@ T exchange(T& obj, U&& new_value)
 #endif  // _MSC_VER
 
 
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 // -----------------------------------------------------------------------------
 //          memory.h
 // -----------------------------------------------------------------------------
 
-namespace phmap {
+namespace duckdb_phmap {
 
 template <typename T>
 std::unique_ptr<T> WrapUnique(T* ptr) 
@@ -1158,7 +1158,7 @@ std::unique_ptr<T> WrapUnique(T* ptr)
 
 namespace memory_internal {
 
-// Traits to select proper overload and return type for `phmap::make_unique<>`.
+// Traits to select proper overload and return type for `duckdb_phmap::make_unique<>`.
 template <typename T>
 struct MakeUniqueResult {
     using scalar = std::unique_ptr<T>;
@@ -1187,7 +1187,7 @@ struct MakeUniqueResult<T[N]> {
     
     template <typename T>
     typename memory_internal::MakeUniqueResult<T>::array make_unique(size_t n) {
-        return std::unique_ptr<T>(new typename phmap::remove_extent_t<T>[n]());
+        return std::unique_ptr<T>(new typename duckdb_phmap::remove_extent_t<T>[n]());
     }
     
     template <typename T, typename... Args>
@@ -1394,32 +1394,32 @@ struct allocator_traits
 
     // const_pointer:
     // Alloc::const_pointer if present, otherwise
-    // phmap::pointer_traits<pointer>::rebind<const value_type>
+    // duckdb_phmap::pointer_traits<pointer>::rebind<const value_type>
     using const_pointer =
         memory_internal::ExtractOrT<memory_internal::GetConstPointer, Alloc,
-                                    typename phmap::pointer_traits<pointer>::
+                                    typename duckdb_phmap::pointer_traits<pointer>::
                                     template rebind<const value_type>>;
 
     // void_pointer:
     // Alloc::void_pointer if present, otherwise
-    // phmap::pointer_traits<pointer>::rebind<void>
+    // duckdb_phmap::pointer_traits<pointer>::rebind<void>
     using void_pointer = memory_internal::ExtractOrT<
         memory_internal::GetVoidPointer, Alloc,
-        typename phmap::pointer_traits<pointer>::template rebind<void>>;
+        typename duckdb_phmap::pointer_traits<pointer>::template rebind<void>>;
 
     // const_void_pointer:
     // Alloc::const_void_pointer if present, otherwise
-    // phmap::pointer_traits<pointer>::rebind<const void>
+    // duckdb_phmap::pointer_traits<pointer>::rebind<const void>
     using const_void_pointer = memory_internal::ExtractOrT<
         memory_internal::GetConstVoidPointer, Alloc,
-        typename phmap::pointer_traits<pointer>::template rebind<const void>>;
+        typename duckdb_phmap::pointer_traits<pointer>::template rebind<const void>>;
 
     // difference_type:
     // Alloc::difference_type if present, otherwise
-    // phmap::pointer_traits<pointer>::difference_type
+    // duckdb_phmap::pointer_traits<pointer>::difference_type
     using difference_type = memory_internal::ExtractOrT<
         memory_internal::GetDifferenceType, Alloc,
-        typename phmap::pointer_traits<pointer>::difference_type>;
+        typename duckdb_phmap::pointer_traits<pointer>::difference_type>;
 
     // size_type:
     // Alloc::size_type if present, otherwise
@@ -1461,9 +1461,9 @@ struct allocator_traits
     using rebind_alloc = typename memory_internal::RebindAlloc<Alloc, T>::type;
 
     // rebind_traits:
-    // phmap::allocator_traits<rebind_alloc<T>>
+    // duckdb_phmap::allocator_traits<rebind_alloc<T>>
     template <typename T>
-    using rebind_traits = phmap::allocator_traits<rebind_alloc<T>>;
+    using rebind_traits = duckdb_phmap::allocator_traits<rebind_alloc<T>>;
 
     // allocate(Alloc& a, size_type n):
     // Calls a.allocate(n)
@@ -1650,7 +1650,7 @@ void CopyRange(Allocator& alloc, Iterator destination, InputIterator first,
     }
 }
 }  // namespace memory_internal
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 
 // -----------------------------------------------------------------------------
@@ -1660,13 +1660,13 @@ void CopyRange(Allocator& alloc, Iterator destination, InputIterator first,
 
 #include <optional>  // IWYU pragma: export
 
-namespace phmap {
+namespace duckdb_phmap {
 using std::bad_optional_access;
 using std::optional;
 using std::make_optional;
 using std::nullopt_t;
 using std::nullopt;
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 #else
 
@@ -1682,7 +1682,7 @@ using std::nullopt;
     #define PHMAP_OPTIONAL_USE_INHERITING_CONSTRUCTORS 1
 #endif
 
-namespace phmap {
+namespace duckdb_phmap {
 
 class bad_optional_access : public std::exception 
 {
@@ -1747,7 +1747,7 @@ protected:
 
     template <typename... Args>
     constexpr explicit optional_data_dtor_base(in_place_t, Args&&... args)
-        : engaged_(true), data_(phmap::forward<Args>(args)...) {}
+        : engaged_(true), data_(duckdb_phmap::forward<Args>(args)...) {}
 
     ~optional_data_dtor_base() { destruct(); }
 };
@@ -1777,7 +1777,7 @@ protected:
 
     template <typename... Args>
     constexpr explicit optional_data_dtor_base(in_place_t, Args&&... args)
-        : engaged_(true), data_(phmap::forward<Args>(args)...) {}
+        : engaged_(true), data_(duckdb_phmap::forward<Args>(args)...) {}
 };
 
 template <typename T>
@@ -1792,7 +1792,7 @@ protected:
 
     template <typename... Args>
     constexpr explicit optional_data_base(in_place_t t, Args&&... args)
-        : base(t, phmap::forward<Args>(args)...) {}
+        : base(t, duckdb_phmap::forward<Args>(args)...) {}
 #endif
 
     template <typename... Args>
@@ -1820,8 +1820,8 @@ protected:
 // supported now, so we use is_trivially_* traits instead.
 template <typename T,
           bool unused =
-          phmap::is_trivially_copy_constructible<T>::value &&
-          phmap::is_trivially_copy_assignable<typename std::remove_cv<T>::type>::value &&
+          duckdb_phmap::is_trivially_copy_constructible<T>::value &&
+          duckdb_phmap::is_trivially_copy_assignable<typename std::remove_cv<T>::type>::value &&
           std::is_trivially_destructible<T>::value>
 class optional_data;
 
@@ -1837,7 +1837,7 @@ protected:
 
     template <typename... Args>
     constexpr explicit optional_data(in_place_t t, Args&&... args)
-        : optional_data_base<T>(t, phmap::forward<Args>(args)...) {}
+        : optional_data_base<T>(t, duckdb_phmap::forward<Args>(args)...) {}
 #endif
 };
 
@@ -1850,7 +1850,7 @@ protected:
 #else
     template <typename... Args>
     constexpr explicit optional_data(in_place_t t, Args&&... args)
-        : optional_data_base<T>(t, phmap::forward<Args>(args)...) {}
+        : optional_data_base<T>(t, duckdb_phmap::forward<Args>(args)...) {}
 #endif
 
     optional_data() = default;
@@ -1862,7 +1862,7 @@ protected:
     }
 
     optional_data(optional_data&& rhs) noexcept(
-        phmap::default_allocator_is_nothrow::value ||
+        duckdb_phmap::default_allocator_is_nothrow::value ||
         std::is_nothrow_move_constructible<T>::value)
     : optional_data_base<T>() {
         if (rhs.engaged_) {
@@ -1981,10 +1981,10 @@ constexpr copy_traits get_ctor_copy_traits()
 template <typename T>
 constexpr copy_traits get_assign_copy_traits() 
 {
-    return phmap::is_copy_assignable<T>::value &&
+    return duckdb_phmap::is_copy_assignable<T>::value &&
                  std::is_copy_constructible<T>::value
              ? copy_traits::copyable
-             : phmap::is_move_assignable<T>::value &&
+             : duckdb_phmap::is_move_assignable<T>::value &&
                        std::is_move_constructible<T>::value
                    ? copy_traits::movable
                    : copy_traits::non_movable;
@@ -2017,7 +2017,7 @@ struct is_constructible_convertible_assignable_from_optional
 // for checking whether an expression is convertible to bool.
 bool convertible_to_bool(bool);
 
-// Base class for std::hash<phmap::optional<T>>:
+// Base class for std::hash<duckdb_phmap::optional<T>>:
 // If std::hash<std::remove_const_t<T>> is enabled, it provides operator() to
 // compute the hash; Otherwise, it is disabled.
 // Reference N4659 23.14.15 [unord.hash].
@@ -2032,15 +2032,15 @@ struct optional_hash_base
 };
 
 template <typename T>
-struct optional_hash_base<T, decltype(std::hash<phmap::remove_const_t<T> >()(
-                                 std::declval<phmap::remove_const_t<T> >()))> 
+struct optional_hash_base<T, decltype(std::hash<duckdb_phmap::remove_const_t<T> >()(
+                                 std::declval<duckdb_phmap::remove_const_t<T> >()))> 
 {
-    using argument_type = phmap::optional<T>;
+    using argument_type = duckdb_phmap::optional<T>;
     using result_type = size_t;
-    size_t operator()(const phmap::optional<T>& opt) const {
-        phmap::type_traits_internal::AssertHashEnabled<phmap::remove_const_t<T>>();
+    size_t operator()(const duckdb_phmap::optional<T>& opt) const {
+        duckdb_phmap::type_traits_internal::AssertHashEnabled<duckdb_phmap::remove_const_t<T>>();
         if (opt) {
-            return std::hash<phmap::remove_const_t<T> >()(*opt);
+            return std::hash<duckdb_phmap::remove_const_t<T> >()(*opt);
         } else {
             return static_cast<size_t>(0x297814aaad196e6dULL);
         }
@@ -2051,7 +2051,7 @@ struct optional_hash_base<T, decltype(std::hash<phmap::remove_const_t<T> >()(
 
 
 // -----------------------------------------------------------------------------
-// phmap::optional class definition
+// duckdb_phmap::optional class definition
 // -----------------------------------------------------------------------------
 #if PHMAP_OLD_GCC
     #define PHMAP_OPTIONAL_NOEXCEPT
@@ -2091,11 +2091,11 @@ public:
     // (The `in_place_t` is a tag used to indicate that the contained object
     // should be constructed in-place.)
     template <typename InPlaceT, typename... Args,
-              phmap::enable_if_t<phmap::conjunction<
+              duckdb_phmap::enable_if_t<duckdb_phmap::conjunction<
                                     std::is_same<InPlaceT, in_place_t>,
                                     std::is_constructible<T, Args&&...> >::value>* = nullptr>
         constexpr explicit optional(InPlaceT, Args&&... args)
-        : data_base(in_place_t(), phmap::forward<Args>(args)...) {}
+        : data_base(in_place_t(), duckdb_phmap::forward<Args>(args)...) {}
 
     // Constructs a non-empty `optional` direct-initialized value of type `T` from
     // the arguments of an initializer_list and `std::forward<Args>(args)...`.
@@ -2106,43 +2106,43 @@ public:
                                                      T, std::initializer_list<U>&, Args&&...>::value>::type>
         constexpr explicit optional(in_place_t, std::initializer_list<U> il,
                                     Args&&... args)
-        : data_base(in_place_t(), il, phmap::forward<Args>(args)...) {
+        : data_base(in_place_t(), il, duckdb_phmap::forward<Args>(args)...) {
     }
 
     // Value constructor (implicit)
     template <
         typename U = T,
         typename std::enable_if<
-            phmap::conjunction<phmap::negation<std::is_same<
+            duckdb_phmap::conjunction<duckdb_phmap::negation<std::is_same<
                                                  in_place_t, typename std::decay<U>::type> >,
-                              phmap::negation<std::is_same<
+                              duckdb_phmap::negation<std::is_same<
                                                  optional<T>, typename std::decay<U>::type> >,
                               std::is_convertible<U&&, T>,
                               std::is_constructible<T, U&&> >::value,
             bool>::type = false>
-        constexpr optional(U&& v) : data_base(in_place_t(), phmap::forward<U>(v)) {}
+        constexpr optional(U&& v) : data_base(in_place_t(), duckdb_phmap::forward<U>(v)) {}
 
     // Value constructor (explicit)
     template <
         typename U = T,
         typename std::enable_if<
-            phmap::conjunction<phmap::negation<std::is_same<
+            duckdb_phmap::conjunction<duckdb_phmap::negation<std::is_same<
                                                  in_place_t, typename std::decay<U>::type>>,
-                              phmap::negation<std::is_same<
+                              duckdb_phmap::negation<std::is_same<
                                                  optional<T>, typename std::decay<U>::type>>,
-                              phmap::negation<std::is_convertible<U&&, T>>,
+                              duckdb_phmap::negation<std::is_convertible<U&&, T>>,
                               std::is_constructible<T, U&&>>::value,
             bool>::type = false>
         explicit constexpr optional(U&& v)
-        : data_base(in_place_t(), phmap::forward<U>(v)) {}
+        : data_base(in_place_t(), duckdb_phmap::forward<U>(v)) {}
 
     // Converting copy constructor (implicit)
     template <typename U,
               typename std::enable_if<
-                  phmap::conjunction<
-                      phmap::negation<std::is_same<T, U> >,
+                  duckdb_phmap::conjunction<
+                      duckdb_phmap::negation<std::is_same<T, U> >,
                       std::is_constructible<T, const U&>,
-                      phmap::negation<
+                      duckdb_phmap::negation<
                           optional_internal::
                           is_constructible_convertible_from_optional<T, U> >,
                       std::is_convertible<const U&, T> >::value,
@@ -2156,13 +2156,13 @@ public:
     // Converting copy constructor (explicit)
     template <typename U,
               typename std::enable_if<
-                  phmap::conjunction<
-                      phmap::negation<std::is_same<T, U>>,
+                  duckdb_phmap::conjunction<
+                      duckdb_phmap::negation<std::is_same<T, U>>,
                       std::is_constructible<T, const U&>,
-                      phmap::negation<
+                      duckdb_phmap::negation<
                           optional_internal::
                           is_constructible_convertible_from_optional<T, U>>,
-                      phmap::negation<std::is_convertible<const U&, T>>>::value,
+                      duckdb_phmap::negation<std::is_convertible<const U&, T>>>::value,
                   bool>::type = false>
         explicit optional(const optional<U>& rhs) {
         if (rhs) {
@@ -2173,10 +2173,10 @@ public:
     // Converting move constructor (implicit)
     template <typename U,
               typename std::enable_if<
-                  phmap::conjunction<
-                      phmap::negation<std::is_same<T, U> >,
+                  duckdb_phmap::conjunction<
+                      duckdb_phmap::negation<std::is_same<T, U> >,
                       std::is_constructible<T, U&&>,
-                      phmap::negation<
+                      duckdb_phmap::negation<
                           optional_internal::
                           is_constructible_convertible_from_optional<T, U> >,
                       std::is_convertible<U&&, T> >::value,
@@ -2191,12 +2191,12 @@ public:
     template <
         typename U,
         typename std::enable_if<
-            phmap::conjunction<
-                phmap::negation<std::is_same<T, U>>, std::is_constructible<T, U&&>,
-                phmap::negation<
+            duckdb_phmap::conjunction<
+                duckdb_phmap::negation<std::is_same<T, U>>, std::is_constructible<T, U&&>,
+                duckdb_phmap::negation<
                     optional_internal::is_constructible_convertible_from_optional<
                         T, U>>,
-                phmap::negation<std::is_convertible<U&&, T>>>::value,
+                duckdb_phmap::negation<std::is_convertible<U&&, T>>>::value,
             bool>::type = false>
         explicit optional(optional<U>&& rhs) {
         if (rhs) {
@@ -2214,7 +2214,7 @@ public:
     // Example:
     //
     //   struct S { int value; };
-    //   optional<S> opt = phmap::nullopt;  // Could also use opt = { };
+    //   optional<S> opt = duckdb_phmap::nullopt;  // Could also use opt = { };
     optional& operator=(nullopt_t) noexcept {
         this->destruct();
         return *this;
@@ -2229,11 +2229,11 @@ public:
     // Value assignment operators
     template <
         typename U = T,
-        typename = typename std::enable_if<phmap::conjunction<
-                                               phmap::negation<
+        typename = typename std::enable_if<duckdb_phmap::conjunction<
+                                               duckdb_phmap::negation<
                                                    std::is_same<optional<T>, typename std::decay<U>::type>>,
-                                               phmap::negation<
-                                                   phmap::conjunction<std::is_scalar<T>,
+                                               duckdb_phmap::negation<
+                                                   duckdb_phmap::conjunction<std::is_scalar<T>,
                                                                      std::is_same<T, typename std::decay<U>::type>>>,
                                                std::is_constructible<T, U>, std::is_assignable<T&, U>>::value>::type>
         optional& operator=(U&& v) {
@@ -2243,10 +2243,10 @@ public:
 
     template <
         typename U,
-        typename = typename std::enable_if<phmap::conjunction<
-                                               phmap::negation<std::is_same<T, U>>,
+        typename = typename std::enable_if<duckdb_phmap::conjunction<
+                                               duckdb_phmap::negation<std::is_same<T, U>>,
                                                std::is_constructible<T, const U&>, std::is_assignable<T&, const U&>,
-                                               phmap::negation<
+                                               duckdb_phmap::negation<
                                                    optional_internal::
                                                    is_constructible_convertible_assignable_from_optional<
                                                        T, U>>>::value>::type>
@@ -2260,10 +2260,10 @@ public:
     }
 
     template <typename U,
-              typename = typename std::enable_if<phmap::conjunction<
-                                                     phmap::negation<std::is_same<T, U>>, std::is_constructible<T, U>,
+              typename = typename std::enable_if<duckdb_phmap::conjunction<
+                                                     duckdb_phmap::negation<std::is_same<T, U>>, std::is_constructible<T, U>,
                                                      std::is_assignable<T&, U>,
-                                                     phmap::negation<
+                                                     duckdb_phmap::negation<
                                                          optional_internal::
                                                          is_constructible_convertible_assignable_from_optional<
                                                              T, U>>>::value>::type>
@@ -2280,7 +2280,7 @@ public:
 
     // optional::reset()
     //
-    // Destroys the inner `T` value of an `phmap::optional` if one is present.
+    // Destroys the inner `T` value of an `duckdb_phmap::optional` if one is present.
     PHMAP_ATTRIBUTE_REINITIALIZES void reset() noexcept { this->destruct(); }
 
     // optional::emplace()
@@ -2376,7 +2376,7 @@ public:
         return reference();
     }
     constexpr const T&& operator*() const && {
-        return phmap::move(reference());
+        return duckdb_phmap::move(reference());
     }
     T&& operator*() && {
         assert(this->engaged_);
@@ -2411,7 +2411,7 @@ public:
     //
     // Returns a reference to an `optional`s underlying value. The constness
     // and lvalue/rvalue-ness of the `optional` is preserved to the view of
-    // the `T` sub-object. Throws `phmap::bad_optional_access` when the `optional`
+    // the `T` sub-object. Throws `duckdb_phmap::bad_optional_access` when the `optional`
     // is empty.
     constexpr const T& value() const & {
         return static_cast<bool>(*this)
@@ -2430,7 +2430,7 @@ public:
             : (optional_internal::throw_bad_optional_access(), reference()));
     }
     constexpr const T&& value() const && {  // NOLINT(build/c++11)
-        return phmap::move(
+        return duckdb_phmap::move(
             static_cast<bool>(*this)
             ? reference()
             : (optional_internal::throw_bad_optional_access(), reference()));
@@ -2451,7 +2451,7 @@ public:
                       "optional<T>::value_or: U must be convertible to T");
         return static_cast<bool>(*this)
             ? **this
-            : static_cast<T>(phmap::forward<U>(v));
+            : static_cast<T>(duckdb_phmap::forward<U>(v));
     }
     template <typename U>
     T value_or(U&& v) && {  // NOLINT(build/c++11)
@@ -2484,7 +2484,7 @@ private:
 
 // swap()
 //
-// Performs a swap between two `phmap::optional` objects, using standard
+// Performs a swap between two `duckdb_phmap::optional` objects, using standard
 // semantics.
 //
 // NOTE: we assume `is_swappable()` is always `true`. A compile error will
@@ -2499,7 +2499,7 @@ void swap(optional<T>& a, optional<T>& b) noexcept(noexcept(a.swap(b))) {
 // make_optional()
 //
 // Creates a non-empty `optional<T>` where the type of `T` is deduced. An
-// `phmap::optional` can also be explicitly instantiated with
+// `duckdb_phmap::optional` can also be explicitly instantiated with
 // `make_optional<T>(v)`.
 //
 // Note: `make_optional()` constructions may be declared `constexpr` for
@@ -2509,23 +2509,23 @@ void swap(optional<T>& a, optional<T>& b) noexcept(noexcept(a.swap(b))) {
 //
 // Example:
 //
-//   constexpr phmap::optional<int> opt = phmap::make_optional(1);
+//   constexpr duckdb_phmap::optional<int> opt = duckdb_phmap::make_optional(1);
 //   static_assert(opt.value() == 1, "");
 template <typename T>
 constexpr optional<typename std::decay<T>::type> make_optional(T&& v) {
-    return optional<typename std::decay<T>::type>(phmap::forward<T>(v));
+    return optional<typename std::decay<T>::type>(duckdb_phmap::forward<T>(v));
 }
 
 template <typename T, typename... Args>
 constexpr optional<T> make_optional(Args&&... args) {
-    return optional<T>(in_place_t(), phmap::forward<Args>(args)...);
+    return optional<T>(in_place_t(), duckdb_phmap::forward<Args>(args)...);
 }
 
 template <typename T, typename U, typename... Args>
 constexpr optional<T> make_optional(std::initializer_list<U> il,
                                     Args&&... args) {
     return optional<T>(in_place_t(), il,
-                       phmap::forward<Args>(args)...);
+                       duckdb_phmap::forward<Args>(args)...);
 }
 
 // Relational operators [optional.relops]
@@ -2703,14 +2703,14 @@ constexpr auto operator>=(const U& v, const optional<T>& x)
     return static_cast<bool>(x) ? static_cast<bool>(v >= *x) : true;
 }
 
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 namespace std {
 
-// std::hash specialization for phmap::optional.
+// std::hash specialization for duckdb_phmap::optional.
 template <typename T>
-struct hash<phmap::optional<T> >
-    : phmap::optional_internal::optional_hash_base<T> {};
+struct hash<duckdb_phmap::optional<T> >
+    : duckdb_phmap::optional_internal::optional_hash_base<T> {};
 
 }  // namespace std
 
@@ -2719,13 +2719,13 @@ struct hash<phmap::optional<T> >
 // -----------------------------------------------------------------------------
 //          common.h
 // -----------------------------------------------------------------------------
-namespace phmap {
+namespace duckdb_phmap {
 namespace priv {
 
 template <class, class = void>
 struct IsTransparent : std::false_type {};
 template <class T>
-struct IsTransparent<T, phmap::void_t<typename T::is_transparent>>
+struct IsTransparent<T, duckdb_phmap::void_t<typename T::is_transparent>>
     : std::true_type {};
 
 template <bool is_transparent>
@@ -2818,7 +2818,7 @@ protected:
 
     void reset() {
         assert(alloc_.has_value());
-        alloc_ = phmap::nullopt;
+        alloc_ = duckdb_phmap::nullopt;
     }
 
     slot_type* slot() const {
@@ -2829,8 +2829,8 @@ protected:
     allocator_type* alloc() { return std::addressof(*alloc_); }
 
 private:
-    phmap::optional<allocator_type> alloc_;
-    mutable phmap::aligned_storage_t<sizeof(slot_type), alignof(slot_type)> slot_space_;
+    duckdb_phmap::optional<allocator_type> alloc_;
+    mutable duckdb_phmap::aligned_storage_t<sizeof(slot_type), alignof(slot_type)> slot_space_;
 };
 
 #ifdef _MSC_VER
@@ -2864,7 +2864,7 @@ private:
 // ---------
 template <typename Policy, typename PolicyTraits, typename Alloc>
 class node_handle<Policy, PolicyTraits, Alloc,
-                  phmap::void_t<typename Policy::mapped_type>>
+                  duckdb_phmap::void_t<typename Policy::mapped_type>>
     : public node_handle_base<PolicyTraits, Alloc> 
 {
     using Base = node_handle_base<PolicyTraits, Alloc>;
@@ -2934,7 +2934,7 @@ struct InsertReturnType
 };
 
 }  // namespace priv
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 
 #ifdef ADDRESS_SANITIZER
@@ -2945,7 +2945,7 @@ struct InsertReturnType
 //  span.h
 // ---------------------------------------------------------------------------
 
-namespace phmap {
+namespace duckdb_phmap {
 
 template <typename T>
 class Span;
@@ -2976,7 +2976,7 @@ constexpr auto GetData(C& c) noexcept  // NOLINT(runtime/references)
 // Detection idioms for size() and data().
 template <typename C>
 using HasSize =
-    std::is_integral<phmap::decay_t<decltype(std::declval<C&>().size())>>;
+    std::is_integral<duckdb_phmap::decay_t<decltype(std::declval<C&>().size())>>;
 
 // We want to enable conversion from vector<T*> to Span<const T* const> but
 // disable conversion from vector<Derived> to Span<Base>. Here we use
@@ -2986,13 +2986,13 @@ using HasSize =
 // which returns a reference.
 template <typename T, typename C>
 using HasData =
-    std::is_convertible<phmap::decay_t<decltype(GetData(std::declval<C&>()))>*,
+    std::is_convertible<duckdb_phmap::decay_t<decltype(GetData(std::declval<C&>()))>*,
                         T* const*>;
 
 // Extracts value type from a Container
 template <typename C>
 struct ElementType {
-  using type = typename phmap::remove_reference_t<C>::value_type;
+  using type = typename duckdb_phmap::remove_reference_t<C>::value_type;
 };
 
 template <typename T, size_t N>
@@ -3059,12 +3059,12 @@ using EnableIfConvertibleToSpanConst =
 //
 // Spans may also be constructed from containers holding contiguous sequences.
 // Such containers must supply `data()` and `size() const` methods (e.g
-// `std::vector<T>`, `phmap::InlinedVector<T, N>`). All implicit conversions to
-// `phmap::Span` from such containers will create spans of type `const T`;
+// `std::vector<T>`, `duckdb_phmap::InlinedVector<T, N>`). All implicit conversions to
+// `duckdb_phmap::Span` from such containers will create spans of type `const T`;
 // spans which can mutate their values (of type `T`) must use explicit
 // constructors.
 //
-// A `Span<T>` is somewhat analogous to an `phmap::string_view`, but for an array
+// A `Span<T>` is somewhat analogous to an `duckdb_phmap::string_view`, but for an array
 // of elements of type `T`. A user of `Span` must ensure that the data being
 // pointed to outlives the `Span` itself.
 //
@@ -3079,14 +3079,14 @@ using EnableIfConvertibleToSpanConst =
 //
 //   // Construct a Span explicitly from a container:
 //   std::vector<int> v = {1, 2, 3, 4, 5};
-//   auto span = phmap::Span<const int>(v);
+//   auto span = duckdb_phmap::Span<const int>(v);
 //
 //   // Construct a Span explicitly from a C-style array:
 //   int a[5] =  {1, 2, 3, 4, 5};
-//   auto span = phmap::Span<const int>(a);
+//   auto span = duckdb_phmap::Span<const int>(a);
 //
 //   // Construct a Span implicitly from a container
-//   void MyRoutine(phmap::Span<const int> a) {
+//   void MyRoutine(duckdb_phmap::Span<const int> a) {
 //     ...
 //   }
 //   std::vector v = {1,2,3,4,5};
@@ -3099,25 +3099,25 @@ using EnableIfConvertibleToSpanConst =
 // (such as resizing) or invalidate iterators into the container.
 //
 // One common use for a `Span` is when passing arguments to a routine that can
-// accept a variety of array types (e.g. a `std::vector`, `phmap::InlinedVector`,
+// accept a variety of array types (e.g. a `std::vector`, `duckdb_phmap::InlinedVector`,
 // a C-style array, etc.). Instead of creating overloads for each case, you
 // can simply specify a `Span` as the argument to such a routine.
 //
 // Example:
 //
-//   void MyRoutine(phmap::Span<const int> a) {
+//   void MyRoutine(duckdb_phmap::Span<const int> a) {
 //     ...
 //   }
 //
 //   std::vector v = {1,2,3,4,5};
 //   MyRoutine(v);
 //
-//   phmap::InlinedVector<int, 4> my_inline_vector;
+//   duckdb_phmap::InlinedVector<int, 4> my_inline_vector;
 //   MyRoutine(my_inline_vector);
 //
 //   // Explicit constructor from pointer,size
 //   int* my_array = new int[10];
-//   MyRoutine(phmap::Span<const int>(my_array, 10));
+//   MyRoutine(duckdb_phmap::Span<const int>(my_array, 10));
 template <typename T>
 class Span 
 {
@@ -3140,7 +3140,7 @@ private:
         typename std::enable_if<!std::is_const<T>::value, U>::type;
 
 public:
-    using value_type = phmap::remove_cv_t<T>;
+    using value_type = duckdb_phmap::remove_cv_t<T>;
     using pointer = T*;
     using const_pointer = const T*;
     using reference = T&;
@@ -3180,7 +3180,7 @@ public:
     // brace-enclosed initializer list to a function expecting a `Span`. Such
     // spans constructed from an initializer list must be of type `Span<const T>`.
     //
-    //   void Process(phmap::Span<const int> x);
+    //   void Process(duckdb_phmap::Span<const int> x);
     //   Process({1, 2, 3});
     //
     // Note that as always the array referenced by the span must outlive the span.
@@ -3193,7 +3193,7 @@ public:
     //
     //   // Assume that this function uses the array directly, not retaining any
     //   // copy of the span or pointer to any of its elements.
-    //   void Process(phmap::Span<const int> ints);
+    //   void Process(duckdb_phmap::Span<const int> ints);
     //
     //   // Okay: the std::initializer_list<int> will reference a temporary array
     //   // that isn't destroyed until after the call to Process returns.
@@ -3201,14 +3201,14 @@ public:
     //
     //   // Not okay: the storage used by the std::initializer_list<int> is not
     //   // allowed to be referenced after the first line.
-    //   phmap::Span<const int> ints = { 17, 19 };
+    //   duckdb_phmap::Span<const int> ints = { 17, 19 };
     //   Process(ints);
     //
     //   // Not okay for the same reason as above: even when the elements of the
     //   // initializer list expression are not temporaries the underlying array
     //   // is, so the initializer list must still outlive the span.
     //   const int foo = 17;
-    //   phmap::Span<const int> ints = { foo };
+    //   duckdb_phmap::Span<const int> ints = { foo };
     //   Process(ints);
     //
     template <typename LazyT = T,
@@ -3347,11 +3347,11 @@ public:
     // Examples:
     //
     //   std::vector<int> vec = {10, 11, 12, 13};
-    //   phmap::MakeSpan(vec).subspan(1, 2);  // {11, 12}
-    //   phmap::MakeSpan(vec).subspan(2, 8);  // {12, 13}
-    //   phmap::MakeSpan(vec).subspan(1);     // {11, 12, 13}
-    //   phmap::MakeSpan(vec).subspan(4);     // {}
-    //   phmap::MakeSpan(vec).subspan(5);     // throws std::out_of_range
+    //   duckdb_phmap::MakeSpan(vec).subspan(1, 2);  // {11, 12}
+    //   duckdb_phmap::MakeSpan(vec).subspan(2, 8);  // {12, 13}
+    //   duckdb_phmap::MakeSpan(vec).subspan(1);     // {11, 12, 13}
+    //   duckdb_phmap::MakeSpan(vec).subspan(4);     // {}
+    //   duckdb_phmap::MakeSpan(vec).subspan(5);     // throws std::out_of_range
     constexpr Span subspan(size_type pos = 0, size_type len = npos) const {
         return (pos <= size())
             ? Span(data() + pos, span_internal::Min(size() - pos, len))
@@ -3366,9 +3366,9 @@ public:
     // Examples:
     //
     //   std::vector<int> vec = {10, 11, 12, 13};
-    //   phmap::MakeSpan(vec).first(1);  // {10}
-    //   phmap::MakeSpan(vec).first(3);  // {10, 11, 12}
-    //   phmap::MakeSpan(vec).first(5);  // throws std::out_of_range
+    //   duckdb_phmap::MakeSpan(vec).first(1);  // {10}
+    //   duckdb_phmap::MakeSpan(vec).first(3);  // {10, 11, 12}
+    //   duckdb_phmap::MakeSpan(vec).first(5);  // throws std::out_of_range
     constexpr Span first(size_type len) const {
         return (len <= size())
             ? Span(data(), len)
@@ -3383,16 +3383,16 @@ public:
     // Examples:
     //
     //   std::vector<int> vec = {10, 11, 12, 13};
-    //   phmap::MakeSpan(vec).last(1);  // {13}
-    //   phmap::MakeSpan(vec).last(3);  // {11, 12, 13}
-    //   phmap::MakeSpan(vec).last(5);  // throws std::out_of_range
+    //   duckdb_phmap::MakeSpan(vec).last(1);  // {13}
+    //   duckdb_phmap::MakeSpan(vec).last(3);  // {11, 12, 13}
+    //   duckdb_phmap::MakeSpan(vec).last(5);  // throws std::out_of_range
     constexpr Span last(size_type len) const {
         return (len <= size())
             ? Span(size() - len + data(), len)
             : (base_internal::ThrowStdOutOfRange("len > size()"), Span());
     }
 
-    // Support for phmap::Hash.
+    // Support for duckdb_phmap::Hash.
     template <typename H>
     friend H AbslHashValue(H h, Span v) {
         return H::combine(H::combine_contiguous(std::move(h), v.data(), v.size()),
@@ -3604,7 +3604,7 @@ bool operator>=(Span<T> a, const U& b) {
 //
 // Examples:
 //
-//   void MyRoutine(phmap::Span<MyComplicatedType> a) {
+//   void MyRoutine(duckdb_phmap::Span<MyComplicatedType> a) {
 //     ...
 //   };
 //   // my_vector is a container of non-const types
@@ -3615,14 +3615,14 @@ bool operator>=(Span<T> a, const U& b) {
 //   MyRoutine(my_vector);                // error, type mismatch
 //
 //   // Explicitly constructing the Span is verbose
-//   MyRoutine(phmap::Span<MyComplicatedType>(my_vector));
+//   MyRoutine(duckdb_phmap::Span<MyComplicatedType>(my_vector));
 //
-//   // Use MakeSpan() to make an phmap::Span<T>
-//   MyRoutine(phmap::MakeSpan(my_vector));
+//   // Use MakeSpan() to make an duckdb_phmap::Span<T>
+//   MyRoutine(duckdb_phmap::MakeSpan(my_vector));
 //
 //   // Construct a span from an array ptr+size
-//   phmap::Span<T> my_span() {
-//     return phmap::MakeSpan(&array[0], num_elements_);
+//   duckdb_phmap::Span<T> my_span() {
+//     return duckdb_phmap::MakeSpan(&array[0], num_elements_);
 //   }
 //
 template <int&... ExplicitArgumentBarrier, typename T>
@@ -3637,7 +3637,7 @@ Span<T> MakeSpan(T* begin, T* end) noexcept {
 
 template <int&... ExplicitArgumentBarrier, typename C>
 constexpr auto MakeSpan(C& c) noexcept  // NOLINT(runtime/references)
-    -> decltype(phmap::MakeSpan(span_internal::GetData(c), c.size())) {
+    -> decltype(duckdb_phmap::MakeSpan(span_internal::GetData(c), c.size())) {
   return MakeSpan(span_internal::GetData(c), c.size());
 }
 
@@ -3653,22 +3653,22 @@ constexpr Span<T> MakeSpan(T (&array)[N]) noexcept {
 //
 // Examples:
 //
-//   void ProcessInts(phmap::Span<const int> some_ints);
+//   void ProcessInts(duckdb_phmap::Span<const int> some_ints);
 //
 //   // Call with a pointer and size.
 //   int array[3] = { 0, 0, 0 };
-//   ProcessInts(phmap::MakeConstSpan(&array[0], 3));
+//   ProcessInts(duckdb_phmap::MakeConstSpan(&array[0], 3));
 //
 //   // Call with a [begin, end) pair.
-//   ProcessInts(phmap::MakeConstSpan(&array[0], &array[3]));
+//   ProcessInts(duckdb_phmap::MakeConstSpan(&array[0], &array[3]));
 //
 //   // Call directly with an array.
-//   ProcessInts(phmap::MakeConstSpan(array));
+//   ProcessInts(duckdb_phmap::MakeConstSpan(array));
 //
 //   // Call with a contiguous container.
 //   std::vector<int> some_ints = ...;
-//   ProcessInts(phmap::MakeConstSpan(some_ints));
-//   ProcessInts(phmap::MakeConstSpan(std::vector<int>{ 0, 0, 0 }));
+//   ProcessInts(duckdb_phmap::MakeConstSpan(some_ints));
+//   ProcessInts(duckdb_phmap::MakeConstSpan(std::vector<int>{ 0, 0, 0 }));
 //
 template <int&... ExplicitArgumentBarrier, typename T>
 constexpr Span<const T> MakeConstSpan(T* ptr, size_t size) noexcept {
@@ -3689,12 +3689,12 @@ template <int&... ExplicitArgumentBarrier, typename T, size_t N>
 constexpr Span<const T> MakeConstSpan(const T (&array)[N]) noexcept {
   return Span<const T>(array, N);
 }
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 // ---------------------------------------------------------------------------
 //  layout.h
 // ---------------------------------------------------------------------------
-namespace phmap {
+namespace duckdb_phmap {
 namespace priv {
 
 // A type wrapper that instructs `Layout` to use the specific alignment for the
@@ -3754,13 +3754,13 @@ struct AlignOf<Aligned<T, N>> {
 
 // Does `Ts...` contain `T`?
 template <class T, class... Ts>
-using Contains = phmap::disjunction<std::is_same<T, Ts>...>;
+using Contains = duckdb_phmap::disjunction<std::is_same<T, Ts>...>;
 
 template <class From, class To>
 using CopyConst =
     typename std::conditional<std::is_const<From>::value, const To, To>::type;
 
-// Note: We're not qualifying this with phmap:: because it doesn't compile under
+// Note: We're not qualifying this with duckdb_phmap:: because it doesn't compile under
 // MSVC.
 template <class T>
 using SliceType = Span<T>;
@@ -3826,12 +3826,12 @@ class LayoutImpl;
 // can compute offsets).
 // ---------------------------------------------------------------------------
 template <class... Elements, size_t... SizeSeq, size_t... OffsetSeq>
-class LayoutImpl<std::tuple<Elements...>, phmap::index_sequence<SizeSeq...>,
-                 phmap::index_sequence<OffsetSeq...>> 
+class LayoutImpl<std::tuple<Elements...>, duckdb_phmap::index_sequence<SizeSeq...>,
+                 duckdb_phmap::index_sequence<OffsetSeq...>> 
 {
 private:
     static_assert(sizeof...(Elements) > 0, "At least one field is required");
-    static_assert(phmap::conjunction<IsLegalElementType<Elements>...>::value,
+    static_assert(duckdb_phmap::conjunction<IsLegalElementType<Elements>...>::value,
                   "Invalid element type (see IsLegalElementType)");
 
     enum {
@@ -4123,8 +4123,8 @@ private:
 
 template <size_t NumSizes, class... Ts>
 using LayoutType = LayoutImpl<
-    std::tuple<Ts...>, phmap::make_index_sequence<NumSizes>,
-    phmap::make_index_sequence<adl_barrier::Min(sizeof...(Ts), NumSizes + 1)>>;
+    std::tuple<Ts...>, duckdb_phmap::make_index_sequence<NumSizes>,
+    duckdb_phmap::make_index_sequence<adl_barrier::Min(sizeof...(Ts), NumSizes + 1)>>;
 
 }  // namespace internal_layout
 
@@ -4142,7 +4142,7 @@ class Layout : public internal_layout::LayoutType<sizeof...(Ts), Ts...>
 public:
     static_assert(sizeof...(Ts) > 0, "At least one field is required");
     static_assert(
-        phmap::conjunction<internal_layout::IsLegalElementType<Ts>...>::value,
+        duckdb_phmap::conjunction<internal_layout::IsLegalElementType<Ts>...>::value,
         "Invalid element type (see IsLegalElementType)");
 
     template <size_t NumSizes>
@@ -4151,7 +4151,7 @@ public:
     template <class... Sizes>
     static constexpr PartialType<sizeof...(Sizes)> Partial(Sizes&&... sizes) {
         static_assert(sizeof...(Sizes) <= sizeof...(Ts), "");
-        return PartialType<sizeof...(Sizes)>(phmap::forward<Sizes>(sizes)...);
+        return PartialType<sizeof...(Sizes)>(duckdb_phmap::forward<Sizes>(sizes)...);
     }
 
     // Creates a layout with the sizes of all arrays specified. If you know
@@ -4188,8 +4188,8 @@ void* Allocate(Alloc* alloc, size_t n) {
   static_assert(Alignment > 0, "");
   assert(n && "n must be positive");
   struct alignas(Alignment) M {};
-  using A = typename phmap::allocator_traits<Alloc>::template rebind_alloc<M>;
-  using AT = typename phmap::allocator_traits<Alloc>::template rebind_traits<M>;
+  using A = typename duckdb_phmap::allocator_traits<Alloc>::template rebind_alloc<M>;
+  using AT = typename duckdb_phmap::allocator_traits<Alloc>::template rebind_traits<M>;
   A mem_alloc(*alloc);
   void* p = &*AT::allocate(mem_alloc, (n + sizeof(M) - 1) / sizeof(M)); // `&*` to support custom pointers such as boost offset_ptr.
   assert(reinterpret_cast<uintptr_t>(p) % Alignment == 0 &&
@@ -4206,8 +4206,8 @@ void Deallocate(Alloc* alloc, void* p, size_t n) {
   static_assert(Alignment > 0, "");
   assert(n && "n must be positive");
   struct alignas(Alignment) M {};
-  using A = typename phmap::allocator_traits<Alloc>::template rebind_alloc<M>;
-  using AT = typename phmap::allocator_traits<Alloc>::template rebind_traits<M>;
+  using A = typename duckdb_phmap::allocator_traits<Alloc>::template rebind_alloc<M>;
+  using AT = typename duckdb_phmap::allocator_traits<Alloc>::template rebind_traits<M>;
   A mem_alloc(*alloc);
   AT::deallocate(mem_alloc, static_cast<M*>(p),
                  (n + sizeof(M) - 1) / sizeof(M));
@@ -4252,7 +4252,7 @@ inline void SanitizerUnpoisonObject(const T* object) {
 }
 
 }  // namespace priv
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 
 // ---------------------------------------------------------------------------
@@ -4348,7 +4348,7 @@ inline void SanitizerUnpoisonObject(const T* object) {
 #define PHMAP_TS_UNCHECKED_READ(x) thread_safety_analysis::ts_unchecked_read(x)
 
 
-namespace phmap {
+namespace duckdb_phmap {
 namespace thread_safety_analysis {
 
 // Takes a reference to a guarded data member, and returns an unguarded
@@ -4499,10 +4499,10 @@ public:
     static void construct(Allocator* alloc, slot_type* slot, Args&&... args) {
         emplace(slot);
         if (kMutableKeys::value) {
-            phmap::allocator_traits<Allocator>::construct(*alloc, &slot->mutable_value,
+            duckdb_phmap::allocator_traits<Allocator>::construct(*alloc, &slot->mutable_value,
                                                          std::forward<Args>(args)...);
         } else {
-            phmap::allocator_traits<Allocator>::construct(*alloc, &slot->value,
+            duckdb_phmap::allocator_traits<Allocator>::construct(*alloc, &slot->value,
                                                          std::forward<Args>(args)...);
         }
     }
@@ -4512,10 +4512,10 @@ public:
     static void construct(Allocator* alloc, slot_type* slot, slot_type* other) {
         emplace(slot);
         if (kMutableKeys::value) {
-            phmap::allocator_traits<Allocator>::construct(
+            duckdb_phmap::allocator_traits<Allocator>::construct(
                 *alloc, &slot->mutable_value, std::move(other->mutable_value));
         } else {
-            phmap::allocator_traits<Allocator>::construct(*alloc, &slot->value,
+            duckdb_phmap::allocator_traits<Allocator>::construct(*alloc, &slot->value,
                                                          std::move(other->value));
         }
     }
@@ -4523,9 +4523,9 @@ public:
     template <class Allocator>
     static void destroy(Allocator* alloc, slot_type* slot) {
         if (kMutableKeys::value) {
-            phmap::allocator_traits<Allocator>::destroy(*alloc, &slot->mutable_value);
+            duckdb_phmap::allocator_traits<Allocator>::destroy(*alloc, &slot->mutable_value);
         } else {
-            phmap::allocator_traits<Allocator>::destroy(*alloc, &slot->value);
+            duckdb_phmap::allocator_traits<Allocator>::destroy(*alloc, &slot->value);
         }
     }
 
@@ -4534,10 +4534,10 @@ public:
                          slot_type* old_slot) {
         emplace(new_slot);
         if (kMutableKeys::value) {
-            phmap::allocator_traits<Allocator>::construct(
+            duckdb_phmap::allocator_traits<Allocator>::construct(
                 *alloc, &new_slot->mutable_value, std::move(old_slot->mutable_value));
         } else {
-            phmap::allocator_traits<Allocator>::construct(*alloc, &new_slot->value,
+            duckdb_phmap::allocator_traits<Allocator>::construct(*alloc, &new_slot->value,
                                                          std::move(old_slot->value));
         }
         destroy(alloc, old_slot);
@@ -4550,11 +4550,11 @@ public:
             swap(a->mutable_value, b->mutable_value);
         } else {
             value_type tmp = std::move(a->value);
-            phmap::allocator_traits<Allocator>::destroy(*alloc, &a->value);
-            phmap::allocator_traits<Allocator>::construct(*alloc, &a->value,
+            duckdb_phmap::allocator_traits<Allocator>::destroy(*alloc, &a->value);
+            duckdb_phmap::allocator_traits<Allocator>::construct(*alloc, &a->value,
                                                          std::move(b->value));
-            phmap::allocator_traits<Allocator>::destroy(*alloc, &b->value);
-            phmap::allocator_traits<Allocator>::construct(*alloc, &b->value,
+            duckdb_phmap::allocator_traits<Allocator>::destroy(*alloc, &b->value);
+            duckdb_phmap::allocator_traits<Allocator>::construct(*alloc, &b->value,
                                                          std::move(tmp));
         }
     }
@@ -4564,8 +4564,8 @@ public:
         if (kMutableKeys::value) {
             dest->mutable_value = std::move(src->mutable_value);
         } else {
-            phmap::allocator_traits<Allocator>::destroy(*alloc, &dest->value);
-            phmap::allocator_traits<Allocator>::construct(*alloc, &dest->value,
+            duckdb_phmap::allocator_traits<Allocator>::destroy(*alloc, &dest->value);
+            duckdb_phmap::allocator_traits<Allocator>::construct(*alloc, &dest->value,
                                                           std::move(src->value));
         }
     }
@@ -4582,7 +4582,7 @@ public:
 }  // phmap
 
 
-namespace phmap {
+namespace duckdb_phmap {
 
 #ifdef BOOST_THREAD_LOCK_OPTIONS_HPP
     using defer_lock_t  = boost::defer_lock_t;
@@ -4599,7 +4599,7 @@ namespace phmap {
 // -----------------------------------------------------------------------------
 // A class that implements the Mutex interface, but does nothing. This is to be 
 // used as a default template parameters for classes who provide optional 
-// internal locking (like phmap::parallel_flat_hash_map).
+// internal locking (like duckdb_phmap::parallel_flat_hash_map).
 // -----------------------------------------------------------------------------
 class NullMutex {
 public:
@@ -4625,9 +4625,9 @@ public:
         DoNothing() noexcept {}
         explicit DoNothing(mutex_type& ) noexcept {}
         explicit DoNothing(mutex_type& , mutex_type&) noexcept {}
-        DoNothing(mutex_type&, phmap::adopt_lock_t) noexcept {}
-        DoNothing(mutex_type&, phmap::defer_lock_t) noexcept {}
-        DoNothing(mutex_type&, phmap::try_to_lock_t) {}
+        DoNothing(mutex_type&, duckdb_phmap::adopt_lock_t) noexcept {}
+        DoNothing(mutex_type&, duckdb_phmap::defer_lock_t) noexcept {}
+        DoNothing(mutex_type&, duckdb_phmap::try_to_lock_t) {}
         template<class T> explicit DoNothing(T&&) {}
         DoNothing& operator=(const DoNothing&) { return *this; }
         DoNothing& operator=(DoNothing&&) noexcept { return *this; }
@@ -4956,7 +4956,7 @@ public:
 // Default implementation for Lockable, should work fine for std::mutex 
 // -----------------------------------
 // use as:
-//    using Lockable = phmap::LockableImpl<mutex_type>;
+//    using Lockable = duckdb_phmap::LockableImpl<mutex_type>;
 //    Lockable m;
 //  
 //    Lockable::ReadWriteLock read_lock(m); // take a lock (read if supported, otherwise write)
@@ -4985,11 +4985,11 @@ public:
 //          Null mutex (no-op) - when we don't want internal synchronization
 // ---------------------------------------------------------------------------
 template <>
-class  LockableImpl<phmap::NullMutex>: public phmap::NullMutex
+class  LockableImpl<duckdb_phmap::NullMutex>: public duckdb_phmap::NullMutex
 {
 public:
-    using mutex_type      = phmap::NullMutex;
-    using Base            = LockableBaseImpl<phmap::NullMutex>;
+    using mutex_type      = duckdb_phmap::NullMutex;
+    using Base            = LockableBaseImpl<duckdb_phmap::NullMutex>;
     using SharedLock      = typename Base::DoNothing; 
     using ReadWriteLock   = typename Base::DoNothing;
     using UniqueLock      = typename Base::DoNothing; 
@@ -4999,7 +4999,7 @@ public:
 
 // --------------------------------------------------------------------------
 //         Abseil Mutex support (read and write lock support)
-//         use: `phmap::AbslMutex` instead of `std::mutex`
+//         use: `duckdb_phmap::AbslMutex` instead of `std::mutex`
 // --------------------------------------------------------------------------
 #ifdef ABSL_SYNCHRONIZATION_MUTEX_H_
     
@@ -5017,8 +5017,8 @@ public:
     class  LockableImpl<absl::Mutex> : public AbslMutex
     {
     public:
-        using mutex_type      = phmap::AbslMutex;
-        using Base            = LockableBaseImpl<phmap::AbslMutex>;
+        using mutex_type      = duckdb_phmap::AbslMutex;
+        using Base            = LockableBaseImpl<duckdb_phmap::AbslMutex>;
         using SharedLock      = typename Base::ReadLock;
         using ReadWriteLock   = typename Base::ReadWriteLock;
         using UniqueLock      = typename Base::WriteLock;
@@ -5030,7 +5030,7 @@ public:
 
 // --------------------------------------------------------------------------
 //         Microsoft SRWLOCK support (read and write lock support)
-//         use: `phmap::srwlock` instead of `std::mutex`
+//         use: `duckdb_phmap::srwlock` instead of `std::mutex`
 // --------------------------------------------------------------------------
 #if defined(_MSC_VER) && defined(SRWLOCK_INIT)
 

@@ -682,16 +682,16 @@
 // can be used in defining new arrays. If you use this macro on a pointer by
 // mistake, you will get a compile-time error.
 #define PHMAP_ARRAYSIZE(array) \
-  (sizeof(::phmap::macros_internal::ArraySizeHelper(array)))
+  (sizeof(::duckdb_phmap::macros_internal::ArraySizeHelper(array)))
 
-namespace phmap {
+namespace duckdb_phmap {
 namespace macros_internal {
     // Note: this internal template function declaration is used by PHMAP_ARRAYSIZE.
     // The function doesn't need a definition, as we only use its type.
     template <typename T, size_t N>
     auto ArraySizeHelper(const T (&array)[N]) -> char (&)[N];
 }  // namespace macros_internal
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 #if PHMAP_HAVE_CPP_ATTRIBUTE(fallthrough)
     #define PHMAP_FALLTHROUGH [[fallthrough]]

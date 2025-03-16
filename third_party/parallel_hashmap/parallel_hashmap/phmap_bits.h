@@ -76,7 +76,7 @@ extern "C" {
     void __sanitizer_unaligned_store64(void *p, uint64_t v);
 }  // extern "C"
 
-namespace phmap {
+namespace duckdb_phmap {
 namespace bits {
 
 inline uint16_t UnalignedLoad16(const void *p) {
@@ -104,19 +104,19 @@ inline void UnalignedStore64(void *p, uint64_t v) {
 }
 
 }  // namespace bits
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
-#define PHMAP_INTERNAL_UNALIGNED_LOAD16(_p) (phmap::bits::UnalignedLoad16(_p))
-#define PHMAP_INTERNAL_UNALIGNED_LOAD32(_p) (phmap::bits::UnalignedLoad32(_p))
-#define PHMAP_INTERNAL_UNALIGNED_LOAD64(_p) (phmap::bits::UnalignedLoad64(_p))
+#define PHMAP_INTERNAL_UNALIGNED_LOAD16(_p) (duckdb_phmap::bits::UnalignedLoad16(_p))
+#define PHMAP_INTERNAL_UNALIGNED_LOAD32(_p) (duckdb_phmap::bits::UnalignedLoad32(_p))
+#define PHMAP_INTERNAL_UNALIGNED_LOAD64(_p) (duckdb_phmap::bits::UnalignedLoad64(_p))
 
-#define PHMAP_INTERNAL_UNALIGNED_STORE16(_p, _val) (phmap::bits::UnalignedStore16(_p, _val))
-#define PHMAP_INTERNAL_UNALIGNED_STORE32(_p, _val) (phmap::bits::UnalignedStore32(_p, _val))
-#define PHMAP_INTERNAL_UNALIGNED_STORE64(_p, _val) (phmap::bits::UnalignedStore64(_p, _val))
+#define PHMAP_INTERNAL_UNALIGNED_STORE16(_p, _val) (duckdb_phmap::bits::UnalignedStore16(_p, _val))
+#define PHMAP_INTERNAL_UNALIGNED_STORE32(_p, _val) (duckdb_phmap::bits::UnalignedStore32(_p, _val))
+#define PHMAP_INTERNAL_UNALIGNED_STORE64(_p, _val) (duckdb_phmap::bits::UnalignedStore64(_p, _val))
 
 #else
 
-namespace phmap {
+namespace duckdb_phmap {
 namespace bits {
 
 inline uint16_t UnalignedLoad16(const void *p) {
@@ -144,15 +144,15 @@ inline void UnalignedStore32(void *p, uint32_t v) { memcpy(p, &v, sizeof v); }
 inline void UnalignedStore64(void *p, uint64_t v) { memcpy(p, &v, sizeof v); }
 
 }  // namespace bits
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
-#define PHMAP_INTERNAL_UNALIGNED_LOAD16(_p) (phmap::bits::UnalignedLoad16(_p))
-#define PHMAP_INTERNAL_UNALIGNED_LOAD32(_p) (phmap::bits::UnalignedLoad32(_p))
-#define PHMAP_INTERNAL_UNALIGNED_LOAD64(_p) (phmap::bits::UnalignedLoad64(_p))
+#define PHMAP_INTERNAL_UNALIGNED_LOAD16(_p) (duckdb_phmap::bits::UnalignedLoad16(_p))
+#define PHMAP_INTERNAL_UNALIGNED_LOAD32(_p) (duckdb_phmap::bits::UnalignedLoad32(_p))
+#define PHMAP_INTERNAL_UNALIGNED_LOAD64(_p) (duckdb_phmap::bits::UnalignedLoad64(_p))
 
-#define PHMAP_INTERNAL_UNALIGNED_STORE16(_p, _val) (phmap::bits::UnalignedStore16(_p, _val))
-#define PHMAP_INTERNAL_UNALIGNED_STORE32(_p, _val) (phmap::bits::UnalignedStore32(_p, _val))
-#define PHMAP_INTERNAL_UNALIGNED_STORE64(_p, _val) (phmap::bits::UnalignedStore64(_p, _val))
+#define PHMAP_INTERNAL_UNALIGNED_STORE16(_p, _val) (duckdb_phmap::bits::UnalignedStore16(_p, _val))
+#define PHMAP_INTERNAL_UNALIGNED_STORE32(_p, _val) (duckdb_phmap::bits::UnalignedStore32(_p, _val))
+#define PHMAP_INTERNAL_UNALIGNED_STORE64(_p, _val) (duckdb_phmap::bits::UnalignedStore64(_p, _val))
 
 #endif
 
@@ -267,7 +267,7 @@ inline void UnalignedStore64(void *p, uint64_t v) { memcpy(p, &v, sizeof v); }
 #endif
 
 
-namespace phmap {
+namespace duckdb_phmap {
 namespace base_internal {
 
 PHMAP_BASE_INTERNAL_FORCEINLINE uint32_t CountLeadingZeros64Slow(uint64_t n) {
@@ -410,13 +410,13 @@ PHMAP_BASE_INTERNAL_FORCEINLINE uint32_t CountTrailingZerosNonZero32(uint32_t n)
 #undef PHMAP_BASE_INTERNAL_FORCEINLINE
 
 }  // namespace base_internal
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 // -----------------------------------------------------------------------------
 // File: endian.h
 // -----------------------------------------------------------------------------
 
-namespace phmap {
+namespace duckdb_phmap {
 
 // Use compiler byte-swapping intrinsics if they are available.  32-bit
 // and 64-bit versions are available in Clang and GCC as of GCC 4.3.0.
@@ -655,7 +655,7 @@ inline void Store64(void *p, uint64_t v) {
 
 }  // namespace big_endian
 
-}  // namespace phmap
+}  // namespace duckdb_phmap
 
 #ifdef _MSC_VER
      #pragma warning(pop)  

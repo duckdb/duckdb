@@ -23,7 +23,7 @@
 #include <fstream>
 #include <functional>
 #include "phmap.h"
-namespace phmap
+namespace duckdb_phmap
 {
 
 namespace type_traits_internal {
@@ -251,77 +251,77 @@ private:
     std::function<void()> destruct_;
 };
 
-} // namespace phmap
+} // namespace duckdb_phmap
 
 
 #ifdef CEREAL_SIZE_TYPE
 
 template <class T>
-using PhmapTrivCopyable = typename phmap::type_traits_internal::IsTriviallyCopyable<T>;
+using PhmapTrivCopyable = typename duckdb_phmap::type_traits_internal::IsTriviallyCopyable<T>;
     
 namespace cereal
 {
-    // Overload Cereal serialization code for phmap::flat_hash_map
+    // Overload Cereal serialization code for duckdb_phmap::flat_hash_map
     // -----------------------------------------------------------
     template <class K, class V, class Hash, class Eq, class A>
     void save(typename std::enable_if<PhmapTrivCopyable<K>::value && PhmapTrivCopyable<V>::value, typename cereal::BinaryOutputArchive>::type &ar,
-              phmap::flat_hash_map<K, V, Hash, Eq, A> const &hmap)
+              duckdb_phmap::flat_hash_map<K, V, Hash, Eq, A> const &hmap)
     {
         hmap.phmap_dump(ar);
     }
 
     template <class K, class V, class Hash, class Eq, class A>
     void load(typename std::enable_if<PhmapTrivCopyable<K>::value && PhmapTrivCopyable<V>::value, typename cereal::BinaryInputArchive>::type &ar, 
-              phmap::flat_hash_map<K, V, Hash, Eq, A>  &hmap)
+              duckdb_phmap::flat_hash_map<K, V, Hash, Eq, A>  &hmap)
     {
         hmap.phmap_load(ar);
     }
 
 
-    // Overload Cereal serialization code for phmap::parallel_flat_hash_map
+    // Overload Cereal serialization code for duckdb_phmap::parallel_flat_hash_map
     // --------------------------------------------------------------------
     template <class K, class V, class Hash, class Eq, class A, size_t N, class Mtx_>
     void save(typename std::enable_if<PhmapTrivCopyable<K>::value && PhmapTrivCopyable<V>::value, typename cereal::BinaryOutputArchive>::type &ar,
-              phmap::parallel_flat_hash_map<K, V, Hash, Eq, A, N, Mtx_> const &hmap)
+              duckdb_phmap::parallel_flat_hash_map<K, V, Hash, Eq, A, N, Mtx_> const &hmap)
     {
         hmap.phmap_dump(ar);
     }
 
     template <class K, class V, class Hash, class Eq, class A, size_t N, class Mtx_>
     void load(typename std::enable_if<PhmapTrivCopyable<K>::value && PhmapTrivCopyable<V>::value, typename cereal::BinaryInputArchive>::type &ar, 
-              phmap::parallel_flat_hash_map<K, V, Hash, Eq, A, N, Mtx_>  &hmap)
+              duckdb_phmap::parallel_flat_hash_map<K, V, Hash, Eq, A, N, Mtx_>  &hmap)
     {
         hmap.phmap_load(ar);
     }
 
-    // Overload Cereal serialization code for phmap::flat_hash_set
+    // Overload Cereal serialization code for duckdb_phmap::flat_hash_set
     // -----------------------------------------------------------
     template <class K, class Hash, class Eq, class A>
     void save(typename std::enable_if<PhmapTrivCopyable<K>::value, typename cereal::BinaryOutputArchive>::type &ar,
-              phmap::flat_hash_set<K, Hash, Eq, A> const &hset)
+              duckdb_phmap::flat_hash_set<K, Hash, Eq, A> const &hset)
     {
         hset.phmap_dump(ar);
     }
 
     template <class K, class Hash, class Eq, class A>
     void load(typename std::enable_if<PhmapTrivCopyable<K>::value, typename cereal::BinaryInputArchive>::type &ar, 
-              phmap::flat_hash_set<K, Hash, Eq, A>  &hset)
+              duckdb_phmap::flat_hash_set<K, Hash, Eq, A>  &hset)
     {
         hset.phmap_load(ar);
     }
 
-    // Overload Cereal serialization code for phmap::parallel_flat_hash_set
+    // Overload Cereal serialization code for duckdb_phmap::parallel_flat_hash_set
     // --------------------------------------------------------------------
     template <class K, class Hash, class Eq, class A, size_t N, class Mtx_>
     void save(typename std::enable_if<PhmapTrivCopyable<K>::value, typename cereal::BinaryOutputArchive>::type &ar,
-              phmap::parallel_flat_hash_set<K, Hash, Eq, A, N, Mtx_> const &hset)
+              duckdb_phmap::parallel_flat_hash_set<K, Hash, Eq, A, N, Mtx_> const &hset)
     {
         hset.phmap_dump(ar);
     }
 
     template <class K, class Hash, class Eq, class A, size_t N, class Mtx_>
     void load(typename std::enable_if<PhmapTrivCopyable<K>::value, typename cereal::BinaryInputArchive>::type &ar, 
-              phmap::parallel_flat_hash_set<K, Hash, Eq, A, N, Mtx_>  &hset)
+              duckdb_phmap::parallel_flat_hash_set<K, Hash, Eq, A, N, Mtx_>  &hset)
     {
         hset.phmap_load(ar);
     }
