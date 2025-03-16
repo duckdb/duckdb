@@ -8,12 +8,12 @@
       {
         "id": 200,
         "name": "build",
-        "type": "vector<ColumnBinding>"
+        "type": "vector<Expression*>"
       },
       {
         "id": 201,
         "name": "apply",
-        "type": "vector<ColumnBinding>"
+        "type": "vector<Expression*>"
       },
       {
         "id": 202,

@@ -14,15 +14,11 @@
 namespace duckdb {
 
 struct BloomFilterPlan {
-	vector<ColumnBinding> build;
-	vector<ColumnBinding> apply;
+	vector<unique_ptr<Expression>> build;
+	vector<unique_ptr<Expression>> apply;
 
 	vector<idx_t> bound_cols_build;
 	vector<idx_t> bound_cols_apply;
-
-	bool operator==(const BloomFilterPlan &other) const {
-		return build == other.build && apply == other.apply;
-	}
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<BloomFilterPlan> Deserialize(Deserializer &deserializer);

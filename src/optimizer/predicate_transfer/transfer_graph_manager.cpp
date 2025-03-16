@@ -29,7 +29,8 @@ bool TransferGraphManager::Build(LogicalOperator &plan) {
 void TransferGraphManager::AddFilterPlan(idx_t create_table, const shared_ptr<BloomFilterPlan> &filter_plan,
                                          bool reverse) {
 	bool is_forward = !reverse;
-	auto node_idx = filter_plan->apply[0].table_index;
+	auto &expr = filter_plan->apply[0]->Cast<BoundColumnRefExpression>().binding;
+	auto node_idx = expr.table_index;
 	transfer_graph[node_idx]->Add(create_table, filter_plan, is_forward, true);
 }
 

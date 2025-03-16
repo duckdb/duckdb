@@ -23,10 +23,10 @@ PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<share
 shared_ptr<BloomFilter> PhysicalCreateBF::BuildBloomFilter(BloomFilterPlan &bf_plan) {
 	auto BF = make_shared_ptr<BloomFilter>();
 	for (auto &apply_col : bf_plan.apply) {
-		BF->column_bindings_applied_.emplace_back(apply_col);
+		BF->column_bindings_applied_.emplace_back(apply_col->Copy());
 	}
 	for (auto &build_col : bf_plan.build) {
-		BF->column_bindings_built_.emplace_back(build_col);
+		BF->column_bindings_built_.emplace_back(build_col->Copy());
 	}
 	// BF->BoundColsApply will be updated in the related PhysicalUseBF
 	BF->BoundColsBuilt = bf_plan.bound_cols_build;

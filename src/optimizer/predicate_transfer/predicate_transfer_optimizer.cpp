@@ -149,12 +149,15 @@ void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id,
 			auto binding0 = graph_manager.table_operator_manager.GetRenaming(expressions[0]->binding);
 			auto binding1 = graph_manager.table_operator_manager.GetRenaming(expressions[1]->binding);
 
+			expressions[0]->binding = binding0;
+			expressions[1]->binding = binding1;
+
 			if (binding0.table_index == cur_node_id) {
-				bf_plan->build.push_back(binding0);
-				bf_plan->apply.push_back(binding1);
+				bf_plan->build.push_back(expressions[0]->Copy());
+				bf_plan->apply.push_back(expressions[1]->Copy());
 			} else if (binding1.table_index == cur_node_id) {
-				bf_plan->build.push_back(binding1);
-				bf_plan->apply.push_back(binding0);
+				bf_plan->build.push_back(expressions[1]->Copy());
+				bf_plan->apply.push_back(expressions[0]->Copy());
 			}
 		}
 		if (!bf_plan->build.empty()) {

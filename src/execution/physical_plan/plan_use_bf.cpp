@@ -11,12 +11,13 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUseBF &op)
 
 	shared_ptr<BloomFilter> target_bf;
 	for (auto &bf : create_bf_op->bf_to_create) {
-		if (bf->column_bindings_applied_ == bf_plan->apply) {
+		if (Expression::ListEquals(bf->column_bindings_applied_, bf_plan->apply)) {
 			bf->BoundColsApplied = bf_plan->bound_cols_apply;
 			target_bf = bf;
 			break; // Found the target, exit loop
 		}
 	}
+	D_ASSERT(target_bf != nullptr);
 
 	auto use_bf = make_uniq<PhysicalUseBF>(plan->types, target_bf, create_bf_op, op.estimated_cardinality);
 	use_bf->children.emplace_back(std::move(plan));

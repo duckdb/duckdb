@@ -10,16 +10,16 @@
 namespace duckdb {
 
 void BloomFilterPlan::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<vector<ColumnBinding>>(200, "build", build);
-	serializer.WritePropertyWithDefault<vector<ColumnBinding>>(201, "apply", apply);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(200, "build", build);
+	serializer.WritePropertyWithDefault<vector<unique_ptr<Expression>>>(201, "apply", apply);
 	serializer.WritePropertyWithDefault<vector<idx_t>>(202, "bound_cols_build", bound_cols_build);
 	serializer.WritePropertyWithDefault<vector<idx_t>>(203, "bound_cols_apply", bound_cols_apply);
 }
 
 unique_ptr<BloomFilterPlan> BloomFilterPlan::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<BloomFilterPlan>(new BloomFilterPlan());
-	deserializer.ReadPropertyWithDefault<vector<ColumnBinding>>(200, "build", result->build);
-	deserializer.ReadPropertyWithDefault<vector<ColumnBinding>>(201, "apply", result->apply);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(200, "build", result->build);
+	deserializer.ReadPropertyWithDefault<vector<unique_ptr<Expression>>>(201, "apply", result->apply);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(202, "bound_cols_build", result->bound_cols_build);
 	deserializer.ReadPropertyWithDefault<vector<idx_t>>(203, "bound_cols_apply", result->bound_cols_apply);
 	return result;

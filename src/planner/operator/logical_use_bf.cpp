@@ -16,11 +16,13 @@ InsertionOrderPreservingMap<string> LogicalUseBF::ParamsToString() const {
 	auto &bf_plan = bf_to_use_plan;
 	bfs += "0x" + std::to_string(reinterpret_cast<uint64_t>(bf_plan.get())) + "\n";
 	bfs += "Build: ";
-	for (auto &v : bf_plan->build) {
+	for (auto &expr : bf_plan->build) {
+		auto &v = expr->Cast<BoundColumnRefExpression>().binding;
 		bfs += std::to_string(v.table_index) + "." + std::to_string(v.column_index) + " ";
 	}
 	bfs += " Apply: ";
-	for (auto &v : bf_plan->apply) {
+	for (auto &expr : bf_plan->apply) {
+		auto &v = expr->Cast<BoundColumnRefExpression>().binding;
 		bfs += std::to_string(v.table_index) + "." + std::to_string(v.column_index) + " ";
 	}
 	bfs += "\n";
