@@ -121,8 +121,8 @@ public:
 
 public:
 	// The columns that this BF applies, and the columns used to build this BF
-	vector<ColumnBinding> column_bindings_applied_;
-	vector<ColumnBinding> column_bindings_built_;
+	vector<unique_ptr<Expression>> column_bindings_applied_;
+	vector<unique_ptr<Expression>> column_bindings_built_;
 	vector<idx_t> BoundColsApplied;
 	vector<idx_t> BoundColsBuilt;
 

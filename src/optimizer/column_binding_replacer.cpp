@@ -28,7 +28,8 @@ void ColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
 
 		auto &create_bf = op.Cast<LogicalCreateBF>();
 		for (auto &bf_plan : create_bf.bf_to_create_plans) {
-			for (auto &col_bind : bf_plan->build) {
+			for (auto &expr : bf_plan->build) {
+				auto &col_bind = expr->Cast<BoundColumnRefExpression>().binding;
 				for (const auto &replace_binding : replacement_bindings) {
 					if (col_bind == replace_binding.old_binding) {
 						col_bind = replace_binding.new_binding;
@@ -43,7 +44,8 @@ void ColumnBindingReplacer::VisitOperator(LogicalOperator &op) {
 		VisitOperatorChildren(op);
 
 		auto &bf_plan = op.Cast<LogicalUseBF>().bf_to_use_plan;
-		for (auto &col_bind : bf_plan->apply) {
+		for (auto &expr : bf_plan->apply) {
+			auto &col_bind = expr->Cast<BoundColumnRefExpression>().binding;
 			for (const auto &replace_binding : replacement_bindings) {
 				if (col_bind == replace_binding.old_binding) {
 					col_bind = replace_binding.new_binding;

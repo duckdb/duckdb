@@ -30,18 +30,18 @@ protected:
 	State state;
 
 	struct FilterPlanHash {
-		std::size_t operator()(const BloomFilterPlan &fp) const {
+		size_t operator()(const BloomFilterPlan *fp) const {
 			size_t h = 0;
-			for (const auto &v : fp.build) {
-				h ^= std::hash<idx_t> {}(v.table_index) ^ (std::hash<idx_t> {}(v.column_index));
+			for (const auto &expr : fp->build) {
+				h ^= expr->Cast<BoundColumnRefExpression>().Hash();
 			}
-			for (const auto &v : fp.apply) {
-				h ^= std::hash<idx_t> {}(v.table_index) ^ (std::hash<idx_t> {}(v.column_index));
+			for (const auto &expr : fp->apply) {
+				h ^= expr->Cast<BoundColumnRefExpression>().Hash();
 			}
 			return h;
 		}
 	};
 	unordered_set<LogicalOperator *> useful_creator;
-	unordered_map<BloomFilterPlan, LogicalCreateBF *, FilterPlanHash> bf_creators;
+	unordered_map<BloomFilterPlan *, LogicalCreateBF *, FilterPlanHash> bf_creators;
 };
 } // namespace duckdb
