@@ -1,50 +1,38 @@
 #include "duckdb/execution/operator/filter/physical_use_bf.hpp"
 
 #include "duckdb/parallel/meta_pipeline.hpp"
+#include "duckdb/parallel/thread_context.hpp"
+
+#include <utility>
 
 namespace duckdb {
-namespace {
-static void BloomFilterExecute(const vector<Vector> &result, const shared_ptr<BlockedBloomFilter> &bloom_filter,
-                               SelectionVector &sel, idx_t &approved_tuple_count, idx_t row_num) {
-	if (!bloom_filter->finalized_) {
-		approved_tuple_count = 0;
-		return;
-	}
-	idx_t result_count = 0;
-	Vector hashes(LogicalType::HASH);
-	VectorOperations::Hash(const_cast<Vector &>(result[bloom_filter->BoundColsApplied[0]]), hashes, row_num);
-	for (int i = 1; i < bloom_filter->BoundColsApplied.size(); i++) {
-		VectorOperations::CombineHash(hashes, const_cast<Vector &>(result[bloom_filter->BoundColsApplied[i]]), row_num);
-	}
-	if (hashes.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-		hashes.Flatten(row_num);
-	}
-	bloom_filter->Find(row_num, (hash_t *)hashes.GetData(), sel, result_count, false, arrow::internal::CpuInfo::AVX2);
-
-	approved_tuple_count = result_count;
-}
-} // namespace
-
-PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, vector<shared_ptr<BlockedBloomFilter>> bf,
-                             const vector<PhysicalCreateBF *> &related_create_bfs, idx_t estimated_cardinality)
+PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, shared_ptr<BloomFilter> bf,
+                             PhysicalCreateBF *related_create_bfs, idx_t estimated_cardinality)
     : CachingPhysicalOperator(PhysicalOperatorType::USE_BF, std::move(types), estimated_cardinality),
-      bf_to_use(std::move(bf)), related_create_bfs(related_create_bfs) {
+      bf_to_use(std::move(bf)), related_creator(related_create_bfs) {
 }
+
+class UseBFState : public CachingOperatorState {
+public:
+	explicit UseBFState() : sel_vector(STANDARD_VECTOR_SIZE), lookup_results(STANDARD_VECTOR_SIZE) {
+	}
+
+	SelectionVector sel_vector;
+	vector<uint64_t> lookup_results;
+
+public:
+	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
+		context.thread.profiler.Flush(op);
+	}
+};
 
 unique_ptr<OperatorState> PhysicalUseBF::GetOperatorState(ExecutionContext &context) const {
-	return make_uniq<CachingOperatorState>();
+	return make_uniq<UseBFState>();
 }
 
 InsertionOrderPreservingMap<string> PhysicalUseBF::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
-
-	result["BF Number"] = std::to_string(bf_to_use.size());
-	result["Hash Column Number"] = std::to_string(bf_to_use[0]->BoundColsApplied.size());
-	string bfs;
-	for (auto *bf : related_create_bfs) {
-		bfs += "0x" + std::to_string(reinterpret_cast<size_t>(bf)) + "\n";
-	}
-	result["BF Creators"] = bfs;
+	result["BF Creators"] = "0x" + std::to_string(reinterpret_cast<size_t>(related_creator)) + "\n";
 	return result;
 }
 
@@ -53,22 +41,33 @@ void PhysicalUseBF::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 
 	auto &state = meta_pipeline.GetState();
 	state.AddPipelineOperator(current, *this);
-	for (auto cell : related_create_bfs) {
-		cell->BuildPipelinesFromRelated(current, meta_pipeline);
-	}
+	related_creator->BuildPipelinesFromRelated(current, meta_pipeline);
 	children[0]->BuildPipelines(current, meta_pipeline);
 }
 
 OperatorResultType PhysicalUseBF::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,
                                                   GlobalOperatorState &gstate, OperatorState &state_p) const {
-	idx_t row_num = input.size();
-	idx_t result_count = input.size();
-	SelectionVector sel(STANDARD_VECTOR_SIZE);
-	auto bf = bf_to_use[0];
+	auto &state = state_p.Cast<UseBFState>();
 
-	BloomFilterExecute(input.data, bf, sel, result_count, row_num);
+	// This operator has no BloomFilter to use
+	if (!bf_to_use || !bf_to_use->finalized_) {
+		chunk.Reference(input);
+		return OperatorResultType::NEED_MORE_INPUT;
+	}
 
-	if (result_count == row_num) {
+	// 1. Lookup the BloomFilter
+	auto count = input.size();
+	auto &results = state.lookup_results;
+	bf_to_use->Lookup(input, results);
+
+	// 2. Fill results
+	idx_t result_count = 0;
+	auto &sel = state.sel_vector;
+	for (size_t i = 0; i < count; i++) {
+		sel.set_index(result_count, i);
+		result_count += results[i];
+	}
+	if (result_count == count) {
 		// nothing was filtered: skip adding any selection vectors
 		chunk.Reference(input);
 	} else {

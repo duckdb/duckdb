@@ -29,12 +29,13 @@ bool TransferGraphManager::Build(LogicalOperator &plan) {
 void TransferGraphManager::AddFilterPlan(idx_t create_table, const shared_ptr<BloomFilterPlan> &filter_plan,
                                          bool reverse) {
 	bool is_forward = !reverse;
-	auto node_idx = filter_plan->apply[0].table_index;
+	auto &expr = filter_plan->apply[0]->Cast<BoundColumnRefExpression>().binding;
+	auto node_idx = expr.table_index;
 	transfer_graph[node_idx]->Add(create_table, filter_plan, is_forward, true);
 }
 
 void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperator>> &join_operators) {
-	expression_set_t conditions;
+	unordered_set<hash_t> existed_set;
 
 	for (size_t i = 0; i < join_operators.size(); i++) {
 		auto &join = join_operators[i].get();
@@ -48,30 +49,26 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 
 		for (size_t j = 0; j < comp_join.conditions.size(); j++) {
 			auto &cond = comp_join.conditions[j];
-			if (cond.comparison != ExpressionType::COMPARE_EQUAL) {
+			if (cond.comparison != ExpressionType::COMPARE_EQUAL ||
+			    cond.left->type != ExpressionType::BOUND_COLUMN_REF ||
+			    cond.right->type != ExpressionType::BOUND_COLUMN_REF) {
 				continue;
 			}
 
-			unique_ptr<BoundComparisonExpression> comparison(
-			    new BoundComparisonExpression(cond.comparison, cond.left->Copy(), cond.right->Copy()));
-			if (!conditions.insert(*comparison).second) {
+			hash_t hash = cond.left->Hash() + cond.right->Hash();
+			if (existed_set.count(hash)) {
 				continue;
 			}
+			existed_set.insert(hash);
 
-			// Extract column bindings
-			ColumnBinding left_binding, right_binding;
-			if (comparison->left->type == ExpressionType::BOUND_COLUMN_REF) {
-				left_binding = comparison->left->Cast<BoundColumnRefExpression>().binding;
-			}
-			if (comparison->right->type == ExpressionType::BOUND_COLUMN_REF) {
-				right_binding = comparison->right->Cast<BoundColumnRefExpression>().binding;
-			}
-
-			// Determine table indices and corresponding nodes
+			ColumnBinding left_binding = cond.left->Cast<BoundColumnRefExpression>().binding;
 			idx_t left_table = table_operator_manager.GetRenaming(left_binding).table_index;
-			idx_t right_table = table_operator_manager.GetRenaming(right_binding).table_index;
 			auto left_node = table_operator_manager.GetTableOperator(left_table);
+
+			ColumnBinding right_binding = cond.right->Cast<BoundColumnRefExpression>().binding;
+			idx_t right_table = table_operator_manager.GetRenaming(right_binding).table_index;
 			auto right_node = table_operator_manager.GetTableOperator(right_table);
+
 			if (!left_node || !right_node) {
 				continue;
 			}
@@ -84,6 +81,8 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			LogicalOperator *small_table = left_is_larger ? right_node : left_node;
 
 			// Create edge
+			auto comparison =
+			    make_uniq<BoundComparisonExpression>(cond.comparison, cond.left->Copy(), cond.right->Copy());
 			shared_ptr<EdgeInfo> edge(new EdgeInfo(std::move(comparison), *big_table, *small_table));
 
 			// Set protection flags
@@ -92,17 +91,9 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 				if (comp_join.join_type == JoinType::LEFT ||
 				    (comp_join.join_type == JoinType::MARK &&
 				     table_operator_manager.not_exist_mark_joins.count(&comp_join))) {
-					if (left_is_larger) {
-						edge->protect_bigger_side = true;
-					} else {
-						edge->protect_smaller_side = true;
-					}
+					(left_is_larger ? edge->protect_bigger_side : edge->protect_smaller_side) = true;
 				} else if (comp_join.join_type == JoinType::RIGHT) {
-					if (left_is_larger) {
-						edge->protect_smaller_side = true;
-					} else {
-						edge->protect_bigger_side = true;
-					}
+					(left_is_larger ? edge->protect_smaller_side : edge->protect_bigger_side) = true;
 				} else if (comp_join.join_type != JoinType::INNER && comp_join.join_type != JoinType::SEMI &&
 				           comp_join.join_type != JoinType::RIGHT_SEMI && comp_join.join_type != JoinType::MARK) {
 					continue; // Unsupported join type
@@ -112,17 +103,9 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 				// todo: it works, but why?
 				if (comp_join.delim_flipped == 0) {
-					if (left_is_larger) {
-						edge->protect_bigger_side = true;
-					} else {
-						edge->protect_smaller_side = true;
-					}
+					(left_is_larger ? edge->protect_bigger_side : edge->protect_smaller_side) = true;
 				} else {
-					if (left_is_larger) {
-						edge->protect_smaller_side = true;
-					} else {
-						edge->protect_bigger_side = true;
-					}
+					(left_is_larger ? edge->protect_smaller_side : edge->protect_bigger_side) = true;
 				}
 				break;
 			}
@@ -144,9 +127,10 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 }
 
 void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) {
-	unordered_set<int> constructed_set, unconstructed_set;
+	unordered_set<idx_t> constructed_set;
+	unordered_set<idx_t> unconstructed_set;
 	int prior_flag = static_cast<int>(table_operator_manager.table_operators.size()) - 1;
-	int root = -1;
+	idx_t root = std::numeric_limits<idx_t>::max();
 
 	// Create table operators
 	for (auto &table_operator : table_operator_manager.table_operators) {
@@ -169,8 +153,9 @@ void TransferGraphManager::LargestRoot(vector<LogicalOperator *> &sorted_nodes) 
 
 	while (!unconstructed_set.empty()) {
 		auto selected_edge = FindEdge(constructed_set, unconstructed_set);
-		if (selected_edge.first == -1)
+		if (selected_edge.first == std::numeric_limits<idx_t>::max()) {
 			break;
+		}
 
 		if (edges_info.count(selected_edge)) {
 			for (auto &v : edges_info[selected_edge]) {
@@ -225,10 +210,10 @@ void TransferGraphManager::CreatePredicateTransferGraph() {
 	}
 }
 
-pair<int, int> TransferGraphManager::FindEdge(const unordered_set<int> &constructed_set,
-                                              const unordered_set<int> &unconstructed_set) {
+pair<idx_t, idx_t> TransferGraphManager::FindEdge(const unordered_set<idx_t> &constructed_set,
+                                                  const unordered_set<idx_t> &unconstructed_set) {
 	idx_t max_weight = 0, max_card = 0;
-	pair<int, int> result {-1, -1};
+	pair<idx_t, idx_t> result {std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint64_t>::max()};
 
 	for (auto i : unconstructed_set) {
 		for (auto j : constructed_set) {

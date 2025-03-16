@@ -1,3 +1,10 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/planner/operator/logical_use_bf.hpp
+//
+//
+//===----------------------------------------------------------------------===//
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
@@ -9,11 +16,11 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::USE_BF;
 
 public:
-	PhysicalUseBF(vector<LogicalType> types, vector<shared_ptr<BlockedBloomFilter>> bf,
-	              const vector<PhysicalCreateBF *> &related_create_bfs, idx_t estimated_cardinality);
+	PhysicalUseBF(vector<LogicalType> types, shared_ptr<BloomFilter> bf, PhysicalCreateBF *related_create_bfs,
+	              idx_t estimated_cardinality);
 
-	vector<shared_ptr<BlockedBloomFilter>> bf_to_use;
-	vector<PhysicalCreateBF *> related_create_bfs;
+	shared_ptr<BloomFilter> bf_to_use;
+	PhysicalCreateBF *related_creator = nullptr;
 
 public:
 	/* Operator interface */

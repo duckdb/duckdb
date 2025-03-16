@@ -149,15 +149,18 @@ void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id,
 			auto binding0 = graph_manager.table_operator_manager.GetRenaming(expressions[0]->binding);
 			auto binding1 = graph_manager.table_operator_manager.GetRenaming(expressions[1]->binding);
 
+			expressions[0]->binding = binding0;
+			expressions[1]->binding = binding1;
+
 			if (binding0.table_index == cur_node_id) {
-				bf_plan->build.push_back(binding0);
-				bf_plan->apply.push_back(binding1);
+				bf_plan->build.push_back(expressions[0]->Copy());
+				bf_plan->apply.push_back(expressions[1]->Copy());
 			} else if (binding1.table_index == cur_node_id) {
-				bf_plan->build.push_back(binding1);
-				bf_plan->apply.push_back(binding0);
+				bf_plan->build.push_back(expressions[1]->Copy());
+				bf_plan->apply.push_back(expressions[0]->Copy());
 			}
 		}
-		if (bf_plan->build.size() > 0) {
+		if (!bf_plan->build.empty()) {
 			bfs_to_create_plan.emplace_back(std::move(bf_plan));
 		} else {
 			throw InternalException("No built column found!");
@@ -178,14 +181,15 @@ unique_ptr<LogicalUseBF> PredicateTransferOptimizer::BuildUseBFOperator(LogicalO
 	unique_ptr<LogicalUseBF> last_operator;
 
 	// This is important for performance, not use (int i = 0; i < temp_result_to_use.size(); i++)
-	for (int64_t i = bf_plans.size() - 1; i >= 0; i--) {
-		auto use_bf_operator = make_uniq<LogicalUseBF>(bf_plans[i]);
+	for (auto it = bf_plans.rbegin(); it != bf_plans.rend(); ++it) {
+		auto use_bf_operator = make_uniq<LogicalUseBF>(*it);
 		use_bf_operator->SetEstimatedCardinality(node.estimated_cardinality);
-		if (last_operator != nullptr) {
+		if (last_operator) {
 			use_bf_operator->AddChild(std::move(last_operator));
 		}
 		last_operator = std::move(use_bf_operator);
 	}
+
 	return last_operator;
 }
 

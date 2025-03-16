@@ -25,7 +25,8 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto &create_bf = op.Cast<LogicalCreateBF>();
 		for (auto &bf_plan : create_bf.bf_to_create_plans) {
 			bf_plan->bound_cols_build.clear();
-			for (auto &col_bind : bf_plan->build) {
+			for (auto &col : bf_plan->build) {
+				auto &col_bind = col->Cast<BoundColumnRefExpression>().binding;
 				for (idx_t i = 0; i < bindings.size(); i++) {
 					if (col_bind == bindings[i]) {
 						bf_plan->bound_cols_build.push_back(i);
@@ -38,6 +39,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 			}
 		}
 		bindings = op.GetColumnBindings();
+		VisitOperatorExpressions(op);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_USE_BF: {
@@ -45,7 +47,8 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		auto &use_bf = op.Cast<LogicalUseBF>();
 		auto &bf_plan = use_bf.bf_to_use_plan;
 		bf_plan->bound_cols_apply.clear();
-		for (auto &col_bind : bf_plan->apply) {
+		for (auto &col : bf_plan->apply) {
+			auto &col_bind = col->Cast<BoundColumnRefExpression>().binding;
 			for (idx_t i = 0; i < bindings.size(); i++) {
 				if (col_bind == bindings[i]) {
 					bf_plan->bound_cols_apply.push_back(i);
@@ -58,6 +61,7 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		}
 
 		bindings = op.GetColumnBindings();
+		VisitOperatorExpressions(op);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_ASOF_JOIN:

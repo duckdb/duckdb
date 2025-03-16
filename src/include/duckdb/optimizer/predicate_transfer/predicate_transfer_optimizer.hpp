@@ -5,11 +5,11 @@
 #include "duckdb/planner/operator/logical_use_bf.hpp"
 
 namespace duckdb {
-using BloomFilters = vector<shared_ptr<BlockedBloomFilter>>;
+using BloomFilters = vector<shared_ptr<BloomFilter>>;
 
 class PredicateTransferOptimizer {
 public:
-	explicit PredicateTransferOptimizer(ClientContext &context) : context(context), graph_manager(context) {
+	explicit PredicateTransferOptimizer(ClientContext &context) : graph_manager(context) {
 	}
 
 	//! Extract the query join information, note that this function must be called before join order optimization,
@@ -42,7 +42,6 @@ private:
 	static void GetColumnBindingExpression(Expression &expr, vector<BoundColumnRefExpression *> &expressions);
 
 private:
-	ClientContext &context;
 	TransferGraphManager graph_manager;
 
 	//! we use a map to record how to modify/update the operators in the query plan.

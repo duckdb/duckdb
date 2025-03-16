@@ -45,13 +45,13 @@ int main() {
 		// Execute query
 		auto result = conn.Query(query);
 		if (result->HasError()) {
-			std::cerr << "Query error: " << result->GetError() << std::endl;
+			std::cerr << "Query error: " << result->GetError() << "\n";
 			return 1;
 		} else {
 			std::cout << result->ToString() << "\n";
 		}
 	} catch (std::exception &e) {
-		std::cerr << "Exception: " << e.what() << std::endl;
+		std::cerr << "Exception: " << e.what() << "\n";
 		return 1;
 	}
 	return 0;

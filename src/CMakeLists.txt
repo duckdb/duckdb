@@ -131,16 +131,12 @@ else()
     target_sources(duckdb PRIVATE version.rc)
   endif()
 
-  find_package(Arrow REQUIRED)
-
   target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
-  target_link_libraries(duckdb Arrow::arrow_shared)
   link_threads(duckdb)
   link_extension_libraries(duckdb)
 
   add_library(duckdb_static STATIC ${ALL_OBJECT_FILES})
   target_link_libraries(duckdb_static ${DUCKDB_LINK_LIBS})
-  target_link_libraries(duckdb_static Arrow::arrow_shared)
   link_threads(duckdb_static)
   link_extension_libraries(duckdb_static)
 
