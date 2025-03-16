@@ -83,8 +83,6 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           FileGlobOptions options) {
-	vector<string> result_files;
-
 	auto res = make_uniq<GlobMultiFileList>(context, paths, options);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && options == FileGlobOptions::DISALLOW_EMPTY) {
 		throw IOException("%s needs at least one file to read", function_name);
