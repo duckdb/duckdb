@@ -323,3 +323,26 @@ query III
 SELECT * FROM read_parquet('__TEST_DIR__/15504.parquet', schema=map { 0: { name: 'id', type: 'int32', default_value: NULL }, 1: { name: 'arr', type: 'varchar[]', default_value: NULL }, 2: { name: 's', type: 'STRUCT(key INT, v1 TEXT, v2 TEXT)', default_value: NULL } });
 ----
 1	[a, b, c]	{'key': 1, 'v1': a, 'v2': b}
+
+# issue 16094
+statement ok
+copy (
+	select
+		x
+	from generate_series(1,100) as g(x)
+) to '__TEST_DIR__/16094.parquet'
+with (
+	field_ids {x: 1}
+);
+
+statement ok
+select
+	x,
+	filename
+from read_parquet(
+	'__TEST_DIR__/16094.parquet',
+	schema=map {
+		1: {name: 'x', type: 'int', default_value: NULL}
+	},
+	filename=True
+) where x = 1;

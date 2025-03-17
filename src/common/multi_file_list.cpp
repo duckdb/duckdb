@@ -31,9 +31,10 @@ bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &opti
                       vector<unique_ptr<Expression>> &filters, vector<string> &expanded_files) {
 	HivePartitioningFilterInfo filter_info;
 	for (idx_t i = 0; i < info.column_ids.size(); i++) {
-		if (!IsRowIdColumnId(info.column_ids[i])) {
-			filter_info.column_map.insert({info.column_names[info.column_ids[i]], i});
+		if (IsVirtualColumn(info.column_ids[i])) {
+			continue;
 		}
+		filter_info.column_map.insert({info.column_names[info.column_ids[i]], i});
 	}
 	filter_info.hive_enabled = options.hive_partitioning;
 	filter_info.filename_enabled = options.filename;
@@ -60,7 +61,11 @@ bool PushdownInternal(ClientContext &context, const MultiFileReaderOptions &opti
 	// construct the set of expressions from the table filters
 	vector<unique_ptr<Expression>> filter_expressions;
 	for (auto &entry : filters.filters) {
-		auto column_idx = column_ids[entry.first];
+		idx_t local_index = entry.first;
+		idx_t column_idx = column_ids[local_index];
+		if (IsVirtualColumn(column_idx)) {
+			continue;
+		}
 		auto column_ref =
 		    make_uniq<BoundColumnRefExpression>(types[column_idx], ColumnBinding(table_index, entry.first));
 		auto filter_expr = entry.second->ToExpression(*column_ref);

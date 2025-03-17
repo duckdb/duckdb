@@ -44,7 +44,7 @@ struct MultiFileReaderOptions {
 	DUCKDB_API void VerifyHiveTypesArePartitions(const std::map<string, string> &partitions) const;
 	DUCKDB_API LogicalType GetHiveLogicalType(const string &hive_partition_column) const;
 	DUCKDB_API Value GetHivePartitionValue(const string &base, const string &entry, ClientContext &context) const;
-	DUCKDB_API bool AnySet();
+	DUCKDB_API bool AnySet() const;
 };
 
 } // namespace duckdb

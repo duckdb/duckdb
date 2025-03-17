@@ -45,12 +45,14 @@ EXPLAIN SELECT i IS NULL FROM integers2 WHERE i>0;
 ----
 logical_opt	<!REGEX>:.*IS NULL.*
 
-# left/right/full outer joins can introduce nulls, even if the base tables do not contain them
+# left/right outer joins with false condition can convert to cross product with constant NULL value, 
+# so we don't need to check IS NULL here, since it's always NULL
 query II
 EXPLAIN SELECT i2.i IS NULL FROM integers i1 LEFT JOIN integers i2 ON (false);
 ----
-logical_opt	<REGEX>:.*IS NULL.*
+logical_opt	<!REGEX>:.*IS NULL.*
 
+# full outer joins can introduce nulls, even if the base tables do not contain them
 query II
 EXPLAIN SELECT i1.i IS NULL FROM integers i1 FULL OUTER JOIN integers i2 ON (false);
 ----

@@ -134,8 +134,8 @@ class TestCanonicalExtensionTypes(object):
 
         arrow_table = pa.Table.from_arrays([storage_array, age_array], names=['pedro_pedro_pedro', 'age'])
 
-        with pytest.raises(duckdb.NotImplementedException, match="pedro.binary"):
-            duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
+        duck_arrow = duckdb_cursor.execute('FROM arrow_table').arrow()
+        assert duckdb_cursor.execute('FROM duck_arrow').fetchall() == [(b'pedro', 29)]
 
     def test_hugeint(self):
         con = duckdb.connect()
@@ -270,3 +270,75 @@ class TestCanonicalExtensionTypes(object):
         res_arrow_table = pa.Table.from_arrays([res_bool8_array], names=['bool8'])
 
         assert result_table.equals(res_arrow_table)
+
+    def test_accept_malformed_complex_json(self, duckdb_cursor):
+        field = pa.field(
+            "geometry",
+            pa.binary(),
+            metadata={
+                "ARROW:extension:name": "foofyfoo",
+                "ARROW:extension:metadata": 'this is not valid json',
+            },
+        )
+        schema = pa.schema([field])
+        geo_table = pa.table(
+            [pa.array([], pa.binary())],
+            schema=schema,
+        )
+
+        tbl = duckdb_cursor.sql("""SELECT geometry as wkt FROM geo_table;""").arrow()
+        assert pa.types.is_binary(tbl.schema[0].type)
+
+        field = pa.field(
+            "geometry",
+            pa.binary(),
+            metadata={
+                "ARROW:extension:name": "arrow.opaque",
+                "ARROW:extension:metadata": 'this is not valid json',
+            },
+        )
+        schema = pa.schema([field])
+        geo_table = pa.table(
+            [pa.array([], pa.binary())],
+            schema=schema,
+        )
+        with pytest.raises(duckdb.SerializationException, match="Failed to parse JSON string"):
+            tbl = duckdb_cursor.sql("""SELECT geometry as wkt FROM geo_table;""").arrow()
+
+        field = pa.field(
+            "geometry",
+            pa.binary(),
+            metadata={
+                "ARROW:extension:name": "foofyfoo",
+                "ARROW:extension:metadata": '{"key": {"complex": "value"}}',
+            },
+        )
+        schema = pa.schema([field])
+        geo_table = pa.table(
+            [pa.array([], pa.binary())],
+            schema=schema,
+        )
+        tbl = duckdb_cursor.sql("""SELECT geometry as wkt FROM geo_table;""").arrow()
+        assert pa.types.is_binary(tbl.schema[0].type)
+
+        field = pa.field(
+            "varint_value",
+            pa.binary(),
+            metadata={
+                "ARROW:extension:name": "arrow.opaque",
+                "ARROW:extension:metadata": '{"vendor_name":"DuckDB","type_name":"varint","key": {"complex": "value"}}',
+            },
+        )
+        schema = pa.schema([field])
+        varint_table = pa.table(
+            [pa.array([], pa.binary())],
+            schema=schema,
+        )
+        assert duckdb_cursor.sql("""DESCRIBE FROM varint_table;""").fetchone() == (
+            'varint_value',
+            'VARINT',
+            'YES',
+            None,
+            None,
+            None,
+        )

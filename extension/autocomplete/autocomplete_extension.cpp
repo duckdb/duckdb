@@ -47,7 +47,10 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 	for (idx_t i = 0; i < available_suggestions.size(); i++) {
 		auto &suggestion = available_suggestions[i];
 		const int32_t BASE_SCORE = 10;
-		auto &str = suggestion.candidate;
+		auto str = suggestion.candidate;
+		if (suggestion.extra_char != '\0') {
+			str += suggestion.extra_char;
+		}
 		auto bonus = suggestion.score_bonus;
 		if (matches.find(str) != matches.end()) {
 			// entry already exists
@@ -73,6 +76,9 @@ static vector<AutoCompleteSuggestion> ComputeSuggestions(vector<AutoCompleteCand
 			throw InternalException("Auto-complete match not found");
 		}
 		auto &suggestion = available_suggestions[entry->second];
+		if (suggestion.extra_char != '\0') {
+			result.pop_back();
+		}
 		if (suggestion.candidate_type == CandidateType::KEYWORD) {
 			if (prefix_is_lower) {
 				result = StringUtil::Lower(result);
@@ -481,11 +487,7 @@ std::string AutocompleteExtension::Name() {
 }
 
 std::string AutocompleteExtension::Version() const {
-#ifdef EXT_VERSION_AUTOCOMPLETE
-	return EXT_VERSION_AUTOCOMPLETE;
-#else
-	return "";
-#endif
+	return DefaultVersion();
 }
 
 } // namespace duckdb
@@ -496,7 +498,7 @@ DUCKDB_EXTENSION_API void autocomplete_init(duckdb::DatabaseInstance &db) {
 }
 
 DUCKDB_EXTENSION_API const char *autocomplete_version() {
-	return duckdb::DuckDB::LibraryVersion();
+	return duckdb::AutocompleteExtension::DefaultVersion();
 }
 }
 

@@ -41,6 +41,18 @@ public:
 		value_offset_ += batch_size;
 	}
 
+	template <typename T>
+	void Skip(uint32_t batch_size) {
+		if (buffer_.len % sizeof(T) != 0) {
+			std::stringstream error;
+			error << "Data buffer size for the BYTE_STREAM_SPLIT encoding (" << buffer_.len
+			      << ") should be a multiple of the type size (" << sizeof(T) << ")";
+			throw std::runtime_error(error.str());
+		}
+		buffer_.available((value_offset_ + batch_size) * sizeof(T));
+		value_offset_ += batch_size;
+	}
+
 private:
 	ByteBuffer buffer_;
 	uint32_t value_offset_;

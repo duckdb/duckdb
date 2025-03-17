@@ -223,6 +223,8 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &add_constraint_info = table_info.Cast<AddConstraintInfo>();
 		return AddConstraint(context, add_constraint_info);
 	}
+	case AlterTableType::SET_PARTITIONED_BY:
+		throw NotImplementedException("SET PARTITIONED BY is not supported for DuckDB tables");
 	default:
 		throw InternalException("Unrecognized alter table type!");
 	}
@@ -863,7 +865,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) const {
 	}
 
 	auto binder = Binder::CreateBinder(context);
-	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema);
+	auto bound_create_info = binder->BindCreateTableCheckpoint(std::move(create_info), schema);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, storage);
 }
 
@@ -885,7 +887,10 @@ void DuckTableEntry::CommitAlter(string &column_name) {
 			break;
 		}
 	}
-	storage->CommitDropColumn(columns.LogicalToPhysical(LogicalIndex(removed_index.GetIndex())).index);
+
+	auto logical_column_index = LogicalIndex(removed_index.GetIndex());
+	auto column_index = columns.LogicalToPhysical(logical_column_index).index;
+	storage->CommitDropColumn(column_index);
 }
 
 void DuckTableEntry::CommitDrop() {

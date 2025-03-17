@@ -61,6 +61,8 @@ public:
 
 	void RegisterSubSystem(FileCompressionType compression_type, unique_ptr<FileSystem> fs) override;
 
+	unique_ptr<FileSystem> ExtractSubSystem(const string &name) override;
+
 	vector<string> ListSubSystems() override;
 
 	std::string GetName() const override;

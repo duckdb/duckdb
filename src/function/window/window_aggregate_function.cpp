@@ -194,7 +194,12 @@ static void ApplyWindowStats(const WindowBoundary &boundary, FrameDelta &delta, 
 	case WindowBoundary::EXPR_PRECEDING_RANGE:
 	case WindowBoundary::EXPR_FOLLOWING_RANGE:
 		return;
-	default:
+	case WindowBoundary::CURRENT_ROW_GROUPS:
+	case WindowBoundary::EXPR_PRECEDING_GROUPS:
+	case WindowBoundary::EXPR_FOLLOWING_GROUPS:
+		return;
+	case WindowBoundary::INVALID:
+		throw InternalException(is_start ? "Unknown window start boundary" : "Unknown window end boundary");
 		break;
 	}
 

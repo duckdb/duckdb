@@ -89,6 +89,11 @@ public:
 		}
 		return *connection;
 	}
+
+	bool ConnectionIsClosed() const {
+		return connection == nullptr;
+	}
+
 	const Connection &GetConnection() const {
 		if (!connection) {
 			ThrowConnectionException();
@@ -182,6 +187,7 @@ public:
 
 	static bool DetectAndGetEnvironment();
 	static bool IsJupyter();
+	static std::string FormattedPythonVersion();
 	static shared_ptr<DuckDBPyConnection> DefaultConnection();
 	static void SetDefaultConnection(shared_ptr<DuckDBPyConnection> conn);
 	static PythonImportCache *ImportCache();
@@ -271,14 +277,6 @@ public:
 
 	unique_ptr<DuckDBPyRelation> FromArrow(py::object &arrow_object);
 
-	unique_ptr<DuckDBPyRelation> FromSubstrait(py::bytes &proto);
-
-	unique_ptr<DuckDBPyRelation> GetSubstrait(const string &query, bool enable_optimizer = true);
-
-	unique_ptr<DuckDBPyRelation> GetSubstraitJSON(const string &query, bool enable_optimizer = true);
-
-	unique_ptr<DuckDBPyRelation> FromSubstraitJSON(const string &json);
-
 	unordered_set<string> GetTableNames(const string &query);
 
 	shared_ptr<DuckDBPyConnection> UnregisterPythonObject(const string &name);
@@ -340,7 +338,6 @@ public:
 	static shared_ptr<PythonImportCache> import_cache;
 
 	static bool IsPandasDataframe(const py::object &object);
-	static bool IsPolarsDataframe(const py::object &object);
 	static PyArrowObjectType GetArrowType(const py::handle &obj);
 	static bool IsAcceptedArrowObject(const py::object &object);
 	static NumpyObjectType IsAcceptedNumpyObject(const py::object &object);
@@ -357,6 +354,7 @@ private:
 	vector<unique_ptr<SQLStatement>> GetStatements(const py::object &query);
 
 	static PythonEnvironmentType environment;
+	static std::string formatted_python_version;
 	static void DetectEnvironment();
 };
 

@@ -13,6 +13,9 @@ PRAGMA enable_verification
 # * First payload bin empty 
 # * Multiple scanned payload blocks
 
+statement ok
+PRAGMA asof_loop_join_threshold=0;
+
 # Check results against IEJoin
 foreach debug False True
 

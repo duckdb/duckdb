@@ -85,14 +85,93 @@ idx_t ArrayColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &state,
 	return ScanCount(state, result, scan_count);
 }
 
-idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
+idx_t ArrayColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
 	// Scan validity
-	auto scan_count = validity.ScanCount(state.child_states[0], result, count);
+	auto scan_count = validity.ScanCount(state.child_states[0], result, count, result_offset);
 	auto array_size = ArrayType::GetSize(type);
 	// Scan child column
 	auto &child_vec = ArrayVector::GetEntry(result);
-	child_column->ScanCount(state.child_states[1], child_vec, count * array_size);
+	child_column->ScanCount(state.child_states[1], child_vec, count * array_size, result_offset * array_size);
 	return scan_count;
+}
+
+void ArrayColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                             SelectionVector &sel, idx_t sel_count) {
+	bool is_supported = !child_column->type.IsNested();
+	if (!is_supported) {
+		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
+		return;
+	}
+	// the below specialized Select implementation selects only the required arrays, and skips over non-required data
+	// note that this implementation is not necessarily faster than the naive implementation of scanning + slicing
+	// this optimization is better:
+	// (1) the fewer consecutive ranges we are scanning
+	// (2) the larger the arrays are
+	// below we try to select the optimal variant
+
+	// first count the number of consecutive requests we must make
+	idx_t consecutive_ranges = 0;
+	for (idx_t i = 0; i < sel_count; i++) {
+		idx_t start_idx = sel.get_index(i);
+		idx_t end_idx = start_idx + 1;
+		for (; i + 1 < sel_count; i++) {
+			auto next_idx = sel.get_index(i + 1);
+			if (next_idx > end_idx) {
+				// not consecutive - break
+				break;
+			}
+			end_idx = next_idx;
+		}
+		consecutive_ranges++;
+	}
+
+	auto target_count = GetVectorCount(vector_index);
+
+	// experimentally, we want to allow around one consecutive range every ~2 array size
+	// for array size = 10, we allow 5 consecutive ranges
+	// for array size = 100, we allow 50 consecutive ranges
+	auto array_size = ArrayType::GetSize(type);
+	auto allowed_ranges = array_size / 2;
+	if (allowed_ranges < consecutive_ranges) {
+		// fallback to select + filter
+		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
+		return;
+	}
+
+	idx_t current_offset = 0;
+	idx_t current_position = 0;
+	auto &child_vec = ArrayVector::GetEntry(result);
+	for (idx_t i = 0; i < sel_count; i++) {
+		idx_t start_idx = sel.get_index(i);
+		idx_t end_idx = start_idx + 1;
+		for (; i + 1 < sel_count; i++) {
+			auto next_idx = sel.get_index(i + 1);
+			if (next_idx > end_idx) {
+				// not consecutive - break
+				break;
+			}
+			end_idx = next_idx;
+		}
+		if (start_idx > current_position) {
+			// skip forward
+			idx_t skip_amount = start_idx - current_position;
+			validity.Skip(state.child_states[0], skip_amount);
+			child_column->Skip(state.child_states[1], skip_amount * array_size);
+		}
+		// scan into the result array
+		idx_t scan_count = end_idx - start_idx;
+		validity.ScanCount(state.child_states[0], result, scan_count, current_offset);
+		child_column->ScanCount(state.child_states[1], child_vec, scan_count * array_size, current_offset * array_size);
+		// move the current position forward
+		current_offset += scan_count;
+		current_position = end_idx;
+	}
+	// if there is any remaining at the end - skip any trailing rows
+	if (current_position < target_count) {
+		idx_t skip_amount = target_count - current_position;
+		validity.Skip(state.child_states[0], skip_amount);
+		child_column->Skip(state.child_states[1], skip_amount * array_size);
+	}
 }
 
 void ArrayColumnData::Skip(ColumnScanState &state, idx_t count) {

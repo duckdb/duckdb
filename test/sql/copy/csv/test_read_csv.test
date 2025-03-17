@@ -6,6 +6,17 @@ statement ok
 PRAGMA enable_verification
 
 query II
+FROM read_csv('data/csv/multi_quote.csv', null_padding = true)
+----
+2019-01-01	text
+2019-02-01	text
+2019-03-01	text
+2019-04-01	text
+2019-05-01	text
+2019-06-01	text, with comma
+2019-09-01	'text'
+
+query II
 FROM read_csv('data/csv/bad_escape.csv')
 ----
 332	Surname, Firstname

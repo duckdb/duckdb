@@ -4,16 +4,14 @@
 #define MBEDTLS_ALLOW_PRIVATE_ACCESS
 
 #include "duckdb/common/helper.hpp"
-#include "mbedtls/entropy.h"
 #include "mbedtls/gcm.h"
+#include "mbedtls/md.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/sha1.h"
 #include "mbedtls/sha256.h"
 
-#ifdef MBEDTLS_NO_ENTROPY_SOURCE
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/types/timestamp.hpp"
-#endif
 
 #include <stdexcept>
 
@@ -223,7 +221,6 @@ bool MbedTlsWrapper::AESGCMStateMBEDTLS::IsOpenSSL() {
 
 
 void MbedTlsWrapper::AESGCMStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t data, duckdb::idx_t len) {
-#ifdef MBEDTLS_NO_ENTROPY_SOURCE
 	duckdb::RandomEngine random_engine(duckdb::Timestamp::GetCurrentTimestamp().value);
 	while (len != 0) {
 		const auto random_integer = random_engine.NextRandomInteger();
@@ -232,21 +229,6 @@ void MbedTlsWrapper::AESGCMStateMBEDTLS::GenerateRandomData(duckdb::data_ptr_t d
 		data += next;
 		len -= next;
 	}
-#else
-	duckdb::data_t buf[MBEDTLS_ENTROPY_BLOCK_SIZE];
-	mbedtls_entropy_context entropy;
-	mbedtls_entropy_init(&entropy);
-
-	while (len != 0) {
-		if (mbedtls_entropy_func(&entropy, buf, MBEDTLS_ENTROPY_BLOCK_SIZE) != 0) {
-			throw runtime_error("Unable to generate random data");
-		}
-		const auto next = duckdb::MinValue<duckdb::idx_t>(len, MBEDTLS_ENTROPY_BLOCK_SIZE);
-		memcpy(data, buf, next);
-		data += next;
-		len -= next;
-	}
-#endif
 }
 
 void MbedTlsWrapper::AESGCMStateMBEDTLS::InitializeEncryption(duckdb::const_data_ptr_t iv, duckdb::idx_t iv_len, const std::string *key) {

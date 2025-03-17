@@ -67,19 +67,6 @@ static void FindForeignKeyInformation(TableCatalogEntry &table, AlterForeignKeyT
 	}
 }
 
-static void LazyLoadIndexes(ClientContext &context, CatalogEntry &entry) {
-	if (entry.type == CatalogType::TABLE_ENTRY) {
-		auto &table_entry = entry.Cast<TableCatalogEntry>();
-		table_entry.GetStorage().InitializeIndexes(context);
-	} else if (entry.type == CatalogType::INDEX_ENTRY) {
-		auto &index_entry = entry.Cast<IndexCatalogEntry>();
-		auto &table_entry = Catalog::GetEntry(context, CatalogType::TABLE_ENTRY, index_entry.catalog.GetName(),
-		                                      index_entry.GetSchemaName(), index_entry.GetTableName())
-		                        .Cast<TableCatalogEntry>();
-		table_entry.GetStorage().InitializeIndexes(context);
-	}
-}
-
 DuckSchemaEntry::DuckSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
     : SchemaCatalogEntry(catalog, info), tables(catalog, make_uniq<DefaultViewGenerator>(catalog, *this)),
       indexes(catalog), table_functions(catalog, make_uniq<DefaultTableFunctionGenerator>(catalog, *this)),
@@ -328,9 +315,6 @@ void DuckSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
 		throw CatalogException("Existing object %s is of type %s, trying to drop type %s", info.name,
 		                       CatalogTypeToString(existing_entry->type), CatalogTypeToString(info.type));
 	}
-
-	// if this is a index or table with indexes, initialize any unknown index instances
-	LazyLoadIndexes(context, *existing_entry);
 
 	vector<unique_ptr<AlterForeignKeyInfo>> fk_arrays;
 	if (existing_entry->type == CatalogType::TABLE_ENTRY) {

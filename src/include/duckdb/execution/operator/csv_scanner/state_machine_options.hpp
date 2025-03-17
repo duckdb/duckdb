@@ -16,9 +16,9 @@ namespace duckdb {
 struct CSVStateMachineOptions {
 	CSVStateMachineOptions() {};
 	CSVStateMachineOptions(string delimiter_p, char quote_p, char escape_p, char comment_p,
-	                       NewLineIdentifier new_line_p, bool rfc_4180_p)
+	                       NewLineIdentifier new_line_p, bool strict_mode_p)
 	    : delimiter(std::move(delimiter_p)), quote(quote_p), escape(escape_p), comment(comment_p), new_line(new_line_p),
-	      rfc_4180(rfc_4180_p) {};
+	      strict_mode(strict_mode_p) {};
 
 	//! Delimiter to separate columns within each line
 	CSVOption<string> delimiter {","};
@@ -30,12 +30,12 @@ struct CSVStateMachineOptions {
 	CSVOption<char> comment = '\0';
 	//! New Line separator
 	CSVOption<NewLineIdentifier> new_line = NewLineIdentifier::NOT_SET;
-	//! RFC 4180 conformance
-	CSVOption<bool> rfc_4180 = false;
+	//! How Strict the parser should be
+	CSVOption<bool> strict_mode = true;
 
 	bool operator==(const CSVStateMachineOptions &other) const {
 		return delimiter == other.delimiter && quote == other.quote && escape == other.escape &&
-		       new_line == other.new_line && comment == other.comment && rfc_4180 == other.rfc_4180;
+		       new_line == other.new_line && comment == other.comment && strict_mode == other.strict_mode;
 	}
 };
 } // namespace duckdb

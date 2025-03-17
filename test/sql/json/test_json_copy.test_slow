@@ -1,5 +1,5 @@
 # name: test/sql/json/test_json_copy.test_slow
-# description: Test JSON COPY using TPC-H
+# description: Test JSON COPY
 # group: [json]
 
 require json
@@ -14,8 +14,10 @@ copy integers to '__TEST_DIR__/integers.json.gz' (FORMAT JSON, COMPRESSION GZIP)
 statement ok
 delete from integers
 
-statement ok
+query I
 copy integers from '__TEST_DIR__/integers.json.gz'
+----
+1
 
 query T
 select i from integers

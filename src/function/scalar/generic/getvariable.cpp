@@ -24,11 +24,11 @@ struct GetVariableBindData : FunctionData {
 
 static unique_ptr<FunctionData> GetVariableBind(ClientContext &context, ScalarFunction &function,
                                                 vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
 	if (!arguments[0]->IsFoldable()) {
 		throw NotImplementedException("getvariable requires a constant input");
-	}
-	if (arguments[0]->HasParameter()) {
-		throw ParameterNotResolvedException();
 	}
 	Value value;
 	auto variable_name = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);

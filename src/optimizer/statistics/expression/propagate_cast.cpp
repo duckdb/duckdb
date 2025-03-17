@@ -124,14 +124,10 @@ static unique_ptr<BaseStatistics> StatisticsNumericCastSwitch(const BaseStatisti
 	}
 }
 
-unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastExpression &cast,
-                                                                     unique_ptr<Expression> &expr_ptr) {
-	auto child_stats = PropagateExpression(cast.child);
-	if (!child_stats) {
-		return nullptr;
-	}
+unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(BaseStatistics &stats, const LogicalType &source,
+                                                                  const LogicalType &target) {
 	unique_ptr<BaseStatistics> result_stats;
-	switch (cast.child->return_type.InternalType()) {
+	switch (source.InternalType()) {
 	case PhysicalType::INT8:
 	case PhysicalType::INT16:
 	case PhysicalType::INT32:
@@ -139,11 +135,19 @@ unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastEx
 	case PhysicalType::INT128:
 	case PhysicalType::FLOAT:
 	case PhysicalType::DOUBLE:
-		result_stats = StatisticsNumericCastSwitch(*child_stats, cast.return_type);
-		break;
+		return StatisticsNumericCastSwitch(stats, target);
 	default:
 		return nullptr;
 	}
+}
+
+unique_ptr<BaseStatistics> StatisticsPropagator::PropagateExpression(BoundCastExpression &cast,
+                                                                     unique_ptr<Expression> &expr_ptr) {
+	auto child_stats = PropagateExpression(cast.child);
+	if (!child_stats) {
+		return nullptr;
+	}
+	auto result_stats = TryPropagateCast(*child_stats, cast.child->return_type, cast.return_type);
 	if (cast.try_cast && result_stats) {
 		result_stats->Set(StatsInfo::CAN_HAVE_NULL_VALUES);
 	}

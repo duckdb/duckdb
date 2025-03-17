@@ -68,11 +68,10 @@ struct LoggingContext {
 
 	LogContextScope scope;
 
-	optional_idx thread;
-	optional_idx client_context;
+	optional_idx thread_id;
+	optional_idx connection_id;
 	optional_idx transaction_id;
-
-	const char *default_log_type = "default";
+	optional_idx query_id;
 };
 
 struct RegisteredLoggingContext {

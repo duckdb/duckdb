@@ -9,6 +9,8 @@ group H2OAI
 
 cache h2oai.duckdb
 
+retry load 5
+
 load benchmark/h2oai/group/queries/load.sql
 
 run benchmark/h2oai/group/queries/q${QUERY_NUMBER_PADDED}.sql

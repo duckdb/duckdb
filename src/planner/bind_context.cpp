@@ -570,10 +570,15 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			}
 		}
 	}
+
 	if (binder.GetBindingMode() == BindingMode::EXTRACT_NAMES) {
+		//! We only care about extracting the names of the referenced columns
+		//! remove the exclude + replace lists
 		expr.exclude_list.clear();
 		expr.replace_list.clear();
 	}
+
+	//! Verify correctness of the exclude list
 	for (auto &excluded : expr.exclude_list) {
 		if (exclusion_info.excluded_qualified_columns.find(excluded) ==
 		    exclusion_info.excluded_qualified_columns.end()) {
@@ -581,6 +586,8 @@ void BindContext::GenerateAllColumnExpressions(StarExpression &expr,
 			                      expr.relation_name.empty() ? "FROM clause" : expr.relation_name.c_str());
 		}
 	}
+
+	//! Verify correctness of the replace list
 	for (auto &entry : expr.replace_list) {
 		if (exclusion_info.excluded_columns.find(entry.first) == exclusion_info.excluded_columns.end()) {
 			throw BinderException("Column \"%s\" in REPLACE list not found in %s", entry.first,
@@ -607,20 +614,28 @@ void BindContext::AddBinding(unique_ptr<Binding> binding) {
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                StandardEntry &entry, bool add_row_id) {
-	AddBinding(make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, add_row_id));
+	virtual_column_map_t virtual_columns;
+	if (add_row_id) {
+		virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
+	}
+	AddBinding(
+	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, &entry, index, std::move(virtual_columns)));
 }
 
 void BindContext::AddBaseTable(idx_t index, const string &alias, const vector<string> &names,
                                const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
                                const string &table_name) {
+	virtual_column_map_t virtual_columns;
+	virtual_columns.insert(make_pair(COLUMN_IDENTIFIER_ROW_ID, TableColumn("rowid", LogicalType::ROW_TYPE)));
 	AddBinding(make_uniq<TableBinding>(alias.empty() ? table_name : alias, types, names, bound_column_ids, nullptr,
-	                                   index, true));
+	                                   index, std::move(virtual_columns)));
 }
 
 void BindContext::AddTableFunction(idx_t index, const string &alias, const vector<string> &names,
                                    const vector<LogicalType> &types, vector<ColumnIndex> &bound_column_ids,
-                                   optional_ptr<StandardEntry> entry) {
-	AddBinding(make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index));
+                                   optional_ptr<StandardEntry> entry, virtual_column_map_t virtual_columns) {
+	AddBinding(
+	    make_uniq<TableBinding>(alias, types, names, bound_column_ids, entry, index, std::move(virtual_columns)));
 }
 
 static string AddColumnNameToBinding(const string &base_name, case_insensitive_set_t &current_names) {

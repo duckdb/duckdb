@@ -332,7 +332,7 @@ void CustomProfilingSettingsSetting::SetLocal(ClientContext &context, const Valu
 	// parse the file content
 	unordered_map<string, string> json;
 	try {
-		json = StringUtil::ParseJSONMap(input.ToString());
+		json = StringUtil::ParseJSONMap(input.ToString())->Flatten();
 	} catch (std::exception &ex) {
 		throw IOException("Could not parse the custom profiler settings file due to incorrect JSON: \"%s\".  Make sure "
 		                  "all the keys and values start with a quote. ",
@@ -497,6 +497,50 @@ void DefaultSecretStorageSetting::ResetGlobal(DatabaseInstance *db, DBConfig &co
 Value DefaultSecretStorageSetting::GetSetting(const ClientContext &context) {
 	auto &config = DBConfig::GetConfig(context);
 	return config.secret_manager->DefaultStorage();
+}
+
+//===----------------------------------------------------------------------===//
+// Disabled Compression Methods
+//===----------------------------------------------------------------------===//
+void DisabledCompressionMethodsSetting::SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &input) {
+	auto list = StringUtil::Split(input.ToString(), ",");
+	set<CompressionType> disabled_compression_methods;
+	for (auto &entry : list) {
+		auto param = StringUtil::Lower(entry);
+		StringUtil::Trim(param);
+		if (param.empty()) {
+			continue;
+		}
+		if (param == "none") {
+			disabled_compression_methods.clear();
+			break;
+		}
+		auto compression_type = CompressionTypeFromString(param);
+		if (compression_type == CompressionType::COMPRESSION_UNCOMPRESSED) {
+			throw InvalidInputException("Uncompressed compression cannot be disabled");
+		}
+		if (compression_type == CompressionType::COMPRESSION_AUTO) {
+			throw InvalidInputException("Unrecognized compression method \"%s\"", entry);
+		}
+		disabled_compression_methods.insert(compression_type);
+	}
+	config.options.disabled_compression_methods = std::move(disabled_compression_methods);
+}
+
+void DisabledCompressionMethodsSetting::ResetGlobal(DatabaseInstance *db, DBConfig &config) {
+	config.options.disabled_compression_methods = DBConfig().options.disabled_compression_methods;
+}
+
+Value DisabledCompressionMethodsSetting::GetSetting(const ClientContext &context) {
+	auto &config = DBConfig::GetConfig(context);
+	string result;
+	for (auto &optimizer : config.options.disabled_compression_methods) {
+		if (!result.empty()) {
+			result += ",";
+		}
+		result += CompressionTypeToString(optimizer);
+	}
+	return Value(result);
 }
 
 //===----------------------------------------------------------------------===//

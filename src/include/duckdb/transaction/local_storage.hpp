@@ -29,11 +29,12 @@ class LocalTableStorage : public enable_shared_from_this<LocalTableStorage> {
 public:
 	// Create a new LocalTableStorage
 	explicit LocalTableStorage(ClientContext &context, DataTable &table);
-	// Create a LocalTableStorage from an ALTER TYPE
-	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, idx_t changed_idx,
-	                  const LogicalType &target_type, const vector<StorageIndex> &bound_columns, Expression &cast_expr);
-	// Create a LocalTableStorage from a DROP COLUMN
-	LocalTableStorage(DataTable &table, LocalTableStorage &parent, idx_t drop_idx);
+	//! Create a LocalTableStorage from an ALTER TYPE.
+	LocalTableStorage(ClientContext &context, DataTable &new_data_table, LocalTableStorage &parent,
+	                  const idx_t alter_column_index, const LogicalType &target_type,
+	                  const vector<StorageIndex> &bound_columns, Expression &cast_expr);
+	//! Create a LocalTableStorage from a DROP COLUMN.
+	LocalTableStorage(DataTable &new_data_table, LocalTableStorage &parent, const idx_t drop_column_index);
 	// Create a LocalTableStorage from an ADD COLUMN
 	LocalTableStorage(ClientContext &context, DataTable &table, LocalTableStorage &parent, ColumnDefinition &new_column,
 	                  ExpressionExecutor &default_executor);
@@ -42,18 +43,22 @@ public:
 	reference<DataTable> table_ref;
 
 	Allocator &allocator;
-	//! The main chunk collection holding the data
+	//! The main row group collection.
 	shared_ptr<RowGroupCollection> row_groups;
 	//! The set of unique append indexes.
 	TableIndexList append_indexes;
 	//! The set of delete indexes.
 	TableIndexList delete_indexes;
+	//! Set to INSERT_DUPLICATES, if we are skipping constraint checking during, e.g., WAL replay.
+	IndexAppendMode index_append_mode = IndexAppendMode::DEFAULT;
 	//! The number of deleted rows
 	idx_t deleted_rows;
-	//! The main optimistic data writer
+
+	//! The optimistic row group collections associated with this table.
+	vector<unique_ptr<RowGroupCollection>> optimistic_collections;
+	//! The main optimistic data writer associated with this table.
 	OptimisticDataWriter optimistic_writer;
-	//! The set of all optimistic data writers associated with this table
-	vector<unique_ptr<OptimisticDataWriter>> optimistic_writers;
+
 	//! Whether or not storage was merged
 	bool merged_storage = false;
 	//! Whether or not the storage was dropped
@@ -72,9 +77,18 @@ public:
 	                          const vector<LogicalType> &table_types, row_t &start_row);
 	void AppendToDeleteIndexes(Vector &row_ids, DataChunk &delete_chunk);
 
-	//! Creates an optimistic writer for this table
-	OptimisticDataWriter &CreateOptimisticWriter();
-	void FinalizeOptimisticWriter(OptimisticDataWriter &writer);
+	//! Create an optimistic row group collection for this table.
+	//! Returns the index into the optimistic_collections vector for newly created collection.
+	PhysicalIndex CreateOptimisticCollection(unique_ptr<RowGroupCollection> collection);
+	//! Returns the optimistic row group collection corresponding to the index.
+	RowGroupCollection &GetOptimisticCollection(const PhysicalIndex collection_index);
+	//! Resets the optimistic row group collection corresponding to the index.
+	void ResetOptimisticCollection(const PhysicalIndex collection_index);
+	//! Returns the optimistic writer.
+	OptimisticDataWriter &GetOptimisticWriter();
+
+private:
+	mutex collections_lock;
 };
 
 class LocalTableManager {
@@ -128,9 +142,15 @@ public:
 	static void FinalizeAppend(LocalAppendState &state);
 	//! Merge a row group collection into the transaction-local storage
 	void LocalMerge(DataTable &table, RowGroupCollection &collection);
-	//! Create an optimistic writer for the specified table
-	OptimisticDataWriter &CreateOptimisticWriter(DataTable &table);
-	void FinalizeOptimisticWriter(DataTable &table, OptimisticDataWriter &writer);
+	//! Create an optimistic row group collection for this table.
+	//! Returns the index into the optimistic_collections vector for newly created collection.
+	PhysicalIndex CreateOptimisticCollection(DataTable &table, unique_ptr<RowGroupCollection> collection);
+	//! Returns the optimistic row group collection corresponding to the index.
+	RowGroupCollection &GetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
+	//! Resets the optimistic row group collection corresponding to the index.
+	void ResetOptimisticCollection(DataTable &table, const PhysicalIndex collection_index);
+	//! Returns the optimistic writer.
+	OptimisticDataWriter &GetOptimisticWriter(DataTable &table);
 
 	//! Delete a set of rows from the local storage
 	idx_t Delete(DataTable &table, Vector &row_ids, idx_t count);
@@ -153,7 +173,7 @@ public:
 
 	void AddColumn(DataTable &old_dt, DataTable &new_dt, ColumnDefinition &new_column,
 	               ExpressionExecutor &default_executor);
-	void DropColumn(DataTable &old_dt, DataTable &new_dt, idx_t removed_column);
+	void DropColumn(DataTable &old_dt, DataTable &new_dt, const idx_t drop_column_index);
 	void ChangeType(DataTable &old_dt, DataTable &new_dt, idx_t changed_idx, const LogicalType &target_type,
 	                const vector<StorageIndex> &bound_columns, Expression &cast_expr);
 
@@ -170,6 +190,7 @@ private:
 	DuckTransaction &transaction;
 	LocalTableManager table_manager;
 
+private:
 	void Flush(DataTable &table, LocalTableStorage &storage, optional_ptr<StorageCommitState> commit_state);
 };
 

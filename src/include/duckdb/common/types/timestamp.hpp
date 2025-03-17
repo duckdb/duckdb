@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
@@ -112,7 +111,13 @@ struct timestamp_tz_t : public timestamp_t { // NOLINT
 	}
 };
 
-enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE, ERROR_RANGE };
+enum class TimestampCastResult : uint8_t {
+	SUCCESS,
+	ERROR_INCORRECT_FORMAT,
+	ERROR_NON_UTC_TIMEZONE,
+	ERROR_RANGE,
+	STRICT_UTC
+};
 
 //! The static Timestamp class holds helper functions for the timestamp types.
 class Timestamp {
@@ -131,8 +136,10 @@ public:
 	DUCKDB_API static TimestampCastResult TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result,
 	                                                            bool &has_offset, string_t &tz,
 	                                                            optional_ptr<int32_t> nanos = nullptr);
+	//! Strict Timestamp does not accept offsets.
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
-	                                                          optional_ptr<int32_t> nanos = nullptr);
+	                                                          optional_ptr<int32_t> nanos = nullptr,
+	                                                          bool strict = false);
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result);
 	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len, optional_ptr<int32_t> nanos = nullptr);
 	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
@@ -198,8 +205,7 @@ public:
 	//! Convert a timestamp to a Julian Day
 	DUCKDB_API static double GetJulianDay(timestamp_t timestamp);
 
-	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset,
-	                                         int &minute_offset);
+	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss);
 
 	DUCKDB_API static string FormatError(const string &str);
 	DUCKDB_API static string FormatError(string_t str);

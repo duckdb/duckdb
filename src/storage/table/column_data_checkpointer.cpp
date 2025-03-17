@@ -250,9 +250,9 @@ vector<CheckpointAnalyzeResult> ColumnDataCheckpointer::DetectBestCompressionMet
 		D_ASSERT(compression_idx != DConstants::INVALID_INDEX);
 
 		auto &best_function = *functions[compression_idx];
-		Logger::Info(db, "FinalAnalyze(%s) result for %s.%s.%d(%s): %d", EnumUtil::ToString(best_function.type),
-		             col_data.info.GetSchemaName(), col_data.info.GetTableName(), col_data.column_index,
-		             col_data.type.ToString(), best_score);
+		DUCKDB_LOG_INFO(db, "duckdb.ColumnDataCheckPointer", "FinalAnalyze(%s) result for %s.%s.%d(%s): %d",
+		                EnumUtil::ToString(best_function.type), col_data.info.GetSchemaName(),
+		                col_data.info.GetTableName(), col_data.column_index, col_data.type.ToString(), best_score);
 		result[i] = CheckpointAnalyzeResult(std::move(chosen_state), best_function);
 	}
 	return result;

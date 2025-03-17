@@ -79,14 +79,28 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 	return nullptr;
 }
 
+vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string &schema_name) {
+	vector<CatalogSearchEntry> view_search_path;
+	auto &catalog_name = catalog.GetName();
+	if (!schema_name.empty()) {
+		view_search_path.emplace_back(catalog_name, schema_name);
+	}
+	auto default_schema = catalog.GetDefaultSchema();
+	if (schema_name.empty() && schema_name != default_schema) {
+		view_search_path.emplace_back(catalog.GetName(), default_schema);
+	}
+	return view_search_path;
+}
+
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
 	// check if the table name refers to a CTE
 
 	// CTE name should never be qualified (i.e. schema_name should be empty)
+	// unless we want to refer to the recurring table of "using key".
 	vector<reference<CommonTableExpressionInfo>> found_ctes;
-	if (ref.schema_name.empty()) {
+	if (ref.schema_name.empty() || ref.schema_name == "recurring") {
 		found_ctes = FindCTE(ref.table_name, ref.table_name == alias);
 	}
 
@@ -110,13 +124,22 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					materialized = CTEMaterialize::CTE_MATERIALIZE_NEVER;
 #endif
 				}
-				auto result = make_uniq<BoundCTERef>(index, ctebinding->index, materialized);
+
+				if (ref.schema_name == "recurring" && cte.key_targets.empty()) {
+					throw InvalidInputException("RECURRING can only be used with USING KEY in recursive CTE.");
+				}
+
+				auto result =
+				    make_uniq<BoundCTERef>(index, ctebinding->index, materialized, ref.schema_name == "recurring");
 				auto alias = ref.alias.empty() ? ref.table_name : ref.alias;
 				auto names = BindContext::AliasColumnNames(alias, ctebinding->names, ref.column_name_alias);
 
 				bind_context.AddGenericBinding(index, alias, names, ctebinding->types);
+
+				auto cte_reference = ref.schema_name.empty() ? ref.table_name : ref.schema_name + "." + ref.table_name;
+
 				// Update references to CTE
-				auto cteref = bind_context.cte_references[ref.table_name];
+				auto cteref = bind_context.cte_references[cte_reference];
 				(*cteref)++;
 
 				result->types = ctebinding->types;
@@ -136,6 +159,12 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 					throw BinderException(
 					    "There is a WITH item named \"%s\", but it cannot be referenced from this part of the query.",
 					    ref.table_name);
+				}
+
+				if (ref.schema_name == "recurring") {
+					throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
+					                      "referenced from this part of the query.",
+					                      ref.table_name);
 				}
 
 				// Move CTE to subquery and bind recursively
@@ -249,7 +278,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 		auto logical_get =
 		    make_uniq<LogicalGet>(table_index, scan_function, std::move(bind_data), std::move(return_types),
-		                          std::move(return_names), table.GetRowIdType());
+		                          std::move(return_names), table.GetVirtualColumns());
 		auto table_entry = logical_get->GetTable();
 		auto &col_ids = logical_get->GetMutableColumnIds();
 		if (!table_entry) {
@@ -278,13 +307,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		subquery.column_name_alias = BindContext::AliasColumnNames(ref.table_name, view_names, ref.column_name_alias);
 
 		// when binding a view, we always look into the catalog/schema where the view is stored first
-		vector<CatalogSearchEntry> view_search_path;
-		auto &catalog_name = view_catalog_entry.ParentCatalog().GetName();
-		auto &schema_name = view_catalog_entry.ParentSchema().name;
-		view_search_path.emplace_back(catalog_name, schema_name);
-		if (schema_name != DEFAULT_SCHEMA) {
-			view_search_path.emplace_back(view_catalog_entry.ParentCatalog().GetName(), DEFAULT_SCHEMA);
-		}
+		auto view_search_path =
+		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name);
 		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
 		// bind the child subquery
 		view_binder->AddBoundView(view_catalog_entry);

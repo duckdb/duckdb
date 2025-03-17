@@ -92,7 +92,7 @@ ROWID = adbc_driver_manager.dbapi.ROWID
 # Functions
 
 
-def connect(path: typing.Optional[str] = None) -> "Connection":
+def connect(path: typing.Optional[str] = None, **kwargs) -> "Connection":
     """Connect to DuckDB via ADBC."""
     db = None
     conn = None
@@ -100,7 +100,7 @@ def connect(path: typing.Optional[str] = None) -> "Connection":
     try:
         db = adbc_driver_duckdb.connect(path)
         conn = adbc_driver_manager.AdbcConnection(db)
-        return adbc_driver_manager.dbapi.Connection(db, conn)
+        return adbc_driver_manager.dbapi.Connection(db, conn, **kwargs)
     except Exception:
         if conn:
             conn.close()
