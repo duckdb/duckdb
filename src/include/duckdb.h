@@ -3265,6 +3265,25 @@ If the set is incomplete or a function with this name already exists DuckDBError
 DUCKDB_C_API duckdb_state duckdb_register_scalar_function_set(duckdb_connection con, duckdb_scalar_function_set set);
 
 //===--------------------------------------------------------------------===//
+// Selection Vector Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a new selection vector of size `size`.
+*/
+DUCKDB_C_API duckdb_selection_vector duckdb_create_selection_vector(idx_t size);
+
+/*!
+Destroys a selection vector.
+*/
+DUCKDB_C_API void duckdb_destroy_selection_vector(duckdb_selection_vector vector);
+
+/*!
+Access the data pointer of a selection vector.
+*/
+DUCKDB_C_API sel_t *duckdb_selection_vector_get_data_ptr(duckdb_selection_vector vector);
+
+//===--------------------------------------------------------------------===//
 // Aggregate Functions
 //===--------------------------------------------------------------------===//
 

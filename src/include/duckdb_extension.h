@@ -981,7 +981,10 @@ typedef struct {
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
 
 // Version unstable_new_vector_types
-#define duckdb_slice_vector duckdb_ext_api.duckdb_slice_vector
+#define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector
+#define duckdb_create_selection_vector       duckdb_ext_api.duckdb_create_selection_vector
+#define duckdb_destroy_selection_vector      duckdb_ext_api.duckdb_destroy_selection_vector
+#define duckdb_selection_vector_get_data_ptr duckdb_ext_api.duckdb_selection_vector_get_data_ptr
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
