@@ -690,7 +690,7 @@ bool LineError::HandleErrors(StringValueResult &result) {
 			break;
 		case CAST_ERROR: {
 			string column_name;
-			LogicalTypeId type_id;
+			LogicalTypeId type_id = LogicalTypeId::INVALID;
 			if (cur_error.col_idx < result.names.size()) {
 				column_name = result.names[cur_error.col_idx];
 			}
