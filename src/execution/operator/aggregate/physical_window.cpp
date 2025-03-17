@@ -140,7 +140,7 @@ public:
 	using WindowHashGroupPtr = unique_ptr<WindowHashGroup>;
 
 	WindowPartitionGlobalSinkState(WindowGlobalSinkState &gsink, const BoundWindowExpression &wexpr)
-	    : PartitionGlobalSinkState(gsink.context, wexpr.partitions, wexpr.orders, gsink.op.children[0]->types,
+	    : PartitionGlobalSinkState(gsink.context, wexpr.partitions, wexpr.orders, gsink.op.children[0].get().GetTypes(),
 	                               wexpr.partitions_stats, gsink.op.estimated_cardinality),
 	      gsink(gsink) {
 	}

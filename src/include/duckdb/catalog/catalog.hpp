@@ -65,6 +65,7 @@ struct SimilarCatalogEntry;
 class Binder;
 class LogicalOperator;
 class PhysicalOperator;
+class PhysicalPlanGenerator;
 class LogicalCreateIndex;
 class LogicalCreateTable;
 class LogicalInsert;
@@ -290,14 +291,16 @@ public:
 	DUCKDB_API void Alter(CatalogTransaction transaction, AlterInfo &info);
 	DUCKDB_API void Alter(ClientContext &context, AlterInfo &info);
 
-	virtual unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
-	                                                       unique_ptr<PhysicalOperator> plan) = 0;
-	virtual unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
-	                                                unique_ptr<PhysicalOperator> plan) = 0;
-	virtual unique_ptr<PhysicalOperator> PlanDelete(ClientContext &context, LogicalDelete &op,
-	                                                unique_ptr<PhysicalOperator> plan) = 0;
-	virtual unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
-	                                                unique_ptr<PhysicalOperator> plan) = 0;
+	virtual PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner,
+	                                            LogicalCreateTable &op, PhysicalOperator &plan) = 0;
+	virtual PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
+	                                     optional_ptr<PhysicalOperator> plan) = 0;
+	virtual PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op,
+	                                     PhysicalOperator &plan) = 0;
+	virtual PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op);
+	virtual PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,
+	                                     PhysicalOperator &plan) = 0;
+	virtual PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op);
 	virtual unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
 	                                                    unique_ptr<LogicalOperator> plan);
 	virtual unique_ptr<LogicalOperator> BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
