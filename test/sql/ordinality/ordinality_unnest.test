@@ -17,9 +17,8 @@ INSERT INTO test VALUES (['a1','a2','a3']),(['b1','b2']);
 query III
 SELECT * FROM test AS t, LATERAL unnest(t.a) WITH ORDINALITY;
 ----
-a unnest ordinality
-[a1,a2,a3]	a1	1
-[a1,a2,a3]	a2	2
-[a1,a2,a3]	a3	3
-[b1,b2]	b1	1
-[b1,b2]	b2	2
+[a1, a2, a3]	a1	1
+[a1, a2, a3]	a2	2
+[a1, a2, a3]	a3	3
+[b1, b2]	b1	1
+[b1, b2]	b2	2

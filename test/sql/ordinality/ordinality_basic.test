@@ -8,5 +8,4 @@ PRAGMA enable_verification
 query II
 SELECT * FROM range(1) WITH ORDINALITY;
 ----
-range	ordinality
 0	1
