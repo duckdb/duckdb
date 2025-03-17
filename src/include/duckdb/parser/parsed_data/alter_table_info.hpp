@@ -79,7 +79,8 @@ enum class AlterTableType : uint8_t {
 	SET_NOT_NULL = 8,
 	DROP_NOT_NULL = 9,
 	SET_COLUMN_COMMENT = 10,
-	ADD_CONSTRAINT = 11
+	ADD_CONSTRAINT = 11,
+	SET_PARTITIONED_BY = 12
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -365,6 +366,26 @@ public:
 
 private:
 	AddConstraintInfo();
+};
+
+//===--------------------------------------------------------------------===//
+// SetPartitionedByInfo
+//===--------------------------------------------------------------------===//
+struct SetPartitionedByInfo : public AlterTableInfo {
+	SetPartitionedByInfo(AlterEntryData data, vector<unique_ptr<ParsedExpression>> partition_keys);
+	~SetPartitionedByInfo() override;
+
+	//! The partition keys
+	vector<unique_ptr<ParsedExpression>> partition_keys;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	SetPartitionedByInfo();
 };
 
 } // namespace duckdb

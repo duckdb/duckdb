@@ -29,8 +29,8 @@
 
 namespace duckdb {
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
+PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
+                                   vector<JoinCondition> cond, JoinType join_type,
                                    const vector<idx_t> &left_projection_map, const vector<idx_t> &right_projection_map,
                                    vector<LogicalType> delim_types, idx_t estimated_cardinality,
                                    unique_ptr<JoinFilterPushdownInfo> pushdown_info_p)
@@ -39,8 +39,8 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 
 	filter_pushdown = std::move(pushdown_info_p);
 
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+	children.push_back(left);
+	children.push_back(right);
 
 	// Collect condition types, and which conditions are just references (so we won't duplicate them in the payload)
 	unordered_map<idx_t, idx_t> build_columns_in_conditions;
@@ -52,7 +52,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 		}
 	}
 
-	auto &lhs_input_types = children[0]->GetTypes();
+	auto &lhs_input_types = children[0].get().GetTypes();
 
 	// Create a projection map for the LHS (if it was empty), for convenience
 	lhs_output_columns.col_idxs = left_projection_map;
@@ -73,7 +73,7 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 		return;
 	}
 
-	auto &rhs_input_types = children[1]->GetTypes();
+	auto &rhs_input_types = children[1].get().GetTypes();
 
 	// Create a projection map for the RHS (if it was empty), for convenience
 	auto right_projection_map_copy = right_projection_map;
@@ -102,11 +102,9 @@ PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOpera
 	}
 }
 
-PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                   unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond, JoinType join_type,
-                                   idx_t estimated_cardinality)
-    : PhysicalHashJoin(op, std::move(left), std::move(right), std::move(cond), join_type, {}, {}, {},
-                       estimated_cardinality, nullptr) {
+PhysicalHashJoin::PhysicalHashJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
+                                   vector<JoinCondition> cond, JoinType join_type, idx_t estimated_cardinality)
+    : PhysicalHashJoin(op, left, right, std::move(cond), join_type, {}, {}, {}, estimated_cardinality, nullptr) {
 }
 
 //===--------------------------------------------------------------------===//
@@ -152,7 +150,7 @@ public:
 		// For external hash join
 		external = ClientConfig::GetConfig(context).GetSetting<DebugForceExternalSetting>(context);
 		// Set probe types
-		probe_types = op.children[0]->types;
+		probe_types = op.children[0].get().GetTypes();
 		probe_types.emplace_back(LogicalType::HASH);
 
 		if (op.filter_pushdown) {
@@ -383,7 +381,7 @@ static constexpr double SKEW_SINGLE_THREADED_THRESHOLD = 0.33;
 //! We can detect this because we partition the data, and go for a single-threaded finalize instead.
 static bool KeysAreSkewed(const HashJoinGlobalSinkState &sink) {
 	const auto max_partition_ht_size =
-	    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
+	    sink.max_partition_size + sink.hash_table->PointerTableSize(sink.max_partition_count);
 	const auto skew = static_cast<double>(max_partition_ht_size) / static_cast<double>(sink.total_size);
 	return skew > SKEW_SINGLE_THREADED_THRESHOLD;
 }
@@ -447,13 +445,13 @@ void PhysicalHashJoin::PrepareFinalize(ClientContext &context, GlobalSinkState &
 	gstate.total_size =
 	    ht.GetTotalSize(gstate.local_hash_tables, gstate.max_partition_size, gstate.max_partition_count);
 	gstate.probe_side_requirement =
-	    GetPartitioningSpaceRequirement(context, children[0]->types, ht.GetRadixBits(), gstate.num_threads);
+	    GetPartitioningSpaceRequirement(context, children[0].get().GetTypes(), ht.GetRadixBits(), gstate.num_threads);
 	const auto max_partition_ht_size =
-	    gstate.max_partition_size + JoinHashTable::PointerTableSize(gstate.max_partition_count);
+	    gstate.max_partition_size + gstate.hash_table->PointerTableSize(gstate.max_partition_count);
 	gstate.temporary_memory_state->SetMinimumReservation(max_partition_ht_size + gstate.probe_side_requirement);
 
 	bool all_constant;
-	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children[0]->types, all_constant));
+	gstate.temporary_memory_state->SetMaterializationPenalty(GetTupleWidth(children[0].get().GetTypes(), all_constant));
 	gstate.temporary_memory_state->SetRemainingSize(gstate.total_size);
 }
 
@@ -679,7 +677,7 @@ public:
 		    GetPartitioningSpaceRequirement(sink.context, op.types, sink.hash_table->GetRadixBits(), sink.num_threads);
 
 		sink.temporary_memory_state->SetMinimumReservation(sink.max_partition_size +
-		                                                   JoinHashTable::PointerTableSize(sink.max_partition_count) +
+		                                                   sink.hash_table->PointerTableSize(sink.max_partition_count) +
 		                                                   sink.probe_side_requirement);
 		sink.temporary_memory_state->UpdateReservation(executor.context);
 
@@ -800,11 +798,31 @@ SinkFinalizeType PhysicalHashJoin::Finalize(Pipeline &pipeline, Event &event, Cl
 	sink.temporary_memory_state->UpdateReservation(context);
 	sink.external = sink.temporary_memory_state->GetReservation() < sink.total_size;
 	if (sink.external) {
+		// For external join we reduce the load factor, this may even prevent the external join altogether
+		ht.load_factor = JoinHashTable::EXTERNAL_LOAD_FACTOR;
+
+		idx_t temp_max_partition_size;
+		idx_t temp_max_partition_count;
+		idx_t temp_total_size =
+		    ht.GetTotalSize(sink.local_hash_tables, temp_max_partition_size, temp_max_partition_count);
+
+		if (temp_total_size < sink.temporary_memory_state->GetReservation()) {
+			// We prevented the external join by reducing the load factor. Update the state accordingly
+			sink.temporary_memory_state->SetMinimumReservation(temp_total_size);
+			sink.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context, temp_total_size);
+
+			sink.total_size = temp_total_size;
+			sink.max_partition_size = temp_max_partition_size;
+			sink.max_partition_count = temp_max_partition_count;
+
+			sink.external = false;
+		}
+	}
+	if (sink.external) {
 		// External Hash Join
 		sink.perfect_join_executor.reset();
 
-		const auto max_partition_ht_size =
-		    sink.max_partition_size + JoinHashTable::PointerTableSize(sink.max_partition_count);
+		const auto max_partition_ht_size = sink.max_partition_size + ht.PointerTableSize(sink.max_partition_count);
 		const auto very_very_skewed = // No point in repartitioning if it's this skewed
 		    static_cast<double>(max_partition_ht_size) >= 0.8 * static_cast<double>(sink.total_size);
 		if (!very_very_skewed &&
@@ -1096,7 +1114,7 @@ unique_ptr<LocalSourceState> PhysicalHashJoin::GetLocalSourceState(ExecutionCont
 
 HashJoinGlobalSourceState::HashJoinGlobalSourceState(const PhysicalHashJoin &op, const ClientContext &context)
     : op(op), global_stage(HashJoinSourceStage::INIT), build_chunk_count(0), build_chunk_done(0), probe_chunk_count(0),
-      probe_chunk_done(0), probe_count(op.children[0]->estimated_cardinality),
+      probe_chunk_done(0), probe_count(op.children[0].get().estimated_cardinality),
       parallel_scan_chunk_count(context.config.verify_parallelism ? 1 : 120) {
 }
 
@@ -1178,7 +1196,6 @@ void HashJoinGlobalSourceState::PrepareBuild(HashJoinGlobalSinkState &sink) {
 	if (sink.context.config.verify_parallelism) {
 		build_chunks_per_thread = 1;
 	} else {
-
 		if (KeysAreSkewed(sink)) {
 			build_chunks_per_thread = build_chunk_count; // This forces single-threaded building
 		} else {

@@ -35,7 +35,11 @@ duckdb_state duckdb_open_internal(DBInstanceCacheWrapper *cache, const char *pat
 		}
 
 		if (cache) {
-			wrapper->database = cache->instance_cache->GetOrCreateInstance(path, *db_config, true);
+			duckdb::string path_str;
+			if (path) {
+				path_str = path;
+			}
+			wrapper->database = cache->instance_cache->GetOrCreateInstance(path_str, *db_config, true);
 		} else {
 			wrapper->database = duckdb::make_shared_ptr<DuckDB>(path, db_config);
 		}

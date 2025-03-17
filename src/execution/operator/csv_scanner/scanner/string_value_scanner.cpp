@@ -970,7 +970,8 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
       result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
-             buffer_manager->GetFilePath(), scanner_idx_p) {
+             buffer_manager->GetFilePath(), scanner_idx_p),
+      start_pos(0) {
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
 
@@ -982,7 +983,8 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
       result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
-             buffer_manager->GetFilePath(), 0) {
+             buffer_manager->GetFilePath(), 0),
+      start_pos(0) {
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
 
@@ -1033,17 +1035,18 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	auto &names = csv_file_scan->GetNames();
 	auto &reader_data = csv_file_scan->reader_data;
 	// Now Do the cast-aroo
-	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
-		idx_t col_idx = c;
-		idx_t result_idx = reader_data.column_mapping[c];
+	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+		auto col_idx = MultiFileLocalIndex(i);
+		auto global_idx = reader_data.column_mapping[col_idx];
 		if (!csv_file_scan->projection_ids.empty()) {
-			result_idx = reader_data.column_mapping[csv_file_scan->projection_ids[c].second];
+			auto local_idx = MultiFileLocalIndex(csv_file_scan->projection_ids[col_idx].second);
+			global_idx = reader_data.column_mapping[local_idx];
 		}
 		if (col_idx >= parse_chunk.ColumnCount()) {
 			throw InvalidInputException("Mismatch between the schema of different files");
 		}
 		auto &parse_vector = parse_chunk.data[col_idx];
-		auto &result_vector = insert_chunk.data[result_idx];
+		auto &result_vector = insert_chunk.data[global_idx];
 		auto &type = result_vector.GetType();
 		auto &parse_type = parse_vector.GetType();
 		if (!type.IsJSONType() &&
