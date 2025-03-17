@@ -20,7 +20,7 @@ public:
 	TransferBFLinker() : state(State::COLLECT_BF_CREATORS) {
 	}
 
-	void RemoveUselessOperators(LogicalOperator &op);
+	void LinkBFOperators(LogicalOperator &op);
 
 protected:
 	void VisitOperator(LogicalOperator &op);
@@ -31,17 +31,50 @@ protected:
 
 	struct FilterPlanHash {
 		size_t operator()(const BloomFilterPlan *fp) const {
-			size_t h = 0;
+			hash_t hash = 0;
 			for (const auto &expr : fp->build) {
-				h ^= expr->Cast<BoundColumnRefExpression>().Hash();
+				hash = CombineHash(hash, expr->Hash());
 			}
 			for (const auto &expr : fp->apply) {
-				h ^= expr->Cast<BoundColumnRefExpression>().Hash();
+				hash = CombineHash(hash, expr->Hash());
 			}
-			return h;
+			return hash;
+		}
+	};
+	struct FilterPlanEquality {
+		bool operator()(const BloomFilterPlan *lhs, const BloomFilterPlan *rhs) const {
+			// If the pointers are the same, trivially equal
+			if (lhs == rhs) {
+				return true;
+			}
+			// Otherwise compare the build/apply vectors item by item
+			if (lhs->build.size() != rhs->build.size()) {
+				return false;
+			}
+			for (size_t i = 0; i < lhs->build.size(); i++) {
+				auto &lhs_binding = lhs->build[i]->Cast<BoundColumnRefExpression>().binding;
+				auto &rhs_binding = rhs->build[i]->Cast<BoundColumnRefExpression>().binding;
+				if (lhs_binding.table_index != rhs_binding.table_index ||
+				    lhs_binding.column_index != rhs_binding.column_index) {
+					return false;
+				}
+			}
+			// Similarly compare apply …
+			if (lhs->apply.size() != rhs->apply.size()) {
+				return false;
+			}
+			for (size_t i = 0; i < lhs->apply.size(); i++) {
+				auto &lhs_binding = lhs->apply[i]->Cast<BoundColumnRefExpression>().binding;
+				auto &rhs_binding = rhs->apply[i]->Cast<BoundColumnRefExpression>().binding;
+				if (lhs_binding.table_index != rhs_binding.table_index ||
+				    lhs_binding.column_index != rhs_binding.column_index) {
+					return false;
+				}
+			}
+			return true;
 		}
 	};
 	unordered_set<LogicalOperator *> useful_creator;
-	unordered_map<BloomFilterPlan *, LogicalCreateBF *, FilterPlanHash> bf_creators;
+	unordered_map<BloomFilterPlan *, LogicalCreateBF *, FilterPlanHash, FilterPlanEquality> bf_creators;
 };
 } // namespace duckdb

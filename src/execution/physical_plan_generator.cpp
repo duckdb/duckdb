@@ -27,7 +27,7 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(unique_ptr<Logica
 
 	// Create and link BloomFilters for UseBFOperator and CreateBFOperator
 	TransferBFLinker linker;
-	linker.RemoveUselessOperators(*op);
+	linker.LinkBFOperators(*op);
 
 	// first resolve column references
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER_COLUMN_BINDING);

@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-void TransferBFLinker::RemoveUselessOperators(LogicalOperator &op) {
+void TransferBFLinker::LinkBFOperators(LogicalOperator &op) {
 	state = State::COLLECT_BF_CREATORS;
 	VisitOperator(op);
 
