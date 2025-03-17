@@ -207,6 +207,9 @@ struct WindowQuantileState {
 				dest[0] = skips[0].second;
 				if (skips.size() > 1) {
 					dest[1] = skips[1].second;
+				} else {
+					// Avoid UMA
+					dest[1] = skips[0].second;
 				}
 				return interp.template Extract<INPUT_TYPE, RESULT_TYPE>(dest.data(), result);
 			} catch (const duckdb_skiplistlib::skip_list::IndexError &idx_err) {
