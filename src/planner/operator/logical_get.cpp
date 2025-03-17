@@ -219,6 +219,7 @@ void LogicalGet::Serialize(Serializer &serializer) const {
 	}
 	serializer.WriteProperty(210, "projected_input", projected_input);
 	serializer.WritePropertyWithDefault(211, "column_indexes", column_ids);
+	serializer.WriteProperty(212, "ordinality_request", ordinality_request);
 }
 
 unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) {
@@ -247,6 +248,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 	}
 	deserializer.ReadProperty(210, "projected_input", result->projected_input);
 	deserializer.ReadPropertyWithDefault(211, "column_indexes", result->column_ids);
+	deserializer.ReadProperty(212, "ordinality_request", result->ordinality_request);
 	if (!legacy_column_ids.empty()) {
 		if (!result->column_ids.empty()) {
 			throw SerializationException(
@@ -272,6 +274,12 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 		bind_data = function.bind(context, input, bind_return_types, bind_names);
 		if (function.get_virtual_columns) {
 			virtual_columns = function.get_virtual_columns(context, bind_data.get());
+		}
+		if (result->ordinality_request == ordinality_request_t::REQUESTED) {
+			bind_return_types.emplace_back(LogicalType::BIGINT);
+			bind_names.emplace_back("ordinality");
+			function.ordinality_data.ordinality_request = ordinality_request_t::REQUESTED;
+			function.ordinality_data.column_id = bind_return_types.size()-1;
 		}
 
 		for (auto &col_id : result->column_ids) {
