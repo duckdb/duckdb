@@ -83,8 +83,6 @@ private:
 
 	unique_ptr<QueryResult> RunLoadQuery(InterpretedBenchmarkState &state, const string &load_query);
 
-	unique_ptr<QueryResult> RunLoadQuery(InterpretedBenchmarkState &state, const string &load_query);
-
 private:
 	bool is_loaded = false;
 	std::unordered_map<string, string> replacement_mapping;

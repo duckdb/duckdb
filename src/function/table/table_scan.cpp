@@ -140,7 +140,7 @@ public:
 		for (const auto &col_idx : input.column_indexes) {
 			l_state->column_ids.push_back(GetStorageIndex(bind_data.table, col_idx));
 		}
-		l_state->scan_state.Initialize(l_state->column_ids, input.filters.get());
+		l_state->scan_state.Initialize(l_state->column_ids, context.client, input.filters.get());
 		local_storage.InitializeScan(storage, l_state->scan_state.local_state, input.filters);
 		return std::move(l_state);
 	}
