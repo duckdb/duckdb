@@ -12,7 +12,7 @@
         }
       ],
       "comment": {
-        "description": "todo"
+        "description": "Creates a new selection vector of size `size`.\n\n"
       }
     },
     {
@@ -25,7 +25,7 @@
         }
       ],
       "comment": {
-        "description": "todo"
+        "description": "Destroys a selection vector.\n\n"
       }
     },
     {
@@ -38,7 +38,7 @@
         }
       ],
       "comment": {
-        "description": "todo"
+        "description": "Access the data pointer of a selection vector.\n\n"
       }
     }
   ]
