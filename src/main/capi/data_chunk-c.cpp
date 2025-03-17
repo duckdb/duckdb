@@ -174,8 +174,6 @@ duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector) {
 	return reinterpret_cast<duckdb_vector>(&duckdb::ArrayVector::GetEntry(*v));
 }
 
-// TODO(joe) set, validity buffer at once
-
 bool duckdb_validity_row_is_valid(uint64_t *validity, idx_t row) {
 	if (!validity) {
 		return true;
