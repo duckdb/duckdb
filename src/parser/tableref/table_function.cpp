@@ -9,11 +9,11 @@ TableFunctionRef::TableFunctionRef() : TableRef(TableReferenceType::TABLE_FUNCTI
 }
 
 string TableFunctionRef::ToString() const {
-	auto result = BaseToString(function->ToString(), column_name_alias);
+	auto result = function->ToString();
 	if (with_ordinality == ordinality_request_t::REQUESTED) {
 		result += " WITH ORDINALITY";
 	}
-	return result;
+	return BaseToString(result, column_name_alias);
 }
 
 bool TableFunctionRef::Equals(const TableRef &other_p) const {
