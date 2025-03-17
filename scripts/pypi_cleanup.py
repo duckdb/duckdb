@@ -127,9 +127,16 @@ class PypiCleanup:
 
             pkg_vers = []
             for version_key, versions in version_dict.items():
+                # releases_by_date.keys() is a list of release versions, so when the version key appears in that list,
+                # that means the version have been released and we don't need to keep PRE-RELEASE (dev) versions anymore.
+                # All versions for that key should be added into a list to delete from PyPi (pkg_vers).
+                # When the version is not released yet, it appears among the version_dict keys. In this case we'd like to keep
+                # some number of versions (how_many_dev_versions_to_keep), so we add the version names from the beginning 
+                # of the versions list sorted by date, except for mentioned number of versions to keep.
                 if version_key in releases_by_date.keys():
                     pkg_vers.extend(versions)
-                pkg_vers.extend(versions[:-how_many_dev_versions_to_keep])
+                else:
+                    pkg_vers.extend(versions[:-how_many_dev_versions_to_keep])
 
             if not pkg_vers:
                 logging.info(f"No releases were found matching specified patterns and dates in package {self.package}")
