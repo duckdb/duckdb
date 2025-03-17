@@ -542,7 +542,7 @@ shared_ptr<BaseUnionData> ParquetMultiFileInfo::GetUnionData(shared_ptr<BaseFile
 		result->metadata = std::move(scan.metadata);
 	}
 
-	return result;
+	return std::move(result);
 }
 
 void ParquetMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &) {
