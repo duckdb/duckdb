@@ -27,7 +27,7 @@
 
     # can bind vectors to parameters
     stmt = DBInterface.prepare(con, "FROM test_table WHERE i IN ?;")
-    results = DBInterface.execute(stmt, ([1,2], ))
+    results = DBInterface.execute(stmt, ([1, 2],))
     df = DataFrame(results)
 
     @test all(df.i .∈ Ref([1, 2]))
