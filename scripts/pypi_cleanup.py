@@ -16,7 +16,7 @@ from requests.exceptions import RequestException
 # deletes old dev wheels from pypi. evil hack.
 # how many dev versions to keep - 3 for each not yet released version
 how_many_dev_versions_to_keep = 3
-patterns = [re.compile(rf"^{duckdb_version_base}.*\.dev\d+$")]
+patterns = [re.compile(r".*\.dev\d+$")]
 actually_delete = True
 host = 'https://pypi.org/'
 
@@ -73,7 +73,7 @@ class CsfrParser(HTMLParser):
 
 
 class PypiCleanup:
-    def __init__(self, url, username, package, password, otp, patterns, retain_days, delete):
+    def __init__(self, url, username, package, password, otp, patterns, delete):
         self.url = urlparse(url).geturl()
         if self.url[-1] == "/":
             self.url = self.url[:-1]
@@ -84,7 +84,6 @@ class PypiCleanup:
         self.package = package
         self.patterns = patterns
         self.verbose = True
-        self.date = datetime.datetime.now() - datetime.timedelta(days=retain_days)
 
     def run(self):
         csrf = None
@@ -243,4 +242,4 @@ class PypiCleanup:
                     logging.info(f"Would be deleting {self.package} version {pkg_ver}, but not doing it!")
 
 
-PypiCleanup(host, pypi_username, 'duckdb', pypi_password, pypi_otp, patterns, retain_days, actually_delete).run()
+PypiCleanup(host, pypi_username, 'duckdb', pypi_password, pypi_otp, patterns, actually_delete).run()
