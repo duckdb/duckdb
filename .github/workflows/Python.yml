@@ -434,7 +434,6 @@ jobs:
        PYPI_CLEANUP_USERNAME: 'mytherin'
        PYPI_CLEANUP_PASSWORD: ${{secrets.PYPI_CLEANUP_PASSWORD}}
        PYPI_CLEANUP_OTP: ${{secrets.PYPI_CLEANUP_OTP}}
-       DUCKDB_BASE_VERSION: ${{github.ref == 'refs/heads/main' && '1.3' || '1.2'}}
 
      steps:
      - uses: actions/checkout@v4
