@@ -35,7 +35,7 @@ public:
 	//! Initializes the TupleDataLayout with the specified aggregates to an empty TupleDataLayout
 	void Initialize(Aggregates aggregates_p, bool align = true, bool heap_offset = true);
 	//! Initializes a TupleDataLayout with the specified ORDER BY to an empty TupleDataLayout
-	void Initialize(const vector<BoundOrderByNode> &orders, bool has_payload);
+	void Initialize(const vector<BoundOrderByNode> &orders, const LogicalType &type, bool has_payload);
 
 	//! Returns the number of data columns
 	inline idx_t ColumnCount() const {

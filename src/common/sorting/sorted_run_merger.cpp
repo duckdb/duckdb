@@ -14,6 +14,7 @@ namespace duckdb {
 static idx_t SortedRunsTotalCount(const vector<unique_ptr<SortedRun>> &sorted_runs) {
 	idx_t total_count = 0;
 	for (const auto &sorted_run : sorted_runs) {
+		D_ASSERT(sorted_run->finalized);
 		total_count += sorted_run->Count();
 	}
 	return total_count;
@@ -418,6 +419,9 @@ SourceResultType SortedRunMerger::GetData(ExecutionContext &, DataChunk &chunk, 
 			break;
 		}
 	}
+
+	// TODO this should return BLOCKED when previous thread has not computed boundaries yet
+	//  Otherwise we will spinlock here, and potentially deadlock (e.g., OOM by previous thread)
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }

@@ -28,11 +28,13 @@ public:
 	void Sink(DataChunk &key, DataChunk &payload);
 	//! Sorts the data (physically reorder data if external)
 	void Finalize(bool external);
-
+	//! Number of tuples
 	idx_t Count() const;
+	//! Size of this sorted run
+	idx_t SizeInBytes() const;
 
 public:
-	//! Key and payload collections (and append states)
+	//! Key and payload collections (and associated append states)
 	unique_ptr<TupleDataCollection> key_data;
 	unique_ptr<TupleDataCollection> payload_data;
 	TupleDataAppendState key_append_state;

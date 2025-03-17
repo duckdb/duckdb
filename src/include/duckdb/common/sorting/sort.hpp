@@ -32,11 +32,12 @@ class Sort {
 	};
 
 public:
-	Sort(const vector<BoundOrderByNode> &orders, const vector<LogicalType> &types, vector<idx_t> projection_map);
+	Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &types,
+	     vector<idx_t> projection_map);
 
 private:
-	//! Key expressions and layout of key columns
-	vector<unique_ptr<Expression>> key_expressions;
+	//! Key orders, expressions, and layout
+	unique_ptr<Expression> key_expression;
 	TupleDataLayout key_layout;
 
 	//! Projection map and payload layout (columns that also appear as key eliminated)

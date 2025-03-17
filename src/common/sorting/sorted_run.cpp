@@ -152,4 +152,12 @@ idx_t SortedRun::Count() const {
 	return key_data->Count();
 }
 
+idx_t SortedRun::SizeInBytes() const {
+	idx_t size = key_data->SizeInBytes();
+	if (payload_data) {
+		size += payload_data->SizeInBytes();
+	}
+	return size;
+}
+
 } // namespace duckdb

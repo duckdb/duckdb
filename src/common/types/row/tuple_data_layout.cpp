@@ -134,7 +134,7 @@ void TupleDataLayout::Initialize(Aggregates aggregates_p, bool align, bool heap_
 	Initialize(vector<LogicalType>(), std::move(aggregates_p), align, heap_offset_p);
 }
 
-void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, bool has_payload) {
+void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const LogicalType &type, bool has_payload) {
 	// Reset state
 	types.clear();
 	aggregates.clear();
@@ -147,23 +147,32 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, bool ha
 	heap_size_offset = DConstants::INVALID_INDEX;
 	aggr_destructor_idxs.clear();
 
+	// Type is determined by "create_sort_key", if it is <= 8 we get a bigint
+	types.push_back(type);
+
 	// Compute row width
 	idx_t temp_row_width = has_payload ? 8 : 0;
-	for (auto &order : orders) {
-		const auto &logical_type = order.expression->return_type;
-		const auto physical_type = logical_type.InternalType();
-		if (TypeIsConstantSize(physical_type)) {
-			// NULL byte + fixed-width type
-			temp_row_width += 1 + GetTypeIdSize(physical_type);
-		} else if (logical_type == LogicalType::VARCHAR && order.stats &&
-		           StringStats::HasMaxStringLength(*order.stats)) {
-			// NULL byte + maximum string length + string delimiter
-			temp_row_width += 1 + StringStats::MaxStringLength(*order.stats) + 1;
-		} else {
-			// We don't know how long the key will be
-			temp_row_width = DConstants::INVALID_INDEX;
-			break;
+	if (type.id() == LogicalTypeId::BIGINT) {
+		temp_row_width += 8;
+	} else {
+		for (auto &order : orders) {
+			const auto &logical_type = order.expression->return_type;
+			const auto physical_type = logical_type.InternalType();
+			if (TypeIsConstantSize(physical_type)) {
+				// NULL byte + fixed-width type
+				temp_row_width += 1 + GetTypeIdSize(physical_type);
+			} else if (logical_type == LogicalType::VARCHAR && order.stats &&
+			           StringStats::HasMaxStringLength(*order.stats)) {
+				// NULL byte + maximum string length + string delimiter
+				temp_row_width += 1 + StringStats::MaxStringLength(*order.stats) + 1;
+			} else {
+				// We don't know how long the key will be
+				temp_row_width = DConstants::INVALID_INDEX;
+				break;
+			}
 		}
+		// TODO: if key size is <= 8 due to string statistics,
+		//  we have a confusing situation where the "type" is VARCHAR, but size is low
 	}
 
 	// Set row width and sort key type accordingly

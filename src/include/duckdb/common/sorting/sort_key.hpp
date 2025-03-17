@@ -50,6 +50,7 @@ public:
 	}
 
 	static int32_t Compare(const SORT_KEY &lhs, const SORT_KEY &rhs) {
+		// TODO: bwapping both and then doing an integer comparison may be better
 		return memcmp(&lhs.part1, &rhs.part1, SORT_KEY::INLINE_LENGTH);
 	}
 
