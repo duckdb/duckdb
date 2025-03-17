@@ -66,6 +66,12 @@ duckdb_bind_internal(stmt::Stmt, i::Integer, val::AbstractString) =
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::Vector{UInt8}) = duckdb_bind_blob(stmt.handle, i, val, sizeof(val));
 duckdb_bind_internal(stmt::Stmt, i::Integer, val::WeakRefString{UInt8}) =
     duckdb_bind_varchar_length(stmt.handle, i, val.ptr, val.len);
+function duckdb_bind_internal(stmt::Stmt, i::Integer, val::AbstractVector{T}) where {T}
+    type = create_logical_type(T)
+    values = create_value.(val)
+    value = Value(duckdb_create_list_value(type.handle, map(x -> x.handle, values), length(values)))
+    return duckdb_bind_value(stmt.handle, i, value.handle)
+end
 
 function duckdb_bind_internal(stmt::Stmt, i::Integer, val::Any)
     println(val)
