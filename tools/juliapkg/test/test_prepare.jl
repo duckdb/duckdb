@@ -26,8 +26,8 @@
     @test isequal(df.j, [3.5, missing, 0.5, 1, 2, 4, 8, -0.5])
 
     # can bind vectors to parameters
-    stmt = DBInterface.prepare(con, "FROM test_table WHERE i IN (?, ?);")
-    results = DBInterface.execute(stmt, (1, 2))
+    stmt = DBInterface.prepare(con, "FROM test_table WHERE i IN ?;")
+    results = DBInterface.execute(stmt, ([1,2], ))
     df = DataFrame(results)
 
     @test all(df.i .∈ Ref([1, 2]))
