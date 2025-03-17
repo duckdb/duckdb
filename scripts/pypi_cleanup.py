@@ -5,6 +5,7 @@ import os
 import re
 import sys
 import time
+from collections import defaultdict
 from html.parser import HTMLParser
 from textwrap import dedent
 from urllib.parse import urlparse
@@ -13,9 +14,8 @@ import requests
 from requests.exceptions import RequestException
 
 # deletes old dev wheels from pypi. evil hack.
-# how many days to retain dev releases - all dev releases older than 5 days are deleted
-retain_days = 5
-duckdb_version_base = os.getenv('DUCKDB_BASE_VERSION', "")
+# how many dev versions to keep - 3 for each not yet released version
+how_many_dev_versions_to_keep = 3
 patterns = [re.compile(rf"^{duckdb_version_base}.*\.dev\d+$")]
 actually_delete = True
 host = 'https://pypi.org/'
@@ -23,12 +23,6 @@ host = 'https://pypi.org/'
 pypi_username = os.getenv('PYPI_CLEANUP_USERNAME', "")
 pypi_password = os.getenv("PYPI_CLEANUP_PASSWORD", "")
 pypi_otp = os.getenv("PYPI_CLEANUP_OTP", "")
-if not duckdb_version_base:
-    print(f'need duckdb version in DUCKDB_BASE_VERSION env variable')
-    exit(1)
-if len(duckdb_version_base) < 3 or not duckdb_version_base.count(".") == 1:
-    print(f'need duckdb version in format "major.minor" version in DUCKDB_BASE_VERSION env variable')
-    exit(1)
 if pypi_username == "":
     print(f'need username in PYPI_CLEANUP_USERNAME env variable')
     exit(1)
@@ -125,12 +119,18 @@ class PypiCleanup:
                 logging.info(f"No releases for package {self.package} have been found")
                 return
 
-            pkg_vers = list(
-                filter(
-                    lambda k: any(filter(lambda rex: rex.match(k), self.patterns)) and releases_by_date[k] < self.date,
-                    releases_by_date.keys(),
-                )
-            )
+            version_dict = defaultdict(list)
+            releases = []
+            for key in releases_by_date.keys():
+                if '.dev' in key:
+                    prefix, postfix = key.split('.dev')
+                    version_dict[prefix].append(key)
+
+            pkg_vers = []
+            for version_key, versions in version_dict.items():
+                if version_key in releases_by_date.keys():
+                    pkg_vers.extend(versions)
+                pkg_vers.extend(versions[:-how_many_dev_versions_to_keep])
 
             if not pkg_vers:
                 logging.info(f"No releases were found matching specified patterns and dates in package {self.package}")
