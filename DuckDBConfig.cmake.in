@@ -7,7 +7,7 @@
 include(CMakeFindDependencyMacro)
 find_dependency(Threads)
 if(NOT @WITH_INTERNAL_ICU@)
-    find_dependency(ICU COMPONENTS i18n uc)
+    find_dependency(ICU COMPONENTS i18n uc data)
 endif()
 
 # Compute paths
