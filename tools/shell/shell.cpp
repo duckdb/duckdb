@@ -4695,8 +4695,8 @@ static const char zOptions[] =
     "   -safe                enable safe-mode\n"
     "   -separator SEP       set output column separator. Default: '|'\n"
     "   -table               set output mode to 'table'\n"
-    "   -unredacted          allow printing unredacted secrets\n"
     "   -ui                  launches a web interface using the ui extension (configurable with .ui_command)\n"
+    "   -unredacted          allow printing unredacted secrets\n"
     "   -unsigned            allow loading of unsigned extensions\n"
     "   -version             show DuckDB version\n";
 static void usage(int showDetail) {
