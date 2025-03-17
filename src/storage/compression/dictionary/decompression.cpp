@@ -61,7 +61,6 @@ void CompressedStringScanState::Initialize(ColumnSegment &segment, bool initiali
 
 void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_offset, idx_t start, idx_t scan_count) {
 	auto result_data = FlatVector::GetData<string_t>(result);
-	auto &validity = FlatVector::Validity(result);
 
 	// Handling non-bitpacking-group-aligned start values;
 	idx_t start_offset = start % BitpackingPrimitives::BITPACKING_ALGORITHM_GROUP_SIZE;
@@ -83,9 +82,6 @@ void CompressedStringScanState::ScanToFlatVector(Vector &result, idx_t result_of
 	for (idx_t i = 0; i < scan_count; i++) {
 		// Lookup dict offset in index buffer
 		auto string_number = sel_vec->get_index(i + start_offset);
-		if (string_number == 0) {
-			validity.SetInvalid(result_offset + i);
-		}
 		auto dict_offset = index_buffer_ptr[string_number];
 		auto str_len = GetStringLength(UnsafeNumericCast<sel_t>(string_number));
 		result_data[result_offset + i] = FetchStringFromDict(UnsafeNumericCast<int32_t>(dict_offset), str_len);

@@ -94,7 +94,7 @@ idx_t DictionaryCompressionStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 	                                                      state.current_dict_size, width);
 
 	const auto total_space = state.segment_count * state.info.GetBlockSize() + req_space;
-	return LossyNumericCast<idx_t>(DictionaryCompression::MINIMUM_COMPRESSION_RATIO * float(total_space)) * 5;
+	return LossyNumericCast<idx_t>(DictionaryCompression::MINIMUM_COMPRESSION_RATIO * float(total_space));
 }
 
 //===--------------------------------------------------------------------===//
@@ -163,7 +163,7 @@ void DictionaryCompressionStorage::StringFetchRow(ColumnSegment &segment, Column
 // Get Function
 //===--------------------------------------------------------------------===//
 CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type) {
-	auto res = CompressionFunction(
+	return CompressionFunction(
 	    CompressionType::COMPRESSION_DICTIONARY, data_type, DictionaryCompressionStorage ::StringInitAnalyze,
 	    DictionaryCompressionStorage::StringAnalyze, DictionaryCompressionStorage::StringFinalAnalyze,
 	    DictionaryCompressionStorage::InitCompression, DictionaryCompressionStorage::Compress,
@@ -171,8 +171,6 @@ CompressionFunction DictionaryCompressionFun::GetFunction(PhysicalType data_type
 	    DictionaryCompressionStorage::StringScan, DictionaryCompressionStorage::StringScanPartial<false>,
 	    DictionaryCompressionStorage::StringFetchRow, UncompressedFunctions::EmptySkip,
 	    UncompressedStringStorage::StringInitSegment);
-	res.validity = CompressionValidity::NO_VALIDITY_REQUIRED;
-	return res;
 }
 
 bool DictionaryCompressionFun::TypeIsSupported(const PhysicalType physical_type) {

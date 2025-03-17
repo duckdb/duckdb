@@ -12,9 +12,9 @@ statement ok
 CHECKPOINT
 
 query I
-SELECT BOOL_OR(compression ILIKE '%fsst%') FROM pragma_storage_info('test')
+SELECT DISTINCT compression FROM pragma_storage_info('test') where segment_type = 'VARCHAR';
 ----
-true
+FSST
 
 statement ok
 DROP TABLE test
