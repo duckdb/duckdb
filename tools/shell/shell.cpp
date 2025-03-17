@@ -1739,11 +1739,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 		/* extract the data and data types */
 		for (int i = 0; i < nCol; i++) {
 			result.types[i] = sqlite3_column_type(pStmt, i);
-			if (result.types[i] == SQLITE_BLOB && cMode == RenderMode::INSERT) {
-				result.data[i] = "";
-			} else {
-				result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
-			}
+			result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
 			if (!result.data[i] && result.types[i] != SQLITE_NULL) {
 				// OOM
 				rc = SQLITE_NOMEM;
