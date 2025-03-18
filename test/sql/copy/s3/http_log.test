@@ -6,8 +6,6 @@ require parquet
 
 require httpfs
 
-require aws
-
 require-env S3_TEST_SERVER_AVAILABLE 1
 
 require-env AWS_DEFAULT_REGION
@@ -39,7 +37,7 @@ FROM 's3://test-bucket/http-secret-test/test.parquet'
 value-1
 
 query I
-SELECT message FROM duckdb_logs() WHERE log_type = 'duckdb.Httplib'
+SELECT message FROM duckdb_logs() WHERE log_type='duckdb.Httplib'
 ---
 <REGEX>:.*HEAD /test.parquet.*
 
