@@ -150,6 +150,7 @@ jobs:
           vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
           duckdb_arch: ${{ matrix.duckdb_arch }}
           run_tests: ${{ inputs.skip_tests != 'true' }}
+          override_git_describe: ${{ inputs.override_git_describe }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -192,6 +193,7 @@ jobs:
           vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
           duckdb_arch: ${{ matrix.duckdb_arch }}
           run_tests: ${{ inputs.skip_tests != 'true' }}
+          override_git_describe: ${{ inputs.override_git_describe }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -233,6 +235,7 @@ jobs:
           vcpkg_target_triplet: ${{ matrix.vcpkg_triplet }}
           duckdb_arch: ${{ matrix.duckdb_arch }}
           run_tests: ${{ inputs.skip_tests != 'true' }}
+          override_git_describe: ${{ inputs.override_git_describe }}
 
       - uses: actions/upload-artifact@v4
         with:
