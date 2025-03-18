@@ -18,7 +18,6 @@ public:
 	TableInOutGlobalState() {
 	}
 
-	idx_t ordinality_current_idx = 1;
 	unique_ptr<GlobalTableFunctionState> global_state;
 };
 
@@ -71,7 +70,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		// straightforward case - no need to project input
 		auto result = function.in_out_function(context, data, input, chunk);
 		if (function.ordinality_data.ordinality_request == ordinality_request_t::REQUESTED) {
-			function.ordinality_data.SetOrdinality(chunk, gstate.ordinality_current_idx);
+			function.ordinality_data.SetOrdinality(chunk);
 		}
 		return result;
 	}
@@ -104,7 +103,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 	}
 	auto result = function.in_out_function(context, data, state.input_chunk, chunk);
 	if (function.ordinality_data.ordinality_request == ordinality_request_t::REQUESTED) {
-		function.ordinality_data.SetOrdinality(chunk, gstate.ordinality_current_idx);
+		function.ordinality_data.SetOrdinality(chunk);
 	}
 	if (result == OperatorResultType::FINISHED) {
 		return result;
