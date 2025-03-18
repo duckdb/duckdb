@@ -1,3 +1,4 @@
+import argparse
 import pyotp
 import datetime
 import logging
@@ -13,16 +14,23 @@ from urllib.parse import urlparse
 import requests
 from requests.exceptions import RequestException
 
+# for local testing run the script with the --dry option
+# it outputs the list of the names to delete and return
+# you can change a value of the how_many_dev_versions_to_keep variable to see difference 
+parser = argparse.ArgumentParser()
+parser.add_argument("--dry", action="store_true", help="Run in dry-run mode (doesn't delete anything)")
+args = parser.parse_args()
+
 # deletes old dev wheels from pypi. evil hack.
 # how many dev versions to keep - 3 for each not yet released version
 how_many_dev_versions_to_keep = 3
 patterns = [re.compile(r".*\.dev\d+$")]
-actually_delete = True
+actually_delete = not args.dry
 host = 'https://pypi.org/'
 
-pypi_username = os.getenv('PYPI_CLEANUP_USERNAME', "")
-pypi_password = os.getenv("PYPI_CLEANUP_PASSWORD", "")
-pypi_otp = os.getenv("PYPI_CLEANUP_OTP", "")
+pypi_username = os.getenv('PYPI_CLEANUP_USERNAME', "") if actually_delete else "user"
+pypi_password = os.getenv("PYPI_CLEANUP_PASSWORD", "") if actually_delete else "password"
+pypi_otp = os.getenv("PYPI_CLEANUP_OTP", "") if actually_delete else "otp"
 if pypi_username == "":
     print(f'need username in PYPI_CLEANUP_USERNAME env variable')
     exit(1)
@@ -32,7 +40,6 @@ if pypi_password == "":
 if pypi_otp == "":
     print(f'need {pypi_username}\' PyPI OTP secret in PYPI_CLEANUP_OTP env variable')
     exit(1)
-
 
 ###### NOTE: This code is taken from the pypi-cleanup package (https://github.com/arcivanov/pypi-cleanup/tree/master)
 class CsfrParser(HTMLParser):
@@ -137,6 +144,10 @@ class PypiCleanup:
                     pkg_vers.extend(versions)
                 else:
                     pkg_vers.extend(versions[:-how_many_dev_versions_to_keep])
+
+            if not actually_delete:
+                print("Following pkg_vers can be deleted: ", pkg_vers)
+                return
 
             if not pkg_vers:
                 logging.info(f"No releases were found matching specified patterns and dates in package {self.package}")
