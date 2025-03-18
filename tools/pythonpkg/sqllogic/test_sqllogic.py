@@ -2,14 +2,13 @@ import gc
 import os
 import pathlib
 import pytest
-import shutil
 import sys
 from typing import Any, Generator, Optional
 
 ##### Copied from sqllogictest_python.py #####
 
 script_path = os.path.dirname(os.path.abspath(__file__))
-sys.path.append(os.path.join(script_path, '..', '..', '..', '..', 'scripts'))
+sys.path.append(os.path.join(script_path, '..', '..', '..', 'scripts'))
 from sqllogictest import (
     SQLParserException,
     SQLLogicParser,
