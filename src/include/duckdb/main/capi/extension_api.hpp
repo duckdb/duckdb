@@ -471,6 +471,14 @@ typedef struct {
 
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
+	// Create and return statistics
+
+	duckdb_base_statistic (*duckdb_create_base_statistic)(duckdb_logical_type type);
+	void (*duckdb_destroy_base_statistic)(duckdb_base_statistic *statistic);
+	void (*duckdb_statistic_set_min)(duckdb_base_statistic statistic, duckdb_value min, bool is_truncated);
+	void (*duckdb_statistic_set_max)(duckdb_base_statistic statistic, duckdb_value max, bool is_truncated);
+	void (*duckdb_statistic_set_has_nulls)(duckdb_base_statistic statistic);
+	void (*duckdb_statistic_set_has_no_nulls)(duckdb_base_statistic statistic);
 	// Vortex duckdb extensions
 
 	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
@@ -895,6 +903,12 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_get_or_create_from_cache = duckdb_get_or_create_from_cache;
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
+	result.duckdb_create_base_statistic = duckdb_create_base_statistic;
+	result.duckdb_destroy_base_statistic = duckdb_destroy_base_statistic;
+	result.duckdb_statistic_set_min = duckdb_statistic_set_min;
+	result.duckdb_statistic_set_max = duckdb_statistic_set_max;
+	result.duckdb_statistic_set_has_nulls = duckdb_statistic_set_has_nulls;
+	result.duckdb_statistic_set_has_no_nulls = duckdb_statistic_set_has_no_nulls;
 	result.duckdb_slice_vector = duckdb_slice_vector;
 	result.duckdb_assign_constant_vector = duckdb_assign_constant_vector;
 	result.duckdb_create_selection_vector = duckdb_create_selection_vector;

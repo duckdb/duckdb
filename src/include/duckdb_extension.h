@@ -542,6 +542,16 @@ typedef struct {
 	                                               idx_t row);
 #endif
 
+// Create and return statistics
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_base_statistic (*duckdb_create_base_statistic)(duckdb_logical_type type);
+	void (*duckdb_destroy_base_statistic)(duckdb_base_statistic *statistic);
+	void (*duckdb_statistic_set_min)(duckdb_base_statistic statistic, duckdb_value min, bool is_truncated);
+	void (*duckdb_statistic_set_max)(duckdb_base_statistic statistic, duckdb_value max, bool is_truncated);
+	void (*duckdb_statistic_set_has_nulls)(duckdb_base_statistic statistic);
+	void (*duckdb_statistic_set_has_no_nulls)(duckdb_base_statistic statistic);
+#endif
+
 // Vortex duckdb extensions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
@@ -974,6 +984,14 @@ typedef struct {
 
 // Version unstable_new_append_functions
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// Version unstable_new_statistics_interface
+#define duckdb_create_base_statistic      duckdb_ext_api.duckdb_create_base_statistic
+#define duckdb_destroy_base_statistic     duckdb_ext_api.duckdb_destroy_base_statistic
+#define duckdb_statistic_set_min          duckdb_ext_api.duckdb_statistic_set_min
+#define duckdb_statistic_set_max          duckdb_ext_api.duckdb_statistic_set_max
+#define duckdb_statistic_set_has_nulls    duckdb_ext_api.duckdb_statistic_set_has_nulls
+#define duckdb_statistic_set_has_no_nulls duckdb_ext_api.duckdb_statistic_set_has_no_nulls
 
 // Version unstable_vortex_ext
 #define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector

@@ -21,6 +21,7 @@ add_library_unity(
   replacement_scan-c.cpp
   result-c.cpp
   scalar_function-c.cpp
+  statistic-c.cpp
   stream-c.cpp
   table_function-c.cpp
   table_description-c.cpp

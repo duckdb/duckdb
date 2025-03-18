@@ -530,6 +530,10 @@ typedef struct _duckdb_profiling_info {
 	void *internal_ptr;
 } * duckdb_profiling_info;
 
+typedef struct _duckdb_base_statistic {
+	void *internal_ptr;
+} * duckdb_base_statistic;
+
 //===--------------------------------------------------------------------===//
 // C API Extension info
 //===--------------------------------------------------------------------===//
@@ -3271,6 +3275,48 @@ If the set is incomplete or a function with this name already exists DuckDBError
 * @return Whether or not the registration was successful.
 */
 DUCKDB_C_API duckdb_state duckdb_register_scalar_function_set(duckdb_connection con, duckdb_scalar_function_set set);
+
+//===--------------------------------------------------------------------===//
+// Statistics Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Returns a statistic for the type of the value passed.
+*/
+DUCKDB_C_API duckdb_base_statistic duckdb_create_base_statistic(duckdb_logical_type type);
+
+/*!
+Destroys a statistic
+*/
+DUCKDB_C_API void duckdb_destroy_base_statistic(duckdb_base_statistic *statistic);
+
+/*!
+Sets the min value for a numeric statistic (if null is passed this signifies no value).
+*/
+DUCKDB_C_API void duckdb_statistic_set_min(duckdb_base_statistic statistic, duckdb_value min, bool is_truncated);
+
+/*!
+Sets the maximum value for the given statistics object.
+
+This function updates the maximum value stored in the statistics object based on the provided `max` value.
+For numeric statistics, it directly sets the maximum value.
+For string statistics, it updates the maximum value by comparing the provided string to the current maximum.
+If the provided string is longer than the maximum string length allowed, the maximum string length is reset.
+
+* @param statistic The statistics object to update.
+* @param max The new maximum value to set, if the value is null this unsets the statistic.
+* @param is_truncated If the value truncated, ignored for non-variable length values (e.g. ints)
+*/
+DUCKDB_C_API void duckdb_statistic_set_max(duckdb_base_statistic statistic, duckdb_value max, bool is_truncated);
+
+/*!
+Sets if the segment can contain NULL values*/
+DUCKDB_C_API void duckdb_statistic_set_has_nulls(duckdb_base_statistic statistic);
+
+/*!
+Set if the segment can contain values that are not null.
+*/
+DUCKDB_C_API void duckdb_statistic_set_has_no_nulls(duckdb_base_statistic statistic);
 
 //===--------------------------------------------------------------------===//
 // Aggregate Functions

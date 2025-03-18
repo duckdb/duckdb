@@ -1,0 +1,105 @@
+{
+  "group": "statistics_interface",
+  "deprecated": false,
+  "entries": [
+    {
+      "name": "duckdb_create_base_statistic",
+      "return_type": "duckdb_base_statistic",
+      "params": [
+        {
+          "type": "duckdb_logical_type",
+          "name": "type"
+        }
+      ],
+      "comment": {
+        "description": "Returns a statistic for the type of the value passed.\n"
+      }
+    },
+    {
+      "name": "duckdb_destroy_base_statistic",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_base_statistic *",
+          "name": "statistic"
+        }
+      ],
+      "comment": {
+        "description": "Destroys a statistic\n"
+      }
+    },
+    {
+      "name": "duckdb_statistic_set_min",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_base_statistic",
+          "name": "statistic"
+        },
+        {
+          "type": "duckdb_value",
+          "name": "min"
+        },
+        {
+          "type": "bool",
+          "name": "is_truncated"
+        }
+      ],
+      "comment": {
+        "description": "Sets the min value for a numeric statistic (if null is passed this signifies no value).\n"
+      }
+    },
+    {
+      "name": "duckdb_statistic_set_max",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_base_statistic",
+          "name": "statistic"
+        },
+        {
+          "type": "duckdb_value",
+          "name": "max"
+        },
+        {
+          "type": "bool",
+          "name": "is_truncated"
+        }
+      ],
+      "comment": {
+        "description": "Sets the maximum value for the given statistics object.\n\nThis function updates the maximum value stored in the statistics object based on the provided `max` value.\nFor numeric statistics, it directly sets the maximum value.\nFor string statistics, it updates the maximum value by comparing the provided string to the current maximum.\nIf the provided string is longer than the maximum string length allowed, the maximum string length is reset.\n\n",
+        "param_comments": {
+          "statistic": "The statistics object to update.",
+          "max": "The new maximum value to set, if the value is null this unsets the statistic.",
+          "is_truncated": "If the value truncated, ignored for non-variable length values (e.g. ints)"
+        }
+      }
+    },
+    {
+      "name": "duckdb_statistic_set_has_nulls",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_base_statistic",
+          "name": "statistic"
+        }
+      ],
+      "comment": {
+        "description": "Sets if the segment can contain NULL values"
+      }
+    },
+    {
+      "name": "duckdb_statistic_set_has_no_nulls",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_base_statistic",
+          "name": "statistic"
+        }
+      ],
+      "comment": {
+        "description": "Set if the segment can contain values that are not null.\n"
+      }
+    }
+  ]
+}

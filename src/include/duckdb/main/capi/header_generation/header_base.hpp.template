@@ -527,6 +527,10 @@ typedef struct _duckdb_profiling_info {
 	void *internal_ptr;
 } * duckdb_profiling_info;
 
+typedef struct _duckdb_base_statistic {
+	void *internal_ptr;
+} * duckdb_base_statistic;
+
 //===--------------------------------------------------------------------===//
 // C API Extension info
 //===--------------------------------------------------------------------===//
