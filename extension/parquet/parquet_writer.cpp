@@ -540,6 +540,7 @@ struct ColumnStatsUnifier {
 	bool all_nulls_set = true;
 	bool min_is_set = false;
 	bool max_is_set = false;
+	idx_t column_size_bytes = 0;
 
 	virtual void UnifyMinMax(const string &new_min, const string &new_max) = 0;
 	virtual string StatsToString(const string &stats) = 0;
@@ -758,6 +759,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 				} else {
 					stats_unifier->all_nulls_set = false;
 				}
+				stats_unifier->column_size_bytes += column.meta_data.total_compressed_size;
 			}
 		}
 	}
@@ -765,6 +767,7 @@ void ParquetWriter::GatherWrittenStatistics() {
 	for (idx_t c = 0; c < stats_unifiers.size(); c++) {
 		auto &stats_unifier = stats_unifiers[c];
 		case_insensitive_map_t<Value> column_stats;
+		column_stats["column_size_bytes"] = Value::UBIGINT(stats_unifier->column_size_bytes);
 		if (stats_unifier->all_min_max_set) {
 			auto min_value = stats_unifier->StatsToString(stats_unifier->global_min);
 			auto max_value = stats_unifier->StatsToString(stats_unifier->global_max);
