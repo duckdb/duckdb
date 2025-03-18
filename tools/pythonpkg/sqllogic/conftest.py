@@ -21,7 +21,13 @@ def pytest_addoption(parser: pytest.Parser):
         dest="test_dirs",
         help="Path to one or more directories containing SQLLogic test scripts",
     )
-    parser.addoption("--build-dir", type=str, dest="build_dir", help="Path to the build directory, used for loading extensions", default=None)
+    parser.addoption(
+        "--build-dir",
+        type=str,
+        dest="build_dir",
+        help="Path to the build directory, used for loading extensions",
+        default=None,
+    )
     parser.addoption("--start-offset", type=int, dest="start_offset", help="Index of the first test to run")
     parser.addoption("--end-offset", type=int, dest="end_offset", help="Index of the last test to run")
     parser.addoption(

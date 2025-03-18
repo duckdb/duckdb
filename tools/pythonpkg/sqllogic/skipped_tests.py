@@ -1,15 +1,6 @@
 SKIPPED_TESTS = set(
     [
-        'test/fuzzer/public/pivot_empty_enum.test',
-        'test/fuzzer/duckfuzz/repeat_wrong_number.test',
-        'test/fuzzer/duckfuzz/array_distance.test',
-        'test/issues/general/test_14286.test', 
-        'test/sql/show_select/describe_subquery.test',
         'test/sql/types/map/map_empty.test',
-        'test/sql/pragma/test_show_tables.test',
-        'test/sql/storage/compression/alp/alp_list_skip.test',
-        'test/sql/transactions/test_create_drop_conflict_variation1.test',
-        'test/sql/json/table/multi_file_hang.test',
         'test/extension/wrong_function_type.test',  # <-- JSON is always loaded
         'test/sql/insert/test_insert_invalid.test',  # <-- doesn't parse properly
         'test/sql/cast/cast_error_location.test',  # <-- python exception doesn't contain error location yet
