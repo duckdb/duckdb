@@ -1080,7 +1080,7 @@ AdbcStatusCode AdbcConnectionGetTableTypes(struct AdbcConnection *connection, st
 
 AdbcStatusCode AdbcConnectionInit(struct AdbcConnection *connection, struct AdbcDatabase *database,
                                   struct AdbcError *error) {
-	if (!connection->private_data) {
+	if (!connection || !connection->private_data) {
 		SetError(error, "Must call AdbcConnectionNew first");
 		return ADBC_STATUS_INVALID_STATE;
 	} else if (!database->private_driver) {
@@ -1099,6 +1099,10 @@ AdbcStatusCode AdbcConnectionInit(struct AdbcConnection *connection, struct Adbc
 	if (status != ADBC_STATUS_OK)
 		return status;
 	connection->private_driver = database->private_driver;
+
+	status = connection->private_driver->ConnectionInit(connection, database, error);
+	if (status != ADBC_STATUS_OK)
+		return status;
 
 	for (const auto &option : options) {
 		status = database->private_driver->ConnectionSetOption(connection, option.first.c_str(), option.second.c_str(),
@@ -1126,7 +1130,7 @@ AdbcStatusCode AdbcConnectionInit(struct AdbcConnection *connection, struct Adbc
 			return status;
 	}
 	INIT_ERROR(error, connection);
-	return connection->private_driver->ConnectionInit(connection, database, error);
+	return status;
 }
 
 AdbcStatusCode AdbcConnectionNew(struct AdbcConnection *connection, struct AdbcError *error) {
@@ -1176,7 +1180,7 @@ AdbcStatusCode AdbcConnectionRollback(struct AdbcConnection *connection, struct 
 
 AdbcStatusCode AdbcConnectionSetOption(struct AdbcConnection *connection, const char *key, const char *value,
                                        struct AdbcError *error) {
-	if (!connection->private_data) {
+	if (!connection || !connection->private_data) {
 		SetError(error, "AdbcConnectionSetOption: must AdbcConnectionNew first");
 		return ADBC_STATUS_INVALID_STATE;
 	}

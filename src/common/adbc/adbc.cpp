@@ -271,6 +271,7 @@ AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char
 	}
 
 	auto conn = static_cast<duckdb::Connection *>(connection->private_data);
+
 	if (strcmp(key, ADBC_CONNECTION_OPTION_AUTOCOMMIT) == 0) {
 		if (strcmp(value, ADBC_OPTION_VALUE_ENABLED) == 0) {
 			if (conn->HasActiveTransaction()) {
