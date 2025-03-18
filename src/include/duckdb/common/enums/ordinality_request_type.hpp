@@ -17,12 +17,10 @@ struct ordinality_data_t {
 	ordinality_request_t ordinality_request = ordinality_request_t::NOT_REQUESTED;
 	idx_t column_id;
 
-	void SetOrdinality(DataChunk &chunk) const {
-		const idx_t ordinality = chunk.size();
+	void SetOrdinality(DataChunk &chunk, const idx_t &ordinality_idx, const idx_t &ordinality ) const {
 		if (ordinality > 0) {
-			constexpr idx_t start = 0;
 			constexpr idx_t step = 1;
-			chunk.data[column_id].Sequence(start, step, ordinality);
+			chunk.data[column_id].Sequence(static_cast<int64_t>(ordinality_idx), step, ordinality);
 		}
 	}
 
