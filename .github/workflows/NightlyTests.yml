@@ -306,7 +306,7 @@ jobs:
        env:
          CI: 1
        run: |
-         python3 -m pytest './tools/pythonpkg/tests/sqllogic/' --verbose --test-dir './test'
+         python3 -m pytest './tools/pythonpkg/sqllogic/' --verbose --test-dir './test'
 
   sqllogic:
      name: Sqllogic tests
