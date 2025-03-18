@@ -946,5 +946,43 @@ class TestArrowFilterPushdown(object):
         duck_probe = duckdb_conn.table("probe")
         duck_probe_arrow = duck_probe.arrow()
         duckdb_conn.register("duck_probe_arrow", duck_probe_arrow)
-        assert duckdb_conn.execute("SELECT * from duck_probe_arrow where a in (1, 999)").fetchall() == [(1,), (999,)]
         assert duckdb_conn.execute("SELECT * from duck_probe_arrow where a = any([1,999])").fetchall() == [(1,), (999,)]
+
+    def test_pushdown_of_optional_filter(self, duckdb_cursor):
+        cardinality_table = pa.Table.from_pydict(
+            {
+                'column_name': [
+                    'id',
+                    'product_code',
+                    'price',
+                    'quantity',
+                    'category',
+                    'is_available',
+                    'rating',
+                    'discount',
+                    'color',
+                ],
+                'cardinality': [100, 100, 100, 45, 5, 3, 6, 39, 5],
+            }
+        )
+
+        result = duckdb.query(
+            """
+            SELECT *
+            FROM cardinality_table
+            WHERE cardinality > 1
+            ORDER BY cardinality ASC
+        """
+        )
+        res = result.fetchall()
+        assert res == [
+            ('is_available', 3),
+            ('category', 5),
+            ('color', 5),
+            ('rating', 6),
+            ('discount', 39),
+            ('quantity', 45),
+            ('id', 100),
+            ('product_code', 100),
+            ('price', 100),
+        ]

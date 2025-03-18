@@ -1,0 +1,55 @@
+diff --git a/src/include/storage/delta_catalog.hpp b/src/include/storage/delta_catalog.hpp
+index 3f5f979..d0899d9 100644
+--- a/src/include/storage/delta_catalog.hpp
++++ b/src/include/storage/delta_catalog.hpp
+@@ -49,14 +49,11 @@ public:
+ 	                                           OnEntryNotFound if_not_found,
+ 	                                           QueryErrorContext error_context = QueryErrorContext()) override;
+ 
+-	unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
+-	                                        unique_ptr<PhysicalOperator> plan) override;
+-	unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
+-	                                               unique_ptr<PhysicalOperator> plan) override;
+-	unique_ptr<PhysicalOperator> PlanDelete(ClientContext &context, LogicalDelete &op,
+-	                                        unique_ptr<PhysicalOperator> plan) override;
+-	unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
+-	                                        unique_ptr<PhysicalOperator> plan) override;
++    PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner, LogicalCreateTable &op, PhysicalOperator &plan) override;
++    PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op, optional_ptr<PhysicalOperator> plan) override;
++    PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op, PhysicalOperator &plan) override;
++    PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op, PhysicalOperator &plan) override;
++
+ 	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
+ 	                                            unique_ptr<LogicalOperator> plan) override;
+ 
+diff --git a/src/storage/delta_catalog.cpp b/src/storage/delta_catalog.cpp
+index 5335974..2d53285 100644
+--- a/src/storage/delta_catalog.cpp
++++ b/src/storage/delta_catalog.cpp
+@@ -90,20 +90,16 @@ DatabaseSize DeltaCatalog::GetDatabaseSize(ClientContext &context) {
+ 	return size;
+ }
+ 
+-unique_ptr<PhysicalOperator> DeltaCatalog::PlanInsert(ClientContext &context, LogicalInsert &op,
+-                                                      unique_ptr<PhysicalOperator> plan) {
+-	throw NotImplementedException("DeltaCatalog does not support inserts");
++PhysicalOperator &DeltaCatalog::PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner, LogicalCreateTable &op, PhysicalOperator &plan) {
++  throw NotImplementedException("DeltaCatalog does not support creating new tables");
+ }
+-unique_ptr<PhysicalOperator> DeltaCatalog::PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
+-                                                             unique_ptr<PhysicalOperator> plan) {
+-	throw NotImplementedException("DeltaCatalog does not support creating new tables");
++PhysicalOperator &DeltaCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op, optional_ptr<PhysicalOperator> plan) {
++	throw NotImplementedException("DeltaCatalog does not support inserts");
+ }
+-unique_ptr<PhysicalOperator> DeltaCatalog::PlanDelete(ClientContext &context, LogicalDelete &op,
+-                                                      unique_ptr<PhysicalOperator> plan) {
++PhysicalOperator &DeltaCatalog::PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op, PhysicalOperator &plan) {
+ 	throw NotImplementedException("DeltaCatalog does not support deletes");
+ }
+-unique_ptr<PhysicalOperator> DeltaCatalog::PlanUpdate(ClientContext &context, LogicalUpdate &op,
+-                                                      unique_ptr<PhysicalOperator> plan) {
++PhysicalOperator &DeltaCatalog::PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op, PhysicalOperator &plan) {
+ 	throw NotImplementedException("DeltaCatalog does not support updates");
+ }
+ unique_ptr<LogicalOperator> DeltaCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,

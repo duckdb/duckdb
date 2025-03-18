@@ -148,7 +148,7 @@ idx_t JSONFileHandle::ReadInternal(char *pointer, const idx_t requested_size) {
 	return total_read_size;
 }
 
-idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, idx_t &position) {
+idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &position) {
 	idx_t read_size = 0;
 	idx_t total_offset = 0;
 

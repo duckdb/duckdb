@@ -71,7 +71,7 @@ public:
 
 private:
 	idx_t ReadInternal(char *pointer, const idx_t requested_size);
-	idx_t ReadFromCache(char *&pointer, idx_t &size, idx_t &position);
+	idx_t ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &position);
 
 private:
 	//! The JSON file handle
@@ -83,7 +83,7 @@ private:
 	const idx_t file_size;
 
 	//! Read properties
-	idx_t read_position;
+	atomic<idx_t> read_position;
 	atomic<idx_t> requested_reads;
 	atomic<idx_t> actual_reads;
 	atomic<bool> last_read_requested;

@@ -20,8 +20,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CTE;
 
 public:
-	PhysicalCTE(string ctename, idx_t table_index, vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
-	            unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality);
+	PhysicalCTE(string ctename, idx_t table_index, vector<LogicalType> types, PhysicalOperator &top,
+	            PhysicalOperator &bottom, idx_t estimated_cardinality);
 	~PhysicalCTE() override;
 
 	vector<const_reference<PhysicalOperator>> cte_scans;

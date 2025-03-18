@@ -1,0 +1,219 @@
+diff --git a/src/include/storage/postgres_catalog.hpp b/src/include/storage/postgres_catalog.hpp
+index 2935c56..b6224d2 100644
+--- a/src/include/storage/postgres_catalog.hpp
++++ b/src/include/storage/postgres_catalog.hpp
+@@ -44,14 +44,11 @@ public:
+ 	                                           OnEntryNotFound if_not_found,
+ 	                                           QueryErrorContext error_context = QueryErrorContext()) override;
+ 
+-	unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
+-	                                        unique_ptr<PhysicalOperator> plan) override;
+-	unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
+-	                                               unique_ptr<PhysicalOperator> plan) override;
+-	unique_ptr<PhysicalOperator> PlanDelete(ClientContext &context, LogicalDelete &op,
+-	                                        unique_ptr<PhysicalOperator> plan) override;
+-	unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
+-	                                        unique_ptr<PhysicalOperator> plan) override;
++    PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner, LogicalCreateTable &op, PhysicalOperator &plan) override;
++    PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op, optional_ptr<PhysicalOperator> plan) override;
++    PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op, PhysicalOperator &plan) override;
++    PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op, PhysicalOperator &plan) override;
++
+ 	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
+ 	                                            unique_ptr<LogicalOperator> plan) override;
+ 
+diff --git a/src/storage/postgres_delete.cpp b/src/storage/postgres_delete.cpp
+index 97c0f8c..88dec2c 100644
+--- a/src/storage/postgres_delete.cpp
++++ b/src/storage/postgres_delete.cpp
+@@ -119,17 +119,16 @@ InsertionOrderPreservingMap<string> PostgresDelete::ParamsToString() const {
+ //===--------------------------------------------------------------------===//
+ // Plan
+ //===--------------------------------------------------------------------===//
+-unique_ptr<PhysicalOperator> PostgresCatalog::PlanDelete(ClientContext &context, LogicalDelete &op,
+-                                                         unique_ptr<PhysicalOperator> plan) {
++PhysicalOperator &PostgresCatalog::PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op, PhysicalOperator &plan) {
+ 	if (op.return_chunk) {
+ 		throw BinderException("RETURNING clause not yet supported for deletion of a Postgres table");
+ 	}
+ 	auto &bound_ref = op.expressions[0]->Cast<BoundReferenceExpression>();
+-	PostgresCatalog::MaterializePostgresScans(*plan);
++	PostgresCatalog::MaterializePostgresScans(plan);
+ 
+-	auto insert = make_uniq<PostgresDelete>(op, op.table, bound_ref.index);
+-	insert->children.push_back(std::move(plan));
+-	return std::move(insert);
++	auto &delete_op = planner.Make<PostgresDelete>(op, op.table, bound_ref.index);
++    delete_op.children.push_back(plan);
++	return delete_op;
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/storage/postgres_index.cpp b/src/storage/postgres_index.cpp
+index bfbab3f..5dd5462 100644
+--- a/src/storage/postgres_index.cpp
++++ b/src/storage/postgres_index.cpp
+@@ -56,8 +56,8 @@ public:
+ 	unique_ptr<CreateIndexInfo> info;
+ 	TableCatalogEntry &table;
+ 
+-	unique_ptr<PhysicalOperator> CreatePlan(ClientContext &context, PhysicalPlanGenerator &generator) override {
+-		return make_uniq<PostgresCreateIndex>(std::move(info), table);
++	PhysicalOperator &CreatePlan(ClientContext &context, PhysicalPlanGenerator &planner) override {
++		return planner.Make<PostgresCreateIndex>(std::move(info), table);
+ 	}
+ 
+ 	void Serialize(Serializer &serializer) const override {
+diff --git a/src/storage/postgres_insert.cpp b/src/storage/postgres_insert.cpp
+index f6d5193..dd616df 100644
+--- a/src/storage/postgres_insert.cpp
++++ b/src/storage/postgres_insert.cpp
+@@ -153,10 +153,10 @@ InsertionOrderPreservingMap<string> PostgresInsert::ParamsToString() const {
+ //===--------------------------------------------------------------------===//
+ // Plan
+ //===--------------------------------------------------------------------===//
+-unique_ptr<PhysicalOperator> AddCastToPostgresTypes(ClientContext &context, unique_ptr<PhysicalOperator> plan) {
++PhysicalOperator &AddCastToPostgresTypes(ClientContext &context, PhysicalPlanGenerator &planner, PhysicalOperator &plan) {
+ 	// check if we need to cast anything
+ 	bool require_cast = false;
+-	auto &child_types = plan->GetTypes();
++	auto &child_types = plan.GetTypes();
+ 	for (auto &type : child_types) {
+ 		auto postgres_type = PostgresUtils::ToPostgresType(type);
+ 		if (postgres_type != type) {
+@@ -164,30 +164,30 @@ unique_ptr<PhysicalOperator> AddCastToPostgresTypes(ClientContext &context, uniq
+ 			break;
+ 		}
+ 	}
+-	if (require_cast) {
+-		vector<LogicalType> postgres_types;
+-		vector<unique_ptr<Expression>> select_list;
+-		for (idx_t i = 0; i < child_types.size(); i++) {
+-			auto &type = child_types[i];
+-			unique_ptr<Expression> expr;
+-			expr = make_uniq<BoundReferenceExpression>(type, i);
+-
+-			auto postgres_type = PostgresUtils::ToPostgresType(type);
+-			if (postgres_type != type) {
+-				// add a cast
+-				expr = BoundCastExpression::AddCastToType(context, std::move(expr), postgres_type);
+-			}
+-			postgres_types.push_back(std::move(postgres_type));
+-			select_list.push_back(std::move(expr));
+-		}
+-		// we need to cast: add casts
+-		auto proj = make_uniq<PhysicalProjection>(std::move(postgres_types), std::move(select_list),
+-		                                          plan->estimated_cardinality);
+-		proj->children.push_back(std::move(plan));
+-		plan = std::move(proj);
+-	}
+-
+-	return plan;
++    if (!require_cast) {
++        return plan;
++    }
++
++    vector<LogicalType> postgres_types;
++    vector<unique_ptr<Expression>> select_list;
++    for (idx_t i = 0; i < child_types.size(); i++) {
++        auto &type = child_types[i];
++        unique_ptr<Expression> expr;
++        expr = make_uniq<BoundReferenceExpression>(type, i);
++
++        auto postgres_type = PostgresUtils::ToPostgresType(type);
++        if (postgres_type != type) {
++            // add a cast
++            expr = BoundCastExpression::AddCastToType(context, std::move(expr), postgres_type);
++        }
++        postgres_types.push_back(std::move(postgres_type));
++        select_list.push_back(std::move(expr));
++    }
++
++    // we need to cast: add casts
++    auto &proj = planner.Make<PhysicalProjection>(std::move(postgres_types), std::move(select_list), plan.estimated_cardinality);
++    proj.children.push_back(plan);
++    return proj;
+ }
+ 
+ bool PostgresCatalog::IsPostgresScan(const string &name) {
+@@ -206,36 +206,34 @@ void PostgresCatalog::MaterializePostgresScans(PhysicalOperator &op) {
+ 		}
+ 	}
+ 	for (auto &child : op.children) {
+-		MaterializePostgresScans(*child);
++		MaterializePostgresScans(child);
+ 	}
+ }
+ 
+-unique_ptr<PhysicalOperator> PostgresCatalog::PlanInsert(ClientContext &context, LogicalInsert &op,
+-                                                         unique_ptr<PhysicalOperator> plan) {
++PhysicalOperator &PostgresCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op, optional_ptr<PhysicalOperator> plan) {
+ 	if (op.return_chunk) {
+ 		throw BinderException("RETURNING clause not yet supported for insertion into Postgres table");
+ 	}
+ 	if (op.action_type != OnConflictAction::THROW) {
+ 		throw BinderException("ON CONFLICT clause not yet supported for insertion into Postgres table");
+ 	}
+-	MaterializePostgresScans(*plan);
+ 
+-	plan = AddCastToPostgresTypes(context, std::move(plan));
++    D_ASSERT(plan);
++	MaterializePostgresScans(*plan);
++	auto &inner_plan = AddCastToPostgresTypes(context, planner, *plan);
+ 
+-	auto insert = make_uniq<PostgresInsert>(op, op.table, op.column_index_map);
+-	insert->children.push_back(std::move(plan));
+-	return std::move(insert);
++	auto &insert = planner.Make<PostgresInsert>(op, op.table, op.column_index_map);
++	insert.children.push_back(inner_plan);
++	return insert;
+ }
+ 
+-unique_ptr<PhysicalOperator> PostgresCatalog::PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
+-                                                                unique_ptr<PhysicalOperator> plan) {
+-	plan = AddCastToPostgresTypes(context, std::move(plan));
+-
+-	MaterializePostgresScans(*plan);
++PhysicalOperator &PostgresCatalog::PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner, LogicalCreateTable &op, PhysicalOperator &plan) {
++	auto &inner_plan = AddCastToPostgresTypes(context, planner, plan);
++	MaterializePostgresScans(inner_plan);
+ 
+-	auto insert = make_uniq<PostgresInsert>(op, op.schema, std::move(op.info));
+-	insert->children.push_back(std::move(plan));
+-	return std::move(insert);
++	auto &insert = planner.Make<PostgresInsert>(op, op.schema, std::move(op.info));
++	insert.children.push_back(inner_plan);
++	return insert;
+ }
+ 
+ } // namespace duckdb
+diff --git a/src/storage/postgres_update.cpp b/src/storage/postgres_update.cpp
+index 4f0aefa..8fa4d69 100644
+--- a/src/storage/postgres_update.cpp
++++ b/src/storage/postgres_update.cpp
+@@ -180,8 +180,7 @@ InsertionOrderPreservingMap<string> PostgresUpdate::ParamsToString() const {
+ //===--------------------------------------------------------------------===//
+ // Plan
+ //===--------------------------------------------------------------------===//
+-unique_ptr<PhysicalOperator> PostgresCatalog::PlanUpdate(ClientContext &context, LogicalUpdate &op,
+-                                                         unique_ptr<PhysicalOperator> plan) {
++PhysicalOperator &PostgresCatalog::PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op, PhysicalOperator &plan) {
+ 	if (op.return_chunk) {
+ 		throw BinderException("RETURNING clause not yet supported for updates of a Postgres table");
+ 	}
+@@ -190,10 +189,11 @@ unique_ptr<PhysicalOperator> PostgresCatalog::PlanUpdate(ClientContext &context,
+ 			throw BinderException("SET DEFAULT is not yet supported for updates of a Postgres table");
+ 		}
+ 	}
+-	PostgresCatalog::MaterializePostgresScans(*plan);
+-	auto insert = make_uniq<PostgresUpdate>(op, op.table, std::move(op.columns));
+-	insert->children.push_back(std::move(plan));
+-	return std::move(insert);
++
++	PostgresCatalog::MaterializePostgresScans(plan);
++	auto &update = planner.Make<PostgresUpdate>(op, op.table, std::move(op.columns));
++    update.children.push_back(plan);
++	return update;
+ }
+ 
+ } // namespace duckdb
