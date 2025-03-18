@@ -11,6 +11,7 @@ namespace duckdb {
 static bool test_force_storage = false;
 static bool test_force_reload = false;
 static bool test_memory_leaks = false;
+static bool summarize_failures = false;
 
 bool TestForceStorage() {
 	return test_force_storage;
@@ -22,6 +23,10 @@ bool TestForceReload() {
 
 bool TestMemoryLeaks() {
 	return test_memory_leaks;
+}
+
+bool SummarizeFailures() {
+	return summarize_failures;
 }
 
 } // namespace duckdb
@@ -77,8 +82,13 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
+	if (std::FILE* file = std::fopen(filename, "r")) {
+		std::fclose(file);
+		std::remove(filename);
+	}
+	
 	RegisterSqllogictests();
-
+	
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
 	if (DeleteTestPath()) {

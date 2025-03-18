@@ -40,6 +40,9 @@ public:
 	bool SkipErrorMessage(const string &message);
 
 	vector<string> LoadResultFromFile(string fname, vector<string> names, idx_t &expected_column_count, string &error);
+
+	void AddFailureToSummary(string file_name, int query_line);
+
 };
 
 } // namespace duckdb
