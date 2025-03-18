@@ -51,7 +51,7 @@ void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows) {
 	std::fill_n(blocks_, num_blocks_, 0);
 }
 
-size_t BloomFilter::Lookup(DataChunk &chunk, vector<uint32_t> &results) {
+int BloomFilter::Lookup(DataChunk &chunk, vector<uint32_t> &results) {
 	int count = static_cast<int>(chunk.size());
 	Vector hashes = HashColumns(chunk, BoundColsApplied);
 	BloomFilterLookup(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks_, results.data());

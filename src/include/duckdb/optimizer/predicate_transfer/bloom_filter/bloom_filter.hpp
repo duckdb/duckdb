@@ -45,7 +45,7 @@ public:
 	bool finalized_;
 
 public:
-	size_t Lookup(DataChunk &chunk, vector<uint32_t> &results);
+	int Lookup(DataChunk &chunk, vector<uint32_t> &results);
 	void Insert(DataChunk &chunk);
 
 	uint32_t num_blocks_;
