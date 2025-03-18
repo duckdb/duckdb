@@ -196,6 +196,10 @@ public:
 		return Mod(val, Div(val));
 	}
 
+	const TYPE &GetDivisor() const {
+		return divisor;
+	}
+
 private:
 	const TYPE divisor;
 	const TYPE multiplier;
