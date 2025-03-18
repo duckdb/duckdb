@@ -147,6 +147,7 @@ FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, Express
                                             T max_value, T constant) {
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		if (ConstantExactRange(min_value, max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}
@@ -155,6 +156,7 @@ FilterPropagateResult CheckZonemapTemplated(const BaseStatistics &stats, Express
 		}
 		return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
 		if (!ConstantValueInRange(min_value, max_value, constant)) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		} else if (ConstantExactRange(min_value, max_value, constant)) {
