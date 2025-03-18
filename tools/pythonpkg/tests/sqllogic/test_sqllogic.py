@@ -1,9 +1,10 @@
-import sys
+import gc
 import os
 import pathlib
 import pytest
+import shutil
+import sys
 from typing import Any, Generator, Optional
-import gc
 
 ##### Copied from sqllogictest_python.py #####
 
@@ -23,13 +24,12 @@ from sqllogictest.result import (
     ExecuteResult,
 )
 
-TEST_DIRECTORY_PATH = os.path.join(script_path, 'duckdb_unittest_tempdir')
-
 
 # This is pretty much just a VM
 class SQLLogicTestExecutor(SQLLogicRunner):
-    def __init__(self, build_directory: Optional[str] = None):
+    def __init__(self, test_directory: str, build_directory: Optional[str] = None):
         super().__init__(build_directory)
+        self.test_directory = test_directory
         # TODO: get this from the `duckdb` package
         self.AUTOLOADABLE_EXTENSIONS = [
             "arrow",
@@ -53,10 +53,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         ]
 
     def get_test_directory(self) -> str:
-        test_directory = TEST_DIRECTORY_PATH
-        if not os.path.exists(test_directory):
-            os.makedirs(test_directory)
-        return test_directory
+        return self.test_directory
 
     def delete_database(self, path):
         def test_delete_file(path):
@@ -112,7 +109,7 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         return res
 
 
-def test_sqllogic(test_script_path: pathlib.Path):
+def test_sqllogic(test_script_path: pathlib.Path, pytestconfig: pytest.Config, tmp_path: pathlib.Path):
     gc.collect()
     sql_parser = SQLLogicParser()
     try:
@@ -121,7 +118,8 @@ def test_sqllogic(test_script_path: pathlib.Path):
         pytest.skip("Failed to parse SQLLogic script: " + str(e.message))
         return
 
-    executor = SQLLogicTestExecutor()
+    build_dir = pytestconfig.getoption("build_dir")
+    executor = SQLLogicTestExecutor(str(tmp_path), build_dir)
     result = executor.execute_test(test)
     assert result.type == ExecuteResult.Type.SUCCESS
 
