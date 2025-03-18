@@ -83,7 +83,6 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 			// finished processing this chunk
 			state.new_row = true;
 			state.row_index = 0;
-			gstate.current_ordinality_idx = 1;
 			return OperatorResultType::NEED_MORE_INPUT;
 		}
 		// we are processing a new row: fetch the data for the current row
@@ -95,6 +94,7 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 		state.input_chunk.SetCardinality(1);
 		state.row_index++;
 		state.new_row = false;
+		gstate.current_ordinality_idx = 1;
 	}
 	// set up the output data in "chunk"
 	D_ASSERT(chunk.ColumnCount() > projected_input.size());
