@@ -82,8 +82,8 @@ public:
 	}
 
 protected:
-	PhysicalOperator CreatePlan(LogicalCreateBF &op);
-	PhysicalOperator CreatePlan(LogicalUseBF &op);
+	PhysicalOperator &CreatePlan(LogicalCreateBF &op);
+	PhysicalOperator &CreatePlan(LogicalUseBF &op);
 	PhysicalOperator &CreatePlan(LogicalAggregate &op);
 	PhysicalOperator &CreatePlan(LogicalAnyJoin &op);
 	PhysicalOperator &CreatePlan(LogicalColumnDataGet &op);
@@ -133,6 +133,8 @@ protected:
 	PhysicalOperator &PlanDelimJoin(LogicalComparisonJoin &op);
 	PhysicalOperator &ExtractAggregateExpressions(PhysicalOperator &child, vector<unique_ptr<Expression>> &expressions,
 	                                              vector<unique_ptr<Expression>> &groups);
+
+	PhysicalCreateBF *CreatePlanFromRelated(LogicalCreateBF &op);
 
 private:
 	ClientContext &context;

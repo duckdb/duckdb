@@ -115,7 +115,7 @@ void PhysicalRightDelimJoin::BuildPipelines(Pipeline &current, MetaPipeline &met
 		    make_pair(delim_scan, reference<Pipeline>(*child_meta_pipeline.GetBasePipeline())));
 	}
 
-	child_meta_pipeline.Build(*children[0]);
+	child_meta_pipeline.Build(children[0]);
 
 	// Build join pipelines without building the RHS (already built in the Sink of this op)
 	PhysicalJoin::BuildJoinPipelines(current, meta_pipeline, join, false);

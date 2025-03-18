@@ -260,7 +260,7 @@ void PhysicalCreateBF::BuildPipelinesFromRelated(Pipeline &current, MetaPipeline
 		// we create a new pipeline starting from the child
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 		this_pipeline = child_meta_pipeline.GetBasePipeline();
-		child_meta_pipeline.Build(*children[0]);
+		child_meta_pipeline.Build(children[0]);
 	} else {
 		current.AddDependency(this_pipeline);
 	}
@@ -280,7 +280,7 @@ void PhysicalCreateBF::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 		// we create a new pipeline starting from the child
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 		this_pipeline = child_meta_pipeline.GetBasePipeline();
-		child_meta_pipeline.Build(*children[0]);
+		child_meta_pipeline.Build(children[0]);
 	} else {
 		current.AddDependency(this_pipeline);
 	}

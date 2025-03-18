@@ -42,7 +42,7 @@ void PhysicalUseBF::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	auto &state = meta_pipeline.GetState();
 	state.AddPipelineOperator(current, *this);
 	related_creator->BuildPipelinesFromRelated(current, meta_pipeline);
-	children[0]->BuildPipelines(current, meta_pipeline);
+	children[0].get().BuildPipelines(current, meta_pipeline);
 }
 
 OperatorResultType PhysicalUseBF::ExecuteInternal(ExecutionContext &context, DataChunk &input, DataChunk &chunk,

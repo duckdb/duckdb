@@ -4,8 +4,8 @@
 #include "duckdb/execution/physical_plan_generator.hpp"
 
 namespace duckdb {
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUseBF &op) {
-	auto plan = CreatePlan(*op.children[0]); // Generate child plan
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalUseBF &op) {
+	auto &plan = CreatePlan(*op.children[0]); // Generate child plan
 	auto create_bf_op = CreatePlanFromRelated(*op.related_create_bf);
 	auto &bf_plan = op.bf_to_use_plan;
 
@@ -19,9 +19,9 @@ unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalUseBF &op)
 	}
 	D_ASSERT(target_bf != nullptr);
 
-	auto use_bf = make_uniq<PhysicalUseBF>(plan->types, target_bf, create_bf_op, op.estimated_cardinality);
-	use_bf->children.emplace_back(std::move(plan));
-	return std::move(use_bf);
+	auto &use_bf = Make<PhysicalUseBF>(plan.types, target_bf, create_bf_op, op.estimated_cardinality);
+	use_bf.children.emplace_back(plan);
+	return use_bf;
 }
 
 } // namespace duckdb
