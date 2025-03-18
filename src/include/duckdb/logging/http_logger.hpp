@@ -9,8 +9,6 @@
 #pragma once
 
 #include "duckdb/common/fstream.hpp"
-#include "duckdb/common/mutex.hpp"
-#include "duckdb/common/printer.hpp"
 #include "duckdb/main/client_context.hpp"
 
 #include <functional>
@@ -26,6 +24,9 @@ namespace duckdb {
 //! We get around that by templating everything, which requires implementing everything in the header
 class HTTPLogger {
 public:
+	static constexpr const char *HTTP_LOGGER_LOG_TYPE = "duckdb.Httplib";
+	static constexpr LogLevel HTTP_LOGGER_LOG_LEVEL = LogLevel::LOG_DEBUG;
+
 	explicit HTTPLogger(ClientContext &context_p) : context(context_p) {
 	}
 
@@ -35,6 +36,16 @@ public:
 		return [&](const REQUEST &req, const RESPONSE &res) {
 			Log(req, res);
 		};
+	}
+
+	// to be used to determine whether the httplib logger should be injected in the httplib clients
+	bool ShouldLog() {
+		// note: legacy option that should probably just always be enabled now that we have a proper logger:
+		//       ShouldLog will determine correctly what to do here
+		if (!context.config.enable_http_logging) {
+			return false;
+		}
+		return Logger::Get(context).ShouldLog(HTTP_LOGGER_LOG_TYPE, HTTP_LOGGER_LOG_LEVEL);
 	}
 
 private:
@@ -55,29 +66,29 @@ private:
 
 	template <class REQUEST, class RESPONSE>
 	void Log(const REQUEST &req, const RESPONSE &res) {
-		const auto &config = ClientConfig::GetConfig(context);
-		D_ASSERT(config.enable_http_logging);
-
-		lock_guard<mutex> guard(lock);
-		if (config.http_logging_output.empty()) {
-			stringstream out;
-			TemplatedWriteRequests(out, req, res);
-			Printer::Print(out.str());
-		} else {
-			ofstream out(config.http_logging_output, ios::app);
+		// This is a deprecated path, but we might as well support it
+		if (!context.config.http_logging_output.empty()) {
+			ofstream out(context.config.http_logging_output, ios::app);
 			TemplatedWriteRequests(out, req, res);
 			out.close();
 			// Throw an IO exception if it fails to write to the file
 			if (out.fail()) {
-				throw IOException("Failed to write HTTP log to file \"%s\": %s", config.http_logging_output,
-				                  strerror(errno));
+				throw IOException("Failed to write HTTP log to file \"%s\": %s", context.config.http_logging_output,
+								  strerror(errno));
 			}
+		}
+
+		auto &logger = Logger::Get(context);
+		if (logger.ShouldLog(HTTP_LOGGER_LOG_TYPE, HTTP_LOGGER_LOG_LEVEL)) {
+			stringstream out;
+			TemplatedWriteRequests(out, req, res);
+			logger.WriteLog(HTTP_LOGGER_LOG_TYPE, HTTP_LOGGER_LOG_LEVEL, out.str());
 		}
 	}
 
 private:
+	// FIXME: lifetime issues?
 	ClientContext &context;
-	mutex lock;
 };
 
 } // namespace duckdb

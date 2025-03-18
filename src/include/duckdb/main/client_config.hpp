@@ -148,9 +148,9 @@ struct ClientConfig {
 	get_result_collector_t result_collector = nullptr;
 
 	//! If HTTP logging is enabled or not.
-	bool enable_http_logging = false;
-	//! The file to save query HTTP logging information to, instead of printing it to the console
-	//! (empty = print to console)
+	bool enable_http_logging = true;
+	//! **DEPRECATED** The file to save query HTTP logging information to, instead of printing it to the console
+	//! (empty = output to the DuckDB logger)
 	string http_logging_output;
 
 public:
