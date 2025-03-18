@@ -279,7 +279,7 @@ unique_ptr<LogicalOperator> LogicalGet::Deserialize(Deserializer &deserializer) 
 			bind_return_types.emplace_back(LogicalType::BIGINT);
 			bind_names.emplace_back("ordinality");
 			function.ordinality_data.ordinality_request = ordinality_request_t::REQUESTED;
-			function.ordinality_data.column_id = bind_return_types.size()-1;
+			function.ordinality_data.column_id = bind_return_types.size() - 1;
 		}
 
 		for (auto &col_id : result->column_ids) {
