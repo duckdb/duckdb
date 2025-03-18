@@ -31,6 +31,7 @@ bool TestForceStorage();
 bool TestForceReload();
 bool TestMemoryLeaks();
 void RegisterSqllogictests();
+bool SummarizeFailures();
 
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);

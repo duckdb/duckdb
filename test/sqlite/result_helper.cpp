@@ -2,6 +2,7 @@
 
 #include "catch.hpp"
 #include "duckdb/common/crypto/md5.hpp"
+#include "duckdb/common/fstream.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "re2/re2.h"
 #include "sqllogic_test_logger.hpp"
@@ -537,6 +538,16 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_st
 		return true;
 	}
 	return false;
+}
+
+void TestResultHelper::AddFailureToSummary(string file_name, int query_line) {
+	std::ofstream file("failures_summary.txt", std::ios::app);
+	if (file.is_open()) {
+		file << file_name << ": " << query_line << "\n";
+		file.close();
+	} else {
+		std::cout << "Error opening failures_summary.txt file." << std::endl;
+	}
 }
 
 } // namespace duckdb
