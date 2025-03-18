@@ -80,7 +80,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
     duckdb_extension_load(iceberg
 #            ${LOAD_ICEBERG_TESTS} TODO: re-enable once autoloading test is fixed
             GIT_URL https://github.com/duckdb/duckdb-iceberg
-            GIT_TAG 6f02e6237199c2935c77aede9a23ba4bdc96ab5f
+            GIT_TAG 3ed7b37f8ba600930357792054a8d113cf9a361c
             )
 endif()
 
