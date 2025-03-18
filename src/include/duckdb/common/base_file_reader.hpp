@@ -267,7 +267,7 @@ public:
 	void push_back(MultiFileGlobalIndex global_index) { // NOLINT: matching name of std
 		column_mapping.push_back(global_index);
 	}
-	const MultiFileGlobalIndex &operator[](MultiFileLocalIndex local_index) {
+	const MultiFileGlobalIndex &operator[](MultiFileLocalIndex local_index) const {
 		return column_mapping[local_index.index];
 	}
 	idx_t size() const { // NOLINT: matching name of std
