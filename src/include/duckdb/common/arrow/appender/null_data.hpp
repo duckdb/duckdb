@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/arrow/appender/null_data.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/arrow/appender/append_data.hpp"
