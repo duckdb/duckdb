@@ -493,7 +493,7 @@ void CSVSniffer::DetectTypes() {
 	}
 	if (!best_candidate) {
 		DialectCandidates dialect_candidates(options.dialect_options.state_machine_options);
-		auto error = CSVError::SniffingError(options, dialect_candidates.Print());
+		auto error = CSVError::SniffingError(options, dialect_candidates.Print(), max_columns_found, set_columns);
 		error_handler->Error(error, true);
 	}
 	// Assert that it's all good at this point.

@@ -1035,17 +1035,18 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	auto &names = csv_file_scan->GetNames();
 	auto &reader_data = csv_file_scan->reader_data;
 	// Now Do the cast-aroo
-	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
-		idx_t col_idx = c;
-		idx_t result_idx = reader_data.column_mapping[c];
+	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+		auto col_idx = MultiFileLocalIndex(i);
+		auto global_idx = reader_data.column_mapping[col_idx];
 		if (!csv_file_scan->projection_ids.empty()) {
-			result_idx = reader_data.column_mapping[csv_file_scan->projection_ids[c].second];
+			auto local_idx = MultiFileLocalIndex(csv_file_scan->projection_ids[col_idx].second);
+			global_idx = reader_data.column_mapping[local_idx];
 		}
 		if (col_idx >= parse_chunk.ColumnCount()) {
 			throw InvalidInputException("Mismatch between the schema of different files");
 		}
 		auto &parse_vector = parse_chunk.data[col_idx];
-		auto &result_vector = insert_chunk.data[result_idx];
+		auto &result_vector = insert_chunk.data[global_idx];
 		auto &type = result_vector.GetType();
 		auto &parse_type = parse_vector.GetType();
 		if (!type.IsJSONType() &&
@@ -1343,8 +1344,39 @@ void StringValueScanner::ProcessOverBufferValue() {
 	}
 	if (over_buffer_string.empty() &&
 	    state_machine->dialect_options.state_machine_options.new_line == NewLineIdentifier::CARRY_ON) {
-		if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
-			iterator.pos.buffer_pos++;
+		if (!iterator.IsBoundarySet()) {
+			if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n') {
+				iterator.pos.buffer_pos++;
+			}
+		} else {
+			while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+			       (buffer_handle_ptr[iterator.pos.buffer_pos] == '\n' ||
+			        buffer_handle_ptr[iterator.pos.buffer_pos] == '\r')) {
+				if (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r') {
+					if (result.last_position.buffer_pos <= previous_buffer_handle->actual_size) {
+						// we add the value
+						result.AddValue(result, previous_buffer_handle->actual_size);
+						if (result.IsCommentSet(result)) {
+							result.UnsetComment(result, iterator.pos.buffer_pos);
+						} else {
+							result.AddRow(result, previous_buffer_handle->actual_size);
+						}
+						state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+						while (iterator.pos.buffer_pos < cur_buffer_handle->actual_size &&
+						       (buffer_handle_ptr[iterator.pos.buffer_pos] == '\r' ||
+						        buffer_handle_ptr[iterator.pos.buffer_pos] == '\n')) {
+							state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos++]);
+						}
+						return;
+					}
+				} else {
+					if (iterator.pos.buffer_pos + 1 == cur_buffer_handle->actual_size) {
+						return;
+					}
+				}
+				state_machine->Transition(states, buffer_handle_ptr[iterator.pos.buffer_pos]);
+				iterator.pos.buffer_pos++;
+			}
 		}
 	}
 	// second buffer
@@ -1819,18 +1851,18 @@ void StringValueScanner::FinalizeChunkProcess() {
 			if (cur_buffer_handle->is_last_buffer && iterator.pos.buffer_pos >= cur_buffer_handle->actual_size) {
 				MoveToNextBuffer();
 			}
-		} else {
-			if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
-				found_error = true;
-				type = UNTERMINATED_QUOTES;
-			} else if (result.current_errors.HasErrorType(INVALID_STATE)) {
-				found_error = true;
-				type = INVALID_STATE;
-			}
-			if (result.current_errors.HandleErrors(result)) {
-				result.number_of_rows++;
-			}
 		}
+		if (result.current_errors.HasErrorType(UNTERMINATED_QUOTES)) {
+			found_error = true;
+			type = UNTERMINATED_QUOTES;
+		} else if (result.current_errors.HasErrorType(INVALID_STATE)) {
+			found_error = true;
+			type = INVALID_STATE;
+		}
+		if (result.current_errors.HandleErrors(result)) {
+			result.number_of_rows++;
+		}
+
 		if (states.IsQuotedCurrent() && !found_error &&
 		    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated

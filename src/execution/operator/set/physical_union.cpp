@@ -6,12 +6,12 @@
 
 namespace duckdb {
 
-PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
-                             unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality, bool allow_out_of_order)
+PhysicalUnion::PhysicalUnion(vector<LogicalType> types, PhysicalOperator &top, PhysicalOperator &bottom,
+                             idx_t estimated_cardinality, bool allow_out_of_order)
     : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality),
       allow_out_of_order(allow_out_of_order) {
-	children.push_back(std::move(top));
-	children.push_back(std::move(bottom));
+	children.push_back(top);
+	children.push_back(bottom);
 }
 
 //===--------------------------------------------------------------------===//
@@ -48,11 +48,11 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	auto &union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
 
 	// continue with the current pipeline
-	children[0]->BuildPipelines(current, meta_pipeline);
+	children[0].get().BuildPipelines(current, meta_pipeline);
 
 	vector<shared_ptr<Pipeline>> dependencies;
 	optional_ptr<MetaPipeline> last_child_ptr;
-	const auto can_saturate_threads = children[0]->CanSaturateThreads(current.GetClientContext());
+	const auto can_saturate_threads = children[0].get().CanSaturateThreads(current.GetClientContext());
 	if (order_matters || can_saturate_threads) {
 		// we add dependencies if order matters: union_pipeline comes after all pipelines created by building current
 		dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
@@ -65,7 +65,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	}
 
 	// build the union pipeline
-	children[1]->BuildPipelines(union_pipeline, meta_pipeline);
+	children[1].get().BuildPipelines(union_pipeline, meta_pipeline);
 
 	if (last_child_ptr) {
 		// the pointer was set, set up the dependencies
@@ -80,7 +80,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 vector<const_reference<PhysicalOperator>> PhysicalUnion::GetSources() const {
 	vector<const_reference<PhysicalOperator>> result;
 	for (auto &child : children) {
-		auto child_sources = child->GetSources();
+		auto child_sources = child.get().GetSources();
 		result.insert(result.end(), child_sources.begin(), child_sources.end());
 	}
 	return result;
