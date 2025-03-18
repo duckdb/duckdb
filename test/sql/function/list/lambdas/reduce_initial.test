@@ -18,7 +18,7 @@ SELECT list_reduce([1, 2, 3], (x, y) -> x * y, -1);
 query I
 SELECT list_reduce([100, 10, 1], (x, y, i) -> x - y - i, 1000);
 ----
-886
+883
 
 query I
 SELECT list_reduce([1, 2, 3], (x, y) -> y - x, -1);
@@ -33,7 +33,7 @@ SELECT list_reduce([1, 2, 3], (x, y) -> x - y, 10);
 query I
 SELECT list_reduce([1, 2, 3], (x, y, i) -> x + y + i, -1);
 ----
-8
+11
 
 query I
 SELECT list_reduce([1, 2, 3], (x, y) -> x + y, NULL);
@@ -122,11 +122,11 @@ NULL
 query I
 SELECT list_reduce(l, (x, y, i) -> x + y + i, initial) FROM t1;
 ----
-109
-1666
+112
+1667
 NULL
 NULL
-103
+105
 NULL
 
 statement ok
@@ -240,7 +240,7 @@ Cannot perform list_reduce on an empty input list
 query I
 SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([4, 5, 6], (a, b, a_i) -> x + y + a + b + x_i + a_i, 100), 1000);
 ----
-28603
+28681
 
 statement error
 SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([], (a, b, a_i) -> x + y + a + b + x_i + a_i), 1000);
@@ -293,7 +293,7 @@ NULL
 query I
 SELECT list_reduce(n, (x, y, x_i) -> list_reduce(l, (a, b, a_i) -> x + y + a + b + x_i + a_i), initial) FROM nested;
 ----
-956
+984
 NULL
 NULL
 NULL
@@ -371,7 +371,7 @@ SELECT list_reduce([1, 2, 3], (x, y) -> list_reduce([4, 5, 6], (a, b) -> list_re
 query I
 SELECT list_reduce([1, 2, 3], (x, y, x_i) -> list_reduce([4, 5, 6], (a, b, a_i) -> list_reduce([7, 8, 9], (c, d, c_i) -> x + y + a + b + c + d + x_i + a_i + c_i, 1000), 100), 10);
 ----
-26003224
+26185861
 
 # three level nested in a table with ints
 
