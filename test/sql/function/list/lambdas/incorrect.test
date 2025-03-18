@@ -84,12 +84,12 @@ foreach func_name list_transform list_filter
 statement error
 SELECT ${func_name}([1], x -> x, 3);
 ----
-<REGEX>:Binder Error.*failed to bind function, either.*Invalid number of function arguments!.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 statement error
 SELECT ${func_name}([True], x -> x, x -> x);
 ----
-<REGEX>:Binder Error.*failed to bind function, either.*Invalid number of function arguments!.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 endloop
 
@@ -101,8 +101,7 @@ SELECT list_reduce([1], x -> x, 3);
 statement error
 SELECT list_reduce([True], x -> x, x -> x);
 ----
-Binder Error: failed to bind function, either: Referenced column "x" not found in FROM clause!
- or: Referenced column "x" not found in FROM clause!
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 # list_transform specific tests
 
