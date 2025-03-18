@@ -241,10 +241,10 @@ void TupleDataCollection::AppendUnified(TupleDataPinState &pin_state, TupleDataC
 
 	if (!layout.AllConstant()) {
 		if (layout.IsSortKeyLayout()) {
-			TupleDataCollection::ComputeHeapSizes(chunk_state, new_chunk, append_sel, actual_append_count);
-		} else {
 			TupleDataCollection::SortKeyComputeHeapSizes(chunk_state, new_chunk, append_sel, actual_append_count,
 			                                             layout.GetSortKeyType());
+		} else {
+			TupleDataCollection::ComputeHeapSizes(chunk_state, new_chunk, append_sel, actual_append_count);
 		}
 	}
 
