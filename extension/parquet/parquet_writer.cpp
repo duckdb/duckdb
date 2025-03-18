@@ -844,8 +844,7 @@ void ParquetWriter::Finalize() {
 		// gather written statistics from the metadata
 		GatherWrittenStatistics();
 		written_stats->file_size_bytes = writer->GetTotalWritten();
-		written_stats->footer_offset = Value::UBIGINT(metadata_start_offset);
-		written_stats->footer_size = Value::UBIGINT(footer_size);
+		written_stats->footer_size_bytes = Value::UBIGINT(footer_size);
 	}
 
 	// flush to disk
