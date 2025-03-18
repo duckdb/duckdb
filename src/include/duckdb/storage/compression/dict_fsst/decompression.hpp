@@ -54,7 +54,7 @@ public:
 
 	buffer_ptr<Vector> dictionary;
 	void *decoder = nullptr;
-	vector<unsigned char> decompress_buffer;
+	bool all_values_inlined = false;
 };
 
 } // namespace dict_fsst

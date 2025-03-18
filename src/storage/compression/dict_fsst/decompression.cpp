@@ -23,8 +23,16 @@ string_t CompressedStringScanState::FetchStringFromDict(Vector &result, uint32_t
 	auto str_ptr = char_ptr_cast(dict_pos);
 	switch (mode) {
 	case DictFSSTMode::FSST_ONLY:
-	case DictFSSTMode::DICT_FSST:
-		return FSSTPrimitives::DecompressValue(decoder, result, str_ptr, string_len, decompress_buffer);
+	case DictFSSTMode::DICT_FSST: {
+		if (string_len == 0) {
+			return string_t(nullptr, 0);
+		}
+		if (all_values_inlined) {
+			return FSSTPrimitives::DecompressInlinedValue(decoder, str_ptr, string_len);
+		} else {
+			return FSSTPrimitives::DecompressValue(decoder, StringVector::GetStringBuffer(result), str_ptr, string_len);
+		}
+	}
 	default:
 		// FIXME: the Vector doesn't seem to take ownership of the non-inlined string data???
 		return string_t(str_ptr, string_len);
@@ -76,11 +84,6 @@ void CompressedStringScanState::Initialize(bool initialize_dictionary) {
 		auto ret = duckdb_fsst_import(reinterpret_cast<duckdb_fsst_decoder_t *>(decoder), baseptr + symbol_table_dest);
 		(void)(ret);
 		D_ASSERT(ret != 0); // FIXME: the old code set the decoder to nullptr instead, why???
-
-		//! The biggest string_length covered by the 'string_lengths_width'
-		uint32_t max_string_length = (1 << string_lengths_width) - 1;
-		auto buffer_size = (max_string_length * 8) + 1;
-		decompress_buffer.resize(buffer_size);
 		break;
 	}
 	default:
