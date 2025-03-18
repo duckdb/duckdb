@@ -10,6 +10,7 @@
 
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
 #include "duckdb/execution/physical_operator_states.hpp"
+#include "duckdb/common/sorting/sort_projection_column.hpp"
 
 namespace duckdb {
 
@@ -25,14 +26,8 @@ class Sort {
 	friend class SortLocalSourceState;
 	friend class SortGlobalSourceState;
 
-	struct SortProjectionColumn {
-		bool is_payload;
-		idx_t layout_col_idx;
-		idx_t output_col_idx;
-	};
-
 public:
-	Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &types,
+	Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &input_types,
 	     vector<idx_t> projection_map);
 
 private:

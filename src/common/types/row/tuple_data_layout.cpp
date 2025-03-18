@@ -138,7 +138,7 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 	// Reset state
 	types.clear();
 	aggregates.clear();
-	struct_layouts->clear();
+	struct_layouts.reset();
 	flag_width = DConstants::INVALID_INDEX;
 	data_width = DConstants::INVALID_INDEX;
 	aggr_width = DConstants::INVALID_INDEX;

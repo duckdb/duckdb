@@ -78,6 +78,7 @@
 #include "duckdb/common/types/conflict_manager.hpp"
 #include "duckdb/common/types/date.hpp"
 #include "duckdb/common/types/hyperloglog.hpp"
+#include "duckdb/common/types/row/block_iterator.hpp"
 #include "duckdb/common/types/row/partitioned_tuple_data.hpp"
 #include "duckdb/common/types/row/tuple_data_states.hpp"
 #include "duckdb/common/types/timestamp.hpp"
@@ -566,6 +567,26 @@ const char* EnumUtil::ToChars<BitpackingMode>(BitpackingMode value) {
 template<>
 BitpackingMode EnumUtil::FromString<BitpackingMode>(const char *value) {
 	return static_cast<BitpackingMode>(StringUtil::StringToEnum(GetBitpackingModeValues(), 6, "BitpackingMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetBlockIteratorStateTypeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(BlockIteratorStateType::FIXED_IN_MEMORY), "FIXED_IN_MEMORY" },
+		{ static_cast<uint32_t>(BlockIteratorStateType::VARIABLE_IN_MEMORY), "VARIABLE_IN_MEMORY" },
+		{ static_cast<uint32_t>(BlockIteratorStateType::FIXED_EXTERNAL), "FIXED_EXTERNAL" },
+		{ static_cast<uint32_t>(BlockIteratorStateType::VARIABLE_EXTERNAL), "VARIABLE_EXTERNAL" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<BlockIteratorStateType>(BlockIteratorStateType value) {
+	return StringUtil::EnumToString(GetBlockIteratorStateTypeValues(), 4, "BlockIteratorStateType", static_cast<uint32_t>(value));
+}
+
+template<>
+BlockIteratorStateType EnumUtil::FromString<BlockIteratorStateType>(const char *value) {
+	return static_cast<BlockIteratorStateType>(StringUtil::StringToEnum(GetBlockIteratorStateTypeValues(), 4, "BlockIteratorStateType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetBlockStateValues() {

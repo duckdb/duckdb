@@ -74,6 +74,8 @@ enum class BindingMode : uint8_t;
 
 enum class BitpackingMode : uint8_t;
 
+enum class BlockIteratorStateType : int8_t;
+
 enum class BlockState : uint8_t;
 
 enum class CAPIResultSetType : uint8_t;
@@ -459,6 +461,9 @@ const char* EnumUtil::ToChars<BindingMode>(BindingMode value);
 
 template<>
 const char* EnumUtil::ToChars<BitpackingMode>(BitpackingMode value);
+
+template<>
+const char* EnumUtil::ToChars<BlockIteratorStateType>(BlockIteratorStateType value);
 
 template<>
 const char* EnumUtil::ToChars<BlockState>(BlockState value);
@@ -1006,6 +1011,9 @@ BindingMode EnumUtil::FromString<BindingMode>(const char *value);
 
 template<>
 BitpackingMode EnumUtil::FromString<BitpackingMode>(const char *value);
+
+template<>
+BlockIteratorStateType EnumUtil::FromString<BlockIteratorStateType>(const char *value);
 
 template<>
 BlockState EnumUtil::FromString<BlockState>(const char *value);

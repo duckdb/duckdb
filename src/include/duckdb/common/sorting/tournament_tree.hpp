@@ -14,12 +14,12 @@
 
 namespace duckdb {
 
-template <class ITER, class COMPARE = std::less<typename std::iterator_traits<ITER>::value_type>>
+template <class ITER>
 class tournament_tree_t { // NOLINT: match stl case
 	using iterator = ITER;
 	using value_type = typename std::iterator_traits<iterator>::value_type;
-	using comp = COMPARE;
 
+public:
 	struct leaf_node_t { // NOLINT: match stl case
 	public:
 		explicit leaf_node_t(const pair<iterator, iterator> &sorted_run)
@@ -40,19 +40,23 @@ class tournament_tree_t { // NOLINT: match stl case
 			return *current;
 		}
 
+		friend bool operator<(const leaf_node_t &lhs, const leaf_node_t &rhs) {
+			return lhs.has_value() ? (rhs.has_value() ? lhs.value() < rhs.value() : true) : false;
+		}
+
 	private:
 		iterator current;
-		const iterator end;
+		iterator end;
 	};
 
 public:
 	explicit tournament_tree_t(const vector<pair<iterator, iterator>> &sorted_runs) // NOLINT: match stl case
-	    : num_leaf_nodes(sorted_runs.size()), num_internal_nodes(num_leaf_nodes - 1) {
-		leaf_nodes.resize(num_leaf_nodes);
+	    : num_leaf_nodes(sorted_runs.size()), num_internal_nodes(NextPowerOfTwo(num_leaf_nodes) - 1) {
+		leaf_nodes.reserve(num_leaf_nodes);
 		internal_nodes.resize(num_internal_nodes);
 
 		for (idx_t leaf_idx = 0; leaf_idx < num_leaf_nodes; leaf_idx++) {
-			leaf_nodes[leaf_idx] = leaf_node_t(sorted_runs[leaf_idx]);
+			leaf_nodes.emplace_back(sorted_runs[leaf_idx]);
 		}
 
 		for (idx_t leaf_idx = 0; leaf_idx < num_leaf_nodes; leaf_idx++) {
@@ -62,21 +66,79 @@ public:
 
 public:
 	bool empty() const { // NOLINT: match stl case
-		return leaf_nodes[internal_nodes[0]].has_value();
+		if (num_leaf_nodes == 1) {
+			return !leaf_nodes[0].has_value();
+		}
+		if (num_leaf_nodes == 2) {
+			return !leaf_nodes[0].has_value() && !leaf_nodes[1].has_value();
+		}
+		return !leaf_nodes[internal_nodes[0]].has_value();
 	}
 
-	value_type &top() const { // NOLINT: match stl case
-		return leaf_nodes[internal_nodes[0]].value();
-	}
-
-	void pop() { // NOLINT: match stl case
-		const auto winning_leaf_idx = internal_nodes[0];
-		leaf_nodes[winning_leaf_idx].advance();
-		update(winning_leaf_idx);
+	idx_t get_batch(value_type **const values, const idx_t &batch_size) { // NOLINT: match stl case
+		if (empty()) {
+			return 0;
+		}
+		idx_t count;
+		if (num_leaf_nodes == 1) {
+			count = get_batch_one_leaf(values, batch_size, 0, 0);
+		} else if (num_leaf_nodes == 2) {
+			count = get_batch_two_leaves(values, batch_size);
+		} else {
+			count = get_batch_internal(values, batch_size);
+		}
+		D_ASSERT(count == batch_size || empty());
+		return count;
 	}
 
 private:
-	// Utility functions for computing parent/child indices
+	idx_t get_batch_one_leaf(value_type **const values, const idx_t &batch_size, idx_t count, // NOLINT: match stl case
+	                         const idx_t &leaf_idx) {
+		auto &leaf_node = leaf_nodes[leaf_idx];
+		while (leaf_node.has_value() && count < batch_size) {
+			values[count++] = &leaf_node.value();
+			leaf_node.advance();
+		}
+		return count;
+	}
+
+	idx_t get_batch_two_leaves(value_type **const values, const idx_t &batch_size) { // NOLINT: match stl case
+		auto &left_leaf_node = leaf_nodes[0];
+		auto &right_leaf_node = leaf_nodes[1];
+		idx_t count = 0;
+		if (left_leaf_node.has_value() && right_leaf_node.has_value()) {
+			while (count < batch_size) {
+				auto &winning_leaf_node =
+				    left_leaf_node.value() < right_leaf_node.value() ? left_leaf_node : right_leaf_node;
+				values[count++] = &winning_leaf_node.value();
+				winning_leaf_node.advance();
+				if (!winning_leaf_node.has_value()) {
+					break;
+				}
+			}
+		}
+		if (left_leaf_node.has_value()) {
+			return get_batch_one_leaf(values, batch_size, count, 0);
+		}
+		D_ASSERT(right_leaf_node.has_value());
+		return get_batch_one_leaf(values, batch_size, count, 1);
+	}
+
+	idx_t get_batch_internal(value_type **const values, const idx_t &batch_size) { // NOLINT: match stl case
+		idx_t count = 0;
+		while (count < batch_size) {
+			const auto &winning_leaf_idx = internal_nodes[0];
+			auto &top = leaf_nodes[winning_leaf_idx];
+			if (!top.has_value()) {
+				break;
+			}
+			values[count++] = &top.value();
+			top.advance();
+			update(winning_leaf_idx);
+		}
+		return count;
+	}
+
 	static idx_t parent(const idx_t &i) { // NOLINT: match stl case
 		return (i - 1) / 2;
 	}
@@ -87,21 +149,19 @@ private:
 		return 2 * i + 2;
 	}
 
-	// Update tree from given node upwards
 	void update(const idx_t &leaf_idx) { // NOLINT: match stl case
-		auto internal_idx = leaf_idx;
-		while (internal_idx < num_internal_nodes) {
-			const auto left_leaf_idx = internal_nodes[left_child(internal_idx)];
-			const auto right_leaf_idx = internal_nodes[right_child(internal_idx)];
-
-			internal_nodes[internal_idx] = comp(leaf_nodes[left_leaf_idx].value(), leaf_nodes[right_leaf_idx].value())
-			                                   ? left_leaf_idx
-			                                   : right_leaf_idx;
-
+		idx_t internal_idx = num_internal_nodes / 2 + leaf_idx / 2;
+		idx_t left_leaf_idx = leaf_idx & 1 ? leaf_idx - 1 : leaf_idx;
+		idx_t right_leaf_idx = MinValue(left_leaf_idx + 1, num_leaf_nodes - 1);
+		while (true) {
+			internal_nodes[internal_idx] =
+			    leaf_nodes[left_leaf_idx] < leaf_nodes[right_leaf_idx] ? left_leaf_idx : right_leaf_idx;
 			if (internal_idx == 0) {
-				break;
+				return;
 			}
 			internal_idx = parent(internal_idx);
+			left_leaf_idx = internal_nodes[left_child(internal_idx)];
+			right_leaf_idx = internal_nodes[right_child(internal_idx)];
 		}
 	}
 
@@ -110,7 +170,7 @@ private:
 	unsafe_vector<leaf_node_t> leaf_nodes;
 
 	const idx_t num_internal_nodes;
-	unsafe_vector<uint32_t> internal_nodes;
+	unsafe_vector<idx_t> internal_nodes;
 };
 
 } // namespace duckdb

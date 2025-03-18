@@ -136,15 +136,16 @@ void SortedRun::Finalize(bool external) {
 		if (!SortKeyUtils::IsConstantSize(sort_key_type)) {
 			throw NotImplementedException("Sort"); // TODO reorder sort key heap
 		}
+		key_data->Unpin();
 		if (payload_data) {
 			ReorderPayload(*key_data, *payload_data);
+			payload_data->Unpin();
 		}
 		// TODO maybe reorder sort key heap and payload in one go
 		//  reordering sort key heap is tricky because we don't want to move the row data
 		//  reordering payload is easy because we're just reconstructing an entire collection
 	}
 
-	key_data->Unpin();
 	finalized = true;
 }
 

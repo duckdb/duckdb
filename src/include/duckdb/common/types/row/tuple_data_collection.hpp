@@ -79,9 +79,9 @@ public:
 	static TupleDataGatherFunction GetGatherFunction(const LogicalType &type);
 
 	//! Gets the scatter function for the given sort key type
-	static TupleDataScatterFunction GetSortKeyScatterFunction(SortKeyType sort_key_type);
+	static TupleDataScatterFunction GetSortKeyScatterFunction(const LogicalType &type, SortKeyType sort_key_type);
 	//! Gets the gather function for the given sort key type
-	static TupleDataGatherFunction GetSortKeyGatherFunction(SortKeyType sort_key_type);
+	static TupleDataGatherFunction GetSortKeyGatherFunction(const LogicalType &type, SortKeyType sort_key_type);
 
 	//! Initializes an Append state - useful for optimizing many appends made to the same tuple data collection
 	void InitializeAppend(TupleDataAppendState &append_state,

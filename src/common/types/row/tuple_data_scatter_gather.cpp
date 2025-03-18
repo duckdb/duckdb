@@ -684,7 +684,7 @@ static void TupleDataTemplatedScatter(const Vector &, const TupleDataVectorForma
 	}
 }
 
-template <SortKeyType SORT_KEY_TYPE>
+template <class T, SortKeyType SORT_KEY_TYPE>
 void TupleDataSortKeyScatter(const Vector &, const TupleDataVectorFormat &source_format,
                              const SelectionVector &append_sel, const idx_t append_count, const TupleDataLayout &layout,
                              const Vector &row_locations, Vector &heap_locations, const idx_t,
@@ -696,7 +696,7 @@ void TupleDataSortKeyScatter(const Vector &, const TupleDataVectorFormat &source
 	// Source
 	const auto &source_data = source_format.unified;
 	const auto &source_sel = *source_data.sel;
-	const auto data = UnifiedVectorFormat::GetData<string_t>(source_data);
+	const auto data = UnifiedVectorFormat::GetData<T>(source_data);
 	D_ASSERT(source_data.validity.AllValid());
 
 	// Target
@@ -1129,41 +1129,53 @@ TupleDataScatterFunction TupleDataCollection::GetScatterFunction(const LogicalTy
 	return result;
 }
 
-TupleDataScatterFunction TupleDataCollection::GetSortKeyScatterFunction(SortKeyType sort_key_type) {
+template <class T>
+TupleDataScatterFunction GetSortKeyScatterFunctionInternal(SortKeyType sort_key_type) {
 	TupleDataScatterFunction result;
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		result.function = TupleDataSortKeyScatter<SortKeyType::NO_PAYLOAD_FIXED_8>;
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_8>;
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		result.function = TupleDataSortKeyScatter<SortKeyType::NO_PAYLOAD_FIXED_16>;
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_16>;
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		result.function = TupleDataSortKeyScatter<SortKeyType::NO_PAYLOAD_FIXED_24>;
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_24>;
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		result.function = TupleDataSortKeyScatter<SortKeyType::NO_PAYLOAD_FIXED_32>;
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_FIXED_32>;
 		break;
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		result.function = TupleDataSortKeyScatter<SortKeyType::NO_PAYLOAD_VARIABLE_32>;
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::NO_PAYLOAD_VARIABLE_32>;
 		break;
 	case SortKeyType::PAYLOAD_FIXED_16:
-		result.function = TupleDataSortKeyScatter<SortKeyType::PAYLOAD_FIXED_16>;
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_16>;
 		break;
 	case SortKeyType::PAYLOAD_FIXED_24:
-		result.function = TupleDataSortKeyScatter<SortKeyType::PAYLOAD_FIXED_24>;
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_24>;
 		break;
 	case SortKeyType::PAYLOAD_FIXED_32:
-		result.function = TupleDataSortKeyScatter<SortKeyType::PAYLOAD_FIXED_32>;
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_FIXED_32>;
 		break;
 	case SortKeyType::PAYLOAD_VARIABLE_32:
-		result.function = TupleDataSortKeyScatter<SortKeyType::PAYLOAD_VARIABLE_32>;
+		result.function = TupleDataSortKeyScatter<T, SortKeyType::PAYLOAD_VARIABLE_32>;
 		break;
 	default:
-		throw NotImplementedException("TupleDataCollection::GetSortKeyScatterFunction for %s",
-		                              EnumUtil::ToString(sort_key_type));
+		throw NotImplementedException("GetSortKeyScatterFunction for %s", EnumUtil::ToString(sort_key_type));
 	}
 	return result;
+}
+
+TupleDataScatterFunction TupleDataCollection::GetSortKeyScatterFunction(const LogicalType &type,
+                                                                        SortKeyType sort_key_type) {
+	switch (type.id()) {
+	case LogicalTypeId::BIGINT:
+		return GetSortKeyScatterFunctionInternal<int64_t>(sort_key_type);
+	case LogicalTypeId::BLOB:
+		return GetSortKeyScatterFunctionInternal<string_t>(sort_key_type);
+	default:
+		throw NotImplementedException("TupleDataCollection::GetSortKeyScatterFunction for %s", type.ToString());
+	}
 }
 
 //-------------------------------------------------------------------------------
@@ -1235,7 +1247,7 @@ static void TupleDataTemplatedGather(const TupleDataLayout &layout, Vector &row_
 	}
 }
 
-template <SortKeyType SORT_KEY_TYPE>
+template <class T, SortKeyType SORT_KEY_TYPE>
 void TupleDataSortKeyGather(const TupleDataLayout &layout, Vector &row_locations, const idx_t col_idx,
                             const SelectionVector &scan_sel, const idx_t scan_count, Vector &target,
                             const SelectionVector &target_sel, optional_ptr<Vector>,
@@ -1683,41 +1695,53 @@ TupleDataGatherFunction TupleDataCollection::GetGatherFunction(const LogicalType
 	return TupleDataGetGatherFunctionInternal(type, false);
 }
 
-TupleDataGatherFunction TupleDataCollection::GetSortKeyGatherFunction(SortKeyType sort_key_type) {
+template <class T>
+TupleDataGatherFunction GetSortKeyGatherFunctionInternal(SortKeyType sort_key_type) {
 	TupleDataGatherFunction result;
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
-		result.function = TupleDataSortKeyGather<SortKeyType::NO_PAYLOAD_FIXED_8>;
+		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_8>;
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
-		result.function = TupleDataSortKeyGather<SortKeyType::NO_PAYLOAD_FIXED_16>;
+		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_16>;
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		result.function = TupleDataSortKeyGather<SortKeyType::NO_PAYLOAD_FIXED_24>;
+		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_24>;
 		break;
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
-		result.function = TupleDataSortKeyGather<SortKeyType::NO_PAYLOAD_FIXED_32>;
+		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_FIXED_32>;
 		break;
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
-		result.function = TupleDataSortKeyGather<SortKeyType::NO_PAYLOAD_VARIABLE_32>;
+		result.function = TupleDataSortKeyGather<T, SortKeyType::NO_PAYLOAD_VARIABLE_32>;
 		break;
 	case SortKeyType::PAYLOAD_FIXED_16:
-		result.function = TupleDataSortKeyGather<SortKeyType::PAYLOAD_FIXED_16>;
+		result.function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_16>;
 		break;
 	case SortKeyType::PAYLOAD_FIXED_24:
-		result.function = TupleDataSortKeyGather<SortKeyType::PAYLOAD_FIXED_24>;
+		result.function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_24>;
 		break;
 	case SortKeyType::PAYLOAD_FIXED_32:
-		result.function = TupleDataSortKeyGather<SortKeyType::PAYLOAD_FIXED_32>;
+		result.function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_FIXED_32>;
 		break;
 	case SortKeyType::PAYLOAD_VARIABLE_32:
-		result.function = TupleDataSortKeyGather<SortKeyType::PAYLOAD_VARIABLE_32>;
+		result.function = TupleDataSortKeyGather<T, SortKeyType::PAYLOAD_VARIABLE_32>;
 		break;
 	default:
-		throw NotImplementedException("TupleDataCollection::GetSortKeyGatherFunction for %s",
-		                              EnumUtil::ToString(sort_key_type));
+		throw NotImplementedException("GetSortKeyGatherFunction for %s", EnumUtil::ToString(sort_key_type));
 	}
 	return result;
+}
+
+TupleDataGatherFunction TupleDataCollection::GetSortKeyGatherFunction(const LogicalType &type,
+                                                                      SortKeyType sort_key_type) {
+	switch (type.id()) {
+	case LogicalTypeId::BIGINT:
+		return GetSortKeyGatherFunctionInternal<int64_t>(sort_key_type);
+	case LogicalTypeId::BLOB:
+		return GetSortKeyGatherFunctionInternal<string_t>(sort_key_type);
+	default:
+		throw NotImplementedException("TupleDataCollection::GetSortKeyGatherFunction for %s", type.ToString());
+	}
 }
 
 } // namespace duckdb

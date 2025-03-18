@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator_states.hpp"
+#include "duckdb/common/sorting/sort_projection_column.hpp"
 
 namespace duckdb {
 
@@ -23,7 +24,8 @@ class SortedRunMerger {
 	friend class SortedRunMergerGlobalState;
 
 public:
-	SortedRunMerger(vector<unique_ptr<SortedRun>> &&sorted_runs, idx_t partition_size, bool external,
+	SortedRunMerger(vector<unique_ptr<SortedRun>> &&sorted_runs,
+	                const vector<SortProjectionColumn> &output_projection_columns, idx_t partition_size, bool external,
 	                bool fixed_blocks);
 
 public:
@@ -39,6 +41,7 @@ public:
 
 public:
 	vector<unique_ptr<SortedRun>> sorted_runs;
+	const vector<SortProjectionColumn> &output_projection_columns;
 	const idx_t total_count;
 
 	const idx_t partition_size;

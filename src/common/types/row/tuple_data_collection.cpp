@@ -30,8 +30,8 @@ void TupleDataCollection::Initialize() {
 	this->count = 0;
 	this->data_size = 0;
 	if (layout.IsSortKeyLayout()) {
-		scatter_functions.emplace_back(GetSortKeyScatterFunction(layout.GetSortKeyType()));
-		gather_functions.emplace_back(GetSortKeyGatherFunction(layout.GetSortKeyType()));
+		scatter_functions.emplace_back(GetSortKeyScatterFunction(layout.GetTypes()[0], layout.GetSortKeyType()));
+		gather_functions.emplace_back(GetSortKeyGatherFunction(layout.GetTypes()[0], layout.GetSortKeyType()));
 	} else {
 		scatter_functions.reserve(layout.ColumnCount());
 		gather_functions.reserve(layout.ColumnCount());

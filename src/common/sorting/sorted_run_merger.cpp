@@ -91,6 +91,8 @@ class SortedRunMergerLocalState : public LocalSourceState {
 public:
 	explicit SortedRunMergerLocalState(SortedRunMergerGlobalState &gstate_p);
 
+	~SortedRunMergerLocalState() override;
+
 public:
 	//! Whether this thread has finished the work it has been assigned
 	bool TaskFinished() const;
@@ -104,12 +106,29 @@ private:
 	void ComputePartitionBoundariesSwitch(SortedRunMergerGlobalState &gstate, unsafe_vector<STATE> &states);
 	template <class STATE, SortKeyType SORT_KEY_TYPE>
 	void TemplatedComputePartitionBoundaries(SortedRunMergerGlobalState &gstate, unsafe_vector<STATE> &states);
+
 	//! Acquires lower partition boundaries from the global state
 	bool AcquirePartitionBoundaries(SortedRunMergerGlobalState &gstate);
-	//! Acquire the next chunk
+
+	//! Merge the partition to obtain the next chunk
 	void MergePartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk);
+	template <class STATE>
+	void MergePartitionSwitch(SortedRunMergerGlobalState &gstate, DataChunk &chunk);
+	template <class STATE, SortKeyType SORT_KEY_TYPE>
+	void TemplatedMergePartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk);
+
+	//! Creates the tournament tree (or destroys if "create" is false
+	void CreateOrDestroyTournamentTree(bool create);
+	template <class STATE>
+	void CreateOrDestroyTournamentTreeSwitch(bool create, unsafe_vector<STATE> &states);
+	template <class STATE, SortKeyType SORT_KEY_TYPE>
+	void TemplatedCreateOrDestroyTournamentTree(bool create, unsafe_vector<STATE> &states);
 
 public:
+	//! Types for templating
+	const BlockIteratorStateType iterator_state_type;
+	const SortKeyType sort_key_type;
+
 	SortedRunMergerTask task;
 	optional_idx partition_idx;
 
@@ -118,8 +137,13 @@ private:
 	unsafe_vector<SortedRunPartitionBoundary> run_boundaries;
 
 	//! States for every iterator type
-	unsafe_vector<const fixed_in_memory_block_iterator_state_t> fixed_in_memory_states;
-	//! TODO: other iterator type
+	unsafe_vector<const block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>> fixed_in_memory_states;
+	//! TODO: other iterator types
+
+	//! Opaque pointer to tournament tree
+	void *tournament_tree;
+	Vector sort_key_ptrs;
+	Vector payload_row_ptrs;
 };
 
 //===--------------------------------------------------------------------===//
@@ -130,7 +154,9 @@ public:
 	explicit SortedRunMergerGlobalState(const SortedRunMerger &merger_p)
 	    : merger(merger_p), num_runs(merger.sorted_runs.size()),
 	      num_partitions((merger.total_count + (merger.partition_size - 1)) / merger.partition_size),
-	      iterator_state_type(GetBlockIteratorStateType(merger.fixed_blocks, merger.external)), next_partition_idx(0) {
+	      iterator_state_type(GetBlockIteratorStateType(merger.fixed_blocks, merger.external)),
+	      sort_key_type(merger.sorted_runs[0]->key_data->GetLayout().GetSortKeyType()), next_partition_idx(0),
+	      total_scanned(0) {
 		// Initialize partitions
 		partitions.resize(num_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
@@ -147,6 +173,7 @@ public:
 			return false; // Nothing left to do
 		}
 		lstate.partition_idx = next_partition_idx++;
+		lstate.task = SortedRunMergerTask::COMPUTE_BOUNDARIES;
 		return true;
 	}
 
@@ -158,20 +185,37 @@ public:
 	const SortedRunMerger &merger;
 	const idx_t num_runs;
 	const idx_t num_partitions;
+
 	const BlockIteratorStateType iterator_state_type;
+	const SortKeyType sort_key_type;
 
 	idx_t next_partition_idx;
 	vector<unique_ptr<SortedRunMergePartition>> partitions;
+	atomic<idx_t> total_scanned;
 };
 
 //===--------------------------------------------------------------------===//
 // Local State Implementation
 //===--------------------------------------------------------------------===//
 SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState &gstate)
-    : task(SortedRunMergerTask::FINISHED), run_boundaries(gstate.num_runs) {
-	for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
-		fixed_in_memory_states.emplace_back(*gstate.merger.sorted_runs[run_idx]->key_data);
+    : iterator_state_type(gstate.iterator_state_type), sort_key_type(gstate.sort_key_type),
+      task(SortedRunMergerTask::FINISHED), run_boundaries(gstate.num_runs), tournament_tree(nullptr),
+      sort_key_ptrs(LogicalType::POINTER), payload_row_ptrs(LogicalType::POINTER) {
+	for (const auto &run : gstate.merger.sorted_runs) {
+		auto &key_data = *run->key_data;
+		switch (iterator_state_type) {
+		case BlockIteratorStateType::FIXED_IN_MEMORY:
+			fixed_in_memory_states.push_back(block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>(key_data));
+			break;
+		default:
+			throw NotImplementedException("SortedRunMergerLocalState::SortedRunMergerLocalState for %s",
+			                              EnumUtil::ToString(iterator_state_type));
+		}
 	}
+}
+
+SortedRunMergerLocalState::~SortedRunMergerLocalState() {
+	CreateOrDestroyTournamentTree(false);
 }
 
 bool SortedRunMergerLocalState::TaskFinished() const {
@@ -206,6 +250,7 @@ void SortedRunMergerLocalState::ExecuteTask(SortedRunMergerGlobalState &gstate, 
 		if (chunk.size() == 0) {
 			task = SortedRunMergerTask::FINISHED;
 			partition_idx = optional_idx::Invalid();
+			CreateOrDestroyTournamentTree(false);
 		}
 		break;
 	default:
@@ -223,8 +268,14 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	run_boundaries = current_partition.GetRunBoundaries(guard);
 	guard.unlock();
 
+	// The "end" boundary was set initialized correctly in gstate
+	// We always start searching from 0
+	for (auto &run_boundary : run_boundaries) {
+		run_boundary.begin = 0;
+	}
+
 	// Compute the end partition boundaries (lock-free)
-	switch (gstate.iterator_state_type) {
+	switch (iterator_state_type) {
 	case BlockIteratorStateType::FIXED_IN_MEMORY:
 		ComputePartitionBoundariesSwitch<const block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>>(
 		    gstate, fixed_in_memory_states);
@@ -258,15 +309,11 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 		D_ASSERT(computed_boundary.begin == computed_boundary.end);
 		current_partition_run_boundaries[run_idx].end = computed_boundary.end;
 	}
-
-	// Next task is to acquire the boundaries of the previous partition
-	task = SortedRunMergerTask::ACQUIRE_BOUNDARIES;
 }
 
 template <class STATE>
 void SortedRunMergerLocalState::ComputePartitionBoundariesSwitch(SortedRunMergerGlobalState &gstate,
                                                                  unsafe_vector<STATE> &states) {
-	const auto sort_key_type = gstate.merger.sorted_runs[0]->key_data->GetLayout().GetSortKeyType();
 	switch (sort_key_type) {
 	case SortKeyType::NO_PAYLOAD_FIXED_8:
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, states);
@@ -332,17 +379,18 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 	D_ASSERT(total_remaining <
 	         gstate.merger.total_count); // This is not the last partition, so should be less than total
 	while (total_remaining != 0) {
+		D_ASSERT(!active_run_idxs.empty());
 		const idx_t k = active_run_idxs.size();
 
 		// Compute step size for each run: ceil(total_remaining / k), or less if run has less remaining
 		auto min_idx = active_run_idxs[0];
 		auto min_delta = ComputeBoundaryDelta(total_remaining, k, run_boundaries[min_idx]);
-		reference<SORT_KEY> min_value = run_iterators[min_idx][run_boundaries[min_idx].begin + min_delta];
+		reference<SORT_KEY> min_value = run_iterators[min_idx][run_boundaries[min_idx].begin + min_delta - 1];
 		for (idx_t i = 1; i < active_run_idxs.size(); i++) {
 			const auto &active_run_idx = active_run_idxs[i];
 			const auto &run_boundary = run_boundaries[active_run_idx];
 			const auto run_delta = ComputeBoundaryDelta(total_remaining, k, run_boundary);
-			auto &run_value = run_iterators[active_run_idx][run_boundary.begin + run_delta];
+			auto &run_value = run_iterators[active_run_idx][run_boundary.begin + run_delta - 1];
 			if (run_value < min_value.get()) {
 				min_idx = active_run_idx;
 				min_delta = run_delta;
@@ -360,11 +408,11 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 		}
 
 		// Update total remaining accordingly
-		D_ASSERT(min_delta >= total_remaining);
+		D_ASSERT(min_delta <= total_remaining);
 		total_remaining -= min_delta;
 	}
 
-	// end of boundary is meaningless now, just set equal to begin so there's no confusion
+	// End of boundary is meaningless now, just set equal to begin so there's no confusion
 	for (auto &run_boundary : run_boundaries) {
 		run_boundary.end = run_boundary.begin;
 	}
@@ -381,20 +429,176 @@ bool SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 
 	// Start has been computed, boundaries are ready to use. Copy to local
 	run_boundaries = current_partition.GetRunBoundaries(guard);
+	guard.unlock();
+
 	return true;
 }
 
 void SortedRunMergerLocalState::MergePartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {
-	throw NotImplementedException("Sort");
+	switch (iterator_state_type) {
+	case BlockIteratorStateType::FIXED_IN_MEMORY:
+		MergePartitionSwitch<const block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>>(gstate, chunk);
+		break;
+	default:
+		// TODO: switch on other types
+		throw NotImplementedException("SortedRunMergerLocalState::MergePartition for %s",
+		                              EnumUtil::ToString(iterator_state_type));
+	}
+}
+
+template <class STATE>
+void SortedRunMergerLocalState::MergePartitionSwitch(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {
+	switch (sort_key_type) {
+	case SortKeyType::NO_PAYLOAD_FIXED_8:
+		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, chunk);
+	case SortKeyType::NO_PAYLOAD_FIXED_16:
+		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_16>(gstate, chunk);
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_24>(gstate, chunk);
+	case SortKeyType::NO_PAYLOAD_FIXED_32:
+		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_32>(gstate, chunk);
+	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate, chunk);
+	case SortKeyType::PAYLOAD_FIXED_16:
+		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_16>(gstate, chunk);
+	case SortKeyType::PAYLOAD_FIXED_24:
+		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_24>(gstate, chunk);
+	case SortKeyType::PAYLOAD_FIXED_32:
+		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_32>(gstate, chunk);
+	case SortKeyType::PAYLOAD_VARIABLE_32:
+		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_VARIABLE_32>(gstate, chunk);
+	default:
+		throw NotImplementedException("SortedRunMergerLocalState::ComputePartitionBoundariesSwitch for %s",
+		                              EnumUtil::ToString(sort_key_type));
+	}
+}
+
+template <class STATE, SortKeyType SORT_KEY_TYPE>
+void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	using ITER = block_iterator_t<STATE, SORT_KEY>;
+
+	if (!tournament_tree) {
+		CreateOrDestroyTournamentTree(true);
+	}
+
+	auto &tree = *static_cast<tournament_tree_t<ITER> *>(tournament_tree);
+	const auto key_ptrs = FlatVector::GetData<SORT_KEY *>(sort_key_ptrs);
+	const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_row_ptrs);
+	const auto count = tree.get_batch(key_ptrs, STANDARD_VECTOR_SIZE);
+	chunk.SetCardinality(count);
+
+	if (count == 0) {
+		return;
+	}
+
+	const auto &output_projection_columns = gstate.merger.output_projection_columns;
+	idx_t opc_idx = 0;
+
+	// Decode from key
+	for (; opc_idx < output_projection_columns.size(); opc_idx++) {
+		const auto &opc = output_projection_columns[opc_idx];
+		if (opc.is_payload) {
+			break;
+		}
+		throw NotImplementedException("Sort");
+	}
+
+	// If there are no payload columns, we're done here
+	if (opc_idx == output_projection_columns.size()) {
+		return;
+	}
+
+	// Gather row pointers from keys
+	for (idx_t i = 0; i < count; i++) {
+		payload_ptrs[i] = key_ptrs[i]->GetPayloadPointer();
+	}
+
+	// Now gather from payload
+	auto &payload_data = *gstate.merger.sorted_runs.back()->payload_data;
+	for (; opc_idx < output_projection_columns.size(); opc_idx++) {
+		const auto &opc = output_projection_columns[opc_idx];
+		D_ASSERT(opc.is_payload);
+		payload_data.Gather(payload_row_ptrs, *FlatVector::IncrementalSelectionVector(), count, opc.layout_col_idx,
+		                    chunk.data[opc.output_col_idx], *FlatVector::IncrementalSelectionVector(), nullptr);
+	}
+}
+
+void SortedRunMergerLocalState::CreateOrDestroyTournamentTree(bool create) {
+	switch (iterator_state_type) {
+	case BlockIteratorStateType::FIXED_IN_MEMORY:
+		CreateOrDestroyTournamentTreeSwitch<const block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>>(
+		    create, fixed_in_memory_states);
+		break;
+	default:
+		// TODO: switch on other types
+		throw NotImplementedException("SortedRunMergerLocalState::CreateOrDestroyTournamentTree for %s",
+		                              EnumUtil::ToString(iterator_state_type));
+	}
+}
+
+template <class STATE>
+void SortedRunMergerLocalState::CreateOrDestroyTournamentTreeSwitch(bool create, unsafe_vector<STATE> &states) {
+	switch (sort_key_type) {
+	case SortKeyType::NO_PAYLOAD_FIXED_8:
+		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(create, states);
+	case SortKeyType::NO_PAYLOAD_FIXED_16:
+		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::NO_PAYLOAD_FIXED_16>(create, states);
+	case SortKeyType::NO_PAYLOAD_FIXED_24:
+		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::NO_PAYLOAD_FIXED_24>(create, states);
+	case SortKeyType::NO_PAYLOAD_FIXED_32:
+		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::NO_PAYLOAD_FIXED_32>(create, states);
+	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::NO_PAYLOAD_VARIABLE_32>(create, states);
+	case SortKeyType::PAYLOAD_FIXED_16:
+		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::PAYLOAD_FIXED_16>(create, states);
+	case SortKeyType::PAYLOAD_FIXED_24:
+		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::PAYLOAD_FIXED_24>(create, states);
+	case SortKeyType::PAYLOAD_FIXED_32:
+		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::PAYLOAD_FIXED_32>(create, states);
+	case SortKeyType::PAYLOAD_VARIABLE_32:
+		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::PAYLOAD_VARIABLE_32>(create, states);
+	default:
+		throw NotImplementedException("SortedRunMergerLocalState::CreateOrDestroyTournamentTreeSwitch for %s",
+		                              EnumUtil::ToString(sort_key_type));
+	}
+}
+
+template <class STATE, SortKeyType SORT_KEY_TYPE>
+void SortedRunMergerLocalState::TemplatedCreateOrDestroyTournamentTree(bool create, unsafe_vector<STATE> &states) {
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	using ITER = block_iterator_t<STATE, SORT_KEY>;
+
+	if (create) {
+		// Create
+		D_ASSERT(!tournament_tree);
+		D_ASSERT(states.size() == run_boundaries.size());
+		vector<pair<ITER, ITER>> sorted_runs;
+		sorted_runs.reserve(states.size());
+		for (idx_t run_idx = 0; run_idx < states.size(); run_idx++) {
+			auto &state = states[run_idx];
+			const auto &run_boundary = run_boundaries[run_idx];
+			sorted_runs.emplace_back(ITER(state, run_boundary.begin), ITER(state, run_boundary.end));
+		}
+		tournament_tree = new tournament_tree_t<ITER>(sorted_runs);
+	} else {
+		// Destroy
+		if (tournament_tree) {
+			delete static_cast<tournament_tree_t<ITER> *>(tournament_tree);
+		}
+		tournament_tree = nullptr;
+	}
 }
 
 //===--------------------------------------------------------------------===//
 // Sorted Run Merger
 //===--------------------------------------------------------------------===//
-SortedRunMerger::SortedRunMerger(vector<unique_ptr<SortedRun>> &&sorted_runs_p, idx_t partition_size_p, bool external_p,
-                                 bool fixed_blocks_p)
-    : sorted_runs(std::move(sorted_runs_p)), total_count(SortedRunsTotalCount(sorted_runs)),
-      partition_size(partition_size_p), external(external_p), fixed_blocks(fixed_blocks_p) {
+SortedRunMerger::SortedRunMerger(vector<unique_ptr<SortedRun>> &&sorted_runs_p,
+                                 const vector<SortProjectionColumn> &output_projection_columns_p,
+                                 idx_t partition_size_p, bool external_p, bool fixed_blocks_p)
+    : sorted_runs(std::move(sorted_runs_p)), output_projection_columns(output_projection_columns_p),
+      total_count(SortedRunsTotalCount(sorted_runs)), partition_size(partition_size_p), external(external_p),
+      fixed_blocks(fixed_blocks_p) {
 	D_ASSERT(total_count != 0);
 }
 
@@ -422,18 +626,26 @@ SourceResultType SortedRunMerger::GetData(ExecutionContext &, DataChunk &chunk, 
 
 	// TODO this should return BLOCKED when previous thread has not computed boundaries yet
 	//  Otherwise we will spinlock here, and potentially deadlock (e.g., OOM by previous thread)
+	gstate.total_scanned += chunk.size();
 
 	return chunk.size() == 0 ? SourceResultType::FINISHED : SourceResultType::HAVE_MORE_OUTPUT;
 }
 
-OperatorPartitionData SortedRunMerger::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
-                                                        GlobalSourceState &gstate, LocalSourceState &lstate,
-                                                        const OperatorPartitionInfo &partition_info) const {
-	throw NotImplementedException("Sort");
+OperatorPartitionData SortedRunMerger::GetPartitionData(ExecutionContext &, DataChunk &, GlobalSourceState &,
+                                                        LocalSourceState &lstate_p,
+                                                        const OperatorPartitionInfo &) const {
+	auto &lstate = lstate_p.Cast<SortedRunMergerLocalState>();
+	return OperatorPartitionData(lstate.partition_idx.GetIndex());
 }
 
-ProgressData SortedRunMerger::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
-	throw NotImplementedException("Sort");
+ProgressData SortedRunMerger::GetProgress(ClientContext &, GlobalSourceState &gstate_p) const {
+	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
+
+	ProgressData res;
+	res.done = static_cast<double>(gstate.total_scanned);
+	res.total = static_cast<double>(total_count);
+	res.invalid = false;
+	return res;
 }
 
 } // namespace duckdb

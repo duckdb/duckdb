@@ -16,7 +16,7 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 class OrderGlobalSinkState : public GlobalSinkState {
 public:
 	OrderGlobalSinkState(const PhysicalOrder &op, ClientContext &context)
-	    : sort(context, op.orders, op.types, op.projections), state(sort.GetGlobalSinkState(context)) {
+	    : sort(context, op.orders, op.children[0]->types, op.projections), state(sort.GetGlobalSinkState(context)) {
 	}
 
 	Sort sort;
@@ -94,7 +94,7 @@ public:
 class OrderLocalSourceState : public LocalSourceState {
 public:
 	explicit OrderLocalSourceState(ExecutionContext &context, OrderGlobalSourceState &gstate)
-	    : state(gstate.sort.GetLocalSourceState(context, gstate)) {
+	    : state(gstate.sort.GetLocalSourceState(context, *gstate.state)) {
 	}
 
 	unique_ptr<LocalSourceState> state;
@@ -128,7 +128,7 @@ OperatorPartitionData PhysicalOrder::GetPartitionData(ExecutionContext &context,
 		throw InternalException("PhysicalOrder::GetPartitionData: partition columns not supported");
 	}
 
-	return gstate.sort.GetPartitionData(context, chunk, gstate, lstate, partition_info);
+	return gstate.sort.GetPartitionData(context, chunk, *gstate.state, *lstate.state, partition_info);
 }
 
 ProgressData PhysicalOrder::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {

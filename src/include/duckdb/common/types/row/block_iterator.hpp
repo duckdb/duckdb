@@ -145,7 +145,7 @@ public:
 	}
 
 	reference operator[](const difference_type &n) const {
-		return state.template GetValueAtIndex<T>(n);
+		return state.get().template GetValueAtIndex<T>(n);
 	}
 
 	//! Difference between iterators
@@ -175,7 +175,7 @@ public:
 	}
 
 private:
-	STATE &state;
+	std::reference_wrapper<STATE> state;
 	difference_type index;
 };
 
