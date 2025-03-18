@@ -1,58 +1,61 @@
 #include "duckdb.hpp"
+
 #include <iostream>
+#include <chrono> // For timing
 
 int main() {
-	try {
-		// Open DuckDB database (in-memory for simplicity, change "example.db" for a persistent one)
-		duckdb::DuckDB db("../duckdb_benchmark_data/tpch_sf1.duckdb");
-		duckdb::Connection conn(db);
+	// Open DuckDB database (in-memory for simplicity, change "example.db" for a persistent one)
+	std::string path = "../duckdb_benchmark_data/imdb.duckdb";
+	duckdb::DuckDB db(path);
+	duckdb::Connection conn(db);
 
-		conn.Query("Set threads = 1;");
+	conn.Query("SET threads = 1;");
 
-		// TPC-H Query 16
-		std::string query = R"(explain analyze
-            SELECT
-                p_brand,
-                p_type,
-                p_size,
-                count(DISTINCT ps_suppkey) AS supplier_cnt
-            FROM
-                partsupp,
-                part
-            WHERE
-                p_partkey = ps_partkey
-                AND p_brand <> 'Brand#45'
-                AND p_type NOT LIKE 'MEDIUM POLISHED%'
-                AND p_size IN (49, 14, 23, 45, 19, 3, 36, 9)
-                AND ps_suppkey NOT IN (
-                    SELECT
-                        s_suppkey
-                    FROM
-                        supplier
-                    WHERE
-                        s_comment LIKE '%Customer%Complaints%')
-            GROUP BY
-                p_brand,
-                p_type,
-                p_size
-            ORDER BY
-                supplier_cnt DESC,
-                p_brand,
-                p_type,
-                p_size;
-        )";
+	std::string query = R"(
+		explain analyze
+		           SELECT MIN(mc.note) AS production_note,
+		       MIN(t.title) AS movie_title,
+		       MIN(t.production_year) AS movie_year
+		FROM company_type AS ct,
+		     info_type AS it,
+		     movie_companies AS mc,
+		     movie_info_idx AS mi_idx,
+		     title AS t
+		WHERE ct.kind = 'production companies'
+		  AND it.info = 'top 250 rank'
+		  AND mc.note NOT LIKE '%(as Metro-Goldwyn-Mayer Pictures)%'
+		  AND (mc.note LIKE '%(co-production)%'
+		       OR mc.note LIKE '%(presents)%')
+		  AND ct.id = mc.company_type_id
+		  AND t.id = mc.movie_id
+		  AND t.id = mi_idx.movie_id
+		  AND mc.movie_id = mi_idx.movie_id
+		  AND it.id = mi_idx.info_type_id;)";
 
-		// Execute query
-		auto result = conn.Query(query);
-		if (result->HasError()) {
-			std::cerr << "Query error: " << result->GetError() << "\n";
-			return 1;
-		} else {
-			std::cout << result->ToString() << "\n";
-		}
-	} catch (std::exception &e) {
-		std::cerr << "Exception: " << e.what() << "\n";
+	// Execute query twice to warm up
+	conn.Query(query);
+	conn.Query(query);
+
+	// Start timer
+	auto start = std::chrono::high_resolution_clock::now();
+
+	// Execute last query
+	auto result = conn.Query(query);
+
+	// Stop timer
+	auto end = std::chrono::high_resolution_clock::now();
+
+	// Calculate elapsed time in milliseconds
+	double elapsed_ms = std::chrono::duration<double, std::milli>(end - start).count();
+
+	// Check result and print execution time
+	if (result->HasError()) {
+		std::cerr << "Query error: " << result->GetError() << "\n";
 		return 1;
+	} else {
+		std::cout << result->ToString() << "\n";
+		std::cout << "Execution Time: " << elapsed_ms << " ms\n";
 	}
+
 	return 0;
 }

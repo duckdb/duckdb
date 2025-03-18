@@ -18,7 +18,7 @@ public:
 	}
 
 	SelectionVector sel_vector;
-	vector<uint64_t> lookup_results;
+	vector<uint32_t> lookup_results;
 
 public:
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
