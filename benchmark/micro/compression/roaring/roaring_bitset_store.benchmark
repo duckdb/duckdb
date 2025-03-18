@@ -4,12 +4,19 @@
 
 name Roaring Write Run Container Inverted
 group roaring
-storage persistent
+storage persistent v1.2.0
 
 load
+CREATE TABLE data_source AS SELECT case when i%3=0 then 1337 else null end as a FROM range(0, 250_000_000) tbl(i);
 PRAGMA force_compression='roaring';
 SET checkpoint_threshold = '10.0 GB';
-CREATE TABLE data_source AS SELECT case when i%3=0 then 1337 else null end as a FROM range(0, 250_000_000) tbl(i);
+CREATE TABLE test_compression as FROM data_source;
+checkpoint;
+
+assert I
+select DISTINCT compression from pragma_storage_info('test_compression') where segment_type in ('VALIDITY')
+----
+Roaring
 
 run
 CREATE TABLE tbl AS FROM data_source;

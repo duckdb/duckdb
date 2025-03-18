@@ -4,13 +4,20 @@
 
 name ZSTD Compression Write
 group zstd
-storage persistent
+storage persistent v1.2.0
 require_reinit
 
 load
 DROP TABLE IF EXISTS zstd_strings;
 PRAGMA force_compression='zstd';
 set variable my_string = (list_reduce([chr(((i % 26) + ord('a'))::INTEGER) for i in range(4096)], (x, y) -> concat(x, y)));
+create table test_compression as select getvariable('my_string') as data from range(2_500_000) tbl(i);
+checkpoint;
+
+assert I
+select DISTINCT compression from pragma_storage_info('test_compression') where segment_type in ('VARCHAR')
+----
+ZSTD
 
 run
 create table zstd_strings as select getvariable('my_string') as data from range(2_500_000) tbl(i);

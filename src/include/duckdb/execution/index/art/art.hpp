@@ -35,6 +35,8 @@ public:
 	static constexpr uint8_t ALLOCATOR_COUNT = 9;
 	//! FixedSizeAllocator count of deprecated ARTs.
 	static constexpr uint8_t DEPRECATED_ALLOCATOR_COUNT = ALLOCATOR_COUNT - 3;
+	//! Keys must not exceed MAX_KEY_LEN * prefix_count.
+	static constexpr idx_t MAX_KEY_LEN = 8192;
 
 public:
 	ART(const string &name, const IndexConstraintType index_constraint_type, const vector<column_t> &column_ids,
@@ -51,7 +53,7 @@ public:
 	}
 
 	//! Plan index construction.
-	static unique_ptr<PhysicalOperator> CreatePlan(PlanIndexInput &input);
+	static PhysicalOperator &CreatePlan(PlanIndexInput &input);
 
 	//! Root of the tree.
 	Node tree = Node();
@@ -59,6 +61,8 @@ public:
 	shared_ptr<array<unsafe_unique_ptr<FixedSizeAllocator>, ALLOCATOR_COUNT>> allocators;
 	//! True, if the ART owns its data.
 	bool owns_data;
+	//! True, if keys need a key length verification pass.
+	bool verify_max_key_len;
 	//! The number of bytes fitting in the prefix.
 	uint8_t prefix_count;
 
@@ -106,9 +110,9 @@ public:
 
 	//! ART key generation.
 	template <bool IS_NOT_NULL = false>
-	static void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
-	static void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids,
-	                               unsafe_vector<ARTKey> &keys, unsafe_vector<ARTKey> &row_id_keys);
+	void GenerateKeys(ArenaAllocator &allocator, DataChunk &input, unsafe_vector<ARTKey> &keys);
+	void GenerateKeyVectors(ArenaAllocator &allocator, DataChunk &input, Vector &row_ids, unsafe_vector<ARTKey> &keys,
+	                        unsafe_vector<ARTKey> &row_id_keys);
 
 	//! Verifies the nodes and optionally returns a string of the ART.
 	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
