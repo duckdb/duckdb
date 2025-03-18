@@ -497,14 +497,57 @@ unique_ptr<AlterInfo> SetPartitionedByInfo::Copy() const {
 string SetPartitionedByInfo::ToString() const {
 	string result = "ALTER TABLE ";
 	result += QualifierToString(catalog, schema, name);
-	result += " SET PARTITIONED BY (";
-	for (idx_t i = 0; i < partition_keys.size(); i++) {
-		if (i > 0) {
-			result += ", ";
+	if (partition_keys.empty()) {
+		result += " RESET PARTITIONED BY";
+	} else {
+		result += " SET PARTITIONED BY (";
+		for (idx_t i = 0; i < partition_keys.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += partition_keys[i]->ToString();
 		}
-		result += partition_keys[i]->ToString();
+		result += ")";
 	}
-	result += ")";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// SetSortedByInfo
+//===--------------------------------------------------------------------===//
+SetSortedByInfo::SetSortedByInfo() : AlterTableInfo(AlterTableType::SET_SORTED_BY) {
+}
+
+SetSortedByInfo::SetSortedByInfo(AlterEntryData data, vector<OrderByNode> orders_p)
+    : AlterTableInfo(AlterTableType::SET_SORTED_BY, std::move(data)), orders(std::move(orders_p)) {
+}
+
+SetSortedByInfo::~SetSortedByInfo() {
+}
+
+unique_ptr<AlterInfo> SetSortedByInfo::Copy() const {
+	vector<OrderByNode> copied_orders;
+	for (auto &order_key : orders) {
+		copied_orders.emplace_back(order_key.type, order_key.null_order, order_key.expression->Copy());
+	}
+	return make_uniq_base<AlterInfo, SetSortedByInfo>(GetAlterEntryData(), std::move(copied_orders));
+}
+
+string SetSortedByInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	if (orders.empty()) {
+		result += " RESET SORTED BY";
+	} else {
+		result += " SET SORTED BY (";
+		for (idx_t i = 0; i < orders.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += orders[i].ToString();
+		}
+		result += ")";
+	}
 	return result;
 }
 
