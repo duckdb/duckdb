@@ -15,7 +15,7 @@ void Serializer::WriteValue(const vector<bool> &vec) {
 
 template <>
 void Serializer::WritePropertyWithDefault<Value>(const field_id_t field_id, const char *tag, const Value &value,
-                                                 const Value &&default_value) {
+                                                 const Value &default_value) {
 	// If current value is default, don't write it
 	if (!options.serialize_default_values && ValueOperations::NotDistinctFrom(value, default_value)) {
 		OnOptionalPropertyBegin(field_id, tag, false);

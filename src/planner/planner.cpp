@@ -184,7 +184,7 @@ void Planner::VerifyPlan(ClientContext &context, unique_ptr<LogicalOperator> &op
 
 	// format (de)serialization of this operator
 	try {
-		MemoryStream stream;
+		MemoryStream stream(Allocator::Get(context));
 
 		SerializationOptions options;
 		if (config.options.serialization_compatibility.manually_set) {

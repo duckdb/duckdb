@@ -68,3 +68,66 @@ WINDOW ${invalid} AS (ORDER BY i);
 syntax error at or near
 
 endloop
+
+# Framed non-aggregate functions can't handle EXCLUDE
+foreach func lead lag ntile
+
+statement error
+SELECT 
+	i,
+	${func}(i ORDER BY i // 2, i) OVER (
+		ORDER BY i // 2
+		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+		EXCLUDE TIES
+	) AS f,
+FROM range(10) tbl(i)
+ORDER BY i;
+----
+EXCLUDE is not supported for the window function
+
+statement error
+SELECT 
+	i,
+	lead(i ORDER BY i // 2, i) OVER w AS f,
+FROM range(10) tbl(i)
+WINDOW w AS (
+		ORDER BY i // 2
+		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+		EXCLUDE TIES
+	)
+ORDER BY i;
+----
+EXCLUDE is not supported for the window function
+
+endloop
+
+foreach func row_number rank cume_dist
+
+statement error
+SELECT 
+	i,
+	${func}(ORDER BY i // 2, i) OVER (
+		ORDER BY i // 2
+		ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+		EXCLUDE TIES
+	) AS f,
+FROM range(10) tbl(i)
+ORDER BY i;
+----
+EXCLUDE is not supported for the window function
+
+statement error
+SELECT 
+	i,
+	${func}(ORDER BY i // 2, i) OVER w AS f,
+FROM range(10) tbl(i)
+WINDOW w AS (
+	ORDER BY i // 2
+	ROWS BETWEEN 3 PRECEDING AND 3 FOLLOWING 
+	EXCLUDE TIES
+)
+ORDER BY i;
+----
+EXCLUDE is not supported for the window function
+
+endloop

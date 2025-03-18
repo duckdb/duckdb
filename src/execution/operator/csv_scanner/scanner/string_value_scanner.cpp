@@ -126,6 +126,10 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 			SkipBOM();
 		}
 	}
+	ignore_empty_values = state_machine.dialect_options.state_machine_options.delimiter.GetValue()[0] != ' ' &&
+	                      state_machine.dialect_options.state_machine_options.quote != ' ' &&
+	                      state_machine.dialect_options.state_machine_options.escape != ' ' &&
+	                      state_machine.dialect_options.state_machine_options.comment != ' ';
 }
 
 StringValueResult::~StringValueResult() {
@@ -148,7 +152,7 @@ inline bool IsValueNull(const char *null_str_ptr, const char *value_ptr, const i
 }
 
 bool StringValueResult::HandleTooManyColumnsError(const char *value_ptr, const idx_t size) {
-	if (cur_col_id >= number_of_columns && state_machine.state_machine_options.rfc_4180.GetValue()) {
+	if (cur_col_id >= number_of_columns && state_machine.state_machine_options.strict_mode.GetValue()) {
 		bool error = true;
 		if (cur_col_id == number_of_columns && ((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
 			// we make an exception if the first over-value is null
@@ -220,7 +224,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 		return;
 	}
 	if (cur_col_id >= number_of_columns) {
-		if (!state_machine.state_machine_options.rfc_4180.GetValue()) {
+		if (!state_machine.state_machine_options.strict_mode.GetValue()) {
 			return;
 		}
 		bool error = true;
@@ -248,9 +252,9 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 	}
 
 	if (((quoted && state_machine.options.allow_quoted_nulls) || !quoted)) {
-		// Check for the occurrence of escaped null string like \N only if RFC 4180 conformance is disabled
+		// Check for the occurrence of escaped null string like \N only if strict_mode is disabled
 		const bool check_unquoted_escaped_null =
-		    state_machine.state_machine_options.rfc_4180.GetValue() == false && escaped && !quoted && size == 1;
+		    state_machine.state_machine_options.strict_mode.GetValue() == false && escaped && !quoted && size == 1;
 		for (idx_t i = 0; i < null_str_count; i++) {
 			bool is_null = false;
 			if (null_str_size[i] == 2 && null_str_ptr[i][0] == state_machine.state_machine_options.escape.GetValue()) {
@@ -488,19 +492,30 @@ void StringValueResult::Reset() {
 		cur_buffer = buffer_handles[iterator.GetBufferIdx()];
 	}
 	buffer_handles.clear();
+	idx_t actual_size = 0;
 	if (cur_buffer) {
 		buffer_handles[cur_buffer->buffer_idx] = cur_buffer;
+		actual_size = cur_buffer->actual_size;
 	}
 	current_errors.Reset();
 	borked_rows.clear();
+	current_line_position.begin = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, actual_size};
+	current_line_position.end = current_line_position.begin;
 }
 
 void StringValueResult::AddQuotedValue(StringValueResult &result, const idx_t buffer_pos) {
 	if (!result.unquoted) {
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	}
-	AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.quoted_position + 1,
-	                        buffer_pos - result.quoted_position - 2, buffer_pos < result.last_position.buffer_pos + 2);
+	// remove potential empty values
+	idx_t length = buffer_pos - result.quoted_position - 1;
+	while (length > 0 && result.ignore_empty_values &&
+	       result.buffer_ptr[result.quoted_position + 1 + length - 1] == ' ') {
+		length--;
+	}
+	length--;
+	AddPossiblyEscapedValue(result, buffer_pos, result.buffer_ptr + result.quoted_position + 1, length,
+	                        buffer_pos < result.last_position.buffer_pos + 2);
 	result.quoted = false;
 }
 
@@ -515,7 +530,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 			}
 		}
 		if (result.cur_col_id >= result.number_of_columns &&
-		    !result.state_machine.state_machine_options.rfc_4180.GetValue()) {
+		    !result.state_machine.state_machine_options.strict_mode.GetValue()) {
 			return;
 		}
 		if (!result.HandleTooManyColumnsError(value_ptr, length)) {
@@ -539,7 +554,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 				auto value = StringValueScanner::RemoveEscape(
 				    value_ptr, length, result.state_machine.dialect_options.state_machine_options.escape.GetValue(),
 				    result.state_machine.dialect_options.state_machine_options.quote.GetValue(),
-				    result.state_machine.dialect_options.state_machine_options.rfc_4180.GetValue(),
+				    result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
 				    result.parse_chunk.data[result.chunk_col_id]);
 				result.AddValueToVector(value.GetData(), value.GetSize());
 			}
@@ -673,23 +688,29 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				    line_pos.GetGlobalPosition(result.requested_size), result.path);
 			}
 			break;
-		case CAST_ERROR:
+		case CAST_ERROR: {
+			string column_name;
+			LogicalTypeId type_id;
+			if (cur_error.col_idx < result.names.size()) {
+				column_name = result.names[cur_error.col_idx];
+			}
+			if (cur_error.col_idx < result.number_of_columns) {
+				type_id = result.parse_types[cur_error.chunk_idx].type_id;
+			}
 			if (result.current_line_position.begin == line_pos) {
 				csv_error = CSVError::CastError(
-				    result.state_machine.options, result.names[cur_error.col_idx], cur_error.error_message,
-				    cur_error.col_idx, borked_line, lines_per_batch,
+				    result.state_machine.options, column_name, cur_error.error_message, cur_error.col_idx, borked_line,
+				    lines_per_batch,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size, first_nl),
-				    result.parse_types[cur_error.chunk_idx].type_id, result.path);
+				    line_pos.GetGlobalPosition(result.requested_size, first_nl), type_id, result.path);
 			} else {
 				csv_error = CSVError::CastError(
-				    result.state_machine.options, result.names[cur_error.col_idx], cur_error.error_message,
-				    cur_error.col_idx, borked_line, lines_per_batch,
+				    result.state_machine.options, column_name, cur_error.error_message, cur_error.col_idx, borked_line,
+				    lines_per_batch,
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
-				    line_pos.GetGlobalPosition(result.requested_size), result.parse_types[cur_error.chunk_idx].type_id,
-				    result.path);
+				    line_pos.GetGlobalPosition(result.requested_size), type_id, result.path);
 			}
-			break;
+		} break;
 		case MAXIMUM_LINE_SIZE:
 			csv_error = CSVError::LineSizeError(
 			    result.state_machine.options, lines_per_batch, borked_line,
@@ -949,7 +970,8 @@ StringValueScanner::StringValueScanner(idx_t scanner_idx_p, const shared_ptr<CSV
       result(states, *state_machine, cur_buffer_handle, BufferAllocator::Get(buffer_manager->context), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
-             buffer_manager->GetFilePath(), scanner_idx_p) {
+             buffer_manager->GetFilePath(), scanner_idx_p),
+      start_pos(0) {
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
 
@@ -961,11 +983,13 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
       result(states, *state_machine, cur_buffer_handle, Allocator::DefaultAllocator(), result_size,
              iterator.pos.buffer_pos, *error_handler, iterator,
              buffer_manager->context.client_data->debug_set_max_line_length, csv_file_scan, lines_read, sniffing,
-             buffer_manager->GetFilePath(), 0) {
+             buffer_manager->GetFilePath(), 0),
+      start_pos(0) {
 	iterator.buffer_size = state_machine->options.buffer_size_option.GetValue();
 }
 
-unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options) {
+unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options,
+                                                                 const MultiFileReaderOptions &file_options) {
 	auto state_machine = make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options,
 	                                                      CSVStateMachineCache::Get(context));
 
@@ -978,7 +1002,7 @@ unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &
 	auto it = BaseScanner::SkipCSVRows(buffer_manager, state_machine, rows_to_skip);
 	auto scanner = make_uniq<StringValueScanner>(buffer_manager, state_machine, make_shared_ptr<CSVErrorHandler>(),
 	                                             STANDARD_VECTOR_SIZE, it);
-	scanner->csv_file_scan = make_shared_ptr<CSVFileScan>(context, options.file_path, options);
+	scanner->csv_file_scan = make_shared_ptr<CSVFileScan>(context, options.file_path, options, file_options);
 	scanner->csv_file_scan->InitializeProjection();
 	return scanner;
 }
@@ -1011,17 +1035,18 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	auto &names = csv_file_scan->GetNames();
 	auto &reader_data = csv_file_scan->reader_data;
 	// Now Do the cast-aroo
-	for (idx_t c = 0; c < reader_data.column_ids.size(); c++) {
-		idx_t col_idx = c;
-		idx_t result_idx = reader_data.column_mapping[c];
+	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+		auto col_idx = MultiFileLocalIndex(i);
+		auto global_idx = reader_data.column_mapping[col_idx];
 		if (!csv_file_scan->projection_ids.empty()) {
-			result_idx = reader_data.column_mapping[csv_file_scan->projection_ids[c].second];
+			auto local_idx = MultiFileLocalIndex(csv_file_scan->projection_ids[col_idx].second);
+			global_idx = reader_data.column_mapping[local_idx];
 		}
 		if (col_idx >= parse_chunk.ColumnCount()) {
 			throw InvalidInputException("Mismatch between the schema of different files");
 		}
 		auto &parse_vector = parse_chunk.data[col_idx];
-		auto &result_vector = insert_chunk.data[result_idx];
+		auto &result_vector = insert_chunk.data[global_idx];
 		auto &type = result_vector.GetType();
 		auto &parse_type = parse_vector.GetType();
 		if (!type.IsJSONType() &&
@@ -1238,7 +1263,7 @@ void StringValueScanner::ProcessExtraRow() {
 	}
 }
 
-string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool rfc_4180,
+string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char escape, char quote, bool strict_mode,
                                           Vector &vector) {
 	// Figure out the exact size
 	idx_t str_pos = 0;
@@ -1247,7 +1272,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 		if (str_ptr[cur_pos] == escape && !just_escaped) {
 			just_escaped = true;
 		} else if (str_ptr[cur_pos] == quote) {
-			if (just_escaped || !rfc_4180) {
+			if (just_escaped || !strict_mode) {
 				str_pos++;
 			}
 			just_escaped = false;
@@ -1267,7 +1292,7 @@ string_t StringValueScanner::RemoveEscape(const char *str_ptr, idx_t end, char e
 		if (c == escape && !just_escaped) {
 			just_escaped = true;
 		} else if (str_ptr[cur_pos] == quote) {
-			if (just_escaped || !rfc_4180) {
+			if (just_escaped || !strict_mode) {
 				removed_escapes_ptr[str_pos++] = c;
 			}
 			just_escaped = false;
@@ -1361,27 +1386,33 @@ void StringValueScanner::ProcessOverBufferValue() {
 	if (!skip_value) {
 		string_t value;
 		if (result.quoted && !result.comment) {
-			value = string_t(over_buffer_string.c_str() + result.quoted_position,
-			                 UnsafeNumericCast<uint32_t>(over_buffer_string.size() - 1 - result.quoted_position));
+			idx_t length = over_buffer_string.size() - 1 - result.quoted_position;
+			while (length > 0 && result.ignore_empty_values &&
+			       over_buffer_string.c_str()[result.quoted_position + length] == ' ') {
+				length--;
+			}
+			value = string_t(over_buffer_string.c_str() + result.quoted_position, UnsafeNumericCast<uint32_t>(length));
 			if (result.escaped) {
 				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
 					const auto str_ptr = over_buffer_string.c_str() + result.quoted_position;
-					value = RemoveEscape(str_ptr, over_buffer_string.size() - 2,
-					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					                     result.state_machine.dialect_options.state_machine_options.rfc_4180.GetValue(),
-					                     result.parse_chunk.data[result.chunk_col_id]);
+					value =
+					    RemoveEscape(str_ptr, over_buffer_string.size() - 2,
+					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					                 result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
+					                 result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		} else {
 			value = string_t(over_buffer_string.c_str(), UnsafeNumericCast<uint32_t>(over_buffer_string.size()));
 			if (result.escaped) {
 				if (!result.HandleTooManyColumnsError(over_buffer_string.c_str(), over_buffer_string.size())) {
-					value = RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
-					                     state_machine->dialect_options.state_machine_options.escape.GetValue(),
-					                     state_machine->dialect_options.state_machine_options.quote.GetValue(),
-					                     result.state_machine.dialect_options.state_machine_options.rfc_4180.GetValue(),
-					                     result.parse_chunk.data[result.chunk_col_id]);
+					value =
+					    RemoveEscape(over_buffer_string.c_str(), over_buffer_string.size(),
+					                 state_machine->dialect_options.state_machine_options.escape.GetValue(),
+					                 state_machine->dialect_options.state_machine_options.quote.GetValue(),
+					                 result.state_machine.dialect_options.state_machine_options.strict_mode.GetValue(),
+					                 result.parse_chunk.data[result.chunk_col_id]);
 				}
 			}
 		}
@@ -1458,7 +1489,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 				}
 				lines_read++;
 			} else if (states.IsQuotedCurrent() &&
-			           state_machine->dialect_options.state_machine_options.rfc_4180.GetValue()) {
+			           state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
 				// Unterminated quote
 				LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos,
 				                                   result.buffer_size};
@@ -1470,7 +1501,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 					result.UnsetComment(result, iterator.pos.buffer_pos);
 				} else {
 					if (result.quoted && states.IsDelimiterBytes() &&
-					    state_machine->dialect_options.state_machine_options.rfc_4180.GetValue()) {
+					    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
 						result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id,
 						                             result.last_position);
 					}
@@ -1524,8 +1555,8 @@ bool StringValueScanner::FirstValueEndsOnQuote(CSVIterator iterator) const {
 	const idx_t to_pos = iterator.GetEndPos();
 	while (iterator.pos.buffer_pos < to_pos) {
 		state_machine->Transition(current_state, buffer_handle_ptr[iterator.pos.buffer_pos++]);
-		if ((current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
-		     current_state.IsState(CSVState::RECORD_SEPARATOR))) {
+		if (current_state.IsState(CSVState::DELIMITER) || current_state.IsState(CSVState::CARRIAGE_RETURN) ||
+		    current_state.IsState(CSVState::RECORD_SEPARATOR)) {
 			return buffer_handle_ptr[iterator.pos.buffer_pos - 2] ==
 			       state_machine->dialect_options.state_machine_options.quote.GetValue();
 		}
@@ -1680,9 +1711,9 @@ void StringValueScanner::SetStart() {
 		// We need to initialize our strict state machine
 		auto &state_machine_cache = CSVStateMachineCache::Get(buffer_manager->context);
 		auto state_options = state_machine->state_machine_options;
-		// To set the state machine to be strict we ensure that rfc_4180 is set to true
-		if (!state_options.rfc_4180.IsSetByUser()) {
-			state_options.rfc_4180 = true;
+		// To set the state machine to be strict we ensure that strict_mode is set to true
+		if (!state_options.strict_mode.IsSetByUser()) {
+			state_options.strict_mode = true;
 		}
 		state_machine_strict =
 		    make_shared_ptr<CSVStateMachine>(state_machine_cache.Get(state_options), state_machine->options);
@@ -1702,6 +1733,9 @@ void StringValueScanner::SetStart() {
 			best_row = quoted_row;
 		}
 		if (!best_row.is_valid && !quoted_row.is_valid && best_row.start_pos < quoted_row.start_pos) {
+			best_row = quoted_row;
+		}
+		if (quoted_row.is_valid && quoted_row.start_pos < best_row.start_pos) {
 			best_row = quoted_row;
 		}
 	}
@@ -1799,7 +1833,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 			}
 		}
 		if (states.IsQuotedCurrent() && !found_error &&
-		    state_machine->dialect_options.state_machine_options.rfc_4180.GetValue()) {
+		    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
 			// quotes
 			result.current_errors.Insert(type, result.cur_col_id, result.chunk_col_id, result.last_position);

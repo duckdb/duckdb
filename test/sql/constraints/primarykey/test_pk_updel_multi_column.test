@@ -22,17 +22,17 @@ SELECT * FROM test ORDER BY ALL;
 13	pandas
 
 statement ok
-UPDATE test SET a = a + 1;
+UPDATE test SET a = a + 3;
 
 query IT
 SELECT * FROM test ORDER BY ALL;
 ----
-12	pandas
-13	pandas
 14	pandas
+15	pandas
+16	pandas
 
 statement error
-UPDATE test SET a = 13 WHERE a = 12;
+UPDATE test SET a = 15 WHERE a = 14;
 ----
 <REGEX>:Constraint Error.*violates primary key constraint.*
 
@@ -44,12 +44,12 @@ UPDATE test SET a = 4;
 query IT
 SELECT * FROM test ORDER BY a;
 ----
-12	pandas
-13	pandas
 14	pandas
+15	pandas
+16	pandas
 
 statement ok
-UPDATE test SET a = a - 1;
+UPDATE test SET a = a - 3;
 
 query IT
 SELECT * FROM test ORDER BY ALL;

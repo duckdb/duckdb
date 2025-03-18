@@ -300,7 +300,7 @@ function/table/unnest.cpp	8
 function/table/version/pragma_version.cpp	3
 function/table_function.cpp	9
 function/udf_function.cpp	6
-extension/json/buffered_json_reader.cpp	35
+extension/json/json_reader.cpp	35
 extension/json/include/json_common.hpp	8
 extension/json/include/json_executors.hpp	3
 extension/json/json_deserializer.cpp	136

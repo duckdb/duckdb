@@ -71,15 +71,11 @@ struct ExtensionAccess {
 	static void SetError(duckdb_extension_info info, const char *error) {
 		auto &load_state = DuckDBExtensionLoadState::Get(info);
 
-		if (error) {
-			load_state.has_error = true;
-			load_state.error_data = ErrorData(error);
-		} else {
-			load_state.has_error = true;
-			load_state.error_data = ErrorData(
-			    ExceptionType::UNKNOWN_TYPE,
-			    "Extension has indicated an error occured during initialization, but did not set an error message.");
-		}
+		load_state.has_error = true;
+		load_state.error_data =
+		    error ? ErrorData(error)
+		          : ErrorData(ExceptionType::UNKNOWN_TYPE, "Extension has indicated an error occured during "
+		                                                   "initialization, but did not set an error message.");
 	}
 
 	//! Called by the extension get a pointer to the database that is loading it
@@ -92,9 +88,11 @@ struct ExtensionAccess {
 			load_state.database_data->database = make_shared_ptr<DuckDB>(load_state.db);
 			return reinterpret_cast<duckdb_database *>(load_state.database_data.get());
 		} catch (std::exception &ex) {
+			load_state.has_error = true;
 			load_state.error_data = ErrorData(ex);
 			return nullptr;
 		} catch (...) {
+			load_state.has_error = true;
 			load_state.error_data =
 			    ErrorData(ExceptionType::UNKNOWN_TYPE, "Unknown error in GetDatabase when trying to load extension!");
 			return nullptr;
@@ -125,8 +123,9 @@ struct ExtensionAccess {
 			load_state.has_error = true;
 			load_state.error_data =
 			    ErrorData(ExceptionType::UNKNOWN_TYPE,
-			              StringUtil::Format("Unknown ABI Type '%s' found when loading extension '%s'",
-			                                 load_state.init_result.abi_type, load_state.init_result.filename));
+			              StringUtil::Format("Unknown ABI Type of value '%d' found when loading extension '%s'",
+			                                 static_cast<uint8_t>(load_state.init_result.abi_type),
+			                                 load_state.init_result.filename));
 			return nullptr;
 		}
 
@@ -481,7 +480,8 @@ ExtensionInitResult ExtensionHelper::InitialLoad(DatabaseInstance &db, FileSyste
 	string error;
 	ExtensionInitResult result;
 	if (!TryInitialLoad(db, fs, extension, result, error)) {
-		if (!ExtensionHelper::AllowAutoInstall(extension)) {
+		auto &config = DBConfig::GetConfig(db);
+		if (!config.options.autoinstall_known_extensions || !ExtensionHelper::AllowAutoInstall(extension)) {
 			throw IOException(error);
 		}
 		// the extension load failed - try installing the extension
@@ -589,7 +589,8 @@ void ExtensionHelper::LoadExternalExtension(DatabaseInstance &db, FileSystem &fs
 		return;
 	}
 
-	throw IOException("Unknown ABI type '%s' for extension '%s'", extension_init_result.abi_type, extension);
+	throw IOException("Unknown ABI type of value '%s' for extension '%s'",
+	                  static_cast<uint8_t>(extension_init_result.abi_type), extension);
 #endif
 }
 

@@ -1,0 +1,68 @@
+# name: test/sql/logging/logging_context_ids.test
+# description: Check the connection_id and transaction_id fields
+# group: [logging]
+
+require noforcestorage
+
+statement ok con1
+set enable_logging=true
+
+# We use these to offet the ids which don't start at 0 here due to internal queries/transactions that DuckDB performs
+statement ok con2
+set variable base_transaction_id = current_transaction_id() + 2
+
+statement ok con2
+set variable base_query_id = current_query_id() + 1
+
+# Con2 will do use autocommit on a new connection
+statement ok con2
+SELECT write_log('hey1', log_type := 'test_logging_autocommit')
+
+statement ok con2
+SELECT write_log('hey2', log_type := 'test_logging_autocommit')
+
+# We expect transaction_ids 1 & 2 here
+query II con2
+SELECT
+    transaction_id - getvariable('base_transaction_id') as relative_transaction_id,
+    query_id - getvariable('base_query_id') as relative_query_id,
+FROM duckdb_logs
+WHERE
+    connection_id=current_connection_id() and
+    type='test_logging_autocommit';
+----
+0	0
+1	1
+
+# Con3 will do the same, but within a transaction
+# Again, we calculate the offsets first
+statement ok con3
+set variable base_transaction_id = current_transaction_id() + 2
+
+statement ok con3
+set variable base_query_id = current_query_id() + 1
+
+statement ok con3
+BEGIN TRANSACTION;
+
+statement ok con3
+SELECT write_log('hey1', log_type := 'test_logging_transaction')
+
+statement ok con3
+SELECT write_log('hey2', log_type := 'test_logging_transaction')
+
+statement ok con3
+COMMIT
+
+# Now both queries were performed in the same transaction
+query II con3
+SELECT
+    transaction_id - getvariable('base_transaction_id') as relative_transaction_id,
+    query_id - getvariable('base_query_id') as query_id,
+FROM duckdb_logs
+WHERE
+    connection_id=current_connection_id() and
+    type='test_logging_transaction';
+----
+0	1
+0	2

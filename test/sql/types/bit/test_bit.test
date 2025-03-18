@@ -192,3 +192,8 @@ query I
 SELECT bit_length(big) FROM huge_bits
 ----
 10017
+
+query I
+select( 'ab'::blob::bit<<2)::blob;
+----
+\x85\x88

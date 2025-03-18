@@ -121,6 +121,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			if (GetBooleanArg(context, option.second)) {
 				return_type = CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST;
 			}
+		} else if (loption == "return_stats") {
+			if (GetBooleanArg(context, option.second)) {
+				return_type = CopyFunctionReturnType::WRITTEN_FILE_STATISTICS;
+			}
 		} else if (loption == "write_partition_columns") {
 			write_partition_columns = GetBooleanArg(context, option.second);
 		} else {
@@ -222,6 +226,10 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			    "Can't combine file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY for COPY");
 		}
 	}
+	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
+	    !copy_function.function.copy_to_get_written_statistics) {
+		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", stmt.info->format);
+	}
 
 	// now create the copy information
 	auto copy = make_uniq<LogicalCopyToFile>(copy_function.function, std::move(function_data), std::move(stmt.info));
@@ -251,6 +259,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 		properties.return_type = StatementReturnType::CHANGED_ROWS;
 		break;
 	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST:
+	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS:
 		properties.return_type = StatementReturnType::QUERY_RESULT;
 		break;
 	default:

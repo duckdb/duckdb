@@ -88,7 +88,7 @@
         "id": 202,
         "name": "index_type",
         "type": "DeprecatedIndexType",
-        "deleted": "True"
+        "status": "deleted"
       },
       {
         "id": 203,
