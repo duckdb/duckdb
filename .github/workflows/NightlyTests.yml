@@ -303,8 +303,6 @@ jobs:
 
      - name: Run Python SQLLogicTester
        shell: bash
-       env:
-         CI: 1
        run: |
          python3 -m pytest './tools/pythonpkg/sqllogic/' --verbose --test-dir './test'
 
