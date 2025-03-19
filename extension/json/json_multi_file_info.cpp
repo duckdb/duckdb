@@ -76,6 +76,9 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		for (idx_t i = 0; i < struct_children.size(); i++) {
 			auto &name = StructType::GetChildName(child_type, i);
 			auto &val = struct_children[i];
+			if (val.IsNull()) {
+				throw BinderException("read_json \"columns\" parameter type specification cannot be NULL.");
+			}
 			options.name_list.push_back(name);
 			if (val.type().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("read_json \"columns\" parameter type specification must be VARCHAR.");
