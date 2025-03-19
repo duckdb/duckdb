@@ -23,7 +23,7 @@ query T
 SELECT string_split_regex(a, '[\r\n]+') FROM test ORDER BY a;
 ----
 [hello, world]
-[what,,  brings, you here,  , today]
+['what,', ' brings, you here', ' , today']
 
 statement ok
 DROP TABLE test;

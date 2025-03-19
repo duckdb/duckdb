@@ -1,0 +1,70 @@
+# name: test/sql/function/uuid/test_uuid_function.test
+# description: Test uuid related functions
+# group: [uuid]
+
+# Test invalid UUID in string format.
+statement error
+SELECT uuid_extract_version('1234');
+----
+Given string '1234' is invalid UUID.
+
+# Test UUIDv7 in string format.
+query I
+SELECT uuid_extract_version('ac227128-7d55-7ee0-a765-5025cc52e55a');
+----
+7
+
+query I
+SELECT uuid_extract_version(uuidv7()::STRING);
+----
+7
+
+query I
+SELECT uuid_extract_version(uuidv7());
+----
+7
+
+# Test UUIDv4 in string format.
+query I
+SELECT uuid_extract_version('ac227128-7d55-4ee0-a765-5025cc52e55a');
+----
+4
+
+query I
+SELECT uuid_extract_version(uuidv4()::STRING);
+----
+4
+
+query I
+SELECT uuid_extract_version(gen_random_uuid()::STRING);
+----
+4
+
+query I
+SELECT uuid_extract_version(uuidv4());
+----
+4
+
+query I
+SELECT uuid_extract_version(gen_random_uuid());
+----
+4
+
+# Test timestamp extraction for invalid string.
+statement error
+SELECT uuid_extract_timestamp('1234');
+----
+Given string '1234' is invalid UUID.
+
+# Test timestamp extraction with UUID v4.
+statement error
+SELECT uuid_extract_timestamp(uuidv4());
+----
+Given UUID is with version 4, not version 7.
+
+# Test timestamp extraction with UUID v7.
+statement ok
+SELECT uuid_extract_timestamp('81948644-15b2-7170-839a-7a01b9fb5951');
+
+statement ok
+SELECT uuid_extract_timestamp(uuidv7());
