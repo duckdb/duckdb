@@ -36,39 +36,55 @@ private:
 	friend SORT_KEY;
 
 public:
+	void ByteSwap() {
+		auto &sort_key = static_cast<SORT_KEY &>(*this);
+		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
+			(&sort_key.part0)[i] = BSwap((&sort_key.part0)[i]);
+		}
+	}
+
 	void Construct(const string_t &str, data_ptr_t &) {
 		D_ASSERT(str.GetSize() <= SORT_KEY::INLINE_LENGTH);
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
-		if (SORT_KEY::INLINE_LENGTH <= string_t::INLINE_LENGTH) {
-			memcpy(&sort_key.part0, str.GetPrefix(), SORT_KEY::INLINE_LENGTH);
-			return;
-		}
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
 			(&sort_key.part0)[i] = 0;
 		}
-		if (str.IsInlined()) {
+
+		if (SORT_KEY::INLINE_LENGTH <= string_t::INLINE_LENGTH) {
+			memcpy(&sort_key.part0, str.GetPrefix(), SORT_KEY::INLINE_LENGTH);
+		} else if (str.IsInlined()) {
 			memcpy(&sort_key.part0, str.GetPrefix(), string_t::INLINE_LENGTH);
 		} else {
 			FastMemcpy(&sort_key.part0, str.GetPointer(), str.GetSize());
 		}
+
+		// IMPORTANT NOTE: for fixed-size keys, we don't actually store the data in byte-comparable order.
+		// We swap so that our comparison can do aligned uint64_t comparisons, yielding better comparison performance.
+		// This means we have to ByteSwap once more when decoding the keys later.
+		// For variable-size keys, we just store it in byte-comparable order, as the performance there matters less.
+		ByteSwap();
 	}
 
 	void Construct(const int64_t &val, data_ptr_t &) {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
-		sort_key.part0 = static_cast<uint64_t>(BSwap(val)); // NOLINT: unsafe cast on purpose
+		sort_key.part0 = static_cast<uint64_t>(val); // NOLINT: unsafe cast on purpose
 	}
 
 	static bool LessThan(const uint64_t *const &lhs, const uint64_t *const &rhs) {
-		if (SORT_KEY::PARTS == 1) {
-			return BSwap(lhs[0]) < BSwap(rhs[0]);
+		switch (SORT_KEY::PARTS) {
+		case 1:
+			return lhs[0] < rhs[0];
+		case 2:
+			return lhs[0] == rhs[0] ? lhs[1] < rhs[1] : lhs[0] < rhs[0];
+		case 3:
+			return lhs[0] == rhs[0] ? (lhs[1] == rhs[1] ? lhs[2] < rhs[2] : lhs[1] < rhs[1]) : lhs[0] < rhs[0];
+		case 4:
+			return lhs[0] == rhs[0]
+			           ? (lhs[1] == rhs[1] ? (lhs[2] == rhs[2] ? lhs[3] < rhs[3] : lhs[2] < rhs[2]) : lhs[1] < rhs[1])
+			           : lhs[0] < rhs[0];
+		default:
+			throw NotImplementedException("FixedSortKey::LessThan for %llu", SORT_KEY::PARTS);
 		}
-		if (SORT_KEY::PARTS == 2) {
-			const auto lhs_part0 = BSwap(lhs[0]);
-			const auto rhs_part0 = BSwap(rhs[0]);
-			return lhs_part0 == rhs_part0 ? BSwap(lhs[1]) < BSwap(rhs[1]) : lhs_part0 < rhs_part0;
-		}
-		// TODO: Check if the above approach is better than memcmp for 3/4 parts
-		return memcmp(lhs, rhs, SORT_KEY::INLINE_LENGTH) < 0;
 	}
 
 	friend bool operator<(const SORT_KEY &lhs, const SORT_KEY &rhs) {
