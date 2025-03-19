@@ -77,6 +77,8 @@ public:
 	}
 };
 
+//! The filters in here are non-composite (only need a single column to be evaluated)
+//! Conditions like `A = 2 OR B = 4` are not pushed into a TableFilterSet.
 class TableFilterSet {
 public:
 	map<idx_t, unique_ptr<TableFilter>> filters;
