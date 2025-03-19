@@ -1488,7 +1488,8 @@ typedef enum PGAlterTableType {
 	PG_AT_AddIdentity,               /* ADD IDENTITY */
 	PG_AT_SetIdentity,               /* SET identity column options */
 	AT_DropIdentity,                 /* DROP IDENTITY */
-	PG_AT_SetPartitionedBy           /* SET PARTITIONED BY */
+	PG_AT_SetPartitionedBy,          /* SET PARTITIONED BY */
+	PG_AT_SetSortedBy                /* SET SORTED BY */
 } PGAlterTableType;
 
 typedef struct PGAlterTableCmd /* one subcommand of an ALTER TABLE */

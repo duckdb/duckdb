@@ -351,19 +351,20 @@ const StringUtil::EnumStringLiteral *GetAlterTableTypeValues() {
 		{ static_cast<uint32_t>(AlterTableType::DROP_NOT_NULL), "DROP_NOT_NULL" },
 		{ static_cast<uint32_t>(AlterTableType::SET_COLUMN_COMMENT), "SET_COLUMN_COMMENT" },
 		{ static_cast<uint32_t>(AlterTableType::ADD_CONSTRAINT), "ADD_CONSTRAINT" },
-		{ static_cast<uint32_t>(AlterTableType::SET_PARTITIONED_BY), "SET_PARTITIONED_BY" }
+		{ static_cast<uint32_t>(AlterTableType::SET_PARTITIONED_BY), "SET_PARTITIONED_BY" },
+		{ static_cast<uint32_t>(AlterTableType::SET_SORTED_BY), "SET_SORTED_BY" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterTableType>(AlterTableType value) {
-	return StringUtil::EnumToString(GetAlterTableTypeValues(), 13, "AlterTableType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterTableTypeValues(), 14, "AlterTableType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterTableType EnumUtil::FromString<AlterTableType>(const char *value) {
-	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 13, "AlterTableType", value));
+	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 14, "AlterTableType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterTypeValues() {
