@@ -81,7 +81,7 @@ Léonard Dubois	29
 statement error
 FROM read_csv('data/csv/encodings/utf16.csv')
 ----
-Invalid unicode (byte sequence mismatch) detected.
+Make sure you are using the correct file encoding. If not, set it (e.g., encoding = 'utf-16').
 
 query II
 FROM read_csv('data/csv/encodings/utf16.csv', encoding = 'utf-16')

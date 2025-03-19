@@ -160,6 +160,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 	case AlterTableType::SET_PARTITIONED_BY:
 		result = SetPartitionedByInfo::Deserialize(deserializer);
 		break;
+	case AlterTableType::SET_SORTED_BY:
+		result = SetSortedByInfo::Deserialize(deserializer);
+		break;
 	default:
 		throw SerializationException("Unsupported type for deserialization of AlterTableInfo!");
 	}
@@ -520,6 +523,17 @@ void SetPartitionedByInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterTableInfo> SetPartitionedByInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<SetPartitionedByInfo>(new SetPartitionedByInfo());
 	deserializer.ReadPropertyWithDefault<vector<unique_ptr<ParsedExpression>>>(400, "partition_keys", result->partition_keys);
+	return std::move(result);
+}
+
+void SetSortedByInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<OrderByNode>>(400, "orders", orders);
+}
+
+unique_ptr<AlterTableInfo> SetSortedByInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<SetSortedByInfo>(new SetSortedByInfo());
+	deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(400, "orders", result->orders);
 	return std::move(result);
 }
 

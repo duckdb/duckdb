@@ -4,9 +4,8 @@
 
 namespace duckdb {
 
-unique_ptr<PhysicalOperator> PhysicalPlanGenerator::CreatePlan(LogicalCopyDatabase &op) {
-	auto node = make_uniq<PhysicalCopyDatabase>(op.types, op.estimated_cardinality, std::move(op.info));
-	return std::move(node);
+PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyDatabase &op) {
+	return Make<PhysicalCopyDatabase>(op.types, op.estimated_cardinality, std::move(op.info));
 }
 
 } // namespace duckdb
