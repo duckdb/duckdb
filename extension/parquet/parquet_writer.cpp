@@ -746,6 +746,9 @@ void GetStatsUnifier(const ParquetColumnSchema &schema, vector<unique_ptr<Column
 
 void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &column,
                                      optional_ptr<ColumnWriterStatistics> writer_stats) {
+	if (!written_stats) {
+		return;
+	}
 	// push the stats of this column into the unifier
 	auto &stats_unifier = stats_accumulator->stats_unifiers[col_idx];
 	bool has_nan = false;
