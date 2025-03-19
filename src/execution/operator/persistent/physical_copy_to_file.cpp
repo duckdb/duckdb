@@ -78,7 +78,7 @@ public:
 		auto written_file_info = AddFile(*write_lock, op.file_path, op.return_type);
 		if (written_file_info) {
 			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
-													*written_file_info->file_stats);
+			                                           *written_file_info->file_stats);
 		}
 		initialized = true;
 	}

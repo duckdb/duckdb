@@ -9,18 +9,6 @@
 
 namespace duckdb {
 
-struct ExtractVersionStrOperator {
-	template <typename INPUT_TYPE, typename RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		const idx_t len = input.GetSize();
-		if (len != 36) {
-			throw InvalidInputException("Given string '%s' is invalid UUID.", input.GetString());
-		}
-		// UUIDv4 and UUIDv7 stores version as the 15-th uint8_t.
-		return input.GetPointer()[14] - '0';
-	}
-};
-
 struct ExtractVersionUuidOperator {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
@@ -48,19 +36,6 @@ struct ExtractTimestampUuidOperator {
 		static constexpr uint64_t kMilliToMicro = 1000;
 		const int64_t unix_ts_ms = unix_ts_milli * kMilliToMicro;
 		return timestamp_t {unix_ts_ms};
-	}
-};
-
-struct ExtractTimestampStrOperator {
-	template <typename INPUT_TYPE, typename RESULT_TYPE>
-	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
-		// Validate whether the give input is a valid UUID.
-		hugeint_t uuid_hugeint;
-		if (!BaseUUID::FromCString(input.GetData(), input.GetSize(), uuid_hugeint)) {
-			throw InvalidInputException("Given string '%s' is invalid UUID.", input.GetString());
-		}
-
-		return ExtractTimestampUuidOperator::Operation<hugeint_t, RESULT_TYPE>(uuid_hugeint, result);
 	}
 };
 
@@ -157,22 +132,14 @@ ScalarFunction UUIDv7Fun::GetFunction() {
 	return uuid_v7_function;
 }
 
-ScalarFunctionSet ExtractUuidVerisonFun::GetFunctions() {
-	ScalarFunctionSet version_extraction;
-	version_extraction.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::UINTEGER,
-	                                              ExtractVersionFunction<string_t, ExtractVersionStrOperator>));
-	version_extraction.AddFunction(ScalarFunction({LogicalType::UUID}, LogicalType::UINTEGER,
-	                                              ExtractVersionFunction<hugeint_t, ExtractVersionUuidOperator>));
-	return version_extraction;
+ScalarFunction UUIDExtractVersionFun::GetFunction() {
+	return ScalarFunction({LogicalType::UUID}, LogicalType::UINTEGER,
+	                      ExtractVersionFunction<hugeint_t, ExtractVersionUuidOperator>);
 }
 
-ScalarFunctionSet ExtractUuidTimestampFun::GetFunctions() {
-	ScalarFunctionSet timestamp_extraction;
-	timestamp_extraction.AddFunction(ScalarFunction({LogicalType::VARCHAR}, LogicalType::TIMESTAMP_TZ,
-	                                                ExtractTimestampFunction<string_t, ExtractTimestampStrOperator>));
-	timestamp_extraction.AddFunction(ScalarFunction({LogicalType::UUID}, LogicalType::TIMESTAMP_TZ,
-	                                                ExtractTimestampFunction<hugeint_t, ExtractTimestampUuidOperator>));
-	return timestamp_extraction;
+ScalarFunction UUIDExtractTimestampFun::GetFunction() {
+	return ScalarFunction({LogicalType::UUID}, LogicalType::TIMESTAMP_TZ,
+	                      ExtractTimestampFunction<hugeint_t, ExtractTimestampUuidOperator>);
 }
 
 } // namespace duckdb
