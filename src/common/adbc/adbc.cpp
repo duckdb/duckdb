@@ -17,7 +17,7 @@
 #include "duckdb/common/adbc/options.h"
 #include "duckdb/common/adbc/single_batch_array_stream.hpp"
 #include "duckdb/function/table/arrow.hpp"
-
+#include "duckdb/common/adbc/wrappers.hpp"
 #include <stdlib.h>
 #include <string.h>
 
@@ -249,7 +249,10 @@ AdbcStatusCode ConnectionNew(struct AdbcConnection *connection, struct AdbcError
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
-	connection->private_data = nullptr;
+	auto connection_wrapper =
+	    static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(malloc(sizeof(duckdb::DuckDBAdbcConnectionWrapper)));
+	connection_wrapper->connection = nullptr;
+	connection->private_data = connection_wrapper;
 	return ADBC_STATUS_OK;
 }
 
@@ -270,7 +273,11 @@ AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
-	auto conn = static_cast<duckdb::Connection *>(connection->private_data);
+	D_ASSERT(connection->private_data);
+
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+
+	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
 
 	if (strcmp(key, ADBC_CONNECTION_OPTION_AUTOCOMMIT) == 0) {
 		if (strcmp(value, ADBC_OPTION_VALUE_ENABLED) == 0) {
@@ -324,7 +331,8 @@ AdbcStatusCode ConnectionCommit(struct AdbcConnection *connection, struct AdbcEr
 		SetError(error, "Connection is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto conn = static_cast<duckdb::Connection *>(connection->private_data);
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
 	if (!conn->HasActiveTransaction()) {
 		SetError(error, "No active transaction, cannot commit");
 		return ADBC_STATUS_INVALID_STATE;
@@ -342,7 +350,8 @@ AdbcStatusCode ConnectionRollback(struct AdbcConnection *connection, struct Adbc
 		SetError(error, "Connection is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-	auto conn = static_cast<duckdb::Connection *>(connection->private_data);
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
 	if (!conn->HasActiveTransaction()) {
 		SetError(error, "No active transaction, cannot rollback");
 		return ADBC_STATUS_INVALID_STATE;
@@ -480,16 +489,19 @@ AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcData
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	auto database_wrapper = static_cast<DuckDBAdbcDatabaseWrapper *>(database->private_data);
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+	conn_wrapper->connection = nullptr;
 
-	connection->private_data = nullptr;
-	auto res =
-	    duckdb_connect(database_wrapper->database, reinterpret_cast<duckdb_connection *>(&connection->private_data));
+	auto res = duckdb_connect(database_wrapper->database, &conn_wrapper->connection);
 	return CheckResult(res, error, "Failed to connect to Database");
 }
 
 AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcError *error) {
 	if (connection && connection->private_data) {
-		duckdb_disconnect(reinterpret_cast<duckdb_connection *>(&connection->private_data));
+		auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+		duckdb_disconnect(reinterpret_cast<duckdb_connection *>(&conn));
+		free(conn_wrapper);
 		connection->private_data = nullptr;
 	}
 	return ADBC_STATUS_OK;
@@ -640,7 +652,9 @@ AdbcStatusCode StatementNew(struct AdbcConnection *connection, struct AdbcStatem
 	}
 
 	statement->private_data = statement_wrapper;
-	statement_wrapper->connection = static_cast<duckdb_connection>(connection->private_data);
+	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
+
+	statement_wrapper->connection = conn_wrapper->connection;
 	statement_wrapper->statement = nullptr;
 	statement_wrapper->result = nullptr;
 	statement_wrapper->ingestion_stream.release = nullptr;
