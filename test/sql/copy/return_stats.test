@@ -73,79 +73,79 @@ SET preserve_insertion_order=${PRESERVE_INSERTION_ORDER};
 query IIIIII
 COPY integers TO '__TEST_DIR__/test_copy_to_file.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*test_copy_to_file.parquet	200000	<REGEX>:\d+	<REGEX>:\d+	{"i"={max=199999, min=0, null_count=0}}	NULL
+<REGEX>:.*test_copy_to_file.parquet	200000	<REGEX>:\d+	<REGEX>:\d+	{'"i"'={max=199999, min=0, null_count=0}}	NULL
 
 # multi-column
 query IIIIII
 COPY multi_column_test TO '__TEST_DIR__/multi_column_copy.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*multi_column_copy.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{"i"={max=2499, min=0, null_count=0}, "j"={max=9, min=0, null_count=0}, "k"={max=2499, min=1, null_count=1250}}	NULL
+<REGEX>:.*multi_column_copy.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{'"i"'={max=2499, min=0, null_count=0}, '"j"'={max=9, min=0, null_count=0}, '"k"'={max=2499, min=1, null_count=1250}}	NULL
 
 # strings
 query IIIIII
 COPY string_test TO '__TEST_DIR__/string_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*string_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{"s"={max=thisisalongstring_999, min=thisisalongstring_0, null_count=0}}	NULL
+<REGEX>:.*string_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{'"s"'={max=thisisalongstring_999, min=thisisalongstring_0, null_count=0}}	NULL
 
 # timestamps/dates
 query IIIIII
 COPY date_test TO '__TEST_DIR__/date_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*date_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{"dt"={max=2006-11-04, min=2000-01-01, null_count=0}, "t"={max=06:56:30, min=00:00:00, null_count=0}, "ts"={max=2006-11-04 12:12:12.123456, min=2000-01-01 12:12:12.123456, null_count=0}, "ts_ms"={max=2006-11-04 12:12:12.123, min=2000-01-01 12:12:12.123, null_count=0}, "ts_ns"={max=2006-11-04 12:12:12.123456789, min=2000-01-01 12:12:12.123456789, null_count=0}, "ts_s"={max=2006-11-04 12:12:12, min=2000-01-01 12:12:12, null_count=0}}	NULL
+<REGEX>:.*date_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{'"dt"'={max=2006-11-04, min=2000-01-01, null_count=0}, '"t"'={max='06:56:30', min='00:00:00', null_count=0}, '"ts"'={max='2006-11-04 12:12:12.123456', min='2000-01-01 12:12:12.123456', null_count=0}, '"ts_ms"'={max='2006-11-04 12:12:12.123', min='2000-01-01 12:12:12.123', null_count=0}, '"ts_ns"'={max='2006-11-04 12:12:12.123456789', min='2000-01-01 12:12:12.123456789', null_count=0}, '"ts_s"'={max='2006-11-04 12:12:12', min='2000-01-01 12:12:12', null_count=0}}	NULL
 
 # empty table
 query IIIIII
 COPY empty_test TO '__TEST_DIR__/empty_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*empty_test.parquet	0	<REGEX>:\d+	<REGEX>:\d+	{"range"={null_count=0}}	NULL
+<REGEX>:.*empty_test.parquet	0	<REGEX>:\d+	<REGEX>:\d+	{'"range"'={null_count=0}}	NULL
 
 # blobs
 query IIIIII
 COPY blob_test TO '__TEST_DIR__/blob_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*blob_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	{"bl"={max=800080, min=, null_count=0}}	NULL
+<REGEX>:.*blob_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	{'"bl"'={max=800080, min='', null_count=0}}	NULL
 
 # decimal
 query IIIIII
 COPY decimal_test TO '__TEST_DIR__/decimal_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*decimal_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	{"dec_i16"={max=25.3, min=1.1, null_count=0}, "dec_i32"={max=123456.789, min=2.123, null_count=0}, "dec_i64"={max=123456789123.456, min=3.456, null_count=0}}	NULL
+<REGEX>:.*decimal_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	{'"dec_i16"'={max=25.3, min=1.1, null_count=0}, '"dec_i32"'={max=123456.789, min=2.123, null_count=0}, '"dec_i64"'={max=123456789123.456, min=3.456, null_count=0}}	NULL
 
 # struct
 query IIIIII
 COPY struct_test TO '__TEST_DIR__/struct_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*struct_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{"struct_val"."x"={max=2499, min=1, null_count=250}, "struct_val"."y"={max=2598, min=102, null_count=1500}}	NULL
+<REGEX>:.*struct_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{'"struct_val"."x"'={max=2499, min=1, null_count=250}, '"struct_val"."y"'={max=2598, min=102, null_count=1500}}	NULL
 
 # list
 query IIIIII
 COPY list_test TO '__TEST_DIR__/list_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*list_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{"l1"."element"={max=2499, min=0}, "l2"."element"={max=2598, min=102}}	NULL
+<REGEX>:.*list_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{'"l1"."element"'={max=2499, min=0}, '"l2"."element"'={max=2598, min=102}}	NULL
 
 # nested struct
 query IIIIII
 COPY nested_struct_test TO '__TEST_DIR__/nested_struct_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*nested_struct_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{"n"."s1"."x"={max=2499, min=0, null_count=0}, "n"."s2"."l"."element"={max=2499, min=0}, "n"."s2"."s3"."y"={max=2499, min=0, null_count=0}}	NULL
+<REGEX>:.*nested_struct_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{'"n"."s1"."x"'={max=2499, min=0, null_count=0}, '"n"."s2"."l"."element"'={max=2499, min=0}, '"n"."s2"."s3"."y"'={max=2499, min=0, null_count=0}}	NULL
 
 # quoted/funky column names
 query IIIIII
 COPY funky_names TO '__TEST_DIR__/funky_names.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*funky_names.parquet	1	<REGEX>:\d+	<REGEX>:\d+	{"""quoted col name"""."quoted '""field name"""={max=42, min=42, null_count=0}}	NULL
+<REGEX>:.*funky_names.parquet	1	<REGEX>:\d+	<REGEX>:\d+	{'"""quoted col name"""."quoted \'""field name"""'={max=42, min=42, null_count=0}}	NULL
 
 # map
 query IIIIII
 COPY map_test TO '__TEST_DIR__/map_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*map_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{"map_val"."key"={max=key999, min=key0}, "map_val"."value"={max=2499, min=0}}	NULL
+<REGEX>:.*map_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{'"map_val"."key"'={max=key999, min=key0}, '"map_val"."value"'={max=2499, min=0}}	NULL
 
 # array
 query IIIIII
 COPY array_test TO '__TEST_DIR__/array_test.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*array_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{"array_val"."element"={max=2501, min=0}}	NULL
+<REGEX>:.*array_test.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	{'"array_val"."element"'={max=2501, min=0}}	NULL
 
 endloop
 
@@ -153,18 +153,18 @@ endloop
 query IIIIII rowsort
 COPY partitioned_test TO '__TEST_DIR__/partitioned_test' (FORMAT PARQUET, PARTITION_BY (partition_key), RETURN_STATS, OVERWRITE);
 ----
-<REGEX>:.*partitioned_test.*partition_key=0.*.parquet	1250	<REGEX>:\d+	<REGEX>:\d+	{"val"={max=2498, min=0, null_count=0}}	{partition_key=0}
-<REGEX>:.*partitioned_test.*partition_key=1.*.parquet	1250	<REGEX>:\d+	<REGEX>:\d+	{"val"={max=2499, min=1, null_count=0}}	{partition_key=1}
+<REGEX>:.*partitioned_test.*partition_key=0.*.parquet	1250	<REGEX>:\d+	<REGEX>:\d+	{'"val"'={max=2498, min=0, null_count=0}}	{partition_key=0}
+<REGEX>:.*partitioned_test.*partition_key=1.*.parquet	1250	<REGEX>:\d+	<REGEX>:\d+	{'"val"'={max=2499, min=1, null_count=0}}	{partition_key=1}
 
 query IIIIII rowsort
 COPY multi_partitioned_test TO '__TEST_DIR__/multi_partitioned_test' (FORMAT PARQUET, PARTITION_BY (partition_key, partition_key2), RETURN_STATS, OVERWRITE);
 ----
-<REGEX>:.*multi_partitioned_test.*partition_key=0.partition_key2=0.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	{"val"={max=2496, min=0, null_count=0}}	{partition_key=0, partition_key2=0}
-<REGEX>:.*multi_partitioned_test.*partition_key=0.partition_key2=1.*[.]parquet	416	<REGEX>:\d+	<REGEX>:\d+	{"val"={max=2494, min=4, null_count=0}}	{partition_key=0, partition_key2=1}
-<REGEX>:.*multi_partitioned_test.*partition_key=0.partition_key2=2.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	{"val"={max=2498, min=2, null_count=0}}	{partition_key=0, partition_key2=2}
-<REGEX>:.*multi_partitioned_test.*partition_key=1.partition_key2=0.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	{"val"={max=2499, min=3, null_count=0}}	{partition_key=1, partition_key2=0}
-<REGEX>:.*multi_partitioned_test.*partition_key=1.partition_key2=1.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	{"val"={max=2497, min=1, null_count=0}}	{partition_key=1, partition_key2=1}
-<REGEX>:.*multi_partitioned_test.*partition_key=1.partition_key2=2.*[.]parquet	416	<REGEX>:\d+	<REGEX>:\d+	{"val"={max=2495, min=5, null_count=0}}	{partition_key=1, partition_key2=2}
+<REGEX>:.*multi_partitioned_test.*partition_key=0.partition_key2=0.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	{'"val"'={max=2496, min=0, null_count=0}}	{partition_key=0, partition_key2=0}
+<REGEX>:.*multi_partitioned_test.*partition_key=0.partition_key2=1.*[.]parquet	416	<REGEX>:\d+	<REGEX>:\d+	{'"val"'={max=2494, min=4, null_count=0}}	{partition_key=0, partition_key2=1}
+<REGEX>:.*multi_partitioned_test.*partition_key=0.partition_key2=2.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	{'"val"'={max=2498, min=2, null_count=0}}	{partition_key=0, partition_key2=2}
+<REGEX>:.*multi_partitioned_test.*partition_key=1.partition_key2=0.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	{'"val"'={max=2499, min=3, null_count=0}}	{partition_key=1, partition_key2=0}
+<REGEX>:.*multi_partitioned_test.*partition_key=1.partition_key2=1.*[.]parquet	417	<REGEX>:\d+	<REGEX>:\d+	{'"val"'={max=2497, min=1, null_count=0}}	{partition_key=1, partition_key2=1}
+<REGEX>:.*multi_partitioned_test.*partition_key=1.partition_key2=2.*[.]parquet	416	<REGEX>:\d+	<REGEX>:\d+	{'"val"'={max=2495, min=5, null_count=0}}	{partition_key=1, partition_key2=2}
 
 # test all types
 statement ok
