@@ -72,7 +72,7 @@ private:
 			// Throw an IO exception if it fails to write to the file
 			if (out.fail()) {
 				throw IOException("Failed to write HTTP log to file \"%s\": %s", context.config.http_logging_output,
-								  strerror(errno));
+				                  strerror(errno));
 			}
 		}
 
