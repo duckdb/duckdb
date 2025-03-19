@@ -758,7 +758,7 @@ void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk 
 		stats_unifier->has_nan = has_nan;
 	}
 	if (column.meta_data.__isset.statistics) {
-		if (has_nan) {
+		if (has_nan && writer_stats->HasStats()) {
 			// if we have NaN values we have not written the min/max to the Parquet file
 			// BUT we can return them as part of RETURN STATS by fetching them from the stats directly
 			stats_unifier->UnifyMinMax(writer_stats->GetMin(), writer_stats->GetMax());
