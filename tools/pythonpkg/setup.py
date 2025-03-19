@@ -5,7 +5,6 @@ import os
 import platform
 import sys
 import traceback
-import subprocess
 from functools import lru_cache
 from glob import glob
 from os.path import exists
@@ -384,77 +383,48 @@ packages.extend(spark_packages)
 # - scripts/package_build.py
 # - tools/pythonpkg/setup.py
 ######
-main_branch_versioning = os.getenv('MAIN_BRANCH_VERSIONING') or 1
+main_branch_versioning = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
+
+versioning_tag_match = 'v*.*.*'
+if main_branch_versioning:
+    versioning_tag_match = 'v*.*.0'
+describe_command = ['git', 'describe', '--tags', '--long', '--debug', '--match', versioning_tag_match]
 
 
-def get_git_describe():
+def get_version(version):
+    def prefix_version(version):
+        """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
+        if version.startswith('v'):
+            return version
+        return 'v' + version
+
     override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
-    versioning_tag_match = 'v*.*.*'
-    if main_branch_versioning:
-        versioning_tag_match = 'v*.*.0'
-    # empty override_git_describe, either since env was empty string or not existing
-    # -> ask git (that can fail, so except in place)
-    if len(override_git_describe) == 0:
-        try:
-            return (
-                subprocess.check_output(
-                    ['git', 'describe', '--tags', '--long', '--debug', '--match', versioning_tag_match]
-                )
-                .strip()
-                .decode('utf8')
-            )
-        except subprocess.CalledProcessError:
-            return "v0.0.0-0-gdeadbeeff"
-    if len(override_git_describe.split('-')) == 3:
-        return override_git_describe
-    if len(override_git_describe.split('-')) == 1:
-        override_git_describe += "-0"
-    assert len(override_git_describe.split('-')) == 2
-    try:
-        return (
-            override_git_describe
-            + "-g"
-            + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
-        )
-    except subprocess.CalledProcessError:
-        return override_git_describe + "-g" + "deadbeeff"
+    if len(override_git_describe) != 0:
+        return prefix_version(override_git_describe)
 
+    # If we're exactly on a tag (dev_iteration = 0)
+    distance = version.distance
+    if distance == 0:
+        return prefix_version(str(version.tag))
 
-def prefix_version(version):
-    """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
-    if version.startswith('v'):
-        return version
-    return 'v' + version
+    major, minor, patch = [int(x) for x in str(version.tag).split('.')]
+    # Increment minor version if main_branch_versioning is enabled (default),
+    # otherwise increment patch version
+    if main_branch_versioning == True:
+        minor += 1
+        patch = 0
+    else:
+        patch += 1
 
+    # Format as v{major}.{minor}.{patch}-dev{distance}
+    next_version = f"{major}.{minor}.{patch}"
+    # Add dev suffix with distance number
+    next_version += f"-dev{distance}"
 
-def git_dev_version():
-    if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
-        return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
-    try:
-        long_version = get_git_describe()
-        version_splits = long_version.split('-')[0].lstrip('v').split('.')
-        dev_version = long_version.split('-')[1]
-        if int(dev_version) == 0:
-            # directly on a tag: emit the regular version
-            return "v" + '.'.join(version_splits)
-        else:
-            # not on a tag: increment the version by one and add a -devX suffix
-            # this needs to keep in sync with changes to CMakeLists.txt
-            if main_branch_versioning == 1:
-                # increment minor version
-                version_splits[1] = str(int(version_splits[1]) + 1)
-            else:
-                # increment patch version
-                version_splits[2] = str(int(version_splits[2]) + 1)
-            return "v" + '.'.join(version_splits) + "-dev" + dev_version
-    except:
-        return "v0.0.0"
+    return prefix_version(next_version)
 
-
-package_version = git_dev_version()
 
 setup(
-    version=package_version,
     name=lib_name,
     description='DuckDB in-process database',
     keywords='DuckDB Database SQL OLAP',
@@ -466,7 +436,6 @@ setup(
     packages=packages,
     include_package_data=True,
     python_requires='>=3.7.0',
-    tests_require=['google-cloud-storage', 'mypy', 'pytest'],
     classifiers=[
         'Topic :: Database :: Database Engines/Servers',
         'Intended Audience :: Developers',
@@ -482,4 +451,11 @@ setup(
         "Issues": "https://github.com/duckdb/duckdb/issues",
         "Changelog": "https://github.com/duckdb/duckdb/releases",
     },
+    use_scm_version={
+        'git_describe_command': " ".join(describe_command),
+        "version_scheme": get_version,
+        "root": "../..",
+        "local_scheme": "no-local-version",
+    },
+    setup_requires=["setuptools>=60.0", "setuptools_scm>=6.4"],
 )

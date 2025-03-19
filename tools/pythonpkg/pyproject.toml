@@ -6,10 +6,6 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools_scm]
-root = "../.."
-local_scheme = "no-local-version"
-
 ### CI Builwheel configurations ###
 
 # Default config runs all tests and requires at least one extension to be tested against
