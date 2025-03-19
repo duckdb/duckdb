@@ -22,7 +22,7 @@ jobs:
     name: Run ODBC Vendor
     runs-on: ubuntu-latest
     env:
-      PAT_USER: ${{ secrets.PAT_USER }}
+      PAT_USER: ${{ secrets.PAT_USERNAME }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     steps:
       - name: Run ODBC Vendor
