@@ -22,7 +22,7 @@ unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientCon
 	} else {
 		// COPY
 		options.record_type = JSONRecordType::RECORDS;
-		options.format = JSONFormat::NEWLINE_DELIMITED;
+		options.format = JSONFormat::AUTO_DETECT;
 	}
 	return std::move(reader_options);
 }
