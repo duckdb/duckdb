@@ -51,6 +51,8 @@ def pytest_configure(config: pytest.Config):
     if rng_seed is not None:
         random.seed(rng_seed)
 
+    # Custom marker used to run all tests
+    config.addinivalue_line("markers", "all")
     # These markers are used for .test_slow and .test_coverage files
     config.addinivalue_line("markers", "slow")
     config.addinivalue_line("markers", "coverage")
@@ -73,7 +75,7 @@ def get_test_marks(path: pathlib.Path, root_dir: pathlib.Path, config: pytest.Co
         # If the category is not in the markers, add it
         config.addinivalue_line("markers", category)
 
-    marks = [pytest.mark.__getattr__(category)]
+    marks = [pytest.mark.all, pytest.mark.__getattr__(category)]
 
     test_id = get_test_id(path, root_dir, config)
     if test_id in SKIPPED_TESTS:
