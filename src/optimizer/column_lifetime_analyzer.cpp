@@ -223,6 +223,9 @@ void ColumnLifetimeAnalyzer::AddVerificationProjection(unique_ptr<LogicalOperato
 
 	// Create a projection and swap the operators accordingly
 	auto projection = make_uniq<LogicalProjection>(table_index, std::move(expressions));
+	if (child->has_estimated_cardinality) {
+		projection->SetEstimatedCardinality(child->estimated_cardinality);
+	}
 	projection->children.emplace_back(std::move(child));
 	child = std::move(projection);
 

@@ -434,7 +434,6 @@ void Vector::SetValue(idx_t index, const Value &val) {
 	}
 	D_ASSERT(val.IsNull() || (val.type().InternalType() == GetType().InternalType()));
 
-	validity.EnsureWritable();
 	validity.Set(index, !val.IsNull());
 	auto physical_type = GetType().InternalType();
 	if (val.IsNull() && !IsStructOrArrayRecursive(GetType())) {
@@ -1593,7 +1592,7 @@ void Vector::Verify(Vector &vector_p, const SelectionVector &sel_p, idx_t count)
 				auto oidx = sel->get_index(i);
 				if (validity.RowIsValid(oidx)) {
 					auto buf = strings[oidx].GetData();
-					D_ASSERT(*buf >= 0 && *buf < 8);
+					D_ASSERT(idx_t(*buf) < 8);
 					Bit::Verify(strings[oidx]);
 				}
 			}

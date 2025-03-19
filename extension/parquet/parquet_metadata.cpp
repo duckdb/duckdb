@@ -771,7 +771,7 @@ void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &d
 				break;
 			case ParquetMetadataOperatorType::BLOOM_PROBE: {
 				auto &bloom_probe_bind_data = data_p.bind_data->Cast<ParquetBloomProbeBindData>();
-				data.ExecuteBloomProbe(context, bind_data.return_types, bind_data.file_list->GetFirstFile(),
+				data.ExecuteBloomProbe(context, bind_data.return_types, data.current_file,
 				                       bloom_probe_bind_data.probe_column_name, bloom_probe_bind_data.probe_constant);
 				break;
 			}
