@@ -22,6 +22,10 @@ public:
 	virtual string GetMax();
 	virtual string GetMinValue();
 	virtual string GetMaxValue();
+	virtual bool CanHaveNaN();
+	virtual bool HasNaN();
+	virtual bool MinIsExact();
+	virtual bool MaxIsExact();
 
 public:
 	template <class TARGET>
@@ -61,6 +65,20 @@ public:
 	}
 	string GetMaxValue() override {
 		return HasStats() ? string(char_ptr_cast(&max), sizeof(T)) : string();
+	}
+};
+
+template <class SRC, class T, class OP>
+class FloatingPointStatisticsState : public NumericStatisticsState<SRC, T, OP> {
+public:
+	bool has_nan = false;
+
+public:
+	bool CanHaveNaN() override {
+		return true;
+	}
+	bool HasNaN() override {
+		return has_nan;
 	}
 };
 

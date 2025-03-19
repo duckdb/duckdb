@@ -11,6 +11,12 @@ statement ok
 CREATE TABLE multi_column_test AS SELECT range i, range%10 j, case when range%2=0 then null else range end k FROM range(2500);
 
 statement ok
+CREATE TABLE floating_point_test AS SELECT case when i%10=0 then null else i/10.0 end as fp FROM range(2500) t(i)
+
+statement ok
+CREATE TABLE floating_point_nan AS SELECT case when i%10=0 then 'nan'::double when i%4=0 then null else i/10.0 end as fp FROM range(2500) t(i)
+
+statement ok
 CREATE TABLE string_test AS SELECT concat('thisisalongstring_', range) s FROM range(2500);
 
 statement ok
@@ -110,6 +116,17 @@ query IIIIII
 COPY decimal_test TO '__TEST_DIR__/decimal_test.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*decimal_test.parquet	2	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{"dec_i16"={column_size_bytes=\d+, max=25.3, min=1.1, null_count=0}, "dec_i32"={column_size_bytes=\d+, max=123456.789, min=2.123, null_count=0}, "dec_i64"={column_size_bytes=\d+, max=123456789123.456, min=3.456, null_count=0}}	NULL
+
+# floating point numbers
+query IIIIII
+COPY floating_point_test TO '__TEST_DIR__/fp.parquet' (RETURN_STATS);
+----
+<REGEX>:.*fp.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{"fp"={column_size_bytes=\d+, has_nan=false, max=249.9, min=0.1, null_count=250}}	NULL
+
+query IIIIII
+COPY floating_point_nan TO '__TEST_DIR__/fp_nan.parquet' (RETURN_STATS);
+----
+<REGEX>:.*fp_nan.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{"fp"={column_size_bytes=\d+, has_nan=true, max=249.9, min=0.1, null_count=500}}	NULL
 
 # struct
 query IIIIII
