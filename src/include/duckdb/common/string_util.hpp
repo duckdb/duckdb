@@ -165,6 +165,9 @@ public:
 	DUCKDB_API static void URLDecodeBuffer(const char *input, idx_t input_size, char *output,
 	                                       bool plus_to_space = false);
 
+	//! BOM skipping (https://en.wikipedia.org/wiki/Byte_order_mark)
+	DUCKDB_API static void SkipBOM(const char *buffer_ptr, const idx_t &buffer_size, idx_t &buffer_pos);
+
 	DUCKDB_API static idx_t ToUnsigned(const string &str);
 
 	template <class T>
