@@ -110,8 +110,18 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 		}
 		case duckdb_libpgquery::PG_AT_SetPartitionedBy: {
 			vector<unique_ptr<ParsedExpression>> partition_keys;
-			TransformExpressionList(*command->def_list, partition_keys);
+			if (command->def_list) {
+				TransformExpressionList(*command->def_list, partition_keys);
+			}
 			result->info = make_uniq<SetPartitionedByInfo>(std::move(data), std::move(partition_keys));
+			break;
+		}
+		case duckdb_libpgquery::PG_AT_SetSortedBy: {
+			vector<OrderByNode> orders;
+			if (command->def_list) {
+				TransformOrderBy(command->def_list, orders);
+			}
+			result->info = make_uniq<SetSortedByInfo>(std::move(data), std::move(orders));
 			break;
 		}
 		default:
