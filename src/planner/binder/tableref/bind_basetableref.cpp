@@ -305,7 +305,17 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// verify that the types and names match up with the expected types and names
 		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
 		if (GetBindingMode() != BindingMode::EXTRACT_NAMES) {
-			if (bound_subquery.subquery->types != view_catalog_entry.types) {
+			// we bound the view subquery with "can_contain_nulls" set to true,
+			// but we don't want to throw an error when SQLNULL does not match up with INTEGER,
+			// because when the view was created, it was bound with "can_contain_nulls" set to false
+			vector<LogicalType> exchanged_types = bound_subquery.subquery->types;
+			for (auto &type : exchanged_types) {
+				if (ExpressionBinder::ContainsNullType(type)) {
+					type = ExpressionBinder::ExchangeNullType(type);
+				}
+			}
+
+			if (exchanged_types != view_catalog_entry.types) {
 				auto actual_types = StringUtil::ToString(bound_subquery.subquery->types, ", ");
 				auto expected_types = StringUtil::ToString(view_catalog_entry.types, ", ");
 				throw BinderException(
