@@ -81,7 +81,7 @@ struct FloatingPointOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static void HandleStats(ColumnWriterStatistics *stats, TGT target_value) {
 		auto &numeric_stats = stats->Cast<FloatingPointStatisticsState<SRC, TGT, BaseParquetOperator>>();
-		if (std::isnan(target_value)) {
+		if (Value::IsNan(target_value)) {
 			numeric_stats.has_nan = true;
 		} else {
 			if (LessThan::Operation(target_value, numeric_stats.min)) {
