@@ -140,7 +140,7 @@ COPY floating_point_nan TO '__TEST_DIR__/fp_nan.parquet' (RETURN_STATS);
 query IIIIII
 COPY fp_nan_only TO '__TEST_DIR__/fp_nan_only.parquet' (RETURN_STATS);
 ----
-<REGEX>:.*fp_nan_only.parquet      1      <REGEX>:\d+   <REGEX>:\d+   <REGEX>:{'"float_val"'={column_size_bytes=\d+, has_nan=true, null_count=0}}  NULL
+<REGEX>:.*fp_nan_only.parquet	1	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"float_val"'={column_size_bytes=\d+, has_nan=true, null_count=0}}	NULL
 
 # large strings are truncated to the nearest valid UTF8 string
 query IIIIII
