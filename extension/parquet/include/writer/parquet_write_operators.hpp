@@ -226,6 +226,23 @@ struct ParquetUUIDOperator : public BaseParquetOperator {
 	static uint64_t XXHash64(const TGT &target_value) {
 		return duckdb_zstd::XXH64(target_value.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE, 0);
 	}
+
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_uniq<UUIDStatisticsState>();
+	}
+
+	template <class SRC, class TGT>
+	static void HandleStats(ColumnWriterStatistics *stats_p, TGT target_value) {
+		auto &stats = stats_p->Cast<UUIDStatisticsState>();
+		if (!stats.has_stats || memcmp(target_value.bytes, stats.min, ParquetUUIDTargetType::PARQUET_UUID_SIZE) < 0) {
+			memcpy(stats.min, target_value.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+		}
+		if (!stats.has_stats || memcmp(target_value.bytes, stats.max, ParquetUUIDTargetType::PARQUET_UUID_SIZE) > 0) {
+			memcpy(stats.max, target_value.bytes, ParquetUUIDTargetType::PARQUET_UUID_SIZE);
+		}
+		stats.has_stats = true;
+	}
 };
 
 struct ParquetTimeTZOperator : public BaseParquetOperator {

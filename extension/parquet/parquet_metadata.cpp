@@ -341,12 +341,12 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 			    25, count, ParquetElementBigint(col_meta.bloom_filter_length, col_meta.__isset.bloom_filter_length));
 
 			// min_is_exact, LogicalType::BOOLEAN
-			current_chunk.SetValue(
-				26, count, ParquetElementBoolean(stats.is_min_value_exact, stats.__isset.is_min_value_exact));
+			current_chunk.SetValue(26, count,
+			                       ParquetElementBoolean(stats.is_min_value_exact, stats.__isset.is_min_value_exact));
 
 			// max_is_exact, LogicalType::BOOLEAN
-			current_chunk.SetValue(
-				27, count, ParquetElementBoolean(stats.is_max_value_exact, stats.__isset.is_max_value_exact));
+			current_chunk.SetValue(27, count,
+			                       ParquetElementBoolean(stats.is_max_value_exact, stats.__isset.is_max_value_exact));
 
 			count++;
 			if (count >= STANDARD_VECTOR_SIZE) {

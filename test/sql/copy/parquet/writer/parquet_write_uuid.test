@@ -64,3 +64,19 @@ NULL
 a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
 a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11
 ffffffff-ffff-ffff-ffff-ffffffffffff
+
+query IIII
+SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metadata('__TEST_DIR__/uuid.parquet')
+----
+00000000-0000-0000-0000-000000000000	ffffffff-ffff-ffff-ffff-ffffffffffff	00000000-0000-0000-0000-000000000000	ffffffff-ffff-ffff-ffff-ffffffffffff
+
+statement ok
+CREATE TABLE uuid2 AS SELECT uuid '47183823-2574-4bfd-b411-99ed177d3e43' uuid_val union all select uuid '00112233-4455-6677-8899-aabbccddeeff';
+
+statement ok
+COPY uuid2 TO '__TEST_DIR__/uuid2.parquet'
+
+query IIII
+SELECT stats_min, stats_max, stats_min_value, stats_max_value FROM parquet_metadata('__TEST_DIR__/uuid2.parquet')
+----
+00112233-4455-6677-8899-aabbccddeeff	47183823-2574-4bfd-b411-99ed177d3e43	00112233-4455-6677-8899-aabbccddeeff	47183823-2574-4bfd-b411-99ed177d3e43

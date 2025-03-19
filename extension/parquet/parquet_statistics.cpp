@@ -15,6 +15,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/storage/statistics/struct_stats.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "reader/uuid_column_reader.hpp"
 #endif
 
 namespace duckdb {
@@ -267,6 +268,13 @@ Value ParquetStatisticsUtils::ConvertValueInternal(const LogicalType &type, cons
 			}
 		}
 		return Value::TIMESTAMPNS(timestamp_value);
+	}
+	case LogicalTypeId::UUID: {
+		if (stats.size() != 16) {
+			throw InvalidInputException("Incorrect stats size for type UUID");
+		}
+		auto uuid_val = UUIDValueConversion::ReadParquetUUID(const_data_ptr_cast(stats.c_str()));
+		return Value::UUID(uuid_val);
 	}
 	default:
 		throw InternalException("Unsupported type for stats %s", type.ToString());
