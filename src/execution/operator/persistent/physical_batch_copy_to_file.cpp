@@ -98,8 +98,8 @@ public:
 	atomic<bool> any_finished;
 	//! Minimum memory per thread
 	idx_t minimum_memory_per_thread;
-	//! File stats (for RETURN_STATS)
-	unique_ptr<CopyFunctionFileStatistics> file_stats;
+	//! Written file info (for RETURN_STATS)
+	unique_ptr<CopyToFileInfo> written_file_info;
 
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage) {
 		// move the batch data to the set of prepared batch data
@@ -145,7 +145,7 @@ public:
 	FixedBatchCopyState current_task = FixedBatchCopyState::SINKING_DATA;
 
 	void InitializeCollection(ClientContext &context, const PhysicalOperator &op) {
-		collection = make_uniq<ColumnDataCollection>(context, op.children[0]->types);
+		collection = make_uniq<ColumnDataCollection>(context, op.children[0].get().GetTypes());
 		collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 		collection->InitializeAppend(append_state);
 		local_memory_usage = 0;
@@ -436,7 +436,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 			} else {
 				// the collection is too large for a batch - we need to repartition
 				// create an empty collection
-				auto new_collection = make_uniq<ColumnDataCollection>(context, children[0]->types);
+				auto new_collection = make_uniq<ColumnDataCollection>(context, children[0].get().GetTypes());
 				new_collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 				append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			}
@@ -461,7 +461,7 @@ void PhysicalBatchCopyToFile::RepartitionBatches(ClientContext &context, GlobalS
 			// the collection is full - move it to the result and create a new one
 			task_manager.AddTask(make_uniq<PrepareBatchTask>(gstate.scheduled_batch_index++, std::move(append_batch)));
 
-			auto new_collection = make_uniq<ColumnDataCollection>(context, children[0]->types);
+			auto new_collection = make_uniq<ColumnDataCollection>(context, children[0].get().GetTypes());
 			new_collection->SetPartitionIndex(0); // Makes the buffer manager less likely to spill this data
 			append_batch = make_uniq<FixedRawBatchData>(0U, std::move(new_collection));
 			append_batch->collection->InitializeAppend(append_state);
@@ -598,12 +598,14 @@ unique_ptr<LocalSinkState> PhysicalBatchCopyToFile::GetLocalSinkState(ExecutionC
 unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientContext &context) const {
 	// request memory based on the minimum amount of memory per column
 	auto minimum_memory_per_thread =
-	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0]->types.size();
+	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0].get().GetTypes().size();
 	auto result = make_uniq<FixedBatchCopyGlobalState>(
 	    context, function.copy_to_initialize_global(context, *bind_data, file_path), minimum_memory_per_thread);
 	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
-		result->file_stats = make_uniq<CopyFunctionFileStatistics>();
-		function.copy_to_get_written_statistics(context, *bind_data, *result->global_state, *result->file_stats);
+		result->written_file_info = make_uniq<CopyToFileInfo>(file_path);
+		result->written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
+		function.copy_to_get_written_statistics(context, *bind_data, *result->global_state,
+		                                        *result->written_file_info->file_stats);
 	}
 	result->batch_size = function.desired_batch_size ? function.desired_batch_size(context, *bind_data) : 0;
 	return std::move(result);
@@ -627,7 +629,7 @@ SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, Dat
 		break;
 	}
 	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS: {
-		PhysicalCopyToFile::ReturnStatistics(chunk, 0, fp, *g.file_stats);
+		PhysicalCopyToFile::ReturnStatistics(chunk, 0, *g.written_file_info);
 		break;
 	}
 	default:

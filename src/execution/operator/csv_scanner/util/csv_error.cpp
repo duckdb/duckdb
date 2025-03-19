@@ -421,21 +421,25 @@ CSVError CSVError::SniffingError(const CSVReaderOptions &options, const string &
 	// 2. What was the search space?
 	error << "The search space used was:" << '\n';
 	error << search_space;
+	error << "Encoding: " << options.encoding << '\n';
 	// 3. Suggest how to fix it!
 	error << "Possible fixes:" << '\n';
-
-	if (options.columns_set) {
-		// If columns are set, suggest to either unset it or validate that it matches the schema
-		error << "* Columns are set as: \"" << set_columns.ToString() << "\", and they contain: " << set_columns.Size()
-		      << " columns. It does not match the number of columns found by the sniffer: " << max_columns_found << "."
-		      << " Verify the columns parameter is correctly set." << '\n';
-	}
+	// 3.0 Inform the user about the strict_mode
 	// 3.1 Inform the reader of the dialect
 	if (options.dialect_options.state_machine_options.strict_mode.GetValue()) {
 		error << "* Disable the parser's strict mode (strict_mode=false) to allow reading rows that do not comply with "
 		         "the CSV standard."
 		      << '\n';
 	}
+	if (options.columns_set) {
+		// If columns are set, suggest to either unset it or validate that it matches the schema
+		error << "* Columns are set as: \"" << set_columns.ToString() << "\", and they contain: " << set_columns.Size()
+		      << " columns. It does not match the number of columns found by the sniffer: " << max_columns_found << "."
+		      << " Verify the columns parameter is correctly set." << '\n';
+	}
+	// 3.0.1 Inform the user about encoding
+	error << "* Make sure you are using the correct file encoding. If not, set it (e.g., encoding = 'utf-16')." << '\n';
+	// 3.1 Inform the reader of the dialect
 	// delimiter
 	if (!options.dialect_options.state_machine_options.delimiter.IsSetByUser()) {
 		error << "* Set delimiter (e.g., delim=\',\')" << '\n';

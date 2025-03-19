@@ -56,3 +56,10 @@ query I
 SELECT my_cool_filename FROM read_parquet('data/parquet-testing/enum.parquet', filename=my_cool_filename) LIMIT 1
 ----
 data/parquet-testing/enum.parquet
+
+query III
+select file_name[22:], row_group_id, bloom_filter_excludes from parquet_bloom_probe('data/parquet-testing/multi_bloom_*.parquet', 'a', 1)
+----
+multi_bloom_a.parquet	0	false
+multi_bloom_b.parquet	0	true
+multi_bloom_c.parquet	0	true
