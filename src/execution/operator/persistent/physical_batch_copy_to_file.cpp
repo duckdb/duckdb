@@ -67,10 +67,9 @@ public:
 	static constexpr const idx_t MINIMUM_MEMORY_PER_COLUMN_PER_THREAD = 4ULL * 1024ULL * 1024ULL;
 
 public:
-	explicit FixedBatchCopyGlobalState(ClientContext &context_p, unique_ptr<GlobalFunctionData> global_state,
-	                                   idx_t minimum_memory_per_thread)
-	    : memory_manager(context_p, minimum_memory_per_thread), rows_copied(0), global_state(std::move(global_state)),
-	      batch_size(0), scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
+	explicit FixedBatchCopyGlobalState(ClientContext &context_p, idx_t minimum_memory_per_thread)
+	    : memory_manager(context_p, minimum_memory_per_thread), initialized(false), rows_copied(0), batch_size(0),
+	      scheduled_batch_index(0), flushed_batch_index(0), any_flushing(false), any_finished(false),
 	      minimum_memory_per_thread(minimum_memory_per_thread) {
 	}
 
@@ -78,6 +77,8 @@ public:
 	BatchTaskManager<BatchCopyTask> task_manager;
 	mutex lock;
 	mutex flush_lock;
+	//! Whether or not the copy has been initialized
+	atomic<bool> initialized;
 	//! The total number of rows copied to the file
 	atomic<idx_t> rows_copied;
 	//! Global copy state
@@ -100,6 +101,24 @@ public:
 	idx_t minimum_memory_per_thread;
 	//! Written file info (for RETURN_STATS)
 	unique_ptr<CopyToFileInfo> written_file_info;
+
+	void Initialize(ClientContext &context, const PhysicalBatchCopyToFile &op) {
+		if (initialized) {
+			return;
+		}
+		lock_guard<mutex> guard(lock);
+		if (initialized) {
+			return;
+		}
+		// initialize writing to the file
+		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		if (op.return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
+			written_file_info = make_uniq<CopyToFileInfo>(op.file_path);
+			written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
+			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
+			                                           *written_file_info->file_stats);
+		}
+	}
 
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage) {
 		// move the batch data to the set of prepared batch data
@@ -185,6 +204,10 @@ SinkResultType PhysicalBatchCopyToFile::Sink(ExecutionContext &context, DataChun
 			state.current_task = FixedBatchCopyState::PROCESSING_TASKS;
 			return Sink(context, chunk, input);
 		}
+	}
+	if (!write_empty_file) {
+		// if we are not writing empty files - initialize after we have received rows
+		gstate.Initialize(context.client, *this);
 	}
 	if (!state.collection) {
 		state.InitializeCollection(context.client, *this);
@@ -288,7 +311,7 @@ SinkFinalizeType PhysicalBatchCopyToFile::FinalFlush(ClientContext &context, Glo
 	if (gstate.scheduled_batch_index != gstate.flushed_batch_index) {
 		throw InternalException("Not all batches were flushed to disk - incomplete file?");
 	}
-	if (function.copy_to_finalize) {
+	if (function.copy_to_finalize && gstate.global_state) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
 
 		if (use_tmp_file) {
@@ -599,13 +622,10 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 	// request memory based on the minimum amount of memory per column
 	auto minimum_memory_per_thread =
 	    FixedBatchCopyGlobalState::MINIMUM_MEMORY_PER_COLUMN_PER_THREAD * children[0].get().GetTypes().size();
-	auto result = make_uniq<FixedBatchCopyGlobalState>(
-	    context, function.copy_to_initialize_global(context, *bind_data, file_path), minimum_memory_per_thread);
-	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
-		result->written_file_info = make_uniq<CopyToFileInfo>(file_path);
-		result->written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
-		function.copy_to_get_written_statistics(context, *bind_data, *result->global_state,
-		                                        *result->written_file_info->file_stats);
+	auto result = make_uniq<FixedBatchCopyGlobalState>(context, minimum_memory_per_thread);
+	if (write_empty_file) {
+		// if we are writing the file also if it is empty - initialize now
+		result->Initialize(context, *this);
 	}
 	result->batch_size = function.desired_batch_size ? function.desired_batch_size(context, *bind_data) : 0;
 	return std::move(result);
@@ -617,19 +637,28 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk,
                                                   OperatorSourceInput &input) const {
 	auto &g = sink_state->Cast<FixedBatchCopyGlobalState>();
-	chunk.SetCardinality(1);
 	auto fp = use_tmp_file ? PhysicalCopyToFile::GetNonTmpFile(context.client, file_path) : file_path;
 	switch (return_type) {
 	case CopyFunctionReturnType::CHANGED_ROWS:
 		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
+		chunk.SetCardinality(1);
 		break;
 	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
+		vector<Value> file_list;
+		if (g.global_state) {
+			file_list.emplace_back(std::move(fp));
+		}
 		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
-		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, {fp}));
+		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, std::move(file_list)));
+		chunk.SetCardinality(1);
 		break;
 	}
 	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS: {
-		PhysicalCopyToFile::ReturnStatistics(chunk, 0, *g.written_file_info);
+		if (g.written_file_info) {
+			g.written_file_info->file_path = std::move(fp);
+			PhysicalCopyToFile::ReturnStatistics(chunk, 0, *g.written_file_info);
+			chunk.SetCardinality(1);
+		}
 		break;
 	}
 	default:
