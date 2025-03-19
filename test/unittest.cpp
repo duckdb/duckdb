@@ -92,22 +92,15 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Failed to create testing directory \"%s\": %s\n", dir.c_str(), ex.what());
 		return 1;
 	}
-
-	if (std::FILE* file = std::fopen(filename, "r")) {
-		std::fclose(file);
-		std::remove(filename);
-	}
 	
 	RegisterSqllogictests();
 	
 	int result = Catch::Session().run(new_argc, new_argv.get());
 	
 	std::ifstream file(filename);
-	if (!file) {
-		std::cout << "Failure opening a file " << filename << std::endl;
-	} else {
+	if (file && summarize_failures) {
 		std::cout << "===============================  FAILURES SUMMARY  ===============================" << std::endl;
-		std::cout << "Failed Test: Failed on the line:\n" << std::endl;
+		std::cout << "Failed Test: falinig line:\n" << std::endl;
 		
 		string line;
 		int i = 1;
