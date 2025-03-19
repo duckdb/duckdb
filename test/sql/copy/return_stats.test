@@ -17,6 +17,9 @@ statement ok
 CREATE TABLE floating_point_nan AS SELECT case when i%10=0 then 'nan'::double when i%4=0 then null else i/10.0 end as fp FROM range(2500) t(i)
 
 statement ok
+CREATE TABLE fp_nan_only AS SELECT 'nan'::float as float_val
+
+statement ok
 CREATE TABLE string_test AS SELECT concat('thisisalongstring_', range) s FROM range(2500);
 
 statement ok
@@ -133,6 +136,11 @@ query IIIIII
 COPY floating_point_nan TO '__TEST_DIR__/fp_nan.parquet' (RETURN_STATS);
 ----
 <REGEX>:.*fp_nan.parquet	2500	<REGEX>:\d+	<REGEX>:\d+	<REGEX>:{'"fp"'={column_size_bytes=\d+, has_nan=true, max=249.9, min=0.1, null_count=500}}	NULL
+
+query IIIIII
+COPY fp_nan_only TO '__TEST_DIR__/fp_nan_only.parquet' (RETURN_STATS);
+----
+<REGEX>:.*fp_nan_only.parquet      1      <REGEX>:\d+   <REGEX>:\d+   <REGEX>:{'"float_val"'={column_size_bytes=\d+, has_nan=true, null_count=0}}  NULL
 
 # large strings are truncated to the nearest valid UTF8 string
 query IIIIII
