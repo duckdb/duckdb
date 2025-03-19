@@ -185,10 +185,12 @@ public:
 	                                      const string &initial_file, const MultiFileReaderBindData &bind_data,
 	                                      const virtual_column_map_t &virtual_columns,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
-	//! Populated the filter_map
-	DUCKDB_API virtual void CreateFilterMap(const vector<ColumnIndex> &global_column_ids,
-	                                        optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
-	                                        optional_ptr<MultiFileReaderGlobalState> global_state);
+	//! Create filters adjusted for the local schema
+	DUCKDB_API virtual unique_ptr<TableFilterSet> CreateFilters(const vector<ColumnIndex> &global_column_ids,
+	                                                            optional_ptr<TableFilterSet> filters,
+	                                                            MultiFileReaderData &reader_data,
+	                                                            const virtual_column_map_t &virtual_columns,
+	                                                            optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
@@ -264,7 +266,6 @@ public:
 		             reader.reader_data, context, global_state);
 		CreateMapping(reader.GetFileName(), reader.GetColumns(), global_columns, global_column_ids, table_filters,
 		              reader.reader_data, initial_file, bind_data, virtual_columns, global_state);
-		reader.reader_data.filters = table_filters;
 	}
 
 	template <class BIND_DATA>

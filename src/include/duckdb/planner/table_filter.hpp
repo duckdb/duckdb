@@ -109,6 +109,14 @@ public:
 		return left->Equals(*right);
 	}
 
+	unique_ptr<TableFilterSet> Copy() const {
+		auto copy = make_uniq<TableFilterSet>();
+		for (auto &it : filters) {
+			copy->filters.emplace(it.first, it.second->Copy());
+		}
+		return copy;
+	}
+
 	void Serialize(Serializer &serializer) const;
 	static TableFilterSet Deserialize(Deserializer &deserializer);
 };

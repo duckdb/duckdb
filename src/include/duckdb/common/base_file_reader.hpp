@@ -371,11 +371,8 @@ struct MultiFileReaderData {
 	MultiFileColumnMapping column_mapping;
 	//! Whether or not there are no columns to read. This can happen when a file only consists of constants
 	bool empty_columns = false;
-	//! Filters can point to either (1) local columns in the file, or (2) constant values in the `constant_map`
-	//! This map specifies where the to-be-filtered value can be found
-	MultiFileFilterMap filter_map;
-	//! The set of table filters
-	optional_ptr<TableFilterSet> filters;
+	//! The set of table filters (adjusted to local indexes)
+	unique_ptr<TableFilterSet> filters;
 	//! The constants that should be applied at the various positions
 	MultiFileConstantMap constant_map;
 	//! Map of (local) column_id -> cast, used when reading multiple files when files have diverging types

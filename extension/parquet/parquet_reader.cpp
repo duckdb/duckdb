@@ -1043,7 +1043,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
 				// fetched on the first read to that buffer.
-				bool lazy_fetch = reader_data.filters;
+				bool lazy_fetch = reader_data.filters != nullptr;
 
 				// Prefetch column-wise
 				for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
@@ -1107,26 +1107,16 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				break;
 			}
 			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
-			auto global_idx = MultiFileGlobalIndex(scan_filter.filter_idx);
-			auto filter_entry = reader_data.filter_map[global_idx];
-			D_ASSERT(filter_entry.IsSet());
-			if (filter_entry.IsConstant()) {
-				// this is a constant vector, look for the constant
-				auto constant_index = filter_entry.GetConstantIndex();
-				auto &constant = reader_data.constant_map[constant_index].value;
-				Vector constant_vector(constant);
-				ColumnReader::ApplyFilter(constant_vector, scan_filter.filter, *scan_filter.filter_state, scan_count,
-				                          state.sel, filter_count);
-			} else {
-				auto local_idx = filter_entry.GetLocalIndex();
-				auto column_id = reader_data.column_ids[local_idx];
+			//! FIXME: we need to make sure that the 'constant_map' is not necessary,
+			//! by processing the filter in the MultiFileList::GetFile method
+			auto local_idx = MultiFileLocalIndex(scan_filter.filter_idx);
+			auto column_id = reader_data.column_ids[local_idx];
 
-				auto &result_vector = result.data[local_idx];
-				auto &child_reader = root_reader.GetChildReader(column_id);
-				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
-				                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
-				need_to_read[local_idx] = false;
-			}
+			auto &result_vector = result.data[local_idx.GetIndex()];
+			auto &child_reader = root_reader.GetChildReader(column_id);
+			child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
+			                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
+			need_to_read[local_idx.GetIndex()] = false;
 		}
 		state.adaptive_filter->EndFilter(filter_state);
 

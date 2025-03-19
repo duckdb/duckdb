@@ -13,8 +13,31 @@
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/planner/filter/list.hpp"
 
 #include <algorithm>
+
+namespace {
+
+using namespace duckdb;
+
+struct MultiFileIndexMapping {
+public:
+	explicit MultiFileIndexMapping(idx_t index) : index(index) {
+	}
+
+public:
+	MultiFileIndexMapping &AddMapping(idx_t from, idx_t to) {
+		auto res = child_mapping.emplace(from, to);
+		return res.first->second;
+	}
+
+public:
+	idx_t index;
+	unordered_map<idx_t, MultiFileIndexMapping> child_mapping;
+};
+
+} // namespace
 
 namespace duckdb {
 
@@ -589,33 +612,117 @@ void MultiFileReader::CreateMapping(const string &file_name,
 	// copy global columns and inject any different defaults
 	CreateColumnMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
 	                    virtual_columns, initial_file, global_state);
-	CreateFilterMap(global_column_ids, filters, reader_data, global_state);
+	reader_data.filters = CreateFilters(global_column_ids, filters, reader_data, virtual_columns, global_state);
 }
 
-void MultiFileReader::CreateFilterMap(const vector<ColumnIndex> &global_column_ids,
-                                      optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
-                                      optional_ptr<MultiFileReaderGlobalState> global_state) {
+static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const unique_ptr<TableFilter> &global_filter,
+                                                              MultiFileIndexMapping &mapping) {
+	auto type = global_filter->filter_type;
+
+	if (!global_filter) {
+		return nullptr;
+	}
+	unique_ptr<TableFilter> result;
+	switch (type) {
+	case TableFilterType::CONSTANT_COMPARISON:
+	case TableFilterType::IS_NULL:
+	case TableFilterType::IS_NOT_NULL:
+	case TableFilterType::IN_FILTER:
+		return global_filter->Copy();
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &or_filter = global_filter->Cast<ConjunctionOrFilter>();
+		auto res = make_uniq<ConjunctionOrFilter>();
+		for (auto &it : or_filter.child_filters) {
+			res->child_filters.push_back(ConvertFilterFromGlobalToLocal(it, mapping));
+		}
+		return res;
+	}
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &and_filter = global_filter->Cast<ConjunctionAndFilter>();
+		auto res = make_uniq<ConjunctionAndFilter>();
+		for (auto &it : and_filter.child_filters) {
+			res->child_filters.push_back(ConvertFilterFromGlobalToLocal(it, mapping));
+		}
+		return res;
+	}
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = global_filter->Cast<StructFilter>();
+		auto &child_filter = struct_filter.child_filter;
+
+		auto it = mapping.child_mapping.find(struct_filter.child_idx);
+		if (it == mapping.child_mapping.end()) {
+			//! The file we're scanning does not contain this field of the struct
+			//! TODO: what we do here depends on what type of filter is used on the child ?
+			//! For example if this was used in an AND we can't just remove the filter, it should be replaced with a
+			//! "false" instead.
+			return nullptr;
+		}
+		auto &mapping = it->second;
+		auto new_child_filter = ConvertFilterFromGlobalToLocal(child_filter, mapping);
+		//! TODO: renaming fields should probably be respected here?
+		auto child_name = struct_filter.child_name;
+		return make_uniq<StructFilter>(mapping.index, child_name, std::move(new_child_filter));
+	}
+	case TableFilterType::OPTIONAL_FILTER: {
+		auto &optional_filter = global_filter->Cast<OptionalFilter>();
+		auto &child_filter = optional_filter.child_filter;
+		if (!child_filter) {
+			return optional_filter.Copy();
+		}
+		auto new_child = ConvertFilterFromGlobalToLocal(child_filter, mapping);
+		return make_uniq<OptionalFilter>(std::move(new_child));
+	}
+	case TableFilterType::DYNAMIC_FILTER: {
+		auto &dynamic_filter = global_filter->Cast<DynamicFilter>();
+		//! FIXME: since this works like BoundParameterExpression,
+		// making a copy of this DynamicFilterData will not function correctly.
+		throw NotImplementedException("DynamicFilter can't be *properly* copied yet");
+	}
+	default:
+		throw NotImplementedException("Can't convert TableFilterType (%s) from global to local indexes",
+		                              EnumUtil::ToString(type));
+	}
+	return result;
+}
+
+unique_ptr<TableFilterSet> MultiFileReader::CreateFilters(const vector<ColumnIndex> &global_column_ids,
+                                                          optional_ptr<TableFilterSet> filters,
+                                                          MultiFileReaderData &reader_data,
+                                                          const virtual_column_map_t &virtual_columns,
+                                                          optional_ptr<MultiFileReaderGlobalState> global_state) {
 	if (!filters) {
-		return;
-	}
-	auto filter_map_size = global_column_ids.size();
-	if (global_state) {
-		filter_map_size += global_state->extra_columns.size();
+		return nullptr;
 	}
 
-	reader_data.filter_map.resize(filter_map_size);
+	unordered_map<idx_t, MultiFileIndexMapping> global_to_local;
+	for (idx_t local_idx = 0; local_idx < reader_data.column_mapping.size(); local_idx++) {
+		auto global_idx = reader_data.column_mapping[MultiFileLocalIndex(local_idx)];
+		global_to_local.emplace(global_idx.GetIndex(), local_idx);
+		//! FIXME: also map the nested types
+	}
 
-	D_ASSERT(reader_data.column_mapping.size() == reader_data.column_ids.size());
-	for (idx_t c = 0; c < reader_data.column_mapping.size(); c++) {
-		auto col_idx = MultiFileLocalIndex(c);
-		auto global_idx = reader_data.column_mapping[col_idx];
-		reader_data.filter_map[global_idx].Set(col_idx);
+	auto result = make_uniq<TableFilterSet>();
+	for (auto &it : filters->filters) {
+		auto &global_index = it.first;
+		auto &global_filter = it.second;
+
+		auto local_it = global_to_local.find(it.first);
+		if (local_it == global_to_local.end()) {
+			//! This entire column is not present in the file we're scanning, skip the filter entirely.
+			//! TODO: I'm not sure that we can freely skip this filter??
+			//! FIXME: this should be handled before the scan, the file doesn't have this column
+			//! handle this in MultiFileList::GetFile
+			auto virtual_it = virtual_columns.find(global_column_ids[it.first].GetPrimaryIndex());
+			if (virtual_it != virtual_columns.end()) {
+				// TODO: treat virtual columns differently?
+			}
+			continue;
+		}
+		auto &mapping = local_it->second;
+		auto local_filter = ConvertFilterFromGlobalToLocal(global_filter, mapping);
+		result->filters.emplace(mapping.index, std::move(local_filter));
 	}
-	for (idx_t c = 0; c < reader_data.constant_map.size(); c++) {
-		auto constant_idx = MultiFileConstantMapIndex(c);
-		auto global_idx = reader_data.constant_map[constant_idx].column_idx;
-		reader_data.filter_map[global_idx].Set(constant_idx);
-	}
+	return result;
 }
 
 void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
