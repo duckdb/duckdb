@@ -183,9 +183,6 @@ void TupleDataLayout::Initialize(const vector<BoundOrderByNode> &orders, const L
 	} else if (temp_row_width <= 16) {
 		row_width = 16;
 		sort_key_type = has_payload ? SortKeyType::PAYLOAD_FIXED_16 : SortKeyType::NO_PAYLOAD_FIXED_16;
-	} else if (temp_row_width <= 24) {
-		row_width = 24;
-		sort_key_type = has_payload ? SortKeyType::PAYLOAD_FIXED_24 : SortKeyType::NO_PAYLOAD_FIXED_24;
 	} else if (temp_row_width <= 32) {
 		row_width = 32;
 		sort_key_type = has_payload ? SortKeyType::PAYLOAD_FIXED_32 : SortKeyType::NO_PAYLOAD_FIXED_32;

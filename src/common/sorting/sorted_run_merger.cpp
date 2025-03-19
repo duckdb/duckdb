@@ -155,8 +155,7 @@ public:
 	    : merger(merger_p), num_runs(merger.sorted_runs.size()),
 	      num_partitions((merger.total_count + (merger.partition_size - 1)) / merger.partition_size),
 	      iterator_state_type(GetBlockIteratorStateType(merger.fixed_blocks, merger.external)),
-	      sort_key_type(merger.sorted_runs[0]->key_data->GetLayout().GetSortKeyType()), next_partition_idx(0),
-	      total_scanned(0) {
+	      sort_key_type(merger.key_layout.GetSortKeyType()), next_partition_idx(0), total_scanned(0) {
 		// Initialize partitions
 		partitions.resize(num_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
@@ -178,7 +177,7 @@ public:
 	}
 
 	idx_t MaxThreads() override {
-		return num_partitions;
+		return MaxValue<idx_t>(num_partitions, 1);
 	}
 
 public:
@@ -313,16 +312,12 @@ void SortedRunMergerLocalState::ComputePartitionBoundariesSwitch(SortedRunMerger
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, states);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_16>(gstate, states);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_24>(gstate, states);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_FIXED_32>(gstate, states);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate, states);
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_16>(gstate, states);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_24>(gstate, states);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedComputePartitionBoundaries<STATE, SortKeyType::PAYLOAD_FIXED_32>(gstate, states);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -452,16 +447,12 @@ void SortedRunMergerLocalState::MergePartitionSwitch(SortedRunMergerGlobalState 
 		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(gstate, chunk);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_16>(gstate, chunk);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_24>(gstate, chunk);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_FIXED_32>(gstate, chunk);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 		return TemplatedMergePartition<STATE, SortKeyType::NO_PAYLOAD_VARIABLE_32>(gstate, chunk);
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_16>(gstate, chunk);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_24>(gstate, chunk);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedMergePartition<STATE, SortKeyType::PAYLOAD_FIXED_32>(gstate, chunk);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -543,16 +534,12 @@ void SortedRunMergerLocalState::CreateOrDestroyTournamentTreeSwitch(bool create,
 		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::NO_PAYLOAD_FIXED_8>(create, states);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::NO_PAYLOAD_FIXED_16>(create, states);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::NO_PAYLOAD_FIXED_24>(create, states);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::NO_PAYLOAD_FIXED_32>(create, states);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::NO_PAYLOAD_VARIABLE_32>(create, states);
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::PAYLOAD_FIXED_16>(create, states);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::PAYLOAD_FIXED_24>(create, states);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedCreateOrDestroyTournamentTree<STATE, SortKeyType::PAYLOAD_FIXED_32>(create, states);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -567,7 +554,6 @@ template <class STATE, SortKeyType SORT_KEY_TYPE>
 void SortedRunMergerLocalState::TemplatedCreateOrDestroyTournamentTree(bool create, unsafe_vector<STATE> &states) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
 	using ITER = block_iterator_t<STATE, SORT_KEY>;
-
 	if (create) {
 		// Create
 		D_ASSERT(!tournament_tree);
@@ -592,13 +578,12 @@ void SortedRunMergerLocalState::TemplatedCreateOrDestroyTournamentTree(bool crea
 //===--------------------------------------------------------------------===//
 // Sorted Run Merger
 //===--------------------------------------------------------------------===//
-SortedRunMerger::SortedRunMerger(vector<unique_ptr<SortedRun>> &&sorted_runs_p,
+SortedRunMerger::SortedRunMerger(const TupleDataLayout &key_layout_p, vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  const vector<SortProjectionColumn> &output_projection_columns_p,
                                  idx_t partition_size_p, bool external_p, bool fixed_blocks_p)
-    : sorted_runs(std::move(sorted_runs_p)), output_projection_columns(output_projection_columns_p),
-      total_count(SortedRunsTotalCount(sorted_runs)), partition_size(partition_size_p), external(external_p),
-      fixed_blocks(fixed_blocks_p) {
-	D_ASSERT(total_count != 0);
+    : key_layout(key_layout_p), sorted_runs(std::move(sorted_runs_p)),
+      output_projection_columns(output_projection_columns_p), total_count(SortedRunsTotalCount(sorted_runs)),
+      partition_size(partition_size_p), external(external_p), fixed_blocks(fixed_blocks_p) {
 }
 
 unique_ptr<LocalSourceState> SortedRunMerger::GetLocalSourceState(ExecutionContext &,
@@ -639,7 +624,6 @@ OperatorPartitionData SortedRunMerger::GetPartitionData(ExecutionContext &, Data
 
 ProgressData SortedRunMerger::GetProgress(ClientContext &, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<SortedRunMergerGlobalState>();
-
 	ProgressData res;
 	res.done = static_cast<double>(gstate.total_scanned);
 	res.total = static_cast<double>(total_count);

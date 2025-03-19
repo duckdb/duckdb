@@ -118,7 +118,7 @@ public:
 	explicit SortGlobalSinkState(ClientContext &context)
 	    : temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), active_threads(0),
 	      external(ClientConfig::GetConfig(context).force_external), any_combined(false), total_count(0),
-	      partition_size(0), any_concatenated(false) {
+	      partition_size(1), any_concatenated(false) {
 	}
 
 public:
@@ -287,7 +287,6 @@ SinkCombineResultType Sort::Combine(ExecutionContext &context, OperatorSinkCombi
 SinkFinalizeType Sort::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                 OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<SortGlobalSinkState>();
-
 	if (gstate.sorted_runs.empty()) {
 		return SinkFinalizeType::NO_OUTPUT_POSSIBLE;
 	}
@@ -313,7 +312,6 @@ SinkFinalizeType Sort::Finalize(Pipeline &pipeline, Event &event, ClientContext 
 ProgressData Sort::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate_p,
                                    const ProgressData source_progress) const {
 	auto &gstate = gstate_p.Cast<SortGlobalSinkState>();
-
 	// Estimate that half of the Sink effort is sorting
 	ProgressData res;
 	const auto sorted_tuples = static_cast<double>(gstate.sorted_tuples);
@@ -329,14 +327,14 @@ ProgressData Sort::GetSinkProgress(ClientContext &context, GlobalSinkState &gsta
 class SortGlobalSourceState : public GlobalSourceState {
 public:
 	SortGlobalSourceState(const Sort &sort, ClientContext &context, SortGlobalSinkState &sink_p)
-	    : sink(sink_p), merger(std::move(sink.sorted_runs), sort.output_projection_columns, sink.partition_size,
-	                           sink.external, !sink.any_concatenated),
-	      merger_global_state(merger.GetGlobalSourceState(context)) {
+	    : sink(sink_p), merger(sort.key_layout, std::move(sink.sorted_runs), sort.output_projection_columns,
+	                           sink.partition_size, sink.external, !sink.any_concatenated),
+	      merger_global_state(merger.total_count == 0 ? nullptr : merger.GetGlobalSourceState(context)) {
 	}
 
 public:
 	idx_t MaxThreads() override {
-		return merger_global_state->MaxThreads();
+		return merger_global_state ? merger_global_state->MaxThreads() : 1;
 	}
 
 public:
@@ -350,7 +348,9 @@ public:
 class SortLocalSourceState : public LocalSourceState {
 public:
 	SortLocalSourceState(const Sort &sort, ExecutionContext &context, SortGlobalSourceState &gstate)
-	    : merger_local_state(gstate.merger.GetLocalSourceState(context, *gstate.merger_global_state)) {
+	    : merger_local_state(gstate.merger.total_count == 0
+	                             ? nullptr
+	                             : gstate.merger.GetLocalSourceState(context, *gstate.merger_global_state)) {
 	}
 
 public:
@@ -367,15 +367,19 @@ unique_ptr<GlobalSourceState> Sort::GetGlobalSourceState(ClientContext &context,
 
 SourceResultType Sort::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<SortGlobalSourceState>();
+	if (gstate.merger.total_count == 0) {
+		return SourceResultType::FINISHED;
+	}
 	auto &lstate = input.local_state.Cast<SortLocalSourceState>();
-
 	OperatorSourceInput merger_input {*gstate.merger_global_state, *lstate.merger_local_state, input.interrupt_state};
 	return gstate.merger.GetData(context, chunk, merger_input);
 }
 
 ProgressData Sort::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<SortGlobalSourceState>();
-
+	if (gstate.merger.total_count == 0) {
+		return ProgressData {};
+	}
 	return gstate.merger.GetProgress(context, *gstate.merger_global_state);
 }
 
@@ -384,7 +388,6 @@ OperatorPartitionData Sort::GetPartitionData(ExecutionContext &context, DataChun
                                              const OperatorPartitionInfo &partition_info) const {
 	auto &gstate = gstate_p.Cast<SortGlobalSourceState>();
 	auto &lstate = lstate_p.Cast<SortLocalSourceState>();
-
 	return gstate.merger.GetPartitionData(context, chunk, *gstate.merger_global_state, *lstate.merger_local_state,
 	                                      partition_info);
 }

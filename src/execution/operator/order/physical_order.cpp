@@ -19,6 +19,7 @@ public:
 	    : sort(context, op.orders, op.children[0]->types, op.projections), state(sort.GetGlobalSinkState(context)) {
 	}
 
+public:
 	Sort sort;
 	unique_ptr<GlobalSinkState> state;
 };
@@ -28,6 +29,7 @@ public:
 	OrderLocalSinkState() {
 	}
 
+public:
 	unique_ptr<LocalSinkState> state;
 };
 
@@ -42,11 +44,9 @@ unique_ptr<GlobalSinkState> PhysicalOrder::GetGlobalSinkState(ClientContext &con
 SinkResultType PhysicalOrder::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &gstate = input.global_state.Cast<OrderGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<OrderLocalSinkState>();
-
 	if (!lstate.state) {
 		lstate.state = gstate.sort.GetLocalSinkState(context);
 	}
-
 	OperatorSinkInput sort_input {*gstate.state, *lstate.state, input.interrupt_state};
 	return gstate.sort.Sink(context, chunk, sort_input);
 }
@@ -54,7 +54,9 @@ SinkResultType PhysicalOrder::Sink(ExecutionContext &context, DataChunk &chunk, 
 SinkCombineResultType PhysicalOrder::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<OrderGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<OrderLocalSinkState>();
-
+	if (!lstate.state) {
+		return SinkCombineResultType::FINISHED;
+	}
 	OperatorSinkCombineInput sort_input {*gstate.state, *lstate.state, input.interrupt_state};
 	return gstate.sort.Combine(context, sort_input);
 }
@@ -62,7 +64,6 @@ SinkCombineResultType PhysicalOrder::Combine(ExecutionContext &context, Operator
 SinkFinalizeType PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                          OperatorSinkFinalizeInput &input) const {
 	auto &gstate = input.global_state.Cast<OrderGlobalSinkState>();
-
 	OperatorSinkFinalizeInput sort_input {*gstate.state, input.interrupt_state};
 	return gstate.sort.Finalize(pipeline, event, context, sort_input);
 }
@@ -70,7 +71,6 @@ SinkFinalizeType PhysicalOrder::Finalize(Pipeline &pipeline, Event &event, Clien
 ProgressData PhysicalOrder::GetSinkProgress(ClientContext &context, GlobalSinkState &gstate_p,
                                             const ProgressData source_progress) const {
 	auto &gstate = gstate_p.Cast<OrderGlobalSinkState>();
-
 	return gstate.sort.GetSinkProgress(context, *gstate.state, source_progress);
 }
 
@@ -83,10 +83,12 @@ public:
 	    : sort(sink.sort), state(sort.GetGlobalSourceState(context, *sink.state)) {
 	}
 
+public:
 	idx_t MaxThreads() override {
 		return state->MaxThreads();
 	}
 
+public:
 	Sort &sort;
 	unique_ptr<GlobalSourceState> state;
 };
@@ -97,6 +99,7 @@ public:
 	    : state(gstate.sort.GetLocalSourceState(context, *gstate.state)) {
 	}
 
+public:
 	unique_ptr<LocalSourceState> state;
 };
 
@@ -113,7 +116,6 @@ unique_ptr<GlobalSourceState> PhysicalOrder::GetGlobalSourceState(ClientContext 
 SourceResultType PhysicalOrder::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
 	auto &gstate = input.global_state.Cast<OrderGlobalSourceState>();
 	auto &lstate = input.local_state.Cast<OrderLocalSourceState>();
-
 	OperatorSourceInput sort_input {*gstate.state, *lstate.state, input.interrupt_state};
 	return gstate.sort.GetData(context, chunk, sort_input);
 }
@@ -123,17 +125,14 @@ OperatorPartitionData PhysicalOrder::GetPartitionData(ExecutionContext &context,
                                                       const OperatorPartitionInfo &partition_info) const {
 	auto &gstate = gstate_p.Cast<OrderGlobalSourceState>();
 	auto &lstate = lstate_p.Cast<OrderLocalSourceState>();
-
 	if (partition_info.RequiresPartitionColumns()) {
 		throw InternalException("PhysicalOrder::GetPartitionData: partition columns not supported");
 	}
-
 	return gstate.sort.GetPartitionData(context, chunk, *gstate.state, *lstate.state, partition_info);
 }
 
 ProgressData PhysicalOrder::GetProgress(ClientContext &context, GlobalSourceState &gstate_p) const {
 	auto &gstate = gstate_p.Cast<OrderGlobalSourceState>();
-
 	return gstate.sort.GetProgress(context, *gstate.state);
 }
 

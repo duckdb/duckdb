@@ -59,8 +59,10 @@ public:
 			leaf_nodes.emplace_back(sorted_runs[leaf_idx]);
 		}
 
-		for (idx_t leaf_idx = 0; leaf_idx < num_leaf_nodes; leaf_idx++) {
-			update(leaf_idx);
+		if (num_internal_nodes > 2) {
+			for (idx_t leaf_idx = 0; leaf_idx < num_leaf_nodes; leaf_idx++) {
+				update(leaf_idx);
+			}
 		}
 	}
 
@@ -71,13 +73,6 @@ public:
 		}
 		if (num_leaf_nodes == 2) {
 			return !leaf_nodes[0].has_value() && !leaf_nodes[1].has_value();
-		}
-		if (num_leaf_nodes < 20) {
-			bool all_empty = true;
-			for (idx_t leaf_idx = 0; leaf_idx < num_leaf_nodes; leaf_idx++) {
-				all_empty &= !leaf_nodes[leaf_idx].has_value();
-			}
-			return all_empty;
 		}
 		return !leaf_nodes[internal_nodes[0]].has_value();
 	}

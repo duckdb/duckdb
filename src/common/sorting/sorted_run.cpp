@@ -39,8 +39,6 @@ static void SetPayloadPointer(Vector &key_locations, Vector &payload_locations, 
 	switch (sort_key_type) {
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_16>(key_locations, payload_locations, count);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_24>(key_locations, payload_locations, count);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedSetPayloadPointer<SortKeyType::PAYLOAD_FIXED_32>(key_locations, payload_locations, count);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -79,16 +77,12 @@ static void Sort(const TupleDataCollection &key_data) {
 		return TemplatedSort<SortKeyType::NO_PAYLOAD_FIXED_8>(key_data);
 	case SortKeyType::NO_PAYLOAD_FIXED_16:
 		return TemplatedSort<SortKeyType::NO_PAYLOAD_FIXED_16>(key_data);
-	case SortKeyType::NO_PAYLOAD_FIXED_24:
-		return TemplatedSort<SortKeyType::NO_PAYLOAD_FIXED_24>(key_data);
 	case SortKeyType::NO_PAYLOAD_FIXED_32:
 		return TemplatedSort<SortKeyType::NO_PAYLOAD_FIXED_32>(key_data);
 	case SortKeyType::NO_PAYLOAD_VARIABLE_32:
 		return TemplatedSort<SortKeyType::NO_PAYLOAD_VARIABLE_32>(key_data);
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedSort<SortKeyType::PAYLOAD_FIXED_16>(key_data);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedSort<SortKeyType::PAYLOAD_FIXED_24>(key_data);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedSort<SortKeyType::PAYLOAD_FIXED_32>(key_data);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
@@ -108,8 +102,6 @@ static void ReorderPayload(TupleDataCollection &key_data, TupleDataCollection &p
 	switch (sort_key_type) {
 	case SortKeyType::PAYLOAD_FIXED_16:
 		return TemplatedReorderPayload<SortKeyType::PAYLOAD_FIXED_16>(key_data, payload_data);
-	case SortKeyType::PAYLOAD_FIXED_24:
-		return TemplatedReorderPayload<SortKeyType::PAYLOAD_FIXED_24>(key_data, payload_data);
 	case SortKeyType::PAYLOAD_FIXED_32:
 		return TemplatedReorderPayload<SortKeyType::PAYLOAD_FIXED_32>(key_data, payload_data);
 	case SortKeyType::PAYLOAD_VARIABLE_32:
