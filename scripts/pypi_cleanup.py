@@ -16,7 +16,7 @@ from requests.exceptions import RequestException
 
 # for local testing run the script with the --dry option
 # it outputs the list of the names to delete and return
-# you can change a value of the how_many_dev_versions_to_keep variable to see difference 
+# you can change a value of the how_many_dev_versions_to_keep variable to see difference
 parser = argparse.ArgumentParser()
 parser.add_argument("--dry", action="store_true", help="Run in dry-run mode (doesn't delete anything)")
 args = parser.parse_args()
@@ -40,6 +40,7 @@ if pypi_password == "":
 if pypi_otp == "":
     print(f'need {pypi_username}\' PyPI OTP secret in PYPI_CLEANUP_OTP env variable')
     exit(1)
+
 
 ###### NOTE: This code is taken from the pypi-cleanup package (https://github.com/arcivanov/pypi-cleanup/tree/master)
 class CsfrParser(HTMLParser):
@@ -138,7 +139,7 @@ class PypiCleanup:
                 # that means the version have been released and we don't need to keep PRE-RELEASE (dev) versions anymore.
                 # All versions for that key should be added into a list to delete from PyPi (pkg_vers).
                 # When the version is not released yet, it appears among the version_dict keys. In this case we'd like to keep
-                # some number of versions (how_many_dev_versions_to_keep), so we add the version names from the beginning 
+                # some number of versions (how_many_dev_versions_to_keep), so we add the version names from the beginning
                 # of the versions list sorted by date, except for mentioned number of versions to keep.
                 if version_key in releases_by_date.keys():
                     pkg_vers.extend(versions)

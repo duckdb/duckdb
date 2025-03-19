@@ -98,8 +98,8 @@ public:
 	atomic<bool> any_finished;
 	//! Minimum memory per thread
 	idx_t minimum_memory_per_thread;
-	//! File stats (for RETURN_STATS)
-	unique_ptr<CopyFunctionFileStatistics> file_stats;
+	//! Written file info (for RETURN_STATS)
+	unique_ptr<CopyToFileInfo> written_file_info;
 
 	void AddBatchData(idx_t batch_index, unique_ptr<PreparedBatchData> new_batch, idx_t memory_usage) {
 		// move the batch data to the set of prepared batch data
@@ -602,8 +602,10 @@ unique_ptr<GlobalSinkState> PhysicalBatchCopyToFile::GetGlobalSinkState(ClientCo
 	auto result = make_uniq<FixedBatchCopyGlobalState>(
 	    context, function.copy_to_initialize_global(context, *bind_data, file_path), minimum_memory_per_thread);
 	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
-		result->file_stats = make_uniq<CopyFunctionFileStatistics>();
-		function.copy_to_get_written_statistics(context, *bind_data, *result->global_state, *result->file_stats);
+		result->written_file_info = make_uniq<CopyToFileInfo>(file_path);
+		result->written_file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
+		function.copy_to_get_written_statistics(context, *bind_data, *result->global_state,
+		                                        *result->written_file_info->file_stats);
 	}
 	result->batch_size = function.desired_batch_size ? function.desired_batch_size(context, *bind_data) : 0;
 	return std::move(result);
@@ -627,7 +629,7 @@ SourceResultType PhysicalBatchCopyToFile::GetData(ExecutionContext &context, Dat
 		break;
 	}
 	case CopyFunctionReturnType::WRITTEN_FILE_STATISTICS: {
-		PhysicalCopyToFile::ReturnStatistics(chunk, 0, fp, *g.file_stats);
+		PhysicalCopyToFile::ReturnStatistics(chunk, 0, *g.written_file_info);
 		break;
 	}
 	default:
