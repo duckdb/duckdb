@@ -11,7 +11,7 @@ namespace duckdb {
 static bool test_force_storage = false;
 static bool test_force_reload = false;
 static bool test_memory_leaks = false;
-static bool summarize_failures = false;
+static bool summarize_failures = true;
 
 bool TestForceStorage() {
 	return test_force_storage;
@@ -65,15 +65,19 @@ int main(int argc, char *argv[]) {
 			SetDebugInitialize(0xFF);
 		} else if (string(argv[i]) == "--single-threaded") {
 			SetSingleThreaded();
-		} else if (string(argv[i]) == "--summarize-failures") {
+		} else if (string(argv[i]) == "--dont-summarize-failures") {
+			// we'd like to summarize by default and not summarize 
+			summarize_failures = false;
+		} else {
+			new_argv[new_argc] = argv[i];
+			new_argc++;
+		}
+		if (summarize_failures == true) {
+			// cleanup before creating new failures summary file
 			if (std::FILE* file = std::fopen(filename, "r")) {
 				std::fclose(file);
 				std::remove(filename);
 			}
-			summarize_failures = true;;
-		} else {
-			new_argv[new_argc] = argv[i];
-			new_argc++;
 		}
 	}
 
