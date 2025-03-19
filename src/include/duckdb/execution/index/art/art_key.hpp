@@ -73,6 +73,7 @@ public:
 	void Concat(ArenaAllocator &allocator, const ARTKey &other);
 	row_t GetRowId() const;
 	idx_t GetMismatchPos(const ARTKey &other, const idx_t start) const;
+	void VerifyKeyLength(const idx_t max_len) const;
 
 private:
 	template <class T>

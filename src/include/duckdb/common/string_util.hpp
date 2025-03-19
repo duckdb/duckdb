@@ -14,7 +14,7 @@
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/set.hpp"
 #include "duckdb/common/vector.hpp"
-
+#include "duckdb/common/complex_json.hpp"
 #include <cstring>
 
 namespace duckdb {
@@ -218,6 +218,9 @@ public:
 	//! Case insensitive equals
 	DUCKDB_API static bool CIEquals(const string &l1, const string &l2);
 
+	//! Case insensitive equals (null-terminated strings)
+	DUCKDB_API static bool CIEquals(const char *l1, idx_t l1_size, const char *l2, idx_t l2_size);
+
 	//! Case insensitive compare
 	DUCKDB_API static bool CILessThan(const string &l1, const string &l2);
 
@@ -295,18 +298,22 @@ public:
 	}
 
 	//! JSON method that parses a { string: value } JSON blob
-	//! NOTE: this method ONLY parses a JSON {"key": "value"} object, it does not support ANYTHING else
 	//! NOTE: this method is not efficient
 	//! NOTE: this method is used in Exception construction - as such it does NOT throw on invalid JSON, instead an
 	//! empty map is returned
-	DUCKDB_API static unordered_map<string, string> ParseJSONMap(const string &json);
+	//! Parses complex (i.e., nested) Json maps, it also parses invalid JSONs, as a pure string.
+	DUCKDB_API static unique_ptr<ComplexJSON> ParseJSONMap(const string &json, bool ignore_errors = false);
+
 	//! JSON method that constructs a { string: value } JSON map
 	//! This is the inverse of ParseJSONMap
 	//! NOTE: this method is not efficient
 	DUCKDB_API static string ExceptionToJSONMap(ExceptionType type, const string &message,
 	                                            const unordered_map<string, string> &map);
 
+	//! Transforms an unordered map to a JSON string
 	DUCKDB_API static string ToJSONMap(const unordered_map<string, string> &map);
+	//! Transforms an complex JSON to a JSON string
+	DUCKDB_API static string ToComplexJSONMap(const ComplexJSON &complex_json);
 
 	DUCKDB_API static string GetFileName(const string &file_path);
 	DUCKDB_API static string GetFileExtension(const string &file_name);

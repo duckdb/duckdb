@@ -52,23 +52,21 @@ py::object PythonTableArrowArrayStreamFactory::ProduceScanner(DBConfig &config, 
 	py::list projection_list = py::cast(column_list);
 
 	bool has_filter = filters && !filters->filters.empty();
+	py::dict kwargs;
+	if (!column_list.empty()) {
+		kwargs["columns"] = projection_list;
+	}
 
 	if (has_filter) {
 		auto filter = TransformFilter(*filters, parameters.projected_columns.projection_map, filter_to_col,
 		                              client_properties, arrow_table);
-		if (column_list.empty()) {
-			return arrow_scanner(arrow_obj_handle, py::arg("filter") = filter);
-		} else {
-			return arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list, py::arg("filter") = filter);
-		}
-	} else {
-		if (column_list.empty()) {
-			return arrow_scanner(arrow_obj_handle);
-		} else {
-			return arrow_scanner(arrow_obj_handle, py::arg("columns") = projection_list);
+		if (!filter.is(py::none())) {
+			kwargs["filter"] = filter;
 		}
 	}
+	return arrow_scanner(arrow_obj_handle, **kwargs);
 }
+
 unique_ptr<ArrowArrayStreamWrapper> PythonTableArrowArrayStreamFactory::Produce(uintptr_t factory_ptr,
                                                                                 ArrowStreamParameters &parameters) {
 	py::gil_scoped_acquire acquire;
@@ -342,6 +340,9 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		for (idx_t i = 0; i < or_filter.child_filters.size(); i++) {
 			auto &child_filter = *or_filter.child_filters[i];
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
+			if (child_expression.is(py::none())) {
+				continue;
+			}
 			if (expression.is(py::none())) {
 				expression = std::move(child_expression);
 			} else {
@@ -356,6 +357,9 @@ py::object TransformFilterRecursive(TableFilter &filter, vector<string> column_r
 		for (idx_t i = 0; i < and_filter.child_filters.size(); i++) {
 			auto &child_filter = *and_filter.child_filters[i];
 			py::object child_expression = TransformFilterRecursive(child_filter, column_ref, timezone_config, type);
+			if (child_expression.is(py::none())) {
+				continue;
+			}
 			if (expression.is(py::none())) {
 				expression = std::move(child_expression);
 			} else {

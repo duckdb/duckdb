@@ -8,6 +8,8 @@ on:
         type: string
       skip_tests:
         type: string
+      run_all:
+        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -16,6 +18,9 @@ on:
         type: string
       skip_tests:
         type: string
+      run_all:
+        type: string
+  repository_dispatch:
   push:
     branches-ignore:
       - 'main'
@@ -311,12 +316,11 @@ jobs:
         python-version: '3.12'
 
     - name: Execute test
+      if: (( inputs.skip_tests != 'true' )) && (( startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' )) && (( github.repository == 'duckdb/duckdb' ))
       shell: bash
       env:
           AWS_ACCESS_KEY_ID: ${{secrets.S3_ID}}
           AWS_SECRET_ACCESS_KEY: ${{secrets.S3_KEY}}
           AWS_DEFAULT_REGION: us-east-1
       run: |
-          if [[ "$GITHUB_REF" =~ ^(refs/heads/main|refs/tags/v.+)$ && "$GITHUB_REPOSITORY" = "duckdb/duckdb" ]] ; then
-            ./scripts/extension-upload-test.sh
-          fi
+          ./scripts/extension-upload-test.sh

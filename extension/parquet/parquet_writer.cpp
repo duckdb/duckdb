@@ -317,6 +317,30 @@ void VerifyUniqueNames(const vector<string> &names) {
 #endif
 }
 
+struct ColumnStatsUnifier {
+	virtual ~ColumnStatsUnifier() = default;
+
+	string column_name;
+	string global_min;
+	string global_max;
+	idx_t null_count = 0;
+	bool all_min_max_set = true;
+	bool all_nulls_set = true;
+	bool min_is_set = false;
+	bool max_is_set = false;
+	idx_t column_size_bytes = 0;
+	bool can_have_nan = false;
+	bool has_nan = false;
+
+	virtual void UnifyMinMax(const string &new_min, const string &new_max) = 0;
+	virtual string StatsToString(const string &stats) = 0;
+};
+
+class ParquetStatsAccumulator {
+public:
+	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
+};
+
 ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file_name_p, vector<LogicalType> types_p,
                              vector<string> names_p, CompressionCodec::type codec, ChildFieldIDs field_ids_p,
                              const vector<pair<string, string>> &kv_metadata,
@@ -391,6 +415,9 @@ ParquetWriter::ParquetWriter(ClientContext &context, FileSystem &fs, string file
 		column_writers.push_back(
 		    ColumnWriter::CreateWriterRecursive(context, *this, file_meta_data.schema, child_schema, path_in_schema));
 	}
+}
+
+ParquetWriter::~ParquetWriter() {
 }
 
 void ParquetWriter::PrepareRowGroup(ColumnDataCollection &buffer, PreparedRowGroup &result) {
@@ -528,22 +555,6 @@ void ParquetWriter::Flush(ColumnDataCollection &buffer) {
 
 	FlushRowGroup(prepared_row_group);
 }
-
-struct ColumnStatsUnifier {
-	virtual ~ColumnStatsUnifier() = default;
-
-	string column_name;
-	string global_min;
-	string global_max;
-	idx_t null_count = 0;
-	bool all_min_max_set = true;
-	bool all_nulls_set = true;
-	bool min_is_set = false;
-	bool max_is_set = false;
-
-	virtual void UnifyMinMax(const string &new_min, const string &new_max) = 0;
-	virtual string StatsToString(const string &stats) = 0;
-};
 
 template <class T>
 struct BaseNumericStatsUnifier : public ColumnStatsUnifier {
@@ -733,38 +744,46 @@ void GetStatsUnifier(const ParquetColumnSchema &schema, vector<unique_ptr<Column
 	}
 }
 
+void ParquetWriter::FlushColumnStats(idx_t col_idx, duckdb_parquet::ColumnChunk &column,
+                                     optional_ptr<ColumnWriterStatistics> writer_stats) {
+	if (!written_stats) {
+		return;
+	}
+	// push the stats of this column into the unifier
+	auto &stats_unifier = stats_accumulator->stats_unifiers[col_idx];
+	bool has_nan = false;
+	if (writer_stats) {
+		stats_unifier->can_have_nan = writer_stats->CanHaveNaN();
+		has_nan = writer_stats->HasNaN();
+		stats_unifier->has_nan = has_nan;
+	}
+	if (column.meta_data.__isset.statistics) {
+		if (has_nan && writer_stats->HasStats()) {
+			// if we have NaN values we have not written the min/max to the Parquet file
+			// BUT we can return them as part of RETURN STATS by fetching them from the stats directly
+			stats_unifier->UnifyMinMax(writer_stats->GetMin(), writer_stats->GetMax());
+		} else if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
+			stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value, column.meta_data.statistics.max_value);
+		} else {
+			stats_unifier->all_min_max_set = false;
+		}
+		if (column.meta_data.statistics.__isset.null_count) {
+			stats_unifier->null_count += column.meta_data.statistics.null_count;
+		} else {
+			stats_unifier->all_nulls_set = false;
+		}
+		stats_unifier->column_size_bytes += column.meta_data.total_compressed_size;
+	}
+}
+
 void ParquetWriter::GatherWrittenStatistics() {
 	written_stats->row_count = file_meta_data.num_rows;
 
-	// find the per-column stats
-	vector<unique_ptr<ColumnStatsUnifier>> stats_unifiers;
-	for (auto &column_writer : column_writers) {
-		GetStatsUnifier(column_writer->Schema(), stats_unifiers);
-	}
-	// unify the stats of all of the row groups
-	for (auto &row_group : file_meta_data.row_groups) {
-		for (idx_t c = 0; c < row_group.columns.size(); c++) {
-			auto &column = row_group.columns[c];
-			auto &stats_unifier = stats_unifiers[c];
-			if (column.meta_data.__isset.statistics) {
-				if (column.meta_data.statistics.__isset.min_value && column.meta_data.statistics.__isset.max_value) {
-					stats_unifier->UnifyMinMax(column.meta_data.statistics.min_value,
-					                           column.meta_data.statistics.max_value);
-				} else {
-					stats_unifier->all_min_max_set = false;
-				}
-				if (column.meta_data.statistics.__isset.null_count) {
-					stats_unifier->null_count += column.meta_data.statistics.null_count;
-				} else {
-					stats_unifier->all_nulls_set = false;
-				}
-			}
-		}
-	}
 	// finalize the min/max values and write to column stats
-	for (idx_t c = 0; c < stats_unifiers.size(); c++) {
-		auto &stats_unifier = stats_unifiers[c];
+	for (idx_t c = 0; c < stats_accumulator->stats_unifiers.size(); c++) {
+		auto &stats_unifier = stats_accumulator->stats_unifiers[c];
 		case_insensitive_map_t<Value> column_stats;
+		column_stats["column_size_bytes"] = Value::UBIGINT(stats_unifier->column_size_bytes);
 		if (stats_unifier->all_min_max_set) {
 			auto min_value = stats_unifier->StatsToString(stats_unifier->global_min);
 			auto max_value = stats_unifier->StatsToString(stats_unifier->global_max);
@@ -777,6 +796,9 @@ void ParquetWriter::GatherWrittenStatistics() {
 		}
 		if (stats_unifier->all_nulls_set) {
 			column_stats["null_count"] = Value::UBIGINT(stats_unifier->null_count);
+		}
+		if (stats_unifier->can_have_nan) {
+			column_stats["has_nan"] = Value::BOOLEAN(stats_unifier->has_nan);
 		}
 		written_stats->column_statistics.insert(make_pair(stats_unifier->column_name, std::move(column_stats)));
 	}
@@ -844,8 +866,7 @@ void ParquetWriter::Finalize() {
 		// gather written statistics from the metadata
 		GatherWrittenStatistics();
 		written_stats->file_size_bytes = writer->GetTotalWritten();
-		written_stats->footer_offset = Value::UBIGINT(metadata_start_offset);
-		written_stats->footer_size = Value::UBIGINT(footer_size);
+		written_stats->footer_size_bytes = Value::UBIGINT(footer_size);
 	}
 
 	// flush to disk
@@ -873,6 +894,11 @@ void ParquetWriter::BufferBloomFilter(idx_t col_idx, unique_ptr<ParquetBloomFilt
 
 void ParquetWriter::SetWrittenStatistics(CopyFunctionFileStatistics &written_stats_p) {
 	written_stats = written_stats_p;
+	stats_accumulator = make_uniq<ParquetStatsAccumulator>();
+	// create the per-column stats unifiers
+	for (auto &column_writer : column_writers) {
+		GetStatsUnifier(column_writer->Schema(), stats_accumulator->stats_unifiers);
+	}
 }
 
 } // namespace duckdb
