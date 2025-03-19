@@ -128,8 +128,6 @@ public:
 	void Init(const FixedSizeAllocatorInfo &info);
 	//! Deserializes all metadata of older storage files
 	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
-	//! Removes empty buffers.
-	void RemoveEmptyBuffers();
 	//! Returns true, if the allocator does not contain any segments.
 	inline bool IsEmpty() {
 		return total_segment_count == 0;

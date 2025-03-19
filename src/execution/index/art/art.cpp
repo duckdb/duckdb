@@ -1253,10 +1253,6 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 	info.root = tree.Get();
 	info.options = options;
 
-	for (auto &allocator : *allocators) {
-		allocator->RemoveEmptyBuffers();
-	}
-
 #ifdef DEBUG
 	if (v1_0_0_storage) {
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_7_LEAF)]->IsEmpty());

@@ -90,12 +90,12 @@ IndexPointer FixedSizeAllocator::New() {
 }
 
 void FixedSizeAllocator::Free(const IndexPointer ptr) {
-
 	auto buffer_id = ptr.GetBufferId();
 	auto offset = ptr.GetOffset();
 
-	D_ASSERT(buffers.find(buffer_id) != buffers.end());
-	auto &buffer = buffers.find(buffer_id)->second;
+	auto buffer_it = buffers.find(buffer_id);
+	D_ASSERT(buffer_it != buffers.end());
+	auto &buffer = buffer_it->second;
 
 	auto bitmask_ptr = reinterpret_cast<validity_t *>(buffer->Get());
 	ValidityMask mask(bitmask_ptr, offset + 1); // FIXME
@@ -105,10 +105,18 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	D_ASSERT(total_segment_count > 0);
 	D_ASSERT(buffer->segment_count > 0);
 
-	// adjust the allocator fields
-	buffers_with_free_space.insert(buffer_id);
+	// Adjust the allocator fields.
 	total_segment_count--;
 	buffer->segment_count--;
+
+	if (buffer->segment_count != 0) {
+		buffers_with_free_space.insert(buffer_id);
+		return;
+	}
+
+	// Erase the empty buffer.
+	buffers_with_free_space.erase(buffer_id);
+	buffers.erase(buffer_it);
 }
 
 void FixedSizeAllocator::Reset() {
@@ -159,7 +167,6 @@ void FixedSizeAllocator::Merge(FixedSizeAllocator &other) {
 }
 
 bool FixedSizeAllocator::InitializeVacuum() {
-
 	// NOTE: we do not vacuum buffers that are not in memory. We might consider changing this
 	// in the future, although buffers on disk should almost never be eligible for a vacuum
 
@@ -167,7 +174,14 @@ bool FixedSizeAllocator::InitializeVacuum() {
 		Reset();
 		return false;
 	}
-	RemoveEmptyBuffers();
+#ifdef DEBUG
+	auto buffer_it = buffers.begin();
+	while (buffer_it != buffers.end()) {
+		if (buffer_it->second->segment_count == 0) {
+			throw InternalException("empty buffer in FixedSizeAllocator");
+		}
+	}
+#endif
 
 	// determine if a vacuum is necessary
 	multimap<idx_t, idx_t> temporary_vacuum_buffers;
@@ -346,20 +360,6 @@ idx_t FixedSizeAllocator::GetAvailableBufferId() const {
 		buffer_id--;
 	}
 	return buffer_id;
-}
-
-void FixedSizeAllocator::RemoveEmptyBuffers() {
-
-	auto buffer_it = buffers.begin();
-	while (buffer_it != buffers.end()) {
-		if (buffer_it->second->segment_count != 0) {
-			++buffer_it;
-			continue;
-		}
-
-		buffers_with_free_space.erase(buffer_it->first);
-		buffer_it = buffers.erase(buffer_it);
-	}
 }
 
 } // namespace duckdb
