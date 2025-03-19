@@ -281,13 +281,13 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 			column_chunk.meta_data.statistics.min_value = state.stats_state->GetMinValue();
 			column_chunk.meta_data.statistics.__isset.min_value = true;
 			column_chunk.meta_data.__isset.statistics = true;
-			column_chunk.meta_data.statistics.is_min_value_exact = true;
+			column_chunk.meta_data.statistics.is_min_value_exact = state.stats_state->MinIsExact();
 			column_chunk.meta_data.statistics.__isset.is_min_value_exact = true;
 
 			column_chunk.meta_data.statistics.max_value = state.stats_state->GetMaxValue();
 			column_chunk.meta_data.statistics.__isset.max_value = true;
 			column_chunk.meta_data.__isset.statistics = true;
-			column_chunk.meta_data.statistics.is_max_value_exact = true;
+			column_chunk.meta_data.statistics.is_max_value_exact = state.stats_state->MaxIsExact();
 			column_chunk.meta_data.statistics.__isset.is_max_value_exact = true;
 		}
 	}
