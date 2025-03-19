@@ -72,6 +72,13 @@ public:
 		if (num_leaf_nodes == 2) {
 			return !leaf_nodes[0].has_value() && !leaf_nodes[1].has_value();
 		}
+		if (num_leaf_nodes < 20) {
+			bool all_empty = true;
+			for (idx_t leaf_idx = 0; leaf_idx < num_leaf_nodes; leaf_idx++) {
+				all_empty &= !leaf_nodes[leaf_idx].has_value();
+			}
+			return all_empty;
+		}
 		return !leaf_nodes[internal_nodes[0]].has_value();
 	}
 
@@ -81,7 +88,7 @@ public:
 		}
 		idx_t count;
 		if (num_leaf_nodes == 1) {
-			count = get_batch_one_leaf(values, batch_size, 0, 0);
+			count = get_batch_one_leaf(values, batch_size);
 		} else if (num_leaf_nodes == 2) {
 			count = get_batch_two_leaves(values, batch_size);
 		} else {
@@ -92,9 +99,9 @@ public:
 	}
 
 private:
-	idx_t get_batch_one_leaf(value_type **const values, const idx_t &batch_size, idx_t count, // NOLINT: match stl case
-	                         const idx_t &leaf_idx) {
-		auto &leaf_node = leaf_nodes[leaf_idx];
+	idx_t get_batch_one_leaf(value_type **const values, const idx_t &batch_size) { // NOLINT: match stl case
+		auto &leaf_node = leaf_nodes[0];
+		idx_t count = 0;
 		while (leaf_node.has_value() && count < batch_size) {
 			values[count++] = &leaf_node.value();
 			leaf_node.advance();
@@ -106,22 +113,15 @@ private:
 		auto &left_leaf_node = leaf_nodes[0];
 		auto &right_leaf_node = leaf_nodes[1];
 		idx_t count = 0;
-		if (left_leaf_node.has_value() && right_leaf_node.has_value()) {
-			while (count < batch_size) {
-				auto &winning_leaf_node =
-				    left_leaf_node.value() < right_leaf_node.value() ? left_leaf_node : right_leaf_node;
-				values[count++] = &winning_leaf_node.value();
-				winning_leaf_node.advance();
-				if (!winning_leaf_node.has_value()) {
-					break;
-				}
+		while (count < batch_size) {
+			auto &winning_leaf_node = left_leaf_node < right_leaf_node ? left_leaf_node : right_leaf_node;
+			if (!winning_leaf_node.has_value()) {
+				break;
 			}
+			values[count++] = &winning_leaf_node.value();
+			winning_leaf_node.advance();
 		}
-		if (left_leaf_node.has_value()) {
-			return get_batch_one_leaf(values, batch_size, count, 0);
-		}
-		D_ASSERT(right_leaf_node.has_value());
-		return get_batch_one_leaf(values, batch_size, count, 1);
+		return count;
 	}
 
 	idx_t get_batch_internal(value_type **const values, const idx_t &batch_size) { // NOLINT: match stl case
@@ -139,17 +139,17 @@ private:
 		return count;
 	}
 
-	static idx_t parent(const idx_t &i) { // NOLINT: match stl case
+	static inline idx_t parent(const idx_t &i) { // NOLINT: match stl case
 		return (i - 1) / 2;
 	}
-	static idx_t left_child(const idx_t &i) { // NOLINT: match stl case
+	static inline idx_t left_child(const idx_t &i) { // NOLINT: match stl case
 		return 2 * i + 1;
 	}
-	static idx_t right_child(const idx_t &i) { // NOLINT: match stl case
+	static inline idx_t right_child(const idx_t &i) { // NOLINT: match stl case
 		return 2 * i + 2;
 	}
 
-	void update(const idx_t &leaf_idx) { // NOLINT: match stl case
+	inline void update(const idx_t &leaf_idx) { // NOLINT: match stl case
 		idx_t internal_idx = num_internal_nodes / 2 + leaf_idx / 2;
 		idx_t left_leaf_idx = leaf_idx & 1 ? leaf_idx - 1 : leaf_idx;
 		idx_t right_leaf_idx = MinValue(left_leaf_idx + 1, num_leaf_nodes - 1);
@@ -157,7 +157,7 @@ private:
 			internal_nodes[internal_idx] =
 			    leaf_nodes[left_leaf_idx] < leaf_nodes[right_leaf_idx] ? left_leaf_idx : right_leaf_idx;
 			if (internal_idx == 0) {
-				return;
+				break;
 			}
 			internal_idx = parent(internal_idx);
 			left_leaf_idx = internal_nodes[left_child(internal_idx)];

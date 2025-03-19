@@ -42,26 +42,35 @@ public:
 		D_ASSERT(str.GetSize() <= SORT_KEY::INLINE_LENGTH);
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		if (SORT_KEY::INLINE_LENGTH <= string_t::INLINE_LENGTH) {
-			memcpy(&sort_key.part1, str.GetPrefix(), SORT_KEY::INLINE_LENGTH);
+			memcpy(&sort_key.part0, str.GetPrefix(), SORT_KEY::INLINE_LENGTH);
 		} else if (str.IsInlined()) {
-			memcpy(&sort_key.part1, str.GetPrefix(), string_t::INLINE_LENGTH);
+			memcpy(&sort_key.part0, str.GetPrefix(), string_t::INLINE_LENGTH);
 		} else {
-			FastMemcpy(&sort_key.part1, str.GetPointer(), str.GetSize());
+			FastMemcpy(&sort_key.part0, str.GetPointer(), str.GetSize());
 		}
 	}
 
 	void Construct(const int64_t &val, data_ptr_t &) {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
-		sort_key.part1 = static_cast<uint64_t>(BSwap(val)); // NOLINT: unsafe cast on purpose
+		sort_key.part0 = static_cast<uint64_t>(BSwap(val)); // NOLINT: unsafe cast on purpose
 	}
 
-	static int32_t Compare(const SORT_KEY &lhs, const SORT_KEY &rhs) {
-		// TODO: bswapping both and then doing an integer comparison may be better
-		return memcmp(&lhs.part1, &rhs.part1, SORT_KEY::INLINE_LENGTH);
+	template <idx_t PARTS>
+	static bool Compare(const uint64_t *const lhs, const uint64_t *const rhs) {
+		if (PARTS == 1) {
+			return BSwap(lhs[0]) < BSwap(rhs[0]);
+		}
+		if (PARTS == 2) {
+			const auto lhs_part0 = BSwap(lhs[0]);
+			const auto rhs_part0 = BSwap(rhs[0]);
+			return lhs_part0 == rhs_part0 ? BSwap(lhs[1]) < BSwap(rhs[1]) : lhs_part0 < rhs_part0;
+		}
+		// TODO: Check if the above approach is better than memcmp for 3/4 parts
+		return memcmp(lhs, rhs, SORT_KEY::INLINE_LENGTH);
 	}
 
 	friend bool operator<(const SORT_KEY &lhs, const SORT_KEY &rhs) {
-		return Compare(lhs, rhs) < 0;
+		return Compare<SORT_KEY::PARTS>(&lhs.part0, &rhs.part0);
 	}
 };
 
@@ -76,7 +85,7 @@ public:
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		sort_key.size = val.GetSize();
 		const auto str_ptr = val.GetData();
-		memcpy(&sort_key.part1, str_ptr, sort_key.size);
+		memcpy(&sort_key.part0, str_ptr, sort_key.size);
 		if (sort_key.size > SORT_KEY::INLINE_LENGTH) {
 			sort_key.data = heap_ptr;
 			memcpy(sort_key.data, str_ptr, sort_key.size);
@@ -89,7 +98,7 @@ public:
 	}
 
 	static int32_t Compare(const SORT_KEY &lhs, const SORT_KEY &rhs) {
-		auto result = memcmp(&lhs.part1, &rhs.part1, SORT_KEY::INLINE_LENGTH);
+		auto result = memcmp(&lhs.part0, &rhs.part0, SORT_KEY::INLINE_LENGTH);
 		if (result == 0) {
 			result = memcmp(lhs.data, rhs.data, MinValue(lhs.size, rhs.size));
 		}
@@ -132,44 +141,49 @@ struct SortKey;
 template <>
 struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_8> : FixedSortKey<SortKey<SortKeyType::NO_PAYLOAD_FIXED_8>>,
                                                   SortKeyNoPayload<SortKey<SortKeyType::NO_PAYLOAD_FIXED_8>> {
+	static constexpr idx_t PARTS = 1;
 	static constexpr idx_t INLINE_LENGTH = 8;
-	uint64_t part1 = 0;
+	uint64_t part0 = 0;
 };
 
 template <>
 struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_16> : FixedSortKey<SortKey<SortKeyType::NO_PAYLOAD_FIXED_16>>,
                                                    SortKeyNoPayload<SortKey<SortKeyType::NO_PAYLOAD_FIXED_16>> {
+	static constexpr idx_t PARTS = 2;
 	static constexpr idx_t INLINE_LENGTH = 16;
+	uint64_t part0 = 0;
 	uint64_t part1 = 0;
-	uint64_t part2 = 0;
 };
 
 template <>
 struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_24> : FixedSortKey<SortKey<SortKeyType::NO_PAYLOAD_FIXED_24>>,
                                                    SortKeyNoPayload<SortKey<SortKeyType::NO_PAYLOAD_FIXED_24>> {
+	static constexpr idx_t PARTS = 3;
 	static constexpr idx_t INLINE_LENGTH = 24;
+	uint64_t part0 = 0;
 	uint64_t part1 = 0;
 	uint64_t part2 = 0;
-	uint64_t part3 = 0;
 };
 
 template <>
 struct SortKey<SortKeyType::NO_PAYLOAD_FIXED_32> : FixedSortKey<SortKey<SortKeyType::NO_PAYLOAD_FIXED_32>>,
                                                    SortKeyNoPayload<SortKey<SortKeyType::NO_PAYLOAD_FIXED_32>> {
+	static constexpr idx_t PARTS = 4;
 	static constexpr idx_t INLINE_LENGTH = 32;
+	uint64_t part0 = 0;
 	uint64_t part1 = 0;
 	uint64_t part2 = 0;
 	uint64_t part3 = 0;
-	uint64_t part4 = 0;
 };
 
 template <>
 struct SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32> : VariableSortKey<SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>>,
                                                       SortKeyNoPayload<SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>> {
+	static constexpr idx_t PARTS = 2;
 	static constexpr idx_t INLINE_LENGTH = 16;
 	static constexpr idx_t HEAP_SIZE_OFFSET = 16;
+	uint64_t part0 = 0;
 	uint64_t part1 = 0;
-	uint64_t part2 = 0;
 	uint64_t size = 0;
 	data_ptr_t data = nullptr;
 };
@@ -177,36 +191,40 @@ struct SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32> : VariableSortKey<SortKey<So
 template <>
 struct SortKey<SortKeyType::PAYLOAD_FIXED_16> : FixedSortKey<SortKey<SortKeyType::PAYLOAD_FIXED_16>>,
                                                 SortKeyPayload<SortKey<SortKeyType::PAYLOAD_FIXED_16>> {
+	static constexpr idx_t PARTS = 1;
 	static constexpr idx_t INLINE_LENGTH = 8;
-	uint64_t part1 = 0;
+	uint64_t part0 = 0;
 	data_ptr_t payload_ptr = nullptr;
 };
 
 template <>
 struct SortKey<SortKeyType::PAYLOAD_FIXED_24> : FixedSortKey<SortKey<SortKeyType::PAYLOAD_FIXED_24>>,
                                                 SortKeyPayload<SortKey<SortKeyType::PAYLOAD_FIXED_24>> {
+	static constexpr idx_t PARTS = 2;
 	static constexpr idx_t INLINE_LENGTH = 16;
+	uint64_t part0 = 0;
 	uint64_t part1 = 0;
-	uint64_t part2 = 0;
 	data_ptr_t payload_ptr = nullptr;
 };
 
 template <>
 struct SortKey<SortKeyType::PAYLOAD_FIXED_32> : FixedSortKey<SortKey<SortKeyType::PAYLOAD_FIXED_32>>,
                                                 SortKeyPayload<SortKey<SortKeyType::PAYLOAD_FIXED_32>> {
+	static constexpr idx_t PARTS = 3;
 	static constexpr idx_t INLINE_LENGTH = 24;
+	uint64_t part0 = 0;
 	uint64_t part1 = 0;
 	uint64_t part2 = 0;
-	uint64_t part3 = 0;
 	data_ptr_t payload_ptr = nullptr;
 };
 
 template <>
 struct SortKey<SortKeyType::PAYLOAD_VARIABLE_32> : VariableSortKey<SortKey<SortKeyType::PAYLOAD_VARIABLE_32>>,
                                                    SortKeyPayload<SortKey<SortKeyType::PAYLOAD_VARIABLE_32>> {
+	static constexpr idx_t PARTS = 1;
 	static constexpr idx_t INLINE_LENGTH = 8;
 	static constexpr idx_t HEAP_SIZE_OFFSET = 8;
-	uint64_t part1 = 0;
+	uint64_t part0 = 0;
 	uint64_t size = 0;
 	data_ptr_t data = nullptr;
 	data_ptr_t payload_ptr = nullptr;

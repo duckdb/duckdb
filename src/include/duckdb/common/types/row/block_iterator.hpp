@@ -77,15 +77,15 @@ public:
 		}
 	}
 
-	idx_t GetIndex(const idx_t &block_idx, const idx_t &tuple_idx) const {
-		return block_idx * fast_mod.GetDivisor() + tuple_idx;
-	}
-
 	void Decrement(idx_t &block_idx, idx_t &tuple_idx) const {
 		if (--tuple_idx == DConstants::INVALID_INDEX) {
 			--block_idx;
 			tuple_idx = fast_mod.GetDivisor() - 1;
 		}
+	}
+
+	idx_t GetIndex(const idx_t &block_idx, const idx_t &tuple_idx) const {
+		return block_idx * fast_mod.GetDivisor() + tuple_idx;
 	}
 
 private:

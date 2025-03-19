@@ -268,12 +268,6 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	run_boundaries = current_partition.GetRunBoundaries(guard);
 	guard.unlock();
 
-	// The "end" boundary was set initialized correctly in gstate
-	// We always start searching from 0
-	for (auto &run_boundary : run_boundaries) {
-		run_boundary.begin = 0;
-	}
-
 	// Compute the end partition boundaries (lock-free)
 	switch (iterator_state_type) {
 	case BlockIteratorStateType::FIXED_IN_MEMORY:
@@ -362,6 +356,9 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 		return;
 	}
 
+	// Initialize "total_remaining", i.e., how much we still need to update the boundaries until we're done
+	idx_t total_remaining = (partition_idx.GetIndex() + 1) * gstate.merger.partition_size;
+
 	// Initialize iterators, and track of which runs are actively being used in the computation, i.e., not yet fixed
 	unsafe_vector<ITER> run_iterators;
 	run_iterators.reserve(gstate.num_runs);
@@ -369,13 +366,15 @@ void SortedRunMergerLocalState::TemplatedComputePartitionBoundaries(SortedRunMer
 	for (idx_t run_idx = 0; run_idx < gstate.num_runs; run_idx++) {
 		run_iterators.emplace_back(states[run_idx]);
 		active_run_idxs[run_idx] = run_idx;
+
+		// Reduce total remaining by what we already have (from previous partition)
+		D_ASSERT(run_boundaries[run_idx].begin <= total_remaining);
+		total_remaining -= run_boundaries[run_idx].begin;
 	}
 
 	// Deltas per run, used for convenience below
 	unsafe_vector<idx_t> run_deltas(gstate.num_runs);
 
-	// Initialize "total_remaining", i.e., how much we still need to update the boundaries until we're done
-	idx_t total_remaining = (partition_idx.GetIndex() + 1) * gstate.merger.partition_size;
 	D_ASSERT(total_remaining <
 	         gstate.merger.total_count); // This is not the last partition, so should be less than total
 	while (total_remaining != 0) {
