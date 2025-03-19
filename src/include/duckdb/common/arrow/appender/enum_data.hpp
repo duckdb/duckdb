@@ -10,6 +10,7 @@
 
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/scalar_data.hpp"
+#include "duckdb/common/arrow/arrow_appender.hpp"
 
 namespace duckdb {
 
