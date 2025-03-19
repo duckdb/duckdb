@@ -150,6 +150,7 @@ jobs:
           vcpkg_target_triplet: x64-linux
           duckdb_arch: linux_amd64_gcc4
           run_tests: ${{ inputs.skip_tests != 'true' }}
+          override_git_describe: ${{ inputs.override_git_describe }}
 
       - uses: actions/upload-artifact@v4
         with:
@@ -158,7 +159,6 @@ jobs:
             build/release/extension/*/*.duckdb_extension
 
   upload-linux-extensions-gcc4:
-    ## TODO: Add a if: github.ref == main, for now this is explicitly missing to be able to test on PR, expected is this should fail due to missing secrets
     name: Upload Linux Extensions (gcc4)
     needs: manylinux-extensions-x64
     strategy:
@@ -432,7 +432,7 @@ jobs:
           ./scripts/upload-assets-to-staging.sh twine_upload tools/pythonpkg/wheelhouse/*.whl
 
   linux-release-cleanup:
-     if: startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main'
+     if: github.ref == 'refs/heads/v1.2-histrionicus' || github.ref == 'refs/heads/main'
      name: PyPi Release Cleanup
      needs: twine-upload
      runs-on: ubuntu-22.04
@@ -457,7 +457,7 @@ jobs:
 
      - name: Cleanup Releases
        shell: bash
-       if: ${{ github.ref == 'refs/heads/main' && github.repository == 'duckdb/duckdb' }}
+       if: ${{ github.repository == 'duckdb/duckdb' }}
        run: python3 scripts/pypi_cleanup.py
 
   twine-upload:

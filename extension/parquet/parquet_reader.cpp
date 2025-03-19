@@ -392,12 +392,12 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	// add casts if required
 	auto &root_struct_reader = ret->Cast<StructColumnReader>();
 	for (auto &entry : reader_data.cast_map) {
-		auto column_idx = entry.first;
+		auto column_id = entry.first;
 		auto &expected_type = entry.second;
-		auto child_reader = std::move(root_struct_reader.child_readers[column_idx]);
+		auto child_reader = std::move(root_struct_reader.child_readers[column_id]);
 		auto cast_schema = make_uniq<ParquetColumnSchema>(child_reader->Schema(), expected_type);
 		auto cast_reader = make_uniq<CastColumnReader>(std::move(child_reader), std::move(cast_schema));
-		root_struct_reader.child_readers[column_idx] = std::move(cast_reader);
+		root_struct_reader.child_readers[column_id] = std::move(cast_reader);
 	}
 	return ret;
 }
@@ -862,16 +862,17 @@ static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, con
 	}
 }
 
-void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t col_idx) {
+void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i) {
 	auto &group = GetGroup(state);
+	auto col_idx = MultiFileLocalIndex(i);
 	auto column_id = reader_data.column_ids[col_idx];
 	auto &column_reader = state.root_reader->Cast<StructColumnReader>().GetChildReader(column_id);
 
 	if (reader_data.filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
 		// filters contain output chunk index, not file col idx!
-		auto global_id = reader_data.column_mapping[col_idx];
-		auto filter_entry = reader_data.filters->filters.find(global_id);
+		auto global_index = reader_data.column_mapping[col_idx];
+		auto filter_entry = reader_data.filters->filters.find(global_index);
 
 		if (stats && filter_entry != reader_data.filters->filters.end()) {
 			auto &filter = *filter_entry->second;
@@ -1005,7 +1006,8 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		}
 
 		uint64_t to_scan_compressed_bytes = 0;
-		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
+		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+			auto col_idx = MultiFileLocalIndex(i);
 			PrepareRowGroupBuffer(state, col_idx);
 
 			auto file_col_idx = reader_data.column_ids[col_idx];
@@ -1044,13 +1046,15 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				bool lazy_fetch = reader_data.filters;
 
 				// Prefetch column-wise
-				for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
+				for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+					auto col_idx = MultiFileLocalIndex(i);
 					auto file_col_idx = reader_data.column_ids[col_idx];
 					auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
 					bool has_filter = false;
 					if (reader_data.filters) {
-						auto entry = reader_data.filters->filters.find(reader_data.column_mapping[col_idx]);
+						auto global_idx = reader_data.column_mapping[col_idx];
+						auto entry = reader_data.filters->filters.find(global_idx.GetIndex());
 						has_filter = entry != reader_data.filters->filters.end();
 					}
 					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !(lazy_fetch && !has_filter));
@@ -1103,29 +1107,33 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				break;
 			}
 			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
-			auto filter_entry = reader_data.filter_map[scan_filter.filter_idx];
-			if (filter_entry.is_constant) {
+			auto global_idx = MultiFileGlobalIndex(scan_filter.filter_idx);
+			auto filter_entry = reader_data.filter_map[global_idx];
+			D_ASSERT(filter_entry.IsSet());
+			if (filter_entry.IsConstant()) {
 				// this is a constant vector, look for the constant
-				auto &constant = reader_data.constant_map[filter_entry.index].value;
+				auto constant_index = filter_entry.GetConstantIndex();
+				auto &constant = reader_data.constant_map[constant_index].value;
 				Vector constant_vector(constant);
 				ColumnReader::ApplyFilter(constant_vector, scan_filter.filter, *scan_filter.filter_state, scan_count,
 				                          state.sel, filter_count);
 			} else {
-				auto id = filter_entry.index;
-				auto file_col_idx = reader_data.column_ids[id];
-				auto result_idx = reader_data.column_mapping[id];
+				auto local_idx = filter_entry.GetLocalIndex();
+				auto column_id = reader_data.column_ids[local_idx];
+				auto result_idx = reader_data.column_mapping[local_idx];
 
 				auto &result_vector = result.data[result_idx];
-				auto &child_reader = root_reader.GetChildReader(file_col_idx);
+				auto &child_reader = root_reader.GetChildReader(column_id);
 				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
 				                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
-				need_to_read[id] = false;
+				need_to_read[local_idx] = false;
 			}
 		}
 		state.adaptive_filter->EndFilter(filter_state);
 
 		// we still may have to read some cols
-		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
+		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+			auto col_idx = MultiFileLocalIndex(i);
 			if (!need_to_read[col_idx]) {
 				continue;
 			}
@@ -1134,7 +1142,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				root_reader.GetChildReader(file_col_idx).Skip(result.size());
 				continue;
 			}
-			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
+			auto &result_vector = result.data[reader_data.column_mapping[col_idx].GetIndex()];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
 			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count);
 		}
@@ -1142,9 +1150,11 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 			result.Slice(state.sel, filter_count);
 		}
 	} else {
-		for (idx_t col_idx = 0; col_idx < reader_data.column_ids.size(); col_idx++) {
+		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+			auto col_idx = MultiFileLocalIndex(i);
 			auto file_col_idx = reader_data.column_ids[col_idx];
-			auto &result_vector = result.data[reader_data.column_mapping[col_idx]];
+			auto global_col_idx = reader_data.column_mapping[col_idx];
+			auto &result_vector = result.data[global_col_idx];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
 			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
 			if (rows_read != scan_count) {

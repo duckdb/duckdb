@@ -18,6 +18,15 @@
 
 namespace duckdb {
 
+struct CopyToFileInfo {
+	explicit CopyToFileInfo(string file_path_p) : file_path(std::move(file_path_p)) {
+	}
+
+	string file_path;
+	unique_ptr<CopyFunctionFileStatistics> file_stats;
+	Value partition_keys;
+};
+
 //! Copy the contents of a query into a table
 class PhysicalCopyToFile : public PhysicalOperator {
 public:
@@ -48,6 +57,7 @@ public:
 
 public:
 	// Source interface
+	unique_ptr<GlobalSourceState> GetGlobalSourceState(ClientContext &context) const override;
 	SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
 
 	bool IsSource() const override {
@@ -75,10 +85,13 @@ public:
 		return per_thread_output || partition_output || parallel;
 	}
 
+public:
 	static void MoveTmpFile(ClientContext &context, const string &tmp_file_path);
 	static string GetNonTmpFile(ClientContext &context, const string &tmp_file_path);
 
 	string GetTrimmedPath(ClientContext &context) const;
+
+	static void ReturnStatistics(DataChunk &chunk, idx_t row_idx, CopyToFileInfo &written_file_info);
 
 private:
 	unique_ptr<GlobalFunctionData> CreateFileState(ClientContext &context, GlobalSinkState &sink,

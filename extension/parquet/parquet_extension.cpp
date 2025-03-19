@@ -542,7 +542,7 @@ shared_ptr<BaseUnionData> ParquetMultiFileInfo::GetUnionData(shared_ptr<BaseFile
 		result->metadata = std::move(scan.metadata);
 	}
 
-	return result;
+	return std::move(result);
 }
 
 void ParquetMultiFileInfo::FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &) {
@@ -958,6 +958,12 @@ unique_ptr<GlobalFunctionData> ParquetWriteInitializeGlobal(ClientContext &conte
 	    parquet_bind.bloom_filter_false_positive_ratio, parquet_bind.compression_level, parquet_bind.debug_use_openssl,
 	    parquet_bind.parquet_version);
 	return std::move(global_state);
+}
+
+void ParquetWriteGetWrittenStatistics(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+                                      CopyFunctionFileStatistics &statistics) {
+	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	global_state.writer->SetWrittenStatistics(statistics);
 }
 
 void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
@@ -1380,6 +1386,7 @@ void ParquetExtension::Load(DuckDB &db) {
 	function.copy_to_bind = ParquetWriteBind;
 	function.copy_to_initialize_global = ParquetWriteInitializeGlobal;
 	function.copy_to_initialize_local = ParquetWriteInitializeLocal;
+	function.copy_to_get_written_statistics = ParquetWriteGetWrittenStatistics;
 	function.copy_to_sink = ParquetWriteSink;
 	function.copy_to_combine = ParquetWriteCombine;
 	function.copy_to_finalize = ParquetWriteFinalize;

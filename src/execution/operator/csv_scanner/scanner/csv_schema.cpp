@@ -90,8 +90,8 @@ void CSVSchema::Initialize(const vector<string> &names, const vector<LogicalType
 	D_ASSERT(names.size() == types.size() && !names.empty());
 	for (idx_t i = 0; i < names.size(); i++) {
 		// Populate our little schema
-		auto name = names.at(i);
-		auto type = types.at(i);
+		const auto &name = names.at(i);
+		const auto &type = types.at(i);
 		columns.push_back({name, type});
 		name_idx_map[names[i]] = i;
 	}

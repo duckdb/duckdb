@@ -32,6 +32,8 @@ void gil_assert();
 bool is_list_like(handle obj);
 bool is_dict_like(handle obj);
 
+std::string to_string(const object &obj);
+
 } // namespace pybind11
 
 namespace duckdb {

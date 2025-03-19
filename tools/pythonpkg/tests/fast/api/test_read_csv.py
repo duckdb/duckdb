@@ -5,6 +5,7 @@ import platform
 import duckdb
 from io import StringIO, BytesIO
 from duckdb import CSVLineTerminator
+import sys
 
 
 def TestFile(name):
@@ -620,6 +621,7 @@ class TestReadCSV(object):
             {'hive_types': {'one': 'INTEGER', 'two': 'VARCHAR'}},
         ],
     )
+    @pytest.mark.skipif(sys.platform.startswith("win"), reason="Skipping on Windows because of lineterminator option")
     def test_read_csv_options(self, duckdb_cursor, options, tmp_path):
         file = tmp_path / "file.csv"
         file.write_text('one,two,three,four\n1,2,3,4\n1,2,3,4\n1,2,3,4')
@@ -638,6 +640,31 @@ class TestReadCSV(object):
         con = duckdb.connect()
         rel = con.read_csv(str(file1), columns={'a': 'VARCHAR'}, auto_detect=False, header=False, comment='#')
         assert rel.fetchall() == [('one|two|three|four',), ('1|2|3|4',), ('1|2|3|4',)]
+
+    def test_read_enum(self, tmp_path):
+        file1 = tmp_path / "file1.csv"
+        file1.write_text('feelings\nhappy\nsad\nangry\nhappy\n')
+
+        con = duckdb.connect()
+        con.execute("CREATE TYPE mood AS ENUM ('happy', 'sad', 'angry')")
+
+        rel = con.read_csv(str(file1), dtype=['mood'])
+        assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
+
+        rel = con.read_csv(str(file1), dtype={'feelings': 'mood'})
+        assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
+
+        rel = con.read_csv(str(file1), columns={'feelings': 'mood'})
+        assert rel.fetchall() == [('happy',), ('sad',), ('angry',), ('happy',)]
+
+        with pytest.raises(duckdb.CatalogException, match="Type with name mood_2 does not exist!"):
+            rel = con.read_csv(str(file1), columns={'feelings': 'mood_2'})
+
+        with pytest.raises(duckdb.CatalogException, match="Type with name mood_2 does not exist!"):
+            rel = con.read_csv(str(file1), dtype={'feelings': 'mood_2'})
+
+        with pytest.raises(duckdb.CatalogException, match="Type with name mood_2 does not exist!"):
+            rel = con.read_csv(str(file1), dtype=['mood_2'])
 
     def test_strict_mode(self, tmp_path):
         file1 = tmp_path / "file1.csv"
