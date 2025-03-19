@@ -20,7 +20,7 @@ insert into integers values (84);
 query II
 SELECT * FROM histogram_values(integers, i, bin_count := 2)
 ----
-60	1
+60	1q
 80	0
 100	1
 

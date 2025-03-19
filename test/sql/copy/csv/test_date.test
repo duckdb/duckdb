@@ -11,7 +11,7 @@ CREATE TABLE date_test(d date);
 query I
 COPY date_test FROM 'data/csv/test/date.csv';
 ----
-1
+1q
 
 query T
 SELECT cast(d as string) FROM date_test;
