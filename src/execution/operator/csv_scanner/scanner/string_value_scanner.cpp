@@ -63,9 +63,9 @@ StringValueResult::StringValueResult(CSVStates &states, CSVStateMachine &state_m
 			    "Mismatch between the number of columns (%d) in the CSV file and what is expected in the scanner (%d).",
 			    number_of_columns, csv_file_scan->file_types.size());
 		}
-		bool icu_loaded = csv_file_scan->buffer_manager->context.db->ExtensionIsLoaded("icu");
+		icu_loaded = csv_file_scan->buffer_manager->context.db->ExtensionIsLoaded("icu");
 		for (idx_t i = 0; i < csv_file_scan->file_types.size(); i++) {
-			auto &type = csv_file_scan->file_types[i];
+			auto type = csv_file_scan->file_types[i];
 			if (type.IsJSONType()) {
 				type = LogicalType::VARCHAR;
 			}
@@ -675,6 +675,9 @@ bool LineError::HandleErrors(StringValueResult &result) {
 				    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
 				    line_pos.GetGlobalPosition(result.requested_size), result.path);
 			}
+			if (!StringValueScanner::CanDirectlyCast(result.csv_file_scan->file_types[col_idx], result.icu_loaded)) {
+				result.number_of_rows--;
+			}
 			break;
 		}
 		case UNTERMINATED_QUOTES:
@@ -770,7 +773,7 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 string FullLinePosition::ReconstructCurrentLine(bool &first_char_nl,
                                                 unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
                                                 bool reconstruct_line) const {
-	if (!reconstruct_line) {
+	if (!reconstruct_line || begin == end) {
 		return {};
 	}
 	string result;
@@ -1025,12 +1028,12 @@ StringValueResult &StringValueScanner::ParseChunk() {
 
 void StringValueScanner::Flush(DataChunk &insert_chunk) {
 	bool continue_processing;
-	insert_chunk.Reset();
 	do {
 		continue_processing = false;
 		auto &process_result = ParseChunk();
 		// First Get Parsed Chunk
 		auto &parse_chunk = process_result.ToChunk();
+		insert_chunk.Reset();
 		// We have to check if we got to error
 		error_handler->ErrorIfNeeded();
 		if (parse_chunk.size() == 0) {
@@ -1101,11 +1104,15 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						      << type.ToString() << "\'";
 						string error_msg = error.str();
 						SanitizeError(error_msg);
+						idx_t row_byte_pos = 0;
+						if (!(result.line_positions_per_row[line_error].begin ==
+						      result.line_positions_per_row[line_error].end)) {
+							row_byte_pos = result.line_positions_per_row[line_error].begin.GetGlobalPosition(
+							    result.result_size, first_nl);
+						}
 						auto csv_error = CSVError::CastError(
 						    state_machine->options, names[col_idx], error_msg, col_idx, borked_line, lines_per_batch,
-						    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size,
-						                                                                      first_nl),
-						    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
+						    row_byte_pos, optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 						error_handler->Error(csv_error);
 					}
 				}
@@ -1705,13 +1712,14 @@ bool StringValueScanner::CanDirectlyCast(const LogicalType &type, bool icu_loade
 	case LogicalTypeId::TIMESTAMP:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::DECIMAL:
-	case LogicalType::VARCHAR:
 	case LogicalType::BOOLEAN:
 		return true;
 	case LogicalType::TIMESTAMP_TZ:
 		// We only try to do direct cast of timestamp tz if the ICU extension is not loaded, otherwise, it needs to go
 		// through string -> timestamp_tz casting
 		return !icu_loaded;
+	case LogicalType::VARCHAR:
+		return !type.IsJSONType();
 	default:
 		return false;
 	}
