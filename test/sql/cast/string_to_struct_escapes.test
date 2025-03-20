@@ -14,7 +14,7 @@ SELECT $${name: John, city: "New York"}$$::STRUCT(name VARCHAR, city VARCHAR);
 query I
 SELECT $${quote_at_start: "\"test\"", age: 30}$$::STRUCT(quote_at_start VARCHAR, age INT);
 ----
-{'quote_at_start': "test", 'age': 30}
+{'quote_at_start': '"test"', 'age': 30}
 
 query I
 SELECT $${user_name: Alice, status: active}$$::STRUCT(user_name VARCHAR, status VARCHAR);
@@ -22,9 +22,9 @@ SELECT $${user_name: Alice, status: active}$$::STRUCT(user_name VARCHAR, status 
 {'user_name': Alice, 'status': active}
 
 query I
-SELECT $${special_characters: "comma, semicolon; and backslash\\", age: 30}$$::STRUCT(special_characters VARCHAR, age INT);
+SELECT $${special_characters: "comma, backslash\\", age: 30}$$::STRUCT(special_characters VARCHAR, age INT);
 ----
-{'special_characters': comma, semicolon; and backslash\, 'age': 30}
+{'special_characters': 'comma, backslash\\', 'age': 30}
 
 query I
 SELECT $${a: 10, b: "hello world"}$$::STRUCT(a INT, b VARCHAR);
@@ -72,10 +72,10 @@ SELECT $${"backslash\name": value}$$::STRUCT("backslash\name" VARCHAR);
 can't be cast to the destination type
 
 # Valid: Name contains a backslash outside of quotes, interpreted as literal
-query I
-SELECT $${backslash\name: value}$$::STRUCT("backslash\name" VARCHAR);
+query III
+SELECT $${backslash\name: value}$$::STRUCT("backslash\name" VARCHAR) a, a::VARCHAR::STRUCT("backslash\name" VARCHAR) b, a == b;
 ----
-{'backslash\name': value}
+{'backslash\\name': value}	{'backslash\\name': value}	true
 
 # first `:` is not escaped, won't match the "name:" struct key
 statement error
@@ -108,6 +108,12 @@ SELECT $${{\"name\"}: John, age: 3}$$::STRUCT("{""name""}" VARCHAR, age INT);
 ----
 {'{"name"}': John, 'age': 3}
 
+# Name has `{` which normally starts a bracket that disables interpreting escape characters
+query I
+SELECT $${{\'name\'}: John, age: 3}$$::STRUCT("{'name'}" VARCHAR, age INT);
+----
+{'{\'name\'}': John, 'age': 3}
+
 # Invalid: Unterminated string value
 statement error
 SELECT $${name: "John, age: 30}$$::STRUCT(name VARCHAR, age INT);
@@ -129,13 +135,13 @@ SELECT $${name : John, age : 30}$$::STRUCT(name VARCHAR, age INT);
 query I
 SELECT $${path: "C:\\Users\\John"}$$::STRUCT(path VARCHAR);
 ----
-{'path': C:\Users\John}
+{'path': 'C:\\Users\\John'}
 
 # STRUCT with special characters in value, properly escaped
 query I
-SELECT $${description: "Special characters: \\, \", ;, (, )"}$$::STRUCT(description VARCHAR);
+SELECT $${description: "Special characters: \\, \", \', (, )"}$$::STRUCT(description VARCHAR);
 ----
-{'description': Special characters: \, ", ;, (, )}
+{'description': 'Special characters: \\, ", \', (, )'}
 
 statement error
 SELECT $${first\ name: "John", age: 30}$$::STRUCT("first name" VARCHAR, age INT);
@@ -163,7 +169,7 @@ can't be cast to the destination type STRUCT("backslash\name" VARCHAR, age INTEG
 query I
 SELECT $${"backslash\\name": "John Doe", age: 30}$$::STRUCT("backslash\name" VARCHAR, age INT);
 ----
-{'backslash\name': John Doe, 'age': 30}
+{'backslash\\name': John Doe, 'age': 30}
 
 statement error
 SELECT $${user\,name: "Alice", age: 25}$$::STRUCT("user,name" VARCHAR, age INT);
@@ -220,7 +226,7 @@ can't be cast to the destination type
 query I
 SELECT $${backslash\name: "John", age: 30}$$::STRUCT("backslash\name" VARCHAR, age INT);
 ----
-{'backslash\name': John, 'age': 30}
+{'backslash\\name': John, 'age': 30}
 
 # Valid: Name contains (unescaped) opening parenthesis
 query I
@@ -243,10 +249,15 @@ can't be cast to the destination type STRUCT("\" VARCHAR, age INTEGER)
 query I
 SELECT $${"\\": "escaped", age: 30}$$::STRUCT("\" VARCHAR, age INT);
 ----
-{'\': escaped, 'age': 30}
+{'\\': escaped, 'age': 30}
 
 # Name with only a special character (not escaped)
 query I
 SELECT $${@: "value", age: 30}$$::STRUCT("@" VARCHAR, age INT);
 ----
 {'@': value, 'age': 30}
+
+query III
+select $$[{'a': test}, {'a': NULL}, {'a': 'null'}, {'a': 'nUlL'}, {'a': NULL}, {'a': NULLz}, {'a': 'NULL'}]$$::STRUCT(a VARCHAR)[] a, a::VARCHAR::STRUCT(a VARCHAR)[] b, a == b
+----
+[{'a': test}, {'a': NULL}, {'a': 'null'}, {'a': 'nUlL'}, {'a': NULL}, {'a': NULLz}, {'a': 'NULL'}]	[{'a': test}, {'a': NULL}, {'a': 'null'}, {'a': 'nUlL'}, {'a': NULL}, {'a': NULLz}, {'a': 'NULL'}]	true

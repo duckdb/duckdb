@@ -41,6 +41,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 		cast_copy.use_tmp_file = op.use_tmp_file;
 		cast_copy.children.push_back(plan);
 		cast_copy.return_type = op.return_type;
+		cast_copy.write_empty_file = op.write_empty_file;
 		return copy;
 	}
 
@@ -67,6 +68,7 @@ PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCopyToFile &op) {
 	cast_copy.names = op.names;
 	cast_copy.expected_types = op.expected_types;
 	cast_copy.parallel = mode == CopyFunctionExecutionMode::PARALLEL_COPY_TO_FILE;
+	cast_copy.write_empty_file = op.write_empty_file;
 
 	cast_copy.children.push_back(plan);
 	return copy;
