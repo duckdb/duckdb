@@ -203,14 +203,14 @@ STDERR
         )
         print(stderr)
 
-        if not dont_summarize_failures:
-            new_data = {
-                "test": test,
-                "return_code": res.returncode,
-                "stdout": stdout,
-                "stderr":stderr
-            }
-            error_container.append(new_data)
+        # if not dont_summarize_failures:
+        new_data = {
+            "test": test,
+            "return_code": res.returncode,
+            "stdout": stdout,
+            "stderr":stderr
+        }
+        error_container.append(new_data)
 
     # if a test closes unexpectedly (e.g., SEGV), test cleanup doesn't happen,
     # causing us to run out of space on subsequent tests in GH Actions (not much disk space there)
