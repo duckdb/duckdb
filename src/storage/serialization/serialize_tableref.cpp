@@ -6,6 +6,7 @@
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/parser/tableref/list.hpp"
+#include "duckdb/parser/tableref/at_clause.hpp"
 
 namespace duckdb {
 
@@ -56,6 +57,18 @@ unique_ptr<TableRef> TableRef::Deserialize(Deserializer &deserializer) {
 	result->alias = std::move(alias);
 	result->sample = std::move(sample);
 	result->query_location = query_location;
+	return result;
+}
+
+void AtClause::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<string>(1, "unit", unit);
+	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(2, "expr", expr);
+}
+
+unique_ptr<AtClause> AtClause::Deserialize(Deserializer &deserializer) {
+	auto unit = deserializer.ReadPropertyWithDefault<string>(1, "unit");
+	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(2, "expr");
+	auto result = duckdb::unique_ptr<AtClause>(new AtClause(std::move(unit), std::move(expr)));
 	return result;
 }
 

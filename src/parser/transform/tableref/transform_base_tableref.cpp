@@ -16,6 +16,10 @@ unique_ptr<TableRef> Transformer::TransformRangeVar(duckdb_libpgquery::PGRangeVa
 	if (root.schemaname) {
 		result->schema_name = root.schemaname;
 	}
+	if (root.at_clause) {
+		auto &at_clause = PGCast<duckdb_libpgquery::PGAtClause>(*root.at_clause);
+		TransformExpression(*at_clause.expr);
+	}
 	if (root.sample) {
 		result->sample = TransformSampleOptions(root.sample);
 	}

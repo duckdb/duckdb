@@ -20,7 +20,7 @@ bool BaseTableRef::Equals(const TableRef &other_p) const {
 	}
 	auto &other = other_p.Cast<BaseTableRef>();
 	return other.catalog_name == catalog_name && other.schema_name == schema_name && other.table_name == table_name &&
-	       column_name_alias == other.column_name_alias;
+	       column_name_alias == other.column_name_alias && AtClause::Equals(at_clause.get(), other.at_clause.get());
 }
 
 unique_ptr<TableRef> BaseTableRef::Copy() {
@@ -30,6 +30,7 @@ unique_ptr<TableRef> BaseTableRef::Copy() {
 	copy->schema_name = schema_name;
 	copy->table_name = table_name;
 	copy->column_name_alias = column_name_alias;
+	copy->at_clause = at_clause ? at_clause->Copy() : nullptr;
 	CopyProperties(*copy);
 
 	return std::move(copy);

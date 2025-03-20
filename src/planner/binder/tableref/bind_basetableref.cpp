@@ -197,7 +197,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	BindSchemaOrCatalog(ref.catalog_name, ref.schema_name);
+	BindSchemaOrCatalog(entry_retriever, ref.catalog_name, ref.schema_name);
 	auto table_or_view = entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
 	                                              ref.table_name, OnEntryNotFound::RETURN_NULL, error_context);
 	// we still didn't find the table
