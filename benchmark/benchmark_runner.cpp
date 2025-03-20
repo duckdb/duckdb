@@ -17,6 +17,8 @@
 
 using namespace duckdb;
 
+std::map<std::string, std::string> summary{};
+
 void BenchmarkRunner::RegisterBenchmark(Benchmark *benchmark) {
 	GetInstance().benchmarks.push_back(benchmark);
 }
@@ -173,6 +175,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 					LogResult("INCORRECT");
 					LogLine("INCORRECT RESULT: " + verify);
 					LogOutput("INCORRECT RESULT: " + verify);
+					summary[benchmark->name] = verify;
 					break;
 				} else {
 					LogResult(std::to_string(profiler.Elapsed()));
@@ -385,6 +388,16 @@ int main(int argc, char **argv) {
 	LoadInterpretedBenchmarks(*fs);
 	parse_arguments(argc, argv);
 	const auto configuration_error = run_benchmarks();
+	
+	if (!summary.empty()) {
+		std::cout << "\n===============================  FAILURES SUMMARY  ===============================\n" << std::endl;
+		int i = 1;
+		for (const auto& item : summary) {
+			std::cout << i << ". [" << item.first << "]: " << item.second << std::endl;
+			i++;
+		}
+	}
+	
 	if (configuration_error != ConfigurationError::None) {
 		print_error_message(configuration_error);
 		exit(1);
