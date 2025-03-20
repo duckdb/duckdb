@@ -397,6 +397,7 @@ public:
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
 			if (current_reader_data.file_state != MultiFileFileState::OPEN) {
+				D_ASSERT(current_reader_data.file_state != MultiFileFileState::CLOSED);
 				if (TryOpenNextFile(context, bind_data, scan_data, gstate, parallel_lock)) {
 					continue;
 				}
@@ -418,16 +419,7 @@ public:
 				scan_data.file_index = gstate.file_index;
 				return true;
 			}
-			// Set state to the next file
-			++gstate.file_index;
-
-			// Close current file
-			current_reader_data.file_state = MultiFileFileState::CLOSED;
-
-			//! Finish processing the file
-			OP::FinishFile(context, *gstate.global_state, *current_reader_data.reader);
-			current_reader_data.closed_reader = current_reader_data.reader;
-			current_reader_data.reader = nullptr;
+			CloseFile(context, current_reader_data, gstate, parallel_lock);
 		}
 	}
 
@@ -767,6 +759,20 @@ private:
 	static bool HasFilesToRead(MultiFileGlobalState &gstate, unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
 		return (gstate.file_index.load() < gstate.readers.size());
+	}
+	static void CloseFile(ClientContext &context, MultiFileGlobalState &gstate, MultiFileReaderData &reader_data,
+	                      unique_lock<mutex> &parallel_lock) {
+		D_ASSERT(parallel_lock.owns_lock());
+		// Set state to the next file
+		++gstate.file_index;
+
+		// Close current file
+		reader_data.file_state = MultiFileFileState::CLOSED;
+
+		//! Finish processing the file
+		OP::FinishFile(context, *gstate.global_state, *reader_data.reader);
+		reader_data.closed_reader = reader_data.reader;
+		reader_data.reader = nullptr;
 	}
 };
 
