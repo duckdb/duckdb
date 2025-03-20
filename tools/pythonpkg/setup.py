@@ -376,6 +376,10 @@ spark_packages = [
 
 packages.extend(spark_packages)
 
+from setuptools_scm import Configuration, ScmVersion
+from pathlib import Path
+import os
+
 ######
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
@@ -383,79 +387,79 @@ packages.extend(spark_packages)
 # - scripts/package_build.py
 # - tools/pythonpkg/setup.py
 ######
-main_branch_versioning = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
 
-versioning_tag_match = 'v*.*.*'
-if main_branch_versioning:
-    versioning_tag_match = 'v*.*.0'
-describe_command = ['git', 'describe', '--tags', '--long', '--debug', '--match', versioning_tag_match]
+# Whether to use main branch versioning logic, defaults to True
+MAIN_BRANCH_VERSIONING = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
 
 
-def get_version(version):
+def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
+    from setuptools_scm.git import parse as git_parse
+    from setuptools_scm.version import meta
+
+    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
+    if override:
+        parts = override.split('-')
+        if len(parts) == 3:
+            # Already in correct format tag-distance-gnode
+            tag, distance, node = parts
+            return meta(tag=tag, distance=int(distance), node=node[1:], config=config)
+        elif len(parts) == 1:
+            # Just tag, add -0-gnode
+            tag = parts[0]
+            distance = 0
+        elif len(parts) == 2:
+            # tag-distance, need to add -gnode
+            tag, distance = parts
+        else:
+            raise ValueError(f"Invalid OVERRIDE_GIT_DESCRIBE format: {override}")
+        return meta(tag=tag, distance=int(distance), config=config)
+
+    versioning_tag_match = 'v*.*.0' if MAIN_BRANCH_VERSIONING else 'v*.*.*'
+    git_describe_command = f"git describe --tags --long --debug --match {versioning_tag_match}"
+
+    try:
+        return git_parse(root, config, describe_command=git_describe_command)
+    except Exception:
+        return meta(tag="v0.0.0", distance=0, node="deadbeeff", config=config)
+
+
+def version_scheme(version):
     def prefix_version(version):
         """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
         if version.startswith('v'):
             return version
         return 'v' + version
 
-    override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
-    if len(override_git_describe) != 0:
-        return prefix_version(override_git_describe)
-
-    # If we're exactly on a tag (dev_iteration = 0)
-    distance = version.distance
-    if distance == 0:
-        return prefix_version(str(version.tag))
+    # If we're exactly on a tag (dev_iteration = 0, dirty=False)
+    if version.exact:
+        return version.format_with("{tag}")
 
     major, minor, patch = [int(x) for x in str(version.tag).split('.')]
     # Increment minor version if main_branch_versioning is enabled (default),
     # otherwise increment patch version
-    if main_branch_versioning == True:
+    if MAIN_BRANCH_VERSIONING == True:
         minor += 1
         patch = 0
     else:
         patch += 1
 
     # Format as v{major}.{minor}.{patch}-dev{distance}
-    next_version = f"{major}.{minor}.{patch}"
-    # Add dev suffix with distance number
-    next_version += f"-dev{distance}"
-
+    next_version = f"{major}.{minor}.{patch}-dev{version.distance}"
     return prefix_version(next_version)
 
 
 setup(
-    name=lib_name,
-    description='DuckDB in-process database',
-    keywords='DuckDB Database SQL OLAP',
-    url="https://www.duckdb.org",
-    long_description='See here for an introduction: https://duckdb.org/docs/api/python/overview',
-    license='MIT',
     data_files=data_files,
     # NOTE: might need to be find_packages() ?
     packages=packages,
-    include_package_data=True,
-    python_requires='>=3.7.0',
-    classifiers=[
-        'Topic :: Database :: Database Engines/Servers',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
-    ],
+    long_description="See here for an introduction: https://duckdb.org/docs/api/python/overview",
     ext_modules=[libduckdb],
-    maintainer="Hannes Muehleisen",
-    maintainer_email="hannes@cwi.nl",
-    cmdclass={"build_ext": build_ext},
-    project_urls={
-        "Documentation": "https://duckdb.org/docs/api/python/overview",
-        "Source": "https://github.com/duckdb/duckdb/blob/main/tools/pythonpkg",
-        "Issues": "https://github.com/duckdb/duckdb/issues",
-        "Changelog": "https://github.com/duckdb/duckdb/releases",
-    },
     use_scm_version={
-        'git_describe_command': " ".join(describe_command),
-        "version_scheme": get_version,
+        "version_scheme": version_scheme,
         "root": "../..",
+        "parse": parse,
+        "fallback_version": "v0.0.0",
         "local_scheme": "no-local-version",
     },
-    setup_requires=["setuptools>=60.0", "setuptools_scm>=6.4"],
+    cmdclass={"build_ext": build_ext},
 )
