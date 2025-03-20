@@ -17,15 +17,16 @@ PhysicalUnion::PhysicalUnion(vector<LogicalType> types, PhysicalOperator &top, P
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
-static bool UnionOfSourcePipelines(PhysicalOperator &op) {
+static bool ContainsSink(PhysicalOperator &op) {
 	if (op.IsSink()) {
-		return false;
+		return true;
 	}
-	bool children_ok = true;
 	for (auto &child : op.children) {
-		children_ok &= UnionOfSourcePipelines(child);
+		if (ContainsSink(child)) {
+			return true;
+		}
 	}
-	return children_ok;
+	return false;
 }
 
 void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
@@ -67,7 +68,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	// in these cases, we don't want to avoid breadth-first plan evaluation,
 	// as it doesn't pose a threat to memory usage (it's just a bunch of straight scans)
 	const auto can_saturate_threads =
-	    UnionOfSourcePipelines(*this) ? false : children[0].get().CanSaturateThreads(current.GetClientContext());
+	    ContainsSink(children[0]) && children[0].get().CanSaturateThreads(current.GetClientContext());
 	if (order_matters || can_saturate_threads) {
 		// we add dependencies if order matters: union_pipeline comes after all pipelines created by building current
 		dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);

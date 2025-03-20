@@ -21,8 +21,10 @@ unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientCon
 		}
 	} else {
 		// COPY
+		options.type = JSONScanType::READ_JSON;
 		options.record_type = JSONRecordType::RECORDS;
 		options.format = JSONFormat::AUTO_DETECT;
+		options.auto_detect = false;
 	}
 	return std::move(reader_options);
 }
@@ -225,6 +227,7 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 		} else {
 			JSONCheckSingleParameter(key, values);
 			options.auto_detect = BooleanValue::Get(values.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
+			options.format = JSONFormat::NEWLINE_DELIMITED;
 		}
 		return true;
 	}
@@ -241,6 +244,9 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 			JSONCheckSingleParameter(key, values);
 			if (BooleanValue::Get(values.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
 				options.format = JSONFormat::ARRAY;
+			} else {
+				// Default to newline-delimited otherwise
+				options.format = JSONFormat::NEWLINE_DELIMITED;
 			}
 		}
 		return true;
