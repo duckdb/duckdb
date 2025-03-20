@@ -421,4 +421,19 @@ _exported_symbols.extend([
     "TimeTimeZoneValue",
 ])
 
+
+# PySQL Syntax Highlighting (Optional)
+from .highlighting import connect_with_highlighting, HighlightingConnection
+
+def connect(*args, **kwargs):
+    if kwargs.get('highlight_enabled', False):
+        return connect_with_highlighting(*args, **kwargs)
+    return DuckDBPyConnection(*args, **kwargs)
+
+_exported_symbols.extend([
+    'connect',
+    'connect_with_highlighting',
+    'HighlightingConnection'
+])
+
 __all__ = _exported_symbols

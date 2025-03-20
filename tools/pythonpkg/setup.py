@@ -467,6 +467,10 @@ setup(
     include_package_data=True,
     python_requires='>=3.7.0',
     tests_require=['google-cloud-storage', 'mypy', 'pytest'],
+    install_requires=['numpy>=1.19', 'pandas>=1.3'],
+    extras_require={
+        'highlighting': ['pygments>=2.10'],
+    }
     classifiers=[
         'Topic :: Database :: Database Engines/Servers',
         'Intended Audience :: Developers',
