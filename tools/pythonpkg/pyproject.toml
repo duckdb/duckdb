@@ -6,9 +6,27 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools_scm]
-root = "../.."
-local_scheme = "no-local-version"
+[project]
+name = "duckdb"
+dynamic = ["version"]
+description = "DuckDB in-process database"
+readme = "README.md"
+keywords = ["DuckDB", "Database", "SQL", "OLAP"]
+requires-python = ">=3.7.0"
+classifiers = [
+    "Topic :: Database :: Database Engines/Servers",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License"
+]
+authors = [
+	{name = "Hannes Muehleisen", email = "hannes@cwi.nl"}
+]
+
+[project.urls]
+Documentation = "https://duckdb.org/docs/api/python/overview"
+Source = "https://github.com/duckdb/duckdb/blob/main/tools/pythonpkg"
+Issues = "https://github.com/duckdb/duckdb/issues"
+Changelog = "https://github.com/duckdb/duckdb/releases"
 
 ### CI Builwheel configurations ###
 
@@ -17,7 +35,7 @@ local_scheme = "no-local-version"
 dependency-versions = "latest"
 before-build = 'pip install numpy>=2.0'
 before-test = 'python scripts/optional_requirements.py'
-test-requires = 'pytest'
+test-requires = ["pytest", "google-cloud-storage", "mypy"]
 test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests --verbose'
 
 [tool.cibuildwheel.environment]
