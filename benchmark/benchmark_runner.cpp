@@ -17,6 +17,8 @@
 
 using namespace duckdb;
 
+std::map<std::string, std::string> summary{};
+
 void BenchmarkRunner::RegisterBenchmark(Benchmark *benchmark) {
 	GetInstance().benchmarks.push_back(benchmark);
 }
@@ -174,6 +176,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 					LogResult("INCORRECT");
 					LogLine("INCORRECT RESULT: " + verify);
 					LogOutput("INCORRECT RESULT: " + verify);
+					summary[benchmark->name] = verify;
 					break;
 				} else {
 					LogResult(std::to_string(profiler.Elapsed()));
