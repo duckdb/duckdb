@@ -66,10 +66,7 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 		rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
 	}
 	for (auto &state : context.registered_state->States()) {
-		PendingQueryParameters query_parameters;
-		query_parameters.parameters = bind_values;
-		query_parameters.allow_stream_result = false; // TODO, how do I get this value?
-		PreparedStatementCallbackInfo info(*prepared, query_parameters);
+		PreparedStatementCallbackInfo info(*prepared, bind_values);
 		auto new_rebind = state->OnExecutePrepared(context, info, rebind);
 		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;

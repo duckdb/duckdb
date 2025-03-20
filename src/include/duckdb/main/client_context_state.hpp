@@ -13,6 +13,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/valid_checker.hpp"
+#include "duckdb/planner/expression/bound_parameter_data.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/database_manager.hpp"
@@ -31,12 +32,12 @@ class RegisteredStateManager;
 enum class RebindQueryInfo { DO_NOT_REBIND, ATTEMPT_TO_REBIND };
 
 struct PreparedStatementCallbackInfo {
-	PreparedStatementCallbackInfo(PreparedStatementData &prepared_statement, const PendingQueryParameters &parameters)
+	PreparedStatementCallbackInfo(PreparedStatementData &prepared_statement, const optional_ptr<case_insensitive_map_t<BoundParameterData>>& parameters)
 	    : prepared_statement(prepared_statement), parameters(parameters) {
 	}
 
 	PreparedStatementData &prepared_statement;
-	const PendingQueryParameters &parameters;
+	optional_ptr<case_insensitive_map_t<BoundParameterData>> parameters;
 };
 
 //! ClientContextState is virtual base class for ClientContext-local (or Query-Local, using QueryEnd callback) state
