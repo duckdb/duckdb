@@ -72,7 +72,7 @@ class BenchmarkRunnerConfig:
             "--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600)."
         )
         parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
-        parser.add_argument("--no-summary", type=str, default=False, help="No failures summary will be outputed.")
+        parser.add_argument("--no-summary", type=str, default=False, help="No failures summary is outputed when passing this flag.")
 
         # Parse arguments
         parsed_args = parser.parse_args()
