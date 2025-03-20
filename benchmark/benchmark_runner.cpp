@@ -58,7 +58,7 @@ void BenchmarkRunner::InitializeBenchmarkDirectory() {
 atomic<bool> is_active;
 atomic<bool> timeout;
 atomic<bool> summarize;
-std::map<std::string, std::string> summary{};
+std::vector<std::string> summary;
 
 void sleep_thread(Benchmark *benchmark, BenchmarkRunner *runner, BenchmarkState *state, bool hotrun,
                   const optional_idx &optional_timeout) {
@@ -118,6 +118,11 @@ void BenchmarkRunner::LogOutput(string message) {
 	}
 }
 
+void BenchmarkRunner::LogSummary(string benchmark, string message) {
+	string failure_message = benchmark + "\n" + message;
+	summary.push_back(failure_message);
+}
+
 void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	Profiler profiler;
 	auto display_name = benchmark->DisplayName();
@@ -175,7 +180,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 					LogResult("INCORRECT");
 					LogLine("INCORRECT RESULT: " + verify);
 					LogOutput("INCORRECT RESULT: " + verify);
-					summary[benchmark->name] = verify;
+					LogSummary(benchmark->name, "INCORRECT RESULT: " + verify);
 					break;
 				} else {
 					LogResult(std::to_string(profiler.Elapsed()));
@@ -395,10 +400,8 @@ int main(int argc, char **argv) {
 	
 	if (!summary.empty() && summarize) {
 		std::cout << "\n===============================  FAILURES SUMMARY  ===============================\n" << std::endl;
-		int i = 1;
-		for (const auto& item : summary) {
-			std::cout << i << ". [" << item.first << "]: " << item.second << std::endl;
-			i++;
+		for (size_t i = 0; i < summary.size(); i++) {
+			std::cout << i + 1 << ". " << summary[i] << std::endl;
 		}
 	}
 	
