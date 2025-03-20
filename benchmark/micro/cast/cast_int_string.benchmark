@@ -12,4 +12,4 @@ run
 SELECT MAX(CAST(i AS VARCHAR)) FROM integers
 
 result I
-9999999
+9999999qqq
