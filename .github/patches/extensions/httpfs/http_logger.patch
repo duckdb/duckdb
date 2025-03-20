@@ -1,0 +1,50 @@
+diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
+index 6e1f635..597dbc3 100644
+--- a/extension/httpfs/httpfs.cpp
++++ b/extension/httpfs/httpfs.cpp
+@@ -467,8 +467,9 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, File
+ 	auto result = duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, params);
+ 
+ 	auto client_context = FileOpener::TryGetClientContext(opener);
+-	if (client_context && ClientConfig::GetConfig(*client_context).enable_http_logging) {
+-		result->http_logger = client_context->client_data->http_logger.get();
++
++	if (client_context && HTTPLogger::ShouldLog(*client_context)) {
++		result->http_logger = make_uniq<HTTPLogger>(*client_context);
+ 	}
+ 
+ 	return result;
+@@ -680,8 +681,8 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 	}
+ 
+ 	auto client_context = FileOpener::TryGetClientContext(opener);
+-	if (client_context && ClientConfig::GetConfig(*client_context).enable_http_logging) {
+-		http_logger = client_context->client_data->http_logger.get();
++	if (client_context && HTTPLogger::ShouldLog(*client_context)) {
++		http_logger = make_uniq<HTTPLogger>(*client_context);
+ 	}
+ 
+ 	auto current_cache = TryGetMetadataCache(opener, hfs);
+@@ -807,8 +808,7 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileHandle::CreateClient(optional
+ 	string path_out, proto_host_port;
+ 	HTTPFileSystem::ParseUrl(path, path_out, proto_host_port);
+ 	auto http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), this);
+-	if (context && ClientConfig::GetConfig(*context).enable_http_logging) {
+-		http_logger = context->client_data->http_logger.get();
++	if (http_logger) {
+ 		http_client->set_logger(
+ 		    http_logger->GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+ 	}
+diff --git a/extension/httpfs/include/httpfs.hpp b/extension/httpfs/include/httpfs.hpp
+index 9dc9eda..74646f3 100644
+--- a/extension/httpfs/include/httpfs.hpp
++++ b/extension/httpfs/include/httpfs.hpp
+@@ -93,7 +93,7 @@ public:
+ 	// We keep an http client stored for connection reuse with keep-alive headers
+ 	HTTPClientCache client_cache;
+ 
+-	optional_ptr<HTTPLogger> http_logger;
++	unique_ptr<HTTPLogger> http_logger;
+ 
+ 	const HTTPParams http_params;
+ 
