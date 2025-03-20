@@ -61,7 +61,21 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	}
 	unique_ptr<LogicalOperator> rebound_plan;
 
-	if (prepared->RequireRebind(context, &bind_values)) {
+	RebindQueryInfo rebind = RebindQueryInfo::DO_NOT_REBIND;
+	if (prepared->RequireRebind(context, bind_values)) {
+		rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
+	}
+	for (auto &state : context.registered_state->States()) {
+		PendingQueryParameters query_parameters;
+		query_parameters.parameters = bind_values;
+		query_parameters.allow_stream_result = false; // TODO, how do I get this value?
+		PreparedStatementCallbackInfo info(*prepared, query_parameters);
+		auto new_rebind = state->OnExecutePrepared(context, info, rebind);
+		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
+			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
+		}
+	}
+	if (rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 		// catalog was modified or statement does not have clear types: rebind the statement before running the execute
 		Planner prepared_planner(context);
 		prepared_planner.parameter_data = bind_values;
