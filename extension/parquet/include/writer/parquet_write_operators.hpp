@@ -108,15 +108,10 @@ struct ParquetTimestampSOperator : public ParquetCastOperator {
 	}
 };
 
-struct ParquetStringOperator : public BaseParquetOperator {
+struct ParquetBaseStringOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static TGT Operation(SRC input) {
 		return input;
-	}
-
-	template <class SRC, class TGT>
-	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
-		return make_uniq<StringStatisticsState>();
 	}
 
 	template <class SRC, class TGT>
@@ -144,6 +139,20 @@ struct ParquetStringOperator : public BaseParquetOperator {
 	template <class SRC, class TGT>
 	static idx_t GetRowSize(const Vector &vector, idx_t index) {
 		return FlatVector::GetData<string_t>(vector)[index].GetSize();
+	}
+};
+
+struct ParquetBlobOperator : public ParquetBaseStringOperator {
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_uniq<StringStatisticsState>(LogicalTypeId::BLOB);
+	}
+};
+
+struct ParquetStringOperator : public ParquetBaseStringOperator {
+	template <class SRC, class TGT>
+	static unique_ptr<ColumnWriterStatistics> InitializeStats() {
+		return make_uniq<StringStatisticsState>();
 	}
 };
 

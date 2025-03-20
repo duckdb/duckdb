@@ -592,6 +592,8 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 			return make_uniq<FixedDecimalColumnWriter>(writer, schema, std::move(path_in_schema), can_have_nulls);
 		}
 	case LogicalTypeId::BLOB:
+		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetBlobOperator>>(
+		    writer, schema, std::move(path_in_schema), can_have_nulls);
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetStringOperator>>(
 		    writer, schema, std::move(path_in_schema), can_have_nulls);
