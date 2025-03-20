@@ -2,6 +2,7 @@ import gc
 import os
 import pathlib
 import pytest
+import signal
 import sys
 from typing import Any, Generator, Optional
 
@@ -21,8 +22,21 @@ from sqllogictest.result import (
     ExecuteResult,
 )
 
+def sigquit_handler(signum, frame):
+    # Access the executor from the test_sqllogic function
+    if hasattr(test_sqllogic, 'executor') and test_sqllogic.executor:
+        if test_sqllogic.executor.database and hasattr(test_sqllogic.executor.database, 'connection'):
+            test_sqllogic.executor.database.connection.interrupt()
+        test_sqllogic.executor.cleanup()
+        test_sqllogic.executor = None
+    # Re-raise the signal to let the default handler take over
+    signal.signal(signal.SIGQUIT, signal.default_int_handler)
+    os.kill(os.getpid(), signal.SIGQUIT)
 
-# This is pretty much just a VM
+
+# Register the SIGQUIT handler
+signal.signal(signal.SIGQUIT, sigquit_handler)
+
 class SQLLogicTestExecutor(SQLLogicRunner):
     def __init__(self, test_directory: str, build_directory: Optional[str] = None):
         super().__init__(build_directory)
@@ -65,45 +79,64 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         test_delete_file(path + ".wal")
 
     def execute_test(self, test: SQLLogicTest) -> ExecuteResult:
-        self.reset()
-        self.test = test
-        self.original_sqlite_test = self.test.is_sqlite_test()
-
-        # Top level keywords
-        keywords = {'__TEST_DIR__': self.get_test_directory(), '__WORKING_DIRECTORY__': os.getcwd()}
-
-        def update_value(_: SQLLogicContext) -> Generator[Any, Any, Any]:
-            # Yield once to represent one iteration, do not touch the keywords
-            yield None
-
-        self.database = SQLLogicDatabase(':memory:', None)
-        pool = self.database.connect()
-        context = SQLLogicContext(pool, self, test.statements, keywords, update_value)
-        pool.initialize_connection(context, pool.get_connection())
-        # The outer context is not a loop!
-        context.is_loop = False
-
         try:
-            context.verify_statements()
-            res = context.execute()
-        except TestException as e:
-            res = e.handle_result()
-            if res.type == ExecuteResult.Type.SKIPPED:
-                pytest.skip(str(e.message))
-            else:
-                pytest.fail(str(e.message), pytrace=False)
+            self.reset()
+            self.test = test
+            self.original_sqlite_test = self.test.is_sqlite_test()
 
-        self.database.reset()
+            # Top level keywords
+            keywords = {'__TEST_DIR__': self.get_test_directory(), '__WORKING_DIRECTORY__': os.getcwd()}
 
-        # Clean up any databases that we created
+            def update_value(_: SQLLogicContext) -> Generator[Any, Any, Any]:
+                # Yield once to represent one iteration, do not touch the keywords
+                yield None
+
+            self.database = SQLLogicDatabase(':memory:', None)
+            pool = self.database.connect()
+            context = SQLLogicContext(pool, self, test.statements, keywords, update_value)
+            pool.initialize_connection(context, pool.get_connection())
+            # The outer context is not a loop!
+            context.is_loop = False
+
+            try:
+                context.verify_statements()
+                res = context.execute()
+            except TestException as e:
+                res = e.handle_result()
+                if res.type == ExecuteResult.Type.SKIPPED:
+                    pytest.skip(str(e.message))
+                else:
+                    pytest.fail(str(e.message), pytrace=False)
+
+            self.database.reset()
+
+            # Clean up any databases that we created
+            for loaded_path in self.loaded_databases:
+                if not loaded_path:
+                    continue
+                # Only delete database files that were created during the tests
+                if not loaded_path.startswith(self.get_test_directory()):
+                    continue
+                os.remove(loaded_path)
+            return res
+        except KeyboardInterrupt:
+            if self.database:
+                self.database.interrupt()
+            raise
+
+    def cleanup(self):
+        if self.database:
+            if hasattr(self.database, 'connection'):
+                self.database.connection.interrupt()
+            self.database.reset()
+            self.database = None
+        # Clean up any remaining test databases
         for loaded_path in self.loaded_databases:
-            if not loaded_path:
-                continue
-            # Only delete database files that were created during the tests
-            if not loaded_path.startswith(self.get_test_directory()):
-                continue
-            os.remove(loaded_path)
-        return res
+            if loaded_path and loaded_path.startswith(self.get_test_directory()):
+                try:
+                    os.remove(loaded_path)
+                except FileNotFoundError:
+                    pass
 
 
 def test_sqllogic(test_script_path: pathlib.Path, pytestconfig: pytest.Config, tmp_path: pathlib.Path):
@@ -117,8 +150,14 @@ def test_sqllogic(test_script_path: pathlib.Path, pytestconfig: pytest.Config, t
 
     build_dir = pytestconfig.getoption("build_dir")
     executor = SQLLogicTestExecutor(str(tmp_path), build_dir)
-    result = executor.execute_test(test)
-    assert result.type == ExecuteResult.Type.SUCCESS
+    # Store executor in the function's arguments so it can be accessed by the interrupt handler
+    test_sqllogic.executor = executor
+    try:
+        result = executor.execute_test(test)
+        assert result.type == ExecuteResult.Type.SUCCESS
+    finally:
+        executor.cleanup()
+        test_sqllogic.executor = None
 
 
 if __name__ == '__main__':

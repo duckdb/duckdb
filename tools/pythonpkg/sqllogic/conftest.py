@@ -40,10 +40,16 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption("--rng-seed", type=int, dest="rng_seed", help="Random integer seed")
 
 
-@pytest.hookimpl(tryfirst=True)
+@pytest.hookimpl(hookwrapper=True)
 def pytest_keyboard_interrupt(excinfo: pytest.ExceptionInfo):
-    # TODO: CTRL+C does not immediately interrupt pytest. You sometimes have to press it multiple times.
-    pytestmark = pytest.mark.skip(reason="Keyboard interrupt")
+    # Ensure all tests are properly cleaned up on keyboard interrupt
+    from .test_sqllogic import test_sqllogic
+    if hasattr(test_sqllogic, 'executor') and test_sqllogic.executor:
+        if test_sqllogic.executor.database and hasattr(test_sqllogic.executor.database, 'connection'):
+            test_sqllogic.executor.database.connection.interrupt()
+        test_sqllogic.executor.cleanup()
+        test_sqllogic.executor = None
+    yield
 
 
 def pytest_configure(config: pytest.Config):
@@ -165,7 +171,7 @@ def pytest_collection_modifyitems(session: pytest.Session, config: pytest.Config
     if start_offset < 0:
         raise ValueError("--start-offset must be a non-negative integer")
     elif end_offset < start_offset:
-        raise ValueError("--end-offset must be greater than or equal to --start-offset")
+        raise ValueError(f"--end-offset ({end_offset}) must be greater than or equal to --start-offset")
 
     max_end_offset = len(items) - 1
     if end_offset > max_end_offset:
