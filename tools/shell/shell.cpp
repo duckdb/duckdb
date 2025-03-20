@@ -4632,7 +4632,7 @@ string ShellState::GetDefaultDuckDBRC() {
 bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 	FILE *inSaved = in;
 	int savedLineno = lineno;
-	int rc;
+	int rc = 0;
 
 	in = fopen(file.c_str(), "rb");
 	if (in) {

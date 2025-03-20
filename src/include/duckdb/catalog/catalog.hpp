@@ -20,6 +20,7 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/reference_map.hpp"
 #include "duckdb/parser/query_error_context.hpp"
+#include "duckdb/catalog/entry_lookup_info.hpp"
 
 #include <functional>
 
@@ -73,17 +74,6 @@ class LogicalDelete;
 class LogicalUpdate;
 class CreateStatement;
 class CatalogEntryRetriever;
-
-//! Return value of Catalog::LookupEntry
-struct CatalogEntryLookup {
-	optional_ptr<SchemaCatalogEntry> schema;
-	optional_ptr<CatalogEntry> entry;
-	ErrorData error;
-
-	DUCKDB_API bool Found() const {
-		return entry;
-	}
-};
 
 //! The Catalog object represents the catalog of the database.
 class Catalog {
