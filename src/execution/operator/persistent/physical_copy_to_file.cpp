@@ -47,11 +47,12 @@ using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHash
 
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
-	explicit CopyToFunctionGlobalState(ClientContext &context, unique_ptr<GlobalFunctionData> global_state)
-	    : rows_copied(0), last_file_offset(0), global_state(std::move(global_state)) {
+	explicit CopyToFunctionGlobalState(ClientContext &context)
+	    : initialized(false), rows_copied(0), last_file_offset(0) {
 		max_open_files = ClientConfig::GetConfig(context).partitioned_write_max_open_files;
 	}
 	StorageLock lock;
+	atomic<bool> initialized;
 	atomic<idx_t> rows_copied;
 	atomic<idx_t> last_file_offset;
 	unique_ptr<GlobalFunctionData> global_state;
@@ -63,6 +64,24 @@ public:
 	vector<unique_ptr<CopyToFileInfo>> written_files;
 	//! Max open files
 	idx_t max_open_files;
+
+	void Initialize(ClientContext &context, const PhysicalCopyToFile &op) {
+		if (initialized) {
+			return;
+		}
+		auto write_lock = lock.GetExclusiveLock();
+		if (initialized) {
+			return;
+		}
+		// initialize writing to the file
+		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		auto written_file_info = AddFile(*write_lock, op.file_path, op.return_type);
+		if (written_file_info) {
+			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
+			                                           *written_file_info->file_stats);
+		}
+		initialized = true;
+	}
 
 	void CreateDir(const string &dir_path, FileSystem &fs) {
 		if (created_directories.find(dir_path) != created_directories.end()) {
@@ -400,7 +419,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 			CheckDirectory(fs, file_path, overwrite_mode);
 		}
 
-		auto state = make_uniq<CopyToFunctionGlobalState>(context, nullptr);
+		auto state = make_uniq<CopyToFunctionGlobalState>(context);
 		if (!per_thread_output && rotate) {
 			auto global_lock = state->lock.GetExclusiveLock();
 			state->global_state = CreateFileState(context, *state, *global_lock);
@@ -413,13 +432,10 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		return std::move(state);
 	}
 
-	auto state = make_uniq<CopyToFunctionGlobalState>(
-	    context, function.copy_to_initialize_global(context, *bind_data, file_path));
-	auto global_lock = state->lock.GetExclusiveLock();
-	auto written_file_info = state->AddFile(*global_lock, file_path, return_type);
-	if (written_file_info) {
-		function.copy_to_get_written_statistics(context, *bind_data, *state->global_state,
-		                                        *written_file_info->file_stats);
+	auto state = make_uniq<CopyToFunctionGlobalState>(context);
+	if (write_empty_file) {
+		// if we are writing the file also if it is empty - initialize now
+		state->Initialize(context, *this);
 	}
 	return std::move(state);
 }
@@ -460,6 +476,10 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
+	if (!write_empty_file) {
+		// if we are only writing the file when there are rows to write we need to initialize here
+		g.Initialize(context.client, *this);
+	}
 	g.rows_copied += chunk.size();
 
 	if (partition_output) {
@@ -523,7 +543,7 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 			// File in global state may change with FILE_SIZE_BYTES/rotate, need to grab lock
 			auto lock = g.lock.GetSharedLock();
 			function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
-		} else {
+		} else if (g.global_state) {
 			function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
 		}
 	}
@@ -549,7 +569,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 		}
 		return SinkFinalizeType::READY;
 	}
-	if (function.copy_to_finalize) {
+	if (function.copy_to_finalize && gstate.global_state) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
 
 		if (use_tmp_file) {
@@ -633,6 +653,9 @@ SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChun
 		idx_t count = next_end - source_state.offset;
 		for (idx_t i = 0; i < count; i++) {
 			auto &file_entry = *g.written_files[source_state.offset + i];
+			if (use_tmp_file) {
+				file_entry.file_path = GetNonTmpFile(context.client, file_entry.file_path);
+			}
 			ReturnStatistics(chunk, i, file_entry);
 		}
 		chunk.SetCardinality(count);
@@ -650,7 +673,11 @@ SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChun
 		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 		vector<Value> file_name_list;
 		for (auto &file_info : g.written_files) {
-			file_name_list.emplace_back(file_info->file_path);
+			if (use_tmp_file) {
+				file_name_list.emplace_back(GetNonTmpFile(context.client, file_info->file_path));
+			} else {
+				file_name_list.emplace_back(file_info->file_path);
+			}
 		}
 		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, std::move(file_name_list)));
 		break;
