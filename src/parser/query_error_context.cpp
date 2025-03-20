@@ -7,6 +7,9 @@
 
 namespace duckdb {
 
+QueryErrorContext::QueryErrorContext(const ParsedExpression &expr) : query_location(expr.query_location) {
+}
+
 string QueryErrorContext::Format(const string &query, const string &error_message, optional_idx error_loc,
                                  bool add_line_indicator) {
 	static constexpr idx_t MAX_LINE_RENDER_WIDTH = 120;
