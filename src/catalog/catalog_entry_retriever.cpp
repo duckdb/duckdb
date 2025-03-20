@@ -39,10 +39,10 @@ optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(const string &catalog
 	return ReturnAndCallback(Catalog::GetEntry(*this, catalog, schema, lookup_info, on_entry_not_found));
 }
 
-optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const string &catalog, const string &name,
-                                                                  OnEntryNotFound on_entry_not_found,
-                                                                  QueryErrorContext error_context) {
-	auto result = Catalog::GetSchema(*this, catalog, name, on_entry_not_found, error_context);
+optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const string &catalog,
+                                                                  const EntryLookupInfo &schema_lookup,
+                                                                  OnEntryNotFound on_entry_not_found) {
+	auto result = Catalog::GetSchema(*this, catalog, schema_lookup, on_entry_not_found);
 	if (!result) {
 		return result;
 	}

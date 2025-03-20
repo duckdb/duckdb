@@ -24,6 +24,10 @@ public:
 	const string &GetEntryName() const;
 	const QueryErrorContext &GetErrorContext() const;
 
+	static EntryLookupInfo SchemaLookup(const EntryLookupInfo &parent, const string &schema_name) {
+		return EntryLookupInfo(CatalogType::SCHEMA_ENTRY, schema_name, parent.error_context);
+	}
+
 private:
 	CatalogType catalog_type;
 	const string &name;

@@ -50,9 +50,8 @@ public:
 	LogicalType GetType(Catalog &catalog, const string &schema, const string &name,
 	                    OnEntryNotFound on_entry_not_found = OnEntryNotFound::RETURN_NULL);
 
-	optional_ptr<SchemaCatalogEntry> GetSchema(const string &catalog, const string &name,
-	                                           OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION,
-	                                           QueryErrorContext error_context = QueryErrorContext());
+	optional_ptr<SchemaCatalogEntry> GetSchema(const string &catalog, const EntryLookupInfo &schema_lookup,
+	                                           OnEntryNotFound on_entry_not_found = OnEntryNotFound::THROW_EXCEPTION);
 
 	const CatalogSearchPath &GetSearchPath() const;
 	void SetSearchPath(vector<CatalogSearchEntry> entries);

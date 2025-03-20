@@ -202,32 +202,37 @@ public:
 	//! Drops an entry from the catalog
 	DUCKDB_API void DropEntry(ClientContext &context, DropInfo &info);
 
-	//! Returns the schema object with the specified name, or throws an exception if it does not exist
-	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const string &name,
-	                                         QueryErrorContext error_context = QueryErrorContext());
-	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &name,
-	                                                      OnEntryNotFound if_not_found,
-	                                                      QueryErrorContext error_context = QueryErrorContext());
-	//! Overloadable method for giving warnings on ambiguous naming id.tab due to a database and schema with name id
-	DUCKDB_API virtual bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &name) {
-		return !!GetSchema(context, name, OnEntryNotFound::RETURN_NULL);
-	}
-	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const string &name,
-	                                         QueryErrorContext error_context = QueryErrorContext());
+
 	DUCKDB_API virtual optional_ptr<SchemaCatalogEntry>
-	GetSchema(CatalogTransaction transaction, const string &schema_name, OnEntryNotFound if_not_found,
-	          QueryErrorContext error_context = QueryErrorContext()) = 0;
+	LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup, OnEntryNotFound if_not_found) = 0;
+
+	//! Returns the schema object with the specified name, or throws an exception if it does not exist
+	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const EntryLookupInfo &schema_lookup);
+	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const EntryLookupInfo &schema_lookup,
+	                                                      OnEntryNotFound if_not_found);
+	//! Overloadable method for giving warnings on ambiguous naming id.tab due to a database and schema with name id
+	DUCKDB_API virtual bool CheckAmbiguousCatalogOrSchema(ClientContext &context, const string &schema);
+
+	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const string &schema);
+	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const string &schema);
+	DUCKDB_API SchemaCatalogEntry &GetSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup);
 	DUCKDB_API static SchemaCatalogEntry &GetSchema(ClientContext &context, const string &catalog_name,
-	                                                const string &schema_name,
-	                                                QueryErrorContext error_context = QueryErrorContext());
+	                                                const EntryLookupInfo &schema_lookup);
+	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &schema,
+	                                                      OnEntryNotFound if_not_found);
+	DUCKDB_API optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const string &schema,
+	                                                      OnEntryNotFound if_not_found);
 	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &catalog_name,
-	                                                             const string &schema_name,
-	                                                             OnEntryNotFound if_not_found,
-	                                                             QueryErrorContext error_context = QueryErrorContext());
+	                                                             const EntryLookupInfo &schema_lookup,
+	                                                             OnEntryNotFound if_not_found);
+	DUCKDB_API static SchemaCatalogEntry &GetSchema(ClientContext &context, const string &catalog_name,
+	                                                const string &schema);
+	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(ClientContext &context, const string &catalog_name,
+	                                                             const string &schema, OnEntryNotFound if_not_found);
 	DUCKDB_API static optional_ptr<SchemaCatalogEntry> GetSchema(CatalogEntryRetriever &retriever,
-	                                                             const string &catalog_name, const string &schema_name,
-	                                                             OnEntryNotFound if_not_found,
-	                                                             QueryErrorContext error_context = QueryErrorContext());
+	                                                             const string &catalog_name,
+	                                                             const EntryLookupInfo &schema_lookup,
+	                                                             OnEntryNotFound if_not_found);
 	//! Scans all the schemas in the system one-by-one, invoking the callback for each entry
 	DUCKDB_API virtual void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) = 0;
 
