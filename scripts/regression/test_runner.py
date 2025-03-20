@@ -193,7 +193,12 @@ if os.path.isdir("duckdb_benchmark_data"):
     shutil.rmtree('duckdb_benchmark_data')
 
 if summary and not no_summary:
-    print("\n\n=============================   FAILURES  SUMMARY   =============================\n")
+    print(
+        '''\n\n====================================================
+================  FAILURES SUMMARY  ================
+====================================================
+'''
+    )
     for i, failure_message in enumerate(summary, start=1):
         print(f"{i}: ", failure_message["benchmark"])
         if failure_message["old_failure"] != failure_message["new_failure"]:
@@ -201,6 +206,5 @@ if summary and not no_summary:
             print("New:\n", failure_message["new_failure"])
         else:
             print(failure_message["old_failure"])
-        print("---------------------------------------------------------------------------------\n")
 
 exit(exit_code)
