@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb.h"
-#include <string.h>
+#include "duckdb/common/string.hpp"
 
 namespace duckdb {
 
