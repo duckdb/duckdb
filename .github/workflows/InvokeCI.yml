@@ -86,3 +86,19 @@ jobs:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
+
+  notify-odbc-main:
+    uses: ./.github/workflows/NotifyExternalRepositories.yml
+    secrets: inherit
+    if: ${{ inputs.git_ref == '' }}
+    with:
+      target-branch: ${{ github.ref_name }}
+      duckdb-sha: ${{ github.head_ref }}
+
+  notify-odbc-specific-branch:
+    uses: ./.github/workflows/NotifyExternalRepositories.yml
+    secrets: inherit
+    if: ${{ inputs.git_ref != '' }}
+    with:
+      target-branch: ${{ github.ref_name }}
+      duckdb-sha: ${{ inputs.git_ref }}
