@@ -9,15 +9,16 @@ from .skipped_tests import SKIPPED_TESTS
 
 SQLLOGIC_TEST_CASE_NAME = "test_sqllogic"
 SQLLOGIC_TEST_PARAMETER = "test_script_path"
+DUCKDB_ROOT_DIR = pathlib.Path(__file__).parent.joinpath("../../..").resolve()
 
 
 def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--test-dir",
-        required=True,
         action="extend",
         nargs="+",
         type=pathlib.Path,
+        default=[DUCKDB_ROOT_DIR / "test"],
         dest="test_dirs",
         help="Path to one or more directories containing SQLLogic test scripts",
     )
@@ -26,7 +27,6 @@ def pytest_addoption(parser: pytest.Parser):
         type=str,
         dest="build_dir",
         help="Path to the build directory, used for loading extensions",
-        default=None,
     )
     parser.addoption("--start-offset", type=int, dest="start_offset", help="Index of the first test to run")
     parser.addoption("--end-offset", type=int, dest="end_offset", help="Index of the last test to run")
