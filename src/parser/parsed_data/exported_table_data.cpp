@@ -1,5 +1,6 @@
 #include "duckdb/parser/parsed_data/exported_table_data.hpp"
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 
 namespace duckdb {
 
