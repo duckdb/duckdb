@@ -36,9 +36,6 @@ struct ClientData {
 	//! Query profiler
 	shared_ptr<QueryProfiler> profiler;
 
-	//! HTTP logger
-	shared_ptr<HTTPLogger> http_logger;
-
 	//! The set of temporary objects that belong to this client
 	shared_ptr<AttachedDatabase> temporary_objects;
 	//! The set of bound prepared statements that belong to this client
