@@ -92,6 +92,16 @@ vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string 
 	return view_search_path;
 }
 
+static vector<LogicalType> ExchangeAllNullTypes(const vector<LogicalType> &types) {
+	vector<LogicalType> result = types;
+	for (auto &type : result) {
+		if (ExpressionBinder::ContainsNullType(type)) {
+			type = ExpressionBinder::ExchangeNullType(type);
+		}
+	}
+	return result;
+}
+
 unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	QueryErrorContext error_context(ref.query_location);
 	// CTEs and views are also referred to using BaseTableRefs, hence need to distinguish here
@@ -305,19 +315,14 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// verify that the types and names match up with the expected types and names
 		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
 		if (GetBindingMode() != BindingMode::EXTRACT_NAMES) {
-			// we bound the view subquery with "can_contain_nulls" set to true,
+			// we bind the view subquery and the original view with different "can_contain_nulls",
 			// but we don't want to throw an error when SQLNULL does not match up with INTEGER,
-			// because when the view was created, it was bound with "can_contain_nulls" set to false
-			vector<LogicalType> exchanged_types = bound_subquery.subquery->types;
-			for (auto &type : exchanged_types) {
-				if (ExpressionBinder::ContainsNullType(type)) {
-					type = ExpressionBinder::ExchangeNullType(type);
-				}
-			}
-
-			if (exchanged_types != view_catalog_entry.types) {
-				auto actual_types = StringUtil::ToString(bound_subquery.subquery->types, ", ");
-				auto expected_types = StringUtil::ToString(view_catalog_entry.types, ", ");
+			// so we exchange all SQLNULL with INTEGER here before comparing
+			auto bound_types = ExchangeAllNullTypes(bound_subquery.subquery->types);
+			auto view_types = ExchangeAllNullTypes(view_catalog_entry.types);
+			if (bound_types != view_types) {
+				auto actual_types = StringUtil::ToString(bound_types, ", ");
+				auto expected_types = StringUtil::ToString(view_types, ", ");
 				throw BinderException(
 				    "Contents of view were altered: types don't match! Expected [%s], but found [%s] instead",
 				    expected_types, actual_types);
