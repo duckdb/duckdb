@@ -452,6 +452,7 @@ setup(
     data_files=data_files,
     # NOTE: might need to be find_packages() ?
     packages=packages,
+    include_package_data=True,
     long_description="See here for an introduction: https://duckdb.org/docs/api/python/overview",
     ext_modules=[libduckdb],
     use_scm_version={
