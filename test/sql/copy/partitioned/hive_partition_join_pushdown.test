@@ -11,12 +11,25 @@ CREATE TABLE tbl AS SELECT i//1000 AS partition, i FROM range(10000) t(i)
 statement ok
 COPY tbl TO '__TEST_DIR__/partition_join_pushdown' (FORMAT parquet, PARTITION_BY (partition))
 
+query II
+EXPLAIN ANALYZE SELECT COUNT(*), MIN(partition), MAX(partition), SUM(i)
+FROM '__TEST_DIR__/partition_join_pushdown/**/*.parquet'
+----
+analyzed_plan	<REGEX>:.*Total Files Read.*10.*
+
 query IIII
 SELECT COUNT(*), MIN(partition), MAX(partition), SUM(i)
 FROM '__TEST_DIR__/partition_join_pushdown/**/*.parquet'
 WHERE partition=(SELECT MAX(partition) FROM tbl)
 ----
 1000	9	9	9499500
+
+query II
+EXPLAIN ANALYZE SELECT COUNT(*), MIN(partition), MAX(partition), SUM(i)
+FROM '__TEST_DIR__/partition_join_pushdown/**/*.parquet'
+WHERE partition=(SELECT MAX(partition) FROM tbl)
+----
+analyzed_plan	<REGEX>:.*Total Files Read.*1.*
 
 query IIII
 SELECT COUNT(*), MIN(partition), MAX(partition), SUM(i)
