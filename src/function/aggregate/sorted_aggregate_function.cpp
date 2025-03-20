@@ -9,7 +9,6 @@
 #include "duckdb/planner/expression/bound_aggregate_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/parser/expression_map.hpp"
-#include "duckdb/function/aggregate/distributive_functions.hpp"
 
 namespace duckdb {
 
@@ -770,6 +769,17 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundAggregateE
 }
 
 void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr) {
+	//	Make implicit orderings explicit
+	auto &aggregate = *expr.aggregate;
+	if (aggregate.order_dependent == AggregateOrderDependent::ORDER_DEPENDENT && expr.arg_orders.empty()) {
+		for (auto &order : expr.orders) {
+			const auto type = order.type;
+			const auto null_order = order.null_order;
+			auto expression = order.expression->Copy();
+			expr.arg_orders.emplace_back(BoundOrderByNode(type, null_order, std::move(expression)));
+		}
+	}
+
 	if (expr.arg_orders.empty() || expr.children.empty()) {
 		// not a sorted aggregate: return
 		return;
@@ -781,7 +791,6 @@ void FunctionBinder::BindSortedAggregate(ClientContext &context, BoundWindowExpr
 			return;
 		}
 	}
-	auto &aggregate = *expr.aggregate;
 	auto &children = expr.children;
 	auto &arg_orders = expr.arg_orders;
 	auto sorted_bind = make_uniq<SortedAggregateBindData>(context, expr);
