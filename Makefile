@@ -524,3 +524,11 @@ bundle-library-obj: bundle-setup
 
 bundle-library: release
 	make bundle-library-o
+
+gather-libs: release
+	cd build/release && \
+	rm -rf libs && \
+	mkdir -p libs && \
+	cp src/libduckdb_static.a libs/. && \
+	cp third_party/*/libduckdb_*.a libs/. && \
+	cp extension/*/lib*_extension.a libs/.

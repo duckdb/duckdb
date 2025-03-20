@@ -37,6 +37,15 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             )
 endif()
 
+################# AVRO
+if (NOT MINGW AND NOT ${WASM_ENABLED})
+    duckdb_extension_load(avro
+            LOAD_TESTS DONT_LINK
+            GIT_URL https://github.com/duckdb/duckdb-avro
+            GIT_TAG 1357c64c91b1f8b4df1e4f7178584a530fb3679b
+    )
+endif()
+
 ################## AWS
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws
