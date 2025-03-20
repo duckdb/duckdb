@@ -436,6 +436,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			}
 			// If we got here, we are ignoring errors, hence we must ignore this line.
 			current_errors.Insert(INVALID_UNICODE, cur_col_id, chunk_col_id, last_position);
+			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = StringVector::AddStringOrBlob(
+			    parse_chunk.data[chunk_col_id], string_t(value_ptr, UnsafeNumericCast<uint32_t>(0)));
 			break;
 		}
 		if (allocate) {
@@ -690,7 +692,7 @@ bool LineError::HandleErrors(StringValueResult &result) {
 			break;
 		case CAST_ERROR: {
 			string column_name;
-			LogicalTypeId type_id;
+			LogicalTypeId type_id = LogicalTypeId::INVALID;
 			if (cur_error.col_idx < result.names.size()) {
 				column_name = result.names[cur_error.col_idx];
 			}
@@ -822,6 +824,8 @@ bool StringValueResult::AddRowInternal() {
 	}
 
 	if (current_errors.HandleErrors(*this)) {
+		D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
+		D_ASSERT(buffer_handles.find(current_line_position.end.buffer_idx) != buffer_handles.end());
 		line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
 		number_of_rows++;
 		if (static_cast<idx_t>(number_of_rows) >= result_size) {
@@ -881,6 +885,8 @@ bool StringValueResult::AddRowInternal() {
 			RemoveLastLine();
 		}
 	}
+	D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
+	D_ASSERT(buffer_handles.find(current_line_position.end.buffer_idx) != buffer_handles.end());
 	line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
 	cur_col_id = 0;
 	chunk_col_id = 0;
@@ -1018,6 +1024,7 @@ StringValueResult &StringValueScanner::ParseChunk() {
 }
 
 void StringValueScanner::Flush(DataChunk &insert_chunk) {
+	insert_chunk.Reset();
 	bool continue_processing;
 	do {
 		continue_processing = false;
@@ -1050,7 +1057,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			}
 			auto &parse_vector = parse_chunk.data[col_idx];
 			auto &result_vector = insert_chunk.data[global_idx];
-			auto &type = result_vector.GetType();
+			const auto &type = result_vector.GetType();
 			auto &parse_type = parse_vector.GetType();
 			if (!type.IsJSONType() && (type == LogicalType::VARCHAR ||
 			                           (type != LogicalType::VARCHAR && parse_type != LogicalType::VARCHAR))) {
@@ -1148,6 +1155,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 			}
 			// Now we slice the result
 			insert_chunk.Slice(successful_rows, sel_idx);
+			result.borked_rows.clear();
 		}
 		if (insert_chunk.size() == 0 && cur_buffer_handle) {
 			idx_t to_pos;
