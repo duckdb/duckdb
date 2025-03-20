@@ -1,8 +1,8 @@
 #include "arrow/arrow_test_helper.hpp"
 #include "catch.hpp"
 #include "duckdb/common/adbc/adbc.hpp"
-
-#include <duckdb/common/adbc/options.h>
+#include "duckdb/common/adbc/wrappers.hpp"
+#include "duckdb/common/adbc/options.h"
 #include <iostream>
 
 namespace duckdb {
@@ -54,12 +54,15 @@ public:
 
 	bool QueryAndCheck(const string &query) {
 		QueryArrow(query);
-		auto cconn = static_cast<Connection *>(adbc_connection.private_data);
+		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+
+		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
 		return ArrowTestHelper::RunArrowComparison(*cconn, query, arrow_stream);
 	}
 
 	unique_ptr<MaterializedQueryResult> Query(const string &query) {
-		auto cconn = static_cast<Connection *>(adbc_connection.private_data);
+		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
 		return cconn->Query(query);
 	}
 
@@ -1102,9 +1105,15 @@ TEST_CASE("Test Segfault Option Set", "[adbc]") {
 
 	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
 
+	auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+	auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
+
+	REQUIRE(!cconn->IsAutoCommit());
+
 	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
 	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 }
+
 TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {
 	if (!duckdb_lib) {
 		return;

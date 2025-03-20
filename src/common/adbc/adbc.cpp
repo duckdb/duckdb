@@ -507,7 +507,13 @@ AdbcStatusCode ConnectionInit(struct AdbcConnection *connection, struct AdbcData
 	conn_wrapper->connection = nullptr;
 
 	auto res = duckdb_connect(database_wrapper->database, &conn_wrapper->connection);
-	return CheckResult(res, error, "Failed to connect to Database");
+	auto adbc_status = CheckResult(res, error, "Failed to connect to Database");
+	if (adbc_status != ADBC_STATUS_OK) {
+		return adbc_status;
+	}
+	// We might have options to set
+	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+	return InternalSetOption(*conn, conn_wrapper->options, error);
 }
 
 AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcError *error) {
