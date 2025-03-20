@@ -72,12 +72,12 @@ int main(int argc, char *argv[]) {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
 		}
-		if (summarize_failures == true) {
-			// cleanup before creating new failures summary file
-			if (std::FILE* file = std::fopen(filename, "r")) {
-				std::fclose(file);
-				std::remove(filename);
-			}
+	}
+	if (summarize_failures) {
+		// cleanup before creating new failures summary file
+		if (std::FILE* file = std::fopen(filename, "r")) {
+			std::fclose(file);
+			std::remove(filename);
 		}
 	}
 
@@ -98,15 +98,20 @@ int main(int argc, char *argv[]) {
 	int result = Catch::Session().run(new_argc, new_argv.get());
 	
 	std::ifstream file(filename);
-	if (file && summarize_failures) {
+	if (summarize_failures && file) {
 		std::cout << "===============================  FAILURES SUMMARY  ===============================" << std::endl;
 		std::cout << "Failed Test: falinig line:\n" << std::endl;
 		
 		string line;
 		int i = 1;
+		bool has_failures = false;
 		while (std::getline(file, line)) {
+			has_failures = true;
 			std::cout << i << ". " << line << std::endl;
 			i++;
+		}
+		if (!has_failures) {
+			std::cout << "No failures recorded." << std::endl;
 		}
 		file.close();
 	}
