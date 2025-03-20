@@ -265,7 +265,7 @@ public:
 	static bool TryGetNextFile(MultiFileGlobalState &global_state, unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
 		//! TryGetNextFile should only be called if there are no files waiting to be read
-		D_ASSERT(!HasUnopenedFiles(global_state, parallel_lock));
+		D_ASSERT(!HasFilesToRead(global_state, parallel_lock));
 		string scanned_file;
 		if (!global_state.file_list.Scan(global_state.file_list_scan, scanned_file)) {
 			return false;
@@ -308,8 +308,8 @@ public:
 
 		for (idx_t i = global_state.file_index; i < file_index_limit; i++) {
 			// Try to get new files to open in this loop too otherwise we will only ever open 1 file ahead
-			const bool has_unopened_files = i < global_state.readers.size();
-			if (!has_unopened_files && !TryGetNextFile(global_state, parallel_lock)) {
+			const bool has_file_to_read = i < global_state.readers.size();
+			if (!has_file_to_read && !TryGetNextFile(global_state, parallel_lock)) {
 				return false;
 			}
 
@@ -370,7 +370,7 @@ public:
 			// - the thread opening the file is done and the file is available
 			// - the thread opening the file has failed
 			// - the file was somehow scanned till the end while we were waiting
-			if (!HasUnopenedFiles(global_state, parallel_lock) ||
+			if (!HasFilesToRead(global_state, parallel_lock) ||
 			    global_state.readers[global_state.file_index]->file_state != MultiFileFileState::OPENING ||
 			    global_state.error_opening_file) {
 				return;
@@ -389,46 +389,45 @@ public:
 				return false;
 			}
 
-			if (!HasUnopenedFiles(gstate, parallel_lock) && !TryGetNextFile(gstate, parallel_lock)) {
+			//! If we don't have a file to read, and the MultiFileList has no new file for us - end the scan
+			if (!HasFilesToRead(gstate, parallel_lock) && !TryGetNextFile(gstate, parallel_lock)) {
 				OP::FinishReading(context, *gstate.global_state, *scan_data.local_state);
 				return false;
 			}
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
-			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
-				if (OP::TryInitializeScan(context, current_reader_data.reader, *gstate.global_state,
-				                          *scan_data.local_state)) {
-					if (!current_reader_data.reader) {
-						throw InternalException("MultiFileReader was moved");
-					}
-					// The current reader has data left to be scanned
-					scan_data.reader = current_reader_data.reader;
-					scan_data.batch_index = gstate.batch_index++;
-					scan_data.file_index = gstate.file_index;
-					return true;
-				} else {
-					// Set state to the next file
-					++gstate.file_index;
-
-					// Close current file
-					current_reader_data.file_state = MultiFileFileState::CLOSED;
-
-					//! Finish processing the file
-					OP::FinishFile(context, *gstate.global_state, *current_reader_data.reader);
-					current_reader_data.closed_reader = current_reader_data.reader;
-					current_reader_data.reader = nullptr;
+			if (current_reader_data.file_state != MultiFileFileState::OPEN) {
+				if (TryOpenNextFile(context, bind_data, scan_data, gstate, parallel_lock)) {
 					continue;
+				}
+
+				// Check if the current file is being opened, in that case we need to wait for it.
+				if (current_reader_data.file_state == MultiFileFileState::OPENING) {
+					WaitForFile(gstate.file_index, gstate, parallel_lock);
 				}
 			}
 
-			if (TryOpenNextFile(context, bind_data, scan_data, gstate, parallel_lock)) {
-				continue;
+			if (OP::TryInitializeScan(context, current_reader_data.reader, *gstate.global_state,
+			                          *scan_data.local_state)) {
+				if (!current_reader_data.reader) {
+					throw InternalException("MultiFileReader was moved");
+				}
+				// The current reader has data left to be scanned
+				scan_data.reader = current_reader_data.reader;
+				scan_data.batch_index = gstate.batch_index++;
+				scan_data.file_index = gstate.file_index;
+				return true;
 			}
+			// Set state to the next file
+			++gstate.file_index;
 
-			// Check if the current file is being opened, in that case we need to wait for it.
-			if (current_reader_data.file_state == MultiFileFileState::OPENING) {
-				WaitForFile(gstate.file_index, gstate, parallel_lock);
-			}
+			// Close current file
+			current_reader_data.file_state = MultiFileFileState::CLOSED;
+
+			//! Finish processing the file
+			OP::FinishFile(context, *gstate.global_state, *current_reader_data.reader);
+			current_reader_data.closed_reader = current_reader_data.reader;
+			current_reader_data.reader = nullptr;
 		}
 	}
 
@@ -765,7 +764,7 @@ public:
 	}
 
 private:
-	static bool HasUnopenedFiles(MultiFileGlobalState &gstate, unique_lock<mutex> &parallel_lock) {
+	static bool HasFilesToRead(MultiFileGlobalState &gstate, unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
 		return (gstate.file_index.load() < gstate.readers.size());
 	}
