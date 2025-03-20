@@ -249,8 +249,7 @@ AdbcStatusCode ConnectionNew(struct AdbcConnection *connection, struct AdbcError
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 
-	auto connection_wrapper =
-	    static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(malloc(sizeof(duckdb::DuckDBAdbcConnectionWrapper)));
+	auto connection_wrapper = new duckdb::DuckDBAdbcConnectionWrapper();
 	connection_wrapper->connection = nullptr;
 	connection->private_data = connection_wrapper;
 	return ADBC_STATUS_OK;
@@ -266,50 +265,65 @@ AdbcStatusCode ExecuteQuery(duckdb::Connection *conn, const char *query, struct 
 	return ADBC_STATUS_OK;
 }
 
+AdbcStatusCode InternalSetOption(duckdb::Connection &conn, std::unordered_map<std::string, std::string> &options,
+                                 struct AdbcError *error) {
+	// If we got here, the options have already been validated and are acceptable
+	for (auto &option : options) {
+		if (strcmp(option.first.c_str(), ADBC_CONNECTION_OPTION_AUTOCOMMIT) == 0) {
+			if (strcmp(option.second.c_str(), ADBC_OPTION_VALUE_ENABLED) == 0) {
+				if (conn.HasActiveTransaction()) {
+					AdbcStatusCode status = ExecuteQuery(&conn, "COMMIT", error);
+					if (status != ADBC_STATUS_OK) {
+						options.clear();
+						return status;
+					}
+				}
+			} else if (strcmp(option.second.c_str(), ADBC_OPTION_VALUE_DISABLED) == 0) {
+				if (!conn.HasActiveTransaction()) {
+					AdbcStatusCode status = ExecuteQuery(&conn, "START TRANSACTION", error);
+					if (status != ADBC_STATUS_OK) {
+						options.clear();
+						return status;
+					}
+				}
+			}
+		}
+	}
+	options.clear();
+	return ADBC_STATUS_OK;
+}
 AdbcStatusCode ConnectionSetOption(struct AdbcConnection *connection, const char *key, const char *value,
                                    struct AdbcError *error) {
 	if (!connection) {
 		SetError(error, "Connection is not set");
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
-
-	D_ASSERT(connection->private_data);
-
+	std::string key_string = std::string(key);
+	std::string key_value = std::string(value);
 	auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
-
-	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
-
 	if (strcmp(key, ADBC_CONNECTION_OPTION_AUTOCOMMIT) == 0) {
 		if (strcmp(value, ADBC_OPTION_VALUE_ENABLED) == 0) {
-			if (conn->HasActiveTransaction()) {
-				AdbcStatusCode status = ExecuteQuery(conn, "COMMIT", error);
-				if (status != ADBC_STATUS_OK) {
-					return status;
-				}
-			} else {
-				// no-op
-			}
+			conn_wrapper->options[key_string] = key_value;
 		} else if (strcmp(value, ADBC_OPTION_VALUE_DISABLED) == 0) {
-			if (conn->HasActiveTransaction()) {
-				// no-op
-			} else {
-				// begin
-				AdbcStatusCode status = ExecuteQuery(conn, "START TRANSACTION", error);
-				if (status != ADBC_STATUS_OK) {
-					return status;
-				}
-			}
+			conn_wrapper->options[key_string] = key_value;
 		} else {
 			auto error_message = "Invalid connection option value " + std::string(key) + "=" + std::string(value);
 			SetError(error, error_message);
 			return ADBC_STATUS_INVALID_ARGUMENT;
 		}
+	} else {
+		// This is an unknown option to the DuckDB driver
+		auto error_message =
+		    "Unknown connection option " + std::string(key) + "=" + (value ? std::string(value) : "(NULL)");
+		SetError(error, error_message);
+		return ADBC_STATUS_NOT_IMPLEMENTED;
+	}
+	if (!conn_wrapper->connection) {
+		// If the connection has not yet been initialized, we just return here.
 		return ADBC_STATUS_OK;
 	}
-	auto error_message =
-	    "Unknown connection option " + std::string(key) + "=" + (value ? std::string(value) : "(NULL)");
-	SetError(error, error_message);
-	return ADBC_STATUS_NOT_IMPLEMENTED;
+	auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
+	return InternalSetOption(*conn, conn_wrapper->options, error);
 }
 
 AdbcStatusCode ConnectionReadPartition(struct AdbcConnection *connection, const uint8_t *serialized_partition,
@@ -501,7 +515,7 @@ AdbcStatusCode ConnectionRelease(struct AdbcConnection *connection, struct AdbcE
 		auto conn_wrapper = static_cast<duckdb::DuckDBAdbcConnectionWrapper *>(connection->private_data);
 		auto conn = reinterpret_cast<duckdb::Connection *>(conn_wrapper->connection);
 		duckdb_disconnect(reinterpret_cast<duckdb_connection *>(&conn));
-		free(conn_wrapper);
+		delete conn_wrapper;
 		connection->private_data = nullptr;
 	}
 	return ADBC_STATUS_OK;
