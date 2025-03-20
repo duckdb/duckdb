@@ -199,7 +199,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	// extract a table or view from the catalog
 	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name, error_context);
 	BindSchemaOrCatalog(ref.catalog_name, ref.schema_name);
-	auto table_or_view = entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::RETURN_NULL);
+	auto table_or_view =
+	    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {

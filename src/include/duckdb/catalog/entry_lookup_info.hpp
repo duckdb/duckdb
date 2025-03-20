@@ -16,7 +16,8 @@ namespace duckdb {
 
 struct EntryLookupInfo {
 public:
-	EntryLookupInfo(CatalogType catalog_type, const string &name, QueryErrorContext error_context = QueryErrorContext());
+	EntryLookupInfo(CatalogType catalog_type, const string &name,
+	                QueryErrorContext error_context = QueryErrorContext());
 
 public:
 	CatalogType GetCatalogType() const;

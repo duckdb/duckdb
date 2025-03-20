@@ -33,9 +33,7 @@ SequenceCatalogEntry &BindSequence(Binder &binder, string &catalog, string &sche
 	// fetch the sequence from the catalog
 	Binder::BindSchemaOrCatalog(binder.context, catalog, schema);
 	EntryLookupInfo sequence_lookup(CatalogType::SEQUENCE_ENTRY, name);
-	return binder.EntryRetriever()
-	    .GetEntry(catalog, schema, sequence_lookup)
-	    ->Cast<SequenceCatalogEntry>();
+	return binder.EntryRetriever().GetEntry(catalog, schema, sequence_lookup)->Cast<SequenceCatalogEntry>();
 }
 
 SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, string &catalog, string &schema,

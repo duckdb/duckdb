@@ -332,16 +332,13 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 
 		optional_ptr<CatalogEntry> entry = nullptr;
 		if (!user_type_schema.empty()) {
-			entry = entry_retriever.GetEntry(*catalog, user_type_schema, type_lookup,
-			                                 OnEntryNotFound::RETURN_NULL);
+			entry = entry_retriever.GetEntry(*catalog, user_type_schema, type_lookup, OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidUserType(entry)) {
-			entry = entry_retriever.GetEntry(*catalog, schema, type_lookup,
-			                                 OnEntryNotFound::RETURN_NULL);
+			entry = entry_retriever.GetEntry(*catalog, schema, type_lookup, OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidUserType(entry)) {
-			entry = entry_retriever.GetEntry(*catalog, INVALID_SCHEMA, type_lookup,
-			                                 OnEntryNotFound::RETURN_NULL);
+			entry = entry_retriever.GetEntry(*catalog, INVALID_SCHEMA, type_lookup, OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidUserType(entry)) {
 			entry = entry_retriever.GetEntry(INVALID_CATALOG, INVALID_SCHEMA, type_lookup,

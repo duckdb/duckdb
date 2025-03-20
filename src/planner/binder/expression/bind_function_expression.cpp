@@ -45,8 +45,8 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	if (!func) {
 		// function was not found - check if we this is a table function
 		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.function_name, error_context);
-		auto table_func = GetCatalogEntry(function.catalog, function.schema,
-		                                  table_function_lookup, OnEntryNotFound::RETURN_NULL);
+		auto table_func =
+		    GetCatalogEntry(function.catalog, function.schema, table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			throw BinderException(function,
 			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
@@ -76,8 +76,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			}
 		}
 		// rebind the function
-		func = GetCatalogEntry(function.catalog, function.schema,
-		                       function_lookup, OnEntryNotFound::THROW_EXCEPTION);
+		func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
@@ -286,8 +285,8 @@ string ExpressionBinder::UnsupportedUnnestMessage() {
 	return "UNNEST not supported here";
 }
 
-optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const string &catalog,
-                                                             const string &schema, const EntryLookupInfo &lookup_info,
+optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const string &catalog, const string &schema,
+                                                             const EntryLookupInfo &lookup_info,
                                                              OnEntryNotFound on_entry_not_found) {
 	return binder.GetCatalogEntry(catalog, schema, lookup_info, on_entry_not_found);
 }

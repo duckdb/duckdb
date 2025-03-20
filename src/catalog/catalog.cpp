@@ -325,13 +325,14 @@ unique_ptr<LogicalOperator> Catalog::BindAlterAddIndex(Binder &binder, TableCata
 // Lookup Structures
 //===--------------------------------------------------------------------===//
 struct CatalogLookup {
-	CatalogLookup(Catalog &catalog, string schema_p, string name_p)
-	    : catalog(catalog), schema(std::move(schema_p)), name(std::move(name_p)) {
+	CatalogLookup(Catalog &catalog, CatalogType catalog_type, string schema_p, string name_p)
+	    : catalog(catalog), schema(std::move(schema_p)), name(std::move(name_p)), lookup_info(catalog_type, name) {
 	}
 
 	Catalog &catalog;
 	string schema;
 	string name;
+	EntryLookupInfo lookup_info;
 };
 
 //===--------------------------------------------------------------------===//
@@ -606,7 +607,8 @@ CatalogException Catalog::UnrecognizedConfigurationError(ClientContext &context,
 	throw CatalogException::MissingEntry("configuration parameter", name, potential_names);
 }
 
-CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
+CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &retriever,
+                                                      const EntryLookupInfo &lookup_info,
                                                       const reference_set_t<SchemaCatalogEntry> &schemas) {
 	auto &context = retriever.GetContext();
 	auto entries = SimilarEntriesInSchemas(context, lookup_info, schemas);
@@ -724,8 +726,8 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 	return CatalogException::MissingEntry(type, entry_name, did_you_mean, lookup_info.GetErrorContext());
 }
 
-CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction,
-                                                   const string &schema, const EntryLookupInfo &lookup_info) {
+CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, const string &schema,
+                                                   const EntryLookupInfo &lookup_info) {
 	auto schema_entry = GetSchema(transaction, schema, OnEntryNotFound::RETURN_NULL);
 	if (!schema_entry) {
 		return {nullptr, nullptr, ErrorData()};
@@ -772,7 +774,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	// Check if the default database is actually attached. CreateMissingEntryException will throw binder exception
 	// otherwise.
 	if (!GetCatalogEntry(context, GetDefaultCatalog(retriever))) {
-		auto except = CatalogException("%s with name %s does not exist!", CatalogTypeToString(lookup_info.GetCatalogType()), lookup_info.GetEntryName());
+		auto except = CatalogException("%s with name %s does not exist!",
+		                               CatalogTypeToString(lookup_info.GetCatalogType()), lookup_info.GetEntryName());
 		return {nullptr, nullptr, ErrorData(except)};
 	} else {
 		auto except = CreateMissingEntryException(retriever, lookup_info, schemas);
@@ -791,13 +794,13 @@ CatalogEntryLookup Catalog::LookupEntry(CatalogEntryRetriever &retriever, const 
 	return res;
 }
 
-CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, vector<CatalogLookup> &lookups,
+CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
                                            const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
 	auto &context = retriever.GetContext();
 	reference_set_t<SchemaCatalogEntry> schemas;
 	for (auto &lookup : lookups) {
 		auto transaction = lookup.catalog.GetCatalogTransaction(context);
-		auto result = lookup.catalog.TryLookupEntryInternal(transaction, lookup.schema, lookup_info);
+		auto result = lookup.catalog.TryLookupEntryInternal(transaction, lookup.schema, lookup.lookup_info);
 		if (result.Found()) {
 			return result;
 		}
@@ -812,7 +815,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, vec
 	// Check if the default database is actually attached. CreateMissingEntryException will throw binder exception
 	// otherwise.
 	if (!GetCatalogEntry(context, GetDefaultCatalog(retriever))) {
-		auto except = CatalogException("%s with name %s does not exist!", CatalogTypeToString(lookup_info.GetCatalogType()), lookup_info.GetEntryName());
+		auto except = CatalogException("%s with name %s does not exist!",
+		                               CatalogTypeToString(lookup_info.GetCatalogType()), lookup_info.GetEntryName());
 		return {nullptr, nullptr, ErrorData(except)};
 	} else {
 		auto except = CreateMissingEntryException(retriever, lookup_info, schemas);
@@ -820,8 +824,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, vec
 	}
 }
 
-CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriever,
-                                                  const string &catalog, const string &schema, const EntryLookupInfo &lookup_info,
+CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriever, const string &catalog,
+                                                  const string &schema, const EntryLookupInfo &lookup_info,
                                                   OnEntryNotFound if_not_found) {
 	// Default tables of catalogs can only be accessed by the catalog name directly
 	if (!schema.empty() || !catalog.empty()) {
@@ -831,7 +835,8 @@ CatalogEntryLookup Catalog::TryLookupDefaultTable(CatalogEntryRetriever &retriev
 	vector<CatalogLookup> catalog_by_name_lookups;
 	auto catalog_by_name = GetCatalogEntry(retriever, lookup_info.GetEntryName());
 	if (catalog_by_name && catalog_by_name->HasDefaultTable()) {
-		catalog_by_name_lookups.emplace_back(*catalog_by_name, catalog_by_name->GetDefaultTableSchema(),
+		catalog_by_name_lookups.emplace_back(*catalog_by_name, CatalogType::TABLE_ENTRY,
+		                                     catalog_by_name->GetDefaultTableSchema(),
 		                                     catalog_by_name->GetDefaultTable());
 	}
 
@@ -857,7 +862,8 @@ static void ThrowDefaultTableAmbiguityException(CatalogEntryLookup &base_lookup,
 }
 
 CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
-                                           const string &schema, const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
+                                           const string &schema, const EntryLookupInfo &lookup_info,
+                                           OnEntryNotFound if_not_found) {
 	auto entries = GetCatalogEntries(retriever, catalog, schema);
 	vector<CatalogLookup> lookups;
 	vector<CatalogLookup> final_lookups;
@@ -875,9 +881,11 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		D_ASSERT(catalog_entry);
 		auto lookup_behavior = catalog_entry->CatalogTypeLookupRule(lookup_info.GetCatalogType());
 		if (lookup_behavior == CatalogLookupBehavior::STANDARD) {
-			lookups.emplace_back(*catalog_entry, entry.schema, lookup_info.GetEntryName());
+			lookups.emplace_back(*catalog_entry, lookup_info.GetCatalogType(), entry.schema,
+			                     lookup_info.GetEntryName());
 		} else if (lookup_behavior == CatalogLookupBehavior::LOWER_PRIORITY) {
-			final_lookups.emplace_back(*catalog_entry, entry.schema, lookup_info.GetEntryName());
+			final_lookups.emplace_back(*catalog_entry, lookup_info.GetCatalogType(), entry.schema,
+			                           lookup_info.GetEntryName());
 		}
 	}
 
@@ -906,14 +914,26 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 	return lookup_result;
 }
 
-optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever,
-                                             const string &schema_name, const EntryLookupInfo &lookup_info,
-                                             OnEntryNotFound if_not_found) {
+CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
+                                const string &schema_name, const string &name) {
+	EntryLookupInfo lookup_info(catalog_type, name);
+	return GetEntry(context, catalog_name, schema_name, lookup_info);
+}
+
+CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &schema_name,
+                                const string &name) {
+	EntryLookupInfo lookup_info(catalog_type, name);
+	return GetEntry(context, schema_name, lookup_info);
+}
+
+optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, const string &schema_name,
+                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
 	auto lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found);
 
 	// Try autoloading extension to resolve lookup
 	if (!lookup_entry.Found()) {
-		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(), lookup_info.GetEntryName())) {
+		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
+		                                    lookup_info.GetEntryName())) {
 			lookup_entry = TryLookupEntry(retriever, schema_name, lookup_info, if_not_found);
 		}
 	}
@@ -936,12 +956,14 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, const string &schema, co
 }
 
 optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, const string &catalog,
-                                             const string &schema, const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
+                                             const string &schema, const EntryLookupInfo &lookup_info,
+                                             OnEntryNotFound if_not_found) {
 	auto result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
 
 	// Try autoloading extension to resolve lookup
 	if (!result.Found()) {
-		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(), lookup_info.GetEntryName())) {
+		if (AutoLoadExtensionByCatalogEntry(*retriever.GetContext().db, lookup_info.GetCatalogType(),
+		                                    lookup_info.GetEntryName())) {
 			result = TryLookupEntry(retriever, catalog, schema, lookup_info, if_not_found);
 		}
 	}
@@ -956,8 +978,8 @@ optional_ptr<CatalogEntry> Catalog::GetEntry(CatalogEntryRetriever &retriever, c
 	}
 	return result.entry.get();
 }
-optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, const string &catalog,
-                                             const string &schema, const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
+optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, const string &catalog, const string &schema,
+                                             const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
 	CatalogEntryRetriever retriever(context);
 	return GetEntry(retriever, catalog, schema, lookup_info, if_not_found);
 }

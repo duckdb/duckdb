@@ -234,20 +234,19 @@ public:
 	//! Gets the "schema.name" entry of the specified type, if entry does not exist behavior depends on OnEntryNotFound
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &schema,
 	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
-	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever,
-	                                               const string &schema, const EntryLookupInfo &lookup_info,
-	                                               OnEntryNotFound if_not_found);
+	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, const string &schema,
+	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
 	DUCKDB_API CatalogEntry &GetEntry(ClientContext &context, const string &schema, const EntryLookupInfo &lookup_info);
 	//! Gets the "catalog.schema.name" entry of the specified type, if entry does not exist behavior depends on
 	//! OnEntryNotFound
-	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(ClientContext &context,
-	                                                      const string &catalog, const string &schema,
-	                                                      const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
-	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever,
-	                                                      const string &catalog, const string &schema,
-	                                                      const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
-	DUCKDB_API static CatalogEntry &GetEntry(ClientContext &context, const string &catalog,
-	                                         const string &schema, const EntryLookupInfo &lookup_info);
+	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &catalog,
+	                                                      const string &schema, const EntryLookupInfo &lookup_info,
+	                                                      OnEntryNotFound if_not_found);
+	DUCKDB_API static optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, const string &catalog,
+	                                                      const string &schema, const EntryLookupInfo &lookup_info,
+	                                                      OnEntryNotFound if_not_found);
+	DUCKDB_API static CatalogEntry &GetEntry(ClientContext &context, const string &catalog, const string &schema,
+	                                         const EntryLookupInfo &lookup_info);
 
 	template <class T>
 	optional_ptr<T> GetEntry(ClientContext &context, const string &schema_name, const string &name,
@@ -262,12 +261,18 @@ public:
 		}
 		return &entry->template Cast<T>();
 	}
+
 	template <class T>
 	T &GetEntry(ClientContext &context, const string &schema_name, const string &name,
 	            QueryErrorContext error_context = QueryErrorContext()) {
 		auto entry = GetEntry<T>(context, schema_name, name, OnEntryNotFound::THROW_EXCEPTION, error_context);
 		return *entry;
 	}
+
+	static CatalogEntry &GetEntry(ClientContext &context, CatalogType catalog_type, const string &catalog_name,
+	                              const string &schema_name, const string &name);
+	CatalogEntry &GetEntry(ClientContext &context, CatalogType catalog_type, const string &schema_name,
+	                       const string &name);
 
 	//! Append a scalar or aggregate function to the catalog
 	DUCKDB_API optional_ptr<CatalogEntry> AddFunction(ClientContext &context, CreateFunctionInfo &info);
@@ -372,27 +377,31 @@ public:
 
 private:
 	//! Lookup an entry in the schema, returning a lookup with the entry and schema if they exist
-	CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction, const string &schema, const EntryLookupInfo &lookup_info);
+	CatalogEntryLookup TryLookupEntryInternal(CatalogTransaction transaction, const string &schema,
+	                                          const EntryLookupInfo &lookup_info);
 	//! Calls LookupEntryInternal on the schema, trying other schemas if the schema is invalid. Sets
 	//! CatalogEntryLookup->error depending on if_not_found when no entry is found
 	CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &schema,
 	                                  const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
-	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, vector<CatalogLookup> &lookups,
+	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const vector<CatalogLookup> &lookups,
 	                                         const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
 	static CatalogEntryLookup TryLookupEntry(CatalogEntryRetriever &retriever, const string &catalog,
-	                                         const string &schema, const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
+	                                         const string &schema, const EntryLookupInfo &lookup_info,
+	                                         OnEntryNotFound if_not_found);
 
 	//! Looks for a Catalog with a DefaultTable that matches the lookup
-	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever,
-	                                                const string &catalog, const string &schema, const EntryLookupInfo &lookup_info,
+	static CatalogEntryLookup TryLookupDefaultTable(CatalogEntryRetriever &retriever, const string &catalog,
+	                                                const string &schema, const EntryLookupInfo &lookup_info,
 	                                                OnEntryNotFound if_not_found);
 
 	//! Return an exception with did-you-mean suggestion.
-	static CatalogException CreateMissingEntryException(CatalogEntryRetriever &retriever, const EntryLookupInfo &lookup_info,
+	static CatalogException CreateMissingEntryException(CatalogEntryRetriever &retriever,
+	                                                    const EntryLookupInfo &lookup_info,
 	                                                    const reference_set_t<SchemaCatalogEntry> &schemas);
 
 	//! Return the close entry name, the distance and the belonging schema.
-	static vector<SimilarCatalogEntry> SimilarEntriesInSchemas(ClientContext &context, const EntryLookupInfo &lookup_info,
+	static vector<SimilarCatalogEntry> SimilarEntriesInSchemas(ClientContext &context,
+	                                                           const EntryLookupInfo &lookup_info,
 	                                                           const reference_set_t<SchemaCatalogEntry> &schemas);
 
 	virtual void DropSchema(ClientContext &context, DropInfo &info) = 0;

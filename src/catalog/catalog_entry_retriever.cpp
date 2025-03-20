@@ -33,7 +33,8 @@ LogicalType CatalogEntryRetriever::GetType(const string &catalog, const string &
 	return type_entry.user_type;
 }
 
-optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(const string &catalog, const string &schema, const EntryLookupInfo &lookup_info,
+optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(const string &catalog, const string &schema,
+                                                           const EntryLookupInfo &lookup_info,
                                                            OnEntryNotFound on_entry_not_found) {
 	return ReturnAndCallback(Catalog::GetEntry(*this, catalog, schema, lookup_info, on_entry_not_found));
 }
@@ -53,7 +54,8 @@ optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const string &
 }
 
 optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(Catalog &catalog, const string &schema,
-                                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found) {
+                                                           const EntryLookupInfo &lookup_info,
+                                                           OnEntryNotFound on_entry_not_found) {
 	return ReturnAndCallback(catalog.GetEntry(*this, schema, lookup_info, on_entry_not_found));
 }
 

@@ -39,9 +39,9 @@ shared_ptr<CSVRejectsTable> CSVRejectsTable::GetOrCreate(ClientContext &context,
 	auto &cache = ObjectCache::GetObjectCache(context);
 	auto &catalog = Catalog::GetCatalog(context, TEMP_CATALOG);
 	auto rejects_scan_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_scan,
-	                                           OnEntryNotFound::RETURN_NULL) != nullptr;
+	                                                              OnEntryNotFound::RETURN_NULL) != nullptr;
 	auto rejects_error_exist = catalog.GetEntry<TableCatalogEntry>(context, DEFAULT_SCHEMA, rejects_error,
-	                                            OnEntryNotFound::RETURN_NULL) != nullptr;
+	                                                               OnEntryNotFound::RETURN_NULL) != nullptr;
 	if ((rejects_scan_exist || rejects_error_exist) && !cache.Get<CSVRejectsTable>(key)) {
 		std::ostringstream error;
 		if (rejects_scan_exist) {

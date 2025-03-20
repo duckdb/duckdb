@@ -76,8 +76,7 @@ void ExtractPivotAggregateExpression(ClientContext &context, ParsedExpression &e
 
 		// check if this is an aggregate to ensure it is an aggregate and not a scalar function
 		EntryLookupInfo lookup_info(CatalogType::AGGREGATE_FUNCTION_ENTRY, aggr_function.function_name, expr);
-		auto &entry = Catalog::GetEntry(context, aggr_function.catalog,
-		                                aggr_function.schema, lookup_info);
+		auto &entry = Catalog::GetEntry(context, aggr_function.catalog, aggr_function.schema, lookup_info);
 		if (entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			// aggregate
 			aggregates.push_back(aggr_function);

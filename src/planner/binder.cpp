@@ -240,7 +240,8 @@ static bool ParsedExpressionIsAggregate(Binder &binder, const ParsedExpression &
 		QueryErrorContext error_context;
 
 		EntryLookupInfo lookup_info(CatalogType::AGGREGATE_FUNCTION_ENTRY, function.function_name, error_context);
-		auto entry = binder.GetCatalogEntry(function.catalog, function.schema, lookup_info, OnEntryNotFound::RETURN_NULL);
+		auto entry =
+		    binder.GetCatalogEntry(function.catalog, function.schema, lookup_info, OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			return true;
 		}
@@ -726,7 +727,8 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 }
 
 optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const string &catalog, const string &schema,
-                                                   const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found) {
+                                                   const EntryLookupInfo &lookup_info,
+                                                   OnEntryNotFound on_entry_not_found) {
 	return entry_retriever.GetEntry(catalog, schema, lookup_info, on_entry_not_found);
 }
 
