@@ -15,6 +15,6 @@ namespace duckdb {
 
 struct DuckDBAdbcConnectionWrapper {
 	duckdb_connection connection;
-	std::unordered_map<std::string, std::string> options;
+	unordered_map<string, string> options;
 };
 } // namespace duckdb
