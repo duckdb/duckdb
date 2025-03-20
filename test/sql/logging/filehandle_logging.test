@@ -1,0 +1,48 @@
+# name: test/sql/logging/filehandle_logging.test
+# group: [logging]
+
+require parquet
+
+require json
+
+statement ok
+pragma threads=1;
+
+statement ok
+set enable_logging = true;
+
+statement ok
+set logging_level='trace';
+
+statement ok
+COPY (SELECT 1 as a) TO '__TEST_DIR__/test.csv'
+
+statement ok
+FROM '__TEST_DIR__/test.csv'
+
+# Create a view that json_transforms the log entries
+statement ok
+CREATE VIEW file_handle_log AS
+    SELECT json_transform(message, '{"fs": "VARCHAR", "op": "VARCHAR", "path": "VARCHAR", "bytes": "BIGINT"}') as message
+    FROM duckdb_logs
+    WHERE type = 'duckdb.FileHandle'
+    ORDER BY timestamp
+
+# Create a view that json_untransforms the log entries
+query IIII
+SELECT
+    message.fs,
+    message.op,
+    filename: parse_filename(message.path),
+    bytes: message.bytes
+FROM file_handle_log
+----
+LocalFileSystem	OPEN	test.csv	NULL
+LocalFileSystem	WRITE	test.csv	1
+LocalFileSystem	WRITE	test.csv	1
+LocalFileSystem	CLOSE	test.csv	NULL
+LocalFileSystem	CLOSE	test.csv	NULL
+LocalFileSystem	OPEN	test.csv	NULL
+LocalFileSystem	READ	test.csv	2
+LocalFileSystem	READ	test.csv	0
+LocalFileSystem	CLOSE	test.csv	NULL

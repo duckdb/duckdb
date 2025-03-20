@@ -10,6 +10,8 @@
 
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/logging/weak_logger.hpp"
+#include "duckdb/logging/logger.hpp"
 
 #include <functional>
 
@@ -20,38 +22,28 @@ namespace duckdb {
 //! 2. duckdb_httplib_openssl
 //! These have essentially the same code, but we cannot convert between them
 //! We get around that by templating everything, which requires implementing everything in the header
-class HTTPLogger {
+class HTTPLogger : public WeakLogger {
 public:
-	static constexpr const char *HTTP_LOGGER_LOG_TYPE = "duckdb.Httplib";
-	static constexpr LogLevel HTTP_LOGGER_LOG_LEVEL = LogLevel::LOG_DEBUG;
+	static constexpr const char *LOG_TYPE = "duckdb.Httplib";
+	static constexpr LogLevel LOG_LEVEL = LogLevel::LOG_DEBUG;
 
-	explicit HTTPLogger(ClientContext &context_p) : context(context_p.shared_from_this()) {
+	explicit HTTPLogger(ClientContext &context_p) : WeakLogger(context_p) {
 	}
 
-	static bool ShouldLog(ClientContext &context) {
+	static bool ShouldLog(ClientContext &context_p) {
 		// note: legacy option that should probably just always be enabled now that we have a proper logger:
 		//       ShouldLog will determine correctly what to do here
-		if (!context.config.enable_http_logging) {
+		if (!context_p.config.enable_http_logging) {
 			return false;
 		}
-		return Logger::Get(context).ShouldLog(HTTP_LOGGER_LOG_TYPE, HTTP_LOGGER_LOG_LEVEL);
+		return Get(context_p).ShouldLog(LOG_TYPE, LOG_LEVEL);
 	}
 
-public:
 	template <class REQUEST, class RESPONSE>
-	std::function<void(const REQUEST &, const RESPONSE &)> GetLogger() {
+	std::function<void(const REQUEST &, const RESPONSE &)> GetHTTPLibCallback() {
 		return [&](const REQUEST &req, const RESPONSE &res) {
 			Log(req, res);
 		};
-	}
-
-	// to be used to determine whether the httplib logger should be injected in the httplib clients
-	bool ShouldLog() {
-		auto context_ptr = context.lock();
-		if (!context_ptr) {
-			return false;
-		}
-		return ShouldLog(*context_ptr);
 	}
 
 private:
@@ -88,16 +80,13 @@ private:
 			}
 		}
 
-		auto &logger = Logger::Get(*context_ptr);
-		if (logger.ShouldLog(HTTP_LOGGER_LOG_TYPE, HTTP_LOGGER_LOG_LEVEL)) {
+		auto &logger = Get(*context_ptr);
+		if (logger.ShouldLog(LOG_TYPE, LOG_LEVEL)) {
 			stringstream out;
 			TemplatedWriteRequests(out, req, res);
-			logger.WriteLog(HTTP_LOGGER_LOG_TYPE, HTTP_LOGGER_LOG_LEVEL, out.str());
+			logger.WriteLog(LOG_TYPE, LOG_LEVEL, out.str());
 		}
 	}
-
-private:
-	weak_ptr<ClientContext> context;
 };
 
 } // namespace duckdb

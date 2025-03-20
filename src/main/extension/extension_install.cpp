@@ -411,9 +411,10 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 			cli.set_proxy_basic_auth(db.config.options.http_proxy_username, db.config.options.http_proxy_password);
 		}
 
-		auto http_logger = HTTPLogger(*context);
-		if (http_logger.ShouldLog()) {
-			cli.set_logger(http_logger.GetLogger<duckdb_httplib::Request, duckdb_httplib::Response>());
+		unique_ptr<HTTPLogger> http_logger;
+		if (context && HTTPLogger::ShouldLog(*context)) {
+			http_logger = make_uniq<HTTPLogger>(*context);
+			cli.set_logger(http_logger->GetHTTPLibCallback<duckdb_httplib::Request, duckdb_httplib::Response>());
 		}
 
 		duckdb_httplib::Headers headers = {
