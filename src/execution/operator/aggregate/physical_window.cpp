@@ -365,8 +365,6 @@ public:
 	bool HasUnfinishedTasks() const {
 		return !stopped && finished < total_tasks;
 	}
-	//! Try to advance the group stage
-	bool TryPrepareNextStage();
 	//! Get the next task given the current state
 	bool TryNextTask(TaskPtr &task);
 
@@ -801,6 +799,9 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task) {
 	auto &gpart = *gsink.global_partition;
 	for (const auto &group_idx : active_groups) {
 		auto &window_hash_group = gpart.window_hash_groups[group_idx];
+		if (window_hash_group->TryPrepareNextStage()) {
+			UnblockTasks(guard);
+		}
 		if (window_hash_group->TryNextTask(task)) {
 			++started;
 			return true;
@@ -813,6 +814,9 @@ bool WindowGlobalSourceState::TryNextTask(TaskPtr &task) {
 		active_groups.emplace_back(group_idx);
 
 		auto &window_hash_group = gpart.window_hash_groups[group_idx];
+		if (window_hash_group->TryPrepareNextStage()) {
+			UnblockTasks(guard);
+		}
 		if (!window_hash_group->TryNextTask(task)) {
 			//	Group has no tasks (empty?)
 			continue;
@@ -859,22 +863,6 @@ bool WindowLocalSourceState::TryAssignTask() {
 	scanner.reset();
 
 	return gsource.TryNextTask(task);
-}
-
-bool WindowGlobalSourceState::TryPrepareNextStage() {
-	// Inside the lock
-	D_ASSERT(HasMoreTasks());
-
-	//	Run through the active groups looking for one that can unblock
-	auto &gpart = *gsink.global_partition;
-	for (const auto &group_idx : active_groups) {
-		auto &window_hash_group = gpart.window_hash_groups[group_idx];
-		if (window_hash_group->TryPrepareNextStage()) {
-			return true;
-		}
-	}
-
-	return false;
 }
 
 void WindowLocalSourceState::ExecuteTask(DataChunk &result) {
@@ -1039,10 +1027,6 @@ SourceResultType PhysicalWindow::GetData(ExecutionContext &context, DataChunk &c
 				// no more tasks - exit
 				gsource.UnblockTasks(guard);
 				break;
-			}
-			if (gsource.TryPrepareNextStage()) {
-				// we successfully prepared the next stage - unblock tasks
-				gsource.UnblockTasks(guard);
 			} else {
 				// there are more tasks available, but we can't execute them yet
 				// block the source
