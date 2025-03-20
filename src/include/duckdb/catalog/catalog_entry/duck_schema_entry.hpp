@@ -62,7 +62,8 @@ public:
 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
 	void DropEntry(ClientContext &context, DropInfo &info) override;
 	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
-	CatalogSet::EntryLookup LookupEntryDetailed(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
+	CatalogSet::EntryLookup LookupEntryDetailed(CatalogTransaction transaction,
+	                                            const EntryLookupInfo &lookup_info) override;
 	SimilarCatalogEntry GetSimilarEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
 
 	unique_ptr<CatalogEntry> Copy(ClientContext &context) const override;

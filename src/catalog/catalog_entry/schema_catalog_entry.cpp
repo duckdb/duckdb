@@ -27,7 +27,8 @@ optional_ptr<CatalogEntry> SchemaCatalogEntry::CreateIndex(ClientContext &contex
 	return CreateIndex(GetCatalogTransaction(context), info, table);
 }
 
-SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) {
+SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction transaction,
+                                                        const EntryLookupInfo &lookup_info) {
 	SimilarCatalogEntry result;
 	Scan(transaction.GetContext(), lookup_info.GetCatalogType(), [&](CatalogEntry &entry) {
 		auto entry_score = StringUtil::SimilarityRating(entry.name, lookup_info.GetEntryName());
@@ -39,14 +40,16 @@ SimilarCatalogEntry SchemaCatalogEntry::GetSimilarEntry(CatalogTransaction trans
 	return result;
 }
 
-optional_ptr<CatalogEntry> SchemaCatalogEntry::GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) {
+optional_ptr<CatalogEntry> SchemaCatalogEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
+                                                        const string &name) {
 	EntryLookupInfo lookup_info(type, name);
 	return LookupEntry(transaction, lookup_info);
 }
 
 //! This should not be used, it's only implemented to not put the burden of implementing it on every derived class of
 //! SchemaCatalogEntry
-CatalogSet::EntryLookup SchemaCatalogEntry::LookupEntryDetailed(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) {
+CatalogSet::EntryLookup SchemaCatalogEntry::LookupEntryDetailed(CatalogTransaction transaction,
+                                                                const EntryLookupInfo &lookup_info) {
 	CatalogSet::EntryLookup result;
 	result.result = LookupEntry(transaction, lookup_info);
 	if (!result.result) {

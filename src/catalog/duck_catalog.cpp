@@ -124,8 +124,8 @@ CatalogSet &DuckCatalog::GetSchemaCatalogSet() {
 }
 
 optional_ptr<SchemaCatalogEntry> DuckCatalog::LookupSchema(CatalogTransaction transaction,
-                                                        const EntryLookupInfo &schema_lookup,
-                                                        OnEntryNotFound if_not_found) {
+                                                           const EntryLookupInfo &schema_lookup,
+                                                           OnEntryNotFound if_not_found) {
 	auto &schema_name = schema_lookup.GetEntryName();
 	D_ASSERT(!schema_name.empty());
 	auto entry = schemas->GetEntry(transaction, schema_name);

@@ -202,9 +202,9 @@ public:
 	//! Drops an entry from the catalog
 	DUCKDB_API void DropEntry(ClientContext &context, DropInfo &info);
 
-
-	DUCKDB_API virtual optional_ptr<SchemaCatalogEntry>
-	LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup, OnEntryNotFound if_not_found) = 0;
+	DUCKDB_API virtual optional_ptr<SchemaCatalogEntry> LookupSchema(CatalogTransaction transaction,
+	                                                                 const EntryLookupInfo &schema_lookup,
+	                                                                 OnEntryNotFound if_not_found) = 0;
 
 	//! Returns the schema object with the specified name, or throws an exception if it does not exist
 	DUCKDB_API SchemaCatalogEntry &GetSchema(ClientContext &context, const EntryLookupInfo &schema_lookup);

@@ -35,8 +35,8 @@ public:
 	DUCKDB_API void ScanSchemas(std::function<void(SchemaCatalogEntry &)> callback);
 
 	DUCKDB_API optional_ptr<SchemaCatalogEntry> LookupSchema(CatalogTransaction transaction,
-	                                                      const EntryLookupInfo &schema_lookup,
-	                                                      OnEntryNotFound if_not_found) override;
+	                                                         const EntryLookupInfo &schema_lookup,
+	                                                         OnEntryNotFound if_not_found) override;
 
 	DUCKDB_API PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner,
 	                                               LogicalCreateTable &op, PhysicalOperator &plan) override;
