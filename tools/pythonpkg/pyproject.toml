@@ -18,23 +18,15 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License"
 ]
+authors = [
+	{name = "Hannes Muehleisen", email = "hannes@cwi.nl"}
+]
+
 [project.urls]
 Documentation = "https://duckdb.org/docs/api/python/overview"
 Source = "https://github.com/duckdb/duckdb/blob/main/tools/pythonpkg"
 Issues = "https://github.com/duckdb/duckdb/issues"
 Changelog = "https://github.com/duckdb/duckdb/releases"
-
-# Formerly 'tests_require' in setup() arguments
-[project.optional-dependencies]
-test = [
-    "google-cloud-storage",
-    "mypy",
-    "pytest"
-]
-
-[tool.setuptools]
-packages = ["duckdb"]
-include-package-data = true
 
 ### CI Builwheel configurations ###
 
@@ -43,7 +35,7 @@ include-package-data = true
 dependency-versions = "latest"
 before-build = 'pip install numpy>=2.0'
 before-test = 'python scripts/optional_requirements.py'
-test-requires = 'pytest'
+test-requires = ["pytest", "google-cloud-storage", "mypy"]
 test-command = 'DUCKDB_PYTHON_TEST_EXTENSION_PATH={project} DUCKDB_PYTHON_TEST_EXTENSION_REQUIRED=1 python -m pytest {project}/tests --verbose'
 
 [tool.cibuildwheel.environment]
