@@ -184,7 +184,7 @@ unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtension(ClientContext
 	auto &db = DatabaseInstance::GetDatabase(context);
 	auto &fs = FileSystem::GetFileSystem(context);
 	string local_path = ExtensionDirectory(context);
-	return InstallExtensionInternal(db, fs, local_path, extension, options,context);
+	return InstallExtensionInternal(db, fs, local_path, extension, options, context);
 }
 
 unsafe_unique_array<data_t> ReadExtensionFileFromDisk(FileSystem &fs, const string &path, idx_t &file_size) {
@@ -503,9 +503,11 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 }
 
 // Install an extension using a hand-rolled http request
-static unique_ptr<ExtensionInstallInfo>
-InstallFromRepository(DatabaseInstance &db, FileSystem &fs, const string &url, const string &extension_name,
-                      const string &temp_path, const string &local_extension_path, ExtensionInstallOptions &options, optional_ptr<ClientContext> context) {
+static unique_ptr<ExtensionInstallInfo> InstallFromRepository(DatabaseInstance &db, FileSystem &fs, const string &url,
+                                                              const string &extension_name, const string &temp_path,
+                                                              const string &local_extension_path,
+                                                              ExtensionInstallOptions &options,
+                                                              optional_ptr<ClientContext> context) {
 	string url_template = ExtensionHelper::ExtensionUrlTemplate(db, *options.repository, options.version);
 	string generated_url = ExtensionHelper::ExtensionFinalizeUrlTemplate(url_template, extension_name);
 
@@ -550,10 +552,11 @@ static void ThrowErrorOnMismatchingExtensionOrigin(FileSystem &fs, const string 
 }
 #endif // DUCKDB_DISABLE_EXTENSION_LOAD
 
-unique_ptr<ExtensionInstallInfo>
-ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs, const string &local_path,
-                                          const string &extension, ExtensionInstallOptions &options,
-                                          optional_ptr<ClientContext> context) {
+unique_ptr<ExtensionInstallInfo> ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs,
+                                                                           const string &local_path,
+                                                                           const string &extension,
+                                                                           ExtensionInstallOptions &options,
+                                                                           optional_ptr<ClientContext> context) {
 #ifdef DUCKDB_DISABLE_EXTENSION_LOAD
 	throw PermissionException("Installing external extensions is disabled through a compile time flag");
 #else
@@ -602,7 +605,8 @@ ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs, 
 	// Install extension from local url based on a repository (Note that this will install it as a local file)
 	if (options.repository && !IsHTTP(options.repository->path)) {
 		LocalFileSystem local_fs;
-		return InstallFromRepository(db, fs, extension, extension_name, temp_path, local_extension_path, options, context);
+		return InstallFromRepository(db, fs, extension, extension_name, temp_path, local_extension_path, options,
+		                             context);
 	}
 
 #ifdef DISABLE_DUCKDB_REMOTE_INSTALL
@@ -613,7 +617,7 @@ ExtensionHelper::InstallExtensionInternal(DatabaseInstance &db, FileSystem &fs, 
 	if (IsFullPath(extension)) {
 		if (StringUtil::StartsWith(extension, "http://")) {
 			// HTTP takes separate path to avoid dependency on httpfs extension
-			return InstallFromHttpUrl(db, extension, extension_name, temp_path, local_extension_path, options,  context);
+			return InstallFromHttpUrl(db, extension, extension_name, temp_path, local_extension_path, options, context);
 		}
 
 		// Direct installation from local or remote path
