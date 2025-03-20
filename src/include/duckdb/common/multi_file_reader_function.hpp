@@ -262,7 +262,10 @@ public:
 
 	// Queries the metadataprovider for another file to scan, updating the files/reader lists in the process.
 	// Returns true if resized
-	static bool ResizeFiles(MultiFileGlobalState &global_state) {
+	static bool TryGetNextFile(MultiFileGlobalState &global_state, unique_lock<mutex> &parallel_lock) {
+		D_ASSERT(parallel_lock.owns_lock());
+		//! TryGetNextFile should only be called if there are no files waiting to be read
+		D_ASSERT(!HasUnopenedFiles(global_state, parallel_lock));
 		string scanned_file;
 		if (!global_state.file_list.Scan(global_state.file_list_scan, scanned_file)) {
 			return false;
@@ -297,12 +300,16 @@ public:
 	static bool TryOpenNextFile(ClientContext &context, const MultiFileBindData &bind_data,
 	                            MultiFileLocalState &scan_data, MultiFileGlobalState &global_state,
 	                            unique_lock<mutex> &parallel_lock) {
+		if (!parallel_lock.owns_lock()) {
+			throw InternalException("parallel_lock is not held, this should not happen");
+		}
 		const auto file_index_limit =
 		    global_state.file_index + NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 
 		for (idx_t i = global_state.file_index; i < file_index_limit; i++) {
-			// We check if we can resize files in this loop too otherwise we will only ever open 1 file ahead
-			if (i >= global_state.readers.size() && !ResizeFiles(global_state)) {
+			// Try to get new files to open in this loop too otherwise we will only ever open 1 file ahead
+			const bool has_unopened_files = i < global_state.readers.size();
+			if (!has_unopened_files && !TryGetNextFile(global_state, parallel_lock)) {
 				return false;
 			}
 
@@ -363,7 +370,7 @@ public:
 			// - the thread opening the file is done and the file is available
 			// - the thread opening the file has failed
 			// - the file was somehow scanned till the end while we were waiting
-			if (global_state.file_index >= global_state.readers.size() ||
+			if (!HasUnopenedFiles(global_state, parallel_lock) ||
 			    global_state.readers[global_state.file_index]->file_state != MultiFileFileState::OPENING ||
 			    global_state.error_opening_file) {
 				return;
@@ -382,7 +389,7 @@ public:
 				return false;
 			}
 
-			if (gstate.file_index >= gstate.readers.size() && !ResizeFiles(gstate)) {
+			if (!HasUnopenedFiles(gstate, parallel_lock) && !TryGetNextFile(gstate, parallel_lock)) {
 				OP::FinishReading(context, *gstate.global_state, *scan_data.local_state);
 				return false;
 			}
@@ -755,6 +762,12 @@ public:
 			bind_data.types[type.first] = type.second;
 			bind_data.columns[type.first].type = type.second;
 		}
+	}
+
+private:
+	static bool HasUnopenedFiles(MultiFileGlobalState &gstate, unique_lock<mutex> &parallel_lock) {
+		D_ASSERT(parallel_lock.owns_lock());
+		return (gstate.file_index.load() < gstate.readers.size());
 	}
 };
 
