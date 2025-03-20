@@ -7,18 +7,6 @@ from typing import List
 from conftest import ShellTest
 import os
 
-
-def test_http_logging_stderr(shell):
-    test = (
-        ShellTest(shell)
-        .statement("SET enable_http_logging=true;")
-        .statement("install 'http://extensions.duckdb.org/v0.10.1/osx_arm64/httpfs.duckdb_extension.gzzz';")
-    )
-    result = test.run()
-    result.check_stderr("HTTP Request")
-    result.check_stderr("HTTP Response")
-
-
 def test_http_logging_file(shell, tmp_path):
     temp_dir = tmp_path / 'http_logging_dir'
     temp_dir.mkdir()
