@@ -20,11 +20,12 @@ FROM read_csv('data/csv/repromarket.csv',
    skip=0,
    null_padding=true,
    ignore_errors=true,
-   strict_mode=true
+   strict_mode=false
 );
 ----
 nemanja.krpovic@gmail.com	krlleta
 vega@example.combogus	NULL
+Vega-Inject	bogus
 mirkofoto@gmail.com	mirko
 
 query I

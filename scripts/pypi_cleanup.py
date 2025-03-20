@@ -1,3 +1,4 @@
+import argparse
 import pyotp
 import datetime
 import logging
@@ -5,6 +6,7 @@ import os
 import re
 import sys
 import time
+from collections import defaultdict
 from html.parser import HTMLParser
 from textwrap import dedent
 from urllib.parse import urlparse
@@ -12,16 +14,23 @@ from urllib.parse import urlparse
 import requests
 from requests.exceptions import RequestException
 
+# for local testing run the script with the --dry option
+# it outputs the list of the names to delete and return
+# you can change a value of the how_many_dev_versions_to_keep variable to see difference
+parser = argparse.ArgumentParser()
+parser.add_argument("--dry", action="store_true", help="Run in dry-run mode (doesn't delete anything)")
+args = parser.parse_args()
+
 # deletes old dev wheels from pypi. evil hack.
-# how many days to retain dev releases - all dev releases older than 10 days are deleted
-retain_days = 10
+# how many dev versions to keep - 3 for each not yet released version
+how_many_dev_versions_to_keep = 3
 patterns = [re.compile(r".*\.dev\d+$")]
-actually_delete = True
+actually_delete = not args.dry
 host = 'https://pypi.org/'
 
-pypi_username = os.getenv('PYPI_CLEANUP_USERNAME', "")
-pypi_password = os.getenv("PYPI_CLEANUP_PASSWORD", "")
-pypi_otp = os.getenv("PYPI_CLEANUP_OTP", "")
+pypi_username = os.getenv('PYPI_CLEANUP_USERNAME', "") if actually_delete else "user"
+pypi_password = os.getenv("PYPI_CLEANUP_PASSWORD", "") if actually_delete else "password"
+pypi_otp = os.getenv("PYPI_CLEANUP_OTP", "") if actually_delete else "otp"
 if pypi_username == "":
     print(f'need username in PYPI_CLEANUP_USERNAME env variable')
     exit(1)
@@ -72,7 +81,7 @@ class CsfrParser(HTMLParser):
 
 
 class PypiCleanup:
-    def __init__(self, url, username, package, password, otp, patterns, retain_days, delete):
+    def __init__(self, url, username, package, password, otp, patterns, delete):
         self.url = urlparse(url).geturl()
         if self.url[-1] == "/":
             self.url = self.url[:-1]
@@ -83,7 +92,6 @@ class PypiCleanup:
         self.package = package
         self.patterns = patterns
         self.verbose = True
-        self.date = datetime.datetime.now() - datetime.timedelta(days=retain_days)
 
     def run(self):
         csrf = None
@@ -118,12 +126,29 @@ class PypiCleanup:
                 logging.info(f"No releases for package {self.package} have been found")
                 return
 
-            pkg_vers = list(
-                filter(
-                    lambda k: any(filter(lambda rex: rex.match(k), self.patterns)) and releases_by_date[k] < self.date,
-                    releases_by_date.keys(),
-                )
-            )
+            version_dict = defaultdict(list)
+            releases = []
+            for key in releases_by_date.keys():
+                if '.dev' in key:
+                    prefix, postfix = key.split('.dev')
+                    version_dict[prefix].append(key)
+
+            pkg_vers = []
+            for version_key, versions in version_dict.items():
+                # releases_by_date.keys() is a list of release versions, so when the version key appears in that list,
+                # that means the version have been released and we don't need to keep PRE-RELEASE (dev) versions anymore.
+                # All versions for that key should be added into a list to delete from PyPi (pkg_vers).
+                # When the version is not released yet, it appears among the version_dict keys. In this case we'd like to keep
+                # some number of versions (how_many_dev_versions_to_keep), so we add the version names from the beginning
+                # of the versions list sorted by date, except for mentioned number of versions to keep.
+                if version_key in releases_by_date.keys():
+                    pkg_vers.extend(versions)
+                else:
+                    pkg_vers.extend(versions[:-how_many_dev_versions_to_keep])
+
+            if not actually_delete:
+                print("Following pkg_vers can be deleted: ", pkg_vers)
+                return
 
             if not pkg_vers:
                 logging.info(f"No releases were found matching specified patterns and dates in package {self.package}")
@@ -236,4 +261,4 @@ class PypiCleanup:
                     logging.info(f"Would be deleting {self.package} version {pkg_ver}, but not doing it!")
 
 
-PypiCleanup(host, pypi_username, 'duckdb', pypi_password, pypi_otp, patterns, retain_days, actually_delete).run()
+PypiCleanup(host, pypi_username, 'duckdb', pypi_password, pypi_otp, patterns, actually_delete).run()
