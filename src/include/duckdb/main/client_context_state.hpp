@@ -32,7 +32,8 @@ class RegisteredStateManager;
 enum class RebindQueryInfo { DO_NOT_REBIND, ATTEMPT_TO_REBIND };
 
 struct PreparedStatementCallbackInfo {
-	PreparedStatementCallbackInfo(PreparedStatementData &prepared_statement, const optional_ptr<case_insensitive_map_t<BoundParameterData>>& parameters)
+	PreparedStatementCallbackInfo(PreparedStatementData &prepared_statement,
+	                              const optional_ptr<case_insensitive_map_t<BoundParameterData>> &parameters)
 	    : prepared_statement(prepared_statement), parameters(parameters) {
 	}
 
