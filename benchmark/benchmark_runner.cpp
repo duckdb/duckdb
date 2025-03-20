@@ -17,8 +17,6 @@
 
 using namespace duckdb;
 
-std::map<std::string, std::string> summary{};
-
 void BenchmarkRunner::RegisterBenchmark(Benchmark *benchmark) {
 	GetInstance().benchmarks.push_back(benchmark);
 }
@@ -60,6 +58,7 @@ void BenchmarkRunner::InitializeBenchmarkDirectory() {
 atomic<bool> is_active;
 atomic<bool> timeout;
 atomic<bool> summarize;
+std::map<std::string, std::string> summary{};
 
 void sleep_thread(Benchmark *benchmark, BenchmarkRunner *runner, BenchmarkState *state, bool hotrun,
                   const optional_idx &optional_timeout) {
