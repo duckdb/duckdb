@@ -27,6 +27,9 @@ class FixedSizeAllocator {
 public:
 	//! We can vacuum 10% or more of the total in-memory footprint
 	static constexpr uint8_t VACUUM_THRESHOLD = 10;
+	//! We allow up to EMPTY_BUFFER_THRESHOLD empty buffers to be kept alive.
+	//! This prevents allocation oscillation for new+free+new+... scenarios.
+	static constexpr idx_t EMPTY_BUFFER_THRESHOLD = 1;
 
 public:
 	//! Construct a new fixed-size allocator
@@ -95,10 +98,6 @@ public:
 		return total_segment_count;
 	}
 
-	inline idx_t GetMaxSegmentsPerBuffer() const {
-		return available_segments_per_buffer;
-	}
-
 	//! Returns the upper bound of the available buffer IDs, i.e., upper_bound > max_buffer_id
 	idx_t GetUpperBoundBufferId() const;
 	//! Merge another FixedSizeAllocator into this allocator. Both must have the same segment size
@@ -128,10 +127,13 @@ public:
 	void Init(const FixedSizeAllocatorInfo &info);
 	//! Deserializes all metadata of older storage files
 	void Deserialize(MetadataManager &metadata_manager, const BlockPointer &block_pointer);
+
 	//! Returns true, if the allocator does not contain any segments.
-	inline bool IsEmpty() {
+	inline bool Empty() {
 		return total_segment_count == 0;
 	}
+	//! Removes empty buffers.
+	void RemoveEmptyBuffers();
 
 private:
 	//! Allocation size of one segment in a buffer
@@ -150,16 +152,23 @@ private:
 	//! We can recalculate this by iterating over all buffers
 	idx_t total_segment_count;
 
-	//! Buffers containing the segments
+	//! Buffers containing the segments.
 	unordered_map<idx_t, unique_ptr<FixedSizeBuffer>> buffers;
-	//! Buffers with free space
+	//! Buffers with free space.
 	unordered_set<idx_t> buffers_with_free_space;
+	//! Caches the next buffer to be filled up.
+	//! Unordered sets make no guarantee that begin() returns the same element.
+	//! By caching one of the elements in the free list, we get more consistency when filling buffers.
+	optional_idx buffer_with_free_space;
+
 	//! Buffers qualifying for a vacuum (helper field to allow for fast NeedsVacuum checks)
 	unordered_set<idx_t> vacuum_buffers;
 
 private:
 	//! Returns an available buffer id
 	idx_t GetAvailableBufferId() const;
+	//! Caches the next buffer that we're going to fill.
+	void NextBufferWithFreeSpace();
 };
 
 } // namespace duckdb

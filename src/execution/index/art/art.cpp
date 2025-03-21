@@ -1234,7 +1234,7 @@ void ART::TransformToDeprecated() {
 	if (deprecated_allocator) {
 		prefix_count = Prefix::DEPRECATED_COUNT;
 
-		D_ASSERT((*allocators)[idx]->IsEmpty());
+		D_ASSERT((*allocators)[idx]->Empty());
 		(*allocators)[idx]->Reset();
 		(*allocators)[idx] = std::move(deprecated_allocator);
 	}
@@ -1253,11 +1253,15 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 	info.root = tree.Get();
 	info.options = options;
 
+	for (auto &allocator : *allocators) {
+		allocator->RemoveEmptyBuffers();
+	}
+
 #ifdef DEBUG
 	if (v1_0_0_storage) {
-		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_7_LEAF)]->IsEmpty());
-		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_15_LEAF)]->IsEmpty());
-		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_256_LEAF)]->IsEmpty());
+		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_7_LEAF)]->Empty());
+		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_15_LEAF)]->Empty());
+		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_256_LEAF)]->Empty());
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::PREFIX)]->GetSegmentSize() ==
 		         Prefix::DEPRECATED_COUNT + Prefix::METADATA_SIZE);
 	}

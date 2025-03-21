@@ -1108,16 +1108,6 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 		});
 	}
 
-	// we need to vacuum the indexes to remove any buffers that are now empty
-	// due to reverting the appends
-	info->indexes.Scan([&](Index &index) {
-		// We cant add to unbound indexes anyway, so there is no need to vacuum them
-		if (index.IsBound()) {
-			index.Cast<BoundIndex>().Vacuum();
-		}
-		return false;
-	});
-
 	// revert the data table append
 	RevertAppendInternal(start_row);
 }
