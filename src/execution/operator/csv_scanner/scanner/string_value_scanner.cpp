@@ -1578,10 +1578,7 @@ bool StringValueScanner::MoveToNextBuffer() {
 }
 
 void StringValueResult::SkipBOM() const {
-	if (buffer_size >= 3 && buffer_ptr[0] == '\xEF' && buffer_ptr[1] == '\xBB' && buffer_ptr[2] == '\xBF' &&
-	    iterator.pos.buffer_pos == 0) {
-		iterator.pos.buffer_pos = 3;
-	}
+	StringUtil::SkipBOM(buffer_ptr, buffer_size, iterator.pos.buffer_pos);
 }
 
 void StringValueResult::RemoveLastLine() {

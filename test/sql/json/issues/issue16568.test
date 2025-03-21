@@ -1,0 +1,13 @@
+# name: test/sql/json/issues/issue16568.test
+# description: Test issue 16568 - Error when loading JSON files with UTF-8 Byte Order Mark (BOM)
+# group: [issues]
+
+require json
+
+statement ok
+pragma enable_verification
+
+query I
+select count(*) from 'data/json/sample_utf8_bom.json'
+----
+1

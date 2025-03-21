@@ -174,7 +174,7 @@ public:
 
 	void PrintDatabaseError(const char *zErr);
 	int ShellDatabaseError(sqlite3 *db);
-	int RunInitialCommand(char *sql);
+	int RunInitialCommand(char *sql, bool bail);
 
 	int RenderRow(RowRenderer &renderer, RowResult &result);
 
@@ -203,8 +203,8 @@ public:
 
 	int RunOneSqlLine(char *zSql);
 	string GetDefaultDuckDBRC();
-	void ProcessDuckDBRC(const char *file);
-	void ProcessFile(const string &file, bool is_duckdb_rc = false);
+	bool ProcessDuckDBRC(const char *file);
+	bool ProcessFile(const string &file, bool is_duckdb_rc = false);
 	int ProcessInput();
 };
 

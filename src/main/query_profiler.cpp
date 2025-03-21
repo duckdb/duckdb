@@ -375,9 +375,12 @@ void OperatorProfiler::StartOperator(optional_ptr<const PhysicalOperator> phys_o
 
 	if (!settings.empty()) {
 		if (ProfilingInfo::Enabled(settings, MetricsType::EXTRA_INFO)) {
-			auto &info = GetOperatorInfo(*active_operator);
-			auto params = active_operator->ParamsToString();
-			info.extra_info = params;
+			if (!OperatorInfoIsInitialized(*active_operator)) {
+				// first time calling into this operator - fetch the info
+				auto &info = GetOperatorInfo(*active_operator);
+				auto params = active_operator->ParamsToString();
+				info.extra_info = params;
+			}
 		}
 
 		// Start the timing of the current operator.
@@ -392,7 +395,7 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		return;
 	}
 	if (!active_operator) {
-		throw InternalException("OperatorProfiler: Attempting to call EndOperator while another operator is active");
+		throw InternalException("OperatorProfiler: Attempting to call EndOperator while no operator is active");
 	}
 
 	if (!settings.empty()) {
@@ -410,6 +413,37 @@ void OperatorProfiler::EndOperator(optional_ptr<DataChunk> chunk) {
 		}
 	}
 	active_operator = nullptr;
+}
+
+void OperatorProfiler::FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate) {
+	if (!enabled) {
+		return;
+	}
+	if (!active_operator) {
+		throw InternalException("OperatorProfiler: Attempting to call FinishSource while no operator is active");
+	}
+	if (!settings.empty()) {
+		if (ProfilingInfo::Enabled(settings, MetricsType::EXTRA_INFO)) {
+			// we're emitting extra info - get the extra source info
+			auto &info = GetOperatorInfo(*active_operator);
+			auto extra_info = active_operator->ExtraSourceParams(gstate, lstate);
+			for (auto &new_info : extra_info) {
+				auto entry = info.extra_info.find(new_info.first);
+				if (entry != info.extra_info.end()) {
+					// entry exists - override
+					entry->second = std::move(new_info.second);
+				} else {
+					// entry does not exist yet - insert
+					info.extra_info.insert(std::move(new_info));
+				}
+			}
+		}
+	}
+}
+
+bool OperatorProfiler::OperatorInfoIsInitialized(const PhysicalOperator &phys_op) {
+	auto entry = operator_infos.find(phys_op);
+	return entry != operator_infos.end();
 }
 
 OperatorInformation &OperatorProfiler::GetOperatorInfo(const PhysicalOperator &phys_op) {

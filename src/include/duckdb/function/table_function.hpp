@@ -181,6 +181,20 @@ struct TableFunctionToStringInput {
 	optional_ptr<const FunctionData> bind_data;
 };
 
+struct TableFunctionDynamicToStringInput {
+	TableFunctionDynamicToStringInput(const TableFunction &table_function_p,
+	                                  optional_ptr<const FunctionData> bind_data_p,
+	                                  optional_ptr<LocalTableFunctionState> local_state_p,
+	                                  optional_ptr<GlobalTableFunctionState> global_state_p)
+	    : table_function(table_function_p), bind_data(bind_data_p), local_state(local_state_p),
+	      global_state(global_state_p) {
+	}
+	const TableFunction &table_function;
+	optional_ptr<const FunctionData> bind_data;
+	optional_ptr<LocalTableFunctionState> local_state;
+	optional_ptr<GlobalTableFunctionState> global_state;
+};
+
 struct TableFunctionGetPartitionInput {
 public:
 	TableFunctionGetPartitionInput(optional_ptr<const FunctionData> bind_data_p,
@@ -282,6 +296,8 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
+typedef InsertionOrderPreservingMap<string> (*table_function_dynamic_to_string_t)(
+    TableFunctionDynamicToStringInput &input);
 
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
@@ -348,8 +364,10 @@ public:
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
 	table_function_pushdown_complex_filter_t pushdown_complex_filter;
-	//! (Optional) function for rendering the operator to a string in profiling output
+	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;
+	//! (Optional) function for rendering the operator to a string in profiling output (invoked post-execution)
+	table_function_dynamic_to_string_t dynamic_to_string;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)
 	table_function_progress_t table_scan_progress;
 	//! (Optional) returns the partition info of the current scan operator

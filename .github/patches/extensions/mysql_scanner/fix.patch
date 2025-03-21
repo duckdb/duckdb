@@ -1,11 +1,15 @@
 diff --git a/src/include/storage/mysql_catalog.hpp b/src/include/storage/mysql_catalog.hpp
-index 58975f3..b189814 100644
+index 58975f3..891247d 100644
 --- a/src/include/storage/mysql_catalog.hpp
 +++ b/src/include/storage/mysql_catalog.hpp
-@@ -41,14 +41,11 @@ public:
- 	                                           OnEntryNotFound if_not_found,
- 	                                           QueryErrorContext error_context = QueryErrorContext()) override;
+@@ -37,18 +37,14 @@ public:
  
+ 	void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
+ 
+-	optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const string &schema_name,
+-	                                           OnEntryNotFound if_not_found,
+-	                                           QueryErrorContext error_context = QueryErrorContext()) override;
+-
 -	unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
 -	                                        unique_ptr<PhysicalOperator> plan) override;
 -	unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
@@ -14,6 +18,9 @@ index 58975f3..b189814 100644
 -	                                        unique_ptr<PhysicalOperator> plan) override;
 -	unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
 -	                                        unique_ptr<PhysicalOperator> plan) override;
++	optional_ptr<SchemaCatalogEntry> LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
++	                                           OnEntryNotFound if_not_found) override;
++
 +    PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner, LogicalCreateTable &op, PhysicalOperator &plan) override;
 +    PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op, optional_ptr<PhysicalOperator> plan) override;
 +    PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op, PhysicalOperator &plan) override;
@@ -22,6 +29,43 @@ index 58975f3..b189814 100644
  	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
  	                                            unique_ptr<LogicalOperator> plan) override;
  
+diff --git a/src/include/storage/mysql_schema_entry.hpp b/src/include/storage/mysql_schema_entry.hpp
+index 9d6b709..8a8de36 100644
+--- a/src/include/storage/mysql_schema_entry.hpp
++++ b/src/include/storage/mysql_schema_entry.hpp
+@@ -38,7 +38,7 @@ public:
+ 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void DropEntry(ClientContext &context, DropInfo &info) override;
+-	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
++	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
+ 
+ private:
+ 	void AlterTable(MySQLTransaction &transaction, RenameTableInfo &info);
+diff --git a/src/storage/mysql_catalog.cpp b/src/storage/mysql_catalog.cpp
+index fb0e6b6..b55154a 100644
+--- a/src/storage/mysql_catalog.cpp
++++ b/src/storage/mysql_catalog.cpp
+@@ -381,15 +381,15 @@ void MySQLCatalog::ScanSchemas(ClientContext &context, std::function<void(Schema
+ 	schemas.Scan(context, [&](CatalogEntry &schema) { callback(schema.Cast<MySQLSchemaEntry>()); });
+ }
+ 
+-optional_ptr<SchemaCatalogEntry> MySQLCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,
+-                                                         OnEntryNotFound if_not_found,
+-                                                         QueryErrorContext error_context) {
++optional_ptr<SchemaCatalogEntry> MySQLCatalog::LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
++                                                         OnEntryNotFound if_not_found) {
++    auto schema_name = schema_lookup.GetEntryName();
+ 	if (schema_name == DEFAULT_SCHEMA) {
+ 		if (default_schema.empty()) {
+ 			throw InvalidInputException("Attempting to fetch the default schema - but no database was "
+ 			                            "provided in the connection string");
+ 		}
+-		return GetSchema(transaction, default_schema, if_not_found, error_context);
++		schema_name = default_schema;
+ 	}
+ 	auto entry = schemas.GetEntry(transaction.GetContext(), schema_name);
+ 	if (!entry && if_not_found != OnEntryNotFound::RETURN_NULL) {
 diff --git a/src/storage/mysql_execute_query.cpp b/src/storage/mysql_execute_query.cpp
 index 8dcac4c..eefbd59 100644
 --- a/src/storage/mysql_execute_query.cpp
@@ -211,3 +255,24 @@ index 7a62b23..19e6586 100644
  }
  
  } // namespace duckdb
+diff --git a/src/storage/mysql_schema_entry.cpp b/src/storage/mysql_schema_entry.cpp
+index 052d384..a06d665 100644
+--- a/src/storage/mysql_schema_entry.cpp
++++ b/src/storage/mysql_schema_entry.cpp
+@@ -197,12 +197,12 @@ void MySQLSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
+ 	GetCatalogSet(info.type).DropEntry(context, info);
+ }
+ 
+-optional_ptr<CatalogEntry> MySQLSchemaEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
+-                                                      const string &name) {
+-	if (!CatalogTypeIsSupported(type)) {
++optional_ptr<CatalogEntry> MySQLSchemaEntry::LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) {
++	auto lookup_type = lookup_info.GetCatalogType();
++	if (!CatalogTypeIsSupported(lookup_type)) {
+ 		return nullptr;
+ 	}
+-	return GetCatalogSet(type).GetEntry(transaction.GetContext(), name);
++	return GetCatalogSet(lookup_type).GetEntry(transaction.GetContext(), lookup_info.GetEntryName());
+ }
+ 
+ MySQLCatalogSet &MySQLSchemaEntry::GetCatalogSet(CatalogType type) {

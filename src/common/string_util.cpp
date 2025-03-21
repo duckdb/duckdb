@@ -846,6 +846,13 @@ void StringUtil::URLDecodeBuffer(const char *input, idx_t input_size, char *outp
 	}
 }
 
+void StringUtil::SkipBOM(const char *buffer_ptr, const idx_t &buffer_size, idx_t &buffer_pos) {
+	if (buffer_size >= 3 && buffer_ptr[0] == '\xEF' && buffer_ptr[1] == '\xBB' && buffer_ptr[2] == '\xBF' &&
+	    buffer_pos == 0) {
+		buffer_pos = 3;
+	}
+}
+
 string StringUtil::URLDecode(const string &input, bool plus_to_space) {
 	idx_t result_size = URLDecodeSize(input.c_str(), input.size(), plus_to_space);
 	auto result_data = make_uniq_array<char>(result_size);

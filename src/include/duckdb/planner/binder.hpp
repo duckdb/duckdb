@@ -60,6 +60,7 @@ struct CommonTableExpressionInfo;
 struct BoundParameterMap;
 struct BoundPragmaInfo;
 struct BoundLimitNode;
+struct EntryLookupInfo;
 struct PivotColumnEntry;
 struct UnpivotEntry;
 
@@ -162,9 +163,8 @@ public:
 	//! Generates an unused index for a table
 	idx_t GenerateTableIndex();
 
-	optional_ptr<CatalogEntry> GetCatalogEntry(CatalogType type, const string &catalog, const string &schema,
-	                                           const string &name, OnEntryNotFound on_entry_not_found,
-	                                           QueryErrorContext &error_context);
+	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
+	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo &cte);
