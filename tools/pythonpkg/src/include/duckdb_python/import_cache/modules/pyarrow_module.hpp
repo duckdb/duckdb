@@ -37,7 +37,7 @@ public:
 public:
 	PyarrowCacheItem()
 	    : PythonImportCacheItem("pyarrow"), dataset(), Table("Table", this),
-	      RecordBatchReader("RecordBatchReader", this) {
+	      RecordBatchReader("RecordBatchReader", this), MessageReader("MessageReader", this) {
 	}
 	~PyarrowCacheItem() override {
 	}
@@ -45,6 +45,7 @@ public:
 	PyarrowDatasetCacheItem dataset;
 	PythonImportCacheItem Table;
 	PythonImportCacheItem RecordBatchReader;
+	PythonImportCacheItem MessageReader;
 };
 
 } // namespace duckdb

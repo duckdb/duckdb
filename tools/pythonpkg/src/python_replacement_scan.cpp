@@ -1,4 +1,7 @@
 #include "duckdb_python/python_replacement_scan.hpp"
+
+#include <duckdb/main/db_instance_cache.hpp>
+
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/main/client_properties.hpp"
 #include "duckdb_python/numpy/numpy_type.hpp"
@@ -16,7 +19,21 @@ namespace duckdb {
 
 static void CreateArrowScan(const string &name, py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties,
-                            PyArrowObjectType type, DBConfig &config) {
+                            PyArrowObjectType type, DBConfig &config, DatabaseInstance &db) {
+
+	if (type == PyArrowObjectType::MessageReader) {
+		if (!db.ExtensionIsLoaded("nanoarrow")) {
+			throw MissingExtensionException(
+			    "The nanoarrow community extension is needed to read the Arrow IPC protocol. \n You can install it "
+			    "with \"INSTALL nanoarrow FROM community;\". \n Then you can load it with \"LOAD nanoarrow;\"");
+		}
+		// If the extension is loaded we actually call the scan_arrow_ipc .
+		// FROM scan_arrow_ipc([{'ptr': 2591342067712::UBIGINT, 'size': 1984::UBIGINT}])
+		// This is an Arrow IPC message collection, we must extract and call read_
+		// auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties, config);
+		// auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+		// auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
+	}
 
 	if (type == PyArrowObjectType::PyCapsuleInterface) {
 		entry = entry.attr("__arrow_c_stream__")();
@@ -79,7 +96,7 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		if (PandasDataFrame::IsPyArrowBacked(entry)) {
 			auto table = PandasDataFrame::ToArrowTable(entry);
 			CreateArrowScan(name, table, *table_function, children, client_properties, PyArrowObjectType::Table,
-			                DBConfig::GetConfig(context));
+			                DBConfig::GetConfig(context), *context.db);
 		} else {
 			string name = "df_" + StringUtil::GenerateRandomName();
 			auto new_df = PandasScanFunction::PandasReplaceCopiedNames(entry);
@@ -109,17 +126,19 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 	} else if (PolarsDataFrame::IsDataFrame(entry)) {
 		auto arrow_dataset = entry.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
-		                DBConfig::GetConfig(context));
+		                DBConfig::GetConfig(context), *context.db);
 	} else if (PolarsDataFrame::IsLazyFrame(entry)) {
 		auto materialized = entry.attr("collect")();
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
-		                DBConfig::GetConfig(context));
-	} else if ((arrow_type = DuckDBPyConnection::GetArrowType(entry)) != PyArrowObjectType::Invalid) {
+		                DBConfig::GetConfig(context), *context.db);
+	} else if (DuckDBPyConnection::GetArrowType(entry) != PyArrowObjectType::Invalid) {
+		arrow_type = DuckDBPyConnection::GetArrowType(entry);
 		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type,
-		                DBConfig::GetConfig(context));
-	} else if ((numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry)) != NumpyObjectType::INVALID) {
-		string name = "np_" + StringUtil::GenerateRandomName();
+		                DBConfig::GetConfig(context), *context.db);
+	} else if (DuckDBPyConnection::IsAcceptedNumpyObject(entry) != NumpyObjectType::INVALID) {
+		numpytype = DuckDBPyConnection::IsAcceptedNumpyObject(entry);
+		string np_name = "np_" + StringUtil::GenerateRandomName();
 		py::dict data; // we will convert all the supported format to dict{"key": np.array(value)}.
 		size_t idx = 0;
 		switch (numpytype) {
