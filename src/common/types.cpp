@@ -365,21 +365,29 @@ bool TypeIsInteger(PhysicalType type) {
 	       type == PhysicalType::UINT128;
 }
 
+static string TypeModifierListToString(const vector<LogicalTypeModifier> &mod_list) {
+	string result;
+	if (mod_list.empty()) {
+		return result;
+	}
+	result = "(";
+	for (idx_t i = 0; i < mod_list.size(); i++) {
+		result += mod_list[i].ToString();
+		if (i < mod_list.size() - 1) {
+			result += ", ";
+		}
+	}
+	result += ")";
+	return result;
+}
+
 string LogicalType::ToString() const {
 	if (id_ != LogicalTypeId::USER) {
 		auto alias = GetAlias();
 		if (!alias.empty()) {
-			auto mods_ptr = GetModifiers();
-			if (mods_ptr && !mods_ptr->empty()) {
-				auto &mods = *mods_ptr;
-				alias += "(";
-				for (idx_t i = 0; i < mods.size(); i++) {
-					alias += mods[i].ToString();
-					if (i < mods.size() - 1) {
-						alias += ", ";
-					}
-				}
-				alias += ")";
+			if (HasExtensionInfo()) {
+				auto &ext_info = *GetExtensionInfo();
+				alias += TypeModifierListToString(ext_info.modifiers);
 			}
 			return alias;
 		}
@@ -988,6 +996,72 @@ static bool CombineUnequalTypes(const LogicalType &left, const LogicalType &righ
 }
 
 template <class OP>
+static bool CombineStructTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
+	auto &left_children = StructType::GetChildTypes(left);
+	auto &right_children = StructType::GetChildTypes(right);
+
+	auto left_unnamed = StructType::IsUnnamed(left);
+	auto is_unnamed = left_unnamed || StructType::IsUnnamed(right);
+	child_list_t<LogicalType> child_types;
+
+	// At least one side is unnamed, so we attempt positional casting.
+	if (is_unnamed) {
+		if (left_children.size() != right_children.size()) {
+			// We can't cast, or create the super-set.
+			return false;
+		}
+
+		for (idx_t i = 0; i < left_children.size(); i++) {
+			LogicalType child_type;
+			if (!OP::Operation(left_children[i].second, right_children[i].second, child_type)) {
+				return false;
+			}
+			auto &child_name = left_unnamed ? right_children[i].first : left_children[i].first;
+			child_types.emplace_back(child_name, std::move(child_type));
+		}
+		result = LogicalType::STRUCT(child_types);
+		return true;
+	}
+
+	// Create a super-set of the STRUCT fields.
+	// First, create a name->index map of the right children.
+	case_insensitive_map_t<idx_t> right_children_map;
+	for (idx_t i = 0; i < right_children.size(); i++) {
+		auto &name = right_children[i].first;
+		right_children_map[name] = i;
+	}
+
+	for (idx_t i = 0; i < left_children.size(); i++) {
+		auto &left_child = left_children[i];
+		auto right_child_it = right_children_map.find(left_child.first);
+
+		if (right_child_it == right_children_map.end()) {
+			// We can directly put the left child.
+			child_types.emplace_back(left_child.first, left_child.second);
+			continue;
+		}
+
+		// We need to recurse to ensure the children have a maximum logical type.
+		LogicalType child_type;
+		auto &right_child = right_children[right_child_it->second];
+		if (!OP::Operation(left_child.second, right_child.second, child_type)) {
+			return false;
+		}
+		child_types.emplace_back(left_child.first, std::move(child_type));
+		right_children_map.erase(right_child_it);
+	}
+
+	// Add all remaining right children.
+	for (const auto &right_child_it : right_children_map) {
+		auto &right_child = right_children[right_child_it.second];
+		child_types.emplace_back(right_child.first, right_child.second);
+	}
+
+	result = LogicalType::STRUCT(child_types);
+	return true;
+}
+
+template <class OP>
 static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right, LogicalType &result) {
 	// Since both left and right are equal we get the left type as our type_id for checks
 	auto type_id = left.id();
@@ -1058,31 +1132,7 @@ static bool CombineEqualTypes(const LogicalType &left, const LogicalType &right,
 		return true;
 	}
 	case LogicalTypeId::STRUCT: {
-		// struct: perform recursively on each child
-		auto &left_child_types = StructType::GetChildTypes(left);
-		auto &right_child_types = StructType::GetChildTypes(right);
-		bool left_unnamed = StructType::IsUnnamed(left);
-		auto any_unnamed = left_unnamed || StructType::IsUnnamed(right);
-		if (left_child_types.size() != right_child_types.size()) {
-			// child types are not of equal size, we can't cast
-			// return false
-			return false;
-		}
-		child_list_t<LogicalType> child_types;
-		for (idx_t i = 0; i < left_child_types.size(); i++) {
-			LogicalType child_type;
-			// Child names must be in the same order OR either one of the structs must be unnamed
-			if (!any_unnamed && !StringUtil::CIEquals(left_child_types[i].first, right_child_types[i].first)) {
-				return false;
-			}
-			if (!OP::Operation(left_child_types[i].second, right_child_types[i].second, child_type)) {
-				return false;
-			}
-			auto &child_name = left_unnamed ? right_child_types[i].first : left_child_types[i].first;
-			child_types.emplace_back(child_name, std::move(child_type));
-		}
-		result = LogicalType::STRUCT(child_types);
-		return true;
+		return CombineStructTypes<OP>(left, right, result);
 	}
 	case LogicalTypeId::UNION: {
 		auto left_member_count = UnionType::GetMemberCount(left);
@@ -1264,7 +1314,7 @@ void LogicalType::Verify() const {
 	switch (id_) {
 	case LogicalTypeId::DECIMAL:
 		D_ASSERT(DecimalType::GetWidth(*this) >= 1 && DecimalType::GetWidth(*this) <= Decimal::MAX_WIDTH_DECIMAL);
-		D_ASSERT(DecimalType::GetScale(*this) >= 0 && DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
+		D_ASSERT(DecimalType::GetScale(*this) <= DecimalType::GetWidth(*this));
 		break;
 	case LogicalTypeId::STRUCT: {
 		// verify child types
@@ -1360,51 +1410,32 @@ bool LogicalType::HasAlias() const {
 	return false;
 }
 
-void LogicalType::SetModifiers(vector<Value> modifiers) {
-	if (!type_info_ && !modifiers.empty()) {
-		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
-	}
-	type_info_->modifiers = std::move(modifiers);
-}
-
-bool LogicalType::HasModifiers() const {
-	if (id() == LogicalTypeId::USER) {
-		return !UserType::GetTypeModifiers(*this).empty();
-	}
-	if (type_info_) {
-		return !type_info_->modifiers.empty();
+bool LogicalType::HasExtensionInfo() const {
+	if (type_info_ && type_info_->extension_info) {
+		return true;
 	}
 	return false;
 }
 
-vector<Value> LogicalType::GetModifiersCopy() const {
-	if (id() == LogicalTypeId::USER) {
-		return UserType::GetTypeModifiers(*this);
-	}
-	if (type_info_) {
-		return type_info_->modifiers;
-	}
-	return {};
-}
-
-optional_ptr<vector<Value>> LogicalType::GetModifiers() {
-	if (id() == LogicalTypeId::USER) {
-		return UserType::GetTypeModifiers(*this);
-	}
-	if (type_info_) {
-		return type_info_->modifiers;
+optional_ptr<const ExtensionTypeInfo> LogicalType::GetExtensionInfo() const {
+	if (type_info_ && type_info_->extension_info) {
+		return type_info_->extension_info.get();
 	}
 	return nullptr;
 }
 
-optional_ptr<const vector<Value>> LogicalType::GetModifiers() const {
-	if (id() == LogicalTypeId::USER) {
-		return UserType::GetTypeModifiers(*this);
-	}
-	if (type_info_) {
-		return type_info_->modifiers;
+optional_ptr<ExtensionTypeInfo> LogicalType::GetExtensionInfo() {
+	if (type_info_ && type_info_->extension_info) {
+		return type_info_->extension_info.get();
 	}
 	return nullptr;
+}
+
+void LogicalType::SetExtensionInfo(unique_ptr<ExtensionTypeInfo> info) {
+	if (!type_info_) {
+		type_info_ = make_shared_ptr<ExtraTypeInfo>(ExtraTypeInfoType::GENERIC_TYPE_INFO);
+	}
+	type_info_->extension_info = std::move(info);
 }
 
 //===--------------------------------------------------------------------===//

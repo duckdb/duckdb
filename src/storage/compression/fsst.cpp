@@ -43,7 +43,7 @@ struct FSSTStorage {
 	static bool StringAnalyze(AnalyzeState &state_p, Vector &input, idx_t count);
 	static idx_t StringFinalAnalyze(AnalyzeState &state_p);
 
-	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointer &checkpointer,
+	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> analyze_state_p);
 	static void Compress(CompressionState &state_p, Vector &scan_vector, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
@@ -208,10 +208,10 @@ idx_t FSSTStorage::StringFinalAnalyze(AnalyzeState &state_p) {
 
 class FSSTCompressionState : public CompressionState {
 public:
-	FSSTCompressionState(ColumnDataCheckpointer &checkpointer, const CompressionInfo &info)
-	    : CompressionState(info), checkpointer(checkpointer),
-	      function(checkpointer.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
-		CreateEmptySegment(checkpointer.GetRowGroup().start);
+	FSSTCompressionState(ColumnDataCheckpointData &checkpoint_data, const CompressionInfo &info)
+	    : CompressionState(info), checkpoint_data(checkpoint_data),
+	      function(checkpoint_data.GetCompressionFunction(CompressionType::COMPRESSION_FSST)) {
+		CreateEmptySegment(checkpoint_data.GetRowGroup().start);
 	}
 
 	~FSSTCompressionState() override {
@@ -234,8 +234,8 @@ public:
 	}
 
 	void CreateEmptySegment(idx_t row_start) {
-		auto &db = checkpointer.GetDatabase();
-		auto &type = checkpointer.GetType();
+		auto &db = checkpoint_data.GetDatabase();
+		auto &type = checkpoint_data.GetType();
 
 		auto compressed_segment = ColumnSegment::CreateTransientSegment(db, function, type, row_start,
 		                                                                info.GetBlockSize(), info.GetBlockSize());
@@ -318,7 +318,7 @@ public:
 		auto next_start = current_segment->start + current_segment->count;
 
 		auto segment_size = Finalize();
-		auto &state = checkpointer.GetCheckpointState();
+		auto &state = checkpoint_data.GetCheckpointState();
 		state.FlushSegment(std::move(current_segment), std::move(current_handle), segment_size);
 
 		if (!final) {
@@ -382,7 +382,7 @@ public:
 		return total_size;
 	}
 
-	ColumnDataCheckpointer &checkpointer;
+	ColumnDataCheckpointData &checkpoint_data;
 	CompressionFunction &function;
 
 	// State regarding current segment
@@ -403,10 +403,10 @@ public:
 	size_t fsst_serialized_symbol_table_size = sizeof(duckdb_fsst_decoder_t);
 };
 
-unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointer &checkpointer,
+unique_ptr<CompressionState> FSSTStorage::InitCompression(ColumnDataCheckpointData &checkpoint_data,
                                                           unique_ptr<AnalyzeState> analyze_state_p) {
 	auto &analyze_state = analyze_state_p->Cast<FSSTAnalyzeState>();
-	auto compression_state = make_uniq<FSSTCompressionState>(checkpointer, analyze_state.info);
+	auto compression_state = make_uniq<FSSTCompressionState>(checkpoint_data, analyze_state.info);
 
 	if (analyze_state.fsst_encoder == nullptr) {
 		throw InternalException("No encoder found during FSST compression");
@@ -513,6 +513,8 @@ struct FSSTScanState : public StringScanState {
 	}
 
 	buffer_ptr<void> duckdb_fsst_decoder;
+	void *duckdb_fsst_decoder_ptr = nullptr;
+
 	vector<unsigned char> decompress_buffer;
 	bitpacking_width_t current_width;
 
@@ -525,6 +527,8 @@ struct FSSTScanState : public StringScanState {
 	unsafe_unique_array<uint32_t> delta_decode_buffer;
 	idx_t delta_decode_capacity = 0;
 
+	bool all_values_inlined = false;
+
 	void StoreLastDelta(uint32_t value, int64_t row) {
 		last_known_index = value;
 		last_known_row = row;
@@ -534,7 +538,8 @@ struct FSSTScanState : public StringScanState {
 		last_known_row = -1;
 	}
 	inline string_t DecompressString(StringDictionaryContainer dict, data_ptr_t baseptr,
-	                                 const bp_delta_offsets_t &offsets, idx_t index, Vector &result) {
+	                                 const bp_delta_offsets_t &offsets, idx_t index,
+	                                 VectorStringBuffer &str_buffer) const {
 		uint32_t str_len = bitunpack_buffer[offsets.scan_offset + index];
 		auto str_ptr = FSSTStorage::FetchStringPointer(
 		    dict, baseptr,
@@ -543,7 +548,11 @@ struct FSSTScanState : public StringScanState {
 		if (str_len == 0) {
 			return string_t(nullptr, 0);
 		}
-		return FSSTPrimitives::DecompressValue(duckdb_fsst_decoder.get(), result, str_ptr, str_len, decompress_buffer);
+		if (all_values_inlined) {
+			return FSSTPrimitives::DecompressInlinedValue(duckdb_fsst_decoder_ptr, str_ptr, str_len);
+		} else {
+			return FSSTPrimitives::DecompressValue(duckdb_fsst_decoder_ptr, str_buffer, str_ptr, str_len);
+		}
 	}
 };
 
@@ -559,6 +568,11 @@ unique_ptr<SegmentScanState> FSSTStorage::StringInitScan(ColumnSegment &segment)
 	    base_ptr, reinterpret_cast<duckdb_fsst_decoder_t *>(state->duckdb_fsst_decoder.get()), &state->current_width);
 	if (!retval) {
 		state->duckdb_fsst_decoder = nullptr;
+	}
+	state->duckdb_fsst_decoder_ptr = state->duckdb_fsst_decoder.get();
+
+	if (StringStats::HasMaxStringLength(segment.stats.statistics)) {
+		state->all_values_inlined = StringStats::MaxStringLength(segment.stats.statistics) <= string_t::INLINE_LENGTH;
 	}
 
 	return std::move(state);
@@ -658,15 +672,16 @@ void FSSTStorage::StringScanPartial(ColumnSegment &segment, ColumnScanState &sta
 		for (idx_t i = 0; i < scan_count; i++) {
 			uint32_t string_length = bitunpack_buffer[i + offsets.scan_offset];
 			result_data[i] = UncompressedStringStorage::FetchStringFromDict(
-			    segment, dict, result, baseptr,
+			    segment, dict.end, result, baseptr,
 			    UnsafeNumericCast<int32_t>(delta_decode_buffer[i + offsets.unused_delta_decoded_values]),
 			    string_length);
 			FSSTVector::SetCount(result, scan_count);
 		}
 	} else {
 		// Just decompress
+		auto &str_buffer = StringVector::GetStringBuffer(result);
 		for (idx_t i = 0; i < scan_count; i++) {
-			result_data[i + result_offset] = scan_state.DecompressString(dict, baseptr, offsets, i, result);
+			result_data[i + result_offset] = scan_state.DecompressString(dict, baseptr, offsets, i, str_buffer);
 		}
 	}
 	EndScan(scan_state, offsets, start, scan_count);
@@ -690,11 +705,13 @@ void FSSTStorage::Select(ColumnSegment &segment, ColumnScanState &state, idx_t v
 
 	D_ASSERT(result.GetVectorType() == VectorType::FLAT_VECTOR);
 
+	auto &str_buffer = StringVector::GetStringBuffer(result);
 	auto offsets = StartScan(scan_state, base_data, start, vector_count);
 	auto result_data = FlatVector::GetData<string_t>(result);
+
 	for (idx_t i = 0; i < sel_count; i++) {
 		idx_t index = sel.get_index(i);
-		result_data[i] = scan_state.DecompressString(dict, baseptr, offsets, index, result);
+		result_data[i] = scan_state.DecompressString(dict, baseptr, offsets, index, str_buffer);
 	}
 	EndScan(scan_state, offsets, start, vector_count);
 }
@@ -736,14 +753,12 @@ void FSSTStorage::StringFetchRow(ColumnSegment &segment, ColumnFetchState &state
 	uint32_t string_length = bitunpack_buffer[offsets.scan_offset];
 
 	string_t compressed_string = UncompressedStringStorage::FetchStringFromDict(
-	    segment, dict, result, base_ptr,
+	    segment, dict.end, result, base_ptr,
 	    UnsafeNumericCast<int32_t>(delta_decode_buffer[offsets.unused_delta_decoded_values]), string_length);
 
-	vector<unsigned char> uncompress_buffer;
-	auto string_block_limit = StringUncompressed::GetStringBlockLimit(segment.GetBlockManager().GetBlockSize());
-	uncompress_buffer.resize(string_block_limit + 1);
-	result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, result, compressed_string.GetData(),
-	                                                          compressed_string.GetSize(), uncompress_buffer);
+	auto &str_buffer = StringVector::GetStringBuffer(result);
+	result_data[result_idx] = FSSTPrimitives::DecompressValue((void *)&decoder, str_buffer, compressed_string.GetData(),
+	                                                          compressed_string.GetSize());
 }
 
 //===--------------------------------------------------------------------===//

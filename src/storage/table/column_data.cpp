@@ -51,6 +51,10 @@ DataTableInfo &ColumnData::GetTableInfo() const {
 	return info;
 }
 
+StorageManager &ColumnData::GetStorageManager() const {
+	return info.GetDB().GetStorageManager();
+}
+
 const LogicalType &ColumnData::RootType() const {
 	if (parent) {
 		return parent->RootType();
@@ -61,6 +65,16 @@ const LogicalType &ColumnData::RootType() const {
 bool ColumnData::HasUpdates() const {
 	lock_guard<mutex> update_guard(update_lock);
 	return updates.get();
+}
+
+bool ColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
+	if (!updates) {
+		return false;
+	}
+	if (updates->HasUpdates(start_row, end_row)) {
+		return true;
+	}
+	return false;
 }
 
 void ColumnData::ClearUpdates() {
@@ -152,7 +166,8 @@ void ColumnData::BeginScanVectorInternal(ColumnScanState &state) {
 	D_ASSERT(state.current->type == type);
 }
 
-idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type) {
+idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remaining, ScanVectorType scan_type,
+                             idx_t base_result_offset) {
 	if (scan_type == ScanVectorType::SCAN_FLAT_VECTOR && result.GetVectorType() != VectorType::FLAT_VECTOR) {
 		throw InternalException("ScanVector called with SCAN_FLAT_VECTOR but result is not a flat vector");
 	}
@@ -162,7 +177,7 @@ idx_t ColumnData::ScanVector(ColumnScanState &state, Vector &result, idx_t remai
 		D_ASSERT(state.row_index >= state.current->start &&
 		         state.row_index <= state.current->start + state.current->count);
 		idx_t scan_count = MinValue<idx_t>(remaining, state.current->start + state.current->count - state.row_index);
-		idx_t result_offset = initial_remaining - remaining;
+		idx_t result_offset = base_result_offset + initial_remaining - remaining;
 		if (scan_count > 0) {
 			if (state.scan_options && state.scan_options->force_fetch_row) {
 				for (idx_t i = 0; i < scan_count; i++) {
@@ -215,12 +230,12 @@ void ColumnData::SelectVector(ColumnScanState &state, Vector &result, idx_t targ
 }
 
 void ColumnData::FilterVector(ColumnScanState &state, Vector &result, idx_t target_count, SelectionVector &sel,
-                              idx_t &sel_count, const TableFilter &filter) {
+                              idx_t &sel_count, const TableFilter &filter, TableFilterState &filter_state) {
 	BeginScanVectorInternal(state);
 	if (state.current->start + state.current->count - state.row_index < target_count) {
 		throw InternalException("ColumnData::Filter should be able to fetch everything from one segment");
 	}
-	state.current->Filter(state, target_count, result, sel, sel_count, filter);
+	state.current->Filter(state, target_count, result, sel, sel_count, filter, filter_state);
 	state.row_index += target_count;
 	state.internal_index = state.row_index;
 }
@@ -321,22 +336,23 @@ void ColumnData::ScanCommittedRange(idx_t row_group_start, idx_t offset_in_row_g
 	}
 }
 
-idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_count) {
+idx_t ColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t scan_count, idx_t result_offset) {
 	if (scan_count == 0) {
 		return 0;
 	}
 	// ScanCount can only be used if there are no updates
 	D_ASSERT(!HasUpdates());
-	return ScanVector(state, result, scan_count, ScanVectorType::SCAN_FLAT_VECTOR);
+	return ScanVector(state, result, scan_count, ScanVectorType::SCAN_FLAT_VECTOR, result_offset);
 }
 
 void ColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
-                        SelectionVector &sel, idx_t &s_count, const TableFilter &filter) {
+                        SelectionVector &sel, idx_t &s_count, const TableFilter &filter,
+                        TableFilterState &filter_state) {
 	idx_t scan_count = Scan(transaction, vector_index, state, result);
 
 	UnifiedVectorFormat vdata;
 	result.ToUnifiedFormat(scan_count, vdata);
-	ColumnSegment::FilterSelection(sel, result, vdata, filter, scan_count, s_count);
+	ColumnSegment::FilterSelection(sel, result, vdata, filter, filter_state, scan_count, s_count);
 }
 
 void ColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
@@ -620,26 +636,16 @@ unique_ptr<ColumnCheckpointState> ColumnData::Checkpoint(RowGroup &row_group, Co
 	auto checkpoint_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
 	checkpoint_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
 
-	auto l = data.Lock();
-	auto &nodes = data.ReferenceSegments(l);
+	auto &nodes = data.ReferenceSegments();
 	if (nodes.empty()) {
 		// empty table: flush the empty list
 		return checkpoint_state;
 	}
 
-	ColumnDataCheckpointer checkpointer(*this, row_group, *checkpoint_state, checkpoint_info);
-	checkpointer.Checkpoint(nodes);
-	checkpointer.FinalizeCheckpoint(data.MoveSegments(l));
-
-	// reset the compression function
-	compression.reset();
-	// replace the old tree with the new one
-	auto new_segments = checkpoint_state->new_tree.MoveSegments();
-	for (auto &new_segment : new_segments) {
-		AppendSegment(l, std::move(new_segment.node));
-	}
-	ClearUpdates();
-
+	vector<reference<ColumnCheckpointState>> states {*checkpoint_state};
+	ColumnDataCheckpointer checkpointer(states, GetDatabase(), row_group, checkpoint_info);
+	checkpointer.Checkpoint();
+	checkpointer.FinalizeCheckpoint();
 	return checkpoint_state;
 }
 
@@ -891,10 +897,21 @@ void ColumnData::GetColumnSegmentInfo(idx_t row_group_index, vector<idx_t> col_p
 		} else {
 			column_info.persistent = false;
 		}
+		auto &compression_function = segment->GetCompressionFunction();
 		auto segment_state = segment->GetSegmentState();
 		if (segment_state) {
 			column_info.segment_info = segment_state->GetSegmentInfo();
 			column_info.additional_blocks = segment_state->GetAdditionalBlocks();
+		}
+		if (compression_function.get_segment_info) {
+			auto segment_info = compression_function.get_segment_info(*segment);
+			vector<string> sinfo;
+			for (auto &item : segment_info) {
+				auto &mode = item.first;
+				auto &count = item.second;
+				sinfo.push_back(StringUtil::Format("%s: %s", mode, count));
+			}
+			column_info.segment_info = StringUtil::Join(sinfo, ", ");
 		}
 		result.emplace_back(column_info);
 

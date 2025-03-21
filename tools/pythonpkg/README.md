@@ -77,50 +77,18 @@ pip install --prefix $DUCKDB_PREFIX -e $DUCKDB_PREFIX/src/duckdb-pythonpkg/duckd
 
 ## Development and Stubs
 
-`*.pyi` stubs are generated with [Mypy's `stubgen`](https://mypy.readthedocs.io/en/stable/stubgen.html) and tweaked. These are important for autocomplete in many IDEs, as static-analysis based language servers can't introspect `duckdb`'s binary module.
+`*.pyi` stubs in `duckdb-stubs` are manually maintained. The connection-related stubs are generated using dedicated scripts in `tools/pythonpkg/scripts/`:
+- `generate_connection_stubs.py`
+- `generate_connection_wrapper_stubs.py`
 
-The stubs from stubgen are pretty good, but not perfect. In some cases, you can help stubgen out: for example, function annotation types that it can't figure out should be specified in the cpp where necessary, as in the example.
+These stubs are important for autocomplete in many IDEs, as static-analysis based language servers can't introspect `duckdb`'s binary module.
 
-```cpp
-// without this change, the generated stub is
-// def query_df(self, df: object, virtual_table_name: str, sql_query: str) -> DuckDBPyRelation: ...
-pybind_opts.disable_function_signatures();
-m.def("query_df", &DuckDBPyRelation::QueryDF,
-      "query_df(self, df: pandas.DataFrame, virtual_table_name: str, sql_query: str) -> DuckDBPyRelation \n"
-      "Run the given SQL query in sql_query on the view named virtual_table_name that contains the content of "
-      "Data.Frame df",
-      py::arg("df"), py::arg("virtual_table_name"), py::arg("sql_query"));
-pybind_opts.enable_function_signatures();
-// now the generated stub is
-// def query_df(self, df: pandas.DataFrame, virtual_table_name: str, sql_query: str) -> DuckDBPyRelation: ...
-```
-
-If you want to regenerate the stubs, there is a bit of a chicken and egg situation - the stubs should go in the package, but
-`stubgen` needs to look at the package to generate the stubs!
-
-There is a test that you can run to check the stubs match the real duckdb package - this runs in CI (sorry in advance...). If you add a method to the duckdb py library and forget to add it to the stub, this test will helpfully fail. The test is a run of [mypy.stubtest](https://github.com/python/mypy/issues/5028#issuecomment-740101546).
-
-The workflow for getting the stubs right will look something like
-
+To verify the stubs match the actual implementation:
 ```bash
-# Edit python package...
-vim tools/pythonpkg/duckdb_python.cpp # or whatever
-
-# Install duckdb python package to
-#  - compile it so stubgen can read it
-#  - put the stubs in editable mode so you can tweak them easily
-(cd tools/pythonpkg; pip install -e .)
-# regerate stub once your changes have been installed.
-scripts/regenerate_python_stubs.sh
-# (re-apply our fixes on top of generate stubs,
-# hint: git add -p; git checkout HEAD tools/pythonpkg/duckdb-stubs)
-
-# check tests
-pytest tests/stubs
-# edit and re-test stubs until you're happy
+python3 -m pytest tests/stubs
 ```
 
-All the above should be done in a virtualenv.
+If you add new methods to the DuckDB Python API, you'll need to manually add corresponding type hints to the stub files.
 
 ## Frequently encountered issue with extensions
 

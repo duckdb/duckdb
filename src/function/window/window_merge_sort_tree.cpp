@@ -11,8 +11,9 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &context, const vector<Bo
     : context(context), memory_per_thread(PhysicalOperator::GetMaxThreadMemory(context)), sort_idx(sort_idx),
       build_stage(PartitionSortStage::INIT), tasks_completed(0) {
 	// Sort the unfiltered indices by the orders
+	const auto force_external = ClientConfig::GetConfig(context).force_external;
 	LogicalType index_type;
-	if (count < std::numeric_limits<uint32_t>::max()) {
+	if (count < std::numeric_limits<uint32_t>::max() && !force_external) {
 		index_type = LogicalType::INTEGER;
 		mst32 = make_uniq<MergeSortTree32>();
 	} else {
@@ -26,7 +27,6 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &context, const vector<Bo
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
 
-	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	if (unique) {
 		vector<BoundOrderByNode> unique_orders;
 		for (const auto &order : orders) {
@@ -36,11 +36,11 @@ WindowMergeSortTree::WindowMergeSortTree(ClientContext &context, const vector<Bo
 		const auto order_type = OrderType::ASCENDING;
 		const auto order_by_type = OrderByNullType::NULLS_LAST;
 		unique_orders.emplace_back(BoundOrderByNode(order_type, order_by_type, std::move(unique_expr)));
-		global_sort = make_uniq<GlobalSortState>(buffer_manager, unique_orders, payload_layout);
+		global_sort = make_uniq<GlobalSortState>(context, unique_orders, payload_layout);
 	} else {
-		global_sort = make_uniq<GlobalSortState>(buffer_manager, orders, payload_layout);
+		global_sort = make_uniq<GlobalSortState>(context, orders, payload_layout);
 	}
-	global_sort->external = ClientConfig::GetConfig(context).force_external;
+	global_sort->external = force_external;
 }
 
 optional_ptr<LocalSortState> WindowMergeSortTree::AddLocalSort() {

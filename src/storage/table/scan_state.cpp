@@ -16,15 +16,19 @@ TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 TableScanState::~TableScanState() {
 }
 
-void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<TableFilterSet> table_filters,
+void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<ClientContext> context,
+                                optional_ptr<TableFilterSet> table_filters,
                                 optional_ptr<SampleOptions> table_sampling) {
 	this->column_ids = std::move(column_ids_p);
 	if (table_filters) {
-		filters.Initialize(*table_filters, column_ids);
+		filters.Initialize(*context, *table_filters, column_ids);
 	}
 	if (table_sampling) {
 		sampling_info.do_system_sample = table_sampling->method == SampleMethod::SYSTEM_SAMPLE;
 		sampling_info.sample_rate = table_sampling->sample_size.GetValue<double>() / 100.0;
+		if (table_sampling->seed.IsValid()) {
+			table_state.random.SetSeed(table_sampling->seed.GetIndex());
+		}
 	}
 }
 
@@ -47,9 +51,11 @@ ScanSamplingInfo &TableScanState::GetSamplingInfo() {
 ScanFilter::ScanFilter(idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter)
     : scan_column_index(index), table_column_index(column_ids[index].GetPrimaryIndex()), filter(filter),
       always_true(false) {
+	filter_state = TableFilterState::Initialize(filter);
 }
 
-void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<StorageIndex> &column_ids) {
+void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
+                                const vector<StorageIndex> &column_ids) {
 	D_ASSERT(!filters.filters.empty());
 	table_filters = &filters;
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
@@ -96,6 +102,9 @@ void ScanFilterInfo::CheckAllFilters() {
 
 void ScanFilterInfo::SetFilterAlwaysTrue(idx_t filter_idx) {
 	auto &filter = filter_list[filter_idx];
+	if (filter.always_true) {
+		return;
+	}
 	filter.always_true = true;
 	column_has_filter[filter.scan_column_index] = false;
 	always_true_filters++;

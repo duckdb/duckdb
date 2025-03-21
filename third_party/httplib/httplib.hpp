@@ -237,7 +237,6 @@ using socket_t = int;
 #include <map>
 #include <memory>
 #include <mutex>
-#include <random>
 #include <regex>
 #include <set>
 #include <sstream>
@@ -246,9 +245,8 @@ using socket_t = int;
 #include <thread>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
-
 #include "duckdb/common/re2_regex.hpp"
+#include "duckdb/common/random_engine.hpp"
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
 #ifdef _WIN32
@@ -2468,7 +2466,6 @@ inline std::string encode_url(const std::string &s) {
   for (size_t i = 0; s[i]; i++) {
     switch (s[i]) {
     case ' ': result += "%20"; break;
-    case '+': result += "%2B"; break;
     case '\r': result += "%0D"; break;
     case '\n': result += "%0A"; break;
     case '\'': result += "%27"; break;
@@ -2546,7 +2543,7 @@ inline void read_file(const std::string &path, std::string &out) {
 
 inline std::string file_extension(const std::string &path) {
   Match m;
-  static auto re = Regex("\\.([a-zA-Z0-9]+)$");
+  auto re = Regex("\\.([a-zA-Z0-9]+)$");
   if (duckdb_re2::RegexSearch(path, m, re)) { return m[1].str(); }
   return std::string();
 }
@@ -4199,7 +4196,7 @@ write_content_chunked(Stream &strm, const ContentProvider &content_provider,
       }
     }
 
-    static const std::string done_marker("0\r\n");
+    const std::string done_marker("0\r\n");
     if (!write_data(strm, done_marker.data(), done_marker.size())) {
       ok = false;
     }
@@ -4214,7 +4211,7 @@ write_content_chunked(Stream &strm, const ContentProvider &content_provider,
       }
     }
 
-    static const std::string crlf("\r\n");
+    const std::string crlf("\r\n");
     if (!write_data(strm, crlf.data(), crlf.size())) { ok = false; }
   };
 
@@ -4352,7 +4349,7 @@ inline bool parse_range_header(const std::string &s, Ranges &ranges) {
 #else
 inline bool parse_range_header(const std::string &s, Ranges &ranges) try {
 #endif
-  static auto re_first_range = Regex(R"(bytes=(\d*-\d*(?:,\s*\d*-\d*)*))");
+  auto re_first_range = Regex(R"(bytes=(\d*-\d*(?:,\s*\d*-\d*)*))");
   Match m;
   if (RegexMatch(s, m, re_first_range)) {
     auto pos = static_cast<size_t>(m.position(1));
@@ -4360,7 +4357,7 @@ inline bool parse_range_header(const std::string &s, Ranges &ranges) try {
     auto all_valid_ranges = true;
     split(&s[pos], &s[pos + len], ',', [&](const char *b, const char *e) {
       if (!all_valid_ranges) { return; }
-      static auto re_another_range = Regex(R"(\s*(\d*)-(\d*))");
+      auto re_another_range = Regex(R"(\s*(\d*)-(\d*))");
       Match cm;
       if (RegexMatch(b, e, cm, re_another_range)) {
         ssize_t first = -1;
@@ -4444,13 +4441,13 @@ public:
             return false;
           }
 
-          static const std::string header_content_type = "Content-Type:";
+          const std::string header_content_type = "Content-Type:";
 
           if (start_with_case_ignore(header, header_content_type)) {
             file_.content_type =
                 trim_copy(header.substr(header_content_type.size()));
           } else {
-            static const Regex re_content_disposition(
+            const Regex re_content_disposition(
                 R"~(^Content-Disposition:\s*form-data;\s*(.*)$)~",
                 duckdb_re2::RegexOptions::CASE_INSENSITIVE);
 
@@ -4473,7 +4470,7 @@ public:
               it = params.find("filename*");
               if (it != params.end()) {
                 // Only allow UTF-8 enconnding...
-                static const Regex re_rfc5987_encoding(
+                const Regex re_rfc5987_encoding(
                     R"~(^UTF-8''(.+?)$)~", duckdb_re2::RegexOptions::CASE_INSENSITIVE);
 
                 Match m2;
@@ -4646,19 +4643,10 @@ inline std::string make_multipart_data_boundary() {
   static const char data[] =
       "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-  // std::random_device might actually be deterministic on some
-  // platforms, but due to lack of support in the c++ standard library,
-  // doing better requires either some ugly hacks or breaking portability.
-  std::random_device seed_gen;
-
-  // Request 128 bits of entropy for initialization
-  std::seed_seq seed_sequence{seed_gen(), seed_gen(), seed_gen(), seed_gen()};
-  std::mt19937 engine(seed_sequence);
-
   std::string result = "--cpp-httplib-multipart-data-";
-
+  duckdb::RandomEngine engine;
   for (auto i = 0; i < 16; i++) {
-    result += data[engine() % (sizeof(data) - 1)];
+    result += data[engine.NextRandomInteger32(0,sizeof(data) - 1)];
   }
 
   return result;
@@ -5110,7 +5098,7 @@ inline bool parse_www_authenticate(const Response &res,
                                    bool is_proxy) {
   auto auth_key = is_proxy ? "Proxy-Authenticate" : "WWW-Authenticate";
   if (res.has_header(auth_key)) {
-    static auto re = Regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
+    auto re = Regex(R"~((?:(?:,\s*)?(.+?)=(?:"(.*?)"|([^,]*))))~");
     auto s = res.get_header_value(auth_key);
     auto pos = s.find(' ');
     if (pos != std::string::npos) {
@@ -5208,7 +5196,7 @@ inline void hosted_at(const std::string &hostname,
 inline std::string append_query_params(const std::string &path,
                                        const Params &params) {
   std::string path_with_query = path;
-  const static Regex re("[^?]+\\?.*");
+  const Regex re("[^?]+\\?.*");
   auto delm = RegexMatch(path, re) ? '&' : '?';
   path_with_query += delm + detail::params_to_query_str(params);
   return path_with_query;
@@ -5884,6 +5872,10 @@ inline void Server::stop() {
   }
 }
 
+static const std::set<std::string> SERVER_METHODS{
+	"GET",     "HEAD",    "POST",  "PUT",   "DELETE",
+	"CONNECT", "OPTIONS", "TRACE", "PATCH", "PRI"};
+
 inline bool Server::parse_request_line(const char *s, Request &req) const {
   auto len = strlen(s);
   if (len < 2 || s[len - 2] != '\r' || s[len - 1] != '\n') { return false; }
@@ -5905,11 +5897,7 @@ inline bool Server::parse_request_line(const char *s, Request &req) const {
     if (count != 3) { return false; }
   }
 
-  static const std::set<std::string> methods{
-      "GET",     "HEAD",    "POST",  "PUT",   "DELETE",
-      "CONNECT", "OPTIONS", "TRACE", "PATCH", "PRI"};
-
-  if (methods.find(req.method) == methods.end()) { return false; }
+  if (SERVER_METHODS.find(req.method) == SERVER_METHODS.end()) { return false; }
 
   if (req.version != "HTTP/1.1" && req.version != "HTTP/1.0") { return false; }
 
@@ -6860,9 +6848,9 @@ inline bool ClientImpl::read_response_line(Stream &strm, const Request &req,
   if (!line_reader.getline()) { return false; }
 
 #ifdef CPPHTTPLIB_ALLOW_LF_AS_LINE_TERMINATOR
-  const static Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
+  const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r?\n");
 #else
-  const static Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
+  const Regex re("(HTTP/1\\.[01]) (\\d{3})(?: (.*?))?\r\n");
 #endif
 
   Match m;
@@ -7084,7 +7072,7 @@ inline bool ClientImpl::redirect(Request &req, Response &res, Error &error) {
   auto location = res.get_header_value("location");
   if (location.empty()) { return false; }
 
-  const static Regex re(
+  const Regex re(
       R"((?:(https?):)?(?://(?:\[([\d:]+)\]|([^:/?#]+))(?::(\d+))?)?([^?#]*)(\?[^#]*)?(?:#.*)?)");
 
   Match m;
@@ -8890,7 +8878,7 @@ inline Client::Client(const std::string &scheme_host_port)
 inline Client::Client(const std::string &scheme_host_port,
                       const std::string &client_cert_path,
                       const std::string &client_key_path) {
-  const static Regex re(
+  const Regex re(
       R"((?:([a-z]+):\/\/)?(?:\[([\d:]+)\]|([^:/?#]+))(?::(\d+))?)");
 
   Match m;

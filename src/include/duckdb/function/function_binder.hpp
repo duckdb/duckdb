@@ -71,6 +71,7 @@ public:
 
 	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundAggregateExpression &expr,
 	                                           const vector<unique_ptr<Expression>> &groups);
+	DUCKDB_API static void BindSortedAggregate(ClientContext &context, BoundWindowExpression &expr);
 
 private:
 	//! Cast a set of expressions to the arguments of this function

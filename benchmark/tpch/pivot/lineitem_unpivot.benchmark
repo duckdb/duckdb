@@ -1,0 +1,32 @@
+# name: benchmark/tpch/pivot/lineitem_unpivot.benchmark
+# description: lineitem unpivot
+# group: [pivot]
+
+name Lineitem Unpivot
+group pivot
+subgroup tpch
+
+require tpch
+
+cache tpch_sf1.duckdb
+
+load
+CALL dbgen(sf=1);
+
+run
+WITH unpivoted_data AS (
+UNPIVOT (SELECT l_orderkey, l_returnflag, l_shipinstruct FROM lineitem) ON l_returnflag, l_shipinstruct
+)
+SELECT name, value, AVG(l_orderkey) FROM unpivoted_data GROUP BY ALL ORDER BY ALL
+
+result III
+l_returnflag	A	3000424.4368691635
+l_returnflag	N	3000145.266271816
+l_returnflag	R	3000411.306590167
+l_shipinstruct	COLLECT COD	3000543.885344478
+l_shipinstruct	DELIVER IN PERSON	3000377.511525631
+l_shipinstruct	NONE	2999474.842545817
+l_shipinstruct	TAKE BACK RETURN	3000722.611838043
+
+
+

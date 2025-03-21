@@ -12,11 +12,12 @@
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/execution/execution_context.hpp"
 #include "duckdb/function/function.hpp"
-#include "duckdb/planner/bind_context.hpp"
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/storage/statistics/node_statistics.hpp"
 #include "duckdb/common/column_index.hpp"
+#include "duckdb/common/table_column.hpp"
 #include "duckdb/function/partition_stats.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 #include <functional>
 
@@ -27,7 +28,9 @@ class LogicalDependencyList;
 class LogicalGet;
 class TableFunction;
 class TableFilterSet;
+class TableFunctionRef;
 class TableCatalogEntry;
+class SampleOptions;
 struct MultiFileReader;
 struct OperatorPartitionData;
 struct OperatorPartitionInfo;
@@ -115,6 +118,7 @@ struct TableFunctionInitInput {
 			column_indexes.emplace_back(col_id);
 		}
 	}
+
 	TableFunctionInitInput(optional_ptr<const FunctionData> bind_data_p, vector<ColumnIndex> column_indexes_p,
 	                       const vector<idx_t> &projection_ids_p, optional_ptr<TableFilterSet> filters_p,
 	                       optional_ptr<SampleOptions> sample_options_p = nullptr)
@@ -134,15 +138,15 @@ struct TableFunctionInitInput {
 
 	bool CanRemoveFilterColumns() const {
 		if (projection_ids.empty()) {
-			// Not set, can't remove filter columns
+			// No filter columns to remove.
 			return false;
-		} else if (projection_ids.size() == column_ids.size()) {
-			// Filter column is used in remainder of plan, can't remove
-			return false;
-		} else {
-			// Less columns need to be projected out than that we scan
-			return true;
 		}
+		if (projection_ids.size() == column_ids.size()) {
+			// Filter column is used in remainder of plan, so we cannot remove it.
+			return false;
+		}
+		// Fewer columns need to be projected out than that we scan.
+		return true;
 	}
 };
 
@@ -175,6 +179,20 @@ struct TableFunctionToStringInput {
 	}
 	const TableFunction &table_function;
 	optional_ptr<const FunctionData> bind_data;
+};
+
+struct TableFunctionDynamicToStringInput {
+	TableFunctionDynamicToStringInput(const TableFunction &table_function_p,
+	                                  optional_ptr<const FunctionData> bind_data_p,
+	                                  optional_ptr<LocalTableFunctionState> local_state_p,
+	                                  optional_ptr<GlobalTableFunctionState> global_state_p)
+	    : table_function(table_function_p), bind_data(bind_data_p), local_state(local_state_p),
+	      global_state(global_state_p) {
+	}
+	const TableFunction &table_function;
+	optional_ptr<const FunctionData> bind_data;
+	optional_ptr<LocalTableFunctionState> local_state;
+	optional_ptr<GlobalTableFunctionState> global_state;
 };
 
 struct TableFunctionGetPartitionInput {
@@ -278,6 +296,8 @@ typedef void (*table_function_pushdown_complex_filter_t)(ClientContext &context,
                                                          FunctionData *bind_data,
                                                          vector<unique_ptr<Expression>> &filters);
 typedef InsertionOrderPreservingMap<string> (*table_function_to_string_t)(TableFunctionToStringInput &input);
+typedef InsertionOrderPreservingMap<string> (*table_function_dynamic_to_string_t)(
+    TableFunctionDynamicToStringInput &input);
 
 typedef void (*table_function_serialize_t)(Serializer &serializer, const optional_ptr<FunctionData> bind_data,
                                            const TableFunction &function);
@@ -290,6 +310,9 @@ typedef TablePartitionInfo (*table_function_get_partition_info_t)(ClientContext 
 
 typedef vector<PartitionStatistics> (*table_function_get_partition_stats_t)(ClientContext &context,
                                                                             GetPartitionStatsInput &input);
+
+typedef virtual_column_map_t (*table_function_get_virtual_columns_t)(ClientContext &context,
+                                                                     optional_ptr<FunctionData> bind_data);
 
 //! When to call init_global to initialize the table function
 enum class TableFunctionInitialization { INITIALIZE_ON_EXECUTE, INITIALIZE_ON_SCHEDULE };
@@ -341,8 +364,10 @@ public:
 	//! (Optional) pushdown a set of arbitrary filter expressions, rather than only simple comparisons with a constant
 	//! Any functions remaining in the expression list will be pushed as a regular filter after the scan
 	table_function_pushdown_complex_filter_t pushdown_complex_filter;
-	//! (Optional) function for rendering the operator to a string in profiling output
+	//! (Optional) function for rendering the operator to a string in explain/profiling output (invoked pre-execution)
 	table_function_to_string_t to_string;
+	//! (Optional) function for rendering the operator to a string in profiling output (invoked post-execution)
+	table_function_dynamic_to_string_t dynamic_to_string;
 	//! (Optional) return how much of the table we have scanned up to this point (% of the data)
 	table_function_progress_t table_scan_progress;
 	//! (Optional) returns the partition info of the current scan operator
@@ -359,6 +384,8 @@ public:
 	table_function_get_partition_info_t get_partition_info;
 	//! (Optional) get a list of all the partition stats of the table
 	table_function_get_partition_stats_t get_partition_stats;
+	//! (Optional) returns a list of virtual columns emitted by the table function
+	table_function_get_virtual_columns_t get_virtual_columns;
 
 	table_function_serialize_t serialize;
 	table_function_deserialize_t deserialize;
@@ -376,6 +403,8 @@ public:
 	//! Whether or not the table function supports sampling pushdown. If not supported a sample will be taken after the
 	//! table function.
 	bool sampling_pushdown;
+	//! Whether or not the table function supports late materialization
+	bool late_materialization;
 	//! Additional function info, passed to the bind
 	shared_ptr<TableFunctionInfo> function_info;
 

@@ -171,15 +171,21 @@ py::dict DuckDBPyResult::FetchNumpy() {
 
 void DuckDBPyResult::FillNumpy(py::dict &res, idx_t col_idx, NumpyResultConversion &conversion, const char *name) {
 	if (result->types[col_idx].id() == LogicalTypeId::ENUM) {
+		auto &import_cache = *DuckDBPyConnection::ImportCache();
+		auto pandas_categorical = import_cache.pandas.Categorical();
+		auto categorical_dtype = import_cache.pandas.CategoricalDtype();
+		if (!pandas_categorical || !categorical_dtype) {
+			throw InvalidInputException("'pandas' is required for this operation but it was not installed");
+		}
+
 		// first we (might) need to create the categorical type
 		if (categories_type.find(col_idx) == categories_type.end()) {
 			// Equivalent to: pandas.CategoricalDtype(['a', 'b'], ordered=True)
-			categories_type[col_idx] = py::module::import("pandas").attr("CategoricalDtype")(categories[col_idx], true);
+			categories_type[col_idx] = categorical_dtype(categories[col_idx], true);
 		}
 		// Equivalent to: pandas.Categorical.from_codes(codes=[0, 1, 0, 1], dtype=dtype)
-		res[name] = py::module::import("pandas")
-		                .attr("Categorical")
-		                .attr("from_codes")(conversion.ToArray(col_idx), py::arg("dtype") = categories_type[col_idx]);
+		res[name] = pandas_categorical.attr("from_codes")(conversion.ToArray(col_idx),
+		                                                  py::arg("dtype") = categories_type[col_idx]);
 		if (!conversion.ToPandas()) {
 			res[name] = res[name].attr("to_numpy")();
 		}
@@ -339,6 +345,9 @@ PandasDataFrame DuckDBPyResult::FrameFromNumpy(bool date_as_object, const py::ha
 	D_ASSERT(py::gil_check());
 	auto &import_cache = *DuckDBPyConnection::ImportCache();
 	auto pandas = import_cache.pandas();
+	if (!pandas) {
+		throw InvalidInputException("'pandas' is required for this operation but it was not installed");
+	}
 
 	py::object items = o.attr("items")();
 	for (const py::handle &item : items) {
@@ -420,13 +429,14 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 		auto arrays = arrow_result.ConsumeArrays();
 		for (auto &array : arrays) {
 			ArrowSchema arrow_schema;
-			auto names = arrow_result.names;
+			auto result_names = arrow_result.names;
 			if (to_polars) {
-				QueryResult::DeduplicateColumns(names);
+				QueryResult::DeduplicateColumns(result_names);
 			}
 			ArrowArray data = array->arrow_array;
 			array->arrow_array.release = nullptr;
-			ArrowConverter::ToArrowSchema(&arrow_schema, arrow_result.types, names, arrow_result.client_properties);
+			ArrowConverter::ToArrowSchema(&arrow_schema, arrow_result.types, result_names,
+			                              arrow_result.client_properties);
 			TransformDuckToArrowChunk(arrow_schema, data, batches);
 		}
 	} else {
@@ -438,17 +448,20 @@ duckdb::pyarrow::Table DuckDBPyResult::FetchArrowTable(idx_t rows_per_batch, boo
 			{
 				D_ASSERT(py::gil_check());
 				py::gil_scoped_release release;
-				count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data);
+				count = ArrowUtil::FetchChunk(scan_state, query_result.client_properties, rows_per_batch, &data,
+				                              ArrowTypeExtensionData::GetExtensionTypes(
+				                                  *query_result.client_properties.client_context, query_result.types));
 			}
 			if (count == 0) {
 				break;
 			}
 			ArrowSchema arrow_schema;
-			auto names = query_result.names;
+			auto result_names = query_result.names;
 			if (to_polars) {
-				QueryResult::DeduplicateColumns(names);
+				QueryResult::DeduplicateColumns(result_names);
 			}
-			ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, names, query_result.client_properties);
+			ArrowConverter::ToArrowSchema(&arrow_schema, query_result.types, result_names,
+			                              query_result.client_properties);
 			TransformDuckToArrowChunk(arrow_schema, data, batches);
 		}
 	}

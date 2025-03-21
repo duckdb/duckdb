@@ -26,6 +26,8 @@
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/main/capi/extension_api.hpp"
+#include "duckdb/storage/compression/empty_validity.hpp"
+#include "duckdb/logging/logger.hpp"
 
 #ifndef DUCKDB_NO_THREADS
 #include "duckdb/common/thread.hpp"
@@ -37,6 +39,8 @@ DBConfig::DBConfig() {
 	compression_functions = make_uniq<CompressionFunctionSet>();
 	encoding_functions = make_uniq<EncodingFunctionSet>();
 	encoding_functions->Initialize(*this);
+	arrow_extensions = make_uniq<ArrowTypeExtensionSet>();
+	arrow_extensions->Initialize(*this);
 	cast_functions = make_uniq<CastFunctionSet>(*this);
 	collation_bindings = make_uniq<CollationBinding>();
 	index_types = make_uniq<IndexTypeSet>();
@@ -64,20 +68,27 @@ DatabaseInstance::DatabaseInstance() {
 
 DatabaseInstance::~DatabaseInstance() {
 	// destroy all attached databases
-	GetDatabaseManager().ResetDatabases(scheduler);
+	if (db_manager) {
+		db_manager->ResetDatabases(scheduler);
+	}
 	// destroy child elements
 	connection_manager.reset();
 	object_cache.reset();
 	scheduler.reset();
 	db_manager.reset();
+
+	// stop the log manager, after this point Logger calls are unsafe.
+	log_manager.reset();
+
 	buffer_manager.reset();
+
 	// flush allocations and disable the background thread
 	if (Allocator::SupportsFlush()) {
 		Allocator::FlushAll();
 	}
 	Allocator::SetBackgroundThreads(false);
 	// after all destruction is complete clear the cache entry
-	db_cache_entry.reset();
+	config.db_cache_entry.reset();
 }
 
 BufferManager &BufferManager::GetBufferManager(DatabaseInstance &db) {
@@ -98,10 +109,6 @@ DatabaseInstance &DatabaseInstance::GetDatabase(ClientContext &context) {
 
 const DatabaseInstance &DatabaseInstance::GetDatabase(const ClientContext &context) {
 	return *context.db;
-}
-
-void DatabaseInstance::SetDatabaseCacheEntry(shared_ptr<DatabaseCacheEntry> entry) {
-	db_cache_entry = std::move(entry);
 }
 
 DatabaseManager &DatabaseInstance::GetDatabaseManager() {
@@ -194,16 +201,14 @@ void DatabaseInstance::CreateMainDatabase() {
 	info.path = config.options.database_path;
 
 	optional_ptr<AttachedDatabase> initial_database;
-	{
-		Connection con(*this);
-		con.BeginTransaction();
-		AttachOptions options(config.options);
-		initial_database = db_manager->AttachDatabase(*con.context, info, options);
-		con.Commit();
-	}
+	Connection con(*this);
+	con.BeginTransaction();
+	AttachOptions options(config.options);
+	initial_database = db_manager->AttachDatabase(*con.context, info, options);
 
 	initial_database->SetInitialDatabase();
-	initial_database->Initialize();
+	initial_database->Initialize(*con.context);
+	con.Commit();
 }
 
 static void ThrowExtensionSetUnrecognizedOptions(const case_insensitive_map_t<Value> &unrecognized_options) {
@@ -218,10 +223,11 @@ static void ThrowExtensionSetUnrecognizedOptions(const case_insensitive_map_t<Va
 }
 
 void DatabaseInstance::LoadExtensionSettings() {
-	auto &unrecognized_options = config.options.unrecognized_options;
+	// copy the map, to protect against modifications during
+	auto unrecognized_options_copy = config.options.unrecognized_options;
 
 	if (config.options.autoload_known_extensions) {
-		if (unrecognized_options.empty()) {
+		if (unrecognized_options_copy.empty()) {
 			// Nothing to do
 			return;
 		}
@@ -230,7 +236,7 @@ void DatabaseInstance::LoadExtensionSettings() {
 		con.BeginTransaction();
 
 		vector<string> extension_options;
-		for (auto &option : unrecognized_options) {
+		for (auto &option : unrecognized_options_copy) {
 			auto &name = option.first;
 			auto &value = option.second;
 
@@ -247,18 +253,17 @@ void DatabaseInstance::LoadExtensionSettings() {
 			if (it == config.extension_parameters.end()) {
 				throw InternalException("Extension %s did not provide the '%s' config setting", extension_name, name);
 			}
+			// if the extension provided the option, it should no longer be unrecognized.
+			D_ASSERT(config.options.unrecognized_options.find(name) == config.options.unrecognized_options.end());
 			auto &context = *con.context;
 			PhysicalSet::SetExtensionVariable(context, it->second, name, SetScope::GLOBAL, value);
 			extension_options.push_back(name);
 		}
 
-		for (auto &option : extension_options) {
-			unrecognized_options.erase(option);
-		}
 		con.Commit();
 	}
-	if (!unrecognized_options.empty()) {
-		ThrowExtensionSetUnrecognizedOptions(unrecognized_options);
+	if (!config.options.unrecognized_options.empty()) {
+		ThrowExtensionSetUnrecognizedOptions(config.options.unrecognized_options);
 	}
 }
 
@@ -284,6 +289,10 @@ void DatabaseInstance::Initialize(const char *database_path, DBConfig *user_conf
 	} else {
 		buffer_manager = make_uniq<StandardBufferManager>(*this, config.options.temporary_directory);
 	}
+
+	log_manager = make_shared_ptr<LogManager>(*this, LogConfig());
+	log_manager->Initialize();
+
 	scheduler = make_uniq<TaskScheduler>(*this);
 	object_cache = make_uniq<ObjectCache>();
 	connection_manager = make_uniq<ConnectionManager>();
@@ -451,6 +460,7 @@ void DatabaseInstance::Configure(DBConfig &new_config, const char *database_path
 		                                                 config.options.buffer_manager_track_eviction_timestamps,
 		                                                 config.options.allocator_bulk_deallocation_flush_threshold);
 	}
+	config.db_cache_entry = std::move(new_config.db_cache_entry);
 }
 
 DBConfig &DBConfig::GetConfig(ClientContext &context) {
@@ -496,6 +506,7 @@ void DatabaseInstance::SetExtensionLoaded(const string &name, ExtensionInstallIn
 	for (auto &callback : callbacks) {
 		callback->OnExtensionLoaded(*this, name);
 	}
+	DUCKDB_LOG_INFO(*this, "duckdb.Extensions.ExtensionLoaded", name);
 }
 
 SettingLookupResult DatabaseInstance::TryGetCurrentSetting(const std::string &key, Value &result) const {
@@ -519,6 +530,10 @@ ValidChecker &DatabaseInstance::GetValidChecker() {
 const duckdb_ext_api_v1 DatabaseInstance::GetExtensionAPIV1() {
 	D_ASSERT(create_api_v1);
 	return create_api_v1();
+}
+
+LogManager &DatabaseInstance::GetLogManager() const {
+	return *log_manager;
 }
 
 ValidChecker &ValidChecker::Get(DatabaseInstance &db) {

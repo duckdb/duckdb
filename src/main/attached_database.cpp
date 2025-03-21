@@ -99,9 +99,11 @@ AttachedDatabase::AttachedDatabase(DatabaseInstance &db, Catalog &catalog_p, str
 		if (StringUtil::CIEquals(entry.first, "row_group_size")) {
 			continue;
 		}
+		if (StringUtil::CIEquals(entry.first, "storage_version")) {
+			continue;
+		}
 		throw BinderException("Unrecognized option for attach \"%s\"", entry.first);
 	}
-
 	// We create the storage after the catalog to guarantee we allow extensions to instantiate the DuckCatalog.
 	catalog = make_uniq<DuckCatalog>(*this);
 	auto read_only = options.access_mode == AccessMode::READ_ONLY;
@@ -171,11 +173,11 @@ string AttachedDatabase::ExtractDatabaseName(const string &dbpath, FileSystem &f
 	return name;
 }
 
-void AttachedDatabase::Initialize(StorageOptions options) {
+void AttachedDatabase::Initialize(optional_ptr<ClientContext> context, StorageOptions options) {
 	if (IsSystem()) {
-		catalog->Initialize(true);
+		catalog->Initialize(context, true);
 	} else {
-		catalog->Initialize(false);
+		catalog->Initialize(context, false);
 	}
 	if (storage) {
 		storage->Initialize(options);
@@ -245,7 +247,7 @@ void AttachedDatabase::Close() {
 			}
 			CheckpointOptions options;
 			options.wal_action = CheckpointWALAction::DELETE_WAL;
-			storage->CreateCheckpoint(options);
+			storage->CreateCheckpoint(nullptr, options);
 		}
 	} catch (...) { // NOLINT
 	}

@@ -114,7 +114,6 @@ static const DefaultExtension internal_extensions[] = {
     {"postgres_scanner", "Adds support for connecting to a Postgres database", false},
     {"inet", "Adds support for IP-related data types and functions", false},
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
-    {"substrait", "Adds support for the Substrait integration", false},
     {"aws", "Provides features that depend on the AWS SDK", false},
     {"arrow", "A zero-copy data integration between Apache Arrow and DuckDB", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
@@ -122,6 +121,7 @@ static const DefaultExtension internal_extensions[] = {
     {"vss", "Adds indexing support to accelerate Vector Similarity Search", false},
     {"delta", "Adds support for Delta Lake", false},
     {"fts", "Adds support for Full-Text Search Indexes", false},
+    {"ui", "Adds local UI for DuckDB", false},
     {nullptr, nullptr, false}};
 
 idx_t ExtensionHelper::DefaultExtensionCount() {
@@ -140,13 +140,14 @@ DefaultExtension ExtensionHelper::GetDefaultExtension(idx_t index) {
 // Allow Auto-Install Extensions
 //===--------------------------------------------------------------------===//
 static const char *const auto_install[] = {"motherduck", "postgres_scanner", "mysql_scanner", "sqlite_scanner",
+                                           "delta",      "iceberg",          "uc_catalog",    "ui",
                                            nullptr};
 
 // TODO: unify with new autoload mechanism
 bool ExtensionHelper::AllowAutoInstall(const string &extension) {
-	auto lcase = StringUtil::Lower(extension);
+	auto extension_name = ApplyExtensionAlias(extension);
 	for (idx_t i = 0; auto_install[i]; i++) {
-		if (lcase == auto_install[i]) {
+		if (extension_name == auto_install[i]) {
 			return true;
 		}
 	}
@@ -223,6 +224,14 @@ bool ExtensionHelper::TryAutoLoadExtension(ClientContext &context, const string 
 	}
 }
 
+static string GetAutoInstallExtensionsRepository(const DBConfigOptions &options) {
+	string repository_url = options.autoinstall_extension_repo;
+	if (repository_url.empty()) {
+		repository_url = options.custom_extension_repo;
+	}
+	return repository_url;
+}
+
 bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const string &extension_name) noexcept {
 	if (instance.ExtensionIsLoaded(extension_name)) {
 		return true;
@@ -231,8 +240,8 @@ bool ExtensionHelper::TryAutoLoadExtension(DatabaseInstance &instance, const str
 	try {
 		auto &fs = FileSystem::GetFileSystem(instance);
 		if (dbconfig.options.autoinstall_known_extensions) {
-			auto autoinstall_repo =
-			    ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
+			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig.options);
+			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(repository_url);
 			ExtensionInstallOptions options;
 			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(instance, fs, extension_name, options);
@@ -381,14 +390,16 @@ void ExtensionHelper::AutoLoadExtension(DatabaseInstance &db, const string &exte
 		auto fs = FileSystem::CreateLocal();
 #ifndef DUCKDB_WASM
 		if (dbconfig.options.autoinstall_known_extensions) {
-			//! Get the autoloading repository
-			auto repository = ExtensionRepository::GetRepositoryByUrl(dbconfig.options.autoinstall_extension_repo);
+			auto repository_url = GetAutoInstallExtensionsRepository(dbconfig.options);
+			auto autoinstall_repo = ExtensionRepository::GetRepositoryByUrl(repository_url);
 			ExtensionInstallOptions options;
-			options.repository = repository;
+			options.repository = autoinstall_repo;
 			ExtensionHelper::InstallExtension(db, *fs, extension_name, options);
 		}
 #endif
 		ExtensionHelper::LoadExternalExtension(db, *fs, extension_name);
+		DUCKDB_LOG_INFO(db, "duckdb.Extensions.ExtensionAutoloaded", extension_name);
+
 	} catch (std::exception &e) {
 		ErrorData error(e);
 		throw AutoloadException(extension_name, error.RawMessage());

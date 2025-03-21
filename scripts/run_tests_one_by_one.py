@@ -3,6 +3,8 @@ import subprocess
 import time
 import threading
 import tempfile
+import os
+import shutil
 
 import argparse
 
@@ -19,7 +21,8 @@ def valid_timeout(value):
 
 parser = argparse.ArgumentParser(description='Run tests one by one with optional flags.')
 parser.add_argument('unittest_program', help='Path to the unittest program')
-parser.add_argument('--no-exit', action='store_true', help='Do not exit after running tests')
+parser.add_argument('--no-exit', action='store_true', help='Execute all tests, without stopping on first error')
+parser.add_argument('--fast-fail', action='store_true', help='Terminate on first error')
 parser.add_argument('--profile', action='store_true', help='Enable profiling')
 parser.add_argument('--no-assertions', action='store_false', help='Disable assertions')
 parser.add_argument('--time_execution', action='store_true', help='Measure and print the execution time of each test')
@@ -47,6 +50,13 @@ if not args.unittest_program:
 # Access the arguments
 unittest_program = args.unittest_program
 no_exit = args.no_exit
+fast_fail = args.fast_fail
+
+if no_exit:
+    if fast_fail:
+        print("--no-exit and --fast-fail can't be combined")
+        exit(1)
+
 profile = args.profile
 assertions = args.no_assertions
 time_execution = args.time_execution
@@ -87,7 +97,7 @@ all_passed = True
 def fail():
     global all_passed
     all_passed = False
-    if not no_exit:
+    if fast_fail:
         exit(1)
 
 
@@ -189,6 +199,14 @@ STDERR
 --------------------"""
         )
         print(stderr)
+
+    # if a test closes unexpectedly (e.g., SEGV), test cleanup doesn't happen,
+    # causing us to run out of space on subsequent tests in GH Actions (not much disk space there)
+    duckdb_unittest_tempdir = os.path.join(
+        os.path.dirname(unittest_program), '..', '..', '..', 'duckdb_unittest_tempdir'
+    )
+    if os.path.exists(duckdb_unittest_tempdir) and os.listdir(duckdb_unittest_tempdir):
+        shutil.rmtree(duckdb_unittest_tempdir)
     fail()
 
 

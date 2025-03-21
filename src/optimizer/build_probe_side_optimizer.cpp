@@ -3,6 +3,7 @@
 #include "duckdb/common/enums/join_type.hpp"
 #include "duckdb/common/type_visitor.hpp"
 #include "duckdb/common/types/row/tuple_data_layout.hpp"
+#include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
 #include "duckdb/planner/operator/logical_get.hpp"
@@ -54,8 +55,7 @@ static void FlipChildren(LogicalOperator &op) {
 	std::swap(op.children[0], op.children[1]);
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN:
-	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		join.join_type = InverseJoinType(join.join_type);
 		for (auto &cond : join.conditions) {
@@ -138,9 +138,9 @@ double BuildProbeSideOptimizer::GetBuildSize(vector<LogicalType> types, const id
 		});
 	}
 
-	// There is also a cost of NextPowerOfTwo(count * 2) * sizeof(data_ptr_t) per tuple in the hash table
-	// This is a not a smooth cost function, so instead we do the average, which is ~3 * sizeof(data_ptr_t)
-	row_width += 3 * sizeof(data_ptr_t);
+	// There is also a cost of NextPowerOfTwo(count * 2) * sizeof(ht_entry_t) per tuple in the hash table
+	// This is a not a smooth cost function, so instead we do the average, which is ~3 * sizeof(ht_entry_t)
+	row_width += 3 * sizeof(ht_entry_t);
 
 	return static_cast<double>(row_width * cardinality);
 }
@@ -242,8 +242,7 @@ void BuildProbeSideOptimizer::VisitOperator(LogicalOperator &op) {
 		}
 		break;
 	}
-	case LogicalOperatorType::LOGICAL_ANY_JOIN:
-	case LogicalOperatorType::LOGICAL_ASOF_JOIN: {
+	case LogicalOperatorType::LOGICAL_ANY_JOIN: {
 		auto &join = op.Cast<LogicalJoin>();
 		// We do not yet support the RIGHT_SEMI or RIGHT_ANTI join types for these, so don't try to flip
 		switch (join.join_type) {

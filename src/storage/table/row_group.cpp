@@ -385,8 +385,9 @@ void RowGroup::CommitDrop() {
 	}
 }
 
-void RowGroup::CommitDropColumn(idx_t column_idx) {
-	GetColumn(column_idx).CommitDropColumn();
+void RowGroup::CommitDropColumn(const idx_t column_index) {
+	auto &column = GetColumn(column_index);
+	column.CommitDropColumn();
 }
 
 void RowGroup::NextVector(CollectionScanState &state) {
@@ -430,13 +431,12 @@ bool RowGroup::CheckZonemap(ScanFilterInfo &filters) {
 		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 			return false;
 		}
-		if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
-			// filter is always true - no need to check it
-			// label the filter as always true so we don't need to check it anymore
-			filters.SetFilterAlwaysTrue(i);
-		}
 		if (filter.filter_type == TableFilterType::OPTIONAL_FILTER) {
 			// these are only for row group checking, set as always true so we don't check it
+			filters.SetFilterAlwaysTrue(i);
+		} else if (prune_result == FilterPropagateResult::FILTER_ALWAYS_TRUE) {
+			// filter is always true - no need to check it
+			// label the filter as always true so we don't need to check it anymore
 			filters.SetFilterAlwaysTrue(i);
 		}
 	}
@@ -606,12 +606,13 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						// this filter is always true - skip it
 						continue;
 					}
+					auto &table_filter_state = *filter.filter_state;
 
 					const auto scan_idx = filter.scan_column_index;
 					const auto column_idx = filter.table_column_index;
 
+					auto &result_vector = result.data[scan_idx];
 					if (column_idx == COLUMN_IDENTIFIER_ROW_ID) {
-
 						// We do another quick statistics scan for row ids here
 						const auto rowid_start = this->start + current_row;
 						const auto rowid_end = this->start + current_row + max_count;
@@ -619,14 +620,14 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 						if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 							// We can just break out of the loop here.
 							approved_tuple_count = 0;
-							break;
+							continue;
 						}
 
 						// Generate row ids
 						// Create sequence for row ids
-						D_ASSERT(result.data[i].GetType().InternalType() == ROW_TYPE);
-						result.data[i].SetVectorType(VectorType::FLAT_VECTOR);
-						auto result_data = FlatVector::GetData<int64_t>(result.data[i]);
+						D_ASSERT(result_vector.GetType().InternalType() == ROW_TYPE);
+						result_vector.SetVectorType(VectorType::FLAT_VECTOR);
+						auto result_data = FlatVector::GetData<int64_t>(result_vector);
 						for (size_t sel_idx = 0; sel_idx < approved_tuple_count; sel_idx++) {
 							result_data[sel.get_index(sel_idx)] =
 							    UnsafeNumericCast<int64_t>(this->start + current_row + sel.get_index(sel_idx));
@@ -639,14 +640,14 @@ void RowGroup::TemplatedScan(TransactionData transaction, CollectionScanState &s
 
 						// Now apply the filter
 						UnifiedVectorFormat vdata;
-						result.data[i].ToUnifiedFormat(approved_tuple_count, vdata);
-						ColumnSegment::FilterSelection(sel, result.data[i], vdata, filter.filter, approved_tuple_count,
-						                               approved_tuple_count);
+						result_vector.ToUnifiedFormat(approved_tuple_count, vdata);
+						ColumnSegment::FilterSelection(sel, result_vector, vdata, filter.filter, table_filter_state,
+						                               approved_tuple_count, approved_tuple_count);
 
 					} else {
 						auto &col_data = GetColumn(filter.table_column_index);
-						col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx],
-						                result.data[scan_idx], sel, approved_tuple_count, filter.filter);
+						col_data.Filter(transaction, state.vector_index, state.column_scans[scan_idx], result_vector,
+						                sel, approved_tuple_count, filter.filter, table_filter_state);
 					}
 				}
 				for (auto &table_filter : filter_list) {

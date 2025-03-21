@@ -115,7 +115,7 @@ string FileSystem::GetEnvVariable(const string &name) {
 
 bool FileSystem::IsPathAbsolute(const string &path) {
 	auto path_separator = PathSeparator(path);
-	return PathMatched(path, path_separator);
+	return PathMatched(path, path_separator) || StringUtil::StartsWith(path, "file:/");
 }
 
 string FileSystem::PathSeparator(const string &path) {
@@ -237,7 +237,11 @@ string FileSystem::NormalizeAbsolutePath(const string &path) {
 }
 
 string FileSystem::PathSeparator(const string &path) {
-	return "\\";
+	if (StringUtil::StartsWith(path, "file:")) {
+		return "/";
+	} else {
+		return "\\";
+	}
 }
 
 void FileSystem::SetWorkingDirectory(const string &path) {
@@ -468,6 +472,10 @@ void FileSystem::RegisterSubSystem(FileCompressionType compression_type, unique_
 
 void FileSystem::UnregisterSubSystem(const string &name) {
 	throw NotImplementedException("%s: Can't unregister a sub system on a non-virtual file system", GetName());
+}
+
+unique_ptr<FileSystem> FileSystem::ExtractSubSystem(const string &name) {
+	throw NotImplementedException("%s: Can't extract a sub system on a non-virtual file system", GetName());
 }
 
 void FileSystem::SetDisabledFileSystems(const vector<string> &names) {

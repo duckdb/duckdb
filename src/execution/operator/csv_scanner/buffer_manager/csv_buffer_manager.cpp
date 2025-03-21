@@ -4,10 +4,9 @@
 namespace duckdb {
 
 CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOptions &options, const string &file_path_p,
-                                   const idx_t file_idx_p, bool per_file_single_threaded_p,
-                                   unique_ptr<CSVFileHandle> file_handle_p)
-    : context(context_p), per_file_single_threaded(per_file_single_threaded_p), file_idx(file_idx_p),
-      file_path(file_path_p), buffer_size(CSVBuffer::CSV_BUFFER_SIZE) {
+                                   bool per_file_single_threaded_p, unique_ptr<CSVFileHandle> file_handle_p)
+    : context(context_p), per_file_single_threaded(per_file_single_threaded_p), file_path(file_path_p),
+      buffer_size(options.buffer_size_option.GetValue()) {
 	D_ASSERT(!file_path.empty());
 	if (file_handle_p) {
 		file_handle = std::move(file_handle_p);
@@ -16,13 +15,6 @@ CSVBufferManager::CSVBufferManager(ClientContext &context_p, const CSVReaderOpti
 	}
 	is_pipe = file_handle->IsPipe();
 	skip_rows = options.dialect_options.skip_rows.GetValue();
-	auto file_size = file_handle->FileSize();
-	if (file_size > 0 && file_size < buffer_size) {
-		buffer_size = CSVBuffer::CSV_MINIMUM_BUFFER_SIZE;
-	}
-	if (options.buffer_size < buffer_size) {
-		buffer_size = options.buffer_size;
-	}
 	Initialize();
 }
 
@@ -34,8 +26,7 @@ void CSVBufferManager::UnpinBuffer(const idx_t cache_idx) {
 
 void CSVBufferManager::Initialize() {
 	if (cached_buffers.empty()) {
-		cached_buffers.emplace_back(
-		    make_shared_ptr<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos, file_idx));
+		cached_buffers.emplace_back(make_shared_ptr<CSVBuffer>(context, buffer_size, *file_handle, global_csv_pos));
 		last_buffer = cached_buffers.front();
 	}
 }
@@ -44,7 +35,7 @@ bool CSVBufferManager::ReadNextAndCacheIt() {
 	D_ASSERT(last_buffer);
 	for (idx_t i = 0; i < 2; i++) {
 		if (!last_buffer->IsCSVFileLastBuffer()) {
-			auto maybe_last_buffer = last_buffer->Next(*file_handle, buffer_size, file_idx, has_seeked);
+			auto maybe_last_buffer = last_buffer->Next(*file_handle, buffer_size, has_seeked);
 			if (!maybe_last_buffer) {
 				last_buffer->last_buffer = true;
 				return false;

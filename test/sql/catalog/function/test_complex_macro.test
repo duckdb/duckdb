@@ -62,10 +62,13 @@ statement error
 SELECT IFELSE(1,IFELSE(1,b,1),a) FROM integers
 ----
 
-# conflicting bindings
-statement error
+statement ok
 CREATE MACRO f1(x) AS (SELECT MIN(a) + x FROM integers)
+
+query I
+select f1(42) from integers;
 ----
+43
 
 # macro in GROUP BY
 statement ok

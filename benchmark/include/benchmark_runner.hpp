@@ -49,7 +49,7 @@ public:
 	vector<Benchmark *> benchmarks;
 	ofstream out_file;
 	ofstream log_file;
-	uint32_t threads = std::thread::hardware_concurrency();
+	uint32_t threads = MaxValue<uint32_t>(std::thread::hardware_concurrency(), 1u);
 };
 
 } // namespace duckdb

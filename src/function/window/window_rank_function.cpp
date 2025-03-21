@@ -93,6 +93,10 @@ void WindowPeerLocalState::NextRank(idx_t partition_begin, idx_t peer_begin, idx
 WindowPeerExecutor::WindowPeerExecutor(BoundWindowExpression &wexpr, ClientContext &context,
                                        WindowSharedExpressions &shared)
     : WindowExecutor(wexpr, context, shared) {
+
+	for (const auto &order : wexpr.arg_orders) {
+		arg_order_idx.emplace_back(shared.RegisterSink(order.expression));
+	}
 }
 
 unique_ptr<WindowExecutorGlobalState> WindowPeerExecutor::GetGlobalState(const idx_t payload_count,
@@ -117,18 +121,19 @@ void WindowRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate, Win
                                           DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx) const {
 	auto &gpeer = gstate.Cast<WindowPeerGlobalState>();
 	auto &lpeer = lstate.Cast<WindowPeerLocalState>();
-	auto partition_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_END]);
 	auto rdata = FlatVector::GetData<uint64_t>(result);
 
 	if (gpeer.token_tree) {
+		auto frame_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[FRAME_BEGIN]);
+		auto frame_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[FRAME_END]);
 		for (idx_t i = 0; i < count; ++i, ++row_idx) {
-			rdata[i] = gpeer.token_tree->Rank(partition_begin[i], partition_end[i], row_idx);
+			rdata[i] = gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
 		}
 		return;
 	}
 
 	//	Reset to "previous" row
+	auto partition_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_BEGIN]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PEER_BEGIN]);
 	lpeer.rank = (peer_begin[0] - partition_begin[0]) + 1;
 	lpeer.rank_equal = (row_idx - peer_begin[0]);
@@ -215,14 +220,14 @@ void WindowPercentRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gsta
                                                  idx_t row_idx) const {
 	auto &gpeer = gstate.Cast<WindowPeerGlobalState>();
 	auto &lpeer = lstate.Cast<WindowPeerLocalState>();
-	auto partition_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_END]);
 	auto rdata = FlatVector::GetData<double>(result);
 
 	if (gpeer.token_tree) {
+		auto frame_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[FRAME_BEGIN]);
+		auto frame_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[FRAME_END]);
 		for (idx_t i = 0; i < count; ++i, ++row_idx) {
-			auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i] - 1));
-			const auto rank = gpeer.token_tree->Rank(partition_begin[i], partition_end[i], row_idx);
+			auto denom = static_cast<double>(NumericCast<int64_t>(frame_end[i] - frame_begin[i] - 1));
+			const auto rank = gpeer.token_tree->Rank(frame_begin[i], frame_end[i], row_idx);
 			double percent_rank = denom > 0 ? ((double)rank - 1) / denom : 0;
 			rdata[i] = percent_rank;
 		}
@@ -230,6 +235,8 @@ void WindowPercentRankExecutor::EvaluateInternal(WindowExecutorGlobalState &gsta
 	}
 
 	//	Reset to "previous" row
+	auto partition_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_END]);
 	auto peer_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PEER_BEGIN]);
 	lpeer.rank = (peer_begin[0] - partition_begin[0]) + 1;
 	lpeer.rank_equal = (row_idx - peer_begin[0]);
@@ -254,20 +261,22 @@ void WindowCumeDistExecutor::EvaluateInternal(WindowExecutorGlobalState &gstate,
                                               DataChunk &eval_chunk, Vector &result, idx_t count, idx_t row_idx) const {
 	auto &gpeer = gstate.Cast<WindowPeerGlobalState>();
 	auto &lpeer = lstate.Cast<WindowPeerLocalState>();
-	auto partition_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_BEGIN]);
-	auto partition_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_END]);
 	auto rdata = FlatVector::GetData<double>(result);
 
 	if (gpeer.token_tree) {
+		auto frame_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[FRAME_BEGIN]);
+		auto frame_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[FRAME_END]);
 		for (idx_t i = 0; i < count; ++i, ++row_idx) {
-			const auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i]));
-			const auto peer_end = gpeer.token_tree->PeerEnd(partition_begin[i], partition_end[i], row_idx);
-			const auto num = static_cast<double>(peer_end - partition_begin[i]);
+			const auto denom = static_cast<double>(NumericCast<int64_t>(frame_end[i] - frame_begin[i]));
+			const auto peer_end = gpeer.token_tree->PeerEnd(frame_begin[i], frame_end[i], row_idx);
+			const auto num = static_cast<double>(peer_end - frame_begin[i]);
 			rdata[i] = denom > 0 ? (num / denom) : 0;
 		}
 		return;
 	}
 
+	auto partition_begin = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_BEGIN]);
+	auto partition_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PARTITION_END]);
 	auto peer_end = FlatVector::GetData<const idx_t>(lpeer.bounds.data[PEER_END]);
 	for (idx_t i = 0; i < count; ++i, ++row_idx) {
 		const auto denom = static_cast<double>(NumericCast<int64_t>(partition_end[i] - partition_begin[i]));

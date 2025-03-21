@@ -48,10 +48,13 @@
         "name": "pandas",
         "children": [
             "pandas.DataFrame",
-            "pandas.isnull",
-            "pandas.ArrowDtype",
+            "pandas.Categorical",
+            "pandas.CategoricalDtype",
+            "pandas.Series",
             "pandas.NaT",
             "pandas.NA",
+            "pandas.isnull",
+            "pandas.ArrowDtype",
             "pandas.BooleanDtype",
             "pandas.UInt8Dtype",
             "pandas.UInt16Dtype",
@@ -170,8 +173,8 @@
             "datetime.date",
             "datetime.time",
             "datetime.timedelta",
-            "datetime.timezone",
-            "datetime.datetime"
+            "datetime.datetime",
+            "datetime.timezone"
         ]
     },
     "datetime.date": {
@@ -312,7 +315,6 @@
         "full_path": "numpy",
         "name": "numpy",
         "children": [
-            "numpy.core",
             "numpy.ma",
             "numpy.ndarray",
             "numpy.datetime64",
@@ -338,20 +340,6 @@
             "numpy.clongdouble"
         ],
         "required": false
-    },
-    "numpy.core": {
-        "type": "attribute",
-        "full_path": "numpy.core",
-        "name": "core",
-        "children": [
-            "numpy.core.multiarray"
-        ]
-    },
-    "numpy.core.multiarray": {
-        "type": "attribute",
-        "full_path": "numpy.core.multiarray",
-        "name": "multiarray",
-        "children": []
     },
     "numpy.ma": {
         "type": "attribute",
@@ -670,6 +658,24 @@
         "type": "attribute",
         "full_path": "collections.abc.Mapping",
         "name": "Mapping",
+        "children": []
+    },
+    "pandas.Categorical": {
+        "type": "attribute",
+        "full_path": "pandas.Categorical",
+        "name": "Categorical",
+        "children": []
+    },
+    "pandas.CategoricalDtype": {
+        "type": "attribute",
+        "full_path": "pandas.CategoricalDtype",
+        "name": "CategoricalDtype",
+        "children": []
+    },
+    "pandas.Series": {
+        "type": "attribute",
+        "full_path": "pandas.Series",
+        "name": "Series",
         "children": []
     }
 }

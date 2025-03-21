@@ -54,7 +54,8 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 			parameter_data = BoundParameterData(std::move(constant.value), std::move(return_type));
 		} else {
 			auto value = ExpressionExecutor::EvaluateScalar(context, *bound_expr, true);
-			parameter_data = BoundParameterData(std::move(value));
+			auto value_type = value.type();
+			parameter_data = BoundParameterData(std::move(value), std::move(value_type));
 		}
 		bind_values[pair.first] = std::move(parameter_data);
 	}

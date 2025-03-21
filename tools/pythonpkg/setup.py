@@ -173,7 +173,7 @@ libraries = []
 if 'DUCKDB_BINARY_DIR' in os.environ:
     existing_duckdb_dir = os.environ['DUCKDB_BINARY_DIR']
 if 'DUCKDB_COMPILE_FLAGS' in os.environ:
-    toolchain_args = ['-std=c++11'] + os.environ['DUCKDB_COMPILE_FLAGS'].split()
+    toolchain_args = os.environ['DUCKDB_COMPILE_FLAGS'].split()
 if 'DUCKDB_LIBS' in os.environ:
     libraries = os.environ['DUCKDB_LIBS'].split(' ')
 
@@ -376,32 +376,91 @@ spark_packages = [
 
 packages.extend(spark_packages)
 
+from setuptools_scm import Configuration, ScmVersion
+from pathlib import Path
+import os
+
+######
+# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
+# - CMakeLists.txt
+# - scripts/amalgamation.py
+# - scripts/package_build.py
+# - tools/pythonpkg/setup.py
+######
+
+# Whether to use main branch versioning logic, defaults to True
+MAIN_BRANCH_VERSIONING = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
+
+
+def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
+    from setuptools_scm.git import parse as git_parse
+    from setuptools_scm.version import meta
+
+    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
+    if override:
+        parts = override.split('-')
+        if len(parts) == 3:
+            # Already in correct format tag-distance-gnode
+            tag, distance, node = parts
+            return meta(tag=tag, distance=int(distance), node=node[1:], config=config)
+        elif len(parts) == 1:
+            # Just tag, add -0-gnode
+            tag = parts[0]
+            distance = 0
+        elif len(parts) == 2:
+            # tag-distance, need to add -gnode
+            tag, distance = parts
+        else:
+            raise ValueError(f"Invalid OVERRIDE_GIT_DESCRIBE format: {override}")
+        return meta(tag=tag, distance=int(distance), config=config)
+
+    versioning_tag_match = 'v*.*.0' if MAIN_BRANCH_VERSIONING else 'v*.*.*'
+    git_describe_command = f"git describe --tags --long --debug --match {versioning_tag_match}"
+
+    try:
+        return git_parse(root, config, describe_command=git_describe_command)
+    except Exception:
+        return meta(tag="v0.0.0", distance=0, node="deadbeeff", config=config)
+
+
+def version_scheme(version):
+    def prefix_version(version):
+        """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
+        if version.startswith('v'):
+            return version
+        return 'v' + version
+
+    # If we're exactly on a tag (dev_iteration = 0, dirty=False)
+    if version.exact:
+        return version.format_with("{tag}")
+
+    major, minor, patch = [int(x) for x in str(version.tag).split('.')]
+    # Increment minor version if main_branch_versioning is enabled (default),
+    # otherwise increment patch version
+    if MAIN_BRANCH_VERSIONING == True:
+        minor += 1
+        patch = 0
+    else:
+        patch += 1
+
+    # Format as v{major}.{minor}.{patch}-dev{distance}
+    next_version = f"{major}.{minor}.{patch}-dev{version.distance}"
+    return prefix_version(next_version)
+
+
 setup(
-    name=lib_name,
-    description='DuckDB in-process database',
-    keywords='DuckDB Database SQL OLAP',
-    url="https://www.duckdb.org",
-    long_description='See here for an introduction: https://duckdb.org/docs/api/python/overview',
-    license='MIT',
     data_files=data_files,
     # NOTE: might need to be find_packages() ?
     packages=packages,
     include_package_data=True,
-    python_requires='>=3.7.0',
-    tests_require=['google-cloud-storage', 'mypy', 'pytest'],
-    classifiers=[
-        'Topic :: Database :: Database Engines/Servers',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
-    ],
+    long_description="See here for an introduction: https://duckdb.org/docs/api/python/overview",
     ext_modules=[libduckdb],
-    maintainer="Hannes Muehleisen",
-    maintainer_email="hannes@cwi.nl",
-    cmdclass={"build_ext": build_ext},
-    project_urls={
-        "Documentation": "https://duckdb.org/docs/api/python/overview",
-        "Source": "https://github.com/duckdb/duckdb/blob/main/tools/pythonpkg",
-        "Issues": "https://github.com/duckdb/duckdb/issues",
-        "Changelog": "https://github.com/duckdb/duckdb/releases",
+    use_scm_version={
+        "version_scheme": version_scheme,
+        "root": "../..",
+        "parse": parse,
+        "fallback_version": "v0.0.0",
+        "local_scheme": "no-local-version",
     },
+    cmdclass={"build_ext": build_ext},
 )

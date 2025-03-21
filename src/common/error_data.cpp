@@ -36,7 +36,7 @@ ErrorData::ErrorData(const string &message)
 			raw_message = message;
 		}
 	} else {
-		auto info = StringUtil::ParseJSONMap(message);
+		auto info = StringUtil::ParseJSONMap(message)->Flatten();
 		for (auto &entry : info) {
 			if (entry.first == "exception_type") {
 				type = Exception::StringToExceptionType(entry.second);
@@ -95,7 +95,7 @@ bool ErrorData::operator==(const ErrorData &other) const {
 }
 
 void ErrorData::ConvertErrorToJSON() {
-	if (raw_message.empty() || raw_message[0] == '{') {
+	if (!raw_message.empty() && raw_message[0] == '{') {
 		// empty or already JSON
 		return;
 	}
@@ -121,8 +121,9 @@ void ErrorData::AddErrorLocation(const string &query) {
 	}
 	{
 		auto entry = extra_info.find("stack_trace");
-		if (entry != extra_info.end()) {
+		if (entry != extra_info.end() && !entry->second.empty()) {
 			raw_message += "\n\nStack Trace:\n" + entry->second;
+			entry->second = "";
 		}
 	}
 	final_message = ConstructFinalMessage();

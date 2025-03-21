@@ -73,6 +73,7 @@ public:
 	string ToString() const override;
 
 	//! The number of ordering clauses the functions share
+	static idx_t GetSharedOrders(const vector<BoundOrderByNode> &lhs, const vector<BoundOrderByNode> &rhs);
 	idx_t GetSharedOrders(const BoundWindowExpression &other) const;
 
 	bool PartitionsAreEquivalent(const BoundWindowExpression &other) const;

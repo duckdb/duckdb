@@ -527,10 +527,32 @@ typedef struct {
 	duckdb_data_chunk (*duckdb_stream_fetch_chunk)(duckdb_result result);
 #endif
 
+// Exposing the instance cache
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_instance_cache (*duckdb_create_instance_cache)();
+	duckdb_state (*duckdb_get_or_create_from_cache)(duckdb_instance_cache instance_cache, const char *path,
+	                                                duckdb_database *out_database, duckdb_config config,
+	                                                char **out_error);
+	void (*duckdb_destroy_instance_cache)(duckdb_instance_cache *instance_cache);
+#endif
+
 // New append functions that are added
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
+#endif
+
+// New string functions that are added
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	char *(*duckdb_value_to_string)(duckdb_value value);
+#endif
+
+// An API to create new vector types
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
+	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
+	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
 #endif
 
 } duckdb_ext_api_v1;
@@ -947,8 +969,22 @@ typedef struct {
 #define duckdb_arrow_array_scan           duckdb_ext_api.duckdb_arrow_array_scan
 #define duckdb_stream_fetch_chunk         duckdb_ext_api.duckdb_stream_fetch_chunk
 
+// Version unstable_instance_cache
+#define duckdb_create_instance_cache    duckdb_ext_api.duckdb_create_instance_cache
+#define duckdb_get_or_create_from_cache duckdb_ext_api.duckdb_get_or_create_from_cache
+#define duckdb_destroy_instance_cache   duckdb_ext_api.duckdb_destroy_instance_cache
+
 // Version unstable_new_append_functions
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// Version unstable_new_string_functions
+#define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
+
+// Version unstable_new_vector_types
+#define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector
+#define duckdb_create_selection_vector       duckdb_ext_api.duckdb_create_selection_vector
+#define duckdb_destroy_selection_vector      duckdb_ext_api.duckdb_destroy_selection_vector
+#define duckdb_selection_vector_get_data_ptr duckdb_ext_api.duckdb_selection_vector_get_data_ptr
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros
@@ -966,6 +1002,12 @@ typedef struct {
 // Place in global scope of any C/C++ file that needs to access the extension API
 #define DUCKDB_EXTENSION_EXTERN extern duckdb_ext_api_v1 duckdb_ext_api;
 
+#ifdef _WIN32
+#define DUCKDB_CAPI_ENTRY_VISIBILITY __declspec(dllexport)
+#else
+#define DUCKDB_CAPI_ENTRY_VISIBILITY __attribute__((visibility("default")))
+#endif
+
 //===--------------------------------------------------------------------===//
 // Entrypoint Macros
 //===--------------------------------------------------------------------===//
@@ -979,7 +1021,7 @@ typedef struct {
 #define DUCKDB_EXTENSION_ENTRYPOINT                                                                                    \
 	DUCKDB_EXTENSION_GLOBAL static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(            \
 	    duckdb_connection connection, duckdb_extension_info info, struct duckdb_extension_access * access);            \
-	DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE(                              \
+	DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN DUCKDB_CAPI_ENTRY_VISIBILITY DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE( \
 	    DUCKDB_EXTENSION_NAME, _init_c_api)(duckdb_extension_info info, struct duckdb_extension_access * access) {     \
 		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_API_VERSION_STRING);                                  \
 		duckdb_database *db = access->get_database(info);                                                              \
@@ -998,7 +1040,7 @@ typedef struct {
 #define DUCKDB_EXTENSION_ENTRYPOINT_CUSTOM                                                                             \
 	DUCKDB_EXTENSION_GLOBAL static bool DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(            \
 	    duckdb_extension_info info, struct duckdb_extension_access * access);                                          \
-	DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE(                              \
+	DUCKDB_EXTENSION_EXTERN_C_GUARD_OPEN DUCKDB_CAPI_ENTRY_VISIBILITY DUCKDB_EXTENSION_API bool DUCKDB_EXTENSION_GLUE( \
 	    DUCKDB_EXTENSION_NAME, _init_c_api)(duckdb_extension_info info, struct duckdb_extension_access * access) {     \
 		DUCKDB_EXTENSION_API_INIT(info, access, DUCKDB_EXTENSION_API_VERSION_STRING);                                  \
 		return DUCKDB_EXTENSION_GLUE(DUCKDB_EXTENSION_NAME, _init_c_api_internal)(info, access);                       \

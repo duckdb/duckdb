@@ -32,8 +32,6 @@ struct EnumUtil {
     static string ToString(T value) { return string(ToChars<T>(value)); }
 };
 
-enum class ARTAppendMode : uint8_t;
-
 enum class ARTConflictType : uint8_t;
 
 enum class AccessMode : uint8_t;
@@ -102,6 +100,8 @@ enum class CompressedMaterializationDirection : uint8_t;
 
 enum class CompressionType : uint8_t;
 
+enum class CompressionValidity : uint8_t;
+
 enum class ConflictManagerMode : uint8_t;
 
 enum class ConstraintType : uint8_t;
@@ -113,6 +113,8 @@ enum class CopyOverwriteMode : uint8_t;
 enum class CopyToType : uint8_t;
 
 enum class DataFileType : uint8_t;
+
+enum class DateCastResult : uint8_t;
 
 enum class DatePartSpecifier : uint8_t;
 
@@ -184,6 +186,8 @@ enum class GateStatus : uint8_t;
 
 enum class HLLStorageType : uint8_t;
 
+enum class IndexAppendMode : uint8_t;
+
 enum class IndexConstraintType : uint8_t;
 
 enum class InsertColumnOrder : uint8_t;
@@ -200,6 +204,12 @@ enum class LimitNodeType : uint8_t;
 
 enum class LoadType : uint8_t;
 
+enum class LogContextScope : uint8_t;
+
+enum class LogLevel : uint8_t;
+
+enum class LogMode : uint8_t;
+
 enum class LogicalOperatorType : uint8_t;
 
 enum class LogicalTypeId : uint8_t;
@@ -215,6 +225,10 @@ enum class MemoryTag : uint8_t;
 enum class MetaPipelineType : uint8_t;
 
 enum class MetricsType : uint8_t;
+
+enum class MultiFileFileState : uint8_t;
+
+enum class MultiFileReaderColumnMappingMode : uint8_t;
 
 enum class NType : uint8_t;
 
@@ -316,6 +330,8 @@ enum class SinkResultType : uint8_t;
 
 enum class SourceResultType : uint8_t;
 
+enum class StarExpressionType : uint8_t;
+
 enum class StatementReturnType : uint8_t;
 
 enum class StatementType : uint8_t;
@@ -378,9 +394,6 @@ enum class WindowBoundary : uint8_t;
 
 enum class WindowExcludeMode : uint8_t;
 
-
-template<>
-const char* EnumUtil::ToChars<ARTAppendMode>(ARTAppendMode value);
 
 template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
@@ -485,6 +498,9 @@ template<>
 const char* EnumUtil::ToChars<CompressionType>(CompressionType value);
 
 template<>
+const char* EnumUtil::ToChars<CompressionValidity>(CompressionValidity value);
+
+template<>
 const char* EnumUtil::ToChars<ConflictManagerMode>(ConflictManagerMode value);
 
 template<>
@@ -501,6 +517,9 @@ const char* EnumUtil::ToChars<CopyToType>(CopyToType value);
 
 template<>
 const char* EnumUtil::ToChars<DataFileType>(DataFileType value);
+
+template<>
+const char* EnumUtil::ToChars<DateCastResult>(DateCastResult value);
 
 template<>
 const char* EnumUtil::ToChars<DatePartSpecifier>(DatePartSpecifier value);
@@ -608,6 +627,9 @@ template<>
 const char* EnumUtil::ToChars<HLLStorageType>(HLLStorageType value);
 
 template<>
+const char* EnumUtil::ToChars<IndexAppendMode>(IndexAppendMode value);
+
+template<>
 const char* EnumUtil::ToChars<IndexConstraintType>(IndexConstraintType value);
 
 template<>
@@ -632,6 +654,15 @@ template<>
 const char* EnumUtil::ToChars<LoadType>(LoadType value);
 
 template<>
+const char* EnumUtil::ToChars<LogContextScope>(LogContextScope value);
+
+template<>
+const char* EnumUtil::ToChars<LogLevel>(LogLevel value);
+
+template<>
+const char* EnumUtil::ToChars<LogMode>(LogMode value);
+
+template<>
 const char* EnumUtil::ToChars<LogicalOperatorType>(LogicalOperatorType value);
 
 template<>
@@ -654,6 +685,12 @@ const char* EnumUtil::ToChars<MetaPipelineType>(MetaPipelineType value);
 
 template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
+
+template<>
+const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value);
+
+template<>
+const char* EnumUtil::ToChars<MultiFileReaderColumnMappingMode>(MultiFileReaderColumnMappingMode value);
 
 template<>
 const char* EnumUtil::ToChars<NType>(NType value);
@@ -806,6 +843,9 @@ template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
 
 template<>
+const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value);
+
+template<>
 const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value);
 
 template<>
@@ -898,9 +938,6 @@ const char* EnumUtil::ToChars<WindowBoundary>(WindowBoundary value);
 template<>
 const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
 
-
-template<>
-ARTAppendMode EnumUtil::FromString<ARTAppendMode>(const char *value);
 
 template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
@@ -1005,6 +1042,9 @@ template<>
 CompressionType EnumUtil::FromString<CompressionType>(const char *value);
 
 template<>
+CompressionValidity EnumUtil::FromString<CompressionValidity>(const char *value);
+
+template<>
 ConflictManagerMode EnumUtil::FromString<ConflictManagerMode>(const char *value);
 
 template<>
@@ -1021,6 +1061,9 @@ CopyToType EnumUtil::FromString<CopyToType>(const char *value);
 
 template<>
 DataFileType EnumUtil::FromString<DataFileType>(const char *value);
+
+template<>
+DateCastResult EnumUtil::FromString<DateCastResult>(const char *value);
 
 template<>
 DatePartSpecifier EnumUtil::FromString<DatePartSpecifier>(const char *value);
@@ -1128,6 +1171,9 @@ template<>
 HLLStorageType EnumUtil::FromString<HLLStorageType>(const char *value);
 
 template<>
+IndexAppendMode EnumUtil::FromString<IndexAppendMode>(const char *value);
+
+template<>
 IndexConstraintType EnumUtil::FromString<IndexConstraintType>(const char *value);
 
 template<>
@@ -1152,6 +1198,15 @@ template<>
 LoadType EnumUtil::FromString<LoadType>(const char *value);
 
 template<>
+LogContextScope EnumUtil::FromString<LogContextScope>(const char *value);
+
+template<>
+LogLevel EnumUtil::FromString<LogLevel>(const char *value);
+
+template<>
+LogMode EnumUtil::FromString<LogMode>(const char *value);
+
+template<>
 LogicalOperatorType EnumUtil::FromString<LogicalOperatorType>(const char *value);
 
 template<>
@@ -1174,6 +1229,12 @@ MetaPipelineType EnumUtil::FromString<MetaPipelineType>(const char *value);
 
 template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value);
+
+template<>
+MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value);
+
+template<>
+MultiFileReaderColumnMappingMode EnumUtil::FromString<MultiFileReaderColumnMappingMode>(const char *value);
 
 template<>
 NType EnumUtil::FromString<NType>(const char *value);
@@ -1324,6 +1385,9 @@ SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);
+
+template<>
+StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value);
 
 template<>
 StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value);

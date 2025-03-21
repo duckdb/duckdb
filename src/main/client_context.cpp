@@ -138,11 +138,14 @@ struct DebugClientContextState : public ClientContextState {
 #endif
 
 ClientContext::ClientContext(shared_ptr<DatabaseInstance> database)
-    : db(std::move(database)), interrupted(false), client_data(make_uniq<ClientData>(*this)), transaction(*this) {
+    : db(std::move(database)), interrupted(false), transaction(*this), connection_id(DConstants::INVALID_INDEX) {
 	registered_state = make_uniq<RegisteredStateManager>();
 #ifdef DEBUG
 	registered_state->GetOrCreate<DebugClientContextState>("debug_client_context_state");
 #endif
+	LoggingContext context(LogContextScope::CONNECTION);
+	logger = db->GetLogManager().CreateLogger(context, true);
+	client_data = make_uniq<ClientData>(*this);
 }
 
 ClientContext::~ClientContext() {
@@ -205,6 +208,17 @@ void ClientContext::BeginQueryInternal(ClientContextLock &lock, const string &qu
 	for (auto &state : registered_state->States()) {
 		state->QueryBegin(*this);
 	}
+
+	// Flush the old Logger
+	logger->Flush();
+
+	// Refresh the logger to ensure we are in sync with global log settings
+	LoggingContext context(LogContextScope::CONNECTION);
+	context.connection_id = connection_id;
+	context.transaction_id = transaction.ActiveTransaction().global_transaction_id;
+	context.query_id = transaction.GetActiveQuery();
+	logger = db->GetLogManager().CreateLogger(context, true);
+	DUCKDB_LOG_INFO(*this, "duckdb.ClientContext.BeginQuery", query);
 }
 
 ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success, bool invalidate_transaction,
@@ -215,7 +229,6 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		active_query->executor->CancelTasks();
 	}
 	active_query->progress_bar.reset();
-
 	D_ASSERT(active_query.get());
 	active_query.reset();
 	query_progress.Initialize();
@@ -236,13 +249,19 @@ ErrorData ClientContext::EndQueryInternal(ClientContextLock &lock, bool success,
 		}
 	} catch (std::exception &ex) {
 		error = ErrorData(ex);
-		if (Exception::InvalidatesDatabase(error.Type())) {
+		if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 			auto &db_inst = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_inst, error.RawMessage());
 		}
 	} catch (...) { // LCOV_EXCL_START
 		error = ErrorData("Unhandled exception!");
 	} // LCOV_EXCL_STOP
+
+	// Refresh the logger
+	logger->Flush();
+	LoggingContext context(LogContextScope::CONNECTION);
+	context.connection_id = reinterpret_cast<idx_t>(this);
+	logger = db->GetLogManager().CreateLogger(context, true);
 
 	// Notify any registered state of query end
 	for (auto const &s : registered_state->States()) {
@@ -288,9 +307,17 @@ Executor &ClientContext::GetExecutor() {
 	return *active_query->executor;
 }
 
+Logger &ClientContext::GetLogger() const {
+	return *logger;
+}
+
 const string &ClientContext::GetCurrentQuery() {
 	D_ASSERT(active_query);
 	return active_query->query;
+}
+
+connection_t ClientContext::GetConnectionId() const {
+	return connection_id;
 }
 
 unique_ptr<QueryResult> ClientContext::FetchResultInternal(ClientContextLock &lock, PendingQueryResult &pending) {
@@ -333,52 +360,48 @@ ClientContext::CreatePreparedStatementInternal(ClientContextLock &lock, const st
 	auto &profiler = QueryProfiler::Get(*this);
 	profiler.StartQuery(query, IsExplainAnalyze(statement.get()), true);
 	profiler.StartPhase(MetricsType::PLANNER);
-	Planner planner(*this);
+	Planner logical_planner(*this);
 	if (values) {
 		auto &parameter_values = *values;
 		for (auto &value : parameter_values) {
-			planner.parameter_data.emplace(value.first, BoundParameterData(value.second));
+			logical_planner.parameter_data.emplace(value.first, BoundParameterData(value.second));
 		}
 	}
 
-	planner.CreatePlan(std::move(statement));
-	D_ASSERT(planner.plan || !planner.properties.bound_all_parameters);
+	logical_planner.CreatePlan(std::move(statement));
+	D_ASSERT(logical_planner.plan || !logical_planner.properties.bound_all_parameters);
 	profiler.EndPhase();
 
-	auto plan = std::move(planner.plan);
+	auto logical_plan = std::move(logical_planner.plan);
 	// extract the result column names from the plan
-	result->properties = planner.properties;
-	result->names = planner.names;
-	result->types = planner.types;
-	result->value_map = std::move(planner.value_map);
-	if (!planner.properties.bound_all_parameters) {
+	result->properties = logical_planner.properties;
+	result->names = logical_planner.names;
+	result->types = logical_planner.types;
+	result->value_map = std::move(logical_planner.value_map);
+	if (!logical_planner.properties.bound_all_parameters) {
 		return result;
 	}
 #ifdef DEBUG
-	plan->Verify(*this);
+	logical_plan->Verify(*this);
 #endif
-	if (config.enable_optimizer && plan->RequireOptimizer()) {
+	if (config.enable_optimizer && logical_plan->RequireOptimizer()) {
 		profiler.StartPhase(MetricsType::ALL_OPTIMIZERS);
-		Optimizer optimizer(*planner.binder, *this);
-		plan = optimizer.Optimize(std::move(plan));
-		D_ASSERT(plan);
+		Optimizer optimizer(*logical_planner.binder, *this);
+		logical_plan = optimizer.Optimize(std::move(logical_plan));
+		D_ASSERT(logical_plan);
 		profiler.EndPhase();
 
 #ifdef DEBUG
-		plan->Verify(*this);
+		logical_plan->Verify(*this);
 #endif
 	}
 
+	// Convert the logical query plan into a physical query plan.
 	profiler.StartPhase(MetricsType::PHYSICAL_PLANNER);
-	// now convert logical query plan into a physical query plan
 	PhysicalPlanGenerator physical_planner(*this);
-	auto physical_plan = physical_planner.CreatePlan(std::move(plan));
+	result->physical_plan = physical_planner.Plan(std::move(logical_plan));
 	profiler.EndPhase();
-
-#ifdef DEBUG
-	D_ASSERT(!physical_plan->ToString().empty());
-#endif
-	result->plan = std::move(physical_plan);
+	D_ASSERT(result->physical_plan);
 	return result;
 }
 
@@ -584,7 +607,7 @@ PendingExecutionResult ClientContext::ExecuteTaskInternal(ClientContextLock &loc
 			}
 		} else if (!Exception::InvalidatesTransaction(error.Type())) {
 			invalidate_transaction = false;
-		} else if (Exception::InvalidatesDatabase(error.Type())) {
+		} else if (Exception::InvalidatesDatabase(error.Type()) || error.Type() == ExceptionType::INTERNAL) {
 			// fatal exceptions invalidate the entire database
 			auto &db_instance = DatabaseInstance::GetDatabase(*this);
 			ValidChecker::Invalidate(db_instance, error.RawMessage());
@@ -1026,7 +1049,9 @@ unique_ptr<PendingQueryResult> ClientContext::PendingQuery(const string &query,
 
 		return PendingQueryInternal(*lock, std::move(statements[0]), params, true);
 	} catch (std::exception &ex) {
-		return make_uniq<PendingQueryResult>(ErrorData(ex));
+		ErrorData error(ex);
+		ProcessError(error, query);
+		return make_uniq<PendingQueryResult>(std::move(error));
 	}
 }
 
@@ -1343,15 +1368,19 @@ ParserOptions ClientContext::GetParserOptions() const {
 	return options;
 }
 
-ClientProperties ClientContext::GetClientProperties() const {
+ClientProperties ClientContext::GetClientProperties() {
 	string timezone = "UTC";
 	Value result;
 
 	if (TryGetCurrentSetting("TimeZone", result)) {
 		timezone = result.ToString();
 	}
-	return {timezone, db->config.options.arrow_offset_size, db->config.options.arrow_use_list_view,
-	        db->config.options.produce_arrow_string_views, db->config.options.arrow_lossless_conversion};
+	return {timezone,
+	        db->config.options.arrow_offset_size,
+	        db->config.options.arrow_use_list_view,
+	        db->config.options.produce_arrow_string_views,
+	        db->config.options.arrow_lossless_conversion,
+	        this};
 }
 
 bool ClientContext::ExecutionIsFinished() {

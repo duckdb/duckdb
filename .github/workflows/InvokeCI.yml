@@ -1,5 +1,6 @@
 name: InvokeCI
 on:
+  repository_dispatch:
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -7,6 +8,10 @@ on:
       git_ref:
         type: string
       skip_tests:
+        type: string
+      run_all:
+        type: string
+      twine_upload:
         type: string
 
 concurrency:
@@ -21,6 +26,7 @@ jobs:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
 
   linux-release:
     uses: ./.github/workflows/LinuxRelease.yml
@@ -37,6 +43,7 @@ jobs:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
 
   python:
     uses: ./.github/workflows/Python.yml
@@ -45,6 +52,8 @@ jobs:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
+      override_twine_upload: ${{ inputs.twine_upload }}
 
   pyodide:
     uses: ./.github/workflows/Pyodide.yml
@@ -61,3 +70,53 @@ jobs:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
+
+  Wasm:
+    uses: ./.github/workflows/Wasm.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+
+  static-libraries:
+    uses: ./.github/workflows/BundleStaticLibs.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+
+  notify-external-repos-main:
+    uses: ./.github/workflows/NotifyExternalRepositories.yml
+    secrets: inherit
+    needs:
+      - osx
+      - linux-release
+      - windows
+      - python
+      - pyodide
+      - R
+      - Wasm
+      - static-libraries
+    if: ${{ inputs.git_ref == '' }}
+    with:
+      target-branch: ${{ github.ref_name }}
+      duckdb-sha: ${{ github.head_ref }}
+
+  notify-specific-branch-on-external-repos:
+    uses: ./.github/workflows/NotifyExternalRepositories.yml
+    secrets: inherit
+    needs:
+      - osx
+      - linux-release
+      - windows
+      - python
+      - pyodide
+      - R
+      - Wasm
+      - static-libraries
+    if: ${{ inputs.git_ref != '' }}
+    with:
+      target-branch: ${{ github.ref_name }}
+      duckdb-sha: ${{ inputs.git_ref }}

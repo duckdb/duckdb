@@ -65,6 +65,7 @@ struct SimilarCatalogEntry;
 class Binder;
 class LogicalOperator;
 class PhysicalOperator;
+class PhysicalPlanGenerator;
 class LogicalCreateIndex;
 class LogicalCreateTable;
 class LogicalInsert;
@@ -117,6 +118,7 @@ public:
 		return false;
 	}
 	virtual void Initialize(bool load_builtin) = 0;
+	virtual void Initialize(optional_ptr<ClientContext> context, bool load_builtin);
 
 	bool IsSystemCatalog() const;
 	bool IsTemporaryCatalog() const;
@@ -289,16 +291,18 @@ public:
 	DUCKDB_API void Alter(CatalogTransaction transaction, AlterInfo &info);
 	DUCKDB_API void Alter(ClientContext &context, AlterInfo &info);
 
-	virtual unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
-	                                                       unique_ptr<PhysicalOperator> plan) = 0;
-	virtual unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
-	                                                unique_ptr<PhysicalOperator> plan) = 0;
-	virtual unique_ptr<PhysicalOperator> PlanDelete(ClientContext &context, LogicalDelete &op,
-	                                                unique_ptr<PhysicalOperator> plan) = 0;
-	virtual unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
-	                                                unique_ptr<PhysicalOperator> plan) = 0;
+	virtual PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner,
+	                                            LogicalCreateTable &op, PhysicalOperator &plan) = 0;
+	virtual PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
+	                                     optional_ptr<PhysicalOperator> plan) = 0;
+	virtual PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op,
+	                                     PhysicalOperator &plan) = 0;
+	virtual PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op);
+	virtual PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op,
+	                                     PhysicalOperator &plan) = 0;
+	virtual PhysicalOperator &PlanUpdate(ClientContext &context, PhysicalPlanGenerator &planner, LogicalUpdate &op);
 	virtual unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
-	                                                    unique_ptr<LogicalOperator> plan) = 0;
+	                                                    unique_ptr<LogicalOperator> plan);
 	virtual unique_ptr<LogicalOperator> BindAlterAddIndex(Binder &binder, TableCatalogEntry &table_entry,
 	                                                      unique_ptr<LogicalOperator> plan,
 	                                                      unique_ptr<CreateIndexInfo> create_info,
@@ -315,7 +319,11 @@ public:
 		return CatalogLookupBehavior::STANDARD;
 	}
 
+	//! Returns the default schema of the catalog
+	virtual string GetDefaultSchema() const;
+
 	//! The default table is used for `SELECT * FROM <catalog_name>;`
+	//! FIXME: these should be virtual methods
 	DUCKDB_API bool HasDefaultTable() const;
 	DUCKDB_API void SetDefaultTable(const string &schema, const string &name);
 	DUCKDB_API string GetDefaultTable() const;

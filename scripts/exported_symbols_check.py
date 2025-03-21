@@ -13,8 +13,8 @@ if res.returncode != 0:
 culprits = []
 
 whitelist = [
-    '@@GLIBC',
-    '@@CXXABI',
+    '@GLIBC',
+    '@CXXABI',
     '__gnu_cxx::',
     'std::',
     'N6duckdb',
@@ -48,12 +48,12 @@ for symbol in res.stdout.decode('utf-8').split('\n'):
         continue
     if symbol.endswith(' U'):  # undefined because dynamic linker
         continue
-    if symbol.endswith(' U 0 0'):  # undefined because dynamic linker
+    if symbol.endswith(' U 0 0') and "random_device" not in symbol:  # undefined because dynamic linker
         continue
 
     is_whitelisted = False
     for entry in whitelist:
-        if entry in symbol:
+        if entry in symbol and "random_device" not in symbol:
             is_whitelisted = True
     if is_whitelisted:
         continue

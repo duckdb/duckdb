@@ -23,7 +23,8 @@ public:
 
 public:
 	LogicalGet(idx_t table_index, TableFunction function, unique_ptr<FunctionData> bind_data,
-	           vector<LogicalType> returned_types, vector<string> returned_names);
+	           vector<LogicalType> returned_types, vector<string> returned_names,
+	           virtual_column_map_t virtual_columns = virtual_column_map_t());
 
 	//! The table index in the current bind context
 	idx_t table_index;
@@ -35,6 +36,8 @@ public:
 	vector<LogicalType> returned_types;
 	//! The names of ALL columns that can be returned by the table function
 	vector<string> names;
+	//! A mapping of column index -> type/name for all virtual columns
+	virtual_column_map_t virtual_columns;
 	//! Columns that are used outside the scan
 	vector<idx_t> projection_ids;
 	//! Filters pushed down for table scan
@@ -60,6 +63,12 @@ public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	//! Returns the underlying table that is being scanned, or nullptr if there is none
 	optional_ptr<TableCatalogEntry> GetTable() const;
+	//! Returns any column to query - preferably the cheapest column
+	//! This is used when we are running e.g. a COUNT(*) and don't care about the contents of any columns in the table
+	column_t GetAnyColumn() const;
+
+	const LogicalType &GetColumnType(const ColumnIndex &column_index) const;
+	const string &GetColumnName(const ColumnIndex &column_index) const;
 
 public:
 	void SetColumnIds(vector<ColumnIndex> &&column_ids);
