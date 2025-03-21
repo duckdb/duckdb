@@ -15,11 +15,10 @@
 #include "duckdb/planner/tableref/bound_cteref.hpp"
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/planner/tableref/bound_at_clause.hpp"
-
-#include <duckdb/execution/expression_executor.hpp>
-#include <duckdb/planner/expression_binder/constant_binder.hpp>
+#include "duckdb/execution/expression_executor.hpp"
 
 namespace duckdb {
 
