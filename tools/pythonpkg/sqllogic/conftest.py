@@ -103,7 +103,6 @@ def scan_for_test_scripts(root_dir: pathlib.Path, config: pytest.Config) -> typi
     """
 
     # TODO: Add tests from extensions
-    # TODO: Do we have to handle --ignore and --ignore-glob and --deselect options?
     test_script_extensions = [".test", ".test_slow", ".test_coverage"]
     it = itertools.chain.from_iterable(root_dir.rglob(f"*{ext}") for ext in test_script_extensions)
     return map(
