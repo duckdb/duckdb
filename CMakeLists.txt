@@ -815,19 +815,19 @@ function(get_statically_linked_extensions DUCKDB_EXTENSION_NAMES OUT_VARIABLE)
   endif()
 endfunction()
 
-function(link_extension_libraries LIBRARY)
+function(link_extension_libraries LIBRARY LINKAGE)
   get_statically_linked_extensions("${DUCKDB_EXTENSION_NAMES}" STATICALLY_LINKED_EXTENSIONS)
   # Now link against any registered out-of-tree extensions
   foreach(EXT_NAME IN LISTS STATICALLY_LINKED_EXTENSIONS)
     string(TOUPPER ${EXT_NAME} EXT_NAME_UPPERCASE)
     if (${DUCKDB_EXTENSION_${EXT_NAME_UPPERCASE}_SHOULD_LINK})
-      target_link_libraries(${LIBRARY} ${EXT_NAME}_extension)
+      target_link_libraries(${LIBRARY} ${LINKAGE} ${EXT_NAME}_extension)
     endif()
   endforeach()
 endfunction()
 
-function(link_threads LIBRARY)
-    target_link_libraries(${LIBRARY} Threads::Threads)
+function(link_threads LIBRARY LINKAGE)
+    target_link_libraries(${LIBRARY} ${LINKAGE} Threads::Threads)
 endfunction()
 
 # Deploys extensions to a local repository (a folder structure that contains the duckdb version + binary arch)
@@ -1481,7 +1481,7 @@ if(NOT DUCKDB_EXPLICIT_PLATFORM)
   set(VERSION_SOURCES tools/utils/test_platform.cpp)
 
   add_executable(duckdb_platform_binary ${VERSION_SOURCES})
-  link_threads(duckdb_platform_binary)
+  link_threads(duckdb_platform_binary "")
 
   set_target_properties(duckdb_platform_binary PROPERTIES OUTPUT_NAME duckdb_platform_binary)
   set_target_properties(duckdb_platform_binary PROPERTIES RUNTIME_OUTPUT_DIRECTORY
