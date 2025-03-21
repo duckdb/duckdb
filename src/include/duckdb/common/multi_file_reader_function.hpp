@@ -16,7 +16,7 @@
 
 namespace duckdb {
 
-enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
+enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, SKIPPED, CLOSED };
 
 struct MultiFileLocalState : public LocalTableFunctionState {
 public:
@@ -340,8 +340,9 @@ public:
 					                      context, current_file_index, global_state.multi_file_reader_state)) {
 						//! File can be skipped entirely, close it and move on
 						can_skip_file = true;
+					} else {
+						OP::FinalizeReader(context, *reader, *global_state.global_state);
 					}
-					OP::FinalizeReader(context, *reader, *global_state.global_state);
 				} catch (...) {
 					parallel_lock.lock();
 					global_state.error_opening_file = true;
@@ -350,15 +351,14 @@ public:
 
 				// Now re-lock the state and add the reader
 				parallel_lock.lock();
+				if (can_skip_file) {
+					current_reader_data.file_state = MultiFileFileState::SKIPPED;
+					//! Intentionally do not increase 'i'
+					continue;
+				}
 				current_reader_data.reader = std::move(reader);
 				current_reader_data.file_state = MultiFileFileState::OPEN;
-				if (can_skip_file) {
-					CloseFile(context, global_state, current_reader_data, parallel_lock);
-					//! Do not increase 'i' because this is not a file that will be opened later
-					continue;
-				} else {
-					return true;
-				}
+				return true;
 			}
 			i++;
 		}
@@ -431,6 +431,11 @@ public:
 					current_reader_data.closed_reader = current_reader_data.reader;
 					current_reader_data.reader = nullptr;
 				}
+			} else if (current_reader_data.file_state == MultiFileFileState::SKIPPED) {
+				//! This file does not need to be opened or closed, the filters have determined that this file can be
+				//! skipped entirely
+				++gstate.file_index;
+				continue;
 			}
 
 			if (TryOpenNextFile(context, bind_data, scan_data, gstate, parallel_lock)) {
@@ -495,9 +500,6 @@ public:
 		result->filters = input.filters.get();
 		result->global_state = OP::InitializeGlobalState(context, bind_data, *result);
 		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
-		//! This is unnecessary since we're still initializing the global state, there is no contention
-		//! But it keeps the CloseFile method simpler
-		unique_lock<mutex> parallel_lock(result->lock);
 
 		// Ensure all readers are initialized and FileListScan is sync with readers list
 		for (auto &reader_data : result->readers) {
@@ -516,7 +518,8 @@ public:
 				if (!InitializeReader(*reader_data->reader, bind_data, input.column_indexes, input.filters, context,
 				                      file_idx, result->multi_file_reader_state)) {
 					//! File can be skipped entirely, close it and move on
-					CloseFile(context, *result, *reader_data, parallel_lock);
+					reader_data->file_state = MultiFileFileState::SKIPPED;
+					result->file_index++;
 				}
 			}
 		}
@@ -782,20 +785,6 @@ private:
 	static bool HasFilesToRead(MultiFileGlobalState &gstate, unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
 		return (gstate.file_index.load() < gstate.readers.size());
-	}
-	static void CloseFile(ClientContext &context, MultiFileGlobalState &gstate, MultiFileFileReaderData &reader_data,
-	                      unique_lock<mutex> &parallel_lock) {
-		D_ASSERT(parallel_lock.owns_lock());
-		// Set state to the next file
-		++gstate.file_index;
-
-		// Close current file
-		reader_data.file_state = MultiFileFileState::CLOSED;
-
-		//! Finish processing the file
-		OP::FinishFile(context, *gstate.global_state, *reader_data.reader);
-		reader_data.closed_reader = reader_data.reader;
-		reader_data.reader = nullptr;
 	}
 };
 
