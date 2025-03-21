@@ -561,7 +561,7 @@ unique_ptr<PendingQueryResult> ClientContext::PendingPreparedStatement(ClientCon
 	}
 
 	for (auto &state : registered_state->States()) {
-		PreparedStatementCallbackInfo info(*prepared, parameters);
+		PreparedStatementCallbackInfo info(*prepared, parameters.parameters);
 		auto new_rebind = state->OnExecutePrepared(*this, info, rebind);
 		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
