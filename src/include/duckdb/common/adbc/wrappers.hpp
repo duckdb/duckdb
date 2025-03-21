@@ -10,6 +10,7 @@
 
 #include "duckdb.h"
 #include "duckdb/common/string.hpp"
+#include "duckdb/common/unordered_map.hpp"
 
 namespace duckdb {
 
