@@ -11,6 +11,7 @@
 #include "duckdb/common/vector.hpp"
 #include "duckdb/main/table_description.hpp"
 #include "duckdb/parser/tableref.hpp"
+#include "duckdb/parser/tableref/at_clause.hpp"
 
 namespace duckdb {
 
@@ -34,6 +35,8 @@ public:
 	string schema_name;
 	//! The table name.
 	string table_name;
+	//! The timestamp/version at which to read this table entry (if any)
+	unique_ptr<AtClause> at_clause;
 
 public:
 	string ToString() const override;

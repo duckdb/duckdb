@@ -1,6 +1,7 @@
 add_library_unity(
   duckdb_parser_tableref
   OBJECT
+  at_clause.cpp
   basetableref.cpp
   delimgetref.cpp
   emptytableref.cpp

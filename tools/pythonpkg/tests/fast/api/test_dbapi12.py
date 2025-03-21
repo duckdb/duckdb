@@ -44,8 +44,8 @@ class TestRelationApi(object):
         duckdb_cursor.execute("INSERT INTO a VALUES (1, 'one'), (2, 'two'), (3, 'three')")
         duckdb_cursor.execute('CREATE VIEW v AS SELECT * FROM a')
 
-        duckdb_cursor.execute('CREATE TEMPORARY TABLE at (i INTEGER)')
-        duckdb_cursor.execute('CREATE TEMPORARY VIEW vt AS SELECT * FROM at')
+        duckdb_cursor.execute('CREATE TEMPORARY TABLE at_ (i INTEGER)')
+        duckdb_cursor.execute('CREATE TEMPORARY VIEW vt AS SELECT * FROM at_')
 
         rel_a = duckdb_cursor.table('a')
         rel_v = duckdb_cursor.view('v')
