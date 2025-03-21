@@ -219,6 +219,10 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		if (append_to_table) {
 			table.RevertAppendInternal(NumericCast<idx_t>(append_state.row_start));
 		}
+#ifdef DEBUG
+		// Verify that our index memory is stable.
+		table.VerifyIndexBuffers();
+#endif
 		error.Throw();
 	}
 	if (append_to_table) {
@@ -541,6 +545,11 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		// append to the indexes and append to the base table
 		storage.AppendToIndexes(transaction, append_state, true);
 	}
+
+#ifdef DEBUG
+	// Verify that our index memory is stable.
+	table.VerifyIndexBuffers();
+#endif
 }
 
 void LocalStorage::Commit(optional_ptr<StorageCommitState> commit_state) {

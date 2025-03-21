@@ -1440,7 +1440,7 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 // Verification
 //===--------------------------------------------------------------------===//
 
-string ART::VerifyAndToString(IndexLock &state, const bool only_verify) {
+string ART::VerifyAndToString(IndexLock &l, const bool only_verify) {
 	return VerifyAndToStringInternal(only_verify);
 }
 
@@ -1451,7 +1451,7 @@ string ART::VerifyAndToStringInternal(const bool only_verify) {
 	return "[empty]";
 }
 
-void ART::VerifyAllocations(IndexLock &state) {
+void ART::VerifyAllocations(IndexLock &l) {
 	return VerifyAllocationsInternal();
 }
 
@@ -1471,6 +1471,12 @@ void ART::VerifyAllocationsInternal() {
 		D_ASSERT(segment_count == node_counts[NumericCast<uint8_t>(i)]);
 	}
 #endif
+}
+
+void ART::VerifyBuffers(IndexLock &l) {
+	for (auto &allocator : *allocators) {
+		allocator->VerifyBuffers();
+	}
 }
 
 constexpr const char *ART::TYPE_NAME;

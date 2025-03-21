@@ -126,14 +126,19 @@ public:
 	idx_t GetInMemorySize();
 
 	//! Returns the string representation of an index, or only traverses and verifies the index.
-	virtual string VerifyAndToString(IndexLock &state, const bool only_verify) = 0;
+	virtual string VerifyAndToString(IndexLock &l, const bool only_verify) = 0;
 	//! Obtains a lock and calls VerifyAndToString.
 	string VerifyAndToString(const bool only_verify);
 
 	//! Ensures that the node allocation counts match the node counts.
-	virtual void VerifyAllocations(IndexLock &state) = 0;
+	virtual void VerifyAllocations(IndexLock &l) = 0;
 	//! Obtains a lock and calls VerifyAllocations.
 	void VerifyAllocations();
+
+	//! Verify the index buffers.
+	virtual void VerifyBuffers(IndexLock &l) = 0;
+	//! Obtains a lock and calls VerifyBuffers.
+	void VerifyBuffers();
 
 	//! Returns true if the index is affected by updates on the specified column IDs, and false otherwise
 	bool IndexIsUpdated(const vector<PhysicalIndex> &column_ids) const;

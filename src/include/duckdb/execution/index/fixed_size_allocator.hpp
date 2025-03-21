@@ -27,9 +27,6 @@ class FixedSizeAllocator {
 public:
 	//! We can vacuum 10% or more of the total in-memory footprint
 	static constexpr uint8_t VACUUM_THRESHOLD = 10;
-	//! We allow up to EMPTY_BUFFER_THRESHOLD empty buffers to be kept alive.
-	//! This prevents allocation oscillation for new+free+new+... scenarios.
-	static constexpr idx_t EMPTY_BUFFER_THRESHOLD = 1;
 
 public:
 	//! Construct a new fixed-size allocator
@@ -134,6 +131,8 @@ public:
 	}
 	//! Removes empty buffers.
 	void RemoveEmptyBuffers();
+	//! Verifies that the number of empty buffers does not exceed the empty buffer threshold.
+	void VerifyBuffers();
 
 private:
 	//! Allocation size of one segment in a buffer
@@ -158,7 +157,7 @@ private:
 	unordered_set<idx_t> buffers_with_free_space;
 	//! Caches the next buffer to be filled up.
 	//! Unordered sets make no guarantee that begin() returns the same element.
-	//! By caching one of the elements in the free list, we get more consistency when filling buffers.
+	//! By caching one of the buffers with free space, we get more consistency when filling buffers.
 	optional_idx buffer_with_free_space;
 
 	//! Buffers qualifying for a vacuum (helper field to allow for fast NeedsVacuum checks)

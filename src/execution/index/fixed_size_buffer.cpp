@@ -44,7 +44,7 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
 	buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_size, false);
 	block_handle = buffer_handle.GetBlockHandle();
 
-	// Zero-initialize the buffer in case it gets serialized to storage.
+	// Zero-initialize the buffer as it might get serialized to storage.
 	memset(buffer_handle.Ptr(), 0, block_size);
 }
 

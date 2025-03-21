@@ -100,12 +100,21 @@ void FixedSizeAllocator::Free(const IndexPointer ptr) {
 	total_segment_count--;
 	buffer->segment_count--;
 
-	// Early-out, if the buffer is not empty, or if the buffer falls within the empty buffer threshold.
-	if (buffer->segment_count != 0 || buffers_with_free_space.size() <= EMPTY_BUFFER_THRESHOLD) {
+	// Early-out, if the buffer is not empty.
+	if (buffer->segment_count != 0) {
 		buffers_with_free_space.insert(buffer_id);
 		if (!buffer_with_free_space.IsValid()) {
 			buffer_with_free_space = buffer_id;
 		}
+		return;
+	}
+
+	// The segment count went to 0, i.e, the buffer is now empty.
+	// We keep the buffer alive, if it is the only buffer with free space.
+	// We do so to prevent too much buffer creation fluctuation.
+	if (buffers_with_free_space.size() == 1) {
+		D_ASSERT(*buffers_with_free_space.begin() == buffer_id);
+		D_ASSERT(buffer_with_free_space.GetIndex() == buffer_id);
 		return;
 	}
 
@@ -364,6 +373,21 @@ void FixedSizeAllocator::RemoveEmptyBuffers() {
 		buffer_it = buffers.erase(buffer_it);
 	}
 	NextBufferWithFreeSpace();
+}
+
+void FixedSizeAllocator::VerifyBuffers() {
+	idx_t count = 0;
+	auto buffer_it = buffers.begin();
+	while (buffer_it != buffers.end()) {
+		if (buffer_it->second->segment_count == 0) {
+			count++;
+		}
+		buffer_it++;
+	}
+
+	if (count > 1) {
+		throw InternalException("more than one empty buffer in allocator");
+	}
 }
 
 void FixedSizeAllocator::NextBufferWithFreeSpace() {

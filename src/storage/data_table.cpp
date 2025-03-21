@@ -356,6 +356,15 @@ void DataTable::VacuumIndexes() {
 	});
 }
 
+void DataTable::VerifyIndexBuffers() {
+	info->indexes.Scan([&](Index &index) {
+		if (index.IsBound()) {
+			index.Cast<BoundIndex>().VerifyBuffers();
+		}
+		return false;
+	});
+}
+
 void DataTable::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
 	row_groups->CleanupAppend(lowest_transaction, start, count);
 }
@@ -1107,6 +1116,16 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 			current_row_base += chunk.size();
 		});
 	}
+
+#ifdef DEBUG
+	// Verify that our index memory is stable.
+	info->indexes.Scan([&](Index &index) {
+		if (index.IsBound()) {
+			index.Cast<BoundIndex>().VerifyBuffers();
+		}
+		return false;
+	});
+#endif
 
 	// revert the data table append
 	RevertAppendInternal(start_row);
