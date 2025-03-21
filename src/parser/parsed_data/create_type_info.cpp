@@ -61,6 +61,7 @@ string CreateTypeInfo::ToString() const {
 		result += " AS ";
 		result += type.ToString();
 	}
+	result += ";";
 	return result;
 }
 
