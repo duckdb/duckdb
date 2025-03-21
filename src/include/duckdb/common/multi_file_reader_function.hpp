@@ -27,7 +27,7 @@ public:
 	shared_ptr<BaseFileReader> reader;
 	bool is_parallel;
 	idx_t batch_index;
-	idx_t file_index;
+	idx_t file_index = DConstants::INVALID_INDEX;
 	unique_ptr<LocalTableFunctionState> local_state;
 	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
 	DataChunk scan_chunk;
@@ -371,6 +371,40 @@ public:
 		}
 	}
 
+	static void InitializeFileScanState(ClientContext &context, MultiFileLocalState &lstate,
+	                                    vector<idx_t> &projection_ids) {
+		auto &reader_data = lstate.reader->reader_data;
+		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
+		vector<LogicalType> intermediate_chunk_types;
+		auto &local_column_ids = reader_data.column_ids;
+		auto &local_columns = lstate.reader->GetColumns();
+		for (idx_t i = 0; i < local_column_ids.size(); i++) {
+			auto local_idx = MultiFileLocalIndex(i);
+			auto local_id = local_column_ids[local_idx];
+			auto cast_entry = reader_data.cast_map.find(local_id);
+			if (cast_entry == reader_data.cast_map.end()) {
+				auto &col = local_columns[local_id];
+				intermediate_chunk_types.push_back(col.type);
+			} else {
+				intermediate_chunk_types.push_back(cast_entry->second);
+			}
+		}
+		lstate.scan_chunk.Destroy();
+		lstate.scan_chunk.Initialize(context, intermediate_chunk_types);
+
+		auto &executor = lstate.executor;
+		executor.ClearExpressions();
+		if (!projection_ids.empty()) {
+			for (auto &id : projection_ids) {
+				executor.AddExpression(*reader_data.expressions[id]);
+			}
+		} else {
+			for (auto &expr : reader_data.expressions) {
+				executor.AddExpression(*expr);
+			}
+		}
+	}
+
 	// This function looks for the next available row group. If not available, it will open files from bind_data.files
 	// until there is a row group available for scanning or the files runs out
 	static bool TryInitializeNextBatch(ClientContext &context, const MultiFileBindData &bind_data,
@@ -397,7 +431,11 @@ public:
 					// The current reader has data left to be scanned
 					scan_data.reader = current_reader_data.reader;
 					scan_data.batch_index = gstate.batch_index++;
+					auto old_file_index = scan_data.file_index;
 					scan_data.file_index = gstate.file_index;
+					if (old_file_index != scan_data.file_index) {
+						InitializeFileScanState(context, scan_data, gstate.projection_ids);
+					}
 					return true;
 				} else {
 					// Set state to the next file
@@ -551,40 +589,6 @@ public:
 		return partition_data;
 	}
 
-	static void InitializeFileScanState(ClientContext &context, MultiFileLocalState &lstate,
-	                                    vector<idx_t> &projection_ids) {
-		auto &reader_data = lstate.reader->reader_data;
-		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
-		vector<LogicalType> intermediate_chunk_types;
-		auto &local_column_ids = reader_data.column_ids;
-		auto &local_columns = lstate.reader->GetColumns();
-		for (idx_t i = 0; i < local_column_ids.size(); i++) {
-			auto local_idx = MultiFileLocalIndex(i);
-			auto local_id = local_column_ids[local_idx];
-			auto cast_entry = reader_data.cast_map.find(local_id);
-			if (cast_entry == reader_data.cast_map.end()) {
-				auto &col = local_columns[local_id];
-				intermediate_chunk_types.push_back(col.type);
-			} else {
-				intermediate_chunk_types.push_back(cast_entry->second);
-			}
-		}
-		lstate.scan_chunk.Destroy();
-		lstate.scan_chunk.Initialize(context, intermediate_chunk_types);
-
-		auto &executor = lstate.executor;
-		executor.ClearExpressions();
-		if (!projection_ids.empty()) {
-			for (auto &id : projection_ids) {
-				executor.AddExpression(*reader_data.expressions[id]);
-			}
-		} else {
-			for (auto &expr : reader_data.expressions) {
-				executor.AddExpression(*expr);
-			}
-		}
-	}
-
 	static void MultiFileScan(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 		if (!data_p.local_state) {
 			return;
@@ -592,10 +596,8 @@ public:
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
-		InitializeFileScanState(context, data, gstate.projection_ids);
 
 		do {
-			idx_t previous_file_index = data.file_index;
 			auto &scan_chunk = data.scan_chunk;
 			scan_chunk.Reset();
 
@@ -610,10 +612,6 @@ public:
 			scan_chunk.Reset();
 			if (!TryInitializeNextBatch(context, bind_data, data, gstate)) {
 				return;
-			}
-			if (data.file_index != previous_file_index) {
-				//! The schema could be different, reinitialize the chunk with the new schema
-				InitializeFileScanState(context, data, gstate.projection_ids);
 			}
 		} while (true);
 	}
