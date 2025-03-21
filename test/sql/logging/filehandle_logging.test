@@ -3,8 +3,6 @@
 
 require parquet
 
-require json
-
 statement ok
 set enable_logging = true;
 
@@ -33,3 +31,25 @@ CONNECTION	duckdb.FileHandle	TRACE	{"fs":"LocalFileSystem","test.csv","op":"OPEN
 CONNECTION	duckdb.FileHandle	TRACE	{"fs":"LocalFileSystem","test.csv","op":"READ","bytes":"4","pos":"0"}
 CONNECTION	duckdb.FileHandle	TRACE	{"fs":"LocalFileSystem","test.csv","op":"READ","bytes":"0","pos":"4"}
 CONNECTION	duckdb.FileHandle	TRACE	{"fs":"LocalFileSystem","test.csv","op":"CLOSE"}
+
+statement ok
+pragma truncate_duckdb_logs;
+
+require httpfs
+
+statement ok
+FROM 'https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv'
+
+# FIXME: investigate why we call READ twice?
+query IIII
+SELECT scope, type, log_level, regexp_replace(message, '\"path\":.*test.csv"', '"test.csv"')
+FROM duckdb_logs
+WHERE type = 'duckdb.FileHandle'
+ORDER BY timestamp
+----
+CONNECTION	duckdb.FileHandle	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"OPEN"}
+CONNECTION	duckdb.FileHandle	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"1276","pos":"0"}
+CONNECTION	duckdb.FileHandle	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"1276","pos":"0"}
+CONNECTION	duckdb.FileHandle	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"0","pos":"1276"}
+CONNECTION	duckdb.FileHandle	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"READ","bytes":"0","pos":"1276"}
+CONNECTION	duckdb.FileHandle	TRACE	{"fs":"HTTPFileSystem","path":"https://github.com/duckdb/duckdb/raw/main/data/csv/customer.csv","op":"CLOSE"}
