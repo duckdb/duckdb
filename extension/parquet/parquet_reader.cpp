@@ -971,6 +971,15 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 		state.file_handle = fs.OpenFile(file_handle->path, flags);
 	}
+	state.adaptive_filter.reset();
+	state.scan_filters.clear();
+	if (reader_data.filters) {
+		state.adaptive_filter = make_uniq<AdaptiveFilter>(*reader_data.filters);
+		for (auto &entry : reader_data.filters->filters) {
+			state.scan_filters.emplace_back(context, entry.first, *entry.second);
+		}
+	}
+
 	state.thrift_file_proto = CreateThriftFileProtocol(allocator, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
@@ -1091,12 +1100,6 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		vector<bool> need_to_read(reader_data.column_ids.size(), true);
 
 		state.sel.Initialize(nullptr);
-		if (state.scan_filters.empty()) {
-			state.adaptive_filter = make_uniq<AdaptiveFilter>(*reader_data.filters);
-			for (auto &entry : reader_data.filters->filters) {
-				state.scan_filters.emplace_back(context, entry.first, *entry.second);
-			}
-		}
 		D_ASSERT(state.scan_filters.size() == reader_data.filters->filters.size());
 
 		// first load the columns that are used in filters
