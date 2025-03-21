@@ -1,11 +1,141 @@
+diff --git a/src/functions/delta_scan/delta_multi_file_reader.cpp b/src/functions/delta_scan/delta_multi_file_reader.cpp
+index b36853a..e67ba9d 100644
+--- a/src/functions/delta_scan/delta_multi_file_reader.cpp
++++ b/src/functions/delta_scan/delta_multi_file_reader.cpp
+@@ -65,16 +65,17 @@ static void FinalizeBindBaseOverride(const MultiFileReaderOptions &file_options,
+ 		}
+ 	}
+ 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
++		auto global_idx = MultiFileGlobalIndex(i);
+ 		auto &col_idx = global_column_ids[i];
+ 		if (col_idx.IsRowIdColumn()) {
+ 			// row-id
+-			reader_data.constant_map.emplace_back(i, Value::BIGINT(42));
++			reader_data.constant_map.Add(global_idx, Value::BIGINT(42));
+ 			continue;
+ 		}
+ 		auto column_id = col_idx.GetPrimaryIndex();
+ 		if (column_id == options.filename_idx) {
+ 			// filename
+-			reader_data.constant_map.emplace_back(i, Value(filename));
++			reader_data.constant_map.Add(global_idx, Value(filename));
+ 			continue;
+ 		}
+ 		if (file_options.union_by_name) {
+@@ -87,7 +88,7 @@ static void FinalizeBindBaseOverride(const MultiFileReaderOptions &file_options,
+ 			if (not_present_in_file) {
+ 				// we need to project a column with name \"global_name\" - but it does not exist in the current file
+ 				// push a NULL value of the specified type
+-				reader_data.constant_map.emplace_back(i, Value(type));
++				reader_data.constant_map.Add(global_idx, Value(type));
+ 				continue;
+ 			}
+ 		}
+@@ -190,7 +191,8 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
+ 			// We add the constant column for the delta_file_number option
+ 			// NOTE: we add a placeholder here, to demonstrate how we can also populate extra columns in the
+ 			// FinalizeChunk
+-			reader_data.constant_map.emplace_back(delta_global_state.delta_file_number_idx, Value::UBIGINT(0));
++			auto global_idx = MultiFileGlobalIndex(delta_global_state.delta_file_number_idx);
++			reader_data.constant_map.Add(global_idx, Value::UBIGINT(0));
+ 		}
+ 	}
+ 
+@@ -201,6 +203,7 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
+ 
+ 	if (!file_metadata.partition_map.empty()) {
+ 		for (idx_t i = 0; i < global_column_ids.size(); i++) {
++			auto global_idx = MultiFileGlobalIndex(i);
+ 			column_t col_id = global_column_ids[i].GetPrimaryIndex();
+ 			if (IsRowIdColumnId(col_id)) {
+ 				continue;
+@@ -209,10 +212,10 @@ void DeltaMultiFileReader::FinalizeBind(const MultiFileReaderOptions &file_optio
+ 			if (col_partition_entry != file_metadata.partition_map.end()) {
+ 				auto &current_type = global_columns[col_id].type;
+ 				if (current_type == LogicalType::BLOB) {
+-					reader_data.constant_map.emplace_back(i, Value::BLOB_RAW(col_partition_entry->second));
++					reader_data.constant_map.Add(global_idx, Value::BLOB_RAW(col_partition_entry->second));
+ 				} else {
+ 					auto maybe_value = Value(col_partition_entry->second).DefaultCastAs(current_type);
+-					reader_data.constant_map.emplace_back(i, maybe_value);
++					reader_data.constant_map.Add(global_idx, maybe_value);
+ 				}
+ 			}
+ 		}
+@@ -311,15 +314,16 @@ static void CustomMulfiFileNameMapping(const string &file_name,
+                                        const string &initial_file,
+                                        optional_ptr<MultiFileReaderGlobalState> global_state) {
+ 	// we have expected types: create a map of name -> column index
+-	case_insensitive_map_t<idx_t> name_map;
+-	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
+-		name_map[local_columns[col_idx].name] = col_idx;
++	case_insensitive_map_t<MultiFileLocalColumnId> name_map;
++	for (idx_t col_id = 0; col_id < local_columns.size(); col_id++) {
++		name_map.emplace(local_columns[col_id].name, MultiFileLocalColumnId(col_id));
+ 	}
+ 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
+ 		// check if this is a constant column
++		auto global_idx = MultiFileGlobalIndex(i);
+ 		bool constant = false;
+ 		for (auto &entry : reader_data.constant_map) {
+-			if (entry.column_id == i) {
++			if (entry.column_idx.GetIndex() == i) {
+ 				constant = true;
+ 				break;
+ 			}
+@@ -347,7 +351,7 @@ static void CustomMulfiFileNameMapping(const string &file_name,
+ 			// FIXME: this override is pretty hacky: for missing columns we just insert NULL constants
+ 			auto &global_type = global_columns[global_id].type;
+ 			Value val(global_type);
+-			reader_data.constant_map.push_back({i, val});
++			reader_data.constant_map.Add(global_idx, val);
+ 			continue;
+ 		}
+ 		// we found the column in the local file - check if the types are the same
+@@ -360,7 +364,7 @@ static void CustomMulfiFileNameMapping(const string &file_name,
+ 			reader_data.cast_map[local_id] = global_type;
+ 		}
+ 		// the types are the same - create the mapping
+-		reader_data.column_mapping.push_back(i);
++		reader_data.column_mapping.push_back(global_idx);
+ 		reader_data.column_ids.push_back(local_id);
+ 	}
+ 
+@@ -387,9 +391,9 @@ void DeltaMultiFileReader::CreateColumnMapping(const string &file_name,
+ 		D_ASSERT(delta_global_state.file_row_number_idx != DConstants::INVALID_INDEX);
+ 
+ 		// Build the name map
+-		case_insensitive_map_t<idx_t> name_map;
+-		for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
+-			name_map[local_columns[col_idx].name] = col_idx;
++		case_insensitive_map_t<MultiFileLocalColumnId> name_map;
++		for (idx_t col_id = 0; col_id < local_columns.size(); col_id++) {
++			name_map.emplace(local_columns[col_id].name, MultiFileLocalColumnId(col_id));
+ 		}
+ 
+ 		// Lookup the required column in the local map
+@@ -400,7 +404,8 @@ void DeltaMultiFileReader::CreateColumnMapping(const string &file_name,
+ 
+ 		// Register the column to be scanned from this file
+ 		reader_data.column_ids.push_back(entry->second);
+-		reader_data.column_mapping.push_back(delta_global_state.file_row_number_idx);
++		auto global_idx = MultiFileGlobalIndex(delta_global_state.file_row_number_idx);
++		reader_data.column_mapping.push_back(global_idx);
+ 	}
+ 
+ 	// This may have changed: update it
 diff --git a/src/include/storage/delta_catalog.hpp b/src/include/storage/delta_catalog.hpp
-index 3f5f979..d0899d9 100644
+index 3f5f979..9d57e0f 100644
 --- a/src/include/storage/delta_catalog.hpp
 +++ b/src/include/storage/delta_catalog.hpp
-@@ -49,14 +49,11 @@ public:
- 	                                           OnEntryNotFound if_not_found,
- 	                                           QueryErrorContext error_context = QueryErrorContext()) override;
+@@ -45,18 +45,14 @@ public:
  
+ 	void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
+ 
+-	optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const string &schema_name,
+-	                                           OnEntryNotFound if_not_found,
+-	                                           QueryErrorContext error_context = QueryErrorContext()) override;
+-
 -	unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
 -	                                        unique_ptr<PhysicalOperator> plan) override;
 -	unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
@@ -14,6 +144,9 @@ index 3f5f979..d0899d9 100644
 -	                                        unique_ptr<PhysicalOperator> plan) override;
 -	unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
 -	                                        unique_ptr<PhysicalOperator> plan) override;
++	optional_ptr<SchemaCatalogEntry> LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
++	                                           OnEntryNotFound if_not_found) override;
++
 +    PhysicalOperator &PlanCreateTableAs(ClientContext &context, PhysicalPlanGenerator &planner, LogicalCreateTable &op, PhysicalOperator &plan) override;
 +    PhysicalOperator &PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op, optional_ptr<PhysicalOperator> plan) override;
 +    PhysicalOperator &PlanDelete(ClientContext &context, PhysicalPlanGenerator &planner, LogicalDelete &op, PhysicalOperator &plan) override;
@@ -22,10 +155,36 @@ index 3f5f979..d0899d9 100644
  	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
  	                                            unique_ptr<LogicalOperator> plan) override;
  
+diff --git a/src/include/storage/delta_schema_entry.hpp b/src/include/storage/delta_schema_entry.hpp
+index 26c57f0..f7d0c23 100644
+--- a/src/include/storage/delta_schema_entry.hpp
++++ b/src/include/storage/delta_schema_entry.hpp
+@@ -39,7 +39,7 @@ public:
+ 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void DropEntry(ClientContext &context, DropInfo &info) override;
+-	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
++	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
+ 
+ 	optional_ptr<DeltaTableEntry> GetCachedTable();
+ 
 diff --git a/src/storage/delta_catalog.cpp b/src/storage/delta_catalog.cpp
-index 5335974..2d53285 100644
+index 5335974..4f1f41c 100644
 --- a/src/storage/delta_catalog.cpp
 +++ b/src/storage/delta_catalog.cpp
+@@ -34,9 +34,9 @@ void DeltaCatalog::ScanSchemas(ClientContext &context, std::function<void(Schema
+ 	callback(*main_schema);
+ }
+ 
+-optional_ptr<SchemaCatalogEntry> DeltaCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,
+-                                                         OnEntryNotFound if_not_found,
+-                                                         QueryErrorContext error_context) {
++optional_ptr<SchemaCatalogEntry> DeltaCatalog::LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
++                                                         OnEntryNotFound if_not_found) {
++    auto &schema_name = schema_lookup.GetEntryName();
+ 	if (schema_name == DEFAULT_SCHEMA || schema_name == INVALID_SCHEMA) {
+ 		return main_schema.get();
+ 	}
 @@ -90,20 +90,16 @@ DatabaseSize DeltaCatalog::GetDatabaseSize(ClientContext &context) {
  	return size;
  }
@@ -53,3 +212,26 @@ index 5335974..2d53285 100644
  	throw NotImplementedException("DeltaCatalog does not support updates");
  }
  unique_ptr<LogicalOperator> DeltaCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt,
+diff --git a/src/storage/delta_schema_entry.cpp b/src/storage/delta_schema_entry.cpp
+index 6790d1d..98c6105 100644
+--- a/src/storage/delta_schema_entry.cpp
++++ b/src/storage/delta_schema_entry.cpp
+@@ -139,14 +139,14 @@ void DeltaSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
+ 	throw NotImplementedException("Delta tables do not support dropping");
+ }
+ 
+-optional_ptr<CatalogEntry> DeltaSchemaEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
+-                                                      const string &name) {
++optional_ptr<CatalogEntry> DeltaSchemaEntry::LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) {
+ 	if (!transaction.HasContext()) {
+ 		throw NotImplementedException("Can not DeltaSchemaEntry::GetEntry without context");
+ 	}
+ 	auto &context = transaction.GetContext();
+-
+-	if (type == CatalogType::TABLE_ENTRY && name == catalog.GetName()) {
++	auto catalog_type = lookup_info.GetCatalogType();
++	auto &entry_name = lookup_info.GetEntryName();
++	if (catalog_type == CatalogType::TABLE_ENTRY && entry_name == catalog.GetName()) {
+ 		auto &delta_transaction = GetDeltaTransaction(transaction);
+ 		auto &delta_catalog = catalog.Cast<DeltaCatalog>();
+ 

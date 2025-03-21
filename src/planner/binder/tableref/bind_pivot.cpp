@@ -61,7 +61,7 @@ static void ExtractPivotExpressions(ParsedExpression &expr, case_insensitive_set
 	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &child_colref = expr.Cast<ColumnRefExpression>();
 		if (child_colref.IsQualified()) {
-			throw BinderException("PIVOT expression cannot contain qualified columns");
+			throw BinderException(expr, "PIVOT expression cannot contain qualified columns");
 		}
 		handled_columns.insert(child_colref.GetColumnName());
 	}
@@ -75,8 +75,8 @@ void ExtractPivotAggregateExpression(ClientContext &context, ParsedExpression &e
 		auto &aggr_function = expr.Cast<FunctionExpression>();
 
 		// check if this is an aggregate to ensure it is an aggregate and not a scalar function
-		auto &entry = Catalog::GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, aggr_function.catalog,
-		                                aggr_function.schema, aggr_function.function_name);
+		EntryLookupInfo lookup_info(CatalogType::AGGREGATE_FUNCTION_ENTRY, aggr_function.function_name, expr);
+		auto &entry = Catalog::GetEntry(context, aggr_function.catalog, aggr_function.schema, lookup_info);
 		if (entry.type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			// aggregate
 			aggregates.push_back(aggr_function);

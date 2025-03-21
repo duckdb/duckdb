@@ -124,6 +124,7 @@ public:
 		pushdown_complex_filter = MultiFileComplexFilterPushdown;
 		get_partition_info = MultiFileGetPartitionInfo;
 		get_virtual_columns = MultiFileGetVirtualColumns;
+		dynamic_to_string = MultiFileDynamicToString;
 		MultiFileReader::AddParameters(*this);
 	}
 
@@ -696,6 +697,13 @@ public:
 		OP::GetVirtualColumns(context, bind_data, result);
 
 		bind_data.virtual_columns = result;
+		return result;
+	}
+
+	static InsertionOrderPreservingMap<string> MultiFileDynamicToString(TableFunctionDynamicToStringInput &input) {
+		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
+		InsertionOrderPreservingMap<string> result;
+		result.insert(make_pair("Total Files Read", std::to_string(gstate.file_index.load())));
 		return result;
 	}
 

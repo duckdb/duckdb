@@ -238,8 +238,10 @@ static bool ParsedExpressionIsAggregate(Binder &binder, const ParsedExpression &
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &function = expr.Cast<FunctionExpression>();
 		QueryErrorContext error_context;
-		auto entry = binder.GetCatalogEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, function.catalog, function.schema,
-		                                    function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+
+		EntryLookupInfo lookup_info(CatalogType::AGGREGATE_FUNCTION_ENTRY, function.function_name, error_context);
+		auto entry =
+		    binder.GetCatalogEntry(function.catalog, function.schema, lookup_info, OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			return true;
 		}
@@ -724,10 +726,10 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	return result;
 }
 
-optional_ptr<CatalogEntry> Binder::GetCatalogEntry(CatalogType type, const string &catalog, const string &schema,
-                                                   const string &name, OnEntryNotFound on_entry_not_found,
-                                                   QueryErrorContext &error_context) {
-	return entry_retriever.GetEntry(type, catalog, schema, name, on_entry_not_found, error_context);
+optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const string &catalog, const string &schema,
+                                                   const EntryLookupInfo &lookup_info,
+                                                   OnEntryNotFound on_entry_not_found) {
+	return entry_retriever.GetEntry(catalog, schema, lookup_info, on_entry_not_found);
 }
 
 } // namespace duckdb

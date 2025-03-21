@@ -260,28 +260,36 @@ void PrimitiveColumnWriter::SetParquetStatistics(PrimitiveColumnWriterState &sta
 		column_chunk.meta_data.statistics.__isset.null_count = true;
 		column_chunk.meta_data.__isset.statistics = true;
 	}
-	// set min/max/min_value/max_value
-	// this code is not going to win any beauty contests, but well
-	auto min = state.stats_state->GetMin();
-	if (!min.empty()) {
-		column_chunk.meta_data.statistics.min = std::move(min);
-		column_chunk.meta_data.statistics.__isset.min = true;
-		column_chunk.meta_data.__isset.statistics = true;
-	}
-	auto max = state.stats_state->GetMax();
-	if (!max.empty()) {
-		column_chunk.meta_data.statistics.max = std::move(max);
-		column_chunk.meta_data.statistics.__isset.max = true;
-		column_chunk.meta_data.__isset.statistics = true;
-	}
-	if (state.stats_state->HasStats()) {
-		column_chunk.meta_data.statistics.min_value = state.stats_state->GetMinValue();
-		column_chunk.meta_data.statistics.__isset.min_value = true;
-		column_chunk.meta_data.__isset.statistics = true;
+	// if we have NaN values - don't write the min/max here
+	if (!state.stats_state->HasNaN()) {
+		// set min/max/min_value/max_value
+		// this code is not going to win any beauty contests, but well
+		auto min = state.stats_state->GetMin();
+		if (!min.empty()) {
+			column_chunk.meta_data.statistics.min = std::move(min);
+			column_chunk.meta_data.statistics.__isset.min = true;
+			column_chunk.meta_data.__isset.statistics = true;
+		}
+		auto max = state.stats_state->GetMax();
+		if (!max.empty()) {
+			column_chunk.meta_data.statistics.max = std::move(max);
+			column_chunk.meta_data.statistics.__isset.max = true;
+			column_chunk.meta_data.__isset.statistics = true;
+		}
 
-		column_chunk.meta_data.statistics.max_value = state.stats_state->GetMaxValue();
-		column_chunk.meta_data.statistics.__isset.max_value = true;
-		column_chunk.meta_data.__isset.statistics = true;
+		if (state.stats_state->HasStats()) {
+			column_chunk.meta_data.statistics.min_value = state.stats_state->GetMinValue();
+			column_chunk.meta_data.statistics.__isset.min_value = true;
+			column_chunk.meta_data.__isset.statistics = true;
+			column_chunk.meta_data.statistics.is_min_value_exact = state.stats_state->MinIsExact();
+			column_chunk.meta_data.statistics.__isset.is_min_value_exact = true;
+
+			column_chunk.meta_data.statistics.max_value = state.stats_state->GetMaxValue();
+			column_chunk.meta_data.statistics.__isset.max_value = true;
+			column_chunk.meta_data.__isset.statistics = true;
+			column_chunk.meta_data.statistics.is_max_value_exact = state.stats_state->MaxIsExact();
+			column_chunk.meta_data.statistics.__isset.is_max_value_exact = true;
+		}
 	}
 	if (HasDictionary(state)) {
 		column_chunk.meta_data.statistics.distinct_count = UnsafeNumericCast<int64_t>(DictionarySize(state));
@@ -327,7 +335,6 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 		if (column_chunk.meta_data.data_page_offset == 0 && (write_info.page_header.type == PageType::DATA_PAGE ||
 		                                                     write_info.page_header.type == PageType::DATA_PAGE_V2)) {
 			column_chunk.meta_data.data_page_offset = UnsafeNumericCast<int64_t>(column_writer.GetTotalWritten());
-			;
 		}
 		D_ASSERT(write_info.page_header.uncompressed_page_size > 0);
 		auto header_start_offset = column_writer.GetTotalWritten();
@@ -345,7 +352,9 @@ void PrimitiveColumnWriter::FinalizeWrite(ColumnWriterState &state_p) {
 	if (state.bloom_filter) {
 		writer.BufferBloomFilter(state.col_idx, std::move(state.bloom_filter));
 	}
-	// which row group is this?
+
+	// finalize the stats
+	writer.FlushColumnStats(state.col_idx, column_chunk, state.stats_state.get());
 }
 
 void PrimitiveColumnWriter::FlushDictionary(PrimitiveColumnWriterState &state, ColumnWriterStatistics *stats) {

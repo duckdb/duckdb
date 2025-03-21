@@ -66,6 +66,7 @@ void LogicalCopyToFile::Serialize(Serializer &serializer) const {
 	serializer.WriteProperty(214, "rotate", rotate);
 	serializer.WriteProperty(215, "return_type", return_type);
 	serializer.WritePropertyWithDefault(216, "write_partition_columns", write_partition_columns, true);
+	serializer.WritePropertyWithDefault(217, "write_empty_file", write_empty_file, true);
 }
 
 unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deserializer) {
@@ -86,7 +87,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto name = deserializer.ReadProperty<string>(210, "function_name");
 
 	auto &func_catalog_entry =
-	    Catalog::GetEntry(context, CatalogType::COPY_FUNCTION_ENTRY, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
+	    Catalog::GetEntry<CopyFunctionCatalogEntry>(context, SYSTEM_CATALOG, DEFAULT_SCHEMA, name);
 	if (func_catalog_entry.type != CatalogType::COPY_FUNCTION_ENTRY) {
 		throw InternalException("DeserializeFunction - cant find catalog entry for function %s", name);
 	}
@@ -110,6 +111,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	auto return_type =
 	    deserializer.ReadPropertyWithExplicitDefault(215, "return_type", CopyFunctionReturnType::CHANGED_ROWS);
 	auto write_partition_columns = deserializer.ReadPropertyWithExplicitDefault(216, "write_partition_columns", true);
+	auto write_empty_file = deserializer.ReadPropertyWithExplicitDefault(217, "write_empty_file", true);
 
 	if (!has_serialize) {
 		// If not serialized, re-bind with the copy info
@@ -137,6 +139,7 @@ unique_ptr<LogicalOperator> LogicalCopyToFile::Deserialize(Deserializer &deseria
 	result->rotate = rotate;
 	result->return_type = return_type;
 	result->write_partition_columns = write_partition_columns;
+	result->write_empty_file = write_empty_file;
 
 	return std::move(result);
 }
