@@ -24,6 +24,7 @@ class ThreadContext;
 class FileOpener;
 class LogStorage;
 class ExecutionContext;
+struct FileHandle;
 
 //! Logger Macro's are preferred method of calling logger
 #define DUCKDB_LOG(SOURCE, TYPE, LEVEL, ...)                                                                           \

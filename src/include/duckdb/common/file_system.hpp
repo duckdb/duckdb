@@ -31,6 +31,8 @@ class ClientContext;
 class DatabaseInstance;
 class FileOpener;
 class FileSystem;
+class FileHandleLogger;
+class Logger;
 
 enum class FileType {
 	//! Regular file
@@ -107,6 +109,8 @@ public:
 	FileSystem &file_system;
 	string path;
 	FileOpenFlags flags;
+
+	shared_ptr<Logger> logger;
 };
 
 class FileSystem {

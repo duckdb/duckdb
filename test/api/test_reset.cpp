@@ -109,6 +109,7 @@ OptionValueSet GetValueForOption(const string &name, const LogicalType &type) {
 	    {"temp_directory", {"tmp"}},
 	    {"wal_autocheckpoint", {"4.0 GiB"}},
 	    {"force_bitpacking_mode", {"constant"}},
+	    {"enable_http_logging", {false}},
 	    {"http_proxy", {"localhost:80"}},
 	    {"http_proxy_username", {"john"}},
 	    {"http_proxy_password", {"doe"}},

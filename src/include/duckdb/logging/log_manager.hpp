@@ -39,6 +39,7 @@ public:
 
 	//! The global logger can be used whe
 	DUCKDB_API Logger &GlobalLogger();
+	DUCKDB_API shared_ptr<Logger> CopyGlobalLoggerPtr();
 
 	//! Flush everything
 	DUCKDB_API void Flush();
@@ -70,7 +71,7 @@ protected:
 	mutex lock;
 	LogConfig config;
 
-	unique_ptr<Logger> global_logger;
+	shared_ptr<Logger> global_logger;
 
 	shared_ptr<LogStorage> log_storage;
 
