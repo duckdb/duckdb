@@ -29,7 +29,7 @@ CREATE VIEW file_handle_log AS
     ORDER BY timestamp
 
 # Create a view that json_untransforms the log entries
-query IIIII
+query IIII
 SELECT
     message.fs,
     message.op,
@@ -37,12 +37,12 @@ SELECT
     bytes: message.bytes
 FROM file_handle_log
 ----
-LocalFileSystem	OPEN	test.csv	NULL	NULL
-LocalFileSystem	WRITE	test.csv	2	NULL
-LocalFileSystem	WRITE	test.csv	1	NULL
-LocalFileSystem	WRITE	test.csv	1	NULL
-LocalFileSystem	CLOSE	test.csv	NULL	NULL
-LocalFileSystem	OPEN	test.csv	NULL	NULL
-LocalFileSystem	READ	test.csv	4	NULL
-LocalFileSystem	READ	test.csv	0	NULL
-LocalFileSystem	CLOSE	test.csv	NULL	NULL
+LocalFileSystem	OPEN	test.csv	NULL
+LocalFileSystem	WRITE	test.csv	2
+LocalFileSystem	WRITE	test.csv	1
+LocalFileSystem	WRITE	test.csv	1
+LocalFileSystem	CLOSE	test.csv	NULL
+LocalFileSystem	OPEN	test.csv	NULL
+LocalFileSystem	READ	test.csv	4
+LocalFileSystem	READ	test.csv	0
+LocalFileSystem	CLOSE	test.csv	NULL
