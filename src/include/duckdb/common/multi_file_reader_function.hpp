@@ -264,8 +264,6 @@ public:
 	// Returns true if resized
 	static bool TryGetNextFile(MultiFileGlobalState &global_state, unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
-		//! TryGetNextFile should only be called if there are no files waiting to be read
-		D_ASSERT(!HasFilesToRead(global_state, parallel_lock));
 		string scanned_file;
 		if (!global_state.file_list.Scan(global_state.file_list_scan, scanned_file)) {
 			return false;
@@ -277,7 +275,7 @@ public:
 		return true;
 	}
 
-	static void InitializeReader(BaseFileReader &reader, const MultiFileBindData &bind_data,
+	static bool InitializeReader(BaseFileReader &reader, const MultiFileBindData &bind_data,
 	                             const vector<ColumnIndex> &global_column_ids,
 	                             optional_ptr<TableFilterSet> table_filters, ClientContext &context,
 	                             optional_idx file_idx, optional_ptr<MultiFileReaderGlobalState> reader_state) {
@@ -291,9 +289,10 @@ public:
 		// 1. The MultiFileReader::Bind call
 		// 2. The 'schema' parquet option
 		auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
-		bind_data.multi_file_reader->InitializeReader(
+		bool need_to_read_file = bind_data.multi_file_reader->InitializeReader(
 		    reader, bind_data.file_options, bind_data.reader_bind, bind_data.virtual_columns, global_columns,
 		    global_column_ids, table_filters, bind_data.file_list->GetFirstFile(), context, reader_state);
+		return need_to_read_file;
 	}
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
@@ -301,19 +300,22 @@ public:
 	                            MultiFileLocalState &scan_data, MultiFileGlobalState &global_state,
 	                            unique_lock<mutex> &parallel_lock) {
 		if (!parallel_lock.owns_lock()) {
-			throw InternalException("parallel_lock is not held, this should not happen");
+			throw InternalException("parallel_lock is not held in TryOpenNextFile, this should not happen");
 		}
-		const auto file_index_limit =
-		    global_state.file_index + NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 
-		for (idx_t i = global_state.file_index; i < file_index_limit; i++) {
+		const auto file_lookahead_limit = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+
+		idx_t file_index = global_state.file_index;
+		idx_t i = 0;
+		while (i < file_lookahead_limit) {
 			// Try to get new files to open in this loop too otherwise we will only ever open 1 file ahead
-			const bool has_file_to_read = i < global_state.readers.size();
+			const bool has_file_to_read = file_index < global_state.readers.size();
 			if (!has_file_to_read && !TryGetNextFile(global_state, parallel_lock)) {
 				return false;
 			}
+			auto current_file_index = file_index++;
 
-			auto &current_reader_data = *global_state.readers[i];
+			auto &current_reader_data = *global_state.readers[current_file_index];
 			if (current_reader_data.file_state == MultiFileFileState::UNOPENED) {
 				current_reader_data.file_state = MultiFileFileState::OPENING;
 				// Get pointer to file mutex before unlocking
@@ -325,16 +327,20 @@ public:
 				unique_lock<mutex> file_lock(current_file_lock);
 
 				shared_ptr<BaseFileReader> reader;
+				bool can_skip_file = false;
 				try {
 					if (current_reader_data.union_data) {
 						auto &union_data = *current_reader_data.union_data;
 						reader = OP::CreateReader(context, *global_state.global_state, union_data, bind_data);
 					} else {
 						reader = OP::CreateReader(context, *global_state.global_state,
-						                          current_reader_data.file_to_be_opened, i, bind_data);
+						                          current_reader_data.file_to_be_opened, current_file_index, bind_data);
 					}
-					InitializeReader(*reader, bind_data, global_state.column_indexes, global_state.filters, context, i,
-					                 global_state.multi_file_reader_state);
+					if (!InitializeReader(*reader, bind_data, global_state.column_indexes, global_state.filters,
+					                      context, current_file_index, global_state.multi_file_reader_state)) {
+						//! File can be skipped entirely, close it and move on
+						can_skip_file = true;
+					}
 					OP::FinalizeReader(context, *reader, *global_state.global_state);
 				} catch (...) {
 					parallel_lock.lock();
@@ -346,9 +352,15 @@ public:
 				parallel_lock.lock();
 				current_reader_data.reader = std::move(reader);
 				current_reader_data.file_state = MultiFileFileState::OPEN;
-
-				return true;
+				if (can_skip_file) {
+					CloseFile(context, global_state, current_reader_data, parallel_lock);
+					//! Do not increase 'i' because this is not a file that will be opened later
+					continue;
+				} else {
+					return true;
+				}
 			}
+			i++;
 		}
 
 		return false;
@@ -408,6 +420,9 @@ public:
 				}
 			}
 
+			if (current_reader_data.file_state == MultiFileFileState::CLOSED) {
+				continue;
+			}
 			if (OP::TryInitializeScan(context, current_reader_data.reader, *gstate.global_state,
 			                          *scan_data.local_state)) {
 				if (!current_reader_data.reader) {
@@ -419,7 +434,7 @@ public:
 				scan_data.file_index = gstate.file_index;
 				return true;
 			}
-			CloseFile(context, current_reader_data, gstate, parallel_lock);
+			CloseFile(context, gstate, current_reader_data, parallel_lock);
 		}
 	}
 
@@ -474,6 +489,15 @@ public:
 			}
 		}
 
+		result->file_index = 0;
+		result->column_indexes = input.column_indexes;
+		result->filters = input.filters.get();
+		result->global_state = OP::InitializeGlobalState(context, bind_data, *result);
+		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
+		//! This is unnecessary since we're still initializing the global state, there is no contention
+		//! But it keeps the CloseFile method simpler
+		unique_lock<mutex> parallel_lock(result->lock);
+
 		// Ensure all readers are initialized and FileListScan is sync with readers list
 		for (auto &reader_data : result->readers) {
 			string file_name;
@@ -488,16 +512,14 @@ public:
 				if (file_name != reader_data->reader->file_name) {
 					throw InternalException("Mismatch in filename order and reader order in multi file scan");
 				}
-				InitializeReader(*reader_data->reader, bind_data, input.column_indexes, input.filters, context,
-				                 file_idx, result->multi_file_reader_state);
+				if (!InitializeReader(*reader_data->reader, bind_data, input.column_indexes, input.filters, context,
+				                      file_idx, result->multi_file_reader_state)) {
+					//! File can be skipped entirely, close it and move on
+					CloseFile(context, *result, *reader_data, parallel_lock);
+				}
 			}
 		}
 
-		result->column_indexes = input.column_indexes;
-		result->filters = input.filters.get();
-		result->file_index = 0;
-		result->global_state = OP::InitializeGlobalState(context, bind_data, *result);
-		result->max_threads = NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads());
 		auto expand_result = bind_data.file_list->GetExpandResult();
 		auto max_threads = OP::MaxThreads(bind_data, *result, expand_result);
 		if (max_threads.IsValid()) {
@@ -760,7 +782,7 @@ private:
 		D_ASSERT(parallel_lock.owns_lock());
 		return (gstate.file_index.load() < gstate.readers.size());
 	}
-	static void CloseFile(ClientContext &context, MultiFileGlobalState &gstate, MultiFileReaderData &reader_data,
+	static void CloseFile(ClientContext &context, MultiFileGlobalState &gstate, MultiFileFileReaderData &reader_data,
 	                      unique_lock<mutex> &parallel_lock) {
 		D_ASSERT(parallel_lock.owns_lock());
 		// Set state to the next file

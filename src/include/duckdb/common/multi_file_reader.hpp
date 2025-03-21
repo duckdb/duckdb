@@ -177,7 +177,7 @@ public:
 	                                     ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Create all required mappings from the global types/names to the file-local types/names
-	DUCKDB_API virtual void CreateMapping(const string &file_name,
+	DUCKDB_API virtual bool CreateMapping(const string &file_name,
 	                                      const vector<MultiFileReaderColumnDefinition> &local_columns,
 	                                      const vector<MultiFileReaderColumnDefinition> &global_columns,
 	                                      const vector<ColumnIndex> &global_column_ids,
@@ -187,7 +187,7 @@ public:
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
 	//! Create filters adjusted for the local schema
 	DUCKDB_API virtual unique_ptr<TableFilterSet> CreateFilters(const vector<ColumnIndex> &global_column_ids,
-	                                                            optional_ptr<TableFilterSet> filters,
+	                                                            map<idx_t, reference<TableFilter>> &filters,
 	                                                            MultiFileReaderData &reader_data,
 	                                                            const virtual_column_map_t &virtual_columns,
 	                                                            optional_ptr<MultiFileReaderGlobalState> global_state);
@@ -256,7 +256,7 @@ public:
 	}
 
 	template <class READER_CLASS>
-	void InitializeReader(READER_CLASS &reader, const MultiFileReaderOptions &options,
+	bool InitializeReader(READER_CLASS &reader, const MultiFileReaderOptions &options,
 	                      const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns,
 	                      const vector<MultiFileReaderColumnDefinition> &global_columns,
 	                      const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> table_filters,
@@ -264,8 +264,8 @@ public:
 	                      optional_ptr<MultiFileReaderGlobalState> global_state) {
 		FinalizeBind(options, bind_data, reader.GetFileName(), reader.GetColumns(), global_columns, global_column_ids,
 		             reader.reader_data, context, global_state);
-		CreateMapping(reader.GetFileName(), reader.GetColumns(), global_columns, global_column_ids, table_filters,
-		              reader.reader_data, initial_file, bind_data, virtual_columns, global_state);
+		return CreateMapping(reader.GetFileName(), reader.GetColumns(), global_columns, global_column_ids,
+		                     table_filters, reader.reader_data, initial_file, bind_data, virtual_columns, global_state);
 	}
 
 	template <class BIND_DATA>
