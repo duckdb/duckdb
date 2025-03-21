@@ -38,7 +38,7 @@ jobs:
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
     steps:
       - name: Run ODBC Vendor
-        if: ${{ github.repo == 'duckdb/duckdb' }}
+        if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor/dispatches
           export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
