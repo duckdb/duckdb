@@ -386,7 +386,7 @@ void FixedSizeAllocator::VerifyBuffers() {
 	}
 
 	if (count > 1) {
-		throw InternalException("more than one empty buffer in allocator");
+		throw InternalException("expected one, but got %d empty buffers in allocator", count);
 	}
 }
 
