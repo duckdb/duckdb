@@ -1107,8 +1107,6 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				break;
 			}
 			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
-			//! FIXME: we need to make sure that the 'constant_map' is not necessary,
-			//! by processing the filter in the MultiFileList::GetFile method
 			auto local_idx = MultiFileLocalIndex(scan_filter.filter_idx);
 			auto column_id = reader_data.column_ids[local_idx];
 

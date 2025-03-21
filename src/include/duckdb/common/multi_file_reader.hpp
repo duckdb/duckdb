@@ -186,11 +186,9 @@ public:
 	                                      const virtual_column_map_t &virtual_columns,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
 	//! Create filters adjusted for the local schema
-	DUCKDB_API virtual unique_ptr<TableFilterSet> CreateFilters(const vector<ColumnIndex> &global_column_ids,
-	                                                            map<idx_t, reference<TableFilter>> &filters,
-	                                                            MultiFileReaderData &reader_data,
-	                                                            const virtual_column_map_t &virtual_columns,
-	                                                            optional_ptr<MultiFileReaderGlobalState> global_state);
+	DUCKDB_API virtual unique_ptr<TableFilterSet>
+	CreateFilters(map<idx_t, reference<TableFilter>> &filters,
+	              unordered_map<idx_t, MultiFileIndexMapping> &global_to_local);
 
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,

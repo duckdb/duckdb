@@ -384,6 +384,22 @@ struct MultiFileReaderData {
 	vector<unique_ptr<Expression>> expressions;
 };
 
+struct MultiFileIndexMapping {
+public:
+	explicit MultiFileIndexMapping(idx_t index) : index(index) {
+	}
+
+public:
+	MultiFileIndexMapping &AddMapping(idx_t from, idx_t to) {
+		auto res = child_mapping.emplace(from, to);
+		return res.first->second;
+	}
+
+public:
+	idx_t index;
+	unordered_map<idx_t, MultiFileIndexMapping> child_mapping;
+};
+
 //! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader
 //! interface
 class BaseFileReader {

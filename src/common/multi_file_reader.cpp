@@ -17,28 +17,6 @@
 
 #include <algorithm>
 
-namespace {
-
-using namespace duckdb;
-
-struct MultiFileIndexMapping {
-public:
-	explicit MultiFileIndexMapping(idx_t index) : index(index) {
-	}
-
-public:
-	MultiFileIndexMapping &AddMapping(idx_t from, idx_t to) {
-		auto res = child_mapping.emplace(from, to);
-		return res.first->second;
-	}
-
-public:
-	idx_t index;
-	unordered_map<idx_t, MultiFileIndexMapping> child_mapping;
-};
-
-} // namespace
-
 namespace duckdb {
 
 constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILENAME;
@@ -689,20 +667,14 @@ struct EvaluationResult {
 
 } // namespace
 
-static EvaluationResult EvaluateConstantFilters(optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
+static EvaluationResult EvaluateConstantFilters(optional_ptr<TableFilterSet> filters, const string &filename,
+                                                const vector<MultiFileReaderColumnDefinition> &global_columns,
+                                                const vector<ColumnIndex> &global_column_ids,
                                                 const virtual_column_map_t &virtual_columns,
-                                                const vector<ColumnIndex> &global_column_ids, const string &filename,
-                                                const vector<MultiFileReaderColumnDefinition> &global_columns) {
+                                                unordered_map<idx_t, MultiFileIndexMapping> &global_to_local) {
 	EvaluationResult result;
 	if (!filters) {
 		return result;
-	}
-
-	unordered_map<idx_t, MultiFileIndexMapping> global_to_local;
-	for (idx_t local_idx = 0; local_idx < reader_data.column_mapping.size(); local_idx++) {
-		auto global_idx = reader_data.column_mapping[MultiFileLocalIndex(local_idx)];
-		global_to_local.emplace(global_idx.GetIndex(), local_idx);
-		//! FIXME: also map the nested types
 	}
 
 	for (auto &it : filters->filters) {
@@ -752,16 +724,30 @@ bool MultiFileReader::CreateMapping(const string &file_name,
 	// copy global columns and inject any different defaults
 	CreateColumnMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
 	                    virtual_columns, initial_file, global_state);
+
+	unordered_map<idx_t, MultiFileIndexMapping> global_to_local;
+	for (idx_t i = 0; i < reader_data.column_mapping.size(); i++) {
+		auto local_idx = MultiFileLocalIndex(i);
+		auto global_idx = reader_data.column_mapping[local_idx];
+		global_to_local.emplace(global_idx.GetIndex(), i);
+
+		auto &local_column_id = reader_data.column_indexes[local_idx];
+		auto &global_column_id = global_column_ids[global_idx];
+
+		auto &local_column = local_columns[local_column_id.GetPrimaryIndex()];
+		auto &global_column = global_columns[global_column_id.GetPrimaryIndex()];
+		//! FIXME: also map the nested types (missing this information it seems?)
+	}
+
 	//! Evaluate the filters against the column(s) that are constant for this file (not present in the local schema)
 	//! If any of these fail, the file can be skipped entirely
-	auto evaluation_result =
-	    EvaluateConstantFilters(filters, reader_data, virtual_columns, global_column_ids, file_name, global_columns);
+	auto evaluation_result = EvaluateConstantFilters(filters, file_name, global_columns, global_column_ids,
+	                                                 virtual_columns, global_to_local);
 	if (evaluation_result.can_skip_file) {
 		return false;
 	}
 
-	reader_data.filters = CreateFilters(global_column_ids, evaluation_result.remaining_filters, reader_data,
-	                                    virtual_columns, global_state);
+	reader_data.filters = CreateFilters(evaluation_result.remaining_filters, global_to_local);
 	return true;
 }
 
@@ -796,12 +782,10 @@ static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter 
 		auto &struct_filter = global_filter.Cast<StructFilter>();
 		auto &child_filter = struct_filter.child_filter;
 
-		auto it = mapping.child_mapping.find(struct_filter.child_idx);
 		//! FXIME: The previous step should ensure that filters that target fields that are not present in the file are
 		//! evaluated earlier
-		D_ASSERT(it != mapping.child_mapping.end());
-		auto &mapping = it->second;
-		D_ASSERT(child_filter);
+		//! For now we will assume the mapping is 1-to-1
+		MultiFileIndexMapping mapping(struct_filter.child_idx);
 		auto new_child_filter = ConvertFilterFromGlobalToLocal(*child_filter, mapping);
 		//! TODO: renaming fields should probably be respected here?
 		auto child_name = struct_filter.child_name;
@@ -817,7 +801,6 @@ static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter 
 		return make_uniq<OptionalFilter>(std::move(new_child));
 	}
 	case TableFilterType::DYNAMIC_FILTER: {
-		auto &dynamic_filter = global_filter.Cast<DynamicFilter>();
 		//! FIXME: since this works like BoundParameterExpression,
 		// making a copy of this DynamicFilterData will not function correctly.
 		throw NotImplementedException("DynamicFilter can't be *properly* copied yet");
@@ -829,20 +812,11 @@ static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter 
 	return result;
 }
 
-unique_ptr<TableFilterSet> MultiFileReader::CreateFilters(const vector<ColumnIndex> &global_column_ids,
-                                                          map<idx_t, reference<TableFilter>> &filters,
-                                                          MultiFileReaderData &reader_data,
-                                                          const virtual_column_map_t &virtual_columns,
-                                                          optional_ptr<MultiFileReaderGlobalState> global_state) {
+unique_ptr<TableFilterSet>
+MultiFileReader::CreateFilters(map<idx_t, reference<TableFilter>> &filters,
+                               unordered_map<idx_t, MultiFileIndexMapping> &global_to_local) {
 	if (filters.empty()) {
 		return nullptr;
-	}
-
-	unordered_map<idx_t, MultiFileIndexMapping> global_to_local;
-	for (idx_t local_idx = 0; local_idx < reader_data.column_mapping.size(); local_idx++) {
-		auto global_idx = reader_data.column_mapping[MultiFileLocalIndex(local_idx)];
-		global_to_local.emplace(global_idx.GetIndex(), local_idx);
-		//! FIXME: also map the nested types
 	}
 
 	auto result = make_uniq<TableFilterSet>();
@@ -850,7 +824,7 @@ unique_ptr<TableFilterSet> MultiFileReader::CreateFilters(const vector<ColumnInd
 		auto &global_index = it.first;
 		auto &global_filter = it.second.get();
 
-		auto local_it = global_to_local.find(it.first);
+		auto local_it = global_to_local.find(global_index);
 		if (local_it == global_to_local.end()) {
 			throw InternalException(
 			    "Error in 'EvaluateConstantFilters', this filter should not end up in CreateFilters!");
