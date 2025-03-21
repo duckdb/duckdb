@@ -329,7 +329,7 @@ struct CatalogLookup {
 	    : catalog(catalog), schema(std::move(schema_p)), name(std::move(name_p)), lookup_info(catalog_type, name) {
 	}
 	CatalogLookup(Catalog &catalog, string schema_p, const EntryLookupInfo &lookup_p)
-		: catalog(catalog), schema(std::move(schema_p)), name(lookup_p.GetEntryName()), lookup_info(lookup_p, name) {
+	    : catalog(catalog), schema(std::move(schema_p)), name(lookup_p.GetEntryName()), lookup_info(lookup_p, name) {
 	}
 
 	Catalog &catalog;
@@ -766,7 +766,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, const string &schema,
                                                    const EntryLookupInfo &lookup_info) {
 	if (lookup_info.GetAtClause() && !SupportsTimeTravel()) {
-		return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel")) };
+		return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel"))};
 	}
 	auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, schema);
 	auto schema_entry = LookupSchema(transaction, schema_lookup, OnEntryNotFound::RETURN_NULL);
@@ -932,7 +932,7 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		D_ASSERT(catalog_entry);
 		auto lookup_behavior = catalog_entry->CatalogTypeLookupRule(lookup_info.GetCatalogType());
 		if (lookup_behavior == CatalogLookupBehavior::STANDARD) {
-			lookups.emplace_back(*catalog_entry, entry.schema, lookup_info);;
+			lookups.emplace_back(*catalog_entry, entry.schema, lookup_info);
 		} else if (lookup_behavior == CatalogLookupBehavior::LOWER_PRIORITY) {
 			final_lookups.emplace_back(*catalog_entry, entry.schema, lookup_info);
 		}

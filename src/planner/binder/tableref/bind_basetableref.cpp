@@ -16,6 +16,10 @@
 #include "duckdb/planner/tableref/bound_dummytableref.hpp"
 #include "duckdb/planner/tableref/bound_subqueryref.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/planner/tableref/bound_at_clause.hpp"
+
+#include <duckdb/execution/expression_executor.hpp>
+#include <duckdb/planner/expression_binder/constant_binder.hpp>
 
 namespace duckdb {
 
@@ -77,6 +81,16 @@ unique_ptr<BoundTableRef> Binder::BindWithReplacementScan(ClientContext &context
 		return Bind(*replacement_function);
 	}
 	return nullptr;
+}
+
+unique_ptr<BoundAtClause> Binder::BindAtClause(optional_ptr<AtClause> at_clause) {
+	if (!at_clause) {
+		return nullptr;
+	}
+	ConstantBinder binder(*this, context, "AT clause");
+	auto expr = binder.Bind(at_clause->ExpressionMutable());
+	auto val = ExpressionExecutor::EvaluateScalar(context, *expr);
+	return make_uniq<BoundAtClause>(at_clause->Unit(), std::move(val));
 }
 
 vector<CatalogSearchEntry> Binder::GetSearchPath(Catalog &catalog, const string &schema_name) {
@@ -197,7 +211,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
-	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name, ref.at_clause.get(), error_context);
+	auto at_clause = BindAtClause(ref.at_clause);
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name, at_clause.get(), error_context);
 	BindSchemaOrCatalog(entry_retriever, ref.catalog_name, ref.schema_name);
 	auto table_or_view =
 	    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::RETURN_NULL);

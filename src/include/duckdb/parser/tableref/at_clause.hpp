@@ -18,6 +18,13 @@ public:
 	AtClause(string unit, unique_ptr<ParsedExpression> expr);
 
 public:
+	const string &Unit() {
+		return unit;
+	}
+	unique_ptr<ParsedExpression> &ExpressionMutable() {
+		return expr;
+	}
+
 	string ToString() const;
 	bool Equals(const AtClause &other_p) const;
 	unique_ptr<AtClause> Copy() const;

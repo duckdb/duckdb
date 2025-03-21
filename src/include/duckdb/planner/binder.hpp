@@ -53,6 +53,8 @@ class ExternalDependency;
 class TableFunction;
 class TableStorageInfo;
 class BoundConstraint;
+class AtClause;
+class BoundAtClause;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
@@ -356,6 +358,8 @@ private:
 	unique_ptr<BoundTableRef> BindBoundPivot(PivotRef &expr);
 	void ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry, vector<UnpivotEntry> &unpivot_entries);
 	void ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result);
+
+	unique_ptr<BoundAtClause> BindAtClause(optional_ptr<AtClause> at_clause);
 
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
 	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,

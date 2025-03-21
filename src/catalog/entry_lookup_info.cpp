@@ -6,13 +6,14 @@ EntryLookupInfo::EntryLookupInfo(CatalogType catalog_type_p, const string &name_
     : catalog_type(catalog_type_p), name(name_p), error_context(error_context_p) {
 }
 
-EntryLookupInfo::EntryLookupInfo(CatalogType catalog_type_p, const string &name_p, optional_ptr<AtClause> at_clause_p,
-                                 QueryErrorContext error_context_p)
+EntryLookupInfo::EntryLookupInfo(CatalogType catalog_type_p, const string &name_p,
+                                 optional_ptr<BoundAtClause> at_clause_p, QueryErrorContext error_context_p)
     : catalog_type(catalog_type_p), name(name_p), at_clause(at_clause_p), error_context(error_context_p) {
 }
 
-EntryLookupInfo::EntryLookupInfo(const EntryLookupInfo &parent, const string &name_p) :
-	catalog_type(parent.catalog_type), name(name_p), at_clause(parent.at_clause), error_context(parent.error_context) {
+EntryLookupInfo::EntryLookupInfo(const EntryLookupInfo &parent, const string &name_p)
+    : catalog_type(parent.catalog_type), name(name_p), at_clause(parent.at_clause),
+      error_context(parent.error_context) {
 }
 
 EntryLookupInfo EntryLookupInfo::SchemaLookup(const EntryLookupInfo &parent, const string &schema_name) {
@@ -31,7 +32,7 @@ const QueryErrorContext &EntryLookupInfo::GetErrorContext() const {
 	return error_context;
 }
 
-const optional_ptr<AtClause> EntryLookupInfo::GetAtClause() const {
+const optional_ptr<BoundAtClause> EntryLookupInfo::GetAtClause() const {
 	return at_clause;
 }
 
