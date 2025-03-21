@@ -78,6 +78,7 @@ void BaseTableRef::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<string>(201, "table_name", table_name);
 	serializer.WritePropertyWithDefault<vector<string>>(202, "column_name_alias", column_name_alias);
 	serializer.WritePropertyWithDefault<string>(203, "catalog_name", catalog_name);
+	serializer.WritePropertyWithDefault<unique_ptr<AtClause>>(204, "at_clause", at_clause);
 }
 
 unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
@@ -86,6 +87,7 @@ unique_ptr<TableRef> BaseTableRef::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<string>(201, "table_name", result->table_name);
 	deserializer.ReadPropertyWithDefault<vector<string>>(202, "column_name_alias", result->column_name_alias);
 	deserializer.ReadPropertyWithDefault<string>(203, "catalog_name", result->catalog_name);
+	deserializer.ReadPropertyWithDefault<unique_ptr<AtClause>>(204, "at_clause", result->at_clause);
 	return std::move(result);
 }
 

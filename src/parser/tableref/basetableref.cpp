@@ -11,7 +11,12 @@ string BaseTableRef::ToString() const {
 	result += catalog_name.empty() ? "" : (KeywordHelper::WriteOptionallyQuoted(catalog_name) + ".");
 	result += schema_name.empty() ? "" : (KeywordHelper::WriteOptionallyQuoted(schema_name) + ".");
 	result += KeywordHelper::WriteOptionallyQuoted(table_name);
-	return BaseToString(result, column_name_alias);
+	result += AliasToString(column_name_alias);
+	if (at_clause) {
+		result += " " + at_clause->ToString();
+	}
+	result += SampleToString();
+	return result;
 }
 
 bool BaseTableRef::Equals(const TableRef &other_p) const {

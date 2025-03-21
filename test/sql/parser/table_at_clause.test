@@ -2,8 +2,8 @@
 # description: Test table AT (TIMESTAMP => ...)
 # group: [parser]
 
-# statement ok
-# PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 CREATE TABLE tbl(i INTEGER)
