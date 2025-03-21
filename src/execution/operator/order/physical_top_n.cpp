@@ -163,8 +163,8 @@ TopNHeap::TopNHeap(ClientContext &context, Allocator &allocator, const vector<Lo
                    const vector<BoundOrderByNode> &orders_p, idx_t limit, idx_t offset)
     : allocator(allocator), buffer_manager(BufferManager::GetBufferManager(context)), payload_types(payload_types_p),
       orders(orders_p), limit(limit), offset(offset), heap_size(limit + offset), executor(context),
-      matching_sel(STANDARD_VECTOR_SIZE), final_sel(STANDARD_VECTOR_SIZE), true_sel(STANDARD_VECTOR_SIZE),
-      false_sel(STANDARD_VECTOR_SIZE), new_remaining_sel(STANDARD_VECTOR_SIZE) {
+      sort_key_heap(allocator), matching_sel(STANDARD_VECTOR_SIZE), final_sel(STANDARD_VECTOR_SIZE),
+      true_sel(STANDARD_VECTOR_SIZE), false_sel(STANDARD_VECTOR_SIZE), new_remaining_sel(STANDARD_VECTOR_SIZE) {
 	// initialize the executor and the sort_chunk
 	vector<LogicalType> sort_types;
 	for (auto &order : orders) {
@@ -190,7 +190,7 @@ TopNHeap::TopNHeap(ClientContext &context, const vector<LogicalType> &payload_ty
 
 TopNHeap::TopNHeap(ExecutionContext &context, const vector<LogicalType> &payload_types,
                    const vector<BoundOrderByNode> &orders, idx_t limit, idx_t offset)
-    : TopNHeap(context.client, Allocator::Get(context.client), payload_types, orders, limit, offset) {
+    : TopNHeap(context.client, BufferAllocator::Get(context.client), payload_types, orders, limit, offset) {
 }
 
 void TopNHeap::AddSmallHeap(DataChunk &input, Vector &sort_keys_vec) {
