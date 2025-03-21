@@ -430,6 +430,7 @@ public:
 					OP::FinishFile(context, *gstate.global_state, *current_reader_data.reader);
 					current_reader_data.closed_reader = current_reader_data.reader;
 					current_reader_data.reader = nullptr;
+					continue;
 				}
 			} else if (current_reader_data.file_state == MultiFileFileState::SKIPPED) {
 				//! This file does not need to be opened or closed, the filters have determined that this file can be
@@ -440,6 +441,11 @@ public:
 
 			if (TryOpenNextFile(context, bind_data, scan_data, gstate, parallel_lock)) {
 				continue;
+			}
+
+			// Check if the current file is being opened, in that case we need to wait for it.
+			if (current_reader_data.file_state == MultiFileFileState::OPENING) {
+				WaitForFile(gstate.file_index, gstate, parallel_lock);
 			}
 		}
 	}
