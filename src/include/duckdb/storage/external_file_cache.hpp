@@ -103,7 +103,7 @@ private:
 	//! Gets the cached file, or creates it if is not yet present
 	CachedFile &GetOrCreateCachedFile(const string &path);
 	//! Whether the CachedFile is still valid given the current modified/version tag
-	bool FileIsValid(CachedFile &cached_file, const unique_ptr<StorageLockKey> &guard,
+	bool FileIsValid(CachedFile &cached_file, const unique_ptr<StorageLockKey> &guard, bool validate,
 	                 const string &current_version_tag, time_t current_last_modified, int64_t access_time);
 
 private:
@@ -111,8 +111,6 @@ private:
 	BufferManager &buffer_manager;
 	//! Whether or not file caching is enabled
 	atomic<bool> enable;
-	//! Whether or not to check whether cached files are invalidated (due to modifying the file)
-	atomic<bool> check_cached_file_invalidation;
 	//! Mapping from file path to cached file with cached ranges
 	unordered_map<string, unique_ptr<CachedFile>> cached_files;
 	//! Lock for accessing the cached files

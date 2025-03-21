@@ -34,7 +34,7 @@ public:
 	CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
 
 public:
-	DUCKDB_API static CachingFileSystem &Get(ClientContext &context);
+	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
 
 	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const string &path, FileOpenFlags flags);
 
@@ -43,6 +43,8 @@ private:
 	FileSystem &file_system;
 	//! The External File Cache that caches the files
 	ExternalFileCache &external_file_cache;
+	//! Whether to validate cache entries
+	bool validate;
 };
 
 struct CachingFileHandle {

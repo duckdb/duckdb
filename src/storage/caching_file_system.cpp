@@ -11,12 +11,12 @@
 namespace duckdb {
 
 CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db)
-    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db)) {
+    : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db)), validate(true) {
+	// TODO: "validate" defaults to true (for now)
 }
 
-CachingFileSystem &CachingFileSystem::Get(ClientContext &context) {
-	auto &client_data = ClientData::Get(context);
-	return *client_data.client_caching_file_system;
+CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
+	return CachingFileSystem(FileSystem::GetFileSystem(context), *context.db);
 }
 
 unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const string &path, FileOpenFlags flags) {
@@ -28,8 +28,8 @@ CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, C
                                      FileOpenFlags flags_p)
     : caching_file_system(caching_file_system_p), external_file_cache(caching_file_system.external_file_cache),
       cached_file(cached_file_p), flags(flags_p) {
-	if (!external_file_cache.enable || external_file_cache.check_cached_file_invalidation) {
-		// If caching is disabled, or if we must check cache invalidation, we always have to open the file
+	if (!external_file_cache.enable || caching_file_system.validate) {
+		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
 		return;
 	}
@@ -49,7 +49,8 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
 		auto guard = cached_file.lock.GetExclusiveLock();
-		if (!external_file_cache.FileIsValid(cached_file, guard, version_tag, last_modified, current_time)) {
+		if (!external_file_cache.FileIsValid(cached_file, guard, caching_file_system.validate, version_tag,
+		                                     last_modified, current_time)) {
 			cached_file.Ranges(guard).clear(); // Invalidate entire cache
 		}
 		cached_file.FileSize(guard) = file_handle->GetFileSize();
@@ -192,7 +193,7 @@ string CachingFileHandle::GetPath() const {
 }
 
 idx_t CachingFileHandle::GetFileSize() {
-	if (file_handle || external_file_cache.check_cached_file_invalidation) {
+	if (file_handle || caching_file_system.validate) {
 		return GetFileHandle().GetFileSize();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -200,7 +201,7 @@ idx_t CachingFileHandle::GetFileSize() {
 }
 
 time_t CachingFileHandle::GetLastModifiedTime() {
-	if (file_handle || external_file_cache.check_cached_file_invalidation) {
+	if (file_handle || caching_file_system.validate) {
 		GetFileHandle();
 		return last_modified;
 	}
@@ -209,7 +210,7 @@ time_t CachingFileHandle::GetLastModifiedTime() {
 }
 
 bool CachingFileHandle::CanSeek() {
-	if (file_handle || external_file_cache.check_cached_file_invalidation) {
+	if (file_handle || caching_file_system.validate) {
 		return GetFileHandle().CanSeek();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -217,7 +218,7 @@ bool CachingFileHandle::CanSeek() {
 }
 
 bool CachingFileHandle::OnDiskFile() {
-	if (file_handle || external_file_cache.check_cached_file_invalidation) {
+	if (file_handle || caching_file_system.validate) {
 		return GetFileHandle().OnDiskFile();
 	}
 	auto guard = cached_file.lock.GetSharedLock();
@@ -225,7 +226,7 @@ bool CachingFileHandle::OnDiskFile() {
 }
 
 const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> &guard) {
-	if (file_handle || external_file_cache.check_cached_file_invalidation) {
+	if (file_handle || caching_file_system.validate) {
 		GetFileHandle();
 		return version_tag;
 	}

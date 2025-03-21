@@ -96,8 +96,7 @@ ExternalFileCache::CachedFile::Ranges(const unique_ptr<StorageLockKey> &guard) {
 }
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
-    : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p),
-      check_cached_file_invalidation(true) { // TODO: this defaults to "true" for now
+    : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p) {
 }
 
 void ExternalFileCache::SetEnabled(bool enable_p) {
@@ -138,10 +137,10 @@ ExternalFileCache::CachedFile &ExternalFileCache::GetOrCreateCachedFile(const st
 	return *entry;
 }
 
-bool ExternalFileCache::FileIsValid(CachedFile &cached_file, const unique_ptr<StorageLockKey> &guard,
+bool ExternalFileCache::FileIsValid(CachedFile &cached_file, const unique_ptr<StorageLockKey> &guard, bool validate,
                                     const string &current_version_tag, time_t current_last_modified,
                                     int64_t access_time) {
-	if (!check_cached_file_invalidation) {
+	if (!validate) {
 		return true; // Assume valid
 	}
 	if (!current_version_tag.empty()) {

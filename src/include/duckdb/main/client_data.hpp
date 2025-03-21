@@ -60,9 +60,6 @@ struct ClientData {
 	//! The clients' file system wrapper
 	unique_ptr<FileSystem> client_file_system;
 
-	//! The client's caching file system wrapper
-	unique_ptr<CachingFileSystem> client_caching_file_system;
-
 	//! The file search path
 	string file_search_path;
 
