@@ -348,19 +348,19 @@ void DuckSchemaEntry::OnDropEntry(CatalogTransaction transaction, CatalogEntry &
 	local_storage.DropTable(table_entry.GetStorage());
 }
 
-optional_ptr<CatalogEntry> DuckSchemaEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
-                                                     const string &name) {
-	return GetCatalogSet(type).GetEntry(transaction, name);
+optional_ptr<CatalogEntry> DuckSchemaEntry::LookupEntry(CatalogTransaction transaction,
+                                                        const EntryLookupInfo &lookup_info) {
+	return GetCatalogSet(lookup_info.GetCatalogType()).GetEntry(transaction, lookup_info.GetEntryName());
 }
 
-CatalogSet::EntryLookup DuckSchemaEntry::GetEntryDetailed(CatalogTransaction transaction, CatalogType type,
-                                                          const string &name) {
-	return GetCatalogSet(type).GetEntryDetailed(transaction, name);
+CatalogSet::EntryLookup DuckSchemaEntry::LookupEntryDetailed(CatalogTransaction transaction,
+                                                             const EntryLookupInfo &lookup_info) {
+	return GetCatalogSet(lookup_info.GetCatalogType()).GetEntryDetailed(transaction, lookup_info.GetEntryName());
 }
 
-SimilarCatalogEntry DuckSchemaEntry::GetSimilarEntry(CatalogTransaction transaction, CatalogType type,
-                                                     const string &name) {
-	return GetCatalogSet(type).SimilarEntry(transaction, name);
+SimilarCatalogEntry DuckSchemaEntry::GetSimilarEntry(CatalogTransaction transaction,
+                                                     const EntryLookupInfo &lookup_info) {
+	return GetCatalogSet(lookup_info.GetCatalogType()).SimilarEntry(transaction, lookup_info.GetEntryName());
 }
 
 CatalogSet &DuckSchemaEntry::GetCatalogSet(CatalogType type) {
