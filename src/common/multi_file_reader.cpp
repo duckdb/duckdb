@@ -423,6 +423,7 @@ void MultiFileReader::CreateColumnMappingByName(const string &file_name,
 			reader_data.cast_map[local_id] = global_type;
 			expected_type = global_type;
 		} else {
+			//! FIXME: local fields are not guaranteed to match with the global fields for this struct
 			local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
 		}
 		expressions.push_back(make_uniq<BoundReferenceExpression>(expected_type, local_idx));
@@ -540,6 +541,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(
 			reader_data.cast_map[local_id] = global_column.type;
 			expected_type = global_column.type;
 		} else {
+			//! FIXME: local fields are not guaranteed to match with the global fields for this struct
 			local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
 		}
 		expressions.push_back(make_uniq<BoundReferenceExpression>(expected_type, local_idx));
@@ -736,7 +738,8 @@ bool MultiFileReader::CreateMapping(const string &file_name,
 
 		auto &local_column = local_columns[local_column_id.GetPrimaryIndex()];
 		auto &global_column = global_columns[global_column_id.GetPrimaryIndex()];
-		//! FIXME: also map the nested types (missing this information it seems?)
+		//! FIXME: The `column_indexes` created in the mapping methods are not respecting/expecting differences in
+		//! struct schemas
 	}
 
 	//! Evaluate the filters against the column(s) that are constant for this file (not present in the local schema)
