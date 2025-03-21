@@ -18,6 +18,14 @@ public:
 	BoundAtClause(string unit_p, Value value_p) : unit(std::move(unit_p)), val(std::move(value_p)) {
 	}
 
+public:
+	const string &Unit() const {
+		return unit;
+	}
+	const Value &GetValue() const {
+		return val;
+	}
+
 private:
 	//! The unit (e.g. TIMESTAMP or VERSION)
 	string unit;
