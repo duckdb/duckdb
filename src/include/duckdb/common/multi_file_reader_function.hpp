@@ -408,33 +408,34 @@ public:
 			}
 
 			auto &current_reader_data = *gstate.readers[gstate.file_index];
-			if (current_reader_data.file_state != MultiFileFileState::OPEN) {
-				D_ASSERT(current_reader_data.file_state != MultiFileFileState::CLOSED);
-				if (TryOpenNextFile(context, bind_data, scan_data, gstate, parallel_lock)) {
-					continue;
-				}
+			if (current_reader_data.file_state == MultiFileFileState::OPEN) {
+				if (OP::TryInitializeScan(context, current_reader_data.reader, *gstate.global_state,
+				                          *scan_data.local_state)) {
+					if (!current_reader_data.reader) {
+						throw InternalException("MultiFileReader was moved");
+					}
+					// The current reader has data left to be scanned
+					scan_data.reader = current_reader_data.reader;
+					scan_data.batch_index = gstate.batch_index++;
+					scan_data.file_index = gstate.file_index;
+					return true;
+				} else {
+					// Set state to the next file
+					++gstate.file_index;
 
-				// Check if the current file is being opened, in that case we need to wait for it.
-				if (current_reader_data.file_state == MultiFileFileState::OPENING) {
-					WaitForFile(gstate.file_index, gstate, parallel_lock);
+					// Close current file
+					current_reader_data.file_state = MultiFileFileState::CLOSED;
+
+					//! Finish processing the file
+					OP::FinishFile(context, *gstate.global_state, *current_reader_data.reader);
+					current_reader_data.closed_reader = current_reader_data.reader;
+					current_reader_data.reader = nullptr;
 				}
 			}
 
-			if (current_reader_data.file_state == MultiFileFileState::CLOSED) {
+			if (TryOpenNextFile(context, bind_data, scan_data, gstate, parallel_lock)) {
 				continue;
 			}
-			if (OP::TryInitializeScan(context, current_reader_data.reader, *gstate.global_state,
-			                          *scan_data.local_state)) {
-				if (!current_reader_data.reader) {
-					throw InternalException("MultiFileReader was moved");
-				}
-				// The current reader has data left to be scanned
-				scan_data.reader = current_reader_data.reader;
-				scan_data.batch_index = gstate.batch_index++;
-				scan_data.file_index = gstate.file_index;
-				return true;
-			}
-			CloseFile(context, gstate, current_reader_data, parallel_lock);
 		}
 	}
 
