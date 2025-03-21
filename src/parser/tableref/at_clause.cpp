@@ -2,7 +2,8 @@
 
 namespace duckdb {
 
-AtClause::AtClause(string unit_p, unique_ptr<ParsedExpression> expr_p) : unit(std::move(unit_p)), expr(std::move(expr_p)) {
+AtClause::AtClause(string unit_p, unique_ptr<ParsedExpression> expr_p)
+    : unit(std::move(unit_p)), expr(std::move(expr_p)) {
 }
 
 string AtClause::ToString() const {
@@ -29,4 +30,4 @@ bool AtClause::Equals(optional_ptr<AtClause> lhs, optional_ptr<AtClause> rhs) {
 	return lhs->Equals(*rhs);
 }
 
-}
+} // namespace duckdb

@@ -797,7 +797,7 @@ at_unit:
 	;
 
 at_specifier:
-		at_unit EQUALS_GREATER c_expr
+		at_unit EQUALS_GREATER a_expr
 			{
 				PGAtClause *n = makeNode(PGAtClause);
 				n->unit = $1;

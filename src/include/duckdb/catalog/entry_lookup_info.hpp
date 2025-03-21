@@ -13,24 +13,28 @@
 #include "duckdb/parser/query_error_context.hpp"
 
 namespace duckdb {
+class AtClause;
 
 struct EntryLookupInfo {
 public:
 	EntryLookupInfo(CatalogType catalog_type, const string &name,
 	                QueryErrorContext error_context = QueryErrorContext());
+	EntryLookupInfo(CatalogType catalog_type, const string &name, optional_ptr<AtClause> at_clause,
+	QueryErrorContext error_context);
+	EntryLookupInfo(const EntryLookupInfo &parent, const string &name);
 
 public:
 	CatalogType GetCatalogType() const;
 	const string &GetEntryName() const;
 	const QueryErrorContext &GetErrorContext() const;
+	const optional_ptr<AtClause> GetAtClause() const;
 
-	static EntryLookupInfo SchemaLookup(const EntryLookupInfo &parent, const string &schema_name) {
-		return EntryLookupInfo(CatalogType::SCHEMA_ENTRY, schema_name, parent.error_context);
-	}
+	static EntryLookupInfo SchemaLookup(const EntryLookupInfo &parent, const string &schema_name);
 
 private:
 	CatalogType catalog_type;
 	const string &name;
+	optional_ptr<AtClause> at_clause;
 	QueryErrorContext error_context;
 };
 

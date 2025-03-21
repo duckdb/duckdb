@@ -67,8 +67,8 @@ void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catal
 				}
 				if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
 					throw BinderException(
-						"Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
-						schema, catalog_name, schema);
+					    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
+					    schema, catalog_name, schema);
 				}
 			}
 			catalog = schema;
