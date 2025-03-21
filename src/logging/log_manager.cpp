@@ -41,6 +41,10 @@ Logger &LogManager::GlobalLogger() {
 	return *global_logger;
 }
 
+shared_ptr<Logger> LogManager::CopyGlobalLoggerPtr() {
+	return global_logger;
+}
+
 void LogManager::Flush() {
 	unique_lock<mutex> lck(lock);
 	log_storage->Flush();

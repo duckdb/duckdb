@@ -9,7 +9,7 @@
 #include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
-#include "duckdb/logging/file_handle_logger.hpp"
+#include "duckdb/logging/loggers/file_handle_logger.hpp"
 
 #include <cstdint>
 #include <cstdio>
@@ -152,6 +152,9 @@ public:
 	}
 
 	int fd;
+
+	// Kept for logging purposes
+	idx_t current_pos = 0;
 
 public:
 	void Close() override {
@@ -444,7 +447,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 
 	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags);
 	if (opener) {
-		file_handle->logger = FileHandleLogger::Get(*opener);
+		file_handle->logger = FileHandleLogger::CopyLoggerPtr(*opener);
 		DUCKDB_LOG_FILE_HANDLE_OPEN((*file_handle));
 	}
 	return file_handle;
@@ -489,28 +492,32 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		nr_bytes -= bytes_read;
 		location += UnsafeNumericCast<idx_t>(bytes_read);
 	}
-	DUCKDB_LOG_FILE_HANDLE_READ(handle, bytes_to_read, location);
+	DUCKDB_LOG_FILE_HANDLE_READ(handle, bytes_to_read, location-UnsafeNumericCast<idx_t>(bytes_to_read));
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
+	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	int fd = unix_handle.fd;
 	int64_t bytes_read = read(fd, buffer, UnsafeNumericCast<size_t>(nr_bytes));
 	if (bytes_read == -1) {
 		throw IOException("Could not read from file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 		                  strerror(errno));
 	}
-	DUCKDB_LOG_FILE_HANDLE_READ(handle, bytes_read);
+	DUCKDB_LOG_FILE_HANDLE_READ(handle, bytes_read, unix_handle.current_pos);
+	unix_handle.current_pos += UnsafeNumericCast<idx_t>(bytes_read);
 	return bytes_read;
 }
 
 void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
 	int fd = handle.Cast<UnixFileHandle>().fd;
 	auto write_buffer = char_ptr_cast(buffer);
-	auto bytes_to_write = nr_bytes;
 
-	while (nr_bytes > 0) {
+	auto bytes_to_write = nr_bytes;
+	auto current_location = location;
+
+	while (bytes_to_write > 0) {
 		int64_t bytes_written =
-		    pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(nr_bytes), UnsafeNumericCast<off_t>(location));
+		    pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(bytes_to_write), UnsafeNumericCast<off_t>(current_location));
 		if (bytes_written < 0) {
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
@@ -520,29 +527,33 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 			                  {{"errno", std::to_string(errno)}}, handle.path, strerror(errno));
 		}
 		write_buffer += bytes_written;
-		nr_bytes -= bytes_written;
-		location += UnsafeNumericCast<idx_t>(bytes_written);
+		bytes_to_write -= bytes_written;
+		current_location += UnsafeNumericCast<idx_t>(bytes_written);
 	}
 
-	DUCKDB_LOG_FILE_HANDLE_WRITE(handle, bytes_to_write, location);
+	DUCKDB_LOG_FILE_HANDLE_WRITE(handle, nr_bytes, location);
 }
 
 int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes) {
-	int fd = handle.Cast<UnixFileHandle>().fd;
-	int64_t bytes_written = 0;
-	while (nr_bytes > 0) {
-		auto bytes_to_write = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(nr_bytes));
-		int64_t current_bytes_written = write(fd, buffer, bytes_to_write);
+	auto &unix_handle = handle.Cast<UnixFileHandle>();
+	int fd = unix_handle.fd;
+
+	auto bytes_to_write = nr_bytes;
+	while (bytes_to_write > 0) {
+		auto bytes_to_write_this_call = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(bytes_to_write));
+		int64_t current_bytes_written = write(fd, buffer, bytes_to_write_this_call);
 		if (current_bytes_written <= 0) {
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
 		}
-		bytes_written += current_bytes_written;
 		buffer = (void *)(data_ptr_cast(buffer) + current_bytes_written);
-		nr_bytes -= current_bytes_written;
+		bytes_to_write -= current_bytes_written;
 	}
-	DUCKDB_LOG_FILE_HANDLE_WRITE(handle, bytes_written);
-	return bytes_written;
+
+	DUCKDB_LOG_FILE_HANDLE_WRITE(handle, nr_bytes, unix_handle.current_pos);
+	unix_handle.current_pos += UnsafeNumericCast<idx_t>(nr_bytes);
+
+	return nr_bytes;
 }
 
 bool LocalFileSystem::Trim(FileHandle &handle, idx_t offset_bytes, idx_t length_bytes) {

@@ -5,7 +5,7 @@
 #include "duckdb/common/opener_file_system.hpp"
 #include "duckdb/common/random_engine.hpp"
 #include "duckdb/common/serializer/buffered_file_writer.hpp"
-#include "duckdb/logging/http_logger.hpp"
+#include "duckdb/logging/loggers/http_logger.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_file_opener.hpp"

@@ -1,4 +1,4 @@
-# name: test/sql/logging/filehandle_logging.test
+# name: test/sql/logging/filehandle_logging_attach.test
 # group: [logging]
 
 require parquet
@@ -15,10 +15,13 @@ statement ok
 set logging_level='trace';
 
 statement ok
-COPY (SELECT 1 as a) TO '__TEST_DIR__/test.parquet'
+attach '__TEST_DIR__/filehandle_logging.db' as db;
 
 statement ok
-FROM '__TEST_DIR__/test.csv'
+CREATE TABLE db.test AS SELECT 1;
+
+statement ok
+DETACH db;
 
 # Create a view that json_transforms the log entries
 statement ok
@@ -38,12 +41,10 @@ SELECT
     message.pos
 FROM file_handle_log
 ----
-LocalFileSystem	OPEN	test.csv	NULL	NULL
-LocalFileSystem	WRITE	test.csv	2	0
-LocalFileSystem	WRITE	test.csv	1	2
-LocalFileSystem	WRITE	test.csv	1	3
-LocalFileSystem	CLOSE	test.csv	NULL	NULL
-LocalFileSystem	OPEN	test.csv	NULL	NULL
-LocalFileSystem	READ	test.csv	4	0
-LocalFileSystem	READ	test.csv	0	4
-LocalFileSystem	CLOSE	test.csv	NULL	NULL
+LocalFileSystem	OPEN	filehandle_logging.db	NULL	NULL
+LocalFileSystem	WRITE	filehandle_logging.db	4096	0
+LocalFileSystem	WRITE	filehandle_logging.db	4096	4096
+LocalFileSystem	WRITE	filehandle_logging.db	4096	8192
+LocalFileSystem	WRITE	filehandle_logging.db	262144	12288
+LocalFileSystem	WRITE	filehandle_logging.db	4096	4096
+LocalFileSystem	CLOSE	filehandle_logging.db	NULL	NULL
