@@ -46,6 +46,7 @@
 namespace duckdb {
 
 void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
+	auto &context = retriever.GetContext();
 	if (catalog.empty() && !schema.empty()) {
 		// schema is specified - but catalog is not
 		// try searching for the catalog instead

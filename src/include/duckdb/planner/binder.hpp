@@ -426,7 +426,7 @@ private:
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
-	void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema);
+	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema);
 	const string BindCatalog(string &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 
