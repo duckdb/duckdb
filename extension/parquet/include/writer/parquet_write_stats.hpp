@@ -223,4 +223,29 @@ public:
 	}
 };
 
+class UUIDStatisticsState : public ColumnWriterStatistics {
+public:
+	bool has_stats = false;
+	data_t min[16] = {0};
+	data_t max[16] = {0};
+
+public:
+	bool HasStats() override {
+		return has_stats;
+	}
+
+	string GetMin() override {
+		return GetMinValue();
+	}
+	string GetMax() override {
+		return GetMaxValue();
+	}
+	string GetMinValue() override {
+		return HasStats() ? string(char_ptr_cast(min), 16) : string();
+	}
+	string GetMaxValue() override {
+		return HasStats() ? string(char_ptr_cast(max), 16) : string();
+	}
+};
+
 } // namespace duckdb

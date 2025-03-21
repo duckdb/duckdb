@@ -1,0 +1,20 @@
+# name: test/sql/json/issues/internal_issue4389.test
+# description: Test internal issue 4389 - auto_detect is false for COPY + JSON
+# group: [issues]
+
+require json
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE todos (userId UBIGINT, id UBIGINT, title VARCHAR, completed BOOLEAN);
+
+statement ok
+insert into todos values (42, 42, 'duck', true)
+
+statement ok
+copy todos to '__TEST_DIR__/todos.json' (ARRAY)
+
+statement ok
+copy todos from '__TEST_DIR__/todos.json'

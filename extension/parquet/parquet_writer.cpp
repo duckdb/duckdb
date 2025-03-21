@@ -656,6 +656,26 @@ struct BlobStatsUnifier : public BaseStringStatsUnifier {
 	}
 };
 
+struct UUIDStatsUnifier : public BaseStringStatsUnifier {
+	string StatsToString(const string &stats) override {
+		if (stats.size() != 16) {
+			return string();
+		}
+		auto data_ptr = const_data_ptr_cast(stats.c_str());
+		static char const UUID_DIGITS[] = "0123456789abcdef";
+		string result;
+		// UUID format is XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXX
+		// i.e. dashes are at bytes 4, 6, 8, 10
+		for (idx_t i = 0; i < 16; i++) {
+			if (i == 4 || i == 6 || i == 8 || i == 10) {
+				result += "-";
+			}
+			result += UUID_DIGITS[data_ptr[i] >> 4];
+			result += UUID_DIGITS[data_ptr[i] & 0xf];
+		}
+		return result;
+	}
+};
 struct NullStatsUnifier : public ColumnStatsUnifier {
 	void UnifyMinMax(const string &new_min, const string &new_max) override {
 	}
@@ -720,6 +740,7 @@ unique_ptr<ColumnStatsUnifier> GetBaseStatsUnifier(const LogicalType &type) {
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StringStatsUnifier>();
 	case LogicalTypeId::UUID:
+		return make_uniq<UUIDStatsUnifier>();
 	case LogicalTypeId::INTERVAL:;
 	case LogicalTypeId::ENUM:
 	default:

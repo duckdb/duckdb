@@ -71,21 +71,37 @@ SELECT ${func_name}(1, 1);
 <REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 statement error
+SELECT ${func_name}(1, x -> x + 1);
+----
+Invalid LIST argument during lambda function binding!
+
+endloop
+
+# list_reduce accepts a third parameter, so shows a different error message
+
+foreach func_name list_transform list_filter
+
+statement error
 SELECT ${func_name}([1], x -> x, 3);
 ----
-<REGEX>:Binder Error.*failed to bind function, either.*Invalid number of function arguments!.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 statement error
 SELECT ${func_name}([True], x -> x, x -> x);
 ----
-<REGEX>:Binder Error.*failed to bind function, either.*Invalid number of function arguments!.*Referenced column.*not found in FROM clause!.*
-
-statement error
-SELECT ${func_name}(1, x -> x + 1);
-----
-<REGEX>:Binder Error.*failed to bind function, either.*Invalid LIST argument during lambda function binding!.*Referenced column.*not found in FROM clause!.*
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 endloop
+
+statement error
+SELECT list_reduce([1], x -> x, 3);
+----
+<REGEX>:Binder Error.*list_reduce expects a function with 2 or 3 arguments.*
+
+statement error
+SELECT list_reduce([True], x -> x, x -> x);
+----
+<REGEX>:Binder Error.*No function matches the given name and argument types.*You might need to add explicit type casts.*
 
 # list_transform specific tests
 

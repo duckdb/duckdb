@@ -903,8 +903,11 @@ void JSONReader::FinalizeBuffer(JSONReaderScanState &scan_state) {
 	// we read something
 	// skip over the array start if required
 	if (!scan_state.is_last) {
-		if (scan_state.buffer_index.GetIndex() == 0 && GetFormat() == JSONFormat::ARRAY) {
-			SkipOverArrayStart(scan_state);
+		if (scan_state.buffer_index.GetIndex() == 0) {
+			StringUtil::SkipBOM(scan_state.buffer_ptr, scan_state.buffer_size, scan_state.buffer_offset);
+			if (GetFormat() == JSONFormat::ARRAY) {
+				SkipOverArrayStart(scan_state);
+			}
 		}
 	}
 	// then finalize the buffer

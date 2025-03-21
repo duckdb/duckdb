@@ -1,5 +1,17 @@
 name: Notify External Repositories
 on:
+  workflow_call:
+    inputs:
+      duckdb-sha:
+        description: 'Vendor Specific DuckDB SHA'
+        required: false
+        default: ''
+        type: 'string'
+      target-branch:
+        description: 'Which Branch to Target'
+        required: true
+        default: ''
+        type: 'string'
   workflow_dispatch:
     inputs:
       duckdb-sha:
