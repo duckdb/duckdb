@@ -474,6 +474,12 @@ typedef struct {
 	// New string functions that are added
 
 	char *(*duckdb_value_to_string)(duckdb_value value);
+	// An API to create new vector types
+
+	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
+	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
+	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -890,6 +896,10 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	result.duckdb_value_to_string = duckdb_value_to_string;
+	result.duckdb_slice_vector = duckdb_slice_vector;
+	result.duckdb_create_selection_vector = duckdb_create_selection_vector;
+	result.duckdb_destroy_selection_vector = duckdb_destroy_selection_vector;
+	result.duckdb_selection_vector_get_data_ptr = duckdb_selection_vector_get_data_ptr;
 	return result;
 }
 
