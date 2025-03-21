@@ -32,6 +32,7 @@ class DatabaseInstance;
 class FileOpener;
 class FileSystem;
 class FileHandleLogger;
+class Logger;
 
 enum class FileType {
 	//! Regular file
@@ -109,7 +110,7 @@ public:
 	string path;
 	FileOpenFlags flags;
 
-	unique_ptr<FileHandleLogger> logger;
+	shared_ptr<Logger> logger;
 };
 
 class FileSystem {

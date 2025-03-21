@@ -444,7 +444,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 
 	auto file_handle = make_uniq<UnixFileHandle>(*this, path, fd, flags);
 	if (opener) {
-		file_handle->logger = FileHandleLogger::TryCreateFileHandleLogger(*opener);
+		file_handle->logger = FileHandleLogger::Get(*opener);
 		DUCKDB_LOG_FILE_HANDLE_OPEN((*file_handle));
 	}
 	return file_handle;

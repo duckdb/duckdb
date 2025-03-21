@@ -10,14 +10,13 @@
 
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/logging/weak_logger.hpp"
 #include "duckdb/logging/logger.hpp"
 
 #include <functional>
 
 namespace duckdb {
 
-// Syntactic sugar around the http handle logger
+// Can't use the regular filehandles here because the logger might not always be set
 #define DUCKDB_LOG_FILE_HANDLE_VA(HANDLE, OP, ...)                                                                     \
 	{                                                                                                                  \
 		if (HANDLE.logger && HANDLE.logger->ShouldLog(FileHandleLogger::LOG_TYPE, FileHandleLogger::LOG_LEVEL)) {      \
@@ -33,29 +32,23 @@ namespace duckdb {
 		}                                                                                                              \
 	}
 
+// Macros for logging to file handles
 #define DUCKDB_LOG_FILE_HANDLE_READ(HANDLE, ...)  DUCKDB_LOG_FILE_HANDLE_VA(HANDLE, "READ", __VA_ARGS__);
 #define DUCKDB_LOG_FILE_HANDLE_WRITE(HANDLE, ...) DUCKDB_LOG_FILE_HANDLE_VA(HANDLE, "WRITE", __VA_ARGS__);
 #define DUCKDB_LOG_FILE_HANDLE_OPEN(HANDLE)       DUCKDB_LOG_FILE_HANDLE(HANDLE, "OPEN");
 #define DUCKDB_LOG_FILE_HANDLE_CLOSE(HANDLE)      DUCKDB_LOG_FILE_HANDLE(HANDLE, "CLOSE");
 
-class FileHandleLogger : public WeakLogger {
+class FileHandleLogger {
 public:
+	//! The log type to use for logging to filehandles
 	static constexpr const char *LOG_TYPE = "duckdb.FileHandle";
+	//! The log type to use for logging to filehandles
 	static constexpr LogLevel LOG_LEVEL = LogLevel::LOG_TRACE;
 
-	explicit FileHandleLogger(ClientContext &context) : WeakLogger(context) {
-	}
-	explicit FileHandleLogger(DatabaseInstance &db) : WeakLogger(db) {
-	}
-
-	static unique_ptr<FileHandleLogger> TryCreateFileHandleLogger(FileOpener &opener) {
+	static shared_ptr<Logger> Get(FileOpener &opener) {
 		auto context = opener.TryGetClientContext();
 		if (context && Logger::Get(*context).ShouldLog(LOG_TYPE, LOG_LEVEL)) {
-			return make_uniq<FileHandleLogger>(*context);
-		}
-		auto db = opener.TryGetDatabase();
-		if (db && Get(*db).ShouldLog(LOG_TYPE, LOG_LEVEL)) {
-			return make_uniq<FileHandleLogger>(*db);
+			return context->logger;
 		}
 		return nullptr;
 	}
