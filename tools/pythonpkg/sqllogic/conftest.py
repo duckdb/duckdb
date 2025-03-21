@@ -16,9 +16,9 @@ def pytest_addoption(parser: pytest.Parser):
     parser.addoption(
         "--test-dir",
         action="extend",
-        nargs="+",
+        nargs="*",
         type=pathlib.Path,
-        default=[DUCKDB_ROOT_DIR / "test"],
+        default=[], # We handle default in pytest_generate_tests
         dest="test_dirs",
         help="Path to one or more directories containing SQLLogic test scripts",
     )
@@ -117,7 +117,9 @@ def pytest_generate_tests(metafunc: pytest.Metafunc):
     # test_sqllogic (a.k.a SQLLOGIC_TEST_CASE_NAME) is defined in test_sqllogic.py
     if metafunc.definition.name == SQLLOGIC_TEST_CASE_NAME:
         test_dirs: typing.List[pathlib.Path] = metafunc.config.getoption("test_dirs")
-        assert len(test_dirs) > 0
+        if len(test_dirs) == 0:
+            # Use DuckDB's test directory as the default when --test-dir not specified
+            test_dirs = [DUCKDB_ROOT_DIR / "test"]
 
         parameters = []
         for test_dir in test_dirs:
