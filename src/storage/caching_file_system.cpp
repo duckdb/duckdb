@@ -41,6 +41,9 @@ CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, C
 	}
 }
 
+CachingFileHandle::~CachingFileHandle() {
+}
+
 FileHandle &CachingFileHandle::GetFileHandle() {
 	if (!file_handle) {
 		const auto current_time = duration_cast<std::chrono::seconds>(system_clock::now().time_since_epoch()).count();

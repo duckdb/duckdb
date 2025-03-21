@@ -10,7 +10,6 @@
 
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/shared_ptr.hpp"
-#include "duckdb/storage/buffer/temporary_file_information.hpp"
 #include "duckdb/storage/external_file_cache.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 
@@ -54,6 +53,8 @@ struct CachingFileHandle {
 
 public:
 	DUCKDB_API CachingFileHandle(CachingFileSystem &caching_file_system, CachedFile &cached_file, FileOpenFlags flags);
+
+	DUCKDB_API ~CachingFileHandle();
 
 public:
 	//! Get the underlying FileHandle
