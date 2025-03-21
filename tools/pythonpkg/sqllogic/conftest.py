@@ -18,7 +18,7 @@ def pytest_addoption(parser: pytest.Parser):
         action="extend",
         nargs="*",
         type=pathlib.Path,
-        default=[], # We handle default in pytest_generate_tests
+        default=[],  # We handle default in pytest_generate_tests
         dest="test_dirs",
         help="Path to one or more directories containing SQLLogic test scripts",
     )
@@ -44,6 +44,7 @@ def pytest_addoption(parser: pytest.Parser):
 def pytest_keyboard_interrupt(excinfo: pytest.ExceptionInfo):
     # Ensure all tests are properly cleaned up on keyboard interrupt
     from .test_sqllogic import test_sqllogic
+
     if hasattr(test_sqllogic, 'executor') and test_sqllogic.executor:
         if test_sqllogic.executor.database and hasattr(test_sqllogic.executor.database, 'connection'):
             test_sqllogic.executor.database.connection.interrupt()

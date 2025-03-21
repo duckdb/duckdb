@@ -22,6 +22,7 @@ from sqllogictest.result import (
     ExecuteResult,
 )
 
+
 def sigquit_handler(signum, frame):
     # Access the executor from the test_sqllogic function
     if hasattr(test_sqllogic, 'executor') and test_sqllogic.executor:
@@ -36,6 +37,7 @@ def sigquit_handler(signum, frame):
 
 # Register the SIGQUIT handler
 signal.signal(signal.SIGQUIT, sigquit_handler)
+
 
 class SQLLogicTestExecutor(SQLLogicRunner):
     def __init__(self, test_directory: str, build_directory: Optional[str] = None):
