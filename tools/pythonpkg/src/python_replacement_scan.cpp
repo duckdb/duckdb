@@ -20,45 +20,65 @@ namespace duckdb {
 static void CreateArrowScan(const string &name, py::object entry, TableFunctionRef &table_function,
                             vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties,
                             PyArrowObjectType type, DBConfig &config, DatabaseInstance &db) {
-
+	py::gil_scoped_acquire acquire;
+	unique_ptr<ExternalDependency> external_dependency = make_uniq<ExternalDependency>();
 	if (type == PyArrowObjectType::MessageReader) {
 		if (!db.ExtensionIsLoaded("nanoarrow")) {
 			throw MissingExtensionException(
 			    "The nanoarrow community extension is needed to read the Arrow IPC protocol. \n You can install it "
 			    "with \"INSTALL nanoarrow FROM community;\". \n Then you can load it with \"LOAD nanoarrow;\"");
 		}
-		// If the extension is loaded we actually call the scan_arrow_ipc .
-		// FROM scan_arrow_ipc([{'ptr': 2591342067712::UBIGINT, 'size': 1984::UBIGINT}])
-		// This is an Arrow IPC message collection, we must extract and call read_
-		// auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties, config);
-		// auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-		// auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
-	}
-
-	if (type == PyArrowObjectType::PyCapsuleInterface) {
-		entry = entry.attr("__arrow_c_stream__")();
-		type = PyArrowObjectType::PyCapsule;
-	}
-
-	auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties, config);
-	auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
-	auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
-
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory.get()))));
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_produce))));
-	children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_get_schema))));
-
-	if (type == PyArrowObjectType::PyCapsule) {
-		// Disable projection+filter pushdown
-		table_function.function = make_uniq<FunctionExpression>("arrow_scan_dumb", std::move(children));
+		vector<Value> values;
+		py::list stream_messages;
+		while (true) {
+			try {
+				py::object message = entry.attr("read_next_message")();
+				if (message.is_none()) {
+					break;
+				}
+				py::object buffer = message.attr("serialize")();
+				stream_messages.append(buffer);
+				const auto buffer_address = stream_messages[stream_messages.size() - 1].attr("address").cast<uintptr_t>();
+				const auto buffer_size = stream_messages[stream_messages.size() - 1].attr("size").cast<uint32_t>();
+				child_list_t<Value> buffer_values;
+				buffer_values.push_back({"ptr", Value::POINTER(buffer_address)});
+				buffer_values.push_back({"size", Value::UBIGINT(buffer_size)});
+				values.push_back(Value::STRUCT(buffer_values));
+			} catch (const py::error_already_set &e) {
+				break;
+			}
+		}
+		auto list_value = Value::LIST(values);
+		children.push_back(make_uniq<ConstantExpression>(list_value));
+		table_function.function = make_uniq<FunctionExpression>("scan_arrow_ipc", std::move(children));
+		auto dependency_item = PythonDependencyItem::Create(make_uniq<RegisteredObject>(stream_messages));
+		external_dependency->AddDependency("replacement_cache", std::move(dependency_item));
 	} else {
-		table_function.function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
-	}
+		if (type == PyArrowObjectType::PyCapsuleInterface) {
+			entry = entry.attr("__arrow_c_stream__")();
+			type = PyArrowObjectType::PyCapsule;
+		}
 
-	auto dependency = make_uniq<ExternalDependency>();
-	auto dependency_item = PythonDependencyItem::Create(make_uniq<RegisteredArrow>(std::move(stream_factory), entry));
-	dependency->AddDependency("replacement_cache", std::move(dependency_item));
-	table_function.external_dependency = std::move(dependency);
+		auto stream_factory = make_uniq<PythonTableArrowArrayStreamFactory>(entry.ptr(), client_properties, config);
+		auto stream_factory_produce = PythonTableArrowArrayStreamFactory::Produce;
+		auto stream_factory_get_schema = PythonTableArrowArrayStreamFactory::GetSchema;
+
+		children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory.get()))));
+		children.push_back(make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_produce))));
+		children.push_back(
+		    make_uniq<ConstantExpression>(Value::POINTER(CastPointerToValue(stream_factory_get_schema))));
+
+		if (type == PyArrowObjectType::PyCapsule) {
+			// Disable projection+filter pushdown
+			table_function.function = make_uniq<FunctionExpression>("arrow_scan_dumb", std::move(children));
+		} else {
+			table_function.function = make_uniq<FunctionExpression>("arrow_scan", std::move(children));
+		}
+		auto dependency_item =
+		    PythonDependencyItem::Create(make_uniq<RegisteredArrow>(std::move(stream_factory), entry));
+		external_dependency->AddDependency("replacement_cache", std::move(dependency_item));
+	}
+	table_function.external_dependency = std::move(external_dependency);
 }
 
 static void ThrowScanFailureError(const py::object &entry, const string &name, const string &location = "") {
