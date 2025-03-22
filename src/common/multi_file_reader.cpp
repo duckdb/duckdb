@@ -788,7 +788,7 @@ static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter 
 		for (auto &it : or_filter.child_filters) {
 			auto child_filter = ConvertFilterFromGlobalToLocal(*it, mapping);
 			if (child_filter) {
-				res->child_filters.push_back(ConvertFilterFromGlobalToLocal(*it, mapping));
+				res->child_filters.push_back(std::move(child_filter));
 			}
 		}
 		return res;
@@ -799,7 +799,7 @@ static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter 
 		for (auto &it : and_filter.child_filters) {
 			auto child_filter = ConvertFilterFromGlobalToLocal(*it, mapping);
 			if (child_filter) {
-				res->child_filters.push_back(ConvertFilterFromGlobalToLocal(*it, mapping));
+				res->child_filters.push_back(std::move(child_filter));
 			}
 		}
 		return res;
