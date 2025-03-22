@@ -223,3 +223,25 @@ TEST_CASE("Issue #9417", "[api][.]") {
 
 	REQUIRE(count == 46);
 }
+
+TEST_CASE("Test blob result semantics", "[api]") {
+	DuckDB db(nullptr);
+	Connection con(db);
+
+	REQUIRE_NO_FAIL(con.Query("CREATE TABLE blobs (b blob)"));
+	REQUIRE_NO_FAIL(con.Query("INSERT INTO blobs VALUES (from_base64('8J+SpQ=='))"));
+
+	// Reading blobs back when asking for a blob
+	auto want_blob = con.Query("SELECT * from blobs");
+
+	for (auto &row : *want_blob) {
+		REQUIRE(row.GetValue<string>(0) == "💥");
+	}
+
+	// Reading blobs back when casting them to strings
+	auto want_string = con.Query("SELECT b::string from blobs");
+
+	for (auto &row : *want_string) {
+		REQUIRE(row.GetValue<string>(0) == "\\xF0\\x9F\\x92\\xA5");
+	}
+}
