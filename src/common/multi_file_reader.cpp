@@ -786,7 +786,10 @@ static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter 
 		auto &or_filter = global_filter.Cast<ConjunctionOrFilter>();
 		auto res = make_uniq<ConjunctionOrFilter>();
 		for (auto &it : or_filter.child_filters) {
-			res->child_filters.push_back(ConvertFilterFromGlobalToLocal(*it, mapping));
+			auto child_filter = ConvertFilterFromGlobalToLocal(*it, mapping);
+			if (child_filter) {
+				res->child_filters.push_back(ConvertFilterFromGlobalToLocal(*it, mapping));
+			}
 		}
 		return res;
 	}
@@ -794,7 +797,10 @@ static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter 
 		auto &and_filter = global_filter.Cast<ConjunctionAndFilter>();
 		auto res = make_uniq<ConjunctionAndFilter>();
 		for (auto &it : and_filter.child_filters) {
-			res->child_filters.push_back(ConvertFilterFromGlobalToLocal(*it, mapping));
+			auto child_filter = ConvertFilterFromGlobalToLocal(*it, mapping);
+			if (child_filter) {
+				res->child_filters.push_back(ConvertFilterFromGlobalToLocal(*it, mapping));
+			}
 		}
 		return res;
 	}
@@ -807,6 +813,9 @@ static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter 
 		//! For now we will assume the mapping is 1-to-1
 		MultiFileIndexMapping mapping(struct_filter.child_idx);
 		auto new_child_filter = ConvertFilterFromGlobalToLocal(*child_filter, mapping);
+		if (!new_child_filter) {
+			return nullptr;
+		}
 		//! TODO: renaming fields should probably be respected here?
 		auto child_name = struct_filter.child_name;
 		return make_uniq<StructFilter>(mapping.index, child_name, std::move(new_child_filter));
