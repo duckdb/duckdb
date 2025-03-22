@@ -1,0 +1,13 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 8f5dcec..4a511a5 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -144,6 +144,8 @@ ExternalProject_Add(
+   # header in ./src/include/delta_kernel_ffi.hpp should be also bumped, applying
+   # the fix
+   GIT_TAG v0.7.0
++  # Temporary workaround to fix compile issue TODO: remove once fixed upstream
++  CONFIGURE_COMMAND cargo update -p chrono --precise 0.4.40
+   # Prints the env variables passed to the cargo build to the terminal, useful
+   # in debugging because passing them through CMake is an error-prone mess
+   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env ${RUST_UNSET_ENV_VARS}
