@@ -113,10 +113,12 @@ idx_t DictFSSTCompressionState::Finalize() {
 	                                               (sel_t *)(dictionary_indices.data()), tuple_count,
 	                                               dictionary_indices_width);
 
+#ifdef DEBUG
 	if (append_state != DictionaryAppendState::ENCODED_ALL_UNIQUE) {
 		auto expected_bitwidth = BitpackingPrimitives::MinimumBitWidth(dict_count - 1);
 		D_ASSERT(dictionary_indices_width == expected_bitwidth);
 	}
+#endif
 	D_ASSERT(base_ptr + required_space == base_ptr + dictionary_indices_dest + dictionary_indices_space);
 	D_ASSERT((uint64_t)*max_element(std::begin(dictionary_indices), std::end(dictionary_indices)) == dict_count - 1);
 	return required_space;
@@ -159,6 +161,7 @@ void DictFSSTCompressionState::FlushEncodingBuffer() {
 		fsst_string_sizes.push_back(str_len);
 		fsst_string_ptrs.push_back((unsigned char *)to_encode.GetData()); // NOLINT
 	}
+	(void)sum;
 	D_ASSERT(sum + 7 == to_encode_string_sum);
 
 	auto compressed_ptrs = vector<unsigned char *>(string_count, nullptr);
@@ -198,6 +201,7 @@ void DictFSSTCompressionState::FlushEncodingBuffer() {
 		string_lengths.push_back(str_len);
 		dictionary_offset += str_len;
 	}
+	(void)compressed_sum;
 	D_ASSERT(compressed_sum <= to_encode_string_sum);
 	if (biggest_strlen >= NumericCast<uint32_t>(1 << string_lengths_width)) {
 		string_lengths_width = BitpackingPrimitives::MinimumBitWidth(biggest_strlen);
