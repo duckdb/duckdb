@@ -1,14 +1,12 @@
-# name: test/sql/storage/compression/string/null.test_slow
+# name: test/sql/storage/compression/string/null_dict_fsst.test_slow
 # description: Test storage of string columns with compression and many null values
 # group: [string]
 
 # load the DB from disk
-load __TEST_DIR__/test_rle.db
+load __TEST_DIR__/test_rle.db readwrite v1.3.0
 
 statement ok
 pragma enable_verification
-
-foreach compression fsst dictionary
 
 foreach enable_fsst_vector true false
 
@@ -16,7 +14,7 @@ statement ok
 SET enable_fsst_vectors='${enable_fsst_vector}'
 
 statement ok
-PRAGMA force_compression='${compression}'
+PRAGMA force_compression='dict_fsst'
 
 # single NULL value
 statement ok
@@ -60,19 +58,14 @@ statement ok
 select compression from pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1;
 
 query I
-select current_setting('force_compression') ILIKE '${compression}'
+select current_setting('force_compression') ILIKE 'dict_fsst'
 ----
 true
 
 query I
-SELECT
-	compression ILIKE 'uncompressed' or
-	(
-		compression ILIKE 'dictionary' and '${compression}'='dictionary'
-	)
-	FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT DISTINCT compression FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
-1
+DICT_FSST
 
 # mix with non-null values
 statement ok
@@ -94,12 +87,9 @@ statement ok
 CHECKPOINT
 
 query I
-SELECT lower(compression)='${compression}' FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT DISTINCT compression FROM pragma_storage_info('nulls') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
 ----
-1
+DICT_FSST
 
 # enable_fsst_vector
-endloop
-
-# compression
 endloop
