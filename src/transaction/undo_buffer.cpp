@@ -179,10 +179,12 @@ void UndoBuffer::Cleanup(transaction_t lowest_active_transaction) {
 	UndoBuffer::IteratorState iterator_state;
 	IterateEntries(iterator_state, [&](UndoFlags type, data_ptr_t data) { state.CleanupEntry(type, data); });
 
-	// possibly vacuum indexes
+#ifdef DEBUG
+	// Verify that our index memory is stable.
 	for (auto &table : state.indexed_tables) {
-		table.second->VacuumIndexes();
+		table.second->VerifyIndexBuffers();
 	}
+#endif
 }
 
 void UndoBuffer::WriteToWAL(WriteAheadLog &wal, optional_ptr<StorageCommitState> commit_state) {

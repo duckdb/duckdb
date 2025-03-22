@@ -1234,7 +1234,7 @@ void ART::TransformToDeprecated() {
 	if (deprecated_allocator) {
 		prefix_count = Prefix::DEPRECATED_COUNT;
 
-		D_ASSERT((*allocators)[idx]->IsEmpty());
+		D_ASSERT((*allocators)[idx]->Empty());
 		(*allocators)[idx]->Reset();
 		(*allocators)[idx] = std::move(deprecated_allocator);
 	}
@@ -1259,9 +1259,9 @@ IndexStorageInfo ART::GetStorageInfo(const case_insensitive_map_t<Value> &option
 
 #ifdef DEBUG
 	if (v1_0_0_storage) {
-		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_7_LEAF)]->IsEmpty());
-		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_15_LEAF)]->IsEmpty());
-		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_256_LEAF)]->IsEmpty());
+		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_7_LEAF)]->Empty());
+		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_15_LEAF)]->Empty());
+		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::NODE_256_LEAF)]->Empty());
 		D_ASSERT((*allocators)[Node::GetAllocatorIdx(NType::PREFIX)]->GetSegmentSize() ==
 		         Prefix::DEPRECATED_COUNT + Prefix::METADATA_SIZE);
 	}
@@ -1440,7 +1440,7 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 // Verification
 //===--------------------------------------------------------------------===//
 
-string ART::VerifyAndToString(IndexLock &state, const bool only_verify) {
+string ART::VerifyAndToString(IndexLock &l, const bool only_verify) {
 	return VerifyAndToStringInternal(only_verify);
 }
 
@@ -1451,7 +1451,7 @@ string ART::VerifyAndToStringInternal(const bool only_verify) {
 	return "[empty]";
 }
 
-void ART::VerifyAllocations(IndexLock &state) {
+void ART::VerifyAllocations(IndexLock &l) {
 	return VerifyAllocationsInternal();
 }
 
@@ -1471,6 +1471,12 @@ void ART::VerifyAllocationsInternal() {
 		D_ASSERT(segment_count == node_counts[NumericCast<uint8_t>(i)]);
 	}
 #endif
+}
+
+void ART::VerifyBuffers(IndexLock &l) {
+	for (auto &allocator : *allocators) {
+		allocator->VerifyBuffers();
+	}
 }
 
 constexpr const char *ART::TYPE_NAME;

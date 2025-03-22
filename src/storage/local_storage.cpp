@@ -219,10 +219,10 @@ void LocalTableStorage::AppendToIndexes(DuckTransaction &transaction, TableAppen
 		if (append_to_table) {
 			table.RevertAppendInternal(NumericCast<idx_t>(append_state.row_start));
 		}
-
-		// we need to vacuum the indexes to remove any buffers that are now empty
-		// due to reverting the appends
-		table.VacuumIndexes();
+#ifdef DEBUG
+		// Verify that our index memory is stable.
+		table.VerifyIndexBuffers();
+#endif
 		error.Throw();
 	}
 	if (append_to_table) {
@@ -546,8 +546,10 @@ void LocalStorage::Flush(DataTable &table, LocalTableStorage &storage, optional_
 		storage.AppendToIndexes(transaction, append_state, true);
 	}
 
-	// possibly vacuum any excess index data
-	table.VacuumIndexes();
+#ifdef DEBUG
+	// Verify that our index memory is stable.
+	table.VerifyIndexBuffers();
+#endif
 }
 
 void LocalStorage::Commit(optional_ptr<StorageCommitState> commit_state) {
