@@ -22,7 +22,6 @@ DictFSSTCompressionState::~DictFSSTCompressionState() {
 	}
 }
 
-static constexpr uint16_t DICTIONARY_HEADER_SIZE = sizeof(dict_fsst_compression_header_t);
 static constexpr uint16_t FSST_SYMBOL_TABLE_SIZE = sizeof(duckdb_fsst_decoder_t);
 static constexpr idx_t DICTIONARY_ENCODE_THRESHOLD = 4096;
 
