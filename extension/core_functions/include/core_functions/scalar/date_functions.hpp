@@ -20,6 +20,7 @@ struct AgeFun {
 	static constexpr const char *Parameters = "timestamp,timestamp";
 	static constexpr const char *Description = "Subtract arguments, resulting in the time difference between the two timestamps";
 	static constexpr const char *Example = "age(TIMESTAMP '2001-04-10', TIMESTAMP '1992-09-20')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -29,6 +30,7 @@ struct CenturyFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the century component from a date or timestamp";
 	static constexpr const char *Example = "century(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -38,6 +40,7 @@ struct DateDiffFun {
 	static constexpr const char *Parameters = "part,startdate,enddate";
 	static constexpr const char *Description = "The number of partition boundaries between the timestamps";
 	static constexpr const char *Example = "date_diff('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -53,6 +56,7 @@ struct DatePartFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Get subfield (equivalent to extract)";
 	static constexpr const char *Example = "date_part('minute', TIMESTAMP '1992-09-20 20:38:40')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -68,6 +72,7 @@ struct DateSubFun {
 	static constexpr const char *Parameters = "part,startdate,enddate";
 	static constexpr const char *Description = "The number of complete partitions between the timestamps";
 	static constexpr const char *Example = "date_sub('hour', TIMESTAMPTZ '1992-09-30 23:59:59', TIMESTAMPTZ '1992-10-01 01:58:00')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -83,6 +88,7 @@ struct DateTruncFun {
 	static constexpr const char *Parameters = "part,timestamp";
 	static constexpr const char *Description = "Truncate to specified precision";
 	static constexpr const char *Example = "date_trunc('hour', TIMESTAMPTZ '1992-09-20 20:38:40')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -98,6 +104,7 @@ struct DayFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the day component from a date or timestamp";
 	static constexpr const char *Example = "day(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -107,6 +114,7 @@ struct DayNameFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "The (English) name of the weekday";
 	static constexpr const char *Example = "dayname(TIMESTAMP '1992-03-22')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -116,6 +124,7 @@ struct DayOfMonthFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the dayofmonth component from a date or timestamp";
 	static constexpr const char *Example = "dayofmonth(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -125,6 +134,7 @@ struct DayOfWeekFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the dayofweek component from a date or timestamp";
 	static constexpr const char *Example = "dayofweek(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -134,6 +144,7 @@ struct DayOfYearFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the dayofyear component from a date or timestamp";
 	static constexpr const char *Example = "dayofyear(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -143,6 +154,7 @@ struct DecadeFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the decade component from a date or timestamp";
 	static constexpr const char *Example = "decade(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -152,6 +164,7 @@ struct EpochFun {
 	static constexpr const char *Parameters = "temporal";
 	static constexpr const char *Description = "Extract the epoch component from a temporal type";
 	static constexpr const char *Example = "epoch(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -161,6 +174,7 @@ struct EpochMsFun {
 	static constexpr const char *Parameters = "temporal";
 	static constexpr const char *Description = "Extract the epoch component in milliseconds from a temporal type";
 	static constexpr const char *Example = "epoch_ms(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -170,6 +184,7 @@ struct EpochUsFun {
 	static constexpr const char *Parameters = "temporal";
 	static constexpr const char *Description = "Extract the epoch component in microseconds from a temporal type";
 	static constexpr const char *Example = "epoch_us(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -179,6 +194,7 @@ struct EpochNsFun {
 	static constexpr const char *Parameters = "temporal";
 	static constexpr const char *Description = "Extract the epoch component in nanoseconds from a temporal type";
 	static constexpr const char *Example = "epoch_ns(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -188,6 +204,7 @@ struct EraFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the era component from a date or timestamp";
 	static constexpr const char *Example = "era(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -197,6 +214,7 @@ struct GetCurrentTimestampFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Returns the current timestamp";
 	static constexpr const char *Example = "get_current_timestamp()";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -218,6 +236,7 @@ struct HoursFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the hour component from a date or timestamp";
 	static constexpr const char *Example = "hour(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -227,6 +246,7 @@ struct ISODayOfWeekFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the isodow component from a date or timestamp";
 	static constexpr const char *Example = "isodow(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -236,6 +256,7 @@ struct ISOYearFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the isoyear component from a date or timestamp";
 	static constexpr const char *Example = "isoyear(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -245,6 +266,7 @@ struct JulianDayFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the Julian Day number from a date or timestamp";
 	static constexpr const char *Example = "julian(timestamp '2006-01-01 12:00')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -254,6 +276,7 @@ struct LastDayFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Returns the last day of the month";
 	static constexpr const char *Example = "last_day(TIMESTAMP '1992-03-22 01:02:03.1234')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -263,6 +286,7 @@ struct MakeDateFun {
 	static constexpr const char *Parameters = "year,month,day\1date-struct::STRUCT(year BIGINT, month BIGINT, day BIGINT)";
 	static constexpr const char *Description = "The date for the given parts\1The date for the given struct.";
 	static constexpr const char *Example = "make_date(1992, 9, 20)\1make_date({'year': 2024, 'month': 11, 'day': 14})";
+	static constexpr const char *Categories = "\1";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -272,6 +296,7 @@ struct MakeTimeFun {
 	static constexpr const char *Parameters = "hour,minute,seconds";
 	static constexpr const char *Description = "The time for the given parts";
 	static constexpr const char *Example = "make_time(13, 34, 27.123456)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -281,6 +306,7 @@ struct MakeTimestampFun {
 	static constexpr const char *Parameters = "year,month,day,hour,minute,seconds";
 	static constexpr const char *Description = "The timestamp for the given parts";
 	static constexpr const char *Example = "make_timestamp(1992, 9, 20, 13, 34, 27.123456)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -290,6 +316,7 @@ struct MakeTimestampNsFun {
 	static constexpr const char *Parameters = "nanos";
 	static constexpr const char *Description = "The timestamp for the given nanoseconds since epoch";
 	static constexpr const char *Example = "make_timestamp(1732117793000000000)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -299,6 +326,7 @@ struct MicrosecondsFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the microsecond component from a date or timestamp";
 	static constexpr const char *Example = "microsecond(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -308,6 +336,7 @@ struct MillenniumFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the millennium component from a date or timestamp";
 	static constexpr const char *Example = "millennium(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -317,6 +346,7 @@ struct MillisecondsFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the millisecond component from a date or timestamp";
 	static constexpr const char *Example = "millisecond(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -326,6 +356,7 @@ struct MinutesFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the minute component from a date or timestamp";
 	static constexpr const char *Example = "minute(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -335,6 +366,7 @@ struct MonthFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the month component from a date or timestamp";
 	static constexpr const char *Example = "month(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -344,6 +376,7 @@ struct MonthNameFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "The (English) name of the month";
 	static constexpr const char *Example = "monthname(TIMESTAMP '1992-09-20')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -353,6 +386,7 @@ struct NanosecondsFun {
 	static constexpr const char *Parameters = "tsns";
 	static constexpr const char *Description = "Extract the nanosecond component from a date or timestamp";
 	static constexpr const char *Example = "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -362,6 +396,7 @@ struct NormalizedIntervalFun {
 	static constexpr const char *Parameters = "interval";
 	static constexpr const char *Description = "Normalizes an INTERVAL to an equivalent interval";
 	static constexpr const char *Example = "normalized_interval(INTERVAL '30 days')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -371,6 +406,7 @@ struct QuarterFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the quarter component from a date or timestamp";
 	static constexpr const char *Example = "quarter(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -380,6 +416,7 @@ struct SecondsFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the second component from a date or timestamp";
 	static constexpr const char *Example = "second(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -389,6 +426,7 @@ struct TimeBucketFun {
 	static constexpr const char *Parameters = "bucket_width,timestamp,origin";
 	static constexpr const char *Description = "Truncate TIMESTAMPTZ by the specified interval bucket_width. Buckets are aligned relative to origin TIMESTAMPTZ. The origin defaults to 2000-01-03 00:00:00+00 for buckets that do not include a month or year interval, and to 2000-01-01 00:00:00+00 for month and year buckets";
 	static constexpr const char *Example = "time_bucket(INTERVAL '2 weeks', TIMESTAMP '1992-04-20 15:26:00-07', TIMESTAMP '1992-04-01 00:00:00-07')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -398,6 +436,7 @@ struct TimezoneFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the timezone component from a date or timestamp";
 	static constexpr const char *Example = "timezone(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -407,6 +446,7 @@ struct TimezoneHourFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the timezone_hour component from a date or timestamp";
 	static constexpr const char *Example = "timezone_hour(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -416,6 +456,7 @@ struct TimezoneMinuteFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the timezone_minute component from a date or timestamp";
 	static constexpr const char *Example = "timezone_minute(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -425,6 +466,7 @@ struct TimeTZSortKeyFun {
 	static constexpr const char *Parameters = "time_tz";
 	static constexpr const char *Description = "Converts a TIME WITH TIME ZONE to an integer sort key";
 	static constexpr const char *Example = "timetz_byte_comparable('18:18:16.21-07:00'::TIME_TZ)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -434,6 +476,7 @@ struct ToCenturiesFun {
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a century interval";
 	static constexpr const char *Example = "to_centuries(5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -443,6 +486,7 @@ struct ToDaysFun {
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a day interval";
 	static constexpr const char *Example = "to_days(5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -452,6 +496,7 @@ struct ToDecadesFun {
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a decade interval";
 	static constexpr const char *Example = "to_decades(5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -461,6 +506,7 @@ struct ToHoursFun {
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a hour interval";
 	static constexpr const char *Example = "to_hours(5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -470,6 +516,7 @@ struct ToMicrosecondsFun {
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a microsecond interval";
 	static constexpr const char *Example = "to_microseconds(5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -479,6 +526,7 @@ struct ToMillenniaFun {
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a millenium interval";
 	static constexpr const char *Example = "to_millennia(1)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -488,6 +536,7 @@ struct ToMillisecondsFun {
 	static constexpr const char *Parameters = "double";
 	static constexpr const char *Description = "Construct a millisecond interval";
 	static constexpr const char *Example = "to_milliseconds(5.5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -497,6 +546,7 @@ struct ToMinutesFun {
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a minute interval";
 	static constexpr const char *Example = "to_minutes(5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -506,6 +556,7 @@ struct ToMonthsFun {
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a month interval";
 	static constexpr const char *Example = "to_months(5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -515,6 +566,7 @@ struct ToQuartersFun {
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a quarter interval";
 	static constexpr const char *Example = "to_quarters(5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -524,6 +576,7 @@ struct ToSecondsFun {
 	static constexpr const char *Parameters = "double";
 	static constexpr const char *Description = "Construct a second interval";
 	static constexpr const char *Example = "to_seconds(5.5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -533,6 +586,7 @@ struct ToTimestampFun {
 	static constexpr const char *Parameters = "sec";
 	static constexpr const char *Description = "Converts secs since epoch to a timestamp with time zone";
 	static constexpr const char *Example = "to_timestamp(1284352323.5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -542,6 +596,7 @@ struct ToWeeksFun {
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a week interval";
 	static constexpr const char *Example = "to_weeks(5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -551,6 +606,7 @@ struct ToYearsFun {
 	static constexpr const char *Parameters = "integer";
 	static constexpr const char *Description = "Construct a year interval";
 	static constexpr const char *Example = "to_years(5)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -560,6 +616,7 @@ struct WeekFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the week component from a date or timestamp";
 	static constexpr const char *Example = "week(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -569,6 +626,7 @@ struct WeekDayFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the weekday component from a date or timestamp";
 	static constexpr const char *Example = "weekday(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -578,6 +636,7 @@ struct WeekOfYearFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the weekofyear component from a date or timestamp";
 	static constexpr const char *Example = "weekofyear(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -587,6 +646,7 @@ struct YearFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the year component from a date or timestamp";
 	static constexpr const char *Example = "year(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -596,6 +656,7 @@ struct YearWeekFun {
 	static constexpr const char *Parameters = "ts";
 	static constexpr const char *Description = "Extract the yearweek component from a date or timestamp";
 	static constexpr const char *Example = "yearweek(timestamp '2021-08-03 11:59:44.123456')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };

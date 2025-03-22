@@ -20,6 +20,7 @@ struct FinalizeFun {
 	static constexpr const char *Parameters = "col0";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -29,6 +30,7 @@ struct CombineFun {
 	static constexpr const char *Parameters = "col0,col1";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -38,6 +40,7 @@ struct WriteLogFun {
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Writes to the logger";
 	static constexpr const char *Example = "write_log('Hello')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -47,6 +50,7 @@ struct CurrentConnectionId {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Get the current connection_id";
 	static constexpr const char *Example = "current_connection_id()";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -56,6 +60,7 @@ struct CurrentTransactionId {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Get the current global transaction_id";
 	static constexpr const char *Example = "current_transaction_id()";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -65,6 +70,7 @@ struct CurrentQueryId {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Get the current query_id";
 	static constexpr const char *Example = "current_transaction_id('Hello')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
