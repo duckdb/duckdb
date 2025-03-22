@@ -812,13 +812,8 @@ static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter 
 		return make_uniq<StructFilter>(mapping.index, child_name, std::move(new_child_filter));
 	}
 	case TableFilterType::OPTIONAL_FILTER: {
-		auto &optional_filter = global_filter.Cast<OptionalFilter>();
-		auto &child_filter = optional_filter.child_filter;
-		if (!child_filter) {
-			return optional_filter.Copy();
-		}
-		auto new_child = ConvertFilterFromGlobalToLocal(*child_filter, mapping);
-		return make_uniq<OptionalFilter>(std::move(new_child));
+		//! For now we'll skip all the optional filters, as they are not necessary for correctness
+		return nullptr;
 	}
 	case TableFilterType::DYNAMIC_FILTER: {
 		//! FIXME: since this works like BoundParameterExpression,
@@ -851,7 +846,9 @@ MultiFileReader::CreateFilters(map<idx_t, reference<TableFilter>> &filters,
 		}
 		auto &mapping = local_it->second;
 		auto local_filter = ConvertFilterFromGlobalToLocal(global_filter, mapping);
-		result->filters.emplace(mapping.index, std::move(local_filter));
+		if (local_filter) {
+			result->filters.emplace(mapping.index, std::move(local_filter));
+		}
 	}
 	return result;
 }
