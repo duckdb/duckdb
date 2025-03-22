@@ -5,7 +5,7 @@
 namespace duckdb {
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateSecret &op) {
-	return Make<PhysicalCreateSecret>(op.info, op.estimated_cardinality);
+	return Make<PhysicalCreateSecret>(op.secret_input, op.estimated_cardinality);
 }
 
 } // namespace duckdb
