@@ -750,11 +750,11 @@ bool MultiFileReader::CreateMapping(const string &file_name,
 		auto global_idx = reader_data.column_mapping[local_idx];
 		global_to_local.emplace(global_idx.GetIndex(), i);
 
-		auto &local_column_id = reader_data.column_indexes[local_idx];
-		auto &global_column_id = global_column_ids[global_idx];
+		// auto &local_column_id = reader_data.column_indexes[local_idx];
+		// auto &global_column_id = global_column_ids[global_idx];
 
-		auto &local_column = local_columns[local_column_id.GetPrimaryIndex()];
-		auto &global_column = global_columns[global_column_id.GetPrimaryIndex()];
+		// auto &local_column = local_columns[local_column_id.GetPrimaryIndex()];
+		// auto &global_column = global_columns[global_column_id.GetPrimaryIndex()];
 		//! FIXME: The `column_indexes` created in the mapping methods are not respecting/expecting differences in
 		//! struct schemas
 	}
