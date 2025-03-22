@@ -21,8 +21,10 @@ unique_ptr<BaseFileReaderOptions> JSONMultiFileInfo::InitializeOptions(ClientCon
 		}
 	} else {
 		// COPY
+		options.type = JSONScanType::READ_JSON;
 		options.record_type = JSONRecordType::RECORDS;
-		options.format = JSONFormat::NEWLINE_DELIMITED;
+		options.format = JSONFormat::AUTO_DETECT;
+		options.auto_detect = false;
 	}
 	return std::move(reader_options);
 }
@@ -76,6 +78,9 @@ bool JSONMultiFileInfo::ParseOption(ClientContext &context, const string &key, c
 		for (idx_t i = 0; i < struct_children.size(); i++) {
 			auto &name = StructType::GetChildName(child_type, i);
 			auto &val = struct_children[i];
+			if (val.IsNull()) {
+				throw BinderException("read_json \"columns\" parameter type specification cannot be NULL.");
+			}
 			options.name_list.push_back(name);
 			if (val.type().id() != LogicalTypeId::VARCHAR) {
 				throw BinderException("read_json \"columns\" parameter type specification must be VARCHAR.");
@@ -222,6 +227,7 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 		} else {
 			JSONCheckSingleParameter(key, values);
 			options.auto_detect = BooleanValue::Get(values.back().DefaultCastAs(LogicalTypeId::BOOLEAN));
+			options.format = JSONFormat::NEWLINE_DELIMITED;
 		}
 		return true;
 	}
@@ -238,6 +244,9 @@ bool JSONMultiFileInfo::ParseCopyOption(ClientContext &context, const string &ke
 			JSONCheckSingleParameter(key, values);
 			if (BooleanValue::Get(values.back().DefaultCastAs(LogicalTypeId::BOOLEAN))) {
 				options.format = JSONFormat::ARRAY;
+			} else {
+				// Default to newline-delimited otherwise
+				options.format = JSONFormat::NEWLINE_DELIMITED;
 			}
 		}
 		return true;

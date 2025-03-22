@@ -65,6 +65,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'vector_interface',
     'validity_mask_functions',
     'scalar_functions',
+    'selection_vector_interface',
     'aggregate_functions',
     'table_functions',
     'table_function_bind',

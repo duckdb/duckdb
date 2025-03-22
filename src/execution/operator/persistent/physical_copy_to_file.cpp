@@ -45,21 +45,14 @@ struct VectorOfValuesEquality {
 template <class T>
 using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHashFunction, VectorOfValuesEquality>;
 
-struct CopyToFileInfo {
-	explicit CopyToFileInfo(string file_path_p) : file_path(std::move(file_path_p)) {
-	}
-
-	string file_path;
-	unique_ptr<CopyFunctionFileStatistics> file_stats;
-};
-
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
-	explicit CopyToFunctionGlobalState(ClientContext &context, unique_ptr<GlobalFunctionData> global_state)
-	    : rows_copied(0), last_file_offset(0), global_state(std::move(global_state)) {
+	explicit CopyToFunctionGlobalState(ClientContext &context)
+	    : initialized(false), rows_copied(0), last_file_offset(0) {
 		max_open_files = ClientConfig::GetConfig(context).partitioned_write_max_open_files;
 	}
 	StorageLock lock;
+	atomic<bool> initialized;
 	atomic<idx_t> rows_copied;
 	atomic<idx_t> last_file_offset;
 	unique_ptr<GlobalFunctionData> global_state;
@@ -67,10 +60,28 @@ public:
 	unordered_set<string> created_directories;
 	//! shared state for HivePartitionedColumnData
 	shared_ptr<GlobalHivePartitionState> partition_state;
-	//! File names
-	vector<CopyToFileInfo> file_names;
+	//! Written file info and stats
+	vector<unique_ptr<CopyToFileInfo>> written_files;
 	//! Max open files
 	idx_t max_open_files;
+
+	void Initialize(ClientContext &context, const PhysicalCopyToFile &op) {
+		if (initialized) {
+			return;
+		}
+		auto write_lock = lock.GetExclusiveLock();
+		if (initialized) {
+			return;
+		}
+		// initialize writing to the file
+		global_state = op.function.copy_to_initialize_global(context, *op.bind_data, op.file_path);
+		auto written_file_info = AddFile(*write_lock, op.file_path, op.return_type);
+		if (written_file_info) {
+			op.function.copy_to_get_written_statistics(context, *op.bind_data, *global_state,
+			                                           *written_file_info->file_stats);
+		}
+		initialized = true;
+	}
 
 	void CreateDir(const string &dir_path, FileSystem &fs) {
 		if (created_directories.find(dir_path) != created_directories.end()) {
@@ -99,16 +110,16 @@ public:
 		return path;
 	}
 
-	optional_ptr<CopyFunctionFileStatistics> AddFile(const StorageLockKey &l, const string &file_name,
-	                                                 CopyFunctionReturnType return_type) {
+	optional_ptr<CopyToFileInfo> AddFile(const StorageLockKey &l, const string &file_name,
+	                                     CopyFunctionReturnType return_type) {
 		D_ASSERT(l.GetType() == StorageLockType::EXCLUSIVE);
-		optional_ptr<CopyFunctionFileStatistics> result;
-		CopyToFileInfo file_info(file_name);
+		auto file_info = make_uniq<CopyToFileInfo>(file_name);
+		optional_ptr<CopyToFileInfo> result;
 		if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
-			file_info.file_stats = make_uniq<CopyFunctionFileStatistics>();
-			result = file_info.file_stats.get();
+			file_info->file_stats = make_uniq<CopyFunctionFileStatistics>();
+			result = file_info.get();
 		}
-		file_names.push_back(std::move(file_info));
+		written_files.push_back(std::move(file_info));
 		return result;
 	}
 
@@ -172,15 +183,29 @@ public:
 				full_path = op.filename_pattern.CreateFilename(fs, hive_path, op.file_extension, offset);
 			}
 		}
-		optional_ptr<CopyFunctionFileStatistics> file_stats;
+		optional_ptr<CopyToFileInfo> written_file_info;
 		if (op.return_type != CopyFunctionReturnType::CHANGED_ROWS) {
-			file_stats = AddFile(*global_lock, full_path, op.return_type);
+			written_file_info = AddFile(*global_lock, full_path, op.return_type);
 		}
 		// initialize writes
 		auto info = make_uniq<PartitionWriteInfo>();
 		info->global_state = op.function.copy_to_initialize_global(context.client, *op.bind_data, full_path);
-		if (file_stats) {
-			op.function.copy_to_get_written_statistics(context.client, *op.bind_data, *info->global_state, *file_stats);
+		if (written_file_info) {
+			// set up the file stats for the copy
+			op.function.copy_to_get_written_statistics(context.client, *op.bind_data, *info->global_state,
+			                                           *written_file_info->file_stats);
+
+			// set the partition info
+			vector<Value> partition_keys;
+			vector<Value> partition_values;
+			for (idx_t i = 0; i < op.partition_columns.size(); i++) {
+				const auto &partition_col_name = op.names[op.partition_columns[i]];
+				const auto &partition_value = values[i];
+				partition_keys.emplace_back(partition_col_name);
+				partition_values.push_back(partition_value.DefaultCastAs(LogicalType::VARCHAR));
+			}
+			written_file_info->partition_keys = Value::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR,
+			                                               std::move(partition_keys), std::move(partition_values));
 		}
 		auto &result = *info;
 		info->active_writes = 1;
@@ -308,13 +333,13 @@ unique_ptr<GlobalFunctionData> PhysicalCopyToFile::CreateFileState(ClientContext
 	idx_t this_file_offset = g.last_file_offset++;
 	auto &fs = FileSystem::GetFileSystem(context);
 	string output_path(filename_pattern.CreateFilename(fs, file_path, file_extension, this_file_offset));
-	optional_ptr<CopyFunctionFileStatistics> file_stats;
+	optional_ptr<CopyToFileInfo> written_file_info;
 	if (return_type != CopyFunctionReturnType::CHANGED_ROWS) {
-		file_stats = g.AddFile(global_lock, output_path, return_type);
+		written_file_info = g.AddFile(global_lock, output_path, return_type);
 	}
 	auto result = function.copy_to_initialize_global(context, *bind_data, output_path);
-	if (file_stats) {
-		function.copy_to_get_written_statistics(context, *bind_data, *result, *file_stats);
+	if (written_file_info) {
+		function.copy_to_get_written_statistics(context, *bind_data, *result, *written_file_info->file_stats);
 	}
 	return result;
 }
@@ -394,7 +419,7 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 			CheckDirectory(fs, file_path, overwrite_mode);
 		}
 
-		auto state = make_uniq<CopyToFunctionGlobalState>(context, nullptr);
+		auto state = make_uniq<CopyToFunctionGlobalState>(context);
 		if (!per_thread_output && rotate) {
 			auto global_lock = state->lock.GetExclusiveLock();
 			state->global_state = CreateFileState(context, *state, *global_lock);
@@ -407,12 +432,10 @@ unique_ptr<GlobalSinkState> PhysicalCopyToFile::GetGlobalSinkState(ClientContext
 		return std::move(state);
 	}
 
-	auto state = make_uniq<CopyToFunctionGlobalState>(
-	    context, function.copy_to_initialize_global(context, *bind_data, file_path));
-	auto global_lock = state->lock.GetExclusiveLock();
-	auto file_stats = state->AddFile(*global_lock, file_path, return_type);
-	if (file_stats) {
-		function.copy_to_get_written_statistics(context, *bind_data, *state->global_state, *file_stats);
+	auto state = make_uniq<CopyToFunctionGlobalState>(context);
+	if (write_empty_file) {
+		// if we are writing the file also if it is empty - initialize now
+		state->Initialize(context, *this);
 	}
 	return std::move(state);
 }
@@ -453,6 +476,10 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
 
+	if (!write_empty_file) {
+		// if we are only writing the file when there are rows to write we need to initialize here
+		g.Initialize(context.client, *this);
+	}
 	g.rows_copied += chunk.size();
 
 	if (partition_output) {
@@ -516,7 +543,7 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 			// File in global state may change with FILE_SIZE_BYTES/rotate, need to grab lock
 			auto lock = g.lock.GetSharedLock();
 			function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
-		} else {
+		} else if (g.global_state) {
 			function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
 		}
 	}
@@ -542,7 +569,7 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 		}
 		return SinkFinalizeType::READY;
 	}
-	if (function.copy_to_finalize) {
+	if (function.copy_to_finalize && gstate.global_state) {
 		function.copy_to_finalize(context, *bind_data, *gstate.global_state);
 
 		if (use_tmp_file) {
@@ -576,18 +603,17 @@ unique_ptr<GlobalSourceState> PhysicalCopyToFile::GetGlobalSourceState(ClientCon
 	return make_uniq<CopyToFileGlobalSourceState>();
 }
 
-void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, idx_t row_idx, const string &file_name,
-                                          CopyFunctionFileStatistics &file_stats) {
+void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, idx_t row_idx, CopyToFileInfo &info) {
+	auto &file_stats = *info.file_stats;
+
 	// filename VARCHAR
-	chunk.SetValue(0, row_idx, file_name);
+	chunk.SetValue(0, row_idx, info.file_path);
 	// count BIGINT
 	chunk.SetValue(1, row_idx, Value::UBIGINT(file_stats.row_count));
 	// file size bytes BIGINT
 	chunk.SetValue(2, row_idx, Value::UBIGINT(file_stats.file_size_bytes));
-	// footer offset BIGINT
-	chunk.SetValue(3, row_idx, file_stats.footer_offset);
-	// footer size BIGINT
-	chunk.SetValue(4, row_idx, file_stats.footer_size);
+	// footer size bytes BIGINT
+	chunk.SetValue(3, row_idx, file_stats.footer_size_bytes);
 	// column statistics map(varchar, map(varchar, varchar))
 	map<string, Value> stats;
 	for (auto &entry : file_stats.column_statistics) {
@@ -612,7 +638,10 @@ void PhysicalCopyToFile::ReturnStatistics(DataChunk &chunk, idx_t row_idx, const
 		values.emplace_back(std::move(entry.second));
 	}
 	auto map_val_type = LogicalType::MAP(LogicalType::VARCHAR, LogicalType::VARCHAR);
-	chunk.SetValue(5, row_idx, Value::MAP(LogicalType::VARCHAR, map_val_type, std::move(keys), std::move(values)));
+	chunk.SetValue(4, row_idx, Value::MAP(LogicalType::VARCHAR, map_val_type, std::move(keys), std::move(values)));
+
+	// partition_keys map(varchar, varchar)
+	chunk.SetValue(5, row_idx, info.partition_keys);
 }
 
 SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChunk &chunk,
@@ -620,17 +649,19 @@ SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChun
 	auto &g = sink_state->Cast<CopyToFunctionGlobalState>();
 	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS) {
 		auto &source_state = input.global_state.Cast<CopyToFileGlobalSourceState>();
-		idx_t next_end = MinValue<idx_t>(source_state.offset + STANDARD_VECTOR_SIZE, g.file_names.size());
+		idx_t next_end = MinValue<idx_t>(source_state.offset + STANDARD_VECTOR_SIZE, g.written_files.size());
 		idx_t count = next_end - source_state.offset;
 		for (idx_t i = 0; i < count; i++) {
-			auto &file_entry = g.file_names[source_state.offset + i];
-			auto &file_stats = *file_entry.file_stats;
-			ReturnStatistics(chunk, i, file_entry.file_path, file_stats);
+			auto &file_entry = *g.written_files[source_state.offset + i];
+			if (use_tmp_file) {
+				file_entry.file_path = GetNonTmpFile(context.client, file_entry.file_path);
+			}
+			ReturnStatistics(chunk, i, file_entry);
 		}
 		chunk.SetCardinality(count);
 		source_state.offset += count;
-		return source_state.offset < g.file_names.size() ? SourceResultType::HAVE_MORE_OUTPUT
-		                                                 : SourceResultType::FINISHED;
+		return source_state.offset < g.written_files.size() ? SourceResultType::HAVE_MORE_OUTPUT
+		                                                    : SourceResultType::FINISHED;
 	}
 
 	chunk.SetCardinality(1);
@@ -641,8 +672,12 @@ SourceResultType PhysicalCopyToFile::GetData(ExecutionContext &context, DataChun
 	case CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST: {
 		chunk.SetValue(0, 0, Value::BIGINT(NumericCast<int64_t>(g.rows_copied.load())));
 		vector<Value> file_name_list;
-		for (auto &file_names : g.file_names) {
-			file_name_list.emplace_back(file_names.file_path);
+		for (auto &file_info : g.written_files) {
+			if (use_tmp_file) {
+				file_name_list.emplace_back(GetNonTmpFile(context.client, file_info->file_path));
+			} else {
+				file_name_list.emplace_back(file_info->file_path);
+			}
 		}
 		chunk.SetValue(1, 0, Value::LIST(LogicalType::VARCHAR, std::move(file_name_list)));
 		break;

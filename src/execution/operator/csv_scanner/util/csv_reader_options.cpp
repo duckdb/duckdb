@@ -125,9 +125,6 @@ void CSVReaderOptions::SetDelimiter(const string &input) {
 	if (delim_str.size() > 4) {
 		throw InvalidInputException("The delimiter option cannot exceed a size of 4 bytes.");
 	}
-	if (input.empty()) {
-		delim_str = string("\0", 1);
-	}
 	this->dialect_options.state_machine_options.delimiter.Set(delim_str);
 }
 

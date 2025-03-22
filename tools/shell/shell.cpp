@@ -385,8 +385,8 @@ static void endTimer(void) {
 #define ArraySize(X) (int)(sizeof(X) / sizeof(X[0]))
 
 /*
-** If the following flag is set, then command execution stops
-** at an error if we are not interactive.
+** If the following flag is set, then command execution stops at an error
+** if we are not interactive, including any error in processed files.
 */
 static bool bail_on_error = false;
 
@@ -638,11 +638,11 @@ idx_t ShellState::RenderLength(const string &str) {
 	return RenderLength(str.c_str());
 }
 
-int ShellState::RunInitialCommand(char *sql) {
+int ShellState::RunInitialCommand(char *sql, bool bail) {
 	int rc;
 	if (sql[0] == '.') {
 		rc = DoMetaCommand(sql);
-		if (rc && bail_on_error) {
+		if (rc && bail) {
 			return rc == 2 ? false : rc;
 		}
 	} else {
@@ -654,12 +654,12 @@ int ShellState::RunInitialCommand(char *sql) {
 		if (zErrMsg != 0) {
 			PrintDatabaseError(zErrMsg);
 			sqlite3_free(zErrMsg);
-			if (bail_on_error) {
+			if (bail) {
 				return rc != 0 ? rc : 1;
 			}
 		} else if (rc != 0) {
 			utf8_printf(stderr, "Error: unable to process SQL: \"%s\"\n", sql);
-			if (bail_on_error) {
+			if (bail) {
 				return rc;
 			}
 		}
@@ -1736,11 +1736,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 		/* extract the data and data types */
 		for (int i = 0; i < nCol; i++) {
 			result.types[i] = sqlite3_column_type(pStmt, i);
-			if (result.types[i] == SQLITE_BLOB && cMode == RenderMode::INSERT) {
-				result.data[i] = "";
-			} else {
-				result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
-			}
+			result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
 			if (!result.data[i] && result.types[i] != SQLITE_NULL) {
 				// OOM
 				rc = SQLITE_NOMEM;
@@ -4626,28 +4622,31 @@ string ShellState::GetDefaultDuckDBRC() {
 ** Read input from the file given by sqliterc_override.  Or if that
 ** parameter is NULL, take input from ~/.duckdbrc
 **
-** Returns the number of errors.
+** Returns true if successful, false otherwise.
 */
 
-void ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
+bool ShellState::ProcessFile(const string &file, bool is_duckdb_rc) {
 	FILE *inSaved = in;
 	int savedLineno = lineno;
+	int rc = 0;
 
 	in = fopen(file.c_str(), "rb");
 	if (in) {
 		if (stdin_is_interactive && is_duckdb_rc) {
 			utf8_printf(stderr, "-- Loading resources from %s\n", file.c_str());
 		}
-		ProcessInput();
+		rc = ProcessInput();
 		fclose(in);
 	} else if (!is_duckdb_rc) {
 		utf8_printf(stderr, "Failed to read file \"%s\"\n", file.c_str());
+		rc = 1;
 	}
 	in = inSaved;
 	lineno = savedLineno;
+	return rc == 0;
 }
 
-void ShellState::ProcessDuckDBRC(const char *file) {
+bool ShellState::ProcessDuckDBRC(const char *file) {
 	string path;
 	if (!file) {
 		// use default .duckdbrc path
@@ -4656,47 +4655,49 @@ void ShellState::ProcessDuckDBRC(const char *file) {
 			// could not find home directory - return
 			raw_printf(stderr, "-- warning: cannot find home directory;"
 			                   " cannot read ~/.duckdbrc\n");
-			return;
+			return true;
 		}
 		file = path.c_str();
 	}
-	ProcessFile(file, true);
+	return ProcessFile(file, true);
 }
 
 /*
 ** Show available command line options
 */
-static const char zOptions[] = "   -ascii               set output mode to 'ascii'\n"
-                               "   -bail                stop after hitting an error\n"
-                               "   -batch               force batch I/O\n"
-                               "   -box                 set output mode to 'box'\n"
-                               "   -column              set output mode to 'column'\n"
-                               "   -cmd COMMAND         run \"COMMAND\" before reading stdin\n"
-                               "   -c COMMAND           run \"COMMAND\" and exit\n"
-                               "   -csv                 set output mode to 'csv'\n"
-                               "   -echo                print commands before execution\n"
-                               "   -f FILENAME          read/process named file and exit\n"
-                               "   -init FILENAME       read/process named file\n"
-                               "   -[no]header          turn headers on or off\n"
-                               "   -help                show this message\n"
-                               "   -html                set output mode to HTML\n"
-                               "   -interactive         force interactive I/O\n"
-                               "   -json                set output mode to 'json'\n"
-                               "   -line                set output mode to 'line'\n"
-                               "   -list                set output mode to 'list'\n"
-                               "   -markdown            set output mode to 'markdown'\n"
-                               "   -newline SEP         set output row separator. Default: '\\n'\n"
-                               "   -no-stdin            exit after processing options instead of reading stdin\n"
-                               "   -nullvalue TEXT      set text string for NULL values. Default ''\n"
-                               "   -quote               set output mode to 'quote'\n"
-                               "   -readonly            open the database read-only\n"
-                               "   -s COMMAND           run \"COMMAND\" and exit\n"
-                               "   -safe                enable safe-mode\n"
-                               "   -separator SEP       set output column separator. Default: '|'\n"
-                               "   -table               set output mode to 'table'\n"
-                               "   -unredacted          allow printing unredacted secrets\n"
-                               "   -unsigned            allow loading of unsigned extensions\n"
-                               "   -version             show DuckDB version\n";
+static const char zOptions[] =
+    "   -ascii               set output mode to 'ascii'\n"
+    "   -bail                stop after hitting an error\n"
+    "   -batch               force batch I/O\n"
+    "   -box                 set output mode to 'box'\n"
+    "   -column              set output mode to 'column'\n"
+    "   -cmd COMMAND         run \"COMMAND\" before reading stdin\n"
+    "   -c COMMAND           run \"COMMAND\" and exit\n"
+    "   -csv                 set output mode to 'csv'\n"
+    "   -echo                print commands before execution\n"
+    "   -f FILENAME          read/process named file and exit\n"
+    "   -init FILENAME       read/process named file\n"
+    "   -[no]header          turn headers on or off\n"
+    "   -help                show this message\n"
+    "   -html                set output mode to HTML\n"
+    "   -interactive         force interactive I/O\n"
+    "   -json                set output mode to 'json'\n"
+    "   -line                set output mode to 'line'\n"
+    "   -list                set output mode to 'list'\n"
+    "   -markdown            set output mode to 'markdown'\n"
+    "   -newline SEP         set output row separator. Default: '\\n'\n"
+    "   -no-stdin            exit after processing options instead of reading stdin\n"
+    "   -nullvalue TEXT      set text string for NULL values. Default ''\n"
+    "   -quote               set output mode to 'quote'\n"
+    "   -readonly            open the database read-only\n"
+    "   -s COMMAND           run \"COMMAND\" and exit\n"
+    "   -safe                enable safe-mode\n"
+    "   -separator SEP       set output column separator. Default: '|'\n"
+    "   -table               set output mode to 'table'\n"
+    "   -ui                  launches a web interface using the ui extension (configurable with .ui_command)\n"
+    "   -unredacted          allow printing unredacted secrets\n"
+    "   -unsigned            allow loading of unsigned extensions\n"
+    "   -version             show DuckDB version\n";
 static void usage(int showDetail) {
 	utf8_printf(stderr,
 	            "Usage: %s [OPTIONS] FILENAME [SQL]\n"
@@ -4911,6 +4912,8 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			} else {
 				data.openFlags |= DUCKDB_LATEST_STORAGE_VERSION;
 			}
+		} else if (strcmp(z, "-bail") == 0) {
+			bail_on_error = true;
 		}
 	}
 	verify_uninitialized();
@@ -4954,7 +4957,9 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 	** is given on the command line, look for a file named ~/.sqliterc and
 	** try to process it.
 	*/
-	data.ProcessDuckDBRC(zInitFile);
+	if (!data.ProcessDuckDBRC(zInitFile) && bail_on_error) {
+		return 1;
+	}
 
 	/* Make a second pass through the command-line argument and set
 	** options.  This second pass is delayed until after the initialization
@@ -5038,7 +5043,10 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 				break;
 			}
 			z = cmdline_option_value(argc, argv, ++i);
-			data.ProcessFile(string(z));
+			if (!data.ProcessFile(string(z))) {
+				free(azCmd);
+				return 1;
+			}
 		} else if (strcmp(z, "-cmd") == 0 || strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 			if (strcmp(z, "-c") == 0 || strcmp(z, "-s") == 0) {
 				readStdin = false;
@@ -5050,8 +5058,10 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			if (i == argc - 1) {
 				break;
 			}
+			// Always bail if -c or -s fail
+			bool bail = bail_on_error || !strcmp(z, "-c") || !strcmp(z, "-s");
 			z = cmdline_option_value(argc, argv, ++i);
-			rc = data.RunInitialCommand(z);
+			rc = data.RunInitialCommand(z, bail);
 			if (rc != 0) {
 				free(azCmd);
 				return rc;
@@ -5060,7 +5070,7 @@ int SQLITE_CDECL wmain(int argc, wchar_t **wargv) {
 			// safe mode has been set before
 		} else if (strcmp(z, "-ui") == 0) {
 			// run the UI command
-			rc = data.RunInitialCommand((char *)data.ui_command.c_str());
+			rc = data.RunInitialCommand((char *)data.ui_command.c_str(), true);
 			if (rc != 0) {
 				free(azCmd);
 				return rc;

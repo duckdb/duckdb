@@ -1679,14 +1679,14 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromDF(const PandasDataFrame &v
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
 }
 
-unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,
-                                                             bool file_row_number, bool filename,
-                                                             bool hive_partitioning, bool union_by_name,
-                                                             const py::object &compression) {
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquetInternal(Value &&file_param, bool binary_as_string,
+                                                                     bool file_row_number, bool filename,
+                                                                     bool hive_partitioning, bool union_by_name,
+                                                                     const py::object &compression) {
 	auto &connection = con.GetConnection();
 	string name = "parquet_" + StringUtil::GenerateRandomName();
 	vector<Value> params;
-	params.emplace_back(file_glob);
+	params.emplace_back(std::move(file_param));
 	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)},
 	                                        {"file_row_number", Value::BOOLEAN(file_row_number)},
 	                                        {"filename", Value::BOOLEAN(filename)},
@@ -1704,32 +1704,27 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_
 	return make_uniq<DuckDBPyRelation>(connection.TableFunction("parquet_scan", params, named_parameters)->Alias(name));
 }
 
+unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquet(const string &file_glob, bool binary_as_string,
+                                                             bool file_row_number, bool filename,
+                                                             bool hive_partitioning, bool union_by_name,
+                                                             const py::object &compression) {
+	auto file_param = Value(file_glob);
+	return FromParquetInternal(std::move(file_param), binary_as_string, file_row_number, filename, hive_partitioning,
+	                           union_by_name, compression);
+}
+
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromParquets(const vector<string> &file_globs, bool binary_as_string,
                                                               bool file_row_number, bool filename,
                                                               bool hive_partitioning, bool union_by_name,
                                                               const py::object &compression) {
-	auto &connection = con.GetConnection();
-	string name = "parquet_" + StringUtil::GenerateRandomName();
 	vector<Value> params;
 	auto file_globs_as_value = vector<Value>();
 	for (const auto &file : file_globs) {
 		file_globs_as_value.emplace_back(file);
 	}
-	params.emplace_back(Value::LIST(file_globs_as_value));
-	named_parameter_map_t named_parameters({{"binary_as_string", Value::BOOLEAN(binary_as_string)},
-	                                        {"file_row_number", Value::BOOLEAN(file_row_number)},
-	                                        {"filename", Value::BOOLEAN(filename)},
-	                                        {"hive_partitioning", Value::BOOLEAN(hive_partitioning)},
-	                                        {"union_by_name", Value::BOOLEAN(union_by_name)}});
-
-	if (!py::none().is(compression)) {
-		if (!py::isinstance<py::str>(compression)) {
-			throw InvalidInputException("from_parquet only accepts 'compression' as a string");
-		}
-		named_parameters["compression"] = Value(py::str(compression));
-	}
-
-	return make_uniq<DuckDBPyRelation>(connection.TableFunction("parquet_scan", params, named_parameters)->Alias(name));
+	auto file_param = Value::LIST(file_globs_as_value);
+	return FromParquetInternal(std::move(file_param), binary_as_string, file_row_number, filename, hive_partitioning,
+	                           union_by_name, compression);
 }
 
 unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_object) {
