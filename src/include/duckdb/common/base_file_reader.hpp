@@ -14,6 +14,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -266,7 +267,7 @@ public:
 	void push_back(MultiFileGlobalIndex global_index) { // NOLINT: matching name of std
 		column_mapping.push_back(global_index);
 	}
-	const MultiFileGlobalIndex &operator[](MultiFileLocalIndex local_index) {
+	const MultiFileGlobalIndex &operator[](MultiFileLocalIndex local_index) const {
 		return column_mapping[local_index.index];
 	}
 	idx_t size() const { // NOLINT: matching name of std
@@ -382,6 +383,8 @@ struct MultiFileReaderData {
 	MultiFileCastMap cast_map;
 	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
 	optional_idx file_list_idx;
+
+	vector<unique_ptr<Expression>> expressions;
 };
 
 //! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader

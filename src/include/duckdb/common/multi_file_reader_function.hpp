@@ -19,13 +19,20 @@ namespace duckdb {
 enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, CLOSED };
 
 struct MultiFileLocalState : public LocalTableFunctionState {
+public:
+	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
+	}
+
+public:
 	shared_ptr<BaseFileReader> reader;
 	bool is_parallel;
 	idx_t batch_index;
-	idx_t file_index;
+	idx_t file_index = DConstants::INVALID_INDEX;
 	unique_ptr<LocalTableFunctionState> local_state;
-	//! The DataChunk containing all read columns (even columns that are immediately removed)
-	DataChunk all_columns;
+	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
+	DataChunk scan_chunk;
+	//! The executor to transform scan_chunk into the final result with FinalizeChunk
+	ExpressionExecutor executor;
 };
 
 struct MultiFileFileReaderData {
@@ -281,9 +288,9 @@ public:
 		// 1. The MultiFileReader::Bind call
 		// 2. The 'schema' parquet option
 		auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
-		bind_data.multi_file_reader->InitializeReader(reader, bind_data.file_options, bind_data.reader_bind,
-		                                              global_columns, global_column_ids, table_filters,
-		                                              bind_data.file_list->GetFirstFile(), context, reader_state);
+		bind_data.multi_file_reader->InitializeReader(
+		    reader, bind_data.file_options, bind_data.reader_bind, bind_data.virtual_columns, global_columns,
+		    global_column_ids, table_filters, bind_data.file_list->GetFirstFile(), context, reader_state);
 	}
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
@@ -364,6 +371,40 @@ public:
 		}
 	}
 
+	static void InitializeFileScanState(ClientContext &context, MultiFileLocalState &lstate,
+	                                    vector<idx_t> &projection_ids) {
+		auto &reader_data = lstate.reader->reader_data;
+		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
+		vector<LogicalType> intermediate_chunk_types;
+		auto &local_column_ids = reader_data.column_ids;
+		auto &local_columns = lstate.reader->GetColumns();
+		for (idx_t i = 0; i < local_column_ids.size(); i++) {
+			auto local_idx = MultiFileLocalIndex(i);
+			auto local_id = local_column_ids[local_idx];
+			auto cast_entry = reader_data.cast_map.find(local_id);
+			if (cast_entry == reader_data.cast_map.end()) {
+				auto &col = local_columns[local_id];
+				intermediate_chunk_types.push_back(col.type);
+			} else {
+				intermediate_chunk_types.push_back(cast_entry->second);
+			}
+		}
+		lstate.scan_chunk.Destroy();
+		lstate.scan_chunk.Initialize(context, intermediate_chunk_types);
+
+		auto &executor = lstate.executor;
+		executor.ClearExpressions();
+		if (!projection_ids.empty()) {
+			for (auto &id : projection_ids) {
+				executor.AddExpression(*reader_data.expressions[id]);
+			}
+		} else {
+			for (auto &expr : reader_data.expressions) {
+				executor.AddExpression(*expr);
+			}
+		}
+	}
+
 	// This function looks for the next available row group. If not available, it will open files from bind_data.files
 	// until there is a row group available for scanning or the files runs out
 	static bool TryInitializeNextBatch(ClientContext &context, const MultiFileBindData &bind_data,
@@ -390,7 +431,11 @@ public:
 					// The current reader has data left to be scanned
 					scan_data.reader = current_reader_data.reader;
 					scan_data.batch_index = gstate.batch_index++;
+					auto old_file_index = scan_data.file_index;
 					scan_data.file_index = gstate.file_index;
+					if (old_file_index != scan_data.file_index) {
+						InitializeFileScanState(context, scan_data, gstate.projection_ids);
+					}
 					return true;
 				} else {
 					// Set state to the next file
@@ -423,14 +468,11 @@ public:
 		auto &bind_data = input.bind_data->Cast<MultiFileBindData>();
 		auto &gstate = gstate_p->Cast<MultiFileGlobalState>();
 
-		auto result = make_uniq<MultiFileLocalState>();
+		auto result = make_uniq<MultiFileLocalState>(context.client);
 		result->is_parallel = true;
 		result->batch_index = 0;
 		result->local_state = OP::InitializeLocalState(context, *gstate.global_state);
 
-		if (gstate.CanRemoveColumns()) {
-			result->all_columns.Initialize(context.client, gstate.scanned_types);
-		}
 		if (!TryInitializeNextBatch(context.client, bind_data, *result, gstate)) {
 			return nullptr;
 		}
@@ -554,20 +596,17 @@ public:
 		auto &data = data_p.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = data_p.global_state->Cast<MultiFileGlobalState>();
 		auto &bind_data = data_p.bind_data->CastNoConst<MultiFileBindData>();
-		auto remove_columns = gstate.CanRemoveColumns();
-		if (remove_columns) {
-			data.all_columns.Reset();
-		}
 
 		do {
-			auto &scan_chunk = remove_columns ? data.all_columns : output;
+			auto &scan_chunk = data.scan_chunk;
+			scan_chunk.Reset();
+
 			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, scan_chunk);
+			output.SetCardinality(scan_chunk.size());
 			if (scan_chunk.size() > 0) {
 				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
-				                                           scan_chunk, gstate.multi_file_reader_state);
-				if (remove_columns) {
-					output.ReferenceColumns(data.all_columns, gstate.projection_ids);
-				}
+				                                           scan_chunk, output, data.executor,
+				                                           gstate.multi_file_reader_state);
 				return;
 			}
 			scan_chunk.Reset();
