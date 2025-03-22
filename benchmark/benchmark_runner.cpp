@@ -57,6 +57,8 @@ void BenchmarkRunner::InitializeBenchmarkDirectory() {
 
 atomic<bool> is_active;
 atomic<bool> timeout;
+atomic<bool> summarize;
+std::vector<std::string> summary;
 
 void sleep_thread(Benchmark *benchmark, BenchmarkRunner *runner, BenchmarkState *state, bool hotrun,
                   const optional_idx &optional_timeout) {
@@ -116,6 +118,11 @@ void BenchmarkRunner::LogOutput(string message) {
 	}
 }
 
+void BenchmarkRunner::LogSummary(string benchmark, string message) {
+	string failure_message = benchmark + "\n" + message;
+	summary.push_back(failure_message);
+}
+
 void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	Profiler profiler;
 	auto display_name = benchmark->DisplayName();
@@ -173,6 +180,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 					LogResult("INCORRECT");
 					LogLine("INCORRECT RESULT: " + verify);
 					LogOutput("INCORRECT RESULT: " + verify);
+					LogSummary(benchmark->name, "INCORRECT RESULT: " + verify);
 					break;
 				} else {
 					LogResult(std::to_string(profiler.Elapsed()));
@@ -251,6 +259,8 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
 	for (int arg_index = 1; arg_index < arg_counter; ++arg_index) {
+		// make it summarize failures by default
+		summarize = true;
 		string arg = arg_values[arg_index];
 		if (arg == "--list") {
 			// list names of all benchmarks
@@ -291,6 +301,8 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 				fprintf(stderr, "Could not open file %s for writing\n", splits[1].c_str());
 				exit(1);
 			}
+		} else if (arg == "--no-summary") {
+			summarize = false;
 		} else {
 			if (!instance.configuration.name_pattern.empty()) {
 				fprintf(stderr, "Only one benchmark can be specified.\n");
@@ -385,6 +397,14 @@ int main(int argc, char **argv) {
 	LoadInterpretedBenchmarks(*fs);
 	parse_arguments(argc, argv);
 	const auto configuration_error = run_benchmarks();
+	
+	if (!summary.empty() && summarize) {
+		std::cout << "\n===============================  FAILURES SUMMARY  ===============================\n" << std::endl;
+		for (size_t i = 0; i < summary.size(); i++) {
+			std::cout << i + 1 << ". " << summary[i] << std::endl;
+		}
+	}
+	
 	if (configuration_error != ConfigurationError::None) {
 		print_error_message(configuration_error);
 		exit(1);
