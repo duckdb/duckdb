@@ -585,6 +585,9 @@ static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &cons
 	switch (type) {
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter.Cast<ConstantFilter>();
+		if (constant.IsNull()) {
+			return false;
+		}
 		return constant_filter.Compare(constant);
 	}
 	case TableFilterType::IS_NULL: {
@@ -596,7 +599,7 @@ static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &cons
 	case TableFilterType::IN_FILTER: {
 		auto &in_filter = filter.Cast<InFilter>();
 		for (auto &val : in_filter.values) {
-			if (val == constant) {
+			if (!constant.IsNull() && val == constant) {
 				return true;
 			}
 		}
@@ -673,6 +676,7 @@ static EvaluationResult EvaluateConstantFilters(optional_ptr<TableFilterSet> fil
                                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
                                                 const vector<ColumnIndex> &global_column_ids,
                                                 const virtual_column_map_t &virtual_columns,
+                                                MultiFileReaderData &reader_data,
                                                 unordered_map<idx_t, MultiFileIndexMapping> &global_to_local) {
 	EvaluationResult result;
 	if (!filters) {
@@ -702,8 +706,21 @@ static EvaluationResult EvaluateConstantFilters(optional_ptr<TableFilterSet> fil
 				throw InternalException("Unrecognized virtual column found: %s", virtual_column.name);
 			}
 		} else {
-			auto &global_column = global_columns[global_column_id];
-			constant_value = global_column.GetDefaultValue();
+			bool has_constant = false;
+			for (idx_t i = 0; i < reader_data.constant_map.size(); i++) {
+				auto &constant_map_entry = reader_data.constant_map[MultiFileConstantMapIndex(i)];
+				if (constant_map_entry.column_idx.GetIndex() == global_index) {
+					has_constant = true;
+					constant_value = constant_map_entry.value;
+					break;
+				}
+			}
+			if (!has_constant) {
+				auto &global_column = global_columns[global_column_id];
+				throw InternalException(
+				    "Column '%s' is not present in the file, but no constant_map entry exists for it!",
+				    global_column.name);
+			}
 		}
 
 		if (!EvaluateFilterAgainstConstant(*global_filter, constant_value)) {
@@ -745,7 +762,7 @@ bool MultiFileReader::CreateMapping(const string &file_name,
 	//! Evaluate the filters against the column(s) that are constant for this file (not present in the local schema)
 	//! If any of these fail, the file can be skipped entirely
 	auto evaluation_result = EvaluateConstantFilters(filters, file_name, global_columns, global_column_ids,
-	                                                 virtual_columns, global_to_local);
+	                                                 virtual_columns, reader_data, global_to_local);
 	if (evaluation_result.can_skip_file) {
 		return false;
 	}
