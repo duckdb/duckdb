@@ -33,6 +33,9 @@ Catalog type does not support time travel
 
 require icu
 
+# timestamptz - interval overload not correctly autoloaded
+require no_extension_autoloading
+
 statement error
 SELECT * FROM tbl AT (TIMESTAMP => NOW() - INTERVAL '3 days')
 ----
