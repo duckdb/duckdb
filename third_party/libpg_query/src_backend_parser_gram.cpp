@@ -25593,12 +25593,12 @@ yyreduce:
 
   case 664:
 #line 795 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.str) = "TIMESTAMP"; ;}
+    { (yyval.str) = (char*) "TIMESTAMP"; ;}
     break;
 
   case 665:
 #line 796 "third_party/libpg_query/grammar/statements/select.y"
-    { (yyval.str) = "VERSION"; ;}
+    { (yyval.str) = (char*) "VERSION"; ;}
     break;
 
   case 666:
