@@ -40,6 +40,6 @@ jobs:
       - name: Run ODBC Vendor
         if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
-          export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor/dispatches
+          export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor.yml/dispatches
           export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
