@@ -45,9 +45,9 @@
 
 namespace duckdb {
 
-void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
+void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog_name, string &schema) {
 	CatalogEntryRetriever retriever(context);
-	if (catalog.empty() && !schema.empty()) {
+	if (catalog_name.empty() && !schema.empty()) {
 		// schema is specified - but catalog is not
 		// try searching for the catalog instead
 		auto &db_manager = DatabaseManager::Get(context);
@@ -66,13 +66,12 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string
 					continue;
 				}
 				if (catalog->CheckAmbiguousCatalogOrSchema(context, schema)) {
-
 					throw BinderException(
 					    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
 					    schema, catalog_name, schema);
 				}
 			}
-			catalog = schema;
+			catalog_name = schema;
 			schema = string();
 		}
 	}
@@ -322,6 +321,7 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 	bind_logical_type_function_t user_bind_modifiers_func = nullptr;
 
 	LogicalType result;
+	EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, user_type_name);
 	if (catalog) {
 		// The search order is:
 		// 1) In the explicitly set schema (my_schema.my_type)
@@ -331,19 +331,16 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 
 		optional_ptr<CatalogEntry> entry = nullptr;
 		if (!user_type_schema.empty()) {
-			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, user_type_schema, user_type_name,
-			                                 OnEntryNotFound::RETURN_NULL);
+			entry = entry_retriever.GetEntry(*catalog, user_type_schema, type_lookup, OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidUserType(entry)) {
-			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, schema, user_type_name,
-			                                 OnEntryNotFound::RETURN_NULL);
+			entry = entry_retriever.GetEntry(*catalog, schema, type_lookup, OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidUserType(entry)) {
-			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, *catalog, INVALID_SCHEMA, user_type_name,
-			                                 OnEntryNotFound::RETURN_NULL);
+			entry = entry_retriever.GetEntry(*catalog, INVALID_SCHEMA, type_lookup, OnEntryNotFound::RETURN_NULL);
 		}
 		if (!IsValidUserType(entry)) {
-			entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, INVALID_CATALOG, INVALID_SCHEMA, user_type_name,
+			entry = entry_retriever.GetEntry(INVALID_CATALOG, INVALID_SCHEMA, type_lookup,
 			                                 OnEntryNotFound::THROW_EXCEPTION);
 		}
 		auto &type_entry = entry->Cast<TypeCatalogEntry>();
@@ -354,7 +351,7 @@ LogicalType Binder::BindLogicalTypeInternal(const LogicalType &type, optional_pt
 		string type_schema = UserType::GetSchema(type);
 
 		BindSchemaOrCatalog(context, type_catalog, type_schema);
-		auto entry = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, type_catalog, type_schema, user_type_name);
+		auto entry = entry_retriever.GetEntry(type_catalog, type_schema, type_lookup);
 		auto &type_entry = entry->Cast<TypeCatalogEntry>();
 		result = type_entry.user_type;
 		user_bind_modifiers_func = type_entry.bind_function;
@@ -522,8 +519,9 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 			// 2: create a type alias with a custom type.
 			// eg. CREATE TYPE a AS INT; CREATE TYPE b AS a;
 			// We set b to be an alias for the underlying type of a
-			auto type_entry_p = entry_retriever.GetEntry(CatalogType::TYPE_ENTRY, schema.catalog.GetName(), schema.name,
-			                                             UserType::GetTypeName(create_type_info.type));
+
+			EntryLookupInfo type_lookup(CatalogType::TYPE_ENTRY, UserType::GetTypeName(create_type_info.type));
+			auto type_entry_p = entry_retriever.GetEntry(schema.catalog.GetName(), schema.name, type_lookup);
 			D_ASSERT(type_entry_p);
 			auto &type_entry = type_entry_p->Cast<TypeCatalogEntry>();
 			create_type_info.type = type_entry.user_type;

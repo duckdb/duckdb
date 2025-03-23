@@ -242,6 +242,9 @@ typedef enum duckdb_cast_mode { DUCKDB_CAST_NORMAL = 0, DUCKDB_CAST_TRY = 1 } du
 //! DuckDB's index type.
 typedef uint64_t idx_t;
 
+//! Type used for the selection vector
+typedef uint32_t sel_t;
+
 //! The callback that will be called to destroy data, e.g.,
 //! bind data (if any), init data (if any), extra data for replacement scans (if any)
 typedef void (*duckdb_delete_callback_t)(void *data);
@@ -390,6 +393,12 @@ typedef struct {
 typedef struct _duckdb_vector {
 	void *internal_ptr;
 } * duckdb_vector;
+
+//! A selection vector is a possibly duplicative vector of indices, which refer to values in a vector.
+//! The resulting vector is make up of the values at each index in the selection vector.
+typedef struct _duckdb_selection_vector {
+	void *internal_ptr;
+} * duckdb_selection_vector;
 
 //===--------------------------------------------------------------------===//
 // Types (explicit freeing/destroying)
@@ -3038,6 +3047,19 @@ The resulting vector has the size of the parent vector multiplied by the array s
 */
 DUCKDB_C_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 
+/*!
+Slice a vector with a selection vector.
+
+The max value in the selection vector must be less than the length of the vector
+
+The resulting vector happens to be a dictionary vector.
+
+* @param vector The vector which is to become a dictionary
+* @param selection The selection vector
+* @param len The length of the selection vector
+*/
+DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
 //===--------------------------------------------------------------------===//
@@ -3241,6 +3263,25 @@ If the set is incomplete or a function with this name already exists DuckDBError
 * @return Whether or not the registration was successful.
 */
 DUCKDB_C_API duckdb_state duckdb_register_scalar_function_set(duckdb_connection con, duckdb_scalar_function_set set);
+
+//===--------------------------------------------------------------------===//
+// Selection Vector Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Creates a new selection vector of size `size`.
+*/
+DUCKDB_C_API duckdb_selection_vector duckdb_create_selection_vector(idx_t size);
+
+/*!
+Destroys a selection vector.
+*/
+DUCKDB_C_API void duckdb_destroy_selection_vector(duckdb_selection_vector vector);
+
+/*!
+Access the data pointer of a selection vector.
+*/
+DUCKDB_C_API sel_t *duckdb_selection_vector_get_data_ptr(duckdb_selection_vector vector);
 
 //===--------------------------------------------------------------------===//
 // Aggregate Functions

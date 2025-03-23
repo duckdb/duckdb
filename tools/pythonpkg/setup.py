@@ -5,7 +5,6 @@ import os
 import platform
 import sys
 import traceback
-import subprocess
 from functools import lru_cache
 from glob import glob
 from os.path import exists
@@ -377,6 +376,10 @@ spark_packages = [
 
 packages.extend(spark_packages)
 
+from setuptools_scm import Configuration, ScmVersion
+from pathlib import Path
+import os
+
 ######
 # MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
 # - CMakeLists.txt
@@ -384,102 +387,80 @@ packages.extend(spark_packages)
 # - scripts/package_build.py
 # - tools/pythonpkg/setup.py
 ######
-main_branch_versioning = os.getenv('MAIN_BRANCH_VERSIONING') or 1
+
+# Whether to use main branch versioning logic, defaults to True
+MAIN_BRANCH_VERSIONING = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
 
 
-def get_git_describe():
-    override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
-    versioning_tag_match = 'v*.*.*'
-    if main_branch_versioning:
-        versioning_tag_match = 'v*.*.0'
-    # empty override_git_describe, either since env was empty string or not existing
-    # -> ask git (that can fail, so except in place)
-    if len(override_git_describe) == 0:
-        try:
-            return (
-                subprocess.check_output(
-                    ['git', 'describe', '--tags', '--long', '--debug', '--match', versioning_tag_match]
-                )
-                .strip()
-                .decode('utf8')
-            )
-        except subprocess.CalledProcessError:
-            return "v0.0.0-0-gdeadbeeff"
-    if len(override_git_describe.split('-')) == 3:
-        return override_git_describe
-    if len(override_git_describe.split('-')) == 1:
-        override_git_describe += "-0"
-    assert len(override_git_describe.split('-')) == 2
-    try:
-        return (
-            override_git_describe
-            + "-g"
-            + subprocess.check_output(['git', 'log', '-1', '--format=%h']).strip().decode('utf8')
-        )
-    except subprocess.CalledProcessError:
-        return override_git_describe + "-g" + "deadbeeff"
+def parse(root: str | Path, config: Configuration) -> ScmVersion | None:
+    from setuptools_scm.git import parse as git_parse
+    from setuptools_scm.version import meta
 
-
-def prefix_version(version):
-    """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
-    if version.startswith('v'):
-        return version
-    return 'v' + version
-
-
-def git_dev_version():
-    if 'SETUPTOOLS_SCM_PRETEND_VERSION' in os.environ:
-        return prefix_version(os.environ['SETUPTOOLS_SCM_PRETEND_VERSION'])
-    try:
-        long_version = get_git_describe()
-        version_splits = long_version.split('-')[0].lstrip('v').split('.')
-        dev_version = long_version.split('-')[1]
-        if int(dev_version) == 0:
-            # directly on a tag: emit the regular version
-            return "v" + '.'.join(version_splits)
+    override = os.getenv('OVERRIDE_GIT_DESCRIBE')
+    if override:
+        parts = override.split('-')
+        if len(parts) == 3:
+            # Already in correct format tag-distance-gnode
+            tag, distance, node = parts
+            return meta(tag=tag, distance=int(distance), node=node[1:], config=config)
+        elif len(parts) == 1:
+            # Just tag, add -0-gnode
+            tag = parts[0]
+            distance = 0
+        elif len(parts) == 2:
+            # tag-distance, need to add -gnode
+            tag, distance = parts
         else:
-            # not on a tag: increment the version by one and add a -devX suffix
-            # this needs to keep in sync with changes to CMakeLists.txt
-            if main_branch_versioning == 1:
-                # increment minor version
-                version_splits[1] = str(int(version_splits[1]) + 1)
-            else:
-                # increment patch version
-                version_splits[2] = str(int(version_splits[2]) + 1)
-            return "v" + '.'.join(version_splits) + "-dev" + dev_version
-    except:
-        return "v0.0.0"
+            raise ValueError(f"Invalid OVERRIDE_GIT_DESCRIBE format: {override}")
+        return meta(tag=tag, distance=int(distance), config=config)
+
+    versioning_tag_match = 'v*.*.0' if MAIN_BRANCH_VERSIONING else 'v*.*.*'
+    git_describe_command = f"git describe --tags --long --debug --match {versioning_tag_match}"
+
+    try:
+        return git_parse(root, config, describe_command=git_describe_command)
+    except Exception:
+        return meta(tag="v0.0.0", distance=0, node="deadbeeff", config=config)
 
 
-package_version = git_dev_version()
+def version_scheme(version):
+    def prefix_version(version):
+        """Make sure the version is prefixed with 'v' to be of the form vX.Y.Z"""
+        if version.startswith('v'):
+            return version
+        return 'v' + version
+
+    # If we're exactly on a tag (dev_iteration = 0, dirty=False)
+    if version.exact:
+        return version.format_with("{tag}")
+
+    major, minor, patch = [int(x) for x in str(version.tag).split('.')]
+    # Increment minor version if main_branch_versioning is enabled (default),
+    # otherwise increment patch version
+    if MAIN_BRANCH_VERSIONING == True:
+        minor += 1
+        patch = 0
+    else:
+        patch += 1
+
+    # Format as v{major}.{minor}.{patch}-dev{distance}
+    next_version = f"{major}.{minor}.{patch}-dev{version.distance}"
+    return prefix_version(next_version)
+
 
 setup(
-    version=package_version,
-    name=lib_name,
-    description='DuckDB in-process database',
-    keywords='DuckDB Database SQL OLAP',
-    url="https://www.duckdb.org",
-    long_description='See here for an introduction: https://duckdb.org/docs/api/python/overview',
-    license='MIT',
     data_files=data_files,
     # NOTE: might need to be find_packages() ?
     packages=packages,
     include_package_data=True,
-    python_requires='>=3.7.0',
-    tests_require=['google-cloud-storage', 'mypy', 'pytest'],
-    classifiers=[
-        'Topic :: Database :: Database Engines/Servers',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: MIT License',
-    ],
+    long_description="See here for an introduction: https://duckdb.org/docs/api/python/overview",
     ext_modules=[libduckdb],
-    maintainer="Hannes Muehleisen",
-    maintainer_email="hannes@cwi.nl",
-    cmdclass={"build_ext": build_ext},
-    project_urls={
-        "Documentation": "https://duckdb.org/docs/api/python/overview",
-        "Source": "https://github.com/duckdb/duckdb/blob/main/tools/pythonpkg",
-        "Issues": "https://github.com/duckdb/duckdb/issues",
-        "Changelog": "https://github.com/duckdb/duckdb/releases",
+    use_scm_version={
+        "version_scheme": version_scheme,
+        "root": "../..",
+        "parse": parse,
+        "fallback_version": "v0.0.0",
+        "local_scheme": "no-local-version",
     },
+    cmdclass={"build_ext": build_ext},
 )

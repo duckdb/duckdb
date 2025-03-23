@@ -86,3 +86,37 @@ jobs:
       override_git_describe: ${{ inputs.override_git_describe }}
       git_ref: ${{ inputs.git_ref }}
       skip_tests: ${{ inputs.skip_tests }}
+
+  notify-external-repos-main:
+    uses: ./.github/workflows/NotifyExternalRepositories.yml
+    secrets: inherit
+    needs:
+      - osx
+      - linux-release
+      - windows
+      - python
+      - pyodide
+      - R
+      - Wasm
+      - static-libraries
+    if: ${{ inputs.git_ref == '' }}
+    with:
+      target-branch: ${{ github.ref_name }}
+      duckdb-sha: ${{ github.ref }}
+
+  notify-specific-branch-on-external-repos:
+    uses: ./.github/workflows/NotifyExternalRepositories.yml
+    secrets: inherit
+    needs:
+      - osx
+      - linux-release
+      - windows
+      - python
+      - pyodide
+      - R
+      - Wasm
+      - static-libraries
+    if: ${{ inputs.git_ref != '' }}
+    with:
+      target-branch: ${{ github.ref_name }}
+      duckdb-sha: ${{ inputs.git_ref }}

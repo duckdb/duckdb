@@ -43,6 +43,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
             GIT_TAG b3050f35c6e99fa35465230493eeab14a78a0409
+            APPLY_PATCHES
             )
 endif()
 
@@ -97,6 +98,7 @@ duckdb_extension_load(inet
     GIT_TAG a8b361ab5d43f6390d7cb48c9a9f0638e9581cf9
     INCLUDE_DIR src/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# POSTGRES_SCANNER

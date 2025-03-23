@@ -547,6 +547,14 @@ typedef struct {
 	char *(*duckdb_value_to_string)(duckdb_value value);
 #endif
 
+// An API to create new vector types
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
+	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
+	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
+#endif
+
 } duckdb_ext_api_v1;
 
 //===--------------------------------------------------------------------===//
@@ -971,6 +979,12 @@ typedef struct {
 
 // Version unstable_new_string_functions
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
+
+// Version unstable_new_vector_types
+#define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector
+#define duckdb_create_selection_vector       duckdb_ext_api.duckdb_create_selection_vector
+#define duckdb_destroy_selection_vector      duckdb_ext_api.duckdb_destroy_selection_vector
+#define duckdb_selection_vector_get_data_ptr duckdb_ext_api.duckdb_selection_vector_get_data_ptr
 
 //===--------------------------------------------------------------------===//
 // Struct Global Macros

@@ -20,6 +20,7 @@ add_library_unity(
   union_casts.cpp
   uuid_casts.cpp
   varint_casts.cpp
+  nested_to_varchar_cast.cpp
   vector_cast_helpers.cpp)
 
 set(ALL_OBJECT_FILES

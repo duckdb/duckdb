@@ -2,20 +2,8 @@
 # description: Test uuid related functions
 # group: [uuid]
 
-# Test invalid UUID in string format.
-statement error
-SELECT uuid_extract_version('1234');
-----
-Given string '1234' is invalid UUID.
-
-# Test UUIDv7 in string format.
 query I
 SELECT uuid_extract_version('ac227128-7d55-7ee0-a765-5025cc52e55a');
-----
-7
-
-query I
-SELECT uuid_extract_version(uuidv7()::STRING);
 ----
 7
 
@@ -31,16 +19,6 @@ SELECT uuid_extract_version('ac227128-7d55-4ee0-a765-5025cc52e55a');
 4
 
 query I
-SELECT uuid_extract_version(uuidv4()::STRING);
-----
-4
-
-query I
-SELECT uuid_extract_version(gen_random_uuid()::STRING);
-----
-4
-
-query I
 SELECT uuid_extract_version(uuidv4());
 ----
 4
@@ -49,12 +27,6 @@ query I
 SELECT uuid_extract_version(gen_random_uuid());
 ----
 4
-
-# Test timestamp extraction for invalid string.
-statement error
-SELECT uuid_extract_timestamp('1234');
-----
-Given string '1234' is invalid UUID.
 
 # Test timestamp extraction with UUID v4.
 statement error

@@ -76,6 +76,22 @@ string ColumnWriterStatistics::GetMaxValue() {
 	return string();
 }
 
+bool ColumnWriterStatistics::CanHaveNaN() {
+	return false;
+}
+
+bool ColumnWriterStatistics::HasNaN() {
+	return false;
+}
+
+bool ColumnWriterStatistics::MinIsExact() {
+	return true;
+}
+
+bool ColumnWriterStatistics::MaxIsExact() {
+	return true;
+}
+
 //===--------------------------------------------------------------------===//
 // ColumnWriter
 //===--------------------------------------------------------------------===//
@@ -556,11 +572,11 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 		return make_uniq<StandardColumnWriter<uint64_t, uint64_t>>(writer, schema, std::move(path_in_schema),
 		                                                           can_have_nulls);
 	case LogicalTypeId::FLOAT:
-		return make_uniq<StandardColumnWriter<float_na_equal, float>>(writer, schema, std::move(path_in_schema),
-		                                                              can_have_nulls);
+		return make_uniq<StandardColumnWriter<float_na_equal, float, FloatingPointOperator>>(
+		    writer, schema, std::move(path_in_schema), can_have_nulls);
 	case LogicalTypeId::DOUBLE:
-		return make_uniq<StandardColumnWriter<double_na_equal, double>>(writer, schema, std::move(path_in_schema),
-		                                                                can_have_nulls);
+		return make_uniq<StandardColumnWriter<double_na_equal, double, FloatingPointOperator>>(
+		    writer, schema, std::move(path_in_schema), can_have_nulls);
 	case LogicalTypeId::DECIMAL:
 		switch (type.InternalType()) {
 		case PhysicalType::INT16:
@@ -576,6 +592,8 @@ ColumnWriter::CreateWriterRecursive(ClientContext &context, ParquetWriter &write
 			return make_uniq<FixedDecimalColumnWriter>(writer, schema, std::move(path_in_schema), can_have_nulls);
 		}
 	case LogicalTypeId::BLOB:
+		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetBlobOperator>>(
+		    writer, schema, std::move(path_in_schema), can_have_nulls);
 	case LogicalTypeId::VARCHAR:
 		return make_uniq<StandardColumnWriter<string_t, string_t, ParquetStringOperator>>(
 		    writer, schema, std::move(path_in_schema), can_have_nulls);
