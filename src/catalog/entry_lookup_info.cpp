@@ -16,6 +16,11 @@ EntryLookupInfo::EntryLookupInfo(const EntryLookupInfo &parent, const string &na
       error_context(parent.error_context) {
 }
 
+EntryLookupInfo::EntryLookupInfo(const EntryLookupInfo &parent, optional_ptr<BoundAtClause> at_clause)
+    : EntryLookupInfo(parent.catalog_type, parent.name, parent.at_clause ? parent.at_clause : at_clause,
+                      parent.error_context) {
+}
+
 EntryLookupInfo EntryLookupInfo::SchemaLookup(const EntryLookupInfo &parent, const string &schema_name) {
 	return EntryLookupInfo(CatalogType::SCHEMA_ENTRY, schema_name, parent.at_clause, parent.error_context);
 }

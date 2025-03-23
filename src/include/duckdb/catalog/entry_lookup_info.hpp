@@ -22,6 +22,7 @@ public:
 	EntryLookupInfo(CatalogType catalog_type, const string &name, optional_ptr<BoundAtClause> at_clause,
 	                QueryErrorContext error_context);
 	EntryLookupInfo(const EntryLookupInfo &parent, const string &name);
+	EntryLookupInfo(const EntryLookupInfo &parent, optional_ptr<BoundAtClause> at_clause);
 
 public:
 	CatalogType GetCatalogType() const;

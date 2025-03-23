@@ -40,8 +40,9 @@ optional_ptr<CatalogEntry> CatalogEntryRetriever::GetEntry(const string &catalog
 }
 
 optional_ptr<SchemaCatalogEntry> CatalogEntryRetriever::GetSchema(const string &catalog,
-                                                                  const EntryLookupInfo &schema_lookup,
+                                                                  const EntryLookupInfo &schema_lookup_p,
                                                                   OnEntryNotFound on_entry_not_found) {
+	EntryLookupInfo schema_lookup(schema_lookup_p, at_clause);
 	auto result = Catalog::GetSchema(*this, catalog, schema_lookup, on_entry_not_found);
 	if (!result) {
 		return result;
@@ -73,6 +74,7 @@ optional_ptr<CatalogEntry> CatalogEntryRetriever::ReturnAndCallback(optional_ptr
 void CatalogEntryRetriever::Inherit(const CatalogEntryRetriever &parent) {
 	this->callback = parent.callback;
 	this->search_path = parent.search_path;
+	this->at_clause = parent.at_clause;
 }
 
 const CatalogSearchPath &CatalogEntryRetriever::GetSearchPath() const {
@@ -105,6 +107,14 @@ void CatalogEntryRetriever::SetSearchPath(vector<CatalogSearchEntry> entries) {
 	}
 
 	this->search_path = make_shared_ptr<CatalogSearchPath>(context, std::move(new_path));
+}
+
+optional_ptr<BoundAtClause> CatalogEntryRetriever::GetAtClause() const {
+	return at_clause;
+}
+
+void CatalogEntryRetriever::SetAtClause(optional_ptr<BoundAtClause> at_clause_p) {
+	at_clause = at_clause_p;
 }
 
 void CatalogEntryRetriever::SetCallback(catalog_entry_callback_t callback) {

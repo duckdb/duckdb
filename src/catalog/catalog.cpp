@@ -760,7 +760,7 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 		did_you_mean = StringUtil::Join(suggestions, " or ");
 	}
 
-	return CatalogException::MissingEntry(type, entry_name, did_you_mean, lookup_info.GetErrorContext());
+	return CatalogException::MissingEntry(lookup_info, did_you_mean);
 }
 
 CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, const string &schema,
@@ -967,6 +967,12 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type
                                 const string &schema_name, const string &name) {
 	EntryLookupInfo lookup_info(catalog_type, name);
 	return GetEntry(context, catalog_name, schema_name, lookup_info);
+}
+
+optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &schema,
+                                             const string &name, OnEntryNotFound if_not_found) {
+	EntryLookupInfo lookup_info(catalog_type, name);
+	return GetEntry(context, schema, lookup_info, if_not_found);
 }
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &schema_name,

@@ -211,7 +211,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	// not a CTE
 	// extract a table or view from the catalog
 	auto at_clause = BindAtClause(ref.at_clause);
-	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name, at_clause.get(), error_context);
+	auto entry_at_clause = at_clause ? at_clause.get() : entry_retriever.GetAtClause();
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name, entry_at_clause, error_context);
 	BindSchemaOrCatalog(entry_retriever, ref.catalog_name, ref.schema_name);
 	auto table_or_view =
 	    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::RETURN_NULL);
@@ -275,7 +276,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		properties.RegisterDBRead(table.ParentCatalog(), context);
 
 		unique_ptr<FunctionData> bind_data;
-		auto scan_function = table.GetScanFunction(context, bind_data);
+		auto scan_function = table.GetScanFunction(context, bind_data, table_lookup);
 		// TODO: bundle the type and name vector in a struct (e.g PackedColumnMetadata)
 		vector<LogicalType> table_types;
 		vector<string> table_names;
@@ -311,7 +312,7 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		// for the view and for the current query
 		auto view_binder = Binder::CreateBinder(context, this, BinderType::VIEW_BINDER);
 		view_binder->can_contain_nulls = true;
-		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.query->Copy()));
+		SubqueryRef subquery(unique_ptr_cast<SQLStatement, SelectStatement>(view_catalog_entry.GetQuery().Copy()));
 		subquery.alias = ref.alias;
 		// construct view names by first (1) taking the view aliases, (2) adding the view names, then (3) applying
 		// subquery aliases
@@ -325,6 +326,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		auto view_search_path =
 		    GetSearchPath(view_catalog_entry.ParentCatalog(), view_catalog_entry.ParentSchema().name);
 		view_binder->entry_retriever.SetSearchPath(std::move(view_search_path));
+		// propagate the AT clause through the view
+		view_binder->entry_retriever.SetAtClause(entry_at_clause);
+
 		// bind the child subquery
 		view_binder->AddBoundView(view_catalog_entry);
 		auto bound_child = view_binder->Bind(subquery);
@@ -333,9 +337,9 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 
 		D_ASSERT(bound_child->type == TableReferenceType::SUBQUERY);
-		// verify that the types and names match up with the expected types and names
+		// verify that the types and names match up with the expected types and names if the view has type info defined
 		auto &bound_subquery = bound_child->Cast<BoundSubqueryRef>();
-		if (GetBindingMode() != BindingMode::EXTRACT_NAMES) {
+		if (GetBindingMode() != BindingMode::EXTRACT_NAMES && view_catalog_entry.HasTypes()) {
 			if (bound_subquery.subquery->types != view_catalog_entry.types) {
 				auto actual_types = StringUtil::ToString(bound_subquery.subquery->types, ", ");
 				auto expected_types = StringUtil::ToString(view_catalog_entry.types, ", ");
