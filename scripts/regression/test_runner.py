@@ -206,5 +206,6 @@ if summary and not no_summary:
             print("New:\n", failure_message["new_failure"])
         else:
             print(failure_message["old_failure"])
+        print("-", 52)
 
 exit(exit_code)

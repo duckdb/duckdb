@@ -118,8 +118,9 @@ void BenchmarkRunner::LogOutput(string message) {
 	}
 }
 
-void BenchmarkRunner::LogSummary(string benchmark, string message) {
-	string failure_message = benchmark + "\n" + message;
+void BenchmarkRunner::LogSummary(string benchmark, string message, size_t i) {
+	string log_result_line = StringUtil::Format("%s\t%d\t", benchmark, i) + "\tINCORRECT\n";
+	string failure_message = benchmark + "\nname\trun\ttiming\n" + log_result_line + message;
 	summary.push_back(failure_message);
 }
 
@@ -180,7 +181,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 					LogResult("INCORRECT");
 					LogLine("INCORRECT RESULT: " + verify);
 					LogOutput("INCORRECT RESULT: " + verify);
-					LogSummary(benchmark->name, "INCORRECT RESULT: " + verify);
+					LogSummary(benchmark->name, "INCORRECT RESULT: " + verify, i);
 					break;
 				} else {
 					LogResult(std::to_string(profiler.Elapsed()));
@@ -399,9 +400,12 @@ int main(int argc, char **argv) {
 	const auto configuration_error = run_benchmarks();
 	
 	if (!summary.empty() && summarize) {
-		std::cout << "\n===============================  FAILURES SUMMARY  ===============================\n" << std::endl;
+		std::cout << "\n====================================================" << std::endl;
+		std::cout << "================  FAILURES SUMMARY  ================" << std::endl;
+		std::cout << "====================================================\n" << std::endl;
 		for (size_t i = 0; i < summary.size(); i++) {
-			std::cout << i + 1 << ". " << summary[i] << std::endl;
+			std::cout << i + 1 << ": " << summary[i] << std::endl;
+			std::cout << "----------------------------------------------------" << std::endl;
 		}
 	}
 	
