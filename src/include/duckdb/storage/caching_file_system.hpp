@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/winapi.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/storage/storage_lock.hpp"
@@ -22,14 +23,13 @@ class FileSystem;
 struct FileHandle;
 class CachingFileSystem;
 
-struct CachingFileHandle {
+class CachingFileHandle {
 	using CachedFileRangeOverlap = ExternalFileCache::CachedFileRangeOverlap;
 	using CachedFileRange = ExternalFileCache::CachedFileRange;
 	using CachedFile = ExternalFileCache::CachedFile;
 
 public:
 	DUCKDB_API CachingFileHandle(CachingFileSystem &caching_file_system, CachedFile &cached_file, FileOpenFlags flags);
-
 	DUCKDB_API ~CachingFileHandle();
 
 public:
@@ -78,7 +78,7 @@ private:
 //! Instead of reading into a designated buffer, it caches reads using the BufferManager,
 //! it returns a BufferHandle and sets a pointer into it
 class CachingFileSystem {
-	friend struct CachingFileHandle;
+	friend class CachingFileHandle;
 
 public:
 	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
