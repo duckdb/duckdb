@@ -1,5 +1,5 @@
 #include "duckdb/function/table/system_functions.hpp"
-#include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/storage/external_file_cache.hpp"
 
 namespace duckdb {
 

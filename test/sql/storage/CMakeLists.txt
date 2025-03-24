@@ -1,4 +1,5 @@
 add_subdirectory(catalog)
+add_subdirectory(external_file_cache)
 add_library_unity(
   test_sql_storage
   OBJECT
