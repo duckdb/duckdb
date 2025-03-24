@@ -21,31 +21,46 @@ statement ok
 CREATE TABLE test (a VARCHAR);
 
 statement ok
-INSERT INTO test SELECT (i::VARCHAR) FROM range(0, 1000000) tbl(i);
-INSERT INTO test SELECT NULL FROM range(0, 1000000) tbl(i);
-INSERT INTO test SELECT (i::VARCHAR) FROM range(0, 1000000) tbl(i);
-INSERT INTO test SELECT ''::VARCHAR FROM range(0, 1000000) tbl(i);
-INSERT INTO test SELECT (i::VARCHAR) FROM range(0, 1000000) tbl(i);
+set variable batch_size=1_000_000
+
+statement ok
+INSERT INTO test SELECT (i::VARCHAR) FROM range(0, getvariable('batch_size')) tbl(i);
+INSERT INTO test SELECT NULL FROM range(0, getvariable('batch_size')) tbl(i);
+INSERT INTO test SELECT (i::VARCHAR) FROM range(0, getvariable('batch_size')) tbl(i);
+INSERT INTO test SELECT ''::VARCHAR FROM range(0, getvariable('batch_size')) tbl(i);
+INSERT INTO test SELECT (i::VARCHAR) FROM range(0, getvariable('batch_size')) tbl(i);
 
 statement ok
 checkpoint
 
+# Before restart
 query IIII
-SELECT SUM(a::INT), MIN(a::INT), MAX(a::INT), COUNT(*) FROM test where a NOT NULL and a != ''
+SELECT
+	SUM(a::INT),
+	MIN(a::INT),
+	MAX(a::INT),
+	COUNT(*)
+FROM test where a NOT NULL and a != ''
 ----
 1499998500000	0	999999	3000000
 
 restart
 
+# After restart
 query IIII
-SELECT SUM(a::INT), MIN(a::INT), MAX(a::INT), COUNT(*) FROM test where a NOT NULL and a != ''
+SELECT
+	SUM(a::INT),
+	MIN(a::INT),
+	MAX(a::INT),
+	COUNT(*)
+FROM test where a NOT NULL and a != ''
 ----
 1499998500000	0	999999	3000000
 
 query I
-SELECT lower(compression)='dict_fsst' FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR' LIMIT 1
+SELECT DISTINCT compression FROM pragma_storage_info('test') WHERE segment_type ILIKE 'VARCHAR'
 ----
-1
+DICT_FSST
 
 statement ok
 DROP TABLE test;
