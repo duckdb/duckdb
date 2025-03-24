@@ -7,12 +7,16 @@
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 #include "duckdb/storage/buffer/block_handle.hpp"
+#include "duckdb/storage/external_file_cache.hpp"
 
 namespace duckdb {
 
 CachingFileSystem::CachingFileSystem(FileSystem &file_system_p, DatabaseInstance &db)
     : file_system(file_system_p), external_file_cache(ExternalFileCache::Get(db)), validate(true) {
 	// TODO: "validate" defaults to true (for now)
+}
+
+CachingFileSystem::~CachingFileSystem() {
 }
 
 CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
@@ -28,7 +32,7 @@ CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, C
                                      FileOpenFlags flags_p)
     : caching_file_system(caching_file_system_p), external_file_cache(caching_file_system.external_file_cache),
       cached_file(cached_file_p), flags(flags_p) {
-	if (!external_file_cache.enable || caching_file_system.validate) {
+	if (!external_file_cache.IsEnabled() || caching_file_system.validate) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
 		return;
@@ -52,8 +56,7 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
 		auto guard = cached_file.lock.GetExclusiveLock();
-		if (!external_file_cache.FileIsValid(cached_file, guard, caching_file_system.validate, version_tag,
-		                                     last_modified, current_time)) {
+		if (!cached_file.IsValid(guard, caching_file_system.validate, version_tag, last_modified, current_time)) {
 			cached_file.Ranges(guard).clear(); // Invalidate entire cache
 		}
 		cached_file.FileSize(guard) = file_handle->GetFileSize();
@@ -67,8 +70,8 @@ FileHandle &CachingFileHandle::GetFileHandle() {
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, const idx_t location) {
 	BufferHandle result;
-	if (!external_file_cache.enable) {
-		result = external_file_cache.buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+	if (!external_file_cache.IsEnabled()) {
+		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 		buffer = result.Ptr();
 		GetFileHandle().Read(buffer, nr_bytes, location);
 		return result;
@@ -132,7 +135,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 	guard.reset();
 
 	// Finally, if we weren't able to find the file range in the cache, we have to create a new file range
-	result = external_file_cache.buffer_manager.Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+	result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
 	auto new_file_range = make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), nr_bytes, location, version_tag);
 	buffer = result.Ptr();
 
@@ -243,7 +246,7 @@ BufferHandle CachingFileHandle::TryReadFromFileRange(const unique_ptr<StorageLoc
 	if (file_range.block_handle->IsUnloaded()) {
 		return BufferHandle(); // Purely in-memory (for now)
 	}
-	auto result = external_file_cache.buffer_manager.Pin(file_range.block_handle);
+	auto result = external_file_cache.GetBufferManager().Pin(file_range.block_handle);
 	if (result.IsValid()) {
 		buffer = result.Ptr() + (location - file_range.location);
 	}
@@ -282,7 +285,7 @@ idx_t CachingFileHandle::ReadAndCopyInterleaved(const vector<shared_ptr<CachedFi
 		}
 
 		// Try to pin the current overlapping file range
-		auto overlapping_file_range_pin = external_file_cache.buffer_manager.Pin(overlapping_range->block_handle);
+		auto overlapping_file_range_pin = external_file_cache.GetBufferManager().Pin(overlapping_range->block_handle);
 		if (!overlapping_file_range_pin.IsValid()) {
 			continue; // No longer valid
 		}

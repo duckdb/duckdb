@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/storage/caching_file_system.hpp
+// duckdb/storage/external_file_cache.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -22,16 +22,9 @@ class ClientContext;
 class DatabaseInstance;
 class BlockHandle;
 class BufferManager;
-class CachingFileSystem;
-struct CachingFileHandle;
 
-//! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.
-//! Instead of reading into a designated buffer, it caches reads using the BufferManager,
-//! it returns a BufferHandle and sets a pointer into it
 class ExternalFileCache {
-	friend class CachingFileSystem;
-	friend struct CachingFileHandle;
-
+public:
 	enum class CachedFileRangeOverlap { NONE, PARTIAL, FULL };
 
 	//! Cached reads (immutable)
@@ -67,6 +60,9 @@ class ExternalFileCache {
 	public:
 		//! Verifies that none of the ranges fully overlap (must hold the lock)
 		void Verify(const unique_ptr<StorageLockKey> &guard) const;
+		//! Whether the CachedFile is still valid given the current modified/version tag
+		bool IsValid(const unique_ptr<StorageLockKey> &guard, bool validate, const string &current_version_tag,
+		             time_t current_last_modified, int64_t access_time);
 
 		//! Get reference to properties (must hold the lock)
 		idx_t &FileSize(const unique_ptr<StorageLockKey> &guard);
@@ -96,15 +92,14 @@ public:
 public:
 	static ExternalFileCache &Get(DatabaseInstance &db);
 	static ExternalFileCache &Get(ClientContext &context);
+
+	bool IsEnabled() const;
 	void SetEnabled(bool enable);
 	vector<CachedFileInformation> GetCachedFileInformation() const;
 
-private:
+	BufferManager &GetBufferManager() const;
 	//! Gets the cached file, or creates it if is not yet present
 	CachedFile &GetOrCreateCachedFile(const string &path);
-	//! Whether the CachedFile is still valid given the current modified/version tag
-	bool FileIsValid(CachedFile &cached_file, const unique_ptr<StorageLockKey> &guard, bool validate,
-	                 const string &current_version_tag, time_t current_last_modified, int64_t access_time);
 
 private:
 	//! The BufferManager used to cache files

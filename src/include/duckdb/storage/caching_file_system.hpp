@@ -10,8 +10,8 @@
 
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/shared_ptr.hpp"
-#include "duckdb/storage/external_file_cache.hpp"
 #include "duckdb/storage/storage_lock.hpp"
+#include "duckdb/storage/external_file_cache.hpp"
 
 namespace duckdb {
 
@@ -20,31 +20,7 @@ class BufferHandle;
 class FileOpenFlags;
 class FileSystem;
 struct FileHandle;
-
-struct CachingFileHandle;
-
-//! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.
-//! Instead of reading into a designated buffer, it caches reads using the BufferManager,
-//! it returns a BufferHandle and sets a pointer into it
-class CachingFileSystem {
-	friend struct CachingFileHandle;
-
-public:
-	CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
-
-public:
-	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
-
-	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const string &path, FileOpenFlags flags);
-
-private:
-	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)
-	FileSystem &file_system;
-	//! The External File Cache that caches the files
-	ExternalFileCache &external_file_cache;
-	//! Whether to validate cache entries
-	bool validate;
-};
+class CachingFileSystem;
 
 struct CachingFileHandle {
 	using CachedFileRangeOverlap = ExternalFileCache::CachedFileRangeOverlap;
@@ -96,6 +72,30 @@ private:
 	//! Last modified time and version tag (if FileHandle is opened)
 	time_t last_modified;
 	string version_tag;
+};
+
+//! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.
+//! Instead of reading into a designated buffer, it caches reads using the BufferManager,
+//! it returns a BufferHandle and sets a pointer into it
+class CachingFileSystem {
+	friend struct CachingFileHandle;
+
+public:
+	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);
+	DUCKDB_API ~CachingFileSystem();
+
+public:
+	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
+
+	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const string &path, FileOpenFlags flags);
+
+private:
+	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)
+	FileSystem &file_system;
+	//! The External File Cache that caches the files
+	ExternalFileCache &external_file_cache;
+	//! Whether to validate cache entries
+	bool validate;
 };
 
 } // namespace duckdb

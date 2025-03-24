@@ -70,6 +70,28 @@ void ExternalFileCache::CachedFile::Verify(const unique_ptr<StorageLockKey> &gua
 #endif
 }
 
+bool ExternalFileCache::CachedFile::IsValid(const unique_ptr<StorageLockKey> &guard, bool validate,
+                                            const string &current_version_tag, time_t current_last_modified,
+                                            int64_t access_time) {
+	if (!validate) {
+		return true; // Assume valid
+	}
+	if (!current_version_tag.empty()) {
+		return VersionTag(guard) == current_version_tag; // Validity checked by version tag (httpfs)
+	}
+	if (LastModified(guard) != current_last_modified) {
+		return false; // The file has certainly been modified
+	}
+	// The last modified time matches. However, we cannot blindly trust this,
+	// because some file systems use a low resolution clock to set the last modified time.
+	// So, we will require that the last modified time is more than 2 seconds ago.
+	static constexpr int64_t LAST_MODIFIED_THRESHOLD = 2;
+	if (access_time < current_last_modified) {
+		return false; // Last modified in the future?
+	}
+	return access_time - current_last_modified > LAST_MODIFIED_THRESHOLD;
+}
+
 idx_t &ExternalFileCache::CachedFile::FileSize(const unique_ptr<StorageLockKey> &guard) {
 	return file_size;
 }
@@ -97,6 +119,10 @@ ExternalFileCache::CachedFile::Ranges(const unique_ptr<StorageLockKey> &guard) {
 
 ExternalFileCache::ExternalFileCache(DatabaseInstance &db, bool enable_p)
     : buffer_manager(BufferManager::GetBufferManager(db)), enable(enable_p) {
+}
+
+bool ExternalFileCache::IsEnabled() const {
+	return enable;
 }
 
 void ExternalFileCache::SetEnabled(bool enable_p) {
@@ -128,6 +154,10 @@ ExternalFileCache &ExternalFileCache::Get(ClientContext &context) {
 	return context.db->GetExternalFileCache();
 }
 
+BufferManager &ExternalFileCache::GetBufferManager() const {
+	return buffer_manager;
+}
+
 ExternalFileCache::CachedFile &ExternalFileCache::GetOrCreateCachedFile(const string &path) {
 	lock_guard<mutex> guard(lock);
 	auto &entry = cached_files[path];
@@ -135,28 +165,6 @@ ExternalFileCache::CachedFile &ExternalFileCache::GetOrCreateCachedFile(const st
 		entry = make_uniq<CachedFile>(path);
 	}
 	return *entry;
-}
-
-bool ExternalFileCache::FileIsValid(CachedFile &cached_file, const unique_ptr<StorageLockKey> &guard, bool validate,
-                                    const string &current_version_tag, time_t current_last_modified,
-                                    int64_t access_time) {
-	if (!validate) {
-		return true; // Assume valid
-	}
-	if (!current_version_tag.empty()) {
-		return cached_file.VersionTag(guard) == current_version_tag; // Validity checked by version tag (httpfs)
-	}
-	if (cached_file.LastModified(guard) != current_last_modified) {
-		return false; // The file has certainly been modified
-	}
-	// The last modified time matches. However, we cannot blindly trust this,
-	// because some file systems use a low resolution clock to set the last modified time.
-	// So, we will require that the last modified time is more than 2 seconds ago.
-	static constexpr int64_t LAST_MODIFIED_THRESHOLD = 2;
-	if (access_time < current_last_modified) {
-		return false; // Last modified in the future?
-	}
-	return access_time - current_last_modified > LAST_MODIFIED_THRESHOLD;
 }
 
 } // namespace duckdb
