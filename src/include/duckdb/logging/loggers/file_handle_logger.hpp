@@ -35,8 +35,8 @@ namespace duckdb {
 // Macros for logging to file handles
 #define DUCKDB_LOG_FILE_HANDLE_READ(HANDLE, BYTES, POS)  DUCKDB_LOG_FILE_HANDLE_BYTES(HANDLE, "READ", BYTES, POS);
 #define DUCKDB_LOG_FILE_HANDLE_WRITE(HANDLE, BYTES, POS) DUCKDB_LOG_FILE_HANDLE_BYTES(HANDLE, "WRITE", BYTES, POS);
-#define DUCKDB_LOG_FILE_HANDLE_OPEN(HANDLE)       DUCKDB_LOG_FILE_HANDLE(HANDLE, "OPEN");
-#define DUCKDB_LOG_FILE_HANDLE_CLOSE(HANDLE)      DUCKDB_LOG_FILE_HANDLE(HANDLE, "CLOSE");
+#define DUCKDB_LOG_FILE_HANDLE_OPEN(HANDLE)              DUCKDB_LOG_FILE_HANDLE(HANDLE, "OPEN");
+#define DUCKDB_LOG_FILE_HANDLE_CLOSE(HANDLE)             DUCKDB_LOG_FILE_HANDLE(HANDLE, "CLOSE");
 
 class FileHandleLogger {
 public:
@@ -46,7 +46,7 @@ public:
 	static constexpr LogLevel LOG_LEVEL = LogLevel::LOG_TRACE;
 
 	//! This copies the logger pointer if necessary. Note that we only copy
-	static shared_ptr<Logger> CopyLoggerPtr(FileOpener &opener) {
+	DUCKDB_API static shared_ptr<Logger> CopyLoggerPtr(FileOpener &opener) {
 		auto context = opener.TryGetClientContext();
 		if (context && Logger::Get(*context).ShouldLog(LOG_TYPE, LOG_LEVEL)) {
 			return context->logger;

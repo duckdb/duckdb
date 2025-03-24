@@ -492,7 +492,7 @@ void LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, i
 		nr_bytes -= bytes_read;
 		location += UnsafeNumericCast<idx_t>(bytes_read);
 	}
-	DUCKDB_LOG_FILE_HANDLE_READ(handle, bytes_to_read, location-UnsafeNumericCast<idx_t>(bytes_to_read));
+	DUCKDB_LOG_FILE_HANDLE_READ(handle, bytes_to_read, location - UnsafeNumericCast<idx_t>(bytes_to_read));
 }
 
 int64_t LocalFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
@@ -516,8 +516,8 @@ void LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, 
 	auto current_location = location;
 
 	while (bytes_to_write > 0) {
-		int64_t bytes_written =
-		    pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(bytes_to_write), UnsafeNumericCast<off_t>(current_location));
+		int64_t bytes_written = pwrite(fd, write_buffer, UnsafeNumericCast<size_t>(bytes_to_write),
+		                               UnsafeNumericCast<off_t>(current_location));
 		if (bytes_written < 0) {
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
 			                  strerror(errno));
@@ -540,7 +540,8 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 
 	auto bytes_to_write = nr_bytes;
 	while (bytes_to_write > 0) {
-		auto bytes_to_write_this_call = MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(bytes_to_write));
+		auto bytes_to_write_this_call =
+		    MinValue<idx_t>(idx_t(NumericLimits<int32_t>::Maximum()), idx_t(bytes_to_write));
 		int64_t current_bytes_written = write(fd, buffer, bytes_to_write_this_call);
 		if (current_bytes_written <= 0) {
 			throw IOException("Could not write file \"%s\": %s", {{"errno", std::to_string(errno)}}, handle.path,
@@ -933,7 +934,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 		SetFilePointer(*handle, file_size);
 	}
 	if (opener) {
-		handle->logger = FileHandleLogger::TryCreateFileHandleLogger(*opener);
+		handle->logger = FileHandleLogger::CopyLoggerPtr(*opener);
 	}
 	return std::move(handle);
 }

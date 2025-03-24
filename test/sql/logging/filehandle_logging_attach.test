@@ -3,6 +3,8 @@
 
 require parquet
 
+require noforcestorage
+
 statement ok
 set enable_logging=true;
 
