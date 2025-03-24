@@ -197,9 +197,10 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 	}
 	// not a CTE
 	// extract a table or view from the catalog
+	EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, ref.table_name, error_context);
 	BindSchemaOrCatalog(ref.catalog_name, ref.schema_name);
-	auto table_or_view = entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name,
-	                                              ref.table_name, OnEntryNotFound::RETURN_NULL, error_context);
+	auto table_or_view =
+	    entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup, OnEntryNotFound::RETURN_NULL);
 	// we still didn't find the table
 	if (GetBindingMode() == BindingMode::EXTRACT_NAMES) {
 		if (!table_or_view || table_or_view->type == CatalogType::TABLE_ENTRY) {
@@ -245,8 +246,8 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 		}
 
 		// could not find an alternative: bind again to get the error
-		(void)entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, ref.catalog_name, ref.schema_name, ref.table_name,
-		                               OnEntryNotFound::THROW_EXCEPTION, error_context);
+		(void)entry_retriever.GetEntry(ref.catalog_name, ref.schema_name, table_lookup,
+		                               OnEntryNotFound::THROW_EXCEPTION);
 		throw InternalException("Catalog::GetEntry should have thrown an exception above");
 	}
 
