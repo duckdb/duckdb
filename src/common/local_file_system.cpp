@@ -1037,7 +1037,7 @@ int64_t LocalFileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_byte
 	auto &pos = handle.Cast<WindowsFileHandle>().position;
 	auto bytes_written = FSWrite(handle, hFile, buffer, nr_bytes, pos);
 	pos += bytes_written;
-	DUCKDB_LOG_FILE_HANDLE_WRITE(handle, bytes_written);
+	DUCKDB_LOG_FILE_HANDLE_WRITE(handle, bytes_written, pos-bytes_written);
 	return bytes_written;
 }
 
