@@ -5,6 +5,10 @@
 statement ok
 PRAGMA enable_verification
 
+query I
+select columns from sniff_csv('data/csv/test_commit_rollback.csv',  normalize_names = true)
+----
+[{'name': _commit, 'type': BIGINT}, {'name': _rollback, 'type': BIGINT}, {'name': _abort, 'type': BIGINT}]
 
 # CSV file with uppercase header
 statement ok

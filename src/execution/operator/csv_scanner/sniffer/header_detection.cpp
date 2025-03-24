@@ -45,6 +45,22 @@ static string TrimWhitespace(const string &col_name) {
 	return col_name.substr(begin, end - begin);
 }
 
+bool NormalizeThis(const KeywordCategory category, const string &col_name) {
+	if (category == KeywordCategory::KEYWORD_TYPE_FUNC || category == KeywordCategory::KEYWORD_RESERVED) {
+		// If the keyword is a type_func of a reserved word, we must normalize.
+		return true;
+	}
+	if (category == KeywordCategory::KEYWORD_UNRESERVED) {
+		const vector<string> normalize_values {"commit", "rollback", "abort"};
+		for (const auto &value : normalize_values) {
+			if (col_name == value) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
 static string NormalizeColumnName(const string &col_name) {
 	// normalize UTF8 characters to NFKD
 	auto nfkd = utf8proc_NFKD(reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str()),
@@ -89,8 +105,8 @@ static string NormalizeColumnName(const string &col_name) {
 
 	// prepend _ if name starts with a digit or is a reserved keyword
 	auto keyword = KeywordHelper::KeywordCategoryType(col_name_cleaned);
-	if (keyword == KeywordCategory::KEYWORD_TYPE_FUNC || keyword == KeywordCategory::KEYWORD_RESERVED ||
-	    (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
+
+	if (NormalizeThis(keyword, col_name_cleaned) || (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
 		col_name_cleaned = "_" + col_name_cleaned;
 	}
 	return col_name_cleaned;
