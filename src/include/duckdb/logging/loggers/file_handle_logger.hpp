@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include "duckdb/common/file_opener.hpp"
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/logging/logger.hpp"
