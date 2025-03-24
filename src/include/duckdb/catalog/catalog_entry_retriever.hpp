@@ -59,6 +59,9 @@ public:
 	void SetCallback(catalog_entry_callback_t callback);
 	catalog_entry_callback_t GetCallback();
 
+	optional_ptr<BoundAtClause> GetAtClause() const;
+	void SetAtClause(optional_ptr<BoundAtClause> at_clause);
+
 private:
 	optional_ptr<CatalogEntry> ReturnAndCallback(optional_ptr<CatalogEntry> result);
 
@@ -67,6 +70,7 @@ private:
 	catalog_entry_callback_t callback = nullptr;
 	ClientContext &context;
 	shared_ptr<CatalogSearchPath> search_path;
+	optional_ptr<BoundAtClause> at_clause;
 };
 
 } // namespace duckdb
