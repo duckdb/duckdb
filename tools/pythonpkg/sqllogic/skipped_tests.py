@@ -1,8 +1,8 @@
 SKIPPED_TESTS = set(
     [
-        'test/sql/copy/return_stats_truncate.test', # <-- <REGEX> handling was changed
-        'test/sql/copy/return_stats.test', # <-- <REGEX> handling was changed
-        'test/sql/copy/parquet/writer/skip_empty_write.test', # <-- <REGEX> handling was changed
+        'test/sql/copy/return_stats_truncate.test',  # <-- <REGEX> handling was changed
+        'test/sql/copy/return_stats.test',  # <-- <REGEX> handling was changed
+        'test/sql/copy/parquet/writer/skip_empty_write.test',  # <-- <REGEX> handling was changed
         'test/sql/types/map/map_empty.test',
         'test/extension/wrong_function_type.test',  # <-- JSON is always loaded
         'test/sql/insert/test_insert_invalid.test',  # <-- doesn't parse properly
