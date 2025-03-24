@@ -18,7 +18,8 @@ add_library_unity(
   strip_accents.cpp
   string_split.cpp
   suffix.cpp
-  contains.cpp)
+  contains.cpp
+  sem_map.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_func_string_main>
     PARENT_SCOPE)

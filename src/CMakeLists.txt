@@ -37,6 +37,10 @@ if(MSVC)
   set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} bcrypt)
 endif()
 
+# Add curl library
+find_package(CURL REQUIRED)
+set(DUCKDB_SYSTEM_LIBS ${DUCKDB_SYSTEM_LIBS} ${CURL_LIBRARIES})
+
 if(MSVC)
   add_compile_options("/bigobj")
 endif()

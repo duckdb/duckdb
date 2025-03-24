@@ -465,4 +465,13 @@ struct SHA256Fun {
 	static ScalarFunctionSet GetFunctions();
 };
 
+struct SemMapFun {
+	static constexpr const char *Name = "sem_map";
+	static constexpr const char *Parameters = "string";
+	static constexpr const char *Description = "Map the input string to another string using LLM";
+	static constexpr const char *Example = "sem_map('hello')";
+
+	static ScalarFunction GetFunction();
+};
+
 } // namespace duckdb
