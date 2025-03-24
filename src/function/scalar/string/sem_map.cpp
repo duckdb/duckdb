@@ -43,11 +43,24 @@ std::string ask_LLM(const std::string& prompt) {
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
         
-        // 发送请求
-        CURLcode res = curl_easy_perform(curl);
+        // 发送请求 - 最多尝试3次
+        CURLcode res = CURLE_OK;
+        int max_attempts = 3;
+        int attempt = 0;
         
-        if(res != CURLE_OK) {
-            response = "Error: " + std::string(curl_easy_strerror(res));
+        while (attempt < max_attempts) {
+            res = curl_easy_perform(curl);
+            
+            if (res == CURLE_OK) {
+                // 请求成功，跳出循环
+                break;
+            } else {
+                // 请求失败，尝试下一次
+                attempt++;
+                if (attempt >= max_attempts) {
+                    response = "Error: " + std::string(curl_easy_strerror(res));
+                }
+            }
         }
         
         // 清理
@@ -58,7 +71,18 @@ std::string ask_LLM(const std::string& prompt) {
     // 解析响应JSON并提取回复内容
     try {
         auto json_response = nlohmann::json::parse(response);
-        return json_response["choices"][0]["message"]["content"];
+        std::string content = json_response["choices"][0]["message"]["content"];
+        
+        // 去除字符串两端的空白字符（类似Python的strip函数）
+        auto start = content.find_first_not_of(" \t\n\r\f\v");
+        if (start == std::string::npos) {
+            content = ""; // 字符串只包含空白字符
+        } else {
+            auto end = content.find_last_not_of(" \t\n\r\f\v");
+            content = content.substr(start, end - start + 1);
+        }
+        
+        return content;
     } catch(const std::exception& e) {
         return "Error parsing response: " + std::string(e.what());
     }
