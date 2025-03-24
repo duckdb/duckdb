@@ -45,9 +45,9 @@
 
 namespace duckdb {
 
-void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog_name, string &schema) {
-	CatalogEntryRetriever retriever(context);
-	if (catalog_name.empty() && !schema.empty()) {
+void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
+	auto &context = retriever.GetContext();
+	if (catalog.empty() && !schema.empty()) {
 		// schema is specified - but catalog is not
 		// try searching for the catalog instead
 		auto &db_manager = DatabaseManager::Get(context);
@@ -55,26 +55,31 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog_name, s
 		if (database) {
 			// we have a database with this name
 			// check if there is a schema
-			auto &search_path = *context.client_data->catalog_search_path;
+			auto &search_path = retriever.GetSearchPath();
 			auto catalog_names = search_path.GetCatalogsForSchema(schema);
 			if (catalog_names.empty()) {
 				catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
 			}
 			for (auto &catalog_name : catalog_names) {
-				auto catalog = Catalog::GetCatalogEntry(retriever, catalog_name);
-				if (!catalog) {
+				auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
+				if (!catalog_ptr) {
 					continue;
 				}
-				if (catalog->CheckAmbiguousCatalogOrSchema(context, schema)) {
+				if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
 					throw BinderException(
 					    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
 					    schema, catalog_name, schema);
 				}
 			}
-			catalog_name = schema;
+			catalog = schema;
 			schema = string();
 		}
 	}
+}
+
+void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
+	CatalogEntryRetriever retriever(context);
+	BindSchemaOrCatalog(retriever, catalog, schema);
 }
 
 void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {

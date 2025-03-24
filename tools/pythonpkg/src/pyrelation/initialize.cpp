@@ -264,7 +264,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 
 	    .def("join", &DuckDBPyRelation::Join,
 	         "Join the relation object with another relation object in other_rel using the join condition expression "
-	         "in join_condition. Types supported are 'inner' and 'left'",
+	         "in join_condition. Types supported are 'inner', 'left', 'right', 'outer', 'semi' and 'anti'",
 	         py::arg("other_rel"), py::arg("condition"), py::arg("how") = "inner")
 	    .def("cross", &DuckDBPyRelation::Cross, "Create cross/cartesian product of two relational objects",
 	         py::arg("other_rel"))
