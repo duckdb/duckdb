@@ -46,19 +46,8 @@ static string TrimWhitespace(const string &col_name) {
 }
 
 bool NormalizeThis(const KeywordCategory category, const string &col_name) {
-	if (category == KeywordCategory::KEYWORD_TYPE_FUNC || category == KeywordCategory::KEYWORD_RESERVED) {
-		// If the keyword is a type_func of a reserved word, we must normalize.
-		return true;
-	}
-	if (category == KeywordCategory::KEYWORD_UNRESERVED) {
-		const vector<string> normalize_values {"commit", "rollback", "abort"};
-		for (const auto &value : normalize_values) {
-			if (col_name == value) {
-				return true;
-			}
-		}
-	}
-	return false;
+	return category == KeywordCategory::KEYWORD_UNRESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC ||
+	       category == KeywordCategory::KEYWORD_RESERVED;
 }
 
 static string NormalizeColumnName(const string &col_name) {
