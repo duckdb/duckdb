@@ -1,13 +1,8 @@
 import duckdb
-import os
 import pytest
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip("pyarrow")
-from typing import Union
-import pyarrow.compute as pc
-import uuid
-import datetime
 
 from duckdb.typing import *
 
@@ -125,7 +120,6 @@ class TestPyArrowUDF(object):
             res = con.sql("""select too_many_tuples(5)""").fetchall()
 
     def test_arrow_side_effects(self, duckdb_cursor):
-        import random as r
 
         def random_arrow(x):
             if not hasattr(random_arrow, 'data'):

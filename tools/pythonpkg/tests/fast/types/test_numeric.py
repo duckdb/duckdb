@@ -1,7 +1,3 @@
-import duckdb
-import numpy
-
-
 def check_result(duckdb_cursor, value, type):
     duckdb_cursor.execute("SELECT " + str(value) + "::" + type)
     results = duckdb_cursor.fetchall()

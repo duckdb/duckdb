@@ -1,12 +1,6 @@
 # fmt: off
 
-import pytest
-import subprocess
-import sys
-from typing import List
 from conftest import ShellTest
-import os
-from pathlib import Path
 
 
 def test_left_align(shell):

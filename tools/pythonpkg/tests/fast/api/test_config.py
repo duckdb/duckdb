@@ -1,7 +1,6 @@
 # simple DB API testcase
 
 import duckdb
-import numpy
 import pytest
 import re
 import os

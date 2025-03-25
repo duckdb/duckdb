@@ -1,6 +1,4 @@
 import duckdb
-import os
-import pandas as pd
 import pytest
 
 from duckdb.typing import *

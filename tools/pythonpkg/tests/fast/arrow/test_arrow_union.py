@@ -2,8 +2,7 @@ from pytest import importorskip
 
 importorskip('pyarrow')
 
-import duckdb
-from pyarrow import scalar, string, large_string, list_, int32, types
+from pyarrow import scalar, string, list_, int32, types
 
 
 def test_nested(duckdb_cursor):

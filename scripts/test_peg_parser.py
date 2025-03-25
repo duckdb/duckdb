@@ -2,7 +2,6 @@ import argparse
 import os
 import sqllogictest
 from sqllogictest import SQLParserException, SQLLogicParser, SQLLogicTest
-import duckdb
 import subprocess
 
 parser = argparse.ArgumentParser(description="Test serialization")

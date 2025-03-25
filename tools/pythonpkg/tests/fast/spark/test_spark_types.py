@@ -9,7 +9,6 @@ if USE_ACTUAL_SPARK:
         "Skipping these tests as they use test_all_types() which is specific to DuckDB", allow_module_level=True
     )
 
-from spark_namespace.sql.types import Row
 from spark_namespace.sql.types import (
     StringType,
     BinaryType,

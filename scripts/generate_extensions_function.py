@@ -1,10 +1,7 @@
 import os
-import csv
-import re
 import argparse
 import glob
-from typing import Set, Tuple, cast
-import pathlib
+from typing import Set, Tuple
 from typing import NamedTuple
 from typing import List, Dict
 import json

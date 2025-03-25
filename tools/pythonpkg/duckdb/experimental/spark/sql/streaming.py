@@ -29,7 +29,6 @@ class DataStreamReader:
         schema: Union[StructType, str, None] = None,
         **options: OptionalPrimitiveType
     ) -> "DataFrame":
-        from duckdb.experimental.spark.sql.dataframe import DataFrame
 
         raise NotImplementedError
 

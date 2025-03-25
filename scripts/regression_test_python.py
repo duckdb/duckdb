@@ -1,12 +1,9 @@
-import os
-import sys
 import duckdb
 import pandas as pd
 import pyarrow as pa
 import time
 import argparse
 from typing import Dict, List, Any
-import numpy as np
 
 TPCH_QUERIES = []
 res = duckdb.execute(

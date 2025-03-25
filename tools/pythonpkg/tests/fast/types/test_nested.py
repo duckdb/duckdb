@@ -1,6 +1,3 @@
-import duckdb
-
-
 class TestNested(object):
     def test_lists(self, duckdb_cursor):
         result = duckdb_cursor.execute("SELECT LIST_VALUE(1, 2, 3, 4) ").fetchall()

@@ -1,7 +1,5 @@
 import argparse
-import sys
 import subprocess
-import re
 import os
 
 DEFAULT_UNITTEST_PATH = 'build/release/test/unittest'

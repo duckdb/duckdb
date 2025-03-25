@@ -1,9 +1,6 @@
 import psycopg2
 import argparse
 import os
-import platform
-import shutil
-import sys
 import subprocess
 import multiprocessing.pool
 

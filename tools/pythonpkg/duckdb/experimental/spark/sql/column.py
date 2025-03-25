@@ -4,7 +4,7 @@ from ..exception import ContributionsAcceptedError
 from .types import DataType
 
 if TYPE_CHECKING:
-    from ._typing import ColumnOrName, LiteralType, DecimalLiteral, DateTimeLiteral
+    from ._typing import LiteralType, DecimalLiteral, DateTimeLiteral
 
 from duckdb import ConstantExpression, ColumnExpression, FunctionExpression, Expression
 

@@ -1,8 +1,5 @@
 import os
-import csv
 import re
-import argparse
-import glob
 
 os.chdir(os.path.dirname(__file__))
 

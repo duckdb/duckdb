@@ -1,4 +1,3 @@
-import duckdb
 import pytest
 from pytest import mark
 import datetime

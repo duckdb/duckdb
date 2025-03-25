@@ -2,7 +2,7 @@ import duckdb
 import numpy as np
 import pytest
 from conftest import NumpyPandas, ArrowPandas
-from datetime import datetime, timezone, time, timedelta
+from datetime import datetime, timezone, time
 
 _ = pytest.importorskip("pandas", minversion="2.0.0")
 

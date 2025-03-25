@@ -1,11 +1,5 @@
-import os
 import sys
 import duckdb
-import numpy
-import subprocess
-from io import StringIO
-import csv
-import statistics
 
 old_file = None
 new_file = None

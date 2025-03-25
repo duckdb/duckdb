@@ -1,5 +1,4 @@
 import numpy as np
-import datetime
 import duckdb
 import pytest
 import warnings

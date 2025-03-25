@@ -1,6 +1,5 @@
 import os
 import json
-import re
 
 targets = [{'source': 'extension/json/include/', 'target': 'extension/json'}]
 

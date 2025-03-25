@@ -3,9 +3,7 @@
 # this script is used to format the source directory
 
 import os
-import time
 import sys
-import inspect
 import subprocess
 import difflib
 import re

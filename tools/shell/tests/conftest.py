@@ -1,8 +1,7 @@
 import pytest
 import os
 import subprocess
-import sys
-from typing import List, NamedTuple, Union
+from typing import List, Union
 
 
 def pytest_addoption(parser):

@@ -1,4 +1,3 @@
-import duckdb
 import numpy
 
 

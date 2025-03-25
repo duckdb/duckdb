@@ -1,5 +1,3 @@
-import pytest
-import duckdb
 import pandas as pd
 
 

@@ -1,5 +1,4 @@
 import duckdb
-import numpy
 import pytest
 from datetime import date, timedelta
 import re

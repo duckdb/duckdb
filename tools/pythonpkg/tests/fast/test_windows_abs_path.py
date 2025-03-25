@@ -1,5 +1,4 @@
 import duckdb
-import pytest
 import os
 import shutil
 

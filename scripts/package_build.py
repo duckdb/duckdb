@@ -1,6 +1,5 @@
 import os
 import sys
-import shutil
 import subprocess
 from python_helpers import open_utf8
 import re

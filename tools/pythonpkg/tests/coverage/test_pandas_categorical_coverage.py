@@ -1,7 +1,6 @@
 import duckdb
-import numpy
 import pytest
-from conftest import NumpyPandas, ArrowPandas
+from conftest import NumpyPandas
 
 
 def check_result_list(res):

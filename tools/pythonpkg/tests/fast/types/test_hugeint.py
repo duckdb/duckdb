@@ -1,5 +1,4 @@
 import numpy
-import pandas
 
 
 class TestHugeint(object):
