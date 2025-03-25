@@ -107,7 +107,7 @@ int main(int argc, char *argv[]) {
 		bool has_failures = false;
 		while (std::getline(file, line)) {
 			has_failures = true;
-			std::cout << i << ". " << line << std::endl;
+			std::cout << i << ": " << line << std::endl;
 			i++;
 		}
 		if (!has_failures) {
