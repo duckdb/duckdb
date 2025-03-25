@@ -1,4 +1,4 @@
-from fsspec import AbstractFileSystem
+from fsspec import filesystem, AbstractFileSystem
 from fsspec.implementations.memory import MemoryFileSystem, MemoryFile
 from .bytes_io_wrapper import BytesIOWrapper
 from io import TextIOBase

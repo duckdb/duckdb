@@ -26,7 +26,7 @@ from ._typing import ColumnOrName
 from .types import NumericType
 
 if TYPE_CHECKING:
-    pass
+    from ._typing import LiteralType
 
 __all__ = ["GroupedData", "Grouping"]
 

@@ -3,6 +3,7 @@ import os
 import re
 import sys
 import shutil
+import subprocess
 from python_helpers import open_utf8, normalize_path
 
 amal_dir = os.path.join('src', 'amalgamation')

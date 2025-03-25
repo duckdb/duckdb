@@ -1,4 +1,6 @@
 import duckdb
+import tempfile
+import os
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 

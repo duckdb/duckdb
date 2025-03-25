@@ -3,6 +3,7 @@ import duckdb
 try:
     import pyarrow
     import pyarrow.parquet
+    import numpy as np
 
     can_run = True
 except:

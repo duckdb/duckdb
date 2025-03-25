@@ -1,5 +1,8 @@
 import duckdb
+import datetime
+import numpy as np
 import pytest
+import copy
 from conftest import NumpyPandas, ArrowPandas
 from duckdb import Value
 

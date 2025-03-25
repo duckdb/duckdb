@@ -1,4 +1,5 @@
 import pytest
+import tempfile
 
 import os
 
@@ -14,9 +15,10 @@ if USE_ACTUAL_SPARK:
         allow_module_level=True,
     )
 
-from duckdb import InvalidInputException, read_csv
+from duckdb import connect, InvalidInputException, read_csv
 from conftest import NumpyPandas, ArrowPandas, getTimeSeriesData
 from spark_namespace import USE_ACTUAL_SPARK
+import pandas._testing as tm
 import datetime
 import csv
 

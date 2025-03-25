@@ -1,6 +1,11 @@
 # fmt: off
 
+import pytest
+import subprocess
+import sys
+from typing import List
 from conftest import ShellTest
+import os
 
 def test_version_dev(shell):
     test = (

@@ -1,5 +1,7 @@
+import duckdb
 import pytest
-from typing import Union  # This is needed for the test to work since signature is used in the test
+import sys
+from typing import Union
 
 
 def make_annotated_function(type: str):

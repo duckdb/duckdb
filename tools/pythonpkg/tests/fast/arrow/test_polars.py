@@ -1,5 +1,6 @@
 import duckdb
 import pytest
+import sys
 
 pl = pytest.importorskip("polars")
 arrow = pytest.importorskip("pyarrow")

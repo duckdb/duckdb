@@ -4,12 +4,20 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 pd = pytest.importorskip("pandas")
 
 from spark_namespace.sql.types import (
+    LongType,
     StructType,
+    BooleanType,
     StructField,
     StringType,
     IntegerType,
+    LongType,
     Row,
+    ArrayType,
+    MapType,
 )
+from spark_namespace.sql.functions import col, struct, when
+import duckdb
+import re
 from pandas.testing import assert_frame_equal
 
 

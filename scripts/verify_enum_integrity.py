@@ -1,4 +1,5 @@
 from cxxheaderparser.parser import CxxParser, ParserOptions
+from cxxheaderparser.visitor import CxxVisitor
 from cxxheaderparser.preprocessor import make_pcpp_preprocessor
 from cxxheaderparser.parserstate import NamespaceBlockState
 from cxxheaderparser.types import EnumDecl

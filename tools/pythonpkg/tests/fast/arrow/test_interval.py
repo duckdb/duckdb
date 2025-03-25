@@ -1,8 +1,11 @@
 import duckdb
+import os
+import datetime
 import pytest
 
 try:
     import pyarrow as pa
+    import pandas as pd
 
     can_run = True
 except:

@@ -7,6 +7,7 @@ try:
     import pyarrow.dataset
     from pyarrow.dataset import Scanner
     import pyarrow.compute as pc
+    import numpy as np
 
     can_run = True
 except:

@@ -1,5 +1,6 @@
 import duckdb
 import pytest
+import pandas as pd
 import duckdb
 
 pa = pytest.importorskip("pyarrow")

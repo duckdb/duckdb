@@ -1,11 +1,15 @@
 import duckdb
+import os
 import pytest
 
 pd = pytest.importorskip("pandas")
 pa = pytest.importorskip('pyarrow', '18.0.0')
+from typing import Union
+import pyarrow.compute as pc
 import uuid
 import datetime
 import numpy as np
+import cmath
 
 from duckdb.typing import *
 

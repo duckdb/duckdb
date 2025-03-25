@@ -2,6 +2,7 @@ import duckdb
 import pandas as pd
 import numpy as np
 import datetime
+import math
 from decimal import Decimal
 from uuid import UUID
 import pytz

@@ -1,4 +1,6 @@
 import duckdb
+import pandas as pd
+import pytest
 
 
 class TestAmbiguousPrepare(object):

@@ -3,6 +3,7 @@ import os
 import pytest
 
 pyarrow_parquet = pytest.importorskip("pyarrow.parquet")
+import sys
 
 
 class TestProgressBarArrow(object):

@@ -1,4 +1,5 @@
 import duckdb
+from decimal import Decimal
 import pytest
 
 

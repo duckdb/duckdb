@@ -3,6 +3,7 @@ import pandas
 import pytest
 
 from datetime import datetime
+from pytz import timezone
 from conftest import pandas_2_or_higher
 
 
