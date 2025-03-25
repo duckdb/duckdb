@@ -206,12 +206,7 @@ STDERR
         )
         print(stderr)
 
-        new_data = {
-            "test": test,
-            "return_code": res.returncode,
-            "stdout": stdout,
-            "stderr":stderr
-        }
+        new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": stderr}
         error_container.append(new_data)
 
     # if a test closes unexpectedly (e.g., SEGV), test cleanup doesn't happen,
@@ -269,5 +264,5 @@ if args.summarize_failures:
 '''
     )
     for i, error in enumerate(error_container, start=1):
-        print(f"TEST {i}:",  error["stderr"])
+        print(f"TEST {i}:", error["stderr"])
 exit(1)
