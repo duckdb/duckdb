@@ -89,27 +89,23 @@ hash_t HashBytes(const_data_ptr_t ptr, const idx_t len) noexcept {
 		h *= 0xd6e8feb86659fd93U;
 	}
 
-	if (AT_LEAST_8_BYTES) {
-		D_ASSERT(len >= 8);
-		// Load remaining (<8) bytes (with a Load instead of a memcpy)
-		const auto inv_rem = 8U - remainder;
-		const auto hr = Load<hash_t>(ptr - inv_rem) >> (inv_rem * 8U);
+	if (remainder != 0) {
+		if (AT_LEAST_8_BYTES) {
+			D_ASSERT(len >= 8);
+			// Load remaining (<8) bytes (with a Load instead of a memcpy)
+			const auto inv_rem = 8U - remainder;
+			const auto hr = Load<hash_t>(ptr - inv_rem) >> (inv_rem * 8U);
 
-		// Process the remainder same as an 8-byte block
-		// This operation is a NOP if the number of remaining bytes is 0
-		const bool not_a_nop = len & 7U;
-		h ^= hr;
-		h *= 0xd6e8feb86659fd93U * not_a_nop + (1 - not_a_nop);
-	} else {
-		// Load remaining (<8) bytes (with a memcpy)
-		hash_t hr = 0;
-		memcpy(&hr, ptr, len & 7U);
+			h ^= hr;
+			h *= 0xd6e8feb86659fd93U;
+		} else {
+			// Load remaining (<8) bytes (with a memcpy)
+			hash_t hr = 0;
+			memcpy(&hr, ptr, remainder);
 
-		// Process the remainder same as an 8-byte block
-		// This operation is a NOP if the number of remaining bytes is 0
-		const bool not_a_nop = len & 7U;
-		h ^= hr;
-		h *= 0xd6e8feb86659fd93U * not_a_nop + (1 - not_a_nop);
+			h ^= hr;
+			h *= 0xd6e8feb86659fd93U;
+		}
 	}
 
 	// Finalize
