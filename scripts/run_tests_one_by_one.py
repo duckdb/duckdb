@@ -264,5 +264,5 @@ if args.summarize_failures:
 '''
     )
     for i, error in enumerate(error_container, start=1):
-        print(f"TEST {i}:", error["stderr"])
+        print(f"{i}:", error["stderr"])
 exit(1)
