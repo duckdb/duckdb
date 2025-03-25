@@ -1,5 +1,6 @@
 import duckdb
 import pytest
+from packaging import version
 
 pa = pytest.importorskip('pyarrow')
 

@@ -5,6 +5,7 @@
 
 import os
 import subprocess
+from python_helpers import open_utf8
 
 shell_proc = os.path.join('build', 'debug', 'test', 'unittest')
 gen_binary_file = os.path.join('test', 'api', 'serialized_plans', 'serialized_plans.binary')

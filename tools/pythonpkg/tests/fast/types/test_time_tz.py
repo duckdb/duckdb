@@ -1,4 +1,6 @@
+import numpy as np
 from datetime import time, timezone
+import duckdb
 import pytest
 import datetime
 

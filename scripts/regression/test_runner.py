@@ -4,7 +4,7 @@ import functools
 import shutil
 from benchmark import BenchmarkRunner, BenchmarkRunnerConfig
 from dataclasses import dataclass
-from typing import List, Union
+from typing import Optional, List, Union
 
 print = functools.partial(print, flush=True)
 

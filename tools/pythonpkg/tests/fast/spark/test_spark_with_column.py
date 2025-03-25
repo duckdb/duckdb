@@ -2,8 +2,22 @@ import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
 
-from spark_namespace.sql.functions import col, lit
+from spark_namespace.sql.types import (
+    LongType,
+    StructType,
+    BooleanType,
+    StructField,
+    StringType,
+    IntegerType,
+    LongType,
+    Row,
+    ArrayType,
+    MapType,
+)
+from spark_namespace.sql.functions import col, struct, when, lit
 from spark_namespace import USE_ACTUAL_SPARK
+import duckdb
+import re
 
 
 class TestWithColumn(object):

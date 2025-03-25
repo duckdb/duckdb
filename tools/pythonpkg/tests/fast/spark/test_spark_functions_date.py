@@ -2,7 +2,7 @@ import warnings
 import pytest
 
 _ = pytest.importorskip("duckdb.experimental.spark")
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql import functions as F

@@ -1,3 +1,4 @@
+import duckdb
 import pytest
 
 pq = pytest.importorskip("pyarrow.parquet")

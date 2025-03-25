@@ -1,7 +1,11 @@
 # fmt: off
 
 import pytest
+import subprocess
+import sys
+from typing import List
 from conftest import ShellTest
+from conftest import json_extension
 import os
 
 @pytest.mark.skipif(os.name == 'nt', reason="Skipped on windows")

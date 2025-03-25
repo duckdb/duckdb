@@ -1,6 +1,8 @@
 import duckdb
 import pytest
 import os
+import tempfile
+import pandas as pd
 
 VARCHAR = duckdb.typing.VARCHAR
 BIGINT = duckdb.typing.BIGINT

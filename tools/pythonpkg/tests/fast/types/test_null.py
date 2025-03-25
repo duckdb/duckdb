@@ -1,3 +1,6 @@
+import traceback
+
+
 class TestNull(object):
     def test_fetchone_null(self, duckdb_cursor):
         duckdb_cursor.execute("CREATE TABLE atable (Value int)")

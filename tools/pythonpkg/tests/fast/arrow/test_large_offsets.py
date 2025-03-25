@@ -1,5 +1,9 @@
+from re import S
 import duckdb
+import os
 import pytest
+import tempfile
+from conftest import pandas_supports_arrow_backend
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")

@@ -4,7 +4,7 @@ from io import StringIO
 import csv
 from dataclasses import dataclass
 import argparse
-from typing import Optional, Union, List
+from typing import Optional, Union, Tuple, List
 import functools
 
 print = functools.partial(print, flush=True)

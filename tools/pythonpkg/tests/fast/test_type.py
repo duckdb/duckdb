@@ -1,6 +1,9 @@
 import duckdb
+import os
+import pandas as pd
 import pytest
 from typing import Union, Optional
+import sys
 
 from duckdb.typing import (
     SQLNULL,

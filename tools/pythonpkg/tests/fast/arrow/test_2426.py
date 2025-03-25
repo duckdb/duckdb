@@ -1,4 +1,5 @@
 import duckdb
+import os
 
 try:
     import pyarrow as pa

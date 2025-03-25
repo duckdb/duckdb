@@ -1,4 +1,5 @@
 import os
+import platform
 
 # list all include directories
 include_directories = [

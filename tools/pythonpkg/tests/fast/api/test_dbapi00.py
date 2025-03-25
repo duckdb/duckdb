@@ -2,6 +2,7 @@
 
 import numpy
 import pytest
+import duckdb
 from conftest import NumpyPandas, ArrowPandas
 
 

@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     import pyarrow as pa
     from pandas.core.frame import DataFrame as PandasDataFrame
 
-    from .group import GroupedData
+    from .group import GroupedData, Grouping
     from .session import SparkSession
 
 from ..errors import PySparkValueError

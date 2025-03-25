@@ -1,3 +1,4 @@
+import duckdb
 import os
 import pytest
 
