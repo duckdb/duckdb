@@ -34,7 +34,7 @@ bool SummarizeFailures() {
 int main(int argc, char *argv[]) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
-	const char* filename("failures_summary.txt");
+	const char *filename("failures_summary.txt");
 
 	int new_argc = 0;
 	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
 			SetSingleThreaded();
 		} else if (string(argv[i]) == "--summarize-failures") {
 			// cleanup before creating new failures summary file
-			if (std::FILE* file = std::fopen(filename, "r")) {
+			if (std::FILE *file = std::fopen(filename, "r")) {
 				std::fclose(file);
 				std::remove(filename);
 			}
@@ -89,17 +89,17 @@ int main(int argc, char *argv[]) {
 		fprintf(stderr, "Failed to create testing directory \"%s\": %s\n", dir.c_str(), ex.what());
 		return 1;
 	}
-	
+
 	RegisterSqllogictests();
-	
+
 	int result = Catch::Session().run(new_argc, new_argv.get());
-	
+
 	std::ifstream file(filename);
 	if (file && summarize_failures) {
 		std::cout << "\n====================================================" << std::endl;
- 		std::cout << "================  FAILURES SUMMARY  ================" << std::endl;
- 		std::cout << "====================================================\n" << std::endl;
-		
+		std::cout << "================  FAILURES SUMMARY  ================" << std::endl;
+		std::cout << "====================================================\n" << std::endl;
+
 		string line;
 		int i = 1;
 		bool has_failures = false;
