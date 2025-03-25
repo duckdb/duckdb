@@ -56,6 +56,7 @@ struct UUIDv4Fun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Returns a random UUIDv4 similar to this: eeccb8c5-9943-b2bb-bb5e-222f4e14b687";
 	static constexpr const char *Example = "uuidv4()";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -65,6 +66,7 @@ struct UUIDv7Fun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "Returns a random UUID v7 similar to this: 019482e4-1441-7aad-8127-eec99573b0a0";
 	static constexpr const char *Example = "uuidv7()";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -74,6 +76,7 @@ struct UUIDExtractVersionFun {
 	static constexpr const char *Parameters = "uuid";
 	static constexpr const char *Description = "Extract a version for the given UUID.";
 	static constexpr const char *Example = "uuid_extract_version('019482e4-1441-7aad-8127-eec99573b0a0')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -83,6 +86,7 @@ struct UUIDExtractTimestampFun {
 	static constexpr const char *Parameters = "uuid";
 	static constexpr const char *Description = "Extract the timestamp for the given UUID v7.";
 	static constexpr const char *Example = "uuid_extract_timestamp('019482e4-1441-7aad-8127-eec99573b0a0')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
