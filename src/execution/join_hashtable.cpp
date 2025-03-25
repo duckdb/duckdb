@@ -1120,12 +1120,9 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 		}
 	}
 	// now set the remaining entries to either true or false based on whether a match was found
-	if (found_match) {
-		for (idx_t i = 0; i < child.size(); i++) {
-			bool_result[i] = found_match[i];
-		}
-	} else {
-		memset(bool_result, 0, sizeof(bool) * child.size());
+	D_ASSERT(found_match);
+	for (idx_t i = 0; i < child.size(); i++) {
+		bool_result[i] = found_match[i];
 	}
 	// if the right side contains NULL values, the result of any FALSE becomes NULL
 	if (ht.has_null) {
