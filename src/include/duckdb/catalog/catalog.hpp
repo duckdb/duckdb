@@ -239,6 +239,9 @@ public:
 	//! Gets the "schema.name" entry of the specified type, if entry does not exist behavior depends on OnEntryNotFound
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, const string &schema,
 	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
+	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(ClientContext &context, CatalogType catalog_type,
+	                                               const string &schema, const string &name,
+	                                               OnEntryNotFound if_not_found);
 	DUCKDB_API optional_ptr<CatalogEntry> GetEntry(CatalogEntryRetriever &retriever, const string &schema,
 	                                               const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found);
 	DUCKDB_API CatalogEntry &GetEntry(ClientContext &context, const string &schema, const EntryLookupInfo &lookup_info);
@@ -308,6 +311,9 @@ public:
 
 	virtual bool InMemory() = 0;
 	virtual string GetDBPath() = 0;
+	virtual bool SupportsTimeTravel() const {
+		return false;
+	}
 
 	//! Whether or not this catalog should search a specific type with the standard priority
 	DUCKDB_API virtual CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const {
