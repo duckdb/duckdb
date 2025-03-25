@@ -56,6 +56,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	bool seen_overwrite_mode = false;
 	bool seen_filepattern = false;
 	bool write_partition_columns = false;
+	bool write_empty_file = true;
 	CopyFunctionReturnType return_type = CopyFunctionReturnType::CHANGED_ROWS;
 
 	CopyFunctionBindInput bind_input(*stmt.info);
@@ -127,6 +128,8 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			}
 		} else if (loption == "write_partition_columns") {
 			write_partition_columns = GetBooleanArg(context, option.second);
+		} else if (loption == "write_empty_file") {
+			write_empty_file = GetBooleanArg(context, option.second);
 		} else {
 			stmt.info->options[option.first] = option.second;
 		}
@@ -226,6 +229,18 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 			    "Can't combine file rotation (e.g., ROW_GROUPS_PER_FILE) and PARTITION_BY for COPY");
 		}
 	}
+	if (!write_empty_file) {
+		if (rotate) {
+			throw NotImplementedException(
+			    "Can't combine WRITE_EMPTY_FILE false with file rotation (e.g., ROW_GROUPS_PER_FILE)");
+		}
+		if (per_thread_output) {
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PER_THREAD_OUTPUT");
+		}
+		if (!partition_cols.empty()) {
+			throw NotImplementedException("Can't combine WRITE_EMPTY_FILE false with PARTITION_BY");
+		}
+	}
 	if (return_type == CopyFunctionReturnType::WRITTEN_FILE_STATISTICS &&
 	    !copy_function.function.copy_to_get_written_statistics) {
 		throw NotImplementedException("RETURN_STATS is not supported for the \"%s\" copy format", stmt.info->format);
@@ -246,6 +261,7 @@ BoundStatement Binder::BindCopyTo(CopyStatement &stmt, CopyToType copy_to_type) 
 	copy->partition_output = !partition_cols.empty();
 	copy->write_partition_columns = write_partition_columns;
 	copy->partition_columns = std::move(partition_cols);
+	copy->write_empty_file = write_empty_file;
 	copy->return_type = return_type;
 
 	copy->names = unique_column_names;

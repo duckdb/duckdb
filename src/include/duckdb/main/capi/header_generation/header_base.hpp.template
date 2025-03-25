@@ -239,6 +239,9 @@ typedef enum duckdb_cast_mode {
 //! DuckDB's index type.
 typedef uint64_t idx_t;
 
+//! Type used for the selection vector
+typedef uint32_t sel_t;
+
 //! The callback that will be called to destroy data, e.g.,
 //! bind data (if any), init data (if any), extra data for replacement scans (if any)
 typedef void (*duckdb_delete_callback_t)(void *data);
@@ -387,6 +390,12 @@ typedef struct {
 typedef struct _duckdb_vector {
 	void *internal_ptr;
 } * duckdb_vector;
+
+//! A selection vector is a possibly duplicative vector of indices, which refer to values in a vector.
+//! The resulting vector is make up of the values at each index in the selection vector.
+typedef struct _duckdb_selection_vector {
+	void *internal_ptr;
+} * duckdb_selection_vector;
 
 //===--------------------------------------------------------------------===//
 // Types (explicit freeing/destroying)

@@ -152,6 +152,11 @@ public:
 		return source_progress;
 	}
 
+	virtual InsertionOrderPreservingMap<string> ExtraSourceParams(GlobalSourceState &gstate,
+	                                                              LocalSourceState &lstate) const {
+		return InsertionOrderPreservingMap<string>();
+	}
+
 public:
 	// Sink interface
 

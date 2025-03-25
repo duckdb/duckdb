@@ -669,5 +669,17 @@
         "type": "vector<ParsedExpression*>"
       }
     ]
+  },
+  {
+    "class": "SetSortedByInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_SORTED_BY",
+    "members": [
+      {
+        "id": 400,
+        "name": "orders",
+        "type": "vector<OrderByNode>"
+      }
+    ]
   }
 ]

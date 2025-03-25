@@ -203,6 +203,11 @@ string TableCatalogEntry::ToSQL() const {
 	return create_info->ToString();
 }
 
+TableFunction TableCatalogEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
+                                                 const EntryLookupInfo &lookup_info) {
+	return GetScanFunction(context, bind_data);
+}
+
 const ColumnList &TableCatalogEntry::GetColumns() const {
 	return columns;
 }

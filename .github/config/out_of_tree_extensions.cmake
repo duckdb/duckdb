@@ -16,6 +16,11 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# HTTPFS
+# Warning: the patching mechanism on windows doesn't work for httpfs somehow.
+# To patch httpfs:
+#  - add patch file, enable APPLY_PATCHES
+#  - disable windows build of httpfs by wrapping in `if (NOT WIN32)`
+#  - IMPORTANT: add a comment that tells people to restore the windows build when removing the patches
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
@@ -38,6 +43,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
             GIT_TAG b3050f35c6e99fa35465230493eeab14a78a0409
+            APPLY_PATCHES
             )
 endif()
 
@@ -53,12 +59,14 @@ endif()
 ################# DELTA
 # MinGW build is not available, and our current manylinux ci does not have enough storage space to run the rust build
 # for Delta
+if (FALSE)
 if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT ${WASM_ENABLED})
     duckdb_extension_load(delta
             GIT_URL https://github.com/duckdb/duckdb-delta
             GIT_TAG 6d626173e9efa6615c25eb08d979d1372100d5db
             APPLY_PATCHES
     )
+endif()
 endif()
 
 ################# EXCEL
@@ -92,6 +100,7 @@ duckdb_extension_load(inet
     GIT_TAG a8b361ab5d43f6390d7cb48c9a9f0638e9581cf9
     INCLUDE_DIR src/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# POSTGRES_SCANNER
