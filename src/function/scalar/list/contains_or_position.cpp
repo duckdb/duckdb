@@ -33,7 +33,10 @@ static unique_ptr<FunctionData> ListSearchBind(ClientContext &context, ScalarFun
 	const auto list_is_param = list.id() == LogicalTypeId::UNKNOWN;
 	const auto value_is_param = value.id() == LogicalTypeId::UNKNOWN;
 
-	if (list_is_param) {
+	if (list.id() == LogicalTypeId::SQLNULL) {
+		throw BinderException("%s: the first argument can not be NULL, expected a list but got NULL",
+		                      bound_function.name);
+	} else if (list_is_param) {
 		if (!value_is_param) {
 			// only list is a parameter, cast it to a list of value type
 			bound_function.arguments[0] = LogicalType::LIST(value);
@@ -63,8 +66,10 @@ ScalarFunction ListContainsFun::GetFunction() {
 }
 
 ScalarFunction ListPositionFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::INTEGER,
+	auto &fun = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::INTEGER,
 	                      ListSearchFunction<true>, ListSearchBind);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return fun;
 }
 
 } // namespace duckdb
