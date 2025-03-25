@@ -608,7 +608,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 
 void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_position) {
 
-	bool first_nl;
+	bool first_nl = false;
 	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles, PrintErrorLine());
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 	if (current_line_position.begin == error_position) {
@@ -1088,7 +1088,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				if (!state_machine->options.IgnoreErrors()) {
 					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 					                                 lines_read - parse_chunk.size() + line_error);
-					bool first_nl;
+					bool first_nl = false;
 					auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
 					    first_nl, result.buffer_handles, result.PrintErrorLine());
 					std::ostringstream error;
@@ -1117,7 +1117,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					if (!state_machine->options.IgnoreErrors()) {
 						LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 						                                 lines_read - parse_chunk.size() + line_error);
-						bool first_nl;
+						bool first_nl = false;
 						auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
 						    first_nl, result.buffer_handles, result.PrintErrorLine());
 						std::ostringstream error;
