@@ -146,7 +146,7 @@ def launch_test(test, list_of_tests=False):
 
     start = time.time()
     try:
-        test_cmd = [unittest_program] + test + ['--summarize-failures']
+        test_cmd = [unittest_program] + test
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
         res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout)
@@ -260,7 +260,12 @@ else:
 if all_passed:
     exit(0)
 if args.summarize_failures:
-    print("\n\n=============================   FAILURES  SUMMARY   =============================\n")
+    print(
+         '''\n\n====================================================
+================  FAILURES SUMMARY  ================
+====================================================
+'''
+    )
     for i, error in enumerate(error_container, start=1):
         print(f"{i}:", error["test"])
         print("FAILED WITH ERROR:\n", error["stderr"])

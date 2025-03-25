@@ -96,22 +96,21 @@ int main(int argc, char *argv[]) {
 	
 	std::ifstream file(filename);
 	if (file && summarize_failures) {
-		std::cout << "===============================  FAILURES SUMMARY  ===============================" << std::endl;
-		std::cout << "Failed Test: falinig line:\n" << std::endl;
+		std::cout << "\n====================================================" << std::endl;
+ 		std::cout << "================  FAILURES SUMMARY  ================" << std::endl;
+ 		std::cout << "====================================================\n" << std::endl;
 		
 		string line;
 		int i = 1;
-		// bool has_failures = false;
+		bool has_failures = false;
 		while (std::getline(file, line)) {
-			// has_failures = true;
 			std::cout << i << ": " << line << std::endl;
 			has_failures = true;
-			std::cout << i << ": " << line << std::endl;
 			i++;
 		}
-		// if (!has_failures) {
-		// 	std::cout << "No failures recorded." << std::endl;
-		// }
+		if (!has_failures) {
+			std::cout << "No failures recorded." << std::endl;
+		}
 		file.close();
 	}
 
