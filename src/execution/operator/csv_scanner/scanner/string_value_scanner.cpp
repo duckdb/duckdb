@@ -1051,9 +1051,9 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
 			idx_t result_idx = i;
 			if (!csv_file_scan->projection_ids.empty()) {
-				result_idx = csv_file_scan->projection_ids[result_idx].second;
+				result_idx = csv_file_scan->projection_ids[i].second;
 			}
-			if (result_idx >= parse_chunk.ColumnCount()) {
+			if (i >= parse_chunk.ColumnCount()) {
 				throw InvalidInputException("Mismatch between the schema of different files");
 			}
 			auto &parse_vector = parse_chunk.data[i];
