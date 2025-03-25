@@ -770,7 +770,7 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 string FullLinePosition::ReconstructCurrentLine(bool &first_char_nl,
                                                 unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
                                                 bool reconstruct_line) const {
-	if (!reconstruct_line) {
+	if (!reconstruct_line || begin == end) {
 		return {};
 	}
 	string result;
