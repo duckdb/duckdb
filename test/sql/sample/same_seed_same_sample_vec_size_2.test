@@ -1,8 +1,8 @@
-# name: test/sql/sample/same_seed_same_sample.test
+# name: test/sql/sample/same_seed_same_sample_vec_size_2.test
 # description: Test same seed same sample for system sample
 # group: [sample]
 
-require vector_size 2048
+require exact_vector_size 2
 
 statement ok
 CREATE OR REPLACE TABLE test AS SELECT UNNEST(RANGE(100000)) as x;
@@ -12,7 +12,7 @@ loop i 0 20
 query II
 SELECT COUNT(*), min(x) FROM test TABLESAMPLE system (25 PERCENT) REPEATABLE (42);
 ----
-20480	12288
+24952	12
 
 endloop
 
@@ -25,3 +25,4 @@ SELECT COUNT(*), min(x) FROM test TABLESAMPLE BERNOULLI (25 PERCENT) REPEATABLE 
 24903	6
 
 endloop
+
