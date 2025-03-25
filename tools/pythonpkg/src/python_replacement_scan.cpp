@@ -1,6 +1,6 @@
 #include "duckdb_python/python_replacement_scan.hpp"
 
-#include <duckdb/main/db_instance_cache.hpp>
+#include "duckdb/main/db_instance_cache.hpp"
 
 #include "duckdb_python/pybind11/pybind_wrapper.hpp"
 #include "duckdb/main/client_properties.hpp"
@@ -97,8 +97,8 @@ static void ThrowScanFailureError(const py::object &entry, const string &name, c
 }
 
 unique_ptr<TableRef> PythonReplacementScan::ReplacementObject(const py::object &entry, const string &name,
-                                                              ClientContext &context) {
-	auto replacement = TryReplacementObject(entry, name, context);
+                                                              ClientContext &context, bool relation) {
+	auto replacement = TryReplacementObject(entry, name, context, relation);
 	if (!replacement) {
 		ThrowScanFailureError(entry, name);
 	}
@@ -106,7 +106,7 @@ unique_ptr<TableRef> PythonReplacementScan::ReplacementObject(const py::object &
 }
 
 unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::object &entry, const string &name,
-                                                                 ClientContext &context) {
+                                                                 ClientContext &context, bool relation) {
 	auto client_properties = context.GetClientProperties();
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
@@ -152,7 +152,7 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
 		                DBConfig::GetConfig(context), *context.db);
-	} else if (DuckDBPyConnection::GetArrowType(entry) != PyArrowObjectType::Invalid) {
+	} else if (DuckDBPyConnection::GetArrowType(entry) != PyArrowObjectType::Invalid && !(DuckDBPyConnection::GetArrowType(entry) == PyArrowObjectType::MessageReader && !relation)) {
 		arrow_type = DuckDBPyConnection::GetArrowType(entry);
 		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type,
 		                DBConfig::GetConfig(context), *context.db);

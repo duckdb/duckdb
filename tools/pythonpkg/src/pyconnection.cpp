@@ -1734,7 +1734,7 @@ unique_ptr<DuckDBPyRelation> DuckDBPyConnection::FromArrow(py::object &arrow_obj
 		auto py_object_type = string(py::str(arrow_object.get_type().attr("__name__")));
 		throw InvalidInputException("Python Object Type %s is not an accepted Arrow Object.", py_object_type);
 	}
-	auto tableref = PythonReplacementScan::ReplacementObject(arrow_object, name, *connection.context);
+	auto tableref = PythonReplacementScan::ReplacementObject(arrow_object, name, *connection.context, true);
 	D_ASSERT(tableref);
 	auto rel = make_shared_ptr<ViewRelation>(connection.context, std::move(tableref), name);
 	return make_uniq<DuckDBPyRelation>(std::move(rel));
