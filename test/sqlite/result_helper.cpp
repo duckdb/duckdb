@@ -506,7 +506,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		logger.PrintLineSep();
 		logger.PrintSQL();
 		logger.PrintLineSep();
-
+		
 		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
 		          << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
 		          << termcolor::reset;
