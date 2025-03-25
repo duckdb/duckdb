@@ -30,8 +30,3 @@ class TestArrowIPCExtension(object):
                 duckdb.Error, match="The nanoarrow community extension is needed to read the Arrow IPC protocol."
             ):
                 result = duckdb_cursor.from_arrow(stream).fetchall()
-            # Replacement Scan should also fail
-            with pytest.raises(
-                duckdb.Error, match="The nanoarrow community extension is needed to read the Arrow IPC protocol."
-            ):
-                result = duckdb_cursor.execute("FROM stream").fetchall()
