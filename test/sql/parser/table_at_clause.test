@@ -1,0 +1,51 @@
+# name: test/sql/parser/table_at_clause.test
+# description: Test table AT (TIMESTAMP => ...)
+# group: [parser]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE tbl(i INTEGER)
+
+statement error
+SELECT * FROM tbl AT (TIMESTAMP => TIMESTAMP '2020-01-01')
+----
+Catalog type does not support time travel
+
+statement error
+SELECT * FROM tbl AT (VERSION => 42)
+----
+Catalog type does not support time travel
+
+statement error
+SELECT * FROM tbl t(c1, c2) AT (TIMESTAMP => '2020-01-01')
+----
+Catalog type does not support time travel
+
+statement ok
+SET VARIABLE my_timestamp = TIMESTAMP '2020-01-01'
+
+statement error
+SELECT * FROM tbl AT (TIMESTAMP => getvariable('my_timestamp'))
+----
+Catalog type does not support time travel
+
+require icu
+
+require no_extension_autoloading "FIXME: TIMESTAMPTZ - INTERVAL"
+
+statement error
+SELECT * FROM tbl AT (TIMESTAMP => NOW() - INTERVAL '3 days')
+----
+Catalog type does not support time travel
+
+statement error
+SELECT * FROM tbl AT (TIMESTAMP => TIMESTAMP '2020-01-01' + a)
+----
+AT clause cannot contain column names
+
+statement error
+SELECT * FROM tbl AT (TIMESTAMP => (SELECT MIN(ts) FROM tbl))
+----
+AT clause cannot contain subqueries
