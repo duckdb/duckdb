@@ -596,10 +596,6 @@ idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, V
 
 	// convert all vectors to unified format
 	TupleDataCollection::ToUnifiedFormat(state.partitioned_append_state.chunk_state, state.group_chunk);
-	if (!state.group_data) {
-		state.group_data = make_unsafe_uniq_array_uninitialized<UnifiedVectorFormat>(state.group_chunk.ColumnCount());
-	}
-	TupleDataCollection::GetVectorData(state.partitioned_append_state.chunk_state, state.group_data.get());
 
 	group_hashes_v.Flatten(chunk_size);
 	const auto hashes = FlatVector::GetData<hash_t>(group_hashes_v);

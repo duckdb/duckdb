@@ -147,7 +147,6 @@ private:
 		SelectionVector empty_vector;
 		SelectionVector new_groups;
 		Vector addresses;
-		unsafe_unique_array<UnifiedVectorFormat> group_data;
 		DataChunk group_chunk;
 		AggregateDictionaryState dict_state;
 	} state;
