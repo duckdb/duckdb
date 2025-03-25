@@ -258,9 +258,13 @@ else:
 
 if all_passed:
     exit(0)
-
-if summarize_failures:
-    print("\n\n=============================   FAILURES  SUMMARY   =============================\n")
+if args.summarize_failures:
+    print(
+         '''\n\n====================================================
+================  FAILURES SUMMARY  ================
+====================================================
+'''
+    )
     for i, error in enumerate(error_container, start=1):
         print(f"TEST {i}:",  error["stderr"])
 exit(1)
