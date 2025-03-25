@@ -82,6 +82,7 @@ benchmark_list = old_runner.benchmark_list
 
 summary = []
 
+
 @dataclass
 class BenchmarkResult:
     benchmark: str
@@ -89,6 +90,7 @@ class BenchmarkResult:
     new_result: Union[float, str]
     old_failure: Optional[str] = None
     new_failure: Optional[str] = None
+
 
 multiply_percentage = 1.0 + REGRESSION_THRESHOLD_PERCENTAGE
 other_results: List[BenchmarkResult] = []
@@ -145,7 +147,7 @@ if len(regression_list) > 0:
             new_data = {
                 "benchmark": regression.benchmark,
                 "old_failure": regression.old_failure,
-                "new_failure": regression.new_failure
+                "new_failure": regression.new_failure,
             }
             summary.append(new_data)
         print("")

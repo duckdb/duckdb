@@ -398,7 +398,7 @@ int main(int argc, char **argv) {
 	LoadInterpretedBenchmarks(*fs);
 	parse_arguments(argc, argv);
 	const auto configuration_error = run_benchmarks();
-	
+
 	if (!summary.empty() && summarize) {
 		std::cout << "\n====================================================" << std::endl;
 		std::cout << "================  FAILURES SUMMARY  ================" << std::endl;
@@ -408,7 +408,7 @@ int main(int argc, char **argv) {
 			std::cout << "----------------------------------------------------" << std::endl;
 		}
 	}
-	
+
 	if (configuration_error != ConfigurationError::None) {
 		print_error_message(configuration_error);
 		exit(1);

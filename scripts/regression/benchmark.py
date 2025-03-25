@@ -72,7 +72,9 @@ class BenchmarkRunnerConfig:
             "--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600)."
         )
         parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
-        parser.add_argument("--no-summary", type=str, default=False, help="No failures summary is outputed when passing this flag.")
+        parser.add_argument(
+            "--no-summary", type=str, default=False, help="No failures summary is outputed when passing this flag."
+        )
 
         # Parse arguments
         parsed_args = parser.parse_args()
@@ -128,7 +130,10 @@ class BenchmarkRunner:
         except subprocess.TimeoutExpired:
             print("Failed to run benchmark " + benchmark)
             print(f"Aborted due to exceeding the limit of {timeout_seconds} seconds")
-            return 'Failed to run benchmark ' + benchmark, f"Aborted due to exceeding the limit of {timeout_seconds} seconds"
+            return (
+                'Failed to run benchmark ' + benchmark,
+                f"Aborted due to exceeding the limit of {timeout_seconds} seconds",
+            )
         if returncode != 0:
             print("Failed to run benchmark " + benchmark)
             print(STDERR_HEADER)
