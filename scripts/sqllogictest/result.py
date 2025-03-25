@@ -70,7 +70,6 @@ BUILTIN_EXTENSIONS = [
     'icu',
 ]
 
-from duckdb import DuckDBPyConnection
 
 # def patch_execute(method):
 #    def patched_execute(self, *args, **kwargs):

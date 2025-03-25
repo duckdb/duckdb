@@ -1,7 +1,6 @@
 import duckdb
 import pytest
 import os
-import pandas as pd
 
 pa = pytest.importorskip("pyarrow")
 pq = pytest.importorskip("pyarrow.parquet")

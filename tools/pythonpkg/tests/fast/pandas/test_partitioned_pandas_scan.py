@@ -1,8 +1,6 @@
 import duckdb
 import pandas as pd
 import numpy
-import datetime
-import time
 
 
 class TestPartitionedPandasScan(object):

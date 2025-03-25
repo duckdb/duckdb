@@ -1,6 +1,5 @@
 import duckdb
 import pytest
-import os
 
 pl = pytest.importorskip("polars")
 

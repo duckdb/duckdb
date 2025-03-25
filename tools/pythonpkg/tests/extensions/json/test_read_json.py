@@ -1,9 +1,5 @@
-import numpy
-import datetime
-import pandas
 import pytest
 import duckdb
-import re
 from io import StringIO
 
 

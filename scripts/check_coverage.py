@@ -1,6 +1,5 @@
 import argparse
 import os
-import math
 import re
 
 parser = argparse.ArgumentParser(description='Check code coverage results')

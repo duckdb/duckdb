@@ -15,10 +15,8 @@ from spark_namespace.sql.types import (
     ArrayType,
     MapType,
 )
-from spark_namespace.sql.functions import col, struct, when
+from spark_namespace.sql.functions import col
 from spark_namespace.sql.column import Column
-import duckdb
-import re
 
 from spark_namespace.errors import PySparkValueError, PySparkTypeError
 

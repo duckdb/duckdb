@@ -1,6 +1,5 @@
 import pytest
 import duckdb
-import sys
 
 pd = pytest.importorskip("pandas")
 import numpy as np

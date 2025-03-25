@@ -4,23 +4,13 @@ _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace import USE_ACTUAL_SPARK
 from spark_namespace.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
     Row,
-    ArrayType,
-    MapType,
 )
-from spark_namespace.sql.functions import col, struct, when, lit, array_contains
+from spark_namespace.sql.functions import col
 from spark_namespace.sql.functions import (
     sum,
     avg,
     max,
-    min,
     stddev_samp,
     stddev,
     std,
@@ -28,11 +18,9 @@ from spark_namespace.sql.functions import (
     var_pop,
     var_samp,
     variance,
-    mean,
     mode,
     median,
     product,
-    count,
     skewness,
     any_value,
     approx_count_distinct,

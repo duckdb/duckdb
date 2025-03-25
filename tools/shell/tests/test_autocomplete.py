@@ -1,12 +1,6 @@
 # fmt: off
 
-import pytest
-import subprocess
-import sys
-from typing import List
 from conftest import ShellTest
-from conftest import autocomplete_extension
-import os
 
 # 'autocomplete_extension' is a fixture which will skip the test if 'autocomplete' is not loaded
 def test_autocomplete_select(shell, autocomplete_extension):

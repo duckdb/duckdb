@@ -1,7 +1,4 @@
-import duckdb
 import pytest
-import sys
-from typing import Union
 
 
 def make_annotated_function(type: str):

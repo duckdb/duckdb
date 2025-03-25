@@ -3,7 +3,6 @@
 # bison (GNU Bison) 2.3
 import os
 import subprocess
-import re
 import sys
 from python_helpers import open_utf8
 

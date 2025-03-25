@@ -28,7 +28,6 @@ import datetime
 import decimal
 import unittest
 import duckdb
-import pytest
 
 
 class DuckDBTypeTests(unittest.TestCase):

@@ -1,5 +1,4 @@
 import duckdb
-import pandas as pd
 
 
 class TestUnion(object):

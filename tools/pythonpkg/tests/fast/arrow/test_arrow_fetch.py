@@ -1,8 +1,6 @@
 import duckdb
-import pytest
 
 try:
-    import pyarrow as pa
 
     can_run = True
 except:

@@ -1,5 +1,4 @@
 import argparse
-import logging
 import os
 import pathlib
 import re
@@ -7,7 +6,6 @@ from types import NoneType
 from typing import Dict, List, NotRequired, TypedDict, Union
 
 from generate_c_api import (
-    EXT_API_DEFINITION_PATTERN,
     get_extension_api_version,
     parse_capi_function_definitions,
     parse_ext_api_definitions,

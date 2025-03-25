@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from pandas.core.frame import DataFrame as PandasDataFrame
 
 from ..exception import ContributionsAcceptedError
-from .types import StructType, AtomicType, DataType
+from .types import StructType
 from ..conf import SparkConf
 from .dataframe import DataFrame
 from .conf import RuntimeConfig
@@ -14,11 +14,9 @@ from .readwriter import DataFrameReader
 from ..context import SparkContext
 from .udf import UDFRegistration
 from .streaming import DataStreamReader
-import duckdb
 
 from ..errors import (
-    PySparkTypeError,
-    PySparkValueError
+    PySparkTypeError
 )
 
 from ..errors.error_classes import *

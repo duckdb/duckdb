@@ -1,11 +1,7 @@
 # fmt: off
 
 import pytest
-import subprocess
-import sys
-from typing import List
 from conftest import ShellTest
-from tools.shell.tests.conftest import random_filepath
 
 
 @pytest.mark.parametrize("command", [".sh ls", ".cd ..", ".log file", ".import file.csv tbl", ".open new_file", ".output out", ".once out", ".excel out", ".read myfile.sql"])

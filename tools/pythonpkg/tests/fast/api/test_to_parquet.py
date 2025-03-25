@@ -2,9 +2,6 @@ import duckdb
 import tempfile
 import os
 import tempfile
-import pandas._testing as tm
-import datetime
-import csv
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 

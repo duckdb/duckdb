@@ -3,20 +3,9 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace.sql.types import (
-    LongType,
-    StructType,
-    BooleanType,
-    StructField,
-    StringType,
-    IntegerType,
-    LongType,
     Row,
-    ArrayType,
-    MapType,
 )
-from spark_namespace.sql.functions import col, struct, when, lit, array_contains
-import duckdb
-import re
+from spark_namespace.sql.functions import col
 
 
 class TestDataFrameOrderBy(object):

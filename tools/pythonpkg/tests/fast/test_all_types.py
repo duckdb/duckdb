@@ -2,7 +2,6 @@ import duckdb
 import pandas as pd
 import numpy as np
 import datetime
-import math
 from decimal import Decimal
 from uuid import UUID
 import pytz
@@ -538,7 +537,7 @@ class TestAllTypes(object):
     @pytest.mark.parametrize('cur_type', all_types)
     def test_arrow(self, cur_type):
         try:
-            import pyarrow as pa
+            pass
         except:
             return
         # We skip those since the extreme ranges are not supported in arrow.

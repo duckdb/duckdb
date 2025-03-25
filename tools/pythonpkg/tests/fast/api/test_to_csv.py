@@ -1,7 +1,6 @@
 import duckdb
 import tempfile
 import os
-import pandas._testing as tm
 import datetime
 import csv
 import pytest

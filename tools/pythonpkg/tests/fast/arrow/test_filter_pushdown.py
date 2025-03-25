@@ -1,8 +1,5 @@
-from re import S
 import duckdb
-import os
 import pytest
-import tempfile
 from conftest import pandas_supports_arrow_backend
 import sys
 from packaging.version import Version
@@ -533,7 +530,6 @@ class TestArrowFilterPushdown(object):
     )
     def test_9371(self, duckdb_cursor, tmp_path):
         import datetime
-        import pathlib
 
         # connect to an in-memory database
         duckdb_cursor.execute("SET TimeZone='UTC';")

@@ -1,8 +1,5 @@
 import amalgamation
 import os
-import re
-import sys
-import shutil
 from python_helpers import open_utf8
 
 include_counts = {}

@@ -1,5 +1,4 @@
 # test fetchdf with various types
-import numpy
 import pytest
 import duckdb
 from conftest import NumpyPandas

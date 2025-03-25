@@ -1,6 +1,4 @@
-import duckdb
 import pytest
-import string
 import datetime as dt
 
 pa = pytest.importorskip("pyarrow")

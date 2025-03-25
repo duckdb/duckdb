@@ -1,5 +1,3 @@
-import duckdb
-import os
 import pytest
 import tempfile
 

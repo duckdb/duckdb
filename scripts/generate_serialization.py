@@ -4,7 +4,7 @@ import re
 import argparse
 from enum import Enum
 
-from typing import Dict, Optional, Tuple, List
+from typing import Dict, Optional, List
 
 parser = argparse.ArgumentParser(description='Generate serialization code')
 parser.add_argument('--source', type=str, help='Source directory')

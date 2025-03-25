@@ -1,4 +1,3 @@
-import os
 import subprocess
 
 duckdb_program = '/Users/myth/Programs/duckdb-bugfix/build/release/duckdb'

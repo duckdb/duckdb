@@ -3,8 +3,6 @@ import pytest
 _ = pytest.importorskip("duckdb.experimental.spark")
 
 from spark_namespace.sql.types import Row
-import textwrap
-import duckdb
 
 
 class TestSparkReadJson(object):

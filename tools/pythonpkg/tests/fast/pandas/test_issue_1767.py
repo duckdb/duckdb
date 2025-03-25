@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 
 import duckdb
-import numpy
 import pytest
 from conftest import NumpyPandas, ArrowPandas
 

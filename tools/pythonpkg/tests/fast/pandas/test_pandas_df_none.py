@@ -1,8 +1,4 @@
-import pandas as pd
-import pytest
 import duckdb
-import sys
-import gc
 
 
 class TestPandasDFNone(object):

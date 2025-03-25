@@ -2,7 +2,6 @@ import duckdb
 import pytest
 from os import path
 import shutil
-import os
 from pathlib import Path
 
 

@@ -1,7 +1,5 @@
 import os
 import argparse
-import subprocess
-import tempfile
 from pathlib import Path
 
 # the threshold at which we consider something a regression (percentage)

@@ -28,9 +28,7 @@ from duckdb.value.constant import (
     TimestampSecondValue,
     TimestampMilisecondValue,
     TimestampNanosecondValue,
-    TimestampTimeZoneValue,
     TimeValue,
-    TimeTimeZoneValue,
 )
 import uuid
 import datetime
@@ -55,12 +53,7 @@ from duckdb.typing import (
     DOUBLE,
     DATE,
     TIMESTAMP,
-    TIMESTAMP_MS,
-    TIMESTAMP_NS,
-    TIMESTAMP_S,
     TIME,
-    TIME_TZ,
-    TIMESTAMP_TZ,
     VARCHAR,
     BLOB,
     BIT,

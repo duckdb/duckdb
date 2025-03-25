@@ -3,7 +3,6 @@ import duckdb
 import pytest
 from duckdb.typing import INTEGER, VARCHAR, TIMESTAMP
 from duckdb import (
-    Expression,
     ConstantExpression,
     ColumnExpression,
     LambdaExpression,
