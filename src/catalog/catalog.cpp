@@ -328,6 +328,9 @@ struct CatalogLookup {
 	CatalogLookup(Catalog &catalog, CatalogType catalog_type, string schema_p, string name_p)
 	    : catalog(catalog), schema(std::move(schema_p)), name(std::move(name_p)), lookup_info(catalog_type, name) {
 	}
+	CatalogLookup(Catalog &catalog, string schema_p, const EntryLookupInfo &lookup_p)
+	    : catalog(catalog), schema(std::move(schema_p)), name(lookup_p.GetEntryName()), lookup_info(lookup_p, name) {
+	}
 
 	Catalog &catalog;
 	string schema;
@@ -757,11 +760,14 @@ CatalogException Catalog::CreateMissingEntryException(CatalogEntryRetriever &ret
 		did_you_mean = StringUtil::Join(suggestions, " or ");
 	}
 
-	return CatalogException::MissingEntry(type, entry_name, did_you_mean, lookup_info.GetErrorContext());
+	return CatalogException::MissingEntry(lookup_info, did_you_mean);
 }
 
 CatalogEntryLookup Catalog::TryLookupEntryInternal(CatalogTransaction transaction, const string &schema,
                                                    const EntryLookupInfo &lookup_info) {
+	if (lookup_info.GetAtClause() && !SupportsTimeTravel()) {
+		return {nullptr, nullptr, ErrorData(BinderException("Catalog type does not support time travel"))};
+	}
 	auto schema_lookup = EntryLookupInfo::SchemaLookup(lookup_info, schema);
 	auto schema_entry = LookupSchema(transaction, schema_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!schema_entry) {
@@ -833,6 +839,8 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
                                            const EntryLookupInfo &lookup_info, OnEntryNotFound if_not_found) {
 	auto &context = retriever.GetContext();
 	reference_set_t<SchemaCatalogEntry> schemas;
+	bool all_errors = true;
+	ErrorData error_data;
 	for (auto &lookup : lookups) {
 		auto transaction = lookup.catalog.GetCatalogTransaction(context);
 		auto result = lookup.catalog.TryLookupEntryInternal(transaction, lookup.schema, lookup.lookup_info);
@@ -842,6 +850,14 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		if (result.schema) {
 			schemas.insert(*result.schema);
 		}
+		if (!result.error.HasError()) {
+			all_errors = false;
+		} else {
+			error_data = std::move(result.error);
+		}
+	}
+	if (all_errors && error_data.HasError()) {
+		error_data.Throw();
 	}
 
 	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
@@ -916,11 +932,9 @@ CatalogEntryLookup Catalog::TryLookupEntry(CatalogEntryRetriever &retriever, con
 		D_ASSERT(catalog_entry);
 		auto lookup_behavior = catalog_entry->CatalogTypeLookupRule(lookup_info.GetCatalogType());
 		if (lookup_behavior == CatalogLookupBehavior::STANDARD) {
-			lookups.emplace_back(*catalog_entry, lookup_info.GetCatalogType(), entry.schema,
-			                     lookup_info.GetEntryName());
+			lookups.emplace_back(*catalog_entry, entry.schema, lookup_info);
 		} else if (lookup_behavior == CatalogLookupBehavior::LOWER_PRIORITY) {
-			final_lookups.emplace_back(*catalog_entry, lookup_info.GetCatalogType(), entry.schema,
-			                           lookup_info.GetEntryName());
+			final_lookups.emplace_back(*catalog_entry, entry.schema, lookup_info);
 		}
 	}
 
@@ -953,6 +967,12 @@ CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type
                                 const string &schema_name, const string &name) {
 	EntryLookupInfo lookup_info(catalog_type, name);
 	return GetEntry(context, catalog_name, schema_name, lookup_info);
+}
+
+optional_ptr<CatalogEntry> Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &schema,
+                                             const string &name, OnEntryNotFound if_not_found) {
+	EntryLookupInfo lookup_info(catalog_type, name);
+	return GetEntry(context, schema, lookup_info, if_not_found);
 }
 
 CatalogEntry &Catalog::GetEntry(ClientContext &context, CatalogType catalog_type, const string &schema_name,
