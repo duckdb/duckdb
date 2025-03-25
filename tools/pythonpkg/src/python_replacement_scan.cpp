@@ -21,7 +21,7 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
                             vector<unique_ptr<ParsedExpression>> &children, ClientProperties &client_properties,
                             PyArrowObjectType type, DBConfig &config, DatabaseInstance &db) {
 	py::gil_scoped_acquire acquire;
-	unique_ptr<ExternalDependency> external_dependency = make_uniq<ExternalDependency>();
+	shared_ptr<ExternalDependency> external_dependency = make_shared_ptr<ExternalDependency>();
 	if (type == PyArrowObjectType::MessageReader) {
 		if (!db.ExtensionIsLoaded("nanoarrow")) {
 			throw MissingExtensionException(
@@ -36,10 +36,9 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 				if (message.is_none()) {
 					break;
 				}
-				py::object buffer = message.attr("serialize")();
-				stream_messages.append(buffer);
-				const auto buffer_address = stream_messages[stream_messages.size() - 1].attr("address").cast<uintptr_t>();
-				const auto buffer_size = stream_messages[stream_messages.size() - 1].attr("size").cast<uint32_t>();
+				stream_messages.append(message.attr("serialize")());
+				const auto buffer_address = stream_messages[stream_messages.size() - 1].attr("address").cast<int64_t>();
+				const auto buffer_size =  stream_messages[stream_messages.size() - 1].attr("size").cast<uint32_t>();
 				child_list_t<Value> buffer_values;
 				buffer_values.push_back({"ptr", Value::POINTER(buffer_address)});
 				buffer_values.push_back({"size", Value::UBIGINT(buffer_size)});
@@ -51,9 +50,10 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 		auto list_value = Value::LIST(values);
 		children.push_back(make_uniq<ConstantExpression>(list_value));
 		table_function.function = make_uniq<FunctionExpression>("scan_arrow_ipc", std::move(children));
-		auto dependency_item = PythonDependencyItem::Create(make_uniq<RegisteredObject>(stream_messages));
+		auto dependency_item = PythonDependencyItem::Create(stream_messages);
 		external_dependency->AddDependency("replacement_cache", std::move(dependency_item));
-	} else {
+	}
+	else {
 		if (type == PyArrowObjectType::PyCapsuleInterface) {
 			entry = entry.attr("__arrow_c_stream__")();
 			type = PyArrowObjectType::PyCapsule;
