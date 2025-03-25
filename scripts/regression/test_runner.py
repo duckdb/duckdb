@@ -49,6 +49,7 @@ parser.add_argument("--nofail", action="store_true", help="Do not fail on regres
 parser.add_argument("--disable-timeout", action="store_true", help="Disable timeout.")
 parser.add_argument("--max-timeout", type=int, default=3600, help="Set maximum timeout in seconds (default: 3600).")
 parser.add_argument("--root-dir", type=str, default="", help="Root directory.")
+parser.add_argument("--no-summary", type=str, default=False, help="No summary in the end.")
 
 # Parse the arguments
 args = parser.parse_args()
@@ -63,6 +64,7 @@ no_regression_fail = args.nofail
 disable_timeout = args.disable_timeout
 max_timeout = args.max_timeout
 root_dir = args.root_dir
+no_summary = args.no_summary
 
 if not os.path.isfile(old_runner_path):
     print(f"Failed to find old runner {old_runner_path}")
@@ -78,12 +80,16 @@ new_runner = BenchmarkRunner(BenchmarkRunnerConfig.from_params(new_runner_path, 
 
 benchmark_list = old_runner.benchmark_list
 
+summary = []
+
 
 @dataclass
 class BenchmarkResult:
     benchmark: str
     old_result: Union[float, str]
     new_result: Union[float, str]
+    old_failure: Optional[str] = None
+    new_failure: Optional[str] = None
 
 
 multiply_percentage = 1.0 + REGRESSION_THRESHOLD_PERCENTAGE
@@ -101,15 +107,19 @@ for i in range(NUMBER_REPETITIONS):
 '''
     )
 
-    old_results = old_runner.run_benchmarks(benchmark_list)
-    new_results = new_runner.run_benchmarks(benchmark_list)
+    old_results, old_failures = old_runner.run_benchmarks(benchmark_list)
+    new_results, new_failures = new_runner.run_benchmarks(benchmark_list)
 
     for benchmark in benchmark_list:
         old_res = old_results[benchmark]
         new_res = new_results[benchmark]
+
+        old_fail = old_failures[benchmark]
+        new_fail = new_failures[benchmark]
+
         if isinstance(old_res, str) or isinstance(new_res, str):
             # benchmark failed to run - always a regression
-            error_list.append(BenchmarkResult(benchmark, old_res, new_res))
+            error_list.append(BenchmarkResult(benchmark, old_res, new_res, old_fail, new_fail))
         elif (no_regression_fail == False) and (
             (old_res + REGRESSION_THRESHOLD_SECONDS) * multiply_percentage < new_res
         ):
@@ -120,6 +130,7 @@ for i in range(NUMBER_REPETITIONS):
 
 exit_code = 0
 regression_list.extend(error_list)
+summary = []
 if len(regression_list) > 0:
     exit_code = 1
     print(
@@ -132,6 +143,13 @@ if len(regression_list) > 0:
         print(f"{regression.benchmark}")
         print(f"Old timing: {regression.old_result}")
         print(f"New timing: {regression.new_result}")
+        if regression.old_failure or regression.new_failure:
+            new_data = {
+                "benchmark": regression.benchmark,
+                "old_failure": regression.old_failure,
+                "new_failure": regression.new_failure,
+            }
+            summary.append(new_data)
         print("")
     print(
         '''====================================================
@@ -175,4 +193,21 @@ else:
 # nuke cached benchmark data between runs
 if os.path.isdir("duckdb_benchmark_data"):
     shutil.rmtree('duckdb_benchmark_data')
+
+if summary and not no_summary:
+    print(
+        '''\n\n====================================================
+================  FAILURES SUMMARY  ================
+====================================================
+'''
+    )
+    for i, failure_message in enumerate(summary, start=1):
+        print(f"{i}: ", failure_message["benchmark"])
+        if failure_message["old_failure"] != failure_message["new_failure"]:
+            print("Old:\n", failure_message["old_failure"])
+            print("New:\n", failure_message["new_failure"])
+        else:
+            print(failure_message["old_failure"])
+        print("-", 52)
+
 exit(exit_code)
