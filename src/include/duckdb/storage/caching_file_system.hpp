@@ -23,7 +23,8 @@ class FileSystem;
 struct FileHandle;
 class CachingFileSystem;
 
-class CachingFileHandle {
+struct CachingFileHandle {
+public:
 	using CachedFileRangeOverlap = ExternalFileCache::CachedFileRangeOverlap;
 	using CachedFileRange = ExternalFileCache::CachedFileRange;
 	using CachedFile = ExternalFileCache::CachedFile;
@@ -78,7 +79,8 @@ private:
 //! Instead of reading into a designated buffer, it caches reads using the BufferManager,
 //! it returns a BufferHandle and sets a pointer into it
 class CachingFileSystem {
-	friend class CachingFileHandle;
+private:
+	friend struct CachingFileHandle;
 
 public:
 	DUCKDB_API CachingFileSystem(FileSystem &file_system, DatabaseInstance &db);

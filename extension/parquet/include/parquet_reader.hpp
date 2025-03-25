@@ -9,6 +9,7 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/storage/caching_file_system.hpp"
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
@@ -22,7 +23,6 @@
 #include "parquet_types.h"
 #include "resizable_buffer.hpp"
 #include "duckdb/execution/adaptive_filter.hpp"
-#include "duckdb/storage/caching_file_system.hpp"
 
 #include <exception>
 

@@ -1,11 +1,9 @@
 #include "catch.hpp"
-#include "duckdb/storage/caching_file_system.hpp"
 #include "test_helpers.hpp"
+#include "duckdb/storage/caching_file_system.hpp"
 
 using namespace duckdb;
 
-// This test isn't really necessary, but CachingFileSystem is only used in extensions (for now),
-// so this test ensures that it is built properly (Windows CI was giving issues).
 TEST_CASE("Test external file cache", "[external_file_cache][.]") {
 	DuckDB db(nullptr);
 	Connection con(db);

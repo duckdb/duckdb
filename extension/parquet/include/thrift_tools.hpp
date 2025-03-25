@@ -14,8 +14,8 @@
 
 #include "duckdb.hpp"
 #ifndef DUCKDB_AMALGAMATION
-#include "duckdb/common/file_system.hpp"
 #include "duckdb/storage/caching_file_system.hpp"
+#include "duckdb/common/file_system.hpp"
 #include "duckdb/common/allocator.hpp"
 #endif
 
