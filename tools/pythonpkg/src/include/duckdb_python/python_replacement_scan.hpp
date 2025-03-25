@@ -16,7 +16,8 @@ public:
 	static unique_ptr<TableRef> TryReplacementObject(const py::object &entry, const string &name,
 	                                                 ClientContext &context, bool relation = false);
 	//! Perform a replacement or throw if it failed
-	static unique_ptr<TableRef> ReplacementObject(const py::object &entry, const string &name, ClientContext &context, bool relation = false);
+	static unique_ptr<TableRef> ReplacementObject(const py::object &entry, const string &name, ClientContext &context,
+	                                              bool relation = false);
 };
 
 } // namespace duckdb

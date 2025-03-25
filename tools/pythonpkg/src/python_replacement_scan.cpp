@@ -38,7 +38,7 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 				}
 				stream_messages.append(message.attr("serialize")());
 				const auto buffer_address = stream_messages[stream_messages.size() - 1].attr("address").cast<int64_t>();
-				const auto buffer_size =  stream_messages[stream_messages.size() - 1].attr("size").cast<uint32_t>();
+				const auto buffer_size = stream_messages[stream_messages.size() - 1].attr("size").cast<uint32_t>();
 				child_list_t<Value> buffer_values;
 				buffer_values.push_back({"ptr", Value::POINTER(buffer_address)});
 				buffer_values.push_back({"size", Value::UBIGINT(buffer_size)});
@@ -52,8 +52,7 @@ static void CreateArrowScan(const string &name, py::object entry, TableFunctionR
 		table_function.function = make_uniq<FunctionExpression>("scan_arrow_ipc", std::move(children));
 		auto dependency_item = PythonDependencyItem::Create(stream_messages);
 		external_dependency->AddDependency("replacement_cache", std::move(dependency_item));
-	}
-	else {
+	} else {
 		if (type == PyArrowObjectType::PyCapsuleInterface) {
 			entry = entry.attr("__arrow_c_stream__")();
 			type = PyArrowObjectType::PyCapsule;
@@ -152,7 +151,8 @@ unique_ptr<TableRef> PythonReplacementScan::TryReplacementObject(const py::objec
 		auto arrow_dataset = materialized.attr("to_arrow")();
 		CreateArrowScan(name, arrow_dataset, *table_function, children, client_properties, PyArrowObjectType::Table,
 		                DBConfig::GetConfig(context), *context.db);
-	} else if (DuckDBPyConnection::GetArrowType(entry) != PyArrowObjectType::Invalid && !(DuckDBPyConnection::GetArrowType(entry) == PyArrowObjectType::MessageReader && !relation)) {
+	} else if (DuckDBPyConnection::GetArrowType(entry) != PyArrowObjectType::Invalid &&
+	           !(DuckDBPyConnection::GetArrowType(entry) == PyArrowObjectType::MessageReader && !relation)) {
 		arrow_type = DuckDBPyConnection::GetArrowType(entry);
 		CreateArrowScan(name, entry, *table_function, children, client_properties, arrow_type,
 		                DBConfig::GetConfig(context), *context.db);
