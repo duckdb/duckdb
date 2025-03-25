@@ -122,19 +122,19 @@ hash_t Hash(string_t val) {
 		hash_t h = 0xe17a1465U ^ (val.GetSize() * 0xc6a4a7935bd1e995U);
 
 		// Hash/combine the first 8-byte block
-		const bool not_an_empty_string = !val.Empty();
-		h ^= Load<hash_t>(const_data_ptr_cast(val.GetPrefix()));
-		h *= 0xd6e8feb86659fd93U * not_an_empty_string + (1 - not_an_empty_string);
+		if (!val.Empty()) {
+			h ^= Load<hash_t>(const_data_ptr_cast(val.GetPrefix()));
+			h *= 0xd6e8feb86659fd93U;
+		}
 
 		// Load remaining 4 bytes
-		hash_t hr = 0;
-		memcpy(&hr, const_data_ptr_cast(val.GetPrefix()) + sizeof(hash_t), 4U);
+		if (val.GetSize() > sizeof(hash_t)) {
+			hash_t hr = 0;
+			memcpy(&hr, const_data_ptr_cast(val.GetPrefix()) + sizeof(hash_t), 4U);
 
-		// Process the remainder the same an 8-byte block
-		// This operation is a NOP if the string is <= 8 bytes
-		const bool not_a_nop = val.GetSize() > sizeof(hash_t);
-		h ^= hr;
-		h *= 0xd6e8feb86659fd93U * not_a_nop + (1 - not_a_nop);
+			h ^= hr;
+			h *= 0xd6e8feb86659fd93U;
+		}
 
 		// Finalize
 		h = Hash(h);
