@@ -143,7 +143,7 @@ struct SortedAggregateState {
 
 	void InitializeChunks(const SortedAggregateBindData &order_bind) {
 		// Lazy instantiation of the buffer chunks
-		auto &allocator = order_bind.buffer_manager.GetBufferAllocator();
+		auto &allocator = BufferManager::GetBufferManager(order_bind.context).GetBufferAllocator();
 		InitializeChunk(allocator, sort_chunk, order_bind.sort_types);
 		if (!order_bind.sorted_on_args) {
 			InitializeChunk(allocator, arg_chunk, order_bind.arg_types);
@@ -567,10 +567,12 @@ struct SortedAggregateFunction {
 		auto &context = order_bind.context;
 		RowLayout payload_layout;
 		payload_layout.Initialize(order_bind.arg_types);
+
+		auto &buffer_allocator = BufferManager::GetBufferManager(order_bind.context).GetBufferAllocator();
 		DataChunk chunk;
-		chunk.Initialize(order_bind.buffer_manager.GetBufferAllocator(), order_bind.arg_types);
+		chunk.Initialize(buffer_allocator, order_bind.arg_types);
 		DataChunk sliced;
-		sliced.Initialize(order_bind.buffer_manager.GetBufferAllocator(), order_bind.arg_types);
+		sliced.Initialize(buffer_allocator, order_bind.arg_types);
 
 		//	 Reusable inner state
 		auto &aggr = order_bind.function;
@@ -609,7 +611,7 @@ struct SortedAggregateFunction {
 		local_sort->Initialize(*global_sort, global_sort->buffer_manager);
 
 		DataChunk prefixed;
-		prefixed.Initialize(order_bind.buffer_manager.GetBufferAllocator(), global_sort->sort_layout.logical_types);
+		prefixed.Initialize(buffer_allocator, global_sort->sort_layout.logical_types);
 
 		//	Go through the states accumulating values to sort until we hit the sort threshold
 		idx_t unsorted_count = 0;
