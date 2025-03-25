@@ -141,17 +141,12 @@ hash_t Hash(string_t val) {
 
 		// This is just an optimization. It should not change the result
 		// This property is important for verification (e.g., DUCKDB_DEBUG_NO_INLINE)
-		// We achieved this with the NOP trick above (and in HashBytes)
 		D_ASSERT(h == Hash(val.GetData(), val.GetSize()));
 
 		return h;
 	}
-	if (string_t::INLINE_LENGTH < sizeof(hash_t)) {
-		// Required for DUCKDB_DEBUG_NO_INLINE
-		return HashBytes<false>(const_data_ptr_cast(val.GetData()), val.GetSize());
-	} else {
-		return HashBytes<true>(const_data_ptr_cast(val.GetData()), val.GetSize());
-	}
+	// Required for DUCKDB_DEBUG_NO_INLINE
+	return HashBytes<string_t::INLINE_LENGTH >= sizeof(hash_t)>(const_data_ptr_cast(val.GetData()), val.GetSize());
 }
 
 template <>
