@@ -1,6 +1,7 @@
 import duckdb
 
 try:
+    import pyarrow as pa
 
     can_run = True
 except:
