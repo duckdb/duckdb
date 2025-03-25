@@ -42,7 +42,7 @@ parser.add_argument(
     type=valid_timeout,
 )
 parser.add_argument('--valgrind', action='store_true', help='Run the tests with valgrind', default=False)
-parser.add_argument('--dont-summarize-failures', action='store_true', help='Run the tests with valgrind', default=False)
+parser.add_argument('--summarize-failures', action='store_true', help='Enable failures summary in the output', default=True)
 
 args, extra_args = parser.parse_known_args()
 
@@ -63,7 +63,7 @@ profile = args.profile
 assertions = args.no_assertions
 time_execution = args.time_execution
 timeout = args.timeout
-dont_summarize_failures = args.dont_summarize_failures
+summarize_failures = args.summarize_failures
 
 # Use the '-l' parameter to output the list of tests to run
 proc = subprocess.run([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -146,7 +146,7 @@ def launch_test(test, list_of_tests=False):
 
     start = time.time()
     try:
-        test_cmd = [unittest_program] + test + ['--dont-summarize-failures']
+        test_cmd = [unittest_program] + test + ['--summarize-failures']
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
         res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout)
@@ -203,7 +203,7 @@ STDERR
         )
         print(stderr)
 
-        # if not dont_summarize_failures:
+        # if not summarize_failures:
         new_data = {
             "test": test,
             "return_code": res.returncode,
@@ -259,9 +259,9 @@ else:
 
 if all_passed:
     exit(0)
-if not dont_summarize_failures:
+if args.summarize_failures:
     print("\n\n=============================   FAILURES  SUMMARY   =============================\n")
     for i, error in enumerate(error_container, start=1):
-        print(f"TEST {i}:", error["test"])
+        print(f"{i}:", error["test"])
         print("FAILED WITH ERROR:\n", error["stderr"])
 exit(1)
