@@ -537,7 +537,7 @@ class TestAllTypes(object):
     @pytest.mark.parametrize('cur_type', all_types)
     def test_arrow(self, cur_type):
         try:
-            pass
+            import pyarrow as pa
         except:
             return
         # We skip those since the extreme ranges are not supported in arrow.
