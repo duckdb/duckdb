@@ -42,7 +42,7 @@ parser.add_argument(
     type=valid_timeout,
 )
 parser.add_argument('--valgrind', action='store_true', help='Run the tests with valgrind', default=False)
-parser.add_argument('--summarize-failures', action='store_true', help='Run the tests with valgrind', default=True)
+parser.add_argument('--summarize-failures', action='store_true', help='Enable failures summary in the output', default=True)
 
 args, extra_args = parser.parse_known_args()
 

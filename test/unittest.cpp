@@ -64,6 +64,13 @@ int main(int argc, char *argv[]) {
 			SetDebugInitialize(0xFF);
 		} else if (string(argv[i]) == "--single-threaded") {
 			SetSingleThreaded();
+		} else if (string(argv[i]) == "--summarize-failures") {
+			// cleanup before creating new failures summary file
+			if (std::FILE* file = std::fopen(filename, "r")) {
+				std::fclose(file);
+				std::remove(filename);
+			}
+			summarize_failures = true;
 		} else {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
@@ -90,6 +97,27 @@ int main(int argc, char *argv[]) {
 	RegisterSqllogictests();
 	
 	int result = Catch::Session().run(new_argc, new_argv.get());
+	
+	std::ifstream file(filename);
+	if (file && summarize_failures) {
+		std::cout << "===============================  FAILURES SUMMARY  ===============================" << std::endl;
+		std::cout << "Failed Test: Failed on the line:\n" << std::endl;
+		
+		string line;
+		int i = 1;
+		// bool has_failures = false;
+		while (std::getline(file, line)) {
+			// has_failures = true;
+			std::cout << i << ": " << line << std::endl;
+			has_failures = true;
+			std::cout << i << ": " << line << std::endl;
+			i++;
+		}
+		// if (!has_failures) {
+		// 	std::cout << "No failures recorded." << std::endl;
+		// }
+		file.close();
+	}
 
 	if (DeleteTestPath()) {
 		TestDeleteDirectory(dir);
