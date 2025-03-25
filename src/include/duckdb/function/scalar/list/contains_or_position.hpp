@@ -13,6 +13,11 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 	const auto source_data = UnifiedVectorFormat::GetData<T>(source_format);
 
 	using RETURN_TYPE = typename std::conditional<RETURN_POSITION, int32_t, int8_t>::type;
+	auto &target_validity = target_vec.GetVectorType() == VectorType::CONSTANT_VECTOR
+	                            ? ConstantVector::Validity(target_vec)
+	                            : FlatVector::Validity(target_vec);
+	ValidityMask target_original_validity(target_validity, count);
+	target_validity.SetAllValid(count);
 
 	idx_t total_matches = 0;
 
@@ -28,8 +33,9 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 
 		    for (auto i = list.offset; i < list.offset + list.length; i++) {
 			    const auto entry_idx = source_format.sel->get_index(i);
-			    if (source_format.validity.RowIsValid(entry_idx) &&
-			        Equals::Operation<T>(source_data[entry_idx], target)) {
+			    if (!DistinctFrom::Operation<T>(source_data[entry_idx], target,
+			                                    !source_format.validity.RowIsValid(entry_idx),
+			                                    !target_original_validity.RowIsValid(out_idx))) {
 				    total_matches++;
 				    return RETURN_POSITION ? UnsafeNumericCast<RETURN_TYPE>(1 + i - list.offset) : 1;
 			    }
