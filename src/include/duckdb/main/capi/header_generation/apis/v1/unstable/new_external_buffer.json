@@ -1,0 +1,8 @@
+{
+  "version": "unstable_new_external_buffer",
+  "description": "External buffer manager",
+  "entries": [
+    "NewCppVectorBuffer",
+    "AssignBufferToVec"
+  ]
+}

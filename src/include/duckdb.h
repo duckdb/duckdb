@@ -689,6 +689,18 @@ struct duckdb_extension_access {
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
 
+//===------------------
+// External Buffers
+//===------------------
+
+typedef struct ExternalBuffer ExternalBuffer;
+
+typedef void (*external_buffer_free)(ExternalBuffer *buffer);
+
+typedef struct {
+	void *ptr;
+} CppVectorBuffer;
+
 #ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
 
 //===--------------------------------------------------------------------===//
@@ -1847,6 +1859,19 @@ De-allocates all memory allocated for the extracted statements.
 * @param extracted_statements The extracted statements to destroy.
 */
 DUCKDB_C_API void duckdb_destroy_extracted(duckdb_extracted_statements *extracted_statements);
+
+//===--------------------------------------------------------------------===//
+// External Buffer
+//===--------------------------------------------------------------------===//
+
+/*!
+Create a new duckdb managed buffer using a external buffer and a free fn* @return A ptr to the duckdb managed buffer
+*/
+DUCKDB_C_API CppVectorBuffer *NewCppVectorBuffer(ExternalBuffer *buffer, external_buffer_free *free_fn);
+
+/*!
+TODO...*/
+DUCKDB_C_API void AssignBufferToVec(duckdb_vector vec, CppVectorBuffer *buffer);
 
 //===--------------------------------------------------------------------===//
 // Pending Result Interface

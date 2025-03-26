@@ -685,6 +685,18 @@ struct duckdb_extension_access {
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
 
+//===------------------
+// External Buffers
+//===------------------
+
+typedef struct ExternalBuffer ExternalBuffer;
+
+typedef void (*external_buffer_free)(ExternalBuffer *buffer);
+
+typedef struct {
+	void *ptr;
+} CppVectorBuffer;
+
 // FILE_CONTENT_SECTION
 
 #ifdef __cplusplus

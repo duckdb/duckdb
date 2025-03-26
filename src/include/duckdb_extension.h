@@ -542,6 +542,12 @@ typedef struct {
 	                                               idx_t row);
 #endif
 
+// External buffer manager
+#ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	CppVectorBuffer *(*NewCppVectorBuffer)(ExternalBuffer *buffer, external_buffer_free *free_fn);
+	void (*AssignBufferToVec)(duckdb_vector vec, CppVectorBuffer *buffer);
+#endif
+
 // Create and return statistics
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
 	duckdb_base_statistic (*duckdb_create_base_statistic)(duckdb_logical_type type);
@@ -984,6 +990,10 @@ typedef struct {
 
 // Version unstable_new_append_functions
 #define duckdb_append_default_to_chunk duckdb_ext_api.duckdb_append_default_to_chunk
+
+// Version unstable_new_external_buffer
+#define NewCppVectorBuffer duckdb_ext_api.NewCppVectorBuffer
+#define AssignBufferToVec  duckdb_ext_api.AssignBufferToVec
 
 // Version unstable_new_statistics_interface
 #define duckdb_create_base_statistic      duckdb_ext_api.duckdb_create_base_statistic

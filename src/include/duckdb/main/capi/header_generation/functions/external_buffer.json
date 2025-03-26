@@ -1,0 +1,41 @@
+{
+  "group": "external_buffer",
+  "deprecated": false,
+  "entries": [
+    {
+      "name": "NewCppVectorBuffer",
+      "return_type": "CppVectorBuffer *",
+      "params": [
+        {
+          "type": "ExternalBuffer *",
+          "name": "buffer"
+        },
+        {
+          "type": "external_buffer_free *",
+          "name": "free_fn"
+        }
+      ],
+      "comment": {
+        "description": "Create a new duckdb managed buffer using a external buffer and a free fn",
+        "return_value": "A ptr to the duckdb managed buffer"
+      }
+    },
+    {
+      "name": "AssignBufferToVec",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_vector",
+          "name": "vec"
+        },
+        {
+          "type": "CppVectorBuffer *",
+          "name": "buffer"
+        }
+      ],
+      "comment": {
+        "description": "TODO..."
+      }
+    }
+  ]
+}

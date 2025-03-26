@@ -471,6 +471,10 @@ typedef struct {
 
 	duckdb_state (*duckdb_append_default_to_chunk)(duckdb_appender appender, duckdb_data_chunk chunk, idx_t col,
 	                                               idx_t row);
+	// External buffer manager
+
+	CppVectorBuffer *(*NewCppVectorBuffer)(ExternalBuffer *buffer, external_buffer_free *free_fn);
+	void (*AssignBufferToVec)(duckdb_vector vec, CppVectorBuffer *buffer);
 	// Create and return statistics
 
 	duckdb_base_statistic (*duckdb_create_base_statistic)(duckdb_logical_type type);
@@ -903,6 +907,8 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_get_or_create_from_cache = duckdb_get_or_create_from_cache;
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
+	result.NewCppVectorBuffer = NewCppVectorBuffer;
+	result.AssignBufferToVec = AssignBufferToVec;
 	result.duckdb_create_base_statistic = duckdb_create_base_statistic;
 	result.duckdb_destroy_base_statistic = duckdb_destroy_base_statistic;
 	result.duckdb_statistic_set_min = duckdb_statistic_set_min;

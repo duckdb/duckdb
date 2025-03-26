@@ -58,6 +58,7 @@ ORIGINAL_FUNCTION_GROUP_ORDER = [
     'bind_values_to_prepared_statements',
     'execute_prepared_statements',
     'extract_statements',
+    'external_buffer',
     'pending_result_interface',
     'value_interface',
     'logical_type_interface',
@@ -150,7 +151,7 @@ def fetch_header_template_main():
         print(f"Could not find the header start mark: {header_mark}")
         exit(1)
 
-    return result[result.find(header_mark) + len(header_mark) :]
+    return result[result.find(header_mark) + len(header_mark):]
 
 
 # Includes the header file template.
@@ -406,7 +407,7 @@ def create_duckdb_h(file, function_groups, write_functions=True):
 
                 function_comment = create_function_comment(function)
                 function_deprecation_notice = (
-                    '**DEPRECATED**' in function_comment or '**DEPRECATION NOTICE**' in function_comment
+                        '**DEPRECATED**' in function_comment or '**DEPRECATION NOTICE**' in function_comment
                 )
                 if function_is_deprecated and not function_deprecation_notice:
                     raise Exception(
@@ -580,15 +581,15 @@ def struct_validate_exclusion_list(functions_in_struct, api_definition, exclusio
 
 
 def create_extension_api_struct(
-    function_groups,
-    function_map,
-    api_definition,
-    exclusion_set,
-    with_create_method=False,
-    with_member_invoker=False,
-    add_version_defines=False,
-    create_method_name='',
-    validate_exclusion_list=True,
+        function_groups,
+        function_map,
+        api_definition,
+        exclusion_set,
+        with_create_method=False,
+        with_member_invoker=False,
+        add_version_defines=False,
+        create_method_name='',
+        validate_exclusion_list=True,
 ):
     extension_struct_finished, functions_in_struct = generate_basic_extension_struct(
         function_map, api_definition, add_version_defines
@@ -647,15 +648,14 @@ def create_extension_api_struct(
 
 
 def create_duckdb_ext_h_versioning(
-    ext_api_version,
-    function_groups,
-    api_struct_definition,
-    exclusion_set,
-    duckdb_header,
-    duckdb_ext_header,
-    with_member_invoker=False,
+        ext_api_version,
+        function_groups,
+        api_struct_definition,
+        exclusion_set,
+        duckdb_header,
+        duckdb_ext_header,
+        with_member_invoker=False,
 ):
-
     # Create the versioning defines
     major, minor, patch = parse_semver(ext_api_version)
     versioning_defines = f"""//! Set version to latest if no explicit version is defined
@@ -810,7 +810,6 @@ def create_duckdb_c_ext_h(file, ext_api_version, function_groups, api_struct_def
 
 # Create duckdb_go_extension.h
 def create_duckdb_go_ext_h(file, ext_api_version, function_groups, api_struct_definition, exclusion_set):
-
     duckdb_ext_h = create_duckdb_ext_h_versioning(
         ext_api_version,
         function_groups,
