@@ -7,28 +7,18 @@
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 
+#include <re2/re2.h>
+
 namespace duckdb {
 
-PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<FilterPlan>> &bf_plans,
+PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<FilterPlan>> &filter_plans,
                                    idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality) {
-	for (auto &plan : bf_plans) {
-		auto BF = BuildBloomFilter(*plan);
-		this->bf_to_create.emplace_back(BF);
+    : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality),
+      filter_plans(filter_plans) {
+	for (size_t i = 0; i < filter_plans.size(); ++i) {
+		bf_to_create.emplace_back(make_shared_ptr<BloomFilter>());
+		min_max_to_create.emplace_back(make_shared_ptr<DynamicTableFilterSet>());
 	}
-}
-
-shared_ptr<BloomFilter> PhysicalCreateBF::BuildBloomFilter(FilterPlan &bf_plan) {
-	auto BF = make_shared_ptr<BloomFilter>();
-	for (auto &apply_col : bf_plan.apply) {
-		BF->column_bindings_applied_.emplace_back(apply_col->Copy());
-	}
-	for (auto &build_col : bf_plan.build) {
-		BF->column_bindings_built_.emplace_back(build_col->Copy());
-	}
-	// BF->BoundColsApply will be updated in the related PhysicalUseBF
-	BF->BoundColsBuilt = bf_plan.bound_cols_build;
-	return BF;
 }
 
 //===--------------------------------------------------------------------===//
@@ -55,8 +45,7 @@ public:
 
 class CreateBFLocalSinkState : public LocalSinkState {
 public:
-	CreateBFLocalSinkState(ClientContext &context, const PhysicalCreateBF &op)
-	    : client_context(context) {
+	CreateBFLocalSinkState(ClientContext &context, const PhysicalCreateBF &op) : client_context(context) {
 		local_data = make_uniq<ColumnDataCollection>(context, op.types);
 	}
 
@@ -187,8 +176,11 @@ SinkFinalizeType PhysicalCreateBF::Finalize(Pipeline &pipeline, Event &event, Cl
 	sink.local_data_collections.clear();
 
 	// initialize the bloom filter
-	for (auto &filter : bf_to_create) {
-		filter->Initialize(context, static_cast<uint32_t>(sink.data_collection->Count()));
+	uint32_t num_rows = static_cast<uint32_t>(sink.data_collection->Count());
+	for (size_t i = 0; i < filter_plans.size(); i++) {
+		auto &plan = filter_plans[i];
+		auto &filter = bf_to_create[i];
+		filter->Initialize(context, num_rows, plan->bound_cols_apply, plan->bound_cols_build);
 	}
 
 	sink.ScheduleFinalize(pipeline, event);

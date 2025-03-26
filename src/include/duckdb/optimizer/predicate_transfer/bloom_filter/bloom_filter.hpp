@@ -37,12 +37,15 @@ static constexpr const uint32_t LOG_BLOCK_SIZE = 5;
 class BloomFilter {
 public:
 	BloomFilter() = default;
-	void Initialize(ClientContext &context_p, uint32_t est_num_rows);
+	void Initialize(ClientContext &context_p, uint32_t est_num_rows, const vector<idx_t> &applied,
+	                const vector<idx_t> &built);
 
 	ClientContext *context;
 	BufferManager *buffer_manager;
 
 	bool finalized_;
+	vector<idx_t> bound_cols_applied;
+	vector<idx_t> bound_cols_built;
 
 public:
 	int Lookup(DataChunk &chunk, vector<uint32_t> &results);
@@ -53,13 +56,6 @@ public:
 
 	std::mutex insert_lock;
 	uint32_t *blocks_;
-
-public:
-	// The columns that this BF applies, and the columns used to build this BF
-	vector<unique_ptr<Expression>> column_bindings_applied_;
-	vector<unique_ptr<Expression>> column_bindings_built_;
-	vector<idx_t> BoundColsApplied;
-	vector<idx_t> BoundColsBuilt;
 
 private:
 	int BloomFilterLookup(int num, uint64_t *BF_RESTRICT key, uint32_t *BF_RESTRICT bf,

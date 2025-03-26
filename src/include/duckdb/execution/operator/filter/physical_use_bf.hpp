@@ -16,11 +16,15 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::USE_BF;
 
 public:
-	PhysicalUseBF(vector<LogicalType> types, shared_ptr<BloomFilter> bf, PhysicalCreateBF *related_create_bfs,
-	              idx_t estimated_cardinality);
+	PhysicalUseBF(vector<LogicalType> types, const shared_ptr<FilterPlan> &filter_plan,
+	              shared_ptr<DynamicTableFilterSet> min_max_to_use, shared_ptr<BloomFilter> bf,
+	              PhysicalCreateBF *related_create_bfs, idx_t estimated_cardinality);
+
+	shared_ptr<FilterPlan> filter_plan;
+	PhysicalCreateBF *related_creator = nullptr;
 
 	shared_ptr<BloomFilter> bf_to_use;
-	PhysicalCreateBF *related_creator = nullptr;
+	shared_ptr<DynamicTableFilterSet> min_max_to_use;
 
 public:
 	/* Operator interface */

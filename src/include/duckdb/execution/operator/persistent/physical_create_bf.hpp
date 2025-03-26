@@ -1,3 +1,11 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/execution/operator/persistent/physical_create_bf.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
@@ -13,11 +21,14 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CREATE_BF;
 
 public:
-	PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<FilterPlan>> &bf_plans,
+	PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<FilterPlan>> &filter_plans,
 	                 idx_t estimated_cardinality);
 
-	vector<shared_ptr<BloomFilter>> bf_to_create;
+	vector<shared_ptr<FilterPlan>> filter_plans;
 	shared_ptr<Pipeline> this_pipeline;
+
+	vector<shared_ptr<BloomFilter>> bf_to_create;
+	vector<shared_ptr<DynamicTableFilterSet>> min_max_to_create;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
@@ -58,8 +69,5 @@ public:
 	/* Add related createBF dependency */
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 	void BuildPipelinesFromRelated(Pipeline &current, MetaPipeline &meta_pipeline);
-
-private:
-	static shared_ptr<BloomFilter> BuildBloomFilter(FilterPlan &bf_plan);
 };
 } // namespace duckdb

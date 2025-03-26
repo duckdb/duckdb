@@ -38,9 +38,12 @@ static Vector HashColumns(DataChunk &chunk, vector<idx_t> &cols) {
 }
 } // namespace
 
-void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows) {
+void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows, const vector<idx_t> &applied,
+                             const vector<idx_t> &built) {
 	context = &context_p;
 	buffer_manager = &BufferManager::GetBufferManager(*context);
+	bound_cols_applied = applied;
+	bound_cols_built = built;
 
 	uint32_t min_bits = std::max<uint32_t>(MIN_NUM_BITS, est_num_rows * MIN_NUM_BITS_PER_KEY);
 	num_blocks_ = std::min(CeilPowerOfTwo(min_bits) >> LOG_BLOCK_SIZE, MAX_NUM_BLOCKS);
@@ -53,14 +56,14 @@ void BloomFilter::Initialize(ClientContext &context_p, uint32_t est_num_rows) {
 
 int BloomFilter::Lookup(DataChunk &chunk, vector<uint32_t> &results) {
 	int count = static_cast<int>(chunk.size());
-	Vector hashes = HashColumns(chunk, BoundColsApplied);
+	Vector hashes = HashColumns(chunk, bound_cols_applied);
 	BloomFilterLookup(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks_, results.data());
 	return count;
 }
 
 void BloomFilter::Insert(DataChunk &chunk) {
 	int count = static_cast<int>(chunk.size());
-	Vector hashes = HashColumns(chunk, BoundColsBuilt);
+	Vector hashes = HashColumns(chunk, bound_cols_built);
 	std::lock_guard<std::mutex> lock(insert_lock);
 	BloomFilterInsert(count, reinterpret_cast<uint64_t *>(hashes.GetData()), blocks_);
 }
