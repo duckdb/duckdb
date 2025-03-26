@@ -235,7 +235,7 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 	// We can't release the heap here if the current chunk's heap_block_ids is empty, because if we are iterating with
 	// PinProperties::DESTROY_AFTER_DONE, we might destroy a heap block that is needed by a later chunk, e.g.,
 	// when chunk 0 needs heap block 0, chunk 1 does not need any heap blocks, and chunk 2 needs heap block 0 again
-	ReleaseOrStoreHandles(pin_state, segment, chunk, !chunk.heap_block_ids.empty());
+	ReleaseOrStoreHandles(pin_state, segment, chunk, !chunk.heap_block_ids.Empty());
 
 	unsafe_vector<reference<TupleDataChunkPart>> parts;
 	parts.reserve(chunk.parts.size());
@@ -453,13 +453,13 @@ void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, Tup
 
 void TupleDataAllocator::ReleaseOrStoreHandlesInternal(
     TupleDataSegment &segment, unsafe_vector<BufferHandle> &pinned_handles, perfect_map_t<BufferHandle> &handles,
-    const perfect_set_t &block_ids, unsafe_vector<TupleDataBlock> &blocks, TupleDataPinProperties properties) {
+    const ContinuousIdSet &block_ids, unsafe_vector<TupleDataBlock> &blocks, TupleDataPinProperties properties) {
 	bool found_handle;
 	do {
 		found_handle = false;
 		for (auto it = handles.begin(); it != handles.end(); it++) {
 			const auto block_id = it->first;
-			if (block_ids.find(block_id) != block_ids.end()) {
+			if (block_ids.Contains(block_id)) {
 				// still required: do not release
 				continue;
 			}

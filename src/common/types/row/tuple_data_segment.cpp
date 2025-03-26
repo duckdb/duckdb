@@ -58,9 +58,9 @@ TupleDataChunk &TupleDataChunk::operator=(TupleDataChunk &&other) noexcept {
 
 void TupleDataChunk::AddPart(TupleDataChunkPart &&part, const TupleDataLayout &layout) {
 	count += part.count;
-	row_block_ids.insert(part.row_block_index);
+	row_block_ids.Insert(part.row_block_index);
 	if (!layout.AllConstant() && part.total_heap_size > 0) {
-		heap_block_ids.insert(part.heap_block_index);
+		heap_block_ids.Insert(part.heap_block_index);
 	}
 	part.lock = *lock;
 	parts.emplace_back(std::move(part));

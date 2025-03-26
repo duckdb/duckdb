@@ -6,11 +6,10 @@
 namespace duckdb {
 
 SelectionData::SelectionData(idx_t count) {
-	owned_data = Allocator::DefaultAllocator().Allocate(count * sizeof(sel_t));
+	owned_data = make_unsafe_uniq_array_uninitialized<sel_t>(count);
 #ifdef DEBUG
-	auto data = reinterpret_cast<sel_t *>(owned_data.get());
 	for (idx_t i = 0; i < count; i++) {
-		data[i] = std::numeric_limits<sel_t>::max();
+		owned_data[i] = std::numeric_limits<sel_t>::max();
 	}
 #endif
 }

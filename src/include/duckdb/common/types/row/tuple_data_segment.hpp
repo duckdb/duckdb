@@ -56,6 +56,38 @@ private:
 	static constexpr const uint32_t INVALID_INDEX = (uint32_t)-1;
 };
 
+class ContinuousIdSet {
+public:
+	ContinuousIdSet() : min_id(DConstants::INVALID_INDEX), max_id(DConstants::INVALID_INDEX) {
+	}
+
+public:
+	void Insert(const idx_t &block_id) {
+		if (Empty()) {
+			min_id = block_id;
+			max_id = block_id;
+		} else {
+			min_id = MinValue(min_id, block_id);
+			max_id = MinValue(max_id, block_id);
+		}
+	}
+
+	bool Contains(const idx_t &block_id) const {
+		if (Empty()) {
+			return false;
+		}
+		return block_id >= min_id && block_id <= max_id;
+	}
+
+	bool Empty() const {
+		return min_id == DConstants::INVALID_INDEX;
+	}
+
+private:
+	idx_t min_id;
+	idx_t max_id;
+};
+
 struct TupleDataChunk {
 public:
 	TupleDataChunk();
@@ -78,10 +110,11 @@ public:
 public:
 	//! The parts of this chunk
 	unsafe_vector<TupleDataChunkPart> parts;
+
 	//! The row block ids referenced by the chunk
-	perfect_set_t row_block_ids;
+	ContinuousIdSet row_block_ids;
 	//! The heap block ids referenced by the chunk
-	perfect_set_t heap_block_ids;
+	ContinuousIdSet heap_block_ids;
 	//! Tuple count for this chunk
 	idx_t count;
 	//! Lock for recomputing heap pointers
