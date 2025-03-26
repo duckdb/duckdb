@@ -24,7 +24,6 @@ public:
 
 public:
 	void SetStart(idx_t new_start) override;
-	bool HasChanges(idx_t start_row, idx_t end_row) const override;
 
 	ScanVectorType GetVectorScanType(ColumnScanState &state, idx_t scan_count, Vector &result) override;
 	void InitializePrefetch(PrefetchState &prefetch_state, ColumnScanState &scan_state, idx_t rows) override;
