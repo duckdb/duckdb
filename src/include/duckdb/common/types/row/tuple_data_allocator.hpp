@@ -101,8 +101,7 @@ private:
 	//! Internal function for ReleaseOrStoreHandles
 	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,
 	                                          unsafe_vector<BufferHandle> &pinned_row_handles,
-	                                          perfect_map_t<BufferHandle> &handles,
-	                                          const ContinuousIdSet &block_ids,
+	                                          perfect_map_t<BufferHandle> &handles, const ContinuousIdSet &block_ids,
 	                                          unsafe_vector<TupleDataBlock> &blocks, TupleDataPinProperties properties);
 	//! Pins the given row block
 	BufferHandle &PinRowBlock(TupleDataPinState &state, const TupleDataChunkPart &part);
