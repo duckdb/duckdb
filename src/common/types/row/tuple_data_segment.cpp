@@ -15,26 +15,6 @@ void TupleDataChunkPart::SetHeapEmpty() {
 	base_heap_ptr = nullptr;
 }
 
-void MoveTupleDataChunkPart(TupleDataChunkPart &a, TupleDataChunkPart &b) {
-	a.row_block_index = b.row_block_index;
-	a.row_block_offset = b.row_block_offset;
-	a.heap_block_index = b.heap_block_index;
-	a.heap_block_offset = b.heap_block_offset;
-	a.base_heap_ptr = b.base_heap_ptr;
-	a.total_heap_size = b.total_heap_size;
-	a.count = b.count;
-	std::swap(a.lock, b.lock);
-}
-
-TupleDataChunkPart::TupleDataChunkPart(TupleDataChunkPart &&other) noexcept : lock((other.lock)) {
-	MoveTupleDataChunkPart(*this, other);
-}
-
-TupleDataChunkPart &TupleDataChunkPart::operator=(TupleDataChunkPart &&other) noexcept {
-	MoveTupleDataChunkPart(*this, other);
-	return *this;
-}
-
 TupleDataChunk::TupleDataChunk() : count(0), lock(make_unsafe_uniq<mutex>()) {
 }
 
