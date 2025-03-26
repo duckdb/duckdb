@@ -165,7 +165,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			if (column_count_mismatch) {
 				log_message = logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
 			} else {
-				log_message = logger.WrongRowCount(expected_rows, result, comparison_values, expected_column_count, row_wise);
+				log_message =
+				    logger.WrongRowCount(expected_rows, result, comparison_values, expected_column_count, row_wise);
 			}
 			logger.AddToSummary(log_message);
 			return false;
@@ -178,7 +179,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 				auto splits = StringUtil::Split(comparison_values[i], "\t");
 				if (splits.size() != expected_column_count) {
 					if (column_count_mismatch) {
-						log_message = logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+						log_message =
+						    logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
 					}
 					log_message += logger.SplitMismatch(i + 1, expected_column_count, splits.size());
 					logger.AddToSummary(log_message);
@@ -220,7 +222,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			}
 		}
 		if (column_count_mismatch) {
-			log_message = logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
+			log_message =
+			    logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
 			logger.AddToSummary(log_result);
 			return false;
 		}

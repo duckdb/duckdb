@@ -39,12 +39,12 @@ public:
 	void OutputResult(MaterializedQueryResult &result, const vector<string> &result_values_string);
 	void OutputHash(const string &hash_value);
 	string ColumnCountMismatch(MaterializedQueryResult &result, const vector<string> &result_values_string,
-	                         idx_t expected_column_count, bool row_wise);
+	                           idx_t expected_column_count, bool row_wise);
 	string NotCleanlyDivisible(idx_t expected_column_count, idx_t actual_column_count);
 	string WrongRowCount(idx_t expected_rows, MaterializedQueryResult &result, const vector<string> &comparison_values,
-	                   idx_t expected_column_count, bool row_wise);
+	                     idx_t expected_column_count, bool row_wise);
 	string ColumnCountMismatchCorrectResult(idx_t original_expected_columns, idx_t expected_column_count,
-	                                      MaterializedQueryResult &result);
+	                                        MaterializedQueryResult &result);
 	string SplitMismatch(idx_t row_number, idx_t expected_column_count, idx_t split_count);
 	string WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result);
 	string UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result);
