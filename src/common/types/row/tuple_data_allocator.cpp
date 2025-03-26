@@ -103,8 +103,8 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 
 		// Build the next part
 		auto next = MinValue<idx_t>(append_count - offset, STANDARD_VECTOR_SIZE - chunk.count);
-		chunk.AddPart(BuildChunkPart(pin_state, chunk_state, append_offset + offset, next, chunk), layout);
-		auto &chunk_part = chunk.parts.back();
+		auto &chunk_part =
+		    chunk.AddPart(segment, BuildChunkPart(pin_state, chunk_state, append_offset + offset, next, chunk));
 		next = chunk_part.count;
 
 		segment.count += next;
@@ -126,19 +126,19 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 		}
 
 		offset += next;
-		chunk_part_indices.emplace_back(chunks.size() - 1, chunk.parts.size() - 1);
+		chunk_part_indices.emplace_back(chunks.size() - 1, chunk.part_ids.End() - 1);
 	}
 
 	// Now initialize the pointers to write the data to
 	chunk_parts.clear();
-	for (auto &indices : chunk_part_indices) {
-		chunk_parts.emplace_back(segment.chunks[indices.first].parts[indices.second]);
+	for (const auto &indices : chunk_part_indices) {
+		chunk_parts.emplace_back(segment.chunk_parts[indices.second]);
 	}
 	InitializeChunkStateInternal(pin_state, chunk_state, append_offset, false, true, false, chunk_parts);
 
 	// To reduce metadata, we try to merge chunk parts where possible
 	// Due to the way chunk parts are constructed, only the last part of the first chunk is eligible for merging
-	segment.chunks[chunk_part_indices[0].first].MergeLastChunkPart(layout);
+	segment.chunks[chunk_part_indices[0].first].MergeLastChunkPart(segment);
 
 	segment.Verify();
 }
@@ -238,9 +238,9 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 	ReleaseOrStoreHandles(pin_state, segment, chunk, !chunk.heap_block_ids.Empty());
 
 	unsafe_vector<reference<TupleDataChunkPart>> parts;
-	parts.reserve(chunk.parts.size());
-	for (auto &part : chunk.parts) {
-		parts.emplace_back(part);
+	parts.reserve(chunk.part_ids.Size());
+	for (auto part_id = chunk.part_ids.Start(); part_id < chunk.part_ids.End(); part_id++) {
+		parts.emplace_back(segment.chunk_parts[part_id]);
 	}
 
 	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, parts);

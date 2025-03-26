@@ -19,6 +19,7 @@ namespace duckdb {
 
 class TupleDataAllocator;
 class TupleDataLayout;
+struct TupleDataSegment;
 
 struct TupleDataChunkPart {
 public:
@@ -68,7 +69,7 @@ public:
 			max_id = block_id;
 		} else {
 			min_id = MinValue(min_id, block_id);
-			max_id = MinValue(max_id, block_id);
+			max_id = MaxValue(max_id, block_id);
 		}
 	}
 
@@ -81,6 +82,27 @@ public:
 
 	bool Empty() const {
 		return min_id == INVALID_INDEX;
+	}
+
+	uint32_t Start() const {
+		D_ASSERT(!Empty());
+		return min_id;
+	}
+
+	uint32_t End() const {
+		D_ASSERT(!Empty());
+		return max_id + 1;
+	}
+
+	uint32_t Size() const {
+		D_ASSERT(!Empty());
+		return End() - Start();
+	}
+
+	void DecrementMax() {
+		D_ASSERT(!Empty());
+		D_ASSERT(Size() > 1);
+		max_id--;
 	}
 
 private:
@@ -102,15 +124,15 @@ public:
 	TupleDataChunk &operator=(TupleDataChunk &&) noexcept;
 
 	//! Add a part to this chunk
-	void AddPart(TupleDataChunkPart &&part, const TupleDataLayout &layout);
+	TupleDataChunkPart &AddPart(TupleDataSegment &segment, TupleDataChunkPart &&part);
 	//! Tries to merge the last chunk part into the second-to-last one
-	void MergeLastChunkPart(const TupleDataLayout &layout);
+	void MergeLastChunkPart(TupleDataSegment &segment);
 	//! Verify counts of the parts in this chunk
-	void Verify() const;
+	void Verify(const TupleDataSegment &segment) const;
 
 public:
 	//! The parts of this chunk
-	unsafe_vector<TupleDataChunkPart> parts;
+	ContinuousIdSet part_ids;
 
 	//! The row block ids referenced by the chunk
 	ContinuousIdSet row_block_ids;
@@ -123,6 +145,9 @@ public:
 };
 
 struct TupleDataSegment {
+	friend struct TupleDataChunkPart;
+	friend struct TupleDataChunk;
+
 public:
 	explicit TupleDataSegment(shared_ptr<TupleDataAllocator> allocator);
 
@@ -151,8 +176,11 @@ public:
 public:
 	//! The allocator for this segment
 	shared_ptr<TupleDataAllocator> allocator;
+	reference<const TupleDataLayout> layout;
 	//! The chunks of this segment
 	unsafe_vector<TupleDataChunk> chunks;
+	//! The chunk parts of this segment
+	unsafe_vector<TupleDataChunkPart> chunk_parts;
 	//! The tuple count of this segment
 	idx_t count;
 	//! The data size of this segment
