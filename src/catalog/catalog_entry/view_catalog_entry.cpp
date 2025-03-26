@@ -100,6 +100,10 @@ string ViewCatalogEntry::ToSQL() const {
 	return result;
 }
 
+const SelectStatement &ViewCatalogEntry::GetQuery() {
+	return *query;
+}
+
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) const {
 	D_ASSERT(!internal);
 	auto create_info = GetInfo();

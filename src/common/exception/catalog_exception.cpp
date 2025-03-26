@@ -1,6 +1,8 @@
 #include "duckdb/common/exception/catalog_exception.hpp"
 #include "duckdb/common/to_string.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "duckdb/catalog/entry_lookup_info.hpp"
+#include "duckdb/planner/tableref/bound_at_clause.hpp"
 
 namespace duckdb {
 
@@ -11,11 +13,19 @@ CatalogException::CatalogException(const string &msg, const unordered_map<string
     : Exception(ExceptionType::CATALOG, msg, extra_info) {
 }
 
-CatalogException CatalogException::MissingEntry(CatalogType type, const string &name, const string &suggestion,
-                                                QueryErrorContext context) {
+CatalogException CatalogException::MissingEntry(const EntryLookupInfo &lookup_info, const string &suggestion) {
+	auto type = lookup_info.GetCatalogType();
+	auto context = lookup_info.GetErrorContext();
+	auto &name = lookup_info.GetEntryName();
+	auto at_clause = lookup_info.GetAtClause();
+
 	string did_you_mean;
 	if (!suggestion.empty()) {
 		did_you_mean = "\nDid you mean \"" + suggestion + "\"?";
+	}
+	string version_info;
+	if (at_clause) {
+		version_info += " at " + StringUtil::Lower(at_clause->Unit()) + " " + at_clause->GetValue().ToString();
 	}
 
 	auto extra_info = Exception::InitializeExtraInfo("MISSING_ENTRY", context.query_location);
@@ -25,9 +35,15 @@ CatalogException CatalogException::MissingEntry(CatalogType type, const string &
 	if (!suggestion.empty()) {
 		extra_info["candidates"] = suggestion;
 	}
-	return CatalogException(
-	    StringUtil::Format("%s with name %s does not exist!%s", CatalogTypeToString(type), name, did_you_mean),
-	    extra_info);
+	return CatalogException(StringUtil::Format("%s with name %s does not exist%s!%s", CatalogTypeToString(type), name,
+	                                           version_info, did_you_mean),
+	                        extra_info);
+}
+
+CatalogException CatalogException::MissingEntry(CatalogType type, const string &name, const string &suggestion,
+                                                QueryErrorContext context) {
+	EntryLookupInfo lookup_info(type, name, context);
+	return MissingEntry(lookup_info, suggestion);
 }
 
 CatalogException CatalogException::MissingEntry(const string &type, const string &name,
