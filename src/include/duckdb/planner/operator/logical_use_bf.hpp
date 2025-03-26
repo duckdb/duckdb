@@ -11,9 +11,9 @@ public:
 	static constexpr const LogicalOperatorType TYPE = LogicalOperatorType::LOGICAL_USE_BF;
 
 public:
-	explicit LogicalUseBF(shared_ptr<BloomFilterPlan> bloom_filter);
+	explicit LogicalUseBF(shared_ptr<FilterPlan> filter_plans);
 
-	shared_ptr<BloomFilterPlan> bf_to_use_plan;
+	shared_ptr<FilterPlan> filter_plan;
 	LogicalCreateBF *related_create_bf = nullptr;
 
 public:

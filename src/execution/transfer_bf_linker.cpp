@@ -21,7 +21,7 @@ void TransferBFLinker::VisitOperator(LogicalOperator &op) {
 	case State::COLLECT_BF_CREATORS: {
 		if (op.type == LogicalOperatorType::LOGICAL_CREATE_BF) {
 			auto &create_bf_op = op.Cast<LogicalCreateBF>();
-			for (auto &filter_plan : create_bf_op.bf_to_create_plans) {
+			for (auto &filter_plan : create_bf_op.filter_plans) {
 				bf_creators[filter_plan.get()] = &create_bf_op;
 			}
 		}
@@ -30,7 +30,7 @@ void TransferBFLinker::VisitOperator(LogicalOperator &op) {
 	case State::LINK_BF_USERS: {
 		if (op.type == LogicalOperatorType::LOGICAL_USE_BF) {
 			auto &use_bf_op = op.Cast<LogicalUseBF>();
-			auto &filter_plan = use_bf_op.bf_to_use_plan;
+			auto &filter_plan = use_bf_op.filter_plan;
 			auto *related_creator = bf_creators[filter_plan.get()];
 
 			if (related_creator != nullptr) {

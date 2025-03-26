@@ -13,7 +13,7 @@
 
 namespace duckdb {
 
-struct BloomFilterPlan {
+struct FilterPlan {
 	vector<unique_ptr<Expression>> build;
 	vector<unique_ptr<Expression>> apply;
 
@@ -21,7 +21,7 @@ struct BloomFilterPlan {
 	vector<idx_t> bound_cols_apply;
 
 	void Serialize(Serializer &serializer) const;
-	static unique_ptr<BloomFilterPlan> Deserialize(Deserializer &deserializer);
+	static unique_ptr<FilterPlan> Deserialize(Deserializer &deserializer);
 };
 
 class GraphEdge {
@@ -32,7 +32,7 @@ public:
 	idx_t destination;
 
 	vector<Expression *> conditions;
-	vector<shared_ptr<BloomFilterPlan>> filter_plan;
+	vector<shared_ptr<FilterPlan>> filter_plan;
 };
 
 struct Edges {
@@ -56,7 +56,7 @@ public:
 public:
 	GraphEdge *Add(idx_t other, bool is_forward, bool is_in_edge);
 	GraphEdge *Add(idx_t other, Expression *expression, bool is_forward, bool is_in_edge);
-	GraphEdge *Add(idx_t other, const shared_ptr<BloomFilterPlan> &filter_plan, bool is_forward, bool is_in_edge);
+	GraphEdge *Add(idx_t other, const shared_ptr<FilterPlan> &filter_plan, bool is_forward, bool is_in_edge);
 };
 
 using TransferGraph = unordered_map<idx_t, unique_ptr<GraphNode>>;
