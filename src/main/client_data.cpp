@@ -12,7 +12,6 @@
 #include "duckdb/main/database.hpp"
 #include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/query_profiler.hpp"
-#include "duckdb/storage/caching_file_system.hpp"
 
 namespace duckdb {
 
