@@ -537,17 +537,19 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_str, string rvalue_str) {
 	bool want_match = StringUtil::StartsWith(rvalue_str, "<REGEX>:");
 	string regex_str = StringUtil::Replace(StringUtil::Replace(rvalue_str, "<REGEX>:", ""), "<!REGEX>:", "");
+	string log_message = "";
 
 	RE2::Options options;
 	options.set_dot_nl(true);
 	RE2 re(regex_str, options);
 	if (!re.ok()) {
-		logger.PrintErrorHeader("Test error!");
-		logger.PrintLineSep();
+		log_message = logger.PrintErrorHeader("Test error!");
+		log_message += logger.PrintLineSep();
 		std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
 		          << std::endl;
-		logger.PrintLineSep();
-
+		log_message += "Failed to parse regex: " + re.error();
+		log_message += logger.PrintLineSep();
+		logger.AddToSummary(log_message);
 		return false;
 	}
 	bool regex_matches = RE2::FullMatch(lvalue_str, re);
