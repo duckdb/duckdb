@@ -34,6 +34,9 @@ public:
 	unsafe_vector<unsafe_unique_ptr<TupleDataPinState>> partition_pin_states;
 	TupleDataChunkState chunk_state;
 
+	//! Used to prevent allocating over and over (if a Vector is needed for partitioning)
+	unique_ptr<Vector> utility_vector;
+
 public:
 	template <bool fixed>
 	typename std::conditional<fixed, fixed_size_map_t<list_entry_t>, perfect_map_t<list_entry_t>>::type &GetMap() {

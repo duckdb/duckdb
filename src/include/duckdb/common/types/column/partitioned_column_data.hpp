@@ -35,6 +35,9 @@ public:
 	vector<unique_ptr<DataChunk>> partition_buffers;
 	vector<unique_ptr<ColumnDataAppendState>> partition_append_states;
 
+	//! Used to prevent allocating over and over (if a Vector is needed for partitioning)
+	unique_ptr<Vector> utility_vector;
+
 public:
 	template <bool fixed>
 	typename std::conditional<fixed, fixed_size_map_t<list_entry_t>, perfect_map_t<list_entry_t>>::type &GetMap() {
