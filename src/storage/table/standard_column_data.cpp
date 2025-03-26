@@ -270,6 +270,10 @@ bool StandardColumnData::IsPersistent() {
 	return ColumnData::IsPersistent() && validity.IsPersistent();
 }
 
+bool StandardColumnData::HasChanges(idx_t start_row, idx_t end_row) const {
+	return ColumnData::HasChanges(start_row, end_row) || validity.HasChanges(start_row, end_row);
+}
+
 PersistentColumnData StandardColumnData::Serialize() {
 	auto persistent_data = ColumnData::Serialize();
 	persistent_data.child_columns.push_back(validity.Serialize());
