@@ -13,7 +13,7 @@ namespace duckdb {
 using ValidityBytes = TupleDataLayout::ValidityBytes;
 
 TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr_p)
-    : layout_ptr(layout_ptr_p), layout(*layout_ptr),
+    : layout_ptr(std::move(layout_ptr_p)), layout(*layout_ptr),
       allocator(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr)) {
 	Initialize();
 }
