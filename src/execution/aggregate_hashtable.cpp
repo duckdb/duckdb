@@ -30,9 +30,9 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
 }
 
 GroupedAggregateHashTable::AggregateHTAppendState::AggregateHTAppendState()
-    : ht_offsets(LogicalType::UBIGINT), hash_salts(LogicalType::HASH), group_compare_vector(STANDARD_VECTOR_SIZE),
-      no_match_vector(STANDARD_VECTOR_SIZE), empty_vector(STANDARD_VECTOR_SIZE), new_groups(STANDARD_VECTOR_SIZE),
-      addresses(LogicalType::POINTER) {
+    : hashes(LogicalType::HASH), ht_offsets(LogicalType::UBIGINT), hash_salts(LogicalType::HASH),
+      group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
+      empty_vector(STANDARD_VECTOR_SIZE), new_groups(STANDARD_VECTOR_SIZE), addresses(LogicalType::POINTER) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, Allocator &allocator,
@@ -481,10 +481,9 @@ idx_t GroupedAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload,
 		return result.GetIndex();
 	}
 	// otherwise append the raw values
-	Vector hashes(LogicalType::HASH);
-	groups.Hash(hashes);
+	groups.Hash(state.hashes);
 
-	return AddChunk(groups, hashes, payload, filter);
+	return AddChunk(groups, state.hashes, payload, filter);
 }
 
 void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsafe_vector<idx_t> &filter) {
@@ -556,11 +555,10 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 
 	// find the groups associated with the addresses
 	// FIXME: this should not use the FindOrCreateGroups, creating them is unnecessary
-	Vector addresses(LogicalType::POINTER);
-	FindOrCreateGroups(groups, addresses);
+	FindOrCreateGroups(groups, state.addresses);
 	// now fetch the aggregates
 	RowOperationsState row_state(*aggregate_allocator);
-	RowOperations::FinalizeStates(row_state, layout, addresses, result, 0);
+	RowOperations::FinalizeStates(row_state, layout, state.addresses, result, 0);
 }
 
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
@@ -761,9 +759,8 @@ void GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &ad
 
 idx_t GroupedAggregateHashTable::FindOrCreateGroups(DataChunk &groups, Vector &addresses_out,
                                                     SelectionVector &new_groups_out) {
-	Vector hashes(LogicalType::HASH);
-	groups.Hash(hashes);
-	return FindOrCreateGroups(groups, hashes, addresses_out, new_groups_out);
+	groups.Hash(state.hashes);
+	return FindOrCreateGroups(groups, state.hashes, addresses_out, new_groups_out);
 }
 
 struct FlushMoveState {

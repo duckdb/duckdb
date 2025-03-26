@@ -140,6 +140,7 @@ private:
 		PartitionedTupleDataAppendState partitioned_append_state;
 		PartitionedTupleDataAppendState unpartitioned_append_state;
 
+		Vector hashes;
 		Vector ht_offsets;
 		Vector hash_salts;
 		SelectionVector group_compare_vector;
