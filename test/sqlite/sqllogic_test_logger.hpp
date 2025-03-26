@@ -33,9 +33,9 @@ public:
 	static string PrintErrorHeader(const string &file_name, idx_t query_line, const string &description);
 	string PrintResultError(const vector<string> &result_values, const vector<string> &values,
 	                        idx_t expected_column_count, bool row_wise);
-	void PrintResultError(MaterializedQueryResult &result, const vector<string> &values, idx_t expected_column_count,
-	                      bool row_wise);
-	void UnexpectedFailure(MaterializedQueryResult &result);
+	string PrintResultError(MaterializedQueryResult &result, const vector<string> &values, idx_t expected_column_count,
+	                        bool row_wise);
+	string UnexpectedFailure(MaterializedQueryResult &result);
 	void OutputResult(MaterializedQueryResult &result, const vector<string> &result_values_string);
 	void OutputHash(const string &hash_value);
 	void ColumnCountMismatch(MaterializedQueryResult &result, const vector<string> &result_values_string,
@@ -52,7 +52,6 @@ public:
 	void InternalException(MaterializedQueryResult &result);
 	static void LoadDatabaseFail(const string &dbpath, const string &message);
 	void AddToSummary(string log_message);
-	
 
 private:
 	lock_guard<mutex> log_lock;

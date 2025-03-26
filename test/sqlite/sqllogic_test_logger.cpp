@@ -41,7 +41,7 @@ string SQLLogicTestLogger::PrintExpectedResult(const vector<string> &values, idx
 			}
 		}
 	}
-	return log_message + "\n";
+	return log_message;
 }
 
 string SQLLogicTestLogger::PrintLineSep() {
@@ -139,25 +139,30 @@ string SQLLogicTestLogger::PrintResultError(const vector<string> &result_values,
 	return log_message;
 }
 
-void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
-                                          idx_t expected_column_count, bool row_wise) {
-	PrintHeader("Expected result:");
-	PrintLineSep();
-	PrintExpectedResult(values, expected_column_count, row_wise);
-	PrintLineSep();
-	PrintHeader("Actual result:");
-	PrintLineSep();
+string SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
+                                            idx_t expected_column_count, bool row_wise) {
+	string log_message = PrintHeader("Expected result:");
+	log_message += PrintLineSep();
+	log_message += PrintExpectedResult(values, expected_column_count, row_wise);
+	log_message += PrintLineSep();
+	log_message += PrintHeader("Actual result:");
+	log_message += PrintLineSep();
 	result.Print();
+	log_message += result.ToString();
+	return log_message;
 }
 
-void SQLLogicTestLogger::UnexpectedFailure(MaterializedQueryResult &result) {
-	PrintLineSep();
+string SQLLogicTestLogger::UnexpectedFailure(MaterializedQueryResult &result) {
+	string log_message = PrintLineSep();
+	log_message += "Query unexpectedly failed (" + file_name + ":" + to_string(query_line) + ")\n";
 	std::cerr << "Query unexpectedly failed (" << file_name.c_str() << ":" << query_line << ")\n";
-	PrintLineSep();
-	PrintSQL();
-	PrintLineSep();
-	PrintHeader("Actual result:");
+	log_message += PrintLineSep();
+	log_message += PrintSQL();
+	log_message += PrintLineSep();
+	log_message += PrintHeader("Actual result:");
 	result.Print();
+	log_message += result.ToString();
+	return log_message;
 }
 void SQLLogicTestLogger::OutputResult(MaterializedQueryResult &result, const vector<string> &result_values_string) {
 	// names

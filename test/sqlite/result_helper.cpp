@@ -26,11 +26,12 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 
 	SQLLogicTestLogger logger(context, query);
 	if (result.HasError()) {
-		logger.UnexpectedFailure(result);
+		string log_message = logger.UnexpectedFailure(result);
 		if (SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return true;
 		}
+		logger.AddToSummary(log_message);
 		return false;
 	}
 	idx_t row_count = result.RowCount();
