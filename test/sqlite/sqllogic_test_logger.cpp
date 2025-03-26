@@ -316,13 +316,15 @@ void SQLLogicTestLogger::ExpectedErrorMismatch(const string &expected_error, Mat
 	result.Print();
 }
 
-void SQLLogicTestLogger::InternalException(MaterializedQueryResult &result) {
-	PrintErrorHeader("Query failed with internal exception!");
-	PrintLineSep();
-	PrintSQL();
-	PrintHeader("Actual result:");
-	PrintLineSep();
+string SQLLogicTestLogger::InternalException(MaterializedQueryResult &result) {
+	string log_message = PrintErrorHeader("Query failed with internal exception!");
+	log_message += PrintLineSep();
+	log_message += PrintSQL();
+	log_message += PrintHeader("Actual result:");
+	log_message += PrintLineSep();
 	result.Print();
+	log_message += result.ToString();
+	return log_message;
 }
 
 void SQLLogicTestLogger::LoadDatabaseFail(const string &dbpath, const string &message) {

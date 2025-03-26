@@ -259,6 +259,7 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
                                             duckdb::unique_ptr<MaterializedQueryResult> owned_result) {
 	auto &result = *owned_result;
 	bool error = result.HasError();
+	string log_message = "";
 
 	SQLLogicTestLogger logger(context, statement);
 	if (runner.output_result_mode || runner.debug_mode) {
@@ -273,7 +274,8 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 		// neither are "unoptimized result differs from original result" errors
 
 		if (result.HasError() && TestIsInternalError(runner.always_fail_error_messages, result.GetError())) {
-			logger.InternalException(result);
+			log_message = logger.InternalException(result);
+			logger.AddToSummary(log_message);
 			return false;
 		}
 		if (expected_result == ExpectedResult::RESULT_UNKNOWN) {
@@ -289,7 +291,8 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 					success = MatchesRegex(logger, result.ToString(), statement.expected_error);
 				}
 				if (!success) {
-					logger.ExpectedErrorMismatch(statement.expected_error, result);
+					log_message = logger.ExpectedErrorMismatch(statement.expected_error, result);
+					logger.AddToSummary(log_message);
 					return false;
 				}
 				string success_log =
