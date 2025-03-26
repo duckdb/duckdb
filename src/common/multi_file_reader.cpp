@@ -648,12 +648,27 @@ static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &cons
 		return EvaluateFilterAgainstConstant(*child_filter, child_constant);
 	}
 	case TableFilterType::OPTIONAL_FILTER: {
-		//! Skip optional filter for now
+		auto &optional_filter = filter.Cast<OptionalFilter>();
+		if (optional_filter.child_filter) {
+			return EvaluateFilterAgainstConstant(*optional_filter.child_filter, constant);
+		}
 		return true;
 	}
 	case TableFilterType::DYNAMIC_FILTER: {
-		//! Skip dynamic filter for now
-		return true;
+		auto &dynamic_filter = filter.Cast<DynamicFilter>();
+		if (!dynamic_filter.filter_data) {
+			//! No filter_data assigned (does this mean the DynamicFilter is broken??)
+			return true;
+		}
+		if (!dynamic_filter.filter_data->initialized) {
+			//! Not initialized
+			return true;
+		}
+		if (!dynamic_filter.filter_data->filter) {
+			//! No filter present
+			return true;
+		}
+		return EvaluateFilterAgainstConstant(*dynamic_filter.filter_data->filter, constant);
 	}
 	default:
 		throw NotImplementedException("Can't evaluate TableFilterType (%s) against a constant",
