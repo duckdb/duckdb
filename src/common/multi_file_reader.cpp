@@ -781,6 +781,7 @@ static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter 
 	case TableFilterType::IS_NULL:
 	case TableFilterType::IS_NOT_NULL:
 	case TableFilterType::IN_FILTER:
+	case TableFilterType::DYNAMIC_FILTER:
 		return global_filter.Copy();
 	case TableFilterType::CONJUNCTION_OR: {
 		auto &or_filter = global_filter.Cast<ConjunctionOrFilter>();
@@ -821,13 +822,12 @@ static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter 
 		return make_uniq<StructFilter>(mapping.index, child_name, std::move(new_child_filter));
 	}
 	case TableFilterType::OPTIONAL_FILTER: {
-		//! For now we'll skip all the optional filters, as they are not necessary for correctness
-		return nullptr;
-	}
-	case TableFilterType::DYNAMIC_FILTER: {
-		//! FIXME: since this works like BoundParameterExpression,
-		// making a copy of this DynamicFilterData will not function correctly.
-		throw NotImplementedException("DynamicFilter can't be *properly* copied yet");
+		auto &optional_filter = global_filter.Cast<OptionalFilter>();
+		unique_ptr<TableFilter> child;
+		if (optional_filter.child_filter) {
+			child = ConvertFilterFromGlobalToLocal(*optional_filter.child_filter, mapping);
+		}
+		return make_uniq<OptionalFilter>(std::move(child));
 	}
 	default:
 		throw NotImplementedException("Can't convert TableFilterType (%s) from global to local indexes",
