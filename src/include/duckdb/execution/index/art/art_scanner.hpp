@@ -40,8 +40,8 @@ public:
 
 	template <class FUNC>
 	void Scan(FUNC &&handler) {
-		while (!stack.empty()) {
-			auto &entry = stack.top();
+		while (!s.empty()) {
+			auto &entry = s.top();
 			if (entry.exhausted) {
 				Pop(handler, entry.node);
 				continue;
@@ -93,7 +93,7 @@ private:
 				return;
 			}
 		}
-		stack.emplace(node);
+		s.emplace(node);
 	}
 
 	template <class FUNC>
@@ -101,7 +101,7 @@ private:
 		if (MODE == ARTScanHandlingMode::POP) {
 			handler(node);
 		}
-		stack.pop();
+		s.pop();
 	}
 
 	template <class FUNC, class NODE>
@@ -118,7 +118,7 @@ private:
 	};
 
 	ART &art;
-	stack<NodeEntry> stack;
+	stack<NodeEntry> s;
 };
 
 } // namespace duckdb
