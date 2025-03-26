@@ -451,9 +451,11 @@ void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, Tup
 	ReleaseOrStoreHandles(pin_state, segment, DUMMY_CHUNK, true);
 }
 
-void TupleDataAllocator::ReleaseOrStoreHandlesInternal(
-    TupleDataSegment &segment, unsafe_vector<BufferHandle> &pinned_handles, perfect_map_t<BufferHandle> &handles,
-    const ContinuousIdSet &block_ids, unsafe_vector<TupleDataBlock> &blocks, TupleDataPinProperties properties) {
+void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,
+                                                       unsafe_vector<BufferHandle> &pinned_handles,
+                                                       buffer_handle_map_t &handles, const ContinuousIdSet &block_ids,
+                                                       unsafe_vector<TupleDataBlock> &blocks,
+                                                       TupleDataPinProperties properties) {
 	bool found_handle;
 	do {
 		found_handle = false;

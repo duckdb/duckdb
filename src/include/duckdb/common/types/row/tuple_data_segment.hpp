@@ -53,16 +53,16 @@ public:
 
 private:
 	//! Marker for empty heaps
-	static constexpr const uint32_t INVALID_INDEX = (uint32_t)-1;
+	static constexpr uint32_t INVALID_INDEX = static_cast<uint32_t>(-1);
 };
 
 class ContinuousIdSet {
 public:
-	ContinuousIdSet() : min_id(DConstants::INVALID_INDEX), max_id(DConstants::INVALID_INDEX) {
+	ContinuousIdSet() : min_id(INVALID_INDEX), max_id(INVALID_INDEX) {
 	}
 
 public:
-	void Insert(const idx_t &block_id) {
+	void Insert(const uint32_t &block_id) {
 		if (Empty()) {
 			min_id = block_id;
 			max_id = block_id;
@@ -72,7 +72,7 @@ public:
 		}
 	}
 
-	bool Contains(const idx_t &block_id) const {
+	bool Contains(const uint32_t &block_id) const {
 		if (Empty()) {
 			return false;
 		}
@@ -80,12 +80,13 @@ public:
 	}
 
 	bool Empty() const {
-		return min_id == DConstants::INVALID_INDEX;
+		return min_id == INVALID_INDEX;
 	}
 
 private:
-	idx_t min_id;
-	idx_t max_id;
+	static constexpr uint32_t INVALID_INDEX = static_cast<uint32_t>(-1);
+	uint32_t min_id;
+	uint32_t max_id;
 };
 
 struct TupleDataChunk {
