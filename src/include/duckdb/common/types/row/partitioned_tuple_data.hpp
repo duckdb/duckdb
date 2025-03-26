@@ -85,6 +85,7 @@ public:
 
 public:
 	//! Get the layout of this PartitionedTupleData
+	shared_ptr<TupleDataLayout> GetLayoutPtr() const;
 	const TupleDataLayout &GetLayout() const;
 	//! Get the partitioning type of this PartitionedTupleData
 	PartitionedTupleDataType GetType() const;
@@ -161,7 +162,8 @@ protected:
 
 protected:
 	//! PartitionedTupleData can only be instantiated by derived classes
-	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager, const TupleDataLayout &layout);
+	PartitionedTupleData(PartitionedTupleDataType type, BufferManager &buffer_manager,
+	                     shared_ptr<TupleDataLayout> &layout_ptr);
 	PartitionedTupleData(const PartitionedTupleData &other);
 
 	//! Create a new shared allocator
@@ -180,11 +182,11 @@ protected:
 	template <bool fixed>
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
-	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) const {
+	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) {
 		if (allocators) {
 			return make_uniq<TupleDataCollection>(allocators->allocators[partition_index]);
 		} else {
-			return make_uniq<TupleDataCollection>(buffer_manager, layout);
+			return make_uniq<TupleDataCollection>(buffer_manager, layout_ptr);
 		}
 	}
 	//! Verify count/data size of this PartitionedTupleData
@@ -193,7 +195,8 @@ protected:
 protected:
 	PartitionedTupleDataType type;
 	BufferManager &buffer_manager;
-	const TupleDataLayout layout;
+	shared_ptr<TupleDataLayout> layout_ptr;
+	const TupleDataLayout &layout;
 	idx_t count;
 	idx_t data_size;
 

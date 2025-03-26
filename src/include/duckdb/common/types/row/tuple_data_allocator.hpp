@@ -52,7 +52,7 @@ public:
 
 class TupleDataAllocator {
 public:
-	TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout);
+	TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> &layout_ptr);
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
 	~TupleDataAllocator();
@@ -62,6 +62,7 @@ public:
 	//! Get the buffer allocator
 	Allocator &GetAllocator();
 	//! Get the layout
+	shared_ptr<TupleDataLayout> GetLayoutPtr() const;
 	const TupleDataLayout &GetLayout() const;
 	//! Number of row blocks
 	idx_t RowBlockCount() const;
@@ -114,7 +115,8 @@ private:
 	//! The buffer manager
 	BufferManager &buffer_manager;
 	//! The layout of the data
-	const TupleDataLayout layout;
+	shared_ptr<TupleDataLayout> layout_ptr;
+	const TupleDataLayout &layout;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 	//! Blocks storing the fixed-size rows

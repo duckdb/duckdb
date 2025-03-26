@@ -54,6 +54,7 @@ public:
 	constexpr static double LOAD_FACTOR = 1.25;
 
 	//! Get the layout of this HT
+	shared_ptr<TupleDataLayout> GetLayoutPtr();
 	const TupleDataLayout &GetLayout() const;
 	//! Number of groups in the HT
 	idx_t Count() const;

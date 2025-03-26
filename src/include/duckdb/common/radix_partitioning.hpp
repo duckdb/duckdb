@@ -107,7 +107,7 @@ private:
 //! RadixPartitionedTupleData is a PartitionedTupleData that partitions input based on the radix of a hash
 class RadixPartitionedTupleData : public PartitionedTupleData {
 public:
-	RadixPartitionedTupleData(BufferManager &buffer_manager, const TupleDataLayout &layout, idx_t radix_bits_p,
+	RadixPartitionedTupleData(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> layout_ptr, idx_t radix_bits_p,
 	                          idx_t hash_col_idx_p);
 	RadixPartitionedTupleData(const RadixPartitionedTupleData &other);
 	~RadixPartitionedTupleData() override;

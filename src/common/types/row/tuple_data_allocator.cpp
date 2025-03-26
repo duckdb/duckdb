@@ -29,12 +29,12 @@ TupleDataBlock &TupleDataBlock::operator=(TupleDataBlock &&other) noexcept {
 	return *this;
 }
 
-TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout)
-    : buffer_manager(buffer_manager), layout(layout.Copy()) {
+TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> &layout_ptr_p)
+    : buffer_manager(buffer_manager), layout_ptr(layout_ptr_p), layout(*layout_ptr) {
 }
 
 TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
-    : buffer_manager(allocator.buffer_manager), layout(allocator.layout.Copy()) {
+    : buffer_manager(allocator.buffer_manager), layout_ptr(allocator.layout_ptr), layout(*layout_ptr) {
 }
 
 void TupleDataAllocator::SetDestroyBufferUponUnpin() {
@@ -60,6 +60,10 @@ BufferManager &TupleDataAllocator::GetBufferManager() {
 
 Allocator &TupleDataAllocator::GetAllocator() {
 	return buffer_manager.GetBufferAllocator();
+}
+
+shared_ptr<TupleDataLayout> TupleDataAllocator::GetLayoutPtr() const {
+	return layout_ptr;
 }
 
 const TupleDataLayout &TupleDataAllocator::GetLayout() const {

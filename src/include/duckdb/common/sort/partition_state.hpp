@@ -82,7 +82,7 @@ public:
 	// OVER(PARTITION BY...) (hash grouping)
 	unique_ptr<RadixPartitionedTupleData> grouping_data;
 	//! Payload plus hash column
-	TupleDataLayout grouping_types;
+	shared_ptr<TupleDataLayout> grouping_types_ptr;
 	//! The number of radix bits if this partition is being synced with another
 	idx_t fixed_bits;
 

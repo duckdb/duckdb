@@ -7,20 +7,25 @@
 namespace duckdb {
 
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
-                                           const TupleDataLayout &layout_p)
-    : type(type_p), buffer_manager(buffer_manager_p), layout(layout_p.Copy()), count(0), data_size(0),
-      allocators(make_shared_ptr<PartitionTupleDataAllocators>()) {
+                                           shared_ptr<TupleDataLayout> &layout_ptr_p)
+    : type(type_p), buffer_manager(buffer_manager_p), layout_ptr(layout_ptr_p), layout(*layout_ptr), count(0),
+      data_size(0), allocators(make_shared_ptr<PartitionTupleDataAllocators>()) {
 }
 
 PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)
-    : type(other.type), buffer_manager(other.buffer_manager), layout(other.layout.Copy()), count(0), data_size(0) {
+    : type(other.type), buffer_manager(other.buffer_manager), layout_ptr(other.layout_ptr), layout(*layout_ptr),
+      count(0), data_size(0) {
 }
 
 PartitionedTupleData::~PartitionedTupleData() {
 }
 
+shared_ptr<TupleDataLayout> PartitionedTupleData::GetLayoutPtr() const {
+	return layout_ptr;
+}
+
 const TupleDataLayout &PartitionedTupleData::GetLayout() const {
-	return layout;
+	return *layout_ptr;
 }
 
 PartitionedTupleDataType PartitionedTupleData::GetType() const {
@@ -300,7 +305,7 @@ unsafe_vector<unique_ptr<TupleDataCollection>> &PartitionedTupleData::GetPartiti
 
 unique_ptr<TupleDataCollection> PartitionedTupleData::GetUnpartitioned() {
 	auto data_collection = std::move(partitions[0]);
-	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout);
+	partitions[0] = make_uniq<TupleDataCollection>(buffer_manager, layout_ptr);
 
 	for (idx_t i = 1; i < partitions.size(); i++) {
 		data_collection->Combine(*partitions[i]);
@@ -370,7 +375,7 @@ void PartitionedTupleData::Print() {
 // LCOV_EXCL_STOP
 
 void PartitionedTupleData::CreateAllocator() {
-	allocators->allocators.emplace_back(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout));
+	allocators->allocators.emplace_back(make_shared_ptr<TupleDataAllocator>(buffer_manager, layout_ptr));
 }
 
 } // namespace duckdb
