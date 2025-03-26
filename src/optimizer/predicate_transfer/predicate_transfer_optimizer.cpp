@@ -68,12 +68,12 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(
 	return plan;
 }
 
-vector<pair<idx_t, shared_ptr<BloomFilterPlan>>>
+vector<pair<idx_t, shared_ptr<FilterPlan>>>
 PredicateTransferOptimizer::CreateBloomFilterPlan(LogicalOperator &node, bool reverse) {
-	vector<pair<idx_t, shared_ptr<BloomFilterPlan>>> result;
+	vector<pair<idx_t, shared_ptr<FilterPlan>>> result;
 
-	vector<shared_ptr<BloomFilterPlan>> bfs_to_use_plan;
-	vector<shared_ptr<BloomFilterPlan>> bfs_to_create_plan;
+	vector<shared_ptr<FilterPlan>> bfs_to_use_plan;
+	vector<shared_ptr<FilterPlan>> bfs_to_create_plan;
 
 	idx_t node_id = TableOperatorManager::GetScalarTableIndex(&node);
 	if (node_id == std::numeric_limits<idx_t>::max() ||
@@ -93,7 +93,7 @@ PredicateTransferOptimizer::CreateBloomFilterPlan(LogicalOperator &node, bool re
 	if (!bfs_to_use_plan.empty() && !bfs_to_create_plan.empty()) {
 		auto last_use_bf = BuildUseBFOperator(node, bfs_to_use_plan);
 		auto create_bf = BuildCreateBFOperator(node, bfs_to_create_plan);
-		for (auto &filter : create_bf->bf_to_create_plans) {
+		for (auto &filter : create_bf->filter_plans) {
 			result.emplace_back(make_pair(node_id, filter));
 		}
 		create_bf->AddChild(unique_ptr_cast<LogicalUseBF, LogicalOperator>(std::move(last_use_bf)));
@@ -107,7 +107,7 @@ PredicateTransferOptimizer::CreateBloomFilterPlan(LogicalOperator &node, bool re
 		}
 
 		auto create_bf = BuildCreateBFOperator(node, bfs_to_create_plan);
-		for (auto &filter : create_bf->bf_to_create_plans) {
+		for (auto &filter : create_bf->filter_plans) {
 			result.emplace_back(make_pair(node_id, filter));
 		}
 		replace_map[&node] = std::move(create_bf);
@@ -116,7 +116,7 @@ PredicateTransferOptimizer::CreateBloomFilterPlan(LogicalOperator &node, bool re
 	return result;
 }
 
-void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, vector<shared_ptr<BloomFilterPlan>> &bfs_to_use_plan,
+void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, vector<shared_ptr<FilterPlan>> &bfs_to_use_plan,
                                                 vector<idx_t> &parent_nodes, bool reverse) {
 	auto &node = graph_manager.transfer_graph[cur_node_id];
 	auto &edges = reverse ? node->backward_stage_edges.in : node->forward_stage_edges.in;
@@ -132,13 +132,13 @@ void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, vector<shared
 }
 
 void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id,
-                                                   vector<shared_ptr<BloomFilterPlan>> &bfs_to_create_plan,
+                                                   vector<shared_ptr<FilterPlan>> &bfs_to_create_plan,
                                                    bool reverse) {
 	auto &node = graph_manager.transfer_graph[cur_node_id];
 	auto &edges = reverse ? node->backward_stage_edges.out : node->forward_stage_edges.out;
 
 	for (auto &edge : edges) {
-		auto bf_plan = make_shared_ptr<BloomFilterPlan>();
+		auto bf_plan = make_shared_ptr<FilterPlan>();
 
 		// Each expression leads to a bloom filter on a column on this table
 		for (auto &expr : edge->conditions) {
@@ -170,14 +170,14 @@ void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id,
 
 unique_ptr<LogicalCreateBF>
 PredicateTransferOptimizer::BuildCreateBFOperator(LogicalOperator &node,
-                                                  vector<shared_ptr<BloomFilterPlan>> &bf_plans) {
+                                                  vector<shared_ptr<FilterPlan>> &bf_plans) {
 	auto create_bf = make_uniq<LogicalCreateBF>(bf_plans);
 	create_bf->SetEstimatedCardinality(node.estimated_cardinality);
 	return create_bf;
 }
 
 unique_ptr<LogicalUseBF> PredicateTransferOptimizer::BuildUseBFOperator(LogicalOperator &node,
-                                                                        vector<shared_ptr<BloomFilterPlan>> &bf_plans) {
+                                                                        vector<shared_ptr<FilterPlan>> &bf_plans) {
 	unique_ptr<LogicalUseBF> last_operator;
 
 	// This is important for performance, not use (int i = 0; i < temp_result_to_use.size(); i++)

@@ -24,16 +24,16 @@ private:
 	unique_ptr<LogicalOperator> InsertTransferOperators(unique_ptr<LogicalOperator> plan);
 
 	//! Create Bloom filter and use existing Bloom filter for the given scan or filter node
-	vector<pair<idx_t, shared_ptr<BloomFilterPlan>>> CreateBloomFilterPlan(LogicalOperator &node, bool reverse = false);
+	vector<pair<idx_t, shared_ptr<FilterPlan>>> CreateBloomFilterPlan(LogicalOperator &node, bool reverse = false);
 
-	void GetAllBFsToUse(idx_t cur_node_id, vector<shared_ptr<BloomFilterPlan>> &bfs_to_use_plan,
+	void GetAllBFsToUse(idx_t cur_node_id, vector<shared_ptr<FilterPlan>> &bfs_to_use_plan,
 	                    vector<idx_t> &parent_nodes, bool reverse);
-	void GetAllBFsToCreate(idx_t cur_node_id, vector<shared_ptr<BloomFilterPlan>> &bfs_to_create_plan, bool reverse);
+	void GetAllBFsToCreate(idx_t cur_node_id, vector<shared_ptr<FilterPlan>> &bfs_to_create_plan, bool reverse);
 
 	static unique_ptr<LogicalCreateBF> BuildCreateBFOperator(LogicalOperator &node,
-	                                                         vector<shared_ptr<BloomFilterPlan>> &bf_plans);
+	                                                         vector<shared_ptr<FilterPlan>> &bf_plans);
 	static unique_ptr<LogicalUseBF> BuildUseBFOperator(LogicalOperator &node,
-	                                                   vector<shared_ptr<BloomFilterPlan>> &bf_plans);
+	                                                   vector<shared_ptr<FilterPlan>> &bf_plans);
 
 	//! if this node has been filtered?
 	bool HasAnyFilter(LogicalOperator &node, bool reverse = false);

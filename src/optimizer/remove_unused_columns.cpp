@@ -347,7 +347,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 
 	if (op.type == LogicalOperatorType::LOGICAL_CREATE_BF) {
 		auto &create_bf = op.Cast<LogicalCreateBF>();
-		for (const auto &cell : create_bf.bf_to_create_plans) {
+		for (const auto &cell : create_bf.filter_plans) {
 			for (auto &expr : cell->build) {
 				auto &v = expr->Cast<BoundColumnRefExpression>().binding;
 				if (column_references.find(v) != column_references.end()) {
@@ -359,7 +359,7 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 	}
 	if (op.type == LogicalOperatorType::LOGICAL_USE_BF) {
 		auto &use_bf = op.Cast<LogicalUseBF>();
-		auto &cell = use_bf.bf_to_use_plan;
+		auto &cell = use_bf.filter_plan;
 		for (auto &expr : cell->apply) {
 			auto &v = expr->Cast<BoundColumnRefExpression>().binding;
 			if (column_references.find(v) != column_references.end()) {

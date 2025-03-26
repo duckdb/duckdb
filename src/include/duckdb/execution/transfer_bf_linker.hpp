@@ -30,7 +30,7 @@ protected:
 	State state;
 
 	struct FilterPlanHash {
-		size_t operator()(const BloomFilterPlan *fp) const {
+		size_t operator()(const FilterPlan *fp) const {
 			hash_t hash = 0;
 			for (const auto &expr : fp->build) {
 				hash = CombineHash(hash, expr->Hash());
@@ -42,7 +42,7 @@ protected:
 		}
 	};
 	struct FilterPlanEquality {
-		bool operator()(const BloomFilterPlan *lhs, const BloomFilterPlan *rhs) const {
+		bool operator()(const FilterPlan *lhs, const FilterPlan *rhs) const {
 			// If the pointers are the same, trivially equal
 			if (lhs == rhs) {
 				return true;
@@ -75,6 +75,6 @@ protected:
 		}
 	};
 	unordered_set<LogicalOperator *> useful_creator;
-	unordered_map<BloomFilterPlan *, LogicalCreateBF *, FilterPlanHash, FilterPlanEquality> bf_creators;
+	unordered_map<FilterPlan *, LogicalCreateBF *, FilterPlanHash, FilterPlanEquality> bf_creators;
 };
 } // namespace duckdb

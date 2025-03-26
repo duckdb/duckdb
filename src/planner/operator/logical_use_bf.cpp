@@ -4,8 +4,8 @@
 
 namespace duckdb {
 
-LogicalUseBF::LogicalUseBF(shared_ptr<BloomFilterPlan> bloom_filter)
-    : LogicalOperator(LogicalOperatorType::LOGICAL_USE_BF), bf_to_use_plan({std::move(bloom_filter)}) {
+LogicalUseBF::LogicalUseBF(shared_ptr<FilterPlan> filter_plans)
+    : LogicalOperator(LogicalOperatorType::LOGICAL_USE_BF), filter_plan({std::move(filter_plans)}) {
 }
 
 InsertionOrderPreservingMap<string> LogicalUseBF::ParamsToString() const {
@@ -13,7 +13,7 @@ InsertionOrderPreservingMap<string> LogicalUseBF::ParamsToString() const {
 
 	result["BF Number"] = std::to_string(1);
 	string bfs;
-	auto &bf_plan = bf_to_use_plan;
+	auto &bf_plan = filter_plan;
 	bfs += "0x" + std::to_string(reinterpret_cast<uint64_t>(bf_plan.get())) + "\n";
 	bfs += "Build: ";
 	for (auto &expr : bf_plan->build) {

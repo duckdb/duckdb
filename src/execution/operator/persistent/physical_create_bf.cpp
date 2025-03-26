@@ -7,11 +7,9 @@
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
 
-#include <thread>
-
 namespace duckdb {
 
-PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<BloomFilterPlan>> &bf_plans,
+PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<FilterPlan>> &bf_plans,
                                    idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality) {
 	for (auto &plan : bf_plans) {
@@ -20,7 +18,7 @@ PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<share
 	}
 }
 
-shared_ptr<BloomFilter> PhysicalCreateBF::BuildBloomFilter(BloomFilterPlan &bf_plan) {
+shared_ptr<BloomFilter> PhysicalCreateBF::BuildBloomFilter(FilterPlan &bf_plan) {
 	auto BF = make_shared_ptr<BloomFilter>();
 	for (auto &apply_col : bf_plan.apply) {
 		BF->column_bindings_applied_.emplace_back(apply_col->Copy());
@@ -57,7 +55,8 @@ public:
 
 class CreateBFLocalSinkState : public LocalSinkState {
 public:
-	CreateBFLocalSinkState(ClientContext &context, const PhysicalCreateBF &op) : client_context(context) {
+	CreateBFLocalSinkState(ClientContext &context, const PhysicalCreateBF &op)
+	    : client_context(context) {
 		local_data = make_uniq<ColumnDataCollection>(context, op.types);
 	}
 
@@ -77,6 +76,7 @@ SinkCombineResultType PhysicalCreateBF::Combine(ExecutionContext &context, Opera
 
 	auto guard = gstate.Lock();
 	gstate.local_data_collections.push_back(std::move(state.local_data));
+
 	return SinkCombineResultType::FINISHED;
 }
 

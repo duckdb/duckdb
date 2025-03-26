@@ -26,7 +26,7 @@ bool TransferGraphManager::Build(LogicalOperator &plan) {
 	return true;
 }
 
-void TransferGraphManager::AddFilterPlan(idx_t create_table, const shared_ptr<BloomFilterPlan> &filter_plan,
+void TransferGraphManager::AddFilterPlan(idx_t create_table, const shared_ptr<FilterPlan> &filter_plan,
                                          bool reverse) {
 	bool is_forward = !reverse;
 	auto &expr = filter_plan->apply[0]->Cast<BoundColumnRefExpression>().binding;

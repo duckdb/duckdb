@@ -7,7 +7,7 @@ namespace duckdb {
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalUseBF &op) {
 	auto &plan = CreatePlan(*op.children[0]); // Generate child plan
 	auto create_bf_op = CreatePlanFromRelated(*op.related_create_bf);
-	auto &bf_plan = op.bf_to_use_plan;
+	auto &bf_plan = op.filter_plan;
 
 	shared_ptr<BloomFilter> target_bf;
 	for (auto &bf : create_bf_op->bf_to_create) {
