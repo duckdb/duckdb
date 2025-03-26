@@ -294,11 +294,12 @@ bool TestResultHelper::CheckStatementResult(const Statement &statement, ExecuteC
 
 	/* Report an error if the results do not match expectation */
 	if (error) {
-		logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
+		string log_message = logger.UnexpectedStatement(expected_result == ExpectedResult::RESULT_SUCCESS, result);
 		if (expected_result == ExpectedResult::RESULT_SUCCESS && SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return true;
 		}
+		logger.AddToSummary(log_message);
 		return false;
 	}
 	if (error) {
@@ -516,13 +517,7 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		log_message += lvalue_str + " <> " + rvalue_str + "\n";
 		log_message += logger.PrintLineSep();
 		log_message += logger.PrintResultError(result_values, values, expected_column_count, row_wise);
-		std::ofstream file("failures_summary.txt", std::ios::app);
-		if (file.is_open()) {
-			file << log_message;
-			file.close();
-		} else {
-			std::cout << "Error opening failures_summary.txt file." << std::endl;
-		}
+		logger.AddToSummary(log_message);
 		return false;
 	}
 	return true;

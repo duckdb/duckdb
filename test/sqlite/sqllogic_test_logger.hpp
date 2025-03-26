@@ -47,10 +47,12 @@ public:
 	                                      MaterializedQueryResult &result);
 	void SplitMismatch(idx_t row_number, idx_t expected_column_count, idx_t split_count);
 	void WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result);
-	void UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result);
+	string UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result);
 	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
 	void InternalException(MaterializedQueryResult &result);
 	static void LoadDatabaseFail(const string &dbpath, const string &message);
+	void AddToSummary(string log_message);
+	
 
 private:
 	lock_guard<mutex> log_lock;

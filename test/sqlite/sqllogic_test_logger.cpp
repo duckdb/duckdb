@@ -274,12 +274,14 @@ void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, Materiali
 	result.Print();
 }
 
-void SQLLogicTestLogger::UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result) {
-	PrintErrorHeader(!expect_ok ? "Query unexpectedly succeeded!" : "Query unexpectedly failed!");
-	PrintLineSep();
-	PrintSQL();
-	PrintLineSep();
+string SQLLogicTestLogger::UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result) {
+	string log_message = PrintErrorHeader(!expect_ok ? "Query unexpectedly succeeded!" : "Query unexpectedly failed!");
+	log_message += PrintLineSep();
+	log_message += PrintSQL();
+	log_message += PrintLineSep();
+	log_message += result.ToString() + "\n";
 	result.Print();
+	return log_message;
 }
 
 void SQLLogicTestLogger::ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result) {
@@ -305,6 +307,16 @@ void SQLLogicTestLogger::LoadDatabaseFail(const string &dbpath, const string &me
 	PrintLineSep();
 	Log("Error message: " + message + "\n");
 	PrintLineSep();
+}
+
+void SQLLogicTestLogger::AddToSummary(string log_message) {
+	std::ofstream file("failures_summary.txt", std::ios::app);
+	if (file.is_open()) {
+		file << log_message;
+		file.close();
+	} else {
+		std::cout << "Error opening failures_summary.txt file." << std::endl;
+	}
 }
 
 } // namespace duckdb
