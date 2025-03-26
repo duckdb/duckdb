@@ -102,7 +102,7 @@ void RowOperations::CombineStates(RowOperationsState &state, TupleDataLayout &la
 void RowOperations::FinalizeStates(RowOperationsState &state, TupleDataLayout &layout, Vector &addresses,
                                    DataChunk &result, idx_t aggr_idx) {
 	// Copy the addresses
-	if (state.addresses) {
+	if (!state.addresses) {
 		state.addresses = make_uniq<Vector>(LogicalType::POINTER);
 	}
 	auto &addresses_copy = *state.addresses;
