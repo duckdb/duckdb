@@ -89,7 +89,7 @@ void PartitionedTupleData::AppendUnified(PartitionedTupleDataAppendState &state,
 void PartitionedTupleData::Append(PartitionedTupleDataAppendState &state, TupleDataChunkState &input,
                                   const idx_t append_count) {
 	// Compute partition indices and store them in state.partition_indices
-	ComputePartitionIndices(input.row_locations, append_count, state.partition_indices);
+	ComputePartitionIndices(input.row_locations, append_count, state.partition_indices, state.utility_vector);
 
 	// Build the selection vector for the partitions
 	BuildPartitionSel(state, *FlatVector::IncrementalSelectionVector(), append_count);

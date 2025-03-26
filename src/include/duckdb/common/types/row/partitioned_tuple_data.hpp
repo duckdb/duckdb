@@ -34,7 +34,7 @@ public:
 	unsafe_vector<unsafe_unique_ptr<TupleDataPinState>> partition_pin_states;
 	TupleDataChunkState chunk_state;
 
-	//! Used to prevent allocating over and over (if a Vector is needed for partitioning)
+	//! Utility Vector for when repartitioning and copying rows straight from one collection to another
 	unique_ptr<Vector> utility_vector;
 
 public:
@@ -149,7 +149,8 @@ protected:
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
 	//! Compute partition indices from rows (similar to function above)
-	virtual void ComputePartitionIndices(Vector &row_locations, idx_t append_count, Vector &partition_indices) const {
+	virtual void ComputePartitionIndices(Vector &row_locations, idx_t append_count, Vector &partition_indices,
+	                                     unique_ptr<Vector> &utility_vector) const {
 		throw NotImplementedException("ComputePartitionIndices for this type of PartitionedTupleData");
 	}
 	//! Maximum partition index (optional)
