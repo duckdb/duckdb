@@ -42,11 +42,11 @@ public:
 };
 
 struct RowOperationsState {
-	explicit RowOperationsState(ArenaAllocator &allocator) : allocator(allocator), addresses(LogicalType::POINTER) {
+	explicit RowOperationsState(ArenaAllocator &allocator) : allocator(allocator) {
 	}
 
 	ArenaAllocator &allocator;
-	Vector addresses; // Re-usable vector for row_aggregate.cpp
+	unique_ptr<Vector> addresses; // Re-usable vector for row_aggregate.cpp
 };
 
 // RowOperations contains a set of operations that operate on data using a RowLayout

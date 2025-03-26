@@ -29,10 +29,11 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context, All
     : GroupedAggregateHashTable(context, allocator, std::move(group_types), {}, vector<AggregateObject>()) {
 }
 
-GroupedAggregateHashTable::AggregateHTAppendState::AggregateHTAppendState()
+GroupedAggregateHashTable::AggregateHTAppendState::AggregateHTAppendState(ArenaAllocator &allocator)
     : hashes(LogicalType::HASH), ht_offsets(LogicalType::UBIGINT), hash_salts(LogicalType::HASH),
       group_compare_vector(STANDARD_VECTOR_SIZE), no_match_vector(STANDARD_VECTOR_SIZE),
-      empty_vector(STANDARD_VECTOR_SIZE), new_groups(STANDARD_VECTOR_SIZE), addresses(LogicalType::POINTER) {
+      empty_vector(STANDARD_VECTOR_SIZE), new_groups(STANDARD_VECTOR_SIZE), addresses(LogicalType::POINTER),
+      row_state(allocator) {
 }
 
 GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, Allocator &allocator,
@@ -42,7 +43,7 @@ GroupedAggregateHashTable::GroupedAggregateHashTable(ClientContext &context_p, A
                                                      idx_t initial_capacity, idx_t radix_bits)
     : BaseAggregateHashTable(context_p, allocator, aggregate_objects_p, std::move(payload_types_p)), context(context_p),
       radix_bits(radix_bits), count(0), capacity(0), skip_lookups(false),
-      aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)) {
+      aggregate_allocator(make_shared_ptr<ArenaAllocator>(allocator)), state(*aggregate_allocator) {
 
 	// Append hash column to the end and initialise the row layout
 	group_types_p.emplace_back(LogicalType::HASH);
@@ -161,7 +162,6 @@ void GroupedAggregateHashTable::Destroy() {
 	// There are aggregates with destructors: Call the destructor for each of the aggregates
 	// Currently does not happen because aggregate destructors are called while scanning in RadixPartitionedHashTable
 	// LCOV_EXCL_START
-	RowOperationsState row_state(*aggregate_allocator);
 	for (auto &data_collection : partitioned_data->GetPartitions()) {
 		if (data_collection->Count() == 0) {
 			continue;
@@ -169,7 +169,7 @@ void GroupedAggregateHashTable::Destroy() {
 		TupleDataChunkIterator iterator(*data_collection, TupleDataPinProperties::DESTROY_AFTER_DONE, false);
 		auto &row_locations = iterator.GetChunkState().row_locations;
 		do {
-			RowOperations::DestroyStates(row_state, *layout_ptr, row_locations, iterator.GetCurrentChunkCount());
+			RowOperations::DestroyStates(state.row_state, *layout_ptr, row_locations, iterator.GetCurrentChunkCount());
 		} while (iterator.Next());
 		data_collection->Reset();
 	}
@@ -498,7 +498,6 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 	auto &aggregates = layout_ptr->GetAggregates();
 	idx_t filter_idx = 0;
 	idx_t payload_idx = 0;
-	RowOperationsState row_state(*aggregate_allocator);
 	for (idx_t i = 0; i < aggregates.size(); i++) {
 		auto &aggr = aggregates[i];
 		if (filter_idx >= filter.size() || i < filter[filter_idx]) {
@@ -510,10 +509,10 @@ void GroupedAggregateHashTable::UpdateAggregates(DataChunk &payload, const unsaf
 		D_ASSERT(i == filter[filter_idx]);
 
 		if (aggr.aggr_type != AggregateType::DISTINCT && aggr.filter) {
-			RowOperations::UpdateFilteredStates(row_state, filter_set.GetFilterData(i), aggr, state.addresses, payload,
-			                                    payload_idx);
+			RowOperations::UpdateFilteredStates(state.row_state, filter_set.GetFilterData(i), aggr, state.addresses,
+			                                    payload, payload_idx);
 		} else {
-			RowOperations::UpdateStates(row_state, aggr, state.addresses, payload, payload_idx, payload.size());
+			RowOperations::UpdateStates(state.row_state, aggr, state.addresses, payload, payload_idx, payload.size());
 		}
 
 		// Move to the next aggregate
@@ -564,8 +563,7 @@ void GroupedAggregateHashTable::FetchAggregates(DataChunk &groups, DataChunk &re
 	// FIXME: this should not use the FindOrCreateGroups, creating them is unnecessary
 	FindOrCreateGroups(groups, state.addresses);
 	// now fetch the aggregates
-	RowOperationsState row_state(*aggregate_allocator);
-	RowOperations::FinalizeStates(row_state, *layout_ptr, state.addresses, result, 0);
+	RowOperations::FinalizeStates(state.row_state, *layout_ptr, state.addresses, result, 0);
 }
 
 idx_t GroupedAggregateHashTable::FindOrCreateGroupsInternal(DataChunk &groups, Vector &group_hashes_v,
@@ -829,7 +827,6 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 	}
 
 	FlushMoveState fm_state(other_data);
-	RowOperationsState row_state(*aggregate_allocator);
 
 	idx_t chunk_idx = 0;
 	const auto chunk_count = other_data.ChunkCount();
@@ -840,10 +837,10 @@ void GroupedAggregateHashTable::Combine(TupleDataCollection &other_data, optiona
 		}
 		const auto input_chunk_size = fm_state.groups.size();
 		FindOrCreateGroups(fm_state.groups, fm_state.hashes, fm_state.group_addresses, fm_state.new_groups_sel);
-		RowOperations::CombineStates(row_state, *layout_ptr, fm_state.scan_state.chunk_state.row_locations,
+		RowOperations::CombineStates(state.row_state, *layout_ptr, fm_state.scan_state.chunk_state.row_locations,
 		                             fm_state.group_addresses, input_chunk_size);
 		if (layout_ptr->HasDestructor()) {
-			RowOperations::DestroyStates(row_state, *layout_ptr, fm_state.scan_state.chunk_state.row_locations,
+			RowOperations::DestroyStates(state.row_state, *layout_ptr, fm_state.scan_state.chunk_state.row_locations,
 			                             input_chunk_size);
 		}
 
