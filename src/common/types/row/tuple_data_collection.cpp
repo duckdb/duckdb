@@ -18,11 +18,6 @@ TupleDataCollection::TupleDataCollection(BufferManager &buffer_manager, shared_p
 	Initialize();
 }
 
-TupleDataCollection::TupleDataCollection(shared_ptr<TupleDataAllocator> allocator)
-    : layout_ptr(allocator->GetLayoutPtr()), layout(*layout_ptr), allocator(std::move(allocator)) {
-	Initialize();
-}
-
 TupleDataCollection::~TupleDataCollection() {
 }
 

@@ -31,7 +31,7 @@ public:
 	perfect_map_t<list_entry_t> partition_entries;
 	fixed_size_map_t<list_entry_t> fixed_partition_entries;
 
-	unsafe_vector<unsafe_unique_ptr<TupleDataPinState>> partition_pin_states;
+	unsafe_vector<TupleDataPinState> partition_pin_states;
 	TupleDataChunkState chunk_state;
 
 	//! Utility Vector for when repartitioning and copying rows straight from one collection to another
@@ -170,8 +170,6 @@ protected:
 	                     shared_ptr<TupleDataLayout> &layout_ptr);
 	PartitionedTupleData(const PartitionedTupleData &other);
 
-	//! Create a new shared allocator
-	void CreateAllocator();
 	//! Whether to use fixed size map or regular map
 	bool UseFixedSizeMap() const;
 	//! Builds a selection vector in the Append state for the partitions
@@ -187,11 +185,7 @@ protected:
 	void BuildBufferSpace(PartitionedTupleDataAppendState &state);
 	//! Create a collection for a specific a partition
 	unique_ptr<TupleDataCollection> CreatePartitionCollection(idx_t partition_index) {
-		if (allocators) {
-			return make_uniq<TupleDataCollection>(allocators->allocators[partition_index]);
-		} else {
-			return make_uniq<TupleDataCollection>(buffer_manager, layout_ptr);
-		}
+		return make_uniq<TupleDataCollection>(buffer_manager, layout_ptr);
 	}
 	//! Verify count/data size of this PartitionedTupleData
 	void Verify() const;

@@ -177,9 +177,6 @@ RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manag
 	D_ASSERT(hash_col_idx < layout.GetTypes().size());
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	allocators->allocators.reserve(num_partitions);
-	for (idx_t i = 0; i < num_partitions; i++) {
-		CreateAllocator();
-	}
 	D_ASSERT(allocators->allocators.size() == num_partitions);
 	Initialize();
 }
@@ -206,8 +203,8 @@ void RadixPartitionedTupleData::InitializeAppendStateInternal(PartitionedTupleDa
 	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
 	state.partition_pin_states.reserve(num_partitions);
 	for (idx_t i = 0; i < num_partitions; i++) {
-		state.partition_pin_states.emplace_back(make_unsafe_uniq<TupleDataPinState>());
-		partitions[i]->InitializeAppend(*state.partition_pin_states[i], properties);
+		state.partition_pin_states.emplace_back();
+		partitions[i]->InitializeAppend(state.partition_pin_states[i], properties);
 	}
 
 	// Init single chunk state
@@ -263,7 +260,7 @@ void RadixPartitionedTupleData::RepartitionFinalizeStates(PartitionedTupleData &
 	auto &partitions = new_partitioned_data.GetPartitions();
 	for (idx_t partition_index = from_idx; partition_index < to_idx; partition_index++) {
 		auto &partition = *partitions[partition_index];
-		auto &partition_pin_state = *state.partition_pin_states[partition_index];
+		auto &partition_pin_state = state.partition_pin_states[partition_index];
 		partition.FinalizePinState(partition_pin_state);
 	}
 }
