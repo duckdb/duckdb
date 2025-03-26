@@ -48,7 +48,7 @@ public:
 	string SplitMismatch(idx_t row_number, idx_t expected_column_count, idx_t split_count);
 	string WrongResultHash(QueryResult *expected_result, MaterializedQueryResult &result);
 	string UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result);
-	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
+	string ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
 	string InternalException(MaterializedQueryResult &result);
 	static void LoadDatabaseFail(const string &dbpath, const string &message);
 	void AddToSummary(string log_message);

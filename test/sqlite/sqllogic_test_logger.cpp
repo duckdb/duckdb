@@ -24,6 +24,7 @@ string SQLLogicTestLogger::PrintExpectedResult(const vector<string> &values, idx
 			fprintf(stderr, "%s\n", values[r].c_str());
 			log_message += "\n" + std::string(values[r].c_str());
 		}
+		log_message += "\n";
 	} else {
 		idx_t c = 0;
 		for (idx_t r = 0; r < values.size(); r++) {
@@ -248,19 +249,18 @@ string SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expec
                                                             MaterializedQueryResult &result) {
 	string log_message = PrintLineSep();
 	log_message += PrintErrorHeader("Wrong column count in query!");
-	log_message += std::cerr << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset
-	                         << " columns, but got " << termcolor::bold << expected_column_count << termcolor::reset
-	                         << " columns" << std::endl;
-	log_message += PrintLineSep();
+	std::cerr << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset << " columns, but got "
+	          << termcolor::bold << expected_column_count << termcolor::reset << " columns" << std::endl;
 	log_message += PrintSQL();
 	log_message += PrintLineSep();
-	log_message += std::cerr << "The expected result " << termcolor::bold << "matched" << termcolor::reset
-	                         << " the query result." << std::endl;
-	log_message += std::cerr << termcolor::bold << "Suggested fix: modify header to \"" << termcolor::green << "query "
-	                         << string(result.ColumnCount(), 'I') << termcolor::reset << termcolor::bold << "\""
-	                         << termcolor::reset << std::endl;
-	log_message += "The expected result " + "matched" + " the query result.\n";
-	log_message += "Suggested fix: modify header to \"" + "query " + string(result.ColumnCount(), 'I') + "\"\n";
+	std::cerr << "The expected result " << termcolor::bold << "matched" << termcolor::reset << " the query result."
+	          << std::endl;
+	log_message += PrintLineSep();
+	std::cerr << termcolor::bold << "Suggested fix: modify header to \"" << termcolor::green << "query "
+	          << string(result.ColumnCount(), 'I') << termcolor::reset << termcolor::bold << "\"" << termcolor::reset
+	          << std::endl;
+	log_message += "The expected result matched the query result.\n";
+	log_message += "Suggested fix: modify header to \" query " + string(result.ColumnCount(), 'I') + "\"\n";
 	log_message += PrintLineSep();
 	return log_message;
 }
@@ -313,13 +313,16 @@ string SQLLogicTestLogger::UnexpectedStatement(bool expect_ok, MaterializedQuery
 	return log_message;
 }
 
-void SQLLogicTestLogger::ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result) {
-	PrintErrorHeader("Query failed, but error message did not match expected error message: " + expected_error);
-	PrintLineSep();
-	PrintSQL();
-	PrintHeader("Actual result:");
-	PrintLineSep();
+string SQLLogicTestLogger::ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result) {
+	string log_message =
+	    PrintErrorHeader("Query failed, but error message did not match expected error message: " + expected_error);
+	log_message += PrintLineSep();
+	log_message += PrintSQL();
+	log_message += PrintHeader("Actual result:");
+	log_message += PrintLineSep();
 	result.Print();
+	log_message += result.ToString();
+	return log_message;
 }
 
 string SQLLogicTestLogger::InternalException(MaterializedQueryResult &result) {

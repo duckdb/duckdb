@@ -224,7 +224,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		if (column_count_mismatch) {
 			log_message =
 			    logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
-			logger.AddToSummary(log_result);
+			logger.AddToSummary(log_message);
 			return false;
 		}
 	} else {
