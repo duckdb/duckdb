@@ -4,7 +4,7 @@
 
 namespace duckdb {
 
-template <class T, bool RETURN_POSITION>
+template <class T, bool RETURN_POSITION, bool SET_TARGET_VALID = false>
 idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_vec, Vector &result, idx_t count) {
 
 	UnifiedVectorFormat source_format;
@@ -70,7 +70,7 @@ idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 //! true/false or the position of the value in the list. The result vector is populated with the result of the search.
 //! usually the "source" vector is the list child vector, but it is passed separately to enable searching nested
 //! children, for example when searching the keys of a MAP vectors.
-template <bool RETURN_POSITION>
+template <bool RETURN_POSITION, bool SET_TARGET_VALID = false>
 idx_t ListSearchOp(Vector &list_v, Vector &source_v, Vector &target_v, Vector &result_v, idx_t target_count) {
 	const auto type = target_v.GetType().InternalType();
 	switch (type) {
