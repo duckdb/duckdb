@@ -834,6 +834,17 @@ def test_dump_mixed(shell):
     result = test.run()
     result.check_stdout('CREATE TABLE a(d DATE, k FLOAT, t TIMESTAMP);')
 
+def test_dump_blobs(shell):
+    test = (
+        ShellTest(shell)
+        .statement("create table test(t VARCHAR, b BLOB);")
+        .statement(".changes off")
+        .statement("insert into test values('literal blob', '\\x07\\x08\\x09');")
+        .statement(".dump")
+    )
+    result = test.run()
+    result.check_stdout("'\\x07\\x08\\x09'")
+
 def test_invalid_csv(shell, tmp_path):
     file = tmp_path / 'nonsencsv.csv'
     with open(file, 'wb+') as f:
@@ -868,18 +879,6 @@ def test_mode_trash(shell):
     )
     result = test.run()
     result.check_stdout('')
-
-@pytest.mark.skip(reason="Broken test, ported directly, was commented out")
-def test_dump_blobs(shell):
-    test = (
-        ShellTest(shell)
-        .statement("CREATE TABLE a (b BLOB);")
-        .statement(".changes off")
-        .statement("INSERT INTO a VALUES (DATE '1992-01-01', 0.3, NOW());")
-        .statement(".dump")
-    )
-    result = test.run()
-    result.check_stdout('COMMIT')
 
 def test_sqlite_comments(shell):
     # Using /* <comment> */

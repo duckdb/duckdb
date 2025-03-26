@@ -195,6 +195,8 @@ public:
 	bool projecting_columns = false;
 	idx_t chunk_col_id = 0;
 
+	bool icu_loaded = false;
+
 	//! We must ensure that we keep the buffers alive until processing the query result
 	unordered_map<idx_t, shared_ptr<CSVBufferHandle>> buffer_handles;
 
