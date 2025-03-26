@@ -32,7 +32,7 @@ public:
 	string PrintErrorHeader(const string &description);
 	static string PrintErrorHeader(const string &file_name, idx_t query_line, const string &description);
 	string PrintResultError(const vector<string> &result_values, const vector<string> &values,
-	                      idx_t expected_column_count, bool row_wise);
+	                        idx_t expected_column_count, bool row_wise);
 	void PrintResultError(MaterializedQueryResult &result, const vector<string> &values, idx_t expected_column_count,
 	                      bool row_wise);
 	void UnexpectedFailure(MaterializedQueryResult &result);

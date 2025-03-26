@@ -506,8 +506,8 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		log_message += logger.PrintLineSep();
 		log_message += logger.PrintSQL();
 		log_message += logger.PrintLineSep();
-		log_message += "Mismatch on row " + std::to_string(current_row + 1) + ", column "
-		          + result.ColumnName(current_column) + "(index " + std::to_string(current_row + 1) + ")\n";
+		log_message += "Mismatch on row " + std::to_string(current_row + 1) + ", column " +
+		               result.ColumnName(current_column) + "(index " + std::to_string(current_row + 1) + ")\n";
 
 		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
 		          << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
@@ -541,7 +541,7 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_st
 		std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
 		          << std::endl;
 		logger.PrintLineSep();
-		
+
 		return false;
 	}
 	bool regex_matches = RE2::FullMatch(lvalue_str, re);

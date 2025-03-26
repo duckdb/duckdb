@@ -113,7 +113,7 @@ void SQLLogicTestLogger::PrintSQLFormatted() {
 }
 
 string SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_line, const string &description) {
-	string log_message = "next case" + file_name + "\n" + PrintLineSep() + description + " ";
+	string log_message = "next case\n" + file_name + "\n" + PrintLineSep() + description + " ";
 	std::cerr << termcolor::red << termcolor::bold << description << " " << termcolor::reset;
 	if (!file_name.empty()) {
 		log_message += "(" + file_name + ":" + std::to_string(query_line) + ")!";
@@ -128,7 +128,7 @@ string SQLLogicTestLogger::PrintErrorHeader(const string &description) {
 }
 
 string SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, const vector<string> &values,
-                                          idx_t expected_column_count, bool row_wise) {
+                                            idx_t expected_column_count, bool row_wise) {
 	string log_message = PrintHeader("Expected result:");
 	log_message += PrintLineSep();
 	log_message += PrintExpectedResult(values, expected_column_count, row_wise);

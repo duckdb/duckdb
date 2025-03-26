@@ -106,12 +106,15 @@ int main(int argc, char *argv[]) {
 		std::cout << "====================================================\n" << std::endl;
 
 		string line;
-		// int i = 1;
+		int i = 0;
 		bool has_failures = false;
 		while (std::getline(file, line)) {
-			// if line starts with "next case", increment i and print i + ": " before the line
-			// i++;
-			std::cerr << line << std::endl;
+			if (StringUtil::StartsWith(line, "next case")) {
+				i++;
+				std::cerr << i << ": ";
+			} else {
+				std::cerr << line << std::endl;
+			}
 			has_failures = true;
 		}
 		if (!has_failures) {
