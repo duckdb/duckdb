@@ -1,7 +1,9 @@
 import pytest
-import pyarrow as pa
 import duckdb
-import pyarrow.ipc as ipc
+
+pa = pytest.importorskip('pyarrow')
+
+ipc = pytest.importorskip('pyarrow.ipc')
 
 
 def get_record_batch():
@@ -16,7 +18,7 @@ class TestArrowIPCExtension(object):
         batch = get_record_batch()
         sink = pa.BufferOutputStream()
 
-        with pa.ipc.new_stream(sink, batch.schema) as writer:
+        with ipc.new_stream(sink, batch.schema) as writer:
             for _ in range(5):  # Write 5 batches into one stream
                 writer.write_batch(batch)
 
