@@ -99,6 +99,10 @@ void TupleDataChunk::MergeLastChunkPart(TupleDataSegment &segment) {
 
 TupleDataSegment::TupleDataSegment(shared_ptr<TupleDataAllocator> allocator_p)
     : allocator(std::move(allocator_p)), layout(allocator->GetLayout()), count(0), data_size(0) {
+	// We initialize these with plenty of room so that we can avoid allocations
+	static constexpr idx_t CHUNK_RESERVATION = 64;
+	chunks.reserve(CHUNK_RESERVATION);
+	chunk_parts.reserve(CHUNK_RESERVATION);
 }
 
 TupleDataSegment::~TupleDataSegment() {

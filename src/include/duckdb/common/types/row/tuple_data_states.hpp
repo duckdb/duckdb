@@ -15,6 +15,8 @@
 
 namespace duckdb {
 
+struct TupleDataChunkPart;
+
 enum class TupleDataPinProperties : uint8_t {
 	INVALID,
 	//! Keeps all passed blocks pinned while scanning/iterating over the chunks (for both reading/writing)
@@ -112,6 +114,9 @@ struct TupleDataChunkState {
 
 	vector<unique_ptr<Vector>> cached_cast_vectors;
 	vector<unique_ptr<VectorCache>> cached_cast_vector_cache;
+
+	//! Cached vector (for InitializeChunkState)
+	unsafe_vector<reference<TupleDataChunkPart>> parts;
 };
 
 struct TupleDataAppendState {

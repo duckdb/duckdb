@@ -237,13 +237,12 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 	// when chunk 0 needs heap block 0, chunk 1 does not need any heap blocks, and chunk 2 needs heap block 0 again
 	ReleaseOrStoreHandles(pin_state, segment, chunk, !chunk.heap_block_ids.Empty());
 
-	unsafe_vector<reference<TupleDataChunkPart>> parts;
-	parts.reserve(chunk.part_ids.Size());
+	chunk_state.parts.clear();
 	for (auto part_id = chunk.part_ids.Start(); part_id < chunk.part_ids.End(); part_id++) {
-		parts.emplace_back(segment.chunk_parts[part_id]);
+		chunk_state.parts.emplace_back(segment.chunk_parts[part_id]);
 	}
 
-	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, parts);
+	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, chunk_state.parts);
 }
 
 static inline void InitializeHeapSizes(const data_ptr_t row_locations[], idx_t heap_sizes[], const idx_t offset,
