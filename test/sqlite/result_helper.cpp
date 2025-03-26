@@ -23,10 +23,11 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 	auto sort_style = query.sort_style;
 	auto query_has_label = query.query_has_label;
 	auto &query_label = query.query_label;
+	string log_message = "";
 
 	SQLLogicTestLogger logger(context, query);
 	if (result.HasError()) {
-		string log_message = logger.UnexpectedFailure(result);
+		log_message += logger.UnexpectedFailure(result);
 		if (SkipErrorMessage(result.GetError())) {
 			runner.finished_processing_file = true;
 			return true;
@@ -94,7 +95,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		string csv_error;
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {
-			logger.PrintErrorHeader(csv_error);
+			log_message = logger.PrintErrorHeader(csv_error);
+			logger.AddToSummary(log_message);
 			return false;
 		}
 	} else {
@@ -152,18 +154,20 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			row_wise = true;
 		} else if (comparison_values.size() % expected_column_count != 0) {
 			if (column_count_mismatch) {
-				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+				log_message = logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
 			} else {
-				logger.NotCleanlyDivisible(expected_column_count, comparison_values.size());
+				log_message = logger.NotCleanlyDivisible(expected_column_count, comparison_values.size());
 			}
+			logger.AddToSummary(log_message);
 			return false;
 		}
 		if (expected_rows != result.RowCount()) {
 			if (column_count_mismatch) {
-				logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+				log_message = logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
 			} else {
-				logger.WrongRowCount(expected_rows, result, comparison_values, expected_column_count, row_wise);
+				log_message = logger.WrongRowCount(expected_rows, result, comparison_values, expected_column_count, row_wise);
 			}
+			logger.AddToSummary(log_message);
 			return false;
 		}
 
@@ -174,9 +178,10 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 				auto splits = StringUtil::Split(comparison_values[i], "\t");
 				if (splits.size() != expected_column_count) {
 					if (column_count_mismatch) {
-						logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
+						log_message = logger.ColumnCountMismatch(result, query.values, original_expected_columns, row_wise);
 					}
-					logger.SplitMismatch(i + 1, expected_column_count, splits.size());
+					log_message += logger.SplitMismatch(i + 1, expected_column_count, splits.size());
+					logger.AddToSummary(log_message);
 					return false;
 				}
 				for (idx_t c = 0; c < splits.size(); c++) {
@@ -215,7 +220,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			}
 		}
 		if (column_count_mismatch) {
-			logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
+			log_message = logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
+			logger.AddToSummary(log_result);
 			return false;
 		}
 	} else {
@@ -240,7 +246,8 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			if (runner.result_label_map.find(query_label) != runner.result_label_map.end()) {
 				expected_result = runner.result_label_map[query_label].get();
 			}
-			logger.WrongResultHash(expected_result, result);
+			log_message = logger.WrongResultHash(expected_result, result);
+			logger.AddToSummary(log_message);
 			return false;
 		}
 		REQUIRE(!hash_compare_error);
