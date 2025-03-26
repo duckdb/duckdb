@@ -502,17 +502,27 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		error = true;
 	}
 	if (error) {
-		logger.PrintErrorHeader("Wrong result in query!");
-		logger.PrintLineSep();
-		logger.PrintSQL();
-		logger.PrintLineSep();
+		string log_message = logger.PrintErrorHeader("Wrong result in query!");
+		log_message += logger.PrintLineSep();
+		log_message += logger.PrintSQL();
+		log_message += logger.PrintLineSep();
+		log_message += "Mismatch on row " + std::to_string(current_row + 1) + ", column "
+		          + result.ColumnName(current_column) + "(index " + std::to_string(current_row + 1) + ")\n";
 
 		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
 		          << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
 		          << termcolor::reset;
 		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
-		logger.PrintLineSep();
-		logger.PrintResultError(result_values, values, expected_column_count, row_wise);
+		log_message += lvalue_str + " <> " + rvalue_str + "\n";
+		log_message += logger.PrintLineSep();
+		log_message += logger.PrintResultError(result_values, values, expected_column_count, row_wise);
+		std::ofstream file("failures_summary.txt", std::ios::app);
+		if (file.is_open()) {
+			file << log_message;
+			file.close();
+		} else {
+			std::cout << "Error opening failures_summary.txt file." << std::endl;
+		}
 		return false;
 	}
 	return true;
@@ -531,6 +541,7 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_st
 		std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
 		          << std::endl;
 		logger.PrintLineSep();
+		
 		return false;
 	}
 	bool regex_matches = RE2::FullMatch(lvalue_str, re);

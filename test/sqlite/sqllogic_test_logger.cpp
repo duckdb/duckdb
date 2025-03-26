@@ -17,41 +17,51 @@ void SQLLogicTestLogger::Log(const string &str) {
 	std::cerr << str;
 }
 
-void SQLLogicTestLogger::PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise) {
+string SQLLogicTestLogger::PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise) {
+	string log_message = "";
 	if (row_wise) {
 		for (idx_t r = 0; r < values.size(); r++) {
 			fprintf(stderr, "%s\n", values[r].c_str());
+			log_message += "\n" + std::string(values[r].c_str());
 		}
 	} else {
 		idx_t c = 0;
 		for (idx_t r = 0; r < values.size(); r++) {
 			if (c != 0) {
 				fprintf(stderr, "\t");
+				log_message += "\t";
 			}
 			fprintf(stderr, "%s", values[r].c_str());
+			log_message += std::string(values[r].c_str());
 			c++;
 			if (c >= columns) {
 				fprintf(stderr, "\n");
+				log_message += "\n";
 				c = 0;
 			}
 		}
 	}
+	return log_message + "\n";
 }
 
-void SQLLogicTestLogger::PrintLineSep() {
+string SQLLogicTestLogger::PrintLineSep() {
 	string line_sep = string(80, '=');
 	std::cerr << termcolor::color<128, 128, 128> << line_sep << termcolor::reset << std::endl;
+	return line_sep + "\n";
 }
 
-void SQLLogicTestLogger::PrintHeader(string header) {
+string SQLLogicTestLogger::PrintHeader(string header) {
 	std::cerr << termcolor::bold << header << termcolor::reset << std::endl;
+	return header + "\n";
 }
 
-void SQLLogicTestLogger::PrintFileHeader() {
-	PrintHeader("File " + file_name + ":" + to_string(query_line) + ")");
+string SQLLogicTestLogger::PrintFileHeader() {
+	string log_message = "File " + file_name + ":" + to_string(query_line) + ")";
+	PrintHeader(log_message);
+	return log_message + "\n";
 }
 
-void SQLLogicTestLogger::PrintSQL() {
+string SQLLogicTestLogger::PrintSQL() {
 	string query = sql_query;
 	if (StringUtil::EndsWith(sql_query, "\n")) {
 		// ends with a newline: don't add one
@@ -67,6 +77,7 @@ void SQLLogicTestLogger::PrintSQL() {
 		query += "\n";
 	}
 	Log(query);
+	return query;
 }
 
 void SQLLogicTestLogger::PrintSQLFormatted() {
@@ -101,28 +112,31 @@ void SQLLogicTestLogger::PrintSQLFormatted() {
 	std::cerr << std::endl;
 }
 
-void SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_line, const string &description) {
-	PrintLineSep();
+string SQLLogicTestLogger::PrintErrorHeader(const string &file_name, idx_t query_line, const string &description) {
+	string log_message = "next case" + file_name + "\n" + PrintLineSep() + description + " ";
 	std::cerr << termcolor::red << termcolor::bold << description << " " << termcolor::reset;
 	if (!file_name.empty()) {
+		log_message += "(" + file_name + ":" + std::to_string(query_line) + ")!";
 		std::cerr << termcolor::bold << "(" << file_name << ":" << query_line << ")!" << termcolor::reset;
 	}
 	std::cerr << std::endl;
+	return log_message + "\n";
 }
 
-void SQLLogicTestLogger::PrintErrorHeader(const string &description) {
-	PrintErrorHeader(file_name, query_line, description);
+string SQLLogicTestLogger::PrintErrorHeader(const string &description) {
+	return PrintErrorHeader(file_name, query_line, description);
 }
 
-void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, const vector<string> &values,
+string SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, const vector<string> &values,
                                           idx_t expected_column_count, bool row_wise) {
-	PrintHeader("Expected result:");
-	PrintLineSep();
-	PrintExpectedResult(values, expected_column_count, row_wise);
-	PrintLineSep();
-	PrintHeader("Actual result:");
-	PrintLineSep();
-	PrintExpectedResult(result_values, expected_column_count, false);
+	string log_message = PrintHeader("Expected result:");
+	log_message += PrintLineSep();
+	log_message += PrintExpectedResult(values, expected_column_count, row_wise);
+	log_message += PrintLineSep();
+	log_message += PrintHeader("Actual result:");
+	log_message += PrintLineSep();
+	log_message += PrintExpectedResult(result_values, expected_column_count, false);
+	return log_message;
 }
 
 void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const vector<string> &values,

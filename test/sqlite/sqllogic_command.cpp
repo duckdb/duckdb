@@ -377,9 +377,6 @@ void Query::ExecuteInternal(ExecuteContext &context) const {
 			context.error_file = file_name;
 			context.error_line = query_line;
 		} else {
-			if (SummarizeFailures()) {
-				helper.AddFailureToSummary(file_name, query_line);
-			}
 			FAIL_LINE(file_name, query_line, 0);
 		}
 	}
@@ -497,9 +494,6 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 			context.error_file = file_name;
 			context.error_line = query_line;
 		} else {
-			if (SummarizeFailures()) {
-				helper.AddFailureToSummary(file_name, query_line);
-			}
 			FAIL_LINE(file_name, query_line, 0);
 		}
 	}
