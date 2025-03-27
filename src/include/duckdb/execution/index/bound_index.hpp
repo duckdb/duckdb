@@ -136,7 +136,7 @@ public:
 	void VerifyAllocations();
 
 	//! Verify the index buffers.
-	virtual void VerifyBuffers(IndexLock &l) = 0;
+	virtual void VerifyBuffers(IndexLock &l);
 	//! Obtains a lock and calls VerifyBuffers.
 	void VerifyBuffers();
 

@@ -91,6 +91,10 @@ void BoundIndex::VerifyAllocations() {
 	return VerifyAllocations(l);
 }
 
+void BoundIndex::VerifyBuffers(IndexLock &l) {
+	throw NotImplementedException("this implementation of VerifyBuffers does not exist");
+}
+
 void BoundIndex::VerifyBuffers() {
 	IndexLock l;
 	InitializeLock(l);
