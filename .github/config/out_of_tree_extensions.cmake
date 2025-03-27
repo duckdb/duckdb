@@ -62,13 +62,13 @@ endif()
 ################# DELTA
 # MinGW build is not available, and our current manylinux ci does not have enough storage space to run the rust build
 # for Delta
-if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT ${WASM_ENABLED})
-    duckdb_extension_load(delta
-            GIT_URL https://github.com/duckdb/duckdb-delta
-            GIT_TAG 6d626173e9efa6615c25eb08d979d1372100d5db
-            APPLY_PATCHES
-    )
-endif()
+# TODO re-enable
+#if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT ${WASM_ENABLED})
+#    duckdb_extension_load(delta
+#            GIT_URL https://github.com/duckdb/duckdb-delta
+#            GIT_TAG 34433495e21b9d722b3afb924939459f68c882ca
+#    )
+#endif()
 
 ################# EXCEL
 duckdb_extension_load(excel
