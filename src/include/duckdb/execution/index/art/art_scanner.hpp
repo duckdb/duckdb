@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/execution/index/art/scanner.hpp
+// duckdb/execution/index/art/art_scanner.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -88,8 +88,7 @@ private:
 	template <class FUNC>
 	void Emplace(FUNC &&handler, Node &node) {
 		if (MODE == ARTScanHandlingMode::EMPLACE) {
-			auto result = handler(node);
-			if (result == ARTScanResult::SKIP) {
+			if (handler(node) == ARTScanResult::SKIP) {
 				return;
 			}
 		}
