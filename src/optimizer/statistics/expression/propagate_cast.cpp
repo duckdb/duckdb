@@ -139,7 +139,8 @@ bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const Log
 	return true;
 }
 
-unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(BaseStatistics &stats, const LogicalType &source, const LogicalType &target) {
+unique_ptr<BaseStatistics> StatisticsPropagator::TryPropagateCast(BaseStatistics &stats, const LogicalType &source,
+                                                                  const LogicalType &target) {
 	if (!CanPropagateCast(source, target)) {
 		return nullptr;
 	}

@@ -20,7 +20,8 @@ public:
 
 public:
 	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr);
-	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr, unique_ptr<ParquetColumnSchema> expression_schema);
+	ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader, unique_ptr<Expression> expr,
+	                       unique_ptr<ParquetColumnSchema> expression_schema);
 
 	unique_ptr<ParquetColumnSchema> cast_schema;
 

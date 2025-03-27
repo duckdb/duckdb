@@ -395,8 +395,10 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 		auto column_id = entry.first;
 		auto &expression = entry.second;
 		auto child_reader = std::move(root_struct_reader.child_readers[column_id]);
-		auto expr_schema = make_uniq<ParquetColumnSchema>(child_reader->Schema(), expression->return_type, ParquetColumnSchemaType::EXPRESSION);
-		auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(child_reader), expression->Copy(), std::move(expr_schema));
+		auto expr_schema = make_uniq<ParquetColumnSchema>(child_reader->Schema(), expression->return_type,
+		                                                  ParquetColumnSchemaType::EXPRESSION);
+		auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(child_reader), expression->Copy(),
+		                                                     std::move(expr_schema));
 		root_struct_reader.child_readers[column_id] = std::move(expr_reader);
 	}
 	return ret;
@@ -887,10 +889,10 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 				// no pruning possible for expressions
 				prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
 			} else if (!column_reader.Type().IsNested() && !is_generated_column && !is_cast &&
-			    ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
-			    ParquetStatisticsUtils::BloomFilterExcludes(filter,
-			                                                group.columns[column_reader.ColumnIndex()].meta_data,
-			                                                *state.thrift_file_proto, allocator)) {
+			           ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
+			           ParquetStatisticsUtils::BloomFilterExcludes(filter,
+			                                                       group.columns[column_reader.ColumnIndex()].meta_data,
+			                                                       *state.thrift_file_proto, allocator)) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column && !is_cast &&
 			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&

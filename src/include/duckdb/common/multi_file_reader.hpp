@@ -102,12 +102,13 @@ public:
 	                                     optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Create all required mappings from the global types/names to the file-local types/names
-	DUCKDB_API virtual ReaderInitializeType
-	CreateMapping(ClientContext &context, MultiFileFileReaderData &reader_data,
-	              const vector<MultiFileReaderColumnDefinition> &global_columns,
-	              const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
-	              const string &initial_file, const MultiFileReaderBindData &bind_data,
-	              const virtual_column_map_t &virtual_columns);
+	DUCKDB_API virtual ReaderInitializeType CreateMapping(ClientContext &context, MultiFileFileReaderData &reader_data,
+	                                                      const vector<MultiFileReaderColumnDefinition> &global_columns,
+	                                                      const vector<ColumnIndex> &global_column_ids,
+	                                                      optional_ptr<TableFilterSet> filters,
+	                                                      const string &initial_file,
+	                                                      const MultiFileReaderBindData &bind_data,
+	                                                      const virtual_column_map_t &virtual_columns);
 
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
@@ -228,20 +229,20 @@ public:
 
 protected:
 	virtual ResultColumnMapping CreateColumnMapping(ClientContext &context, MultiFileFileReaderData &reader_data,
-	                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                 const vector<ColumnIndex> &global_column_ids,
-	                                 const MultiFileReaderBindData &bind_data,
-	                                 const virtual_column_map_t &virtual_columns);
-	virtual ResultColumnMapping CreateColumnMappingByFieldId(ClientContext &context, MultiFileFileReaderData &reader_data,
-	                                          const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                          const vector<ColumnIndex> &global_column_ids,
-	                                          const MultiFileReaderBindData &bind_data,
-	                                          const virtual_column_map_t &virtual_columns);
+	                                                const vector<MultiFileReaderColumnDefinition> &global_columns,
+	                                                const vector<ColumnIndex> &global_column_ids,
+	                                                const MultiFileReaderBindData &bind_data,
+	                                                const virtual_column_map_t &virtual_columns);
+	virtual ResultColumnMapping
+	CreateColumnMappingByFieldId(ClientContext &context, MultiFileFileReaderData &reader_data,
+	                             const vector<MultiFileReaderColumnDefinition> &global_columns,
+	                             const vector<ColumnIndex> &global_column_ids, const MultiFileReaderBindData &bind_data,
+	                             const virtual_column_map_t &virtual_columns);
 	virtual ResultColumnMapping CreateColumnMappingByName(ClientContext &context, MultiFileFileReaderData &reader_data,
-	                                       const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                       const vector<ColumnIndex> &global_column_ids,
-	                                       const MultiFileReaderBindData &bind_data,
-	                                       const virtual_column_map_t &virtual_columns);
+	                                                      const vector<MultiFileReaderColumnDefinition> &global_columns,
+	                                                      const vector<ColumnIndex> &global_column_ids,
+	                                                      const MultiFileReaderBindData &bind_data,
+	                                                      const virtual_column_map_t &virtual_columns);
 
 	//! Used in errors to report which function is using this MultiFileReader
 	string function_name;
