@@ -49,5 +49,5 @@ public:
 
 private:
 	static void DefaultLinePrint(OutputStream stream, const string &str);
-}
+};
 } // namespace duckdb
