@@ -123,13 +123,15 @@ CatalogSet &DuckCatalog::GetSchemaCatalogSet() {
 	return *schemas;
 }
 
-optional_ptr<SchemaCatalogEntry> DuckCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,
-                                                        OnEntryNotFound if_not_found, QueryErrorContext error_context) {
+optional_ptr<SchemaCatalogEntry> DuckCatalog::LookupSchema(CatalogTransaction transaction,
+                                                           const EntryLookupInfo &schema_lookup,
+                                                           OnEntryNotFound if_not_found) {
+	auto &schema_name = schema_lookup.GetEntryName();
 	D_ASSERT(!schema_name.empty());
 	auto entry = schemas->GetEntry(transaction, schema_name);
 	if (!entry) {
 		if (if_not_found == OnEntryNotFound::THROW_EXCEPTION) {
-			throw CatalogException(error_context, "Schema with name %s does not exist!", schema_name);
+			throw CatalogException(schema_lookup.GetErrorContext(), "Schema with name %s does not exist!", schema_name);
 		}
 		return nullptr;
 	}

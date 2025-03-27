@@ -42,6 +42,7 @@ public:
 	void LogLine(string message);
 	void LogResult(string message);
 	void LogOutput(string message);
+	void LogSummary(string benchmark, string message, size_t i);
 
 	void RunBenchmark(Benchmark *benchmark);
 	void RunBenchmarks();

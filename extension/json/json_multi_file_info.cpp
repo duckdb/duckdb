@@ -474,11 +474,12 @@ void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanG
 	const auto count = lstate.Read();
 	yyjson_val **values = scan_state.values;
 
+	auto &column_ids = json_reader.reader_data.column_ids;
 	if (!gstate.names.empty()) {
 		vector<Vector *> result_vectors;
-		result_vectors.reserve(gstate.column_ids.size());
-		for (const auto &col_idx : gstate.column_ids) {
-			result_vectors.emplace_back(&output.data[col_idx]);
+		result_vectors.reserve(column_ids.size());
+		for (idx_t i = 0; i < column_ids.size(); i++) {
+			result_vectors.emplace_back(&output.data[i]);
 		}
 
 		D_ASSERT(gstate.json_data.options.record_type != JSONRecordType::AUTO_DETECT);
@@ -521,9 +522,8 @@ void ReadJSONObjectsFunction(ClientContext &context, JSONReader &json_reader, JS
 
 	if (!gstate.names.empty()) {
 		// Create the strings without copying them
-		const auto col_idx = gstate.column_ids[0];
-		auto strings = FlatVector::GetData<string_t>(output.data[col_idx]);
-		auto &validity = FlatVector::Validity(output.data[col_idx]);
+		auto strings = FlatVector::GetData<string_t>(output.data[0]);
+		auto &validity = FlatVector::Validity(output.data[0]);
 		for (idx_t i = 0; i < count; i++) {
 			if (objects[i]) {
 				strings[i] = string_t(units[i].pointer, units[i].size);

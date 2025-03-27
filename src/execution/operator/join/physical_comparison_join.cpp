@@ -82,7 +82,6 @@ void PhysicalComparisonJoin::ConstructEmptyJoinResult(JoinType join_type, bool h
 		result.Reference(input);
 	} else if (join_type == JoinType::MARK) {
 		// MARK join with empty hash table
-		D_ASSERT(join_type == JoinType::MARK);
 		D_ASSERT(result.ColumnCount() == input.ColumnCount() + 1);
 		auto &result_vector = result.data.back();
 		D_ASSERT(result_vector.GetType() == LogicalType::BOOLEAN);

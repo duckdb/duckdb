@@ -20,7 +20,6 @@ on:
         type: string
       run_all:
         type: string
-  repository_dispatch:
   push:
     branches-ignore:
       - 'main'

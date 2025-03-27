@@ -82,9 +82,6 @@ private:
 	uint32_t GetOffset(const idx_t bitmask_count, const idx_t available_segments);
 	//! Sets the allocation size, if dirty
 	void SetAllocationSize(const idx_t available_segments, const idx_t segment_size, const idx_t bitmask_offset);
-	//! Sets all uninitialized regions of a buffer in the respective partial block allocation
-	void SetUninitializedRegions(PartialBlockForIndex &p_block_for_index, const idx_t segment_size, const idx_t offset,
-	                             const idx_t bitmask_offset, const idx_t available_segments);
 
 private:
 	//! Block manager of the database instance

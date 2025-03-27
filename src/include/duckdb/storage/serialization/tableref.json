@@ -53,6 +53,11 @@
         "id": 203,
         "name": "catalog_name",
         "type": "string"
+      },
+      {
+        "id": 204,
+        "name": "at_clause",
+        "type": "AtClause*"
       }
     ]
   },
@@ -248,5 +253,24 @@
         "type": "ShowType"
       }
     ]
+  },
+  {
+    "class": "AtClause",
+    "includes": [
+      "duckdb/parser/tableref/at_clause.hpp"
+    ],
+    "members": [
+      {
+        "id": 1,
+        "name": "unit",
+        "type": "string"
+      },
+      {
+        "id": 2,
+        "name": "expr",
+        "type": "ParsedExpression*"
+      }
+    ],
+    "constructor": ["unit", "expr"]
   }
 ]

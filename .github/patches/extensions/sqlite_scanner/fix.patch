@@ -1,8 +1,18 @@
 diff --git a/src/include/storage/sqlite_catalog.hpp b/src/include/storage/sqlite_catalog.hpp
-index 236923a..60f6f9e 100644
+index 236923a..3d9da9d 100644
 --- a/src/include/storage/sqlite_catalog.hpp
 +++ b/src/include/storage/sqlite_catalog.hpp
-@@ -41,15 +41,12 @@ public:
+@@ -33,23 +33,19 @@ public:
+ 
+ 	void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
+ 
+-	optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const string &schema_name,
+-	                                           OnEntryNotFound if_not_found,
+-	                                           QueryErrorContext error_context = QueryErrorContext()) override;
++	optional_ptr<SchemaCatalogEntry> LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
++	                                           OnEntryNotFound if_not_found) override;
+ 
+ 	SQLiteSchemaEntry &GetMainSchema() {
  		return *main_schema;
  	}
  
@@ -24,6 +34,36 @@ index 236923a..60f6f9e 100644
  	                                            unique_ptr<LogicalOperator> plan) override;
  
  	DatabaseSize GetDatabaseSize(ClientContext &context) override;
+diff --git a/src/include/storage/sqlite_schema_entry.hpp b/src/include/storage/sqlite_schema_entry.hpp
+index 1ecdb04..6661467 100644
+--- a/src/include/storage/sqlite_schema_entry.hpp
++++ b/src/include/storage/sqlite_schema_entry.hpp
+@@ -36,7 +36,7 @@ public:
+ 	void Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) override;
+ 	void DropEntry(ClientContext &context, DropInfo &info) override;
+-	optional_ptr<CatalogEntry> GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) override;
++	optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
+ 
+ private:
+ 	void AlterTable(SQLiteTransaction &transaction, RenameTableInfo &info);
+diff --git a/src/storage/sqlite_catalog.cpp b/src/storage/sqlite_catalog.cpp
+index 40a97ce..96b0802 100644
+--- a/src/storage/sqlite_catalog.cpp
++++ b/src/storage/sqlite_catalog.cpp
+@@ -31,9 +31,9 @@ void SQLiteCatalog::ScanSchemas(ClientContext &context, std::function<void(Schem
+ 	callback(*main_schema);
+ }
+ 
+-optional_ptr<SchemaCatalogEntry> SQLiteCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name,
+-                                                          OnEntryNotFound if_not_found,
+-                                                          QueryErrorContext error_context) {
++optional_ptr<SchemaCatalogEntry> SQLiteCatalog::LookupSchema(CatalogTransaction transaction, const EntryLookupInfo &schema_lookup,
++                                                          OnEntryNotFound if_not_found) {
++    auto &schema_name = schema_lookup.GetEntryName();
+ 	if (schema_name == DEFAULT_SCHEMA || schema_name == INVALID_SCHEMA) {
+ 		return main_schema.get();
+ 	}
 diff --git a/src/storage/sqlite_delete.cpp b/src/storage/sqlite_delete.cpp
 index 201e70b..bb75a40 100644
 --- a/src/storage/sqlite_delete.cpp
@@ -170,6 +210,28 @@ index d25aa9f..20cd1b7 100644
  }
  
  } // namespace duckdb
+diff --git a/src/storage/sqlite_schema_entry.cpp b/src/storage/sqlite_schema_entry.cpp
+index 5477cfd..1a9e9f5 100644
+--- a/src/storage/sqlite_schema_entry.cpp
++++ b/src/storage/sqlite_schema_entry.cpp
+@@ -296,14 +296,13 @@ void SQLiteSchemaEntry::DropEntry(ClientContext &context, DropInfo &info) {
+ 	transaction.DropEntry(info.type, info.name, info.cascade);
+ }
+ 
+-optional_ptr<CatalogEntry> SQLiteSchemaEntry::GetEntry(CatalogTransaction transaction, CatalogType type,
+-                                                       const string &name) {
++optional_ptr<CatalogEntry> SQLiteSchemaEntry::LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) {
+ 	auto &sqlite_transaction = GetSQLiteTransaction(transaction);
+-	switch (type) {
++	switch (lookup_info.GetCatalogType()) {
+ 	case CatalogType::INDEX_ENTRY:
+ 	case CatalogType::TABLE_ENTRY:
+ 	case CatalogType::VIEW_ENTRY:
+-		return sqlite_transaction.GetCatalogEntry(name);
++		return sqlite_transaction.GetCatalogEntry(lookup_info.GetEntryName());
+ 	default:
+ 		return nullptr;
+ 	}
 diff --git a/src/storage/sqlite_update.cpp b/src/storage/sqlite_update.cpp
 index 90a3934..a84137a 100644
 --- a/src/storage/sqlite_update.cpp

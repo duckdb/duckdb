@@ -26,7 +26,7 @@ InnerTableRef <- ValuesRef / TableFunction / TableSubquery / BaseTableRef / Pare
 
 TableRef <- InnerTableRef JoinOrPivot*
 TableSubquery <- Lateral? SubqueryReference TableAlias?
-BaseTableRef <- BaseTableName TableAlias?
+BaseTableRef <- BaseTableName TableAlias? AtClause?
 ValuesRef <- ValuesClause TableAlias?
 ParensTableRef <- Parens(TableRef)
 
@@ -53,6 +53,10 @@ NamedParameter <- Identifier NamedParameterAssignment Expression
 NamedParameterAssignment <- ':=' / '=>'
 
 TableAlias <- 'AS'i? Identifier ColumnAliases?
+
+AtClause <- 'AT'i Parens(AtSpecifier)
+AtSpecifier <- AtUnit '=>' Expression
+AtUnit <- 'VERSION'i / 'TIMESTAMP'i
 
 JoinClause <- RegularJoinClause / JoinWithoutOnClause
 RegularJoinClause <- 'ASOF'i? JoinType? 'JOIN'i InnerTableRef JoinQualifier

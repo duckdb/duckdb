@@ -196,7 +196,7 @@ duckdb_fsst_decompress(
          }
       }
    }
-   if (posOut+24 <= size) { // handle the possibly 3 last bytes without a loop
+   if (posOut+32 <= size) { // handle the possibly 3 last bytes without a loop
       if (posIn+2 <= lenIn) { 
 	 strOut[posOut] = strIn[posIn+1]; 
          if (strIn[posIn] != FSST_ESC) {

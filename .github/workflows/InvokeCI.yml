@@ -102,7 +102,7 @@ jobs:
     if: ${{ inputs.git_ref == '' }}
     with:
       target-branch: ${{ github.ref_name }}
-      duckdb-sha: ${{ github.head_ref }}
+      duckdb-sha: ${{ github.ref }}
 
   notify-specific-branch-on-external-repos:
     uses: ./.github/workflows/NotifyExternalRepositories.yml

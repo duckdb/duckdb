@@ -63,7 +63,7 @@ struct TemplatedValidityMask {
 public:
 	static constexpr const idx_t BITS_PER_VALUE = ValidityBuffer::BITS_PER_VALUE;
 	static constexpr const idx_t STANDARD_ENTRY_COUNT = (STANDARD_VECTOR_SIZE + (BITS_PER_VALUE - 1)) / BITS_PER_VALUE;
-	static constexpr const idx_t STANDARD_MASK_SIZE = STANDARD_ENTRY_COUNT * sizeof(validity_t);
+	static constexpr const idx_t STANDARD_MASK_SIZE = STANDARD_ENTRY_COUNT * sizeof(V);
 
 public:
 	inline TemplatedValidityMask() : validity_mask(nullptr), capacity(STANDARD_VECTOR_SIZE) {

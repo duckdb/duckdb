@@ -27,7 +27,7 @@ void TableFilterSet::PushFilter(const ColumnIndex &col_idx, unique_ptr<TableFilt
 	}
 }
 
-string TableFilter::DebugToString() {
+string TableFilter::DebugToString() const {
 	return ToString("c0");
 }
 

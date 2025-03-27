@@ -86,6 +86,9 @@ static unique_ptr<FunctionData> DuckDBFunctionsBind(ClientContext &context, Tabl
 	names.emplace_back("stability");
 	return_types.emplace_back(LogicalType::VARCHAR);
 
+	names.emplace_back("categories");
+	return_types.emplace_back(LogicalType::LIST(LogicalType::VARCHAR));
+
 	return nullptr;
 }
 
@@ -650,6 +653,10 @@ bool ExtractFunctionData(FunctionEntry &entry, idx_t function_idx, DataChunk &ou
 
 	// stability, LogicalType::VARCHAR
 	output.SetValue(col++, output_offset, OP::ResultType(function, function_idx));
+
+	// categories, LogicalType::LIST(LogicalType::VARCHAR)
+	output.SetValue(col++, output_offset,
+	                Value::LIST(LogicalType::VARCHAR, ToValueVector(function_description.categories)));
 
 	return function_idx + 1 == OP::FunctionCount(function);
 }

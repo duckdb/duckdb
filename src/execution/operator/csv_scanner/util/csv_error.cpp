@@ -20,19 +20,32 @@ CSVErrorHandler::CSVErrorHandler(bool ignore_errors_p) : ignore_errors(ignore_er
 }
 
 void CSVErrorHandler::ThrowError(const CSVError &csv_error) {
-	std::ostringstream error;
-	if (PrintLineNumber(csv_error)) {
-		error << "CSV Error on Line: " << GetLineInternal(csv_error.error_info) << '\n';
-		if (!csv_error.csv_row.empty()) {
-			error << "Original Line: " << csv_error.csv_row << '\n';
+	auto error_to_throw = csv_error;
+	idx_t error_to_throw_row = GetLineInternal(error_to_throw.error_info);
+	if (PrintLineNumber(error_to_throw) && !errors.empty()) {
+		// We stored a previous error here, we pick the one that happens the earliest to throw
+		for (const auto &error : errors) {
+			if (CanGetLine(error.GetBoundaryIndex())) {
+				idx_t cur_error_to_throw = GetLineInternal(error.error_info);
+				if (cur_error_to_throw < error_to_throw_row) {
+					error_to_throw = error;
+					error_to_throw_row = cur_error_to_throw;
+				}
+			}
 		}
 	}
-	if (csv_error.full_error_message.empty()) {
-		error << csv_error.error_message;
-	} else {
-		error << csv_error.full_error_message;
+	std::ostringstream error;
+	if (PrintLineNumber(error_to_throw)) {
+		error << "CSV Error on Line: " << error_to_throw_row << '\n';
+		if (!error_to_throw.csv_row.empty()) {
+			error << "Original Line: " << error_to_throw.csv_row << '\n';
+		}
 	}
-
+	if (error_to_throw.full_error_message.empty()) {
+		error << error_to_throw.error_message;
+	} else {
+		error << error_to_throw.full_error_message;
+	}
 	switch (csv_error.type) {
 	case CAST_ERROR:
 		throw ConversionException(error.str());

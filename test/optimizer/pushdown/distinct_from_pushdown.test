@@ -1,0 +1,27 @@
+# name: test/optimizer/pushdown/distinct_from_pushdown.test
+# description: Test DISTINCT FROM pushed down into scans
+# group: [pushdown]
+
+statement ok
+create table test as select 'tst' as tst;
+
+query I
+select * from test where tst is not distinct from 'a' or tst is not distinct from 'b';
+----
+
+query I
+select * from test where tst is distinct from 'a' or tst is distinct from 'b';
+----
+tst
+
+statement ok
+create table test2 as select 42 as tst;
+
+query I
+select * from test2 where tst is not distinct from 12 or tst is not distinct from 13;
+----
+
+query I
+select * from test2 where tst is distinct from 12 or tst is distinct from 13
+----
+42

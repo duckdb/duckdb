@@ -281,8 +281,9 @@ unique_ptr<BoundTableRef> Binder::Bind(TableFunctionRef &ref) {
 	Binder::BindSchemaOrCatalog(context, catalog, schema);
 
 	// fetch the function from the catalog
-	auto &func_catalog = *GetCatalogEntry(CatalogType::TABLE_FUNCTION_ENTRY, catalog, schema, fexpr.function_name,
-	                                      OnEntryNotFound::THROW_EXCEPTION, error_context);
+
+	EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, fexpr.function_name, error_context);
+	auto &func_catalog = *GetCatalogEntry(catalog, schema, table_function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 
 	if (func_catalog.type == CatalogType::TABLE_MACRO_ENTRY) {
 		auto &macro_func = func_catalog.Cast<TableMacroCatalogEntry>();

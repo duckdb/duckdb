@@ -60,13 +60,9 @@ GeoParquetColumnMetadataWriter::GeoParquetColumnMetadataWriter(ClientContext &co
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// These functions are required to extract the geometry type, ZM flag and bounding box from a WKB blob
-	auto &type_func_set =
-	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_geometrytype")
-	        .Cast<ScalarFunctionCatalogEntry>();
-	auto &flag_func_set = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_zmflag")
-	                          .Cast<ScalarFunctionCatalogEntry>();
-	auto &bbox_func_set = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_extent")
-	                          .Cast<ScalarFunctionCatalogEntry>();
+	auto &type_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_geometrytype");
+	auto &flag_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_zmflag");
+	auto &bbox_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_extent");
 
 	auto wkb_type = LogicalType(LogicalTypeId::BLOB);
 	wkb_type.SetAlias("WKB_BLOB");
@@ -404,8 +400,7 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 	    column.geometry_encoding == GeoParquetColumnEncoding::WKB) {
 		// Look for a conversion function in the catalog
 		auto &conversion_func_set =
-		    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_geomfromwkb")
-		        .Cast<ScalarFunctionCatalogEntry>();
+		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_geomfromwkb");
 		auto conversion_func = conversion_func_set.functions.GetFunctionByArguments(context, {LogicalType::BLOB});
 
 		// Create a bound function call expression

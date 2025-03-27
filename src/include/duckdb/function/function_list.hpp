@@ -23,6 +23,7 @@ struct StaticFunctionDefinition {
 	const char *parameters;
 	const char *description;
 	const char *example;
+	const char *categories;
 	get_scalar_function_t get_function;
 	get_scalar_function_set_t get_function_set;
 	get_aggregate_function_t get_aggregate_function;

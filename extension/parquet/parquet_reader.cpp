@@ -971,6 +971,15 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 		state.file_handle = fs.OpenFile(file_handle->path, flags);
 	}
+	state.adaptive_filter.reset();
+	state.scan_filters.clear();
+	if (reader_data.filters) {
+		state.adaptive_filter = make_uniq<AdaptiveFilter>(*reader_data.filters);
+		for (auto &entry : reader_data.filters->filters) {
+			state.scan_filters.emplace_back(context, entry.first, *entry.second);
+		}
+	}
+
 	state.thrift_file_proto = CreateThriftFileProtocol(allocator, *state.file_handle, state.prefetch_mode);
 	state.root_reader = CreateReader(context);
 	state.define_buf.resize(allocator, STANDARD_VECTOR_SIZE);
@@ -1043,7 +1052,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
 				// fetched on the first read to that buffer.
-				bool lazy_fetch = reader_data.filters;
+				bool lazy_fetch = reader_data.filters != nullptr;
 
 				// Prefetch column-wise
 				for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
@@ -1091,12 +1100,6 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		vector<bool> need_to_read(reader_data.column_ids.size(), true);
 
 		state.sel.Initialize(nullptr);
-		if (state.scan_filters.empty()) {
-			state.adaptive_filter = make_uniq<AdaptiveFilter>(*reader_data.filters);
-			for (auto &entry : reader_data.filters->filters) {
-				state.scan_filters.emplace_back(context, entry.first, *entry.second);
-			}
-		}
 		D_ASSERT(state.scan_filters.size() == reader_data.filters->filters.size());
 
 		// first load the columns that are used in filters
@@ -1107,27 +1110,14 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				break;
 			}
 			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
-			auto global_idx = MultiFileGlobalIndex(scan_filter.filter_idx);
-			auto filter_entry = reader_data.filter_map[global_idx];
-			D_ASSERT(filter_entry.IsSet());
-			if (filter_entry.IsConstant()) {
-				// this is a constant vector, look for the constant
-				auto constant_index = filter_entry.GetConstantIndex();
-				auto &constant = reader_data.constant_map[constant_index].value;
-				Vector constant_vector(constant);
-				ColumnReader::ApplyFilter(constant_vector, scan_filter.filter, *scan_filter.filter_state, scan_count,
-				                          state.sel, filter_count);
-			} else {
-				auto local_idx = filter_entry.GetLocalIndex();
-				auto column_id = reader_data.column_ids[local_idx];
-				auto result_idx = reader_data.column_mapping[local_idx];
+			auto local_idx = MultiFileLocalIndex(scan_filter.filter_idx);
+			auto column_id = reader_data.column_ids[local_idx];
 
-				auto &result_vector = result.data[result_idx];
-				auto &child_reader = root_reader.GetChildReader(column_id);
-				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
-				                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
-				need_to_read[local_idx] = false;
-			}
+			auto &result_vector = result.data[local_idx.GetIndex()];
+			auto &child_reader = root_reader.GetChildReader(column_id);
+			child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
+			                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
+			need_to_read[local_idx.GetIndex()] = false;
 		}
 		state.adaptive_filter->EndFilter(filter_state);
 
@@ -1142,7 +1132,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				root_reader.GetChildReader(file_col_idx).Skip(result.size());
 				continue;
 			}
-			auto &result_vector = result.data[reader_data.column_mapping[col_idx].GetIndex()];
+			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
 			child_reader.Select(result.size(), define_ptr, repeat_ptr, result_vector, state.sel, filter_count);
 		}
@@ -1153,8 +1143,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
 			auto col_idx = MultiFileLocalIndex(i);
 			auto file_col_idx = reader_data.column_ids[col_idx];
-			auto global_col_idx = reader_data.column_mapping[col_idx];
-			auto &result_vector = result.data[global_col_idx];
+			auto &result_vector = result.data[i];
 			auto &child_reader = root_reader.GetChildReader(file_col_idx);
 			auto rows_read = child_reader.Read(scan_count, define_ptr, repeat_ptr, result_vector);
 			if (rows_read != scan_count) {

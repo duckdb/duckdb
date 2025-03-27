@@ -2,12 +2,12 @@
 # description: Test the memory usage of the ART for various workloads
 # group: [memory]
 
-statement ok
-PRAGMA enable_verification;
-
 require noforcestorage
 
 require skip_reload
+
+statement ok
+PRAGMA enable_verification;
 
 statement ok
 CREATE FUNCTION mem_to_bytes(x) AS CASE

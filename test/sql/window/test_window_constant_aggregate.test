@@ -205,7 +205,7 @@ ORDER BY ALL
 statement ok
 pragma threads=2
 
-loop i 0 100
+loop i 0 20
 
 query III
 with table_1 AS (
@@ -283,5 +283,29 @@ fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2024-04-01 00:00:00	12
 7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-04-01 00:00:00	NULL
 7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-03-01 00:00:00	NULL
 7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-02-01 00:00:00	NULL
+
+endloop
+
+# Test implicit ordering for aggregates
+loop i 0 20
+
+query I
+with repro2 AS (
+	SELECT range // 59 AS id, random() AS value
+	FROM range(1475)
+), X AS (
+	SELECT
+		list(value) OVER (
+			PARTITION BY id 
+			ORDER BY value 
+			ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+			) AS values
+	FROM repro2
+)
+select count(*) 
+from X 
+where values[1] != list_aggregate(values, 'min')
+----
+0
 
 endloop

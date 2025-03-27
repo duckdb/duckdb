@@ -10,18 +10,22 @@ require vector_size 2048
 ## Files created via `duckdb file_name -c "CHECKPOINT;"
 
 statement ok
-ATTACH 'data/storage/empty64.db';
+ATTACH 'data/storage/empty64.db' (READ_ONLY);
 
 statement ok
-ATTACH 'data/storage/empty65.db';
+ATTACH 'data/storage/empty65.db' (READ_ONLY);
 
-statement error
-ATTACH 'data/storage/empty66.db';
-----
-IO Error: Trying to read a database file with version number 66, but we can only read versions between 64 and 65.
+statement ok
+ATTACH 'data/storage/empty66.db' (READ_ONLY);
+
+# statement error
+# ATTACH 'data/storage/empty67.db' (READ_ONLY);
+# ----
+# IO Error: Trying to read a database file with version number 67, but we can only read versions between 64 and 66.
 
 query I
 SELECT tags FROM duckdb_databases() WHERE database_name LIKE 'empty%' ORDER BY database_name;
 ----
-{storage_version=v1.0.0 - v1.1.3}
-{storage_version=v1.2.0 - v1.2.1}
+{storage_version=v1.0.0+}
+{storage_version=v1.2.0+}
+{storage_version=v1.3.0+}

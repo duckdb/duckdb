@@ -506,7 +506,12 @@ void WindowBoundariesState::Bounds(DataChunk &bounds, idx_t row_idx, optional_pt
 	bounds.Reset();
 	D_ASSERT(bounds.ColumnCount() == 8);
 
+	//	Have we jumped from the previous position?
 	const auto is_jump = (next_pos != row_idx);
+	if (is_jump) {
+		next_pos = row_idx;
+	}
+
 	if (required.count(PARTITION_BEGIN)) {
 		PartitionBegin(bounds, row_idx, count, is_jump, partition_mask);
 	}

@@ -38,6 +38,7 @@ struct BoundCreateTableInfo;
 
 class TableFunction;
 struct FunctionData;
+struct EntryLookupInfo;
 
 class Binder;
 struct ColumnSegmentInfo;
@@ -94,6 +95,8 @@ public:
 
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
+	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
+	                                      const EntryLookupInfo &lookup_info);
 
 	virtual bool IsDuckTable() const {
 		return false;

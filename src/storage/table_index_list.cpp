@@ -83,7 +83,7 @@ void TableIndexList::InitializeIndexes(ClientContext &context, DataTableInfo &ta
 	auto &catalog = table_info.GetDB().GetCatalog();
 	auto schema = table_info.GetSchemaName();
 	auto table_name = table_info.GetTableName();
-	auto &table_entry = catalog.GetEntry(context, CatalogType::TABLE_ENTRY, schema, table_name);
+	auto &table_entry = catalog.GetEntry<TableCatalogEntry>(context, schema, table_name);
 	auto &table = table_entry.Cast<DuckTableEntry>();
 
 	vector<LogicalType> column_types;

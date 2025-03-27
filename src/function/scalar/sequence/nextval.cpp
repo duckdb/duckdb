@@ -32,9 +32,8 @@ struct NextSequenceValueOperator {
 SequenceCatalogEntry &BindSequence(Binder &binder, string &catalog, string &schema, const string &name) {
 	// fetch the sequence from the catalog
 	Binder::BindSchemaOrCatalog(binder.context, catalog, schema);
-	return binder.EntryRetriever()
-	    .GetEntry(CatalogType::SEQUENCE_ENTRY, catalog, schema, name)
-	    ->Cast<SequenceCatalogEntry>();
+	EntryLookupInfo sequence_lookup(CatalogType::SEQUENCE_ENTRY, name);
+	return binder.EntryRetriever().GetEntry(catalog, schema, sequence_lookup)->Cast<SequenceCatalogEntry>();
 }
 
 SequenceCatalogEntry &BindSequenceFromContext(ClientContext &context, string &catalog, string &schema,

@@ -282,6 +282,12 @@ idx_t TemporaryMemoryManager::ComputeReservation(const TemporaryMemoryState &tem
 		// Update counts
 		res[min_idx] += delta;
 		remaining_memory -= delta;
+
+		// If we aren't able to assign the remaining memory to the lowest-derivative state in the last iteration,
+		// we'll exit this loop without assigning all free memory. This adds another iteration
+		if (opt_idx == optimization_iterations - 1 && delta < iter_memory) {
+			opt_idx--;
+		}
 	}
 	D_ASSERT(remaining_memory == 0);
 

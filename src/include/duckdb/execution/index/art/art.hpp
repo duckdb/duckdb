@@ -115,9 +115,11 @@ public:
 	                        unsafe_vector<ARTKey> &row_id_keys);
 
 	//! Verifies the nodes and optionally returns a string of the ART.
-	string VerifyAndToString(IndexLock &state, const bool only_verify) override;
+	string VerifyAndToString(IndexLock &l, const bool only_verify) override;
 	//! Verifies that the node allocations match the node counts.
-	void VerifyAllocations(IndexLock &state) override;
+	void VerifyAllocations(IndexLock &l) override;
+	//! Verifies the index buffers.
+	void VerifyBuffers(IndexLock &l) override;
 
 private:
 	bool SearchEqual(ARTKey &key, idx_t max_count, unsafe_vector<row_t> &row_ids);

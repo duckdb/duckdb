@@ -1,0 +1,21 @@
+# name: test/sql/subquery/scalar/in_multiple_columns.test
+# description: Test IN operator with multiple columns
+# group: [scalar]
+
+statement ok
+CREATE TABLE table1(x INTEGER, y INTEGER);
+
+statement ok
+INSERT INTO table1 VALUES (NULL, 2), (1, NULL);
+
+statement ok
+CREATE TABLE table2(i INTEGER);
+
+statement ok
+INSERT INTO table2 VALUES (1), (2), (3);
+
+query I
+SELECT (x, y) IN (SELECT i, i + 1 FROM table2) from table1;
+----
+NULL
+NULL

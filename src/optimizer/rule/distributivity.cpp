@@ -42,9 +42,10 @@ unique_ptr<Expression> DistributivityRule::ExtractExpression(BoundConjunctionExp
 		if (and_expr.children.size() == 1) {
 			conj.children[idx] = std::move(and_expr.children[0]);
 		}
-	} else {
-		// not an AND node! remove the entire expression
-		// this happens in the case of e.g. (X AND B) OR X
+	}
+	// not an AND node(e.g. (X AND B) OR X) or this is the last expr,
+	// remove the entire expression
+	if (!result) {
 		D_ASSERT(child->Equals(expr));
 		result = std::move(child);
 		conj.children[idx] = nullptr;
