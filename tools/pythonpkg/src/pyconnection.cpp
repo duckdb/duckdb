@@ -2286,7 +2286,7 @@ PyArrowObjectType DuckDBPyConnection::GetArrowType(const py::handle &obj) {
 		// First Verify Lib Types
 		auto table_class = import_cache.pyarrow.Table();
 		auto record_batch_reader_class = import_cache.pyarrow.RecordBatchReader();
-		auto message_reader_class = import_cache.pyarrow.MessageReader();
+		auto message_reader_class = import_cache.pyarrow.ipc.MessageReader();
 		if (py::isinstance(obj, table_class)) {
 			return PyArrowObjectType::Table;
 		} else if (py::isinstance(obj, record_batch_reader_class)) {
