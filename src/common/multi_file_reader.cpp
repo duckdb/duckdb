@@ -14,7 +14,7 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/planner/filter/list.hpp"
-
+#include "duckdb/optimizer/statistics_propagator.hpp"
 #include <algorithm>
 
 namespace duckdb {
@@ -433,9 +433,9 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByName(ClientContext &co
 		auto expected_type = local_type;
 
 		unique_ptr<Expression> expr;
-		expr = make_uniq<BoundReferenceExpression>(expected_type, local_idx);
+		expr = make_uniq<BoundReferenceExpression>(local_type, local_idx);
 		if (global_type != local_type) {
-			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_type);
+			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
 		} else {
 			//! FIXME: local fields are not guaranteed to match with the global fields for this struct
 			local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
@@ -553,7 +553,7 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByFieldId(ClientContext 
 
 		unique_ptr<Expression> expr;
 		expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx);
-		if (local_column.type != global_column.type) {
+		if (global_column.type != local_column.type) {
 			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
 		} else {
 			//! FIXME: local fields are not guaranteed to match with the global fields for this struct
@@ -702,12 +702,12 @@ static EvaluationResult EvaluateConstantFilters(MultiFileFileReaderData &reader_
                                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
                                                 const vector<ColumnIndex> &global_column_ids,
                                                 const virtual_column_map_t &virtual_columns,
-                                                unordered_map<idx_t, MultiFileIndexMapping> &global_to_local) {
+                                                ResultColumnMapping &mapping) {
 	EvaluationResult result;
 	if (!filters) {
 		return result;
 	}
-
+	auto &global_to_local = mapping.global_to_local;
 	for (auto &it : filters->filters) {
 		auto &global_index = it.first;
 		auto &global_filter = it.second;
@@ -757,6 +757,162 @@ static EvaluationResult EvaluateConstantFilters(MultiFileFileReaderData &reader_
 	return result;
 }
 
+static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filter,
+                                                 MultiFileIndexMapping &mapping, const LogicalType &target_type) {
+	auto type = global_filter.filter_type;
+
+	switch (type) {
+	case TableFilterType::CONJUNCTION_OR: {
+		auto &or_filter = global_filter.Cast<ConjunctionOrFilter>();
+		auto res = make_uniq<ConjunctionOrFilter>();
+		for (auto &it : or_filter.child_filters) {
+			auto child_filter = TryCastTableFilter(*it, mapping, target_type);
+			if (!child_filter) {
+				return nullptr;
+			}
+			res->child_filters.push_back(std::move(child_filter));
+		}
+		return std::move(res);
+	}
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &and_filter = global_filter.Cast<ConjunctionAndFilter>();
+		auto res = make_uniq<ConjunctionAndFilter>();
+		for (auto &it : and_filter.child_filters) {
+			auto child_filter = TryCastTableFilter(*it, mapping, target_type);
+			if (!child_filter) {
+				return nullptr;
+			}
+			res->child_filters.push_back(std::move(child_filter));
+		}
+		return std::move(res);
+	}
+	case TableFilterType::STRUCT_EXTRACT: {
+		auto &struct_filter = global_filter.Cast<StructFilter>();
+		auto &child_filter = struct_filter.child_filter;
+
+		//! FXIME: The previous step should ensure that filters that target fields that are not present in the file are
+		//! evaluated earlier
+		//! For now we will assume the mapping is 1-to-1
+		MultiFileIndexMapping struct_mapping(struct_filter.child_idx);
+		auto &struct_type = StructType::GetChildTypes(target_type);
+		auto new_child_filter = TryCastTableFilter(*child_filter, struct_mapping, struct_type[struct_filter.child_idx].second);
+		if (!new_child_filter) {
+			return nullptr;
+		}
+		//! TODO: renaming fields should probably be respected here?
+		auto child_name = struct_filter.child_name;
+		return make_uniq<StructFilter>(struct_mapping.index, child_name, std::move(new_child_filter));
+	}
+	case TableFilterType::OPTIONAL_FILTER: {
+		auto &optional_filter = global_filter.Cast<OptionalFilter>();
+		auto child_result = TryCastTableFilter(*optional_filter.child_filter, mapping, target_type);
+		if (!child_result) {
+			return nullptr;
+		}
+		return make_uniq<OptionalFilter>(std::move(child_result));
+	}
+	case TableFilterType::DYNAMIC_FILTER: {
+		// we can't transfer dynamic filters over casts directly
+		// BUT we can copy the current state of the filter and push that
+		// FIXME: we could solve this in a different manner as well by pushing the dynamic filter directly
+		auto &dynamic_filter = global_filter.Cast<DynamicFilter>();
+		if (!dynamic_filter.filter_data) {
+			return nullptr;
+		}
+		if (!dynamic_filter.filter_data->initialized) {
+			return nullptr;
+		}
+		if (!dynamic_filter.filter_data->filter) {
+			return nullptr;
+		}
+		lock_guard<mutex> lock(dynamic_filter.filter_data->lock);
+		return TryCastTableFilter(*dynamic_filter.filter_data->filter, mapping, target_type);
+	}
+	case TableFilterType::IS_NULL:
+	case TableFilterType::IS_NOT_NULL:
+		// these filters can just be copied as they don't depend on type
+		return global_filter.Copy();
+	case TableFilterType::CONSTANT_COMPARISON: {
+		auto &constant_filter = global_filter.Cast<ConstantFilter>();
+		auto new_constant = constant_filter.constant;
+		if (!new_constant.DefaultTryCastAs(target_type)) {
+			return nullptr;
+		}
+		return make_uniq<ConstantFilter>(constant_filter.comparison_type, std::move(new_constant));
+	}
+	case TableFilterType::IN_FILTER: {
+		auto &in_filter = global_filter.Cast<InFilter>();
+		auto in_list = in_filter.values;
+		for(auto &val : in_list) {
+			if (!val.DefaultTryCastAs(target_type)) {
+				return nullptr;
+			}
+		}
+		return make_uniq<InFilter>(std::move(in_list));
+	}
+	default:
+		throw NotImplementedException("Can't convert TableFilterType (%s) from global to local indexes",
+		                              EnumUtil::ToString(type));
+	}
+}
+
+unique_ptr<TableFilterSet> CreateFilters(ClientContext &context, MultiFileFileReaderData &reader_data,
+								const vector<MultiFileReaderColumnDefinition> &global_columns, map<idx_t, reference<TableFilter>> &filters,
+							   ResultColumnMapping &mapping) {
+	if (filters.empty()) {
+		return nullptr;
+	}
+	auto &local_columns = reader_data.reader->GetColumns();
+	auto &global_to_local = mapping.global_to_local;
+	auto result = make_uniq<TableFilterSet>();
+	for (auto &it : filters) {
+		auto &global_index = it.first;
+		auto &global_filter = it.second.get();
+
+		auto local_it = global_to_local.find(global_index);
+		if (local_it == global_to_local.end()) {
+			throw InternalException(
+				"Error in 'EvaluateConstantFilters', this filter should not end up in CreateFilters!");
+		}
+		auto &map_entry = local_it->second;
+		auto local_id = map_entry.index;
+		auto &local_type = local_columns[local_id].type;
+		auto &global_type = global_columns[global_index].type;
+
+		unique_ptr<TableFilter> local_filter;
+		if (local_type == global_type) {
+			// no conversion required - just copy the filter
+			local_filter = global_filter.Copy();
+		} else {
+			// types are different - try to convert
+			// first check if we can safely convert (i.e. if the conversion is lossless would not change the result)
+			if (StatisticsPropagator::CanPropagateCast(local_type, global_type)) {
+				// if we can convert - try to actually convert
+				local_filter = TryCastTableFilter(global_filter, map_entry, global_type);
+			}
+		}
+		auto filter_idx = reader_data.reader->reader_data.column_indexes[local_id].GetPrimaryIndex();
+		if (local_filter) {
+			// succeeded in casting - push the local filter
+			result->filters.emplace(filter_idx, std::move(local_filter));
+		} else {
+			auto &old_reader_data = reader_data.reader->reader_data;
+			// failed to cast - copy the global filter and evaluate the conversion expression in the reader
+			result->filters.emplace(filter_idx, global_filter.Copy());
+
+			// construct the cast expression
+			unique_ptr<Expression> expr;
+			expr = make_uniq<BoundReferenceExpression>(local_type, 0ULL);
+			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_type);
+			old_reader_data.expression_map[local_id] = std::move(expr);
+
+			// reset the expression - since we are evaluating it in the reader we can just reference it
+			reader_data.expressions[local_id] = make_uniq<BoundReferenceExpression>(global_type, local_id);
+		}
+	}
+	return result;
+}
+
 ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, MultiFileFileReaderData &reader_data,
                                                     const vector<MultiFileReaderColumnDefinition> &global_columns,
                                                     const vector<ColumnIndex> &global_column_ids,
@@ -771,103 +927,15 @@ ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, Mult
 	//! Evaluate the filters against the column(s) that are constant for this file (not present in the local schema)
 	//! If any of these fail, the file can be skipped entirely
 	auto evaluation_result = EvaluateConstantFilters(reader_data, filters, global_columns, global_column_ids,
-	                                                 virtual_columns, result.global_to_local);
+	                                                 virtual_columns, result);
 	if (evaluation_result.can_skip_file) {
 		return ReaderInitializeType::SKIP_READING_FILE;
 	}
 
-	reader_data.reader->filters = CreateFilters(evaluation_result.remaining_filters, result.global_to_local);
+	reader_data.reader->filters = CreateFilters(context, reader_data, global_columns, evaluation_result.remaining_filters, result);
+
+	// for any remaining casts - push them as expressions
 	return ReaderInitializeType::INITIALIZED;
-}
-
-static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter &global_filter,
-                                                              MultiFileIndexMapping &mapping) {
-	auto type = global_filter.filter_type;
-
-	unique_ptr<TableFilter> result;
-	switch (type) {
-	case TableFilterType::CONSTANT_COMPARISON:
-	case TableFilterType::IS_NULL:
-	case TableFilterType::IS_NOT_NULL:
-	case TableFilterType::IN_FILTER:
-	case TableFilterType::DYNAMIC_FILTER:
-		return global_filter.Copy();
-	case TableFilterType::CONJUNCTION_OR: {
-		auto &or_filter = global_filter.Cast<ConjunctionOrFilter>();
-		auto res = make_uniq<ConjunctionOrFilter>();
-		for (auto &it : or_filter.child_filters) {
-			auto child_filter = ConvertFilterFromGlobalToLocal(*it, mapping);
-			if (child_filter) {
-				res->child_filters.push_back(std::move(child_filter));
-			}
-		}
-		return std::move(res);
-	}
-	case TableFilterType::CONJUNCTION_AND: {
-		auto &and_filter = global_filter.Cast<ConjunctionAndFilter>();
-		auto res = make_uniq<ConjunctionAndFilter>();
-		for (auto &it : and_filter.child_filters) {
-			auto child_filter = ConvertFilterFromGlobalToLocal(*it, mapping);
-			if (child_filter) {
-				res->child_filters.push_back(std::move(child_filter));
-			}
-		}
-		return std::move(res);
-	}
-	case TableFilterType::STRUCT_EXTRACT: {
-		auto &struct_filter = global_filter.Cast<StructFilter>();
-		auto &child_filter = struct_filter.child_filter;
-
-		//! FXIME: The previous step should ensure that filters that target fields that are not present in the file are
-		//! evaluated earlier
-		//! For now we will assume the mapping is 1-to-1
-		MultiFileIndexMapping mapping(struct_filter.child_idx);
-		auto new_child_filter = ConvertFilterFromGlobalToLocal(*child_filter, mapping);
-		if (!new_child_filter) {
-			return nullptr;
-		}
-		//! TODO: renaming fields should probably be respected here?
-		auto child_name = struct_filter.child_name;
-		return make_uniq<StructFilter>(mapping.index, child_name, std::move(new_child_filter));
-	}
-	case TableFilterType::OPTIONAL_FILTER: {
-		auto &optional_filter = global_filter.Cast<OptionalFilter>();
-		unique_ptr<TableFilter> child;
-		if (optional_filter.child_filter) {
-			child = ConvertFilterFromGlobalToLocal(*optional_filter.child_filter, mapping);
-		}
-		return make_uniq<OptionalFilter>(std::move(child));
-	}
-	default:
-		throw NotImplementedException("Can't convert TableFilterType (%s) from global to local indexes",
-		                              EnumUtil::ToString(type));
-	}
-}
-
-unique_ptr<TableFilterSet>
-MultiFileReader::CreateFilters(map<idx_t, reference<TableFilter>> &filters,
-                               unordered_map<idx_t, MultiFileIndexMapping> &global_to_local) {
-	if (filters.empty()) {
-		return nullptr;
-	}
-
-	auto result = make_uniq<TableFilterSet>();
-	for (auto &it : filters) {
-		auto &global_index = it.first;
-		auto &global_filter = it.second.get();
-
-		auto local_it = global_to_local.find(global_index);
-		if (local_it == global_to_local.end()) {
-			throw InternalException(
-			    "Error in 'EvaluateConstantFilters', this filter should not end up in CreateFilters!");
-		}
-		auto &mapping = local_it->second;
-		auto local_filter = ConvertFilterFromGlobalToLocal(global_filter, mapping);
-		if (local_filter) {
-			result->filters.emplace(mapping.index, std::move(local_filter));
-		}
-	}
-	return result;
 }
 
 void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,

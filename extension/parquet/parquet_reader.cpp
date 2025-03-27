@@ -389,6 +389,16 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InternalException("Root element of Parquet file must be a struct");
 	}
+	// add expressions if required
+	auto &root_struct_reader = ret->Cast<StructColumnReader>();
+	for (auto &entry : reader_data.expression_map) {
+		auto column_id = entry.first;
+		auto &expression = entry.second;
+		auto child_reader = std::move(root_struct_reader.child_readers[column_id]);
+		auto expr_schema = make_uniq<ParquetColumnSchema>(child_reader->Schema(), expression->return_type, ParquetColumnSchemaType::EXPRESSION);
+		auto expr_reader = make_uniq<ExpressionColumnReader>(context, std::move(child_reader), expression->Copy(), std::move(expr_schema));
+		root_struct_reader.child_readers[column_id] = std::move(expr_reader);
+	}
 	return ret;
 }
 
@@ -416,6 +426,9 @@ unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(ParquetReader &reader, idx
 	if (schema_type == ParquetColumnSchemaType::CAST) {
 		auto stats = children[0].Stats(reader, row_group_idx_p, columns);
 		return StatisticsPropagator::TryPropagateCast(*stats, children[0].type, type);
+	}
+	if (schema_type == ParquetColumnSchemaType::EXPRESSION) {
+		return nullptr;
 	}
 	if (schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
 		auto stats = NumericStats::CreateUnknown(type);
@@ -870,7 +883,10 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			// check the bloom filter if present
 			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
 			bool is_cast = column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::CAST;
-			if (!column_reader.Type().IsNested() && !is_generated_column && !is_cast &&
+			if (column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::EXPRESSION) {
+				// no pruning possible for expressions
+				prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+			} else if (!column_reader.Type().IsNested() && !is_generated_column && !is_cast &&
 			    ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
 			    ParquetStatisticsUtils::BloomFilterExcludes(filter,
 			                                                group.columns[column_reader.ColumnIndex()].meta_data,

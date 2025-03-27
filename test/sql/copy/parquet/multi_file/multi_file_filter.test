@@ -11,7 +11,7 @@ statement ok
 COPY (FROM (VALUES ('f1', 42), ('f1', 8), ('f1', NULL)) t(f, i)) TO '__TEST_DIR__/multi_file_filter_f1.parquet'
 
 statement ok
-COPY (FROM (VALUES ('f2', '042'), ('f2', '124'), ('f2', NULL)) t(f, i)) TO '__TEST_DIR__/multi_file_filter_f2.parquet'
+COPY (FROM (VALUES ('042', 'f2'), ('124', 'f2'), (NULL, 'f2')) t(i, f)) TO '__TEST_DIR__/multi_file_filter_f2.parquet'
 
 # the schema of the file depends on the first file read
 statement ok
