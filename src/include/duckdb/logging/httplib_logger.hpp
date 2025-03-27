@@ -22,12 +22,9 @@ namespace duckdb {
 //! 2. duckdb_httplib_openssl
 //! These have essentially the same code, but we cannot convert between them
 //! We get around that by templating everything, which requires implementing everything in the header
-class HTTPLogger {
+class HTTPLibLogger {
 public:
-	static constexpr const char *LOG_TYPE = "duckdb.Httplib";
-	static constexpr LogLevel LOG_LEVEL = LogLevel::LOG_DEBUG;
-
-	explicit HTTPLogger(ClientContext &context)
+	explicit HTTPLibLogger(ClientContext &context)
 	    : logger(context.logger), http_logging_output(context.config.http_logging_output) {
 	}
 
@@ -37,7 +34,7 @@ public:
 		if (!context_p.config.enable_http_logging) {
 			return false;
 		}
-		return Logger::Get(context_p).ShouldLog(LOG_TYPE, LOG_LEVEL);
+		return Logger::Get(context_p).ShouldLog(HTTPLogType::NAME, HTTPLogType::LEVEL);
 	}
 
 	// Warning: the callback is only valid as long as the HTTPLogger is alive
@@ -65,6 +62,13 @@ private:
 	}
 
 	template <class REQUEST, class RESPONSE>
+	static string TemplatedWriteRequestsToString(REQUEST req, RESPONSE res) {
+		stringstream out;
+		TemplatedWriteRequests(out, req, res);
+		return out.str();
+	}
+
+	template <class REQUEST, class RESPONSE>
 	void Log(const REQUEST &req, const RESPONSE &res) {
 		// This is a deprecated path, but we might as well support it
 		if (!http_logging_output.empty()) {
@@ -77,11 +81,7 @@ private:
 			}
 		}
 
-		if (logger->ShouldLog(LOG_TYPE, LOG_LEVEL)) {
-			stringstream out;
-			TemplatedWriteRequests(out, req, res);
-			logger->WriteLog(LOG_TYPE, LOG_LEVEL, out.str());
-		}
+		DUCKDB_LOG(logger, HTTPLogType, TemplatedWriteRequestsToString(req, res));
 	}
 
 protected:

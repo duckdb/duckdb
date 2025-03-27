@@ -7,7 +7,7 @@ index 6e1f635..e551181 100644
  #include "duckdb/common/types/hash.hpp"
  #include "duckdb/function/scalar/strftime_format.hpp"
 -#include "duckdb/logging/http_logger.hpp"
-+#include "duckdb/logging/loggers/http_logger.hpp"
++#include "duckdb/logging/httplib_logger.hpp"
 +#include "duckdb/logging/loggers/file_handle_logger.hpp"
  #include "duckdb/main/client_context.hpp"
  #include "duckdb/main/database.hpp"

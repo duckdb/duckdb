@@ -38,6 +38,10 @@ Logger &Logger::Get(const FileOpener &opener) {
 	return opener.GetLogger();
 }
 
+Logger &Logger::Get(const shared_ptr<Logger> &logger) {
+	return *logger;
+}
+
 ThreadSafeLogger::ThreadSafeLogger(LogConfig &config_p, LoggingContext &context_p, LogManager &manager)
     : ThreadSafeLogger(config_p, manager.RegisterLoggingContext(context_p), manager) {
 }

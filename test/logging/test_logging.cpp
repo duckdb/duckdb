@@ -21,12 +21,12 @@ void LogFormatStringCustomType(SOURCE &src, FUN f) {
 }
 
 #define TEST_ALL_LOG_MACROS(LOG_LEVEL, SOURCE, LOG_TYPE)                                                               \
-	DUCKDB_LOG(SOURCE, "default", LOG_LEVEL, "log-a-lot: 'simple'")                                                    \
-	DUCKDB_LOG(SOURCE, "default", LOG_LEVEL, "log-a-lot: '%s'", "format")                                              \
-	DUCKDB_LOG(SOURCE, "default", LOG_LEVEL, string("log-a-lot: 'string type'"))                                       \
-	DUCKDB_LOG(SOURCE, "custom_type", LOG_LEVEL, "log-a-lot: 'simple with type'")                                      \
-	DUCKDB_LOG(SOURCE, "custom_type", LOG_LEVEL, "log-a-lot: '%s'", "format with type")                                \
-	DUCKDB_LOG(SOURCE, "custom_type", LOG_LEVEL, string("log-a-lot: 'string type with type'"))
+	DUCKDB_LOG_INTERNAL(SOURCE, "default", LOG_LEVEL, "log-a-lot: 'simple'")                                                    \
+	DUCKDB_LOG_INTERNAL(SOURCE, "default", LOG_LEVEL, "log-a-lot: '%s'", "format")                                              \
+	DUCKDB_LOG_INTERNAL(SOURCE, "default", LOG_LEVEL, string("log-a-lot: 'string type'"))                                       \
+	DUCKDB_LOG_INTERNAL(SOURCE, "custom_type", LOG_LEVEL, "log-a-lot: 'simple with type'")                                      \
+	DUCKDB_LOG_INTERNAL(SOURCE, "custom_type", LOG_LEVEL, "log-a-lot: '%s'", "format with type")                                \
+	DUCKDB_LOG_INTERNAL(SOURCE, "custom_type", LOG_LEVEL, string("log-a-lot: 'string type with type'"))
 
 // Tests all Logger function entrypoints at the specified log level with the specified enabled/disabled loggers
 void test_logging(const string &minimum_level, const string &enabled_log_types, const string &disabled_log_types) {

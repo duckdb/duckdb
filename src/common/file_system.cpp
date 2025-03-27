@@ -16,6 +16,7 @@
 
 #include <cstdint>
 #include <cstdio>
+#include "duckdb/logging/file_system_logger.hpp"
 
 #ifndef _WIN32
 #include <dirent.h>
@@ -642,6 +643,18 @@ void FileHandle::Truncate(int64_t new_size) {
 
 FileType FileHandle::GetType() {
 	return file_system.GetFileType(*this);
+}
+
+void FileHandle::TryAddLogger(FileOpener &opener) {
+	auto context = opener.TryGetClientContext();
+	if (context && Logger::Get(*context).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
+		logger = context->logger;
+		return;
+	}
+	auto database = opener.TryGetDatabase();
+	if (database && Logger::Get(*database).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
+		logger = database->GetLogManager().CopyGlobalLoggerPtr();
+	}
 }
 
 idx_t FileHandle::GetProgress() {

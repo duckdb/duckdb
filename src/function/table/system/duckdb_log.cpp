@@ -6,6 +6,7 @@
 #include "duckdb/logging/log_manager.hpp"
 #include "duckdb/logging/log_storage.hpp"
 #include "duckdb/parser/tableref/subqueryref.hpp"
+#include "duckdb/logging/log_manager.hpp"
 
 namespace duckdb {
 

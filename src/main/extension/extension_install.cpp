@@ -5,7 +5,7 @@
 #include "duckdb/common/serializer/binary_serializer.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/uuid.hpp"
-#include "duckdb/logging/loggers/http_logger.hpp"
+#include "duckdb/logging/httplib_logger.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/main/extension_helper.hpp"
 #include "duckdb/main/extension_install_info.hpp"
@@ -411,9 +411,9 @@ static unique_ptr<ExtensionInstallInfo> InstallFromHttpUrl(DatabaseInstance &db,
 			cli.set_proxy_basic_auth(db.config.options.http_proxy_username, db.config.options.http_proxy_password);
 		}
 
-		unique_ptr<HTTPLogger> http_logger;
-		if (context && HTTPLogger::ShouldLog(*context)) {
-			http_logger = make_uniq<HTTPLogger>(*context);
+		unique_ptr<HTTPLibLogger> http_logger;
+		if (context && HTTPLibLogger::ShouldLog(*context)) {
+			http_logger = make_uniq<HTTPLibLogger>(*context);
 			cli.set_logger(http_logger->GetHTTPLibCallback<duckdb_httplib::Request, duckdb_httplib::Response>());
 		}
 
