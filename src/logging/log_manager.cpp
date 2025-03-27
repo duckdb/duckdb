@@ -179,7 +179,6 @@ void LogManager::SetEnableStructuredLoggers(vector<string> &enabled_logger_types
 	config.enabled = true;
 }
 
-
 void LogManager::TruncateLogStorage() {
 	unique_lock<mutex> lck(lock);
 	log_storage->Truncate();

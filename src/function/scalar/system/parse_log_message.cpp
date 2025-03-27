@@ -26,7 +26,7 @@ struct ParseLogMessageData : FunctionData {
 };
 
 unique_ptr<FunctionData> ParseLogMessageBind(ClientContext &context, ScalarFunction &bound_function,
-												  vector<unique_ptr<Expression>> &arguments) {
+                                             vector<unique_ptr<Expression>> &arguments) {
 
 	if (arguments.size() != 2) {
 		throw BinderException("structured_log_schema: expects 1 argument", arguments[0]->alias);
@@ -49,7 +49,9 @@ unique_ptr<FunctionData> ParseLogMessageBind(ClientContext &context, ScalarFunct
 	}
 
 	if (!lookup->is_structured) {
-		throw NotImplementedException("The log type '%s', can not be parsed automatically. Please use `FROM duckdb_logs WHERE type='%s';` instead.", type, type);
+		throw NotImplementedException("The log type '%s', can not be parsed automatically. Please use `FROM "
+		                              "duckdb_logs WHERE type='%s';` instead.",
+		                              type, type);
 	}
 
 	bound_function.return_type = lookup->type;
@@ -62,8 +64,8 @@ static void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vec
 }
 
 ScalarFunction ParseLogMessage::GetFunction() {
-	return ScalarFunction({LogicalType::VARCHAR,LogicalType::VARCHAR}, LogicalType::ANY, ParseLogMessageFunction, ParseLogMessageBind, nullptr,
-						  nullptr, nullptr, LogicalType(LogicalTypeId::INVALID));
+	return ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::ANY, ParseLogMessageFunction,
+	                      ParseLogMessageBind, nullptr, nullptr, nullptr, LogicalType(LogicalTypeId::INVALID));
 }
 
 } // namespace duckdb

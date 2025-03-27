@@ -28,7 +28,7 @@ class ExecutionContext;
 struct FileHandle;
 
 //! Internal
-#define DUCKDB_LOG_INTERNAL(SOURCE, TYPE, LEVEL, ...)                                                                    \
+#define DUCKDB_LOG_INTERNAL(SOURCE, TYPE, LEVEL, ...)                                                                  \
 	{                                                                                                                  \
 		auto &logger_ref_ = Logger::Get(SOURCE);                                                                       \
 		if (logger_ref_.ShouldLog(TYPE, LEVEL)) {                                                                      \
@@ -36,17 +36,22 @@ struct FileHandle;
 		}                                                                                                              \
 	}
 
-
 //! Default Loggers
-#define DUCKDB_LOG_TRACE(SOURCE, ...) DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_TRACE, __VA_ARGS__)
-#define DUCKDB_LOG_DEBUG(SOURCE, ...) DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_DEBUG, __VA_ARGS__)
-#define DUCKDB_LOG_INFO(SOURCE, ...)  DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_INFO, __VA_ARGS__)
-#define DUCKDB_LOG_WARN(SOURCE, ...)  DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_WARN, __VA_ARGS__)
-#define DUCKDB_LOG_ERROR(SOURCE, ...) DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_ERROR, __VA_ARGS__)
-#define DUCKDB_LOG_FATAL(SOURCE, ...) DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_FATAL, __VA_ARGS__)
+#define DUCKDB_LOG_TRACE(SOURCE, ...)                                                                                  \
+	DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_TRACE, __VA_ARGS__)
+#define DUCKDB_LOG_DEBUG(SOURCE, ...)                                                                                  \
+	DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_DEBUG, __VA_ARGS__)
+#define DUCKDB_LOG_INFO(SOURCE, ...) DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_INFO, __VA_ARGS__)
+#define DUCKDB_LOG_WARN(SOURCE, ...) DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_WARN, __VA_ARGS__)
+#define DUCKDB_LOG_ERROR(SOURCE, ...)                                                                                  \
+	DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_ERROR, __VA_ARGS__)
+#define DUCKDB_LOG_FATAL(SOURCE, ...)                                                                                  \
+	DUCKDB_LOG_INTERNAL(SOURCE, DefaultLogType::NAME, LogLevel::LOG_FATAL, __VA_ARGS__)
 
 //! LogType based loggers
-#define DUCKDB_LOG(SOURCE, LOG_TYPE_CLASS, ...) DUCKDB_LOG_INTERNAL(SOURCE, LOG_TYPE_CLASS::NAME, LOG_TYPE_CLASS::LEVEL, LOG_TYPE_CLASS::ConstructLogMessage(__VA_ARGS__))
+#define DUCKDB_LOG(SOURCE, LOG_TYPE_CLASS, ...)                                                                        \
+	DUCKDB_LOG_INTERNAL(SOURCE, LOG_TYPE_CLASS::NAME, LOG_TYPE_CLASS::LEVEL,                                           \
+	                    LOG_TYPE_CLASS::ConstructLogMessage(__VA_ARGS__))
 
 //! Main logging interface
 class Logger {

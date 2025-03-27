@@ -1,4 +1,4 @@
-# name: test/sql/logging/filehandle_logging.test
+# name: test/sql/logging/file_system_logging.test
 # group: [logging]
 
 require parquet
