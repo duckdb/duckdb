@@ -142,8 +142,6 @@ const vector<LogicalType> &CSVFileScan::GetTypes() {
 void CSVFileScan::InitializeProjection() {
 	for (idx_t i = 0; i < options.dialect_options.num_cols; i++) {
 		reader_data.column_ids.push_back(MultiFileLocalColumnId(i));
-		//! FIXME: where is this mapping to???
-		reader_data.column_mapping.push_back(MultiFileGlobalIndex(i));
 	}
 }
 

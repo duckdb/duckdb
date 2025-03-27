@@ -333,11 +333,21 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileRe
 	return nullptr;
 }
 
-void MultiFileReader::CreateColumnMappingByName(ClientContext &context, MultiFileFileReaderData &reader_data,
+struct ResultColumnMapping {
+	unordered_map<idx_t, MultiFileIndexMapping> global_to_local;
+	string error;
+
+public:
+	bool HasError() const {
+		return !error.empty();
+	}
+};
+
+ResultColumnMapping MultiFileReader::CreateColumnMappingByName(ClientContext &context, MultiFileFileReaderData &reader_data,
                                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
                                                 const vector<ColumnIndex> &global_column_ids,
                                                 const MultiFileReaderBindData &bind_data,
-                                                const virtual_column_map_t &virtual_columns, const string &initial_file) {
+                                                const virtual_column_map_t &virtual_columns) {
 	auto &local_columns = reader_data.reader->GetColumns();
 	auto &file_name = reader_data.reader->GetFileName();
 	// we have expected types: create a map of name -> (local) column id
@@ -346,7 +356,7 @@ void MultiFileReader::CreateColumnMappingByName(ClientContext &context, MultiFil
 		auto &column = local_columns[col_idx];
 		name_map.emplace(column.name, MultiFileLocalColumnId(col_idx));
 	}
-
+	ResultColumnMapping result;
 	auto &expressions = reader_data.expressions;
 	// FIXME - this should be removed eventually
 	auto &old_reader_data = reader_data.reader->reader_data;
@@ -402,12 +412,13 @@ void MultiFileReader::CreateColumnMappingByName(ClientContext &context, MultiFil
 					}
 					candidate_names += column.name;
 				}
-				throw IOException(StringUtil::Format(
+				result.error = StringUtil::Format(
 				    "Failed to read file \"%s\": schema mismatch in glob: column \"%s\" was read from "
-				    "the original file \"%s\", but could not be found in file \"%s\".\nCandidate names: "
+				    "the original file \"${INITIAL_FILE}\", but could not be found in file \"%s\".\nCandidate names: "
 				    "%s\nIf you are trying to "
 				    "read files with different schemas, try setting union_by_name=True",
-				    file_name, identifier, initial_file, file_name, candidate_names));
+				    file_name, identifier, file_name, candidate_names);
+				return result;
 			}
 		}
 		// we found the column in the local file - check if the types are the same
@@ -431,19 +442,19 @@ void MultiFileReader::CreateColumnMappingByName(ClientContext &context, MultiFil
 		}
 		expressions.push_back(std::move(expr));
 		// create the mapping
-		old_reader_data.column_mapping.push_back(global_idx);
+		result.global_to_local.emplace(global_idx.GetIndex(), local_idx);
 		old_reader_data.column_ids.push_back(local_id);
 		old_reader_data.column_indexes.emplace_back(std::move(local_index));
 	}
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
+	return result;
 }
 
-void MultiFileReader::CreateColumnMappingByFieldId(ClientContext &context, MultiFileFileReaderData &reader_data,
+ResultColumnMapping MultiFileReader::CreateColumnMappingByFieldId(ClientContext &context, MultiFileFileReaderData &reader_data,
                                                    const vector<MultiFileReaderColumnDefinition> &global_columns,
                                                    const vector<ColumnIndex> &global_column_ids,
                                                    const MultiFileReaderBindData &bind_data,
-                                                   const virtual_column_map_t &virtual_columns,
-                                                   const string &initial_file) {
+                                                   const virtual_column_map_t &virtual_columns) {
 #ifdef DEBUG
 	//! Make sure the global columns have field_ids to match on
 	for (auto &column : global_columns) {
@@ -454,6 +465,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(ClientContext &context, Multi
 
 	auto &local_columns = reader_data.reader->GetColumns();
 
+	ResultColumnMapping result;
 	// we have expected types: create a map of field_id -> column index
 	unordered_map<int32_t, MultiFileLocalColumnId> field_id_map;
 	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
@@ -507,7 +519,6 @@ void MultiFileReader::CreateColumnMappingByFieldId(ClientContext &context, Multi
 		auto local_idx = MultiFileLocalIndex(old_reader_data.column_ids.size());
 		if (global_column_id >= global_columns.size()) {
 			if (bind_data.file_row_number_idx == global_column_id) {
-				old_reader_data.column_mapping.push_back(MultiFileGlobalIndex(i));
 				// FIXME: this needs a more extensible solution
 				auto new_column_id = MultiFileLocalColumnId(field_id_map.size());
 				old_reader_data.column_ids.push_back(new_column_id);
@@ -550,28 +561,26 @@ void MultiFileReader::CreateColumnMappingByFieldId(ClientContext &context, Multi
 		}
 		expressions.push_back(std::move(expr));
 
-		old_reader_data.column_mapping.push_back(MultiFileGlobalIndex(i));
+		result.global_to_local.emplace(global_idx.GetIndex(), local_idx);
 		old_reader_data.column_ids.push_back(local_id);
 		old_reader_data.column_indexes.push_back(std::move(local_index));
 	}
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
+	return result;
 }
 
-void MultiFileReader::CreateColumnMapping(ClientContext &context, MultiFileFileReaderData &reader_data,
+ResultColumnMapping MultiFileReader::CreateColumnMapping(ClientContext &context, MultiFileFileReaderData &reader_data,
                                           const vector<MultiFileReaderColumnDefinition> &global_columns,
                                           const vector<ColumnIndex> &global_column_ids,
                                           const MultiFileReaderBindData &bind_data,
-                                          const virtual_column_map_t &virtual_columns, const string &initial_file) {
+                                          const virtual_column_map_t &virtual_columns) {
 	switch (bind_data.mapping) {
 	case MultiFileReaderColumnMappingMode::BY_NAME: {
-		CreateColumnMappingByName(context, reader_data, global_columns, global_column_ids, bind_data, virtual_columns,
-		                          initial_file);
-		break;
+		return CreateColumnMappingByName(context, reader_data, global_columns, global_column_ids, bind_data, virtual_columns);
 	}
 	case MultiFileReaderColumnMappingMode::BY_FIELD_ID: {
-		CreateColumnMappingByFieldId(context, reader_data, global_columns, global_column_ids, bind_data,
-		                             virtual_columns, initial_file);
-		break;
+		return CreateColumnMappingByFieldId(context, reader_data, global_columns, global_column_ids, bind_data,
+		                             virtual_columns);
 	}
 	default: {
 		throw InternalException("Unsupported MultiFileReaderColumnMappingMode type");
@@ -755,28 +764,19 @@ ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, Mult
                                                     const MultiFileReaderBindData &bind_data,
                                                     const virtual_column_map_t &virtual_columns) {
 	// copy global columns and inject any different defaults
-	CreateColumnMapping(context, reader_data, global_columns, global_column_ids, bind_data, virtual_columns,
-	                    initial_file);
-
-	// FIXME: this should be removed eventually
-	auto &old_reader_data = reader_data.reader->reader_data;
-	unordered_map<idx_t, MultiFileIndexMapping> global_to_local;
-	for (idx_t i = 0; i < old_reader_data.column_mapping.size(); i++) {
-		auto local_idx = MultiFileLocalIndex(i);
-		auto global_idx = old_reader_data.column_mapping[local_idx];
-		global_to_local.emplace(global_idx.GetIndex(), i);
-
+	auto result = CreateColumnMapping(context, reader_data, global_columns, global_column_ids, bind_data, virtual_columns);
+	if (result.HasError()) {
+		throw IOException(StringUtil::Replace(result.error, "${INITIAL_FILE}", initial_file));
 	}
-
 	//! Evaluate the filters against the column(s) that are constant for this file (not present in the local schema)
 	//! If any of these fail, the file can be skipped entirely
 	auto evaluation_result = EvaluateConstantFilters(reader_data, filters, global_columns, global_column_ids,
-	                                                 virtual_columns, global_to_local);
+	                                                 virtual_columns, result.global_to_local);
 	if (evaluation_result.can_skip_file) {
 		return ReaderInitializeType::SKIP_READING_FILE;
 	}
 
-	reader_data.reader->filters = CreateFilters(evaluation_result.remaining_filters, global_to_local);
+	reader_data.reader->filters = CreateFilters(evaluation_result.remaining_filters, result.global_to_local);
 	return ReaderInitializeType::INITIALIZED;
 }
 

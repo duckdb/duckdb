@@ -861,9 +861,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 	if (filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
 		// filters contain output chunk index, not file col idx!
-		auto global_index = reader_data.column_mapping[col_idx];
-		auto filter_entry = filters->filters.find(global_index);
-
+		auto filter_entry = filters->filters.find(col_idx);
 		if (stats && filter_entry != filters->filters.end()) {
 			auto &filter = *filter_entry->second;
 
@@ -1051,8 +1049,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 					bool has_filter = false;
 					if (filters) {
-						auto global_idx = reader_data.column_mapping[col_idx];
-						auto entry = filters->filters.find(global_idx.GetIndex());
+						auto entry = filters->filters.find(col_idx);
 						has_filter = entry != filters->filters.end();
 					}
 					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !(lazy_fetch && !has_filter));

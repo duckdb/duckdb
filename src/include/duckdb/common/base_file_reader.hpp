@@ -262,22 +262,6 @@ private:
 	vector<T> column_ids;
 };
 
-struct MultiFileColumnMapping {
-public:
-	void push_back(MultiFileGlobalIndex global_index) { // NOLINT: matching name of std
-		column_mapping.push_back(global_index);
-	}
-	const MultiFileGlobalIndex &operator[](MultiFileLocalIndex local_index) const {
-		return column_mapping[local_index.index];
-	}
-	idx_t size() const { // NOLINT: matching name of std
-		return column_mapping.size();
-	}
-
-private:
-	vector<MultiFileGlobalIndex> column_mapping;
-};
-
 struct MultiFileFilterMap {
 public:
 	void push_back(const MultiFileFilterEntry &filter_entry) { // NOLINT: matching name of std
@@ -299,9 +283,6 @@ struct MultiFileReaderData {
 	MultiFileLocalColumnIds<MultiFileLocalColumnId> column_ids;
 	//! The column indexes to read from the file
 	vector<ColumnIndex> column_indexes;
-	//! The mapping of column id -> result column id
-	//! The result chunk will be filled as follows: chunk.data[column_mapping[i]] = ReadColumn(column_ids[i]);
-	MultiFileColumnMapping column_mapping;
 	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
 	optional_idx file_list_idx;
 };

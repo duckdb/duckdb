@@ -27,6 +27,7 @@ class LogicalGet;
 class Expression;
 class ClientContext;
 class DataChunk;
+struct ResultColumnMapping;
 
 enum class ReaderInitializeType { INITIALIZED, SKIP_READING_FILE };
 
@@ -230,21 +231,21 @@ public:
 	                                                       TableFunctionPartitionInput &input);
 
 protected:
-	virtual void CreateColumnMapping(ClientContext &context, MultiFileFileReaderData &reader_data,
+	virtual ResultColumnMapping CreateColumnMapping(ClientContext &context, MultiFileFileReaderData &reader_data,
 	                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
 	                                 const vector<ColumnIndex> &global_column_ids,
 	                                 const MultiFileReaderBindData &bind_data,
-	                                 const virtual_column_map_t &virtual_columns, const string &initial_file);
-	virtual void CreateColumnMappingByFieldId(ClientContext &context, MultiFileFileReaderData &reader_data,
+	                                 const virtual_column_map_t &virtual_columns);
+	virtual ResultColumnMapping CreateColumnMappingByFieldId(ClientContext &context, MultiFileFileReaderData &reader_data,
 	                                          const vector<MultiFileReaderColumnDefinition> &global_columns,
 	                                          const vector<ColumnIndex> &global_column_ids,
 	                                          const MultiFileReaderBindData &bind_data,
-	                                          const virtual_column_map_t &virtual_columns, const string &initial_file);
-	virtual void CreateColumnMappingByName(ClientContext &context, MultiFileFileReaderData &reader_data,
+	                                          const virtual_column_map_t &virtual_columns);
+	virtual ResultColumnMapping CreateColumnMappingByName(ClientContext &context, MultiFileFileReaderData &reader_data,
 	                                       const vector<MultiFileReaderColumnDefinition> &global_columns,
 	                                       const vector<ColumnIndex> &global_column_ids,
 	                                       const MultiFileReaderBindData &bind_data,
-	                                       const virtual_column_map_t &virtual_columns, const string &initial_file);
+	                                       const virtual_column_map_t &virtual_columns);
 
 	//! Used in errors to report which function is using this MultiFileReader
 	string function_name;
