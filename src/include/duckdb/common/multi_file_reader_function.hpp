@@ -275,15 +275,14 @@ public:
 		return true;
 	}
 
-	static bool InitializeReader(BaseFileReader &reader, const MultiFileBindData &bind_data,
+	static bool InitializeReader(MultiFileFileReaderData &reader_data, const MultiFileBindData &bind_data,
 	                             const vector<ColumnIndex> &global_column_ids,
 	                             optional_ptr<TableFilterSet> table_filters, ClientContext &context,
 	                             optional_idx file_idx, optional_ptr<MultiFileReaderGlobalState> reader_state) {
-		auto &reader_data = reader.reader_data;
-
+		auto &reader = *reader_data.reader;
 		reader.table_columns = bind_data.table_columns;
 		// Mark the file in the file list we are scanning here
-		reader_data.file_list_idx = file_idx;
+		reader.reader_data.file_list_idx = file_idx;
 
 		// 'reader_bind.schema' could be set explicitly by:
 		// 1. The MultiFileReader::Bind call
@@ -326,22 +325,21 @@ public:
 				parallel_lock.unlock();
 				unique_lock<mutex> file_lock(current_file_lock);
 
-				shared_ptr<BaseFileReader> reader;
 				bool can_skip_file = false;
 				try {
 					if (current_reader_data.union_data) {
 						auto &union_data = *current_reader_data.union_data;
-						reader = OP::CreateReader(context, *global_state.global_state, union_data, bind_data);
+						current_reader_data.reader = OP::CreateReader(context, *global_state.global_state, union_data, bind_data);
 					} else {
-						reader = OP::CreateReader(context, *global_state.global_state,
+						current_reader_data.reader = OP::CreateReader(context, *global_state.global_state,
 						                          current_reader_data.file_to_be_opened, current_file_index, bind_data);
 					}
-					if (!InitializeReader(*reader, bind_data, global_state.column_indexes, global_state.filters,
+					if (!InitializeReader(current_reader_data, bind_data, global_state.column_indexes, global_state.filters,
 					                      context, current_file_index, global_state.multi_file_reader_state)) {
 						//! File can be skipped entirely, close it and move on
 						can_skip_file = true;
 					} else {
-						OP::FinalizeReader(context, *reader, *global_state.global_state);
+						OP::FinalizeReader(context, *current_reader_data.reader, *global_state.global_state);
 					}
 				} catch (...) {
 					parallel_lock.lock();
@@ -356,7 +354,6 @@ public:
 					//! Intentionally do not increase 'i'
 					continue;
 				}
-				current_reader_data.reader = std::move(reader);
 				current_reader_data.file_state = MultiFileFileState::OPEN;
 				return true;
 			}
@@ -559,7 +556,7 @@ public:
 				if (file_name != reader_data->reader->file_name) {
 					throw InternalException("Mismatch in filename order and reader order in multi file scan");
 				}
-				if (!InitializeReader(*reader_data->reader, bind_data, input.column_indexes, input.filters, context,
+				if (!InitializeReader(*reader_data, bind_data, input.column_indexes, input.filters, context,
 				                      file_idx, result->multi_file_reader_state)) {
 					//! File can be skipped entirely, close it and move on
 					reader_data->file_state = MultiFileFileState::SKIPPED;
