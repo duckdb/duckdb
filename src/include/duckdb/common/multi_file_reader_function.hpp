@@ -183,7 +183,6 @@ public:
 	                                             optional_idx file_idx,
 	                                             optional_ptr<MultiFileReaderGlobalState> reader_state) {
 		auto &reader = *reader_data.reader;
-		reader.table_columns = bind_data.table_columns;
 		// Mark the file in the file list we are scanning here
 		reader.reader_data.file_list_idx = file_idx;
 
@@ -540,8 +539,8 @@ public:
 			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, scan_chunk);
 			output.SetCardinality(scan_chunk.size());
 			if (scan_chunk.size() > 0) {
-				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, *data.reader,
-				                                           *data.reader_data, scan_chunk, output, data.executor,
+				bind_data.multi_file_reader->FinalizeChunk(context, bind_data, *data.reader, *data.reader_data,
+				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
 				return;
 			}

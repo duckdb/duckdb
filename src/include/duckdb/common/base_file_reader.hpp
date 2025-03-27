@@ -300,8 +300,6 @@ public:
 	string file_name;
 	vector<MultiFileReaderColumnDefinition> columns;
 	MultiFileReaderData reader_data;
-	//! Table column names - set when using COPY tbl FROM file.parquet
-	vector<string> table_columns;
 	//! The set of table filters (adjusted to local indexes)
 	unique_ptr<TableFilterSet> filters;
 

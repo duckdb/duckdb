@@ -351,14 +351,13 @@ public:
 };
 
 struct MultiFileColumnMap {
-	MultiFileColumnMap(idx_t index, const LogicalType &local_type, const LogicalType &global_type, idx_t expr_idx)
-	    : mapping(index), local_type(local_type), global_type(global_type), expr_idx(expr_idx) {
+	MultiFileColumnMap(idx_t index, const LogicalType &local_type, const LogicalType &global_type)
+	    : mapping(index), local_type(local_type), global_type(global_type) {
 	}
 
 	MultiFileIndexMapping mapping;
 	const LogicalType &local_type;
 	const LogicalType &global_type;
-	idx_t expr_idx;
 };
 
 struct ResultColumnMapping {
@@ -469,7 +468,7 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByName(
 		}
 		expressions.push_back(std::move(expr));
 		// create the mapping
-		MultiFileColumnMap index_mapping(local_idx, local_type, global_type, expressions.size() - 1);
+		MultiFileColumnMap index_mapping(local_idx, local_type, global_type);
 		result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
 		old_reader_data.column_ids.push_back(local_id);
 		old_reader_data.column_indexes.emplace_back(std::move(local_index));
@@ -588,7 +587,7 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByFieldId(
 		}
 		expressions.push_back(std::move(expr));
 
-		MultiFileColumnMap index_mapping(local_idx, local_column.type, global_column.type, expressions.size() - 1);
+		MultiFileColumnMap index_mapping(local_idx, local_column.type, global_column.type);
 		result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
 		old_reader_data.column_ids.push_back(local_id);
 		old_reader_data.column_indexes.push_back(std::move(local_index));
@@ -978,8 +977,8 @@ ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, Mult
 	return ReaderInitializeType::INITIALIZED;
 }
 
-string GetExtendedMultiFileError(const Expression &expr, BaseFileReader &reader, idx_t expr_idx,
-                                 string &first_message) {
+string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expression &expr, BaseFileReader &reader,
+                                 idx_t expr_idx, string &first_message) {
 	if (expr.type != ExpressionType::OPERATOR_CAST) {
 		// not a cast
 		return string();
@@ -998,13 +997,13 @@ string GetExtendedMultiFileError(const Expression &expr, BaseFileReader &reader,
 	auto reader_type = reader.GetReaderType();
 	auto function_name = "read_" + StringUtil::Lower(reader_type);
 	string extended_error;
-	if (!reader.table_columns.empty()) {
+	if (!bind_data.table_columns.empty()) {
 		// COPY .. FROM
 		extended_error = StringUtil::Format(
 		    "In file \"%s\" the column \"%s\" has type %s, but we are trying to load it into column ", reader.file_name,
 		    local_col.name, source_type);
-		if (expr_idx < reader.table_columns.size()) {
-			extended_error += "\"" + reader.table_columns[expr_idx] + "\" ";
+		if (expr_idx < bind_data.table_columns.size()) {
+			extended_error += "\"" + bind_data.table_columns[expr_idx] + "\" ";
 		}
 		extended_error += StringUtil::Format("with type %s.", target_type);
 		extended_error +=
@@ -1038,9 +1037,9 @@ string GetExtendedMultiFileError(const Expression &expr, BaseFileReader &reader,
 	return extended_error;
 }
 
-void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
-                                    BaseFileReader &reader, const MultiFileFileReaderData &reader_data,
-                                    DataChunk &input_chunk, DataChunk &output_chunk, ExpressionExecutor &executor,
+void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileBindData &bind_data, BaseFileReader &reader,
+                                    const MultiFileFileReaderData &reader_data, DataChunk &input_chunk,
+                                    DataChunk &output_chunk, ExpressionExecutor &executor,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
 	executor.SetChunk(input_chunk);
 	for (idx_t i = 0; i < executor.expressions.size(); i++) {
@@ -1051,7 +1050,8 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReade
 			ErrorData error(ex);
 			auto &original_error = error.RawMessage();
 			string first_message;
-			string extended_error = GetExtendedMultiFileError(*executor.expressions[i], reader, i, first_message);
+			string extended_error =
+			    GetExtendedMultiFileError(bind_data, *executor.expressions[i], reader, i, first_message);
 			throw ConversionException("Error while reading file \"%s\": %s: %s\n\n%s", reader.file_name, first_message,
 			                          original_error, extended_error);
 		}
