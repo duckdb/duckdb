@@ -123,17 +123,6 @@ void CSVFileScan::InitializeFileNamesTypes() {
 		file_types = types;
 	}
 
-	// We need to be sure that our types are also following the cast_map
-	if (!reader_data.cast_map.empty()) {
-		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
-			auto local_idx = MultiFileLocalIndex(i);
-			auto entry = reader_data.cast_map.find(reader_data.column_ids[local_idx]);
-			if (entry != reader_data.cast_map.end()) {
-				file_types[i] = entry->second;
-			}
-		}
-	}
-
 	// We sort the types on the order of the parsed chunk
 	std::sort(projection_ids.begin(), projection_ids.end());
 	vector<LogicalType> sorted_types;

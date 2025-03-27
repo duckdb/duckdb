@@ -333,7 +333,7 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileRe
 	return nullptr;
 }
 
-void MultiFileReader::CreateColumnMappingByName(MultiFileFileReaderData &reader_data,
+void MultiFileReader::CreateColumnMappingByName(ClientContext &context, MultiFileFileReaderData &reader_data,
                                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
                                                 const vector<ColumnIndex> &global_column_ids,
                                                 const MultiFileReaderBindData &bind_data,
@@ -421,24 +421,25 @@ void MultiFileReader::CreateColumnMappingByName(MultiFileFileReaderData &reader_
 
 		auto local_idx = old_reader_data.column_ids.size();
 		auto expected_type = local_type;
+
+		unique_ptr<Expression> expr;
+		expr = make_uniq<BoundReferenceExpression>(expected_type, local_idx);
 		if (global_type != local_type) {
-			// the types are not the same - add a cast
-			old_reader_data.cast_map[local_id] = global_type;
-			expected_type = global_type;
+			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_type);
 		} else {
 			//! FIXME: local fields are not guaranteed to match with the global fields for this struct
 			local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
 		}
-		expressions.push_back(make_uniq<BoundReferenceExpression>(expected_type, local_idx));
+		expressions.push_back(std::move(expr));
 		// create the mapping
 		old_reader_data.column_mapping.push_back(global_idx);
 		old_reader_data.column_ids.push_back(local_id);
-		old_reader_data.column_indexes.push_back(std::move(local_index));
+		old_reader_data.column_indexes.emplace_back(std::move(local_index));
 	}
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
 }
 
-void MultiFileReader::CreateColumnMappingByFieldId(MultiFileFileReaderData &reader_data,
+void MultiFileReader::CreateColumnMappingByFieldId(ClientContext &context, MultiFileFileReaderData &reader_data,
                                                    const vector<MultiFileReaderColumnDefinition> &global_columns,
                                                    const vector<ColumnIndex> &global_column_ids,
                                                    const MultiFileReaderBindData &bind_data,
@@ -541,16 +542,15 @@ void MultiFileReader::CreateColumnMappingByFieldId(MultiFileFileReaderData &read
 		auto &local_column = local_columns[local_id.GetId()];
 		ColumnIndex local_index(local_id.GetId());
 
-		auto expected_type = local_column.type;
+		unique_ptr<Expression> expr;
+		expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx);
 		if (local_column.type != global_column.type) {
-			// differing types, wrap in a cast column reader
-			old_reader_data.cast_map[local_id] = global_column.type;
-			expected_type = global_column.type;
+			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
 		} else {
 			//! FIXME: local fields are not guaranteed to match with the global fields for this struct
 			local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
 		}
-		expressions.push_back(make_uniq<BoundReferenceExpression>(expected_type, local_idx));
+		expressions.push_back(std::move(expr));
 
 		old_reader_data.column_mapping.push_back(MultiFileGlobalIndex(i));
 		old_reader_data.column_ids.push_back(local_id);
@@ -559,7 +559,7 @@ void MultiFileReader::CreateColumnMappingByFieldId(MultiFileFileReaderData &read
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
 }
 
-void MultiFileReader::CreateColumnMapping(MultiFileFileReaderData &reader_data,
+void MultiFileReader::CreateColumnMapping(ClientContext &context, MultiFileFileReaderData &reader_data,
                                           const vector<MultiFileReaderColumnDefinition> &global_columns,
                                           const vector<ColumnIndex> &global_column_ids,
                                           const MultiFileReaderBindData &bind_data,
@@ -567,13 +567,13 @@ void MultiFileReader::CreateColumnMapping(MultiFileFileReaderData &reader_data,
                                           optional_ptr<MultiFileReaderGlobalState> global_state) {
 	switch (bind_data.mapping) {
 	case MultiFileReaderColumnMappingMode::BY_NAME: {
-		CreateColumnMappingByName(reader_data, global_columns, global_column_ids, bind_data, virtual_columns,
+		CreateColumnMappingByName(context, reader_data, global_columns, global_column_ids, bind_data, virtual_columns,
 		                          initial_file, global_state);
 		break;
 	}
 	case MultiFileReaderColumnMappingMode::BY_FIELD_ID: {
-		CreateColumnMappingByFieldId(reader_data, global_columns, global_column_ids, bind_data, virtual_columns,
-		                             initial_file, global_state);
+		CreateColumnMappingByFieldId(context, reader_data, global_columns, global_column_ids, bind_data,
+		                             virtual_columns, initial_file, global_state);
 		break;
 	}
 	default: {
@@ -751,15 +751,16 @@ static EvaluationResult EvaluateConstantFilters(MultiFileFileReaderData &reader_
 	return result;
 }
 
-bool MultiFileReader::CreateMapping(MultiFileFileReaderData &reader_data,
-                                    const vector<MultiFileReaderColumnDefinition> &global_columns,
-                                    const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
-                                    const string &initial_file, const MultiFileReaderBindData &bind_data,
-                                    const virtual_column_map_t &virtual_columns,
-                                    optional_ptr<MultiFileReaderGlobalState> global_state) {
+ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, MultiFileFileReaderData &reader_data,
+                                                    const vector<MultiFileReaderColumnDefinition> &global_columns,
+                                                    const vector<ColumnIndex> &global_column_ids,
+                                                    optional_ptr<TableFilterSet> filters, const string &initial_file,
+                                                    const MultiFileReaderBindData &bind_data,
+                                                    const virtual_column_map_t &virtual_columns,
+                                                    optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// copy global columns and inject any different defaults
-	CreateColumnMapping(reader_data, global_columns, global_column_ids, bind_data, virtual_columns, initial_file,
-	                    global_state);
+	CreateColumnMapping(context, reader_data, global_columns, global_column_ids, bind_data, virtual_columns,
+	                    initial_file, global_state);
 
 	// FIXME: this should be removed eventually
 	auto &old_reader_data = reader_data.reader->reader_data;
@@ -783,11 +784,11 @@ bool MultiFileReader::CreateMapping(MultiFileFileReaderData &reader_data,
 	auto evaluation_result = EvaluateConstantFilters(reader_data, filters, global_columns, global_column_ids,
 	                                                 virtual_columns, global_to_local);
 	if (evaluation_result.can_skip_file) {
-		return false;
+		return ReaderInitializeType::SKIP_READING_FILE;
 	}
 
 	reader_data.reader->filters = CreateFilters(evaluation_result.remaining_filters, global_to_local);
-	return true;
+	return ReaderInitializeType::INITIALIZED;
 }
 
 static unique_ptr<TableFilter> ConvertFilterFromGlobalToLocal(const TableFilter &global_filter,

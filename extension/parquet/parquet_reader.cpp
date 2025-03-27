@@ -389,16 +389,6 @@ unique_ptr<ColumnReader> ParquetReader::CreateReader(ClientContext &context) {
 	if (ret->Type().id() != LogicalTypeId::STRUCT) {
 		throw InternalException("Root element of Parquet file must be a struct");
 	}
-	// add casts if required
-	auto &root_struct_reader = ret->Cast<StructColumnReader>();
-	for (auto &entry : reader_data.cast_map) {
-		auto column_id = entry.first;
-		auto &expected_type = entry.second;
-		auto child_reader = std::move(root_struct_reader.child_readers[column_id]);
-		auto cast_schema = make_uniq<ParquetColumnSchema>(child_reader->Schema(), expected_type);
-		auto cast_reader = make_uniq<CastColumnReader>(std::move(child_reader), std::move(cast_schema));
-		root_struct_reader.child_readers[column_id] = std::move(cast_reader);
-	}
 	return ret;
 }
 

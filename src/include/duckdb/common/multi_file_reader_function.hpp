@@ -176,10 +176,12 @@ public:
 		return true;
 	}
 
-	static bool InitializeReader(MultiFileFileReaderData &reader_data, const MultiFileBindData &bind_data,
-	                             const vector<ColumnIndex> &global_column_ids,
-	                             optional_ptr<TableFilterSet> table_filters, ClientContext &context,
-	                             optional_idx file_idx, optional_ptr<MultiFileReaderGlobalState> reader_state) {
+	static ReaderInitializeType InitializeReader(MultiFileFileReaderData &reader_data,
+	                                             const MultiFileBindData &bind_data,
+	                                             const vector<ColumnIndex> &global_column_ids,
+	                                             optional_ptr<TableFilterSet> table_filters, ClientContext &context,
+	                                             optional_idx file_idx,
+	                                             optional_ptr<MultiFileReaderGlobalState> reader_state) {
 		auto &reader = *reader_data.reader;
 		reader.table_columns = bind_data.table_columns;
 		// Mark the file in the file list we are scanning here
@@ -189,10 +191,9 @@ public:
 		// 1. The MultiFileReader::Bind call
 		// 2. The 'schema' parquet option
 		auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
-		bool need_to_read_file = bind_data.multi_file_reader->InitializeReader(
+		return bind_data.multi_file_reader->InitializeReader(
 		    reader_data, bind_data.file_options, bind_data.reader_bind, bind_data.virtual_columns, global_columns,
 		    global_column_ids, table_filters, bind_data.file_list->GetFirstFile(), context, reader_state);
-		return need_to_read_file;
 	}
 
 	//! Helper function that try to start opening a next file. Parallel lock should be locked when calling.
@@ -237,9 +238,10 @@ public:
 						    OP::CreateReader(context, *global_state.global_state, current_reader_data.file_to_be_opened,
 						                     current_file_index, bind_data);
 					}
-					if (!InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
-					                      global_state.filters, context, current_file_index,
-					                      global_state.multi_file_reader_state)) {
+					auto init_result = InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
+					                                    global_state.filters, context, current_file_index,
+					                                    global_state.multi_file_reader_state);
+					if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
 						//! File can be skipped entirely, close it and move on
 						can_skip_file = true;
 					} else {
@@ -304,13 +306,8 @@ public:
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
 			auto local_idx = MultiFileLocalIndex(i);
 			auto local_id = local_column_ids[local_idx];
-			auto cast_entry = old_reader_data.cast_map.find(local_id);
-			if (cast_entry == old_reader_data.cast_map.end()) {
-				auto &col = local_columns[local_id];
-				intermediate_chunk_types.push_back(col.type);
-			} else {
-				intermediate_chunk_types.push_back(cast_entry->second);
-			}
+			auto &col = local_columns[local_id];
+			intermediate_chunk_types.push_back(col.type);
 		}
 		lstate.scan_chunk.Destroy();
 		lstate.scan_chunk.Initialize(context, intermediate_chunk_types);
@@ -462,8 +459,9 @@ public:
 				if (file_name != reader_data->reader->file_name) {
 					throw InternalException("Mismatch in filename order and reader order in multi file scan");
 				}
-				if (!InitializeReader(*reader_data, bind_data, input.column_indexes, input.filters, context, file_idx,
-				                      result->multi_file_reader_state)) {
+				auto init_result = InitializeReader(*reader_data, bind_data, input.column_indexes, input.filters,
+				                                    context, file_idx, result->multi_file_reader_state);
+				if (init_result == ReaderInitializeType::SKIP_READING_FILE) {
 					//! File can be skipped entirely, close it and move on
 					reader_data->file_state = MultiFileFileState::SKIPPED;
 					result->file_index++;

@@ -294,39 +294,6 @@ private:
 	vector<MultiFileFilterEntry> filter_map;
 };
 
-struct MultiFileCastMap {
-public:
-	using iterator = unordered_map<column_t, LogicalType>::iterator;
-	using const_iterator = unordered_map<column_t, LogicalType>::const_iterator;
-
-public:
-	LogicalType &operator[](MultiFileLocalColumnId column_id) {
-		return cast_map[column_id.column_id];
-	}
-	// Iterator support
-	iterator begin() {
-		return cast_map.begin();
-	}
-	iterator end() {
-		return cast_map.end();
-	}
-	const_iterator begin() const {
-		return cast_map.begin();
-	}
-	const_iterator end() const {
-		return cast_map.end();
-	}
-	iterator find(MultiFileLocalColumnId column_id) {
-		return cast_map.find(column_id.column_id);
-	}
-	bool empty() const {
-		return cast_map.empty();
-	}
-
-private:
-	unordered_map<column_t, LogicalType> cast_map;
-};
-
 struct MultiFileReaderData {
 	//! The column ids to read from the file
 	MultiFileLocalColumnIds<MultiFileLocalColumnId> column_ids;
@@ -335,9 +302,6 @@ struct MultiFileReaderData {
 	//! The mapping of column id -> result column id
 	//! The result chunk will be filled as follows: chunk.data[column_mapping[i]] = ReadColumn(column_ids[i]);
 	MultiFileColumnMapping column_mapping;
-	//! Map of (local) column_id -> cast, used when reading multiple files when files have diverging types
-	//! for the same column
-	MultiFileCastMap cast_map;
 	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
 	optional_idx file_list_idx;
 };
