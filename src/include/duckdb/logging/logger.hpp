@@ -8,12 +8,10 @@
 
 #pragma once
 
-#include "duckdb/logging/log_type.hpp"
 #include "duckdb/logging/logging.hpp"
+#include "duckdb/logging/log_type.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/string_util.hpp"
-
-#include <functional>
 
 namespace duckdb {
 class TableDescription;

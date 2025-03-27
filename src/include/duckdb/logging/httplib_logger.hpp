@@ -10,7 +10,7 @@
 
 #include "duckdb/common/fstream.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/logging/logger.hpp"
+#include "duckdb/logging/log_type.hpp"
 
 #include <functional>
 
