@@ -91,19 +91,18 @@ public:
 
 	//! Finalize the bind phase of the multi-file reader after we know (1) the required (output) columns, and (2) the
 	//! pushed down table filters
-	DUCKDB_API virtual void FinalizeBind(const MultiFileReaderOptions &file_options,
-	                                     const MultiFileReaderBindData &options, const string &filename,
-	                                     const vector<MultiFileReaderColumnDefinition> &local_columns,
+	DUCKDB_API virtual void FinalizeBind(
+	MultiFileFileReaderData &reader_data, const MultiFileReaderOptions &file_options,
+	                                     const MultiFileReaderBindData &options,
 	                                     const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                     const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+	                                     const vector<ColumnIndex> &global_column_ids,
 	                                     ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Create all required mappings from the global types/names to the file-local types/names
-	DUCKDB_API virtual bool CreateMapping(const string &file_name,
-	                                      const vector<MultiFileReaderColumnDefinition> &local_columns,
+	DUCKDB_API virtual bool CreateMapping(MultiFileFileReaderData &reader_data,
 	                                      const vector<MultiFileReaderColumnDefinition> &global_columns,
 	                                      const vector<ColumnIndex> &global_column_ids,
-	                                      optional_ptr<TableFilterSet> filters, BaseFileReader &reader,
+	                                      optional_ptr<TableFilterSet> filters,
 	                                      const string &initial_file, const MultiFileReaderBindData &bind_data,
 	                                      const virtual_column_map_t &virtual_columns,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
@@ -120,7 +119,7 @@ public:
 
 	//! Fetch the partition data for the current chunk
 	DUCKDB_API virtual void GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,
-	                                         const MultiFileReaderData &reader_data,
+	                                         const MultiFileFileReaderData &reader_data,
 	                                         optional_ptr<MultiFileReaderGlobalState> global_state,
 	                                         const OperatorPartitionInfo &partition_info,
 	                                         OperatorPartitionData &partition_data);
@@ -181,11 +180,10 @@ public:
 	                      const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> table_filters,
 	                      const string &initial_file, ClientContext &context,
 	                      optional_ptr<MultiFileReaderGlobalState> global_state) {
-		auto &reader = *reader_data.reader;
-		FinalizeBind(options, bind_data, reader.GetFileName(), reader.GetColumns(), global_columns, global_column_ids,
-		             reader.reader_data, context, global_state);
-		return CreateMapping(reader.GetFileName(), reader.GetColumns(), global_columns, global_column_ids,
-		                     table_filters, reader, initial_file, bind_data, virtual_columns, global_state);
+		FinalizeBind(reader_data, options, bind_data, global_columns, global_column_ids,
+		             context, global_state);
+		return CreateMapping(reader_data, global_columns, global_column_ids,
+		                     table_filters, initial_file, bind_data, virtual_columns, global_state);
 	}
 
 	template <class BIND_DATA>
@@ -230,24 +228,22 @@ public:
 	                                                       TableFunctionPartitionInput &input);
 
 protected:
-	virtual void CreateColumnMapping(const string &file_name,
-	                                 const vector<MultiFileReaderColumnDefinition> &local_columns,
+	virtual void CreateColumnMapping(MultiFileFileReaderData &reader_data,
 	                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                 const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+	                                 const vector<ColumnIndex> &global_column_ids,
 	                                 const MultiFileReaderBindData &bind_data,
 	                                 const virtual_column_map_t &virtual_columns, const string &initial_file,
 	                                 optional_ptr<MultiFileReaderGlobalState> global_state);
 	virtual void
-	CreateColumnMappingByFieldId(const string &file_name, const vector<MultiFileReaderColumnDefinition> &local_columns,
+	CreateColumnMappingByFieldId(MultiFileFileReaderData &reader_data,
 	                             const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                             const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
+	                             const vector<ColumnIndex> &global_column_ids,
 	                             const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns,
 	                             const string &initial_file, optional_ptr<MultiFileReaderGlobalState> global_state);
-	virtual void CreateColumnMappingByName(const string &file_name,
-	                                       const vector<MultiFileReaderColumnDefinition> &local_columns,
+	virtual void CreateColumnMappingByName(MultiFileFileReaderData &reader_data,
 	                                       const vector<MultiFileReaderColumnDefinition> &global_columns,
 	                                       const vector<ColumnIndex> &global_column_ids,
-	                                       MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
+	                                       const MultiFileReaderBindData &bind_data,
 	                                       const virtual_column_map_t &virtual_columns, const string &initial_file,
 	                                       optional_ptr<MultiFileReaderGlobalState> global_state);
 

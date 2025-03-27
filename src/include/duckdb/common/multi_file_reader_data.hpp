@@ -96,23 +96,41 @@ struct MultiFileBindData : public TableFunctionData {
 	}
 };
 
-struct MultiFileLocalState : public LocalTableFunctionState {
+struct MultiFileConstantMap {
 public:
-	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
+	using iterator = vector<MultiFileConstantEntry>::iterator;
+	using const_iterator = vector<MultiFileConstantEntry>::const_iterator;
+
+public:
+	template <typename... Args>
+	void Add(Args &&...args) {
+		constant_map.emplace_back(std::forward<Args>(args)...);
+	}
+	const MultiFileConstantEntry &operator[](MultiFileConstantMapIndex constant_index) {
+		return constant_map[constant_index.index];
+	}
+	idx_t size() const { // NOLINT: matching name of std
+		return constant_map.size();
+	}
+	// Iterator support
+	iterator begin() {
+		return constant_map.begin();
+	}
+	iterator end() {
+		return constant_map.end();
+	}
+	const_iterator begin() const {
+		return constant_map.begin();
+	}
+	const_iterator end() const {
+		return constant_map.end();
 	}
 
-public:
-	shared_ptr<BaseFileReader> reader;
-	bool is_parallel;
-	idx_t batch_index;
-	idx_t file_index = DConstants::INVALID_INDEX;
-	unique_ptr<LocalTableFunctionState> local_state;
-	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
-	DataChunk scan_chunk;
-	//! The executor to transform scan_chunk into the final result with FinalizeChunk
-	ExpressionExecutor executor;
+private:
+	vector<MultiFileConstantEntry> constant_map;
 };
 
+//! Per-file data for the multi file reader
 struct MultiFileFileReaderData {
 	// Create data for an unopened file
 	explicit MultiFileFileReaderData(const string &file_to_be_opened)
@@ -144,6 +162,10 @@ struct MultiFileFileReaderData {
 	unique_ptr<mutex> file_mutex;
 	//! Options for opening the file
 	shared_ptr<BaseUnionData> union_data;
+	//! The constants that should be applied at the various positions
+	MultiFileConstantMap constant_map;
+	//! The set of expressions that should be evaluated to obtain the final result
+	vector<unique_ptr<Expression>> expressions;
 
 	//! (only set when file_state is UNOPENED) the file to be opened
 	string file_to_be_opened;
@@ -195,5 +217,22 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	}
 };
 
+struct MultiFileLocalState : public LocalTableFunctionState {
+public:
+	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
+	}
+
+public:
+	shared_ptr<BaseFileReader> reader;
+	optional_ptr<MultiFileFileReaderData> reader_data;
+	bool is_parallel;
+	idx_t batch_index;
+	idx_t file_index = DConstants::INVALID_INDEX;
+	unique_ptr<LocalTableFunctionState> local_state;
+	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
+	DataChunk scan_chunk;
+	//! The executor to transform scan_chunk into the final result with FinalizeChunk
+	ExpressionExecutor executor;
+};
 
 } // namespace duckdb

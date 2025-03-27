@@ -288,18 +288,21 @@ public:
 		}
 	}
 
-	static void InitializeFileScanState(ClientContext &context, MultiFileLocalState &lstate,
+	static void InitializeFileScanState(ClientContext &context, MultiFileFileReaderData &reader_data, MultiFileLocalState &lstate,
 	                                    vector<idx_t> &projection_ids) {
-		auto &reader_data = lstate.reader->reader_data;
+		lstate.reader = reader_data.reader;
+		lstate.reader_data = reader_data;
+		// FIXME: this should eventually be removed
+		auto &old_reader_data = lstate.reader->reader_data;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
 		vector<LogicalType> intermediate_chunk_types;
-		auto &local_column_ids = reader_data.column_ids;
+		auto &local_column_ids = old_reader_data.column_ids;
 		auto &local_columns = lstate.reader->GetColumns();
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
 			auto local_idx = MultiFileLocalIndex(i);
 			auto local_id = local_column_ids[local_idx];
-			auto cast_entry = reader_data.cast_map.find(local_id);
-			if (cast_entry == reader_data.cast_map.end()) {
+			auto cast_entry = old_reader_data.cast_map.find(local_id);
+			if (cast_entry == old_reader_data.cast_map.end()) {
 				auto &col = local_columns[local_id];
 				intermediate_chunk_types.push_back(col.type);
 			} else {
@@ -347,12 +350,11 @@ public:
 						throw InternalException("MultiFileReader was moved");
 					}
 					// The current reader has data left to be scanned
-					scan_data.reader = current_reader_data.reader;
 					scan_data.batch_index = gstate.batch_index++;
 					auto old_file_index = scan_data.file_index;
 					scan_data.file_index = gstate.file_index;
 					if (old_file_index != scan_data.file_index) {
-						InitializeFileScanState(context, scan_data, gstate.projection_ids);
+						InitializeFileScanState(context, current_reader_data, scan_data, gstate.projection_ids);
 					}
 					return true;
 				} else {
@@ -511,7 +513,7 @@ public:
 		auto &data = input.local_state->Cast<MultiFileLocalState>();
 		auto &gstate = input.global_state->Cast<MultiFileGlobalState>();
 		OperatorPartitionData partition_data(data.batch_index);
-		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, data.reader->reader_data,
+		bind_data.multi_file_reader->GetPartitionData(context, bind_data.reader_bind, *data.reader_data,
 		                                              gstate.multi_file_reader_state, input.partition_info,
 		                                              partition_data);
 		return partition_data;

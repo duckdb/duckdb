@@ -294,40 +294,6 @@ private:
 	vector<MultiFileFilterEntry> filter_map;
 };
 
-struct MultiFileConstantMap {
-public:
-	using iterator = vector<MultiFileConstantEntry>::iterator;
-	using const_iterator = vector<MultiFileConstantEntry>::const_iterator;
-
-public:
-	template <typename... Args>
-	void Add(Args &&...args) {
-		constant_map.emplace_back(std::forward<Args>(args)...);
-	}
-	const MultiFileConstantEntry &operator[](MultiFileConstantMapIndex constant_index) {
-		return constant_map[constant_index.index];
-	}
-	idx_t size() const { // NOLINT: matching name of std
-		return constant_map.size();
-	}
-	// Iterator support
-	iterator begin() {
-		return constant_map.begin();
-	}
-	iterator end() {
-		return constant_map.end();
-	}
-	const_iterator begin() const {
-		return constant_map.begin();
-	}
-	const_iterator end() const {
-		return constant_map.end();
-	}
-
-private:
-	vector<MultiFileConstantEntry> constant_map;
-};
-
 struct MultiFileCastMap {
 public:
 	using iterator = unordered_map<column_t, LogicalType>::iterator;
@@ -371,15 +337,11 @@ struct MultiFileReaderData {
 	MultiFileColumnMapping column_mapping;
 	//! Whether or not there are no columns to read. This can happen when a file only consists of constants
 	bool empty_columns = false;
-	//! The constants that should be applied at the various positions
-	MultiFileConstantMap constant_map;
 	//! Map of (local) column_id -> cast, used when reading multiple files when files have diverging types
 	//! for the same column
 	MultiFileCastMap cast_map;
 	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
 	optional_idx file_list_idx;
-
-	vector<unique_ptr<Expression>> expressions;
 };
 
 struct MultiFileIndexMapping {
