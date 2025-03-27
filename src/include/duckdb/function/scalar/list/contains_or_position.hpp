@@ -4,7 +4,6 @@
 
 namespace duckdb {
 
-
 template <class T, bool RETURN_POSITION, bool SET_TARGET_VALID = false>
 idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_vec, Vector &result, idx_t count) {
 	UnifiedVectorFormat source_format;
@@ -42,8 +41,7 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 			    const auto entry_idx = source_format.sel->get_index(i);
 			    bool is_valid = source_format.validity.RowIsValid(entry_idx);
 			    bool matches = false;
-				if (SET_TARGET_VALID)
-				{
+			    if (SET_TARGET_VALID) {
 				    const auto target_idx = target_format.sel->get_index(out_idx);
 				    matches = !DistinctFrom::Operation<T>(source_data[entry_idx], target, !is_valid,
 				                                          !target_mask.RowIsValid(target_idx));
@@ -65,7 +63,6 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 
 	return total_matches;
 }
-
 
 template <bool RETURN_POSITION>
 idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_vec, Vector &result_vec,
@@ -93,33 +90,47 @@ idx_t ListSearchOp(Vector &list_v, Vector &source_v, Vector &target_v, Vector &r
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return ListSearchSimpleOp<int8_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<int8_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                     target_count);
 	case PhysicalType::INT16:
-		return ListSearchSimpleOp<int16_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<int16_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                      target_count);
 	case PhysicalType::INT32:
-		return ListSearchSimpleOp<int32_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<int32_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                      target_count);
 	case PhysicalType::INT64:
-		return ListSearchSimpleOp<int64_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<int64_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                      target_count);
 	case PhysicalType::INT128:
-		return ListSearchSimpleOp<hugeint_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<hugeint_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                        target_count);
 	case PhysicalType::UINT8:
-		return ListSearchSimpleOp<uint8_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<uint8_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                      target_count);
 	case PhysicalType::UINT16:
-		return ListSearchSimpleOp<uint16_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<uint16_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                       target_count);
 	case PhysicalType::UINT32:
-		return ListSearchSimpleOp<uint32_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<uint32_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                       target_count);
 	case PhysicalType::UINT64:
-		return ListSearchSimpleOp<uint64_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<uint64_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                       target_count);
 	case PhysicalType::UINT128:
-		return ListSearchSimpleOp<uhugeint_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<uhugeint_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                         target_count);
 	case PhysicalType::FLOAT:
-		return ListSearchSimpleOp<float, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<float, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                    target_count);
 	case PhysicalType::DOUBLE:
-		return ListSearchSimpleOp<double, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<double, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                     target_count);
 	case PhysicalType::VARCHAR:
-		return ListSearchSimpleOp<string_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<string_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                       target_count);
 	case PhysicalType::INTERVAL:
-		return ListSearchSimpleOp<interval_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v, target_count);
+		return ListSearchSimpleOp<interval_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
+		                                                                         target_count);
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
 	case PhysicalType::ARRAY:
