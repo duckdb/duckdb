@@ -6,7 +6,9 @@
 namespace duckdb {
 
 SelectionData::SelectionData(idx_t count) {
-	owned_data = Allocator::DefaultAllocator().Allocate(count * sizeof(sel_t));
+	if (count != 0) {
+		owned_data = Allocator::DefaultAllocator().Allocate(count * sizeof(sel_t));
+	}
 #ifdef DEBUG
 	auto data_ptr = reinterpret_cast<sel_t *>(owned_data.get());
 	for (idx_t i = 0; i < count; i++) {
