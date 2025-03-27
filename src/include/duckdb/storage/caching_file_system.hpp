@@ -36,9 +36,11 @@ public:
 public:
 	//! Get the underlying FileHandle
 	DUCKDB_API FileHandle &GetFileHandle();
-	//! Read nr_bytes from the file (or cache) at location. The pointer will be set to the requested range
+	//! Read (seek) nr_bytes from the file (or cache) at location. The pointer will be set to the requested range
 	//! The buffer is guaranteed to stay in memory as long as the returned BufferHandle is in scope
 	DUCKDB_API BufferHandle Read(data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
+	//! Read (non-seeking) nr bytes from the file (or cache), same as above, also sets nr_bytes to actually read bytes
+	DUCKDB_API BufferHandle Read(data_ptr_t &buffer, idx_t &nr_bytes);
 	//! Get some properties of the file
 	DUCKDB_API string GetPath() const;
 	DUCKDB_API idx_t GetFileSize();
@@ -49,9 +51,16 @@ public:
 private:
 	//! Get the version tag of the file (for checking cache invalidation)
 	const string &GetVersionTag(const unique_ptr<StorageLockKey> &guard);
-	//! Try to read from cache, return an invalid BufferHandle if it fails
+	//! Tries to read from the cache, filling "overlapping_ranges" with ranges that overlap with the request.
+	//! Returns an invalid BufferHandle if it fails
+	BufferHandle TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
+	                              vector<shared_ptr<CachedFileRange>> &overlapping_ranges);
+	//! Try to read from the specified range, return an invalid BufferHandle if it fails
 	BufferHandle TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard, CachedFileRange &file_range,
 	                                  data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
+	//! Try to insert the file range into the cache
+	BufferHandle TryInsertFileRange(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
+	                                shared_ptr<CachedFileRange> &new_file_range);
 	//! Read from file and copy from cached buffers until the requested read is complete
 	//! If actually_read is false, no reading happens, only the number of non-cached reads is counted and returned
 	idx_t ReadAndCopyInterleaved(const vector<shared_ptr<CachedFileRange>> &overlapping_ranges,
@@ -73,6 +82,9 @@ private:
 	//! Last modified time and version tag (if FileHandle is opened)
 	time_t last_modified;
 	string version_tag;
+
+	//! Current position (if non-seeking reads)
+	idx_t position;
 };
 
 //! CachingFileSystem is a read-only file system that closely resembles the FileSystem API.

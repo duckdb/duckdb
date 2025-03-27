@@ -4,6 +4,7 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/table/range.hpp"
 #include "utf8proc_wrapper.hpp"
+#include "duckdb/storage/caching_file_system.hpp"
 
 namespace duckdb {
 
@@ -120,7 +121,7 @@ template <class OP>
 static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
 	auto &bind_data = input.bind_data->Cast<ReadFileBindData>();
 	auto &state = input.global_state->Cast<ReadFileGlobalState>();
-	auto &fs = FileSystem::GetFileSystem(context);
+	auto fs = CachingFileSystem::Get(context);
 
 	auto output_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, bind_data.files.size() - state.current_file_idx);
 
@@ -129,7 +130,7 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 		// Add the file name to the output
 		auto &file_name = bind_data.files[state.current_file_idx + out_idx];
 
-		unique_ptr<FileHandle> file_handle = nullptr;
+		unique_ptr<CachingFileHandle> file_handle = nullptr;
 
 		// Given the columns requested, do we even need to open the file?
 		if (state.requires_file_open) {
@@ -164,14 +165,26 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 						const auto bytes_to_read = MinValue<int64_t>(remaining_bytes, MAX_READ_SIZE);
 						const auto content_string_ptr =
 						    content_string.GetDataWriteable() + (file_size - remaining_bytes);
-						const auto actually_read =
-						    file_handle->Read(content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read));
+
+						idx_t actually_read;
+						if (file_handle->OnDiskFile()) {
+							// Local file: non-caching read
+							actually_read = NumericCast<idx_t>(file_handle->GetFileHandle().Read(
+							    content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read)));
+						} else {
+							// Remote file: caching read
+							data_ptr_t read_ptr;
+							actually_read = NumericCast<idx_t>(bytes_to_read);
+							auto buffer_handle = file_handle->Read(read_ptr, actually_read);
+							memcpy(content_string_ptr, read_ptr, actually_read);
+						}
+
 						if (actually_read == 0) {
 							// Uh oh, random EOF?
 							throw IOException("Failed to read file '%s' at offset %lu, unexpected EOF", file_name,
 							                  file_size - remaining_bytes);
 						}
-						remaining_bytes -= actually_read;
+						remaining_bytes -= NumericCast<int64_t>(actually_read);
 					}
 
 					content_string.Finalize();
@@ -190,7 +203,7 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 					// This can sometimes fail (e.g. httpfs file system cant always parse the last modified time
 					// correctly)
 					try {
-						auto timestamp_seconds = Timestamp::FromEpochSeconds(fs.GetLastModifiedTime(*file_handle));
+						auto timestamp_seconds = Timestamp::FromEpochSeconds(file_handle->GetLastModifiedTime());
 						FlatVector::GetData<timestamp_tz_t>(last_modified_vector)[out_idx] =
 						    timestamp_tz_t(timestamp_seconds);
 					} catch (std::exception &ex) {

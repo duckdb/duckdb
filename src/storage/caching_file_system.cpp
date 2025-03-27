@@ -30,7 +30,7 @@ unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const string &path, Fi
 CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, CachedFile &cached_file_p,
                                      FileOpenFlags flags_p)
     : caching_file_system(caching_file_system_p), external_file_cache(caching_file_system.external_file_cache),
-      cached_file(cached_file_p), flags(flags_p) {
+      cached_file(cached_file_p), flags(flags_p), position(0) {
 	if (!external_file_cache.IsEnabled() || caching_file_system.validate) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
@@ -76,62 +76,12 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 		return result;
 	}
 
-	// Get read lock for cached ranges
-	auto guard = cached_file.lock.GetSharedLock();
-	auto &ranges = cached_file.Ranges(guard);
-
-	// First, try to see if we've read from the exact same location before
-	auto it = ranges.find(location);
-	if (it != ranges.end()) {
-		// We have read from the exact same location before
-		if (it->second->GetOverlap(nr_bytes, location) == CachedFileRangeOverlap::FULL) {
-			// The file range contains the requested file range
-			// FIXME: if we ever start persisting this stuff, this read needs to happen outside of the lock
-			result = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
-			if (result.IsValid()) {
-				return result;
-			}
-		}
-	}
-
-	// Second, loop through file ranges (ordered by location) to see if any contain the requested file range
-	const auto this_end = location + nr_bytes;
+	// Try to read from the cache, filling overlapping_ranges in the process
 	vector<shared_ptr<CachedFileRange>> overlapping_ranges;
-
-	// Start at lower_bound (first range with location not less than location of requested range) minus one
-	// This works because we don't allow fully overlapping ranges in the files
-	it = ranges.lower_bound(location);
-	if (it != ranges.begin()) {
-		--it;
+	result = TryReadFromCache(buffer, nr_bytes, location, overlapping_ranges);
+	if (result.IsValid()) {
+		return result; // Success
 	}
-	for (it = ranges.begin(); it != ranges.end();) {
-		if (it->second->location >= this_end) {
-			// We're past the requested location
-			break;
-		}
-		// Check if the cached range overlaps the requested one
-		switch (it->second->GetOverlap(nr_bytes, location)) {
-		case CachedFileRangeOverlap::NONE:
-			// No overlap at all
-			break;
-		case CachedFileRangeOverlap::PARTIAL:
-			// Partial overlap, store for potential use later
-			overlapping_ranges.push_back(it->second);
-			break;
-		case CachedFileRangeOverlap::FULL:
-			// The file range fully contains the requested file range, if the buffer is still valid we're done
-			// FIXME: if we ever start persisting this stuff, this read needs to happen outside of the lock
-			result = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
-			if (result.IsValid()) {
-				return result;
-			}
-			continue;
-		}
-		++it;
-	}
-
-	// We can unlock now because we copied over the ranges to local
-	guard.reset();
 
 	// Finally, if we weren't able to find the file range in the cache, we have to create a new file range
 	result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
@@ -151,44 +101,40 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 		}
 	}
 
-	// Grab the lock again (write lock this time) to insert the newly created buffer into the ranges
-	guard = cached_file.lock.GetExclusiveLock();
+	return TryInsertFileRange(buffer, nr_bytes, location, new_file_range);
+}
 
-	// Start at lower_bound (first range with location not less than location of newly created range)
-	for (it = ranges.lower_bound(location); it != ranges.end();) {
-		if (it->second->GetOverlap(*new_file_range) == CachedFileRangeOverlap::FULL) {
-			// Another thread has read a range that fully contains the requested range in the meantime
-			result = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
-			if (result.IsValid()) {
-				return result;
-			}
-			it = ranges.erase(it);
-			continue;
-		}
-		// Check if the new range overlaps with a cached one
-		bool break_loop = false;
-		switch (new_file_range->GetOverlap(*it->second)) {
-		case CachedFileRangeOverlap::NONE:
-			break_loop = true; // We iterated past potential overlaps
-			break;
-		case CachedFileRangeOverlap::PARTIAL:
-			break; // The newly created range does not fully contain this range, so it is still useful
-		case CachedFileRangeOverlap::FULL:
-			// Full overlap, this range will be obsolete when we insert the current one
-			// Since we have the write lock here, we can do some cleanup
-			it = ranges.erase(it);
-			continue;
-		}
-		if (break_loop) {
-			break;
-		}
-		++it;
+BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
+	BufferHandle result;
+
+	// If we can't seek, we can't use the cache for these calls,
+	// because we won't be able to seek over any parts we skipped by reading from the cache
+	if (!external_file_cache.IsEnabled() || !GetFileHandle().CanSeek()) {
+		result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+		buffer = result.Ptr();
+		nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(buffer, nr_bytes));
+		position += NumericCast<idx_t>(nr_bytes);
+		return result;
 	}
 
-	// Finally, insert newly created buffer into the map
-	new_file_range->AddCheckSum();
-	ranges[location] = std::move(new_file_range);
-	cached_file.Verify(guard);
+	// Try to read from the cache first
+	vector<shared_ptr<CachedFileRange>> overlapping_ranges;
+	result = TryReadFromCache(buffer, nr_bytes, position, overlapping_ranges);
+	if (result.IsValid()) {
+		position += nr_bytes;
+		return result; // Success
+	}
+
+	// Finally, if we weren't able to find the file range in the cache, we have to create a new file range
+	result = external_file_cache.GetBufferManager().Allocate(MemoryTag::EXTERNAL_FILE_CACHE, nr_bytes);
+	buffer = result.Ptr();
+
+	GetFileHandle().Seek(position);
+	nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(buffer, nr_bytes));
+	auto new_file_range = make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), nr_bytes, position, version_tag);
+
+	result = TryInsertFileRange(buffer, nr_bytes, position, new_file_range);
+	position += NumericCast<idx_t>(nr_bytes);
 
 	return result;
 }
@@ -238,6 +184,66 @@ const string &CachingFileHandle::GetVersionTag(const unique_ptr<StorageLockKey> 
 	return cached_file.VersionTag(guard);
 }
 
+BufferHandle CachingFileHandle::TryReadFromCache(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
+                                                 vector<shared_ptr<CachedFileRange>> &overlapping_ranges) {
+	BufferHandle result;
+
+	// Get read lock for cached ranges
+	auto guard = cached_file.lock.GetSharedLock();
+	auto &ranges = cached_file.Ranges(guard);
+
+	// First, try to see if we've read from the exact same location before
+	auto it = ranges.find(location);
+	if (it != ranges.end()) {
+		// We have read from the exact same location before
+		if (it->second->GetOverlap(nr_bytes, location) == CachedFileRangeOverlap::FULL) {
+			// The file range contains the requested file range
+			// FIXME: if we ever start persisting this stuff, this read needs to happen outside of the lock
+			result = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
+			if (result.IsValid()) {
+				return result;
+			}
+		}
+	}
+
+	// Second, loop through file ranges (ordered by location) to see if any contain the requested file range
+	const auto this_end = location + nr_bytes;
+
+	// Start at lower_bound (first range with location not less than location of requested range) minus one
+	// This works because we don't allow fully overlapping ranges in the files
+	it = ranges.lower_bound(location);
+	if (it != ranges.begin()) {
+		--it;
+	}
+	for (it = ranges.begin(); it != ranges.end();) {
+		if (it->second->location >= this_end) {
+			// We're past the requested location
+			break;
+		}
+		// Check if the cached range overlaps the requested one
+		switch (it->second->GetOverlap(nr_bytes, location)) {
+		case CachedFileRangeOverlap::NONE:
+			// No overlap at all
+			break;
+		case CachedFileRangeOverlap::PARTIAL:
+			// Partial overlap, store for potential use later
+			overlapping_ranges.push_back(it->second);
+			break;
+		case CachedFileRangeOverlap::FULL:
+			// The file range fully contains the requested file range, if the buffer is still valid we're done
+			// FIXME: if we ever start persisting this stuff, this read needs to happen outside of the lock
+			result = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
+			if (result.IsValid()) {
+				return result;
+			}
+			continue;
+		}
+		++it;
+	}
+
+	return result;
+}
+
 BufferHandle CachingFileHandle::TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard,
                                                      CachedFileRange &file_range, data_ptr_t &buffer, idx_t nr_bytes,
                                                      idx_t location) {
@@ -249,6 +255,53 @@ BufferHandle CachingFileHandle::TryReadFromFileRange(const unique_ptr<StorageLoc
 	if (result.IsValid()) {
 		buffer = result.Ptr() + (location - file_range.location);
 	}
+	return result;
+}
+
+BufferHandle CachingFileHandle::TryInsertFileRange(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
+                                                   shared_ptr<CachedFileRange> &new_file_range) {
+	BufferHandle result;
+
+	// Grab the lock again (write lock this time) to insert the newly created buffer into the ranges
+	auto guard = cached_file.lock.GetExclusiveLock();
+	auto &ranges = cached_file.Ranges(guard);
+
+	// Start at lower_bound (first range with location not less than location of newly created range)
+	for (auto it = ranges.lower_bound(location); it != ranges.end();) {
+		if (it->second->GetOverlap(*new_file_range) == CachedFileRangeOverlap::FULL) {
+			// Another thread has read a range that fully contains the requested range in the meantime
+			result = TryReadFromFileRange(guard, *it->second, buffer, nr_bytes, location);
+			if (result.IsValid()) {
+				return result;
+			}
+			it = ranges.erase(it);
+			continue;
+		}
+		// Check if the new range overlaps with a cached one
+		bool break_loop = false;
+		switch (new_file_range->GetOverlap(*it->second)) {
+		case CachedFileRangeOverlap::NONE:
+			break_loop = true; // We iterated past potential overlaps
+			break;
+		case CachedFileRangeOverlap::PARTIAL:
+			break; // The newly created range does not fully contain this range, so it is still useful
+		case CachedFileRangeOverlap::FULL:
+			// Full overlap, this range will be obsolete when we insert the current one
+			// Since we have the write lock here, we can do some cleanup
+			it = ranges.erase(it);
+			continue;
+		}
+		if (break_loop) {
+			break;
+		}
+		++it;
+	}
+
+	// Finally, insert newly created buffer into the map
+	new_file_range->AddCheckSum();
+	ranges[location] = std::move(new_file_range);
+	cached_file.Verify(guard);
+
 	return result;
 }
 
