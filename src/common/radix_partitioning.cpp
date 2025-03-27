@@ -175,9 +175,6 @@ RadixPartitionedTupleData::RadixPartitionedTupleData(BufferManager &buffer_manag
       hash_col_idx(hash_col_idx_p) {
 	D_ASSERT(radix_bits <= RadixPartitioning::MAX_RADIX_BITS);
 	D_ASSERT(hash_col_idx < layout.GetTypes().size());
-	const auto num_partitions = RadixPartitioning::NumberOfPartitions(radix_bits);
-	allocators->allocators.reserve(num_partitions);
-	D_ASSERT(allocators->allocators.size() == num_partitions);
 	Initialize();
 }
 

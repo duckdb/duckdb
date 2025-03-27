@@ -74,12 +74,6 @@ enum class PartitionedTupleDataType : uint8_t {
 	RADIX
 };
 
-//! Shared allocators for parallel partitioning
-struct PartitionTupleDataAllocators {
-	mutex lock;
-	vector<shared_ptr<TupleDataAllocator>> allocators;
-};
-
 //! PartitionedTupleData represents partitioned row data, which serves as an interface for different types of
 //! partitioning, e.g., radix, hive
 class PartitionedTupleData {
@@ -199,7 +193,6 @@ protected:
 	idx_t data_size;
 
 	mutex lock;
-	shared_ptr<PartitionTupleDataAllocators> allocators;
 	unsafe_vector<unique_ptr<TupleDataCollection>> partitions;
 
 public:

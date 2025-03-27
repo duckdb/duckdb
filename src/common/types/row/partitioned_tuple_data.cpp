@@ -9,7 +9,7 @@ namespace duckdb {
 PartitionedTupleData::PartitionedTupleData(PartitionedTupleDataType type_p, BufferManager &buffer_manager_p,
                                            shared_ptr<TupleDataLayout> &layout_ptr_p)
     : type(type_p), buffer_manager(buffer_manager_p), layout_ptr(layout_ptr_p), layout(*layout_ptr), count(0),
-      data_size(0), allocators(make_shared_ptr<PartitionTupleDataAllocators>()) {
+      data_size(0) {
 }
 
 PartitionedTupleData::PartitionedTupleData(const PartitionedTupleData &other)

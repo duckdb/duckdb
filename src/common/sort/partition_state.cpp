@@ -99,7 +99,7 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 		++max_bits;
 	}
 
-	auto grouping_types_ptr = make_shared_ptr<TupleDataLayout>();
+	grouping_types_ptr = make_shared_ptr<TupleDataLayout>();
 	if (!orders.empty()) {
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
