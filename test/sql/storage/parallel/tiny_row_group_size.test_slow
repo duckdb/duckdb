@@ -1,0 +1,42 @@
+# name: test/sql/storage/parallel/tiny_row_group_size.test_slow
+# description: Test tiny row group size
+# group: [parallel]
+
+statement ok
+ATTACH '__TEST_DIR__/tiny_row_group_size.db' (ROW_GROUP_SIZE 2048)
+
+statement ok
+USE tiny_row_group_size
+
+statement ok
+CREATE TABLE t AS FROM range(1000000) t(i)
+
+query IIIII
+SELECT SUM(i), MIN(i), MAX(i), COUNT(i), COUNT(*) FROM t
+----
+499999500000	0	999999	1000000	1000000
+
+# we have a total of 1M values, ideally this is 488 row groups
+query II
+select count(distinct row_group_id) < 1000, max(count) from pragma_storage_info('t');
+----
+true	2048
+
+query I
+SELECT * FROM t OFFSET 77777 LIMIT 5
+----
+77777
+77778
+77779
+77780
+77781
+
+query II
+SELECT i, row_number() OVER () FROM t OFFSET 777776 LIMIT 5
+----
+777776	777777
+777777	777778
+777778	777779
+777779	777780
+777780	777781
+

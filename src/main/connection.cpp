@@ -19,8 +19,11 @@
 namespace duckdb {
 
 Connection::Connection(DatabaseInstance &database)
-    : context(make_shared_ptr<ClientContext>(database.shared_from_this())) {
-	ConnectionManager::Get(database).AddConnection(*context);
+    : context(make_shared_ptr<ClientContext>(database.shared_from_this())), warning_cb(nullptr) {
+	auto &connection_manager = ConnectionManager::Get(database);
+	connection_manager.AddConnection(*context);
+	connection_manager.AssignConnectionId(*this);
+
 #ifdef DEBUG
 	EnableProfiling();
 	context->config.emit_profiler_output = false;
@@ -28,16 +31,19 @@ Connection::Connection(DatabaseInstance &database)
 }
 
 Connection::Connection(DuckDB &database) : Connection(*database.instance) {
+	// Initialization of warning_cb happens in the other constructor
 }
 
-Connection::Connection(Connection &&other) noexcept {
+Connection::Connection(Connection &&other) noexcept : warning_cb(nullptr) {
 	std::swap(context, other.context);
 	std::swap(warning_cb, other.warning_cb);
+	std::swap(connection_id, other.connection_id);
 }
 
 Connection &Connection::operator=(Connection &&other) noexcept {
 	std::swap(context, other.context);
 	std::swap(warning_cb, other.warning_cb);
+	std::swap(connection_id, other.connection_id);
 	return *this;
 }
 
@@ -98,34 +104,6 @@ unique_ptr<MaterializedQueryResult> Connection::Query(const string &query) {
 	return unique_ptr_cast<QueryResult, MaterializedQueryResult>(std::move(result));
 }
 
-DUCKDB_API string Connection::GetSubstrait(const string &query) {
-	vector<Value> params;
-	params.emplace_back(query);
-	auto result = TableFunction("get_substrait", params)->Execute();
-	auto protobuf = result->FetchRaw()->GetValue(0, 0);
-	return protobuf.GetValueUnsafe<string_t>().GetString();
-}
-
-DUCKDB_API unique_ptr<QueryResult> Connection::FromSubstrait(const string &proto) {
-	vector<Value> params;
-	params.emplace_back(Value::BLOB_RAW(proto));
-	return TableFunction("from_substrait", params)->Execute();
-}
-
-DUCKDB_API string Connection::GetSubstraitJSON(const string &query) {
-	vector<Value> params;
-	params.emplace_back(query);
-	auto result = TableFunction("get_substrait_json", params)->Execute();
-	auto protobuf = result->FetchRaw()->GetValue(0, 0);
-	return protobuf.GetValueUnsafe<string_t>().GetString();
-}
-
-DUCKDB_API unique_ptr<QueryResult> Connection::FromSubstraitJSON(const string &json) {
-	vector<Value> params;
-	params.emplace_back(json);
-	return TableFunction("from_substrait_json", params)->Execute();
-}
-
 unique_ptr<MaterializedQueryResult> Connection::Query(unique_ptr<SQLStatement> statement) {
 	auto result = context->Query(std::move(statement), false);
 	D_ASSERT(result->type == QueryResultType::MATERIALIZED_RESULT);
@@ -140,6 +118,39 @@ unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement>
 	return context->PendingQuery(std::move(statement), allow_stream_result);
 }
 
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query,
+                                                        case_insensitive_map_t<BoundParameterData> &named_values,
+                                                        bool allow_stream_result) {
+	return context->PendingQuery(query, named_values, allow_stream_result);
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement,
+                                                        case_insensitive_map_t<BoundParameterData> &named_values,
+                                                        bool allow_stream_result) {
+	return context->PendingQuery(std::move(statement), named_values, allow_stream_result);
+}
+
+static case_insensitive_map_t<BoundParameterData> ConvertParamListToMap(vector<Value> &param_list) {
+	case_insensitive_map_t<BoundParameterData> named_values;
+	for (idx_t i = 0; i < param_list.size(); i++) {
+		auto &val = param_list[i];
+		named_values[std::to_string(i + 1)] = BoundParameterData(val);
+	}
+	return named_values;
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(const string &query, vector<Value> &values,
+                                                        bool allow_stream_result) {
+	auto named_params = ConvertParamListToMap(values);
+	return context->PendingQuery(query, named_params, allow_stream_result);
+}
+
+unique_ptr<PendingQueryResult> Connection::PendingQuery(unique_ptr<SQLStatement> statement, vector<Value> &values,
+                                                        bool allow_stream_result) {
+	auto named_params = ConvertParamListToMap(values);
+	return context->PendingQuery(std::move(statement), named_params, allow_stream_result);
+}
+
 unique_ptr<PreparedStatement> Connection::Prepare(const string &query) {
 	return context->Prepare(query);
 }
@@ -149,11 +160,12 @@ unique_ptr<PreparedStatement> Connection::Prepare(unique_ptr<SQLStatement> state
 }
 
 unique_ptr<QueryResult> Connection::QueryParamsRecursive(const string &query, vector<Value> &values) {
-	auto statement = Prepare(query);
-	if (statement->HasError()) {
-		return make_uniq<MaterializedQueryResult>(statement->error);
+	auto named_params = ConvertParamListToMap(values);
+	auto pending = PendingQuery(query, named_params, false);
+	if (pending->HasError()) {
+		return make_uniq<MaterializedQueryResult>(pending->GetErrorObject());
 	}
-	return statement->Execute(values, false);
+	return pending->Execute();
 }
 
 unique_ptr<TableDescription> Connection::TableInfo(const string &database_name, const string &schema_name,
@@ -197,7 +209,28 @@ shared_ptr<Relation> Connection::Table(const string &table_name) {
 shared_ptr<Relation> Connection::Table(const string &schema_name, const string &table_name) {
 	auto table_info = TableInfo(INVALID_CATALOG, schema_name, table_name);
 	if (!table_info) {
-		throw CatalogException("Table '%s' does not exist!", table_name);
+		throw CatalogException("Table %s does not exist!", ParseInfo::QualifierToString("", schema_name, table_name));
+	}
+	return make_shared_ptr<TableRelation>(context, std::move(table_info));
+}
+
+shared_ptr<Relation> Connection::Table(const string &catalog_name, const string &schema_name,
+                                       const string &table_name) {
+	unique_ptr<TableDescription> table_info;
+	do {
+		table_info = TableInfo(catalog_name, schema_name, table_name);
+		if (table_info) {
+			break;
+		}
+
+		if (catalog_name.empty() && !schema_name.empty()) {
+			table_info = TableInfo(schema_name, DEFAULT_SCHEMA, table_name);
+		}
+	} while (false);
+
+	if (!table_info) {
+		throw CatalogException("Table %s does not exist!",
+		                       ParseInfo::QualifierToString(catalog_name, schema_name, table_name));
 	}
 	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }
@@ -228,6 +261,11 @@ shared_ptr<Relation> Connection::TableFunction(const string &fname, const vector
 shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values) {
 	vector<string> column_names;
 	return Values(values, column_names);
+}
+
+shared_ptr<Relation> Connection::Values(vector<vector<unique_ptr<ParsedExpression>>> &&expressions) {
+	vector<string> column_names;
+	return make_shared_ptr<ValueRelation>(context, std::move(expressions), column_names);
 }
 
 shared_ptr<Relation> Connection::Values(const vector<vector<Value>> &values, const vector<string> &column_names,

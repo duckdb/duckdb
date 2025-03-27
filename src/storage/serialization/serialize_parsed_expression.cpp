@@ -292,8 +292,9 @@ void StarExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", replace_list);
 	serializer.WritePropertyWithDefault<bool>(203, "columns", columns);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
-	serializer.WritePropertyWithDefault<bool>(205, "unpacked", unpacked, false);
+	/* [Deleted] (bool) "unpacked" */
 	serializer.WritePropertyWithDefault<qualified_column_set_t>(206, "qualified_exclude_list", SerializedQualifiedExcludeList(), qualified_column_set_t());
+	serializer.WritePropertyWithDefault<qualified_column_map_t<string>>(207, "rename_list", rename_list, qualified_column_map_t<string>());
 }
 
 unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deserializer) {
@@ -304,13 +305,9 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deseriali
 	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr");
 	auto unpacked = deserializer.ReadPropertyWithExplicitDefault<bool>(205, "unpacked", false);
 	auto qualified_exclude_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_set_t>(206, "qualified_exclude_list", qualified_column_set_t());
-	auto result = duckdb::unique_ptr<StarExpression>(new StarExpression(exclude_list, qualified_exclude_list));
-	result->relation_name = std::move(relation_name);
-	result->replace_list = std::move(replace_list);
-	result->columns = columns;
-	result->expr = std::move(expr);
-	result->unpacked = unpacked;
-	return std::move(result);
+	auto rename_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<string>>(207, "rename_list", qualified_column_map_t<string>());
+	auto result = StarExpression::DeserializeStarExpression(std::move(relation_name), exclude_list, std::move(replace_list), columns, std::move(expr), unpacked, qualified_exclude_list, std::move(rename_list));
+	return result;
 }
 
 void SubqueryExpression::Serialize(Serializer &serializer) const {
@@ -348,6 +345,7 @@ void WindowExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(213, "filter_expr", filter_expr);
 	serializer.WritePropertyWithDefault<WindowExcludeMode>(214, "exclude_clause", exclude_clause, WindowExcludeMode::NO_OTHER);
 	serializer.WritePropertyWithDefault<bool>(215, "distinct", distinct);
+	serializer.WritePropertyWithDefault<vector<OrderByNode>>(216, "arg_orders", arg_orders);
 }
 
 unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deserializer) {
@@ -368,6 +366,7 @@ unique_ptr<ParsedExpression> WindowExpression::Deserialize(Deserializer &deseria
 	deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(213, "filter_expr", result->filter_expr);
 	deserializer.ReadPropertyWithExplicitDefault<WindowExcludeMode>(214, "exclude_clause", result->exclude_clause, WindowExcludeMode::NO_OTHER);
 	deserializer.ReadPropertyWithDefault<bool>(215, "distinct", result->distinct);
+	deserializer.ReadPropertyWithDefault<vector<OrderByNode>>(216, "arg_orders", result->arg_orders);
 	return std::move(result);
 }
 

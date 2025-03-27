@@ -26,7 +26,6 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'brotli', 'common')]
     includes += [os.path.join('third_party', 'brotli', 'dec')]
     includes += [os.path.join('third_party', 'brotli', 'enc')]
-    includes += [os.path.join('third_party', 'mbedtls')]
     includes += [os.path.join('third_party', 'mbedtls', 'include')]
     includes += [os.path.join('third_party', 'mbedtls', 'library')]
     includes += [os.path.join('third_party', 'miniz')]
@@ -37,6 +36,7 @@ def third_party_includes():
     includes += [os.path.join('third_party', 'utf8proc')]
     includes += [os.path.join('third_party', 'utf8proc', 'include')]
     includes += [os.path.join('third_party', 'yyjson', 'include')]
+    includes += [os.path.join('third_party', 'zstd', 'include')]
     return includes
 
 
@@ -53,6 +53,7 @@ def third_party_sources():
     sources += [os.path.join('third_party', 'libpg_query')]
     sources += [os.path.join('third_party', 'mbedtls')]
     sources += [os.path.join('third_party', 'yyjson')]
+    sources += [os.path.join('third_party', 'zstd')]
     return sources
 
 
@@ -135,13 +136,32 @@ def get_relative_path(source_dir, target_file):
     return target_file
 
 
+######
+# MAIN_BRANCH_VERSIONING default value needs to keep in sync between:
+# - CMakeLists.txt
+# - scripts/amalgamation.py
+# - scripts/package_build.py
+# - tools/pythonpkg/setup.py
+######
+main_branch_versioning = False if os.getenv('MAIN_BRANCH_VERSIONING') == "0" else True
+
+
 def get_git_describe():
     override_git_describe = os.getenv('OVERRIDE_GIT_DESCRIBE') or ''
+    versioning_tag_match = 'v*.*.*'
+    if main_branch_versioning:
+        versioning_tag_match = 'v*.*.0'
     # empty override_git_describe, either since env was empty string or not existing
     # -> ask git (that can fail, so except in place)
     if len(override_git_describe) == 0:
         try:
-            return subprocess.check_output(['git', 'describe', '--tags', '--long']).strip().decode('utf8')
+            return (
+                subprocess.check_output(
+                    ['git', 'describe', '--tags', '--long', '--debug', '--match', versioning_tag_match]
+                )
+                .strip()
+                .decode('utf8')
+            )
         except subprocess.CalledProcessError:
             return "v0.0.0-0-gdeadbeeff"
     if len(override_git_describe.split('-')) == 3:
@@ -189,7 +209,13 @@ def git_dev_version():
             return "v" + '.'.join(version_splits)
         else:
             # not on a tag: increment the version by one and add a -devX suffix
-            version_splits[2] = str(int(version_splits[2]) + 1)
+            # this needs to keep in sync with changes to CMakeLists.txt
+            if main_branch_versioning == True:
+                # increment minor version
+                version_splits[1] = str(int(version_splits[1]) + 1)
+            else:
+                # increment patch version
+                version_splits[2] = str(int(version_splits[2]) + 1)
             return "v" + '.'.join(version_splits) + "-dev" + dev_version
     except:
         return "v0.0.0"

@@ -41,6 +41,9 @@ public:
 	bool error = false;
 	idx_t result_position = 0;
 	bool cur_line_starts_as_comment = false;
+
+	idx_t cur_buffer_idx = 0;
+	idx_t current_buffer_size = 0;
 	//! How many rows fit a given column count
 	map<idx_t, idx_t> rows_per_column_count;
 	//! Adds a Value to the result

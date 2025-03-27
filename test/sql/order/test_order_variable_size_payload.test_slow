@@ -160,8 +160,8 @@ insert into test5 values (3, 'ababa'), (1, 'babab'), (NULL, 'abbab'), (2, NULL);
 query TT
 select i, list(string_split(s, 'b')) from test5 group by i order by i;
 ----
-NULL	[[a, , a, ]]
-1	[[, a, a, ]]
+NULL	[[a, '', a, '']]
+1	[['', a, a, '']]
 2	[NULL]
 3	[[a, a, a]]
 
@@ -176,8 +176,8 @@ NULL	{'i': NULL, 's': abbab}
 query TT
 select i, struct_pack(i:=i, s:=string_split(s, 'b')) from test5 order by i;
 ----
-NULL	{'i': NULL, 's': [a, , a, ]}
-1	{'i': 1, 's': [, a, a, ]}
+NULL	{'i': NULL, 's': [a, '', a, '']}
+1	{'i': 1, 's': ['', a, a, '']}
 2	{'i': 2, 's': NULL}
 3	{'i': 3, 's': [a, a, a]}
 
@@ -185,13 +185,13 @@ query TT
 select i, struct_pack(i:=i, s:=UNNEST(string_split(s, 'b'))) from test5 order by i;
 ----
 NULL	{'i': NULL, 's': a}
-NULL	{'i': NULL, 's': }
+NULL	{'i': NULL, 's': ''}
 NULL	{'i': NULL, 's': a}
-NULL	{'i': NULL, 's': }
-1	{'i': 1, 's': }
+NULL	{'i': NULL, 's': ''}
+1	{'i': 1, 's': ''}
 1	{'i': 1, 's': a}
 1	{'i': 1, 's': a}
-1	{'i': 1, 's': }
+1	{'i': 1, 's': ''}
 3	{'i': 3, 's': a}
 3	{'i': 3, 's': a}
 3	{'i': 3, 's': a}
@@ -215,8 +215,8 @@ NULL	{'i': NULL, 's': abbab}
 query TT
 select i, struct_pack(i:=i, s:=list(string_split(s, 'b'))) from test5 group by i order by i;
 ----
-NULL	{'i': NULL, 's': [[a, , a, ]]}
-1	{'i': 1, 's': [[, a, a, ]]}
+NULL	{'i': NULL, 's': [[a, '', a, '']]}
+1	{'i': 1, 's': [['', a, a, '']]}
 2	{'i': 2, 's': [NULL]}
 3	{'i': 3, 's': [[a, a, a]]}
 

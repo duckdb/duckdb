@@ -10,13 +10,16 @@
 
 #include "duckdb.hpp"
 #include "parquet_types.h"
+#include "parquet_column_schema.hpp"
 
 namespace duckdb {
 class MemoryStream;
 class ParquetWriter;
 class ColumnWriterPageState;
-class BasicColumnWriterState;
+class PrimitiveColumnWriterState;
 struct ChildFieldIDs;
+class ResizeableBuffer;
+class ParquetBloomFilter;
 
 class ColumnWriterState {
 public:
@@ -25,6 +28,7 @@ public:
 	unsafe_vector<uint16_t> definition_levels;
 	unsafe_vector<uint16_t> repetition_levels;
 	vector<bool> is_empty;
+	idx_t parent_null_count = 0;
 	idx_t null_count = 0;
 
 public:
@@ -40,15 +44,10 @@ public:
 	}
 };
 
-class ColumnWriterStatistics {
+class ColumnWriterPageState {
 public:
-	virtual ~ColumnWriterStatistics();
-
-	virtual bool HasStats();
-	virtual string GetMin();
-	virtual string GetMax();
-	virtual string GetMinValue();
-	virtual string GetMaxValue();
+	virtual ~ColumnWriterPageState() {
+	}
 
 public:
 	template <class TARGET>
@@ -64,28 +63,47 @@ public:
 };
 
 class ColumnWriter {
+protected:
+	static constexpr uint16_t PARQUET_DEFINE_VALID = UINT16_C(65535);
 
 public:
-	ColumnWriter(ParquetWriter &writer, idx_t schema_idx, vector<string> schema_path, idx_t max_repeat,
-	             idx_t max_define, bool can_have_nulls);
+	ColumnWriter(ParquetWriter &writer, const ParquetColumnSchema &column_schema, vector<string> schema_path,
+	             bool can_have_nulls);
 	virtual ~ColumnWriter();
 
 	ParquetWriter &writer;
-	idx_t schema_idx;
+	const ParquetColumnSchema &column_schema;
 	vector<string> schema_path;
-	idx_t max_repeat;
-	idx_t max_define;
 	bool can_have_nulls;
 
 public:
-	//! Create the column writer for a specific type recursively
-	static unique_ptr<ColumnWriter>
-	CreateWriterRecursive(ClientContext &context, vector<duckdb_parquet::format::SchemaElement> &schemas,
-	                      ParquetWriter &writer, const LogicalType &type, const string &name,
-	                      vector<string> schema_path, optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat = 0,
-	                      idx_t max_define = 1, bool can_have_nulls = true);
+	const LogicalType &Type() const {
+		return column_schema.type;
+	}
+	const ParquetColumnSchema &Schema() const {
+		return column_schema;
+	}
+	inline idx_t SchemaIndex() const {
+		return column_schema.schema_index;
+	}
+	inline idx_t MaxDefine() const {
+		return column_schema.max_define;
+	}
+	idx_t MaxRepeat() const {
+		return column_schema.max_repeat;
+	}
 
-	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::format::RowGroup &row_group) = 0;
+	static ParquetColumnSchema FillParquetSchema(vector<duckdb_parquet::SchemaElement> &schemas,
+	                                             const LogicalType &type, const string &name,
+	                                             optional_ptr<const ChildFieldIDs> field_ids, idx_t max_repeat = 0,
+	                                             idx_t max_define = 1, bool can_have_nulls = true);
+	//! Create the column writer for a specific type recursively
+	static unique_ptr<ColumnWriter> CreateWriterRecursive(ClientContext &context, ParquetWriter &writer,
+	                                                      const vector<duckdb_parquet::SchemaElement> &parquet_schemas,
+	                                                      const ParquetColumnSchema &schema,
+	                                                      vector<string> path_in_schema);
+
+	virtual unique_ptr<ColumnWriterState> InitializeWriteState(duckdb_parquet::RowGroup &row_group) = 0;
 
 	//! indicates whether the write need to analyse the data before preparing it
 	virtual bool HasAnalyze() {
@@ -113,7 +131,7 @@ protected:
 	void HandleRepeatLevels(ColumnWriterState &state_p, ColumnWriterState *parent, idx_t count, idx_t max_repeat) const;
 
 	void CompressPage(MemoryStream &temp_writer, size_t &compressed_size, data_ptr_t &compressed_data,
-	                  unique_ptr<data_t[]> &compressed_buf);
+	                  AllocatedData &compressed_buf);
 };
 
 } // namespace duckdb

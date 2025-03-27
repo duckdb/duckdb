@@ -261,7 +261,9 @@ string ChangeColumnTypeInfo::ToString() const {
 	result += " ALTER COLUMN ";
 	result += KeywordHelper::WriteOptionallyQuoted(column_name);
 	result += " TYPE ";
-	result += target_type.ToString(); // FIXME: ToSQLString ?
+	if (target_type.IsValid()) {
+		result += target_type.ToString();
+	}
 	auto extra_type_info = target_type.AuxInfo();
 	if (extra_type_info && extra_type_info->type == ExtraTypeInfoType::STRING_TYPE_INFO) {
 		auto &string_info = extra_type_info->Cast<StringTypeInfo>();
@@ -442,6 +444,110 @@ string RenameViewInfo::ToString() const {
 	result += " RENAME TO ";
 	result += KeywordHelper::WriteOptionallyQuoted(new_view_name);
 	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// AddConstraintInfo
+//===--------------------------------------------------------------------===//
+AddConstraintInfo::AddConstraintInfo() : AlterTableInfo(AlterTableType::ADD_CONSTRAINT) {
+}
+
+AddConstraintInfo::AddConstraintInfo(AlterEntryData data, unique_ptr<Constraint> constraint_p)
+    : AlterTableInfo(AlterTableType::ADD_CONSTRAINT, std::move(data)), constraint(std::move(constraint_p)) {
+}
+
+AddConstraintInfo::~AddConstraintInfo() {
+}
+
+unique_ptr<AlterInfo> AddConstraintInfo::Copy() const {
+	return make_uniq_base<AlterInfo, AddConstraintInfo>(GetAlterEntryData(), constraint->Copy());
+}
+
+string AddConstraintInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	result += " ADD ";
+	result += constraint->ToString();
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// SetPartitionedByInfo
+//===--------------------------------------------------------------------===//
+SetPartitionedByInfo::SetPartitionedByInfo() : AlterTableInfo(AlterTableType::SET_PARTITIONED_BY) {
+}
+
+SetPartitionedByInfo::SetPartitionedByInfo(AlterEntryData data, vector<unique_ptr<ParsedExpression>> partition_keys_p)
+    : AlterTableInfo(AlterTableType::SET_PARTITIONED_BY, std::move(data)), partition_keys(std::move(partition_keys_p)) {
+}
+
+SetPartitionedByInfo::~SetPartitionedByInfo() {
+}
+
+unique_ptr<AlterInfo> SetPartitionedByInfo::Copy() const {
+	vector<unique_ptr<ParsedExpression>> copied_partition_keys;
+	for (auto &partition_key : partition_keys) {
+		copied_partition_keys.push_back(partition_key->Copy());
+	}
+	return make_uniq_base<AlterInfo, SetPartitionedByInfo>(GetAlterEntryData(), std::move(copied_partition_keys));
+}
+
+string SetPartitionedByInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	if (partition_keys.empty()) {
+		result += " RESET PARTITIONED BY";
+	} else {
+		result += " SET PARTITIONED BY (";
+		for (idx_t i = 0; i < partition_keys.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += partition_keys[i]->ToString();
+		}
+		result += ")";
+	}
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
+// SetSortedByInfo
+//===--------------------------------------------------------------------===//
+SetSortedByInfo::SetSortedByInfo() : AlterTableInfo(AlterTableType::SET_SORTED_BY) {
+}
+
+SetSortedByInfo::SetSortedByInfo(AlterEntryData data, vector<OrderByNode> orders_p)
+    : AlterTableInfo(AlterTableType::SET_SORTED_BY, std::move(data)), orders(std::move(orders_p)) {
+}
+
+SetSortedByInfo::~SetSortedByInfo() {
+}
+
+unique_ptr<AlterInfo> SetSortedByInfo::Copy() const {
+	vector<OrderByNode> copied_orders;
+	for (auto &order_key : orders) {
+		copied_orders.emplace_back(order_key.type, order_key.null_order, order_key.expression->Copy());
+	}
+	return make_uniq_base<AlterInfo, SetSortedByInfo>(GetAlterEntryData(), std::move(copied_orders));
+}
+
+string SetSortedByInfo::ToString() const {
+	string result = "ALTER TABLE ";
+	result += QualifierToString(catalog, schema, name);
+	if (orders.empty()) {
+		result += " RESET SORTED BY";
+	} else {
+		result += " SET SORTED BY (";
+		for (idx_t i = 0; i < orders.size(); i++) {
+			if (i > 0) {
+				result += ", ";
+			}
+			result += orders[i].ToString();
+		}
+		result += ")";
+	}
 	return result;
 }
 

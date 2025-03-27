@@ -40,7 +40,7 @@ ifeq (${DISABLE_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG=-DENABLE_SANITIZER=FALSE -DENABLE_UBSAN=0
 endif
 ifeq (${DISABLE_UBSAN}, 1)
-	DISABLE_SANITIZER_FLAG=-DENABLE_UBSAN=0
+	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DENABLE_UBSAN=0
 endif
 ifeq (${DISABLE_VPTR_SANITIZER}, 1)
 	DISABLE_SANITIZER_FLAG:=${DISABLE_SANITIZER_FLAG} -DDISABLE_VPTR_SANITIZER=1
@@ -126,7 +126,7 @@ ifeq (${BUILD_FTS}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};fts
 endif
 ifeq (${BUILD_HTTPFS}, 1)
-	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};httpfs
+	CORE_EXTENSIONS:=${CORE_EXTENSIONS};httpfs
 endif
 ifeq (${BUILD_JSON}, 1)
 	BUILD_EXTENSIONS:=${BUILD_EXTENSIONS};json
@@ -219,6 +219,9 @@ endif
 ifeq (${ALTERNATIVE_VERIFY}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DALTERNATIVE_VERIFY=1
 endif
+ifeq (${DISABLE_POINTER_SALT}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DDISABLE_POINTER_SALT=1
+endif
 ifeq (${LATEST_STORAGE}, 1)
 	CMAKE_VARS:=${CMAKE_VARS} -DLATEST_STORAGE=1
 endif
@@ -262,6 +265,15 @@ endif
 ifdef DEBUG_STACKTRACE
 	CMAKE_VARS:=${CMAKE_VARS} -DDEBUG_STACKTRACE=1
 endif
+ifeq (${NATIVE_ARCH}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DNATIVE_ARCH=1
+endif
+ifeq (${MAIN_BRANCH_VERSIONING}, 0)
+        CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=0
+endif
+ifeq (${MAIN_BRANCH_VERSIONING}, 1)
+        CMAKE_VARS:=${CMAKE_VARS} -DMAIN_BRANCH_VERSIONING=1
+endif
 
 # Optional overrides
 ifneq (${STANDARD_VECTOR_SIZE}, )
@@ -285,6 +297,9 @@ endif
 ifneq ("${LTO}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_LTO='${LTO}'
 endif
+ifeq (${EXPORT_DYNAMIC_SYMBOLS}, 1)
+	CMAKE_VARS:=${CMAKE_VARS} -DEXPORT_DYNAMIC_SYMBOLS=1
+endif
 ifneq ("${CMAKE_LLVM_PATH}", "")
 	CMAKE_VARS:=${CMAKE_VARS} -DCMAKE_RANLIB='${CMAKE_LLVM_PATH}/bin/llvm-ranlib' -DCMAKE_AR='${CMAKE_LLVM_PATH}/bin/llvm-ar' -DCMAKE_CXX_COMPILER='${CMAKE_LLVM_PATH}/bin/clang++' -DCMAKE_C_COMPILER='${CMAKE_LLVM_PATH}/bin/clang'
 endif
@@ -306,7 +321,6 @@ clean-python:
 debug: ${EXTENSION_CONFIG_STEP}
 	mkdir -p ./build/debug && \
 	cd build/debug && \
-	echo ${DUCKDB_EXTENSION_SUBSTRAIT_PATH} && \
 	cmake $(GENERATOR) $(FORCE_COLOR) ${WARNINGS_AS_ERRORS} ${FORCE_32_BIT_FLAG} ${DISABLE_UNITY_FLAG} ${DISABLE_SANITIZER_FLAG} ${STATIC_LIBCPP} ${CMAKE_VARS} ${CMAKE_VARS_BUILD} -DDEBUG_MOVE=1 -DCMAKE_BUILD_TYPE=Debug ../.. && \
 	cmake --build . --config Debug
 
@@ -363,7 +377,7 @@ unittest_release: release
 	build/release/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestci:
-	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest
+	python3 scripts/run_tests_one_by_one.py build/debug/test/unittest --time_execution
 	build/debug/tools/sqlite3_api_wrapper/test_sqlite3_api_wrapper
 
 unittestarrow:
@@ -450,7 +464,7 @@ format-feature:
 	python3 scripts/format.py feature --fix --noconfirm
 
 third_party/sqllogictest:
-	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/cwida/sqllogictest.git third_party/sqllogictest
+	git clone --depth=1 --branch hawkfish-statistical-rounding https://github.com/duckdb/sqllogictest.git third_party/sqllogictest
 
 sqlite: release | third_party/sqllogictest
 	git --git-dir third_party/sqllogictest/.git pull
@@ -480,18 +494,41 @@ coverage-check:
 generate-files:
 	python3 scripts/generate_c_api.py
 	python3 scripts/generate_functions.py
+	python3 scripts/generate_settings.py
 	python3 scripts/generate_serialization.py
+	python3 scripts/generate_storage_info.py
 	python3 scripts/generate_enum_util.py
+	python3 scripts/generate_metric_enums.py
 	-@python3 tools/pythonpkg/scripts/generate_connection_code.py || echo "Warning: generate_connection_code.py failed, cxxheaderparser & pcpp are required to perform this step"
 # Run the formatter again after (re)generating the files
 	$(MAKE) format-main
 
-bundle-library: release
+bundle-setup:
 	cd build/release && \
+	rm -rf bundle && \
 	mkdir -p bundle && \
 	cp src/libduckdb_static.a bundle/. && \
 	cp third_party/*/libduckdb_*.a bundle/. && \
 	cp extension/*/lib*_extension.a bundle/. && \
 	cd bundle && \
-	find . -name '*.a' -exec ${AR} -x {} \; && \
-	${AR} cr ../libduckdb_bundle.a *.o
+	find . -name '*.a' -exec mkdir -p {}.objects \; -exec mv {} {}.objects \; && \
+	find . -name '*.a' -execdir ${AR} -x {} \;
+
+bundle-library-o: bundle-setup
+	cd build/release/bundle && \
+	echo ./*/*.o | xargs ${AR} cr ../libduckdb_bundle.a
+
+bundle-library-obj: bundle-setup
+	cd build/release/bundle && \
+	echo ./*/*.obj | xargs ${AR} cr ../libduckdb_bundle.a
+
+bundle-library: release
+	make bundle-library-o
+
+gather-libs: release
+	cd build/release && \
+	rm -rf libs && \
+	mkdir -p libs && \
+	cp src/libduckdb_static.a libs/. && \
+	cp third_party/*/libduckdb_*.a libs/. && \
+	cp extension/*/lib*_extension.a libs/.

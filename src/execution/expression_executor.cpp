@@ -62,6 +62,11 @@ void ExpressionExecutor::AddExpression(const Expression &expr) {
 	states.push_back(std::move(state));
 }
 
+void ExpressionExecutor::ClearExpressions() {
+	states.clear();
+	expressions.clear();
+}
+
 void ExpressionExecutor::Initialize(const Expression &expression, ExpressionExecutorState &state) {
 	state.executor = this;
 	state.root_state = InitializeState(expression, state);
@@ -141,7 +146,7 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression &expr,
                                                                 ExpressionExecutorState &state) {
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_REF:
 		return InitializeState(expr.Cast<BoundReferenceExpression>(), state);
 	case ExpressionClass::BOUND_BETWEEN:
@@ -170,10 +175,16 @@ unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression
 void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state, const SelectionVector *sel,
                                  idx_t count, Vector &result) {
 #ifdef DEBUG
-	// the result vector has to be used for the first time or has to be reset
-	// otherwise, the validity mask might contain previous (now incorrect) data
+	// The result vector must be used for the first time, or must be reset.
+	// Otherwise, the validity mask can contain previous (now incorrect) data.
 	if (result.GetVectorType() == VectorType::FLAT_VECTOR) {
-		D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
+
+		// We do not initialize vector caches for these expressions.
+		if (expr.GetExpressionClass() != ExpressionClass::BOUND_REF &&
+		    expr.GetExpressionClass() != ExpressionClass::BOUND_CONSTANT &&
+		    expr.GetExpressionClass() != ExpressionClass::BOUND_PARAMETER) {
+			D_ASSERT(FlatVector::Validity(result).CheckAllValid(count));
+		}
 	}
 #endif
 
@@ -185,7 +196,7 @@ void ExpressionExecutor::Execute(const Expression &expr, ExpressionState *state,
 		    "ExpressionExecutor::Execute called with a result vector of type %s that does not match expression type %s",
 		    result.GetType(), expr.return_type);
 	}
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_BETWEEN:
 		Execute(expr.Cast<BoundBetweenExpression>(), state, sel, count, result);
 		break;
@@ -229,7 +240,7 @@ idx_t ExpressionExecutor::Select(const Expression &expr, ExpressionState *state,
 	}
 	D_ASSERT(true_sel || false_sel);
 	D_ASSERT(expr.return_type.id() == LogicalTypeId::BOOLEAN);
-	switch (expr.expression_class) {
+	switch (expr.GetExpressionClass()) {
 #ifndef DUCKDB_SMALLER_BINARY
 	case ExpressionClass::BOUND_BETWEEN:
 		return Select(expr.Cast<BoundBetweenExpression>(), state, sel, count, true_sel, false_sel);

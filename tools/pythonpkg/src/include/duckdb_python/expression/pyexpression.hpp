@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb_python/pyrelation.hpp
+// duckdb_python/expression/pyexpression.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -40,14 +40,14 @@ public:
 	string ToString() const;
 	string GetName() const;
 	void Print() const;
-	shared_ptr<DuckDBPyExpression> Add(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> Add(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Subtract(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Multiply(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Division(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> FloorDivision(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Modulo(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Power(const DuckDBPyExpression &other) const;
 	shared_ptr<DuckDBPyExpression> Negate();
-	shared_ptr<DuckDBPyExpression> Subtract(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> Multiply(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> Division(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> FloorDivision(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> Modulo(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> Power(const DuckDBPyExpression &other);
 
 	// Equality operations
 
@@ -61,13 +61,16 @@ public:
 	shared_ptr<DuckDBPyExpression> SetAlias(const string &alias) const;
 	shared_ptr<DuckDBPyExpression> When(const DuckDBPyExpression &condition, const DuckDBPyExpression &value);
 	shared_ptr<DuckDBPyExpression> Else(const DuckDBPyExpression &value);
+
 	shared_ptr<DuckDBPyExpression> Cast(const DuckDBPyType &type) const;
+	shared_ptr<DuckDBPyExpression> Between(const DuckDBPyExpression &lower, const DuckDBPyExpression &upper);
+	shared_ptr<DuckDBPyExpression> Collate(const string &collation);
 
 	// AND, OR and NOT
 
 	shared_ptr<DuckDBPyExpression> Not();
-	shared_ptr<DuckDBPyExpression> And(const DuckDBPyExpression &other);
-	shared_ptr<DuckDBPyExpression> Or(const DuckDBPyExpression &other);
+	shared_ptr<DuckDBPyExpression> And(const DuckDBPyExpression &other) const;
+	shared_ptr<DuckDBPyExpression> Or(const DuckDBPyExpression &other) const;
 
 	// IS NULL / IS NOT NULL
 
@@ -76,6 +79,7 @@ public:
 
 	// IN / NOT IN
 
+	shared_ptr<DuckDBPyExpression> CreateCompareExpression(ExpressionType compare_type, const py::args &args);
 	shared_ptr<DuckDBPyExpression> In(const py::args &args);
 	shared_ptr<DuckDBPyExpression> NotIn(const py::args &args);
 
@@ -95,12 +99,15 @@ public:
 
 public:
 	static shared_ptr<DuckDBPyExpression> StarExpression(py::object exclude = py::none());
-	static shared_ptr<DuckDBPyExpression> ColumnExpression(const string &column_name);
+	static shared_ptr<DuckDBPyExpression> ColumnExpression(const py::args &column_name);
+	static shared_ptr<DuckDBPyExpression> DefaultExpression();
 	static shared_ptr<DuckDBPyExpression> ConstantExpression(const py::object &value);
+	static shared_ptr<DuckDBPyExpression> LambdaExpression(const py::object &lhs, const DuckDBPyExpression &rhs);
 	static shared_ptr<DuckDBPyExpression> CaseExpression(const DuckDBPyExpression &condition,
 	                                                     const DuckDBPyExpression &value);
 	static shared_ptr<DuckDBPyExpression> FunctionExpression(const string &function_name, const py::args &args);
 	static shared_ptr<DuckDBPyExpression> Coalesce(const py::args &args);
+	static shared_ptr<DuckDBPyExpression> SQLExpression(string sql);
 
 public:
 	// Internal functions (not exposed to Python)

@@ -49,7 +49,8 @@ SQLLogicTestRunner::~SQLLogicTestRunner() {
 
 void SQLLogicTestRunner::ExecuteCommand(duckdb::unique_ptr<Command> command) {
 	if (InLoop()) {
-		active_loops.back()->loop_commands.push_back(std::move(command));
+		auto &current_loop = *active_loops.back();
+		current_loop.loop_commands.push_back(std::move(command));
 	} else {
 		ExecuteContext context;
 		command->Execute(context);
@@ -60,7 +61,8 @@ void SQLLogicTestRunner::StartLoop(LoopDefinition definition) {
 	auto loop = make_uniq<LoopCommand>(*this, std::move(definition));
 	auto loop_ptr = loop.get();
 	if (InLoop()) {
-		active_loops.back()->loop_commands.push_back(std::move(loop));
+		auto &current_loop = *active_loops.back();
+		current_loop.loop_commands.push_back(std::move(loop));
 	} else {
 		// not in a loop yet: new top-level loop
 		top_level_loop = std::move(loop);
@@ -132,6 +134,7 @@ void SQLLogicTestRunner::Reconnect() {
 }
 
 string SQLLogicTestRunner::ReplaceLoopIterator(string text, string loop_iterator_name, string replacement) {
+	replacement = ReplaceKeywords(replacement);
 	if (StringUtil::Contains(loop_iterator_name, ",")) {
 		auto name_splits = StringUtil::Split(loop_iterator_name, ",");
 		auto replacement_splits = StringUtil::Split(replacement, ",");
@@ -296,6 +299,28 @@ bool SQLLogicTestRunner::ForEachTokenReplace(const string &parameter, vector<str
 	return collection;
 }
 
+static string ParseExplanation(SQLLogicParser &parser, const vector<string> &params, size_t &index) {
+	string res;
+	if (params[index].empty() || params[index][0] != '"') {
+		parser.Fail("Quoted parameter should start with double quotes");
+	}
+
+	res += params[index].substr(1);
+	index++;
+
+	while (index < params.size()) {
+		res += " " + params[index];
+		index++;
+
+		if (res.back() == '"') {
+			res.pop_back();
+			break;
+		}
+	}
+
+	return res;
+}
+
 RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vector<string> &params) {
 	if (params.size() < 1) {
 		parser.Fail("require requires a single parameter");
@@ -303,6 +328,14 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	// require command
 	string param = StringUtil::Lower(params[0]);
 	// os specific stuff
+
+	if (param == "notmusl") {
+#ifdef __MUSL_ENABLED__
+		return RequireResult::MISSING;
+#else
+		return RequireResult::PRESENT;
+#endif
+	}
 	if (param == "notmingw") {
 #ifdef __MINGW32__
 		return RequireResult::MISSING;
@@ -371,6 +404,38 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 #else
 		return RequireResult::PRESENT;
 #endif
+	}
+
+	if (param == "ram") {
+		if (params.size() != 2) {
+			parser.Fail("require ram requires a parameter");
+		}
+		// require a minimum amount of ram
+		auto required_limit = DBConfig::ParseMemoryLimit(params[1]);
+		auto limit = FileSystem::GetAvailableMemory();
+		if (!limit.IsValid()) {
+			return RequireResult::MISSING;
+		}
+		if (limit.GetIndex() < required_limit) {
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
+	}
+
+	if (param == "disk_space") {
+		if (params.size() != 2) {
+			parser.Fail("require disk_space requires a parameter");
+		}
+		// require a minimum amount of disk space
+		auto required_limit = DBConfig::ParseMemoryLimit(params[1]);
+		auto available_space = FileSystem::GetAvailableDiskSpace(".");
+		if (!available_space.IsValid()) {
+			return RequireResult::MISSING;
+		}
+		if (available_space.GetIndex() < required_limit) {
+			return RequireResult::MISSING;
+		}
+		return RequireResult::PRESENT;
 	}
 
 	if (param == "vector_size") {
@@ -442,11 +507,28 @@ RequireResult SQLLogicTestRunner::CheckRequire(SQLLogicParser &parser, const vec
 	}
 
 	if (param == "no_extension_autoloading") {
+		if (params.size() < 2) {
+			parser.Fail("require no_extension_autoloading needs an explanation string");
+		}
+		size_t index = 1;
+		string explanation = ParseExplanation(parser, params, index);
+		if (explanation.rfind("EXPECTED", 0) == 0 || explanation.rfind("FIXME", 0) == 0) {
+			// good, explanation is properly formatted
+		} else {
+			parser.Fail(
+			    "require no_extension_autoloading explanation string should begin with either 'EXPECTED' or FIXME'");
+		}
 		if (config->options.autoload_known_extensions) {
 			// If autoloading is on, we skip this test
 			return RequireResult::MISSING;
 		}
 		return RequireResult::PRESENT;
+	}
+	if (param == "allow_unsigned_extensions") {
+		if (config->options.allow_unsigned_extensions) {
+			return RequireResult::PRESENT;
+		}
+		return RequireResult::MISSING;
 	}
 
 	bool excluded_from_autoloading = true;

@@ -8,7 +8,6 @@
 
 #pragma once
 
-#include "duckdb/common/common.hpp"
 #include "duckdb/common/limits.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types.hpp"
@@ -22,15 +21,17 @@ struct date_t;     // NOLINT
 struct dtime_t;    // NOLINT
 struct dtime_tz_t; // NOLINT
 
-//! Type used to represent timestamps (seconds,microseconds,milliseconds or nanoseconds since 1970-01-01)
+//! Type used to represent a TIMESTAMP. timestamp_t holds the microseconds since 1970-01-01.
 struct timestamp_t { // NOLINT
+	// NOTE: The unit of value is microseconds for timestamp_t, but it can be
+	// different for subclasses (e.g. it's nanos for timestamp_ns, etc).
 	int64_t value;
 
 	timestamp_t() = default;
-	explicit inline constexpr timestamp_t(int64_t value_p) : value(value_p) {
+	explicit inline constexpr timestamp_t(int64_t micros) : value(micros) {
 	}
-	inline timestamp_t &operator=(int64_t value_p) {
-		value = value_p;
+	inline timestamp_t &operator=(int64_t micros) {
+		value = micros;
 		return *this;
 	}
 
@@ -79,19 +80,46 @@ struct timestamp_t { // NOLINT
 	} // NOLINT
 };
 
-struct timestamp_tz_t : public timestamp_t { // NOLINT
-};
-struct timestamp_ns_t : public timestamp_t { // NOLINT
-};
-struct timestamp_ms_t : public timestamp_t { // NOLINT
-};
+//! Type used to represent TIMESTAMP_S. timestamp_sec_t holds the seconds since 1970-01-01.
 struct timestamp_sec_t : public timestamp_t { // NOLINT
+	timestamp_sec_t() = default;
+	explicit inline constexpr timestamp_sec_t(int64_t seconds) : timestamp_t(seconds) {
+	}
 };
 
-enum class TimestampCastResult : uint8_t { SUCCESS, ERROR_INCORRECT_FORMAT, ERROR_NON_UTC_TIMEZONE };
+//! Type used to represent TIMESTAMP_MS. timestamp_ms_t holds the milliseconds since 1970-01-01.
+struct timestamp_ms_t : public timestamp_t { // NOLINT
+	timestamp_ms_t() = default;
+	explicit inline constexpr timestamp_ms_t(int64_t millis) : timestamp_t(millis) {
+	}
+};
 
-//! The Timestamp class is a static class that holds helper functions for the Timestamp
-//! type.
+//! Type used to represent TIMESTAMP_NS. timestamp_ns_t holds the nanoseconds since 1970-01-01.
+struct timestamp_ns_t : public timestamp_t { // NOLINT
+	timestamp_ns_t() = default;
+	explicit inline constexpr timestamp_ns_t(int64_t nanos) : timestamp_t(nanos) {
+	}
+};
+
+//! Type used to represent TIMESTAMPTZ. timestamp_tz_t holds the microseconds since 1970-01-01 (UTC).
+//! It is physically the same as timestamp_t, both hold microseconds since epoch.
+struct timestamp_tz_t : public timestamp_t { // NOLINT
+	timestamp_tz_t() = default;
+	explicit inline constexpr timestamp_tz_t(int64_t micros) : timestamp_t(micros) {
+	}
+	explicit inline constexpr timestamp_tz_t(timestamp_t ts) : timestamp_t(ts) {
+	}
+};
+
+enum class TimestampCastResult : uint8_t {
+	SUCCESS,
+	ERROR_INCORRECT_FORMAT,
+	ERROR_NON_UTC_TIMEZONE,
+	ERROR_RANGE,
+	STRICT_UTC
+};
+
+//! The static Timestamp class holds helper functions for the timestamp types.
 class Timestamp {
 public:
 	// min timestamp is 290308-12-22 (BC)
@@ -105,10 +133,13 @@ public:
 	//! Convert a string where the offset can also be a time zone string: / [A_Za-z0-9/_]+/
 	//! If has_offset is true, then the result is an instant that was offset from UTC
 	//! If the tz is not empty, the result is still an instant, but the parts can be extracted and applied to the TZ
-	DUCKDB_API static bool TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result, bool &has_offset,
-	                                             string_t &tz, optional_ptr<int32_t> nanos = nullptr);
+	DUCKDB_API static TimestampCastResult TryConvertTimestampTZ(const char *str, idx_t len, timestamp_t &result,
+	                                                            bool &has_offset, string_t &tz,
+	                                                            optional_ptr<int32_t> nanos = nullptr);
+	//! Strict Timestamp does not accept offsets.
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_t &result,
-	                                                          optional_ptr<int32_t> nanos = nullptr);
+	                                                          optional_ptr<int32_t> nanos = nullptr,
+	                                                          bool strict = false);
 	DUCKDB_API static TimestampCastResult TryConvertTimestamp(const char *str, idx_t len, timestamp_ns_t &result);
 	DUCKDB_API static timestamp_t FromCString(const char *str, idx_t len, optional_ptr<int32_t> nanos = nullptr);
 	//! Convert a date object to a string in the format "YYYY-MM-DD hh:mm:ss"
@@ -130,7 +161,7 @@ public:
 		       c == '-';
 	}
 
-	//! Is the timestamp finite or infinite?
+	//! True, if the timestamp is finite, else false.
 	static inline bool IsFinite(timestamp_t timestamp) {
 		return timestamp != timestamp_t::infinity() && timestamp != timestamp_t::ninfinity();
 	}
@@ -168,18 +199,20 @@ public:
 	DUCKDB_API static int64_t GetEpochMicroSeconds(timestamp_t timestamp);
 	//! Convert a timestamp to epoch (in nanoseconds)
 	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_t timestamp);
+	DUCKDB_API static int64_t GetEpochNanoSeconds(timestamp_ns_t timestamp);
 	//! Convert a timestamp to a rounded epoch at a given resolution.
 	DUCKDB_API static int64_t GetEpochRounded(timestamp_t timestamp, const int64_t power_of_ten);
 	//! Convert a timestamp to a Julian Day
 	DUCKDB_API static double GetJulianDay(timestamp_t timestamp);
 
-	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hour_offset,
-	                                         int &minute_offset);
+	DUCKDB_API static bool TryParseUTCOffset(const char *str, idx_t &pos, idx_t len, int &hh, int &mm, int &ss);
 
-	DUCKDB_API static string ConversionError(const string &str);
-	DUCKDB_API static string ConversionError(string_t str);
+	DUCKDB_API static string FormatError(const string &str);
+	DUCKDB_API static string FormatError(string_t str);
 	DUCKDB_API static string UnsupportedTimezoneError(const string &str);
 	DUCKDB_API static string UnsupportedTimezoneError(string_t str);
+	DUCKDB_API static string RangeError(const string &str);
+	DUCKDB_API static string RangeError(string_t str);
 };
 
 } // namespace duckdb

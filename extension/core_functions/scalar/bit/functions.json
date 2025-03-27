@@ -26,6 +26,6 @@
         "description": "Pads the bitstring until the specified length",
         "example": "bitstring('1010'::BIT, 7)",
         "struct": "BitStringFun",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     }
 ]

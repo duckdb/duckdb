@@ -48,7 +48,7 @@ public:
 public:
 	DatetimeCacheItem()
 	    : PythonImportCacheItem("datetime"), date(this), time("time", this), timedelta("timedelta", this),
-	      timezone("timezone", this), datetime(this) {
+	      datetime(this), timezone("timezone", this) {
 	}
 	~DatetimeCacheItem() override {
 	}
@@ -56,8 +56,8 @@ public:
 	DatetimeDateCacheItem date;
 	PythonImportCacheItem time;
 	PythonImportCacheItem timedelta;
-	PythonImportCacheItem timezone;
 	DatetimeDatetimeCacheItem datetime;
+	PythonImportCacheItem timezone;
 };
 
 } // namespace duckdb

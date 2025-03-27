@@ -7,6 +7,7 @@
 #include "duckdb/common/helper.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/main/database.hpp"
+#include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/expression/subquery_expression.hpp"
 #include "duckdb/parser/parsed_expression_iterator.hpp"
@@ -210,7 +211,7 @@ void Binder::AddCTEMap(CommonTableExpressionMap &cte_map) {
 static void GetTableRefCountsNode(case_insensitive_map_t<idx_t> &cte_ref_counts, QueryNode &node);
 
 static void GetTableRefCountsExpr(case_insensitive_map_t<idx_t> &cte_ref_counts, ParsedExpression &expr) {
-	if (expr.type == ExpressionType::SUBQUERY) {
+	if (expr.GetExpressionType() == ExpressionType::SUBQUERY) {
 		auto &subquery = expr.Cast<SubqueryExpression>();
 		GetTableRefCountsNode(cte_ref_counts, *subquery.subquery->node);
 	} else {
@@ -237,8 +238,10 @@ static bool ParsedExpressionIsAggregate(Binder &binder, const ParsedExpression &
 	if (expr.GetExpressionClass() == ExpressionClass::FUNCTION) {
 		auto &function = expr.Cast<FunctionExpression>();
 		QueryErrorContext error_context;
-		auto entry = binder.GetCatalogEntry(CatalogType::AGGREGATE_FUNCTION_ENTRY, function.catalog, function.schema,
-		                                    function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+
+		EntryLookupInfo lookup_info(CatalogType::AGGREGATE_FUNCTION_ENTRY, function.function_name, error_context);
+		auto entry =
+		    binder.GetCatalogEntry(function.catalog, function.schema, lookup_info, OnEntryNotFound::RETURN_NULL);
 		if (entry && entry->type == CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 			return true;
 		}
@@ -343,9 +346,8 @@ unique_ptr<BoundQueryNode> Binder::BindNode(QueryNode &node) {
 BoundStatement Binder::Bind(QueryNode &node) {
 	BoundStatement result;
 	if (node.type != QueryNodeType::CTE_NODE && // Issue #13850 - Don't auto-materialize if users materialize (for now)
-	    context.db->config.options.disabled_optimizers.find(OptimizerType::MATERIALIZED_CTE) ==
-	        context.db->config.options.disabled_optimizers.end() &&
-	    context.config.enable_optimizer && OptimizeCTEs(node)) {
+	    !Optimizer::OptimizerDisabled(context, OptimizerType::MATERIALIZED_CTE) && context.config.enable_optimizer &&
+	    OptimizeCTEs(node)) {
 		switch (node.type) {
 		case QueryNodeType::SELECT_NODE:
 			result = BindWithCTE(node.Cast<SelectNode>());
@@ -658,7 +660,7 @@ case_insensitive_map_t<unique_ptr<TableRef>> &Binder::GetReplacementScans() {
 
 // FIXME: this is extremely naive
 void VerifyNotExcluded(ParsedExpression &expr) {
-	if (expr.type == ExpressionType::COLUMN_REF) {
+	if (expr.GetExpressionType() == ExpressionType::COLUMN_REF) {
 		auto &column_ref = expr.Cast<ColumnRefExpression>();
 		if (!column_ref.IsQualified()) {
 			return;
@@ -682,13 +684,13 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 
 	auto binder = Binder::CreateBinder(context);
 
-	vector<column_t> bound_columns;
+	vector<ColumnIndex> bound_columns;
 	idx_t column_count = 0;
 	for (auto &col : table.GetColumns().Logical()) {
 		names.push_back(col.Name());
 		types.push_back(col.Type());
 		if (!col.Generated()) {
-			bound_columns.push_back(column_count);
+			bound_columns.emplace_back(column_count);
 		}
 		column_count++;
 	}
@@ -724,10 +726,10 @@ BoundStatement Binder::BindReturning(vector<unique_ptr<ParsedExpression>> return
 	return result;
 }
 
-optional_ptr<CatalogEntry> Binder::GetCatalogEntry(CatalogType type, const string &catalog, const string &schema,
-                                                   const string &name, OnEntryNotFound on_entry_not_found,
-                                                   QueryErrorContext &error_context) {
-	return entry_retriever.GetEntry(type, catalog, schema, name, on_entry_not_found, error_context);
+optional_ptr<CatalogEntry> Binder::GetCatalogEntry(const string &catalog, const string &schema,
+                                                   const EntryLookupInfo &lookup_info,
+                                                   OnEntryNotFound on_entry_not_found) {
+	return entry_retriever.GetEntry(catalog, schema, lookup_info, on_entry_not_found);
 }
 
 } // namespace duckdb

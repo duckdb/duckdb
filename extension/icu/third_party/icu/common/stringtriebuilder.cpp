@@ -383,7 +383,7 @@ StringTrieBuilder::equalNodes(const void *left, const void *right) {
     return *(const Node *)left==*(const Node *)right;
 }
 
-UBool
+bool
 StringTrieBuilder::Node::operator==(const Node &other) const {
     return this==&other || (typeid(*this)==typeid(other) && hash==other.hash);
 }
@@ -396,7 +396,7 @@ StringTrieBuilder::Node::markRightEdgesFirst(int32_t edgeNumber) {
     return edgeNumber;
 }
 
-UBool
+bool
 StringTrieBuilder::FinalValueNode::operator==(const Node &other) const {
     if(this==&other) {
         return TRUE;
@@ -413,7 +413,7 @@ StringTrieBuilder::FinalValueNode::write(StringTrieBuilder &builder) {
     offset=builder.writeValueAndFinal(value, TRUE);
 }
 
-UBool
+bool
 StringTrieBuilder::ValueNode::operator==(const Node &other) const {
     if(this==&other) {
         return TRUE;
@@ -425,7 +425,7 @@ StringTrieBuilder::ValueNode::operator==(const Node &other) const {
     return hasValue==o.hasValue && (!hasValue || value==o.value);
 }
 
-UBool
+bool
 StringTrieBuilder::IntermediateValueNode::operator==(const Node &other) const {
     if(this==&other) {
         return TRUE;
@@ -451,7 +451,7 @@ StringTrieBuilder::IntermediateValueNode::write(StringTrieBuilder &builder) {
     offset=builder.writeValueAndFinal(value, FALSE);
 }
 
-UBool
+bool
 StringTrieBuilder::LinearMatchNode::operator==(const Node &other) const {
     if(this==&other) {
         return TRUE;
@@ -471,7 +471,7 @@ StringTrieBuilder::LinearMatchNode::markRightEdgesFirst(int32_t edgeNumber) {
     return edgeNumber;
 }
 
-UBool
+bool
 StringTrieBuilder::ListBranchNode::operator==(const Node &other) const {
     if(this==&other) {
         return TRUE;
@@ -550,7 +550,7 @@ StringTrieBuilder::ListBranchNode::write(StringTrieBuilder &builder) {
     }
 }
 
-UBool
+bool
 StringTrieBuilder::SplitBranchNode::operator==(const Node &other) const {
     if(this==&other) {
         return TRUE;
@@ -584,7 +584,7 @@ StringTrieBuilder::SplitBranchNode::write(StringTrieBuilder &builder) {
     offset=builder.write(unit);
 }
 
-UBool
+bool
 StringTrieBuilder::BranchHeadNode::operator==(const Node &other) const {
     if(this==&other) {
         return TRUE;

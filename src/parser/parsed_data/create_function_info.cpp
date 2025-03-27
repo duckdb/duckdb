@@ -11,9 +11,8 @@ CreateFunctionInfo::CreateFunctionInfo(CatalogType type, string schema) : Create
 void CreateFunctionInfo::CopyFunctionProperties(CreateFunctionInfo &other) const {
 	CopyProperties(other);
 	other.name = name;
-	other.description = description;
-	other.parameter_names = parameter_names;
-	other.example = example;
+	other.alias_of = alias_of;
+	other.descriptions = descriptions;
 }
 
 } // namespace duckdb

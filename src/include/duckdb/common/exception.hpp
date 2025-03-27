@@ -119,6 +119,8 @@ public:
 	DUCKDB_API static unordered_map<string, string> InitializeExtraInfo(const string &subtype,
 	                                                                    optional_idx error_location);
 
+	//! Whether this exception type can occur during execution of a query
+	DUCKDB_API static bool IsExecutionError(ExceptionType type);
 	DUCKDB_API static string ToJSON(ExceptionType type, const string &message);
 	DUCKDB_API static string ToJSON(ExceptionType type, const string &message,
 	                                const unordered_map<string, string> &extra_info);
@@ -137,7 +139,7 @@ public:
 
 	DUCKDB_API static bool UncaughtException();
 
-	DUCKDB_API static string GetStackTrace(int max_depth = 120);
+	DUCKDB_API static string GetStackTrace(idx_t max_depth = 120);
 	static string FormatStackTrace(const string &message = "") {
 		return (message + "\n" + GetStackTrace());
 	}

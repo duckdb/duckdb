@@ -1,5 +1,5 @@
 #include "core_functions/scalar/string_functions.hpp"
-#include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/common/local_file_system.hpp"
 #include <iostream>
 
@@ -56,11 +56,11 @@ static idx_t Find(const char *input_data, idx_t input_size, const string &sep_da
 	if (sep_data.empty()) {
 		return 0;
 	}
-	auto pos = ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(&sep_data[0]), 1);
+	auto pos = FindStrInStr(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(&sep_data[0]), 1);
 	// both_slash option
 	if (sep_data.size() > 1) {
 		auto sec_pos =
-		    ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(&sep_data[1]), 1);
+		    FindStrInStr(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(&sep_data[1]), 1);
 		// choose the leftmost valid position
 		if (sec_pos != DConstants::INVALID_INDEX && (sec_pos < pos || pos == DConstants::INVALID_INDEX)) {
 			return sec_pos;

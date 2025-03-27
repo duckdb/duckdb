@@ -8,13 +8,15 @@
 
 #pragma once
 
+#include "duckdb/common/column_index.hpp"
+#include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/function/scalar/strftime_format.hpp"
 #include "json_common.hpp"
 
 namespace duckdb {
 
 struct DateFormatMap;
-class BufferedJSONReader;
+class JSONReader;
 
 //! Options for error handling while transforming JSON
 struct JSONTransformOptions {
@@ -35,7 +37,7 @@ public:
 	//! Whether to delay the error when transforming (e.g., when non-strict casting or reading from file)
 	bool delay_error = false;
 	//! Date format used for parsing (can be NULL)
-	optional_ptr<DateFormatMap> date_format_map = nullptr;
+	optional_ptr<const DateFormatMap> date_format_map = nullptr;
 	//! String to store errors in
 	string error_message;
 	//! Index of the object where the error occurred
@@ -50,23 +52,26 @@ public:
 
 struct TryParseDate {
 	template <class T>
-	static inline bool Operation(StrpTimeFormat &format, const string_t &input, T &result, string &error_message) {
+	static inline bool Operation(const StrpTimeFormat &format, const string_t &input, T &result,
+	                             string &error_message) {
 		return format.TryParseDate(input, result, error_message);
 	}
 };
 
 struct TryParseTimeStamp {
 	template <class T>
-	static inline bool Operation(StrpTimeFormat &format, const string_t &input, T &result, string &error_message) {
+	static inline bool Operation(const StrpTimeFormat &format, const string_t &input, T &result,
+	                             string &error_message) {
 		return format.TryParseTimestamp(input, result, error_message);
 	}
 };
 
 struct JSONTransform {
 	static bool Transform(yyjson_val *vals[], yyjson_alc *alc, Vector &result, const idx_t count,
-	                      JSONTransformOptions &options);
+	                      JSONTransformOptions &options, optional_ptr<const ColumnIndex> column_index);
 	static bool TransformObject(yyjson_val *objects[], yyjson_alc *alc, const idx_t count, const vector<string> &names,
-	                            const vector<Vector *> &result_vectors, JSONTransformOptions &options);
+	                            const vector<Vector *> &result_vectors, JSONTransformOptions &options,
+	                            optional_ptr<const vector<ColumnIndex>> column_indices, bool error_unknown_key);
 	static bool GetStringVector(yyjson_val *vals[], const idx_t count, const LogicalType &target, Vector &string_vector,
 	                            JSONTransformOptions &options);
 };

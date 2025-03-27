@@ -40,8 +40,12 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager)
       block_handle(nullptr) {
 
 	auto &buffer_manager = block_manager.buffer_manager;
-	buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_manager.GetBlockSize(), false);
+	auto block_size = block_manager.GetBlockSize();
+	buffer_handle = buffer_manager.Allocate(MemoryTag::ART_INDEX, block_size, false);
 	block_handle = buffer_handle.GetBlockHandle();
+
+	// Zero-initialize the buffer as it might get serialized to storage.
+	memset(buffer_handle.Ptr(), 0, block_size);
 }
 
 FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segment_count, const idx_t allocation_size,
@@ -54,7 +58,8 @@ FixedSizeBuffer::FixedSizeBuffer(BlockManager &block_manager, const idx_t segmen
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 }
 
-void FixedSizeBuffer::Destroy() {
+FixedSizeBuffer::~FixedSizeBuffer() {
+	lock_guard<mutex> l(lock);
 	if (InMemory()) {
 		// we can have multiple readers on a pinned block, and unpinning the buffer handle
 		// decrements the reader count on the underlying block handle (Destroy() unpins)
@@ -106,21 +111,21 @@ void FixedSizeBuffer::Serialize(PartialBlockManager &partial_block_manager, cons
 		auto &p_block_for_index = allocation.partial_block->Cast<PartialBlockForIndex>();
 		auto dst_handle = buffer_manager.Pin(p_block_for_index.block_handle);
 		memcpy(dst_handle.Ptr() + block_pointer.offset, buffer_handle.Ptr(), allocation_size);
-		SetUninitializedRegions(p_block_for_index, segment_size, block_pointer.offset, bitmask_offset);
 
 	} else {
 		// create a new block that can potentially be used as a partial block
 		D_ASSERT(block_handle);
 		D_ASSERT(!block_pointer.offset);
 		auto p_block_for_index = make_uniq<PartialBlockForIndex>(allocation.state, block_manager, block_handle);
-		SetUninitializedRegions(*p_block_for_index, segment_size, block_pointer.offset, bitmask_offset);
 		allocation.partial_block = std::move(p_block_for_index);
 	}
 
-	partial_block_manager.RegisterPartialBlock(std::move(allocation));
-
 	// resetting this buffer
 	buffer_handle.Destroy();
+
+	// register the partial block
+	partial_block_manager.RegisterPartialBlock(std::move(allocation));
+
 	block_handle = block_manager.RegisterBlock(block_pointer.block_id);
 	D_ASSERT(block_handle->BlockId() < MAXIMUM_BLOCK);
 
@@ -146,11 +151,11 @@ void FixedSizeBuffer::Pin() {
 	block_handle = std::move(new_block_handle);
 }
 
-uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count) {
+uint32_t FixedSizeBuffer::GetOffset(const idx_t bitmask_count, const idx_t available_segments) {
 
 	// get the bitmask data
 	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
-	ValidityMask mask(bitmask_ptr);
+	ValidityMask mask(bitmask_ptr, available_segments);
 	auto data = mask.GetData();
 
 	// fills up a buffer sequentially before searching for free bits
@@ -204,7 +209,7 @@ void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const id
 	// We traverse from the back. A binary search would be faster.
 	// However, buffers are often (almost) full, so the overhead is acceptable.
 	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
-	ValidityMask mask(bitmask_ptr);
+	ValidityMask mask(bitmask_ptr, available_segments);
 
 	auto max_offset = available_segments;
 	for (idx_t i = available_segments; i > 0; i--) {
@@ -214,29 +219,6 @@ void FixedSizeBuffer::SetAllocationSize(const idx_t available_segments, const id
 		}
 	}
 	allocation_size = max_offset * segment_size + bitmask_offset;
-}
-
-void FixedSizeBuffer::SetUninitializedRegions(PartialBlockForIndex &p_block_for_index, const idx_t segment_size,
-                                              const idx_t offset, const idx_t bitmask_offset) {
-
-	// this function calls Get() on the buffer
-	D_ASSERT(InMemory());
-
-	auto bitmask_ptr = reinterpret_cast<validity_t *>(Get());
-	ValidityMask mask(bitmask_ptr);
-
-	idx_t i = 0;
-	idx_t max_offset = offset + allocation_size;
-	idx_t current_offset = offset + bitmask_offset;
-	while (current_offset < max_offset) {
-
-		if (mask.RowIsValid(i)) {
-			D_ASSERT(current_offset + segment_size <= max_offset);
-			p_block_for_index.AddUninitializedRegion(current_offset, current_offset + segment_size);
-		}
-		current_offset += segment_size;
-		i++;
-	}
 }
 
 } // namespace duckdb

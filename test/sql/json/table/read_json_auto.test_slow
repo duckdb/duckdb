@@ -155,13 +155,18 @@ select * from read_json_auto('data/json/different_schemas.ndjson', sample_size=-
 
 # if we require fields to appear in all objects by setting field_appearance_threshold=1, we default to MAP
 query I
+select typeof(COLUMNS(*)) from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=1) limit 1
+----
+MAP(VARCHAR, JSON)
+
+query I
 select * from read_json_auto('data/json/different_schemas.ndjson', field_appearance_threshold=1)
 ----
-{id=1, name="O Brother, Where Art Thou?"}
+{id=1, name='"O Brother, Where Art Thou?"'}
 {id=2}
-{id=3, name="The Firm"}
+{id=3, name='"The Firm"'}
 {id=4}
-{id=5, name="Raising Arizona"}
+{id=5, name='"Raising Arizona"'}
 
 # if we set it to 0.5 it should work already since "name" appears in 3/5 objects, which is greater than 0.5
 query II
@@ -288,13 +293,13 @@ MAP(VARCHAR, STRUCT(a JSON[]))
 
 # Candidate types are properly handled for map inference
 query I
-SELECT distinct typeof(a) FROM read_json_auto('data/json/map_of_dates.jsonl')
+SELECT distinct typeof(a) FROM read_json_auto('data/json/map_of_dates.jsonl', map_inference_threshold=25)
 ----
 MAP(VARCHAR, DATE)
 
 # Mixed candidate types are also handled
 query I
-SELECT distinct typeof(a) FROM read_json_auto('data/json/map_of_mixed_date_timestamps.jsonl')
+SELECT distinct typeof(a) FROM read_json_auto('data/json/map_of_mixed_date_timestamps.jsonl', map_inference_threshold=25)
 ----
 MAP(VARCHAR, VARCHAR)
 

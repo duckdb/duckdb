@@ -314,21 +314,22 @@ struct VectorArgMinMaxBase : ArgMinMaxBase<COMPARATOR, IGNORE_NULL> {
 template <class OP>
 AggregateFunction GetGenericArgMinMaxFunction() {
 	using STATE = ArgMinMaxState<string_t, string_t>;
-	return AggregateFunction({LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY,
-	                         AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
-	                         OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
-	                         AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind,
-	                         AggregateFunction::StateDestroy<STATE, OP>);
+	return AggregateFunction(
+	    {LogicalType::ANY, LogicalType::ANY}, LogicalType::ANY, AggregateFunction::StateSize<STATE>,
+	    AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>, OP::template Update<STATE>,
+	    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind,
+	    AggregateFunction::StateDestroy<STATE, OP>);
 }
 
 template <class OP, class ARG_TYPE, class BY_TYPE>
 AggregateFunction GetVectorArgMinMaxFunctionInternal(const LogicalType &by_type, const LogicalType &type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
-	return AggregateFunction(
-	    {type, by_type}, type, AggregateFunction::StateSize<STATE>, AggregateFunction::StateInitialize<STATE, OP>,
-	    OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
-	    AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind, AggregateFunction::StateDestroy<STATE, OP>);
+	return AggregateFunction({type, by_type}, type, AggregateFunction::StateSize<STATE>,
+	                         AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>,
+	                         OP::template Update<STATE>, AggregateFunction::StateCombine<STATE, OP>,
+	                         AggregateFunction::StateVoidFinalize<STATE, OP>, nullptr, OP::Bind,
+	                         AggregateFunction::StateDestroy<STATE, OP>);
 #else
 	auto function = GetGenericArgMinMaxFunction<OP>();
 	function.arguments = {type, by_type};
@@ -380,7 +381,9 @@ template <class OP, class ARG_TYPE, class BY_TYPE>
 AggregateFunction GetArgMinMaxFunctionInternal(const LogicalType &by_type, const LogicalType &type) {
 #ifndef DUCKDB_SMALLER_BINARY
 	using STATE = ArgMinMaxState<ARG_TYPE, BY_TYPE>;
-	auto function = AggregateFunction::BinaryAggregate<STATE, ARG_TYPE, BY_TYPE, ARG_TYPE, OP>(type, by_type, type);
+	auto function =
+	    AggregateFunction::BinaryAggregate<STATE, ARG_TYPE, BY_TYPE, ARG_TYPE, OP, AggregateDestructorType::LEGACY>(
+	        type, by_type, type);
 	if (type.InternalType() == PhysicalType::VARCHAR || by_type.InternalType() == PhysicalType::VARCHAR) {
 		function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 	}
@@ -542,8 +545,8 @@ public:
 	BinaryAggregateHeap<K, V, COMPARATOR> heap;
 
 	bool is_initialized = false;
-	void Initialize(idx_t nval) {
-		heap.Initialize(nval);
+	void Initialize(ArenaAllocator &allocator, idx_t nval) {
+		heap.Initialize(allocator, nval);
 		is_initialized = true;
 	}
 };
@@ -598,7 +601,7 @@ static void ArgMinMaxNUpdate(Vector inputs[], AggregateInputData &aggr_input, id
 			if (nval >= MAX_N) {
 				throw InvalidInputException("Invalid input for arg_min/arg_max: n value must be < %d", MAX_N);
 			}
-			state.Initialize(UnsafeNumericCast<idx_t>(nval));
+			state.Initialize(aggr_input.allocator, UnsafeNumericCast<idx_t>(nval));
 		}
 
 		// Now add the input to the heap
@@ -618,7 +621,7 @@ static void SpecializeArgMinMaxNFunction(AggregateFunction &function) {
 	using OP = MinMaxNOperation;
 
 	function.state_size = AggregateFunction::StateSize<STATE>;
-	function.initialize = AggregateFunction::StateInitialize<STATE, OP>;
+	function.initialize = AggregateFunction::StateInitialize<STATE, OP, AggregateDestructorType::LEGACY>;
 	function.combine = AggregateFunction::StateCombine<STATE, OP>;
 	function.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 

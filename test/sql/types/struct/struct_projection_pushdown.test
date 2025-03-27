@@ -1,0 +1,76 @@
+# name: test/sql/types/struct/struct_projection_pushdown.test
+# description: Test struct projection pushdown
+# group: [struct]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test_structs(id INT, s STRUCT(a integer, b bool));
+
+statement ok
+INSERT INTO test_structs VALUES (1, {'a': 42, 'b': true}), (2, NULL), (3, {'a': 84, 'b': NULL}), (4, {'a': NULL, 'b': false});
+
+statement ok
+COPY test_structs TO '__TEST_DIR__/test_structs.parquet'
+
+foreach source test_structs read_parquet('__TEST_DIR__/test_structs.parquet')
+
+query I
+SELECT s.b FROM ${source}
+----
+true
+NULL
+NULL
+false
+
+query I
+SELECT s['b'] FROM ${source}
+----
+true
+NULL
+NULL
+false
+
+query II
+SELECT s['b'], s FROM ${source}
+----
+true	{'a': 42, 'b': true}
+NULL	NULL
+NULL	{'a': 84, 'b': NULL}
+false	{'a': NULL, 'b': false}
+
+query II
+SELECT s.b, s.a FROM ${source}
+----
+true	42
+NULL	NULL
+NULL	84
+false	NULL
+
+query I
+SELECT s FROM ${source} WHERE s.b
+----
+{'a': 42, 'b': true}
+
+query I
+SELECT a FROM (SELECT UNNEST(s) FROM ${source}) WHERE b
+----
+42
+
+query I
+SELECT id FROM ${source} WHERE s.b
+----
+1
+
+endloop
+
+statement ok
+UPDATE test_structs SET s={'a': 84, 'b': false} WHERE id=2
+
+query II
+SELECT s['b'], s.a FROM test_structs WHERE id=2
+----
+false	84

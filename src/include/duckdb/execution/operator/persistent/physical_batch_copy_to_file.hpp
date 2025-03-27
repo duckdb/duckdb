@@ -30,6 +30,7 @@ public:
 	string file_path;
 	bool use_tmp_file;
 	CopyFunctionReturnType return_type;
+	bool write_empty_file;
 
 public:
 	// Source interface
@@ -49,8 +50,8 @@ public:
 	unique_ptr<GlobalSinkState> GetGlobalSinkState(ClientContext &context) const override;
 	SinkNextBatchType NextBatch(ExecutionContext &context, OperatorSinkNextBatchInput &input) const override;
 
-	bool RequiresBatchIndex() const override {
-		return true;
+	OperatorPartitionInfo RequiredPartitionInfo() const override {
+		return OperatorPartitionInfo::BatchIndex();
 	}
 
 	bool IsSink() const override {

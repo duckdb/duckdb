@@ -129,9 +129,11 @@ template <bool HAS_NANOS>
 duckdb::string_t StringFromTimestamp(timestamp_t input, Vector &vector) {
 	if (input == timestamp_t::infinity()) {
 		return StringVector::AddString(vector, Date::PINF);
-	} else if (input == timestamp_t::ninfinity()) {
+	}
+	if (input == timestamp_t::ninfinity()) {
 		return StringVector::AddString(vector, Date::NINF);
 	}
+
 	date_t date_entry;
 	dtime_t time_entry;
 	int32_t picos = 0;
@@ -260,9 +262,11 @@ template <>
 string_t StringCastTZ::Operation(timestamp_t input, Vector &vector) {
 	if (input == timestamp_t::infinity()) {
 		return StringVector::AddString(vector, Date::PINF);
-	} else if (input == timestamp_t::ninfinity()) {
+	}
+	if (input == timestamp_t::ninfinity()) {
 		return StringVector::AddString(vector, Date::NINF);
 	}
+
 	date_t date_entry;
 	dtime_t time_entry;
 	Timestamp::Convert(input, date_entry, time_entry);

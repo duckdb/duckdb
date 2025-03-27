@@ -27,7 +27,7 @@ query IIIIII
 SELECT SUM(id) AS id, SUM(id2) AS id2, SUM(id3) AS id3, SUM(value) AS sum_value, SUM(one_min_value) AS sum_one_min_value, sum_value + sum_one_min_value AS sum
 FROM df
 ----
-255978	29751	17482	2504.293	2495.704	4999.997
+252652	29774	17657	2497.951	2502.045	4999.996
 
 statement ok
 PRAGMA enable_verification
@@ -51,7 +51,7 @@ FROM (
 GROUP BY ALL
 ORDER BY ALL
 ----
-660 values hashing to 7a9e98649bddd1ba74c34324caf4674c
+660 values hashing to 787fff9f7e1d4749631eac7194d6ed44
 
 endloop
 

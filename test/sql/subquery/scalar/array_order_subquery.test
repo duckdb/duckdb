@@ -36,6 +36,18 @@ select array(select unnest(l) AS i order by i desc nulls first) as a from (value
 []
 [12, 11, 10]
 
+# row id
+query I
+SELECT ARRAY(SELECT i FROM t ORDER BY rowid DESC)
+----
+[4, 4, 3, 2, 1]
+
+# qualified name
+query I
+SELECT ARRAY(SELECT i FROM t ORDER BY t.rowid)
+----
+[1, 2, 3, 4, 4]
+
 # use integer literals
 query I
 SELECT ARRAY
@@ -73,6 +85,16 @@ SELECT ARRAY
    ORDER by 1 DESC) AS new_array;
 ----
 [3, 2, 1]
+
+query I
+select array(select * from unnest(['a', 'b']) as _t(u) order by if(u='a',100, 1)) as out;
+----
+[b, a]
+
+query I
+select array(select * from unnest(['a', 'b']) as _t(u) order by if(u='a',100, 1) desc) as out;
+----
+[a, b]
 
 statement error
 SELECT ARRAY

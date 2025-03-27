@@ -36,3 +36,12 @@ where pruefbahn_id = '58981';
 58981	07:20:00+00
 58981	07:20:00+00
 58981	07:20:00+00
+
+query I
+select col33 
+from 'data/parquet-testing/negative-timetz.parquet';
+----
+20:08:21+00
+09:01:00+00
+13:04:04+00
+

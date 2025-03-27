@@ -1,11 +1,13 @@
-#include "duckdb/execution/operator/csv_scanner/csv_sniffer.hpp"
+#include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
 #include "duckdb/common/types/value.hpp"
 
 namespace duckdb {
 
-CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager> buffer_manager_p,
-                       CSVStateMachineCache &state_machine_cache_p, bool default_null_to_varchar_p)
-    : state_machine_cache(state_machine_cache_p), options(options_p), buffer_manager(std::move(buffer_manager_p)),
+CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, const MultiFileReaderOptions &file_options,
+                       shared_ptr<CSVBufferManager> buffer_manager_p, CSVStateMachineCache &state_machine_cache_p,
+                       bool default_null_to_varchar_p)
+    : state_machine_cache(state_machine_cache_p), options(options_p), file_options(file_options),
+      buffer_manager(std::move(buffer_manager_p)), lines_sniffed(0),
       default_null_to_varchar(default_null_to_varchar_p) {
 	// Initialize Format Candidates
 	for (const auto &format_template : format_template_candidates) {
@@ -21,20 +23,6 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, shared_ptr<CSVBufferManager>
 	}
 }
 
-bool SetColumns::IsSet() const {
-	if (!types) {
-		return false;
-	}
-	return !types->empty();
-}
-
-idx_t SetColumns::Size() const {
-	if (!types) {
-		return 0;
-	}
-	return types->size();
-}
-
 template <class T>
 void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, const string &name, string &error) {
 	if (original.IsSetByUser()) {
@@ -48,8 +36,9 @@ void MatchAndReplace(CSVOption<T> &original, CSVOption<T> &sniffed, const string
 		original.Set(sniffed.GetValue(), false);
 	}
 }
-void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sniffed, string &error, bool found_date,
-                                    bool found_timestamp) {
+
+void MatchAndReplaceUserSetVariables(DialectOptions &original, DialectOptions &sniffed, string &error, bool found_date,
+                                     bool found_timestamp) {
 	MatchAndReplace(original.header, sniffed.header, "Header", error);
 	if (sniffed.state_machine_options.new_line.GetValue() != NewLineIdentifier::NOT_SET) {
 		// Is sniffed line is not set (e.g., single-line file) , we don't try to replace and match.
@@ -72,7 +61,7 @@ void MatchAndRepaceUserSetVariables(DialectOptions &original, DialectOptions &sn
 	}
 }
 // Set the CSV Options in the reference
-void CSVSniffer::SetResultOptions() {
+void CSVSniffer::SetResultOptions() const {
 	bool found_date = false;
 	bool found_timestamp = false;
 	for (auto &type : detected_types) {
@@ -82,31 +71,30 @@ void CSVSniffer::SetResultOptions() {
 			found_timestamp = true;
 		}
 	}
-	MatchAndRepaceUserSetVariables(options.dialect_options, best_candidate->GetStateMachine().dialect_options,
-	                               options.sniffer_user_mismatch_error, found_date, found_timestamp);
+	MatchAndReplaceUserSetVariables(options.dialect_options, best_candidate->GetStateMachine().dialect_options,
+	                                options.sniffer_user_mismatch_error, found_date, found_timestamp);
 	options.dialect_options.num_cols = best_candidate->GetStateMachine().dialect_options.num_cols;
 	options.dialect_options.rows_until_header = best_candidate->GetStateMachine().dialect_options.rows_until_header;
 }
 
-SnifferResult CSVSniffer::MinimalSniff() {
+AdaptiveSnifferResult CSVSniffer::MinimalSniff() {
 	if (set_columns.IsSet()) {
 		// Nothing to see here
-		return SnifferResult(*set_columns.types, *set_columns.names);
+		return AdaptiveSnifferResult(*set_columns.types, *set_columns.names, true);
 	}
 	// Return Types detected
 	vector<LogicalType> return_types;
 	// Column Names detected
-	vector<string> names;
-
 	buffer_manager->sniffing = true;
-	constexpr idx_t result_size = 2;
+	constexpr idx_t result_size = STANDARD_VECTOR_SIZE;
 
 	auto state_machine =
 	    make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options, state_machine_cache);
 	ColumnCountScanner count_scanner(buffer_manager, state_machine, error_handler, result_size);
 	auto &sniffed_column_counts = count_scanner.ParseChunk();
 	if (sniffed_column_counts.result_position == 0) {
-		return {{}, {}};
+		// The file is an empty file, we just return
+		return {{}, {}, false};
 	}
 
 	state_machine->dialect_options.num_cols = sniffed_column_counts[0].number_of_columns;
@@ -114,6 +102,7 @@ SnifferResult CSVSniffer::MinimalSniff() {
 
 	// First figure out the number of columns on this configuration
 	auto scanner = count_scanner.UpgradeToStringValueScanner();
+	scanner->error_handler->SetIgnoreErrors(true);
 	// Parse chunk and read csv with info candidate
 	auto &data_chunk = scanner->ParseChunk().ToChunk();
 	idx_t start_row = 0;
@@ -130,20 +119,19 @@ SnifferResult CSVSniffer::MinimalSniff() {
 
 	// Possibly Gather Header
 	vector<HeaderValue> potential_header;
-	if (start_row != 0) {
-		for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
-			auto &cur_vector = data_chunk.data[col_idx];
-			auto vector_data = FlatVector::GetData<string_t>(cur_vector);
-			auto &validity = FlatVector::Validity(cur_vector);
-			HeaderValue val;
-			if (validity.RowIsValid(0)) {
-				val = HeaderValue(vector_data[0]);
-			}
-			potential_header.emplace_back(val);
+	for (idx_t col_idx = 0; col_idx < data_chunk.ColumnCount(); col_idx++) {
+		auto &cur_vector = data_chunk.data[col_idx];
+		const auto vector_data = FlatVector::GetData<string_t>(cur_vector);
+		auto &validity = FlatVector::Validity(cur_vector);
+		HeaderValue val;
+		if (validity.RowIsValid(0)) {
+			val = HeaderValue(vector_data[0]);
 		}
+		potential_header.emplace_back(val);
 	}
-	names = DetectHeaderInternal(buffer_manager->context, potential_header, *state_machine, set_columns,
-	                             best_sql_types_candidates_per_column_idx, options, *error_handler);
+
+	auto names = DetectHeaderInternal(buffer_manager->context, potential_header, *state_machine, set_columns,
+	                                  best_sql_types_candidates_per_column_idx, options, file_options, *error_handler);
 
 	for (idx_t column_idx = 0; column_idx < best_sql_types_candidates_per_column_idx.size(); column_idx++) {
 		LogicalType d_type = best_sql_types_candidates_per_column_idx[column_idx].back();
@@ -152,40 +140,43 @@ SnifferResult CSVSniffer::MinimalSniff() {
 		}
 		detected_types.push_back(d_type);
 	}
-
-	return {detected_types, names};
+	return {detected_types, names, sniffed_column_counts.result_position > 1};
 }
 
-SnifferResult CSVSniffer::AdaptiveSniff(CSVSchema &file_schema) {
+SnifferResult CSVSniffer::AdaptiveSniff(const CSVSchema &file_schema) {
 	auto min_sniff_res = MinimalSniff();
 	bool run_full = error_handler->AnyErrors() || detection_error_handler->AnyErrors();
 	// Check if we are happy with the result or if we need to do more sniffing
 	if (!error_handler->AnyErrors() && !detection_error_handler->AnyErrors()) {
 		// If we got no errors, we also run full if schemas do not match.
-		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
+		if (!set_columns.IsSet() && !file_options.AnySet()) {
 			string error;
-			run_full =
-			    !file_schema.SchemasMatch(error, min_sniff_res.names, min_sniff_res.return_types, options.file_path);
+			run_full = !file_schema.SchemasMatch(error, min_sniff_res, options.file_path, true);
 		}
 	}
 	if (run_full) {
 		// We run full sniffer
 		auto full_sniffer = SniffCSV();
-		if (!set_columns.IsSet() && !options.file_options.AnySet()) {
+		if (!set_columns.IsSet() && !file_options.AnySet()) {
 			string error;
-			if (!file_schema.SchemasMatch(error, full_sniffer.names, full_sniffer.return_types, options.file_path) &&
+			if (!file_schema.SchemasMatch(error, full_sniffer, options.file_path, false) &&
 			    !options.ignore_errors.GetValue()) {
 				throw InvalidInputException(error);
 			}
 		}
 		return full_sniffer;
 	}
-	return min_sniff_res;
+	return min_sniff_res.ToSnifferResult();
 }
-SnifferResult CSVSniffer::SniffCSV(bool force_match) {
+
+SnifferResult CSVSniffer::SniffCSV(const bool force_match) {
 	buffer_manager->sniffing = true;
 	// 1. Dialect Detection
 	DetectDialect();
+	if (buffer_manager->file_handle->compression_type != FileCompressionType::UNCOMPRESSED &&
+	    buffer_manager->IsBlockUnloaded(0)) {
+		buffer_manager->ResetBufferManager();
+	}
 	// 2. Type Detection
 	DetectTypes();
 	// 3. Type Refinement
@@ -202,15 +193,8 @@ SnifferResult CSVSniffer::SniffCSV(bool force_match) {
 		buffer_manager->ResetBufferManager();
 	}
 	buffer_manager->sniffing = false;
-	if (!best_candidate->error_handler->errors.empty() && !options.ignore_errors.GetValue()) {
-		for (auto &error_vector : best_candidate->error_handler->errors) {
-			for (auto &error : error_vector.second) {
-				if (error.type == MAXIMUM_LINE_SIZE) {
-					// If it's a maximum line size error, we can do it now.
-					error_handler->Error(error);
-				}
-			}
-		}
+	if (best_candidate->error_handler->AnyErrors() && !options.ignore_errors.GetValue()) {
+		best_candidate->error_handler->ErrorIfTypeExists(MAXIMUM_LINE_SIZE);
 	}
 	D_ASSERT(best_sql_types_candidates_per_column_idx.size() == names.size());
 	// We are done, Set the CSV Options in the reference. Construct and return the result.

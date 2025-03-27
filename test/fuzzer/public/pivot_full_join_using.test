@@ -1,0 +1,16 @@
+# name: test/fuzzer/public/pivot_full_join_using.test
+# description: Test pivoting on a USING column that comes from a FULL JOIN
+# group: [public]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE TABLE t1 (c01 INT, c02 INT);
+
+statement ok
+CREATE TABLE t2 (c01 INT, c03 INT);
+
+query II
+PIVOT t1 FULL JOIN t2 USING ( c01 ) ON c01;
+----

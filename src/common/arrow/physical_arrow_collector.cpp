@@ -10,10 +10,10 @@ namespace duckdb {
 
 unique_ptr<PhysicalResultCollector> PhysicalArrowCollector::Create(ClientContext &context, PreparedStatementData &data,
                                                                    idx_t batch_size) {
-	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, *data.plan)) {
+	if (!PhysicalPlanGenerator::PreserveInsertionOrder(context, data.physical_plan->Root())) {
 		// the plan is not order preserving, so we just use the parallel materialized collector
 		return make_uniq_base<PhysicalResultCollector, PhysicalArrowCollector>(data, true, batch_size);
-	} else if (!PhysicalPlanGenerator::UseBatchIndex(context, *data.plan)) {
+	} else if (!PhysicalPlanGenerator::UseBatchIndex(context, data.physical_plan->Root())) {
 		// the plan is order preserving, but we cannot use the batch index: use a single-threaded result collector
 		return make_uniq_base<PhysicalResultCollector, PhysicalArrowCollector>(data, false, batch_size);
 	} else {
@@ -37,7 +37,8 @@ SinkResultType PhysicalArrowCollector::Sink(ExecutionContext &context, DataChunk
 			auto properties = context.client.GetClientProperties();
 			D_ASSERT(processed < count);
 			auto initial_capacity = MinValue(record_batch_size, count - processed);
-			appender = make_uniq<ArrowAppender>(types, initial_capacity, properties);
+			appender = make_uniq<ArrowAppender>(types, initial_capacity, properties,
+			                                    ArrowTypeExtensionData::GetExtensionTypes(context.client, types));
 		}
 
 		// Figure out how much we can still append to this chunk

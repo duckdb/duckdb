@@ -270,7 +270,7 @@ class TestFetchNested(object):
             'a': [
                 {
                     '1':10,
-                    '2':9,
+                    # '2':9,  # This value will be overwritten by '2':11 below.
                     '3':8,
                     '4':7,
                     '2':11,
@@ -433,8 +433,8 @@ class TestFetchNested(object):
             'a': [
                 {'i': 1, 'j': 2},
                 {'i': 1, 'j': 2},
-                np.nan,
-                np.nan
+                pd.NA,
+                pd.NA
             ]
         }),
         ("""
@@ -454,8 +454,8 @@ class TestFetchNested(object):
                     '1':3,
                     '2':4
                 },
-                np.nan,
-                np.nan
+                pd.NA,
+                pd.NA
             ]
         }),
     ])

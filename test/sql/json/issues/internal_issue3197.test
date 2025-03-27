@@ -1,0 +1,10 @@
+# name: test/sql/json/issues/internal_issue3197.test
+# description: Test internal issue 3197 - AFL++ issue: crashes (segfault) in json reader
+# group: [issues]
+
+require json
+
+statement error
+from 'data/json/internal_3197.json'
+----
+Invalid Input Error

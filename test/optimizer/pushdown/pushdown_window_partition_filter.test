@@ -134,7 +134,7 @@ logical_opt	<REGEX>:.*FILTER.*WINDOW.*
 query II
 explain select * from window_no_filter where a != 'C' order by a;
 ----
-logical_opt	<REGEX>:.*WINDOW.*FILTER.*
+logical_opt	<REGEX>:.*WINDOW.*Filters.*
 
 statement ok
 create table t2 as select range a, range%50 b, range%25 c from range(500);

@@ -24,11 +24,11 @@ struct GetVariableBindData : FunctionData {
 
 static unique_ptr<FunctionData> GetVariableBind(ClientContext &context, ScalarFunction &function,
                                                 vector<unique_ptr<Expression>> &arguments) {
+	if (arguments[0]->HasParameter() || arguments[0]->return_type.id() == LogicalTypeId::UNKNOWN) {
+		throw ParameterNotResolvedException();
+	}
 	if (!arguments[0]->IsFoldable()) {
 		throw NotImplementedException("getvariable requires a constant input");
-	}
-	if (arguments[0]->HasParameter()) {
-		throw ParameterNotResolvedException();
 	}
 	Value value;
 	auto variable_name = ExpressionExecutor::EvaluateScalar(context, *arguments[0]);
@@ -49,10 +49,10 @@ unique_ptr<Expression> BindGetVariableExpression(FunctionBindExpressionInput &in
 	return make_uniq<BoundConstantExpression>(bind_data.value);
 }
 
-void GetVariableFun::RegisterFunction(BuiltinFunctions &set) {
+ScalarFunction GetVariableFun::GetFunction() {
 	ScalarFunction getvar("getvariable", {LogicalType::VARCHAR}, LogicalType::ANY, nullptr, GetVariableBind, nullptr);
 	getvar.bind_expression = BindGetVariableExpression;
-	set.AddFunction(getvar);
+	return getvar;
 }
 
 } // namespace duckdb

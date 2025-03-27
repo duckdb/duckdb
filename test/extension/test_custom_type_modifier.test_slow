@@ -91,7 +91,7 @@ d
 statement error
 CREATE TABLE t3 (i BOUNDED(200, 300));
 ----
-Binder Error: Cannot apply '2' type modifier(s) to type 'BOUNDED' taking at most '1' type modifier(s)
+Binder Error: BOUNDED type must have one modifier
 
 statement ok
 CREATE TYPE user_type AS INTEGER
@@ -105,12 +105,12 @@ Binder Error: Type 'user_type' does not take any type modifiers
 statement error
 SELECT 1::BOUNDED(NULL)
 ----
-Invalid Input Error: BOUNDED type must have a max value
+BOUNDED type modifier must be integer
 
 statement error
 SELECT 1::BOUNDED(900000000000000000)
 ----
-Binder Error: Cannot apply type modifier '900000000000000000' to type 'BOUNDED', expected value of type 'INTEGER'
+BOUNDED type modifier must be integer
 
 
 # MinMax Type
@@ -173,13 +173,10 @@ SELECT * FROM minmax_table WHERE i = 50;
 ----
 50
 
-statement ok
-PRAGMA explain_output='optimized_only'
-
 query II
-EXPLAIN SELECT * FROM minmax_table WHERE i = 50;
+EXPLAIN ANALYZE SELECT * FROM minmax_table WHERE i = 50;
 ----
-logical_opt	<REGEX>:.*INDEX_SCAN.*
+analyzed_plan	<REGEX>:.*Type: Index Scan.*
 
 # Check the typename in the catalog
 query I
@@ -190,10 +187,9 @@ SELECT parameter_types from duckdb_functions() where function_name = 'minmax_ran
 query I
 SELECT parameter_types from duckdb_functions() where function_name = 'bounded_ascii';
 ----
-[BOUNDED(255)]
+['BOUNDED(255)']
 
-# BOUNDED's default type modifier values is NULL, but it could theorietically be set to something else
 query I
 SELECT parameter_types from duckdb_functions() where function_name = 'bounded_add';
 ----
-[BOUNDED(NULL), BOUNDED(NULL)]
+[BOUNDED, BOUNDED]

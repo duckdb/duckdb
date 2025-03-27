@@ -27,6 +27,4 @@ class Test3324(object):
         ).fetch_df()
 
         with pytest.raises(duckdb.BinderException, match="Unexpected prepared parameter"):
-            duckdb_cursor.execute("""execute v1(?)""", 'test1').fetch_df()
-        with pytest.raises(duckdb.BinderException, match="Unexpected prepared parameter"):
             duckdb_cursor.execute("""execute v1(?)""", ('test1',)).fetch_df()

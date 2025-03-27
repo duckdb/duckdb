@@ -230,13 +230,18 @@ unique_ptr<FunctionData> BindApproxQuantile(ClientContext &context, AggregateFun
 	return make_uniq<ApproximateQuantileBindData>(quantiles);
 }
 
-unique_ptr<FunctionData> BindApproxQuantileDecimal(ClientContext &context, AggregateFunction &function,
-                                                   vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindApproxQuantile(context, function, arguments);
-	function = GetApproximateQuantileDecimalAggregateFunction(arguments[0]->return_type);
+AggregateFunction ApproxQuantileDecimalFunction(const LogicalType &type) {
+	auto function = GetApproximateQuantileDecimalAggregateFunction(type);
 	function.name = "approx_quantile";
 	function.serialize = ApproximateQuantileBindData::Serialize;
 	function.deserialize = ApproximateQuantileBindData::Deserialize;
+	return function;
+}
+
+unique_ptr<FunctionData> BindApproxQuantileDecimal(ClientContext &context, AggregateFunction &function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = BindApproxQuantile(context, function, arguments);
+	function = ApproxQuantileDecimalFunction(arguments[0]->return_type);
 	return bind_data;
 }
 
@@ -344,13 +349,18 @@ AggregateFunction GetApproxQuantileListAggregateFunction(const LogicalType &type
 	}
 }
 
-unique_ptr<FunctionData> BindApproxQuantileDecimalList(ClientContext &context, AggregateFunction &function,
-                                                       vector<unique_ptr<Expression>> &arguments) {
-	auto bind_data = BindApproxQuantile(context, function, arguments);
-	function = GetApproxQuantileListAggregateFunction(arguments[0]->return_type);
+AggregateFunction ApproxQuantileDecimalListFunction(const LogicalType &type) {
+	auto function = GetApproxQuantileListAggregateFunction(type);
 	function.name = "approx_quantile";
 	function.serialize = ApproximateQuantileBindData::Serialize;
 	function.deserialize = ApproximateQuantileBindData::Deserialize;
+	return function;
+}
+
+unique_ptr<FunctionData> BindApproxQuantileDecimalList(ClientContext &context, AggregateFunction &function,
+                                                       vector<unique_ptr<Expression>> &arguments) {
+	auto bind_data = BindApproxQuantile(context, function, arguments);
+	function = ApproxQuantileDecimalListFunction(arguments[0]->return_type);
 	return bind_data;
 }
 
@@ -365,11 +375,39 @@ AggregateFunction GetApproxQuantileListAggregate(const LogicalType &type) {
 	return fun;
 }
 
+unique_ptr<FunctionData> ApproxQuantileDecimalDeserialize(Deserializer &deserializer, AggregateFunction &function) {
+	auto bind_data = ApproximateQuantileBindData::Deserialize(deserializer, function);
+	auto &return_type = deserializer.Get<const LogicalType &>();
+	if (return_type.id() == LogicalTypeId::LIST) {
+		function = ApproxQuantileDecimalListFunction(function.arguments[0]);
+	} else {
+		function = ApproxQuantileDecimalFunction(function.arguments[0]);
+	}
+	return bind_data;
+}
+
+AggregateFunction GetApproxQuantileDecimal() {
+	// stub function - the actual function is set during bind or deserialize
+	AggregateFunction fun({LogicalTypeId::DECIMAL, LogicalType::FLOAT}, LogicalTypeId::DECIMAL, nullptr, nullptr,
+	                      nullptr, nullptr, nullptr, nullptr, BindApproxQuantileDecimal);
+	fun.serialize = ApproximateQuantileBindData::Serialize;
+	fun.deserialize = ApproxQuantileDecimalDeserialize;
+	return fun;
+}
+
+AggregateFunction GetApproxQuantileDecimalList() {
+	// stub function - the actual function is set during bind or deserialize
+	AggregateFunction fun({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::FLOAT)},
+	                      LogicalType::LIST(LogicalTypeId::DECIMAL), nullptr, nullptr, nullptr, nullptr, nullptr,
+	                      nullptr, BindApproxQuantileDecimalList);
+	fun.serialize = ApproximateQuantileBindData::Serialize;
+	fun.deserialize = ApproxQuantileDecimalDeserialize;
+	return fun;
+}
+
 AggregateFunctionSet ApproxQuantileFun::GetFunctions() {
 	AggregateFunctionSet approx_quantile;
-	approx_quantile.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::FLOAT}, LogicalTypeId::DECIMAL,
-	                                              nullptr, nullptr, nullptr, nullptr, nullptr, nullptr,
-	                                              BindApproxQuantileDecimal));
+	approx_quantile.AddFunction(GetApproxQuantileDecimal());
 
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::SMALLINT));
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::INTEGER));
@@ -384,9 +422,7 @@ AggregateFunctionSet ApproxQuantileFun::GetFunctions() {
 	approx_quantile.AddFunction(GetApproximateQuantileAggregate(LogicalType::TIMESTAMP_TZ));
 
 	// List variants
-	approx_quantile.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL, LogicalType::LIST(LogicalType::FLOAT)},
-	                                              LogicalType::LIST(LogicalTypeId::DECIMAL), nullptr, nullptr, nullptr,
-	                                              nullptr, nullptr, nullptr, BindApproxQuantileDecimalList));
+	approx_quantile.AddFunction(GetApproxQuantileDecimalList());
 
 	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalTypeId::TINYINT));
 	approx_quantile.AddFunction(GetApproxQuantileListAggregate(LogicalTypeId::SMALLINT));

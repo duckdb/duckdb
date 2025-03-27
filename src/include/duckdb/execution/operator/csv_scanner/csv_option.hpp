@@ -30,8 +30,9 @@ struct CSVOption { // NOLINT: work-around bug in clang-tidy
 public:
 	CSVOption(T value_p) : value(value_p) { // NOLINT: allow implicit conversion from value
 	}
-	CSVOption(T value_p, bool set_by_user_p) : value(value_p), set_by_user(set_by_user_p) {
+	CSVOption(T value_p, bool set_by_user_p) : set_by_user(set_by_user_p), value(value_p) {
 	}
+
 	CSVOption() {};
 
 	//! Sets value.
@@ -77,7 +78,7 @@ public:
 		return value != other;
 	}
 	//! Returns CSV Option value
-	inline const T GetValue() const {
+	inline const T &GetValue() const {
 		return value;
 	}
 	bool IsSetByUser() const {
@@ -127,6 +128,10 @@ private:
 
 	std::string FormatValueInternal(const char &val) const {
 		string char_val;
+		if (val == '\0') {
+			char_val = "(empty)";
+			return char_val;
+		}
 		char_val += val;
 		return char_val;
 	}

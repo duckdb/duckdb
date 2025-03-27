@@ -30,7 +30,7 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 			throw ParameterNotResolvedException();
 		}
 	}
-	auto query_location = col_ref.query_location;
+	auto query_location = col_ref.GetQueryLocation();
 	auto column_names = col_ref.column_names;
 	auto result_name = StringUtil::Join(column_names, ".");
 	if (!table_function_name.empty()) {
@@ -48,6 +48,11 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	auto value_function = ExpressionBinder::GetSQLValueFunction(column_names.back());
 	if (value_function) {
 		return BindExpression(value_function, depth, root_expression);
+	}
+	if (table_function_name.empty()) {
+		throw BinderException(query_location,
+		                      "Failed to bind \"%s\" - COLUMNS expression can only contain lambda parameters",
+		                      result_name);
 	}
 
 	return BindResult(make_uniq<BoundConstantExpression>(Value(result_name)));

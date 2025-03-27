@@ -1,0 +1,16 @@
+# name: test/issues/general/test_14286.test
+# description: Issue 14286 - An error was encountered using both distinct and struct
+# group: [general]
+
+statement ok
+select
+    category,
+    array_agg(distinct name) filter(where id != 5)            as a_list,
+    array_agg(name)          filter(where id != 5)            as b_list,
+    array_agg({'id': id, 'name': name, 'catetory': category}) as c_list
+from (
+    select 1 as id, '大熊猫' as name, '熊' as category union all
+    select 2 as id, '大熊猫' as name, '猫' as category union all
+    select 3 as id, '小熊猫' as name, '猫' as category
+) t
+group by category;

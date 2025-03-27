@@ -23,7 +23,7 @@ public:
 
 PhysicalTableInOutFunction::PhysicalTableInOutFunction(vector<LogicalType> types, TableFunction function_p,
                                                        unique_ptr<FunctionData> bind_data_p,
-                                                       vector<column_t> column_ids_p, idx_t estimated_cardinality,
+                                                       vector<ColumnIndex> column_ids_p, idx_t estimated_cardinality,
                                                        vector<column_t> project_input_p)
     : PhysicalOperator(PhysicalOperatorType::INOUT_FUNCTION, std::move(types), estimated_cardinality),
       function(std::move(function_p)), bind_data(std::move(bind_data_p)), column_ids(std::move(column_ids_p)),
@@ -39,7 +39,7 @@ unique_ptr<OperatorState> PhysicalTableInOutFunction::GetOperatorState(Execution
 	}
 	if (!projected_input.empty()) {
 		vector<LogicalType> input_types;
-		auto &child_types = children[0]->types;
+		auto &child_types = children[0].get().GetTypes();
 		idx_t input_length = child_types.size() - projected_input.size();
 		for (idx_t k = 0; k < input_length; k++) {
 			input_types.push_back(child_types[k]);
@@ -111,7 +111,11 @@ OperatorResultType PhysicalTableInOutFunction::Execute(ExecutionContext &context
 InsertionOrderPreservingMap<string> PhysicalTableInOutFunction::ParamsToString() const {
 	InsertionOrderPreservingMap<string> result;
 	if (function.to_string) {
-		result["__text__"] = function.to_string(bind_data.get());
+		TableFunctionToStringInput input(function, bind_data.get());
+		auto to_string_result = function.to_string(input);
+		for (const auto &it : to_string_result) {
+			result[it.first] = it.second;
+		}
 	} else {
 		result["Name"] = function.name;
 	}

@@ -101,6 +101,8 @@ struct ClientConfig {
 	idx_t nested_loop_join_threshold = 5;
 	//! The number of rows we need on either table to choose a merge join over an IE join
 	idx_t merge_join_threshold = 1000;
+	//! The maximum number of rows to use the nested loop join implementation
+	idx_t asof_loop_join_threshold = 64;
 
 	//! The maximum amount of memory to keep buffered in a streaming query result. Default: 1mb.
 	idx_t streaming_buffer_size = 1000000;
@@ -117,7 +119,13 @@ struct ClientConfig {
 	//! The threshold at which we switch from using filtered aggregates to LIST with a dedicated pivot operator
 	idx_t pivot_filter_threshold = 20;
 
-	//! Whether or not the "/" division operator defaults to integer division or floating point division
+	//! The maximum amount of OR filters we generate dynamically from a hash join
+	idx_t dynamic_or_filter_threshold = 50;
+
+	//! The maximum amount of rows in the LIMIT/SAMPLE for which we trigger late materialization
+	idx_t late_materialization_max_rows = 50;
+
+	//! Whether the "/" division operator defaults to integer division or floating point division
 	bool integer_division = false;
 	//! When a scalar subquery returns multiple rows - return a random row instead of returning an error
 	bool scalar_subquery_error_on_multiple_rows = true;
@@ -168,6 +176,16 @@ public:
 
 	void ResetUserVariable(const string &name) {
 		user_variables.erase(name);
+	}
+
+	template <class OP>
+	static typename OP::RETURN_TYPE GetSetting(const ClientContext &context) {
+		return OP::GetSetting(context).template GetValue<typename OP::RETURN_TYPE>();
+	}
+
+	template <class OP>
+	static Value GetSettingValue(const ClientContext &context) {
+		return OP::GetSetting(context);
 	}
 
 public:

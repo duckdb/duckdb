@@ -33,6 +33,8 @@ public:
 	void EndFilter(AdaptiveFilterState state);
 
 private:
+	bool disable_permutations = false;
+
 	//! used for adaptive expression reordering
 	idx_t iteration_count = 0;
 	idx_t swap_idx = 0;

@@ -35,14 +35,17 @@ using FrameStats = array<FrameDelta, 2>;
 //! but the row count will still be valid
 class ColumnDataCollection;
 struct WindowPartitionInput {
-	WindowPartitionInput(ClientContext &context, const ColumnDataCollection *inputs, idx_t count, bool all_valid,
-	                     const ValidityMask &filter_mask, const FrameStats &stats)
-	    : context(context), inputs(inputs), count(count), all_valid(all_valid), filter_mask(filter_mask), stats(stats) {
+	WindowPartitionInput(ClientContext &context, const ColumnDataCollection *inputs, idx_t count,
+	                     vector<column_t> &column_ids, vector<bool> &all_valid, const ValidityMask &filter_mask,
+	                     const FrameStats &stats)
+	    : context(context), inputs(inputs), count(count), column_ids(column_ids), all_valid(all_valid),
+	      filter_mask(filter_mask), stats(stats) {
 	}
 	ClientContext &context;
 	const ColumnDataCollection *inputs;
 	idx_t count;
-	bool all_valid;
+	vector<column_t> column_ids;
+	vector<bool> all_valid;
 	const ValidityMask &filter_mask;
 	const FrameStats stats;
 };
@@ -100,6 +103,13 @@ struct AggregateFunctionInfo {
 	}
 };
 
+enum class AggregateDestructorType {
+	STANDARD,
+	// legacy destructors allow non-trivial destructors in aggregate states
+	// these might not be trivial to off-load to disk
+	LEGACY
+};
+
 class AggregateFunction : public BaseScalarFunction { // NOLINT: work-around bug in clang-tidy
 public:
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -114,7 +124,8 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID), null_handling),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
+	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
 	}
 
 	AggregateFunction(const string &name, const vector<LogicalType> &arguments, const LogicalType &return_type,
@@ -128,7 +139,8 @@ public:
 	                         LogicalType(LogicalTypeId::INVALID)),
 	      state_size(state_size), initialize(initialize), update(update), combine(combine), finalize(finalize),
 	      simple_update(simple_update), window(window), bind(bind), destructor(destructor), statistics(statistics),
-	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT) {
+	      serialize(serialize), deserialize(deserialize), order_dependent(AggregateOrderDependent::ORDER_DEPENDENT),
+	      distinct_dependent(AggregateDistinctDependent::DISTINCT_DEPENDENT) {
 	}
 
 	AggregateFunction(const vector<LogicalType> &arguments, const LogicalType &return_type, aggregate_size_t state_size,
@@ -183,6 +195,8 @@ public:
 	aggregate_deserialize_t deserialize;
 	//! Whether or not the aggregate is order dependent
 	AggregateOrderDependent order_dependent;
+	//! Whether or not the aggregate is affect by distinct modifiers
+	AggregateDistinctDependent distinct_dependent;
 	//! Additional function info, passed to the bind
 	shared_ptr<AggregateFunctionInfo> function_info;
 
@@ -203,29 +217,33 @@ public:
 		    AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, AggregateFunction::NullaryUpdate<STATE, OP>);
 	}
 
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
+	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
+	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction
 	UnaryAggregate(const LogicalType &input_type, LogicalType return_type,
 	               FunctionNullHandling null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING) {
-		return AggregateFunction(
-		    {input_type}, return_type, AggregateFunction::StateSize<STATE>,
-		    AggregateFunction::StateInitialize<STATE, OP>, AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
-		    AggregateFunction::StateCombine<STATE, OP>, AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
-		    null_handling, AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>);
+		return AggregateFunction({input_type}, return_type, AggregateFunction::StateSize<STATE>,
+		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
+		                         AggregateFunction::UnaryScatterUpdate<STATE, INPUT_TYPE, OP>,
+		                         AggregateFunction::StateCombine<STATE, OP>,
+		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>, null_handling,
+		                         AggregateFunction::UnaryUpdate<STATE, INPUT_TYPE, OP>);
 	}
 
-	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP>
+	template <class STATE, class INPUT_TYPE, class RESULT_TYPE, class OP,
+	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction UnaryAggregateDestructor(LogicalType input_type, LogicalType return_type) {
-		auto aggregate = UnaryAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP>(input_type, return_type);
+		auto aggregate = UnaryAggregate<STATE, INPUT_TYPE, RESULT_TYPE, OP, destructor_type>(input_type, return_type);
 		aggregate.destructor = AggregateFunction::StateDestroy<STATE, OP>;
 		return aggregate;
 	}
 
-	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP>
+	template <class STATE, class A_TYPE, class B_TYPE, class RESULT_TYPE, class OP,
+	          AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static AggregateFunction BinaryAggregate(const LogicalType &a_type, const LogicalType &b_type,
 	                                         LogicalType return_type) {
 		return AggregateFunction({a_type, b_type}, return_type, AggregateFunction::StateSize<STATE>,
-		                         AggregateFunction::StateInitialize<STATE, OP>,
+		                         AggregateFunction::StateInitialize<STATE, OP, destructor_type>,
 		                         AggregateFunction::BinaryScatterUpdate<STATE, A_TYPE, B_TYPE, OP>,
 		                         AggregateFunction::StateCombine<STATE, OP>,
 		                         AggregateFunction::StateFinalize<STATE, RESULT_TYPE, OP>,
@@ -238,8 +256,14 @@ public:
 		return sizeof(STATE);
 	}
 
-	template <class STATE, class OP>
+	template <class STATE, class OP, AggregateDestructorType destructor_type = AggregateDestructorType::STANDARD>
 	static void StateInitialize(const AggregateFunction &, data_ptr_t state) {
+		// FIXME: we should remove the "destructor_type" option in the future
+#if !defined(__GNUC__) || (__GNUC__ >= 5)
+		static_assert(std::is_trivially_move_constructible<STATE>::value ||
+		                  destructor_type == AggregateDestructorType::LEGACY,
+		              "Aggregate state must be trivially move constructible");
+#endif
 		OP::Initialize(*reinterpret_cast<STATE *>(state));
 	}
 

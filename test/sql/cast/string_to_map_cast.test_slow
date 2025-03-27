@@ -31,7 +31,7 @@ SELECT '{greetings=[Hello World!, Hello DuckDB, Howdy], farewells=[Bye World, By
 query I
 SELECT '{"key=A"=Duck, "key=B"="hello=world"}'::MAP(VARCHAR, VARCHAR)
 ----
-{key=A=Duck, key=B=hello=world}
+{'key=A'=Duck, 'key=B'='hello=world'}
 
 statement error
 SELECT '{a=1, b=2, a=3}'::MAP(VARCHAR, INT)
@@ -76,29 +76,29 @@ SELECT CAST('{''hello''=2, ''world''=50, ''!''=12}' AS MAP(VARCHAR, INT));
 {hello=2, world=50, !=12}
 
 query I
-SELECT CAST('{''''hello''''=hello, ''''world''''=world, ''''!''''=!}' AS MAP(VARCHAR, VARCHAR));
+SELECT CAST($${\'hello\'=hello, \'world\'=world, \'!\'=!}$$ AS MAP(VARCHAR, VARCHAR));
 ----
-{'hello'=hello, 'world'=world, '!'=!}
+{'\'hello\''=hello, '\'world\''=world, '\'!\''=!}
 
 query I
-SELECT CAST('{[[''🦆, 🦆, 🦆'']]=100, [[duck, db, ''🦆'']]=101}' AS MAP(VARCHAR[][], INT));
+SELECT CAST($${[[\'🦆, 🦆, 🦆\']]=100, [[duck, db, \'🦆\']]=101}$$ AS MAP(VARCHAR[][], INT));
 ----
-{[['🦆, 🦆, 🦆']]=100, [[duck, db, '🦆']]=101}
+{[['\'🦆', 🦆, '🦆\'']]=100, [[duck, db, '\'🦆\'']]=101}
 
 query I
-SELECT CAST('{"can''t"="you''re", "i''m"="q''u''o''t''e"}' AS MAP(VARCHAR, VARCHAR));
+SELECT CAST($${"can't"="you're", "i'm"="q'u'o't'e"}$$ AS MAP(VARCHAR, VARCHAR));
 ----
-{can't=you're, i'm=q'u'o't'e}
+{'can\'t'='you\'re', 'i\'m'='q\'u\'o\'t\'e'}
 
-query I
-SELECT CAST('{"{"="}", "["="]"}' AS MAP(VARCHAR, VARCHAR));
+query III
+SELECT CAST('{"{"="}", "["="]"}' AS MAP(VARCHAR, VARCHAR)) a, a::VARCHAR::MAP(VARCHAR, VARCHAR) b, a == b;
 ----
-{{=}, [=]}
+{'{'='}', '['=']'}	{'{'='}', '['=']'}	true
 
-query I
-SELECT CAST('{''}''="{", '']''="["}' AS MAP(VARCHAR, VARCHAR));
+query III
+SELECT CAST($${'}'="{", ']'="["}$$ AS MAP(VARCHAR, VARCHAR)) a, a::VARCHAR::MAP(VARCHAR, VARCHAR) b, a == b;
 ----
-{}={, ]=[}
+{'}'='{', ']'='['}	{'}'='{', ']'='['}	true
 
 
 #               Test for whitespaces
@@ -114,8 +114,8 @@ SELECT CAST('{ [12,     13,14]=val, [       8, 9         ]      =val, [ 4    ]=v
 {[12, 13, 14]=val, [8, 9]=val, [4]=val}
 
 query I
-SELECT CAST('   { { a:[2,    3], b:  Duckster      }=         {50.0        =50}, {a    : [9,1,4], b:Duck          }
-                ={  1      =    0}  }' AS MAP(STRUCT(a INT[], b VARCHAR), MAP(INT, DOUBLE)));
+SELECT CAST($$   { { a:[2,    3], b:  Duckster      }=         {50.0        =50}, {a    : [9,1,4], b:Duck          }
+                ={  1      =    0}  }$$ AS MAP(STRUCT(a INT[], b VARCHAR), MAP(INT, DOUBLE)));
 ----
 {{'a': [2, 3], 'b': Duckster}={50=50.0}, {'a': [9, 1, 4], 'b': Duck}={1=0.0}}
 
@@ -220,7 +220,7 @@ statement ok
 INSERT INTO Duck_tbl VALUES ('{1=Duck, 3=DB}'), ('{12=DuckDB}'), ('{3=DB, 5=🦆 4=Ducky, 7=Duckster}'), ('{0=DuckParty}'), ('{5=DBDuck, 7=Duckster, 1=🦆}'), ('{1="final Quack"}');
 
 query I
-SELECT * FROM Duck_tbl WHERE list_contains(cast(col1 as MAP(INT, VARCHAR))[7], 'Duckster') ;
+SELECT * FROM Duck_tbl WHERE cast(col1 as MAP(INT, VARCHAR))[7] = 'Duckster' ;
 ----
 {3=DB, 5=🦆 4=Ducky, 7=Duckster}
 {5=DBDuck, 7=Duckster, 1=🦆}
@@ -244,7 +244,7 @@ SELECT CAST('{A={a:[12,13,14], b:"🦆", c:0.12}, B={a:[12,13,14], b:DuckDuck, c
 query I
 SELECT CAST('{{a:Meow=Meow}={a:12, b:0.8, c:MeowMeow}, {a:Quack}={a:13, b:3.2, c:QuackQuack}}' AS MAP(STRUCT(a VARCHAR), STRUCT(a INT, b DOUBLE, c VARCHAR)));
 ----
-{{'a': Meow=Meow}={'a': 12, 'b': 0.8, 'c': MeowMeow}, {'a': Quack}={'a': 13, 'b': 3.2, 'c': QuackQuack}}
+{{'a': 'Meow=Meow'}={'a': 12, 'b': 0.8, 'c': MeowMeow}, {'a': Quack}={'a': 13, 'b': 3.2, 'c': QuackQuack}}
 
 query I
 SELECT CAST('{{A:AAA}={a:[12,13,14], b:"🦆", c:{a:[[a], [b, c]], b:[123]}}}' AS MAP(STRUCT(A VARCHAR), STRUCT(a INT[], b VARCHAR, c STRUCT(a VARCHAR[][], b INT[]))));
@@ -331,4 +331,4 @@ COPY assembled_maps FROM '__TEST_DIR__/assembled_maps.csv';
 query I
 SELECT * FROM assembled_maps;
 ----
-{8=hello, DuckDB}
+{8='hello, DuckDB'}

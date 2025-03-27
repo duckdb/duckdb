@@ -14,7 +14,7 @@ namespace duckdb {
 class DatabaseInstance;
 
 struct UncompressedFunctions {
-	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointer &checkpointer,
+	static unique_ptr<CompressionState> InitCompression(ColumnDataCheckpointData &checkpoint_data,
 	                                                    unique_ptr<AnalyzeState> state);
 	static void Compress(CompressionState &state_p, Vector &data, idx_t count);
 	static void FinalizeCompress(CompressionState &state_p);
@@ -29,6 +29,9 @@ struct FixedSizeUncompressed {
 struct ValidityUncompressed {
 public:
 	static CompressionFunction GetFunction(PhysicalType data_type);
+	static void AlignedScan(data_ptr_t input, idx_t input_start, Vector &result, idx_t scan_count);
+	static void UnalignedScan(data_ptr_t input, idx_t input_size, idx_t input_start, Vector &result,
+	                          idx_t result_offset, idx_t scan_count);
 
 public:
 	static const validity_t LOWER_MASKS[65];

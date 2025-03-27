@@ -1,0 +1,39 @@
+# name: test/sql/alter/add_pk/test_add_pk_with_generated_column.test
+# description: Test adding a PRIMARY KEY to a table with a generated column.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification;
+
+statement ok
+CREATE TABLE test (
+	a INT NOT NULL,
+	b INT GENERATED ALWAYS AS (a) VIRTUAL,
+	c INT,
+);
+
+statement ok
+INSERT INTO test VALUES (5, 4);
+
+# Cannot add a PK to generated columns.
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (b);
+----
+<REGEX>:Binder Error.*cannot create a PRIMARY KEY on a generated column: b.*
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (b, c);
+----
+<REGEX>:Binder Error.*cannot create a PRIMARY KEY on a generated column: b.*
+
+# Can add a PK to a non-generated column.
+
+statement ok
+ALTER TABLE test ADD PRIMARY KEY (c);
+
+statement error
+INSERT INTO test VALUES (1, 4);
+----
+<REGEX>:Constraint Error.*violates primary key constraint.*
+

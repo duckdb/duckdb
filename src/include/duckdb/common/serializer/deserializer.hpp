@@ -81,7 +81,7 @@ public:
 	}
 
 	template <typename T>
-	inline T ReadPropertyWithExplicitDefault(const field_id_t field_id, const char *tag, T &&default_value) {
+	inline T ReadPropertyWithExplicitDefault(const field_id_t field_id, const char *tag, T default_value) {
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			OnOptionalPropertyEnd(false);
 			return std::forward<T>(default_value);
@@ -104,7 +104,7 @@ public:
 	}
 
 	template <typename T>
-	inline void ReadPropertyWithExplicitDefault(const field_id_t field_id, const char *tag, T &ret, T &&default_value) {
+	inline void ReadPropertyWithExplicitDefault(const field_id_t field_id, const char *tag, T &ret, T default_value) {
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			ret = std::forward<T>(default_value);
 			OnOptionalPropertyEnd(false);
@@ -116,7 +116,7 @@ public:
 
 	template <typename T>
 	inline void ReadPropertyWithExplicitDefault(const field_id_t field_id, const char *tag, CSVOption<T> &ret,
-	                                            T &&default_value) {
+	                                            T default_value) {
 		if (!OnOptionalPropertyBegin(field_id, tag)) {
 			ret = std::forward<T>(default_value);
 			OnOptionalPropertyEnd(false);
@@ -157,6 +157,11 @@ public:
 	template <class T>
 	T Get() {
 		return data.Get<T>();
+	}
+
+	template <class T>
+	optional_ptr<T> TryGet() {
+		return data.TryGet<T>();
 	}
 
 	//! Unset a serialization property

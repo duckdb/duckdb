@@ -61,14 +61,14 @@ if(AMALGAMATION_BUILD)
 
   add_library(duckdb SHARED "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
   target_link_libraries(duckdb ${DUCKDB_SYSTEM_LIBS})
-  link_threads(duckdb)
-  link_extension_libraries(duckdb)
+  link_threads(duckdb PUBLIC)
+  link_extension_libraries(duckdb PRIVATE)
 
   add_library(duckdb_static STATIC
               "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.cpp")
   target_link_libraries(duckdb_static ${DUCKDB_SYSTEM_LIBS})
-  link_threads(duckdb_static)
-  link_extension_libraries(duckdb_static)
+  link_threads(duckdb_static PUBLIC)
+  link_extension_libraries(duckdb_static PUBLIC)
 
   install(FILES "${PROJECT_SOURCE_DIR}/src/amalgamation/duckdb.hpp"
                 "${PROJECT_SOURCE_DIR}/src/include/duckdb.h"
@@ -86,6 +86,7 @@ else()
   add_subdirectory(function)
   add_subdirectory(catalog)
   add_subdirectory(common)
+  add_subdirectory(logging)
   add_subdirectory(execution)
   add_subdirectory(main)
   add_subdirectory(parallel)
@@ -105,7 +106,8 @@ else()
       duckdb_fastpforlib
       duckdb_skiplistlib
       duckdb_mbedtls
-      duckdb_yyjson)
+      duckdb_yyjson
+      duckdb_zstd)
 
   add_library(duckdb SHARED ${ALL_OBJECT_FILES})
 
@@ -129,14 +131,14 @@ else()
     target_sources(duckdb PRIVATE version.rc)
   endif()
 
-  target_link_libraries(duckdb ${DUCKDB_LINK_LIBS})
-  link_threads(duckdb)
-  link_extension_libraries(duckdb)
+  target_link_libraries(duckdb PUBLIC ${DUCKDB_LINK_LIBS})
+  link_threads(duckdb PUBLIC)
+  link_extension_libraries(duckdb PRIVATE)
 
   add_library(duckdb_static STATIC ${ALL_OBJECT_FILES})
-  target_link_libraries(duckdb_static ${DUCKDB_LINK_LIBS})
-  link_threads(duckdb_static)
-  link_extension_libraries(duckdb_static)
+  target_link_libraries(duckdb_static PUBLIC ${DUCKDB_LINK_LIBS})
+  link_threads(duckdb_static PUBLIC)
+  link_extension_libraries(duckdb_static PUBLIC)
 
   target_include_directories(
     duckdb PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>

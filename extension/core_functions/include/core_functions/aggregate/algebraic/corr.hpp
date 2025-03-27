@@ -58,11 +58,7 @@ struct CorrOperation {
 			if (!Value::DoubleIsFinite(std_y)) {
 				throw OutOfRangeException("STDDEV_POP for Y is out of range!");
 			}
-			if (std_x * std_y == 0) {
-				finalize_data.ReturnNull();
-				return;
-			}
-			target = cov / (std_x * std_y);
+			target = std_x * std_y != 0 ? cov / (std_x * std_y) : NAN;
 		}
 	}
 

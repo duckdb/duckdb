@@ -297,7 +297,7 @@
         "name": "acosh",
         "parameters": "x",
         "description": "Computes the inverse hyperbolic cos of x",
-        "example": "acosh(0.5)",
+        "example": "acosh(2.3)",
         "type": "scalar_function"
     },
     {

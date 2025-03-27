@@ -67,6 +67,16 @@ public:
 		auto l = Lock();
 		return MoveSegments(l);
 	}
+
+	const vector<SegmentNode<T>> &ReferenceSegments(SegmentLock &l) {
+		LoadAllSegments(l);
+		return nodes;
+	}
+	const vector<SegmentNode<T>> &ReferenceSegments() {
+		auto l = Lock();
+		return ReferenceSegments(l);
+	}
+
 	idx_t GetSegmentCount() {
 		auto l = Lock();
 		return GetSegmentCount(l);
@@ -165,16 +175,6 @@ public:
 	}
 	bool HasSegment(SegmentLock &, T *segment) {
 		return segment->index < nodes.size() && nodes[segment->index].node.get() == segment;
-	}
-
-	//! Replace this tree with another tree, taking over its nodes in-place
-	void Replace(SegmentTree<T> &other) {
-		auto l = Lock();
-		Replace(l, other);
-	}
-	void Replace(SegmentLock &l, SegmentTree<T> &other) {
-		other.LoadAllSegments(l);
-		nodes = std::move(other.nodes);
 	}
 
 	//! Erase all segments after a specific segment

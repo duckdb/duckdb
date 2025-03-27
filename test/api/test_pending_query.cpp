@@ -2,6 +2,7 @@
 #include "test_helpers.hpp"
 
 #include <thread>
+#include "duckdb/common/string_util.hpp"
 
 using namespace duckdb;
 using namespace std;
@@ -104,6 +105,12 @@ TEST_CASE("Test Pending Query API", "[api][.]") {
 		// query the connection as normal after
 		result = con.Query("SELECT 42");
 		REQUIRE(CHECK_COLUMN(result, 0, {42}));
+	}
+	SECTION("Pending results errors as JSON") {
+		con.Query("SET errors_as_json = true;");
+		auto pending_query = con.PendingQuery("SELCT 32;");
+		REQUIRE(pending_query->HasError());
+		REQUIRE(duckdb::StringUtil::Contains(pending_query->GetError(), "SYNTAX_ERROR"));
 	}
 }
 

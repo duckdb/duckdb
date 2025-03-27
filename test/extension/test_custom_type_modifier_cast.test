@@ -1,0 +1,20 @@
+# name: test/extension/test_custom_type_modifier_cast.test
+# description: Test custom type level metadata.
+# group: [extension]
+
+require skip_reload
+
+require notmingw
+
+require allow_unsigned_extensions
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+LOAD '__BUILD_DIRECTORY__/test/extension/loadable_extension_demo.duckdb_extension';
+
+statement error
+SELECT 1::MINMAX(500, 1000);
+----
+Conversion Error: Value 1 is outside of range [500,1000]

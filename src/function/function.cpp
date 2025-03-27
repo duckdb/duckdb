@@ -2,6 +2,7 @@
 
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/hash.hpp"
+#include "duckdb/function/built_in_functions.hpp"
 #include "duckdb/function/scalar/string_functions.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/pragma_info.hpp"
@@ -73,9 +74,10 @@ bool SimpleNamedParameterFunction::HasNamedParameters() const {
 
 BaseScalarFunction::BaseScalarFunction(string name_p, vector<LogicalType> arguments_p, LogicalType return_type_p,
                                        FunctionStability stability, LogicalType varargs_p,
-                                       FunctionNullHandling null_handling)
+                                       FunctionNullHandling null_handling, FunctionErrors errors)
     : SimpleFunction(std::move(name_p), std::move(arguments_p), std::move(varargs_p)),
-      return_type(std::move(return_type_p)), stability(stability), null_handling(null_handling) {
+      return_type(std::move(return_type_p)), stability(stability), null_handling(null_handling), errors(errors),
+      collation_handling(FunctionCollationHandling::PROPAGATE_COLLATIONS) {
 }
 
 BaseScalarFunction::~BaseScalarFunction() {
@@ -93,21 +95,11 @@ void BuiltinFunctions::Initialize() {
 	RegisterTableFunctions();
 	RegisterArrowFunctions();
 
-	RegisterDistributiveAggregates();
-
-	RegisterCompressedMaterializationFunctions();
-
-	RegisterGenericFunctions();
-	RegisterOperators();
-	RegisterSequenceFunctions();
-	RegisterStringFunctions();
-	RegisterNestedFunctions();
-
 	RegisterPragmaFunctions();
 
 	// initialize collations
 	AddCollation("nocase", LowerFun::GetFunction(), true);
-	AddCollation("noaccent", StripAccentsFun::GetFunction());
+	AddCollation("noaccent", StripAccentsFun::GetFunction(), true);
 	AddCollation("nfc", NFCNormalizeFun::GetFunction());
 
 	RegisterExtensionOverloads();

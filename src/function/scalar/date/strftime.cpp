@@ -111,10 +111,6 @@ ScalarFunctionSet StrfTimeFun::GetFunctions() {
 	return strftime;
 }
 
-void StrfTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
-}
-
 StrpTimeFormat::StrpTimeFormat() {
 }
 
@@ -306,17 +302,15 @@ ScalarFunctionSet StrpTimeFun::GetFunctions() {
 	auto fun = ScalarFunction({LogicalType::VARCHAR, LogicalType::VARCHAR}, LogicalType::TIMESTAMP,
 	                          StrpTimeFunction::Parse<timestamp_t>, StrpTimeFunction::Bind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	BaseScalarFunction::SetReturnsError(fun);
 	strptime.AddFunction(fun);
 
 	fun = ScalarFunction({LogicalType::VARCHAR, list_type}, LogicalType::TIMESTAMP,
 	                     StrpTimeFunction::Parse<timestamp_t>, StrpTimeFunction::Bind);
+	BaseScalarFunction::SetReturnsError(fun);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	strptime.AddFunction(fun);
 	return strptime;
-}
-
-void StrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
 }
 
 ScalarFunctionSet TryStrpTimeFun::GetFunctions() {
@@ -334,10 +328,6 @@ ScalarFunctionSet TryStrpTimeFun::GetFunctions() {
 	try_strptime.AddFunction(fun);
 
 	return try_strptime;
-}
-
-void TryStrpTimeFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunctions());
 }
 
 } // namespace duckdb

@@ -1,0 +1,103 @@
+# name: test/sql/index/art/constraints/test_art_tx_updates_list.test
+# description: Test UPDATE with different connections and LIST payload.
+# group: [constraints]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET immediate_transaction_mode = true;
+
+statement ok
+CREATE TABLE tbl_list (id INT PRIMARY KEY, payload VARCHAR[]);
+
+statement ok
+INSERT INTO tbl_list VALUES (1, ['first payload']), (2, ['second payload']);
+
+# Keep one connection open to ensure we still have the old value in the ART.
+
+statement ok old
+BEGIN;
+
+statement ok old
+INSERT INTO tbl_list VALUES (5, ['old payload']);
+
+# con1 open.
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+UPDATE tbl_list SET payload = ['con1 payload'] WHERE id = 1;
+
+statement ok con1
+UPDATE tbl_list SET id = 3 WHERE id = 2;
+
+statement ok con1
+INSERT INTO tbl_list VALUES (2, ['new payload']);
+
+# Ensure that we can still see the old value.
+
+query III
+SELECT id, payload, rowid FROM tbl_list WHERE id = 1;
+----
+1	[first payload]	0
+
+query III
+SELECT id, payload, rowid FROM tbl_list WHERE id = 2;
+----
+2	[second payload]	1
+
+# Try to update again.
+
+statement ok
+BEGIN;
+
+statement error
+UPDATE tbl_list SET payload = ['second payload'] WHERE id = 1;
+----
+<REGEX>:TransactionContext Error.*Conflict on tuple deletion.*
+
+statement ok
+ROLLBACK;
+
+statement ok con1
+COMMIT;
+
+query III
+SELECT id, payload, rowid FROM tbl_list WHERE id = 1;
+----
+1	[con1 payload]	2
+
+query III
+SELECT id, payload, rowid FROM tbl_list WHERE id = 2;
+----
+2	[new payload]	4
+
+query III
+SELECT id, payload, rowid FROM tbl_list WHERE id = 3;
+----
+3	[second payload]	3
+
+# Ensure that the old transaction can still see the old storage.
+
+query III old
+SELECT id, payload, rowid FROM tbl_list WHERE id = 1;
+----
+1	[first payload]	0
+
+query III old
+SELECT id, payload, rowid FROM tbl_list WHERE id = 2;
+----
+2	[second payload]	1
+
+statement ok old
+COMMIT;
+
+query III
+SELECT id, payload, rowid FROM tbl_list ORDER BY ALL;
+----
+1	[con1 payload]	2
+2	[new payload]	4
+3	[second payload]	3
+5	[old payload]	5

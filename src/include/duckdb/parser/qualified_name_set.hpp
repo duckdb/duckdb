@@ -41,4 +41,8 @@ struct QualifiedColumnEquality {
 
 using qualified_column_set_t = unordered_set<QualifiedColumnName, QualifiedColumnHashFunction, QualifiedColumnEquality>;
 
+template <class T>
+using qualified_column_map_t =
+    unordered_map<QualifiedColumnName, T, QualifiedColumnHashFunction, QualifiedColumnEquality>;
+
 } // namespace duckdb

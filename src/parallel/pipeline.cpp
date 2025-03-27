@@ -72,17 +72,23 @@ ClientContext &Pipeline::GetClientContext() {
 	return executor.context;
 }
 
-bool Pipeline::GetProgress(double &current_percentage, idx_t &source_cardinality) {
+bool Pipeline::GetProgress(ProgressData &progress) {
 	D_ASSERT(source);
-	source_cardinality = MinValue<idx_t>(source->estimated_cardinality, 1ULL << 48ULL);
+	idx_t source_cardinality = MinValue<idx_t>(source->estimated_cardinality, 1ULL << 48ULL);
+	if (source_cardinality < 1) {
+		source_cardinality = 1;
+	}
 	if (!initialized) {
-		current_percentage = 0;
+		progress.done = 0;
+		progress.total = double(source_cardinality);
 		return true;
 	}
 	auto &client = executor.context;
-	current_percentage = source->GetProgress(client, *source_state);
-	current_percentage = sink->GetSinkProgress(client, *sink->sink_state, current_percentage);
-	return current_percentage >= 0;
+
+	progress = source->GetProgress(client, *source_state);
+	progress.Normalize(double(source_cardinality));
+	progress = sink->GetSinkProgress(client, *sink->sink_state, progress);
+	return progress.IsValid();
 }
 
 void Pipeline::ScheduleSequentialTask(shared_ptr<Event> &event) {
@@ -105,8 +111,9 @@ bool Pipeline::ScheduleParallel(shared_ptr<Event> &event) {
 			return false;
 		}
 	}
-	if (sink->RequiresBatchIndex()) {
-		if (!source->SupportsBatchIndex()) {
+	auto partition_info = sink->RequiredPartitionInfo();
+	if (partition_info.batch_index) {
+		if (!source->SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
 			throw InternalException(
 			    "Attempting to schedule a pipeline where the sink requires batch index but source does not support it");
 		}

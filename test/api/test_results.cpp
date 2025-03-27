@@ -111,7 +111,7 @@ TEST_CASE("Test dates/times/timestamps", "[api]") {
 	auto result = con.Query("SELECT * FROM data;");
 	for (auto &row : *result) {
 		int32_t year, month, day;
-		int32_t hour, minute, second, milisecond;
+		int32_t hour, minute, second, millisecond;
 
 		auto date = row.GetValue<date_t>(0);
 		auto time = row.GetValue<dtime_t>(1);
@@ -121,15 +121,15 @@ TEST_CASE("Test dates/times/timestamps", "[api]") {
 		REQUIRE(month == 1);
 		REQUIRE(day == 1);
 
-		Time::Convert(time, hour, minute, second, milisecond);
+		Time::Convert(time, hour, minute, second, millisecond);
 		REQUIRE(hour == 13);
 		REQUIRE(minute == 0);
 		REQUIRE(second == 17);
-		REQUIRE(milisecond == 0);
+		REQUIRE(millisecond == 0);
 
 		Timestamp::Convert(timestamp, date, time);
 		Date::Convert(date, year, month, day);
-		Time::Convert(time, hour, minute, second, milisecond);
+		Time::Convert(time, hour, minute, second, millisecond);
 
 		REQUIRE(year == 1993);
 		REQUIRE(month == 1);
@@ -137,7 +137,7 @@ TEST_CASE("Test dates/times/timestamps", "[api]") {
 		REQUIRE(hour == 14);
 		REQUIRE(minute == 0);
 		REQUIRE(second == 17);
-		REQUIRE(milisecond == 0);
+		REQUIRE(millisecond == 0);
 
 		row_count++;
 	}

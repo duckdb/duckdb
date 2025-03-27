@@ -1,0 +1,17 @@
+# name: benchmark/micro/compression/string/string_select_selective.benchmark
+# description: Uncompressed String selective filter
+# group: [string]
+
+name Select Uncompressed String Columns (0.1% selectivity)
+group string
+storage persistent
+
+load
+CREATE TABLE string_values(filter_val INTEGER USING COMPRESSION UNCOMPRESSED, str_val VARCHAR USING COMPRESSION UNCOMPRESSED, str_val_nulls VARCHAR USING COMPRESSION UNCOMPRESSED);
+INSERT INTO string_values SELECT i % 1000, case when i%7=0 then concat('thisisalongstring', i) else concat('shortstr', i // 10) end str_val, case when i%3=0 then null else str_val end str_val_nulls FROM range(100_000_000) t(i);
+
+run
+SELECT COUNT(*), SUM(strlen(str_val)), SUM(strlen(str_val_nulls)), COUNT(str_val_nulls) FROM string_values WHERE filter_val=77;
+
+result IIII
+100000	1631748	1087835	66667

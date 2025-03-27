@@ -16,4 +16,29 @@ TEST_CASE("Test UUID API", "[api]") {
 	        "7fffffff-ffff-ffff-ffff-ffffffffffff");
 	REQUIRE(UUID::ToString(UUID::FromUHugeint((NumericLimits<uhugeint_t>::Maximum() / 2) + 1)) ==
 	        "80000000-0000-0000-0000-000000000000");
+
+	REQUIRE_THAT(UUID::ToUHugeint(UUID::FromString("00000000-0000-0000-0000-000000000000")),
+	             Catch::Predicate<uhugeint_t>([&](const uhugeint_t &input) {
+		             return input.upper == 0x0000000000000000 && input.lower == 0x0000000000000000;
+	             }));
+	REQUIRE_THAT(UUID::ToUHugeint(UUID::FromString("00000000-0000-0000-0000-000000000001")),
+	             Catch::Predicate<uhugeint_t>([&](const uhugeint_t &input) {
+		             return input.upper == 0x0000000000000000 && input.lower == 0x0000000000000001;
+	             }));
+	REQUIRE_THAT(UUID::ToUHugeint(UUID::FromString("ffffffff-ffff-ffff-ffff-ffffffffffff")),
+	             Catch::Predicate<uhugeint_t>([&](const uhugeint_t &input) {
+		             return input.upper == 0xffffffffffffffff && input.lower == 0xffffffffffffffff;
+	             }));
+	REQUIRE_THAT(UUID::ToUHugeint(UUID::FromString("ffffffff-ffff-ffff-ffff-fffffffffffe")),
+	             Catch::Predicate<uhugeint_t>([&](const uhugeint_t &input) {
+		             return input.upper == 0xffffffffffffffff && input.lower == 0xfffffffffffffffe;
+	             }));
+	REQUIRE_THAT(UUID::ToUHugeint(UUID::FromString("7fffffff-ffff-ffff-ffff-ffffffffffff")),
+	             Catch::Predicate<uhugeint_t>([&](const uhugeint_t &input) {
+		             return input.upper == 0x7fffffffffffffff && input.lower == 0xffffffffffffffff;
+	             }));
+	REQUIRE_THAT(UUID::ToUHugeint(UUID::FromString("80000000-0000-0000-0000-000000000000")),
+	             Catch::Predicate<uhugeint_t>([&](const uhugeint_t &input) {
+		             return input.upper == 0x8000000000000000 && input.lower == 0x0000000000000000;
+	             }));
 }

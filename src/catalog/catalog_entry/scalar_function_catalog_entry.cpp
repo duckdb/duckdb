@@ -1,4 +1,5 @@
 #include "duckdb/catalog/catalog_entry/scalar_function_catalog_entry.hpp"
+#include "duckdb/common/vector.hpp"
 #include "duckdb/parser/parsed_data/alter_scalar_function_info.hpp"
 
 namespace duckdb {
@@ -26,12 +27,9 @@ unique_ptr<CatalogEntry> ScalarFunctionCatalogEntry::AlterEntry(CatalogTransacti
 	}
 	CreateScalarFunctionInfo new_info(std::move(new_set));
 	new_info.internal = internal;
-	new_info.description =
-	    add_overloads.new_overloads->description.empty() ? description : add_overloads.new_overloads->description;
-	new_info.parameter_names = add_overloads.new_overloads->parameter_names.empty()
-	                               ? parameter_names
-	                               : add_overloads.new_overloads->parameter_names;
-	new_info.example = add_overloads.new_overloads->example.empty() ? example : add_overloads.new_overloads->example;
+	new_info.descriptions = descriptions;
+	new_info.descriptions.insert(new_info.descriptions.end(), add_overloads.new_overloads->descriptions.begin(),
+	                             add_overloads.new_overloads->descriptions.end());
 	return make_uniq<ScalarFunctionCatalogEntry>(catalog, schema, new_info);
 }
 

@@ -1,19 +1,35 @@
+#include "duckdb/common/assert.hpp"
+#include "duckdb/common/enums/join_type.hpp"
+#include "duckdb/common/helper.hpp"
+#include "duckdb/common/typedefs.hpp"
+#include "duckdb/common/types.hpp"
+#include "duckdb/common/types/value.hpp"
+#include "duckdb/common/unique_ptr.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/execution/expression_executor.hpp"
 #include "duckdb/optimizer/filter_pushdown.hpp"
 #include "duckdb/optimizer/optimizer.hpp"
+#include "duckdb/planner/binder.hpp"
+#include "duckdb/planner/column_binding.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
+#include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_any_join.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_cross_product.hpp"
+#include "duckdb/planner/operator/logical_dummy_scan.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_projection.hpp"
+#include <utility>
 
 namespace duckdb {
 
 using Filter = FilterPushdown::Filter;
 
 static unique_ptr<Expression> ReplaceColRefWithNull(unique_ptr<Expression> expr, unordered_set<idx_t> &right_bindings) {
-	if (expr->type == ExpressionType::BOUND_COLUMN_REF) {
+	if (expr->GetExpressionType() == ExpressionType::BOUND_COLUMN_REF) {
 		auto &bound_colref = expr->Cast<BoundColumnRefExpression>();
 		if (right_bindings.find(bound_colref.binding.table_index) != right_bindings.end()) {
 			// bound colref belongs to RHS
@@ -31,7 +47,7 @@ static bool FilterRemovesNull(ClientContext &context, ExpressionRewriter &rewrit
                               unordered_set<idx_t> &right_bindings) {
 	// make a copy of the expression
 	auto copy = expr->Copy();
-	// replace all BoundColumnRef expressions frmo the RHS with NULL constants in the copied expression
+	// replace all BoundColumnRef expressions from the RHS with NULL constants in the copied expression
 	copy = ReplaceColRefWithNull(std::move(copy), right_bindings);
 
 	// attempt to flatten the expression by running the expression rewriter on it
@@ -97,6 +113,9 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 			// bindings match right side or both sides: we cannot directly push it into the right
 			// however, if the filter removes rows with null values from the RHS we can turn the left outer join
 			// in an inner join, and then push down as we would push down an inner join
+			// Edit: This is only possible if the bindings match BOTH sides, so the filter can be pushed down to both
+			// children. If the filter can only be applied to the right side, and the filter filters
+			// all tuples, then the inner join cannot be converted.
 			if (FilterRemovesNull(optimizer.context, optimizer.rewriter, filters[i]->filter.get(), right_bindings)) {
 				// the filter removes NULL values, turn it into an inner join
 				join.join_type = JoinType::INNER;
@@ -123,7 +142,49 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownLeftJoin(unique_ptr<LogicalO
 	});
 	right_pushdown.GenerateFilters();
 	op->children[0] = left_pushdown.Rewrite(std::move(op->children[0]));
-	op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+
+	bool rewrite_right = true;
+	if (op->type == LogicalOperatorType::LOGICAL_ANY_JOIN) {
+		auto &any_join = join.Cast<LogicalAnyJoin>();
+		if (AddFilter(any_join.condition->Copy()) == FilterResult::UNSATISFIABLE) {
+			// filter statically evaluates to false, turns it to the cross product join with 1 row NULLs
+			if (any_join.join_type == JoinType::LEFT) {
+				unordered_map<idx_t, vector<unique_ptr<Expression>>> projections_groups;
+				auto column_bindings = op->children[1]->GetColumnBindings();
+				op->children[1]->ResolveOperatorTypes();
+				auto &types = op->children[1]->types;
+				for (idx_t i = 0; i < column_bindings.size(); i++) {
+					projections_groups[column_bindings[i].table_index].emplace_back(
+					    make_uniq<BoundConstantExpression>(Value(types[i])));
+				}
+
+				auto create_proj_dummy_scan = [&](idx_t table_index) {
+					auto dummy_scan = make_uniq<LogicalDummyScan>(optimizer.binder.GenerateTableIndex());
+					auto proj = make_uniq<LogicalProjection>(table_index, std::move(projections_groups[table_index]));
+					proj->AddChild(std::move(dummy_scan));
+					return proj;
+				};
+				// make cross products on the RHS first
+				auto begin = projections_groups.begin();
+				D_ASSERT(begin != projections_groups.end());
+				unique_ptr<LogicalOperator> left = create_proj_dummy_scan(begin->first);
+				projections_groups.erase(begin);
+				for (auto &group : projections_groups) {
+					auto proj = create_proj_dummy_scan(group.first);
+					auto op = LogicalCrossProduct::Create(std::move(left), std::move(proj));
+					left = std::move(op);
+				}
+				// then make cross product with the LHS
+				op = LogicalCrossProduct::Create(std::move(op->children[0]), std::move(left));
+				rewrite_right = false;
+			}
+		}
+	}
+
+	if (rewrite_right) {
+		op->children[1] = right_pushdown.Rewrite(std::move(op->children[1]));
+	}
+
 	return PushFinalFilters(std::move(op));
 }
 

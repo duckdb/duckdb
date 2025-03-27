@@ -43,3 +43,17 @@ class TestJoin(object):
         rel.show()
         res = rel.fetchall()
         assert res == [(1, 2, 1, 3)]
+
+    @pytest.mark.xfail(condition=True, reason="Selecting from a duplicate binding causes an error")
+    def test_deduplicated_bindings(self, duckdb_cursor):
+        duckdb_cursor.execute("create table old as select * from (values ('42', 1), ('21', 2)) t(a, b)")
+        duckdb_cursor.execute("create table old_1 as select * from (values ('42', 3), ('21', 4)) t(a, b)")
+
+        old = duckdb_cursor.table('old')
+        old_1 = duckdb_cursor.table('old_1')
+
+        join_one = old.join(old_1, "old.a == old_1.a")
+        join_two = old.join(old_1, "old.a == old_1.a")
+
+        join_three = join_one.join(join_two, "old.a == old_1.a")
+        join_three.show()

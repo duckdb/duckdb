@@ -5,7 +5,7 @@
 require parquet
 
 statement ok
-pragma enable_object_cache
+SET parquet_metadata_cache=true;
 
 # test the cached file
 query II

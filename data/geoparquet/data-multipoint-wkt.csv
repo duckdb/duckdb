@@ -1,0 +1,5 @@
+"col","geometry"
+0,"MULTIPOINT ((30 10))"
+1,"MULTIPOINT ((10 40), (40 30), (20 20), (30 10))"
+2,"MULTIPOINT EMPTY"
+3,

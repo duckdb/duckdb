@@ -1,0 +1,43 @@
+# name: test/sql/alter/add_pk/test_add_same_pk_twice.test
+# description: Test adding the same PRIMARY KEY twice.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (i INTEGER, j INTEGER)
+
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+ALTER TABLE test ADD PRIMARY KEY (j)
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (i)
+----
+<REGEX>:Catalog Error.*table "test" can have only one primary key.*
+
+statement ok
+COMMIT
+
+# Without a transaction.
+
+statement ok
+CREATE TABLE other (i INTEGER PRIMARY KEY, j INTEGER)
+
+statement error
+ALTER TABLE other ADD PRIMARY KEY (i, j)
+----
+<REGEX>:Catalog Error.*table "other" can have only one primary key.*
+
+statement error
+ALTER TABLE other ADD PRIMARY KEY (i)
+----
+<REGEX>:Catalog Error.*table "other" can have only one primary key.*
+
+statement error
+ALTER TABLE other ADD PRIMARY KEY (j)
+----
+<REGEX>:Catalog Error.*table "other" can have only one primary key.*

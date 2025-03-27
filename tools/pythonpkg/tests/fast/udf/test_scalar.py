@@ -3,7 +3,7 @@ import os
 import pytest
 
 pd = pytest.importorskip("pandas")
-pa = pytest.importorskip("pyarrow")
+pa = pytest.importorskip('pyarrow', '18.0.0')
 from typing import Union
 import pyarrow.compute as pc
 import uuid
@@ -12,8 +12,6 @@ import numpy as np
 import cmath
 
 from duckdb.typing import *
-
-from arrow_canonical_extensions import UuidType, HugeIntType
 
 
 def make_annotated_function(type):
@@ -52,7 +50,7 @@ class TestScalarUDF(object):
             (DATE, datetime.date(2005, 3, 11)),
             (TIMESTAMP, datetime.datetime(2009, 2, 13, 11, 5, 53)),
             (TIME, datetime.time(14, 1, 12)),
-            (BLOB, b'\xF6\x96\xB0\x85'),
+            (BLOB, b'\xf6\x96\xb0\x85'),
             (INTERVAL, datetime.timedelta(days=30969, seconds=999, microseconds=999999)),
             (BOOLEAN, True),
             (
@@ -70,10 +68,6 @@ class TestScalarUDF(object):
 
         con = duckdb.connect()
         con.create_function('test', test_function, type=function_type)
-        if type == UUID:
-            pa.register_extension_type(UuidType())
-        elif type == HUGEINT:
-            pa.register_extension_type(HugeIntType())
         # Single value
         res = con.execute(f"select test(?::{str(type)})", [value]).fetchall()
         assert res[0][0] == value
@@ -123,10 +117,6 @@ class TestScalarUDF(object):
         table_rel = con.table('tbl')
         res = table_rel.project('test(x)').fetchall()
         assert res[0][0] == value
-        if type == UUID:
-            pa.unregister_extension_type("arrow.uuid")
-        elif type == HUGEINT:
-            pa.unregister_extension_type("duckdb.hugeint")
 
     @pytest.mark.parametrize('udf_type', ['arrow', 'native'])
     def test_map_coverage(self, udf_type):

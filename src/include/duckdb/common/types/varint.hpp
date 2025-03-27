@@ -16,11 +16,22 @@
 #include "duckdb/function/cast/default_casts.hpp"
 
 namespace duckdb {
+using digit_t = uint32_t;
+using twodigit_t = uint64_t;
+
 //! The Varint class is a static class that holds helper functions for the Varint type.
 class Varint {
 public:
 	//! Header size of a Varint is always 3 bytes.
 	DUCKDB_API static constexpr uint8_t VARINT_HEADER_SIZE = 3;
+	//! Max(e such that 10**e fits in a digit_t)
+	DUCKDB_API static constexpr uint8_t DECIMAL_SHIFT = 9;
+	//! 10 ** DECIMAL_SHIFT
+	DUCKDB_API static constexpr digit_t DECIMAL_BASE = 1000000000;
+	//! Bytes of a digit_t
+	DUCKDB_API static constexpr uint8_t DIGIT_BYTES = sizeof(digit_t);
+	//! Bits of a digit_t
+	DUCKDB_API static constexpr uint8_t DIGIT_BITS = DIGIT_BYTES * 8;
 	//! Verifies if a Varint is valid. i.e., if it has 3 header bytes. The header correctly represents the number of
 	//! data bytes, and the data bytes has no leading zero bytes.
 	DUCKDB_API static void Verify(const string_t &input);
@@ -47,6 +58,8 @@ public:
 	DUCKDB_API static char DigitToChar(int digit);
 	//! Function to convert a string_t into a vector of bytes
 	DUCKDB_API static void GetByteArray(vector<uint8_t> &byte_array, bool &is_negative, const string_t &blob);
+	//! Function to create a VARINT blob from a byte array containing the absolute value, plus an is_negative bool
+	DUCKDB_API static string FromByteArray(uint8_t *data, idx_t size, bool is_negative);
 	//! Function to convert VARINT blob to a VARCHAR
 	DUCKDB_API static string VarIntToVarchar(const string_t &blob);
 	//! Function to convert Varchar to VARINT blob

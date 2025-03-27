@@ -1,0 +1,19 @@
+# name: test/sql/alter/add_pk/test_add_pk_invalid_type.test
+# description: Test adding a PRIMARY KEY with an invalid type.
+# group: [add_pk]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+CREATE TABLE test (a INTEGER[], b INTEGER)
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (a)
+----
+<REGEX>:Invalid type Error.*Invalid Type.*Invalid type for index key.*
+
+statement error
+ALTER TABLE test ADD PRIMARY KEY (a, b)
+----
+<REGEX>:Invalid type Error.*Invalid Type.*Invalid type for index key.*

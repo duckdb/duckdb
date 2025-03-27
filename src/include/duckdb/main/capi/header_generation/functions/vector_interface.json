@@ -63,7 +63,7 @@
                 }
             ],
             "comment": {
-                "description": "Ensures the validity mask is writable by allocating it.\n\nAfter this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.\nThis allows null values to be written to the vector, regardless of whether a validity mask was present before.\n\n",
+                "description": "Ensures the validity mask is writable by allocating it.\n\nAfter this function is called, `duckdb_vector_get_validity` will ALWAYS return non-NULL.\nThis allows NULL values to be written to the vector, regardless of whether a validity mask was present before.\n\n",
                 "param_comments": {
                     "vector": "The vector to alter"
                 }
@@ -241,6 +241,32 @@
                     "vector": "The vector"
                 },
                 "return_value": "The child vector"
+            }
+        },
+        {
+            "name": "duckdb_slice_vector",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "duckdb_selection_vector",
+                    "name": "selection"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "len"
+                }
+            ],
+            "comment": {
+                "description": "Slice a vector with a selection vector.\n\nThe max value in the selection vector must be less than the length of the vector\n\nThe resulting vector happens to be a dictionary vector.\n\n",
+                "param_comments": {
+                    "vector": "The vector which is to become a dictionary",
+                    "selection": "The selection vector",
+                    "len": "The length of the selection vector"
+                }
             }
         }
     ]

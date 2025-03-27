@@ -42,7 +42,7 @@ If you wish to load data from a DataFrame into a DuckDB table you can run a `CRE
 using DuckDB
 using DataFrames
 
-# create a new in-memory dabase
+# create a new in-memory database
 con = DBInterface.connect(DuckDB.DB)
 
 # create a DataFrame
@@ -133,6 +133,15 @@ julia -e "import Pkg; Pkg.activate(\".\"); include(\"test/runtests.jl\")" "test_
 ```
 
 Just as mentioned before, to attach lldb to this, you'll have to replace the `julia` part with the absolute path.
+
+### Automatic API generation
+
+A base Julia wrapper around the C-API is generated using the `update_api.sh` script (which internally calls the python script `scripts/generate_c_api_julia.py`). This script uses the definitions of DuckDB C-API to automatically generate the Julia wrapper that is complete and consistent with the C-API. To generate the wrapper, just run:
+
+```bash
+./update_api.sh
+```
+
 
 ### Submitting a New Package
 The DuckDB Julia package depends on the [DuckDB_jll package](https://github.com/JuliaBinaryWrappers/DuckDB_jll.jl), which can be updated by sending a PR to [Yggdrassil](https://github.com/JuliaPackaging/Yggdrasil/pull/5049).

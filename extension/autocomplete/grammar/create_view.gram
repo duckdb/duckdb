@@ -1,0 +1,1 @@
+CreateViewStmt <- 'VIEW'i IfNotExists? QualifiedName InsertColumnList? 'AS'i SelectStatement

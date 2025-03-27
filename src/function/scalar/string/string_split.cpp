@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/string_functions.hpp"
+#include "duckdb/function/scalar/string_common.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/common/types/vector.hpp"
@@ -35,8 +36,7 @@ struct RegularStringSplit {
 		if (delim_size == 0) {
 			return 0;
 		}
-		return ContainsFun::Find(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(delim_data),
-		                         delim_size);
+		return FindStrInStr(const_uchar_ptr_cast(input_data), input_size, const_uchar_ptr_cast(delim_data), delim_size);
 	}
 };
 
@@ -83,7 +83,7 @@ struct StringSplitter {
 				// special case: 0 length match and pos is 0
 				// move to the next character
 				for (pos++; pos < input_size; pos++) {
-					if (LengthFun::IsCharacter(input_data[pos])) {
+					if (IsCharacter(input_data[pos])) {
 						break;
 					}
 				}
@@ -181,14 +181,6 @@ ScalarFunction StringSplitFun::GetFunction() {
 	return string_split;
 }
 
-void StringSplitFun::RegisterFunction(BuiltinFunctions &set) {
-	for (auto &name : {"string_split", "str_split", "string_to_array", "split"}) {
-		auto function = GetFunction();
-		function.name = name;
-		set.AddFunction(function);
-	}
-}
-
 ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	auto varchar_list_type = LogicalType::LIST(LogicalType::VARCHAR);
 	ScalarFunctionSet regexp_split;
@@ -200,14 +192,6 @@ ScalarFunctionSet StringSplitRegexFun::GetFunctions() {
 	regex_fun.arguments.emplace_back(LogicalType::VARCHAR);
 	regexp_split.AddFunction(regex_fun);
 	return regexp_split;
-}
-
-void StringSplitRegexFun::RegisterFunction(BuiltinFunctions &set) {
-	for (auto &name : {"string_split_regex", "str_split_regex", "regexp_split_to_array"}) {
-		auto function = GetFunctions();
-		function.name = name;
-		set.AddFunction(function);
-	}
 }
 
 } // namespace duckdb

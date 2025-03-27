@@ -364,6 +364,9 @@ ScalarFunctionSet TimeBucketFun::GetFunctions() {
 	                                       LogicalType::DATE, TimeBucketOriginFunction<date_t>));
 	time_bucket.AddFunction(ScalarFunction({LogicalType::INTERVAL, LogicalType::TIMESTAMP, LogicalType::TIMESTAMP},
 	                                       LogicalType::TIMESTAMP, TimeBucketOriginFunction<timestamp_t>));
+	for (auto &func : time_bucket.functions) {
+		BaseScalarFunction::SetReturnsError(func);
+	}
 	return time_bucket;
 }
 

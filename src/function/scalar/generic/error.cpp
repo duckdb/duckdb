@@ -16,11 +16,8 @@ ScalarFunction ErrorFun::GetFunction() {
 	                          ScalarFunction::UnaryFunction<string_t, int32_t, ErrorOperator>);
 	// Set the function with side effects to avoid the optimization.
 	fun.stability = FunctionStability::VOLATILE;
+	BaseScalarFunction::SetReturnsError(fun);
 	return fun;
-}
-
-void ErrorFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunction());
 }
 
 } // namespace duckdb

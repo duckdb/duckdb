@@ -1,5 +1,7 @@
 #include "duckdb/catalog/catalog_entry/aggregate_function_catalog_entry.hpp"
 #include "duckdb/function/function_binder.hpp"
+#include "duckdb/function/scalar/generic_common.hpp"
+#include "duckdb/function/scalar/system_functions.hpp"
 #include "duckdb/function/scalar/generic_functions.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/database.hpp"
@@ -206,8 +208,8 @@ static unique_ptr<FunctionData> BindAggregateState(ClientContext &context, Scala
 	auto state_type = AggregateStateType::GetStateType(arg_return_type);
 
 	// now we can look up the function in the catalog again and bind it
-	auto &func = Catalog::GetSystemCatalog(context).GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY,
-	                                                         DEFAULT_SCHEMA, state_type.function_name);
+	auto &func = Catalog::GetSystemCatalog(context).GetEntry<AggregateFunctionCatalogEntry>(context, DEFAULT_SCHEMA,
+	                                                                                        state_type.function_name);
 	if (func.type != CatalogType::AGGREGATE_FUNCTION_ENTRY) {
 		throw InternalException("Could not find aggregate %s", state_type.function_name);
 	}
@@ -265,7 +267,7 @@ static void ExportAggregateFinalize(Vector &state, AggregateInputData &aggr_inpu
 }
 
 ExportAggregateFunctionBindData::ExportAggregateFunctionBindData(unique_ptr<Expression> aggregate_p) {
-	D_ASSERT(aggregate_p->type == ExpressionType::BOUND_AGGREGATE);
+	D_ASSERT(aggregate_p->GetExpressionType() == ExpressionType::BOUND_AGGREGATE);
 	aggregate = unique_ptr_cast<Expression, BoundAggregateExpression>(std::move(aggregate_p));
 }
 
@@ -339,7 +341,7 @@ ExportAggregateFunction::Bind(unique_ptr<BoundAggregateExpression> child_aggrega
 	                                           child_aggregate->aggr_type);
 }
 
-ScalarFunction ExportAggregateFunction::GetFinalize() {
+ScalarFunction FinalizeFun::GetFunction() {
 	auto result = ScalarFunction("finalize", {LogicalTypeId::AGGREGATE_STATE}, LogicalTypeId::INVALID,
 	                             AggregateStateFinalize, BindAggregateState, nullptr, nullptr, InitFinalizeState);
 	result.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
@@ -348,7 +350,7 @@ ScalarFunction ExportAggregateFunction::GetFinalize() {
 	return result;
 }
 
-ScalarFunction ExportAggregateFunction::GetCombine() {
+ScalarFunction CombineFun::GetFunction() {
 	auto result =
 	    ScalarFunction("combine", {LogicalTypeId::AGGREGATE_STATE, LogicalTypeId::ANY}, LogicalTypeId::AGGREGATE_STATE,
 	                   AggregateStateCombine, BindAggregateState, nullptr, nullptr, InitCombineState);
@@ -356,11 +358,6 @@ ScalarFunction ExportAggregateFunction::GetCombine() {
 	result.serialize = ExportStateScalarSerialize;
 	result.deserialize = ExportStateScalarDeserialize;
 	return result;
-}
-
-void ExportAggregateFunction::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(ExportAggregateFunction::GetCombine());
-	set.AddFunction(ExportAggregateFunction::GetFinalize());
 }
 
 } // namespace duckdb

@@ -3,21 +3,25 @@
 
 #include "duckdb/storage/storage_info.hpp"
 #include "duckdb/common/optional_idx.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 
-optional_idx AttachInfo::GetBlockAllocSize() const {
-
+StorageOptions AttachInfo::GetStorageOptions() const {
+	StorageOptions storage_options;
 	for (auto &entry : options) {
 		if (entry.first == "block_size") {
 			// Extract the block allocation size. This is NOT the actual memory available on a block (block_size),
 			// even though the corresponding option we expose to the user is called "block_size".
-			idx_t block_alloc_size = UBigIntValue::Get(entry.second.DefaultCastAs(LogicalType::UBIGINT));
-			Storage::VerifyBlockAllocSize(block_alloc_size);
-			return block_alloc_size;
+			storage_options.block_alloc_size = entry.second.GetValue<uint64_t>();
+		} else if (entry.first == "row_group_size") {
+			storage_options.row_group_size = entry.second.GetValue<uint64_t>();
+		} else if (entry.first == "storage_version") {
+			storage_options.storage_version =
+			    SerializationCompatibility::FromString(entry.second.ToString()).serialization_version;
 		}
 	}
-	return optional_idx();
+	return storage_options;
 }
 
 unique_ptr<AttachInfo> AttachInfo::Copy() const {
@@ -34,9 +38,11 @@ string AttachInfo::ToString() const {
 	result += "ATTACH";
 	if (on_conflict == OnCreateConflict::IGNORE_ON_CONFLICT) {
 		result += " IF NOT EXISTS";
+	} else if (on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		result += " OR REPLACE";
 	}
 	result += " DATABASE";
-	result += StringUtil::Format(" '%s'", path);
+	result += KeywordHelper::WriteQuoted(path, '\'');
 	if (!name.empty()) {
 		result += " AS " + KeywordHelper::WriteOptionallyQuoted(name);
 	}

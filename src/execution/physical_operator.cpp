@@ -36,7 +36,7 @@ void PhysicalOperator::Print() const {
 vector<const_reference<PhysicalOperator>> PhysicalOperator::GetChildren() const {
 	vector<const_reference<PhysicalOperator>> result;
 	for (auto &child : children) {
-		result.push_back(*child);
+		result.push_back(child.get());
 	}
 	return result;
 }
@@ -50,16 +50,16 @@ idx_t PhysicalOperator::EstimatedThreadCount() const {
 	idx_t result = 0;
 	if (children.empty()) {
 		// Terminal operator, e.g., base table, these decide the degree of parallelism of pipelines
-		result = MaxValue<idx_t>(estimated_cardinality / (Storage::ROW_GROUP_SIZE * 2), 1);
+		result = MaxValue<idx_t>(estimated_cardinality / (DEFAULT_ROW_GROUP_SIZE * 2), 1);
 	} else if (type == PhysicalOperatorType::UNION) {
 		// We can run union pipelines in parallel, so we sum up the thread count of the children
 		for (auto &child : children) {
-			result += child->EstimatedThreadCount();
+			result += child.get().EstimatedThreadCount();
 		}
 	} else {
 		// For other operators we take the maximum of the children
 		for (auto &child : children) {
-			result = MaxValue(child->EstimatedThreadCount(), result);
+			result = MaxValue(child.get().EstimatedThreadCount(), result);
 		}
 	}
 	return result;
@@ -116,13 +116,16 @@ SourceResultType PhysicalOperator::GetData(ExecutionContext &context, DataChunk 
 	throw InternalException("Calling GetData on a node that is not a source!");
 }
 
-idx_t PhysicalOperator::GetBatchIndex(ExecutionContext &context, DataChunk &chunk, GlobalSourceState &gstate,
-                                      LocalSourceState &lstate) const {
-	throw InternalException("Calling GetBatchIndex on a node that does not support it");
+OperatorPartitionData PhysicalOperator::GetPartitionData(ExecutionContext &context, DataChunk &chunk,
+                                                         GlobalSourceState &gstate, LocalSourceState &lstate,
+                                                         const OperatorPartitionInfo &partition_info) const {
+	throw InternalException("Calling GetPartitionData on a node that does not support it");
 }
 
-double PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
-	return -1;
+ProgressData PhysicalOperator::GetProgress(ClientContext &context, GlobalSourceState &gstate) const {
+	ProgressData res;
+	res.SetInvalid();
+	return res;
 }
 // LCOV_EXCL_STOP
 
@@ -175,10 +178,13 @@ bool PhysicalOperator::OperatorCachingAllowed(ExecutionContext &context) {
 		return false;
 	} else if (!context.pipeline->GetSink()) {
 		return false;
-	} else if (context.pipeline->GetSink()->RequiresBatchIndex()) {
-		return false;
 	} else if (context.pipeline->IsOrderDependent()) {
 		return false;
+	} else {
+		auto partition_info = context.pipeline->GetSink()->RequiredPartitionInfo();
+		if (partition_info.AnyRequired()) {
+			return false;
+		}
 	}
 
 	return true;
@@ -201,7 +207,7 @@ void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 
 		// we create a new pipeline starting from the child
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
-		child_meta_pipeline.Build(*children[0]);
+		child_meta_pipeline.Build(children[0]);
 	} else {
 		// operator is not a sink! recurse in children
 		if (children.empty()) {
@@ -212,7 +218,7 @@ void PhysicalOperator::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 				throw InternalException("Operator not supported in BuildPipelines");
 			}
 			state.AddPipelineOperator(current, *this);
-			children[0]->BuildPipelines(current, meta_pipeline);
+			children[0].get().BuildPipelines(current, meta_pipeline);
 		}
 	}
 }
@@ -232,7 +238,7 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetSources() const {
 			if (children.size() != 1) {
 				throw InternalException("Operator not supported in GetSource");
 			}
-			return children[0]->GetSources();
+			return children[0].get().GetSources();
 		}
 	}
 }
@@ -240,7 +246,7 @@ vector<const_reference<PhysicalOperator>> PhysicalOperator::GetSources() const {
 bool PhysicalOperator::AllSourcesSupportBatchIndex() const {
 	auto sources = GetSources();
 	for (auto &source : sources) {
-		if (!source.get().SupportsBatchIndex()) {
+		if (!source.get().SupportsPartitioning(OperatorPartitionInfo::BatchIndex())) {
 			return false;
 		}
 	}
@@ -252,7 +258,7 @@ void PhysicalOperator::Verify() {
 	auto sources = GetSources();
 	D_ASSERT(!sources.empty());
 	for (auto &child : children) {
-		child->Verify();
+		child.get().Verify();
 	}
 #endif
 }

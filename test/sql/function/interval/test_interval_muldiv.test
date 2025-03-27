@@ -1,0 +1,81 @@
+# name: test/sql/function/interval/test_interval_muldiv.test
+# description: Test PG INTERVAL DOUBLE multiply and divide.
+# group: [interval]
+
+statement ok
+PRAGMA enable_verification
+
+# From src/test/regress/sql/interval.sql
+# Test multiplication and division with intervals.
+# Floating point arithmetic rounding errors can lead to unexpected results,
+# though the code attempts to do the right thing and round up to days and
+# minutes to avoid results such as '3 days 24:00 hours' or '14:20:60'.
+# Note that it is expected for some day components to be greater than 29 and
+# some time components be greater than 23:59:59 due to how intervals are
+# stored internally.
+statement ok
+CREATE TABLE INTERVAL_MULDIV_TBL (span interval);
+
+statement ok
+INSERT INTO INTERVAL_MULDIV_TBL VALUES
+    ('41 months 12 days 360:00'),
+    ('-41 months -12 days 360:00'),
+    ('-12 days'),
+    ('9 months -27 days 12:34:56'),
+    ('-3 years 482 days 76:54:32.189'),
+    ('4 months'),
+    ('14 months'),
+    ('999 months 999 days'),
+;
+
+query I
+SELECT span * 0.3 AS product
+FROM INTERVAL_MULDIV_TBL;
+----
+1 year 12 days 122:24:00
+-1 year -12 days 93:36:00
+-3 days -14:24:00
+2 months 13 days 01:22:28.8
+-10 months 120 days 37:28:21.6567
+1 month 6 days
+4 months 6 days
+24 years 11 months 320 days 16:48:00
+
+query I
+SELECT span * 8.2 AS product
+FROM INTERVAL_MULDIV_TBL;
+----
+28 years 104 days 2961:36:00
+-28 years -104 days 2942:24:00
+-98 days -09:36:00
+6 years 1 month -197 days 93:34:27.2
+-24 years -7 months 3946 days 640:15:11.9498
+2 years 8 months 24 days
+9 years 6 months 24 days
+682 years 7 months 8215 days 19:12:00
+
+query I
+SELECT span / 10 AS quotient
+FROM INTERVAL_MULDIV_TBL;
+----
+4 months 4 days 40:48:00
+-4 months -4 days 31:12:00
+-1 day -04:48:00
+25 days -15:32:30.4
+-3 months 30 days 12:29:27.2189
+12 days
+1 month 12 days
+8 years 3 months 126 days 21:36:00
+
+query I
+SELECT span / 100 AS quotient
+FROM INTERVAL_MULDIV_TBL;
+----
+12 days 13:40:48
+-12 days -06:28:48
+-02:52:48
+2 days 10:26:44.96
+-6 days 01:14:56.72189
+1 day 04:48:00
+4 days 04:48:00
+9 months 39 days 16:33:36

@@ -37,7 +37,7 @@ static inline void CalendarAddHour(icu::Calendar *calendar, int64_t interval_hou
 		while (interval_hour > 0) {
 			calendar->add(UCAL_HOUR,
 			              interval_hour > NumericLimits<int32_t>::Maximum() ? NumericLimits<int32_t>::Maximum()
-			                                                                : interval_hour,
+			                                                                : static_cast<int32_t>(interval_hour),
 			              status);
 			interval_hour -= NumericLimits<int32_t>::Maximum();
 		}
@@ -45,7 +45,7 @@ static inline void CalendarAddHour(icu::Calendar *calendar, int64_t interval_hou
 		while (interval_hour < 0) {
 			calendar->add(UCAL_HOUR,
 			              interval_hour < NumericLimits<int32_t>::Minimum() ? NumericLimits<int32_t>::Minimum()
-			                                                                : interval_hour,
+			                                                                : static_cast<int32_t>(interval_hour),
 			              status);
 			interval_hour -= NumericLimits<int32_t>::Minimum();
 		}
@@ -85,13 +85,13 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 	// Break units apart to avoid overflow
 	auto interval_h = interval.micros / Interval::MICROS_PER_MSEC;
 
-	const auto interval_ms = interval_h % Interval::MSECS_PER_SEC;
+	const auto interval_ms = static_cast<int32_t>(interval_h % Interval::MSECS_PER_SEC);
 	interval_h /= Interval::MSECS_PER_SEC;
 
-	const auto interval_s = interval_h % Interval::SECS_PER_MINUTE;
+	const auto interval_s = static_cast<int32_t>(interval_h % Interval::SECS_PER_MINUTE);
 	interval_h /= Interval::SECS_PER_MINUTE;
 
-	const auto interval_m = interval_h % Interval::MINS_PER_HOUR;
+	const auto interval_m = static_cast<int32_t>(interval_h % Interval::MINS_PER_HOUR);
 	interval_h /= Interval::MINS_PER_HOUR;
 
 	if (interval.months < 0 || interval.days < 0 || interval.micros < 0) {
@@ -132,6 +132,9 @@ timestamp_t ICUCalendarSub::Operation(timestamp_t timestamp, interval_t interval
 
 template <>
 interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_date, icu::Calendar *calendar) {
+	if (!Timestamp::IsFinite(end_date) || !Timestamp::IsFinite(start_date)) {
+		throw InvalidInputException("Cannot subtract infinite timestamps");
+	}
 	if (start_date > end_date) {
 		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar);
 		return {-negated.months, -negated.days, -negated.micros};
@@ -156,7 +159,7 @@ interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_dat
 	auto min_diff = SubtractField(calendar, UCAL_MINUTE, end_date);
 	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
 	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
-	auto micros_diff = ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros);
+	auto micros_diff = UnsafeNumericCast<int32_t>(ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros));
 	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
 
 	return result;
@@ -188,7 +191,7 @@ interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_dat
 	auto min_diff = SubtractField(calendar, UCAL_MINUTE, end_date);
 	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
 	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
-	auto micros_diff = ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros);
+	auto micros_diff = UnsafeNumericCast<int32_t>(ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros));
 	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
 
 	return result;
@@ -204,7 +207,9 @@ struct ICUDateAdd : public ICUDateFunc {
 		auto &info = func_expr.bind_info->Cast<BindData>();
 		CalendarPtr calendar(info.calendar->clone());
 
-		auto end_date = Timestamp::GetCurrentTimestamp();
+		//	Subtract argument from current_date (at midnight)
+		const auto end_date = CurrentMidnight(calendar.get(), state);
+
 		UnaryExecutor::Execute<TA, TR>(args.data[0], result, args.size(), [&](TA start_date) {
 			return OP::template Operation<timestamp_t, TA, TR>(end_date, start_date, calendar.get());
 		});

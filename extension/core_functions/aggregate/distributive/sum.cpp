@@ -157,6 +157,12 @@ unique_ptr<BaseStatistics> SumPropagateStats(ClientContext &context, BoundAggreg
 
 AggregateFunction GetSumAggregate(PhysicalType type) {
 	switch (type) {
+	case PhysicalType::BOOL: {
+		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, bool, hugeint_t, IntegerSumOperation>(
+		    LogicalType::BOOLEAN, LogicalType::HUGEINT);
+		function.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+		return function;
+	}
 	case PhysicalType::INT16: {
 		auto function = AggregateFunction::UnaryAggregate<SumState<int64_t>, int16_t, hugeint_t, IntegerSumOperation>(
 		    LogicalType::SMALLINT, LogicalType::HUGEINT);
@@ -209,6 +215,7 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(AggregateFunction({LogicalTypeId::DECIMAL}, LogicalTypeId::DECIMAL, nullptr, nullptr, nullptr,
 	                                  nullptr, nullptr, FunctionNullHandling::DEFAULT_NULL_HANDLING, nullptr,
 	                                  BindDecimalSum));
+	sum.AddFunction(GetSumAggregate(PhysicalType::BOOL));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT16));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT32));
 	sum.AddFunction(GetSumAggregate(PhysicalType::INT64));
@@ -216,6 +223,10 @@ AggregateFunctionSet SumFun::GetFunctions() {
 	sum.AddFunction(AggregateFunction::UnaryAggregate<SumState<double>, double, double, NumericSumOperation>(
 	    LogicalType::DOUBLE, LogicalType::DOUBLE));
 	return sum;
+}
+
+AggregateFunction CountIfFun::GetFunction() {
+	return GetSumAggregate(PhysicalType::BOOL);
 }
 
 AggregateFunctionSet SumNoOverflowFun::GetFunctions() {

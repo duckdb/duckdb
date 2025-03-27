@@ -9,6 +9,7 @@
 #include "duckdb/planner/operator/logical_create_index.hpp"
 #include "duckdb/planner/operator/logical_extension_operator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/planner/operator/logical_recursive_cte.hpp"
 
 namespace duckdb {
 
@@ -133,6 +134,16 @@ void ColumnBindingResolver::VisitOperator(LogicalOperator &op) {
 		ext_op.ResolveColumnBindings(*this, bindings);
 		return;
 	}
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		auto &rec = op.Cast<LogicalRecursiveCTE>();
+		VisitOperatorChildren(op);
+		bindings = op.GetColumnBindings();
+
+		for (auto &expr : rec.key_targets) {
+			VisitExpression(&expr);
+		}
+		return;
+	}
 	default:
 		break;
 	}
@@ -156,13 +167,13 @@ unique_ptr<Expression> ColumnBindingResolver::VisitReplace(BoundColumnRefExpress
 				// in verification mode
 				return nullptr;
 			}
-			return make_uniq<BoundReferenceExpression>(expr.alias, expr.return_type, i);
+			return make_uniq<BoundReferenceExpression>(expr.GetAlias(), expr.return_type, i);
 		}
 	}
 	// LCOV_EXCL_START
 	// could not bind the column reference, this should never happen and indicates a bug in the code
 	// generate an error message
-	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.alias,
+	throw InternalException("Failed to bind column reference \"%s\" [%d.%d] (bindings: %s)", expr.GetAlias(),
 	                        expr.binding.table_index, expr.binding.column_index,
 	                        LogicalOperator::ColumnBindingsToString(bindings));
 	// LCOV_EXCL_STOP

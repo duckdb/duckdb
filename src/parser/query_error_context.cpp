@@ -2,13 +2,17 @@
 #include "duckdb/parser/sql_statement.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/to_string.hpp"
-
+#include "duckdb/parser/parsed_expression.hpp"
 #include "utf8proc_wrapper.hpp"
 
 namespace duckdb {
 
+QueryErrorContext::QueryErrorContext(const ParsedExpression &expr) : query_location(expr.query_location) {
+}
+
 string QueryErrorContext::Format(const string &query, const string &error_message, optional_idx error_loc,
                                  bool add_line_indicator) {
+	static constexpr idx_t MAX_LINE_RENDER_WIDTH = 120;
 	if (!error_loc.IsValid()) {
 		// no location in query provided
 		return error_message;
@@ -58,6 +62,7 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 	idx_t len = end_pos - start_pos;
 	vector<idx_t> render_widths;
 	vector<idx_t> positions;
+	vector<idx_t> natural_break;
 	if (Utf8Proc::IsValid(buf, len)) {
 		// for unicode awareness, we traverse the graphemes of the current line and keep track of their render widths
 		// and of their position in the string
@@ -65,6 +70,8 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 			auto char_render_width = Utf8Proc::RenderWidth(buf, len, cpos);
 			positions.push_back(cpos);
 			render_widths.push_back(char_render_width);
+			natural_break.push_back(StringUtil::CharacterIsOperator(buf[cpos]) ||
+			                        StringUtil::CharacterIsSpace(buf[cpos]));
 			cpos = Utf8Proc::NextGraphemeCluster(buf, len, cpos);
 		}
 	} else { // LCOV_EXCL_START
@@ -73,6 +80,8 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 		for (idx_t cpos = 0; cpos < len; cpos++) {
 			positions.push_back(cpos);
 			render_widths.push_back(1);
+			natural_break.push_back(StringUtil::CharacterIsOperator(buf[cpos]) ||
+			                        StringUtil::CharacterIsSpace(buf[cpos]));
 		}
 	} // LCOV_EXCL_STOP
 	// now we want to find the (unicode aware) start and end position
@@ -88,13 +97,25 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 	bool truncate_end = false;
 	idx_t spos = 0;
 	// now we iterate backwards from the error location
-	// we show max 40 render width before the error location
+	// we show max 60 render width before the error location
+	idx_t error_line_start = start_pos;
 	idx_t current_render_width = 0;
 	for (idx_t i = epos; i > 0; i--) {
 		current_render_width += render_widths[i];
-		if (current_render_width >= 40) {
+		if (current_render_width >= MAX_LINE_RENDER_WIDTH / 2) {
+			// we're exceeding the render width - truncate the beginning
+			// try to break at a "nice" point (i.e. a space, bracket, etc)
+			// try to find a natural break that is within 4 bytes of here
+			idx_t start_scan = i > 4 ? i - 4 : 0;
+			idx_t end_scan = MinValue<idx_t>(i + 4, epos);
+			for (idx_t k = start_scan; k < end_scan; k++) {
+				if (natural_break[k]) {
+					i = k;
+					break;
+				}
+			}
 			truncate_beginning = true;
-			start_pos = positions[i];
+			start_pos += positions[i];
 			spos = i;
 			break;
 		}
@@ -103,9 +124,20 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 	current_render_width = 0;
 	for (idx_t i = epos; i < positions.size(); i++) {
 		current_render_width += render_widths[i];
-		if (current_render_width >= 40) {
+		if (current_render_width >= MAX_LINE_RENDER_WIDTH / 2) {
+			// we're exceeding the render width - truncate the end
+			// try to break at a "nice" point (i.e. a space, bracket, etc)
+			// try to find a natural break that is within 4 bytes of here
+			idx_t start_scan = i > epos + 4 ? i - 4 : epos;
+			idx_t end_scan = MinValue<idx_t>(i + 4, positions.size());
+			for (idx_t k = start_scan; k < end_scan; k++) {
+				if (natural_break[k]) {
+					i = k;
+					break;
+				}
+			}
 			truncate_end = true;
-			end_pos = positions[i];
+			end_pos = error_line_start + positions[i];
 			break;
 		}
 	}
@@ -125,7 +157,7 @@ string QueryErrorContext::Format(const string &query, const string &error_messag
 
 	// now first print the error message plus the current line (or a subset of the line)
 	string result = error_message;
-	result += "\n" + line_indicator + begin_trunc + query.substr(start_pos, end_pos - start_pos) + end_trunc;
+	result += "\n\n" + line_indicator + begin_trunc + query.substr(start_pos, end_pos - start_pos) + end_trunc;
 	// print an arrow pointing at the error location
 	result += "\n" + string(error_render_width, ' ') + "^";
 	return result;

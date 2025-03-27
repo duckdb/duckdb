@@ -6,17 +6,29 @@
 
 namespace duckdb {
 
-PhysicalUnion::PhysicalUnion(vector<LogicalType> types, unique_ptr<PhysicalOperator> top,
-                             unique_ptr<PhysicalOperator> bottom, idx_t estimated_cardinality, bool allow_out_of_order)
+PhysicalUnion::PhysicalUnion(vector<LogicalType> types, PhysicalOperator &top, PhysicalOperator &bottom,
+                             idx_t estimated_cardinality, bool allow_out_of_order)
     : PhysicalOperator(PhysicalOperatorType::UNION, std::move(types), estimated_cardinality),
       allow_out_of_order(allow_out_of_order) {
-	children.push_back(std::move(top));
-	children.push_back(std::move(bottom));
+	children.push_back(top);
+	children.push_back(bottom);
 }
 
 //===--------------------------------------------------------------------===//
 // Pipeline Construction
 //===--------------------------------------------------------------------===//
+static bool ContainsSink(PhysicalOperator &op) {
+	if (op.IsSink()) {
+		return true;
+	}
+	for (auto &child : op.children) {
+		if (ContainsSink(child)) {
+			return true;
+		}
+	}
+	return false;
+}
+
 void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) {
 	op_state.reset();
 	sink_state.reset();
@@ -32,7 +44,11 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 		order_matters = true;
 	}
 	if (sink) {
-		if (sink->SinkOrderDependent() || sink->RequiresBatchIndex()) {
+		if (sink->SinkOrderDependent()) {
+			order_matters = true;
+		}
+		auto partition_info = sink->RequiredPartitionInfo();
+		if (partition_info.batch_index) {
 			order_matters = true;
 		}
 		if (!sink->ParallelSink()) {
@@ -44,11 +60,15 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	auto &union_pipeline = meta_pipeline.CreateUnionPipeline(current, order_matters);
 
 	// continue with the current pipeline
-	children[0]->BuildPipelines(current, meta_pipeline);
+	children[0].get().BuildPipelines(current, meta_pipeline);
 
 	vector<shared_ptr<Pipeline>> dependencies;
 	optional_ptr<MetaPipeline> last_child_ptr;
-	const auto can_saturate_threads = children[0]->CanSaturateThreads(current.GetClientContext());
+	// users commonly UNION ALL together a bunch of cheap scan pipelines (e.g., instead of a multi file list)
+	// in these cases, we don't want to avoid breadth-first plan evaluation,
+	// as it doesn't pose a threat to memory usage (it's just a bunch of straight scans)
+	const auto can_saturate_threads =
+	    ContainsSink(children[0]) && children[0].get().CanSaturateThreads(current.GetClientContext());
 	if (order_matters || can_saturate_threads) {
 		// we add dependencies if order matters: union_pipeline comes after all pipelines created by building current
 		dependencies = meta_pipeline.AddDependenciesFrom(union_pipeline, union_pipeline, false);
@@ -61,7 +81,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 	}
 
 	// build the union pipeline
-	children[1]->BuildPipelines(union_pipeline, meta_pipeline);
+	children[1].get().BuildPipelines(union_pipeline, meta_pipeline);
 
 	if (last_child_ptr) {
 		// the pointer was set, set up the dependencies
@@ -76,7 +96,7 @@ void PhysicalUnion::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipelin
 vector<const_reference<PhysicalOperator>> PhysicalUnion::GetSources() const {
 	vector<const_reference<PhysicalOperator>> result;
 	for (auto &child : children) {
-		auto child_sources = child->GetSources();
+		auto child_sources = child.get().GetSources();
 		result.insert(result.end(), child_sources.begin(), child_sources.end());
 	}
 	return result;

@@ -35,8 +35,14 @@ BoundStatement Binder::Bind(DropStatement &stmt) {
 	case CatalogType::TABLE_ENTRY:
 	case CatalogType::TYPE_ENTRY: {
 		BindSchemaOrCatalog(stmt.info->catalog, stmt.info->schema);
-		auto entry = Catalog::GetEntry(context, stmt.info->type, stmt.info->catalog, stmt.info->schema, stmt.info->name,
-		                               stmt.info->if_not_found);
+		auto catalog = Catalog::GetCatalogEntry(context, stmt.info->catalog);
+		if (catalog) {
+			// mark catalog as accessed
+			properties.RegisterDBRead(*catalog, context);
+		}
+		EntryLookupInfo entry_lookup(stmt.info->type, stmt.info->name);
+		auto entry = Catalog::GetEntry(context, stmt.info->catalog, stmt.info->schema, entry_lookup,
+		                               OnEntryNotFound::RETURN_NULL);
 		if (!entry) {
 			break;
 		}

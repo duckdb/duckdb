@@ -24,3 +24,12 @@ select list_sort(range(5000), 'desc');
 query I nosort reversered list
 select list_reverse(list) from tbl;
 ----
+
+# test incorrect parameter type
+foreach type boolean varchar tinyint smallint integer bigint hugeint utinyint usmallint uinteger ubigint float double decimal(4,1) decimal(9,4) decimal(18,6) decimal(38,10) date time timestamp timestamp_s timestamp_ms timestamp_ns timetz timestamptz interval blob
+
+statement error
+SELECT list_reverse(NULL::${type})
+----
+
+endloop

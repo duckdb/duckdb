@@ -1,5 +1,6 @@
 #include "duckdb/planner/logical_operator.hpp"
 
+#include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/serializer/binary_deserializer.hpp"
 #include "duckdb/common/serializer/binary_serializer.hpp"
@@ -8,6 +9,9 @@
 #include "duckdb/common/tree_renderer.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "duckdb/planner/operator/list.hpp"
+#include "duckdb/planner/operator/logical_filter.hpp"
+#include "duckdb/planner/operator/logical_join.hpp"
+#include "duckdb/planner/operator/logical_order.hpp"
 
 namespace duckdb {
 
@@ -73,7 +77,6 @@ InsertionOrderPreservingMap<string> LogicalOperator::ParamsToString() const {
 }
 
 void LogicalOperator::ResolveOperatorTypes() {
-
 	types.clear();
 	// first resolve child types
 	for (auto &child : children) {
@@ -158,7 +161,7 @@ void LogicalOperator::Verify(ClientContext &context) {
 		if (expressions[expr_idx]->HasParameter()) {
 			continue;
 		}
-		MemoryStream stream;
+		MemoryStream stream(Allocator::Get(context));
 		// We are serializing a query plan
 		try {
 			BinarySerializer::Serialize(*expressions[expr_idx], stream);
@@ -212,8 +215,10 @@ vector<idx_t> LogicalOperator::GetTableIndex() const {
 }
 
 unique_ptr<LogicalOperator> LogicalOperator::Copy(ClientContext &context) const {
-	MemoryStream stream;
-	BinarySerializer serializer(stream);
+	MemoryStream stream(Allocator::Get(context));
+	SerializationOptions options;
+	options.serialization_compatibility = SerializationCompatibility::Latest();
+	BinarySerializer serializer(stream, options);
 	try {
 		serializer.Begin();
 		this->Serialize(serializer);

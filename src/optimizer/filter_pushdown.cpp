@@ -3,6 +3,7 @@
 #include "duckdb/optimizer/optimizer.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/operator/logical_comparison_join.hpp"
+#include "duckdb/planner/operator/logical_aggregate.hpp"
 #include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_join.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
@@ -14,12 +15,14 @@ using Filter = FilterPushdown::Filter;
 
 void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &table_bindings) {
 	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_DELIM_JOIN:
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
 		auto &join = op.Cast<LogicalComparisonJoin>();
 		if (join.join_type != JoinType::MARK) {
 			break;
 		}
-		// if the projected table bindings include the mark join index,
+		// if an operator above the mark join includes the mark join index,
+		// then the mark join cannot be converted to a semi join
 		if (table_bindings.find(join.mark_index) != table_bindings.end()) {
 			join.convert_mark_to_semi = false;
 		}
@@ -31,24 +34,48 @@ void FilterPushdown::CheckMarkToSemi(LogicalOperator &op, unordered_set<idx_t> &
 	case LogicalOperatorType::LOGICAL_PROJECTION: {
 		// when we encounter a projection, replace the table_bindings with
 		// the tables in the projection
-		auto plan_bindings = op.GetColumnBindings();
 		auto &proj = op.Cast<LogicalProjection>();
 		auto proj_bindings = proj.GetColumnBindings();
 		unordered_set<idx_t> new_table_bindings;
 		for (auto &binding : proj_bindings) {
 			auto col_index = binding.column_index;
 			auto &expr = proj.expressions.at(col_index);
-			vector<ColumnBinding> bindings_to_keep;
 			ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
-				if (expr->expression_class == ExpressionClass::BOUND_COLUMN_REF) {
-					auto &col_ref = expr->Cast<BoundColumnRefExpression>();
+				if (child.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+					auto &col_ref = child.Cast<BoundColumnRefExpression>();
+					new_table_bindings.insert(col_ref.binding.table_index);
+				}
+			});
+			table_bindings = new_table_bindings;
+		}
+		break;
+	}
+	// It's possible a mark join index makes its way into a group by as the grouping index
+	// when that happens we need to keep track of it to make sure we do not convert a mark join to semi.
+	// see filter_pushdown_into_subquery.
+	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
+		auto &aggr = op.Cast<LogicalAggregate>();
+		auto aggr_bindings = aggr.GetColumnBindings();
+		vector<ColumnBinding> bindings_to_keep;
+		for (auto &expr : aggr.groups) {
+			ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
+				if (child.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+					auto &col_ref = child.Cast<BoundColumnRefExpression>();
 					bindings_to_keep.push_back(col_ref.binding);
 				}
 			});
-			for (auto &expr_binding : bindings_to_keep) {
-				new_table_bindings.insert(expr_binding.table_index);
-			}
-			table_bindings = new_table_bindings;
+		}
+		for (auto &expr : aggr.expressions) {
+			ExpressionIterator::EnumerateExpression(expr, [&](Expression &child) {
+				if (child.GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+					auto &col_ref = child.Cast<BoundColumnRefExpression>();
+					bindings_to_keep.push_back(col_ref.binding);
+				}
+			});
+		}
+		table_bindings = unordered_set<idx_t>();
+		for (auto &expr_binding : bindings_to_keep) {
+			table_bindings.insert(expr_binding.table_index);
 		}
 		break;
 	}
@@ -122,7 +149,7 @@ unique_ptr<LogicalOperator> FilterPushdown::PushdownJoin(unique_ptr<LogicalOpera
 	         op->type == LogicalOperatorType::LOGICAL_ASOF_JOIN || op->type == LogicalOperatorType::LOGICAL_ANY_JOIN ||
 	         op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN);
 	auto &join = op->Cast<LogicalJoin>();
-	if (!join.left_projection_map.empty() || !join.right_projection_map.empty()) {
+	if (join.HasProjectionMap()) {
 		// cannot push down further otherwise the projection maps won't be preserved
 		return FinishPushdown(std::move(op));
 	}

@@ -1,0 +1,9 @@
+# name: test/optimizer/column_lifetime_analyzer/summary_column_lifetime.test
+# description: Test column lifetime analyzer with SUMMARY (internal issue #4138)
+# group: [column_lifetime_analyzer]
+
+statement ok
+create table data as select * from range(0,4000) tbl(col);
+
+statement ok
+SELECT * FROM summary((SELECT col FROM data ORDER BY col));

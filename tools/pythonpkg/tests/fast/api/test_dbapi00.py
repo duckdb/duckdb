@@ -90,11 +90,18 @@ class TestSimpleDBAPI(object):
     def test_pandas_selection(self, duckdb_cursor, pandas, integers, timestamps):
         import datetime
 
+        from packaging.version import Version
+
+        # I don't know when this exactly changed, but 2.0.3 does not support this, recent versions do
+        if Version(pandas.__version__) <= Version('2.0.3'):
+            pytest.skip("The resulting dtype is 'object' when given a Series with dtype Int32DType")
+
         duckdb_cursor.execute('SELECT * FROM integers')
         result = duckdb_cursor.fetchdf()
-        arr = numpy.ma.masked_array(numpy.arange(11))
-        arr.mask = [False] * 10 + [True]
-        arr = {'i': arr}
+        array = numpy.ma.masked_array(numpy.arange(11))
+        array.mask = [False] * 10 + [True]
+        arr = {'i': pandas.Series(array.data, dtype=pandas.Int32Dtype)}
+        arr['i'][array.mask] = pandas.NA
         arr = pandas.DataFrame(arr)
         pandas.testing.assert_frame_equal(result, arr)
 

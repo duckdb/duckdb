@@ -17,7 +17,7 @@ namespace duckdb {
 struct FileHandle;
 
 //! The standard row group size
-#define STANDARD_ROW_GROUPS_SIZE 122880
+#define DEFAULT_ROW_GROUP_SIZE 122880ULL
 //! The definition of an invalid block
 #define INVALID_BLOCK (-1)
 //! The maximum block id is 2^62
@@ -38,10 +38,8 @@ struct Storage {
 	//! The size of the headers. This should be small and written more or less atomically by the hard disk. We default
 	//! to the page size, which is 4KB. (1 << 12)
 	constexpr static idx_t FILE_HEADER_SIZE = 4096U;
-	//! The number of rows per row group (must be a multiple of the vector size)
-	constexpr static const idx_t ROW_GROUP_SIZE = STANDARD_ROW_GROUPS_SIZE;
-	//! The number of vectors per row group
-	constexpr static const idx_t ROW_GROUP_VECTOR_COUNT = ROW_GROUP_SIZE / STANDARD_VECTOR_SIZE;
+	//! The maximum row group size
+	constexpr static const idx_t MAX_ROW_GROUP_SIZE = 1ULL << 30ULL;
 
 	//! The minimum block allocation size. This is the minimum size we test in our nightly tests.
 	constexpr static idx_t MIN_BLOCK_ALLOC_SIZE = 16384ULL;
@@ -56,10 +54,13 @@ struct Storage {
 	static void VerifyBlockAllocSize(const idx_t block_alloc_size);
 };
 
-//! The version number of the database storage format
+//! The version number default, lower and upper bounds of the database storage format
 extern const uint64_t VERSION_NUMBER;
+extern const uint64_t VERSION_NUMBER_LOWER;
+extern const uint64_t VERSION_NUMBER_UPPER;
 string GetDuckDBVersion(idx_t version_number);
 optional_idx GetStorageVersion(const char *version_string);
+string GetStorageVersionName(idx_t serialization_version);
 optional_idx GetSerializationVersion(const char *version_string);
 vector<string> GetSerializationCandidates();
 
@@ -111,17 +112,19 @@ struct DatabaseHeader {
 	idx_t block_alloc_size;
 	//! The vector size of the database file
 	idx_t vector_size;
+	//! The serialization compatibility version
+	idx_t serialization_compatibility;
 
 	void Write(WriteStream &ser);
-	static DatabaseHeader Read(ReadStream &source);
+	static DatabaseHeader Read(const MainHeader &header, ReadStream &source);
 };
 
 //! Detect mismatching constant values when compiling
 
-#if (STANDARD_ROW_GROUPS_SIZE % STANDARD_VECTOR_SIZE != 0)
+#if (DEFAULT_ROW_GROUP_SIZE % STANDARD_VECTOR_SIZE != 0)
 #error The row group size must be a multiple of the vector size
 #endif
-#if (STANDARD_ROW_GROUPS_SIZE < STANDARD_VECTOR_SIZE)
+#if (DEFAULT_ROW_GROUP_SIZE < STANDARD_VECTOR_SIZE)
 #error Row groups must be able to hold at least one vector
 #endif
 #if (DEFAULT_BLOCK_ALLOC_SIZE & (DEFAULT_BLOCK_ALLOC_SIZE - 1) != 0)

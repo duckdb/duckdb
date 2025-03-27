@@ -303,6 +303,28 @@ ORDER BY id
 ----
 40000 values hashing to c302c8b0f3c10c1e5cc7211c4af7a8d6
 
+# Independent INGORE/RESPECT NULLS with shared input.
+query III
+SELECT 
+	v, 
+	lead(v) OVER (ORDER BY id), 
+	lead(v IGNORE NULLS) OVER (ORDER BY id) 
+FROM (VALUES 
+	(1, 1), 
+	(2, NULL), 
+	(3, 2), 
+	(4, NULL), 
+	(5, 3), 
+	(6, NULL)
+) tbl(id, v);
+----
+1	NULL	2
+NULL	2	2
+2	NULL	3
+NULL	3	3
+3	NULL	NULL
+NULL	NULL	NULL
+
 #
 # Unsupported
 #

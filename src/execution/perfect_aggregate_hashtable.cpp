@@ -130,7 +130,12 @@ void PerfectAggregateHashTable::AddChunk(DataChunk &groups, DataChunk &payload) 
 	// compute the actual pointer to the data by adding it to the base HT pointer and multiplying by the tuple size
 	for (idx_t i = 0; i < groups.size(); i++) {
 		const auto group = address_data[i];
-		D_ASSERT(group < total_groups);
+		if (group >= total_groups) {
+			throw InvalidInputException("Perfect hash aggregate: aggregate group %llu exceeded total groups %llu. This "
+			                            "likely means that the statistics in your data source are corrupt.\n* PRAGMA "
+			                            "disable_optimizer to disable optimizations that rely on correct statistics",
+			                            group, total_groups);
+		}
 		group_is_set[group] = true;
 		address_data[i] = uintptr_t(data) + group * tuple_size;
 	}

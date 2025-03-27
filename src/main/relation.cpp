@@ -136,11 +136,11 @@ shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other, const str
 shared_ptr<Relation> Relation::Join(const shared_ptr<Relation> &other,
                                     vector<unique_ptr<ParsedExpression>> expression_list, JoinType type,
                                     JoinRefType ref_type) {
-	if (expression_list.size() > 1 || expression_list[0]->type == ExpressionType::COLUMN_REF) {
+	if (expression_list.size() > 1 || expression_list[0]->GetExpressionType() == ExpressionType::COLUMN_REF) {
 		// multiple columns or single column ref: the condition is a USING list
 		vector<string> using_columns;
 		for (auto &expr : expression_list) {
-			if (expr->type != ExpressionType::COLUMN_REF) {
+			if (expr->GetExpressionType() != ExpressionType::COLUMN_REF) {
 				throw ParserException("Expected a single expression as join condition");
 			}
 			auto &colref = expr->Cast<ColumnRefExpression>();
@@ -212,7 +212,7 @@ shared_ptr<Relation> Relation::Aggregate(vector<unique_ptr<ParsedExpression>> ex
 }
 
 string Relation::GetAlias() {
-	return "relation";
+	return alias;
 }
 
 unique_ptr<TableRef> Relation::GetTableRef() {
@@ -263,16 +263,25 @@ void Relation::Insert(const vector<vector<Value>> &values) {
 	rel->Insert(GetAlias());
 }
 
-shared_ptr<Relation> Relation::CreateRel(const string &schema_name, const string &table_name, bool temporary) {
-	return make_shared_ptr<CreateTableRelation>(shared_from_this(), schema_name, table_name, temporary);
+void Relation::Insert(vector<vector<unique_ptr<ParsedExpression>>> &&expressions) {
+	vector<string> column_names;
+	auto rel = make_shared_ptr<ValueRelation>(context->GetContext(), std::move(expressions), std::move(column_names),
+	                                          "values");
+	rel->Insert(GetAlias());
 }
 
-void Relation::Create(const string &table_name, bool temporary) {
-	Create(INVALID_SCHEMA, table_name, temporary);
+shared_ptr<Relation> Relation::CreateRel(const string &schema_name, const string &table_name, bool temporary,
+                                         OnCreateConflict on_conflict) {
+	return make_shared_ptr<CreateTableRelation>(shared_from_this(), schema_name, table_name, temporary, on_conflict);
 }
 
-void Relation::Create(const string &schema_name, const string &table_name, bool temporary) {
-	auto create = CreateRel(schema_name, table_name, temporary);
+void Relation::Create(const string &table_name, bool temporary, OnCreateConflict on_conflict) {
+	Create(INVALID_SCHEMA, table_name, temporary, on_conflict);
+}
+
+void Relation::Create(const string &schema_name, const string &table_name, bool temporary,
+                      OnCreateConflict on_conflict) {
+	auto create = CreateRel(schema_name, table_name, temporary, on_conflict);
 	auto res = create->Execute();
 	if (res->HasError()) {
 		const string prepended_message = "Failed to create table '" + table_name + "': ";
@@ -342,6 +351,14 @@ void Relation::TryBindRelation(vector<ColumnDefinition> &columns) {
 }
 
 void Relation::Update(const string &update, const string &condition) {
+	throw InvalidInputException("UPDATE can only be used on base tables!");
+}
+
+void Relation::Update(vector<string>, // NOLINT: unused variable / copied on every invocation ...
+                      vector<unique_ptr<ParsedExpression>> &&update, // NOLINT: unused variable
+                      unique_ptr<ParsedExpression> condition) {      // NOLINT: unused variable
+	(void)std::move(update);
+	(void)std::move(condition);
 	throw InvalidInputException("UPDATE can only be used on base tables!");
 }
 

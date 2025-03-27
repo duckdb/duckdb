@@ -196,10 +196,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		auto &state = *reinterpret_cast<STATE *>(l_state);
 		auto gstate = reinterpret_cast<const STATE *>(g_state);
 
-		D_ASSERT(partition.inputs);
-		const auto &inputs = *partition.inputs;
-		D_ASSERT(inputs.ColumnCount() == 1);
-		auto &data = state.GetOrCreateWindowCursor(inputs, partition.all_valid);
+		auto &data = state.GetOrCreateWindowCursor(partition);
 		const auto &fmask = partition.filter_mask;
 
 		auto rdata = FlatVector::GetData<RESULT_TYPE>(result);
@@ -221,7 +218,7 @@ struct MedianAbsoluteDeviationOperation : QuantileOperation {
 		const auto &quantile = bind_data.quantiles[0];
 		auto &window_state = state.GetOrCreateWindowState();
 		MEDIAN_TYPE med;
-		if (gstate && gstate->HasTrees()) {
+		if (gstate && gstate->HasTree()) {
 			med = gstate->GetWindowState().template WindowScalar<MEDIAN_TYPE, false>(data, frames, n, result, quantile);
 		} else {
 			window_state.UpdateSkip(data, frames, included);
@@ -268,7 +265,8 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
                                                                    const LogicalType &target_type) {
 	using STATE = QuantileState<INPUT_TYPE, QuantileStandardType>;
 	using OP = MedianAbsoluteDeviationOperation<MEDIAN_TYPE>;
-	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP>(input_type, target_type);
+	auto fun = AggregateFunction::UnaryAggregateDestructor<STATE, INPUT_TYPE, TARGET_TYPE, OP,
+	                                                       AggregateDestructorType::LEGACY>(input_type, target_type);
 	fun.bind = BindMAD;
 	fun.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 #ifndef DUCKDB_SMALLER_BINARY
@@ -278,7 +276,7 @@ AggregateFunction GetTypedMedianAbsoluteDeviationAggregateFunction(const Logical
 	return fun;
 }
 
-AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType &type) {
+AggregateFunction GetMedianAbsoluteDeviationAggregateFunctionInternal(const LogicalType &type) {
 	switch (type.id()) {
 	case LogicalTypeId::FLOAT:
 		return GetTypedMedianAbsoluteDeviationAggregateFunction<float, float, float>(type, type);
@@ -314,6 +312,12 @@ AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType 
 	default:
 		throw NotImplementedException("Unimplemented Median Absolute Deviation aggregate");
 	}
+}
+
+AggregateFunction GetMedianAbsoluteDeviationAggregateFunction(const LogicalType &type) {
+	auto result = GetMedianAbsoluteDeviationAggregateFunctionInternal(type);
+	result.errors = FunctionErrors::CAN_THROW_RUNTIME_ERROR;
+	return result;
 }
 
 unique_ptr<FunctionData> BindMedianAbsoluteDeviationDecimal(ClientContext &context, AggregateFunction &function,

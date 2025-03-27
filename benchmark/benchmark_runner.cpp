@@ -57,6 +57,8 @@ void BenchmarkRunner::InitializeBenchmarkDirectory() {
 
 atomic<bool> is_active;
 atomic<bool> timeout;
+atomic<bool> summarize;
+std::vector<std::string> summary;
 
 void sleep_thread(Benchmark *benchmark, BenchmarkRunner *runner, BenchmarkState *state, bool hotrun,
                   const optional_idx &optional_timeout) {
@@ -116,11 +118,27 @@ void BenchmarkRunner::LogOutput(string message) {
 	}
 }
 
+void BenchmarkRunner::LogSummary(string benchmark, string message, size_t i) {
+	string log_result_line = StringUtil::Format("%s\t%d\t", benchmark, i) + "\tINCORRECT\n";
+	string failure_message = benchmark + "\nname\trun\ttiming\n" + log_result_line + message;
+	summary.push_back(failure_message);
+}
+
 void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 	Profiler profiler;
 	auto display_name = benchmark->DisplayName();
 
-	auto state = benchmark->Initialize(configuration);
+	duckdb::unique_ptr<BenchmarkState> state;
+	try {
+		state = benchmark->Initialize(configuration);
+		benchmark->Assert(state.get());
+	} catch (std::exception &ex) {
+		Log(StringUtil::Format("%s\t1\t", benchmark->name));
+		LogResult("ERROR");
+		duckdb::ErrorData error_data(ex);
+		LogLine(error_data.Message());
+		return;
+	}
 	auto nruns = benchmark->NRuns();
 	for (size_t i = 0; i < nruns + 1; i++) {
 		bool hotrun = i > 0;
@@ -135,16 +153,25 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 		std::thread interrupt_thread(sleep_thread, benchmark, this, state.get(), hotrun,
 		                             benchmark->Timeout(configuration));
 
-		profiler.Start();
-		benchmark->Run(state.get());
-		profiler.End();
+		string error;
+		try {
+			profiler.Start();
+			benchmark->Run(state.get());
+			profiler.End();
+		} catch (std::exception &ex) {
+			duckdb::ErrorData error_data(ex);
+			error = error_data.Message();
+		}
 
 		is_active = false;
 		interrupt_thread.join();
 		if (hotrun) {
 			LogOutput(benchmark->GetLogOutput(state.get()));
-			if (timeout) {
-				// write timeout
+			if (!error.empty()) {
+				LogResult("ERROR");
+				LogLine(error);
+				break;
+			} else if (timeout) {
 				LogResult("TIMEOUT");
 				break;
 			} else {
@@ -154,6 +181,7 @@ void BenchmarkRunner::RunBenchmark(Benchmark *benchmark) {
 					LogResult("INCORRECT");
 					LogLine("INCORRECT RESULT: " + verify);
 					LogOutput("INCORRECT RESULT: " + verify);
+					LogSummary(benchmark->name, "INCORRECT RESULT: " + verify, i);
 					break;
 				} else {
 					LogResult(std::to_string(profiler.Elapsed()));
@@ -232,6 +260,8 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 	auto &instance = BenchmarkRunner::GetInstance();
 	auto &benchmarks = instance.benchmarks;
 	for (int arg_index = 1; arg_index < arg_counter; ++arg_index) {
+		// make it summarize failures by default
+		summarize = true;
 		string arg = arg_values[arg_index];
 		if (arg == "--list") {
 			// list names of all benchmarks
@@ -272,6 +302,8 @@ void parse_arguments(const int arg_counter, char const *const *arg_values) {
 				fprintf(stderr, "Could not open file %s for writing\n", splits[1].c_str());
 				exit(1);
 			}
+		} else if (arg == "--no-summary") {
+			summarize = false;
 		} else {
 			if (!instance.configuration.name_pattern.empty()) {
 				fprintf(stderr, "Only one benchmark can be specified.\n");
@@ -366,6 +398,17 @@ int main(int argc, char **argv) {
 	LoadInterpretedBenchmarks(*fs);
 	parse_arguments(argc, argv);
 	const auto configuration_error = run_benchmarks();
+
+	if (!summary.empty() && summarize) {
+		std::cout << "\n====================================================" << std::endl;
+		std::cout << "================  FAILURES SUMMARY  ================" << std::endl;
+		std::cout << "====================================================\n" << std::endl;
+		for (size_t i = 0; i < summary.size(); i++) {
+			std::cout << i + 1 << ": " << summary[i] << std::endl;
+			std::cout << "----------------------------------------------------" << std::endl;
+		}
+	}
+
 	if (configuration_error != ConfigurationError::None) {
 		print_error_message(configuration_error);
 		exit(1);

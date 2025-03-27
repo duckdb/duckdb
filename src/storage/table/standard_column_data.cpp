@@ -7,6 +7,7 @@
 #include "duckdb/storage/table/column_checkpoint_state.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
+#include "duckdb/storage/table/column_data_checkpointer.hpp"
 
 namespace duckdb {
 
@@ -57,8 +58,10 @@ void StandardColumnData::InitializeScanWithOffset(ColumnScanState &state, idx_t 
 idx_t StandardColumnData::Scan(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
                                idx_t target_count) {
 	D_ASSERT(state.row_index == state.child_states[0].row_index);
-	auto scan_count = ColumnData::Scan(transaction, vector_index, state, result, target_count);
-	validity.Scan(transaction, vector_index, state.child_states[0], result, target_count);
+	auto scan_type = GetVectorScanType(state, target_count, result);
+	auto mode = ScanVectorMode::REGULAR_SCAN;
+	auto scan_count = ScanVector(transaction, vector_index, state, result, target_count, scan_type, mode);
+	validity.ScanVector(transaction, vector_index, state.child_states[0], result, target_count, scan_type, mode);
 	return scan_count;
 }
 
@@ -70,10 +73,52 @@ idx_t StandardColumnData::ScanCommitted(idx_t vector_index, ColumnScanState &sta
 	return scan_count;
 }
 
-idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count) {
-	auto scan_count = ColumnData::ScanCount(state, result, count);
-	validity.ScanCount(state.child_states[0], result, count);
+idx_t StandardColumnData::ScanCount(ColumnScanState &state, Vector &result, idx_t count, idx_t result_offset) {
+	auto scan_count = ColumnData::ScanCount(state, result, count, result_offset);
+	validity.ScanCount(state.child_states[0], result, count, result_offset);
 	return scan_count;
+}
+
+void StandardColumnData::Filter(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                                SelectionVector &sel, idx_t &count, const TableFilter &filter,
+                                TableFilterState &filter_state) {
+	// check if we can do a specialized select
+	// the compression functions need to support this
+	auto compression = GetCompressionFunction();
+	bool has_filter = compression && compression->filter;
+	auto validity_compression = validity.GetCompressionFunction();
+	bool validity_has_filter = validity_compression && validity_compression->filter;
+	auto target_count = GetVectorCount(vector_index);
+	auto scan_type = GetVectorScanType(state, target_count, result);
+	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
+	bool verify_fetch_row = state.scan_options && state.scan_options->force_fetch_row;
+	if (!has_filter || !validity_has_filter || !scan_entire_vector || verify_fetch_row) {
+		// we are not scanning an entire vector - this can have several causes (updates, etc)
+		ColumnData::Filter(transaction, vector_index, state, result, sel, count, filter, filter_state);
+		return;
+	}
+	FilterVector(state, result, target_count, sel, count, filter, filter_state);
+	validity.FilterVector(state.child_states[0], result, target_count, sel, count, filter, filter_state);
+}
+
+void StandardColumnData::Select(TransactionData transaction, idx_t vector_index, ColumnScanState &state, Vector &result,
+                                SelectionVector &sel, idx_t sel_count) {
+	// check if we can do a specialized select
+	// the compression functions need to support this
+	auto compression = GetCompressionFunction();
+	bool has_select = compression && compression->select;
+	auto validity_compression = validity.GetCompressionFunction();
+	bool validity_has_select = validity_compression && validity_compression->select;
+	auto target_count = GetVectorCount(vector_index);
+	auto scan_type = GetVectorScanType(state, target_count, result);
+	bool scan_entire_vector = scan_type == ScanVectorType::SCAN_ENTIRE_VECTOR;
+	if (!has_select || !validity_has_select || !scan_entire_vector) {
+		// we are not scanning an entire vector - this can have several causes (updates, etc)
+		ColumnData::Select(transaction, vector_index, state, result, sel, sel_count);
+		return;
+	}
+	SelectVector(state, result, target_count, sel, sel_count);
+	validity.SelectVector(state.child_states[0], result, target_count, sel, sel_count);
 }
 
 void StandardColumnData::InitializeAppend(ColumnAppendState &state) {
@@ -188,10 +233,29 @@ unique_ptr<ColumnCheckpointState> StandardColumnData::Checkpoint(RowGroup &row_g
 	// to prevent reading the validity data immediately after it is checkpointed we first checkpoint the main column
 	// this is necessary for concurrent checkpointing as due to the partial block manager checkpointed data might be
 	// flushed to disk by a different thread than the one that wrote it, causing a data race
-	auto base_state = ColumnData::Checkpoint(row_group, checkpoint_info);
-	auto validity_state = validity.Checkpoint(row_group, checkpoint_info);
+	auto base_state = CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	base_state->global_stats = BaseStatistics::CreateEmpty(type).ToUnique();
+	auto validity_state_p = validity.CreateCheckpointState(row_group, checkpoint_info.info.manager);
+	validity_state_p->global_stats = BaseStatistics::CreateEmpty(validity.type).ToUnique();
+
+	auto &validity_state = *validity_state_p;
 	auto &checkpoint_state = base_state->Cast<StandardColumnCheckpointState>();
-	checkpoint_state.validity_state = std::move(validity_state);
+	checkpoint_state.validity_state = std::move(validity_state_p);
+
+	auto &nodes = data.ReferenceSegments();
+	if (nodes.empty()) {
+		// empty table: flush the empty list
+		return base_state;
+	}
+
+	vector<reference<ColumnCheckpointState>> checkpoint_states;
+	checkpoint_states.emplace_back(checkpoint_state);
+	checkpoint_states.emplace_back(validity_state);
+
+	ColumnDataCheckpointer checkpointer(checkpoint_states, GetDatabase(), row_group, checkpoint_info);
+	checkpointer.Checkpoint();
+	checkpointer.FinalizeCheckpoint();
+
 	return base_state;
 }
 

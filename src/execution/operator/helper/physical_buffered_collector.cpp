@@ -59,7 +59,7 @@ unique_ptr<LocalSinkState> PhysicalBufferedCollector::GetLocalSinkState(Executio
 unique_ptr<QueryResult> PhysicalBufferedCollector::GetResult(GlobalSinkState &state) {
 	auto &gstate = state.Cast<BufferedCollectorGlobalState>();
 	lock_guard<mutex> l(gstate.glock);
-	// FIXME: maybe we want to check if the execution was successfull before creating the StreamQueryResult ?
+	// FIXME: maybe we want to check if the execution was successful before creating the StreamQueryResult ?
 	auto cc = gstate.context.lock();
 	auto result = make_uniq<StreamQueryResult>(statement_type, properties, types, names, cc->GetClientProperties(),
 	                                           gstate.buffered_data);

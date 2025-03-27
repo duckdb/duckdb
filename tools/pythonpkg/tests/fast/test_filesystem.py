@@ -21,18 +21,18 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def intercept(monkeypatch: MonkeyPatch, obj: object, name: str) -> List[str]:
-    error_occured = []
+    error_occurred = []
     orig = getattr(obj, name)
 
     def ceptor(*args, **kwargs):
         try:
             return orig(*args, **kwargs)
         except Exception as e:
-            error_occured.append(e)
+            error_occurred.append(e)
             raise e
 
     monkeypatch.setattr(obj, name, ceptor)
-    return error_occured
+    return error_occurred
 
 
 @fixture()
@@ -111,7 +111,7 @@ class TestPythonFilesystem:
             fh.write(b'hello\n\0world\0')
         duckdb_cursor.register_filesystem(memory)
 
-        duckdb_cursor.execute('select * from read_csv("memory://test.csv", header = 0)')
+        duckdb_cursor.execute('select * from read_csv("memory://test.csv", header = 0, quote = \'"\', escape = \'"\')')
 
         assert duckdb_cursor.fetchall() == [('hello',), ('\0world\0',)]
 

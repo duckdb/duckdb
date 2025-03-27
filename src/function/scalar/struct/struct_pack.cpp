@@ -1,4 +1,5 @@
 #include "duckdb/function/scalar/nested_functions.hpp"
+#include "duckdb/function/scalar/struct_functions.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/parser/expression/bound_expression.hpp"
@@ -42,10 +43,10 @@ static unique_ptr<FunctionData> StructPackBind(ClientContext &context, ScalarFun
 		auto &child = arguments[i];
 		string alias;
 		if (IS_STRUCT_PACK) {
-			if (child->alias.empty()) {
+			if (child->GetAlias().empty()) {
 				throw BinderException("Need named argument for struct pack, e.g. STRUCT_PACK(a := b)");
 			}
-			alias = child->alias;
+			alias = child->GetAlias();
 			if (name_collision_set.find(alias) != name_collision_set.end()) {
 				throw BinderException("Duplicate struct entry name \"%s\"", alias);
 			}
@@ -84,16 +85,8 @@ ScalarFunction StructPackFun::GetFunction() {
 	return GetStructPackFunction<true>();
 }
 
-void StructPackFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunction());
-}
-
 ScalarFunction RowFun::GetFunction() {
 	return GetStructPackFunction<false>();
-}
-
-void RowFun::RegisterFunction(BuiltinFunctions &set) {
-	set.AddFunction(GetFunction());
 }
 
 } // namespace duckdb

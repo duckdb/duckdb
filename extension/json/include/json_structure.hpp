@@ -15,6 +15,7 @@ namespace duckdb {
 struct JSONStructureDescription;
 struct DateFormatMap;
 struct StrpTimeFormat;
+class MutableDateFormatMap;
 
 struct JSONStructureNode {
 public:
@@ -34,18 +35,18 @@ public:
 	bool ContainsVarchar() const;
 	void InitializeCandidateTypes(idx_t max_depth, bool convert_strings_to_integers, idx_t depth = 0);
 	void RefineCandidateTypes(yyjson_val *vals[], idx_t val_count, Vector &string_vector, ArenaAllocator &allocator,
-	                          DateFormatMap &date_format_map);
+	                          MutableDateFormatMap &date_format_map);
 
 private:
 	void RefineCandidateTypesArray(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                               ArenaAllocator &allocator, DateFormatMap &date_format_map);
+	                               ArenaAllocator &allocator, MutableDateFormatMap &date_format_map);
 	void RefineCandidateTypesObject(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                                ArenaAllocator &allocator, DateFormatMap &date_format_map);
+	                                ArenaAllocator &allocator, MutableDateFormatMap &date_format_map);
 	void RefineCandidateTypesString(yyjson_val *vals[], idx_t val_count, Vector &string_vector,
-	                                DateFormatMap &date_format_map);
-	void EliminateCandidateTypes(idx_t vec_count, Vector &string_vector, DateFormatMap &date_format_map);
+	                                MutableDateFormatMap &date_format_map);
+	void EliminateCandidateTypes(idx_t vec_count, Vector &string_vector, MutableDateFormatMap &date_format_map);
 	bool EliminateCandidateFormats(idx_t vec_count, Vector &string_vector, const Vector &result_vector,
-	                               vector<StrpTimeFormat> &formats);
+	                               MutableDateFormatMap &date_format_map);
 
 public:
 	unique_ptr<string> key;
@@ -84,6 +85,7 @@ public:
 struct JSONStructure {
 public:
 	static void ExtractStructure(yyjson_val *val, JSONStructureNode &node, bool ignore_errors);
+	static void MergeNodes(JSONStructureNode &merged, const JSONStructureNode &node);
 	static LogicalType StructureToType(ClientContext &context, const JSONStructureNode &node, idx_t max_depth,
 	                                   double field_appearance_threshold, idx_t map_inference_threshold,
 	                                   idx_t depth = 0, const LogicalType &null_type = LogicalType::JSON());

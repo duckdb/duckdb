@@ -77,9 +77,32 @@
     },
     {
         "name": "hex",
-        "parameters": "value",
-        "description": "Converts the value to hexadecimal representation",
-        "example": "hex(42)",
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"}
+                ],
+                "description": "Converts the string to hexadecimal representation.",
+                "example": "hex('Hello')",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "blob", "type": "BLOB"}
+                ],
+                "description": "Converts `blob` to `VARCHAR` using hexadecimal encoding.",
+                "example": "hex('\\xAA\\xBB'::BLOB)",
+                "categories": ["blob"]
+            },
+            {
+                "parameters": [
+                    {"name": "value", "type": "ANY"}
+                ],
+                "description": "Converts the value to hexadecimal representation.",
+                "example": "hex(42)",
+                "categories": ["numeric"]
+            }
+        ],
         "type": "scalar_function_set",
         "aliases": ["to_hex"]
     },
@@ -100,29 +123,29 @@
     },
     {
         "name": "jaro_similarity",
-        "parameters": "str1,str2",
+        "parameters": "str1,str2,score_cutoff",
         "description": "The Jaro similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
-        "example": "jaro_similarity('duck','duckdb')",
-        "type": "scalar_function"
+        "example": "jaro_similarity('duck', 'duckdb', 0.5)",
+        "type": "scalar_function_set"
     },
     {
         "name": "jaro_winkler_similarity",
-        "parameters": "str1,str2",
+        "parameters": "str1,str2,score_cutoff",
         "description": "The Jaro-Winkler similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
-        "example": "jaro_winkler_similarity('duck','duckdb')",
-        "type": "scalar_function"
+        "example": "jaro_winkler_similarity('duck', 'duckdb', 0.5)",
+        "type": "scalar_function_set"
     },
     {
         "name": "left",
         "parameters": "string,count",
-        "description": "Extract the left-most count characters",
+        "description": "Extracts the left-most count characters",
         "example": "left('Hello\uD83E\uDD86', 2)",
         "type": "scalar_function"
     },
     {
         "name": "left_grapheme",
         "parameters": "string,count",
-        "description": "Extract the left-most count grapheme clusters",
+        "description": "Extracts the left-most count grapheme clusters",
         "example": "left_grapheme('\uD83E\uDD26\uD83C\uDFFC\u200D♂️\uD83E\uDD26\uD83C\uDFFD\u200D♀️', 1)",
         "type": "scalar_function"
     },
@@ -218,7 +241,7 @@
     {
         "name": "right_grapheme",
         "parameters": "string,count",
-        "description": "Extract the right-most count grapheme clusters",
+        "description": "Extracts the right-most count grapheme clusters",
         "example": "right_grapheme('\uD83E\uDD26\uD83C\uDFFC\u200D♂️\uD83E\uDD26\uD83C\uDFFD\u200D♀️', 1)",
         "type": "scalar_function"
     },
@@ -245,25 +268,41 @@
     },
     {
         "name": "trim",
-        "parameters": "string,characters",
-        "description": "Removes any occurrences of any of the characters from either side of the string",
-        "example": "trim('>>>>test<<', '><')",
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"}
+                ],
+                "description": "Removes any spaces from either side of the string.",
+                "example": "trim(' test ')"
+            },
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"},
+                    {"name": "characters", "type": "VARCHAR"}
+                ],
+                "description": "Removes any occurrences of any of the characters from either side of the string",
+                "example": "trim('>>>>test<<', '><')"
+            }
+        ],
         "type": "scalar_function_set"
     },
     {
         "name": "unbin",
         "parameters": "value",
-        "description": "Converts a value from binary representation to a blob",
+        "description": "Converts a value from binary representation to a blob.",
         "example": "unbin('0110')",
         "type": "scalar_function",
+        "categories": ["string", "blob"],
         "aliases": ["from_binary"]
     },
     {
         "name": "unhex",
         "parameters": "value",
-        "description": "Converts a value from hexadecimal representation to a blob",
+        "description": "Converts a value from hexadecimal representation to a blob.",
         "example": "unhex('2A')",
         "type": "scalar_function",
+        "categories": ["string", "blob"],
         "aliases": ["from_hex"]
     },
     {

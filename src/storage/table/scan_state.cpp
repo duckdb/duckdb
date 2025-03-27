@@ -16,14 +16,23 @@ TableScanState::TableScanState() : table_state(*this), local_state(*this) {
 TableScanState::~TableScanState() {
 }
 
-void TableScanState::Initialize(vector<column_t> column_ids_p, optional_ptr<TableFilterSet> table_filters) {
+void TableScanState::Initialize(vector<StorageIndex> column_ids_p, optional_ptr<ClientContext> context,
+                                optional_ptr<TableFilterSet> table_filters,
+                                optional_ptr<SampleOptions> table_sampling) {
 	this->column_ids = std::move(column_ids_p);
 	if (table_filters) {
-		filters.Initialize(*table_filters, column_ids);
+		filters.Initialize(*context, *table_filters, column_ids);
+	}
+	if (table_sampling) {
+		sampling_info.do_system_sample = table_sampling->method == SampleMethod::SYSTEM_SAMPLE;
+		sampling_info.sample_rate = table_sampling->sample_size.GetValue<double>() / 100.0;
+		if (table_sampling->seed.IsValid()) {
+			table_state.random.SetSeed(table_sampling->seed.GetIndex());
+		}
 	}
 }
 
-const vector<column_t> &TableScanState::GetColumnIds() {
+const vector<StorageIndex> &TableScanState::GetColumnIds() {
 	D_ASSERT(!column_ids.empty());
 	return column_ids;
 }
@@ -35,11 +44,18 @@ ScanFilterInfo &TableScanState::GetFilterInfo() {
 	return filters;
 }
 
-ScanFilter::ScanFilter(idx_t index, const vector<column_t> &column_ids, TableFilter &filter)
-    : scan_column_index(index), table_column_index(column_ids[index]), filter(filter), always_true(false) {
+ScanSamplingInfo &TableScanState::GetSamplingInfo() {
+	return sampling_info;
 }
 
-void ScanFilterInfo::Initialize(TableFilterSet &filters, const vector<column_t> &column_ids) {
+ScanFilter::ScanFilter(idx_t index, const vector<StorageIndex> &column_ids, TableFilter &filter)
+    : scan_column_index(index), table_column_index(column_ids[index].GetPrimaryIndex()), filter(filter),
+      always_true(false) {
+	filter_state = TableFilterState::Initialize(filter);
+}
+
+void ScanFilterInfo::Initialize(ClientContext &context, TableFilterSet &filters,
+                                const vector<StorageIndex> &column_ids) {
 	D_ASSERT(!filters.filters.empty());
 	table_filters = &filters;
 	adaptive_filter = make_uniq<AdaptiveFilter>(filters);
@@ -86,6 +102,9 @@ void ScanFilterInfo::CheckAllFilters() {
 
 void ScanFilterInfo::SetFilterAlwaysTrue(idx_t filter_idx) {
 	auto &filter = filter_list[filter_idx];
+	if (filter.always_true) {
+		return;
+	}
 	filter.always_true = true;
 	column_has_filter[filter.scan_column_index] = false;
 	always_true_filters++;
@@ -133,7 +152,7 @@ void ColumnScanState::Next(idx_t count) {
 	}
 }
 
-const vector<storage_t> &CollectionScanState::GetColumnIds() {
+const vector<StorageIndex> &CollectionScanState::GetColumnIds() {
 	return parent.GetColumnIds();
 }
 
@@ -141,6 +160,10 @@ TableFilterSet &GetFilters();
 
 ScanFilterInfo &CollectionScanState::GetFilterInfo() {
 	return parent.GetFilterInfo();
+}
+
+ScanSamplingInfo &CollectionScanState::GetSamplingInfo() {
+	return parent.GetSamplingInfo();
 }
 
 TableScanOptions &CollectionScanState::GetOptions() {
@@ -153,7 +176,7 @@ ParallelCollectionScanState::ParallelCollectionScanState()
 
 CollectionScanState::CollectionScanState(TableScanState &parent_p)
     : row_group(nullptr), vector_index(0), max_row_group_row(0), row_groups(nullptr), max_row(0), batch_index(0),
-      valid_sel(STANDARD_VECTOR_SIZE), parent(parent_p) {
+      valid_sel(STANDARD_VECTOR_SIZE), random(-1), parent(parent_p) {
 }
 
 bool CollectionScanState::Scan(DuckTransaction &transaction, DataChunk &result) {

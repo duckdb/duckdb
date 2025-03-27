@@ -29,4 +29,4 @@ FROM test GROUP BY c0)
 SELECT * FROM cte
 ORDER BY c0
 ----
-299406 values hashing to e9b6d718674413df6f4d2c3c3c5bd853
+299370 values hashing to bbebcd893b08ad0e1c1240e29a1b814d

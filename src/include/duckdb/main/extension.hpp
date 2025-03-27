@@ -24,12 +24,17 @@ public:
 	DUCKDB_API virtual std::string Version() const {
 		return "";
 	}
+	DUCKDB_API static const char *DefaultVersion();
 };
 
 enum class ExtensionABIType : uint8_t {
 	UNKNOWN = 0,
+	//! Uses C++ ABI, version needs to match precisely
 	CPP = 1,
+	//! Uses C ABI using the duckdb_ext_api_v1 struct, version needs to be equal or higher
 	C_STRUCT = 2,
+	//! Uses C ABI using the duckdb_ext_api_v1 struct including "unstable" functions, version needs to match precisely
+	C_STRUCT_UNSTABLE = 3
 };
 
 //! The parsed extension metadata footer
@@ -44,9 +49,11 @@ struct ParsedExtensionMetaData {
 	ExtensionABIType abi_type;
 
 	string platform;
-	// (only for ExtensionABIType::CPP) the DuckDB version this extension is compiled for
+	// (For ExtensionABIType::CPP or ExtensionABIType::C_STRUCT_UNSTABLE) the DuckDB version this extension is compiled
+	// for
 	string duckdb_version;
-	// (only for ExtensionABIType::C_STRUCT) the CAPI version of the C_STRUCT
+	// (only for ExtensionABIType::C_STRUCT) the CAPI version of the C_STRUCT (Currently interpreted as the minimum
+	// DuckDB version)
 	string duckdb_capi_version;
 	string extension_version;
 	string signature;

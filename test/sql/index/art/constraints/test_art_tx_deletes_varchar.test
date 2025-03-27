@@ -1,0 +1,79 @@
+# name: test/sql/index/art/constraints/test_art_tx_deletes_varchar.test
+# description: Test DELETE + INSERT with different connections and VARCHAR payload.
+# group: [constraints]
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+SET immediate_transaction_mode = true;
+
+statement ok
+CREATE TABLE tbl (id INT PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO tbl VALUES (1, 'first payload');
+
+# Keep one connection open to ensure we still have the old value in the ART.
+
+statement ok old
+BEGIN;
+
+statement ok old
+INSERT INTO tbl VALUES (5, 'old payload');
+
+# con1 open.
+
+statement ok con1
+BEGIN;
+
+statement ok con1
+DELETE FROM tbl;
+
+statement ok con1
+INSERT INTO tbl VALUES (1, 'con1 payload');
+
+# Ensure that we can still see the old value.
+
+query III
+SELECT id, payload, rowid FROM tbl WHERE id = 1;
+----
+1	first payload	0
+
+# Try to delete again.
+
+statement ok
+BEGIN;
+
+statement error
+DELETE FROM tbl;
+----
+<REGEX>:TransactionContext Error.*Conflict on tuple deletion.*
+
+statement ok
+ROLLBACK;
+
+statement ok con1
+COMMIT;
+
+query III
+SELECT id, payload, rowid FROM tbl WHERE id = 1;
+----
+1	con1 payload	1
+
+# Ensure that the old transaction can still see the old storage.
+
+query III old
+SELECT id, payload, rowid FROM tbl WHERE id = 1;
+----
+1	first payload	0
+
+statement ok old
+COMMIT;
+
+query III
+SELECT id, payload, rowid FROM tbl ORDER BY ALL;
+----
+1	con1 payload	1
+5	old payload	2
+

@@ -14,7 +14,10 @@ statement ok
 USE attach_index_db
 
 statement ok
-CREATE TABLE tbl_a (a_id INTEGER PRIMARY KEY, value VARCHAR NOT NULL)
+CREATE TABLE tbl_a (
+	a_id INTEGER PRIMARY KEY,
+	value VARCHAR NOT NULL
+)
 
 statement ok
 CREATE INDEX idx_tbl_a ON tbl_a (value)

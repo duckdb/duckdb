@@ -61,6 +61,22 @@ SELECT * EXCLUDE (s1.t.c) FROM db1.s1.t, (SELECT 42) t
 ----
 42
 
+# rename
+query I
+SELECT * EXCLUDE (new_col) FROM (SELECT * RENAME (db1.s1.t.c AS new_col) FROM db1.s1.t, db2.s1.t)
+----
+84
+
+query I
+SELECT * EXCLUDE (new_col) FROM (SELECT * RENAME (DB1.S1.T.C AS new_col) FROM db1.s1.t, db2.s1.t)
+----
+84
+
+query I
+SELECT * EXCLUDE (new_col) FROM (SELECT * RENAME (s1.t.c AS new_col) FROM db1.s1.t, (SELECT 42) t)
+----
+42
+
 # struct pack
 query II
 SELECT db1.s1.t, db2.s1.t FROM db1.s1.t, db2.s1.t
