@@ -12,110 +12,11 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
+#include "duckdb/common/multi_file_reader_data.hpp"
+#include "duckdb/common/multi_file_reader.hpp"
 #include <numeric>
 
 namespace duckdb {
-
-enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, SKIPPED, CLOSED };
-
-struct MultiFileLocalState : public LocalTableFunctionState {
-public:
-	explicit MultiFileLocalState(ClientContext &context) : executor(context) {
-	}
-
-public:
-	shared_ptr<BaseFileReader> reader;
-	bool is_parallel;
-	idx_t batch_index;
-	idx_t file_index = DConstants::INVALID_INDEX;
-	unique_ptr<LocalTableFunctionState> local_state;
-	//! The chunk written to by the reader, handed to FinalizeChunk to transform to the global schema
-	DataChunk scan_chunk;
-	//! The executor to transform scan_chunk into the final result with FinalizeChunk
-	ExpressionExecutor executor;
-};
-
-struct MultiFileFileReaderData {
-	// Create data for an unopened file
-	explicit MultiFileFileReaderData(const string &file_to_be_opened)
-	    : reader(nullptr), file_state(MultiFileFileState::UNOPENED), file_mutex(make_uniq<mutex>()),
-	      file_to_be_opened(file_to_be_opened) {
-	}
-	// Create data for an existing reader
-	explicit MultiFileFileReaderData(shared_ptr<BaseFileReader> reader_p)
-	    : reader(std::move(reader_p)), file_state(MultiFileFileState::OPEN), file_mutex(make_uniq<mutex>()) {
-	}
-	// Create data for an existing reader
-	explicit MultiFileFileReaderData(shared_ptr<BaseUnionData> union_data_p) : file_mutex(make_uniq<mutex>()) {
-		if (union_data_p->reader) {
-			reader = std::move(union_data_p->reader);
-			file_state = MultiFileFileState::OPEN;
-		} else {
-			union_data = std::move(union_data_p);
-			file_state = MultiFileFileState::UNOPENED;
-		}
-	}
-
-	//! Currently opened reader for the file
-	shared_ptr<BaseFileReader> reader;
-	//! The file reader after we have started all scans to the file
-	weak_ptr<BaseFileReader> closed_reader;
-	//! Flag to indicate the file is being opened
-	MultiFileFileState file_state;
-	//! Mutexes to wait for the file when it is being opened
-	unique_ptr<mutex> file_mutex;
-	//! Options for opening the file
-	shared_ptr<BaseUnionData> union_data;
-
-	//! (only set when file_state is UNOPENED) the file to be opened
-	string file_to_be_opened;
-};
-
-struct MultiFileGlobalState : public GlobalTableFunctionState {
-	explicit MultiFileGlobalState(MultiFileList &file_list_p) : file_list(file_list_p) {
-	}
-	explicit MultiFileGlobalState(unique_ptr<MultiFileList> owned_file_list_p)
-	    : file_list(*owned_file_list_p), owned_file_list(std::move(owned_file_list_p)) {
-	}
-
-	//! The file list to scan
-	MultiFileList &file_list;
-	//! The scan over the file_list
-	MultiFileListScanData file_list_scan;
-	//! Owned multi file list - if filters have been dynamically pushed into the reader
-	unique_ptr<MultiFileList> owned_file_list;
-	//! Reader state
-	unique_ptr<MultiFileReaderGlobalState> multi_file_reader_state;
-	//! Lock
-	mutable mutex lock;
-	//! Signal to other threads that a file failed to open, letting every thread abort.
-	bool error_opening_file = false;
-
-	//! Index of file currently up for scanning
-	atomic<idx_t> file_index;
-	//! Index of the lowest file we know we have completely read
-	mutable idx_t completed_file_index = 0;
-	//! The current set of readers
-	vector<unique_ptr<MultiFileFileReaderData>> readers;
-
-	idx_t batch_index = 0;
-
-	idx_t max_threads = 1;
-	vector<idx_t> projection_ids;
-	vector<LogicalType> scanned_types;
-	vector<ColumnIndex> column_indexes;
-	optional_ptr<TableFilterSet> filters;
-
-	unique_ptr<GlobalTableFunctionState> global_state;
-
-	idx_t MaxThreads() const override {
-		return max_threads;
-	}
-
-	bool CanRemoveColumns() const {
-		return !projection_ids.empty();
-	}
-};
 
 template <class OP>
 class MultiFileReaderFunction : public TableFunction {
@@ -289,7 +190,7 @@ public:
 		// 2. The 'schema' parquet option
 		auto &global_columns = bind_data.reader_bind.schema.empty() ? bind_data.columns : bind_data.reader_bind.schema;
 		bool need_to_read_file = bind_data.multi_file_reader->InitializeReader(
-		    reader, bind_data.file_options, bind_data.reader_bind, bind_data.virtual_columns, global_columns,
+		    reader_data, bind_data.file_options, bind_data.reader_bind, bind_data.virtual_columns, global_columns,
 		    global_column_ids, table_filters, bind_data.file_list->GetFirstFile(), context, reader_state);
 		return need_to_read_file;
 	}
