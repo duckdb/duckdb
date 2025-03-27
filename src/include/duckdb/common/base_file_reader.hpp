@@ -371,8 +371,6 @@ struct MultiFileReaderData {
 	MultiFileColumnMapping column_mapping;
 	//! Whether or not there are no columns to read. This can happen when a file only consists of constants
 	bool empty_columns = false;
-	//! The set of table filters (adjusted to local indexes)
-	unique_ptr<TableFilterSet> filters;
 	//! The constants that should be applied at the various positions
 	MultiFileConstantMap constant_map;
 	//! Map of (local) column_id -> cast, used when reading multiple files when files have diverging types
@@ -413,6 +411,8 @@ public:
 	MultiFileReaderData reader_data;
 	//! Table column names - set when using COPY tbl FROM file.parquet
 	vector<string> table_columns;
+	//! The set of table filters (adjusted to local indexes)
+	unique_ptr<TableFilterSet> filters;
 
 public:
 	const vector<MultiFileReaderColumnDefinition> &GetColumns() const {

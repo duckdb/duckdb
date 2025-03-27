@@ -181,7 +181,7 @@ public:
 	                                      const vector<MultiFileReaderColumnDefinition> &local_columns,
 	                                      const vector<MultiFileReaderColumnDefinition> &global_columns,
 	                                      const vector<ColumnIndex> &global_column_ids,
-	                                      optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
+	                                      optional_ptr<TableFilterSet> filters, BaseFileReader &reader,
 	                                      const string &initial_file, const MultiFileReaderBindData &bind_data,
 	                                      const virtual_column_map_t &virtual_columns,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
@@ -263,7 +263,7 @@ public:
 		FinalizeBind(options, bind_data, reader.GetFileName(), reader.GetColumns(), global_columns, global_column_ids,
 		             reader.reader_data, context, global_state);
 		return CreateMapping(reader.GetFileName(), reader.GetColumns(), global_columns, global_column_ids,
-		                     table_filters, reader.reader_data, initial_file, bind_data, virtual_columns, global_state);
+		                     table_filters, reader, initial_file, bind_data, virtual_columns, global_state);
 	}
 
 	template <class BIND_DATA>

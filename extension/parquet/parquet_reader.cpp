@@ -868,13 +868,13 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 	auto column_id = reader_data.column_ids[col_idx];
 	auto &column_reader = state.root_reader->Cast<StructColumnReader>().GetChildReader(column_id);
 
-	if (reader_data.filters) {
+	if (filters) {
 		auto stats = column_reader.Stats(state.group_idx_list[state.current_group], group.columns);
 		// filters contain output chunk index, not file col idx!
 		auto global_index = reader_data.column_mapping[col_idx];
-		auto filter_entry = reader_data.filters->filters.find(global_index);
+		auto filter_entry = filters->filters.find(global_index);
 
-		if (stats && filter_entry != reader_data.filters->filters.end()) {
+		if (stats && filter_entry != filters->filters.end()) {
 			auto &filter = *filter_entry->second;
 
 			FilterPropagateResult prune_result;
@@ -973,9 +973,9 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 	}
 	state.adaptive_filter.reset();
 	state.scan_filters.clear();
-	if (reader_data.filters) {
-		state.adaptive_filter = make_uniq<AdaptiveFilter>(*reader_data.filters);
-		for (auto &entry : reader_data.filters->filters) {
+	if (filters) {
+		state.adaptive_filter = make_uniq<AdaptiveFilter>(*filters);
+		for (auto &entry : filters->filters) {
 			state.scan_filters.emplace_back(context, entry.first, *entry.second);
 		}
 	}
@@ -1039,8 +1039,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				    file_name);
 			}
 
-			if (!reader_data.filters &&
-			    scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
+			if (!filters && scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {
 				// Prefetch the whole row group
 				if (!state.current_group_prefetched) {
 					auto total_compressed_size = GetGroupCompressedSize(state);
@@ -1052,7 +1051,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 			} else {
 				// lazy fetching is when all tuples in a column can be skipped. With lazy fetching the buffer is only
 				// fetched on the first read to that buffer.
-				bool lazy_fetch = reader_data.filters != nullptr;
+				bool lazy_fetch = filters != nullptr;
 
 				// Prefetch column-wise
 				for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
@@ -1061,10 +1060,10 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 					auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
 					bool has_filter = false;
-					if (reader_data.filters) {
+					if (filters) {
 						auto global_idx = reader_data.column_mapping[col_idx];
-						auto entry = reader_data.filters->filters.find(global_idx.GetIndex());
-						has_filter = entry != reader_data.filters->filters.end();
+						auto entry = filters->filters.find(global_idx.GetIndex());
+						has_filter = entry != filters->filters.end();
 					}
 					root_reader.GetChildReader(file_col_idx).RegisterPrefetch(trans, !(lazy_fetch && !has_filter));
 				}
@@ -1095,12 +1094,12 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 	auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
-	if (reader_data.filters) {
+	if (filters) {
 		idx_t filter_count = result.size();
 		vector<bool> need_to_read(reader_data.column_ids.size(), true);
 
 		state.sel.Initialize(nullptr);
-		D_ASSERT(state.scan_filters.size() == reader_data.filters->filters.size());
+		D_ASSERT(state.scan_filters.size() == filters->filters.size());
 
 		// first load the columns that are used in filters
 		auto filter_state = state.adaptive_filter->BeginFilter();

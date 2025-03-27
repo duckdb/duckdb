@@ -751,18 +751,18 @@ bool MultiFileReader::CreateMapping(const string &file_name,
                                     const vector<MultiFileReaderColumnDefinition> &local_columns,
                                     const vector<MultiFileReaderColumnDefinition> &global_columns,
                                     const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
-                                    MultiFileReaderData &reader_data, const string &initial_file,
+                                    BaseFileReader &reader, const string &initial_file,
                                     const MultiFileReaderBindData &bind_data,
                                     const virtual_column_map_t &virtual_columns,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// copy global columns and inject any different defaults
-	CreateColumnMapping(file_name, local_columns, global_columns, global_column_ids, reader_data, bind_data,
+	CreateColumnMapping(file_name, local_columns, global_columns, global_column_ids, reader.reader_data, bind_data,
 	                    virtual_columns, initial_file, global_state);
 
 	unordered_map<idx_t, MultiFileIndexMapping> global_to_local;
-	for (idx_t i = 0; i < reader_data.column_mapping.size(); i++) {
+	for (idx_t i = 0; i < reader.reader_data.column_mapping.size(); i++) {
 		auto local_idx = MultiFileLocalIndex(i);
-		auto global_idx = reader_data.column_mapping[local_idx];
+		auto global_idx = reader.reader_data.column_mapping[local_idx];
 		global_to_local.emplace(global_idx.GetIndex(), i);
 
 		// auto &local_column_id = reader_data.column_indexes[local_idx];
@@ -777,12 +777,12 @@ bool MultiFileReader::CreateMapping(const string &file_name,
 	//! Evaluate the filters against the column(s) that are constant for this file (not present in the local schema)
 	//! If any of these fail, the file can be skipped entirely
 	auto evaluation_result = EvaluateConstantFilters(filters, file_name, global_columns, global_column_ids,
-	                                                 virtual_columns, reader_data, global_to_local);
+	                                                 virtual_columns, reader.reader_data, global_to_local);
 	if (evaluation_result.can_skip_file) {
 		return false;
 	}
 
-	reader_data.filters = CreateFilters(evaluation_result.remaining_filters, global_to_local);
+	reader.filters = CreateFilters(evaluation_result.remaining_filters, global_to_local);
 	return true;
 }
 
