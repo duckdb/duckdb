@@ -1,6 +1,6 @@
 # name: test/sql/copy/parquet/multi_file/multi_file_filter.test
 # description: Test multi file filters
-# group: [parquet]
+# group: [multi_file]
 
 require parquet
 

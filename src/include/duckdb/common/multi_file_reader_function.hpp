@@ -230,13 +230,16 @@ public:
 				try {
 					if (current_reader_data.union_data) {
 						auto &union_data = *current_reader_data.union_data;
-						current_reader_data.reader = OP::CreateReader(context, *global_state.global_state, union_data, bind_data);
+						current_reader_data.reader =
+						    OP::CreateReader(context, *global_state.global_state, union_data, bind_data);
 					} else {
-						current_reader_data.reader = OP::CreateReader(context, *global_state.global_state,
-						                          current_reader_data.file_to_be_opened, current_file_index, bind_data);
+						current_reader_data.reader =
+						    OP::CreateReader(context, *global_state.global_state, current_reader_data.file_to_be_opened,
+						                     current_file_index, bind_data);
 					}
-					if (!InitializeReader(current_reader_data, bind_data, global_state.column_indexes, global_state.filters,
-					                      context, current_file_index, global_state.multi_file_reader_state)) {
+					if (!InitializeReader(current_reader_data, bind_data, global_state.column_indexes,
+					                      global_state.filters, context, current_file_index,
+					                      global_state.multi_file_reader_state)) {
 						//! File can be skipped entirely, close it and move on
 						can_skip_file = true;
 					} else {
@@ -288,8 +291,8 @@ public:
 		}
 	}
 
-	static void InitializeFileScanState(ClientContext &context, MultiFileFileReaderData &reader_data, MultiFileLocalState &lstate,
-	                                    vector<idx_t> &projection_ids) {
+	static void InitializeFileScanState(ClientContext &context, MultiFileFileReaderData &reader_data,
+	                                    MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
 		lstate.reader = reader_data.reader;
 		lstate.reader_data = reader_data;
 		// FIXME: this should eventually be removed
@@ -459,8 +462,8 @@ public:
 				if (file_name != reader_data->reader->file_name) {
 					throw InternalException("Mismatch in filename order and reader order in multi file scan");
 				}
-				if (!InitializeReader(*reader_data, bind_data, input.column_indexes, input.filters, context,
-				                      file_idx, result->multi_file_reader_state)) {
+				if (!InitializeReader(*reader_data, bind_data, input.column_indexes, input.filters, context, file_idx,
+				                      result->multi_file_reader_state)) {
 					//! File can be skipped entirely, close it and move on
 					reader_data->file_state = MultiFileFileState::SKIPPED;
 					result->file_index++;

@@ -262,12 +262,11 @@ void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderB
 	}
 }
 
-void MultiFileReader::FinalizeBind(
-	MultiFileFileReaderData &reader_data,
-	const MultiFileReaderOptions &file_options, const MultiFileReaderBindData &options,
+void MultiFileReader::FinalizeBind(MultiFileFileReaderData &reader_data, const MultiFileReaderOptions &file_options,
+                                   const MultiFileReaderBindData &options,
                                    const vector<MultiFileReaderColumnDefinition> &global_columns,
-                                   const vector<ColumnIndex> &global_column_ids,
-                                   ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
+                                   const vector<ColumnIndex> &global_column_ids, ClientContext &context,
+                                   optional_ptr<MultiFileReaderGlobalState> global_state) {
 
 	// create a map of name -> column index
 	auto &local_columns = reader_data.reader->GetColumns();
@@ -439,12 +438,13 @@ void MultiFileReader::CreateColumnMappingByName(MultiFileFileReaderData &reader_
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
 }
 
-void MultiFileReader::CreateColumnMappingByFieldId(
-    MultiFileFileReaderData &reader_data,
-    const vector<MultiFileReaderColumnDefinition> &global_columns, const vector<ColumnIndex> &global_column_ids,
-    const MultiFileReaderBindData &bind_data,
-    const virtual_column_map_t &virtual_columns, const string &initial_file,
-    optional_ptr<MultiFileReaderGlobalState> global_state) {
+void MultiFileReader::CreateColumnMappingByFieldId(MultiFileFileReaderData &reader_data,
+                                                   const vector<MultiFileReaderColumnDefinition> &global_columns,
+                                                   const vector<ColumnIndex> &global_column_ids,
+                                                   const MultiFileReaderBindData &bind_data,
+                                                   const virtual_column_map_t &virtual_columns,
+                                                   const string &initial_file,
+                                                   optional_ptr<MultiFileReaderGlobalState> global_state) {
 #ifdef DEBUG
 	//! Make sure the global columns have field_ids to match on
 	for (auto &column : global_columns) {
@@ -567,13 +567,13 @@ void MultiFileReader::CreateColumnMapping(MultiFileFileReaderData &reader_data,
                                           optional_ptr<MultiFileReaderGlobalState> global_state) {
 	switch (bind_data.mapping) {
 	case MultiFileReaderColumnMappingMode::BY_NAME: {
-		CreateColumnMappingByName(reader_data, global_columns, global_column_ids, bind_data,
-		                          virtual_columns, initial_file, global_state);
+		CreateColumnMappingByName(reader_data, global_columns, global_column_ids, bind_data, virtual_columns,
+		                          initial_file, global_state);
 		break;
 	}
 	case MultiFileReaderColumnMappingMode::BY_FIELD_ID: {
-		CreateColumnMappingByFieldId(reader_data, global_columns, global_column_ids,
-		                             bind_data, virtual_columns, initial_file, global_state);
+		CreateColumnMappingByFieldId(reader_data, global_columns, global_column_ids, bind_data, virtual_columns,
+		                             initial_file, global_state);
 		break;
 	}
 	default: {
@@ -671,6 +671,7 @@ static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &cons
 			//! No filter present
 			return true;
 		}
+		lock_guard<mutex> lock(dynamic_filter.filter_data->lock);
 		return EvaluateFilterAgainstConstant(*dynamic_filter.filter_data->filter, constant);
 	}
 	default:
@@ -690,7 +691,8 @@ struct EvaluationResult {
 
 } // namespace
 
-static EvaluationResult EvaluateConstantFilters(MultiFileFileReaderData &reader_data, optional_ptr<TableFilterSet> filters,
+static EvaluationResult EvaluateConstantFilters(MultiFileFileReaderData &reader_data,
+                                                optional_ptr<TableFilterSet> filters,
                                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
                                                 const vector<ColumnIndex> &global_column_ids,
                                                 const virtual_column_map_t &virtual_columns,
@@ -752,13 +754,12 @@ static EvaluationResult EvaluateConstantFilters(MultiFileFileReaderData &reader_
 bool MultiFileReader::CreateMapping(MultiFileFileReaderData &reader_data,
                                     const vector<MultiFileReaderColumnDefinition> &global_columns,
                                     const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
-                                    const string &initial_file,
-                                    const MultiFileReaderBindData &bind_data,
+                                    const string &initial_file, const MultiFileReaderBindData &bind_data,
                                     const virtual_column_map_t &virtual_columns,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
 	// copy global columns and inject any different defaults
-	CreateColumnMapping(reader_data, global_columns, global_column_ids, bind_data,
-	                    virtual_columns, initial_file, global_state);
+	CreateColumnMapping(reader_data, global_columns, global_column_ids, bind_data, virtual_columns, initial_file,
+	                    global_state);
 
 	// FIXME: this should be removed eventually
 	auto &old_reader_data = reader_data.reader->reader_data;

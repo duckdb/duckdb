@@ -91,21 +91,19 @@ public:
 
 	//! Finalize the bind phase of the multi-file reader after we know (1) the required (output) columns, and (2) the
 	//! pushed down table filters
-	DUCKDB_API virtual void FinalizeBind(
-	MultiFileFileReaderData &reader_data, const MultiFileReaderOptions &file_options,
+	DUCKDB_API virtual void FinalizeBind(MultiFileFileReaderData &reader_data,
+	                                     const MultiFileReaderOptions &file_options,
 	                                     const MultiFileReaderBindData &options,
 	                                     const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                     const vector<ColumnIndex> &global_column_ids,
-	                                     ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state);
+	                                     const vector<ColumnIndex> &global_column_ids, ClientContext &context,
+	                                     optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Create all required mappings from the global types/names to the file-local types/names
-	DUCKDB_API virtual bool CreateMapping(MultiFileFileReaderData &reader_data,
-	                                      const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                      const vector<ColumnIndex> &global_column_ids,
-	                                      optional_ptr<TableFilterSet> filters,
-	                                      const string &initial_file, const MultiFileReaderBindData &bind_data,
-	                                      const virtual_column_map_t &virtual_columns,
-	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
+	DUCKDB_API virtual bool
+	CreateMapping(MultiFileFileReaderData &reader_data, const vector<MultiFileReaderColumnDefinition> &global_columns,
+	              const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
+	              const string &initial_file, const MultiFileReaderBindData &bind_data,
+	              const virtual_column_map_t &virtual_columns, optional_ptr<MultiFileReaderGlobalState> global_state);
 	//! Create filters adjusted for the local schema
 	DUCKDB_API virtual unique_ptr<TableFilterSet>
 	CreateFilters(map<idx_t, reference<TableFilter>> &filters,
@@ -180,10 +178,9 @@ public:
 	                      const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> table_filters,
 	                      const string &initial_file, ClientContext &context,
 	                      optional_ptr<MultiFileReaderGlobalState> global_state) {
-		FinalizeBind(reader_data, options, bind_data, global_columns, global_column_ids,
-		             context, global_state);
-		return CreateMapping(reader_data, global_columns, global_column_ids,
-		                     table_filters, initial_file, bind_data, virtual_columns, global_state);
+		FinalizeBind(reader_data, options, bind_data, global_columns, global_column_ids, context, global_state);
+		return CreateMapping(reader_data, global_columns, global_column_ids, table_filters, initial_file, bind_data,
+		                     virtual_columns, global_state);
 	}
 
 	template <class BIND_DATA>
@@ -234,12 +231,12 @@ protected:
 	                                 const MultiFileReaderBindData &bind_data,
 	                                 const virtual_column_map_t &virtual_columns, const string &initial_file,
 	                                 optional_ptr<MultiFileReaderGlobalState> global_state);
-	virtual void
-	CreateColumnMappingByFieldId(MultiFileFileReaderData &reader_data,
-	                             const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                             const vector<ColumnIndex> &global_column_ids,
-	                             const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns,
-	                             const string &initial_file, optional_ptr<MultiFileReaderGlobalState> global_state);
+	virtual void CreateColumnMappingByFieldId(MultiFileFileReaderData &reader_data,
+	                                          const vector<MultiFileReaderColumnDefinition> &global_columns,
+	                                          const vector<ColumnIndex> &global_column_ids,
+	                                          const MultiFileReaderBindData &bind_data,
+	                                          const virtual_column_map_t &virtual_columns, const string &initial_file,
+	                                          optional_ptr<MultiFileReaderGlobalState> global_state);
 	virtual void CreateColumnMappingByName(MultiFileFileReaderData &reader_data,
 	                                       const vector<MultiFileReaderColumnDefinition> &global_columns,
 	                                       const vector<ColumnIndex> &global_column_ids,
