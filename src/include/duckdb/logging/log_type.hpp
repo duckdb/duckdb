@@ -11,6 +11,7 @@
 #include "duckdb/logging/logging.hpp"
 
 namespace duckdb {
+struct FileHandle;
 
 //! Log types provide some structure to the formats that the different log messages can have
 //! For now, this holds a type that the VARCHAR value will be auto-cast into.
