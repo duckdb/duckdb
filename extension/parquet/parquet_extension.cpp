@@ -2,7 +2,6 @@
 
 #include "parquet_extension.hpp"
 
-#include "reader/cast_column_reader.hpp"
 #include "duckdb.hpp"
 #include "duckdb/parser/expression/positional_reference_expression.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"

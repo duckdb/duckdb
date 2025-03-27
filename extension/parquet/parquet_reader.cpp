@@ -2,7 +2,6 @@
 
 #include "reader/boolean_column_reader.hpp"
 #include "reader/callback_column_reader.hpp"
-#include "reader/cast_column_reader.hpp"
 #include "column_reader.hpp"
 #include "duckdb.hpp"
 #include "reader/expression_column_reader.hpp"
@@ -416,19 +415,15 @@ ParquetColumnSchema::ParquetColumnSchema(string name_p, LogicalType type_p, idx_
       max_repeat(max_repeat), schema_index(schema_index), column_index(column_index) {
 }
 
-ParquetColumnSchema::ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type,
+ParquetColumnSchema::ParquetColumnSchema(ParquetColumnSchema parent, LogicalType result_type,
                                          ParquetColumnSchemaType schema_type)
-    : schema_type(schema_type), name(parent.name), type(std::move(cast_type)), max_define(parent.max_define),
+    : schema_type(schema_type), name(parent.name), type(std::move(result_type)), max_define(parent.max_define),
       max_repeat(parent.max_repeat), schema_index(parent.schema_index), column_index(parent.column_index) {
 	children.push_back(std::move(parent));
 }
 
 unique_ptr<BaseStatistics> ParquetColumnSchema::Stats(ParquetReader &reader, idx_t row_group_idx_p,
                                                       const vector<ColumnChunk> &columns) const {
-	if (schema_type == ParquetColumnSchemaType::CAST) {
-		auto stats = children[0].Stats(reader, row_group_idx_p, columns);
-		return StatisticsPropagator::TryPropagateCast(*stats, children[0].type, type);
-	}
 	if (schema_type == ParquetColumnSchemaType::EXPRESSION) {
 		return nullptr;
 	}
@@ -884,17 +879,17 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			// TODO we might not have stats but STILL a bloom filter so move this up
 			// check the bloom filter if present
 			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
-			bool is_cast = column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::CAST;
-			if (column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::EXPRESSION) {
+			bool is_expression = column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::EXPRESSION;
+			if (is_expression) {
 				// no pruning possible for expressions
 				prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			} else if (!column_reader.Type().IsNested() && !is_generated_column && !is_cast &&
+			} else if (!column_reader.Type().IsNested() && !is_generated_column &&
 			           ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
 			           ParquetStatisticsUtils::BloomFilterExcludes(filter,
 			                                                       group.columns[column_reader.ColumnIndex()].meta_data,
 			                                                       *state.thrift_file_proto, allocator)) {
 				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column && !is_cast &&
+			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column &&
 			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
 			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value) {
 
