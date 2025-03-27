@@ -306,12 +306,12 @@ public:
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
 			auto local_idx = MultiFileLocalIndex(i);
 			auto local_id = local_column_ids[local_idx];
-			auto cast_entry = old_reader_data.cast_map.find(local_id);
-			if (cast_entry == old_reader_data.cast_map.end()) {
+			auto cast_entry = old_reader_data.expression_map.find(local_id);
+			if (cast_entry == old_reader_data.expression_map.end()) {
 				auto &col = local_columns[local_id];
 				intermediate_chunk_types.push_back(col.type);
 			} else {
-				intermediate_chunk_types.push_back(cast_entry->second);
+				intermediate_chunk_types.push_back(cast_entry->second->return_type);
 			}
 		}
 		lstate.scan_chunk.Destroy();
@@ -540,7 +540,7 @@ public:
 			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, scan_chunk);
 			output.SetCardinality(scan_chunk.size());
 			if (scan_chunk.size() > 0) {
-				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, data.reader->reader_data,
+				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, *data.reader, *data.reader_data,
 				                                           scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
 				return;

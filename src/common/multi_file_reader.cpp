@@ -884,6 +884,18 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 	}
 }
 
+void SetIndexToZero(Expression &expr) {
+	if (expr.type == ExpressionType::BOUND_REF) {
+		auto &ref = expr.Cast<BoundReferenceExpression>();
+		ref.index = 0;
+		return;
+	}
+
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
+		SetIndexToZero(child);
+	});
+}
+
 unique_ptr<TableFilterSet> CreateFilters(ClientContext &context, MultiFileFileReaderData &reader_data,
                                          const vector<MultiFileReaderColumnDefinition> &global_columns,
                                          map<idx_t, reference<TableFilter>> &filters, ResultColumnMapping &mapping) {
@@ -928,8 +940,10 @@ unique_ptr<TableFilterSet> CreateFilters(ClientContext &context, MultiFileFileRe
 			// failed to cast - copy the global filter and evaluate the conversion expression in the reader
 			result->filters.emplace(local_id, global_filter.Copy());
 
-			// add the entry to the cast map
-			old_reader_data.cast_map[filter_idx] = global_type;
+			// add the expression to the expression map - we are now evaluating this inside the reader directly
+			// we need to set the index of the references inside the expression to 0
+			SetIndexToZero(*reader_data.expressions[local_id]);
+			old_reader_data.expression_map[filter_idx] = std::move(reader_data.expressions[local_id]);
 
 			// reset the expression - since we are evaluating it in the reader we can just reference it
 			reader_data.expressions[local_id] = make_uniq<BoundReferenceExpression>(global_type, local_id);
@@ -966,12 +980,20 @@ ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, Mult
 }
 
 void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
-                                    const MultiFileReaderData &reader_data, DataChunk &input_chunk,
+                                    BaseFileReader &reader, const MultiFileFileReaderData &reader_data, DataChunk &input_chunk,
                                     DataChunk &output_chunk, ExpressionExecutor &executor,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
-	executor.Execute(input_chunk, output_chunk);
+	executor.SetChunk(input_chunk);
+	for (idx_t i = 0; i < executor.expressions.size(); i++) {
+		try {
+			executor.ExecuteExpression(i, output_chunk.data[i]);
+		} catch(std::exception &ex) {
+			ErrorData error(ex);
+			auto &columns = reader.GetColumns();
+			error.Throw(StringUtil::Format("Error while reading from file \"%s\": ", reader.GetFileName()));
+		}
+	}
 	output_chunk.SetCardinality(input_chunk.size());
-	output_chunk.Verify();
 }
 
 void MultiFileReader::GetPartitionData(ClientContext &context, const MultiFileReaderBindData &bind_data,

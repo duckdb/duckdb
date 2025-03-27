@@ -283,8 +283,8 @@ struct MultiFileReaderData {
 	MultiFileLocalColumnIds<MultiFileLocalColumnId> column_ids;
 	//! The column indexes to read from the file
 	vector<ColumnIndex> column_indexes;
-	//! Casts to perform prior to executing filters (only used for filters)
-	unordered_map<column_t, LogicalType> cast_map;
+	//! Expression to execute for a given column (BEFORE executing the filter)
+	unordered_map<column_t, unique_ptr<Expression>> expression_map;
 	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
 	optional_idx file_list_idx;
 };

@@ -112,7 +112,7 @@ public:
 
 	//! Finalize the reading of a chunk - applying any constants that are required
 	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
-	                                      const MultiFileReaderData &reader_data, DataChunk &input_chunk,
+	                                      BaseFileReader &reader, const MultiFileFileReaderData &reader_data, DataChunk &input_chunk,
 	                                      DataChunk &output_chunk, ExpressionExecutor &executor,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
 
