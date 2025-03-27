@@ -71,10 +71,13 @@ public:
 public:
 	DUCKDB_API void StartOperator(optional_ptr<const PhysicalOperator> phys_op);
 	DUCKDB_API void EndOperator(optional_ptr<DataChunk> chunk);
+	DUCKDB_API void FinishSource(GlobalSourceState &gstate, LocalSourceState &lstate);
 
 	//! Adds the timings in the OperatorProfiler (tree) to the QueryProfiler (tree).
 	DUCKDB_API void Flush(const PhysicalOperator &phys_op);
 	DUCKDB_API OperatorInformation &GetOperatorInfo(const PhysicalOperator &phys_op);
+	DUCKDB_API bool OperatorInfoIsInitialized(const PhysicalOperator &phys_op);
+	DUCKDB_API void AddExtraInfo(InsertionOrderPreservingMap<string> extra_info);
 
 public:
 	ClientContext &context;
@@ -164,6 +167,13 @@ public:
 	//! Return the root of the query tree
 	optional_ptr<ProfilingNode> GetRoot() {
 		return root.get();
+	}
+
+	//! Provides access to the root of the query tree, but ensures there are no concurrent modifications
+	//! This can be useful when implementing continuous profiling or making customizations
+	DUCKDB_API void GetRootUnderLock(const std::function<void(optional_ptr<ProfilingNode>)> &callback) {
+		lock_guard<std::mutex> guard(lock);
+		callback(GetRoot());
 	}
 
 private:

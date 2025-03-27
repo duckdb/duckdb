@@ -2,7 +2,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_casting.hpp"
 
 namespace duckdb {
-bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) {
+bool CSVSniffer::TryCastVector(Vector &parse_chunk_col, idx_t size, const LogicalType &sql_type) const {
 	auto &sniffing_state_machine = best_candidate->GetStateMachine();
 	// try vector-cast from string to sql_type
 	Vector dummy_result(sql_type, size);

@@ -15,12 +15,14 @@
 #include "duckdb/common/types/string_type.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
 #include "duckdb/execution/operator/csv_scanner/header_value.hpp"
+#include "duckdb/execution/operator/csv_scanner/set_columns.hpp"
 
 namespace duckdb {
 class InternalAppender;
 class CSVFileScan;
 class CSVRejectsTable;
 struct ReadCSVData;
+struct MultiFileBindData;
 
 //! Object that holds information on how many lines each csv batch read.
 class LinesPerBoundary {
@@ -66,7 +68,8 @@ public:
 	                             string &csv_row, idx_t row_byte_position, optional_idx byte_position,
 	                             const string &current_path);
 	//! Produces an error message for a dialect sniffing error.
-	static CSVError SniffingError(const CSVReaderOptions &options, const string &search_space);
+	static CSVError SniffingError(const CSVReaderOptions &options, const string &search_space, idx_t max_columns_found,
+	                              SetColumns &set_columns);
 	//! Produces an error message for a header sniffing error.
 	static CSVError HeaderSniffingError(const CSVReaderOptions &options, const vector<HeaderValue> &best_header_row,
 	                                    idx_t column_count, const string &delimiter);
@@ -120,6 +123,8 @@ public:
 	void Error(const CSVError &csv_error, bool force_error = false);
 	//! If we have a cached error, and we can now error, we error.
 	void ErrorIfNeeded();
+	//! Throw an error if there are any
+	void ErrorIfAny();
 	//! Throws an error if a given type exists
 	void ErrorIfTypeExists(CSVErrorType error_type);
 	//! Inserts a finished error info
@@ -137,7 +142,7 @@ public:
 	idx_t GetSize();
 
 	void FillRejectsTable(InternalAppender &errors_appender, idx_t file_idx, idx_t scan_idx, const CSVFileScan &file,
-	                      CSVRejectsTable &rejects, const ReadCSVData &bind_data, idx_t limit);
+	                      CSVRejectsTable &rejects, const MultiFileBindData &bind_data, idx_t limit);
 
 private:
 	//! Private methods should always be locked by parent method.

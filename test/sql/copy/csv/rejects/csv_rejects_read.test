@@ -181,9 +181,8 @@ ON L.num = R.num;
 query IIIIIIIIIII
 SELECT * EXCLUDE (scan_id, file_id) FROM reject_scans ORDER BY ALL;
 ----
-data/csv/error/mismatch/small1.csv	,	\0	\0	\n	0	1	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
-data/csv/error/mismatch/small2.csv	,	\0	\0	\n	0	1	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
-
+data/csv/error/mismatch/small1.csv	,	(empty)	(empty)	\n	0	1	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
+data/csv/error/mismatch/small2.csv	,	(empty)	(empty)	\n	0	1	{'num': 'INTEGER','str': 'VARCHAR'}	NULL	NULL	store_rejects=true
 
 query IIIIIIII
 SELECT * EXCLUDE (scan_id, file_id) FROM reject_errors ORDER BY ALL;

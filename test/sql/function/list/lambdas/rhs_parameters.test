@@ -73,11 +73,11 @@ SELECT list_transform(v, x -> [list_transform([':-)'], y -> x || y || '-#lambdaL
 || list_filter(list_transform(['B-)'], k -> [k] || [x]), j -> list_contains(j, 'a') or list_contains(j, 'duck')))
 FROM lists
 ----
-[[[a:-)-#lambdaLove], [B-), a]], [[b:-)-#lambdaLove]], [[c:-)-#lambdaLove]]]
+[[['a:-)-#lambdaLove'], ['B-)', a]], [['b:-)-#lambdaLove']], [['c:-)-#lambdaLove']]]
 NULL
-[[[duck:-)-#lambdaLove], [B-), duck]], [[db:-)-#lambdaLove]], [[tests:-)-#lambdaLove]]]
+[[['duck:-)-#lambdaLove'], ['B-)', duck]], [['db:-)-#lambdaLove']], [['tests:-)-#lambdaLove']]]
 NULL
-[[[lambdas!:-)-#lambdaLove]]]
+[[['lambdas!:-)-#lambdaLove']]]
 
 statement ok
 create table no_overwrite as select [range, range + 1] l from range(3);

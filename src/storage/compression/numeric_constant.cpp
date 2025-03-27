@@ -150,7 +150,7 @@ void FiltersNullValues(const TableFilter &filter, bool &filters_nulls, bool &fil
 }
 
 void ConstantFilterValidity(ColumnSegment &segment, ColumnScanState &state, idx_t vector_count, Vector &result,
-                            SelectionVector &sel, idx_t &sel_count, const TableFilter &filter) {
+                            SelectionVector &sel, idx_t &sel_count, const TableFilter &filter, TableFilterState &) {
 	// check what effect the filter has on NULL values
 	bool filters_nulls, filters_valid_values;
 	FiltersNullValues(filter, filters_nulls, filters_valid_values);

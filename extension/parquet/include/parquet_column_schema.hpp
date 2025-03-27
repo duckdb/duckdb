@@ -23,7 +23,8 @@ enum class ParquetExtraTypeInfo {
 	UNIT_MICROS,
 	DECIMAL_BYTE_ARRAY,
 	DECIMAL_INT32,
-	DECIMAL_INT64
+	DECIMAL_INT64,
+	FLOAT16
 };
 
 struct ParquetColumnSchema {
@@ -50,7 +51,7 @@ struct ParquetColumnSchema {
 	vector<ParquetColumnSchema> children;
 
 	unique_ptr<BaseStatistics> Stats(ParquetReader &reader, idx_t row_group_idx_p,
-	                                 const vector<ColumnChunk> &columns) const;
+	                                 const vector<duckdb_parquet::ColumnChunk> &columns) const;
 };
 
 } // namespace duckdb

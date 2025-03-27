@@ -13,7 +13,7 @@ CSVBoundary::CSVBoundary(idx_t buffer_idx_p, idx_t buffer_pos_p, idx_t boundary_
 CSVBoundary::CSVBoundary() : buffer_idx(0), buffer_pos(0), boundary_idx(0), end_pos(NumericLimits<idx_t>::Maximum()) {
 }
 
-CSVIterator::CSVIterator() : is_set(false) {
+CSVIterator::CSVIterator() : buffer_size(0), is_set(false) {
 }
 
 void CSVBoundary::Print() const {

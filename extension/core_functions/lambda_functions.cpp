@@ -223,23 +223,13 @@ void ExecuteExpression(const idx_t elem_cnt, const LambdaFunctions::ColumnInfo &
 // ListLambdaBindData
 //===--------------------------------------------------------------------===//
 
-unique_ptr<FunctionData> ListLambdaBindData::Copy() const {
-	auto lambda_expr_copy = lambda_expr ? lambda_expr->Copy() : nullptr;
-	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr_copy), has_index);
-}
-
-bool ListLambdaBindData::Equals(const FunctionData &other_p) const {
-	auto &other = other_p.Cast<ListLambdaBindData>();
-	return Expression::Equals(lambda_expr, other.lambda_expr) && return_type == other.return_type &&
-	       has_index == other.has_index;
-}
-
 void ListLambdaBindData::Serialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data_p,
                                    const ScalarFunction &) {
 	auto &bind_data = bind_data_p->Cast<ListLambdaBindData>();
 	serializer.WriteProperty(100, "return_type", bind_data.return_type);
 	serializer.WritePropertyWithDefault(101, "lambda_expr", bind_data.lambda_expr, unique_ptr<Expression>());
 	serializer.WriteProperty(102, "has_index", bind_data.has_index);
+	serializer.WriteProperty(103, "has_initial", bind_data.has_initial);
 }
 
 unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deserializer, ScalarFunction &) {
@@ -247,7 +237,8 @@ unique_ptr<FunctionData> ListLambdaBindData::Deserialize(Deserializer &deseriali
 	auto lambda_expr = deserializer.ReadPropertyWithExplicitDefault<unique_ptr<Expression>>(101, "lambda_expr",
 	                                                                                        unique_ptr<Expression>());
 	auto has_index = deserializer.ReadProperty<bool>(102, "has_index");
-	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr), has_index);
+	auto has_initial = deserializer.ReadProperty<bool>(103, "has_initial");
+	return make_uniq<ListLambdaBindData>(return_type, std::move(lambda_expr), has_index, has_initial);
 }
 
 //===--------------------------------------------------------------------===//

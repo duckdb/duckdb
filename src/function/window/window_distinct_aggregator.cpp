@@ -142,7 +142,7 @@ WindowDistinctAggregatorGlobalState::WindowDistinctAggregatorGlobalState(ClientC
 	RowLayout payload_layout;
 	payload_layout.Initialize(payload_types);
 
-	global_sort = make_uniq<GlobalSortState>(BufferManager::GetBufferManager(context), orders, payload_layout);
+	global_sort = make_uniq<GlobalSortState>(context, orders, payload_layout);
 
 	memory_per_thread = PhysicalOperator::GetMaxThreadMemory(context);
 
@@ -189,6 +189,10 @@ optional_ptr<LocalSortState> WindowDistinctAggregatorGlobalState::InitializeLoca
 class WindowDistinctAggregatorLocalState : public WindowAggregatorLocalState {
 public:
 	explicit WindowDistinctAggregatorLocalState(const WindowDistinctAggregatorGlobalState &aggregator);
+
+	~WindowDistinctAggregatorLocalState() override {
+		statef.Destroy();
+	}
 
 	void Sink(DataChunk &sink_chunk, DataChunk &coll_chunk, idx_t input_idx, optional_ptr<SelectionVector> filter_sel,
 	          idx_t filtered);
@@ -740,6 +744,8 @@ void WindowDistinctAggregatorLocalState::Evaluate(const WindowDistinctAggregator
 
 	//	Finalise the result aggregates and write to the result
 	statef.Finalize(result);
+
+	//	Destruct any non-POD state
 	statef.Destroy();
 }
 

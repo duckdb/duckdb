@@ -122,6 +122,14 @@ void LogicalOperatorVisitor::EnumerateExpressions(LogicalOperator &op,
 		}
 		break;
 	}
+	case LogicalOperatorType::LOGICAL_RECURSIVE_CTE: {
+		auto &rec = op.Cast<LogicalRecursiveCTE>();
+
+		for (auto &target : rec.key_targets) {
+			callback(&target);
+		}
+		break;
+	}
 	case LogicalOperatorType::LOGICAL_INSERT: {
 		auto &insert = op.Cast<LogicalInsert>();
 		if (insert.on_conflict_condition) {

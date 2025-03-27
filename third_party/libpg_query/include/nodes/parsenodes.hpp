@@ -319,7 +319,6 @@ typedef struct PGAStar {
 	PGList *replace_list; /* optional: REPLACE list */
 	PGList *rename_list;  /* optional: RENAME list */
 	bool columns;         /* whether or not this is a columns list */
-	bool unpacked;        /* whether or not the columns list is unpacked */
 	int location;
 } PGAStar;
 
@@ -1096,6 +1095,7 @@ typedef struct PGCommonTableExpr {
 	int location;     /* token location, or -1 if unknown */
 	/* These fields are set during parse analysis: */
 	bool cterecursive;        /* is this CTE actually recursive? */
+	PGList *recursive_keys;
 	int cterefcount;          /* number of RTEs referencing this CTE
 								 * (excluding internal self-references) */
 	PGList *ctecolnames;      /* list of output column names */
@@ -1487,7 +1487,9 @@ typedef enum PGAlterTableType {
 	PG_AT_DetachPartition,           /* DETACH PARTITION */
 	PG_AT_AddIdentity,               /* ADD IDENTITY */
 	PG_AT_SetIdentity,               /* SET identity column options */
-	AT_DropIdentity                  /* DROP IDENTITY */
+	AT_DropIdentity,                 /* DROP IDENTITY */
+	PG_AT_SetPartitionedBy,          /* SET PARTITIONED BY */
+	PG_AT_SetSortedBy                /* SET SORTED BY */
 } PGAlterTableType;
 
 typedef struct PGAlterTableCmd /* one subcommand of an ALTER TABLE */
@@ -1496,8 +1498,8 @@ typedef struct PGAlterTableCmd /* one subcommand of an ALTER TABLE */
 	PGAlterTableType subtype; /* Type of table alteration to apply */
 	char *name;               /* column, constraint, or trigger to act on,
 								 * or tablespace */
-	PGNode *def;              /* definition of new column, index,
-								 * constraint, or parent table */
+	PGNode *def;              /* definition of new column, index, * constraint, or parent table */
+	PGList *def_list;         /* e.g. expression list for partitioned by */
 	PGDropBehavior behavior;  /* RESTRICT or CASCADE for DROP cases */
 	bool missing_ok;          /* skip error if missing? */
 } PGAlterTableCmd;

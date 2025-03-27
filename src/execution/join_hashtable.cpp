@@ -29,9 +29,9 @@ JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
 	ht.data_collection->InitializeChunkState(chunk_state, ht.equality_predicate_columns);
 }
 
-JoinHashTable::JoinHashTable(ClientContext &context, const vector<JoinCondition> &conditions_p,
+JoinHashTable::JoinHashTable(ClientContext &context_p, const vector<JoinCondition> &conditions_p,
                              vector<LogicalType> btypes, JoinType type_p, const vector<idx_t> &output_columns_p)
-    : buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
+    : context(context_p), buffer_manager(BufferManager::GetBufferManager(context)), conditions(conditions_p),
       build_types(std::move(btypes)), output_columns(output_columns_p), entry_size(0), tuple_size(0),
       vfound(Value::BOOLEAN(false)), join_type(type_p), finalized(false), has_null(false),
       radix_bits(INITIAL_RADIX_BITS) {
@@ -677,7 +677,7 @@ void JoinHashTable::InsertHashes(Vector &hashes_v, const idx_t count, TupleDataC
 	}
 }
 
-void JoinHashTable::InitializePointerTable() {
+void JoinHashTable::AllocatePointerTable() {
 	capacity = PointerTableCapacity(Count());
 	D_ASSERT(IsPowerOfTwo(capacity));
 
@@ -699,10 +699,12 @@ void JoinHashTable::InitializePointerTable() {
 	}
 	D_ASSERT(hash_map.GetSize() == capacity * sizeof(ht_entry_t));
 
-	// initialize HT with all-zero entries
-	std::fill_n(entries, capacity, ht_entry_t());
-
 	bitmask = capacity - 1;
+}
+
+void JoinHashTable::InitializePointerTable(idx_t entry_idx_from, idx_t entry_idx_to) {
+	// initialize HT with all-zero entries
+	std::fill_n(entries + entry_idx_from, entry_idx_to - entry_idx_from, ht_entry_t());
 }
 
 void JoinHashTable::Finalize(idx_t chunk_idx_from, idx_t chunk_idx_to, bool parallel) {
@@ -1111,17 +1113,16 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 		if (!jdata.validity.AllValid()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
-				mask.Set(i, jdata.validity.RowIsValidUnsafe(jidx));
+				if (!jdata.validity.RowIsValidUnsafe(jidx)) {
+					mask.SetInvalid(i);
+				}
 			}
 		}
 	}
 	// now set the remaining entries to either true or false based on whether a match was found
-	if (found_match) {
-		for (idx_t i = 0; i < child.size(); i++) {
-			bool_result[i] = found_match[i];
-		}
-	} else {
-		memset(bool_result, 0, sizeof(bool) * child.size());
+	D_ASSERT(found_match);
+	for (idx_t i = 0; i < child.size(); i++) {
+		bool_result[i] = found_match[i];
 	}
 	// if the right side contains NULL values, the result of any FALSE becomes NULL
 	if (ht.has_null) {
@@ -1500,7 +1501,7 @@ idx_t JoinHashTable::FinishedPartitionCount() const {
 void JoinHashTable::Repartition(JoinHashTable &global_ht) {
 	auto new_sink_collection =
 	    make_uniq<RadixPartitionedTupleData>(buffer_manager, layout, global_ht.radix_bits, layout.ColumnCount() - 1);
-	sink_collection->Repartition(*new_sink_collection);
+	sink_collection->Repartition(context, *new_sink_collection);
 	sink_collection = std::move(new_sink_collection);
 	global_ht.Merge(*this);
 }

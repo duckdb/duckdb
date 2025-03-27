@@ -91,6 +91,12 @@ void StringStats::ResetMaxStringLength(BaseStatistics &stats) {
 	StringStats::GetDataUnsafe(stats).has_max_string_length = false;
 }
 
+void StringStats::SetMaxStringLength(BaseStatistics &stats, uint32_t length) {
+	auto &data = StringStats::GetDataUnsafe(stats);
+	data.has_max_string_length = true;
+	data.max_string_length = length;
+}
+
 void StringStats::SetContainsUnicode(BaseStatistics &stats) {
 	StringStats::GetDataUnsafe(stats).has_unicode = true;
 }
@@ -210,12 +216,14 @@ FilterPropagateResult StringStats::CheckZonemap(const_data_ptr_t min_data, idx_t
 	int max_comp = StringValueComparison(data, MinValue(max_len, size), max_data);
 	switch (comparison_type) {
 	case ExpressionType::COMPARE_EQUAL:
+	case ExpressionType::COMPARE_NOT_DISTINCT_FROM:
 		if (min_comp >= 0 && max_comp <= 0) {
 			return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 		} else {
 			return FilterPropagateResult::FILTER_ALWAYS_FALSE;
 		}
 	case ExpressionType::COMPARE_NOTEQUAL:
+	case ExpressionType::COMPARE_DISTINCT_FROM:
 		if (min_comp < 0 || max_comp > 0) {
 			return FilterPropagateResult::FILTER_ALWAYS_TRUE;
 		}

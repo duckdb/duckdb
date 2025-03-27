@@ -1,0 +1,24 @@
+# name: test/issues/general/test_16524.test
+# description: Issue 16524 - DuckDB internal error with a relatively complex JOIN involving lateral subqueries
+# group: [general]
+
+statement ok
+CREATE TABLE INT8_TBL(q1 int8, q2 int8);
+
+statement ok
+INSERT INTO INT8_TBL VALUES
+  ('  123   ','  456'),
+  ('123   ','4567890123456789'),
+  ('4567890123456789','123'),
+  (+4567890123456789,'4567890123456789'),
+  ('+4567890123456789','-4567890123456789');
+
+statement ok
+select * from
+  int8_tbl c left join (
+    int8_tbl a left join (select q1, coalesce(q2,42) as x from int8_tbl b) ss1
+      on a.q2 = ss1.q1
+    cross join
+    lateral (select q1, coalesce(ss1.x,q2) as y from int8_tbl d) ss2
+  ) on c.q2 = ss2.q1,
+  lateral (select ss2.y offset 0) ss3

@@ -14,6 +14,7 @@
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/likely.hpp"
 #include "duckdb/common/string_map_set.hpp"
+#include "duckdb/function/cast/nested_to_varchar_cast.hpp"
 
 namespace duckdb {
 
@@ -179,6 +180,89 @@ struct VectorCastHelpers {
 		default:
 			throw InternalException("Unimplemented internal type for decimal");
 		}
+	}
+
+	template <bool STRUCT_KEY>
+	static idx_t CalculateEscapedStringLength(const string_t &string, bool &needs_quotes) {
+		auto base_length = string.GetSize();
+		idx_t length = 0;
+		auto string_data = string.GetData();
+		needs_quotes = false;
+
+		if (base_length == 0) {
+			//! Empty quotes
+			needs_quotes = true;
+			return 2;
+		}
+
+		if (STRUCT_KEY) {
+			needs_quotes = true;
+		} else if (isspace(string_data[0])) {
+			needs_quotes = true;
+		} else if (base_length >= 2 && isspace(string_data[base_length - 1])) {
+			needs_quotes = true;
+		} else if (StringUtil::CIEquals(string_data, base_length, "null", 4)) {
+			needs_quotes = true;
+		} else {
+			const bool *table = NestedToVarcharCast::LOOKUP_TABLE;
+			for (idx_t i = 0; i < base_length; i++) {
+				needs_quotes |= table[(uint8_t)string_data[i]];
+			}
+		}
+
+		if (!needs_quotes) {
+			return base_length;
+		}
+
+		for (idx_t i = 0; i < base_length; i++) {
+			length += 1 + (string_data[i] == '\'' || string_data[i] == '\\');
+		}
+		length += 2;
+		return length;
+	}
+
+	static idx_t CalculateStringLength(const string_t &string, bool &needs_quotes) {
+		needs_quotes = false;
+		return string.GetSize();
+	}
+
+	template <bool STRUCT_KEY>
+	static idx_t WriteEscapedString(void *dest, const string_t &string, bool needs_quotes) {
+		auto base_length = string.GetSize();
+		if (base_length == 0) {
+			D_ASSERT(needs_quotes);
+			memcpy(dest, "''", 2);
+			return 2;
+		}
+
+		auto string_start = string.GetData();
+		auto string_data = string_start;
+
+		auto destination = reinterpret_cast<char *>(dest);
+		if (!needs_quotes) {
+			memcpy(destination, string_data, base_length);
+			return base_length;
+		}
+
+		idx_t offset = 0;
+		destination[offset++] = '\'';
+
+		for (idx_t i = 0; i < base_length; i++) {
+			const bool needs_quote = string_data[i] == '\\' || string_data[i] == '\'';
+			destination[offset] = '\\';
+			destination[offset + needs_quote] = string_data[i];
+			offset += 1 + needs_quote;
+		}
+
+		destination[offset++] = '\'';
+		return offset;
+	}
+
+	static idx_t WriteString(void *dest, const string_t &string, bool needs_quotes) {
+		D_ASSERT(needs_quotes == false);
+		auto len = string.GetSize();
+		memcpy(dest, string.GetData(), len);
+		return len;
 	}
 };
 

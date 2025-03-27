@@ -14,6 +14,29 @@ INSERT INTO right_pushdown VALUES
     (1, NULL), 
 ;
 
+statement ok
+CREATE TABLE issue13899(seq_no INT, amount DECIMAL(10,2));
+
+statement ok
+INSERT INTO issue13899 VALUES
+	(1,1.00),
+	(2,null),
+	(3,null),
+	(4,null),
+	(5,2.00),
+	(6,null),
+	(7,null),
+	(8,3.00),
+	(9,null),
+	(10,null),
+	(11,5.00);
+
+# Compare NLJ optimisation to operator
+foreach threshold 0 32
+
+statement ok
+PRAGMA asof_loop_join_threshold = ${threshold};
+
 query IIII
 SELECT 
 	d1.time,
@@ -24,7 +47,8 @@ FROM right_pushdown d1
 ASOF JOIN (
 	SELECT * FROM right_pushdown WHERE value is not NULL
 	) d2
-	ON d1.time >= d2.time;
+	ON d1.time >= d2.time
+ORDER BY ALL;
 ----
 0 	0	0.0	0.0
 1 	0	NULL	0.0
@@ -39,7 +63,8 @@ FROM right_pushdown d1
 ASOF LEFT JOIN (
 	SELECT * FROM right_pushdown WHERE value is not NULL
 	) d2
-	ON d1.time >= d2.time;
+	ON d1.time >= d2.time
+ORDER BY ALL;
 ----
 0 	0	0.0	0.0
 1 	0	NULL	0.0
@@ -103,23 +128,6 @@ ORDER BY ALL
 5	6
 10	11
 
-statement ok
-CREATE TABLE issue13899(seq_no INT, amount DECIMAL(10,2));
-
-statement ok
-INSERT INTO issue13899 VALUES
-	(1,1.00),
-	(2,null),
-	(3,null),
-	(4,null),
-	(5,2.00),
-	(6,null),
-	(7,null),
-	(8,3.00),
-	(9,null),
-	(10,null),
-	(11,5.00);
-
 query III
 select 
 	a.seq_no,
@@ -142,3 +150,5 @@ ORDER BY 1
 9	NULL	3.00
 10	NULL	3.00
 11	5.00	5.00
+
+endloop

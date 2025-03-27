@@ -152,7 +152,7 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("projected_columns") = "")
 	    .def("sum", &DuckDBPyRelation::Sum, "Computes the sum of all values present in a given column",
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("unique", &DuckDBPyRelation::Unique, "Number of distinct values in a column.", py::arg("unique_aggr"));
+	    .def("unique", &DuckDBPyRelation::Unique, "Returns the distinct values in a column.", py::arg("unique_aggr"));
 	/* TODO: Approximate aggregate functions */
 	/* TODO: Statistical aggregate functions */
 	m.def("median", &DuckDBPyRelation::Median, "Computes the median over all values present in a given column",
@@ -264,7 +264,7 @@ void DuckDBPyRelation::Initialize(py::handle &m) {
 
 	    .def("join", &DuckDBPyRelation::Join,
 	         "Join the relation object with another relation object in other_rel using the join condition expression "
-	         "in join_condition. Types supported are 'inner' and 'left'",
+	         "in join_condition. Types supported are 'inner', 'left', 'right', 'outer', 'semi' and 'anti'",
 	         py::arg("other_rel"), py::arg("condition"), py::arg("how") = "inner")
 	    .def("cross", &DuckDBPyRelation::Cross, "Create cross/cartesian product of two relational objects",
 	         py::arg("other_rel"))

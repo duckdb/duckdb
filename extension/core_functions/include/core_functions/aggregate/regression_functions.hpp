@@ -20,6 +20,7 @@ struct RegrAvgxFun {
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "Returns the average of the independent variable for non-null pairs in a group, where x is the independent variable and y is the dependent variable.";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -29,6 +30,7 @@ struct RegrAvgyFun {
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "Returns the average of the dependent variable for non-null pairs in a group, where x is the independent variable and y is the dependent variable.";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -38,6 +40,7 @@ struct RegrCountFun {
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "Returns the number of non-null number pairs in a group.";
 	static constexpr const char *Example = "(SUM(x*y) - SUM(x) * SUM(y) / COUNT(*)) / COUNT(*)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -47,6 +50,7 @@ struct RegrInterceptFun {
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "Returns the intercept of the univariate linear regression line for non-null pairs in a group.";
 	static constexpr const char *Example = "AVG(y)-REGR_SLOPE(y,x)*AVG(x)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -56,6 +60,7 @@ struct RegrR2Fun {
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "Returns the coefficient of determination for non-null pairs in a group.";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -65,6 +70,7 @@ struct RegrSlopeFun {
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "Returns the slope of the linear regression line for non-null pairs in a group.";
 	static constexpr const char *Example = "COVAR_POP(x,y) / VAR_POP(x)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -74,6 +80,7 @@ struct RegrSXXFun {
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "REGR_COUNT(y, x) * VAR_POP(x)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -83,6 +90,7 @@ struct RegrSXYFun {
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "Returns the population covariance of input values";
 	static constexpr const char *Example = "REGR_COUNT(y, x) * COVAR_POP(y, x)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };
@@ -92,6 +100,7 @@ struct RegrSYYFun {
 	static constexpr const char *Parameters = "y,x";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "REGR_COUNT(y, x) * VAR_POP(y)";
+	static constexpr const char *Categories = "";
 
 	static AggregateFunction GetFunction();
 };

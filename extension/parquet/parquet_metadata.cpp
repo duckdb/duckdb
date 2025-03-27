@@ -104,6 +104,13 @@ Value ParquetElementBigint(T &&value, bool is_iset) {
 	return Value::BIGINT(value);
 }
 
+Value ParquetElementBoolean(bool value, bool is_iset) {
+	if (!is_iset) {
+		return Value();
+	}
+	return Value::BOOLEAN(value);
+}
+
 //===--------------------------------------------------------------------===//
 // Row Group Meta Data
 //===--------------------------------------------------------------------===//
@@ -185,6 +192,12 @@ void ParquetMetaDataOperatorData::BindMetaData(vector<LogicalType> &return_types
 
 	names.emplace_back("bloom_filter_length");
 	return_types.emplace_back(LogicalType::BIGINT);
+
+	names.emplace_back("min_is_exact");
+	return_types.emplace_back(LogicalType::BOOLEAN);
+
+	names.emplace_back("max_is_exact");
+	return_types.emplace_back(LogicalType::BOOLEAN);
 }
 
 Value ConvertParquetStats(const LogicalType &type, const ParquetColumnSchema &schema_ele, bool stats_is_set,
@@ -327,6 +340,14 @@ void ParquetMetaDataOperatorData::LoadRowGroupMetadata(ClientContext &context, c
 			current_chunk.SetValue(
 			    25, count, ParquetElementBigint(col_meta.bloom_filter_length, col_meta.__isset.bloom_filter_length));
 
+			// min_is_exact, LogicalType::BOOLEAN
+			current_chunk.SetValue(26, count,
+			                       ParquetElementBoolean(stats.is_min_value_exact, stats.__isset.is_min_value_exact));
+
+			// max_is_exact, LogicalType::BOOLEAN
+			current_chunk.SetValue(27, count,
+			                       ParquetElementBoolean(stats.is_max_value_exact, stats.__isset.is_max_value_exact));
+
 			count++;
 			if (count >= STANDARD_VECTOR_SIZE) {
 				current_chunk.SetCardinality(count);
@@ -423,6 +444,9 @@ Value ParquetLogicalTypeToString(const duckdb_parquet::LogicalType &type, bool i
 	}
 	if (type.__isset.UUID) {
 		return Value(PrintParquetElementToString(type.UUID));
+	}
+	if (type.__isset.FLOAT16) {
+		return Value(PrintParquetElementToString(type.FLOAT16));
 	}
 	return Value();
 }
@@ -768,7 +792,7 @@ void ParquetMetaDataImplementation(ClientContext &context, TableFunctionInput &d
 				break;
 			case ParquetMetadataOperatorType::BLOOM_PROBE: {
 				auto &bloom_probe_bind_data = data_p.bind_data->Cast<ParquetBloomProbeBindData>();
-				data.ExecuteBloomProbe(context, bind_data.return_types, bind_data.file_list->GetFirstFile(),
+				data.ExecuteBloomProbe(context, bind_data.return_types, data.current_file,
 				                       bloom_probe_bind_data.probe_column_name, bloom_probe_bind_data.probe_constant);
 				break;
 			}
