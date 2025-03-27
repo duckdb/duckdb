@@ -333,8 +333,34 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileRe
 	return nullptr;
 }
 
+struct MultiFileIndexMapping {
+public:
+	explicit MultiFileIndexMapping(idx_t index) : index(index) {
+	}
+
+public:
+	MultiFileIndexMapping &AddMapping(idx_t from, idx_t to) {
+		auto res = child_mapping.emplace(from, make_uniq<MultiFileIndexMapping>(to));
+		return *res.first->second;
+	}
+
+public:
+	idx_t index;
+	unordered_map<idx_t, unique_ptr<MultiFileIndexMapping>> child_mapping;
+};
+
+struct MultiFileColumnMap {
+	MultiFileColumnMap(idx_t index, const LogicalType &local_type, const LogicalType &global_type, idx_t expr_idx) :
+	   mapping(index), local_type(local_type), global_type(global_type), expr_idx(expr_idx) {}
+
+	MultiFileIndexMapping mapping;
+	const LogicalType &local_type;
+	const LogicalType &global_type;
+	idx_t expr_idx;
+};
+
 struct ResultColumnMapping {
-	unordered_map<idx_t, MultiFileIndexMapping> global_to_local;
+	unordered_map<idx_t, MultiFileColumnMap> global_to_local;
 	string error;
 
 public:
@@ -441,7 +467,8 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByName(
 		}
 		expressions.push_back(std::move(expr));
 		// create the mapping
-		result.global_to_local.emplace(global_idx.GetIndex(), local_idx);
+		MultiFileColumnMap index_mapping(local_idx, local_type, global_type, expressions.size() - 1);
+		result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
 		old_reader_data.column_ids.push_back(local_id);
 		old_reader_data.column_indexes.emplace_back(std::move(local_index));
 	}
@@ -559,7 +586,8 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByFieldId(
 		}
 		expressions.push_back(std::move(expr));
 
-		result.global_to_local.emplace(global_idx.GetIndex(), local_idx);
+		MultiFileColumnMap index_mapping(local_idx, local_column.type, global_column.type, expressions.size() - 1);
+		result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
 		old_reader_data.column_ids.push_back(local_id);
 		old_reader_data.column_indexes.push_back(std::move(local_index));
 	}
@@ -875,10 +903,10 @@ unique_ptr<TableFilterSet> CreateFilters(ClientContext &context, MultiFileFileRe
 			    "Error in 'EvaluateConstantFilters', this filter should not end up in CreateFilters!");
 		}
 		auto &map_entry = local_it->second;
-		auto local_id = map_entry.index;
+		auto local_id = map_entry.mapping.index;
 		auto filter_idx = reader_data.reader->reader_data.column_indexes[local_id].GetPrimaryIndex();
-		auto &local_type = local_columns[filter_idx].type;
-		auto &global_type = global_columns[global_index].type;
+		auto &local_type = map_entry.local_type;
+		auto &global_type = map_entry.global_type;
 
 		unique_ptr<TableFilter> local_filter;
 		if (local_type == global_type) {
@@ -889,7 +917,7 @@ unique_ptr<TableFilterSet> CreateFilters(ClientContext &context, MultiFileFileRe
 			// first check if we can safely convert (i.e. if the conversion is lossless would not change the result)
 			if (StatisticsPropagator::CanPropagateCast(local_type, global_type)) {
 				// if we can convert - try to actually convert
-				local_filter = TryCastTableFilter(global_filter, map_entry, local_type);
+				local_filter = TryCastTableFilter(global_filter, map_entry.mapping, local_type);
 			}
 		}
 		if (local_filter) {
@@ -900,11 +928,8 @@ unique_ptr<TableFilterSet> CreateFilters(ClientContext &context, MultiFileFileRe
 			// failed to cast - copy the global filter and evaluate the conversion expression in the reader
 			result->filters.emplace(local_id, global_filter.Copy());
 
-			// construct the cast expression
-			unique_ptr<Expression> expr;
-			expr = make_uniq<BoundReferenceExpression>(local_type, 0ULL);
-			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_type);
-			old_reader_data.expression_map[filter_idx] = std::move(expr);
+			// add the entry to the cast map
+			old_reader_data.cast_map[filter_idx] = global_type;
 
 			// reset the expression - since we are evaluating it in the reader we can just reference it
 			reader_data.expressions[local_id] = make_uniq<BoundReferenceExpression>(global_type, local_id);
