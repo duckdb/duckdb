@@ -47,7 +47,7 @@ public:
 
 public:
 	idx_t GetFileIndex() const {
-		return reader_data.file_list_idx.GetIndex();
+		return file_list_idx.GetIndex();
 	}
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();

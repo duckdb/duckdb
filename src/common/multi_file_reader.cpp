@@ -374,8 +374,9 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByName(
     ClientContext &context, MultiFileFileReaderData &reader_data,
     const vector<MultiFileReaderColumnDefinition> &global_columns, const vector<ColumnIndex> &global_column_ids,
     const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns) {
-	auto &local_columns = reader_data.reader->GetColumns();
-	auto &file_name = reader_data.reader->GetFileName();
+	auto &reader = *reader_data.reader;
+	auto &local_columns = reader.GetColumns();
+	auto &file_name = reader.GetFileName();
 	// we have expected types: create a map of name -> (local) column id
 	case_insensitive_map_t<MultiFileLocalColumnId> name_map;
 	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
@@ -385,7 +386,6 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByName(
 	ResultColumnMapping result;
 	auto &expressions = reader_data.expressions;
 	// FIXME - this should be removed eventually
-	auto &old_reader_data = reader_data.reader->reader_data;
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		auto global_idx = MultiFileGlobalIndex(i);
 		// check if this is a constant column
@@ -455,7 +455,7 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByName(
 		auto &local_type = local_columns[local_id.GetId()].type;
 		ColumnIndex local_index(local_id.GetId());
 
-		auto local_idx = old_reader_data.column_ids.size();
+		auto local_idx = reader.column_ids.size();
 		auto expected_type = local_type;
 
 		unique_ptr<Expression> expr;
@@ -470,8 +470,8 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByName(
 		// create the mapping
 		MultiFileColumnMap index_mapping(local_idx, local_type, global_type);
 		result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
-		old_reader_data.column_ids.push_back(local_id);
-		old_reader_data.column_indexes.emplace_back(std::move(local_index));
+		reader.column_ids.push_back(local_id);
+		reader.column_indexes.emplace_back(std::move(local_index));
 	}
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
 	return result;
@@ -489,7 +489,8 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByFieldId(
 	}
 #endif
 
-	auto &local_columns = reader_data.reader->GetColumns();
+	auto &reader = *reader_data.reader;
+	auto &local_columns = reader.GetColumns();
 
 	ResultColumnMapping result;
 	// we have expected types: create a map of field_id -> column index
@@ -506,8 +507,6 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByFieldId(
 
 	// loop through the schema definition
 	auto &expressions = reader_data.expressions;
-	// FIXME - this should be removed eventually
-	auto &old_reader_data = reader_data.reader->reader_data;
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
 		auto global_idx = MultiFileGlobalIndex(i);
 
@@ -542,13 +541,13 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByFieldId(
 			continue;
 		}
 
-		auto local_idx = MultiFileLocalIndex(old_reader_data.column_ids.size());
+		auto local_idx = MultiFileLocalIndex(reader.column_ids.size());
 		if (global_column_id >= global_columns.size()) {
 			if (bind_data.file_row_number_idx == global_column_id) {
 				// FIXME: this needs a more extensible solution
 				auto new_column_id = MultiFileLocalColumnId(field_id_map.size());
-				old_reader_data.column_ids.push_back(new_column_id);
-				old_reader_data.column_indexes.emplace_back(field_id_map.size());
+				reader.column_ids.push_back(new_column_id);
+				reader.column_indexes.emplace_back(field_id_map.size());
 				//! FIXME: what to do here???
 				expressions.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, local_idx));
 			} else {
@@ -589,8 +588,8 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByFieldId(
 
 		MultiFileColumnMap index_mapping(local_idx, local_column.type, global_column.type);
 		result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
-		old_reader_data.column_ids.push_back(local_id);
-		old_reader_data.column_indexes.push_back(std::move(local_index));
+		reader.column_ids.push_back(local_id);
+		reader.column_indexes.push_back(std::move(local_index));
 	}
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
 	return result;
@@ -901,6 +900,7 @@ unique_ptr<TableFilterSet> CreateFilters(ClientContext &context, MultiFileFileRe
 	if (filters.empty()) {
 		return nullptr;
 	}
+	auto &reader = *reader_data.reader;
 	auto &global_to_local = mapping.global_to_local;
 	auto result = make_uniq<TableFilterSet>();
 	for (auto &it : filters) {
@@ -914,7 +914,7 @@ unique_ptr<TableFilterSet> CreateFilters(ClientContext &context, MultiFileFileRe
 		}
 		auto &map_entry = local_it->second;
 		auto local_id = map_entry.mapping.index;
-		auto filter_idx = reader_data.reader->reader_data.column_indexes[local_id].GetPrimaryIndex();
+		auto filter_idx = reader.column_indexes[local_id].GetPrimaryIndex();
 		auto &local_type = map_entry.local_type;
 		auto &global_type = map_entry.global_type;
 
@@ -934,14 +934,13 @@ unique_ptr<TableFilterSet> CreateFilters(ClientContext &context, MultiFileFileRe
 			// succeeded in casting - push the local filter
 			result->filters.emplace(local_id, std::move(local_filter));
 		} else {
-			auto &old_reader_data = reader_data.reader->reader_data;
 			// failed to cast - copy the global filter and evaluate the conversion expression in the reader
 			result->filters.emplace(local_id, global_filter.Copy());
 
 			// add the expression to the expression map - we are now evaluating this inside the reader directly
 			// we need to set the index of the references inside the expression to 0
 			SetIndexToZero(*reader_data.expressions[local_id]);
-			old_reader_data.expression_map[filter_idx] = std::move(reader_data.expressions[local_id]);
+			reader.expression_map[filter_idx] = std::move(reader_data.expressions[local_id]);
 
 			// reset the expression - since we are evaluating it in the reader we can just reference it
 			reader_data.expressions[local_id] = make_uniq<BoundReferenceExpression>(global_type, local_id);
@@ -991,7 +990,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 	auto &source_type = ref.return_type;
 	auto &target_type = cast_expr.return_type;
 	auto &columns = reader.GetColumns();
-	auto local_col_id = reader.reader_data.column_indexes[ref.index].GetPrimaryIndex();
+	auto local_col_id = reader.column_indexes[ref.index].GetPrimaryIndex();
 	auto &local_col = columns[local_col_id];
 
 	auto reader_type = reader.GetReaderType();

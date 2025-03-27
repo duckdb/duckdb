@@ -184,7 +184,7 @@ public:
 	                                             optional_ptr<MultiFileReaderGlobalState> reader_state) {
 		auto &reader = *reader_data.reader;
 		// Mark the file in the file list we are scanning here
-		reader.reader_data.file_list_idx = file_idx;
+		reader.file_list_idx = file_idx;
 
 		// 'reader_bind.schema' could be set explicitly by:
 		// 1. The MultiFileReader::Bind call
@@ -296,17 +296,16 @@ public:
 	                                    MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
 		lstate.reader = reader_data.reader;
 		lstate.reader_data = reader_data;
-		// FIXME: this should eventually be removed
-		auto &old_reader_data = lstate.reader->reader_data;
+		auto &reader = *lstate.reader;
 		//! Initialize the intermediate chunk to be used by the underlying reader before being finalized
 		vector<LogicalType> intermediate_chunk_types;
-		auto &local_column_ids = old_reader_data.column_ids;
+		auto &local_column_ids = reader.column_ids;
 		auto &local_columns = lstate.reader->GetColumns();
 		for (idx_t i = 0; i < local_column_ids.size(); i++) {
 			auto local_idx = MultiFileLocalIndex(i);
 			auto local_id = local_column_ids[local_idx];
-			auto cast_entry = old_reader_data.expression_map.find(local_id);
-			if (cast_entry == old_reader_data.expression_map.end()) {
+			auto cast_entry = reader.expression_map.find(local_id);
+			if (cast_entry == reader.expression_map.end()) {
 				auto &col = local_columns[local_id];
 				intermediate_chunk_types.push_back(col.type);
 			} else {

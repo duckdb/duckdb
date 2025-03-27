@@ -474,7 +474,7 @@ void ReadJSONFunction(ClientContext &context, JSONReader &json_reader, JSONScanG
 	const auto count = lstate.Read();
 	yyjson_val **values = scan_state.values;
 
-	auto &column_ids = json_reader.reader_data.column_ids;
+	auto &column_ids = json_reader.column_ids;
 	if (!gstate.names.empty()) {
 		vector<Vector *> result_vectors;
 		result_vectors.reserve(column_ids.size());

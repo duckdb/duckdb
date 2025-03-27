@@ -102,7 +102,7 @@ void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<L
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {
-	if (reader_data.column_ids.empty()) {
+	if (column_ids.empty()) {
 		// This means that the columns from this file are irrelevant.
 		// just read the first column
 		file_types.emplace_back(LogicalType::VARCHAR);
@@ -111,15 +111,15 @@ void CSVFileScan::InitializeFileNamesTypes() {
 		return;
 	}
 
-	for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
+	for (idx_t i = 0; i < column_ids.size(); i++) {
 		auto col_idx = MultiFileLocalIndex(i);
-		auto column_id = reader_data.column_ids[col_idx];
+		auto column_id = column_ids[col_idx];
 		file_types.emplace_back(types[column_id.GetId()]);
 		projected_columns.insert(column_id.GetId());
 		projection_ids.emplace_back(column_id.GetId(), col_idx);
 	}
 
-	if (reader_data.column_ids.empty()) {
+	if (column_ids.empty()) {
 		file_types = types;
 	}
 
@@ -141,7 +141,7 @@ const vector<LogicalType> &CSVFileScan::GetTypes() {
 
 void CSVFileScan::InitializeProjection() {
 	for (idx_t i = 0; i < options.dialect_options.num_cols; i++) {
-		reader_data.column_ids.push_back(MultiFileLocalColumnId(i));
+		column_ids.push_back(MultiFileLocalColumnId(i));
 	}
 }
 
