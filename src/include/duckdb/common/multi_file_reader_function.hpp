@@ -540,8 +540,8 @@ public:
 			OP::Scan(context, *data.reader, *gstate.global_state, *data.local_state, scan_chunk);
 			output.SetCardinality(scan_chunk.size());
 			if (scan_chunk.size() > 0) {
-				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, *data.reader, *data.reader_data,
-				                                           scan_chunk, output, data.executor,
+				bind_data.multi_file_reader->FinalizeChunk(context, bind_data.reader_bind, *data.reader,
+				                                           *data.reader_data, scan_chunk, output, data.executor,
 				                                           gstate.multi_file_reader_state);
 				return;
 			}

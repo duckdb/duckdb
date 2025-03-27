@@ -57,6 +57,10 @@ public:
 	//! Initialize the actual names and types to be scanned from the file
 	void InitializeFileNamesTypes();
 
+	string GetReaderType() const override {
+		return "CSV";
+	}
+
 public:
 	//! Buffer Manager for the CSV File
 	shared_ptr<CSVBufferManager> buffer_manager;

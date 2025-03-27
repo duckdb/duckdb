@@ -16,6 +16,7 @@
 #include "duckdb/planner/filter/list.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include <algorithm>
+#include <duckdb/parser/expression/cast_expression.hpp>
 
 namespace duckdb {
 
@@ -350,8 +351,9 @@ public:
 };
 
 struct MultiFileColumnMap {
-	MultiFileColumnMap(idx_t index, const LogicalType &local_type, const LogicalType &global_type, idx_t expr_idx) :
-	   mapping(index), local_type(local_type), global_type(global_type), expr_idx(expr_idx) {}
+	MultiFileColumnMap(idx_t index, const LogicalType &local_type, const LogicalType &global_type, idx_t expr_idx)
+	    : mapping(index), local_type(local_type), global_type(global_type), expr_idx(expr_idx) {
+	}
 
 	MultiFileIndexMapping mapping;
 	const LogicalType &local_type;
@@ -891,9 +893,7 @@ void SetIndexToZero(Expression &expr) {
 		return;
 	}
 
-	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
-		SetIndexToZero(child);
-	});
+	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { SetIndexToZero(child); });
 }
 
 unique_ptr<TableFilterSet> CreateFilters(ClientContext &context, MultiFileFileReaderData &reader_data,
@@ -902,7 +902,6 @@ unique_ptr<TableFilterSet> CreateFilters(ClientContext &context, MultiFileFileRe
 	if (filters.empty()) {
 		return nullptr;
 	}
-	auto &local_columns = reader_data.reader->GetColumns();
 	auto &global_to_local = mapping.global_to_local;
 	auto result = make_uniq<TableFilterSet>();
 	for (auto &it : filters) {
@@ -979,18 +978,82 @@ ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, Mult
 	return ReaderInitializeType::INITIALIZED;
 }
 
+string GetExtendedMultiFileError(const Expression &expr, BaseFileReader &reader, idx_t expr_idx,
+                                 string &first_message) {
+	if (expr.type != ExpressionType::OPERATOR_CAST) {
+		// not a cast
+		return string();
+	}
+	auto &cast_expr = expr.Cast<BoundCastExpression>();
+	if (cast_expr.child->type != ExpressionType::BOUND_REF) {
+		return string();
+	}
+	auto &ref = cast_expr.child->Cast<BoundReferenceExpression>();
+	auto &source_type = ref.return_type;
+	auto &target_type = cast_expr.return_type;
+	auto &columns = reader.GetColumns();
+	auto local_col_id = reader.reader_data.column_indexes[ref.index].GetPrimaryIndex();
+	auto &local_col = columns[local_col_id];
+
+	auto reader_type = reader.GetReaderType();
+	auto function_name = "read_" + StringUtil::Lower(reader_type);
+	string extended_error;
+	if (!reader.table_columns.empty()) {
+		// COPY .. FROM
+		extended_error = StringUtil::Format(
+		    "In file \"%s\" the column \"%s\" has type %s, but we are trying to load it into column ", reader.file_name,
+		    local_col.name, source_type);
+		if (expr_idx < reader.table_columns.size()) {
+			extended_error += "\"" + reader.table_columns[expr_idx] + "\" ";
+		}
+		extended_error += StringUtil::Format("with type %s.", target_type);
+		extended_error +=
+		    StringUtil::Format("\nThis means the %s schema does not match the schema of the table.", reader_type);
+		extended_error += "\nPossible solutions:";
+		extended_error += StringUtil::Format(
+		    "\n* Insert by name instead of by position using \"INSERT INTO tbl BY NAME SELECT * FROM "
+		    "%s(...)\"",
+		    function_name);
+		extended_error +=
+		    StringUtil::Format("\n* Manually specify which columns to insert using \"INSERT INTO tbl SELECT ... FROM "
+		                       "%s(...)\"",
+		                       function_name);
+	} else {
+		// read_parquet() with multiple files
+		extended_error =
+		    StringUtil::Format("In file \"%s\" the column \"%s\" has type %s, but we are trying to read it as type %s.",
+		                       reader.file_name, local_col.name, source_type, target_type);
+		extended_error +=
+		    StringUtil::Format("\nThis can happen when reading multiple %s files. The schema information is taken from "
+		                       "the first %s file by default. Possible solutions:\n",
+		                       reader_type, reader_type);
+		extended_error +=
+		    StringUtil::Format("* Enable the union_by_name=True option to combine the schema of all %s files "
+		                       "(duckdb.org/docs/data/multiple_files/combining_schemas)\n",
+		                       reader_type);
+		extended_error += "* Use a COPY statement to automatically derive types from an existing table.";
+	}
+	first_message = StringUtil::Format("failed to cast column \"%s\" from type %s to %s: ", local_col.name, source_type,
+	                                   target_type);
+	return extended_error;
+}
+
 void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
-                                    BaseFileReader &reader, const MultiFileFileReaderData &reader_data, DataChunk &input_chunk,
-                                    DataChunk &output_chunk, ExpressionExecutor &executor,
+                                    BaseFileReader &reader, const MultiFileFileReaderData &reader_data,
+                                    DataChunk &input_chunk, DataChunk &output_chunk, ExpressionExecutor &executor,
                                     optional_ptr<MultiFileReaderGlobalState> global_state) {
 	executor.SetChunk(input_chunk);
 	for (idx_t i = 0; i < executor.expressions.size(); i++) {
 		try {
 			executor.ExecuteExpression(i, output_chunk.data[i]);
-		} catch(std::exception &ex) {
+		} catch (std::exception &ex) {
+			// error while converting - try to create a nice error message
 			ErrorData error(ex);
-			auto &columns = reader.GetColumns();
-			error.Throw(StringUtil::Format("Error while reading from file \"%s\": ", reader.GetFileName()));
+			auto &original_error = error.RawMessage();
+			string first_message;
+			string extended_error = GetExtendedMultiFileError(*executor.expressions[i], reader, i, first_message);
+			throw ConversionException("Error while reading file \"%s\": %s: %s\n\n%s", reader.file_name, first_message,
+			                          original_error, extended_error);
 		}
 	}
 	output_chunk.SetCardinality(input_chunk.size());

@@ -312,6 +312,7 @@ public:
 	const string &GetFileName() {
 		return file_name;
 	}
+	virtual string GetReaderType() const = 0;
 
 public:
 	template <class TARGET>
