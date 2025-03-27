@@ -66,7 +66,7 @@ ScalarFunction ListContainsFun::GetFunction() {
 }
 
 ScalarFunction ListPositionFun::GetFunction() {
-	auto &fun = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::INTEGER,
+	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::INTEGER,
 	                      ListSearchFunction<true, true>, ListSearchBind);
 	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return fun;
