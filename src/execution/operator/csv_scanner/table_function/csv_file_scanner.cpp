@@ -102,7 +102,7 @@ void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<L
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {
-	if (reader_data.empty_columns && reader_data.column_ids.empty()) {
+	if (reader_data.column_ids.empty()) {
 		// This means that the columns from this file are irrelevant.
 		// just read the first column
 		file_types.emplace_back(LogicalType::VARCHAR);

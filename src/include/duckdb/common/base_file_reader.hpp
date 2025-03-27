@@ -335,8 +335,6 @@ struct MultiFileReaderData {
 	//! The mapping of column id -> result column id
 	//! The result chunk will be filled as follows: chunk.data[column_mapping[i]] = ReadColumn(column_ids[i]);
 	MultiFileColumnMapping column_mapping;
-	//! Whether or not there are no columns to read. This can happen when a file only consists of constants
-	bool empty_columns = false;
 	//! Map of (local) column_id -> cast, used when reading multiple files when files have diverging types
 	//! for the same column
 	MultiFileCastMap cast_map;

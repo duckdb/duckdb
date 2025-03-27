@@ -437,8 +437,6 @@ void MultiFileReader::CreateColumnMappingByName(MultiFileFileReaderData &reader_
 		old_reader_data.column_indexes.push_back(std::move(local_index));
 	}
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
-
-	old_reader_data.empty_columns = old_reader_data.column_indexes.empty();
 }
 
 void MultiFileReader::CreateColumnMappingByFieldId(
@@ -559,8 +557,6 @@ void MultiFileReader::CreateColumnMappingByFieldId(
 		old_reader_data.column_indexes.push_back(std::move(local_index));
 	}
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
-
-	old_reader_data.empty_columns = old_reader_data.column_ids.empty();
 }
 
 void MultiFileReader::CreateColumnMapping(MultiFileFileReaderData &reader_data,
