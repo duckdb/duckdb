@@ -1211,7 +1211,7 @@ void Vector::Serialize(Serializer &serializer, idx_t count, bool compressed_seri
 	UnifiedVectorFormat vdata;
 
 	// serialize compressed vectors to save space, but skip this if serializing into older versions
-	if (serializer.ShouldSerialize(5)) {
+	if (!serializer.ShouldSerialize(5)) {
 		compressed_serialization = false;
 	}
 	if (compressed_serialization) {

@@ -152,7 +152,7 @@ static void InitializeAggregates(py::class_<DuckDBPyRelation> &m) {
 	         py::arg("projected_columns") = "")
 	    .def("sum", &DuckDBPyRelation::Sum, "Computes the sum of all values present in a given column",
 	         py::arg("column"), py::arg("groups") = "", py::arg("window_spec") = "", py::arg("projected_columns") = "")
-	    .def("unique", &DuckDBPyRelation::Unique, "Number of distinct values in a column.", py::arg("unique_aggr"));
+	    .def("unique", &DuckDBPyRelation::Unique, "Returns the distinct values in a column.", py::arg("unique_aggr"));
 	/* TODO: Approximate aggregate functions */
 	/* TODO: Statistical aggregate functions */
 	m.def("median", &DuckDBPyRelation::Median, "Computes the median over all values present in a given column",

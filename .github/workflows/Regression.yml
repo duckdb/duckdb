@@ -40,7 +40,7 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   BASE_BRANCH: ${{ github.base_ref || (endsWith(github.ref, '_feature') && 'feature' || 'main') }}
-  BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || inputs.base_hash }}
+  BASE_HASH: ${{ inputs.base_hash }}
 
 jobs:
   regression-test-benchmark-runner:
@@ -90,7 +90,6 @@ jobs:
           make
           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
-          git checkout ${{ env.BASE_SHA }}
           make
           cd ..
 
@@ -105,7 +104,7 @@ jobs:
           if [[ -z "${BASE_HASH}" ]]; then
             export CHECKOUT_HASH=$(gh run list --repo duckdb/duckdb --branch=main --workflow=Regression --event=repository_dispatch --status=completed --json=headSha --limit=1 --jq '.[0].headSha')
           else
-            export CHECKOUT_HASH="$BASE_SHA"
+            export CHECKOUT_HASH="$BASE_HASH"
           fi
           git checkout $CHECKOUT_HASH
           make
@@ -215,7 +214,6 @@ jobs:
           make
           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
-          git checkout ${{ env.BASE_SHA }}
           make
           cd ..
 
@@ -296,7 +294,6 @@ jobs:
           make
           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
-          git checkout ${{ env.BASE_SHA }}
           make
           cd ..
 
@@ -339,7 +336,6 @@ jobs:
           make
           git clone --branch ${{ env.BASE_BRANCH }} https://github.com/duckdb/duckdb.git --depth=1
           cd duckdb
-          git checkout ${{ env.BASE_SHA }}
           make
           cd ..
 

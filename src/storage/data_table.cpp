@@ -356,6 +356,15 @@ void DataTable::VacuumIndexes() {
 	});
 }
 
+void DataTable::VerifyIndexBuffers() {
+	info->indexes.Scan([&](Index &index) {
+		if (index.IsBound()) {
+			index.Cast<BoundIndex>().VerifyBuffers();
+		}
+		return false;
+	});
+}
+
 void DataTable::CleanupAppend(transaction_t lowest_transaction, idx_t start, idx_t count) {
 	row_groups->CleanupAppend(lowest_transaction, start, count);
 }
@@ -1108,15 +1117,15 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 		});
 	}
 
-	// we need to vacuum the indexes to remove any buffers that are now empty
-	// due to reverting the appends
+#ifdef DEBUG
+	// Verify that our index memory is stable.
 	info->indexes.Scan([&](Index &index) {
-		// We cant add to unbound indexes anyway, so there is no need to vacuum them
 		if (index.IsBound()) {
-			index.Cast<BoundIndex>().Vacuum();
+			index.Cast<BoundIndex>().VerifyBuffers();
 		}
 		return false;
 	});
+#endif
 
 	// revert the data table append
 	RevertAppendInternal(start_row);
