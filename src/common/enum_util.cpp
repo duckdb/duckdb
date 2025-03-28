@@ -2429,6 +2429,7 @@ const StringUtil::EnumStringLiteral *GetMultiFileFileStateValues() {
 		{ static_cast<uint32_t>(MultiFileFileState::UNOPENED), "UNOPENED" },
 		{ static_cast<uint32_t>(MultiFileFileState::OPENING), "OPENING" },
 		{ static_cast<uint32_t>(MultiFileFileState::OPEN), "OPEN" },
+		{ static_cast<uint32_t>(MultiFileFileState::SKIPPED), "SKIPPED" },
 		{ static_cast<uint32_t>(MultiFileFileState::CLOSED), "CLOSED" }
 	};
 	return values;
@@ -2436,12 +2437,12 @@ const StringUtil::EnumStringLiteral *GetMultiFileFileStateValues() {
 
 template<>
 const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value) {
-	return StringUtil::EnumToString(GetMultiFileFileStateValues(), 4, "MultiFileFileState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMultiFileFileStateValues(), 5, "MultiFileFileState", static_cast<uint32_t>(value));
 }
 
 template<>
 MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value) {
-	return static_cast<MultiFileFileState>(StringUtil::StringToEnum(GetMultiFileFileStateValues(), 4, "MultiFileFileState", value));
+	return static_cast<MultiFileFileState>(StringUtil::StringToEnum(GetMultiFileFileStateValues(), 5, "MultiFileFileState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetMultiFileReaderColumnMappingModeValues() {
