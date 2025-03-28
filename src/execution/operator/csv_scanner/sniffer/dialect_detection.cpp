@@ -439,14 +439,6 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		} else if (!options.null_padding) {
 			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
 		}
-		// if (!candidates.empty()) {
-		// 	for (auto &candidate : candidates) {
-		// 		if (candidate->state_machine->dialect_options.state_machine_options.quote.GetValue() == '\0') {
-		// 		int x = 9;
-		// 	}
-		// 	}
-		//
-		// }
 		candidates.clear();
 		sniffing_state_machine.dialect_options.num_cols = num_cols;
 		lines_sniffed = sniffed_column_counts.result_position;
