@@ -52,6 +52,7 @@ add_library_unity(
   local_file_system.cpp
   multi_file_list.cpp
   multi_file_reader.cpp
+  multi_file_reader_column_mapper.cpp
   error_data.cpp
   opener_file_system.cpp
   printer.cpp
