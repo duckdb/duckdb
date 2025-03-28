@@ -19,10 +19,12 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 	UnifiedVectorFormat target_format;
 	if (SET_TARGET_VALID) {
 		target_vec.ToUnifiedFormat(count, target_format);
-		target_mask.Copy(target_format.validity, count);
 		if (target_vec.GetVectorType() == VectorType::FLAT_VECTOR ||
 		    target_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
+			target_mask.Copy(target_format.validity, count);
 			target_format.validity.SetAllValid(count);
+		} else {
+			target_mask = target_format.validity;
 		}
 	}
 
