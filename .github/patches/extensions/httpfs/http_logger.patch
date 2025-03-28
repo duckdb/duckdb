@@ -1,0 +1,159 @@
+diff --git a/extension/httpfs/httpfs.cpp b/extension/httpfs/httpfs.cpp
+index 6e1f635..d41fab5 100644
+--- a/extension/httpfs/httpfs.cpp
++++ b/extension/httpfs/httpfs.cpp
+@@ -8,7 +8,8 @@
+ #include "duckdb/common/thread.hpp"
+ #include "duckdb/common/types/hash.hpp"
+ #include "duckdb/function/scalar/strftime_format.hpp"
+-#include "duckdb/logging/http_logger.hpp"
++#include "duckdb/logging/file_system_logger.hpp"
++#include "duckdb/logging/httplib_logger.hpp"
+ #include "duckdb/main/client_context.hpp"
+ #include "duckdb/main/database.hpp"
+ #include "duckdb/main/secret/secret_manager.hpp"
+@@ -250,7 +251,7 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileSystem::GetClient(const HTTPP
+ 	client->set_decompress(false);
+ 	if (hfh && hfh->http_logger) {
+ 		client->set_logger(
+-		    hfh->http_logger->GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
++		    hfh->http_logger->GetHTTPLibCallback<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+ 	}
+ 	if (!http_params.bearer_token.empty()) {
+ 		client->set_bearer_token_auth(http_params.bearer_token.c_str());
+@@ -467,8 +468,9 @@ unique_ptr<HTTPFileHandle> HTTPFileSystem::CreateHandle(const string &path, File
+ 	auto result = duckdb::make_uniq<HTTPFileHandle>(*this, path, flags, params);
+ 
+ 	auto client_context = FileOpener::TryGetClientContext(opener);
+-	if (client_context && ClientConfig::GetConfig(*client_context).enable_http_logging) {
+-		result->http_logger = client_context->client_data->http_logger.get();
++
++	if (client_context && HTTPLibLogger::ShouldLog(*client_context)) {
++		result->http_logger = make_uniq<HTTPLibLogger>(*client_context);
+ 	}
+ 
+ 	return result;
+@@ -490,6 +492,9 @@ unique_ptr<FileHandle> HTTPFileSystem::OpenFile(const string &path, FileOpenFlag
+ 
+ 	auto handle = CreateHandle(path, flags, opener);
+ 	handle->Initialize(opener);
++
++	DUCKDB_LOG_FILE_SYSTEM_OPEN((*handle));
++
+ 	return std::move(handle);
+ }
+ 
+@@ -505,6 +510,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
+ 		}
+ 		memcpy(buffer, hfh.cached_file_handle->GetData() + location, nr_bytes);
+ 		hfh.file_offset = location + nr_bytes;
++		DUCKDB_LOG_FILE_SYSTEM_READ(handle, nr_bytes, location);
+ 		return;
+ 	}
+ 
+@@ -518,6 +524,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
+ 		hfh.buffer_available = 0;
+ 		hfh.buffer_idx = 0;
+ 		hfh.file_offset = location + nr_bytes;
++		DUCKDB_LOG_FILE_SYSTEM_READ(handle, nr_bytes, location);
+ 		return;
+ 	}
+ 
+@@ -565,6 +572,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
+ 			}
+ 		}
+ 	}
++	DUCKDB_LOG_FILE_SYSTEM_READ(handle, nr_bytes, location);
+ }
+ 
+ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes) {
+@@ -572,6 +580,8 @@ int64_t HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes)
+ 	idx_t max_read = hfh.length - hfh.file_offset;
+ 	nr_bytes = MinValue<idx_t>(max_read, nr_bytes);
+ 	Read(handle, buffer, nr_bytes, hfh.file_offset);
++
++	DUCKDB_LOG_FILE_SYSTEM_READ(handle, nr_bytes, hfh.file_offset - nr_bytes);
+ 	return nr_bytes;
+ }
+ 
+@@ -680,8 +690,12 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
+ 	}
+ 
+ 	auto client_context = FileOpener::TryGetClientContext(opener);
+-	if (client_context && ClientConfig::GetConfig(*client_context).enable_http_logging) {
+-		http_logger = client_context->client_data->http_logger.get();
++	if (client_context && HTTPLibLogger::ShouldLog(*client_context)) {
++		http_logger = make_uniq<HTTPLibLogger>(*client_context);
++	}
++
++	if (opener) {
++		TryAddLogger(*opener);
+ 	}
+ 
+ 	auto current_cache = TryGetMetadataCache(opener, hfs);
+@@ -807,10 +821,9 @@ unique_ptr<duckdb_httplib_openssl::Client> HTTPFileHandle::CreateClient(optional
+ 	string path_out, proto_host_port;
+ 	HTTPFileSystem::ParseUrl(path, path_out, proto_host_port);
+ 	auto http_client = HTTPFileSystem::GetClient(this->http_params, proto_host_port.c_str(), this);
+-	if (context && ClientConfig::GetConfig(*context).enable_http_logging) {
+-		http_logger = context->client_data->http_logger.get();
++	if (http_logger) {
+ 		http_client->set_logger(
+-		    http_logger->GetLogger<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
++		    http_logger->GetHTTPLibCallback<duckdb_httplib_openssl::Request, duckdb_httplib_openssl::Response>());
+ 	}
+ 	return http_client;
+ }
+@@ -829,5 +842,7 @@ ResponseWrapper::ResponseWrapper(duckdb_httplib_openssl::Response &res, string &
+ 	body = res.body;
+ }
+ 
+-HTTPFileHandle::~HTTPFileHandle() = default;
++HTTPFileHandle::~HTTPFileHandle() {
++	DUCKDB_LOG_FILE_SYSTEM_CLOSE((*this));
++};
+ } // namespace duckdb
+diff --git a/extension/httpfs/include/httpfs.hpp b/extension/httpfs/include/httpfs.hpp
+index 9dc9eda..2341aa8 100644
+--- a/extension/httpfs/include/httpfs.hpp
++++ b/extension/httpfs/include/httpfs.hpp
+@@ -20,7 +20,7 @@ using Headers = std::multimap<std::string, std::string, duckdb_httplib_openssl::
+ 
+ namespace duckdb {
+ 
+-class HTTPLogger;
++class HTTPLibLogger;
+ 
+ using HeaderMap = case_insensitive_map_t<string>;
+ 
+@@ -93,7 +93,7 @@ public:
+ 	// We keep an http client stored for connection reuse with keep-alive headers
+ 	HTTPClientCache client_cache;
+ 
+-	optional_ptr<HTTPLogger> http_logger;
++	unique_ptr<HTTPLibLogger> http_logger;
+ 
+ 	const HTTPParams http_params;
+ 
+diff --git a/extension/httpfs/s3fs.cpp b/extension/httpfs/s3fs.cpp
+index 48a6ce5..658416a 100644
+--- a/extension/httpfs/s3fs.cpp
++++ b/extension/httpfs/s3fs.cpp
+@@ -4,6 +4,8 @@
+ #include "duckdb.hpp"
+ #ifndef DUCKDB_AMALGAMATION
+ #include "duckdb/common/exception/http_exception.hpp"
++#include "duckdb/logging/log_type.hpp"
++#include "duckdb/logging/file_system_logger.hpp"
+ #include "duckdb/common/helper.hpp"
+ #include "duckdb/common/thread.hpp"
+ #include "duckdb/common/types/timestamp.hpp"
+@@ -860,6 +862,8 @@ void S3FileSystem::Write(FileHandle &handle, void *buffer, int64_t nr_bytes, idx
+ 		s3fh.file_offset += bytes_to_write;
+ 		bytes_written += bytes_to_write;
+ 	}
++
++	DUCKDB_LOG_FILE_SYSTEM_WRITE(handle, bytes_written, s3fh.file_offset - bytes_written);
+ }
+ 
+ static bool Match(vector<string>::const_iterator key, vector<string>::const_iterator key_end,
