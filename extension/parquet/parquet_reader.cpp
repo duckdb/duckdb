@@ -965,7 +965,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
 
 		if (should_prefetch && can_prefetch) {
 			state.prefetch_mode = true;
-			if (!file_handle->OnDiskFile()) {
+			if (file_handle->IsRemoteFile()) {
 				flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
 			}
 		} else {

@@ -168,6 +168,10 @@ bool CachingFileHandle::CanSeek() {
 	return cached_file.CanSeek(guard);
 }
 
+bool CachingFileHandle::IsRemoteFile() const {
+	return FileSystem::IsRemoteFile(cached_file.path);
+}
+
 bool CachingFileHandle::OnDiskFile() {
 	if (file_handle || caching_file_system.validate) {
 		return GetFileHandle().OnDiskFile();

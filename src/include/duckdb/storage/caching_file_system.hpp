@@ -46,6 +46,7 @@ public:
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API time_t GetLastModifiedTime();
 	DUCKDB_API bool CanSeek();
+	DUCKDB_API bool IsRemoteFile() const;
 	DUCKDB_API bool OnDiskFile();
 
 private:
