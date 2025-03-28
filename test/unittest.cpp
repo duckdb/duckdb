@@ -121,7 +121,7 @@ int main(int argc, char *argv[]) {
 		while (std::getline(file, line)) {
 			if (StringUtil::StartsWith(line, "next case")) {
 				i++;
-				std::cerr << i << ": ";
+				std::cerr << " \n" << i << ": ";
 			} else {
 				std::cerr << line << std::endl;
 			}
