@@ -65,8 +65,8 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
-#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
@@ -2424,6 +2424,24 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 49, "MetricsType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MultiFileColumnMappingMode::BY_NAME), "BY_NAME" },
+		{ static_cast<uint32_t>(MultiFileColumnMappingMode::BY_FIELD_ID), "BY_FIELD_ID" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value) {
+	return StringUtil::EnumToString(GetMultiFileColumnMappingModeValues(), 2, "MultiFileColumnMappingMode", static_cast<uint32_t>(value));
+}
+
+template<>
+MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value) {
+	return static_cast<MultiFileColumnMappingMode>(StringUtil::StringToEnum(GetMultiFileColumnMappingModeValues(), 2, "MultiFileColumnMappingMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetMultiFileFileStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MultiFileFileState::UNOPENED), "UNOPENED" },
@@ -2443,24 +2461,6 @@ const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value) {
 template<>
 MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value) {
 	return static_cast<MultiFileFileState>(StringUtil::StringToEnum(GetMultiFileFileStateValues(), 5, "MultiFileFileState", value));
-}
-
-const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MultiFileColumnMappingMode::BY_NAME), "BY_NAME" },
-		{ static_cast<uint32_t>(MultiFileColumnMappingMode::BY_FIELD_ID), "BY_FIELD_ID" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value) {
-	return StringUtil::EnumToString(GetMultiFileColumnMappingModeValues(), 2, "MultiFileColumnMappingMode", static_cast<uint32_t>(value));
-}
-
-template<>
-MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value) {
-	return static_cast<MultiFileColumnMappingMode>(StringUtil::StringToEnum(GetMultiFileColumnMappingModeValues(), 2, "MultiFileColumnMappingMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetNTypeValues() {

@@ -339,18 +339,6 @@ LogicalType LogicalType::Deserialize(Deserializer &deserializer) {
 	return result;
 }
 
-void MultiFileReaderBindData::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<idx_t>(100, "filename_idx", filename_idx);
-	serializer.WritePropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", hive_partitioning_indexes);
-}
-
-MultiFileReaderBindData MultiFileReaderBindData::Deserialize(Deserializer &deserializer) {
-	MultiFileReaderBindData result;
-	deserializer.ReadPropertyWithDefault<idx_t>(100, "filename_idx", result.filename_idx);
-	deserializer.ReadPropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", result.hive_partitioning_indexes);
-	return result;
-}
-
 void MultiFileOptions::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<bool>(100, "filename", filename);
 	serializer.WritePropertyWithDefault<bool>(101, "hive_partitioning", hive_partitioning);
@@ -370,6 +358,18 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 	deserializer.ReadPropertyWithDefault<bool>(104, "hive_types_autocast", result.hive_types_autocast);
 	deserializer.ReadPropertyWithDefault<case_insensitive_map_t<LogicalType>>(105, "hive_types_schema", result.hive_types_schema);
 	deserializer.ReadPropertyWithExplicitDefault<string>(106, "filename_column", result.filename_column, MultiFileOptions::DEFAULT_FILENAME_COLUMN);
+	return result;
+}
+
+void MultiFileReaderBindData::Serialize(Serializer &serializer) const {
+	serializer.WritePropertyWithDefault<idx_t>(100, "filename_idx", filename_idx);
+	serializer.WritePropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", hive_partitioning_indexes);
+}
+
+MultiFileReaderBindData MultiFileReaderBindData::Deserialize(Deserializer &deserializer) {
+	MultiFileReaderBindData result;
+	deserializer.ReadPropertyWithDefault<idx_t>(100, "filename_idx", result.filename_idx);
+	deserializer.ReadPropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", result.hive_partitioning_indexes);
 	return result;
 }
 
