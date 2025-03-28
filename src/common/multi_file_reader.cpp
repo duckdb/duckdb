@@ -459,12 +459,20 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByName(
 		auto expected_type = local_type;
 
 		unique_ptr<Expression> expr;
-		expr = make_uniq<BoundReferenceExpression>(local_type, local_idx);
-		if (global_type != local_type) {
-			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
+		if (reader.UseCastMap()) {
+			// reader is responsible for casting
+			expr = make_uniq<BoundReferenceExpression>(global_type, local_idx);
+			if (global_type != local_type) {
+				reader.cast_map[local_id.GetId()] = global_type;
+			}
 		} else {
-			//! FIXME: local fields are not guaranteed to match with the global fields for this struct
-			local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
+			expr = make_uniq<BoundReferenceExpression>(local_type, local_idx);
+			if (global_type != local_type) {
+				expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
+			} else {
+				//! FIXME: local fields are not guaranteed to match with the global fields for this struct
+				local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
+			}
 		}
 		expressions.push_back(std::move(expr));
 		// create the mapping
@@ -574,15 +582,25 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByFieldId(
 
 		const auto &local_id = it->second;
 		auto &local_column = local_columns[local_id.GetId()];
+		auto &global_type = global_column.type;
+		auto &local_type = local_column.type;
 		ColumnIndex local_index(local_id.GetId());
 
 		unique_ptr<Expression> expr;
-		expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx);
-		if (global_column.type != local_column.type) {
-			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
+		if (reader.UseCastMap()) {
+			// reader is responsible for casting
+			expr = make_uniq<BoundReferenceExpression>(global_type, local_idx);
+			if (global_type != local_type) {
+				reader.cast_map[local_id.GetId()] = global_type;
+			}
 		} else {
-			//! FIXME: local fields are not guaranteed to match with the global fields for this struct
-			local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
+			expr = make_uniq<BoundReferenceExpression>(local_type, local_idx);
+			if (global_type != local_type) {
+				expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
+			} else {
+				//! FIXME: local fields are not guaranteed to match with the global fields for this struct
+				local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
+			}
 		}
 		expressions.push_back(std::move(expr));
 

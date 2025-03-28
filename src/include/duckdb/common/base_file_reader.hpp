@@ -301,6 +301,8 @@ public:
 	//! Expression to execute for a given column (BEFORE executing the filter)
 	//! NOTE: this is only set when we have filters - it can be ignored for readers that don't have filter pushdown
 	unordered_map<column_t, unique_ptr<Expression>> expression_map;
+	//! The final types for various expressions - this is ONLY used if UseCastMap() is explicitly enabled
+	unordered_map<column_t, LogicalType> cast_map;
 
 public:
 	const vector<MultiFileReaderColumnDefinition> &GetColumns() const {
@@ -310,6 +312,10 @@ public:
 		return file_name;
 	}
 	virtual string GetReaderType() const = 0;
+	virtual bool UseCastMap() const {
+		//! Whether or not to push casts into the cast map
+		return false;
+	}
 
 public:
 	template <class TARGET>

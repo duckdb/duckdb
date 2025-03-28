@@ -61,6 +61,11 @@ public:
 		return "CSV";
 	}
 
+	bool UseCastMap() const override {
+		//! Whether or not to push casts into the cast map
+		return true;
+	}
+
 public:
 	//! Buffer Manager for the CSV File
 	shared_ptr<CSVBufferManager> buffer_manager;
