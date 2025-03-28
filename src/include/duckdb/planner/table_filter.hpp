@@ -49,7 +49,7 @@ public:
 	//! Returns true if the statistics indicate that the segment can contain values that satisfy that filter
 	virtual FilterPropagateResult CheckStatistics(BaseStatistics &stats) = 0;
 	virtual string ToString(const string &column_name) const = 0;
-	string DebugToString();
+	string DebugToString() const;
 	virtual unique_ptr<TableFilter> Copy() const = 0;
 	virtual bool Equals(const TableFilter &other) const {
 		return filter_type == other.filter_type;
@@ -77,6 +77,8 @@ public:
 	}
 };
 
+//! The filters in here are non-composite (only need a single column to be evaluated)
+//! Conditions like `A = 2 OR B = 4` are not pushed into a TableFilterSet.
 class TableFilterSet {
 public:
 	map<idx_t, unique_ptr<TableFilter>> filters;
@@ -107,6 +109,14 @@ public:
 			return false;
 		}
 		return left->Equals(*right);
+	}
+
+	unique_ptr<TableFilterSet> Copy() const {
+		auto copy = make_uniq<TableFilterSet>();
+		for (auto &it : filters) {
+			copy->filters.emplace(it.first, it.second->Copy());
+		}
+		return copy;
 	}
 
 	void Serialize(Serializer &serializer) const;

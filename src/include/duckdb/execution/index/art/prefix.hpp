@@ -51,9 +51,6 @@ public:
 	//! Free the prefix and its child.
 	static void Free(ART &art, Node &node);
 
-	//! Initializes a merge by incrementing the buffer ID of the prefix and its child.
-	static void InitializeMerge(ART &art, Node &node, const unsafe_vector<idx_t> &upper_bounds);
-
 	//! Concatenates parent -> byte -> child. Special-handling, if
 	//! 1. the byte was in a gate node.
 	//! 2. the byte was in PREFIX_INLINED.
@@ -92,9 +89,6 @@ public:
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
 	//! Count the number of prefixes.
 	static void VerifyAllocations(ART &art, const Node &node, unordered_map<uint8_t, idx_t> &node_counts);
-
-	//! Vacuum the child of the node.
-	static void Vacuum(ART &art, Node &node, const unordered_set<uint8_t> &indexes);
 
 	//! Transform the child of the node.
 	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);

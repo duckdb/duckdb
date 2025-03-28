@@ -336,12 +336,12 @@ unique_ptr<LogicalOperator> LogicalCreate::Deserialize(Deserializer &deserialize
 
 void LogicalCreateBF::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<vector<shared_ptr<FilterPlan>>>(200, "bf_to_create_plans", filter_plans);
+	serializer.WritePropertyWithDefault<vector<shared_ptr<FilterPlan>>>(200, "filter_plans", filter_plans);
 }
 
 unique_ptr<LogicalOperator> LogicalCreateBF::Deserialize(Deserializer &deserializer) {
-	auto bf_to_create_plans = deserializer.ReadPropertyWithDefault<vector<shared_ptr<FilterPlan>>>(200, "bf_to_create_plans");
-	auto result = duckdb::unique_ptr<LogicalCreateBF>(new LogicalCreateBF(std::move(bf_to_create_plans)));
+	auto filter_plans = deserializer.ReadPropertyWithDefault<vector<shared_ptr<FilterPlan>>>(200, "filter_plans");
+	auto result = duckdb::unique_ptr<LogicalCreateBF>(new LogicalCreateBF(std::move(filter_plans)));
 	return std::move(result);
 }
 
@@ -771,12 +771,12 @@ unique_ptr<LogicalOperator> LogicalUpdate::Deserialize(Deserializer &deserialize
 
 void LogicalUseBF::Serialize(Serializer &serializer) const {
 	LogicalOperator::Serialize(serializer);
-	serializer.WritePropertyWithDefault<shared_ptr<FilterPlan>>(200, "bf_to_use_plan", filter_plan);
+	serializer.WritePropertyWithDefault<shared_ptr<FilterPlan>>(200, "filter_plan", filter_plan);
 }
 
 unique_ptr<LogicalOperator> LogicalUseBF::Deserialize(Deserializer &deserializer) {
-	auto bf_to_use_plan = deserializer.ReadPropertyWithDefault<shared_ptr<FilterPlan>>(200, "bf_to_use_plan");
-	auto result = duckdb::unique_ptr<LogicalUseBF>(new LogicalUseBF(std::move(bf_to_use_plan)));
+	auto filter_plan = deserializer.ReadPropertyWithDefault<shared_ptr<FilterPlan>>(200, "filter_plan");
+	auto result = duckdb::unique_ptr<LogicalUseBF>(new LogicalUseBF(std::move(filter_plan)));
 	return std::move(result);
 }
 

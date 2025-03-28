@@ -76,6 +76,7 @@ idx_t DataChunk::GetAllocationSize() const {
 }
 
 void DataChunk::Reset() {
+	SetCardinality(0);
 	if (data.empty() || vector_caches.empty()) {
 		return;
 	}
@@ -86,7 +87,6 @@ void DataChunk::Reset() {
 		data[i].ResetFromCache(vector_caches[i]);
 	}
 	capacity = STANDARD_VECTOR_SIZE;
-	SetCardinality(0);
 }
 
 void DataChunk::Destroy() {

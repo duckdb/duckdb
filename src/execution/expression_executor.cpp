@@ -62,6 +62,11 @@ void ExpressionExecutor::AddExpression(const Expression &expr) {
 	states.push_back(std::move(state));
 }
 
+void ExpressionExecutor::ClearExpressions() {
+	states.clear();
+	expressions.clear();
+}
+
 void ExpressionExecutor::Initialize(const Expression &expression, ExpressionExecutorState &state) {
 	state.executor = this;
 	state.root_state = InitializeState(expression, state);

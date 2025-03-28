@@ -1,8 +1,8 @@
 #include "arrow/arrow_test_helper.hpp"
 #include "catch.hpp"
 #include "duckdb/common/adbc/adbc.hpp"
-
-#include <duckdb/common/adbc/options.h>
+#include "duckdb/common/adbc/wrappers.hpp"
+#include "duckdb/common/adbc/options.h"
 #include <iostream>
 
 namespace duckdb {
@@ -54,12 +54,15 @@ public:
 
 	bool QueryAndCheck(const string &query) {
 		QueryArrow(query);
-		auto cconn = static_cast<Connection *>(adbc_connection.private_data);
+		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+
+		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
 		return ArrowTestHelper::RunArrowComparison(*cconn, query, arrow_stream);
 	}
 
 	unique_ptr<MaterializedQueryResult> Query(const string &query) {
-		auto cconn = static_cast<Connection *>(adbc_connection.private_data);
+		auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+		auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
 		return cconn->Query(query);
 	}
 
@@ -1111,6 +1114,40 @@ TEST_CASE("Test AdbcConnectionGetTableTypes", "[adbc]") {
 	auto res = db.Query("Select * from result");
 	REQUIRE((res->ColumnCount() == 1));
 	REQUIRE((res->GetValue(0, 0).ToString() == "BASE TABLE"));
+}
+
+TEST_CASE("Test Segfault Option Set", "[adbc]") {
+	if (!duckdb_lib) {
+		return;
+	}
+
+	AdbcDatabase adbc_database;
+	AdbcConnection adbc_connection;
+
+	AdbcError adbc_error;
+	InitializeADBCError(&adbc_error);
+
+	REQUIRE(SUCCESS(AdbcDatabaseNew(&adbc_database, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "driver", duckdb_lib, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "entrypoint", "duckdb_adbc_init", &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseSetOption(&adbc_database, "path", ":memory:", &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcDatabaseInit(&adbc_database, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionNew(&adbc_connection, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionSetOption(&adbc_connection, ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+	                                        ADBC_OPTION_VALUE_DISABLED, &adbc_error)));
+
+	REQUIRE(SUCCESS(AdbcConnectionInit(&adbc_connection, &adbc_database, &adbc_error)));
+
+	auto conn_wrapper = static_cast<DuckDBAdbcConnectionWrapper *>(adbc_connection.private_data);
+	auto cconn = reinterpret_cast<Connection *>(conn_wrapper->connection);
+
+	REQUIRE(!cconn->IsAutoCommit());
+
+	REQUIRE(SUCCESS(AdbcConnectionRelease(&adbc_connection, &adbc_error)));
+	REQUIRE(SUCCESS(AdbcDatabaseRelease(&adbc_database, &adbc_error)));
 }
 
 TEST_CASE("Test AdbcConnectionGetObjects", "[adbc]") {

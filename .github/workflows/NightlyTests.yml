@@ -109,7 +109,6 @@ jobs:
       GEN: ninja
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;json"
-      SMALLER_BINARY: 1
     steps:
     - uses: actions/checkout@v3
       with:
@@ -127,7 +126,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make
+      run: SMALLER_BINARY=1 make
 
     - name: Measure Size
       shell: bash
@@ -458,9 +457,6 @@ jobs:
       CXX: g++-10
       GEN: ninja
       CORE_EXTENSIONS: "parquet;json;tpch;tpcds;httpfs"
-      DEBUG_STACKTRACE: 1
-      LATEST_STORAGE: 1
-      BLOCK_VERIFICATION: 1
 
     steps:
       - uses: actions/checkout@v3
@@ -479,7 +475,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make reldebug
+        run: DEBUG_STACKTRACE=1 BLOCK_VERIFICATION=1 LATEST_STORAGE=1 make reldebug
 
       - name: Test
         shell: bash
@@ -509,7 +505,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      VERIFY_VECTOR: ${{ matrix.vector_type }}
+      VERIFY_VECTOR_KIND: ${{ matrix.vector_type }}
 
     steps:
       - uses: actions/checkout@v3
@@ -528,7 +524,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make reldebug
+        run: VERIFY_VECTOR=${VERIFY_VECTOR_KIND} make reldebug
 
       - name: Test
         shell: bash
@@ -541,7 +537,6 @@ jobs:
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
       - uses: actions/checkout@v3
@@ -560,7 +555,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make relassert
+        run: FORCE_ASYNC_SINK_SOURCE=1 make relassert
 
       - name: Test
         shell: bash
@@ -699,7 +694,6 @@ jobs:
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
-      STANDARD_VECTOR_SIZE: 2
 
     steps:
       - uses: actions/checkout@v3
@@ -718,7 +712,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make relassert
+        run: STANDARD_VECTOR_SIZE=2 make relassert
 
       - name: Test
         shell: bash
@@ -731,7 +725,6 @@ jobs:
     needs: linux-memory-leaks
     env:
       GEN: ninja
-      BLOCK_ALLOC_SIZE: 16384
       CORE_EXTENSIONS: "json;parquet"
 
     steps:
@@ -751,7 +744,7 @@ jobs:
 
       - name: Build with standard vector size
         shell: bash
-        run: make relassert
+        run: BLOCK_ALLOC_SIZE=16384 make relassert
 
       - name: Fast and storage tests
         shell: bash
@@ -761,7 +754,7 @@ jobs:
 
       - name: Build with vector size of 512
         shell: bash
-        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && STANDARD_VECTOR_SIZE=512 make relassert
+        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && BLOCK_ALLOC_SIZE=16384 STANDARD_VECTOR_SIZE=512 make relassert
 
       - name: Fast and storage tests
         shell: bash

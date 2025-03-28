@@ -20,6 +20,7 @@ struct StrfTimeFun {
 	static constexpr const char *Parameters = "data,format";
 	static constexpr const char *Description = "Converts a date to a string according to the format string.";
 	static constexpr const char *Example = "strftime(date '1992-01-01', '%a, %-d %B %Y')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -29,6 +30,7 @@ struct StrpTimeFun {
 	static constexpr const char *Parameters = "text::VARCHAR,format::VARCHAR\1text::VARCHAR,format-list::VARCHAR[]";
 	static constexpr const char *Description = "Converts the string text to timestamp according to the format string. Throws an error on failure. To return NULL on failure, use try_strptime.\1Converts the string text to timestamp applying the format strings in the list until one succeeds. Throws an error on failure. To return NULL on failure, use try_strptime.";
 	static constexpr const char *Example = "strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')\1strptime('4/15/2023 10:56:00', ['%d/%m/%Y %H:%M:%S', '%m/%d/%Y %H:%M:%S'])";
+	static constexpr const char *Categories = "\1";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -38,6 +40,7 @@ struct TryStrpTimeFun {
 	static constexpr const char *Parameters = "text,format";
 	static constexpr const char *Description = "Converts the string text to timestamp according to the format string. Returns NULL on failure.";
 	static constexpr const char *Example = "try_strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();
 };

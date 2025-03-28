@@ -2,11 +2,12 @@
 #include "duckdb/execution/operator/persistent/physical_insert.hpp"
 #include "duckdb/execution/physical_plan_generator.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
-#include "duckdb/storage/data_table.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/execution/operator/persistent/physical_batch_insert.hpp"
+#include "duckdb/execution/operator/projection/physical_projection.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/catalog/duck_catalog.hpp"
+#include "duckdb/planner/expression/bound_reference_expression.hpp"
 
 namespace duckdb {
 
@@ -72,6 +73,30 @@ bool PhysicalPlanGenerator::UseBatchIndex(PhysicalOperator &plan) {
 	return UseBatchIndex(context, plan);
 }
 
+PhysicalOperator &PhysicalPlanGenerator::ResolveDefaultsProjection(LogicalInsert &op, PhysicalOperator &child) {
+	if (op.column_index_map.empty()) {
+		throw InternalException("No defaults to push");
+	}
+	// columns specified by the user, push a projection
+	vector<LogicalType> types;
+	vector<unique_ptr<Expression>> select_list;
+	for (auto &col : op.table.GetColumns().Physical()) {
+		auto storage_idx = col.StorageOid();
+		auto mapped_index = op.column_index_map[col.Physical()];
+		if (mapped_index == DConstants::INVALID_INDEX) {
+			// push default value
+			select_list.push_back(std::move(op.bound_defaults[storage_idx]));
+		} else {
+			// push reference
+			select_list.push_back(make_uniq<BoundReferenceExpression>(col.Type(), mapped_index));
+		}
+		types.push_back(col.Type());
+	}
+	auto &proj = Make<PhysicalProjection>(std::move(types), std::move(select_list), child.estimated_cardinality);
+	proj.children.push_back(child);
+	return proj;
+}
+
 PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGenerator &planner, LogicalInsert &op,
                                           optional_ptr<PhysicalOperator> plan) {
 	D_ASSERT(plan);
@@ -92,20 +117,22 @@ PhysicalOperator &DuckCatalog::PlanInsert(ClientContext &context, PhysicalPlanGe
 		// that currently needs to be done for every chunk, which would add a huge bottleneck to parallelized insertion
 		parallel_streaming_insert = false;
 	}
+	if (!op.column_index_map.empty()) {
+		plan = planner.ResolveDefaultsProjection(op, *plan);
+	}
 	if (use_batch_index && !parallel_streaming_insert) {
-		auto &insert =
-		    planner.Make<PhysicalBatchInsert>(op.types, op.table, op.column_index_map, std::move(op.bound_defaults),
-		                                      std::move(op.bound_constraints), op.estimated_cardinality);
+		auto &insert = planner.Make<PhysicalBatchInsert>(op.types, op.table, std::move(op.bound_constraints),
+		                                                 op.estimated_cardinality);
 		insert.children.push_back(*plan);
 		return insert;
 	}
 
 	auto &insert = planner.Make<PhysicalInsert>(
-	    op.types, op.table, op.column_index_map, std::move(op.bound_defaults), std::move(op.bound_constraints),
-	    std::move(op.expressions), std::move(op.set_columns), std::move(op.set_types), op.estimated_cardinality,
-	    op.return_chunk, parallel_streaming_insert && num_threads > 1, op.action_type,
-	    std::move(op.on_conflict_condition), std::move(op.do_update_condition), std::move(op.on_conflict_filter),
-	    std::move(op.columns_to_fetch), op.update_is_del_and_insert);
+	    op.types, op.table, std::move(op.bound_constraints), std::move(op.expressions), std::move(op.set_columns),
+	    std::move(op.set_types), op.estimated_cardinality, op.return_chunk,
+	    parallel_streaming_insert && num_threads > 1, op.action_type, std::move(op.on_conflict_condition),
+	    std::move(op.do_update_condition), std::move(op.on_conflict_filter), std::move(op.columns_to_fetch),
+	    op.update_is_del_and_insert);
 	insert.children.push_back(*plan);
 	return insert;
 }

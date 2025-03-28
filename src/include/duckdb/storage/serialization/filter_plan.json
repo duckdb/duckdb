@@ -1,6 +1,6 @@
 [
   {
-    "class": "BloomFilterPlan",
+    "class": "FilterPlan",
     "includes": [
       "duckdb/optimizer/predicate_transfer/dag.hpp"
     ],
