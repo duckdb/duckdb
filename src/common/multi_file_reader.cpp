@@ -370,6 +370,37 @@ public:
 	}
 };
 
+void PushColumnMapping(ClientContext &context, MultiFileFileReaderData &reader_data, BaseFileReader &reader,
+                       const LogicalType &global_type, const LogicalType &local_type, MultiFileLocalColumnId local_id,
+                       ResultColumnMapping &result, MultiFileGlobalIndex global_idx, const ColumnIndex &global_id) {
+	auto local_idx = reader.column_ids.size();
+
+	unique_ptr<Expression> expr;
+
+	ColumnIndex local_index(local_id.GetId());
+	if (reader.UseCastMap()) {
+		// reader is responsible for casting
+		expr = make_uniq<BoundReferenceExpression>(global_type, local_idx);
+		if (global_type != local_type) {
+			reader.cast_map[local_id.GetId()] = global_type;
+		}
+	} else {
+		expr = make_uniq<BoundReferenceExpression>(local_type, local_idx);
+		if (global_type != local_type) {
+			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_type);
+		} else {
+			//! FIXME: local fields are not guaranteed to match with the global fields for this struct
+			local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
+		}
+	}
+	reader_data.expressions.push_back(std::move(expr));
+
+	MultiFileColumnMap index_mapping(local_idx, local_type, global_type);
+	result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
+	reader.column_ids.push_back(local_id);
+	reader.column_indexes.push_back(std::move(local_index));
+}
+
 ResultColumnMapping MultiFileReader::CreateColumnMappingByName(
     ClientContext &context, MultiFileFileReaderData &reader_data,
     const vector<MultiFileReaderColumnDefinition> &global_columns, const vector<ColumnIndex> &global_column_ids,
@@ -453,33 +484,9 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByName(
 		D_ASSERT(local_id.GetId() < local_columns.size());
 		auto &global_type = global_columns[global_column_id].type;
 		auto &local_type = local_columns[local_id.GetId()].type;
-		ColumnIndex local_index(local_id.GetId());
 
-		auto local_idx = reader.column_ids.size();
-		auto expected_type = local_type;
-
-		unique_ptr<Expression> expr;
-		if (reader.UseCastMap()) {
-			// reader is responsible for casting
-			expr = make_uniq<BoundReferenceExpression>(global_type, local_idx);
-			if (global_type != local_type) {
-				reader.cast_map[local_id.GetId()] = global_type;
-			}
-		} else {
-			expr = make_uniq<BoundReferenceExpression>(local_type, local_idx);
-			if (global_type != local_type) {
-				expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
-			} else {
-				//! FIXME: local fields are not guaranteed to match with the global fields for this struct
-				local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
-			}
-		}
-		expressions.push_back(std::move(expr));
-		// create the mapping
-		MultiFileColumnMap index_mapping(local_idx, local_type, global_type);
-		result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
-		reader.column_ids.push_back(local_id);
-		reader.column_indexes.emplace_back(std::move(local_index));
+		PushColumnMapping(context, reader_data, reader, global_type, local_type, local_id, result, global_idx,
+		                  global_id);
 	}
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
 	return result;
@@ -584,30 +591,9 @@ ResultColumnMapping MultiFileReader::CreateColumnMappingByFieldId(
 		auto &local_column = local_columns[local_id.GetId()];
 		auto &global_type = global_column.type;
 		auto &local_type = local_column.type;
-		ColumnIndex local_index(local_id.GetId());
 
-		unique_ptr<Expression> expr;
-		if (reader.UseCastMap()) {
-			// reader is responsible for casting
-			expr = make_uniq<BoundReferenceExpression>(global_type, local_idx);
-			if (global_type != local_type) {
-				reader.cast_map[local_id.GetId()] = global_type;
-			}
-		} else {
-			expr = make_uniq<BoundReferenceExpression>(local_type, local_idx);
-			if (global_type != local_type) {
-				expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
-			} else {
-				//! FIXME: local fields are not guaranteed to match with the global fields for this struct
-				local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
-			}
-		}
-		expressions.push_back(std::move(expr));
-
-		MultiFileColumnMap index_mapping(local_idx, local_column.type, global_column.type);
-		result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
-		reader.column_ids.push_back(local_id);
-		reader.column_indexes.push_back(std::move(local_index));
+		PushColumnMapping(context, reader_data, reader, global_type, local_type, local_id, result, global_idx,
+		                  global_id);
 	}
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
 	return result;
