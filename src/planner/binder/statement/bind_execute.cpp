@@ -61,7 +61,18 @@ BoundStatement Binder::Bind(ExecuteStatement &stmt) {
 	}
 	unique_ptr<LogicalOperator> rebound_plan;
 
-	if (prepared->RequireRebind(context, &bind_values)) {
+	RebindQueryInfo rebind = RebindQueryInfo::DO_NOT_REBIND;
+	if (prepared->RequireRebind(context, bind_values)) {
+		rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
+	}
+	for (auto &state : context.registered_state->States()) {
+		BindPreparedStatementCallbackInfo info {*prepared, bind_values};
+		auto new_rebind = state->OnRebindPreparedStatement(context, info, rebind);
+		if (new_rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
+			rebind = RebindQueryInfo::ATTEMPT_TO_REBIND;
+		}
+	}
+	if (rebind == RebindQueryInfo::ATTEMPT_TO_REBIND) {
 		// catalog was modified or statement does not have clear types: rebind the statement before running the execute
 		Planner prepared_planner(context);
 		prepared_planner.parameter_data = bind_values;
