@@ -37,13 +37,13 @@ int main(int argc, char *argv[]) {
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
 	const char *filename("failures_summary.txt");
 
-	const char* summarize = std::getenv("SUMMARIZE_FAILURES");
-    if (summarize != nullptr && std::string(summarize) == "1") {
+	const char *summarize = std::getenv("SUMMARIZE_FAILURES");
+	if (summarize != nullptr && std::string(summarize) == "1") {
 		if (std::FILE *file = std::fopen(filename, "r")) {
 			std::fclose(file);
 			std::remove(filename);
 		}
-			summarize_failures = true;
+		summarize_failures = true;
 	}
 
 	int new_argc = 0;
@@ -100,13 +100,13 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
-	if (std::FILE* file = std::fopen(filename, "r")) {
+	if (std::FILE *file = std::fopen(filename, "r")) {
 		std::fclose(file);
 		std::remove(filename);
 	}
-	
+
 	RegisterSqllogictests();
-	
+
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
 	std::ifstream file(filename);
