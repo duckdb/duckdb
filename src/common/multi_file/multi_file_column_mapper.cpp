@@ -64,20 +64,12 @@ void MultiFileColumnMapper::PushColumnMapping(const LogicalType &global_type, co
 	unique_ptr<Expression> expr;
 
 	ColumnIndex local_index(local_id.GetId());
-	if (reader.UseCastMap()) {
-		// reader is responsible for casting
-		expr = make_uniq<BoundReferenceExpression>(global_type, local_idx);
-		if (global_type != local_type) {
-			reader.cast_map[local_id.GetId()] = global_type;
-		}
+	expr = make_uniq<BoundReferenceExpression>(local_type, local_idx);
+	if (global_type != local_type) {
+		expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_type);
 	} else {
-		expr = make_uniq<BoundReferenceExpression>(local_type, local_idx);
-		if (global_type != local_type) {
-			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_type);
-		} else {
-			//! FIXME: local fields are not guaranteed to match with the global fields for this struct
-			local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
-		}
+		//! FIXME: local fields are not guaranteed to match with the global fields for this struct
+		local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
 	}
 	reader_data.expressions.push_back(std::move(expr));
 
@@ -159,12 +151,29 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByName() {
 				    file_name, identifier, initial_file, file_name, candidate_names);
 			}
 		}
-		// we found the column in the local file - check if the types are the same
+		// we found the top-level column in the local file - check if the types are the same
 		auto local_id = entry->second;
 		D_ASSERT(global_column_id < global_columns.size());
 		D_ASSERT(local_id.GetId() < local_columns.size());
 		auto &global_type = global_columns[global_column_id].type;
 		auto &local_type = local_columns[local_id.GetId()].type;
+		if (reader.UseCastMap()) {
+			// reader is responsible for converting types - just push a reference at this layer
+			ColumnIndex local_index(local_id.GetId());
+			auto local_idx = reader.column_ids.size();
+			auto expr = make_uniq<BoundReferenceExpression>(global_type, local_idx);
+			if (global_type != local_type) {
+				reader.cast_map[local_id.GetId()] = global_type;
+			}
+
+			reader_data.expressions.push_back(std::move(expr));
+
+			MultiFileColumnMap index_mapping(local_idx, local_type, global_type);
+			result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
+			reader.column_ids.push_back(local_id);
+			reader.column_indexes.push_back(std::move(local_index));
+			continue;
+		}
 
 		PushColumnMapping(global_type, local_type, local_id, result, global_idx, global_id);
 	}
@@ -262,6 +271,9 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByFieldId() {
 			expressions.push_back(make_uniq<BoundConstantExpression>(constant_expr.value));
 			reader_data.constant_map.Add(global_idx, constant_expr.value);
 			continue;
+		}
+		if (reader.UseCastMap()) {
+			throw InternalException("Cast map is not supported for field-id based mapping");
 		}
 
 		const auto &local_id = it->second;
