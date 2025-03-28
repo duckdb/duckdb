@@ -58,10 +58,10 @@ select 'hi' || NULL;
 ----
 NULL
 
-statement error
+query I
 select list_concat([1], [2], [3]);
 ----
-Binder Error: No function matches the given name and argument types 'list_concat(INTEGER[], INTEGER[], INTEGER[])'.
+[1, 2, 3]
 
 query I
 select [1] || [2] || [3];
