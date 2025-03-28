@@ -927,6 +927,7 @@ unique_ptr<FileHandle> LocalFileSystem::OpenFile(const string &path_p, FileOpenF
 	}
 	if (opener) {
 		handle->TryAddLogger(*opener);
+		DUCKDB_LOG_FILE_SYSTEM_OPEN((*handle));
 	}
 	return std::move(handle);
 }
