@@ -4,6 +4,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "test_helpers.hpp"
+#include <cstdlib>
 
 using namespace duckdb;
 
@@ -36,12 +37,21 @@ int main(int argc, char *argv[]) {
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
 	const char *filename("failures_summary.txt");
 
+	const char* summarize = std::getenv("SUMMARIZE_FAILURES");
+    if (summarize != nullptr && std::string(summarize) == "1") {
+		if (std::FILE *file = std::fopen(filename, "r")) {
+			std::fclose(file);
+			std::remove(filename);
+		}
+			summarize_failures = true;
+	}
+
 	int new_argc = 0;
 	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
 	for (int i = 0; i < argc; i++) {
 		if (string(argv[i]) == "--force-storage") {
 			test_force_storage = true;
-		} else if (string(argv[i]) == "--force-reload" || string(argv[i]) == "--force-restart") {
+		} else if (string(argv[i]) == "--force-reload") {
 			test_force_reload = true;
 		} else if (StringUtil::StartsWith(string(argv[i]), "--memory-leak") ||
 		           StringUtil::StartsWith(string(argv[i]), "--test-memory-leak")) {
