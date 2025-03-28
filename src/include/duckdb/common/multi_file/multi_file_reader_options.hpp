@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file_reader_options.hpp
+// duckdb/common/multi_file/multi_file_reader_options.hpp
 //
 //
 //===----------------------------------------------------------------------===//

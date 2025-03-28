@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file_reader.hpp
+// duckdb/common/multi_file/multi_file_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,14 +10,13 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
-#include "duckdb/common/multi_file_list.hpp"
+#include "duckdb/common/multi_file/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/union_by_name.hpp"
-#include "duckdb/common/base_file_reader.hpp"
-#include "duckdb/common/multi_file_reader_data.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/common/multi_file/union_by_name.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader_states.hpp"
 
 namespace duckdb {
 class TableFunction;

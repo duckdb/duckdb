@@ -1,19 +1,19 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file_reader_function.hpp
+// duckdb/common/multi_file/multi_file_reader_function.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
-#include "duckdb/common/multi_file_reader_data.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader_data.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include <numeric>
 
 namespace duckdb {

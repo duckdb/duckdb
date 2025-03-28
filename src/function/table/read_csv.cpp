@@ -1,11 +1,11 @@
 #include "duckdb/function/table/read_csv.hpp"
 
 #include "duckdb/common/enum_util.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 #include "duckdb/common/serializer/serializer.hpp"
 #include "duckdb/common/string_util.hpp"
-#include "duckdb/common/union_by_name.hpp"
+#include "duckdb/common/multi_file/union_by_name.hpp"
 #include "duckdb/execution/operator/csv_scanner/global_csv_state.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/execution/operator/csv_scanner/sniffer/csv_sniffer.hpp"
@@ -27,7 +27,7 @@
 
 #include <limits>
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
-#include "duckdb/common/multi_file_reader_function.hpp"
+#include "duckdb/common/multi_file/multi_file_reader_function.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 
 namespace duckdb {

@@ -1,4 +1,4 @@
-#include "duckdb/common/multi_file_reader_column_mapper.hpp"
+#include "duckdb/common/multi_file/multi_file_reader_column_mapper.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"

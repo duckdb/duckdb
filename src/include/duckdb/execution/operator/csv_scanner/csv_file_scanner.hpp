@@ -14,7 +14,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
-#include "duckdb/common/base_file_reader.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
 
 namespace duckdb {
 struct ReadCSVData;

@@ -548,7 +548,7 @@
   {
     "class": "MultiFileReaderOptions",
     "includes": [
-      "duckdb/common/multi_file_reader_options.hpp"
+      "duckdb/common/multi_file/multi_file_reader_options.hpp"
     ],
     "members": [
       {
@@ -593,7 +593,7 @@
   {
     "class": "MultiFileReaderBindData",
     "includes": [
-      "duckdb/common/multi_file_reader.hpp"
+      "duckdb/common/multi_file/multi_file_reader.hpp"
     ],
     "members": [
       {

@@ -1,4 +1,4 @@
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/hive_partitioning.hpp"
@@ -7,7 +7,7 @@
 #include "duckdb/function/function_set.hpp"
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/main/config.hpp"
-#include "duckdb/common/multi_file_reader_column_mapper.hpp"
+#include "duckdb/common/multi_file/multi_file_reader_column_mapper.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/common/string_util.hpp"

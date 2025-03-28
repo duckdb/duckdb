@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file_list.hpp
+// duckdb/common/multi_file/multi_file_list.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -9,7 +9,7 @@
 #pragma once
 
 #include "duckdb/common/common.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/multi_file_reader_options.hpp"
 #include "duckdb/common/extra_operator_info.hpp"
 
 namespace duckdb {

@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_buffer_manager.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_handle.hpp"

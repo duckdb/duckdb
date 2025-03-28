@@ -8,13 +8,13 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/common/multi_file_reader_function.hpp"
+#include "duckdb/common/multi_file/multi_file_reader_function.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 
 namespace duckdb {

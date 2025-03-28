@@ -1,31 +1,18 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file_reader_data.hpp
+// duckdb/common/multi_file/multi_file_reader_states.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/function/table_function.hpp"
-#include "duckdb/function/copy_function.hpp"
-#include "duckdb/common/exception/conversion_exception.hpp"
-#include <numeric>
+#include "duckdb/common/multi_file/multi_file_reader_data.hpp"
+#include "duckdb/common/multi_file/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
 
 namespace duckdb {
-
-enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, SKIPPED, CLOSED };
-
-struct HivePartitioningIndex {
-	HivePartitioningIndex(string value, idx_t index);
-
-	string value;
-	idx_t index;
-
-	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &deserializer);
-};
 
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
@@ -94,40 +81,6 @@ struct MultiFileBindData : public TableFunctionData {
 	void Initialize(ClientContext &, BaseUnionData &union_data) {
 		Initialize(std::move(union_data.reader));
 	}
-};
-
-struct MultiFileConstantMap {
-public:
-	using iterator = vector<MultiFileConstantEntry>::iterator;
-	using const_iterator = vector<MultiFileConstantEntry>::const_iterator;
-
-public:
-	template <typename... Args>
-	void Add(Args &&...args) {
-		constant_map.emplace_back(std::forward<Args>(args)...);
-	}
-	const MultiFileConstantEntry &operator[](MultiFileConstantMapIndex constant_index) {
-		return constant_map[constant_index.index];
-	}
-	idx_t size() const { // NOLINT: matching name of std
-		return constant_map.size();
-	}
-	// Iterator support
-	iterator begin() {
-		return constant_map.begin();
-	}
-	iterator end() {
-		return constant_map.end();
-	}
-	const_iterator begin() const {
-		return constant_map.begin();
-	}
-	const_iterator end() const {
-		return constant_map.end();
-	}
-
-private:
-	vector<MultiFileConstantEntry> constant_map;
 };
 
 //! Per-file data for the multi file reader

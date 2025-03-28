@@ -9,7 +9,7 @@
 #pragma once
 
 #include "delta_utils.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 
 namespace duckdb {
 

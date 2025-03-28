@@ -16,7 +16,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/multi_file_reader_options.hpp"
 #include "duckdb/execution/operator/csv_scanner/set_columns.hpp"
 
 namespace duckdb {

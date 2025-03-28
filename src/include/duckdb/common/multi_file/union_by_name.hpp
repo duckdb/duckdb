@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/union_by_name.hpp
+// duckdb/common/multi_file/union_by_name.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,8 +13,8 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/helper.hpp"
 #include "duckdb/parallel/task_executor.hpp"
-#include "duckdb/common/base_file_reader.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader_options.hpp"
 
 namespace duckdb {
 
