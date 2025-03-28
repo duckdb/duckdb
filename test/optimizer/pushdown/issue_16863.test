@@ -16,4 +16,3 @@ SELECT t1.c1, (t1.c1 IS NULL)
 FROM t1 RIGHT JOIN (SELECT NULL AS col0 FROM t1) AS sub0 ON true
 WHERE (t1.c1 IS NULL);
 ----
-NULL	false
