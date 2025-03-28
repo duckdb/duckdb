@@ -66,8 +66,8 @@
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
 #include "duckdb/common/multi_file/multi_file_list.hpp"
-#include "duckdb/common/multi_file/multi_file_reader_data.hpp"
-#include "duckdb/common/multi_file/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
@@ -2445,22 +2445,22 @@ MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value) {
 	return static_cast<MultiFileFileState>(StringUtil::StringToEnum(GetMultiFileFileStateValues(), 5, "MultiFileFileState", value));
 }
 
-const StringUtil::EnumStringLiteral *GetMultiFileReaderColumnMappingModeValues() {
+const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MultiFileReaderColumnMappingMode::BY_NAME), "BY_NAME" },
-		{ static_cast<uint32_t>(MultiFileReaderColumnMappingMode::BY_FIELD_ID), "BY_FIELD_ID" }
+		{ static_cast<uint32_t>(MultiFileColumnMappingMode::BY_NAME), "BY_NAME" },
+		{ static_cast<uint32_t>(MultiFileColumnMappingMode::BY_FIELD_ID), "BY_FIELD_ID" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<MultiFileReaderColumnMappingMode>(MultiFileReaderColumnMappingMode value) {
-	return StringUtil::EnumToString(GetMultiFileReaderColumnMappingModeValues(), 2, "MultiFileReaderColumnMappingMode", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value) {
+	return StringUtil::EnumToString(GetMultiFileColumnMappingModeValues(), 2, "MultiFileColumnMappingMode", static_cast<uint32_t>(value));
 }
 
 template<>
-MultiFileReaderColumnMappingMode EnumUtil::FromString<MultiFileReaderColumnMappingMode>(const char *value) {
-	return static_cast<MultiFileReaderColumnMappingMode>(StringUtil::StringToEnum(GetMultiFileReaderColumnMappingModeValues(), 2, "MultiFileReaderColumnMappingMode", value));
+MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value) {
+	return static_cast<MultiFileColumnMappingMode>(StringUtil::StringToEnum(GetMultiFileColumnMappingModeValues(), 2, "MultiFileColumnMappingMode", value));
 }
 
 const StringUtil::EnumStringLiteral *GetNTypeValues() {

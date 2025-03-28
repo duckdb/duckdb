@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file/multi_file_reader_column_mapper.hpp
+// duckdb/common/multi_file/multi_file_column_mapper.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -13,14 +13,13 @@
 namespace duckdb {
 struct ResultColumnMapping;
 
-//! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
-class MultiFileReaderColumnMapper {
+class MultiFileColumnMapper {
 public:
-	MultiFileReaderColumnMapper(ClientContext &context, MultiFileFileReaderData &reader_data,
-	                            const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                            const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
-	                            const string &initial_file, const MultiFileReaderBindData &bind_data,
-	                            const virtual_column_map_t &virtual_columns);
+	MultiFileColumnMapper(ClientContext &context, MultiFileReaderData &reader_data,
+	                      const vector<MultiFileColumnDefinition> &global_columns,
+	                      const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> filters,
+	                      const string &initial_file, const MultiFileReaderBindData &bind_data,
+	                      const virtual_column_map_t &virtual_columns);
 
 public:
 	ReaderInitializeType CreateMapping();
@@ -40,8 +39,8 @@ private:
 
 private:
 	ClientContext &context;
-	MultiFileFileReaderData &reader_data;
-	const vector<MultiFileReaderColumnDefinition> &global_columns;
+	MultiFileReaderData &reader_data;
+	const vector<MultiFileColumnDefinition> &global_columns;
 	const vector<ColumnIndex> &global_column_ids;
 	optional_ptr<TableFilterSet> global_filters;
 	const string &initial_file;

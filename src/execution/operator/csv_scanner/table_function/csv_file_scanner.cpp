@@ -7,7 +7,7 @@
 namespace duckdb {
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVReaderOptions options_p,
-                         const MultiFileReaderOptions &file_options, const vector<string> &names,
+                         const MultiFileOptions &file_options, const vector<string> &names,
                          const vector<LogicalType> &types, CSVSchema &file_schema, bool per_file_single_threaded,
                          shared_ptr<CSVBufferManager> buffer_manager_p, bool fixed_schema)
     : BaseFileReader(file_path_p), buffer_manager(std::move(buffer_manager_p)),
@@ -51,7 +51,7 @@ CSVFileScan::CSVFileScan(ClientContext &context, const string &file_path_p, CSVR
 }
 
 CSVFileScan::CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options_p,
-                         const MultiFileReaderOptions &file_options)
+                         const MultiFileOptions &file_options)
     : BaseFileReader(file_name), error_handler(make_shared_ptr<CSVErrorHandler>(options_p.ignore_errors.GetValue())),
       options(options_p) {
 	buffer_manager = make_shared_ptr<CSVBufferManager>(context, options, file_name);
@@ -98,7 +98,7 @@ void CSVFileScan::SetStart() {
 void CSVFileScan::SetNamesAndTypes(const vector<string> &names_p, const vector<LogicalType> &types_p) {
 	names = names_p;
 	types = types_p;
-	columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(names, types);
+	columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(names, types);
 }
 
 void CSVFileScan::InitializeFileNamesTypes() {

@@ -1,4 +1,4 @@
-#include "duckdb/common/multi_file/multi_file_reader_column_mapper.hpp"
+#include "duckdb/common/multi_file/multi_file_column_mapper.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
@@ -9,13 +9,12 @@
 
 namespace duckdb {
 
-MultiFileReaderColumnMapper::MultiFileReaderColumnMapper(ClientContext &context, MultiFileFileReaderData &reader_data,
-                                                         const vector<MultiFileReaderColumnDefinition> &global_columns,
-                                                         const vector<ColumnIndex> &global_column_ids,
-                                                         optional_ptr<TableFilterSet> filters,
-                                                         const string &initial_file,
-                                                         const MultiFileReaderBindData &bind_data,
-                                                         const virtual_column_map_t &virtual_columns)
+MultiFileColumnMapper::MultiFileColumnMapper(ClientContext &context, MultiFileReaderData &reader_data,
+                                             const vector<MultiFileColumnDefinition> &global_columns,
+                                             const vector<ColumnIndex> &global_column_ids,
+                                             optional_ptr<TableFilterSet> filters, const string &initial_file,
+                                             const MultiFileReaderBindData &bind_data,
+                                             const virtual_column_map_t &virtual_columns)
     : context(context), reader_data(reader_data), global_columns(global_columns), global_column_ids(global_column_ids),
       global_filters(filters), initial_file(initial_file), bind_data(bind_data), virtual_columns(virtual_columns) {
 }
@@ -56,9 +55,9 @@ public:
 	}
 };
 
-void MultiFileReaderColumnMapper::PushColumnMapping(const LogicalType &global_type, const LogicalType &local_type,
-                                                    MultiFileLocalColumnId local_id, ResultColumnMapping &result,
-                                                    MultiFileGlobalIndex global_idx, const ColumnIndex &global_id) {
+void MultiFileColumnMapper::PushColumnMapping(const LogicalType &global_type, const LogicalType &local_type,
+                                              MultiFileLocalColumnId local_id, ResultColumnMapping &result,
+                                              MultiFileGlobalIndex global_idx, const ColumnIndex &global_id) {
 	auto &reader = *reader_data.reader;
 	auto local_idx = reader.column_ids.size();
 
@@ -88,7 +87,7 @@ void MultiFileReaderColumnMapper::PushColumnMapping(const LogicalType &global_ty
 	reader.column_indexes.push_back(std::move(local_index));
 }
 
-ResultColumnMapping MultiFileReaderColumnMapper::CreateColumnMappingByName() {
+ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByName() {
 	auto &reader = *reader_data.reader;
 	auto &local_columns = reader.GetColumns();
 	auto &file_name = reader.GetFileName();
@@ -173,7 +172,7 @@ ResultColumnMapping MultiFileReaderColumnMapper::CreateColumnMappingByName() {
 	return result;
 }
 
-ResultColumnMapping MultiFileReaderColumnMapper::CreateColumnMappingByFieldId() {
+ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByFieldId() {
 #ifdef DEBUG
 	//! Make sure the global columns have field_ids to match on
 	for (auto &column : global_columns) {
@@ -276,16 +275,16 @@ ResultColumnMapping MultiFileReaderColumnMapper::CreateColumnMappingByFieldId() 
 	return result;
 }
 
-ResultColumnMapping MultiFileReaderColumnMapper::CreateColumnMapping() {
+ResultColumnMapping MultiFileColumnMapper::CreateColumnMapping() {
 	switch (bind_data.mapping) {
-	case MultiFileReaderColumnMappingMode::BY_NAME: {
+	case MultiFileColumnMappingMode::BY_NAME: {
 		return CreateColumnMappingByName();
 	}
-	case MultiFileReaderColumnMappingMode::BY_FIELD_ID: {
+	case MultiFileColumnMappingMode::BY_FIELD_ID: {
 		return CreateColumnMappingByFieldId();
 	}
 	default: {
-		throw InternalException("Unsupported MultiFileReaderColumnMappingMode type");
+		throw InternalException("Unsupported MultiFileColumnMappingMode type");
 	}
 	}
 }
@@ -389,8 +388,8 @@ static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &cons
 }
 
 ReaderInitializeType
-MultiFileReaderColumnMapper::EvaluateConstantFilters(ResultColumnMapping &mapping,
-                                                     map<idx_t, reference<TableFilter>> &remaining_filters) {
+MultiFileColumnMapper::EvaluateConstantFilters(ResultColumnMapping &mapping,
+                                               map<idx_t, reference<TableFilter>> &remaining_filters) {
 	if (!global_filters) {
 		return ReaderInitializeType::INITIALIZED;
 	}
@@ -552,8 +551,8 @@ void SetIndexToZero(Expression &expr) {
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { SetIndexToZero(child); });
 }
 
-unique_ptr<TableFilterSet> MultiFileReaderColumnMapper::CreateFilters(map<idx_t, reference<TableFilter>> &filters,
-                                                                      ResultColumnMapping &mapping) {
+unique_ptr<TableFilterSet> MultiFileColumnMapper::CreateFilters(map<idx_t, reference<TableFilter>> &filters,
+                                                                ResultColumnMapping &mapping) {
 	if (filters.empty()) {
 		return nullptr;
 	}
@@ -606,7 +605,7 @@ unique_ptr<TableFilterSet> MultiFileReaderColumnMapper::CreateFilters(map<idx_t,
 	return result;
 }
 
-ReaderInitializeType MultiFileReaderColumnMapper::CreateMapping() {
+ReaderInitializeType MultiFileColumnMapper::CreateMapping() {
 	// copy global columns and inject any different defaults
 	auto result = CreateColumnMapping();
 	//! Evaluate the filters against the column(s) that are constant for this file (not present in the local schema)

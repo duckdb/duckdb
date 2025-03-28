@@ -18,7 +18,7 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/parser/parsed_data/copy_info.hpp"
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
-#include "duckdb/common/multi_file/multi_file_reader_function.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 
 #include <limits>
 
@@ -606,7 +606,7 @@ void CSVCopyFunction::RegisterFunction(BuiltinFunctions &set) {
 	info.rotate_files = WriteCSVRotateFiles;
 	info.rotate_next_file = WriteCSVRotateNextFile;
 
-	info.copy_from_bind = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBindCopy;
+	info.copy_from_bind = MultiFileFunction<CSVMultiFileInfo>::MultiFileBindCopy;
 	info.copy_from_function = ReadCSVTableFunction::GetFunction();
 
 	info.extension = "csv";

@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file/multi_file_reader_data.hpp
+// duckdb/common/multi_file/multi_file_data.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -28,18 +28,18 @@ struct HivePartitioningIndex {
 	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &deserializer);
 };
 
-struct MultiFileReaderColumnDefinition {
+struct MultiFileColumnDefinition {
 public:
-	MultiFileReaderColumnDefinition(const string &name, const LogicalType &type) : name(name), type(type) {
+	MultiFileColumnDefinition(const string &name, const LogicalType &type) : name(name), type(type) {
 	}
 
-	MultiFileReaderColumnDefinition(const MultiFileReaderColumnDefinition &other)
+	MultiFileColumnDefinition(const MultiFileColumnDefinition &other)
 	    : name(other.name), type(other.type), children(other.children),
 	      default_expression(other.default_expression ? other.default_expression->Copy() : nullptr),
 	      identifier(other.identifier) {
 	}
 
-	MultiFileReaderColumnDefinition &operator=(const MultiFileReaderColumnDefinition &other) {
+	MultiFileColumnDefinition &operator=(const MultiFileColumnDefinition &other) {
 		if (this != &other) {
 			name = other.name;
 			type = other.type;
@@ -51,9 +51,9 @@ public:
 	}
 
 public:
-	static vector<MultiFileReaderColumnDefinition> ColumnsFromNamesAndTypes(const vector<string> &names,
-	                                                                        const vector<LogicalType> &types) {
-		vector<MultiFileReaderColumnDefinition> columns;
+	static vector<MultiFileColumnDefinition> ColumnsFromNamesAndTypes(const vector<string> &names,
+	                                                                  const vector<LogicalType> &types) {
+		vector<MultiFileColumnDefinition> columns;
 		D_ASSERT(names.size() == types.size());
 		for (idx_t i = 0; i < names.size(); i++) {
 			auto &name = names[i];
@@ -63,7 +63,7 @@ public:
 		return columns;
 	}
 
-	static void ExtractNamesAndTypes(const vector<MultiFileReaderColumnDefinition> &columns, vector<string> &names,
+	static void ExtractNamesAndTypes(const vector<MultiFileColumnDefinition> &columns, vector<string> &names,
 	                                 vector<LogicalType> &types) {
 		D_ASSERT(names.empty());
 		D_ASSERT(types.empty());
@@ -100,7 +100,7 @@ public:
 public:
 	string name;
 	LogicalType type;
-	vector<MultiFileReaderColumnDefinition> children;
+	vector<MultiFileColumnDefinition> children;
 	unique_ptr<ParsedExpression> default_expression;
 
 	//! Either the field_id or the name to map on

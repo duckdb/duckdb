@@ -77,7 +77,7 @@
       {
         "id": 102,
         "name": "file_options",
-        "type": "MultiFileReaderOptions"
+        "type": "MultiFileOptions"
       },
       {
         "id": 103,

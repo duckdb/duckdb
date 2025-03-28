@@ -621,7 +621,7 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	root_schema = ParseSchema();
 	for (idx_t i = 0; i < root_schema->children.size(); i++) {
 		auto &element = root_schema->children[i];
-		auto column = MultiFileReaderColumnDefinition(element.name, element.type);
+		auto column = MultiFileColumnDefinition(element.name, element.type);
 		auto &column_schema = file_meta_data->schema[element.schema_index];
 
 		if (column_schema.__isset.field_id) {

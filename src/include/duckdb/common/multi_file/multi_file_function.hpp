@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file/multi_file_reader_function.hpp
+// duckdb/common/multi_file/multi_file_function.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -12,16 +12,16 @@
 #include "duckdb/function/table_function.hpp"
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
-#include "duckdb/common/multi_file/multi_file_reader_data.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include <numeric>
 
 namespace duckdb {
 
 template <class OP>
-class MultiFileReaderFunction : public TableFunction {
+class MultiFileFunction : public TableFunction {
 public:
-	explicit MultiFileReaderFunction(string name_p)
+	explicit MultiFileFunction(string name_p)
 	    : TableFunction(std::move(name_p), {LogicalType::VARCHAR}, MultiFileScan, MultiFileBind, MultiFileInitGlobal,
 	                    MultiFileInitLocal) {
 		cardinality = MultiFileCardinality;
@@ -40,7 +40,7 @@ public:
 	                                                      unique_ptr<MultiFileReader> multi_file_reader_p,
 	                                                      shared_ptr<MultiFileList> multi_file_list_p,
 	                                                      vector<LogicalType> &return_types, vector<string> &names,
-	                                                      MultiFileReaderOptions file_options_p,
+	                                                      MultiFileOptions file_options_p,
 	                                                      unique_ptr<BaseFileReaderOptions> options_p) {
 		auto result = make_uniq<MultiFileBindData>();
 		result->multi_file_reader = std::move(multi_file_reader_p);
@@ -101,7 +101,7 @@ public:
 			result->types = return_types;
 			result->table_columns = names;
 		}
-		result->columns = MultiFileReaderColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
+		result->columns = MultiFileColumnDefinition::ColumnsFromNamesAndTypes(result->names, result->types);
 		return std::move(result);
 	}
 
@@ -109,7 +109,7 @@ public:
 	                                              vector<LogicalType> &return_types, vector<string> &names) {
 		auto multi_file_reader = MultiFileReader::Create(input.table_function);
 		auto file_list = multi_file_reader->CreateFileList(context, input.inputs[0]);
-		MultiFileReaderOptions file_options;
+		MultiFileOptions file_options;
 
 		auto options = OP::InitializeOptions(context, input.info);
 		for (auto &kv : input.named_parameters) {
@@ -130,7 +130,7 @@ public:
 	                                                  vector<string> &expected_names,
 	                                                  vector<LogicalType> &expected_types) {
 		auto options = OP::InitializeOptions(context, nullptr);
-		MultiFileReaderOptions file_options;
+		MultiFileOptions file_options;
 
 		for (auto &option : info.options) {
 			auto loption = StringUtil::Lower(option.first);
@@ -171,13 +171,12 @@ public:
 		}
 
 		// Push the file in the reader data, to be opened later
-		global_state.readers.push_back(make_uniq<MultiFileFileReaderData>(scanned_file));
+		global_state.readers.push_back(make_uniq<MultiFileReaderData>(scanned_file));
 
 		return true;
 	}
 
-	static ReaderInitializeType InitializeReader(MultiFileFileReaderData &reader_data,
-	                                             const MultiFileBindData &bind_data,
+	static ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,
 	                                             const vector<ColumnIndex> &global_column_ids,
 	                                             optional_ptr<TableFilterSet> table_filters, ClientContext &context,
 	                                             optional_idx file_idx,
@@ -292,7 +291,7 @@ public:
 		}
 	}
 
-	static void InitializeFileScanState(ClientContext &context, MultiFileFileReaderData &reader_data,
+	static void InitializeFileScanState(ClientContext &context, MultiFileReaderData &reader_data,
 	                                    MultiFileLocalState &lstate, vector<idx_t> &projection_ids) {
 		lstate.reader = reader_data.reader;
 		lstate.reader_data = reader_data;
@@ -433,7 +432,7 @@ public:
 			result->readers = {};
 		} else if (!bind_data.union_readers.empty()) {
 			for (auto &reader : bind_data.union_readers) {
-				result->readers.push_back(make_uniq<MultiFileFileReaderData>(reader));
+				result->readers.push_back(make_uniq<MultiFileReaderData>(reader));
 			}
 			if (result->readers.size() != file_list.GetTotalFileCount()) {
 				result->readers = {};
@@ -441,7 +440,7 @@ public:
 		} else if (bind_data.initial_reader) {
 			// we can only use the initial reader if it was constructed from the first file
 			if (bind_data.initial_reader->file_name == file_list.GetFirstFile()) {
-				result->readers.push_back(make_uniq<MultiFileFileReaderData>(std::move(bind_data.initial_reader)));
+				result->readers.push_back(make_uniq<MultiFileReaderData>(std::move(bind_data.initial_reader)));
 			}
 		}
 

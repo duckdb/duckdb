@@ -27,13 +27,12 @@
 
 #include <limits>
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
-#include "duckdb/common/multi_file/multi_file_reader_function.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 
 namespace duckdb {
 
-SerializedCSVReaderOptions::SerializedCSVReaderOptions(CSVReaderOptions options_p,
-                                                       MultiFileReaderOptions file_options_p)
+SerializedCSVReaderOptions::SerializedCSVReaderOptions(CSVReaderOptions options_p, MultiFileOptions file_options_p)
     : options(std::move(options_p)), file_options(std::move(file_options_p)) {
 }
 
@@ -135,17 +134,17 @@ static unique_ptr<FunctionData> CSVReaderDeserialize(Deserializer &deserializer,
 	// auto csv_options = make_uniq<CSVFileReaderOptions>();
 	// csv_options->options = std::move(serialized_data.options.options);
 	//
-	// auto bind_data = MultiFileReaderFunction<CSVMultiFileInfo>::MultiFileBindInternal(
+	// auto bind_data = MultiFileFunction<CSVMultiFileInfo>::MultiFileBindInternal(
 	//     context, std::move(multi_file_reader), std::move(file_list), serialized_data.return_types,
 	//     serialized_data.return_names, std::move(serialized_data.options.file_options), std::move(csv_options));
 	// return bind_data;
 }
 
 TableFunction ReadCSVTableFunction::GetFunction() {
-	MultiFileReaderFunction<CSVMultiFileInfo> read_csv("read_csv");
+	MultiFileFunction<CSVMultiFileInfo> read_csv("read_csv");
 	read_csv.serialize = CSVReaderSerialize;
 	read_csv.deserialize = CSVReaderDeserialize;
-	read_csv.type_pushdown = MultiFileReaderFunction<CSVMultiFileInfo>::PushdownType;
+	read_csv.type_pushdown = MultiFileFunction<CSVMultiFileInfo>::PushdownType;
 	ReadCSVAddNamedParameters(read_csv);
 	return static_cast<TableFunction>(read_csv);
 }

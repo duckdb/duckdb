@@ -1,15 +1,15 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file/multi_file_reader_states.hpp
+// duckdb/common/multi_file/multi_file_states.hpp
 //
 //
 //===----------------------------------------------------------------------===//
 
 #pragma once
 
-#include "duckdb/common/multi_file/multi_file_reader_data.hpp"
-#include "duckdb/common/multi_file/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/multi_file/base_file_reader.hpp"
 
 namespace duckdb {
@@ -23,9 +23,9 @@ struct MultiFileReaderBindData {
 	//! The (global) column id of the file_row_number column (if any)
 	column_t file_row_number_idx = DConstants::INVALID_INDEX;
 	//! (optional) The schema set by the multi file reader
-	vector<MultiFileReaderColumnDefinition> schema;
+	vector<MultiFileColumnDefinition> schema;
 	//! The method used to map local -> global columns
-	MultiFileReaderColumnMappingMode mapping = MultiFileReaderColumnMappingMode::BY_NAME;
+	MultiFileColumnMappingMode mapping = MultiFileColumnMappingMode::BY_NAME;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
 	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &deserializer);
@@ -63,9 +63,9 @@ struct MultiFileBindData : public TableFunctionData {
 	unique_ptr<TableFunctionData> bind_data;
 	shared_ptr<MultiFileList> file_list;
 	unique_ptr<MultiFileReader> multi_file_reader;
-	vector<MultiFileReaderColumnDefinition> columns;
+	vector<MultiFileColumnDefinition> columns;
 	MultiFileReaderBindData reader_bind;
-	MultiFileReaderOptions file_options;
+	MultiFileOptions file_options;
 	vector<LogicalType> types;
 	vector<string> names;
 	virtual_column_map_t virtual_columns;
@@ -84,18 +84,18 @@ struct MultiFileBindData : public TableFunctionData {
 };
 
 //! Per-file data for the multi file reader
-struct MultiFileFileReaderData {
+struct MultiFileReaderData {
 	// Create data for an unopened file
-	explicit MultiFileFileReaderData(const string &file_to_be_opened)
+	explicit MultiFileReaderData(const string &file_to_be_opened)
 	    : reader(nullptr), file_state(MultiFileFileState::UNOPENED), file_mutex(make_uniq<mutex>()),
 	      file_to_be_opened(file_to_be_opened) {
 	}
 	// Create data for an existing reader
-	explicit MultiFileFileReaderData(shared_ptr<BaseFileReader> reader_p)
+	explicit MultiFileReaderData(shared_ptr<BaseFileReader> reader_p)
 	    : reader(std::move(reader_p)), file_state(MultiFileFileState::OPEN), file_mutex(make_uniq<mutex>()) {
 	}
 	// Create data for an existing reader
-	explicit MultiFileFileReaderData(shared_ptr<BaseUnionData> union_data_p) : file_mutex(make_uniq<mutex>()) {
+	explicit MultiFileReaderData(shared_ptr<BaseUnionData> union_data_p) : file_mutex(make_uniq<mutex>()) {
 		if (union_data_p->reader) {
 			reader = std::move(union_data_p->reader);
 			file_state = MultiFileFileState::OPEN;
@@ -149,7 +149,7 @@ struct MultiFileGlobalState : public GlobalTableFunctionState {
 	//! Index of the lowest file we know we have completely read
 	mutable idx_t completed_file_index = 0;
 	//! The current set of readers
-	vector<unique_ptr<MultiFileFileReaderData>> readers;
+	vector<unique_ptr<MultiFileReaderData>> readers;
 
 	idx_t batch_index = 0;
 
@@ -177,7 +177,7 @@ public:
 
 public:
 	shared_ptr<BaseFileReader> reader;
-	optional_ptr<MultiFileFileReaderData> reader_data;
+	optional_ptr<MultiFileReaderData> reader_data;
 	bool is_parallel;
 	idx_t batch_index;
 	idx_t file_index = DConstants::INVALID_INDEX;

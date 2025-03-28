@@ -998,7 +998,7 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options,
-                                                                 const MultiFileReaderOptions &file_options) {
+                                                                 const MultiFileOptions &file_options) {
 	auto state_machine = make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options,
 	                                                      CSVStateMachineCache::Get(context));
 
