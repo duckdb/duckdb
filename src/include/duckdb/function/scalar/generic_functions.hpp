@@ -20,6 +20,7 @@ struct ConstantOrNullFun {
 	static constexpr const char *Parameters = "arg1,arg2";
 	static constexpr const char *Description = "If arg2 is NULL, return NULL. Otherwise, return arg1.";
 	static constexpr const char *Example = "constant_or_null(42, NULL)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -29,6 +30,7 @@ struct GetVariableFun {
 	static constexpr const char *Parameters = "";
 	static constexpr const char *Description = "";
 	static constexpr const char *Example = "";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -38,6 +40,7 @@ struct ErrorFun {
 	static constexpr const char *Parameters = "message";
 	static constexpr const char *Description = "Throws the given error message";
 	static constexpr const char *Example = "error('access_mode')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
@@ -47,6 +50,7 @@ struct CreateSortKeyFun {
 	static constexpr const char *Parameters = "parameters...";
 	static constexpr const char *Description = "Constructs a binary-comparable sort key based on a set of input parameters and sort qualifiers";
 	static constexpr const char *Example = "create_sort_key('A', 'DESC')";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };

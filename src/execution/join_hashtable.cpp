@@ -1113,17 +1113,16 @@ void ScanStructure::ConstructMarkJoinResult(DataChunk &join_keys, DataChunk &chi
 		if (!jdata.validity.AllValid()) {
 			for (idx_t i = 0; i < join_keys.size(); i++) {
 				auto jidx = jdata.sel->get_index(i);
-				mask.Set(i, jdata.validity.RowIsValidUnsafe(jidx));
+				if (!jdata.validity.RowIsValidUnsafe(jidx)) {
+					mask.SetInvalid(i);
+				}
 			}
 		}
 	}
 	// now set the remaining entries to either true or false based on whether a match was found
-	if (found_match) {
-		for (idx_t i = 0; i < child.size(); i++) {
-			bool_result[i] = found_match[i];
-		}
-	} else {
-		memset(bool_result, 0, sizeof(bool) * child.size());
+	D_ASSERT(found_match);
+	for (idx_t i = 0; i < child.size(); i++) {
+		bool_result[i] = found_match[i];
 	}
 	// if the right side contains NULL values, the result of any FALSE becomes NULL
 	if (ht.has_null) {

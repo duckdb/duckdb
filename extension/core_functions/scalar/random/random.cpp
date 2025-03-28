@@ -23,7 +23,7 @@ struct ExtractTimestampUuidOperator {
 	template <typename INPUT_TYPE, typename RESULT_TYPE>
 	static RESULT_TYPE Operation(INPUT_TYPE input, Vector &result) {
 		// Validate whether the given UUID is v7.
-		const uint8_t version = ((uint8_t)((input.upper) >> 8) & 0xf0) >> 4;
+		const uint8_t version = (static_cast<uint8_t>((input.upper) >> 8) & 0xf0) >> 4;
 		if (version != 7) {
 			throw InvalidInputException("Given UUID is with version %u, not version 7.", version);
 		}
@@ -33,8 +33,8 @@ struct ExtractTimestampUuidOperator {
 		int64_t unix_ts_milli = upper;
 		unix_ts_milli = unix_ts_milli >> 16;
 
-		static constexpr uint64_t kMilliToMicro = 1000;
-		const int64_t unix_ts_ms = unix_ts_milli * kMilliToMicro;
+		static constexpr int64_t kMilliToMicro = 1000;
+		const int64_t unix_ts_ms = kMilliToMicro * unix_ts_milli;
 		return timestamp_t {unix_ts_ms};
 	}
 };

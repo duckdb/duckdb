@@ -14,9 +14,10 @@ public:
 	                                    optional_ptr<ReplacementScanData> data);
 	//! Try to perform a replacement, returns NULL on error
 	static unique_ptr<TableRef> TryReplacementObject(const py::object &entry, const string &name,
-	                                                 ClientContext &context);
+	                                                 ClientContext &context, bool relation = false);
 	//! Perform a replacement or throw if it failed
-	static unique_ptr<TableRef> ReplacementObject(const py::object &entry, const string &name, ClientContext &context);
+	static unique_ptr<TableRef> ReplacementObject(const py::object &entry, const string &name, ClientContext &context,
+	                                              bool relation = false);
 };
 
 } // namespace duckdb
