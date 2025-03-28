@@ -6,18 +6,20 @@
 #include "duckdb/parallel/meta_pipeline.hpp"
 #include "duckdb/common/types/row/tuple_data_collection.hpp"
 #include "duckdb/common/types/column/partitioned_column_data.hpp"
-
-#include <re2/re2.h>
+#include "duckdb/execution/operator/aggregate/ungrouped_aggregate_state.hpp"
+#include "duckdb/function/aggregate/distributive_function_utils.hpp"
+#include "duckdb/function/function_binder.hpp"
 
 namespace duckdb {
 
 PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<FilterPlan>> &filter_plans,
-                                   idx_t estimated_cardinality)
+                                   vector<shared_ptr<DynamicTableFilterSet>> dynamic_filter_sets,
+                                   vector<vector<ColumnBinding>> &dynamic_filter_cols, idx_t estimated_cardinality)
     : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality),
-      filter_plans(filter_plans) {
+      filter_plans(filter_plans), min_max_to_create(std::move(dynamic_filter_sets)),
+      min_max_applied_cols(std::move(dynamic_filter_cols)) {
 	for (size_t i = 0; i < filter_plans.size(); ++i) {
 		bf_to_create.emplace_back(make_shared_ptr<BloomFilter>());
-		min_max_to_create.emplace_back(make_shared_ptr<DynamicTableFilterSet>());
 	}
 }
 
@@ -30,6 +32,86 @@ public:
 	    : context(context), op(op),
 	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())) {
 		data_collection = make_uniq<ColumnDataCollection>(context, op.types);
+
+		// init min max aggregation
+		vector<AggregateFunction> aggr_functions;
+		aggr_functions.push_back(MinFunction::GetFunction());
+		aggr_functions.push_back(MaxFunction::GetFunction());
+
+		for (idx_t i = 0; i < op.filter_plans.size(); ++i) {
+			if (op.min_max_to_create[i] == nullptr) {
+				continue;
+			}
+
+			auto &plan = op.filter_plans[i];
+			for (idx_t j = 0; j < plan->build.size(); ++j) {
+				auto &expr = plan->build[j];
+				auto &bound_col_idx = plan->bound_cols_build[j];
+				if (col_to_expr.count(bound_col_idx)) {
+					continue;
+				}
+				col_to_expr[bound_col_idx] = min_max_aggregates.size();
+
+				for (auto &aggr : aggr_functions) {
+					FunctionBinder function_binder(context);
+					vector<unique_ptr<Expression>> aggr_children;
+					aggr_children.push_back(expr->Copy());
+					auto aggr_expr = function_binder.BindAggregateFunction(aggr, std::move(aggr_children), nullptr,
+					                                                       AggregateType::NON_DISTINCT);
+					min_max_aggregates.push_back(std::move(aggr_expr));
+				}
+			}
+		}
+
+		global_aggregate_state =
+		    make_uniq<GlobalUngroupedAggregateState>(BufferAllocator::Get(context), min_max_aggregates);
+	}
+
+	void FinalizeMinMax() {
+		vector<LogicalType> min_max_types;
+		for (auto &aggr_expr : min_max_aggregates) {
+			min_max_types.push_back(aggr_expr->return_type);
+		}
+		auto final_min_max = make_uniq<DataChunk>();
+		final_min_max->Initialize(Allocator::DefaultAllocator(), min_max_types);
+		global_aggregate_state->Finalize(*final_min_max);
+
+		// create a filter for each of the aggregates
+		for (idx_t idx = 0; idx < op.filter_plans.size(); idx++) {
+			auto &filter_plan = op.filter_plans[idx];
+			auto &dynamic_filters = op.min_max_to_create[idx];
+			auto &applied_bindings = op.min_max_applied_cols[idx];
+			if (dynamic_filters == nullptr) {
+				// currently, it does not support min-max pushdown for delim get.
+				continue;
+			}
+
+			for (idx_t expr_idx = 0; expr_idx < filter_plan->build.size(); expr_idx++) {
+				idx_t apply_col_index = applied_bindings[expr_idx].column_index;
+				idx_t build_col_index = filter_plan->bound_cols_build[expr_idx];
+				idx_t agg_idx = col_to_expr[build_col_index];
+
+				auto min_val = final_min_max->data[agg_idx].GetValue(0);
+				auto max_val = final_min_max->data[agg_idx + 1].GetValue(0);
+				if (min_val.IsNull() || max_val.IsNull()) {
+					continue;
+				}
+
+				if (Value::NotDistinctFrom(min_val, max_val)) {
+					// min = max - generate an equality filter
+					auto constant_filter = make_uniq<ConstantFilter>(ExpressionType::COMPARE_EQUAL, std::move(min_val));
+					dynamic_filters->PushFilter(op, apply_col_index, std::move(constant_filter));
+				} else {
+					// min != max - generate a range filter
+					auto greater_equals =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_GREATERTHANOREQUALTO, std::move(min_val));
+					dynamic_filters->PushFilter(op, apply_col_index, std::move(greater_equals));
+					auto less_equals =
+					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
+					dynamic_filters->PushFilter(op, apply_col_index, std::move(less_equals));
+				}
+			}
+		}
 	}
 
 	void ScheduleFinalize(Pipeline &pipeline, Event &event);
@@ -41,21 +123,53 @@ public:
 	const idx_t num_threads;
 	unique_ptr<ColumnDataCollection> data_collection;
 	vector<unique_ptr<ColumnDataCollection>> local_data_collections;
+
+	//! Global Min/Max aggregates for filter pushdown
+	unordered_map<idx_t, idx_t> col_to_expr;
+	unique_ptr<GlobalUngroupedAggregateState> global_aggregate_state;
+	vector<unique_ptr<Expression>> min_max_aggregates;
 };
 
 class CreateBFLocalSinkState : public LocalSinkState {
 public:
 	CreateBFLocalSinkState(ClientContext &context, const PhysicalCreateBF &op) : client_context(context) {
+		auto &gstate = op.sink_state->Cast<CreateBFGlobalSinkState>();
 		local_data = make_uniq<ColumnDataCollection>(context, op.types);
+		col_to_expr = gstate.col_to_expr;
+		local_aggregate_state = make_uniq<LocalUngroupedAggregateState>(*gstate.global_aggregate_state);
+	}
+
+	void Sink(DataChunk &chunk) const {
+		for (auto &pair : col_to_expr) {
+			idx_t col_idx = pair.first;
+			idx_t expr_idx = pair.second;
+
+			// min and max
+			local_aggregate_state->Sink(chunk, col_idx, expr_idx);
+			local_aggregate_state->Sink(chunk, col_idx, expr_idx + 1);
+		}
 	}
 
 	ClientContext &client_context;
 	unique_ptr<ColumnDataCollection> local_data;
+
+	//! Local Min/Max aggregates for filter pushdown
+	unordered_map<idx_t, idx_t> col_to_expr;
+	unique_ptr<LocalUngroupedAggregateState> local_aggregate_state;
 };
 
 SinkResultType PhysicalCreateBF::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &state = input.local_state.Cast<CreateBFLocalSinkState>();
 	state.local_data->Append(chunk);
+
+	// min-max
+	for (auto &pair : state.col_to_expr) {
+		idx_t col_idx = pair.first;
+		idx_t expr_idx = pair.second;
+
+		state.local_aggregate_state->Sink(chunk, col_idx, expr_idx);
+		state.local_aggregate_state->Sink(chunk, col_idx, expr_idx + 1);
+	}
 	return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -63,9 +177,11 @@ SinkCombineResultType PhysicalCreateBF::Combine(ExecutionContext &context, Opera
 	auto &gstate = input.global_state.Cast<CreateBFGlobalSinkState>();
 	auto &state = input.local_state.Cast<CreateBFLocalSinkState>();
 
+	// min-max aggregation
+	gstate.global_aggregate_state->Combine(*state.local_aggregate_state);
+
 	auto guard = gstate.Lock();
 	gstate.local_data_collections.push_back(std::move(state.local_data));
-
 	return SinkCombineResultType::FINISHED;
 }
 
@@ -169,6 +285,9 @@ SinkFinalizeType PhysicalCreateBF::Finalize(Pipeline &pipeline, Event &event, Cl
                                             OperatorSinkFinalizeInput &input) const {
 	auto &sink = input.global_state.Cast<CreateBFGlobalSinkState>();
 
+	// finalize min-max
+	sink.FinalizeMinMax();
+
 	// collect local data
 	for (auto &local_data : sink.local_data_collections) {
 		sink.data_collection->Combine(*local_data);
@@ -220,6 +339,14 @@ InsertionOrderPreservingMap<string> PhysicalCreateBF::ParamsToString() const {
 
 	result["BF Number"] = std::to_string(bf_to_create.size());
 	result["ID"] = "0x" + std::to_string(reinterpret_cast<size_t>(this));
+
+	string min_max_filter;
+	for (auto &filter : min_max_applied_cols) {
+		for (auto &v : filter) {
+			min_max_filter += std::to_string(v.table_index) + "." + std::to_string(v.column_index) + " ";
+		}
+	}
+	result["Min-Max Filter"] = min_max_filter;
 
 	return result;
 }

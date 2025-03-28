@@ -28,6 +28,14 @@ InsertionOrderPreservingMap<string> LogicalCreateBF::ParamsToString() const {
 		bfs += "\n";
 	}
 	result["BloomFilters"] = bfs;
+
+	string min_max_filter;
+	for (auto &filter : min_max_applied_cols) {
+		for (auto &v : filter) {
+			min_max_filter += std::to_string(v.table_index) + "." + std::to_string(v.column_index) + " ";
+		}
+	}
+	result["Min-Max Filter"] = min_max_filter;
 	return result;
 }
 

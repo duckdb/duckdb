@@ -26,16 +26,14 @@ private:
 	//! Create Bloom filter and use existing Bloom filter for the given scan or filter node
 	vector<pair<idx_t, shared_ptr<FilterPlan>>> CreateBloomFilterPlan(LogicalOperator &node, bool reverse = false);
 
-	void GetAllBFsToUse(idx_t cur_node_id, vector<shared_ptr<FilterPlan>> &bfs_to_use_plan,
-	                    vector<idx_t> &parent_nodes, bool reverse);
+	void GetAllBFsToUse(idx_t cur_node_id, vector<shared_ptr<FilterPlan>> &bfs_to_use_plan, vector<idx_t> &parent_nodes,
+	                    bool reverse);
 	void GetAllBFsToCreate(idx_t cur_node_id, vector<shared_ptr<FilterPlan>> &bfs_to_create_plan, bool reverse);
 
 	static unique_ptr<LogicalCreateBF> BuildCreateBFOperator(LogicalOperator &node,
 	                                                         vector<shared_ptr<FilterPlan>> &bf_plans);
-	static unique_ptr<LogicalUseBF> BuildUseBFOperator(LogicalOperator &node,
-	                                                   vector<shared_ptr<FilterPlan>> &bf_plans);
+	static unique_ptr<LogicalUseBF> BuildUseBFOperator(LogicalOperator &node, vector<shared_ptr<FilterPlan>> &bf_plans);
 
-	//! if this node has been filtered?
 	bool HasAnyFilter(LogicalOperator &node, bool reverse = false);
 
 	//! which column(s) involved in this expression?
@@ -45,7 +43,7 @@ private:
 	TransferGraphManager graph_manager;
 
 	//! we use a map to record how to modify/update the operators in the query plan.
-	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> modify_map_for_forward_stage;
-	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> modify_map_for_backward_stage;
+	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> forward_stage_modification;
+	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> backward_stage_modifcation;
 };
 } // namespace duckdb

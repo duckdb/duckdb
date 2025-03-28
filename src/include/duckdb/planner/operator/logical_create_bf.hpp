@@ -23,6 +23,9 @@ public:
 	vector<shared_ptr<FilterPlan>> filter_plans;
 	PhysicalCreateBF *physical = nullptr;
 
+	vector<shared_ptr<DynamicTableFilterSet>> min_max_to_create;
+	vector<vector<ColumnBinding>> min_max_applied_cols;
+
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
 	vector<ColumnBinding> GetColumnBindings() override;

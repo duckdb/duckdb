@@ -8,7 +8,8 @@ namespace duckdb {
 PhysicalCreateBF *PhysicalPlanGenerator::CreatePlanFromRelated(LogicalCreateBF &op) {
 	if (!op.physical) {
 		auto &plan = CreatePlan(*op.children[0]);
-		auto &create_bf = Make<PhysicalCreateBF>(plan.types, op.filter_plans, op.estimated_cardinality);
+		auto &create_bf = Make<PhysicalCreateBF>(plan.types, op.filter_plans, op.min_max_to_create,
+		                                         op.min_max_applied_cols, op.estimated_cardinality);
 		create_bf.children.emplace_back(plan);
 		op.physical = static_cast<PhysicalCreateBF *>(&create_bf); // Store the pointer safely
 	}
@@ -18,7 +19,8 @@ PhysicalCreateBF *PhysicalPlanGenerator::CreatePlanFromRelated(LogicalCreateBF &
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalCreateBF &op) {
 	if (!op.physical) {
 		auto &plan = CreatePlan(*op.children[0]);
-		auto &create_bf = Make<PhysicalCreateBF>(plan.types, op.filter_plans, op.estimated_cardinality);
+		auto &create_bf = Make<PhysicalCreateBF>(plan.types, op.filter_plans, op.min_max_to_create,
+		                                         op.min_max_applied_cols, op.estimated_cardinality);
 		op.physical = static_cast<PhysicalCreateBF *>(&create_bf); // Ensure safe raw pointer storage
 		create_bf.children.emplace_back(plan);
 		return create_bf; // Transfer ownership safely

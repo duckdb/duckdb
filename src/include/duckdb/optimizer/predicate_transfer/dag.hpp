@@ -22,6 +22,8 @@ struct FilterPlan {
 
 	void Serialize(Serializer &serializer) const;
 	static unique_ptr<FilterPlan> Deserialize(Deserializer &deserializer);
+
+	bool operator==(const FilterPlan &other) const;
 };
 
 class GraphEdge {

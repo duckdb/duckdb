@@ -1551,6 +1551,3 @@ if(EXISTS ${CMAKE_CONFIG_TEMPLATE} AND EXISTS ${CMAKE_CONFIG_VERSION_TEMPLATE})
     DESTINATION "${INSTALL_CMAKE_DIR}")
 endif()
 
- add_executable(main main_debug.cpp)
- target_link_libraries(main duckdb)
-

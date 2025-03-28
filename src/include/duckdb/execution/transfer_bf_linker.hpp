@@ -25,8 +25,13 @@ public:
 protected:
 	void VisitOperator(LogicalOperator &op);
 
+	static idx_t FindPlanIndex(const shared_ptr<FilterPlan> &plan, const vector<shared_ptr<FilterPlan>> &filter_plans);
+
+	static void UpdateMinMaxBinding(LogicalOperator &op, vector<ColumnBinding> &updated_bindings,
+	                                shared_ptr<DynamicTableFilterSet> &filter_set);
+
 protected:
-	enum class State { COLLECT_BF_CREATORS, LINK_BF_USERS, CLEAN_USELESS_OPERATORS };
+	enum class State { COLLECT_BF_CREATORS, LINK_BF_USERS, CLEAN_USELESS_OPERATORS, UPDATE_MIN_MAX_BINDING };
 	State state;
 
 	struct FilterPlanHash {
@@ -43,35 +48,13 @@ protected:
 	};
 	struct FilterPlanEquality {
 		bool operator()(const FilterPlan *lhs, const FilterPlan *rhs) const {
-			// If the pointers are the same, trivially equal
 			if (lhs == rhs) {
 				return true;
 			}
-			// Otherwise compare the build/apply vectors item by item
-			if (lhs->build.size() != rhs->build.size()) {
+			if (!lhs || !rhs) {
 				return false;
 			}
-			for (size_t i = 0; i < lhs->build.size(); i++) {
-				auto &lhs_binding = lhs->build[i]->Cast<BoundColumnRefExpression>().binding;
-				auto &rhs_binding = rhs->build[i]->Cast<BoundColumnRefExpression>().binding;
-				if (lhs_binding.table_index != rhs_binding.table_index ||
-				    lhs_binding.column_index != rhs_binding.column_index) {
-					return false;
-				}
-			}
-			// Similarly compare apply …
-			if (lhs->apply.size() != rhs->apply.size()) {
-				return false;
-			}
-			for (size_t i = 0; i < lhs->apply.size(); i++) {
-				auto &lhs_binding = lhs->apply[i]->Cast<BoundColumnRefExpression>().binding;
-				auto &rhs_binding = rhs->apply[i]->Cast<BoundColumnRefExpression>().binding;
-				if (lhs_binding.table_index != rhs_binding.table_index ||
-				    lhs_binding.column_index != rhs_binding.column_index) {
-					return false;
-				}
-			}
-			return true;
+			return *lhs == *rhs;
 		}
 	};
 	unordered_set<LogicalOperator *> useful_creator;

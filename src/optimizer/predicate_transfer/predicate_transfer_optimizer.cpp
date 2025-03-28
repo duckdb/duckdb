@@ -46,8 +46,8 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(
 		child = InsertTransferOperators(std::move(child));
 	}
 
-	LogicalOperator *original_operator = plan.get(); // Store original operator pointer
-
+	// Store original operator pointer
+	LogicalOperator *original_operator = plan.get();
 	auto apply_modification = [&](std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> &modify_map) {
 		auto it = modify_map.find(original_operator);
 		if (it == modify_map.end()) {
@@ -62,14 +62,14 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(
 		plan = std::move(it->second);
 	};
 
-	apply_modification(modify_map_for_forward_stage);
-	apply_modification(modify_map_for_backward_stage);
+	apply_modification(forward_stage_modification);
+	apply_modification(backward_stage_modifcation);
 
 	return plan;
 }
 
-vector<pair<idx_t, shared_ptr<FilterPlan>>>
-PredicateTransferOptimizer::CreateBloomFilterPlan(LogicalOperator &node, bool reverse) {
+vector<pair<idx_t, shared_ptr<FilterPlan>>> PredicateTransferOptimizer::CreateBloomFilterPlan(LogicalOperator &node,
+                                                                                              bool reverse) {
 	vector<pair<idx_t, shared_ptr<FilterPlan>>> result;
 
 	vector<shared_ptr<FilterPlan>> bfs_to_use_plan;
@@ -88,7 +88,7 @@ PredicateTransferOptimizer::CreateBloomFilterPlan(LogicalOperator &node, bool re
 	// Create Bloom Filter
 	GetAllBFsToCreate(node_id, bfs_to_create_plan, reverse);
 
-	auto &replace_map = reverse ? modify_map_for_backward_stage : modify_map_for_forward_stage;
+	auto &replace_map = reverse ? backward_stage_modifcation : forward_stage_modification;
 
 	if (!bfs_to_use_plan.empty() && !bfs_to_create_plan.empty()) {
 		auto last_use_bf = BuildUseBFOperator(node, bfs_to_use_plan);
@@ -132,8 +132,7 @@ void PredicateTransferOptimizer::GetAllBFsToUse(idx_t cur_node_id, vector<shared
 }
 
 void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id,
-                                                   vector<shared_ptr<FilterPlan>> &bfs_to_create_plan,
-                                                   bool reverse) {
+                                                   vector<shared_ptr<FilterPlan>> &bfs_to_create_plan, bool reverse) {
 	auto &node = graph_manager.transfer_graph[cur_node_id];
 	auto &edges = reverse ? node->backward_stage_edges.out : node->forward_stage_edges.out;
 
@@ -169,8 +168,7 @@ void PredicateTransferOptimizer::GetAllBFsToCreate(idx_t cur_node_id,
 }
 
 unique_ptr<LogicalCreateBF>
-PredicateTransferOptimizer::BuildCreateBFOperator(LogicalOperator &node,
-                                                  vector<shared_ptr<FilterPlan>> &bf_plans) {
+PredicateTransferOptimizer::BuildCreateBFOperator(LogicalOperator &node, vector<shared_ptr<FilterPlan>> &bf_plans) {
 	auto create_bf = make_uniq<LogicalCreateBF>(bf_plans);
 	create_bf->SetEstimatedCardinality(node.estimated_cardinality);
 	return create_bf;
@@ -194,7 +192,7 @@ unique_ptr<LogicalUseBF> PredicateTransferOptimizer::BuildUseBFOperator(LogicalO
 }
 
 bool PredicateTransferOptimizer::HasAnyFilter(LogicalOperator &node, bool reverse) {
-	if (!reverse || (modify_map_for_forward_stage.find(&node) == modify_map_for_forward_stage.end())) {
+	if (!reverse || (forward_stage_modification.find(&node) == forward_stage_modification.end())) {
 		if (node.type == LogicalOperatorType::LOGICAL_GET) {
 			auto &get = node.Cast<LogicalGet>();
 			if (get.table_filters.filters.empty()) {

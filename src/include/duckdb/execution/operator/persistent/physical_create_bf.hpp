@@ -22,13 +22,15 @@ public:
 
 public:
 	PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<FilterPlan>> &filter_plans,
-	                 idx_t estimated_cardinality);
+	                 vector<shared_ptr<DynamicTableFilterSet>> dynamic_filter_sets,
+	                 vector<vector<ColumnBinding>> &dynamic_filter_cols, idx_t estimated_cardinality);
 
 	vector<shared_ptr<FilterPlan>> filter_plans;
 	shared_ptr<Pipeline> this_pipeline;
-
 	vector<shared_ptr<BloomFilter>> bf_to_create;
+
 	vector<shared_ptr<DynamicTableFilterSet>> min_max_to_create;
+	vector<vector<ColumnBinding>> min_max_applied_cols;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;
