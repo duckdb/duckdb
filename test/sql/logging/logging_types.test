@@ -1,6 +1,8 @@
 # name: test/sql/logging/logging_types.test
 # group: [logging]
 
+require noforcestorage
+
 statement ok
 PRAGMA enable_logging('FileSystem');
 
