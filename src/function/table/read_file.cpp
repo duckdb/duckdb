@@ -134,7 +134,11 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 
 		// Given the columns requested, do we even need to open the file?
 		if (state.requires_file_open) {
-			file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_DIRECT_IO);
+			auto flags = FileFlags::FILE_FLAGS_READ;
+			if (FileSystem::IsRemoteFile(file_name)) {
+				flags |= FileFlags::FILE_FLAGS_DIRECT_IO;
+			}
+			file_handle = fs.OpenFile(file_name, flags);
 		}
 
 		for (idx_t col_idx = 0; col_idx < state.column_ids.size(); col_idx++) {
@@ -176,7 +180,7 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 						} else {
 							// Local file: non-caching read
 							actually_read = NumericCast<idx_t>(file_handle->GetFileHandle().Read(
-								content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read)));
+							    content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read)));
 						}
 
 						if (actually_read == 0) {
