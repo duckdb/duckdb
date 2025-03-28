@@ -32,10 +32,10 @@ PRAGMA enable_logging('QueryLog');
 statement ok
 SELECT 'hallo' as value;
 
-statement error
-FROM duckdb_logs_parsed('QueryLog')
+query IIII
+SELECT type, log_level, scope, message FROM duckdb_logs_parsed('QueryLog') ORDER BY timestamp
 ----
-Not implemented Error: The log type 'QueryLog', can not be parsed automatically. Please use `FROM duckdb_logs WHERE type='QueryLog';` instead.
+QueryLog	INFO	CONNECTION	SELECT 'hallo' as value;
 
 statement ok
 SELECT type, log_level, scope, message FROM duckdb_logs WHERE type='QueryLog';

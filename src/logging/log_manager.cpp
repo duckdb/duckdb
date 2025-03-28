@@ -43,7 +43,7 @@ Logger &LogManager::GlobalLogger() {
 	return *global_logger;
 }
 
-shared_ptr<Logger> LogManager::CopyGlobalLoggerPtr() {
+shared_ptr<Logger> LogManager::GlobalLoggerReference() {
 	return global_logger;
 }
 

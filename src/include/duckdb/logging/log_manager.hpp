@@ -40,7 +40,7 @@ public:
 
 	//! The global logger can be used whe
 	DUCKDB_API Logger &GlobalLogger();
-	DUCKDB_API shared_ptr<Logger> CopyGlobalLoggerPtr();
+	DUCKDB_API shared_ptr<Logger> GlobalLoggerReference();
 
 	//! Flush everything
 	DUCKDB_API void Flush();

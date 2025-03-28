@@ -654,7 +654,7 @@ void FileHandle::TryAddLogger(FileOpener &opener) {
 	}
 	auto database = opener.TryGetDatabase();
 	if (database && Logger::Get(*database).ShouldLog(FileSystemLogType::NAME, FileSystemLogType::LEVEL)) {
-		logger = database->GetLogManager().CopyGlobalLoggerPtr();
+		logger = database->GetLogManager().GlobalLoggerReference();
 	}
 }
 

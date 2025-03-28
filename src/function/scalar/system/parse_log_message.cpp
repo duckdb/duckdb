@@ -49,18 +49,27 @@ unique_ptr<FunctionData> ParseLogMessageBind(ClientContext &context, ScalarFunct
 	}
 
 	if (!lookup->is_structured) {
-		throw NotImplementedException("The log type '%s', can not be parsed automatically. Please use `FROM "
-		                              "duckdb_logs WHERE type='%s';` instead.",
-		                              type, type);
+		// Unstructured types we simply wrap in a struct with a single field called message
+		child_list_t<LogicalType> children = {{"message", LogicalType::VARCHAR}};
+		bound_function.return_type = LogicalType::STRUCT(children);
+	} else {
+		bound_function.return_type = lookup->type;
 	}
-
-	bound_function.return_type = lookup->type;
 
 	return make_uniq<ParseLogMessageData>(*lookup);
 }
 
 static void ParseLogMessageFunction(DataChunk &args, ExpressionState &state, Vector &result) {
-	VectorOperations::DefaultCast(args.data[1], result, args.size(), true);
+	auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
+	const auto &info = func_expr.bind_info->Cast<ParseLogMessageData>();
+
+	if (info.log_type.is_structured) {
+		// TODO: allow more complex parsing operations than DefaultCast
+		VectorOperations::DefaultCast(args.data[1], result, args.size(), true);
+	} else {
+		auto &struct_entries = StructVector::GetEntries(result);
+		struct_entries[0]->Reference(args.data[1]);
+	}
 }
 
 ScalarFunction ParseLogMessage::GetFunction() {

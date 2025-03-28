@@ -80,6 +80,7 @@ struct ParseLogMessage {
 	static constexpr const char *Parameters = "type,message";
 	static constexpr const char *Description = "Parse the message into the expected logical type";
 	static constexpr const char *Example = "parse_duckdb_log_message('FileSystem', log_message)";
+	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
 };
