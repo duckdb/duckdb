@@ -14,6 +14,7 @@
 #include "duckdb/planner/table_filter.hpp"
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/planner/expression.hpp"
 
 namespace duckdb {
 
@@ -266,7 +267,7 @@ public:
 	void push_back(MultiFileGlobalIndex global_index) { // NOLINT: matching name of std
 		column_mapping.push_back(global_index);
 	}
-	const MultiFileGlobalIndex &operator[](MultiFileLocalIndex local_index) {
+	const MultiFileGlobalIndex &operator[](MultiFileLocalIndex local_index) const {
 		return column_mapping[local_index.index];
 	}
 	idx_t size() const { // NOLINT: matching name of std
@@ -370,11 +371,8 @@ struct MultiFileReaderData {
 	MultiFileColumnMapping column_mapping;
 	//! Whether or not there are no columns to read. This can happen when a file only consists of constants
 	bool empty_columns = false;
-	//! Filters can point to either (1) local columns in the file, or (2) constant values in the `constant_map`
-	//! This map specifies where the to-be-filtered value can be found
-	MultiFileFilterMap filter_map;
-	//! The set of table filters
-	optional_ptr<TableFilterSet> filters;
+	//! The set of table filters (adjusted to local indexes)
+	unique_ptr<TableFilterSet> filters;
 	//! The constants that should be applied at the various positions
 	MultiFileConstantMap constant_map;
 	//! Map of (local) column_id -> cast, used when reading multiple files when files have diverging types
@@ -382,6 +380,24 @@ struct MultiFileReaderData {
 	MultiFileCastMap cast_map;
 	//! (Optionally) The MultiFileReader-generated metadata corresponding to the currently read file
 	optional_idx file_list_idx;
+
+	vector<unique_ptr<Expression>> expressions;
+};
+
+struct MultiFileIndexMapping {
+public:
+	explicit MultiFileIndexMapping(idx_t index) : index(index) {
+	}
+
+public:
+	MultiFileIndexMapping &AddMapping(idx_t from, idx_t to) {
+		auto res = child_mapping.emplace(from, make_uniq<MultiFileIndexMapping>(to));
+		return *res.first->second;
+	}
+
+public:
+	idx_t index;
+	unordered_map<idx_t, unique_ptr<MultiFileIndexMapping>> child_mapping;
 };
 
 //! Parent class of single-file readers - this must be inherited from for readers implementing the MultiFileReader

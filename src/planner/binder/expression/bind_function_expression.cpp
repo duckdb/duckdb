@@ -39,12 +39,14 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 	// lookup the function in the catalog
 	QueryErrorContext error_context(function.GetQueryLocation());
 	binder.BindSchemaOrCatalog(function.catalog, function.schema);
-	auto func = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
-	                            function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, function.function_name, error_context);
+	auto func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (!func) {
 		// function was not found - check if we this is a table function
-		auto table_func = GetCatalogEntry(CatalogType::TABLE_FUNCTION_ENTRY, function.catalog, function.schema,
-		                                  function.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+		EntryLookupInfo table_function_lookup(CatalogType::TABLE_FUNCTION_ENTRY, function.function_name, error_context);
+		auto table_func =
+		    GetCatalogEntry(function.catalog, function.schema, table_function_lookup, OnEntryNotFound::RETURN_NULL);
 		if (table_func) {
 			throw BinderException(function,
 			                      "Function \"%s\" is a table function but it was used as a scalar function. This "
@@ -74,8 +76,7 @@ BindResult ExpressionBinder::BindExpression(FunctionExpression &function, idx_t 
 			}
 		}
 		// rebind the function
-		func = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, function.catalog, function.schema,
-		                       function.function_name, OnEntryNotFound::THROW_EXCEPTION, error_context);
+		func = GetCatalogEntry(function.catalog, function.schema, function_lookup, OnEntryNotFound::THROW_EXCEPTION);
 	}
 
 	if (func->type != CatalogType::AGGREGATE_FUNCTION_ENTRY &&
@@ -284,11 +285,10 @@ string ExpressionBinder::UnsupportedUnnestMessage() {
 	return "UNNEST not supported here";
 }
 
-optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(CatalogType type, const string &catalog,
-                                                             const string &schema, const string &name,
-                                                             OnEntryNotFound on_entry_not_found,
-                                                             QueryErrorContext &error_context) {
-	return binder.GetCatalogEntry(type, catalog, schema, name, on_entry_not_found, error_context);
+optional_ptr<CatalogEntry> ExpressionBinder::GetCatalogEntry(const string &catalog, const string &schema,
+                                                             const EntryLookupInfo &lookup_info,
+                                                             OnEntryNotFound on_entry_not_found) {
+	return binder.GetCatalogEntry(catalog, schema, lookup_info, on_entry_not_found);
 }
 
 } // namespace duckdb

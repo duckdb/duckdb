@@ -1736,11 +1736,7 @@ void ShellState::ExecutePreparedStatement(sqlite3_stmt *pStmt) {
 		/* extract the data and data types */
 		for (int i = 0; i < nCol; i++) {
 			result.types[i] = sqlite3_column_type(pStmt, i);
-			if (result.types[i] == SQLITE_BLOB && cMode == RenderMode::INSERT) {
-				result.data[i] = "";
-			} else {
-				result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
-			}
+			result.data[i] = (const char *)sqlite3_column_text(pStmt, i);
 			if (!result.data[i] && result.types[i] != SQLITE_NULL) {
 				// OOM
 				rc = SQLITE_NOMEM;
@@ -4691,7 +4687,7 @@ static const char zOptions[] =
     "   -markdown            set output mode to 'markdown'\n"
     "   -newline SEP         set output row separator. Default: '\\n'\n"
     "   -no-stdin            exit after processing options instead of reading stdin\n"
-    "   -nullvalue TEXT      set text string for NULL values. Default ''\n"
+    "   -nullvalue TEXT      set text string for NULL values. Default 'NULL'\n"
     "   -quote               set output mode to 'quote'\n"
     "   -readonly            open the database read-only\n"
     "   -s COMMAND           run \"COMMAND\" and exit\n"

@@ -144,8 +144,9 @@ static LogicalType BindRangeExpression(ClientContext &context, const string &nam
 BindResult BaseSelectBinder::BindWindow(WindowExpression &window, idx_t depth) {
 	QueryErrorContext error_context(window.GetQueryLocation());
 	//	Check for macros pretending to be aggregates
-	auto entry = GetCatalogEntry(CatalogType::SCALAR_FUNCTION_ENTRY, window.catalog, window.schema,
-	                             window.function_name, OnEntryNotFound::RETURN_NULL, error_context);
+
+	EntryLookupInfo function_lookup(CatalogType::SCALAR_FUNCTION_ENTRY, window.function_name, error_context);
+	auto entry = GetCatalogEntry(window.catalog, window.schema, function_lookup, OnEntryNotFound::RETURN_NULL);
 	if (window.GetExpressionType() == ExpressionType::WINDOW_AGGREGATE && entry &&
 	    entry->type == CatalogType::MACRO_ENTRY) {
 		auto macro = make_uniq<FunctionExpression>(window.catalog, window.schema, window.function_name,
