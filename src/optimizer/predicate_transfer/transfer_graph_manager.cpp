@@ -54,6 +54,10 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 				continue;
 			}
 
+			if (!cond.left->return_type.IsNumeric() || !cond.right->return_type.IsNumeric()) {
+				continue;
+			}
+
 			hash_t hash = cond.left->Hash() + cond.right->Hash();
 			if (existed_set.count(hash)) {
 				continue;

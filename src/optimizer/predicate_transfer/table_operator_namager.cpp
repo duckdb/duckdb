@@ -5,8 +5,6 @@
 #include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 
-#include <duckdb/planner/operator/logical_filter.hpp>
-
 namespace duckdb {
 vector<reference<LogicalOperator>> TableOperatorManager::ExtractOperators(LogicalOperator &plan) {
 	vector<reference<LogicalOperator>> ret;
