@@ -1,5 +1,5 @@
 #include "duckdb/common/helper.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "json_functions.hpp"
 #include "json_scan.hpp"
 #include "json_structure.hpp"
@@ -236,7 +236,7 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 }
 
 TableFunction JSONFunctions::GetReadJSONTableFunction(shared_ptr<JSONScanInfo> function_info) {
-	MultiFileReaderFunction<JSONMultiFileInfo> table_function("read_json");
+	MultiFileFunction<JSONMultiFileInfo> table_function("read_json");
 
 	JSONScan::TableFunctionDefaults(table_function);
 	table_function.named_parameters["columns"] = LogicalType::ANY;

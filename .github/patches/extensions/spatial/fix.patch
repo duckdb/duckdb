@@ -200,10 +200,10 @@ index e960069..2b73e36 100644
  	void Serialize(Serializer &writer) const override {
  		LogicalExtensionOperator::Serialize(writer);
 diff --git a/src/spatial/index/rtree/rtree_index_scan.cpp b/src/spatial/index/rtree/rtree_index_scan.cpp
-index 318f414..d9b4dc1 100644
+index 2cb8db3..adf0135 100644
 --- a/src/spatial/index/rtree/rtree_index_scan.cpp
 +++ b/src/spatial/index/rtree/rtree_index_scan.cpp
-@@ -56,7 +56,7 @@ static unique_ptr<GlobalTableFunctionState> RTreeIndexScanInitGlobal(ClientConte
+@@ -60,7 +60,7 @@ static unique_ptr<GlobalTableFunctionState> RTreeIndexScanInitGlobal(ClientConte
  	}
  
  	// Initialize the storage scan state
@@ -212,3 +212,54 @@ index 318f414..d9b4dc1 100644
  	local_storage.InitializeScan(bind_data.table.GetStorage(), result->local_storage_state.local_state, input.filters);
  
  	// Initialize the scan state for the index
+diff --git a/src/spatial/modules/gdal/gdal_module.cpp b/src/spatial/modules/gdal/gdal_module.cpp
+index b96928d..69307c0 100644
+--- a/src/spatial/modules/gdal/gdal_module.cpp
++++ b/src/spatial/modules/gdal/gdal_module.cpp
+@@ -9,7 +9,7 @@
+ // DuckDB
+ #include "duckdb/main/database.hpp"
+ #include "duckdb/common/enums/file_glob_options.hpp"
+-#include "duckdb/common/multi_file_reader.hpp"
++#include "duckdb/common/multi_file/multi_file_reader.hpp"
+ #include "duckdb/function/table/arrow.hpp"
+ #include "duckdb/main/extension_util.hpp"
+ #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+diff --git a/src/spatial/modules/shapefile/shapefile_module.cpp b/src/spatial/modules/shapefile/shapefile_module.cpp
+index 5659fc8..4b51d75 100644
+--- a/src/spatial/modules/shapefile/shapefile_module.cpp
++++ b/src/spatial/modules/shapefile/shapefile_module.cpp
+@@ -3,7 +3,7 @@
+ #include "spatial/geometry/sgl.hpp"
+ #include "spatial/spatial_types.hpp"
+ 
+-#include "duckdb/common/multi_file_reader.hpp"
++#include "duckdb/common/multi_file/multi_file_reader.hpp"
+ #include "duckdb/function/replacement_scan.hpp"
+ #include "duckdb/main/extension_util.hpp"
+ #include "duckdb/parser/expression/constant_expression.hpp"
+diff --git a/test/sql/geometry/st_dump.test b/test/sql/geometry/st_dump.test
+index 3346f5f..c181720 100644
+--- a/test/sql/geometry/st_dump.test
++++ b/test/sql/geometry/st_dump.test
+@@ -25,7 +25,7 @@ SElECT ST_Dump(ST_GeomFromText('GEOMETRYCOLLECTION EMPTY'));
+ query I
+ SElECT ST_Dump(ST_GeomFromText('GEOMETRYCOLLECTION (POINT (0 0))'));
+ ----
+-[{'geom': POINT (0 0), 'path': [1]}]
++[{'geom': 'POINT (0 0)', 'path': [1]}]
+ 
+ # Test with multipoint
+ query II
+@@ -69,9 +69,9 @@ FROM (VALUES
+     (ST_GeomFromText('GEOMETRYCOLLECTION (POINT (1 1), GEOMETRYCOLLECTION(POINT (3 3)), POINT (2 2))'))
+ ) as t(geom)
+ ----
+-[{'geom': POINT (1 1), 'path': [1]}, {'geom': POINT (2 2), 'path': [2]}, {'geom': POINT (3 3), 'path': [3, 1]}]
++[{'geom': 'POINT (1 1)', 'path': [1]}, {'geom': 'POINT (2 2)', 'path': [2]}, {'geom': 'POINT (3 3)', 'path': [3, 1]}]
+ NULL
+-[{'geom': POINT (1 1), 'path': [1]}, {'geom': POINT (3 3), 'path': [2, 1]}, {'geom': POINT (2 2), 'path': [3]}]
++[{'geom': 'POINT (1 1)', 'path': [1]}, {'geom': 'POINT (3 3)', 'path': [2, 1]}, {'geom': 'POINT (2 2)', 'path': [3]}]
+ 
+ 
+ # With Z and M
