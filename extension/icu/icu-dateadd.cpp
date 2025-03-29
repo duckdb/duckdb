@@ -8,6 +8,7 @@
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "include/icu-datefunc.hpp"
+#include "icu-helpers.hpp"
 
 namespace duckdb {
 
@@ -171,30 +172,11 @@ interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_dat
 		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar);
 		return {-negated.months, -negated.days, -negated.micros};
 	}
-
-	auto start_micros = ICUDateFunc::SetTime(calendar, start_date);
-	auto end_micros = (uint64_t)(end_date.value % Interval::MICROS_PER_MSEC);
-
-	// Borrow 1ms from end_date if we wrap. This works because start_date <= end_date
-	// and if the µs are out of order, then there must be an extra ms.
-	if (start_micros > (idx_t)end_micros) {
-		end_date.value -= Interval::MICROS_PER_MSEC;
-		end_micros += Interval::MICROS_PER_MSEC;
-	}
-
-	//	Lunar calendars have uneven numbers of months, so we just diff months, not years
-	interval_t result;
-	result.months = SubtractField(calendar, UCAL_MONTH, end_date);
-	result.days = SubtractField(calendar, UCAL_DATE, end_date);
-
-	auto hour_diff = SubtractField(calendar, UCAL_HOUR_OF_DAY, end_date);
-	auto min_diff = SubtractField(calendar, UCAL_MINUTE, end_date);
-	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
-	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
-	auto micros_diff = UnsafeNumericCast<int32_t>(ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros));
-	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
-
-	return result;
+	auto start_data = ICUHelpers::DecomposeTimestamp(timestamp_tz_t(start_date.value), calendar);
+	auto end_data = ICUHelpers::DecomposeTimestamp(timestamp_tz_t(end_date.value), calendar);
+	auto start_ts = ICUHelpers::ToTimestamp(start_data);
+	auto end_ts = ICUHelpers::ToTimestamp(end_data);
+	return Interval::GetAge(end_ts, start_ts);
 }
 
 struct ICUDateAdd : public ICUDateFunc {
