@@ -14,6 +14,12 @@ SELECT b || NULL from x1;
 statement ok
 SELECT NULL || NULL from x1;
 
+statement ok
+SELECT NULL || b || NULL from x1;
+
+statement ok
+SELECT b || NULL || b from x1;
+
 query I
 select concat([42]);
 ----
@@ -28,3 +34,23 @@ query I
 select concat([42]::INT[1], [43]::INT[1], NULL::INT[1], [44]::INT[1], NULL::INT[1], [45]::INT[1]);
 ----
 [42, 43, 44, 45]
+
+query I
+select list_concat([42]);
+----
+[42]
+
+query I
+select list_concat([42], [43], [], [44], [], [45]);
+----
+[42, 43, 44, 45]
+
+query I
+select list_concat([42]::INT[1], [43]::INT[1], NULL::INT[1], [44]::INT[1], NULL::INT[1], [45]::INT[1]);
+----
+[42, 43, 44, 45]
+
+query I
+select list_concat([1]::INT[1], [2, 3]::INT[2]);
+----
+[1, 2, 3]

@@ -53,15 +53,25 @@ select concat([1], 'hello');
 ----
 Binder Error: Cannot concatenate types INTEGER[] and VARCHAR
 
+statement error
+SELECT list_concat([1, 2], ['3', '4'])
+----
+Binder Error: Cannot concatenate lists of types INTEGER[] and VARCHAR[]
+
+statement error
+SELECT list_concat([1, 2], 4)
+----
+Binder Error: No function matches the given name and argument types 'list_concat(INTEGER[], INTEGER_LITERAL)'. You might need to add explicit type casts.
+
 query I
 select 'hi' || NULL;
 ----
 NULL
 
-statement error
+query I
 select list_concat([1], [2], [3]);
 ----
-Binder Error: No function matches the given name and argument types 'list_concat(INTEGER[], INTEGER[], INTEGER[])'.
+[1, 2, 3]
 
 query I
 select [1] || [2] || [3];
