@@ -66,6 +66,11 @@ SELECT
    bar(count, 0, max(count) over ()) AS bar
 FROM histogram_values(source, col_name, bin_count := bin_count, technique := technique);
 )"},
+	{DEFAULT_SCHEMA, "duckdb_logs_parsed", {"log_type"}, {}, R"(
+SELECT * EXCLUDE (message), UNNEST(parse_duckdb_log_message(log_type, message))
+FROM duckdb_logs
+WHERE type = log_type
+)"},
 	{nullptr, nullptr, {nullptr}, {{nullptr, nullptr}}, nullptr}
 	};
 // clang-format on
