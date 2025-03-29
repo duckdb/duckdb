@@ -558,7 +558,8 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 	} else { // leaf node
 		if (!s_ele.__isset.type) {
 			throw InvalidInputException(
-			    "Node has neither num_children nor type set - this violates the Parquet spec (corrupted file)");
+			    "Node '%s' has neither num_children nor type set - this violates the Parquet spec (corrupted file)",
+			    s_ele.name.c_str());
 		}
 		auto result = ParseColumnSchema(s_ele, max_define, max_repeat, this_idx, next_file_idx++);
 		if (s_ele.repetition_type == FieldRepetitionType::REPEATED) {
