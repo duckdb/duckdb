@@ -4,6 +4,7 @@
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "test_helpers.hpp"
+#include <cstdlib>
 
 using namespace duckdb;
 
@@ -11,6 +12,7 @@ namespace duckdb {
 static bool test_force_storage = false;
 static bool test_force_reload = false;
 static bool test_memory_leaks = false;
+static bool summarize_failures = false;
 
 bool TestForceStorage() {
 	return test_force_storage;
@@ -24,18 +26,32 @@ bool TestMemoryLeaks() {
 	return test_memory_leaks;
 }
 
+bool SummarizeFailures() {
+	return summarize_failures;
+}
+
 } // namespace duckdb
 
 int main(int argc, char *argv[]) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
+	const char *filename("failures_summary.txt");
+
+	const char *summarize = std::getenv("SUMMARIZE_FAILURES");
+	if (summarize != nullptr && std::string(summarize) == "1") {
+		if (std::FILE *file = std::fopen(filename, "r")) {
+			std::fclose(file);
+			std::remove(filename);
+		}
+		summarize_failures = true;
+	}
 
 	int new_argc = 0;
 	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
 	for (int i = 0; i < argc; i++) {
 		if (string(argv[i]) == "--force-storage") {
 			test_force_storage = true;
-		} else if (string(argv[i]) == "--force-reload" || string(argv[i]) == "--force-restart") {
+		} else if (string(argv[i]) == "--force-reload") {
 			test_force_reload = true;
 		} else if (StringUtil::StartsWith(string(argv[i]), "--memory-leak") ||
 		           StringUtil::StartsWith(string(argv[i]), "--test-memory-leak")) {
@@ -59,6 +75,13 @@ int main(int argc, char *argv[]) {
 			SetDebugInitialize(0xFF);
 		} else if (string(argv[i]) == "--single-threaded") {
 			SetSingleThreaded();
+		} else if (string(argv[i]) == "--summarize-failures") {
+			// cleanup before creating new failures summary file
+			if (std::FILE *file = std::fopen(filename, "r")) {
+				std::fclose(file);
+				std::remove(filename);
+			}
+			summarize_failures = true;
 		} else {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
@@ -77,9 +100,38 @@ int main(int argc, char *argv[]) {
 		return 1;
 	}
 
+	if (std::FILE *file = std::fopen(filename, "r")) {
+		std::fclose(file);
+		std::remove(filename);
+	}
+
 	RegisterSqllogictests();
 
 	int result = Catch::Session().run(new_argc, new_argv.get());
+
+	std::ifstream file(filename);
+	if (file && summarize_failures) {
+		std::cout << "\n====================================================" << std::endl;
+		std::cout << "================  FAILURES SUMMARY  ================" << std::endl;
+		std::cout << "====================================================\n" << std::endl;
+
+		string line;
+		int i = 0;
+		bool has_failures = false;
+		while (std::getline(file, line)) {
+			if (StringUtil::StartsWith(line, "next case")) {
+				i++;
+				std::cerr << " \n" << i << ": ";
+			} else {
+				std::cerr << line << std::endl;
+			}
+			has_failures = true;
+		}
+		if (!has_failures) {
+			std::cout << "No failures recorded." << std::endl;
+		}
+		file.close();
+	}
 
 	if (DeleteTestPath()) {
 		TestDeleteDirectory(dir);

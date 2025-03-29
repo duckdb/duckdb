@@ -13,6 +13,8 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include <chrono>
 
+#include <iostream>
+
 namespace duckdb {
 
 static void query_break(int line) {
@@ -93,6 +95,7 @@ unique_ptr<MaterializedQueryResult> Command::ExecuteQuery(ExecuteContext &contex
 	if (TestForceReload() && TestForceStorage()) {
 		RestartDatabase(context, connection, context.sql_query);
 	}
+
 #ifdef DUCKDB_ALTERNATIVE_VERIFY
 	auto ccontext = connection->context;
 	auto result = ccontext->Query(context.sql_query, true);
@@ -481,6 +484,7 @@ void Statement::ExecuteInternal(ExecuteContext &context) const {
 			return;
 		}
 	}
+
 	auto result = ExecuteQuery(context, connection, file_name, query_line);
 
 	TestResultHelper helper(runner);

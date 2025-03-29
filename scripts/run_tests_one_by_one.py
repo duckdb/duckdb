@@ -8,6 +8,8 @@ import shutil
 
 import argparse
 
+error_container = []
+
 
 def valid_timeout(value):
     try:
@@ -41,6 +43,9 @@ parser.add_argument(
     type=valid_timeout,
 )
 parser.add_argument('--valgrind', action='store_true', help='Run the tests with valgrind', default=False)
+parser.add_argument(
+    '--summarize-failures', action='store_true', help='Enable failures summary in the output', default=True
+)
 
 args, extra_args = parser.parse_known_args()
 
@@ -61,6 +66,7 @@ profile = args.profile
 assertions = args.no_assertions
 time_execution = args.time_execution
 timeout = args.timeout
+summarize_failures = args.summarize_failures
 
 # Use the '-l' parameter to output the list of tests to run
 proc = subprocess.run([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -200,6 +206,9 @@ STDERR
         )
         print(stderr)
 
+        new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": stderr}
+        error_container.append(new_data)
+
     # if a test closes unexpectedly (e.g., SEGV), test cleanup doesn't happen,
     # causing us to run out of space on subsequent tests in GH Actions (not much disk space there)
     duckdb_unittest_tempdir = os.path.join(
@@ -247,4 +256,14 @@ else:
 
 if all_passed:
     exit(0)
+if args.summarize_failures:
+    print(
+        '''\n\n====================================================
+================  FAILURES SUMMARY  ================
+====================================================
+'''
+    )
+    for i, error in enumerate(error_container, start=1):
+        print(f"{i}:", error["test"][0])
+        print(error["stderr"])
 exit(1)
