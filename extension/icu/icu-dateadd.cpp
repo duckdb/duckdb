@@ -168,15 +168,9 @@ interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_dat
 
 template <>
 interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_date, icu::Calendar *calendar) {
-	if (start_date > end_date) {
-		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar);
-		return {-negated.months, -negated.days, -negated.micros};
-	}
-	auto start_data = ICUHelpers::DecomposeTimestamp(timestamp_tz_t(start_date.value), calendar);
-	auto end_data = ICUHelpers::DecomposeTimestamp(timestamp_tz_t(end_date.value), calendar);
-	auto start_ts = ICUHelpers::ToTimestamp(start_data);
-	auto end_ts = ICUHelpers::ToTimestamp(end_data);
-	return Interval::GetAge(end_ts, start_ts);
+	auto start_data = ICUHelpers::GetComponents(timestamp_tz_t(start_date.value), calendar);
+	auto end_data = ICUHelpers::GetComponents(timestamp_tz_t(end_date.value), calendar);
+	return Interval::GetAge(end_data, start_data, start_date > end_date);
 }
 
 struct ICUDateAdd : public ICUDateFunc {

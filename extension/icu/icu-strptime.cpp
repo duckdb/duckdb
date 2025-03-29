@@ -18,26 +18,26 @@
 
 namespace duckdb {
 
-TimestampData ICUHelpers::DecomposeTimestamp(timestamp_tz_t ts, icu::Calendar *calendar) {
+TimestampComponents ICUHelpers::GetComponents(timestamp_tz_t ts, icu::Calendar *calendar) {
 	// Get the parts in the given time zone
 	uint64_t micros = ICUDateFunc::SetTime(calendar, timestamp_t(ts.value));
 
-	TimestampData ts_data;
-	ts_data.date_units[0] = ICUDateFunc::ExtractField(calendar, UCAL_EXTENDED_YEAR);
-	ts_data.date_units[1] = ICUDateFunc::ExtractField(calendar, UCAL_MONTH) + 1;
-	ts_data.date_units[2] = ICUDateFunc::ExtractField(calendar, UCAL_DATE);
+	TimestampComponents ts_data;
+	ts_data.year = ICUDateFunc::ExtractField(calendar, UCAL_EXTENDED_YEAR);
+	ts_data.month = ICUDateFunc::ExtractField(calendar, UCAL_MONTH) + 1;
+	ts_data.day = ICUDateFunc::ExtractField(calendar, UCAL_DATE);
 
-	ts_data.time_units[0] = ICUDateFunc::ExtractField(calendar, UCAL_HOUR_OF_DAY);
-	ts_data.time_units[1] = ICUDateFunc::ExtractField(calendar, UCAL_MINUTE);
-	ts_data.time_units[2] = ICUDateFunc::ExtractField(calendar, UCAL_SECOND);
-	ts_data.time_units[3] = UnsafeNumericCast<int32_t>(
+	ts_data.hour = ICUDateFunc::ExtractField(calendar, UCAL_HOUR_OF_DAY);
+	ts_data.minute = ICUDateFunc::ExtractField(calendar, UCAL_MINUTE);
+	ts_data.second = ICUDateFunc::ExtractField(calendar, UCAL_SECOND);
+	ts_data.microsecond = UnsafeNumericCast<int32_t>(
 	    ICUDateFunc::ExtractField(calendar, UCAL_MILLISECOND) * Interval::MICROS_PER_MSEC + micros);
 	return ts_data;
 }
 
-timestamp_t ICUHelpers::ToTimestamp(TimestampData data) {
-	date_t date_val = Date::FromDate(data.date_units[0], data.date_units[1], data.date_units[2]);
-	dtime_t time_val = Time::FromTime(data.time_units[0], data.time_units[1], data.time_units[2], data.time_units[3]);
+timestamp_t ICUHelpers::ToTimestamp(TimestampComponents data) {
+	date_t date_val = Date::FromDate(data.year, data.month, data.day);
+	dtime_t time_val = Time::FromTime(data.hour, data.minute, data.second, data.microsecond);
 	return Timestamp::FromDatetime(date_val, time_val);
 }
 struct ICUStrptime : public ICUDateFunc {
@@ -469,14 +469,14 @@ struct ICUStrftime : public ICUDateFunc {
 		}
 
 		// decompose the timestamp
-		TimestampData ts_data = ICUHelpers::DecomposeTimestamp(timestamp_tz_t(input.value), calendar);
+		auto ts_data = ICUHelpers::GetComponents(timestamp_tz_t(input.value), calendar);
 
 		idx_t year_length;
 		bool add_bc;
-		const auto date_len = DateToStringCast::Length(ts_data.date_units, year_length, add_bc);
+		const auto date_len = DateToStringCast::Length(ts_data.year, year_length, add_bc);
 
 		char micro_buffer[6];
-		const auto time_len = TimeToStringCast::Length(ts_data.time_units, micro_buffer);
+		const auto time_len = TimeToStringCast::Length(ts_data.microsecond, micro_buffer);
 
 		auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET) + ExtractField(calendar, UCAL_DST_OFFSET);
 		offset /= Interval::MSECS_PER_SEC;
@@ -490,11 +490,12 @@ struct ICUStrftime : public ICUDateFunc {
 		string_t target = StringVector::EmptyString(result, len);
 		auto buffer = target.GetDataWriteable();
 
-		DateToStringCast::Format(buffer, ts_data.date_units, year_length, add_bc);
+		DateToStringCast::Format(buffer, ts_data.year, ts_data.month, ts_data.day, year_length, add_bc);
 		buffer += date_len;
 		*buffer++ = ' ';
 
-		TimeToStringCast::Format(buffer, time_len, ts_data.time_units, micro_buffer);
+		TimeToStringCast::Format(buffer, time_len, ts_data.hour, ts_data.minute, ts_data.second, ts_data.microsecond,
+		                         micro_buffer);
 		buffer += time_len;
 
 		memcpy(buffer, offset_str.c_str(), offset_len);
