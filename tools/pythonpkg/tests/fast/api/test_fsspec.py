@@ -30,6 +30,7 @@ class TestReadParquet(object):
                             "type": "file",
                             "created": 0,
                             "islink": False,
+                            "modified": 0,
                         }
                         for path in vals
                     ]

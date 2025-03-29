@@ -191,9 +191,7 @@ time_t PythonFilesystem::GetLastModifiedTime(FileHandle &handle) {
 	// TODO: this value should be cached on the PythonFileHandle
 	PythonGILWrapper gil;
 
-	auto last_mod = filesystem.attr("modified")(handle.path);
-
-	return py::int_(last_mod.attr("timestamp")());
+	return py::int_(filesystem.attr("info")(handle.path)["modified"]);
 }
 void PythonFilesystem::FileSync(FileHandle &handle) {
 	D_ASSERT(!py::gil_check());
