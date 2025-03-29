@@ -6,14 +6,14 @@
 
 namespace duckdb {
 
-template <bool RETURN_POSITION>
+template <bool RETURN_POSITION, bool SET_TARGET_VALID = false>
 static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector &result) {
 	auto target_count = input.size();
 	auto &list_vec = input.data[0];
 	auto &source_vec = ListVector::GetEntry(list_vec);
 	auto &target_vec = input.data[1];
 
-	ListSearchOp<RETURN_POSITION>(list_vec, source_vec, target_vec, result, target_count);
+	ListSearchOp<RETURN_POSITION, SET_TARGET_VALID>(list_vec, source_vec, target_vec, result, target_count);
 
 	if (target_count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -33,7 +33,10 @@ static unique_ptr<FunctionData> ListSearchBind(ClientContext &context, ScalarFun
 	const auto list_is_param = list.id() == LogicalTypeId::UNKNOWN;
 	const auto value_is_param = value.id() == LogicalTypeId::UNKNOWN;
 
-	if (list_is_param) {
+	if (list.id() == LogicalTypeId::SQLNULL) {
+		throw BinderException("%s: the first argument can not be NULL, expected a list but got NULL",
+		                      bound_function.name);
+	} else if (list_is_param) {
 		if (!value_is_param) {
 			// only list is a parameter, cast it to a list of value type
 			bound_function.arguments[0] = LogicalType::LIST(value);
@@ -63,8 +66,10 @@ ScalarFunction ListContainsFun::GetFunction() {
 }
 
 ScalarFunction ListPositionFun::GetFunction() {
-	return ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::INTEGER,
-	                      ListSearchFunction<true>, ListSearchBind);
+	auto fun = ScalarFunction({LogicalType::LIST(LogicalType::ANY), LogicalType::ANY}, LogicalType::INTEGER,
+	                          ListSearchFunction<true, true>, ListSearchBind);
+	fun.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	return fun;
 }
 
 } // namespace duckdb
