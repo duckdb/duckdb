@@ -53,6 +53,7 @@ public:
 
 	ProgressData GetProgress(ClientContext &context, GlobalSinkState &sink_p, GlobalSourceState &gstate) const;
 
+	shared_ptr<TupleDataLayout> GetLayoutPtr() const;
 	const TupleDataLayout &GetLayout() const;
 	idx_t MaxThreads(GlobalSinkState &sink) const;
 	static void SetMultiScan(GlobalSinkState &sink);
@@ -61,7 +62,7 @@ private:
 	void SetGroupingValues();
 	void PopulateGroupChunk(DataChunk &group_chunk, DataChunk &input_chunk) const;
 
-	TupleDataLayout layout;
+	shared_ptr<TupleDataLayout> layout_ptr;
 };
 
 } // namespace duckdb

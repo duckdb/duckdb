@@ -16,6 +16,7 @@ namespace duckdb {
 struct TupleDataSegment;
 struct TupleDataChunk;
 struct TupleDataChunkPart;
+class ContinuousIdSet;
 
 struct TupleDataBlock {
 public:
@@ -52,7 +53,7 @@ public:
 
 class TupleDataAllocator {
 public:
-	TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout);
+	TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> &layout_ptr);
 	TupleDataAllocator(TupleDataAllocator &allocator);
 
 	~TupleDataAllocator();
@@ -62,6 +63,7 @@ public:
 	//! Get the buffer allocator
 	Allocator &GetAllocator();
 	//! Get the layout
+	shared_ptr<TupleDataLayout> GetLayoutPtr() const;
 	const TupleDataLayout &GetLayout() const;
 	//! Number of row blocks
 	idx_t RowBlockCount() const;
@@ -99,7 +101,7 @@ private:
 	//! Internal function for ReleaseOrStoreHandles
 	static void ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,
 	                                          unsafe_vector<BufferHandle> &pinned_row_handles,
-	                                          perfect_map_t<BufferHandle> &handles, const perfect_set_t &block_ids,
+	                                          buffer_handle_map_t &handles, const ContinuousIdSet &block_ids,
 	                                          unsafe_vector<TupleDataBlock> &blocks, TupleDataPinProperties properties);
 	//! Pins the given row block
 	BufferHandle &PinRowBlock(TupleDataPinState &state, const TupleDataChunkPart &part);
@@ -114,7 +116,8 @@ private:
 	//! The buffer manager
 	BufferManager &buffer_manager;
 	//! The layout of the data
-	const TupleDataLayout layout;
+	shared_ptr<TupleDataLayout> layout_ptr;
+	const TupleDataLayout &layout;
 	//! Partition index (optional, if partitioned)
 	optional_idx partition_index;
 	//! Blocks storing the fixed-size rows

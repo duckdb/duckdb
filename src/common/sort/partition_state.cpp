@@ -99,16 +99,17 @@ PartitionGlobalSinkState::PartitionGlobalSinkState(ClientContext &context,
 		++max_bits;
 	}
 
+	grouping_types_ptr = make_shared_ptr<TupleDataLayout>();
 	if (!orders.empty()) {
 		if (partitions.empty()) {
 			//	Sort early into a dedicated hash group if we only sort.
-			grouping_types.Initialize(payload_types);
+			grouping_types_ptr->Initialize(payload_types);
 			auto new_group = make_uniq<PartitionGlobalHashGroup>(context, partitions, orders, payload_types, external);
 			hash_groups.emplace_back(std::move(new_group));
 		} else {
 			auto types = payload_types;
 			types.push_back(LogicalType::HASH);
-			grouping_types.Initialize(types);
+			grouping_types_ptr->Initialize(types);
 			ResizeGroupingData(estimated_cardinality);
 		}
 	}
@@ -132,13 +133,14 @@ void PartitionGlobalSinkState::SyncPartitioning(const PartitionGlobalSinkState &
 	const auto old_bits = grouping_data ? grouping_data->GetRadixBits() : 0;
 	if (fixed_bits != old_bits) {
 		const auto hash_col_idx = payload_types.size();
-		grouping_data = make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, fixed_bits, hash_col_idx);
+		grouping_data =
+		    make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, fixed_bits, hash_col_idx);
 	}
 }
 
 unique_ptr<RadixPartitionedTupleData> PartitionGlobalSinkState::CreatePartition(idx_t new_bits) const {
 	const auto hash_col_idx = payload_types.size();
-	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types, new_bits, hash_col_idx);
+	return make_uniq<RadixPartitionedTupleData>(buffer_manager, grouping_types_ptr, new_bits, hash_col_idx);
 }
 
 void PartitionGlobalSinkState::ResizeGroupingData(idx_t cardinality) {
