@@ -8,13 +8,13 @@
 #include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_reader_options.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "duckdb/parser/expression/star_expression.hpp"
 #include "duckdb/parser/query_node/select_node.hpp"
 #include "duckdb/parser/tableref/basetableref.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
 #include "duckdb/function/table/read_csv.hpp"
-#include "duckdb/common/multi_file_reader_function.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_multi_file_info.hpp"
 
 namespace duckdb {
@@ -27,7 +27,7 @@ void ReadCSVRelation::InitializeAlias(const vector<string> &input) {
 
 CSVReaderOptions ReadCSVRelationBind(const shared_ptr<ClientContext> &context, const vector<string> &input,
                                      named_parameter_map_t &options, vector<ColumnDefinition> &columns,
-                                     MultiFileReaderOptions &file_options) {
+                                     MultiFileOptions &file_options) {
 	auto file_list = MultiFileReader::CreateValueFromFileList(input);
 
 	auto multi_file_reader = MultiFileReader::CreateDefault("ReadCSVRelation");
@@ -102,7 +102,7 @@ ReadCSVRelation::ReadCSVRelation(const shared_ptr<ClientContext> &context, const
     : TableFunctionRelation(context, "read_csv_auto", {MultiFileReader::CreateValueFromFileList(input)}, nullptr,
                             false),
       alias(std::move(alias_p)) {
-	MultiFileReaderOptions file_options;
+	MultiFileOptions file_options;
 
 	InitializeAlias(input);
 	CSVReaderOptions csv_options;

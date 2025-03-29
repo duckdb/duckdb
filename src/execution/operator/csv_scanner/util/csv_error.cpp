@@ -5,7 +5,7 @@
 #include "duckdb/execution/operator/persistent/csv_rejects_table.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_file_scanner.hpp"
 #include "duckdb/main/appender.hpp"
-#include "duckdb/common/multi_file_reader_function.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 #include <sstream>
 
 namespace duckdb {

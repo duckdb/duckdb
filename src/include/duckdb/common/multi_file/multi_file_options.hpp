@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file_reader_options.hpp
+// duckdb/common/multi_file/multi_file_options.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -17,15 +17,15 @@ namespace duckdb {
 struct BindInfo;
 class MultiFileList;
 
-enum class MultiFileReaderColumnMappingMode : uint8_t { BY_NAME, BY_FIELD_ID };
+enum class MultiFileColumnMappingMode : uint8_t { BY_NAME, BY_FIELD_ID };
 
-struct MultiFileReaderOptions {
+struct MultiFileOptions {
 	bool filename = false;
 	bool hive_partitioning = false;
 	bool auto_detect_hive_partitioning = true;
 	bool union_by_name = false;
 	bool hive_types_autocast = true;
-	MultiFileReaderColumnMappingMode mapping = MultiFileReaderColumnMappingMode::BY_NAME;
+	MultiFileColumnMappingMode mapping = MultiFileColumnMappingMode::BY_NAME;
 
 	case_insensitive_map_t<LogicalType> hive_types_schema;
 
@@ -36,7 +36,7 @@ struct MultiFileReaderOptions {
 	case_insensitive_map_t<Value> custom_options;
 
 	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API static MultiFileReaderOptions Deserialize(Deserializer &source);
+	DUCKDB_API static MultiFileOptions Deserialize(Deserializer &source);
 	DUCKDB_API void AddBatchInfo(BindInfo &bind_info) const;
 	DUCKDB_API void AutoDetectHivePartitioning(MultiFileList &files, ClientContext &context);
 	DUCKDB_API static bool AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context);
