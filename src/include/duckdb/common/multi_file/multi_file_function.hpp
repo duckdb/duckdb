@@ -13,7 +13,6 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
-#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include <numeric>
 
 namespace duckdb {

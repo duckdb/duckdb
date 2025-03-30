@@ -83,6 +83,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
@@ -170,6 +171,43 @@ const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value) {
 template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value) {
 	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 3, "ARTConflictType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetARTScanHandlingModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTScanHandlingMode::EMPLACE), "EMPLACE" },
+		{ static_cast<uint32_t>(ARTScanHandlingMode::POP), "POP" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTScanHandlingMode>(ARTScanHandlingMode value) {
+	return StringUtil::EnumToString(GetARTScanHandlingModeValues(), 2, "ARTScanHandlingMode", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTScanHandlingMode EnumUtil::FromString<ARTScanHandlingMode>(const char *value) {
+	return static_cast<ARTScanHandlingMode>(StringUtil::StringToEnum(GetARTScanHandlingModeValues(), 2, "ARTScanHandlingMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetARTScanResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTScanResult::CONTINUE), "CONTINUE" },
+		{ static_cast<uint32_t>(ARTScanResult::SKIP), "SKIP" },
+		{ static_cast<uint32_t>(ARTScanResult::YIELD), "YIELD" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value) {
+	return StringUtil::EnumToString(GetARTScanResultValues(), 3, "ARTScanResult", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value) {
+	return static_cast<ARTScanResult>(StringUtil::StringToEnum(GetARTScanResultValues(), 3, "ARTScanResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAccessModeValues() {

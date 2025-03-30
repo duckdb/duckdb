@@ -34,6 +34,10 @@ struct EnumUtil {
 
 enum class ARTConflictType : uint8_t;
 
+enum class ARTScanHandlingMode : uint8_t;
+
+enum class ARTScanResult : uint8_t;
+
 enum class AccessMode : uint8_t;
 
 enum class AggregateCombineType : uint8_t;
@@ -397,6 +401,12 @@ enum class WindowExcludeMode : uint8_t;
 
 template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
+
+template<>
+const char* EnumUtil::ToChars<ARTScanHandlingMode>(ARTScanHandlingMode value);
+
+template<>
+const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -941,6 +951,12 @@ const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
 
 template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
+
+template<>
+ARTScanHandlingMode EnumUtil::FromString<ARTScanHandlingMode>(const char *value);
+
+template<>
+ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
