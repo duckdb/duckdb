@@ -473,10 +473,10 @@ struct ICUStrftime : public ICUDateFunc {
 
 		idx_t year_length;
 		bool add_bc;
-		const auto date_len = DateToStringCast::Length(ts_data.year, year_length, add_bc);
+		const auto date_len = DateToStringCast::YearLength(ts_data.year, year_length, add_bc);
 
 		char micro_buffer[6];
-		const auto time_len = TimeToStringCast::Length(ts_data.microsecond, micro_buffer);
+		const auto time_len = TimeToStringCast::MicrosLength(ts_data.microsecond, micro_buffer);
 
 		auto offset = ExtractField(calendar, UCAL_ZONE_OFFSET) + ExtractField(calendar, UCAL_DST_OFFSET);
 		offset /= Interval::MSECS_PER_SEC;

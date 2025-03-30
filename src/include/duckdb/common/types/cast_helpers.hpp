@@ -192,7 +192,7 @@ struct UhugeintToStringCast {
 };
 
 struct DateToStringCast {
-	static idx_t Length(int32_t &year, idx_t &year_length, bool &add_bc) {
+	static idx_t YearLength(int32_t &year, idx_t &year_length, bool &add_bc) {
 		// format is YYYY-MM-DD with optional (BC) at the end
 		// regular length is 10
 		idx_t length = 6;
@@ -215,7 +215,7 @@ struct DateToStringCast {
 	}
 
 	static idx_t Length(int32_t date[], idx_t &year_length, bool &add_bc) {
-		return Length(date[0], year_length, add_bc);
+		return YearLength(date[0], year_length, add_bc);
 	}
 
 	static void FormatComponent(char *&ptr, int32_t number) {
@@ -272,7 +272,7 @@ struct TimeToStringCast {
 		return UnsafeNumericCast<int32_t>(trailing_zeros);
 	}
 
-	static idx_t Length(int32_t micros, char micro_buffer[]) {
+	static idx_t MicrosLength(int32_t micros, char micro_buffer[]) {
 		// format is HH:MM:DD.MS
 		// microseconds come after the time with a period separator
 		idx_t length;
@@ -293,7 +293,7 @@ struct TimeToStringCast {
 	}
 
 	static idx_t Length(int32_t time[], char micro_buffer[]) {
-		return Length(time[3], micro_buffer);
+		return MicrosLength(time[3], micro_buffer);
 	}
 
 	static void FormatTwoDigits(char *ptr, int32_t value) {
