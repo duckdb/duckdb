@@ -405,7 +405,7 @@ static const StaticFunctionDefinition core_functions[] = {
 	FINAL_FUNCTION
 };
 
-const StaticFunctionDefinition *StaticFunctionDefinition::GetFunctionList() {
+const StaticFunctionDefinition *CoreFunctionList::GetFunctionList() {
 	return core_functions;
 }
 
