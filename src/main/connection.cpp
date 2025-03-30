@@ -74,6 +74,10 @@ void Connection::Interrupt() {
 	context->Interrupt();
 }
 
+double Connection::GetQueryProgress() {
+	return context->GetQueryProgress().GetPercentage();
+}
+
 void Connection::EnableProfiling() {
 	context->EnableProfiling();
 }

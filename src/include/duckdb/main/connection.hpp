@@ -62,6 +62,9 @@ public:
 	//! Interrupt execution of the current query
 	DUCKDB_API void Interrupt();
 
+	//! Get query progress of current query
+	DUCKDB_API double GetQueryProgress();
+
 	//! Enable query profiling
 	DUCKDB_API void EnableProfiling();
 	//! Disable query profiling
