@@ -272,6 +272,12 @@
         "custom_implementation": true
     },
     {
+        "name": "disable_timestamptz_casts",
+        "description": "Disable casting from timestamp to timestamptz ",
+        "type": "BOOLEAN",
+        "scope": "local"
+    },
+    {
         "name": "disabled_compression_methods",
         "description": "Disable a specific set of compression methods (comma separated)",
         "type": "VARCHAR",

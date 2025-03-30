@@ -5,8 +5,6 @@
 #include "duckdb/function/cast/cast_function_set.hpp"
 #include "duckdb/function/cast_rules.hpp"
 #include "duckdb/main/extension_util.hpp"
-#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "include/icu-casts.hpp"
 #include "include/icu-datefunc.hpp"
 #include "duckdb/transaction/meta_transaction.hpp"
@@ -164,6 +162,10 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 	static BoundCastInfo BindCastFromNaive(BindCastInput &input, const LogicalType &source, const LogicalType &target) {
 		if (!input.context) {
 			throw InternalException("Missing context for TIMESTAMP to TIMESTAMPTZ cast.");
+		}
+		if (input.context->config.disable_timestamptz_casts) {
+			throw BinderException("Casting from %s to TIMESTAMPTZ has been disabled",
+			                      LogicalTypeIdToString(source.id()));
 		}
 
 		auto cast_data = make_uniq<CastData>(make_uniq<BindData>(*input.context));
