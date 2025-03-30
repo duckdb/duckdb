@@ -14,12 +14,12 @@ void FilenamePattern::SetFilenamePattern(const string &pattern) {
 	if (pos != string::npos) {
 		base = StringUtil::Replace(base, id_format, "");
 		uuid = false;
-	}
-
-	pos = base.find(uuid_format);
-	if (pos != string::npos) {
-		base = StringUtil::Replace(base, uuid_format, "");
-		uuid = true;
+	} else {
+		pos = base.find(uuid_format);
+		if (pos != string::npos) {
+			base = StringUtil::Replace(base, uuid_format, "");
+			uuid = true;
+		}
 	}
 
 	pos = std::min(pos, (idx_t)base.length());
