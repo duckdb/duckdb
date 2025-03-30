@@ -20,3 +20,8 @@ query I
 SELECT AGE(timestamptz '2020-06-01' + interval (230) day, timestamptz '2020-06-01')
 ----
 7 months 23 days
+
+query I
+SELECT AGE(timestamptz '2021-06-01', timestamptz '2020-06-01' + interval (230) day)
+----
+5 months 7 days

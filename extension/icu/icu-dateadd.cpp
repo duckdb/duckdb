@@ -14,21 +14,21 @@ namespace duckdb {
 
 struct ICUCalendarAdd {
 	template <class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
+	static inline TR Operation(TA left, TB right, TZCalendar &calendar_p) {
 		throw InternalException("Unimplemented type for ICUCalendarAdd");
 	}
 };
 
 struct ICUCalendarSub : public ICUDateFunc {
 	template <class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
+	static inline TR Operation(TA left, TB right, TZCalendar &calendar_p) {
 		throw InternalException("Unimplemented type for ICUCalendarSub");
 	}
 };
 
 struct ICUCalendarAge : public ICUDateFunc {
 	template <class TA, class TB, class TR>
-	static inline TR Operation(TA left, TB right, icu::Calendar *calendar) {
+	static inline TR Operation(TA left, TB right, TZCalendar &calendar_p) {
 		throw InternalException("Unimplemented type for ICUCalendarAge");
 	}
 };
@@ -54,10 +54,11 @@ static inline void CalendarAddHour(icu::Calendar *calendar, int64_t interval_hou
 }
 
 template <>
-timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval, icu::Calendar *calendar) {
+timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval, TZCalendar &calendar_p) {
 	if (!Timestamp::IsFinite(timestamp)) {
 		return timestamp;
 	}
+	auto calendar = calendar_p.GetICUCalendar();
 
 	int64_t millis = timestamp.value / Interval::MICROS_PER_MSEC;
 	int64_t micros = timestamp.value % Interval::MICROS_PER_MSEC;
@@ -121,25 +122,26 @@ timestamp_t ICUCalendarAdd::Operation(timestamp_t timestamp, interval_t interval
 }
 
 template <>
-timestamp_t ICUCalendarAdd::Operation(interval_t interval, timestamp_t timestamp, icu::Calendar *calendar) {
+timestamp_t ICUCalendarAdd::Operation(interval_t interval, timestamp_t timestamp, TZCalendar &calendar) {
 	return Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
 }
 
 template <>
-timestamp_t ICUCalendarSub::Operation(timestamp_t timestamp, interval_t interval, icu::Calendar *calendar) {
+timestamp_t ICUCalendarSub::Operation(timestamp_t timestamp, interval_t interval, TZCalendar &calendar) {
 	const interval_t negated {-interval.months, -interval.days, -interval.micros};
 	return ICUCalendarAdd::template Operation<timestamp_t, interval_t, timestamp_t>(timestamp, negated, calendar);
 }
 
 template <>
-interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_date, icu::Calendar *calendar) {
+interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_date, TZCalendar &calendar_p) {
 	if (!Timestamp::IsFinite(end_date) || !Timestamp::IsFinite(start_date)) {
 		throw InvalidInputException("Cannot subtract infinite timestamps");
 	}
 	if (start_date > end_date) {
-		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar);
+		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar_p);
 		return {-negated.months, -negated.days, -negated.micros};
 	}
+	auto calendar = calendar_p.GetICUCalendar();
 
 	auto start_micros = ICUDateFunc::SetTime(calendar, start_date);
 	auto end_micros = (uint64_t)(end_date.value % Interval::MICROS_PER_MSEC);
@@ -167,10 +169,42 @@ interval_t ICUCalendarSub::Operation(timestamp_t end_date, timestamp_t start_dat
 }
 
 template <>
-interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_date, icu::Calendar *calendar) {
-	auto start_data = ICUHelpers::GetComponents(timestamp_tz_t(start_date.value), calendar);
-	auto end_data = ICUHelpers::GetComponents(timestamp_tz_t(end_date.value), calendar);
-	return Interval::GetAge(end_data, start_data, start_date > end_date);
+interval_t ICUCalendarAge::Operation(timestamp_t end_date, timestamp_t start_date, TZCalendar &calendar_p) {
+	auto calendar = calendar_p.GetICUCalendar();
+	if (calendar_p.IsGregorian()) {
+		auto start_data = ICUHelpers::GetComponents(timestamp_tz_t(start_date.value), calendar);
+		auto end_data = ICUHelpers::GetComponents(timestamp_tz_t(end_date.value), calendar);
+		return Interval::GetAge(end_data, start_data, start_date > end_date);
+	}
+	// fallback for non-gregorian calendars, since Interval::GetAge does not handle
+	if (start_date > end_date) {
+		auto negated = Operation<timestamp_t, timestamp_t, interval_t>(start_date, end_date, calendar_p);
+		return {-negated.months, -negated.days, -negated.micros};
+	}
+
+	auto start_micros = ICUDateFunc::SetTime(calendar, start_date);
+	auto end_micros = (uint64_t)(end_date.value % Interval::MICROS_PER_MSEC);
+
+	// Borrow 1ms from end_date if we wrap. This works because start_date <= end_date
+	// and if the µs are out of order, then there must be an extra ms.
+	if (start_micros > (idx_t)end_micros) {
+		end_date.value -= Interval::MICROS_PER_MSEC;
+		end_micros += Interval::MICROS_PER_MSEC;
+	}
+
+	//	Lunar calendars have uneven numbers of months, so we just diff months, not years
+	interval_t result;
+	result.months = SubtractField(calendar, UCAL_MONTH, end_date);
+	result.days = SubtractField(calendar, UCAL_DATE, end_date);
+
+	auto hour_diff = SubtractField(calendar, UCAL_HOUR_OF_DAY, end_date);
+	auto min_diff = SubtractField(calendar, UCAL_MINUTE, end_date);
+	auto sec_diff = SubtractField(calendar, UCAL_SECOND, end_date);
+	auto ms_diff = SubtractField(calendar, UCAL_MILLISECOND, end_date);
+	auto micros_diff = UnsafeNumericCast<int32_t>(ms_diff * Interval::MICROS_PER_MSEC + (end_micros - start_micros));
+	result.micros = Time::FromTime(hour_diff, min_diff, sec_diff, micros_diff).micros;
+
+	return result;
 }
 
 struct ICUDateAdd : public ICUDateFunc {
@@ -181,13 +215,13 @@ struct ICUDateAdd : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BindData>();
-		CalendarPtr calendar(info.calendar->clone());
+		TZCalendar calendar(*info.calendar, info.cal_setting);
 
 		//	Subtract argument from current_date (at midnight)
-		const auto end_date = CurrentMidnight(calendar.get(), state);
+		const auto end_date = CurrentMidnight(calendar.GetICUCalendar(), state);
 
 		UnaryExecutor::Execute<TA, TR>(args.data[0], result, args.size(), [&](TA start_date) {
-			return OP::template Operation<timestamp_t, TA, TR>(end_date, start_date, calendar.get());
+			return OP::template Operation<timestamp_t, TA, TR>(end_date, start_date, calendar);
 		});
 	}
 
@@ -203,10 +237,10 @@ struct ICUDateAdd : public ICUDateFunc {
 
 		auto &func_expr = state.expr.Cast<BoundFunctionExpression>();
 		auto &info = func_expr.bind_info->Cast<BindData>();
-		CalendarPtr calendar(info.calendar->clone());
+		TZCalendar calendar(*info.calendar, info.cal_setting);
 
 		BinaryExecutor::Execute<TA, TB, TR>(args.data[0], args.data[1], result, args.size(), [&](TA left, TB right) {
-			return OP::template Operation<TA, TB, TR>(left, right, calendar.get());
+			return OP::template Operation<TA, TB, TR>(left, right, calendar);
 		});
 	}
 
@@ -263,15 +297,15 @@ struct ICUDateAdd : public ICUDateFunc {
 	}
 };
 
-timestamp_t ICUDateFunc::Add(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval) {
+timestamp_t ICUDateFunc::Add(TZCalendar &calendar, timestamp_t timestamp, interval_t interval) {
 	return ICUCalendarAdd::Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
 }
 
-timestamp_t ICUDateFunc::Sub(icu::Calendar *calendar, timestamp_t timestamp, interval_t interval) {
+timestamp_t ICUDateFunc::Sub(TZCalendar &calendar, timestamp_t timestamp, interval_t interval) {
 	return ICUCalendarSub::Operation<timestamp_t, interval_t, timestamp_t>(timestamp, interval, calendar);
 }
 
-interval_t ICUDateFunc::Sub(icu::Calendar *calendar, timestamp_t end_date, timestamp_t start_date) {
+interval_t ICUDateFunc::Sub(TZCalendar &calendar, timestamp_t end_date, timestamp_t start_date) {
 	return ICUCalendarSub::Operation<timestamp_t, timestamp_t, interval_t>(end_date, start_date, calendar);
 }
 
