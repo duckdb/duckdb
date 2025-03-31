@@ -190,8 +190,6 @@ jobs:
             manylinux: manylinux_2_28
           # Speed things up a bit for non-releases
           - isRelease: false
-            python_build: 'cp37-*'
-          - isRelease: false
             python_build: 'cp38-*'
           - isRelease: false
             python_build: 'cp39-*'
