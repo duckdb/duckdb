@@ -31,6 +31,12 @@ struct HivePartitioningIndex {
 struct MultiFileColumnDefinition {
 public:
 	MultiFileColumnDefinition(const string &name, const LogicalType &type) : name(name), type(type) {
+		if (type.id() == LogicalTypeId::STRUCT) {
+			// recursively create for children
+			for(auto &child_entry : StructType::GetChildTypes(type)) {
+				children.emplace_back(child_entry.first, child_entry.second);
+			}
+		}
 	}
 
 	MultiFileColumnDefinition(const MultiFileColumnDefinition &other)

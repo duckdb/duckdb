@@ -34,7 +34,7 @@ public:
 
 struct MultiFileColumnMap {
 	MultiFileColumnMap(idx_t index, const LogicalType &local_type, const LogicalType &global_type)
-	    : mapping(index), local_type(local_type), global_type(global_type), require_filter_cast(local_type == global_type) {
+	    : mapping(index), local_type(local_type), global_type(global_type), require_filter_cast(local_type != global_type) {
 	}
 	MultiFileColumnMap(MultiFileIndexMapping mapping_p, const LogicalType &local_type, const LogicalType &global_type, bool require_filter_cast)
 	    : mapping(std::move(mapping_p)), local_type(local_type), global_type(global_type), require_filter_cast(require_filter_cast) {
@@ -54,6 +54,163 @@ public:
 	bool HasError() const {
 		return !error.empty();
 	}
+};
+
+struct ColumnMapResult {
+	unique_ptr<Expression> expression;
+	unique_ptr<ColumnIndex> column_index;
+	unique_ptr<MultiFileIndexMapping> mapping;
+};
+
+unique_ptr<Expression> ReferenceChildColumn(const MultiFileColumnDefinition &local_column, idx_t current_index, Expression &parent) {
+	vector<unique_ptr<Expression>> children;
+	children.push_back(parent.Copy());
+	auto struct_extract_fun = StructExtractAtFun::GetFunction();
+	auto bind_data = StructExtractAtFun::GetBindData(current_index);
+	auto &parent_types = StructType::GetChildTypes(parent.return_type);
+	auto &result_type = parent_types[current_index].second;
+	return make_uniq<BoundFunctionExpression>(result_type, std::move(struct_extract_fun), std::move(children), std::move(bind_data));
+}
+
+struct ColumnMapper {
+	virtual ~ColumnMapper() = default;
+	virtual unique_ptr<ColumnMapper> Create(const vector<MultiFileColumnDefinition> &columns) const = 0;
+	virtual optional_idx Find(const MultiFileColumnDefinition &column) const = 0;
+	virtual unique_ptr<Expression> GetDefaultExpression(const MultiFileColumnDefinition &column, optional_ptr<Expression> parent) const = 0;
+};
+
+ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDefinition &global_column, const vector<MultiFileColumnDefinition> &local_columns, const ColumnMapper &mapper, idx_t top_level_index, optional_ptr<Expression> parent = nullptr) {
+	ColumnMapResult result;
+	auto entry = mapper.Find(global_column);
+	if (!entry.IsValid()) {
+		// entry not present in map, use default value
+		result.expression = mapper.GetDefaultExpression(global_column, parent);
+		return result;
+	}
+	// the field exists! get the local column
+	MultiFileLocalColumnId local_id(entry.GetIndex());
+	auto &local_column = local_columns[local_id.GetId()];
+	unique_ptr<Expression> expr;
+	unique_ptr<MultiFileIndexMapping> mapping;
+	idx_t column_idx;
+	if (!parent) {
+		// root expression - refer to it directly
+		column_idx = top_level_index;
+		expr = make_uniq<BoundReferenceExpression>(local_column.type, top_level_index);
+	} else {
+		// extract the field from the parent
+		column_idx = local_id.GetId();
+		expr = ReferenceChildColumn(local_column, column_idx, *parent);
+	}
+	mapping = make_uniq<MultiFileIndexMapping>(column_idx);
+	if (global_column.children.empty()) {
+		// not a nested type - return the column directly
+		if (global_column.type != local_column.type) {
+			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
+		}
+		result.expression = std::move(expr);
+		result.column_index = make_uniq<ColumnIndex>(column_idx);
+		result.mapping = std::move(mapping);
+		return result;
+	}
+	// nested type - check if the field identifiers match and if we need to remap
+	// FIXME: we don't need to remap if all identifiers and types match (common case)
+	auto nested_mapper = mapper.Create(local_column.children);
+	auto &struct_children = StructType::GetChildTypes(global_column.type);
+	if (struct_children.size() != global_column.children.size()) {
+		throw InternalException("Mismatch between field id children in global_column.children and struct children in type");
+	}
+	vector<unique_ptr<Expression>> mapped_expressions;
+	vector<ColumnIndex> child_indexes;
+	for(idx_t i = 0; i < global_column.children.size(); i++) {
+		auto &global_child = global_column.children[i];
+		auto child_map = MapColumn(context, global_child, local_column.children, *nested_mapper, top_level_index, expr.get());
+		if (child_map.column_index) {
+			child_indexes.push_back(std::move(*child_map.column_index));
+			mapping->child_mapping.insert(make_pair(i, std::move(child_map.mapping)));
+		}
+		child_map.expression->alias = struct_children[i].first;
+		mapped_expressions.push_back(std::move(child_map.expression));
+	}
+	auto struct_pack_fun = StructPackFun::GetFunction();
+	auto bind_data = make_uniq<VariableReturnBindData>(global_column.type);
+	result.expression = make_uniq<BoundFunctionExpression>(global_column.type, std::move(struct_pack_fun), std::move(mapped_expressions), std::move(bind_data));
+	result.column_index = make_uniq<ColumnIndex>(column_idx, std::move(child_indexes));
+	result.mapping = std::move(mapping);
+	return result;
+}
+
+struct FieldIdMapper : public ColumnMapper {
+	FieldIdMapper(const vector<MultiFileColumnDefinition> &columns) {
+		for (idx_t col_idx = 0; col_idx < columns.size(); col_idx++) {
+			auto &column = columns[col_idx];
+			if (column.identifier.IsNull()) {
+				// Extra columns at the end will not have a field_id
+				break;
+			}
+			auto field_id = column.GetIdentifierFieldId();
+			field_id_map.emplace(field_id, MultiFileLocalColumnId(col_idx));
+		}
+	}
+
+	unique_ptr<ColumnMapper> Create(const vector<MultiFileColumnDefinition> &columns) const override {
+		return make_uniq<FieldIdMapper>(columns);
+	}
+	optional_idx Find(const MultiFileColumnDefinition &column) const override {
+		auto entry = field_id_map.find(column.GetIdentifierFieldId());
+		if (entry == field_id_map.end()) {
+			return optional_idx();
+		}
+		return entry->second.GetId();
+	}
+	unique_ptr<Expression> GetDefaultExpression(const MultiFileColumnDefinition &column, optional_ptr<Expression> parent) const override {
+		auto &default_val = column.default_expression;
+		if (!default_val) {
+			throw InternalException("No default expression in FieldId Map");
+		}
+		if (default_val->type != ExpressionType::VALUE_CONSTANT) {
+			throw NotImplementedException("Default expression that isn't constant is not supported yet");
+		}
+		auto &constant_expr = default_val->Cast<ConstantExpression>();
+		// return only the expression
+		return make_uniq<BoundConstantExpression>(constant_expr.value);
+	}
+
+	idx_t MapCount() {
+		return field_id_map.size();
+	}
+
+private:
+	unordered_map<int32_t, MultiFileLocalColumnId> field_id_map;
+};
+
+struct NameMapper : public ColumnMapper {
+	NameMapper(const vector<MultiFileColumnDefinition> &columns) {
+		for (idx_t col_idx = 0; col_idx < columns.size(); col_idx++) {
+			auto &column = columns[col_idx];
+			name_map.emplace(column.GetIdentifierName(), MultiFileLocalColumnId(col_idx));
+		}
+	}
+
+	unique_ptr<ColumnMapper> Create(const vector<MultiFileColumnDefinition> &columns) const override {
+		return make_uniq<NameMapper>(columns);
+	}
+	optional_idx Find(const MultiFileColumnDefinition &column) const override {
+		auto entry = name_map.find(column.GetIdentifierName());
+		if (entry == name_map.end()) {
+			return optional_idx();
+		}
+		return entry->second.GetId();
+	}
+	unique_ptr<Expression> GetDefaultExpression(const MultiFileColumnDefinition &column, optional_ptr<Expression> parent) const override {
+		if (parent) {
+			return make_uniq<BoundConstantExpression>(Value(column.type));
+		}
+		throw InternalException("FIXME: missing default expression in root");
+	}
+
+private:
+	case_insensitive_map_t<MultiFileLocalColumnId> name_map;
 };
 
 void MultiFileColumnMapper::PushColumnMapping(const LogicalType &global_type, const LogicalType &local_type,
@@ -85,11 +242,8 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByName() {
 	auto &local_columns = reader.GetColumns();
 	auto &file_name = reader.GetFileName();
 	// we have expected types: create a map of name -> (local) column id
-	case_insensitive_map_t<MultiFileLocalColumnId> name_map;
-	for (idx_t col_idx = 0; col_idx < local_columns.size(); col_idx++) {
-		auto &column = local_columns[col_idx];
-		name_map.emplace(column.name, MultiFileLocalColumnId(col_idx));
-	}
+	NameMapper name_map(local_columns);
+
 	ResultColumnMapping result;
 	auto &expressions = reader_data.expressions;
 	for (idx_t i = 0; i < global_column_ids.size(); i++) {
@@ -128,10 +282,9 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByName() {
 			    "MultiFileReader::CreateColumnMappingByName - global_id is out of range in global_types for this file");
 		}
 		auto &global_column = global_columns[global_column_id];
-		auto identifier = global_column.GetIdentifierName();
-		auto entry = name_map.find(identifier);
-		if (entry == name_map.end()) {
-			// identiier not present in file, use default value
+		auto entry = name_map.Find(global_column);
+		if (!entry.IsValid()) {
+			// identifier not present in file, use default value
 			if (global_column.default_expression) {
 				reader_data.constant_map.Add(global_idx, global_column.GetDefaultValue());
 				expressions.push_back(make_uniq<BoundConstantExpression>(global_column.GetDefaultValue()));
@@ -149,11 +302,11 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByName() {
 				    "the original file \"%s\", but could not be found in file \"%s\".\nCandidate names: "
 				    "%s\nIf you are trying to "
 				    "read files with different schemas, try setting union_by_name=True",
-				    file_name, identifier, initial_file, file_name, candidate_names);
+				    file_name, global_column.GetIdentifierName(), initial_file, file_name, candidate_names);
 			}
 		}
 		// we found the top-level column in the local file - check if the types are the same
-		auto local_id = entry->second;
+		MultiFileLocalColumnId local_id(entry.GetIndex());
 		D_ASSERT(global_column_id < global_columns.size());
 		D_ASSERT(local_id.GetId() < local_columns.size());
 		auto &global_type = global_columns[global_column_id].type;
@@ -165,8 +318,10 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByName() {
 			auto expr = make_uniq<BoundReferenceExpression>(global_type, local_idx);
 			if (global_type != local_type) {
 				reader.cast_map[local_id.GetId()] = global_type;
+			} else {
+				// if types are equivalent we can push the parent ColumnIndex mapping
+				local_index = ColumnIndex(local_id.GetId(), global_id.GetChildIndexes());
 			}
-
 			reader_data.expressions.push_back(std::move(expr));
 
 			MultiFileColumnMap index_mapping(local_idx, local_type, global_type);
@@ -175,110 +330,24 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByName() {
 			reader.column_indexes.push_back(std::move(local_index));
 			continue;
 		}
+		auto local_idx = MultiFileLocalIndex(reader.column_ids.size());
+		// construct the expression to construct this column
+		auto column_map = MapColumn(context, global_column, local_columns, name_map, local_idx);
+		if (!column_map.column_index) {
+			// no columns were presented
+			reader_data.expressions.push_back(std::move(column_map.expression));
+			continue;
+		}
+		auto local_index = std::move(column_map.column_index);
+		D_ASSERT(local_index->GetPrimaryIndex() == local_id.GetId());
+		reader_data.expressions.push_back(std::move(column_map.expression));
 
-		PushColumnMapping(global_type, local_type, local_id, result, global_idx, global_id);
+		MultiFileColumnMap index_mapping(std::move(*column_map.mapping), local_type, global_column.type, true);
+		result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
+		reader.column_ids.emplace_back(local_id);
+		reader.column_indexes.push_back(std::move(*local_index));
 	}
 	D_ASSERT(global_column_ids.size() == reader_data.expressions.size());
-	return result;
-}
-
-using field_id_map_t = unordered_map<int32_t, MultiFileLocalColumnId>;
-
-field_id_map_t CreateFieldIdMap(const vector<MultiFileColumnDefinition> &columns) {
-	field_id_map_t result;
-	for (idx_t col_idx = 0; col_idx < columns.size(); col_idx++) {
-		auto &column = columns[col_idx];
-		if (column.identifier.IsNull()) {
-			// Extra columns at the end will not have a field_id
-			break;
-		}
-		auto field_id = column.GetIdentifierFieldId();
-		result.emplace(field_id, MultiFileLocalColumnId(col_idx));
-	}
-	return result;
-}
-
-struct ColumnMapResult {
-	unique_ptr<Expression> expression;
-	unique_ptr<ColumnIndex> column_index;
-	unique_ptr<MultiFileIndexMapping> mapping;
-};
-
-unique_ptr<Expression> ReferenceChildColumn(const MultiFileColumnDefinition &local_column, idx_t current_index, Expression &parent) {
-	vector<unique_ptr<Expression>> children;
-	children.push_back(parent.Copy());
-	auto struct_extract_fun = StructExtractAtFun::GetFunction();
-	auto bind_data = StructExtractAtFun::GetBindData(current_index);
-	auto &parent_types = StructType::GetChildTypes(parent.return_type);
-	auto &result_type = parent_types[current_index].second;
-	return make_uniq<BoundFunctionExpression>(result_type, std::move(struct_extract_fun), std::move(children), std::move(bind_data));
-}
-
-ColumnMapResult MapColumnByFieldId(ClientContext &context, const MultiFileColumnDefinition &global_column, const vector<MultiFileColumnDefinition> &local_columns, const field_id_map_t &field_id_map, idx_t top_level_index, optional_ptr<Expression> parent = nullptr) {
-	ColumnMapResult result;
-	auto it = field_id_map.find(global_column.GetIdentifierFieldId());
-	if (it == field_id_map.end()) {
-		// field id not present in map, use default value
-		auto &default_val = global_column.default_expression;
-		D_ASSERT(default_val);
-		if (default_val->type != ExpressionType::VALUE_CONSTANT) {
-			throw NotImplementedException("Default expression that isn't constant is not supported yet");
-		}
-		auto &constant_expr = default_val->Cast<ConstantExpression>();
-		// return only the expression
-		result.expression = make_uniq<BoundConstantExpression>(constant_expr.value);
-		return result;
-	}
-	// the field exists! get the local column
-	auto local_id = it->second;
-	auto &local_column = local_columns[local_id.GetId()];
-	unique_ptr<Expression> expr;
-	unique_ptr<MultiFileIndexMapping> mapping;
-	idx_t column_idx;
-	if (!parent) {
-		// root expression - refer to it directly
-		column_idx = top_level_index;
-		expr = make_uniq<BoundReferenceExpression>(local_column.type, top_level_index);
-	} else {
-		// extract the field from the parent
-		column_idx = local_id.GetId();
-		expr = ReferenceChildColumn(local_column, column_idx, *parent);
-	}
-	mapping = make_uniq<MultiFileIndexMapping>(column_idx);
-	if (global_column.children.empty()) {
-		// not a nested type - return the column directly
-		if (global_column.type != local_column.type) {
-			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
-		}
-		result.expression = std::move(expr);
-		result.column_index = make_uniq<ColumnIndex>(column_idx);
-		result.mapping = std::move(mapping);
-		return result;
-	}
-	// nested type - check if the field identifiers match and if we need to remap
-	// FIXME: we don't need to remap if all identifiers and types match (common case)
-	auto nested_field_id_map = CreateFieldIdMap(local_column.children);
-	auto &struct_children = StructType::GetChildTypes(global_column.type);
-	if (struct_children.size() != global_column.children.size()) {
-		throw InternalException("Mismatch between field id children in global_column.children and struct children in type");
-	}
-	vector<unique_ptr<Expression>> mapped_expressions;
-	vector<ColumnIndex> child_indexes;
-	for(idx_t i = 0; i < global_column.children.size(); i++) {
-		auto &global_child = global_column.children[i];
-		auto child_map = MapColumnByFieldId(context, global_child, local_column.children, nested_field_id_map, top_level_index, expr.get());
-		if (child_map.column_index) {
-			child_indexes.push_back(std::move(*child_map.column_index));
-			mapping->child_mapping.insert(make_pair(i, std::move(child_map.mapping)));
-		}
-		child_map.expression->alias = struct_children[i].first;
-		mapped_expressions.push_back(std::move(child_map.expression));
-	}
-	auto struct_pack_fun = StructPackFun::GetFunction();
-	auto bind_data = make_uniq<VariableReturnBindData>(global_column.type);
-	result.expression = make_uniq<BoundFunctionExpression>(global_column.type, std::move(struct_pack_fun), std::move(mapped_expressions), std::move(bind_data));
-	result.column_index = make_uniq<ColumnIndex>(column_idx, std::move(child_indexes));
-	result.mapping = std::move(mapping);
 	return result;
 }
 
@@ -296,7 +365,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByFieldId() {
 
 	ResultColumnMapping result;
 	// we have expected types: create a map of field_id -> column index
-	auto field_id_map = CreateFieldIdMap(local_columns);
+	FieldIdMapper field_id_map(local_columns);
 
 	// loop through the schema definition
 	auto &expressions = reader_data.expressions;
@@ -338,9 +407,9 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByFieldId() {
 		if (global_column_id >= global_columns.size()) {
 			if (bind_data.file_row_number_idx == global_column_id) {
 				// FIXME: this needs a more extensible solution
-				auto new_column_id = MultiFileLocalColumnId(field_id_map.size());
+				auto new_column_id = MultiFileLocalColumnId(field_id_map.MapCount());
 				reader.column_ids.push_back(new_column_id);
-				reader.column_indexes.emplace_back(field_id_map.size());
+				reader.column_indexes.emplace_back(field_id_map.MapCount());
 				//! FIXME: what to do here???
 				expressions.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, local_idx));
 			} else {
@@ -356,7 +425,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByFieldId() {
 		}
 		
 		// construct the expression to construct this column
-		auto column_map = MapColumnByFieldId(context, global_column, local_columns, field_id_map, local_idx);
+		auto column_map = MapColumn(context, global_column, local_columns, field_id_map, local_idx);
 		if (!column_map.column_index) {
 			// no columns were presented
 		    reader_data.expressions.push_back(std::move(column_map.expression));
