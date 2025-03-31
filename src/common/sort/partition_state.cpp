@@ -1,11 +1,8 @@
 #include "duckdb/common/sort/partition_state.hpp"
 
-#include "duckdb/common/types/column/column_data_consumer.hpp"
 #include "duckdb/common/row_operations/row_operations.hpp"
 #include "duckdb/main/config.hpp"
 #include "duckdb/parallel/executor_task.hpp"
-
-#include <numeric>
 
 namespace duckdb {
 
@@ -478,7 +475,7 @@ void PartitionLocalMergeState::ExecuteTask() {
 bool PartitionGlobalMergeState::AssignTask(PartitionLocalMergeState &local_state) {
 	lock_guard<mutex> guard(lock);
 
-	if (tasks_assigned >= total_tasks) {
+	if (tasks_assigned >= total_tasks && !TryPrepareNextStage()) {
 		return false;
 	}
 
@@ -497,15 +494,13 @@ void PartitionGlobalMergeState::CompleteTask() {
 }
 
 bool PartitionGlobalMergeState::TryPrepareNextStage() {
-	lock_guard<mutex> guard(lock);
-
 	if (tasks_completed < total_tasks) {
 		return false;
 	}
 
 	tasks_assigned = tasks_completed = 0;
 
-	switch (stage) {
+	switch (stage.load()) {
 	case PartitionSortStage::INIT:
 		//	If the partitions are unordered, don't scan in parallel
 		//	because it produces non-deterministic orderings.
@@ -628,23 +623,6 @@ bool PartitionGlobalMergeStates::ExecuteTask(PartitionLocalMergeState &local_sta
 			}
 
 			// Try to assign work for this hash group to this thread
-			if (global_state->AssignTask(local_state)) {
-				// We assigned a task to this thread!
-				// Break out of this loop to re-enter the top-level loop and execute the task
-				break;
-			}
-
-			// Hash group global state couldn't assign a task to this thread
-			// Try to prepare the next stage
-			if (!global_state->TryPrepareNextStage()) {
-				// This current hash group is not yet done
-				// But we were not able to assign a task for it to this thread
-				// See if the next hash group is better
-				continue;
-			}
-
-			// We were able to prepare the next stage for this hash group!
-			// Try to assign a task once more
 			if (global_state->AssignTask(local_state)) {
 				// We assigned a task to this thread!
 				// Break out of this loop to re-enter the top-level loop and execute the task
