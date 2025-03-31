@@ -331,12 +331,18 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 	if (root_type == LogicalOperatorType::LOGICAL_TOP_N) {
 		// for top-n we need to order on expressions, so we need to order AFTER the final projection
 		auto proj = make_uniq<LogicalProjection>(proj_index, std::move(final_proj_list));
+		if (join->has_estimated_cardinality) {
+			proj->SetEstimatedCardinality(join->estimated_cardinality);
+		}
 		proj->children.push_back(std::move(join));
 
 		for (auto &order : final_orders) {
 			ReplaceTableReferences(*order.expression, proj_index);
 		}
 		auto order = make_uniq<LogicalOrder>(std::move(final_orders));
+		if (proj->has_estimated_cardinality) {
+			order->SetEstimatedCardinality(proj->estimated_cardinality);
+		}
 		order->children.push_back(std::move(proj));
 
 		op = std::move(order);
@@ -344,9 +350,15 @@ bool LateMaterialization::TryLateMaterialization(unique_ptr<LogicalOperator> &op
 		// for limit/sample we order on row-id, so we need to order BEFORE the final projection
 		// because the final projection removes row-ids
 		auto order = make_uniq<LogicalOrder>(std::move(final_orders));
+		if (join->has_estimated_cardinality) {
+			order->SetEstimatedCardinality(join->estimated_cardinality);
+		}
 		order->children.push_back(std::move(join));
 
 		auto proj = make_uniq<LogicalProjection>(proj_index, std::move(final_proj_list));
+		if (order->has_estimated_cardinality) {
+			proj->SetEstimatedCardinality(order->estimated_cardinality);
+		}
 		proj->children.push_back(std::move(order));
 
 		op = std::move(proj);

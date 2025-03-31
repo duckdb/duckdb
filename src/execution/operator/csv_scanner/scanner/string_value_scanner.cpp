@@ -436,6 +436,8 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			}
 			// If we got here, we are ignoring errors, hence we must ignore this line.
 			current_errors.Insert(INVALID_UNICODE, cur_col_id, chunk_col_id, last_position);
+			static_cast<string_t *>(vector_ptr[chunk_col_id])[number_of_rows] = StringVector::AddStringOrBlob(
+			    parse_chunk.data[chunk_col_id], string_t(value_ptr, UnsafeNumericCast<uint32_t>(0)));
 			break;
 		}
 		if (allocate) {
@@ -606,7 +608,7 @@ void StringValueResult::AddValue(StringValueResult &result, const idx_t buffer_p
 
 void StringValueResult::HandleUnicodeError(idx_t col_idx, LinePosition &error_position) {
 
-	bool first_nl;
+	bool first_nl = false;
 	auto borked_line = current_line_position.ReconstructCurrentLine(first_nl, buffer_handles, PrintErrorLine());
 	LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(), lines_read);
 	if (current_line_position.begin == error_position) {
@@ -690,7 +692,7 @@ bool LineError::HandleErrors(StringValueResult &result) {
 			break;
 		case CAST_ERROR: {
 			string column_name;
-			LogicalTypeId type_id;
+			LogicalTypeId type_id = LogicalTypeId::INVALID;
 			if (cur_error.col_idx < result.names.size()) {
 				column_name = result.names[cur_error.col_idx];
 			}
@@ -768,7 +770,7 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 string FullLinePosition::ReconstructCurrentLine(bool &first_char_nl,
                                                 unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
                                                 bool reconstruct_line) const {
-	if (!reconstruct_line) {
+	if (!reconstruct_line || begin == end) {
 		return {};
 	}
 	string result;
@@ -822,6 +824,8 @@ bool StringValueResult::AddRowInternal() {
 	}
 
 	if (current_errors.HandleErrors(*this)) {
+		D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
+		D_ASSERT(buffer_handles.find(current_line_position.end.buffer_idx) != buffer_handles.end());
 		line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
 		number_of_rows++;
 		if (static_cast<idx_t>(number_of_rows) >= result_size) {
@@ -881,6 +885,8 @@ bool StringValueResult::AddRowInternal() {
 			RemoveLastLine();
 		}
 	}
+	D_ASSERT(buffer_handles.find(current_line_position.begin.buffer_idx) != buffer_handles.end());
+	D_ASSERT(buffer_handles.find(current_line_position.end.buffer_idx) != buffer_handles.end());
 	line_positions_per_row[static_cast<idx_t>(number_of_rows)] = current_line_position;
 	cur_col_id = 0;
 	chunk_col_id = 0;
@@ -1017,6 +1023,7 @@ StringValueResult &StringValueScanner::ParseChunk() {
 }
 
 void StringValueScanner::Flush(DataChunk &insert_chunk) {
+	insert_chunk.Reset();
 	auto &process_result = ParseChunk();
 	// First Get Parsed Chunk
 	auto &parse_chunk = process_result.ToChunk();
@@ -1045,7 +1052,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		}
 		auto &parse_vector = parse_chunk.data[col_idx];
 		auto &result_vector = insert_chunk.data[result_idx];
-		auto &type = result_vector.GetType();
+		const auto &type = result_vector.GetType();
 		auto &parse_type = parse_vector.GetType();
 		if (!type.IsJSONType() &&
 		    (type == LogicalType::VARCHAR || (type != LogicalType::VARCHAR && parse_type != LogicalType::VARCHAR))) {
@@ -1081,7 +1088,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 				if (!state_machine->options.IgnoreErrors()) {
 					LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 					                                 lines_read - parse_chunk.size() + line_error);
-					bool first_nl;
+					bool first_nl = false;
 					auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
 					    first_nl, result.buffer_handles, result.PrintErrorLine());
 					std::ostringstream error;
@@ -1110,7 +1117,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					if (!state_machine->options.IgnoreErrors()) {
 						LinesPerBoundary lines_per_batch(iterator.GetBoundaryIdx(),
 						                                 lines_read - parse_chunk.size() + line_error);
-						bool first_nl;
+						bool first_nl = false;
 						auto borked_line = result.line_positions_per_row[line_error].ReconstructCurrentLine(
 						    first_nl, result.buffer_handles, result.PrintErrorLine());
 						std::ostringstream error;
@@ -1141,6 +1148,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		}
 		// Now we slice the result
 		insert_chunk.Slice(successful_rows, sel_idx);
+		result.borked_rows.clear();
 	}
 }
 
@@ -1832,6 +1840,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 		}
 		if (states.IsQuotedCurrent() && !found_error &&
 		    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+			type = UNTERMINATED_QUOTES;
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
 			// quotes
 			result.current_errors.Insert(type, result.cur_col_id, result.chunk_col_id, result.last_position);
