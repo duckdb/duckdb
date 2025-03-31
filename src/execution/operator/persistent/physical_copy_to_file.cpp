@@ -64,6 +64,8 @@ public:
 	vector<unique_ptr<CopyToFileInfo>> written_files;
 	//! Max open files
 	idx_t max_open_files;
+	//! If rotate is true, this lock is used
+	StorageLock file_write_lock_if_rotating;
 
 	void Initialize(ClientContext &context, const PhysicalCopyToFile &op) {
 		if (initialized) {
@@ -472,6 +474,40 @@ PhysicalCopyToFile::PhysicalCopyToFile(vector<LogicalType> types, CopyFunction f
       function(std::move(function_p)), bind_data(std::move(bind_data)), parallel(false) {
 }
 
+void PhysicalCopyToFile::WriteRotateInternal(ExecutionContext &context, GlobalSinkState &global_state,
+                                             const std::function<void(GlobalFunctionData &)> &fun) const {
+	auto &g = global_state.Cast<CopyToFunctionGlobalState>();
+
+	// Loop until we can write (synchronize using locks when using parallel writes to the same files and "rotate")
+	while (true) {
+		// Grab global lock and dereference the current gstate
+		auto global_guard = g.lock.GetExclusiveLock();
+		auto &gstate = *g.global_state;
+		if (rotate && function.rotate_next_file(gstate, *bind_data, file_size_bytes)) {
+			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
+			auto owned_gstate = std::move(g.global_state);
+			g.global_state = CreateFileState(context.client, *sink_state, *global_guard);
+			global_guard.reset();
+
+			// This thread now waits for the exclusive lock on this file while other threads complete their writes
+			// Note that new writes can still start, as there is already a new global state
+			auto file_guard = g.file_write_lock_if_rotating.GetExclusiveLock();
+			function.copy_to_finalize(context.client, *bind_data, *owned_gstate);
+		} else {
+			// Get shared file write lock while holding global lock,
+			// so file can't be rotated before we get the write lock
+			auto file_guard = g.file_write_lock_if_rotating.GetSharedLock();
+
+			// Because we got the shared lock on the file, we're sure that it will keep existing until we release it
+			global_guard.reset();
+
+			// Sink/Combine!
+			fun(gstate);
+			break;
+		}
+	}
+}
+
 SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &g = input.global_state.Cast<CopyToFunctionGlobalState>();
 	auto &l = input.local_state.Cast<CopyToFunctionLocalState>();
@@ -507,20 +543,9 @@ SinkResultType PhysicalCopyToFile::Sink(ExecutionContext &context, DataChunk &ch
 		return SinkResultType::NEED_MORE_INPUT;
 	}
 
-	// FILE_SIZE_BYTES/rotate is set, but threads write to the same file, synchronize using lock
-	auto &gstate = g.global_state;
-	auto global_lock = g.lock.GetExclusiveLock();
-	if (rotate && function.rotate_next_file(*gstate, *bind_data, file_size_bytes)) {
-		auto owned_gstate = std::move(gstate);
-		gstate = CreateFileState(context.client, *sink_state, *global_lock);
-		global_lock.reset();
-		function.copy_to_finalize(context.client, *bind_data, *owned_gstate);
-	} else {
-		global_lock.reset();
-	}
-
-	global_lock = g.lock.GetSharedLock();
-	function.copy_to_sink(context, *bind_data, *gstate, *l.local_state, chunk);
+	WriteRotateInternal(context, input.global_state, [&](GlobalFunctionData &gstate) {
+		function.copy_to_sink(context, *bind_data, gstate, *l.local_state, chunk);
+	});
 
 	return SinkResultType::NEED_MORE_INPUT;
 }
@@ -540,9 +565,9 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 				function.copy_to_finalize(context.client, *bind_data, *l.global_state);
 			}
 		} else if (rotate) {
-			// File in global state may change with FILE_SIZE_BYTES/rotate, need to grab lock
-			auto lock = g.lock.GetSharedLock();
-			function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
+			WriteRotateInternal(context, input.global_state, [&](GlobalFunctionData &gstate) {
+				function.copy_to_combine(context, *bind_data, gstate, *l.local_state);
+			});
 		} else if (g.global_state) {
 			function.copy_to_combine(context, *bind_data, *g.global_state, *l.local_state);
 		}
