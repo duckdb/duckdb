@@ -2,6 +2,7 @@
 #include "duckdb/main/config.hpp"
 #include "utf8proc_wrapper.hpp"
 #include "duckdb/common/exception/list.hpp"
+#include "duckdb/common/string_util.hpp"
 
 namespace duckdb {
 
