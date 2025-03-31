@@ -21,6 +21,8 @@
 #  - add patch file, enable APPLY_PATCHES
 #  - disable windows build of httpfs by wrapping in `if (NOT WIN32)`
 #  - IMPORTANT: add a comment that tells people to restore the windows build when removing the patches
+# (ccfelius): remove `if (NOT WIN32)` after applying the patch to httpfs
+if (NOT WIN32)
 duckdb_extension_load(httpfs
     APPLY_PATCHES
     LOAD_TESTS
@@ -28,6 +30,7 @@ duckdb_extension_load(httpfs
     GIT_TAG 85ac4667bcb0d868199e156f8dd918b0278db7b9
     INCLUDE_DIR extension/httpfs/include
     )
+endif()
 
 ################# ARROW
 if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
