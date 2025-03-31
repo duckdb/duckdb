@@ -125,10 +125,6 @@ void TransferBFLinker::UpdateMinMaxBinding(LogicalOperator &op, vector<ColumnBin
 			return;
 		}
 
-		for (auto &binding : updated_bindings) {
-			D_ASSERT(binding.table_index == get.table_index);
-		}
-
 		if (!get.dynamic_filters) {
 			get.dynamic_filters = make_shared_ptr<DynamicTableFilterSet>();
 		}

@@ -95,7 +95,9 @@ public:
 				auto min_val = final_min_max->data[agg_idx].GetValue(0);
 				auto max_val = final_min_max->data[agg_idx + 1].GetValue(0);
 				if (min_val.IsNull() || max_val.IsNull()) {
-					continue;
+					// it means that no rows can pass the min-max filter...
+					min_val = Value::MaximumValue(min_val.type());
+					max_val = Value::MinimumValue(max_val.type());
 				}
 
 				if (Value::NotDistinctFrom(min_val, max_val)) {
