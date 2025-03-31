@@ -477,3 +477,17 @@ query I
 SELECT '-1.5 MILLENIUM'::INTERVAL
 ----
 -1500 years
+
+# Test BIGINT versions of months and days
+
+foreach type BIGINT INTEGER
+
+foreach func to_millennia to_centuries to_decades to_years to_quarters to_months to_weeks to_days
+
+statement ok
+select ${func}(84::${type});
+
+endloop
+
+endloop
+
