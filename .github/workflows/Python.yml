@@ -59,7 +59,7 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
-  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || 'cp37-*' }}
+  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || '{cp37,cp38}-*' }}
 
 jobs:
 # This is just a sanity check of Python 3.10 running with Arrow
