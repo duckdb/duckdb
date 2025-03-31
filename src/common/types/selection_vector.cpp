@@ -6,10 +6,11 @@
 namespace duckdb {
 
 SelectionData::SelectionData(idx_t count) {
-	owned_data = make_unsafe_uniq_array_uninitialized<sel_t>(count);
+	owned_data = Allocator::DefaultAllocator().Allocate(MaxValue<idx_t>(count, 1) * sizeof(sel_t));
 #ifdef DEBUG
+	auto data_ptr = reinterpret_cast<sel_t *>(owned_data.get());
 	for (idx_t i = 0; i < count; i++) {
-		owned_data[i] = std::numeric_limits<sel_t>::max();
+		data_ptr[i] = std::numeric_limits<sel_t>::max();
 	}
 #endif
 }
@@ -34,7 +35,7 @@ void SelectionVector::Print(idx_t count) const {
 
 buffer_ptr<SelectionData> SelectionVector::Slice(const SelectionVector &sel, idx_t count) const {
 	auto data = make_buffer<SelectionData>(count);
-	auto result_ptr = data->owned_data.get();
+	auto result_ptr = reinterpret_cast<sel_t *>(data->owned_data.get());
 	// for every element, we perform result[i] = target[new[i]]
 	for (idx_t i = 0; i < count; i++) {
 		auto new_idx = sel.get_index(i);
