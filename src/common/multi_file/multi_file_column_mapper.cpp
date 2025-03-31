@@ -575,19 +575,22 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 		auto &struct_filter = global_filter.Cast<StructFilter>();
 		auto &child_filter = struct_filter.child_filter;
 
-		//! FXIME: The previous step should ensure that filters that target fields that are not present in the file are
-		//! evaluated earlier
-		//! For now we will assume the mapping is 1-to-1
-		MultiFileIndexMapping struct_mapping(struct_filter.child_idx);
+		// find the corresponding local entry
+		auto entry = mapping.child_mapping.find(struct_filter.child_idx);
+		if (entry == mapping.child_mapping.end()) {
+			// this is constant for this file - abort
+			// FIXME: should be handled before
+			return nullptr;
+		}
+		auto &struct_mapping = *entry->second;
 		auto &struct_type = StructType::GetChildTypes(target_type);
-		auto new_child_filter =
-		    TryCastTableFilter(*child_filter, struct_mapping, struct_type[struct_filter.child_idx].second);
+		auto &child_type = struct_type[struct_mapping.index].second;
+		auto new_child_filter = TryCastTableFilter(*child_filter, struct_mapping, child_type);
 		if (!new_child_filter) {
 			return nullptr;
 		}
-		//! TODO: renaming fields should probably be respected here?
-		auto child_name = struct_filter.child_name;
-		return make_uniq<StructFilter>(struct_mapping.index, child_name, std::move(new_child_filter));
+		auto child_name = struct_type[struct_mapping.index].first;
+		return make_uniq<StructFilter>(struct_mapping.index, std::move(child_name), std::move(new_child_filter));
 	}
 	case TableFilterType::OPTIONAL_FILTER: {
 		auto &optional_filter = global_filter.Cast<OptionalFilter>();
@@ -621,6 +624,10 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = global_filter.Cast<ConstantFilter>();
 		auto new_constant = constant_filter.constant;
+		if (!StatisticsPropagator::CanPropagateCast(constant_filter.constant.type(), target_type)) {
+			// type cannot be converted - abort
+			return nullptr;
+		}
 		if (!new_constant.DefaultTryCastAs(target_type)) {
 			return nullptr;
 		}
@@ -629,6 +636,10 @@ static unique_ptr<TableFilter> TryCastTableFilter(const TableFilter &global_filt
 	case TableFilterType::IN_FILTER: {
 		auto &in_filter = global_filter.Cast<InFilter>();
 		auto in_list = in_filter.values;
+		if (!in_list.empty() && !StatisticsPropagator::CanPropagateCast(in_list[0].type(), target_type)) {
+			// type cannot be converted - abort
+			return nullptr;
+		}
 		for (auto &val : in_list) {
 			if (!val.DefaultTryCastAs(target_type)) {
 				return nullptr;
@@ -650,6 +661,15 @@ void SetIndexToZero(Expression &expr) {
 	}
 
 	ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) { SetIndexToZero(child); });
+}
+
+bool CanPropagateCast(const MultiFileIndexMapping &mapping, const LogicalType &local_type, const LogicalType &global_type) {
+	if (local_type.id() == LogicalTypeId::STRUCT && global_type.id() == LogicalTypeId::STRUCT) {
+		// struct fields - check along the mapping
+		// mapping is global to local
+		throw InternalException("Propagate cast - check mapping");
+	}
+	return StatisticsPropagator::CanPropagateCast(local_type, global_type);
 }
 
 unique_ptr<TableFilterSet> MultiFileColumnMapper::CreateFilters(map<idx_t, reference<TableFilter>> &filters,
@@ -681,12 +701,7 @@ unique_ptr<TableFilterSet> MultiFileColumnMapper::CreateFilters(map<idx_t, refer
 			local_filter = global_filter.Copy();
 		} else {
 			// types are different - try to convert
-			// first check if we can safely convert (i.e. if the conversion is lossless would not change the result)
-			// FIXME: we can transform struct filters
-			if (StatisticsPropagator::CanPropagateCast(local_type, global_type)) {
-				// if we can convert - try to actually convert
-				local_filter = TryCastTableFilter(global_filter, map_entry.mapping, local_type);
-			}
+			local_filter = TryCastTableFilter(global_filter, map_entry.mapping, local_type);
 		}
 		if (local_filter) {
 			// succeeded in casting - push the local filter
