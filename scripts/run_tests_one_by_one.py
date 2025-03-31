@@ -67,6 +67,8 @@ assertions = args.no_assertions
 time_execution = args.time_execution
 timeout = args.timeout
 summarize_failures = args.summarize_failures
+env = os.environ.copy()
+env["SUMMARIZE_FAILURES"]='1'
 
 # Use the '-l' parameter to output the list of tests to run
 proc = subprocess.run([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -152,7 +154,7 @@ def launch_test(test, list_of_tests=False):
         test_cmd = [unittest_program] + test
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
-        res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout)
+        res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env=env)
     except subprocess.TimeoutExpired as e:
         if list_of_tests:
             print("[TIMED OUT]", flush=True)
@@ -256,7 +258,7 @@ else:
 
 if all_passed:
     exit(0)
-if args.summarize_failures:
+if env=='1':
     print(
         '''\n\n====================================================
 ================  FAILURES SUMMARY  ================
