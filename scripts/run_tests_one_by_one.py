@@ -10,7 +10,6 @@ import argparse
 
 error_container = []
 
-
 def valid_timeout(value):
     try:
         timeout_float = float(value)
@@ -43,9 +42,6 @@ parser.add_argument(
     type=valid_timeout,
 )
 parser.add_argument('--valgrind', action='store_true', help='Run the tests with valgrind', default=False)
-parser.add_argument(
-    '--summarize-failures', action='store_true', help='Enable failures summary in the output', default=True
-)
 
 args, extra_args = parser.parse_known_args()
 
@@ -66,9 +62,6 @@ profile = args.profile
 assertions = args.no_assertions
 time_execution = args.time_execution
 timeout = args.timeout
-summarize_failures = args.summarize_failures
-env = os.environ.copy()
-env["SUMMARIZE_FAILURES"]='1'
 
 # Use the '-l' parameter to output the list of tests to run
 proc = subprocess.run([unittest_program, '-l'] + extra_args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -154,7 +147,7 @@ def launch_test(test, list_of_tests=False):
         test_cmd = [unittest_program] + test
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
-        res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env=env)
+        res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout)
     except subprocess.TimeoutExpired as e:
         if list_of_tests:
             print("[TIMED OUT]", flush=True)
@@ -258,7 +251,7 @@ else:
 
 if all_passed:
     exit(0)
-if env=='1':
+if len(error_container):
     print(
         '''\n\n====================================================
 ================  FAILURES SUMMARY  ================
