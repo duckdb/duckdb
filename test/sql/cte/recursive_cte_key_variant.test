@@ -141,6 +141,17 @@ WITH RECURSIVE tbl2(a) AS (SELECT 1 UNION SELECT a.a+1 FROM tbl2 AS a, (SELECT *
 ----
 Invalid Input Error: RECURRING can only be used with USING KEY in recursive CTE.
 
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a) AS (SELECT 5, 1 UNION SELECT a, b + 1 FROM tbl WHERE b < a),tbl1(a,b) AS (SELECT * FROM recurring.tbl) SELECT * FROM tbl1;
+----
+Binder Error: There is a WITH item named "tbl", but the recurring table cannot be referenced from this part of the query.
+
+statement error
+WITH RECURSIVE tbl(a, b) USING KEY (a) AS MATERIALIZED (SELECT 5, 1 UNION SELECT a, b + 1 FROM tbl WHERE b < a),tbl1(a,b) AS (SELECT * FROM recurring.tbl) SELECT * FROM tbl1;
+----
+Binder Error: There is a WITH item named "tbl", but the recurring table cannot be referenced from this part of the query.
+
+
 #######################
 # Connected components
 #######################
