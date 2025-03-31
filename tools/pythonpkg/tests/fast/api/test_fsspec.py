@@ -1,6 +1,7 @@
 import pytest
 import duckdb
 import io
+import datetime
 
 fsspec = pytest.importorskip("fsspec")
 
@@ -30,12 +31,15 @@ class TestReadParquet(object):
                             "type": "file",
                             "created": 0,
                             "islink": False,
-                            "modified": 0,
                         }
                         for path in vals
                     ]
                 else:
                     return vals
+
+            def modified(self, path):
+                # this is needed since PR #16463 because the Parquet reader now always fetches the modified timestamp
+                return datetime.datetime.fromtimestamp(0, datetime.UTC)
 
             def _open(self, path, **kwargs):
                 return io.BytesIO(self._data[path])
