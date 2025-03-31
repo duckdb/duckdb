@@ -231,7 +231,8 @@ OperatorResultType PhysicalUnnest::ExecuteInternal(ExecutionContext &context, Da
 		for (idx_t col_idx = 0; col_idx < state.list_data.ColumnCount(); col_idx++) {
 			auto &list_vector = state.list_data.data[col_idx];
 			auto &result_vector = chunk.data[col_offset + col_idx];
-			if (ListType::GetChildType(state.list_data.data[col_idx].GetType()) == LogicalType::SQLNULL ||
+			if (state.list_data.data[col_idx].GetType() == LogicalType::SQLNULL ||
+			    ListType::GetChildType(state.list_data.data[col_idx].GetType()) == LogicalType::SQLNULL ||
 			    ListVector::GetListSize(list_vector) == 0) {
 				// UNNEST(NULL) or UNNEST([])
 				// we cannot slice empty lists - but if our child list is empty we can only return NULL anyway
