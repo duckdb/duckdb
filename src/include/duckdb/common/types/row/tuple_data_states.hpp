@@ -12,6 +12,7 @@
 #include "duckdb/common/perfect_map_set.hpp"
 #include "duckdb/common/types.hpp"
 #include "duckdb/common/types/vector_cache.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
