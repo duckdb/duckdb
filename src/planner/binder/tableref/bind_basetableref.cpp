@@ -163,6 +163,13 @@ unique_ptr<BoundTableRef> Binder::Bind(BaseTableRef &ref) {
 
 				// Update references to CTE
 				auto cteref = bind_context.cte_references[cte_reference];
+
+				if (cteref == nullptr && ref.schema_name == "recurring") {
+					throw BinderException("There is a WITH item named \"%s\", but the recurring table cannot be "
+					                      "referenced from this part of the query.",
+					                      ref.table_name);
+				}
+
 				(*cteref)++;
 
 				result->types = ctebinding->types;
