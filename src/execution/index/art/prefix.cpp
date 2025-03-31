@@ -99,23 +99,6 @@ void Prefix::Free(ART &art, Node &node) {
 	node.Clear();
 }
 
-void Prefix::InitializeMerge(ART &art, Node &node, const unsafe_vector<idx_t> &upper_bounds) {
-	auto buffer_count = upper_bounds[Node::GetAllocatorIdx(PREFIX)];
-	Node next = node;
-	Prefix prefix(art, next, true);
-
-	while (next.GetType() == PREFIX) {
-		next = *prefix.ptr;
-		if (prefix.ptr->GetType() == PREFIX) {
-			prefix.ptr->IncreaseBufferId(buffer_count);
-			prefix = Prefix(art, next, true);
-		}
-	}
-
-	node.IncreaseBufferId(buffer_count);
-	prefix.ptr->InitMerge(art, upper_bounds);
-}
-
 void Prefix::Concat(ART &art, Node &parent, uint8_t byte, const GateStatus old_status, const Node &child,
                     const GateStatus status) {
 	D_ASSERT(!parent.IsAnyLeaf());
@@ -364,25 +347,6 @@ void Prefix::VerifyAllocations(ART &art, const Node &node, unordered_map<uint8_t
 	reference<const Node> ref(node);
 	Iterator(art, ref, false, false, [&](Prefix &prefix) { node_counts[idx]++; });
 	return ref.get().VerifyAllocations(art, node_counts);
-}
-
-void Prefix::Vacuum(ART &art, Node &node, const unordered_set<uint8_t> &indexes) {
-	bool set = indexes.find(Node::GetAllocatorIdx(PREFIX)) != indexes.end();
-	auto &allocator = Node::GetAllocator(art, PREFIX);
-
-	reference<Node> ref(node);
-	while (ref.get().GetType() == PREFIX) {
-		if (set && allocator.NeedsVacuum(ref)) {
-			auto status = ref.get().GetGateStatus();
-			ref.get() = allocator.VacuumPointer(ref);
-			ref.get().SetMetadata(static_cast<uint8_t>(PREFIX));
-			ref.get().SetGateStatus(status);
-		}
-		Prefix prefix(art, ref, true);
-		ref = *prefix.ptr;
-	}
-
-	ref.get().Vacuum(art, indexes);
 }
 
 void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {

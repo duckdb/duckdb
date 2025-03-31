@@ -7,6 +7,7 @@
 #include "duckdb/execution/index/art/base_leaf.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/iterator.hpp"
+#include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/leaf.hpp"
 #include "duckdb/execution/index/art/node256.hpp"
 #include "duckdb/execution/index/art/node256_leaf.hpp"
@@ -362,35 +363,23 @@ bool Node::IsAnyLeaf() const {
 
 void Node::InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
 	D_ASSERT(HasMetadata());
-	auto type = GetType();
+	ARTScanner<ARTScanHandlingMode::POP> scanner(art);
 
-	switch (type) {
-	case NType::PREFIX:
-		return Prefix::InitializeMerge(art, *this, upper_bounds);
-	case NType::LEAF:
-		throw InternalException("Failed to initialize merge due to deprecated ART storage.");
-	case NType::NODE_4:
-		InitMergeInternal(art, Ref<Node4>(art, *this, type), upper_bounds);
-		break;
-	case NType::NODE_16:
-		InitMergeInternal(art, Ref<Node16>(art, *this, type), upper_bounds);
-		break;
-	case NType::NODE_48:
-		InitMergeInternal(art, Ref<Node48>(art, *this, type), upper_bounds);
-		break;
-	case NType::NODE_256:
-		InitMergeInternal(art, Ref<Node256>(art, *this, type), upper_bounds);
-		break;
-	case NType::LEAF_INLINED:
-		return;
-	case NType::NODE_7_LEAF:
-	case NType::NODE_15_LEAF:
-	case NType::NODE_256_LEAF:
-		break;
-	}
+	auto handler = [&upper_bounds](Node &node) {
+		auto type = node.GetType();
+		if (node.GetType() == NType::LEAF_INLINED) {
+			return ARTScanResult::CONTINUE;
+		}
+		if (type == NType::LEAF) {
+			throw InternalException("deprecated ART storage in InitMerge");
+		}
+		auto idx = GetAllocatorIdx(type);
+		node.IncreaseBufferId(upper_bounds[idx]);
+		return ARTScanResult::CONTINUE;
+	};
 
-	auto idx = GetAllocatorIdx(type);
-	IncreaseBufferId(upper_bounds[idx]);
+	scanner.Init(handler, *this);
+	scanner.Scan(handler);
 }
 
 bool Node::MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const GateStatus status) {
@@ -597,48 +586,45 @@ bool Node::MergeInternal(ART &art, Node &other, const GateStatus status) {
 
 void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 	D_ASSERT(HasMetadata());
+	ARTScanner<ARTScanHandlingMode::EMPLACE> scanner(art);
 
-	auto type = GetType();
-	switch (type) {
-	case NType::LEAF_INLINED:
-		return;
-	case NType::PREFIX:
-		return Prefix::Vacuum(art, *this, indexes);
-	case NType::LEAF:
-		if (indexes.find(GetAllocatorIdx(type)) == indexes.end()) {
-			return;
+	auto handler = [&art, &indexes](Node &node) {
+		ARTScanResult result;
+		auto type = node.GetType();
+		switch (type) {
+		case NType::LEAF_INLINED:
+			return ARTScanResult::SKIP;
+		case NType::LEAF: {
+			if (indexes.find(GetAllocatorIdx(type)) == indexes.end()) {
+				return ARTScanResult::SKIP;
+			}
+			Leaf::DeprecatedVacuum(art, node);
+			return ARTScanResult::SKIP;
 		}
-		return Leaf::DeprecatedVacuum(art, *this);
-	default:
-		break;
-	}
+		case NType::NODE_7_LEAF:
+		case NType::NODE_15_LEAF:
+		case NType::NODE_256_LEAF:
+			result = ARTScanResult::SKIP;
+			break;
+		default:
+			result = ARTScanResult::CONTINUE;
+			break;
+		}
 
-	auto idx = GetAllocatorIdx(type);
-	auto &allocator = GetAllocator(art, type);
-	auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(*this);
-	if (needs_vacuum) {
-		auto status = GetGateStatus();
-		*this = allocator.VacuumPointer(*this);
-		SetMetadata(static_cast<uint8_t>(type));
-		SetGateStatus(status);
-	}
+		auto idx = GetAllocatorIdx(type);
+		auto &allocator = GetAllocator(art, type);
+		auto needs_vacuum = indexes.find(idx) != indexes.end() && allocator.NeedsVacuum(node);
+		if (needs_vacuum) {
+			auto status = node.GetGateStatus();
+			node = allocator.VacuumPointer(node);
+			node.SetMetadata(static_cast<uint8_t>(type));
+			node.SetGateStatus(status);
+		}
+		return result;
+	};
 
-	switch (type) {
-	case NType::NODE_4:
-		return VacuumInternal(art, Ref<Node4>(art, *this, type), indexes);
-	case NType::NODE_16:
-		return VacuumInternal(art, Ref<Node16>(art, *this, type), indexes);
-	case NType::NODE_48:
-		return VacuumInternal(art, Ref<Node48>(art, *this, type), indexes);
-	case NType::NODE_256:
-		return VacuumInternal(art, Ref<Node256>(art, *this, type), indexes);
-	case NType::NODE_7_LEAF:
-	case NType::NODE_15_LEAF:
-	case NType::NODE_256_LEAF:
-		return;
-	default:
-		throw InternalException("Invalid node type for Vacuum: %s.", EnumUtil::ToString(type));
-	}
+	scanner.Init(handler, *this);
+	scanner.Scan(handler);
 }
 
 //===--------------------------------------------------------------------===//

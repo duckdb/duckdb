@@ -12,8 +12,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/base_file_reader.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "column_reader.hpp"
@@ -110,12 +110,12 @@ struct ParquetOptions {
 
 struct ParquetOptionsSerialization {
 	ParquetOptionsSerialization() = default;
-	ParquetOptionsSerialization(ParquetOptions parquet_options_p, MultiFileReaderOptions file_options_p)
+	ParquetOptionsSerialization(ParquetOptions parquet_options_p, MultiFileOptions file_options_p)
 	    : parquet_options(std::move(parquet_options_p)), file_options(std::move(file_options_p)) {
 	}
 
 	ParquetOptions parquet_options;
-	MultiFileReaderOptions file_options;
+	MultiFileOptions file_options;
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -169,6 +169,10 @@ public:
 	                                                 shared_ptr<ParquetFileMetadataCache> metadata, const string &name);
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
+
+	string GetReaderType() const override {
+		return "Parquet";
+	}
 
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only

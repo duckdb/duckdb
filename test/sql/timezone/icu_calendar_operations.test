@@ -1,0 +1,27 @@
+# name: test/sql/timezone/icu_calendar_operations.test
+# description: Test the ICU calendar interface
+# group: [timezone]
+
+require icu
+
+# Normalise the testing locale
+statement ok
+SET Calendar = 'hebrew';
+
+statement ok
+SET TimeZone = 'UTC';
+
+query I
+SELECT AGE(timestamptz '2020-01-01' + interval (30) day, timestamptz '2020-01-01')
+----
+1 month
+
+query I
+SELECT AGE(timestamptz '2020-06-01' + interval (230) day, timestamptz '2020-06-01')
+----
+7 months 23 days
+
+query I
+SELECT AGE(timestamptz '2021-06-01', timestamptz '2020-06-01' + interval (230) day)
+----
+5 months 7 days

@@ -35,6 +35,8 @@ public:
 		return std::move(statistics_map);
 	}
 
+	//! Whether or not we can propagate a cast between two types
+	static bool CanPropagateCast(const LogicalType &source, const LogicalType &target);
 	static unique_ptr<BaseStatistics> TryPropagateCast(BaseStatistics &stats, const LogicalType &source,
 	                                                   const LogicalType &target);
 

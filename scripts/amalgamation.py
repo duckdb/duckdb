@@ -76,7 +76,7 @@ if '--extended' in sys.argv:
             "duckdb/planner/filter/null_filter.hpp",
             "duckdb/common/arrow/arrow_wrapper.hpp",
             "duckdb/common/hive_partitioning.hpp",
-            "duckdb/common/union_by_name.hpp",
+            "duckdb/common/multi_file/union_by_name.hpp",
             "duckdb/planner/operator/logical_get.hpp",
             "duckdb/common/compressed_file_system.hpp",
         ]
