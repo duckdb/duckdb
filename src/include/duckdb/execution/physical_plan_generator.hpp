@@ -97,6 +97,9 @@ public:
 		return physical_plan->Make<T>(std::forward<ARGS>(args)...);
 	}
 
+public:
+	PhysicalOperator &ResolveDefaultsProjection(LogicalInsert &op, PhysicalOperator &child);
+
 protected:
 	PhysicalOperator &CreatePlan(LogicalAggregate &op);
 	PhysicalOperator &CreatePlan(LogicalAnyJoin &op);

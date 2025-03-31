@@ -14,7 +14,7 @@
 #include "duckdb/execution/operator/csv_scanner/csv_error.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_schema.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_validator.hpp"
-#include "duckdb/common/base_file_reader.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
 
 namespace duckdb {
 struct ReadCSVData;
@@ -34,12 +34,12 @@ public:
 	//! Constructor for new CSV Files, we must initialize the buffer manager and the state machine
 	//! Path to this file
 	CSVFileScan(ClientContext &context, const string &file_path, CSVReaderOptions options,
-	            const MultiFileReaderOptions &file_options, const vector<string> &names,
-	            const vector<LogicalType> &types, CSVSchema &file_schema, bool per_file_single_threaded,
+	            const MultiFileOptions &file_options, const vector<string> &names, const vector<LogicalType> &types,
+	            CSVSchema &file_schema, bool per_file_single_threaded,
 	            shared_ptr<CSVBufferManager> buffer_manager = nullptr, bool fixed_schema = false);
 
 	CSVFileScan(ClientContext &context, const string &file_name, const CSVReaderOptions &options,
-	            const MultiFileReaderOptions &file_options);
+	            const MultiFileOptions &file_options);
 
 public:
 	void SetStart();
@@ -47,7 +47,7 @@ public:
 
 public:
 	idx_t GetFileIndex() const {
-		return reader_data.file_list_idx.GetIndex();
+		return file_list_idx.GetIndex();
 	}
 	const vector<string> &GetNames();
 	const vector<LogicalType> &GetTypes();
@@ -56,6 +56,15 @@ public:
 
 	//! Initialize the actual names and types to be scanned from the file
 	void InitializeFileNamesTypes();
+
+	string GetReaderType() const override {
+		return "CSV";
+	}
+
+	bool UseCastMap() const override {
+		//! Whether or not to push casts into the cast map
+		return true;
+	}
 
 public:
 	//! Buffer Manager for the CSV File

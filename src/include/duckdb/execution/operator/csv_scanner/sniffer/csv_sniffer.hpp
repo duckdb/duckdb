@@ -63,7 +63,7 @@ struct HasType {
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
-	explicit CSVSniffer(CSVReaderOptions &options_p, const MultiFileReaderOptions &file_options,
+	explicit CSVSniffer(CSVReaderOptions &options_p, const MultiFileOptions &file_options,
 	                    shared_ptr<CSVBufferManager> buffer_manager_p, CSVStateMachineCache &state_machine_cache,
 	                    bool default_null_to_varchar = true);
 
@@ -107,7 +107,7 @@ private:
 	//! Reference to original CSV Options, it will be modified as a result of the sniffer.
 	CSVReaderOptions &options;
 	//! The multi-file reader options
-	const MultiFileReaderOptions &file_options;
+	const MultiFileOptions &file_options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;
 	//! Information regarding columns that were set by user/query
@@ -195,7 +195,7 @@ private:
 	DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
 	                     const SetColumns &set_columns,
 	                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-	                     CSVReaderOptions &options, const MultiFileReaderOptions &file_options,
+	                     CSVReaderOptions &options, const MultiFileOptions &file_options,
 	                     CSVErrorHandler &error_handler);
 	vector<string> names;
 	//! If the file only has a header
