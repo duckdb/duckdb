@@ -535,4 +535,16 @@ double Timestamp::GetJulianDay(timestamp_t timestamp) {
 	return result;
 }
 
+TimestampComponents Timestamp::GetComponents(timestamp_t timestamp) {
+	date_t date;
+	dtime_t time;
+
+	Convert(timestamp, date, time);
+
+	TimestampComponents result;
+	Date::Convert(date, result.year, result.month, result.day);
+	Time::Convert(time, result.hour, result.minute, result.second, result.microsecond);
+	return result;
+}
+
 } // namespace duckdb
