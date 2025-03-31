@@ -266,6 +266,8 @@ enum class PartitionedTupleDataType : uint8_t;
 
 enum class PendingExecutionResult : uint8_t;
 
+enum class PhysicalOperatorMemoryType : uint8_t;
+
 enum class PhysicalOperatorType : uint8_t;
 
 enum class PhysicalType : uint8_t;
@@ -745,6 +747,9 @@ const char* EnumUtil::ToChars<PartitionedTupleDataType>(PartitionedTupleDataType
 
 template<>
 const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult value);
+
+template<>
+const char* EnumUtil::ToChars<PhysicalOperatorMemoryType>(PhysicalOperatorMemoryType value);
 
 template<>
 const char* EnumUtil::ToChars<PhysicalOperatorType>(PhysicalOperatorType value);
@@ -1289,6 +1294,9 @@ PartitionedTupleDataType EnumUtil::FromString<PartitionedTupleDataType>(const ch
 
 template<>
 PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *value);
+
+template<>
+PhysicalOperatorMemoryType EnumUtil::FromString<PhysicalOperatorMemoryType>(const char *value);
 
 template<>
 PhysicalOperatorType EnumUtil::FromString<PhysicalOperatorType>(const char *value);
