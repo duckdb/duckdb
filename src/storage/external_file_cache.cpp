@@ -84,8 +84,8 @@ bool ExternalFileCache::CachedFile::IsValid(const unique_ptr<StorageLockKey> &gu
 	}
 	// The last modified time matches. However, we cannot blindly trust this,
 	// because some file systems use a low resolution clock to set the last modified time.
-	// So, we will require that the last modified time is more than 2 seconds ago.
-	static constexpr int64_t LAST_MODIFIED_THRESHOLD = 2;
+	// So, we will require that the last modified time is more than 10 seconds ago.
+	static constexpr int64_t LAST_MODIFIED_THRESHOLD = 10;
 	if (access_time < current_last_modified) {
 		return false; // Last modified in the future?
 	}
