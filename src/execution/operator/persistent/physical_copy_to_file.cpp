@@ -48,7 +48,8 @@ using vector_of_value_map_t = unordered_map<vector<Value>, T, VectorOfValuesHash
 class CopyToFunctionGlobalState : public GlobalSinkState {
 public:
 	explicit CopyToFunctionGlobalState(ClientContext &context)
-	    : initialized(false), rows_copied(0), last_file_offset(0) {
+	    : initialized(false), rows_copied(0), last_file_offset(0),
+	      file_write_lock_if_rotating(make_uniq<StorageLock>()) {
 		max_open_files = ClientConfig::GetConfig(context).partitioned_write_max_open_files;
 	}
 	StorageLock lock;
@@ -65,7 +66,7 @@ public:
 	//! Max open files
 	idx_t max_open_files;
 	//! If rotate is true, this lock is used
-	StorageLock file_write_lock_if_rotating;
+	unique_ptr<StorageLock> file_write_lock_if_rotating;
 
 	void Initialize(ClientContext &context, const PhysicalCopyToFile &op) {
 		if (initialized) {
@@ -480,29 +481,32 @@ void PhysicalCopyToFile::WriteRotateInternal(ExecutionContext &context, GlobalSi
 
 	// Loop until we can write (synchronize using locks when using parallel writes to the same files and "rotate")
 	while (true) {
-		// Grab global lock and dereference the current gstate
+		// Grab global lock and dereference the current file state (and corresponding lock)
 		auto global_guard = g.lock.GetExclusiveLock();
-		auto &gstate = *g.global_state;
-		if (rotate && function.rotate_next_file(gstate, *bind_data, file_size_bytes)) {
+		auto &file_state = *g.global_state;
+		auto &file_lock = *g.file_write_lock_if_rotating;
+		if (rotate && function.rotate_next_file(file_state, *bind_data, file_size_bytes)) {
 			// Global state must be rotated. Move to local scope, create an new one, and immediately release global lock
 			auto owned_gstate = std::move(g.global_state);
 			g.global_state = CreateFileState(context.client, *sink_state, *global_guard);
+			auto owned_lock = std::move(g.file_write_lock_if_rotating);
+			g.file_write_lock_if_rotating = make_uniq<StorageLock>();
 			global_guard.reset();
 
 			// This thread now waits for the exclusive lock on this file while other threads complete their writes
 			// Note that new writes can still start, as there is already a new global state
-			auto file_guard = g.file_write_lock_if_rotating.GetExclusiveLock();
+			auto file_guard = owned_lock->GetExclusiveLock();
 			function.copy_to_finalize(context.client, *bind_data, *owned_gstate);
 		} else {
 			// Get shared file write lock while holding global lock,
 			// so file can't be rotated before we get the write lock
-			auto file_guard = g.file_write_lock_if_rotating.GetSharedLock();
+			auto file_guard = file_lock.GetSharedLock();
 
 			// Because we got the shared lock on the file, we're sure that it will keep existing until we release it
 			global_guard.reset();
 
 			// Sink/Combine!
-			fun(gstate);
+			fun(file_state);
 			break;
 		}
 	}
