@@ -60,13 +60,9 @@ GeoParquetColumnMetadataWriter::GeoParquetColumnMetadataWriter(ClientContext &co
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// These functions are required to extract the geometry type, ZM flag and bounding box from a WKB blob
-	auto &type_func_set =
-	    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_geometrytype")
-	        .Cast<ScalarFunctionCatalogEntry>();
-	auto &flag_func_set = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_zmflag")
-	                          .Cast<ScalarFunctionCatalogEntry>();
-	auto &bbox_func_set = catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_extent")
-	                          .Cast<ScalarFunctionCatalogEntry>();
+	auto &type_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_geometrytype");
+	auto &flag_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_zmflag");
+	auto &bbox_func_set = catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_extent");
 
 	auto wkb_type = LogicalType(LogicalTypeId::BLOB);
 	wkb_type.SetAlias("WKB_BLOB");
@@ -382,25 +378,29 @@ bool GeoParquetFileMetadata::IsGeoParquetConversionEnabled(const ClientContext &
 	return true;
 }
 
+LogicalType GeoParquetFileMetadata::GeometryType() {
+	auto blob_type = LogicalType(LogicalTypeId::BLOB);
+	blob_type.SetAlias("GEOMETRY");
+	return blob_type;
+}
+
 unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReader &reader,
-                                                                    const LogicalType &logical_type,
-                                                                    const SchemaElement &s_ele, idx_t schema_idx_p,
-                                                                    idx_t max_define_p, idx_t max_repeat_p,
+                                                                    const ParquetColumnSchema &schema,
                                                                     ClientContext &context) {
 
-	D_ASSERT(IsGeometryColumn(s_ele.name));
+	D_ASSERT(IsGeometryColumn(schema.name));
 
-	const auto &column = geometry_columns[s_ele.name];
+	const auto &column = geometry_columns[schema.name];
 
 	// Get the catalog
 	auto &catalog = Catalog::GetSystemCatalog(context);
 
 	// WKB encoding
-	if (logical_type.id() == LogicalTypeId::BLOB && column.geometry_encoding == GeoParquetColumnEncoding::WKB) {
+	if (schema.children[0].type.id() == LogicalTypeId::BLOB &&
+	    column.geometry_encoding == GeoParquetColumnEncoding::WKB) {
 		// Look for a conversion function in the catalog
 		auto &conversion_func_set =
-		    catalog.GetEntry(context, CatalogType::SCALAR_FUNCTION_ENTRY, DEFAULT_SCHEMA, "st_geomfromwkb")
-		        .Cast<ScalarFunctionCatalogEntry>();
+		    catalog.GetEntry<ScalarFunctionCatalogEntry>(context, DEFAULT_SCHEMA, "st_geomfromwkb");
 		auto conversion_func = conversion_func_set.functions.GetFunctionByArguments(context, {LogicalType::BLOB});
 
 		// Create a bound function call expression
@@ -410,8 +410,7 @@ unique_ptr<ColumnReader> GeoParquetFileMetadata::CreateColumnReader(ParquetReade
 		    make_uniq<BoundFunctionExpression>(conversion_func.return_type, conversion_func, std::move(args), nullptr);
 
 		// Create a child reader
-		auto child_reader =
-		    ColumnReader::CreateReader(reader, logical_type, s_ele, schema_idx_p, max_define_p, max_repeat_p);
+		auto child_reader = ColumnReader::CreateReader(reader, schema.children[0]);
 
 		// Create an expression reader that applies the conversion function to the child reader
 		return make_uniq<ExpressionColumnReader>(context, std::move(child_reader), std::move(expr));

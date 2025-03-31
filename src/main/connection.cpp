@@ -20,7 +20,10 @@ namespace duckdb {
 
 Connection::Connection(DatabaseInstance &database)
     : context(make_shared_ptr<ClientContext>(database.shared_from_this())), warning_cb(nullptr) {
-	ConnectionManager::Get(database).AddConnection(*context);
+	auto &connection_manager = ConnectionManager::Get(database);
+	connection_manager.AddConnection(*context);
+	connection_manager.AssignConnectionId(*this);
+
 #ifdef DEBUG
 	EnableProfiling();
 	context->config.emit_profiler_output = false;
@@ -34,11 +37,13 @@ Connection::Connection(DuckDB &database) : Connection(*database.instance) {
 Connection::Connection(Connection &&other) noexcept : warning_cb(nullptr) {
 	std::swap(context, other.context);
 	std::swap(warning_cb, other.warning_cb);
+	std::swap(connection_id, other.connection_id);
 }
 
 Connection &Connection::operator=(Connection &&other) noexcept {
 	std::swap(context, other.context);
 	std::swap(warning_cb, other.warning_cb);
+	std::swap(connection_id, other.connection_id);
 	return *this;
 }
 
@@ -204,7 +209,28 @@ shared_ptr<Relation> Connection::Table(const string &table_name) {
 shared_ptr<Relation> Connection::Table(const string &schema_name, const string &table_name) {
 	auto table_info = TableInfo(INVALID_CATALOG, schema_name, table_name);
 	if (!table_info) {
-		throw CatalogException("Table '%s' does not exist!", table_name);
+		throw CatalogException("Table %s does not exist!", ParseInfo::QualifierToString("", schema_name, table_name));
+	}
+	return make_shared_ptr<TableRelation>(context, std::move(table_info));
+}
+
+shared_ptr<Relation> Connection::Table(const string &catalog_name, const string &schema_name,
+                                       const string &table_name) {
+	unique_ptr<TableDescription> table_info;
+	do {
+		table_info = TableInfo(catalog_name, schema_name, table_name);
+		if (table_info) {
+			break;
+		}
+
+		if (catalog_name.empty() && !schema_name.empty()) {
+			table_info = TableInfo(schema_name, DEFAULT_SCHEMA, table_name);
+		}
+	} while (false);
+
+	if (!table_info) {
+		throw CatalogException("Table %s does not exist!",
+		                       ParseInfo::QualifierToString(catalog_name, schema_name, table_name));
 	}
 	return make_shared_ptr<TableRelation>(context, std::move(table_info));
 }

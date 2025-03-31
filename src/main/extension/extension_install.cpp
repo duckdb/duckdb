@@ -220,11 +220,10 @@ string ExtensionHelper::ExtensionUrlTemplate(optional_ptr<const DatabaseInstance
 	} else {
 		versioned_path = "/${REVISION}/${PLATFORM}/${NAME}.duckdb_extension";
 	}
+	string default_endpoint = ExtensionRepository::DEFAULT_REPOSITORY_URL;
 #ifdef WASM_LOADABLE_EXTENSIONS
-	string default_endpoint = DEFAULT_REPOSITORY;
 	versioned_path = versioned_path + ".wasm";
 #else
-	string default_endpoint = ExtensionRepository::DEFAULT_REPOSITORY_URL;
 	versioned_path = versioned_path + CompressionExtensionFromType(FileCompressionType::GZIP);
 #endif
 	string url_template = repository.path + versioned_path;
@@ -319,7 +318,8 @@ static unique_ptr<ExtensionInstallInfo> DirectInstallExtension(DatabaseInstance 
 	// Throw error on failure
 	if (!exists) {
 		if (!fs.IsRemoteFile(file)) {
-			throw IOException("Failed to copy local extension \"%s\" at PATH \"%s\"\n", extension_name, file);
+			throw IOException("Failed to install local extension \"%s\", no access to the file at PATH \"%s\"\n",
+			                  extension_name, file);
 		}
 		if (StringUtil::StartsWith(file, "https://")) {
 			throw IOException("Failed to install remote extension \"%s\" from url \"%s\"", extension_name, file);

@@ -657,5 +657,29 @@
         "type": "unique_ptr<Constraint>"
       }
     ]
+  },
+  {
+    "class": "SetPartitionedByInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_PARTITIONED_BY",
+    "members": [
+      {
+        "id": 400,
+        "name": "partition_keys",
+        "type": "vector<ParsedExpression*>"
+      }
+    ]
+  },
+  {
+    "class": "SetSortedByInfo",
+    "base": "AlterTableInfo",
+    "enum": "SET_SORTED_BY",
+    "members": [
+      {
+        "id": 400,
+        "name": "orders",
+        "type": "vector<OrderByNode>"
+      }
+    ]
   }
 ]

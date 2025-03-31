@@ -16,6 +16,11 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# HTTPFS
+# Warning: the patching mechanism on windows doesn't work for httpfs somehow.
+# To patch httpfs:
+#  - add patch file, enable APPLY_PATCHES
+#  - disable windows build of httpfs by wrapping in `if (NOT WIN32)`
+#  - IMPORTANT: add a comment that tells people to restore the windows build when removing the patches
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
@@ -38,6 +43,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
             GIT_TAG b3050f35c6e99fa35465230493eeab14a78a0409
+            APPLY_PATCHES
             )
 endif()
 
@@ -53,23 +59,27 @@ endif()
 ################# DELTA
 # MinGW build is not available, and our current manylinux ci does not have enough storage space to run the rust build
 # for Delta
+if (FALSE)
 if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT ${WASM_ENABLED})
     duckdb_extension_load(delta
             GIT_URL https://github.com/duckdb/duckdb-delta
-            GIT_TAG 846019edcc27000721ff9c4281e85a63d1aa10de
+            GIT_TAG 6d626173e9efa6615c25eb08d979d1372100d5db
+            APPLY_PATCHES
     )
+endif()
 endif()
 
 ################# EXCEL
 duckdb_extension_load(excel
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-excel
-    GIT_TAG e243577956f36a898d5485189e5288839c2c4b73
+    GIT_TAG f14e7c3beaf379c54b47b996aa896a1d814e1be8
     INCLUDE_DIR src/excel/include
     )
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
+if(FALSE)
 if (NOT WIN32)
     set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
 else ()
@@ -83,6 +93,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             GIT_TAG 43b4e37f6e859d6c1c67b787ac511659e9e0b6fb
             )
 endif()
+endif()
 
 ################# INET
 duckdb_extension_load(inet
@@ -91,6 +102,7 @@ duckdb_extension_load(inet
     GIT_TAG a8b361ab5d43f6390d7cb48c9a9f0638e9581cf9
     INCLUDE_DIR src/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 
 ################# POSTGRES_SCANNER
@@ -100,7 +112,8 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(postgres_scanner
             DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-postgres
-            GIT_TAG 79fcce4a7478d245189d851ce289def2b42f4f93
+            GIT_TAG 8461ed8b6f726564934e9c831cdc88d431e3148f
+            APPLY_PATCHES
             )
 endif()
 
@@ -110,9 +123,10 @@ if (NOT MINGW)
 duckdb_extension_load(spatial
     DONT_LINK LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-spatial
-    GIT_TAG 79bf2b6f55db3bf7201f375662616663b4b0954a
+    GIT_TAG 2905968a85703e5ca3698976daafd759554e1744
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 endif()
 
@@ -128,12 +142,13 @@ duckdb_extension_load(sqlite_scanner
         ${STATIC_LINK_SQLITE} LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlite
         GIT_TAG 96e451c043afa40ee39b7581009ba0c72a523a12
+        APPLY_PATCHES
         )
 
 duckdb_extension_load(sqlsmith
         DONT_LINK LOAD_TESTS
         GIT_URL https://github.com/duckdb/duckdb-sqlsmith
-        GIT_TAG b13723fe701f1e38d2cd65b3b6eb587c6553a251
+        GIT_TAG e1eb0ae02a258f176d6e06b84c0d6c7a09c6b4da
         )
 
 ################# VSS
@@ -143,6 +158,7 @@ duckdb_extension_load(vss
         GIT_URL https://github.com/duckdb/duckdb-vss
         GIT_TAG 580e8918eb89f478cf2d233ca908ffbd3ec752c5
         TEST_DIR test/sql
+        APPLY_PATCHES
     )
 
 ################# MYSQL
@@ -152,6 +168,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-mysql
             GIT_TAG c2a56813a9fe9cb8c24c424be646d41ab2f8e64f
+            APPLY_PATCHES
             )
 endif()
 
@@ -160,6 +177,6 @@ duckdb_extension_load(fts
         LOAD_TESTS
         DONT_LINK
         GIT_URL https://github.com/duckdb/duckdb-fts
-        GIT_TAG 0477abaf2484aa7b9aabf8ace9dc0bde80a15554
+        GIT_TAG 3aa6a180b9c101d78070f5f7214c27552bb091c8
         TEST_DIR test/sql
 )

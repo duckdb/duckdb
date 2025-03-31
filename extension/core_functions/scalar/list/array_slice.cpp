@@ -416,7 +416,12 @@ static unique_ptr<FunctionData> ArraySliceBind(ClientContext &context, ScalarFun
 			    "Slice with steps has not been implemented for string types, you can consider rewriting your query as "
 			    "follows:\n SELECT array_to_string((str_split(string, '')[begin:end:step], '');");
 		}
-		bound_function.return_type = arguments[0]->return_type;
+		if (arguments[0]->return_type.IsJSONType()) {
+			// This is needed to avoid producing invalid JSON
+			bound_function.return_type = LogicalType::VARCHAR;
+		} else {
+			bound_function.return_type = arguments[0]->return_type;
+		}
 		for (idx_t i = 1; i < 3; i++) {
 			if (arguments[i]->return_type.id() != LogicalTypeId::LIST) {
 				bound_function.arguments[i] = LogicalType::BIGINT;

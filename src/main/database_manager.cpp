@@ -11,7 +11,8 @@
 
 namespace duckdb {
 
-DatabaseManager::DatabaseManager(DatabaseInstance &db) : next_oid(0), current_query_number(1) {
+DatabaseManager::DatabaseManager(DatabaseInstance &db)
+    : next_oid(0), current_query_number(1), current_transaction_id(0) {
 	system = make_uniq<AttachedDatabase>(db);
 	databases = make_uniq<CatalogSet>(system->GetCatalog());
 }
@@ -59,6 +60,9 @@ optional_ptr<AttachedDatabase> DatabaseManager::AttachDatabase(ClientContext &co
 	}
 
 	// and add it to the databases catalog set
+	if (info.on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+		DetachDatabase(context, name, OnEntryNotFound::RETURN_NULL);
+	}
 	if (!databases->CreateEntry(context, name, std::move(attached_db), dependencies)) {
 		throw BinderException("Failed to attach database: database with name \"%s\" already exists", name);
 	}

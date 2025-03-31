@@ -1,6 +1,7 @@
 #include "duckdb/storage/temporary_memory_manager.hpp"
 
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/main/connection_manager.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
@@ -73,6 +74,11 @@ unique_lock<mutex> TemporaryMemoryManager::Lock() {
 	return unique_lock<mutex>(lock);
 }
 
+idx_t TemporaryMemoryManager::DefaultMinimumReservation() const {
+	return MinValue(num_threads * MINIMUM_RESERVATION_PER_STATE_PER_THREAD,
+	                memory_limit / MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR);
+}
+
 void TemporaryMemoryManager::Unregister(TemporaryMemoryState &temporary_memory_state) {
 	auto guard = Lock();
 
@@ -91,6 +97,7 @@ void TemporaryMemoryManager::UpdateConfiguration(ClientContext &context) {
 	    LossyNumericCast<idx_t>(MAXIMUM_MEMORY_LIMIT_RATIO * static_cast<double>(buffer_manager.GetMaxMemory()));
 	has_temporary_directory = buffer_manager.HasTemporaryDirectory();
 	num_threads = NumericCast<idx_t>(task_scheduler.NumberOfThreads());
+	num_connections = ConnectionManager::Get(context).GetConnectionCount();
 	query_max_memory = buffer_manager.GetQueryMaxMemory();
 }
 
@@ -102,9 +109,7 @@ unique_ptr<TemporaryMemoryState> TemporaryMemoryManager::Register(ClientContext 
 	auto guard = Lock();
 	UpdateConfiguration(context);
 
-	auto minimum_reservation = MinValue(num_threads * MINIMUM_RESERVATION_PER_STATE_PER_THREAD,
-	                                    memory_limit / MINIMUM_RESERVATION_MEMORY_LIMIT_DIVISOR);
-	auto result = unique_ptr<TemporaryMemoryState>(new TemporaryMemoryState(*this, minimum_reservation));
+	auto result = unique_ptr<TemporaryMemoryState>(new TemporaryMemoryState(*this, DefaultMinimumReservation()));
 	SetRemainingSize(*result, result->GetMinimumReservation());
 	SetReservation(*result, result->GetMinimumReservation());
 	active_states.insert(*result);
@@ -277,6 +282,12 @@ idx_t TemporaryMemoryManager::ComputeReservation(const TemporaryMemoryState &tem
 		// Update counts
 		res[min_idx] += delta;
 		remaining_memory -= delta;
+
+		// If we aren't able to assign the remaining memory to the lowest-derivative state in the last iteration,
+		// we'll exit this loop without assigning all free memory. This adds another iteration
+		if (opt_idx == optimization_iterations - 1 && delta < iter_memory) {
+			opt_idx--;
+		}
 	}
 	D_ASSERT(remaining_memory == 0);
 
@@ -302,8 +313,13 @@ idx_t TemporaryMemoryManager::ComputeReservation(const TemporaryMemoryState &tem
 		auto &state = states[idx].get();
 		D_ASSERT(res[idx] <= state.GetRemainingSize());
 		const auto initial_state_reservation = ComputeInitialReservation(state);
-		const auto upper_bound = LossyNumericCast<idx_t>(
-		    MAXIMUM_FREE_MEMORY_RATIO * static_cast<double>(initial_state_reservation + remaining_memory));
+		// Bound by the ratio
+		const auto state_remaining = initial_state_reservation + remaining_memory;
+		auto upper_bound = LossyNumericCast<idx_t>(MAXIMUM_FREE_MEMORY_RATIO * static_cast<double>(state_remaining));
+		// Or bound by leaving a number of minimum reservations for other states
+		auto num_other_states = MinValue(MAXIMUM_REMAINING_STATE_RESERVATIONS, num_connections);
+		num_other_states = MaxValue(num_other_states, MINIMUM_REMAINING_STATE_RESERVATIONS);
+		upper_bound = MinValue(upper_bound, num_other_states * DefaultMinimumReservation());
 		auto state_reservation = MinValue(res[idx], upper_bound);
 		// But make sure it's never less than the initial reservation
 		state_reservation = MaxValue(state_reservation, initial_state_reservation);

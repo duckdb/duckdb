@@ -61,6 +61,8 @@ public:
 	DUCKDB_API virtual unique_ptr<LogStorageScanState> CreateScanContextsState() const;
 	DUCKDB_API virtual bool ScanContexts(LogStorageScanState &state, DataChunk &result) const;
 	DUCKDB_API virtual void InitializeScanContexts(LogStorageScanState &state) const;
+
+	DUCKDB_API virtual void Truncate();
 };
 
 class StdOutLogStorage : public LogStorage {
@@ -73,6 +75,8 @@ public:
 	                   const RegisteredLoggingContext &context) override;
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override;
 	void Flush() override;
+
+	void Truncate() override;
 };
 
 class InMemoryLogStorageScanState : public LogStorageScanState {
@@ -94,6 +98,8 @@ public:
 	void WriteLogEntries(DataChunk &chunk, const RegisteredLoggingContext &context) override;
 	void Flush() override;
 
+	void Truncate() override;
+
 	//! LogStorage API: READING
 	bool CanScan() override;
 
@@ -106,6 +112,7 @@ public:
 
 protected:
 	void WriteLoggingContext(const RegisteredLoggingContext &context);
+	void ResetBuffers();
 
 protected:
 	mutable mutex lock;

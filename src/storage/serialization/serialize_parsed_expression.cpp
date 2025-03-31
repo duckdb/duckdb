@@ -292,7 +292,7 @@ void StarExpression::Serialize(Serializer &serializer) const {
 	serializer.WritePropertyWithDefault<case_insensitive_map_t<unique_ptr<ParsedExpression>>>(202, "replace_list", replace_list);
 	serializer.WritePropertyWithDefault<bool>(203, "columns", columns);
 	serializer.WritePropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr", expr);
-	serializer.WritePropertyWithDefault<bool>(205, "unpacked", unpacked, false);
+	/* [Deleted] (bool) "unpacked" */
 	serializer.WritePropertyWithDefault<qualified_column_set_t>(206, "qualified_exclude_list", SerializedQualifiedExcludeList(), qualified_column_set_t());
 	serializer.WritePropertyWithDefault<qualified_column_map_t<string>>(207, "rename_list", rename_list, qualified_column_map_t<string>());
 }
@@ -305,14 +305,9 @@ unique_ptr<ParsedExpression> StarExpression::Deserialize(Deserializer &deseriali
 	auto expr = deserializer.ReadPropertyWithDefault<unique_ptr<ParsedExpression>>(204, "expr");
 	auto unpacked = deserializer.ReadPropertyWithExplicitDefault<bool>(205, "unpacked", false);
 	auto qualified_exclude_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_set_t>(206, "qualified_exclude_list", qualified_column_set_t());
-	auto result = duckdb::unique_ptr<StarExpression>(new StarExpression(exclude_list, qualified_exclude_list));
-	result->relation_name = std::move(relation_name);
-	result->replace_list = std::move(replace_list);
-	result->columns = columns;
-	result->expr = std::move(expr);
-	result->unpacked = unpacked;
-	deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<string>>(207, "rename_list", result->rename_list, qualified_column_map_t<string>());
-	return std::move(result);
+	auto rename_list = deserializer.ReadPropertyWithExplicitDefault<qualified_column_map_t<string>>(207, "rename_list", qualified_column_map_t<string>());
+	auto result = StarExpression::DeserializeStarExpression(std::move(relation_name), exclude_list, std::move(replace_list), columns, std::move(expr), unpacked, qualified_exclude_list, std::move(rename_list));
+	return result;
 }
 
 void SubqueryExpression::Serialize(Serializer &serializer) const {

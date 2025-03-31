@@ -1,0 +1,21 @@
+# name: test/sql/sample/get_multiple_samples_small.test_slow
+# description: Run a sample multiple times (internal#4236)
+# group: [sample]
+
+statement ok
+pragma memory_limit='10G';
+
+
+statement ok
+CREATE OR REPLACE TABLE blah as (
+        SELECT *
+        FROM range(10_000_000)
+    );
+
+
+loop i 0 500
+
+statement ok
+SELECT * FROM blah TABLESAMPLE 100 ROWS;
+
+endloop

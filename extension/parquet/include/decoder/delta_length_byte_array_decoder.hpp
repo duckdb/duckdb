@@ -22,11 +22,20 @@ public:
 public:
 	void InitializePage();
 
-	void Read(uint8_t *defines, idx_t read_count, Vector &result, idx_t result_offset);
+	void Read(shared_ptr<ResizeableBuffer> &block, uint8_t *defines, idx_t read_count, Vector &result,
+	          idx_t result_offset);
+	void Skip(uint8_t *defines, idx_t skip_count);
+
+private:
+	template <bool HAS_DEFINES>
+	void ReadInternal(shared_ptr<ResizeableBuffer> &block, uint8_t *defines, idx_t read_count, Vector &result,
+	                  idx_t result_offset);
+	template <bool HAS_DEFINES>
+	void SkipInternal(uint8_t *defines, idx_t skip_count);
 
 private:
 	ColumnReader &reader;
-	shared_ptr<ResizeableBuffer> length_buffer;
+	ResizeableBuffer &length_buffer;
 	idx_t byte_array_count = 0;
 	idx_t length_idx;
 };

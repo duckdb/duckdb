@@ -7,7 +7,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/common/multi_file_list.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 namespace duckdb {
 
@@ -245,7 +245,7 @@ static void TemplatedGetHivePartitionValues(Vector &input, vector<HivePartitionK
 
 	const auto &type = input.GetType();
 
-	const auto reinterpret = Value::CreateValue<T>(data[0]).GetTypeMutable() != type;
+	const auto reinterpret = Value::CreateValue<T>(data[sel.get_index(0)]).GetTypeMutable() != type;
 	if (reinterpret) {
 		for (idx_t i = 0; i < count; i++) {
 			auto &key = keys[i];

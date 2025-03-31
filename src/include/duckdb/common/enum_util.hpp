@@ -34,6 +34,10 @@ struct EnumUtil {
 
 enum class ARTConflictType : uint8_t;
 
+enum class ARTScanHandlingMode : uint8_t;
+
+enum class ARTScanResult : uint8_t;
+
 enum class AccessMode : uint8_t;
 
 enum class AggregateCombineType : uint8_t;
@@ -226,7 +230,9 @@ enum class MetaPipelineType : uint8_t;
 
 enum class MetricsType : uint8_t;
 
-enum class MultiFileReaderColumnMappingMode : uint8_t;
+enum class MultiFileColumnMappingMode : uint8_t;
+
+enum class MultiFileFileState : uint8_t;
 
 enum class NType : uint8_t;
 
@@ -328,6 +334,8 @@ enum class SinkResultType : uint8_t;
 
 enum class SourceResultType : uint8_t;
 
+enum class StarExpressionType : uint8_t;
+
 enum class StatementReturnType : uint8_t;
 
 enum class StatementType : uint8_t;
@@ -393,6 +401,12 @@ enum class WindowExcludeMode : uint8_t;
 
 template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
+
+template<>
+const char* EnumUtil::ToChars<ARTScanHandlingMode>(ARTScanHandlingMode value);
+
+template<>
+const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value);
 
 template<>
 const char* EnumUtil::ToChars<AccessMode>(AccessMode value);
@@ -683,7 +697,10 @@ template<>
 const char* EnumUtil::ToChars<MetricsType>(MetricsType value);
 
 template<>
-const char* EnumUtil::ToChars<MultiFileReaderColumnMappingMode>(MultiFileReaderColumnMappingMode value);
+const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value);
+
+template<>
+const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value);
 
 template<>
 const char* EnumUtil::ToChars<NType>(NType value);
@@ -836,6 +853,9 @@ template<>
 const char* EnumUtil::ToChars<SourceResultType>(SourceResultType value);
 
 template<>
+const char* EnumUtil::ToChars<StarExpressionType>(StarExpressionType value);
+
+template<>
 const char* EnumUtil::ToChars<StatementReturnType>(StatementReturnType value);
 
 template<>
@@ -931,6 +951,12 @@ const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
 
 template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
+
+template<>
+ARTScanHandlingMode EnumUtil::FromString<ARTScanHandlingMode>(const char *value);
+
+template<>
+ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value);
 
 template<>
 AccessMode EnumUtil::FromString<AccessMode>(const char *value);
@@ -1221,7 +1247,10 @@ template<>
 MetricsType EnumUtil::FromString<MetricsType>(const char *value);
 
 template<>
-MultiFileReaderColumnMappingMode EnumUtil::FromString<MultiFileReaderColumnMappingMode>(const char *value);
+MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value);
+
+template<>
+MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value);
 
 template<>
 NType EnumUtil::FromString<NType>(const char *value);
@@ -1372,6 +1401,9 @@ SinkResultType EnumUtil::FromString<SinkResultType>(const char *value);
 
 template<>
 SourceResultType EnumUtil::FromString<SourceResultType>(const char *value);
+
+template<>
+StarExpressionType EnumUtil::FromString<StarExpressionType>(const char *value);
 
 template<>
 StatementReturnType EnumUtil::FromString<StatementReturnType>(const char *value);

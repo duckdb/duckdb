@@ -458,17 +458,33 @@ cte_list:
 		| cte_list ',' common_table_expr		{ $$ = lappend($1, $3); }
 		;
 
-common_table_expr:  name opt_name_list AS opt_materialized '(' PreparableStmt ')'
+common_table_expr:  name opt_name_list opt_on_key AS opt_materialized '(' PreparableStmt ')'
 			{
 				PGCommonTableExpr *n = makeNode(PGCommonTableExpr);
 				n->ctename = $1;
 				n->aliascolnames = $2;
-				n->ctematerialized = $4;
-				n->ctequery = $6;
+				n->recursive_keys = $3;
+				n->ctematerialized = $5;
+				n->ctequery = $7;
 				n->location = @1;
 				$$ = (PGNode *) n;
 			}
 		;
+
+opt_on_key:
+		USING KEY '(' column_ref_list_opt_comma ')' 				{ $$ = $4; }
+		| /*EMPTY*/												{ $$ = list_make1(NIL); }
+		;
+
+column_ref_list_opt_comma:
+		column_ref_list	 						{ $$ = $1; }
+		| column_ref_list ','					{ $$ = $1; }
+		;
+
+column_ref_list:
+		columnref								{ $$ = list_make1($1); }
+        | column_ref_list ',' columnref		{ $$ = lappend($1, $3); }
+        ;
 
 opt_materialized:
 		MATERIALIZED							{ $$ = PGCTEMaterializeAlways; }
@@ -774,6 +790,28 @@ opt_repeatable_clause:
 			| /*EMPTY*/					{ $$ = -1; }
 		;
 
+
+at_unit:
+	TIMESTAMP { $$ = (char*) "TIMESTAMP"; }
+	| VERSION_P { $$ = (char*) "VERSION"; }
+	;
+
+at_specifier:
+		at_unit EQUALS_GREATER a_expr
+			{
+				PGAtClause *n = makeNode(PGAtClause);
+				n->unit = $1;
+				n->expr = $3;
+				$$ = (PGNode *) n;
+			}
+	;
+
+opt_at_clause:
+		AT '(' at_specifier ')' { $$ = $3; }
+		| /*EMPTY*/				{ $$ = NULL; }
+	;
+
+
 select_limit_value:
 			a_expr									{ $$ = $1; }
 			| ALL
@@ -1035,16 +1073,18 @@ alias_prefix_colon_clause:
 /*
  * table_ref is where an alias clause can be attached.
  */
-table_ref:	relation_expr opt_alias_clause opt_tablesample_clause
+table_ref:	relation_expr opt_alias_clause opt_at_clause opt_tablesample_clause
 				{
+					$1->at_clause = $3;
 					$1->alias = $2;
-					$1->sample = $3;
+					$1->sample = $4;
 					$$ = (PGNode *) $1;
 				}
-			| alias_prefix_colon_clause relation_expr opt_tablesample_clause
+			| alias_prefix_colon_clause relation_expr opt_at_clause opt_tablesample_clause
                 {
+					$2->at_clause = $3;
                     $2->alias = $1;
-                    $2->sample = $3;
+                    $2->sample = $4;
                     $$ = (PGNode *) $2;
                 }
             | func_table func_alias_clause opt_tablesample_clause
@@ -2604,15 +2644,6 @@ a_expr:		c_expr									{ $$ = $1; }
 					n->location = @1;
 					$$ = (PGNode *)n;
 				}
-			| '*' COLUMNS '(' a_expr ')'
-				{
-					PGAStar *star = makeNode(PGAStar);
-					star->expr = $4;
-					star->columns = true;
-					star->unpacked = true;
-					star->location = @1;
-					$$ = (PGNode *) star;
-				}
 			| COLUMNS '(' a_expr ')'
 				{
 					PGAStar *star = makeNode(PGAStar);
@@ -2620,6 +2651,21 @@ a_expr:		c_expr									{ $$ = $1; }
 					star->columns = true;
 					star->location = @1;
 					$$ = (PGNode *) star;
+				}
+			| UNPACK '(' a_expr ')'
+				{
+					PGFuncCall *n = makeFuncCall(SystemFuncName("unpack"), list_make1($3), @1);
+					$$ = (PGNode *) n;
+				}
+			| '*' COLUMNS '(' a_expr ')'
+				{
+					PGAStar *star = makeNode(PGAStar);
+					star->expr = $4;
+					star->columns = true;
+					star->location = @1;
+
+					PGFuncCall *n = makeFuncCall(SystemFuncName("unpack"), list_make1((PGNode *)star), @1);
+					$$ = (PGNode *) n;
 				}
 			| '*' opt_except_list opt_replace_list opt_rename_list
 				{

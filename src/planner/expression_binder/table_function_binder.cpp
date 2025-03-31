@@ -49,6 +49,11 @@ BindResult TableFunctionBinder::BindColumnReference(unique_ptr<ParsedExpression>
 	if (value_function) {
 		return BindExpression(value_function, depth, root_expression);
 	}
+	if (table_function_name.empty()) {
+		throw BinderException(query_location,
+		                      "Failed to bind \"%s\" - COLUMNS expression can only contain lambda parameters",
+		                      result_name);
+	}
 
 	return BindResult(make_uniq<BoundConstantExpression>(Value(result_name)));
 }

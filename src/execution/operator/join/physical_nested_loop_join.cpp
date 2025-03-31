@@ -9,13 +9,13 @@
 
 namespace duckdb {
 
-PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, unique_ptr<PhysicalOperator> left,
-                                               unique_ptr<PhysicalOperator> right, vector<JoinCondition> cond,
-                                               JoinType join_type, idx_t estimated_cardinality)
+PhysicalNestedLoopJoin::PhysicalNestedLoopJoin(LogicalOperator &op, PhysicalOperator &left, PhysicalOperator &right,
+                                               vector<JoinCondition> cond, JoinType join_type,
+                                               idx_t estimated_cardinality)
     : PhysicalComparisonJoin(op, PhysicalOperatorType::NESTED_LOOP_JOIN, std::move(cond), join_type,
                              estimated_cardinality) {
-	children.push_back(std::move(left));
-	children.push_back(std::move(right));
+	children.push_back(left);
+	children.push_back(right);
 }
 
 bool PhysicalJoin::HasNullValues(DataChunk &chunk) {
@@ -151,8 +151,9 @@ public:
 class NestedLoopJoinGlobalState : public GlobalSinkState {
 public:
 	explicit NestedLoopJoinGlobalState(ClientContext &context, const PhysicalNestedLoopJoin &op)
-	    : right_payload_data(context, op.children[1]->types), right_condition_data(context, op.GetJoinTypes()),
-	      has_null(false), right_outer(PropagatesBuildSide(op.join_type)) {
+	    : right_payload_data(context, op.children[1].get().GetTypes()),
+	      right_condition_data(context, op.GetJoinTypes()), has_null(false),
+	      right_outer(PropagatesBuildSide(op.join_type)) {
 	}
 
 	mutex nj_lock;
@@ -241,7 +242,7 @@ public:
 		auto &allocator = Allocator::Get(context);
 		left_condition.Initialize(allocator, condition_types);
 		right_condition.Initialize(allocator, condition_types);
-		right_payload.Initialize(allocator, op.children[1]->GetTypes());
+		right_payload.Initialize(allocator, op.children[1].get().GetTypes());
 		left_outer.Initialize(STANDARD_VECTOR_SIZE);
 	}
 

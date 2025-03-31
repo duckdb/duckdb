@@ -19,6 +19,7 @@ add_library_unity(
   dependency_manager.cpp
   dependency_list.cpp
   dependency_catalog_set.cpp
+  entry_lookup_info.cpp
   similar_catalog_entry.cpp)
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_catalog>

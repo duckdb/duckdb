@@ -15,6 +15,12 @@ SELECT (count(*) > 0) FROM duckdb_extensions() WHERE install_path ILIKE '%duckdb
 ----
 false
 
+# All extensions reported by duckdb are either statically linked or not installed
+query I
+SELECT count(*) FROM duckdb_extensions() WHERE install_mode != 'NOT_INSTALLED' AND install_mode != 'STATICALLY_LINKED'
+----
+0
+
 ### No autoloading nor installing: throw error with installation hint
 statement ok
 set autoload_known_extensions=false
@@ -53,13 +59,13 @@ statement error
 SET s3_region='eu-west-1';
 ----
 Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'httpfs':
-Failed to copy local extension
+Failed to install local extension
 
 statement error
 select * from read_json_auto('data/json/example_n.ndjson');
 ----
 Extension Autoloading Error: An error occurred while trying to automatically install the required extension 'json':
-Failed to copy local extension
+Failed to install local extension
 
 # Now override with non-existent remote repo
 statement ok
