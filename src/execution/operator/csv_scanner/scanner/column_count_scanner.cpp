@@ -193,8 +193,7 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 				result.cur_buffer_idx = iterator.pos.buffer_idx;
 				result.current_buffer_size = cur_buffer_handle->actual_size;
 				// Do a quick check that the line is still sane
-				const LinePosition cur_position(result.cur_buffer_idx, iterator.pos.buffer_idx,
-				                                result.current_buffer_size);
+				const LinePosition cur_position(result.cur_buffer_idx, 0, result.current_buffer_size);
 				LinesPerBoundary lines_per_batch;
 				if (cur_position - result.last_position > result.state_machine.options.maximum_line_size.GetValue()) {
 					FullLinePosition current_line_position;
@@ -211,6 +210,10 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 					result.error = true;
 					return;
 				}
+			}
+			if (result.buffer_handles.size() > 2) {
+				// pop lowest value
+				result.buffer_handles.erase(result.buffer_handles.begin());
 			}
 			iterator.pos.buffer_pos = 0;
 			buffer_handle_ptr = cur_buffer_handle->Ptr();

@@ -48,7 +48,7 @@ public:
 	//! How many rows fit a given column count
 	map<idx_t, idx_t> rows_per_column_count;
 	CSVErrorHandler &error_handler;
-	unordered_map<idx_t, shared_ptr<CSVBufferHandle>> buffer_handles;
+	map<idx_t, shared_ptr<CSVBufferHandle>> buffer_handles;
 	//! Adds a Value to the result
 	static inline void AddValue(ColumnCountResult &result, idx_t buffer_pos);
 	//! Adds a Row to the result
