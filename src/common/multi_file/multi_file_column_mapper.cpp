@@ -184,6 +184,40 @@ void MultiFileColumnMapper::ThrowColumnNotFoundError(const string &global_column
 	                            file_name, global_column_name, initial_file, file_name, candidate_names);
 }
 
+//! Check if a column is trivially mappable (i.e. the column is effectively identical to the global column)
+bool IsTriviallyMappable(const MultiFileColumnDefinition &global_column,
+                         const vector<MultiFileColumnDefinition> &local_columns, const ColumnMapper &mapper,
+                         optional_idx expected_idx = optional_idx()) {
+	auto entry = mapper.Find(global_column);
+	if (!entry.IsValid()) {
+		return false;
+	}
+	if (global_column.children.empty()) {
+		return true;
+	}
+	auto local_id = entry.GetIndex();
+	if (expected_idx.IsValid() && local_id != expected_idx.GetIndex()) {
+		return false;
+	}
+	auto &local_column = local_columns[local_id];
+	if (local_column.type != global_column.type) {
+		return false;
+	}
+	if (local_column.children.size() != global_column.children.size()) {
+		// child count difference - cannot map trivially
+		return false;
+	}
+	auto nested_mapper = mapper.Create(local_column.children);
+	for (idx_t i = 0; i < global_column.children.size(); i++) {
+		auto &global_child = global_column.children[i];
+		bool trivially_mappable = IsTriviallyMappable(global_child, local_column.children, *nested_mapper, i);
+		if (!trivially_mappable) {
+			return false;
+		}
+	}
+	return true;
+}
+
 ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDefinition &global_column,
                           const ColumnIndex &global_index, const vector<MultiFileColumnDefinition> &local_columns,
                           const ColumnMapper &mapper, optional_idx top_level_index = optional_idx()) {
@@ -298,19 +332,20 @@ ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDefinitio
 }
 
 unique_ptr<Expression> ConstructMapExpression(ClientContext &context, idx_t local_idx, ColumnMapResult &mapping,
-                                              const MultiFileColumnDefinition &global_column) {
+                                              const MultiFileColumnDefinition &global_column,
+                                              bool is_trivially_mappable) {
 	auto &local_column = *mapping.local_column;
 	unique_ptr<Expression> expr;
 	expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx);
 	if (global_column.type.id() != LogicalTypeId::STRUCT ||
-	    (!mapping.column_map.IsNull() && mapping.column_map.type().id() != LogicalTypeId::STRUCT)) {
+	    (!mapping.column_map.IsNull() && mapping.column_map.type().id() != LogicalTypeId::STRUCT) ||
+	    is_trivially_mappable) {
 		// not a struct - potentially add a cast
 		if (local_column.type != global_column.type) {
 			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
 		}
 		return expr;
 	}
-	// FIXME: we don't need to remap struct if all identifiers and types match (common case)
 	// struct column - generate a remap_struct - but only if we have any columns to remap
 	if (mapping.column_map.IsNull()) {
 		// no columns to map - emit the default value directly
@@ -418,20 +453,22 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			continue;
 		}
 
-		// construct the expression to construct this column
 		auto column_map = MapColumn(context, global_column, global_id, local_columns, mapper, local_idx.GetIndex());
 		if (!column_map.column_index) {
 			// no columns were emitted
 			reader_data.expressions.push_back(std::move(column_map.default_value));
 			continue;
 		}
+		auto trivial_map = IsTriviallyMappable(global_column, local_columns, mapper);
 		auto local_index = std::move(column_map.column_index);
 		auto local_id = local_index->GetPrimaryIndex();
 		auto &local_type = local_columns[local_id].type;
-		reader_data.expressions.push_back(
-		    ConstructMapExpression(context, local_idx.GetIndex(), column_map, global_column));
+		auto expr = ConstructMapExpression(context, local_idx.GetIndex(), column_map, global_column, trivial_map);
+		reader_data.expressions.push_back(std::move(expr));
+		bool require_filter_cast = !trivial_map;
 
-		MultiFileColumnMap index_mapping(std::move(*column_map.mapping), local_type, global_column.type, true);
+		MultiFileColumnMap index_mapping(std::move(*column_map.mapping), local_type, global_column.type,
+		                                 require_filter_cast);
 		result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
 		reader.column_ids.emplace_back(local_id);
 		reader.column_indexes.push_back(std::move(*local_index));
