@@ -25,7 +25,7 @@ class TestQueryProgress(object):
                 time.sleep(0.1)
                 y = conn.query_progress()
                 assert 100 > y > x > 0
-            
+
         thread = threading.Thread(target=thread_target)
         print("START")
         thread.start()
