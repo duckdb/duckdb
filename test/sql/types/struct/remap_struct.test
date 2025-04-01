@@ -1,0 +1,99 @@
+# name: test/sql/types/struct/remap_struct.test
+# description: Test struct remapping
+# group: [struct]
+
+require skip_reload
+
+statement ok
+PRAGMA enable_verification
+
+# basic remap usage
+query I
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::INTEGER});
+----
+{'v1': 2, 'v2': NULL, 'v3': 1}
+
+# different defaults + casting
+query I
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR, v2 VARCHAR, v3 VARCHAR), {'v1': 'j', 'v3': 'i'}, {'v2': 'hello'});
+----
+{'v1': 2, 'v2': hello, 'v3': 1}
+
+# bulk copy
+statement ok
+CREATE TABLE structs(struct_val STRUCT(i INT, j VARCHAR));
+
+statement ok
+INSERT INTO structs VALUES ({'i': 42, 'j': 'hello world this is my string'}), (NULL), ({'i': 100, 'j': NULL}), ({'i': NULL, 'j': 'string string string'});
+
+query I
+SELECT remap_struct(struct_val, NULL::ROW(v1 VARCHAR, v2 VARCHAR, v3 VARCHAR), {'v1': 'j', 'v3': 'i'}, {'v2': 'hello'})
+FROM structs
+----
+{'v1': hello world this is my string, 'v2': hello, 'v3': 42}
+NULL
+{'v1': NULL, 'v2': hello, 'v3': 100}
+{'v1': string string string, 'v2': hello, 'v3': NULL}
+
+query I
+SELECT remap_struct(struct_val, NULL::ROW(v1 VARCHAR, v2 VARCHAR, v3 VARCHAR), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::VARCHAR})
+FROM structs
+----
+{'v1': hello world this is my string, 'v2': NULL, 'v3': 42}
+NULL
+{'v1': NULL, 'v2': NULL, 'v3': 100}
+{'v1': string string string, 'v2': NULL, 'v3': NULL}
+
+# no defaults
+query I
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT), {'v1': 'j', 'v2': 'i'}, NULL);
+----
+{'v1': 2, 'v2': 1}
+
+# invalid usage
+# invalid target value
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR), {'v2': 'i'}, NULL);
+----
+Target value v2 not found
+
+# invalid type
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL, {'v2': 'i'}, NULL);
+----
+Struct remap can only remap structs
+
+statement error
+SELECT remap_struct(ROW(1, 2), NULL::ROW(v1 VARCHAR), {'v2': 'i'}, NULL);
+----
+Struct remap can only remap named structs
+
+# invalid source value
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR), {'v1': 'k'}, NULL);
+----
+Source value k not found
+
+# duplicate default/target
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR), {'v1': 'i'}, {'v1': NULL::VARCHAR});
+----
+Duplicate value provided for target v1
+
+# not all target values mapped
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR, v2 VARCHAR), {'v1': 'i'}, NULL);
+----
+Missing target value v2
+
+statement error
+SELECT remap_struct(struct_val, NULL::ROW(v1 VARCHAR, v2 VARCHAR, v3 VARCHAR), {'v1': 'j', 'v3': 'i'}, struct_val)
+FROM structs
+----
+Default values must be constants
+
+# default type mismatch
+statement error
+SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': 'hello'});
+----
+Default key v2 does not match target type INTEGER

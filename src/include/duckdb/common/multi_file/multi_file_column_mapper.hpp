@@ -26,6 +26,7 @@ public:
 	ReaderInitializeType CreateMapping();
 
 	void ThrowColumnNotFoundError(const string &global_column_name) const;
+
 private:
 	ResultColumnMapping CreateColumnMapping();
 	ResultColumnMapping CreateColumnMappingByMapper(const ColumnMapper &mapper);

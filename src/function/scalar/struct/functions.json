@@ -29,6 +29,13 @@
         "type": "scalar_function"
     },
     {
+        "name": "remap_struct",
+        "parameters": "source,target,remap,defaults",
+        "description": "Map a struct to another struct type. Columns are remapped according to the remap argument. Columns that are not present should be specified as default columns.",
+        "example": "remap_struct({'i': 3, 'v3': 3, 'v2': 0}, NULL::STRUCT(v1 VARCHAR, v2 INT, v3 INT, v4 INT), {'v1': 'i', 'v2': 'v2', 'v3': 'v3'}, {'v4': NULL})",
+        "type": "scalar_function"
+    },
+    {
         "name": "struct_concat",
         "parameters": "struct,struct,...",
         "description": "Merge the multiple STRUCTs into a single STRUCT.",

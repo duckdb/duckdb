@@ -200,7 +200,8 @@ private:
 	                                      idx_t schema_index, idx_t column_index,
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
 
-	MultiFileColumnDefinition ParseColumnDefinition(const duckdb_parquet::FileMetaData &file_meta_data, ParquetColumnSchema &element);
+	MultiFileColumnDefinition ParseColumnDefinition(const duckdb_parquet::FileMetaData &file_meta_data,
+	                                                ParquetColumnSchema &element);
 
 private:
 	unique_ptr<FileHandle> file_handle;

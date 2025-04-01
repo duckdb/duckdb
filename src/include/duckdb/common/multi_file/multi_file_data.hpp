@@ -55,13 +55,12 @@ public:
 		MultiFileColumnDefinition result(name, type);
 		if (type.id() == LogicalTypeId::STRUCT) {
 			// recursively create for children
-			for(auto &child_entry : StructType::GetChildTypes(type)) {
+			for (auto &child_entry : StructType::GetChildTypes(type)) {
 				result.children.push_back(CreateFromNameAndType(child_entry.first, child_entry.second));
 			}
 		}
 		return result;
 	}
-
 
 	static vector<MultiFileColumnDefinition> ColumnsFromNamesAndTypes(const vector<string> &names,
 	                                                                  const vector<LogicalType> &types) {

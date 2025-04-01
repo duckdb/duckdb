@@ -56,6 +56,16 @@ struct RowFun {
 	static ScalarFunction GetFunction();
 };
 
+struct RemapStructFun {
+	static constexpr const char *Name = "remap_struct";
+	static constexpr const char *Parameters = "struct,...";
+	static constexpr const char *Description = "Map a struct to another struct type, potentially re-ordering, renaming and casting members";
+	static constexpr const char *Example = "remap_struct({'i': 3, 'v3': 3, 'v2': 0}, NULL::STRUCT(v1 VARCHAR, v2 INT, v3 INT), 'i', 'v2', 'v3')";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
 struct StructConcatFun {
 	static constexpr const char *Name = "struct_concat";
 	static constexpr const char *Parameters = "struct,struct,...";

@@ -604,7 +604,8 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 	return make_uniq<ParquetColumnSchema>(root);
 }
 
-MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaData &file_meta_data, ParquetColumnSchema &element) {
+MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaData &file_meta_data,
+                                                               ParquetColumnSchema &element) {
 	MultiFileColumnDefinition result(element.name, element.type);
 	auto &column_schema = file_meta_data.schema[element.schema_index];
 
@@ -616,7 +617,7 @@ MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaDat
 			result.identifier = Value::INTEGER(parent_column_schema.field_id);
 		}
 	}
-	for(auto &child : element.children) {
+	for (auto &child : element.children) {
 		result.children.push_back(ParseColumnDefinition(file_meta_data, child));
 	}
 	return result;
