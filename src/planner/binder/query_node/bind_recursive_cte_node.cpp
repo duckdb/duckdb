@@ -41,11 +41,7 @@ unique_ptr<BoundQueryNode> Binder::BindNode(RecursiveCTENode &statement) {
 
 	// Add bindings of left side to temporary CTE bindings context
 	result->right_binder->bind_context.AddCTEBinding(result->setop_index, statement.ctename, result->names,
-	                                                 result->types);
-	if (!statement.key_targets.empty()) {
-		result->right_binder->bind_context.AddCTEBinding(result->setop_index, "recurring." + statement.ctename,
-		                                                 result->names, result->types);
-	}
+	                                                 result->types, !statement.key_targets.empty());
 
 	result->right = result->right_binder->BindNode(*statement.right);
 	for (auto &c : result->left_binder->correlated_columns) {
