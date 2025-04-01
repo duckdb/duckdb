@@ -36,6 +36,7 @@ int main(int argc, char *argv[]) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
 	const char *filename("failures_summary.txt");
+	// duckdb::stringstream summary;
 
 	const char *summarize = std::getenv("SUMMARIZE_FAILURES");
 	if (summarize != nullptr && std::string(summarize) == "1") {
@@ -106,32 +107,32 @@ int main(int argc, char *argv[]) {
 	}
 
 	RegisterSqllogictests();
-
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
-	std::ifstream file(filename);
-	if (file && summarize_failures) {
-		std::cout << "\n====================================================" << std::endl;
-		std::cout << "================  FAILURES SUMMARY  ================" << std::endl;
-		std::cout << "====================================================\n" << std::endl;
-
-		string line;
-		int i = 0;
-		bool has_failures = false;
-		while (std::getline(file, line)) {
-			if (StringUtil::StartsWith(line, "next case")) {
-				i++;
-				std::cerr << " \n" << i << ": ";
-			} else {
-				std::cerr << line << std::endl;
-			}
-			has_failures = true;
-		}
-		if (!has_failures) {
-			std::cout << "No failures recorded." << std::endl;
-		}
-		file.close();
-	}
+	// std::ifstream file(filename);
+	// if (file && summarize_failures) {
+	// if (summarize_failures) {
+	std::cout << "\n====================================================" << std::endl;
+	std::cout << "================  FAILURES SUMMARY  ================" << std::endl;
+	std::cout << "====================================================\n" << std::endl;
+	std::cout << GetSummary().str();
+		// string line;
+		// int i = 0;
+		// bool has_failures = false;
+		// while (std::getline(file, line)) {
+		// 	if (StringUtil::StartsWith(line, "next case")) {
+		// 		i++;
+		// 		std::cerr << " \n" << i << ": ";
+		// 	} else {
+		// 		std::cerr << line << std::endl;
+		// 	}
+		// 	has_failures = true;
+		// }
+		// if (!has_failures) {
+		// 	std::cout << "No failures recorded." << std::endl;
+		// }
+		// file.close();
+	// }
 
 	if (DeleteTestPath()) {
 		TestDeleteDirectory(dir);

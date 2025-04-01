@@ -32,6 +32,7 @@ bool TestForceReload();
 bool TestMemoryLeaks();
 void RegisterSqllogictests();
 bool SummarizeFailures();
+duckdb::stringstream ReturnSummary();
 
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);

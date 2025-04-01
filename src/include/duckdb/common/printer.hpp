@@ -10,10 +10,13 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/string_util.hpp"
+#include <sstream>
 
 namespace duckdb {
 
 enum class OutputStream : uint8_t { STREAM_STDOUT = 1, STREAM_STDERR = 2 };
+// std::stringstream failures_summary;
+std::stringstream& GetSummary();
 
 //! Printer is a static class that allows printing to logs or stdout/stderr
 class Printer {
