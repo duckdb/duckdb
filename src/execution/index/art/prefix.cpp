@@ -342,13 +342,6 @@ string Prefix::VerifyAndToString(ART &art, const Node &node, const bool only_ver
 	return only_verify ? "" : str + child;
 }
 
-void Prefix::VerifyAllocations(ART &art, const Node &node, unordered_map<uint8_t, idx_t> &node_counts) {
-	auto idx = Node::GetAllocatorIdx(PREFIX);
-	reference<const Node> ref(node);
-	Iterator(art, ref, false, false, [&](Prefix &prefix) { node_counts[idx]++; });
-	return ref.get().VerifyAllocations(art, node_counts);
-}
-
 void Prefix::TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
 	// Early-out, if we do not need any transformations.
 	if (!allocator) {
