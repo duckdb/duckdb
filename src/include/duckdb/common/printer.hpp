@@ -17,7 +17,6 @@ enum class OutputStream : uint8_t { STREAM_STDOUT = 1, STREAM_STDERR = 2 };
 
 typedef void (*line_printer_f)(OutputStream stream, const string &str);
 
-
 //! Printer is a static class that allows printing to logs or stdout/stderr
 class Printer {
 public:
