@@ -164,7 +164,7 @@ struct NFCNormalizeFun {
 struct LengthFun {
 	static constexpr const char *Name = "length";
 	static constexpr const char *Parameters = "string::VARCHAR\001bit::BIT\001list::ANY[]";
-	static constexpr const char *Description = "Number of characters in `string`.\001Returns the bit-length of the `bit` argument.\001ReturnS the length of the `list`.";
+	static constexpr const char *Description = "Number of characters in `string`.\001Returns the bit-length of the `bit` argument.\001Returns the length of the `list`.";
 	static constexpr const char *Example = "length('Hello🦆')\00142::TINYINT::BIT\001len([1, 2, 3])";
 	static constexpr const char *Categories = "string\001numeric\001list";
 

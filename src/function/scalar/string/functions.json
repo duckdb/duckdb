@@ -139,7 +139,7 @@
             },
             {
                 "parameters": [{"name": "list", "type": "ANY[]"}],
-                "description": "ReturnS the length of the `list`.",
+                "description": "Returns the length of the `list`.",
                 "example": "len([1, 2, 3])",
                 "categories": ["list"]
             }
