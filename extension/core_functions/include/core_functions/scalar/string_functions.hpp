@@ -53,10 +53,10 @@ struct BarFun {
 
 struct BinFun {
 	static constexpr const char *Name = "bin";
-	static constexpr const char *Parameters = "string::VARCHAR\1value::ANY";
-	static constexpr const char *Description = "Converts the string to binary representation\1Converts the value to binary representation";
-	static constexpr const char *Example = "bin('Aa')\1bin(42)";
-	static constexpr const char *Categories = "string\1numeric";
+	static constexpr const char *Parameters = "string::VARCHAR\001value::ANY";
+	static constexpr const char *Description = "Converts the string to binary representation\001Converts the value to binary representation";
+	static constexpr const char *Example = "bin('Aa')\001bin(42)";
+	static constexpr const char *Categories = "string\001numeric";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -141,10 +141,10 @@ struct MismatchesFun {
 
 struct HexFun {
 	static constexpr const char *Name = "hex";
-	static constexpr const char *Parameters = "string::VARCHAR\1blob::BLOB\1value::ANY";
-	static constexpr const char *Description = "Converts the string to hexadecimal representation.\1Converts `blob` to `VARCHAR` using hexadecimal encoding.\1Converts the value to hexadecimal representation.";
-	static constexpr const char *Example = "hex('Hello')\1hex('\\xAA\\xBB'::BLOB)\1hex(42)";
-	static constexpr const char *Categories = "string\1blob\1numeric";
+	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB\001value::ANY";
+	static constexpr const char *Description = "Converts the string to hexadecimal representation.\001Converts `blob` to `VARCHAR` using hexadecimal encoding.\001Converts the value to hexadecimal representation.";
+	static constexpr const char *Example = "hex('Hello')\001hex('\\xAA\\xBB'::BLOB)\001hex(42)";
+	static constexpr const char *Categories = "string\001blob\001numeric";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -395,10 +395,10 @@ struct TranslateFun {
 
 struct TrimFun {
 	static constexpr const char *Name = "trim";
-	static constexpr const char *Parameters = "string::VARCHAR\1string::VARCHAR,characters::VARCHAR";
-	static constexpr const char *Description = "Removes any spaces from either side of the string.\1Removes any occurrences of any of the characters from either side of the string";
-	static constexpr const char *Example = "trim(' test ')\1trim('>>>>test<<', '><')";
-	static constexpr const char *Categories = "string\1string";
+	static constexpr const char *Parameters = "string::VARCHAR\001string::VARCHAR,characters::VARCHAR";
+	static constexpr const char *Description = "Removes any spaces from either side of the string.\001Removes any occurrences of any of the characters from either side of the string";
+	static constexpr const char *Example = "trim(' test ')\001trim('>>>>test<<', '><')";
+	static constexpr const char *Categories = "string\001string";
 
 	static ScalarFunctionSet GetFunctions();
 };

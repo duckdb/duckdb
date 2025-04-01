@@ -109,10 +109,10 @@ struct ListPackFun {
 
 struct ListSliceFun {
 	static constexpr const char *Name = "list_slice";
-	static constexpr const char *Parameters = "list,begin,end\1list,begin,end,step";
-	static constexpr const char *Description = "Extracts a sublist or substring using slice conventions. Negative values are accepted.\1list_slice with added step feature.";
-	static constexpr const char *Example = "list_slice([4, 5, 6], 2, 3)\2array_slice('DuckDB', 3, 4)\2array_slice('DuckDB', 3, NULL)\2array_slice('DuckDB', 0, -3)\1list_slice([4, 5, 6], 1, 3, 2)";
-	static constexpr const char *Categories = "list,string\1list";
+	static constexpr const char *Parameters = "list,begin,end\001list,begin,end,step";
+	static constexpr const char *Description = "Extracts a sublist or substring using slice conventions. Negative values are accepted.\001list_slice with added step feature.";
+	static constexpr const char *Example = "list_slice([4, 5, 6], 2, 3)\002array_slice('DuckDB', 3, 4)\002array_slice('DuckDB', 3, NULL)\002array_slice('DuckDB', 0, -3)\001list_slice([4, 5, 6], 1, 3, 2)";
+	static constexpr const char *Categories = "list,string\001list";
 
 	static ScalarFunctionSet GetFunctions();
 };

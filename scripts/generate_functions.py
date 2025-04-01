@@ -73,7 +73,7 @@ def get_parameter_line(variants):
         raise ValueError(
             f"invalid parameters for variants {variants}\nParameters should have format: \"parameters\": [{{\"name\": <param_name>, \"type\": <param_type>}}, ...]"
         )
-    return "\\1".join(
+    return "\\001".join(
         ",".join(
             param['name'] + "::" + param['type'] if ('type' in param) else param['name']
             for param in variant['parameters']
@@ -83,11 +83,11 @@ def get_parameter_line(variants):
 
 
 def get_description_line(variants):
-    return "\\1".join([variant['description'] for variant in variants])
+    return "\\001".join([variant['description'] for variant in variants])
 
 
 def get_example_line(variants):
-    return "\\1".join([example_from_json(variant) for variant in variants])
+    return "\\001".join([example_from_json(variant) for variant in variants])
 
 
 def example_from_json(json_record):
@@ -101,11 +101,11 @@ def example_from_json(json_record):
 
 
 def examples_to_line(example_list):
-    return "\\2".join([sanitize_string(example) for example in example_list])
+    return "\\002".join([sanitize_string(example) for example in example_list])
 
 
 def get_category_line(variants):
-    return "\\1".join([categories_from_json(variant) for variant in variants])
+    return "\\001".join([categories_from_json(variant) for variant in variants])
 
 
 def categories_from_json(json_record):

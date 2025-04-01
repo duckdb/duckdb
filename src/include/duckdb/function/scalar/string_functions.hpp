@@ -99,7 +99,7 @@ struct ConcatOperatorFun {
 	static constexpr const char *Name = "||";
 	static constexpr const char *Parameters = "string,string";
 	static constexpr const char *Description = "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(string, ...)` and `list_concat(list1, list2)`.";
-	static constexpr const char *Example = "'Duck' || 'DB'\2[1, 2, 3] || [4, 5, 6]\2'\\xAA'::BLOB || '\\xBB'::BLOB";
+	static constexpr const char *Example = "'Duck' || 'DB'\002[1, 2, 3] || [4, 5, 6]\002'\\xAA'::BLOB || '\\xBB'::BLOB";
 	static constexpr const char *Categories = "string,list,blob";
 
 	static ScalarFunction GetFunction();
@@ -133,10 +133,10 @@ struct EndsWithFun {
 
 struct ContainsFun {
 	static constexpr const char *Name = "contains";
-	static constexpr const char *Parameters = "string::VARCHAR,search_string::VARCHAR\1list::ANY[],element::ANY\1map::MAP(ANY,ANY),key::ANY";
-	static constexpr const char *Description = "Returns true if `search_string` is found within `string`.\1Returns true if the `list` contains the `element`.\1Checks if a `map` contains a given `key`.";
-	static constexpr const char *Example = "contains('abc', 'a')\1contains([1, 2, NULL], 1)\1contains(MAP {'key1': 10, 'key2': 20, 'key3': 30}, 'key2')";
-	static constexpr const char *Categories = "string\1list\1map";
+	static constexpr const char *Parameters = "string::VARCHAR,search_string::VARCHAR\001list::ANY[],element::ANY\001map::MAP(ANY,ANY),key::ANY";
+	static constexpr const char *Description = "Returns true if `search_string` is found within `string`.\001Returns true if the `list` contains the `element`.\001Checks if a `map` contains a given `key`.";
+	static constexpr const char *Example = "contains('abc', 'a')\001contains([1, 2, NULL], 1)\001contains(MAP {'key1': 10, 'key2': 20, 'key3': 30}, 'key2')";
+	static constexpr const char *Categories = "string\001list\001map";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -163,10 +163,10 @@ struct NFCNormalizeFun {
 
 struct LengthFun {
 	static constexpr const char *Name = "length";
-	static constexpr const char *Parameters = "string::VARCHAR\1bit::BIT\1list::ANY[]";
-	static constexpr const char *Description = "Number of characters in `string`.\1Returns the bit-length of the `bit` argument.\1ReturnS the length of the `list`.";
-	static constexpr const char *Example = "length('Hello🦆')\142::TINYINT::BIT\1len([1, 2, 3])";
-	static constexpr const char *Categories = "string\1numeric\1list";
+	static constexpr const char *Parameters = "string::VARCHAR\001bit::BIT\001list::ANY[]";
+	static constexpr const char *Description = "Number of characters in `string`.\001Returns the bit-length of the `bit` argument.\001ReturnS the length of the `list`.";
+	static constexpr const char *Example = "length('Hello🦆')\00142::TINYINT::BIT\001len([1, 2, 3])";
+	static constexpr const char *Categories = "string\001numeric\001list";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -211,10 +211,10 @@ struct BitLengthFun {
 
 struct OctetLengthFun {
 	static constexpr const char *Name = "octet_length";
-	static constexpr const char *Parameters = "blob::BLOB\1bitstring::BIT";
-	static constexpr const char *Description = "Number of bytes in `blob`.\1Returns the number of bytes in the `bitstring`.";
-	static constexpr const char *Example = "octet_length('\\xAA\\xBB'::BLOB)\1octet_length('1101011'::BITSTRING)";
-	static constexpr const char *Categories = "blob\1bitstring";
+	static constexpr const char *Parameters = "blob::BLOB\001bitstring::BIT";
+	static constexpr const char *Description = "Number of bytes in `blob`.\001Returns the number of bytes in the `bitstring`.";
+	static constexpr const char *Example = "octet_length('\\xAA\\xBB'::BLOB)\001octet_length('1101011'::BITSTRING)";
+	static constexpr const char *Categories = "blob\001bitstring";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -231,10 +231,10 @@ struct LengthGraphemeFun {
 
 struct ArrayLengthFun {
 	static constexpr const char *Name = "array_length";
-	static constexpr const char *Parameters = "list::ANY[]\1list::ANY[],dimension::ANY";
-	static constexpr const char *Description = "Returns the length of the `list`.\1`array_length` for lists with dimensions other than 1 not implemented";
-	static constexpr const char *Example = "array_length([1,2,3])\1";
-	static constexpr const char *Categories = "list\1";
+	static constexpr const char *Parameters = "list::ANY[]\001list::ANY[],dimension::ANY";
+	static constexpr const char *Description = "Returns the length of the `list`.\001`array_length` for lists with dimensions other than 1 not implemented";
+	static constexpr const char *Example = "array_length([1,2,3])\001";
+	static constexpr const char *Categories = "list\001";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -467,40 +467,40 @@ struct NotIlikeEscapeFun {
 
 struct MD5Fun {
 	static constexpr const char *Name = "md5";
-	static constexpr const char *Parameters = "string::VARCHAR\1blob::BLOB";
-	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a string.\1Returns the MD5 hash of the `blob` as a string.";
-	static constexpr const char *Example = "md5('abc')\1md5('\\xAA\\xBB'::BLOB)";
-	static constexpr const char *Categories = "string\1blob";
+	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
+	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a string.\001Returns the MD5 hash of the `blob` as a string.";
+	static constexpr const char *Example = "md5('abc')\001md5('\\xAA\\xBB'::BLOB)";
+	static constexpr const char *Categories = "string\001blob";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct MD5NumberFun {
 	static constexpr const char *Name = "md5_number";
-	static constexpr const char *Parameters = "string::VARCHAR\1blob::BLOB";
-	static constexpr const char *Description = "Returns the MD5 hash of the `string` as an INT128.\1Returns the MD5 hash of the `blob` as an INT128.";
-	static constexpr const char *Example = "md5_number('abc')\1md5_number('\\xAA\\xBB'::BLOB)";
-	static constexpr const char *Categories = "string\1blob";
+	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
+	static constexpr const char *Description = "Returns the MD5 hash of the `string` as an INT128.\001Returns the MD5 hash of the `blob` as an INT128.";
+	static constexpr const char *Example = "md5_number('abc')\001md5_number('\\xAA\\xBB'::BLOB)";
+	static constexpr const char *Categories = "string\001blob";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct SHA1Fun {
 	static constexpr const char *Name = "sha1";
-	static constexpr const char *Parameters = "string::VARCHAR\1blob::BLOB";
-	static constexpr const char *Description = "Returns the SHA1 hash of the `string`.\1Returns the SHA1 hash of the `blob`.";
-	static constexpr const char *Example = "sha1('hello')\1sha1('\\xAA\\xBB'::BLOB)";
-	static constexpr const char *Categories = "string\1blob";
+	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
+	static constexpr const char *Description = "Returns the SHA1 hash of the `string`.\001Returns the SHA1 hash of the `blob`.";
+	static constexpr const char *Example = "sha1('hello')\001sha1('\\xAA\\xBB'::BLOB)";
+	static constexpr const char *Categories = "string\001blob";
 
 	static ScalarFunctionSet GetFunctions();
 };
 
 struct SHA256Fun {
 	static constexpr const char *Name = "sha256";
-	static constexpr const char *Parameters = "string::VARCHAR\1blob::BLOB";
-	static constexpr const char *Description = "Returns the SHA256 hash of the `string`.\1Returns the SHA256 hash of the `blob`.";
-	static constexpr const char *Example = "sha256('hello')\1sha256('\\xAA\\xBB'::BLOB)";
-	static constexpr const char *Categories = "string\1blob";
+	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
+	static constexpr const char *Description = "Returns the SHA256 hash of the `string`.\001Returns the SHA256 hash of the `blob`.";
+	static constexpr const char *Example = "sha256('hello')\001sha256('\\xAA\\xBB'::BLOB)";
+	static constexpr const char *Categories = "string\001blob";
 
 	static ScalarFunctionSet GetFunctions();
 };
