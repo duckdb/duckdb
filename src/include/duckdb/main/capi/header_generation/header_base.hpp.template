@@ -385,8 +385,9 @@ typedef struct {
 	void *internal_data;
 } duckdb_column;
 
-//! A vector to a specified column in a data chunk. Lives as long as the
-//! data chunk lives, i.e., must not be destroyed.
+//! Either a vector to a specified column in a data chunk, or a allocated vector.
+//! If the vector is a specified column it lives as long as the data chunk lives, i.e., must not be destroyed.
+//! If it was allocated by duckdb_create_vector it should be cleaned `duckdb_destroy_vector`.
 typedef struct _duckdb_vector {
 	void *internal_ptr;
 } * duckdb_vector;

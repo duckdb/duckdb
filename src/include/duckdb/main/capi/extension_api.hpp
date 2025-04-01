@@ -485,8 +485,11 @@ typedef struct {
 	void (*duckdb_statistic_set_has_no_nulls)(duckdb_base_statistic statistic);
 	// Vortex duckdb extensions
 
+	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
+	void (*duckdb_destroy_vector)(duckdb_vector *vector);
 	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
 	void (*duckdb_assign_constant_vector)(duckdb_vector vector, duckdb_value value);
+	void (*duckdb_reference_vector)(duckdb_vector to_vector, duckdb_vector from_vector);
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
 	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
@@ -915,8 +918,11 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_statistic_set_max = duckdb_statistic_set_max;
 	result.duckdb_statistic_set_has_nulls = duckdb_statistic_set_has_nulls;
 	result.duckdb_statistic_set_has_no_nulls = duckdb_statistic_set_has_no_nulls;
+	result.duckdb_create_vector = duckdb_create_vector;
+	result.duckdb_destroy_vector = duckdb_destroy_vector;
 	result.duckdb_slice_vector = duckdb_slice_vector;
 	result.duckdb_assign_constant_vector = duckdb_assign_constant_vector;
+	result.duckdb_reference_vector = duckdb_reference_vector;
 	result.duckdb_create_selection_vector = duckdb_create_selection_vector;
 	result.duckdb_destroy_selection_vector = duckdb_destroy_selection_vector;
 	result.duckdb_selection_vector_get_data_ptr = duckdb_selection_vector_get_data_ptr;

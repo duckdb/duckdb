@@ -388,8 +388,9 @@ typedef struct {
 	void *internal_data;
 } duckdb_column;
 
-//! A vector to a specified column in a data chunk. Lives as long as the
-//! data chunk lives, i.e., must not be destroyed.
+//! Either a vector to a specified column in a data chunk, or a allocated vector.
+//! If the vector is a specified column it lives as long as the data chunk lives, i.e., must not be destroyed.
+//! If it was allocated by duckdb_create_vector it should be cleaned `duckdb_destroy_vector`.
 typedef struct _duckdb_vector {
 	void *internal_ptr;
 } * duckdb_vector;
@@ -2885,6 +2886,18 @@ Destroys the data chunk and de-allocates all memory allocated for that chunk.
 DUCKDB_C_API void duckdb_destroy_data_chunk(duckdb_data_chunk *chunk);
 
 /*!
+Creates a flat vector.
+
+*/
+DUCKDB_C_API duckdb_vector duckdb_create_vector(duckdb_logical_type type, idx_t capacity);
+
+/*!
+Destroys the vector and de-allocates all memory allocated for that vector, if unused else where.
+
+*/
+DUCKDB_C_API void duckdb_destroy_vector(duckdb_vector *vector);
+
+/*!
 Resets a data chunk, clearing the validity masks and setting the cardinality of the data chunk to 0.
 After calling this method, you must call `duckdb_vector_get_validity` and `duckdb_vector_get_data` to obtain current
 data and validity pointers
@@ -3076,6 +3089,12 @@ DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vec
 /*!
 Copies the value from `value` to `vector`.*/
 DUCKDB_C_API void duckdb_assign_constant_vector(duckdb_vector vector, duckdb_value value);
+
+/*!
+References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer
+
+*/
+DUCKDB_C_API void duckdb_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector);
 
 DUCKDB_C_API const char *duckdb_stringify_data_chunk(duckdb_data_chunk chunk);
 

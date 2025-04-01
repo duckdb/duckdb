@@ -46,6 +46,21 @@ void duckdb_data_chunk_reset(duckdb_data_chunk chunk) {
 	dchunk->Reset();
 }
 
+duckdb_vector duckdb_create_vector(duckdb_logical_type type, idx_t capacity) {
+	auto dtype = reinterpret_cast<duckdb::LogicalType *>(type);
+	auto vector = new duckdb::Vector(*dtype, capacity);
+	return reinterpret_cast<duckdb_vector>(vector);
+}
+
+void duckdb_destroy_vector(duckdb_vector *vector) {
+	if (vector && *vector) {
+		auto dvector = reinterpret_cast<duckdb::Vector *>(*vector);
+		delete dvector;
+		*vector = nullptr;
+	}
+
+}
+
 idx_t duckdb_data_chunk_get_column_count(duckdb_data_chunk chunk) {
 	if (!chunk) {
 		return 0;
@@ -233,6 +248,12 @@ void duckdb_assign_constant_vector(duckdb_vector vector, duckdb_value value) {
 	dvector->Reference(*dvalue);
 }
 
+void duckdb_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector) {
+	auto dto_vector = reinterpret_cast<duckdb::Vector *>(to_vector);
+	auto dfrom_vector = reinterpret_cast<duckdb::Vector *>(from_vector);
+	dto_vector->Reference(*dfrom_vector);
+}
+
 const char *duckdb_stringify_data_chunk(duckdb_data_chunk chunk) {
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto str = dchunk->ToString();
@@ -246,3 +267,4 @@ void duckdb_verify_data_chunk(duckdb_data_chunk chunk) {
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	dchunk->Verify();
 }
+

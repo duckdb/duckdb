@@ -560,8 +560,11 @@ typedef struct {
 
 // Vortex duckdb extensions
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
+	duckdb_vector (*duckdb_create_vector)(duckdb_logical_type type, idx_t capacity);
+	void (*duckdb_destroy_vector)(duckdb_vector *vector);
 	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
 	void (*duckdb_assign_constant_vector)(duckdb_vector vector, duckdb_value value);
+	void (*duckdb_reference_vector)(duckdb_vector to_vector, duckdb_vector from_vector);
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
 	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
@@ -1004,8 +1007,11 @@ typedef struct {
 #define duckdb_statistic_set_has_no_nulls duckdb_ext_api.duckdb_statistic_set_has_no_nulls
 
 // Version unstable_vortex_ext
+#define duckdb_create_vector                 duckdb_ext_api.duckdb_create_vector
+#define duckdb_destroy_vector                duckdb_ext_api.duckdb_destroy_vector
 #define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector
 #define duckdb_assign_constant_vector        duckdb_ext_api.duckdb_assign_constant_vector
+#define duckdb_reference_vector              duckdb_ext_api.duckdb_reference_vector
 #define duckdb_stringify_data_chunk          duckdb_ext_api.duckdb_stringify_data_chunk
 #define duckdb_verify_data_chunk             duckdb_ext_api.duckdb_verify_data_chunk
 #define duckdb_create_selection_vector       duckdb_ext_api.duckdb_create_selection_vector
