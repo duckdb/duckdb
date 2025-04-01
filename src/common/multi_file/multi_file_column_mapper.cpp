@@ -277,7 +277,8 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, idx_t loca
 	auto &local_column = *mapping.local_column;
 	unique_ptr<Expression> expr;
 	expr = make_uniq<BoundReferenceExpression>(local_column.type, local_idx);
-	if (global_column.type.id() != LogicalTypeId::STRUCT || mapping.column_map.type().id() != LogicalTypeId::STRUCT) {
+	if (global_column.type.id() != LogicalTypeId::STRUCT ||
+	    (!mapping.column_map.IsNull() && mapping.column_map.type().id() != LogicalTypeId::STRUCT)) {
 		// not a struct - potentially add a cast
 		if (local_column.type != global_column.type) {
 			expr = BoundCastExpression::AddCastToType(context, std::move(expr), global_column.type);
