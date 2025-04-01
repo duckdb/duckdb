@@ -113,7 +113,7 @@ static void RemapStructFunction(DataChunk &args, ExpressionState &state, Vector 
 struct RemapIndex {
 	idx_t index;
 	LogicalType type;
-	case_insensitive_map_t<RemapIndex> child_map;
+	unique_ptr<case_insensitive_map_t<RemapIndex>> child_map;
 
 	static case_insensitive_map_t<RemapIndex> GetMap(const LogicalType &type) {
 		case_insensitive_map_t<RemapIndex> result;
@@ -130,7 +130,7 @@ struct RemapIndex {
 		index.index = idx;
 		index.type = type;
 		if (type.id() == LogicalTypeId::STRUCT) {
-			index.child_map = GetMap(type);
+			index.child_map = make_uniq<case_insensitive_map_t<RemapIndex>>(GetMap(type));
 		}
 		return index;
 	}
@@ -140,7 +140,7 @@ struct RemapEntry {
 	optional_idx index;
 	optional_idx default_index;
 	LogicalType target_type;
-	case_insensitive_map_t<RemapEntry> child_remaps;
+	unique_ptr<case_insensitive_map_t<RemapEntry>> child_remaps;
 
 	static void PerformRemap(const string &remap_target, const Value &remap_val,
 	                         case_insensitive_map_t<RemapIndex> &source_map,
@@ -162,7 +162,7 @@ struct RemapEntry {
 				throw BinderException("Remap keys for remap_struct need to be varchar and struct");
 			}
 			remap_source = children[0].ToString();
-			struct_val = std::move(children[1]);
+			struct_val = children[1];
 		} else {
 			throw BinderException("Remap keys for remap_struct needs to be a string or struct");
 		}
@@ -186,11 +186,12 @@ struct RemapEntry {
 			if (!source_is_struct || !target_is_struct || struct_val.IsNull()) {
 				throw BinderException("Structs require nested remaps");
 			}
+			remap.child_remaps = make_uniq<case_insensitive_map_t<RemapEntry>>();
 			auto &remap_types = StructType::GetChildTypes(struct_val.type());
 			auto &remap_values = StructValue::GetChildren(struct_val);
 			for (idx_t child_idx = 0; child_idx < remap_types.size(); child_idx++) {
-				PerformRemap(remap_types[child_idx].first, remap_values[child_idx], entry->second.child_map,
-				             target_entry->second.child_map, remap.child_remaps);
+				PerformRemap(remap_types[child_idx].first, remap_values[child_idx], *entry->second.child_map,
+				             *target_entry->second.child_map, *remap.child_remaps);
 			}
 		}
 		result.emplace(remap_target, std::move(remap));
@@ -217,6 +218,7 @@ struct RemapEntry {
 			if (result_entry == result.end()) {
 				result.emplace(default_target, std::move(remap));
 				result_entry = result.find(default_target);
+				result_entry->second.child_remaps = make_uniq<case_insensitive_map_t<RemapEntry>>();
 			} else {
 				// the entry exists - add the default index
 				result_entry->second.default_index = default_idx;
@@ -224,8 +226,8 @@ struct RemapEntry {
 			auto &child_types = StructType::GetChildTypes(default_type);
 			for (idx_t child_idx = 0; child_idx < child_types.size(); child_idx++) {
 				auto &child_default = child_types[child_idx];
-				HandleDefault(child_idx, child_default.first, child_default.second, entry->second.child_map,
-				              result_entry->second.child_remaps);
+				HandleDefault(child_idx, child_default.first, child_default.second, *entry->second.child_map,
+				              *result_entry->second.child_remaps);
 			}
 			return;
 		}
@@ -256,7 +258,7 @@ struct RemapEntry {
 			info.default_index = entry->second.default_index;
 			if (child_type.id() == LogicalTypeId::STRUCT) {
 				// recurse
-				info.child_remap_info = ConstructMap(child_type, entry->second.child_remaps);
+				info.child_remap_info = ConstructMap(child_type, *entry->second.child_remaps);
 			}
 			result.push_back(std::move(info));
 		}
@@ -284,7 +286,7 @@ struct RemapEntry {
 				if (child_type.id() == LogicalTypeId::STRUCT) {
 					// struct - recurse
 					new_source_children.emplace_back(child_name,
-					                                 RemapCast(child_type, remap_entry->second.child_remaps));
+					                                 RemapCast(child_type, *remap_entry->second.child_remaps));
 				} else {
 					new_source_children.emplace_back(child_name, remap_entry->second.target_type);
 				}

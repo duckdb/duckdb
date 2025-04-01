@@ -77,7 +77,7 @@ struct ColumnMapper {
 };
 
 struct FieldIdMapper : public ColumnMapper {
-	FieldIdMapper(const vector<MultiFileColumnDefinition> &columns) {
+	explicit FieldIdMapper(const vector<MultiFileColumnDefinition> &columns) {
 		for (idx_t col_idx = 0; col_idx < columns.size(); col_idx++) {
 			auto &column = columns[col_idx];
 			if (column.identifier.IsNull()) {
@@ -271,7 +271,6 @@ ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDefinitio
 	}
 	if (!column_mapping.empty()) {
 		// we have column mappings at this level - construct the struct
-		// STRUCT(const LogicalType &type, vector<Value> struct_values);
 		result.column_map = Value::STRUCT(std::move(column_mapping));
 		if (!is_root) {
 			// if this is nested we need to refer to the current column at this level
