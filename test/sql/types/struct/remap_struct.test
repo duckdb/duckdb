@@ -29,6 +29,26 @@ SELECT remap_struct(
 ----
 {'v1': 1, 'v2': {'x': 42, 'y': NULL, 'z': 100}, 'v3': NULL}
 
+# nested struct with null as default
+query I
+SELECT remap_struct(
+ {'i': 1, 'j': {'x': 42, 'y': 100}},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, y INT, z STRUCT(a INT, b INT))),
+ {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'y': 'y'})},
+ {'v2': {'z': NULL::STRUCT(a INT, b INT)}});
+----
+{'v1': 1, 'v2': {'x': 42, 'y': 100, 'z': NULL}}
+
+# nested type - no defaults
+query I
+SELECT remap_struct(
+ {'i': 1, 'j': {'x': 42, 'y': 100, 'z': 1000}},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, z INT), v3 VARCHAR),
+ {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'z': 'z'})},
+ {'v3': NULL::VARCHAR});
+----
+{'v1': 1, 'v2': {'x': 42, 'z': 1000}, 'v3': NULL}
+
 # nested type - no input for a struct
 query I
 SELECT remap_struct(
@@ -117,16 +137,6 @@ statement error
 SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': 'hello'});
 ----
 Default key v2 does not match target type INTEGER
-
-# nested type - no defaults
-query I
-SELECT remap_struct(
- {'i': 1, 'j': {'x': 42, 'y': 100, 'z': 1000}},
- NULL::ROW(v1 INT, v2 STRUCT(x INT, z INT), v3 VARCHAR),
- {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'z': 'z'})},
- {'v3': NULL::VARCHAR});
-----
-{'v1': 1, 'v2': {'x': 42, 'z': 1000}, 'v3': NULL}
 
 # duplicate default
 statement error

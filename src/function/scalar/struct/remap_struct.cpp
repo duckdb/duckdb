@@ -44,7 +44,6 @@ static void RemapStruct(Vector &input, Vector &default_vector, Vector &result, i
 		throw InternalException("Remap info unaligned in remap struct");
 	}
 	bool has_top_level_null = false;
-	UnifiedVectorFormat format;
 	// copy over the NULL values from the input vector
 	if (input.GetVectorType() == VectorType::CONSTANT_VECTOR) {
 		if (ConstantVector::IsNull(input)) {
@@ -53,27 +52,31 @@ static void RemapStruct(Vector &input, Vector &default_vector, Vector &result, i
 			return;
 		}
 	} else {
-		auto &validity = FlatVector::Validity(input);
-		if (!validity.AllValid()) {
-			FlatVector::SetValidity(result, validity);
-			has_top_level_null = true;
+		UnifiedVectorFormat format;
+		input.ToUnifiedFormat(result_size, format);
+		if (!format.validity.AllValid()) {
+			auto &result_validity = FlatVector::Validity(result);
+			for(idx_t i = 0; i < result_size; i++) {
+				auto input_idx = format.sel->get_index(i);
+				if (!format.validity.RowIsValid(input_idx)) {
+					result_validity.SetInvalid(i);
+				}
+			}
+			has_top_level_null = !result_validity.AllValid();
 		}
 	}
 	// set up the correct vector references
 	for (idx_t i = 0; i < remap_info.size(); i++) {
 		auto &remap = remap_info[i];
-		if (!remap.child_remap_info.empty()) {
+		if (remap.index.IsValid() && !remap.child_remap_info.empty()) {
 			// nested remap - recurse
-			reference<Vector> input_vector = input;
-			if (remap.index.IsValid()) {
-				input_vector = *input_vectors[remap.index.GetIndex()];
-			}
+			auto &input_vector = *input_vectors[remap.index.GetIndex()];
 			reference<Vector> child_default = default_vector;
 			if (remap.default_index.IsValid()) {
 				auto &defaults = StructVector::GetEntries(default_vector);
 				child_default = *defaults[remap.default_index.GetIndex()];
 			}
-			RemapStruct(input_vector.get(), child_default.get(), *result_vectors[i], result_size,
+			RemapStruct(input_vector, child_default.get(), *result_vectors[i], result_size,
 			            remap.child_remap_info);
 			continue;
 		}

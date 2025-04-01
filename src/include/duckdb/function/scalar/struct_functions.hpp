@@ -58,9 +58,9 @@ struct RowFun {
 
 struct RemapStructFun {
 	static constexpr const char *Name = "remap_struct";
-	static constexpr const char *Parameters = "struct,...";
-	static constexpr const char *Description = "Map a struct to another struct type, potentially re-ordering, renaming and casting members";
-	static constexpr const char *Example = "remap_struct({'i': 3, 'v3': 3, 'v2': 0}, NULL::STRUCT(v1 VARCHAR, v2 INT, v3 INT), 'i', 'v2', 'v3')";
+	static constexpr const char *Parameters = "input,target_type,mapping,defaults";
+	static constexpr const char *Description = "Map a struct to another struct type, potentially re-ordering, renaming and casting members and filling in defaults for missing values";
+	static constexpr const char *Example = "remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::INTEGER})";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
