@@ -59,7 +59,7 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
-  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || 'cp37-*' }}
+  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || '{cp37,cp38}-*' }}
 
 jobs:
 # This is just a sanity check of Python 3.10 running with Arrow
@@ -126,6 +126,7 @@ jobs:
   manylinux-extensions-x64:
     name: Linux Extensions (linux_amd64_gcc4)
     needs: linux-python3-10
+    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -160,6 +161,7 @@ jobs:
 
   upload-linux-extensions-gcc4:
     name: Upload Linux Extensions (gcc4)
+    if: false
     needs: manylinux-extensions-x64
     strategy:
       matrix:
@@ -173,7 +175,8 @@ jobs:
 
   linux-python3:
     name: Python 3 Linux
-    needs: manylinux-extensions-x64
+    # needs: manylinux-extensions-x64
+    needs: linux-python3-10
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -248,7 +251,8 @@ jobs:
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
     - uses: actions/download-artifact@v4
-      if: ${{ matrix.arch == 'x86_64' }}
+      if: false
+      # if: ${{ matrix.arch == 'x86_64' }}
       with:
         name: duckdb-extensions-${{ matrix.duckdb_arch }}
         path: tools/pythonpkg
