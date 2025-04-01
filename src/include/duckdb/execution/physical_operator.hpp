@@ -12,7 +12,6 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/operator_result_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
-#include "duckdb/common/enums/physical_operator_memory_type.hpp"
 #include "duckdb/common/enums/explain_format.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "duckdb/execution/execution_context.hpp"
@@ -40,8 +39,7 @@ public:
 
 public:
 	PhysicalOperator(PhysicalOperatorType type, vector<LogicalType> types, idx_t estimated_cardinality)
-	    : type(type), memory_type(PhysicalOperatorMemoryType::DESTROY), types(std::move(types)),
-	      estimated_cardinality(estimated_cardinality) {
+	    : type(type), types(std::move(types)), estimated_cardinality(estimated_cardinality) {
 	}
 
 	virtual ~PhysicalOperator() {
@@ -53,8 +51,6 @@ public:
 
 	//! The physical operator type
 	PhysicalOperatorType type;
-	//! The memory type of the physical operator.
-	PhysicalOperatorMemoryType memory_type;
 	//! The set of children of the operator
 	vector<reference<PhysicalOperator>> children;
 	//! The types returned by this physical operator

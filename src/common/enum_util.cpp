@@ -43,7 +43,6 @@
 #include "duckdb/common/enums/order_type.hpp"
 #include "duckdb/common/enums/output_type.hpp"
 #include "duckdb/common/enums/pending_execution_result.hpp"
-#include "duckdb/common/enums/physical_operator_memory_type.hpp"
 #include "duckdb/common/enums/physical_operator_type.hpp"
 #include "duckdb/common/enums/prepared_statement_mode.hpp"
 #include "duckdb/common/enums/profiler_format.hpp"
@@ -2902,24 +2901,6 @@ const char* EnumUtil::ToChars<PendingExecutionResult>(PendingExecutionResult val
 template<>
 PendingExecutionResult EnumUtil::FromString<PendingExecutionResult>(const char *value) {
 	return static_cast<PendingExecutionResult>(StringUtil::StringToEnum(GetPendingExecutionResultValues(), 6, "PendingExecutionResult", value));
-}
-
-const StringUtil::EnumStringLiteral *GetPhysicalOperatorMemoryTypeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(PhysicalOperatorMemoryType::DESTROY), "DESTROY" },
-		{ static_cast<uint32_t>(PhysicalOperatorMemoryType::DO_NOT_DESTROY), "DO_NOT_DESTROY" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<PhysicalOperatorMemoryType>(PhysicalOperatorMemoryType value) {
-	return StringUtil::EnumToString(GetPhysicalOperatorMemoryTypeValues(), 2, "PhysicalOperatorMemoryType", static_cast<uint32_t>(value));
-}
-
-template<>
-PhysicalOperatorMemoryType EnumUtil::FromString<PhysicalOperatorMemoryType>(const char *value) {
-	return static_cast<PhysicalOperatorMemoryType>(StringUtil::StringToEnum(GetPhysicalOperatorMemoryTypeValues(), 2, "PhysicalOperatorMemoryType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetPhysicalOperatorTypeValues() {

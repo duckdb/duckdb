@@ -26,12 +26,10 @@ public:
 	explicit PhysicalPlan(Allocator &allocator) : arena(allocator) {};
 
 	~PhysicalPlan() {
-		// Call the destructor of each physical operator manually.
+		// Call the destructor of each physical operator.
 		for (auto &op : ops) {
-			if (op.get().memory_type == PhysicalOperatorMemoryType::DESTROY) {
-				auto &op_ref = op.get();
-				op_ref.~PhysicalOperator();
-			}
+			auto &op_ref = op.get();
+			op_ref.~PhysicalOperator();
 		}
 	}
 
