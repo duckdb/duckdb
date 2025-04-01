@@ -2,8 +2,9 @@
 
 namespace duckdb {
 
-ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size)
-    : ScannerResult(states, state_machine, result_size) {
+ColumnCountResult::ColumnCountResult(CSVStates &states, CSVStateMachine &state_machine, idx_t result_size,
+                                     CSVErrorHandler &error_handler)
+    : ScannerResult(states, state_machine, result_size), error_handler(error_handler) {
 	column_counts.resize(result_size);
 }
 
@@ -42,6 +43,14 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
 	const LinePosition cur_position(result.cur_buffer_idx, buffer_pos + 1, result.current_buffer_size);
 	if (cur_position - result.last_position > result.state_machine.options.maximum_line_size.GetValue() &&
 	    buffer_pos != NumericLimits<idx_t>::Maximum()) {
+		LinesPerBoundary lines_per_batch;
+
+		string csv_row;
+		auto error = CSVError::LineSizeError(
+		    result.state_machine.options, lines_per_batch, csv_row,
+		    result.last_position.GetGlobalPosition(result.state_machine.options.buffer_size_option.GetValue(), false),
+		    result.state_machine.options.file_path);
+		result.error_handler.Error(error);
 		result.error = true;
 	}
 	result.InternalAddRow();
@@ -100,10 +109,10 @@ void ColumnCountResult::QuotedNewLine(ColumnCountResult &result) {
 
 ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manager,
                                        const shared_ptr<CSVStateMachine> &state_machine,
-                                       shared_ptr<CSVErrorHandler> error_handler, idx_t result_size_p,
+                                       shared_ptr<CSVErrorHandler> error_handler_p, idx_t result_size_p,
                                        CSVIterator iterator)
-    : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler), true, nullptr, iterator),
-      result(states, *state_machine, result_size_p), column_count(1), result_size(result_size_p) {
+    : BaseScanner(std::move(buffer_manager), state_machine, std::move(error_handler_p), true, nullptr, iterator),
+      result(states, *state_machine, result_size_p, *error_handler), column_count(1), result_size(result_size_p) {
 	sniffing = true;
 	idx_t actual_size = 0;
 	if (cur_buffer_handle) {
@@ -180,7 +189,15 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 				result.current_buffer_size = cur_buffer_handle->actual_size;
 				// Do a quick check that the line is still sane
 				const LinePosition cur_position(result.cur_buffer_idx, 0, result.current_buffer_size);
+				LinesPerBoundary lines_per_batch;
 				if (cur_position - result.last_position > result.state_machine.options.maximum_line_size.GetValue()) {
+					string csv_row;
+					auto error =
+					    CSVError::LineSizeError(result.state_machine.options, lines_per_batch, csv_row,
+					                            result.last_position.GetGlobalPosition(
+					                                result.state_machine.options.buffer_size_option.GetValue(), false),
+					                            result.state_machine.options.file_path);
+					error_handler->Error(error);
 					result.error = true;
 					return;
 				}

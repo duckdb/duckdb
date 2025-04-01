@@ -119,6 +119,16 @@ bool CSVErrorHandler::HasError(const CSVErrorType error_type) {
 	return false;
 }
 
+CSVError CSVErrorHandler::GetFirstError(CSVErrorType error_type) {
+	lock_guard<mutex> parallel_lock(main_mutex);
+	for (const auto &er : errors) {
+		if (er.type == error_type) {
+			return er;
+		}
+	}
+	throw InternalException("CSVErrorHandler::GetFirstError was called without having an appropriate error type");
+}
+
 idx_t CSVErrorHandler::GetSize() {
 	lock_guard<mutex> parallel_lock(main_mutex);
 	return errors.size();
