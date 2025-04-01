@@ -192,9 +192,6 @@ bool IsTriviallyMappable(const MultiFileColumnDefinition &global_column,
 	if (!entry.IsValid()) {
 		return false;
 	}
-	if (global_column.children.empty()) {
-		return true;
-	}
 	auto local_id = entry.GetIndex();
 	if (expected_idx.IsValid() && local_id != expected_idx.GetIndex()) {
 		return false;
