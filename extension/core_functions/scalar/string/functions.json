@@ -2,7 +2,7 @@
     {
         "name": "^@",
         "parameters": "string,search_string",
-        "description": "Returns true if string begins with search_string",
+        "description": "Returns true if `string` begins with `search_string`",
         "example": "starts_with('abc','a')",
         "categories": ["string"],
         "type": "scalar_function",
@@ -12,7 +12,7 @@
     {
         "name": "ascii",
         "parameters": "string",
-        "description": "Returns an integer that represents the Unicode code point of the first character of the string",
+        "description": "Returns an integer that represents the Unicode code point of the first character of the `string`",
         "example": "ascii('Ω')",
         "categories": ["string"],
         "type": "scalar_function",
@@ -82,7 +82,7 @@
         "name": "formatReadableDecimalSize",
         "parameters": "bytes",
         "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)",
-        "example": "format_bytes(1000 * 16)",
+        "example": "formatReadableDecimalSize(1000 * 16)",
         "categories": ["string", "numeric"],
         "type": "scalar_function"
     },

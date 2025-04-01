@@ -64,6 +64,15 @@ def get_struct_name(function_name):
 
 
 def get_parameter_line(variants):
+    if not all(
+        isinstance(variant['parameters'], list)
+        and all(isinstance(param, dict) for param in variant['parameters'])
+        and all('name' in param.keys() for param in variant['parameters'])
+        for variant in variants
+    ):
+        raise ValueError(
+            f"invalid parameters for variants {variants}\nParameters should have format: \"parameters\": [{{\"name\": <param_name>, \"type\": <param_type>}}, ...]"
+        )
     return "\\1".join(
         ",".join(
             param['name'] + "::" + param['type'] if ('type' in param) else param['name']

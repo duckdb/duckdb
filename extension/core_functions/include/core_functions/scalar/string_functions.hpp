@@ -18,7 +18,7 @@ namespace duckdb {
 struct StartsWithOperatorFun {
 	static constexpr const char *Name = "^@";
 	static constexpr const char *Parameters = "string,search_string";
-	static constexpr const char *Description = "Returns true if string begins with search_string";
+	static constexpr const char *Description = "Returns true if `string` begins with `search_string`";
 	static constexpr const char *Example = "starts_with('abc','a')";
 	static constexpr const char *Categories = "string";
 
@@ -34,7 +34,7 @@ struct StartsWithFun {
 struct ASCIIFun {
 	static constexpr const char *Name = "ascii";
 	static constexpr const char *Parameters = "string";
-	static constexpr const char *Description = "Returns an integer that represents the Unicode code point of the first character of the string";
+	static constexpr const char *Description = "Returns an integer that represents the Unicode code point of the first character of the `string`";
 	static constexpr const char *Example = "ascii('Ω')";
 	static constexpr const char *Categories = "string";
 
@@ -117,7 +117,7 @@ struct FormatreadabledecimalsizeFun {
 	static constexpr const char *Name = "formatReadableDecimalSize";
 	static constexpr const char *Parameters = "bytes";
 	static constexpr const char *Description = "Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)";
-	static constexpr const char *Example = "format_bytes(1000 * 16)";
+	static constexpr const char *Example = "formatReadableDecimalSize(1000 * 16)";
 	static constexpr const char *Categories = "string,numeric";
 
 	static ScalarFunction GetFunction();
