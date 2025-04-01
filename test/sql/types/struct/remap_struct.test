@@ -19,7 +19,27 @@ SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 VARCHAR, v2 VARCHAR, v3 VARCH
 ----
 {'v1': 2, 'v2': hello, 'v3': 1}
 
-# bulk copy
+# remap nested types
+query I
+SELECT remap_struct(
+ {'i': 1, 'j': {'x': 42, 'z': 100}},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, y INT, z INT), v3 VARCHAR),
+ {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'z': 'z'})},
+ {'v2': {'y': NULL::INT}, 'v3': NULL::VARCHAR});
+----
+{'v1': 1, 'v2': {'x': 42, 'y': NULL, 'z': 100}, 'v3': NULL}
+
+# nested type - no input for a struct
+query I
+SELECT remap_struct(
+ {'i': 1},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, y INT, z INT), v3 VARCHAR),
+ {'v1': 'i'},
+ {'v2': {'x': NULL::INT, 'y': NULL::INT, 'z': NULL::INT}, 'v3': NULL::VARCHAR});
+----
+{'v1': 1, 'v2': {'x': NULL, 'y': NULL, 'z': NULL}, 'v3': NULL}
+
+# bulk
 statement ok
 CREATE TABLE structs(struct_val STRUCT(i INT, j VARCHAR));
 
@@ -97,3 +117,33 @@ statement error
 SELECT remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': 'hello'});
 ----
 Default key v2 does not match target type INTEGER
+
+# nested type - no defaults
+query I
+SELECT remap_struct(
+ {'i': 1, 'j': {'x': 42, 'y': 100, 'z': 1000}},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, z INT), v3 VARCHAR),
+ {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'z': 'z'})},
+ {'v3': NULL::VARCHAR});
+----
+{'v1': 1, 'v2': {'x': 42, 'z': 1000}, 'v3': NULL}
+
+# duplicate default
+statement error
+SELECT remap_struct(
+ {'i': 1, 'j': {'x': 42, 'z': 100}},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, y INT), v3 VARCHAR),
+ {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'y': 'z'})},
+ {'v2': {'y': NULL::INT}, 'v3': NULL::VARCHAR});
+----
+Duplicate value provided for target y
+
+# unaligned nested type
+statement error
+SELECT remap_struct(
+ {'i': 1, 'j': {'x': 42, 'z': 100}},
+ NULL::ROW(v1 INT, v2 STRUCT(x INT, y INT), v3 VARCHAR),
+ {'v1': 'i', 'v2': ROW('j', {'x': 'x', 'y': 'z'})},
+ {'v2': NULL, 'v3': NULL::VARCHAR});
+----
+Target value is a struct - default value should also be a struct
