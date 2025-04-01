@@ -56,7 +56,7 @@ static void RemapStruct(Vector &input, Vector &default_vector, Vector &result, i
 		input.ToUnifiedFormat(result_size, format);
 		if (!format.validity.AllValid()) {
 			auto &result_validity = FlatVector::Validity(result);
-			for(idx_t i = 0; i < result_size; i++) {
+			for (idx_t i = 0; i < result_size; i++) {
 				auto input_idx = format.sel->get_index(i);
 				if (!format.validity.RowIsValid(input_idx)) {
 					result_validity.SetInvalid(i);
@@ -76,8 +76,7 @@ static void RemapStruct(Vector &input, Vector &default_vector, Vector &result, i
 				auto &defaults = StructVector::GetEntries(default_vector);
 				child_default = *defaults[remap.default_index.GetIndex()];
 			}
-			RemapStruct(input_vector, child_default.get(), *result_vectors[i], result_size,
-			            remap.child_remap_info);
+			RemapStruct(input_vector, child_default.get(), *result_vectors[i], result_size, remap.child_remap_info);
 			continue;
 		}
 		// root remap
