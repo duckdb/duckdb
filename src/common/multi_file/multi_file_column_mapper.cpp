@@ -185,8 +185,8 @@ void MultiFileColumnMapper::ThrowColumnNotFoundError(const string &global_column
 }
 
 ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDefinition &global_column,
-                          const vector<MultiFileColumnDefinition> &local_columns, const ColumnMapper &mapper,
-                          optional_idx top_level_index = optional_idx()) {
+                          const ColumnIndex &global_index, const vector<MultiFileColumnDefinition> &local_columns,
+                          const ColumnMapper &mapper, optional_idx top_level_index = optional_idx()) {
 	bool is_root = top_level_index.IsValid();
 	ColumnMapResult result;
 	auto entry = mapper.Find(global_column);
@@ -225,10 +225,36 @@ ColumnMapResult MapColumn(ClientContext &context, const MultiFileColumnDefinitio
 	}
 	child_list_t<Value> column_mapping;
 	vector<unique_ptr<Expression>> default_expressions;
+	unordered_map<idx_t, const_reference<ColumnIndex>> selected_children;
+	if (global_index.HasChildren()) {
+		for (auto &index : global_index.GetChildIndexes()) {
+			selected_children.emplace(index.GetPrimaryIndex(), index);
+		}
+	}
+
 	vector<ColumnIndex> child_indexes;
 	for (idx_t i = 0; i < global_column.children.size(); i++) {
+		bool is_selected = true;
+		const_reference<ColumnIndex> global_child_index = global_index;
+		if (!selected_children.empty()) {
+			auto entry = selected_children.find(i);
+			if (entry != selected_children.end()) {
+				// the column is relevent - set the child index
+				global_child_index = entry->second;
+			} else {
+				// not relevant - ignore the column
+				is_selected = false;
+			}
+		}
 		auto &global_child = global_column.children[i];
-		auto child_map = MapColumn(context, global_child, local_column.children, *nested_mapper);
+		ColumnMapResult child_map;
+		if (is_selected) {
+			child_map =
+			    MapColumn(context, global_child, global_child_index.get(), local_column.children, *nested_mapper);
+		} else {
+			// column is not relevant for the query - push a NULL value
+			child_map.default_value = make_uniq<BoundConstantExpression>(Value(global_child.type));
+		}
 		if (child_map.column_index) {
 			child_indexes.push_back(std::move(*child_map.column_index));
 			mapping->child_mapping.insert(make_pair(i, std::move(child_map.mapping)));
@@ -338,7 +364,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 
 		// Handle any generate columns that are not in the schema (currently only file_row_number)
 		auto &global_id = global_column_ids[i];
-		auto global_column_id = global_column_ids[i].GetPrimaryIndex();
+		auto global_column_id = global_id.GetPrimaryIndex();
 
 		if (IsVirtualColumn(global_column_id)) {
 			// virtual column - these are emitted for every file
@@ -394,7 +420,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 		}
 
 		// construct the expression to construct this column
-		auto column_map = MapColumn(context, global_column, local_columns, mapper, local_idx.GetIndex());
+		auto column_map = MapColumn(context, global_column, global_id, local_columns, mapper, local_idx.GetIndex());
 		if (!column_map.column_index) {
 			// no columns were emitted
 			reader_data.expressions.push_back(std::move(column_map.default_value));
