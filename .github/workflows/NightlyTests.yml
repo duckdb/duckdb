@@ -179,28 +179,6 @@ jobs:
       shell: bash
       run: make allunit
 
-  old-gcc:
-    name: GCC 4.8
-    needs: linux-memory-leaks
-    runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Test
-      shell: bash
-      run: |
-        docker run                                                             \
-          -v.:/duckdb                                                          \
-          -e CC=/usr/bin/gcc                                                   \
-          -e CXX=/usr/bin/g++                                                  \
-          -e CMAKE_BUILD_PARALLEL_LEVEL=2                                      \
-          quay.io/pypa/manylinux2014_x86_64                                    \
-          bash -c "yum install -y gcc-c++ && make -C /duckdb unit"
-
-
   linux-compile-32:
     name: Linux (32 Bit)
     runs-on: ubuntu-latest
