@@ -60,7 +60,7 @@ void ICUDateFunc::BindData::InitCalendar() {
 
 bool ICUDateFunc::BindData::Equals(const FunctionData &other_p) const {
 	auto &other = other_p.Cast<const BindData>();
-	return *calendar == *other.calendar;
+	return calendar->isEquivalentTo(*other.calendar);
 }
 
 unique_ptr<FunctionData> ICUDateFunc::BindData::Copy() const {
