@@ -107,6 +107,7 @@ jobs:
         path: |
           libduckdb-linux-${{ matrix.config.arch }}.zip
           duckdb_cli-linux-${{ matrix.config.arch }}.zip
+          duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - name: Test
       shell: bash
