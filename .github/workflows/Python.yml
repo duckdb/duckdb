@@ -151,6 +151,7 @@ jobs:
           duckdb_arch: linux_amd64_gcc4
           run_tests: ${{ inputs.skip_tests != 'true' }}
           override_git_describe: ${{ inputs.override_git_describe }}
+          skip_extensions: "aws;avro;iceberg"
 
       - uses: actions/upload-artifact@v4
         with:
