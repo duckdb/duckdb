@@ -603,12 +603,20 @@ void Node::Vacuum(ART &art, const unordered_set<uint8_t> &indexes) {
 		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
-		case NType::NODE_256_LEAF:
+		case NType::NODE_256_LEAF: {
 			result = ARTScanHandlingResult::SKIP;
 			break;
-		default:
+		}
+		case NType::PREFIX:
+		case NType::NODE_4:
+		case NType::NODE_16:
+		case NType::NODE_48:
+		case NType::NODE_256: {
 			result = ARTScanHandlingResult::CONTINUE;
 			break;
+		}
+		default:
+			throw InternalException("invalid node type for Vacuum: %s", EnumUtil::ToString(type));
 		}
 
 		const auto idx = GetAllocatorIdx(type);
@@ -657,7 +665,7 @@ void Node::TransformToDeprecated(ART &art, Node &node,
 	case NType::NODE_256:
 		return TransformToDeprecatedInternal(art, InMemoryRef<Node256>(art, node, type), deprecated_prefix_allocator);
 	default:
-		throw InternalException("Invalid node type for TransformToDeprecated: %s.", EnumUtil::ToString(type));
+		throw InternalException("invalid node type for TransformToDeprecated: %s", EnumUtil::ToString(type));
 	}
 }
 
@@ -734,19 +742,20 @@ void Node::VerifyAllocations(ART &art, unordered_map<uint8_t, idx_t> &node_count
 		}
 		case NType::NODE_7_LEAF:
 		case NType::NODE_15_LEAF:
-		case NType::NODE_256_LEAF:
+		case NType::NODE_256_LEAF: {
 			result = ARTScanHandlingResult::SKIP;
 			break;
+		}
 		case NType::PREFIX:
 		case NType::NODE_4:
 		case NType::NODE_16:
 		case NType::NODE_48:
-		case NType::NODE_256:
+		case NType::NODE_256: {
 			result = ARTScanHandlingResult::CONTINUE;
 			break;
+		}
 		default:
-			result = ARTScanHandlingResult::CONTINUE;
-			break;
+			throw InternalException("invalid node type for VerifyAllocations: %s", EnumUtil::ToString(type));
 		}
 		node_counts[GetAllocatorIdx(type)]++;
 		return result;
