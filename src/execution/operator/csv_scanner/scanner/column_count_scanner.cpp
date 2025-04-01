@@ -44,8 +44,11 @@ bool ColumnCountResult::AddRow(ColumnCountResult &result, idx_t buffer_pos) {
 	if (cur_position - result.last_position > result.state_machine.options.maximum_line_size.GetValue() &&
 	    buffer_pos != NumericLimits<idx_t>::Maximum()) {
 		LinesPerBoundary lines_per_batch;
-
-		string csv_row;
+		FullLinePosition current_line_position;
+		current_line_position.begin = result.last_position;
+		current_line_position.end = cur_position;
+		bool mock = false;
+		string csv_row = current_line_position.ReconstructCurrentLine(mock, result.buffer_handles, true);
 		auto error = CSVError::LineSizeError(
 		    result.state_machine.options, lines_per_batch, csv_row,
 		    result.last_position.GetGlobalPosition(result.state_machine.options.buffer_size_option.GetValue(), false),
@@ -117,6 +120,7 @@ ColumnCountScanner::ColumnCountScanner(shared_ptr<CSVBufferManager> buffer_manag
 	idx_t actual_size = 0;
 	if (cur_buffer_handle) {
 		actual_size = cur_buffer_handle->actual_size;
+		result.buffer_handles[0] = cur_buffer_handle;
 	}
 	result.last_position = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, actual_size};
 	result.current_buffer_size = actual_size;
@@ -185,13 +189,19 @@ void ColumnCountScanner::FinalizeChunkProcess() {
 				}
 				return;
 			} else {
+				result.buffer_handles[iterator.pos.buffer_idx] = cur_buffer_handle;
 				result.cur_buffer_idx = iterator.pos.buffer_idx;
 				result.current_buffer_size = cur_buffer_handle->actual_size;
 				// Do a quick check that the line is still sane
-				const LinePosition cur_position(result.cur_buffer_idx, 0, result.current_buffer_size);
+				const LinePosition cur_position(result.cur_buffer_idx, iterator.pos.buffer_idx,
+				                                result.current_buffer_size);
 				LinesPerBoundary lines_per_batch;
 				if (cur_position - result.last_position > result.state_machine.options.maximum_line_size.GetValue()) {
-					string csv_row;
+					FullLinePosition current_line_position;
+					current_line_position.begin = result.last_position;
+					current_line_position.end = cur_position;
+					bool mock = false;
+					string csv_row = current_line_position.ReconstructCurrentLine(mock, result.buffer_handles, true);
 					auto error =
 					    CSVError::LineSizeError(result.state_machine.options, lines_per_batch, csv_row,
 					                            result.last_position.GetGlobalPosition(
