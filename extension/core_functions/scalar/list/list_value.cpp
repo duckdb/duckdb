@@ -55,34 +55,33 @@ static void TemplatedListValueFunction(DataChunk &args, Vector &result) {
 static void ListValueListFunction(DataChunk &args, Vector &result) {
 	const idx_t list_size = args.ColumnCount();
 	ListVector::Reserve(result, args.size() * list_size);
-	const auto result_data = FlatVector::GetData<list_entry_t>(result);
-	auto &result_list = ListVector::GetEntry(result);
-	auto &result_child_vector = ListVector::GetEntry(result_list);
-	const auto result_list_data = FlatVector::GetData<list_entry_t>(result_list);
-	auto &result_list_validity = FlatVector::Validity(result_list);
 
-	vector<idx_t> col_offsets(list_size);
+	vector<idx_t> col_offsets;
 	idx_t offset_sum = 0;
 	for (idx_t i = 0; i < list_size; i++) {
-		col_offsets[i] = offset_sum;
-
-		auto list = args.data[i];
-
-		UnifiedVectorFormat list_data;
-		list.ToUnifiedFormat(args.size(), list_data);
+		col_offsets.push_back(offset_sum);
+		auto &list = args.data[i];
 		const auto length = ListVector::GetListSize(list);
-		auto &child_vector = ListVector::GetEntry(list);
-
-		if (length == 0) {
-			//! Nothing to add
-			continue;
-		}
-		VectorOperations::Copy(child_vector, result_child_vector, length, 0, offset_sum);
-
 		offset_sum += length;
 	}
-	ListVector::SetListSize(result_list, offset_sum);
 
+	auto &result_list = ListVector::GetEntry(result);
+	ListVector::Reserve(result_list, offset_sum);
+
+	auto &result_child_vector = ListVector::GetEntry(result_list);
+	for (idx_t i = 0; i < list_size; i++) {
+		auto list = args.data[i];
+		const auto length = ListVector::GetListSize(list);
+		if (length == 0) {
+			continue;
+		}
+		auto &child_vector = ListVector::GetEntry(list);
+		VectorOperations::Copy(child_vector, result_child_vector, length, 0, col_offsets[i]);
+	}
+
+	const auto result_data = FlatVector::GetData<list_entry_t>(result);
+	const auto result_list_data = FlatVector::GetData<list_entry_t>(result_list);
+	auto &result_list_validity = FlatVector::Validity(result_list);
 	const auto result_unified_format = args.ToUnifiedFormat();
 	for (idx_t r = 0; r < args.size(); r++) {
 		for (idx_t c = 0; c < list_size; c++) {
@@ -91,9 +90,8 @@ static void ListValueListFunction(DataChunk &args, Vector &result) {
 			const auto input_data = UnifiedVectorFormat::GetData<list_entry_t>(result_unified_format[c]);
 			if (result_unified_format[c].validity.RowIsValid(input_idx)) {
 				const auto length = input_data[input_idx].length;
-				result_list_data[result_idx] = list_entry_t(col_offsets[c], length);
-
-				col_offsets[c] += length;
+				const auto offset = col_offsets[c] + input_data[input_idx].offset;
+				result_list_data[result_idx] = list_entry_t(offset, length);
 			} else {
 				result_list_validity.SetInvalid(result_idx);
 			}
@@ -101,7 +99,9 @@ static void ListValueListFunction(DataChunk &args, Vector &result) {
 		result_data[r].offset = r * list_size;
 		result_data[r].length = list_size;
 	}
+
 	ListVector::SetListSize(result, args.size() * list_size);
+	ListVector::SetListSize(result_list, offset_sum);
 }
 
 static void TemplatedListValueFunctionFallback(DataChunk &args, Vector &result) {

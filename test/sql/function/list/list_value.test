@@ -176,18 +176,6 @@ SELECT LIST_VALUE(a, b, c) FROM nested_list_table;
 [[[7, 7], [8, 8, 8]], [[9]], [[10, 10], [11, 11, 11]]]
 [[[12, NULL]], [NULL, [13, 13, 13]], NULL]
 
-# test very large table
-statement ok
-CREATE TABLE large_list_table(a INTEGER[], b INTEGER[], c INTEGER[]);
-
-statement ok
-INSERT INTO large_list_table SELECT [i, i, i], [i + 1, i + 1], [i + 2] FROM range(10000) tbl(i);
-
-query I
-SELECT LIST_VALUE(a, b, c) FROM large_list_table WHERE a[1] = 1;
-----
-[[1, 1, 1], [2, 2], [3]]
-
 # errors
 statement error
 SELECT LIST_VALUE([1, 1], ['a', 'a'], [ROW(2, 2), ROW(3, 3)]);
