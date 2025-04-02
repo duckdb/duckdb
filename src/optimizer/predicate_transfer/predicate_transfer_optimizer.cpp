@@ -63,7 +63,7 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(
 	};
 
 	apply_modification(forward_stage_modification);
-	// apply_modification(backward_stage_modifcation);
+	apply_modification(backward_stage_modification);
 
 	return plan;
 }
@@ -88,7 +88,7 @@ vector<pair<idx_t, shared_ptr<FilterPlan>>> PredicateTransferOptimizer::CreateBl
 	// Create Bloom Filter
 	GetAllBFsToCreate(node_id, bfs_to_create_plan, reverse);
 
-	auto &replace_map = reverse ? backward_stage_modifcation : forward_stage_modification;
+	auto &replace_map = reverse ? backward_stage_modification : forward_stage_modification;
 
 	if (!bfs_to_use_plan.empty() && !bfs_to_create_plan.empty()) {
 		auto last_use_bf = BuildUseBFOperator(node, bfs_to_use_plan);

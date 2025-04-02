@@ -44,6 +44,6 @@ private:
 
 	//! we use a map to record how to modify/update the operators in the query plan.
 	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> forward_stage_modification;
-	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> backward_stage_modifcation;
+	std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> backward_stage_modification;
 };
 } // namespace duckdb
