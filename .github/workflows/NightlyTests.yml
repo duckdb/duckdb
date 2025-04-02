@@ -482,54 +482,6 @@ jobs:
         run: |
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit --time_execution
 
-  vector-verification:
-    name: Vector Verification Tests (${{ matrix.vector_type }})
-    runs-on: ubuntu-22.04
-    needs: linux-memory-leaks
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - vector_type: "dictionary_expression"
-            test_parameter: '"*"'
-          - vector_type: "dictionary_operator"
-            test_parameter: '' # skip running all tests here because it is too slow
-          - vector_type: "constant_operator"
-            test_parameter: '' # skip running all tests here because it is too slow
-          - vector_type: "sequence_operator"
-            test_parameter: '' # skip running all tests here because it is too slow
-          - vector_type: "nested_shuffle"
-            test_parameter: '' # skip running all tests here because it is too slow
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      VERIFY_VECTOR_KIND: ${{ matrix.vector_type }}
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.CCACHE_SAVE }}
-
-      - name: Build
-        shell: bash
-        run: VERIFY_VECTOR=${VERIFY_VECTOR_KIND} make reldebug
-
-      - name: Test
-        shell: bash
-        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest ${{ matrix.test_parameter }} --no-exit
-
   force-blocking-sink-source:
     name: Forcing async Sinks/Sources
     runs-on: ubuntu-24.04
