@@ -46,7 +46,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
-            GIT_TAG b3050f35c6e99fa35465230493eeab14a78a0409
+            GIT_TAG d3c5013a3d296f2055b14cdbffa9d066f0663c67
             )
 endif()
 
