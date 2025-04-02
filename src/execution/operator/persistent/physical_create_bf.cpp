@@ -83,7 +83,6 @@ public:
 			auto &dynamic_filters = op.min_max_to_create[idx];
 			auto &applied_bindings = op.min_max_applied_cols[idx];
 			if (dynamic_filters == nullptr) {
-				// currently, it does not support min-max pushdown for delim get.
 				continue;
 			}
 
@@ -94,6 +93,7 @@ public:
 
 				auto min_val = final_min_max->data[agg_idx].GetValue(0);
 				auto max_val = final_min_max->data[agg_idx + 1].GetValue(0);
+
 				if (min_val.IsNull() || max_val.IsNull()) {
 					// it means that no rows can pass the min-max filter...
 					min_val = Value::MaximumValue(min_val.type());
@@ -113,6 +113,8 @@ public:
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
 					dynamic_filters->PushFilter(op, apply_col_index, std::move(less_equals));
 				}
+
+				std::cout << std::to_string(reinterpret_cast<size_t>(&op)) << "[Min/Max Filter] Min: " << min_val << ", Max: " << max_val << "\n";
 			}
 		}
 	}
