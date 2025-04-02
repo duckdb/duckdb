@@ -73,6 +73,10 @@ static void ListValueListFunction(DataChunk &args, Vector &result) {
 		const auto length = ListVector::GetListSize(list);
 		auto &child_vector = ListVector::GetEntry(list);
 
+		if (length == 0) {
+			//! Nothing to add
+			continue;
+		}
 		VectorOperations::Copy(child_vector, result_child_vector, length, 0, offset_sum);
 
 		offset_sum += length;
@@ -93,7 +97,6 @@ static void ListValueListFunction(DataChunk &args, Vector &result) {
 			} else {
 				result_list_validity.SetInvalid(result_idx);
 			}
-
 		}
 		result_data[r].offset = r * list_size;
 		result_data[r].length = list_size;
