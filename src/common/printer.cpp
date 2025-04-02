@@ -16,11 +16,6 @@
 
 namespace duckdb {
 
-std::stringstream& GetSummary() {
-	static std::stringstream summary;
-	return summary;
-}
-
 void Printer::RawPrint(OutputStream stream, const string &str) {
 #ifndef DUCKDB_DISABLE_PRINT
 #ifdef DUCKDB_WINDOWS
@@ -32,10 +27,6 @@ void Printer::RawPrint(OutputStream stream, const string &str) {
 	}
 #endif
 	fprintf(stream == OutputStream::STREAM_STDERR ? stderr : stdout, "%s", str.c_str());
-	// if (stream == OutputStream::STREAM_STDERR) {
-		// GetSummary() << str << std::endl;
-	// }
-
 #endif
 }
 
@@ -43,7 +34,6 @@ void Printer::RawPrint(OutputStream stream, const string &str) {
 void Printer::Print(OutputStream stream, const string &str) {
 	Printer::RawPrint(stream, str);
 	Printer::RawPrint(stream, "\n");
-	GetSummary() << str << std::endl;
 }
 void Printer::Flush(OutputStream stream) {
 #ifndef DUCKDB_DISABLE_PRINT
@@ -53,7 +43,6 @@ void Printer::Flush(OutputStream stream) {
 
 void Printer::Print(const string &str) {
 	Printer::Print(OutputStream::STREAM_STDERR, str);
-	// GetSummary() << str << std::endl;
 }
 
 bool Printer::IsTerminal(OutputStream stream) {
