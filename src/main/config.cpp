@@ -101,6 +101,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_GLOBAL(DuckDBAPISetting),
     DUCKDB_LOCAL(DynamicOrFilterThresholdSetting),
     DUCKDB_GLOBAL(EnableExternalAccessSetting),
+    DUCKDB_GLOBAL(EnableExternalFileCacheSetting),
     DUCKDB_GLOBAL(EnableFSSTVectorsSetting),
     DUCKDB_LOCAL(EnableHTTPLoggingSetting),
     DUCKDB_GLOBAL(EnableHTTPMetadataCacheSetting),
