@@ -191,6 +191,42 @@ jobs:
       shell: bash
       run: build/reldebug/test/unittest --force-reload --force-storage
 
+ no-string-inline:
+    name: No String Inline / Destroy Unpinned Blocks
+    runs-on: ubuntu-24.04
+    needs: force-storage
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      DISABLE_STRING_INLINE: 1
+      DESTROY_UNPINNED_BLOCKS: 1
+      ALTERNATIVE_VERIFY: 1
+      DISABLE_POINTER_SALT: 1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        shell: bash
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: build/relassert/test/unittest
+
  vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-22.04
