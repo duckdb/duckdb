@@ -164,7 +164,8 @@ struct ICUFromNaiveTimestamp : public ICUDateFunc {
 			throw InternalException("Missing context for TIMESTAMP to TIMESTAMPTZ cast.");
 		}
 		if (input.context->config.disable_timestamptz_casts) {
-			throw BinderException("Casting from %s to TIMESTAMPTZ has been disabled",
+			throw BinderException("Casting from TIMESTAMP to TIMESTAMP WITH TIME ZONE without an explicit time zone "
+			                      "has been disabled  - use \"AT TIME ZONE ...\"",
 			                      LogicalTypeIdToString(source.id()));
 		}
 
