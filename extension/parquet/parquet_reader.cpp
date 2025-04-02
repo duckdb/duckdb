@@ -605,6 +605,25 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 	return make_uniq<ParquetColumnSchema>(root);
 }
 
+MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaData &file_meta_data,
+                                                               ParquetColumnSchema &element) {
+	MultiFileColumnDefinition result(element.name, element.type);
+	auto &column_schema = file_meta_data.schema[element.schema_index];
+
+	if (column_schema.__isset.field_id) {
+		result.identifier = Value::INTEGER(column_schema.field_id);
+	} else if (element.parent_schema_index.IsValid()) {
+		auto &parent_column_schema = file_meta_data.schema[element.parent_schema_index.GetIndex()];
+		if (parent_column_schema.__isset.field_id) {
+			result.identifier = Value::INTEGER(parent_column_schema.field_id);
+		}
+	}
+	for (auto &child : element.children) {
+		result.children.push_back(ParseColumnDefinition(file_meta_data, child));
+	}
+	return result;
+}
+
 void ParquetReader::InitializeSchema(ClientContext &context) {
 	auto file_meta_data = GetFileMetadata();
 
@@ -622,18 +641,7 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	root_schema = ParseSchema();
 	for (idx_t i = 0; i < root_schema->children.size(); i++) {
 		auto &element = root_schema->children[i];
-		auto column = MultiFileColumnDefinition(element.name, element.type);
-		auto &column_schema = file_meta_data->schema[element.schema_index];
-
-		if (column_schema.__isset.field_id) {
-			column.identifier = Value::INTEGER(column_schema.field_id);
-		} else if (element.parent_schema_index.IsValid()) {
-			auto &parent_column_schema = file_meta_data->schema[element.parent_schema_index.GetIndex()];
-			if (parent_column_schema.__isset.field_id) {
-				column.identifier = Value::INTEGER(parent_column_schema.field_id);
-			}
-		}
-		columns.emplace_back(std::move(column));
+		columns.push_back(ParseColumnDefinition(*file_meta_data, element));
 	}
 }
 

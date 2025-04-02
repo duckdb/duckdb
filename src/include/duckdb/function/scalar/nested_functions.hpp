@@ -82,7 +82,6 @@ struct HistogramAggState {
 	MAP_TYPE *hist;
 };
 
-unique_ptr<FunctionData> GetBindData(idx_t index);
 ScalarFunction GetKeyExtractFunction();
 ScalarFunction GetIndexExtractFunction();
 ScalarFunction GetExtractAtFunction();
