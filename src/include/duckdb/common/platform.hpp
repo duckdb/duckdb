@@ -68,7 +68,8 @@ std::string DuckDBPlatform() { // NOLINT: allow definition in header
 		postfix = "_musl";
 	}
 #elif defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0
-#error "DuckDB does not support legacy CXX ABI - Do not set _GLIBCXX_USE_CXX11_ABI to 0 and please use a GCC newer than 5"
+#error                                                                                                                 \
+    "DuckDB does not support legacy CXX ABI - Do not set _GLIBCXX_USE_CXX11_ABI to 0 and please use a GCC newer than 5"
 #endif
 
 #if defined(__ANDROID__)
