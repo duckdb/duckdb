@@ -17,6 +17,16 @@ select * from parquet_scan('data/parquet-testing/arrow_nan.parquet') where f='na
 nan	nan
 
 query II
+select * from parquet_scan('data/parquet-testing/arrow_nan.parquet') where f>10;
+----
+nan	nan
+
+query II
 select * from parquet_scan('data/parquet-testing/arrow_nan.parquet') where d='nan';
+----
+nan	nan
+
+query II
+select * from parquet_scan('data/parquet-testing/arrow_nan.parquet') where d>10;
 ----
 nan	nan
