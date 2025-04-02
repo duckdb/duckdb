@@ -13,8 +13,6 @@
 #include "duckdb/main/stream_query_result.hpp"
 #include <chrono>
 
-#include <iostream>
-
 namespace duckdb {
 
 static void query_break(int line) {

@@ -5,7 +5,6 @@
 #include "duckdb/common/string_util.hpp"
 #include "sqlite/sqllogic_test_logger.hpp"
 #include "test_helpers.hpp"
-#include <cstdlib>
 
 using namespace duckdb;
 

@@ -2,7 +2,6 @@
 
 #include "catch.hpp"
 #include "duckdb/common/crypto/md5.hpp"
-#include "duckdb/common/fstream.hpp"
 #include "duckdb/parser/qualified_name.hpp"
 #include "re2/re2.h"
 #include "sqllogic_test_logger.hpp"
