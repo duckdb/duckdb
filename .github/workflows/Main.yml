@@ -16,8 +16,7 @@ on:
       - '!.github/workflows/Main.yml'
   merge_group:
   pull_request:
-    types:
-      - auto_merge_enabled
+    types: [opened, reopened, ready_for_review]
     paths-ignore:
       - '**.md'
       - 'tools/**'
