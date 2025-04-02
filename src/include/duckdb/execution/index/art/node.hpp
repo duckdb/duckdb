@@ -168,16 +168,6 @@ private:
 
 private:
 	template <class NODE>
-	static void InitMergeInternal(ART &art, NODE &n, const unsafe_vector<idx_t> &upper_bounds) {
-		NODE::Iterator(n, [&](Node &child) { child.InitMerge(art, upper_bounds); });
-	}
-
-	template <class NODE>
-	static void VacuumInternal(ART &art, NODE &n, const unordered_set<uint8_t> &indexes) {
-		NODE::Iterator(n, [&](Node &child) { child.Vacuum(art, indexes); });
-	}
-
-	template <class NODE>
 	static void TransformToDeprecatedInternal(ART &art, unsafe_optional_ptr<NODE> ptr,
 	                                          unsafe_unique_ptr<FixedSizeAllocator> &allocator) {
 		if (ptr) {

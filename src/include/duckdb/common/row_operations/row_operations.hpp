@@ -10,6 +10,7 @@
 
 #include "duckdb/common/enums/expression_type.hpp"
 #include "duckdb/common/types.hpp"
+#include "duckdb/common/types/vector.hpp"
 
 namespace duckdb {
 
@@ -22,7 +23,6 @@ class TupleDataLayout;
 class RowDataCollection;
 struct SelectionVector;
 class StringHeap;
-class Vector;
 struct UnifiedVectorFormat;
 
 // The NestedValidity class help to set/get the validity from inside nested vectors
@@ -46,6 +46,7 @@ struct RowOperationsState {
 	}
 
 	ArenaAllocator &allocator;
+	unique_ptr<Vector> addresses; // Re-usable vector for row_aggregate.cpp
 };
 
 // RowOperations contains a set of operations that operate on data using a RowLayout

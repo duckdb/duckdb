@@ -51,7 +51,7 @@ SinkResultType PhysicalCreateType::Sink(ExecutionContext &context, DataChunk &ch
 	for (idx_t i = 0; i < chunk.size(); i++) {
 		idx_t idx = sdata.sel->get_index(i);
 		if (!sdata.validity.RowIsValid(idx)) {
-			throw InvalidInputException("Attempted to create ENUM type with NULL value!");
+			continue;
 		}
 		auto str = src_ptr[idx];
 		auto entry = gstate.found_strings.find(src_ptr[idx]);

@@ -14,15 +14,11 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
-
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
+      - '**'
       - '!.github/workflows/Main.yml'
 
 
@@ -37,8 +33,6 @@ jobs:
  linux-debug:
     name: Linux Debug (${{ matrix.tag }})
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    outputs:
-      git_describe: ${{ steps.describe_step.outputs.git_describe }}
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -59,8 +53,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
 
     - id: describe_step
       run: echo "git_describe=$(git describe --tags --long)" >> "$GITHUB_OUTPUT"
@@ -106,8 +98,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
 
     - name: Install
       shell: bash
@@ -132,7 +122,6 @@ jobs:
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-22.04
     env:
-      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
@@ -171,7 +160,6 @@ jobs:
     runs-on: ubuntu-22.04
     needs: force-storage
     env:
-      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       GEN: ninja
@@ -203,13 +191,45 @@ jobs:
       shell: bash
       run: build/reldebug/test/unittest --force-reload --force-storage
 
+ vector-sizes:
+    name: Vector Sizes
+    runs-on: ubuntu-22.04
+    needs: force-storage
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        shell: bash
+        run: STANDARD_VECTOR_SIZE=2 make relassert
+
+      - name: Test
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --time_execution
+
  valgrind:
     name: Valgrind
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-22.04
     needs: force-storage
     env:
-      OVERRIDE_GIT_DESCRIBE: ${{needs.linux-debug.outputs.git_describe}}
       CC: gcc-10
       CXX: g++-10
       DISABLE_SANITIZER: 1
@@ -240,3 +260,23 @@ jobs:
     - name: Test
       shell: bash
       run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+
+ old-gcc:
+    name: GCC 4.8
+    #needs: force-storage
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Test
+      shell: bash
+      run: |
+        docker run                                                             \
+          -v.:/duckdb                                                          \
+          -e CC=/usr/bin/gcc                                                   \
+          -e CXX=/usr/bin/g++                                                  \
+          -e CMAKE_BUILD_PARALLEL_LEVEL=2                                      \
+          quay.io/pypa/manylinux2014_x86_64                                    \
+          bash -c "yum install -y gcc-c++ && make -C /duckdb unit"

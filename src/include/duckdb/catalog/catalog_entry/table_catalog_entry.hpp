@@ -18,6 +18,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/catalog/catalog_entry/table_column_type.hpp"
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
+#include "duckdb/common/table_column.hpp"
 
 namespace duckdb {
 
@@ -37,6 +38,7 @@ struct BoundCreateTableInfo;
 
 class TableFunction;
 struct FunctionData;
+struct EntryLookupInfo;
 
 class Binder;
 struct ColumnSegmentInfo;
@@ -93,6 +95,8 @@ public:
 
 	//! Returns the scan function that can be used to scan the given table
 	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) = 0;
+	virtual TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data,
+	                                      const EntryLookupInfo &lookup_info);
 
 	virtual bool IsDuckTable() const {
 		return false;
@@ -117,10 +121,8 @@ public:
 	//! Returns true, if the table has a primary key, else false.
 	bool HasPrimaryKey() const;
 
-	//! Returns the rowid type of this table
-	virtual LogicalType GetRowIdType() const {
-		return LogicalType::ROW_TYPE;
-	}
+	//! Returns the virtual columns for this table
+	virtual virtual_column_map_t GetVirtualColumns() const;
 
 protected:
 	//! A list of columns that are part of this table

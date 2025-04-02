@@ -130,7 +130,7 @@ NULL
 query I
 select regexp_extract_all('', '')
 ----
-[]
+['']
 
 query I
 select regexp_extract_all('', 'abc')
@@ -170,17 +170,17 @@ select regexp_extract_all('abcdef', 'bcde')
 query I
 select regexp_extract_all('aabca', 'a*')
 ----
-[aa, , , a, ]
+[aa, '', '', a, '']
 
 query I
 select regexp_extract_all('aaba', 'a?')
 ----
-[a, a, , a, ]
+[a, a, '', a, '']
 
 query I
 select regexp_extract_all('baac', 'a*')
 ----
-[, aa, , ]
+['', aa, '', '']
 
 query I
 select regexp_extract_all('abcd', 'a(bc)*')
@@ -205,17 +205,17 @@ select regexp_extract_all('щцф', '.{6}')
 query I
 select regexp_extract_all('щццф', 'ц*')
 ----
-[, цц, , ]
+['', цц, '', '']
 
 query I
 select regexp_extract_all('abba', 'b*')
 ----
-[, bb, , ]
+['', bb, '', '']
 
 query I
 select regexp_extract_all('', '()')
 ----
-[]
+['']
 
 query I
 select regexp_extract_all('', '(abc)')
@@ -225,7 +225,7 @@ select regexp_extract_all('', '(abc)')
 query I
 select regexp_extract_all('', '(abc)?')
 ----
-[]
+['']
 
 query I
 select regexp_extract_all('abc', 'a(b)c')
@@ -255,7 +255,7 @@ select regexp_extract_all('abcdef', '(bcde)')
 query I
 select regexp_extract_all('this_is__a___Test', '(.*?)(?:_|$)')
 ----
-[this_, is_, _, a_, _, _, Test, ]
+[this_, is_, _, a_, _, _, Test, '']
 
 query I
 select regexp_extract_all('щцф', 'щ(.).', 1)
@@ -280,7 +280,7 @@ select regexp_extract_all('abc', '(a)(b)')
 statement error
 select regexp_extract_all('', '(')
 ----
-Invalid Input Error: Pattern failed to parse, error: 'missing ): ('
+Invalid Input Error: missing )
 
 query I
 select regexp_extract_all('abcdef', 'ac.*e.')
@@ -300,12 +300,12 @@ select regexp_extract_all('abc', '.{2}')
 query I
 select regexp_extract_all('\001\002\003', '\002?')
 ----
-[, , , , , , , , , , , , ]
+['', '', '', '', '', '', '', '', '', '', '', '', '']
 
 query I
 select regexp_extract_all('', '()')
 ----
-[]
+['']
 
 query I
 select regexp_extract_all('', '(abc)')
@@ -315,12 +315,12 @@ select regexp_extract_all('', '(abc)')
 query I
 select regexp_extract_all('', '(abc)?')
 ----
-[]
+['']
 
 query I
 select regexp_extract_all('this__test_case', '(.*?)(?:_|$)')
 ----
-[this_, _, test_, case, ]
+[this_, _, test_, case, '']
 
 query I
 select regexp_extract_all('щцф', 'щ(..)..')
@@ -537,7 +537,7 @@ FROM (
   VALUES ('03-123-4567')
 ) AS t(str)
 ----
-03-123-4567	[123, 456]	[]	[03, 123, 4567]	[03, 12, 3, 45, 67]	[03, , 12, 3, , 45, 67, ]
+03-123-4567	[123, 456]	[]	[03, 123, 4567]	[03, 12, 3, 45, 67]	[03, '', 12, 3, '', 45, 67, '']
 
 statement error
 SELECT str, 
@@ -546,7 +546,7 @@ FROM (
   VALUES ('acd'), ('abcd'), ('abbcd'), ('abbbcd')
 ) AS t(str)
 ----
-Invalid Input Error: Pattern failed to parse, error: 'bad repetition operator: ++'
+Invalid Input Error: bad repetition operator: ++
 
 query IIIIIII
 SELECT
@@ -592,7 +592,7 @@ SELECT
   REGEXP_EXTRACT_ALL('https://www.emakina.nl/?utm_source=sf_mail&user_id=7h87hte51kj_9866c', '([^\?&]+)=') AS parameter_key,
   REGEXP_EXTRACT_ALL('https://www.emakina.nl/?utm_source=sf_mail&user_id=7h87hte51kj_9866c', '=([^&]+)') AS parameter_value 
 ----
-[utm_source=, user_id=]	[=sf_mail, =7h87hte51kj_9866c]
+['utm_source=', 'user_id=']	['=sf_mail', '=7h87hte51kj_9866c']
 
 # Double anchor:
 query I
@@ -630,7 +630,7 @@ select regexp_extract_all('aaaaaaaa', pattern) from t;
 NULL
 [a, a, a, a, a, a, a, a]
 [aaa, aaa]
-[, , , , , , , , ]
+['', '', '', '', '', '', '', '', '']
 [aa, aa, aa, aa]
 NULL
 [a, a, a, a, a, a, a, a]
@@ -660,7 +660,7 @@ NULL
 NULL
 [a, a, a, a, a, a, a, a]
 [aaa, aaa]
-[, , , , , , , , ]
+['', '', '', '', '', '', '', '', '']
 [aa, aa, aa, aa]
 NULL
 [a, a, a, a, a, a, a, a]
@@ -698,7 +698,7 @@ NULL
 NULL
 [a, a, a, a, a, a, a, a]
 [aaa, aaa]
-[, , , , , , , , ]
+['', '', '', '', '', '', '', '', '']
 [aa, aa, aa, aa]
 NULL
 [a, a, a, a, a, a, a, a]

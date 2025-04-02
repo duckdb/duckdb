@@ -109,7 +109,6 @@ jobs:
       GEN: ninja
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: "icu;tpch;tpcds;json"
-      SMALLER_BINARY: 1
     steps:
     - uses: actions/checkout@v3
       with:
@@ -127,7 +126,7 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make
+      run: SMALLER_BINARY=1 make
 
     - name: Measure Size
       shell: bash
@@ -179,28 +178,6 @@ jobs:
     - name: Test
       shell: bash
       run: make allunit
-
-  old-gcc:
-    name: GCC 4.8
-    needs: linux-memory-leaks
-    runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/main' || github.ref == 'refs/heads/feature' }}
-    steps:
-    - uses: actions/checkout@v3
-      with:
-        fetch-depth: 0
-
-    - name: Test
-      shell: bash
-      run: |
-        docker run                                                             \
-          -v.:/duckdb                                                          \
-          -e CC=/usr/bin/gcc                                                   \
-          -e CXX=/usr/bin/g++                                                  \
-          -e CMAKE_BUILD_PARALLEL_LEVEL=2                                      \
-          quay.io/pypa/manylinux2014_x86_64                                    \
-          bash -c "yum install -y gcc-c++ && make -C /duckdb unit"
-
 
   linux-compile-32:
     name: Linux (32 Bit)
@@ -458,9 +435,6 @@ jobs:
       CXX: g++-10
       GEN: ninja
       CORE_EXTENSIONS: "parquet;json;tpch;tpcds;httpfs"
-      DEBUG_STACKTRACE: 1
-      LATEST_STORAGE: 1
-      BLOCK_VERIFICATION: 1
 
     steps:
       - uses: actions/checkout@v3
@@ -479,7 +453,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make reldebug
+        run: DEBUG_STACKTRACE=1 BLOCK_VERIFICATION=1 LATEST_STORAGE=1 make reldebug
 
       - name: Test
         shell: bash
@@ -509,7 +483,7 @@ jobs:
       CXX: g++-10
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      VERIFY_VECTOR: ${{ matrix.vector_type }}
+      VERIFY_VECTOR_KIND: ${{ matrix.vector_type }}
 
     steps:
       - uses: actions/checkout@v3
@@ -528,7 +502,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make reldebug
+        run: VERIFY_VECTOR=${VERIFY_VECTOR_KIND} make reldebug
 
       - name: Test
         shell: bash
@@ -541,7 +515,6 @@ jobs:
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
-      FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
       - uses: actions/checkout@v3
@@ -560,7 +533,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: make relassert
+        run: FORCE_ASYNC_SINK_SOURCE=1 make relassert
 
       - name: Test
         shell: bash
@@ -690,48 +663,12 @@ jobs:
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
           python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600
 
-
-  vector-sizes:
-    name: Vector Sizes
-    runs-on: ubuntu-22.04
-    needs: linux-memory-leaks
-    env:
-      CC: gcc-10
-      CXX: g++-10
-      GEN: ninja
-      STANDARD_VECTOR_SIZE: 2
-
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Install
-        shell: bash
-        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
-
-      - name: Setup Ccache
-        uses: hendrikmuhs/ccache-action@main
-        with:
-          key: ${{ github.job }}
-          save: ${{ env.CCACHE_SAVE }}
-
-      - name: Build
-        shell: bash
-        run: make relassert
-
-      - name: Test
-        shell: bash
-        run: |
-          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest --no-exit --time_execution
-
   block-sizes:
     name: Block Sizes
     runs-on: ubuntu-24.04
     needs: linux-memory-leaks
     env:
       GEN: ninja
-      BLOCK_ALLOC_SIZE: 16384
       CORE_EXTENSIONS: "json;parquet"
 
     steps:
@@ -751,7 +688,7 @@ jobs:
 
       - name: Build with standard vector size
         shell: bash
-        run: make relassert
+        run: BLOCK_ALLOC_SIZE=16384 make relassert
 
       - name: Fast and storage tests
         shell: bash
@@ -761,7 +698,7 @@ jobs:
 
       - name: Build with vector size of 512
         shell: bash
-        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && STANDARD_VECTOR_SIZE=512 make relassert
+        run: rm -rf ./build && rm -rf ./duckdb_unittest_tempdir && make clean && BLOCK_ALLOC_SIZE=16384 STANDARD_VECTOR_SIZE=512 make relassert
 
       - name: Fast and storage tests
         shell: bash

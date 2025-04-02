@@ -228,11 +228,11 @@ TableIOManager &TableIOManager::Get(DataTable &table) {
 //===--------------------------------------------------------------------===//
 // Scan
 //===--------------------------------------------------------------------===//
-void DataTable::InitializeScan(DuckTransaction &transaction, TableScanState &state,
-                               const vector<StorageIndex> &column_ids, TableFilterSet *table_filters) {
+void DataTable::InitializeScan(ClientContext &context, DuckTransaction &transaction, TableScanState &state,
+                               const vector<StorageIndex> &column_ids, optional_ptr<TableFilterSet> table_filters) {
 	state.checkpoint_lock = transaction.SharedLockTable(*info);
 	auto &local_storage = LocalStorage::Get(transaction);
-	state.Initialize(column_ids, table_filters);
+	state.Initialize(column_ids, context, table_filters);
 	row_groups->InitializeScan(state.table_state, column_ids, table_filters);
 	local_storage.InitializeScan(*this, state.local_state, table_filters);
 }
@@ -351,6 +351,15 @@ void DataTable::VacuumIndexes() {
 	info->indexes.Scan([&](Index &index) {
 		if (index.IsBound()) {
 			index.Cast<BoundIndex>().Vacuum();
+		}
+		return false;
+	});
+}
+
+void DataTable::VerifyIndexBuffers() {
+	info->indexes.Scan([&](Index &index) {
+		if (index.IsBound()) {
+			index.Cast<BoundIndex>().VerifyBuffers();
 		}
 		return false;
 	});
@@ -854,14 +863,24 @@ void DataTable::FinalizeLocalAppend(LocalAppendState &state) {
 	LocalStorage::FinalizeAppend(state);
 }
 
-OptimisticDataWriter &DataTable::CreateOptimisticWriter(ClientContext &context) {
+PhysicalIndex DataTable::CreateOptimisticCollection(ClientContext &context, unique_ptr<RowGroupCollection> collection) {
 	auto &local_storage = LocalStorage::Get(context, db);
-	return local_storage.CreateOptimisticWriter(*this);
+	return local_storage.CreateOptimisticCollection(*this, std::move(collection));
 }
 
-void DataTable::FinalizeOptimisticWriter(ClientContext &context, OptimisticDataWriter &writer) {
+RowGroupCollection &DataTable::GetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index) {
 	auto &local_storage = LocalStorage::Get(context, db);
-	local_storage.FinalizeOptimisticWriter(*this, writer);
+	return local_storage.GetOptimisticCollection(*this, collection_index);
+}
+
+void DataTable::ResetOptimisticCollection(ClientContext &context, const PhysicalIndex collection_index) {
+	auto &local_storage = LocalStorage::Get(context, db);
+	local_storage.ResetOptimisticCollection(*this, collection_index);
+}
+
+OptimisticDataWriter &DataTable::GetOptimisticWriter(ClientContext &context) {
+	auto &local_storage = LocalStorage::Get(context, db);
+	return local_storage.GetOptimisticWriter(*this);
 }
 
 void DataTable::LocalMerge(ClientContext &context, RowGroupCollection &collection) {
@@ -1098,15 +1117,15 @@ void DataTable::RevertAppend(DuckTransaction &transaction, idx_t start_row, idx_
 		});
 	}
 
-	// we need to vacuum the indexes to remove any buffers that are now empty
-	// due to reverting the appends
+#ifdef DEBUG
+	// Verify that our index memory is stable.
 	info->indexes.Scan([&](Index &index) {
-		// We cant add to unbound indexes anyway, so there is no need to vacuum them
 		if (index.IsBound()) {
-			index.Cast<BoundIndex>().Vacuum();
+			index.Cast<BoundIndex>().VerifyBuffers();
 		}
 		return false;
 	});
+#endif
 
 	// revert the data table append
 	RevertAppendInternal(start_row);
@@ -1541,8 +1560,8 @@ void DataTable::Checkpoint(TableDataWriter &writer, Serializer &serializer) {
 	writer.FinalizeTable(global_stats, info.get(), serializer);
 }
 
-void DataTable::CommitDropColumn(idx_t index) {
-	row_groups->CommitDropColumn(index);
+void DataTable::CommitDropColumn(const idx_t column_index) {
+	row_groups->CommitDropColumn(column_index);
 }
 
 idx_t DataTable::ColumnCount() const {
