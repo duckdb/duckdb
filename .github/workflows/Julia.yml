@@ -16,18 +16,13 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Julia.yml'
-
+  merge_group:
   pull_request:
-    types: [opened, reopened, ready_for_review]
-    paths-ignore:
-      - '**.md'
-      - 'examples/**'
-      - 'test/**'
-      - 'tools/**'
-      - '!tools/juliapkg/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
+   types: [opened, reopened, ready_for_review]
+   paths-ignore:
+      - '**'
       - '!.github/workflows/Julia.yml'
+      - '!tools/juliapkg/**'
 
 
 concurrency:
