@@ -2,11 +2,9 @@
 
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
-#include "duckdb/planner/operator/logical_filter.hpp"
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/column_binding_map.hpp"
 #include "duckdb/planner/binder.hpp"
-#include <numeric>
 
 namespace duckdb {
 
@@ -33,7 +31,7 @@ struct CSEReplacementState {
 	//! Cached expressions that are kept around so the expression_map always contains valid expressions
 	vector<unique_ptr<Expression>> cached_expressions;
 	//! Short circuit argument tracking
-	vector<idx_t> short_circuits;
+	bool short_circuited = false;
 };
 
 void CommonSubExpressionOptimizer::VisitOperator(LogicalOperator &op) {
@@ -64,7 +62,7 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 		if (node == state.expression_count.end()) {
 			// first time we encounter this expression, insert this node with [count = 1]
 			// but only if it is not an interior argument of a short circuit sensitive expression.
-			if (std::accumulate(state.short_circuits.begin(), state.short_circuits.end(), idx_t(0)) == 0) {
+			if (!state.short_circuited) {
 				state.expression_count[expr] = CSENode();
 			}
 		} else {
@@ -78,13 +76,13 @@ void CommonSubExpressionOptimizer::CountExpressions(Expression &expr, CSEReplace
 	switch (expr.GetExpressionClass()) {
 	case ExpressionClass::BOUND_CONJUNCTION:
 	case ExpressionClass::BOUND_CASE: {
-		// Add a short circuit reference
-		state.short_circuits.emplace_back(0);
+		// Save the short circuit reference
+		const auto save_short_circuit = state.short_circuited;
 		ExpressionIterator::EnumerateChildren(expr, [&](Expression &child) {
 			CountExpressions(child, state);
-			++state.short_circuits.back();
+			state.short_circuited = true;
 		});
-		state.short_circuits.pop_back();
+		state.short_circuited = save_short_circuit;
 		break;
 	}
 	default:
