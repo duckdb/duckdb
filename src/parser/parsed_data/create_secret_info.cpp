@@ -28,7 +28,7 @@ unique_ptr<CreateInfo> CreateSecretInfo::Copy() const {
 	}
 
 	for (const auto &option : options) {
-		result->options.insert({option.first, option.second->Copy()});
+		result->options.insert(make_pair(option.first, option.second->Copy()));
 	}
 
 	return std::move(result);

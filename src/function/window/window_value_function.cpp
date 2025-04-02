@@ -101,8 +101,10 @@ void WindowValueLocalState::Sink(WindowExecutorGlobalState &gstate, DataChunk &s
 		child.ToUnifiedFormat(coll_count, child_data);
 		const auto &validity = child_data.validity;
 		if (gstate.executor.wexpr.ignore_nulls && !validity.AllValid()) {
+			const auto &sel = *child_data.sel;
 			for (sel_t i = 0; i < coll_count; ++i) {
-				if (validity.RowIsValidUnsafe(i)) {
+				const auto idx = sel.get_index(i);
+				if (validity.RowIsValidUnsafe(idx)) {
 					sort_nulls[filtered++] = i;
 				}
 			}

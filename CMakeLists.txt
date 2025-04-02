@@ -923,7 +923,8 @@ function(build_loadable_extension_directory NAME ABI_TYPE OUTPUT_DIRECTORY EXTEN
   if(EMSCRIPTEN)
     # Compile the library into the actual wasm file
     string(TOUPPER ${NAME} EXTENSION_NAME_UPPERCASE)
-    string(REPLACE ";" " " TO_BE_LINKED "${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS}")
+    set(TO_BE_LINKED ${DUCKDB_EXTENSION_${EXTENSION_NAME_UPPERCASE}_LINKED_LIBS} )
+    separate_arguments(TO_BE_LINKED)
     if (${ABI_TYPE} STREQUAL "CPP")
       set(EXPORTED_FUNCTIONS "_${NAME}_init,_${NAME}_version")
     elseif (${ABI_TYPE} STREQUAL "C_STRUCT" OR ${ABI_TYPE} STREQUAL "C_STRUCT_UNSTABLE")
