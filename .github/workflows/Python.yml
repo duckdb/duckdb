@@ -126,7 +126,6 @@ jobs:
   manylinux-extensions-x64:
     name: Linux Extensions (linux_amd64_gcc4)
     needs: linux-python3-10
-    if: false
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -161,7 +160,6 @@ jobs:
 
   upload-linux-extensions-gcc4:
     name: Upload Linux Extensions (gcc4)
-    if: false
     needs: manylinux-extensions-x64
     strategy:
       matrix:
@@ -175,8 +173,7 @@ jobs:
 
   linux-python3:
     name: Python 3 Linux
-    # needs: manylinux-extensions-x64
-    needs: linux-python3-10
+    needs: manylinux-extensions-x64
     runs-on: ubuntu-22.04
     strategy:
       fail-fast: false
@@ -251,8 +248,7 @@ jobs:
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
     - uses: actions/download-artifact@v4
-      if: false
-      # if: ${{ matrix.arch == 'x86_64' }}
+      if: ${{ matrix.arch == 'x86_64' }}
       with:
         name: duckdb-extensions-${{ matrix.duckdb_arch }}
         path: tools/pythonpkg
