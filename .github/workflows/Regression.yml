@@ -22,6 +22,16 @@ on:
       - '.github/workflows/**'
       - '!.github/workflows/Regression.yml'
   merge_group:
+  pull_request:
+    types:
+      - auto_merge_enabled
+    paths-ignore:
+      - '**.md'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Regression.yml'
 
 
 concurrency:
