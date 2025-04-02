@@ -29,6 +29,10 @@ SQLLogicTestRunner::SQLLogicTestRunner(string dbpath) : dbpath(std::move(dbpath)
 		local_extension_repo = env_var;
 		config->options.autoload_known_extensions = true;
 	}
+	auto verify_vector = std::getenv("DUCKDB_DEBUG_VERIFY_VECTOR");
+	if (verify_vector) {
+		config->options.debug_verify_vector = EnumUtil::FromString<DebugVectorVerification>(verify_vector);
+	}
 }
 
 SQLLogicTestRunner::~SQLLogicTestRunner() {
