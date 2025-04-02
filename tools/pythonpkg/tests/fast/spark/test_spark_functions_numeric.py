@@ -338,6 +338,14 @@ class TestSparkFunctionsNumeric(object):
         assert isinstance(res[1].rand, float)
         assert res[1].rand >= 0 and res[1].rand < 1
 
+    def test_negative(self, spark):
+        df = spark.createDataFrame([(0,), (2,), (-3,)], ["value"])
+        df = df.withColumn("value", F.negative(F.col("value")))
+        res = df.collect()
+        assert res[0].value == 0
+        assert res[1].value == -2
+        assert res[2].value == -3
+
     @pytest.mark.parametrize("sign_func", [F.sign, F.signum])
     def test_sign(self, spark, sign_func):
         df = spark.range(1).select(sign_func(F.lit(-5).alias("v1")), sign_func(F.lit(6).alias("v2")))
