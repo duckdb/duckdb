@@ -87,6 +87,7 @@ static const ConfigurationOption internal_options[] = {
     DUCKDB_LOCAL(DebugForceExternalSetting),
     DUCKDB_LOCAL(DebugForceNoCrossProductSetting),
     DUCKDB_GLOBAL(DebugSkipCheckpointOnCommitSetting),
+    DUCKDB_GLOBAL(DebugVerifyVectorSetting),
     DUCKDB_GLOBAL(DebugWindowModeSetting),
     DUCKDB_GLOBAL(DefaultBlockSizeSetting),
     DUCKDB_GLOBAL_LOCAL(DefaultCollationSetting),
