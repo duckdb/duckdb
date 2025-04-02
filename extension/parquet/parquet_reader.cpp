@@ -933,8 +933,11 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			// check the bloom filter if present
 			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
 			bool is_expression = column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::EXPRESSION;
-			bool has_min_max = group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
-			                   group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value;
+			bool has_min_max = false;
+			if (!is_generated_column) {
+				has_min_max = group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
+				              group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value;
+			}
 			if (is_expression) {
 				// no pruning possible for expressions
 				prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
