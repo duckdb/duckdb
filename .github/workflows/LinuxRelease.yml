@@ -28,7 +28,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/LinuxRelease.yml'
-
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -107,6 +107,7 @@ jobs:
         path: |
           libduckdb-linux-${{ matrix.config.arch }}.zip
           duckdb_cli-linux-${{ matrix.config.arch }}.zip
+          duckdb_cli-linux-${{ matrix.config.arch }}.gz
 
     - name: Test
       shell: bash

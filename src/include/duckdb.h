@@ -1657,7 +1657,7 @@ DUCKDB_C_API duckdb_state duckdb_bind_hugeint(duckdb_prepared_statement prepared
                                               duckdb_hugeint val);
 
 /*!
-Binds an duckdb_uhugeint value to the prepared statement at the specified index.
+Binds a duckdb_uhugeint value to the prepared statement at the specified index.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_uhugeint(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                                duckdb_uhugeint val);
@@ -1669,24 +1669,24 @@ DUCKDB_C_API duckdb_state duckdb_bind_decimal(duckdb_prepared_statement prepared
                                               duckdb_decimal val);
 
 /*!
-Binds an uint8_t value to the prepared statement at the specified index.
+Binds a uint8_t value to the prepared statement at the specified index.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_uint8(duckdb_prepared_statement prepared_statement, idx_t param_idx, uint8_t val);
 
 /*!
-Binds an uint16_t value to the prepared statement at the specified index.
+Binds a uint16_t value to the prepared statement at the specified index.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_uint16(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                              uint16_t val);
 
 /*!
-Binds an uint32_t value to the prepared statement at the specified index.
+Binds a uint32_t value to the prepared statement at the specified index.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_uint32(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                              uint32_t val);
 
 /*!
-Binds an uint64_t value to the prepared statement at the specified index.
+Binds a uint64_t value to the prepared statement at the specified index.
 */
 DUCKDB_C_API duckdb_state duckdb_bind_uint64(duckdb_prepared_statement prepared_statement, idx_t param_idx,
                                              uint64_t val);
@@ -1987,7 +1987,7 @@ Creates a value from a boolean
 DUCKDB_C_API duckdb_value duckdb_create_bool(bool input);
 
 /*!
-Creates a value from a int8_t (a tinyint)
+Creates a value from an int8_t (a tinyint)
 
 * @param input The tinyint value
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
@@ -2003,7 +2003,7 @@ Creates a value from a uint8_t (a utinyint)
 DUCKDB_C_API duckdb_value duckdb_create_uint8(uint8_t input);
 
 /*!
-Creates a value from a int16_t (a smallint)
+Creates a value from an int16_t (a smallint)
 
 * @param input The smallint value
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
@@ -2019,7 +2019,7 @@ Creates a value from a uint16_t (a usmallint)
 DUCKDB_C_API duckdb_value duckdb_create_uint16(uint16_t input);
 
 /*!
-Creates a value from a int32_t (an integer)
+Creates a value from an int32_t (an integer)
 
 * @param input The integer value
 * @return The value. This must be destroyed with `duckdb_destroy_value`.
@@ -2238,7 +2238,7 @@ DUCKDB_C_API uint16_t duckdb_get_uint16(duckdb_value val);
 /*!
 Returns the int32_t value of the given value.
 
-* @param val A duckdb_value containing a integer
+* @param val A duckdb_value containing an integer
 * @return A int32_t, or MinValue<int32> if the value cannot be converted
 */
 DUCKDB_C_API int32_t duckdb_get_int32(duckdb_value val);
@@ -3037,7 +3037,7 @@ The resulting vector is valid as long as the parent vector is valid.
 DUCKDB_C_API duckdb_vector duckdb_struct_vector_get_child(duckdb_vector vector, idx_t index);
 
 /*!
-Retrieves the child vector of a array vector.
+Retrieves the child vector of an array vector.
 
 The resulting vector is valid as long as the parent vector is valid.
 The resulting vector has the size of the parent vector multiplied by the array size.
