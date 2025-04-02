@@ -27,7 +27,7 @@ static bool single_threaded = false;
 static case_insensitive_set_t required_requires;
 static bool delete_test_path = true;
 
-std::stringstream& GetSummary() {
+std::stringstream &GetSummary() {
 	static std::stringstream summary;
 	return summary;
 }

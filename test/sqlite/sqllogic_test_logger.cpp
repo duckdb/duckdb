@@ -135,7 +135,7 @@ void SQLLogicTestLogger::PrintErrorHeader(const string &description) {
 }
 
 void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, const vector<string> &values,
-                                            idx_t expected_column_count, bool row_wise) {
+                                          idx_t expected_column_count, bool row_wise) {
 	PrintHeader("Expected result:");
 	PrintLineSep();
 	PrintExpectedResult(values, expected_column_count, row_wise);
@@ -146,7 +146,7 @@ void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, c
 }
 
 void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
-                                            idx_t expected_column_count, bool row_wise) {
+                                          idx_t expected_column_count, bool row_wise) {
 	PrintHeader("Expected result:");
 	PrintLineSep();
 	PrintExpectedResult(values, expected_column_count, row_wise);
@@ -204,14 +204,14 @@ void SQLLogicTestLogger::OutputHash(const string &hash_value) {
 }
 
 void SQLLogicTestLogger::ColumnCountMismatch(MaterializedQueryResult &result,
-                                               const vector<string> &result_values_string, idx_t expected_column_count,
-                                               bool row_wise) {
+                                             const vector<string> &result_values_string, idx_t expected_column_count,
+                                             bool row_wise) {
 
 	PrintErrorHeader("Wrong column count in query!");
 	std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got "
 	          << termcolor::bold << result.ColumnCount() << termcolor::reset << " columns" << std::endl;
 	GetSummary() << "Expected " + to_string(expected_column_count) + " columns, but got " +
-	               to_string(result.ColumnCount()) + " columns\n";
+	                    to_string(result.ColumnCount()) + " columns\n";
 	PrintLineSep();
 	PrintSQL();
 	PrintLineSep();
@@ -225,25 +225,25 @@ void SQLLogicTestLogger::NotCleanlyDivisible(idx_t expected_column_count, idx_t 
 	        (int)actual_column_count);
 	fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
 	GetSummary() << "Expected " + to_string(expected_column_count) + " columns, but " + to_string(actual_column_count) +
-	               " values were supplied\n";
+	                    " values were supplied\n";
 }
 
 void SQLLogicTestLogger::WrongRowCount(idx_t expected_rows, MaterializedQueryResult &result,
-                                         const vector<string> &comparison_values, idx_t expected_column_count,
-                                         bool row_wise) {
+                                       const vector<string> &comparison_values, idx_t expected_column_count,
+                                       bool row_wise) {
 	PrintErrorHeader("Wrong row count in query!");
 	std::cerr << "Expected " << termcolor::bold << expected_rows << termcolor::reset << " rows, but got "
 	          << termcolor::bold << result.RowCount() << termcolor::reset << " rows" << std::endl;
-	GetSummary() << "Expected " + to_string(expected_rows) + " rows, but got " + to_string(result.RowCount()) + " rows\n";
+	GetSummary() << "Expected " + to_string(expected_rows) + " rows, but got " + to_string(result.RowCount()) +
+	                    " rows\n";
 	PrintLineSep();
 	PrintSQL();
 	PrintLineSep();
 	PrintResultError(result, comparison_values, expected_column_count, row_wise);
 }
 
-void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expected_columns,
-                                                            idx_t expected_column_count,
-                                                            MaterializedQueryResult &result) {
+void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expected_columns, idx_t expected_column_count,
+                                                          MaterializedQueryResult &result) {
 	PrintLineSep();
 	PrintErrorHeader("Wrong column count in query!");
 	std::cerr << "Expected " << termcolor::bold << original_expected_columns << termcolor::reset << " columns, but got "
@@ -263,12 +263,13 @@ void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expecte
 
 void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_count, idx_t split_count) {
 	PrintLineSep();
-	PrintErrorHeader("Error in test! Column count mismatch after splitting on tab on row " +
-	                                to_string(row_number) + "!");
+	PrintErrorHeader("Error in test! Column count mismatch after splitting on tab on row " + to_string(row_number) +
+	                 "!");
 	std::cerr << "Expected " << termcolor::bold << expected_column_count << termcolor::reset << " columns, but got "
 	          << termcolor::bold << split_count << termcolor::reset << " columns" << std::endl;
 	std::cerr << "Does the result contain tab values? In that case, place every value on a single row." << std::endl;
-	GetSummary() << "Expected " + to_string(expected_column_count) + " columns, but got " + to_string(split_count) + " columns\n";
+	GetSummary() << "Expected " + to_string(expected_column_count) + " columns, but got " + to_string(split_count) +
+	                    " columns\n";
 	GetSummary() << "Does the result contain tab values? In that case, place every value on a single row.\n";
 	PrintLineSep();
 	PrintSQL();

@@ -214,7 +214,7 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 			}
 		}
 		if (column_count_mismatch) {
-		    logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
+			logger.ColumnCountMismatchCorrectResult(original_expected_columns, expected_column_count, result);
 			return false;
 		}
 	} else {
@@ -507,10 +507,11 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		logger.PrintSQL();
 		logger.PrintLineSep();
 		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
-				  << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
-				  << termcolor::reset;
+		          << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
+		          << termcolor::reset;
 		GetSummary() << "Mismatch on row " + std::to_string(current_row + 1) + ", column " +
-		               result.ColumnName(current_column) + "(index " + std::to_string(current_row + 1) + ")" << std::endl;
+		                    result.ColumnName(current_column) + "(index " + std::to_string(current_row + 1) + ")"
+		             << std::endl;
 		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
 		GetSummary() << lvalue_str + " <> " << rvalue_str << std::endl;
 		logger.PrintLineSep();

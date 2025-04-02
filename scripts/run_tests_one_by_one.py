@@ -10,6 +10,7 @@ import argparse
 
 error_container = []
 
+
 def valid_timeout(value):
     try:
         timeout_float = float(value)
@@ -148,7 +149,9 @@ def launch_test(test, list_of_tests=False):
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
         # should unset SUMMARIZE_FAILURES to avoid producing exceeding failure logs
-        res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env={'SUMMARIZE_FAILURES': '0'})
+        res = subprocess.run(
+            test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env={'SUMMARIZE_FAILURES': '0'}
+        )
     except subprocess.TimeoutExpired as e:
         if list_of_tests:
             print("[TIMED OUT]", flush=True)
