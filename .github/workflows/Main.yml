@@ -14,15 +14,11 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
-
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
-      - '**.md'
-      - 'tools/**'
-      - '!tools/shell/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
+      - '**'
       - '!.github/workflows/Main.yml'
 
 
@@ -264,3 +260,23 @@ jobs:
     - name: Test
       shell: bash
       run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+
+ old-gcc:
+    name: GCC 4.8
+    #needs: force-storage
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Test
+      shell: bash
+      run: |
+        docker run                                                             \
+          -v.:/duckdb                                                          \
+          -e CC=/usr/bin/gcc                                                   \
+          -e CXX=/usr/bin/g++                                                  \
+          -e CMAKE_BUILD_PARALLEL_LEVEL=2                                      \
+          quay.io/pypa/manylinux2014_x86_64                                    \
+          bash -c "yum install -y gcc-c++ && make -C /duckdb unit"

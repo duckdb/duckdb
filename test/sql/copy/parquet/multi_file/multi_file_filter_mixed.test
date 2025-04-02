@@ -4,8 +4,8 @@
 
 require parquet
 
-# statement ok
-# PRAGMA enable_verification
+statement ok
+PRAGMA enable_verification
 
 statement ok
 COPY (FROM (VALUES ('f1', 42), ('f1', 8), ('f1', NULL)) t(f, i)) TO '__TEST_DIR__/multi_file_filter_f1.parquet'

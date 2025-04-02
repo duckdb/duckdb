@@ -32,7 +32,8 @@ struct StructExtractAtFun {
 	static constexpr const char *Example = "struct_extract_at({'i': 3, 'v2': 3, 'v3': 0}, 2)";
 	static constexpr const char *Categories = "";
 
-	static ScalarFunctionSet GetFunctions();
+	static ScalarFunction GetFunction();
+	static unique_ptr<FunctionData> GetBindData(idx_t index);
 };
 
 struct StructPackFun {
@@ -50,6 +51,16 @@ struct RowFun {
 	static constexpr const char *Parameters = "any,...";
 	static constexpr const char *Description = "Create an unnamed STRUCT (tuple) containing the argument values.";
 	static constexpr const char *Example = "row(i, i % 4, i / 4)";
+	static constexpr const char *Categories = "";
+
+	static ScalarFunction GetFunction();
+};
+
+struct RemapStructFun {
+	static constexpr const char *Name = "remap_struct";
+	static constexpr const char *Parameters = "input,target_type,mapping,defaults";
+	static constexpr const char *Description = "Map a struct to another struct type, potentially re-ordering, renaming and casting members and filling in defaults for missing values";
+	static constexpr const char *Example = "remap_struct({'i': 1, 'j': 2}, NULL::ROW(v1 INT, v2 INT, v3 INT), {'v1': 'j', 'v3': 'i'}, {'v2': NULL::INTEGER})";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();

@@ -16,17 +16,11 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Swift.yml'
-
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
-      - '**.md'
-      - 'examples/**'
-      - 'test/**'
-      - 'tools/**'
-      - '!tools/swift/**'
-      - '.github/patches/duckdb-wasm/**'
-      - '.github/workflows/**'
+      - '**'
       - '!.github/workflows/Swift.yml'
 
 

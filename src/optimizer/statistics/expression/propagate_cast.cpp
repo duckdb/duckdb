@@ -22,6 +22,9 @@ static unique_ptr<BaseStatistics> StatisticsOperationsNumericNumericCast(const B
 }
 
 bool StatisticsPropagator::CanPropagateCast(const LogicalType &source, const LogicalType &target) {
+	if (source == target) {
+		return true;
+	}
 	// we can only propagate numeric -> numeric
 	switch (source.InternalType()) {
 	case PhysicalType::INT8:
