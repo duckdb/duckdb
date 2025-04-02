@@ -1,0 +1,68 @@
+# name: test/sql/copy/parquet/multi_file/multi_file_filter_integer_types.test
+# description: Test multi file filters
+# group: [multi_file]
+
+require parquet
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+COPY (FROM (VALUES ('f1', 42::INT), ('f1', 8::INT), ('f1', NULL::INT)) t(f, i)) TO '__TEST_DIR__/multi_file_filter_f1.parquet'
+
+statement ok
+COPY (FROM (VALUES (42::BIGINT, 'f2'), (124::BIGINT, 'f2'), (NULL::BIGINT, 'f2')) t(i, f)) TO '__TEST_DIR__/multi_file_filter_f2.parquet'
+
+# the schema of the file depends on the first file read
+statement ok
+CREATE VIEW integer_file_first AS FROM read_parquet(['__TEST_DIR__/multi_file_filter_f1.parquet', '__TEST_DIR__/multi_file_filter_f2.parquet'])
+
+statement ok
+CREATE VIEW bigint_file_first AS FROM read_parquet(['__TEST_DIR__/multi_file_filter_f2.parquet', '__TEST_DIR__/multi_file_filter_f1.parquet'])
+
+# equality
+query II
+SELECT f, i
+FROM integer_file_first
+WHERE i='042'
+----
+f1	42
+f2	42
+
+query II
+SELECT f, i
+FROM bigint_file_first
+WHERE i='042'
+ORDER BY ALL
+----
+f1	42
+f2	42
+
+# greater than
+query II
+SELECT f, i
+FROM integer_file_first
+WHERE i>10
+ORDER BY ALL
+----
+f1	42
+f2	42
+f2	124
+
+query II
+SELECT f, i
+FROM bigint_file_first
+WHERE i>'10'
+ORDER BY ALL
+----
+f1	42
+f2	42
+f2	124
+
+query II
+SELECT f, i
+FROM integer_file_first
+WHERE i IS NULL
+----
+f1	NULL
+f2	NULL

@@ -186,6 +186,11 @@ void DictionaryDecoder::Filter(uint8_t *defines, const idx_t read_count, Vector 
 	D_ASSERT(filter_count > 0);
 	// read the dictionary values
 	const auto valid_count = Read(defines, read_count, result, 0);
+	if (valid_count == 0) {
+		// all values are NULL
+		approved_tuple_count = 0;
+		return;
+	}
 
 	// apply the filter by checking the dictionary offsets directly
 	uint32_t *offsets;

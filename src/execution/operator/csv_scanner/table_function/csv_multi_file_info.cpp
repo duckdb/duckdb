@@ -22,7 +22,7 @@ bool CSVMultiFileInfo::ParseCopyOption(ClientContext &context, const string &key
 }
 
 bool CSVMultiFileInfo::ParseOption(ClientContext &context, const string &key, const Value &val,
-                                   MultiFileReaderOptions &file_options, BaseFileReaderOptions &options_p) {
+                                   MultiFileOptions &file_options, BaseFileReaderOptions &options_p) {
 	auto &options = options_p.Cast<CSVFileReaderOptions>();
 	options.options.ParseOption(context, key, val);
 	return true;
@@ -55,8 +55,8 @@ unique_ptr<TableFunctionData> CSVMultiFileInfo::InitializeBindData(MultiFileBind
 
 //! Function to do schema discovery over one CSV file or a list/glob of CSV files
 void SchemaDiscovery(ClientContext &context, ReadCSVData &result, CSVReaderOptions &options,
-                     const MultiFileReaderOptions &file_options, vector<LogicalType> &return_types,
-                     vector<string> &names, MultiFileList &multi_file_list) {
+                     const MultiFileOptions &file_options, vector<LogicalType> &return_types, vector<string> &names,
+                     MultiFileList &multi_file_list) {
 	vector<CSVSchema> schemas;
 	const auto option_og = options;
 
@@ -302,7 +302,7 @@ shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context
 
 shared_ptr<BaseFileReader> CSVMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
                                                           CSVReaderOptions &options,
-                                                          const MultiFileReaderOptions &file_options) {
+                                                          const MultiFileOptions &file_options) {
 	return make_shared_ptr<CSVFileScan>(context, filename, options, file_options);
 }
 

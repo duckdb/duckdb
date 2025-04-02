@@ -12,8 +12,8 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/base_file_reader.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "json_reader_options.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "json_common.hpp"
@@ -226,6 +226,10 @@ public:
 	double GetProgress() const;
 
 	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer);
+
+	string GetReaderType() const override {
+		return "JSON";
+	}
 
 private:
 	void SkipOverArrayStart(JSONReaderScanState &scan_state);

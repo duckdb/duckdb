@@ -236,7 +236,7 @@
                 }
             ],
             "comment": {
-                "description": "Retrieves the child vector of a array vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\nThe resulting vector has the size of the parent vector multiplied by the array size.\n\n",
+                "description": "Retrieves the child vector of an array vector.\n\nThe resulting vector is valid as long as the parent vector is valid.\nThe resulting vector has the size of the parent vector multiplied by the array size.\n\n",
                 "param_comments": {
                     "vector": "The vector"
                 },
