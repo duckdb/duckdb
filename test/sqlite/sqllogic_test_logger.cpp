@@ -145,6 +145,12 @@ void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, c
 	PrintExpectedResult(result_values, expected_column_count, false);
 }
 
+void SQLLogicTestLogger::PrintResultString(MaterializedQueryResult &result) {
+	const std::string &result_string = result.ToString();
+	GetSummary() << result_string;
+	Printer::Print(result_string);
+}
+
 void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
                                           idx_t expected_column_count, bool row_wise) {
 	PrintHeader("Expected result:");
@@ -153,7 +159,7 @@ void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const
 	PrintLineSep();
 	PrintHeader("Actual result:");
 	PrintLineSep();
-	result.Print();
+	PrintResultString(result);
 }
 
 void SQLLogicTestLogger::UnexpectedFailure(MaterializedQueryResult &result) {
@@ -164,7 +170,7 @@ void SQLLogicTestLogger::UnexpectedFailure(MaterializedQueryResult &result) {
 	PrintSQL();
 	PrintLineSep();
 	PrintHeader("Actual result:");
-	result.Print();
+	PrintResultString(result);
 }
 void SQLLogicTestLogger::OutputResult(MaterializedQueryResult &result, const vector<string> &result_values_string) {
 	// names
@@ -292,7 +298,7 @@ void SQLLogicTestLogger::WrongResultHash(QueryResult *expected_result, Materiali
 	PrintLineSep();
 	PrintHeader("Actual result:");
 	PrintLineSep();
-	result.Print();
+	PrintResultString(result);
 }
 
 void SQLLogicTestLogger::UnexpectedStatement(bool expect_ok, MaterializedQueryResult &result) {
@@ -300,9 +306,7 @@ void SQLLogicTestLogger::UnexpectedStatement(bool expect_ok, MaterializedQueryRe
 	PrintLineSep();
 	PrintSQL();
 	PrintLineSep();
-	const std::string &result_string = result.ToString();
-	GetSummary() << result_string;
-	Printer::Print(result_string);
+	PrintResultString(result);
 }
 
 void SQLLogicTestLogger::ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result) {
@@ -311,7 +315,7 @@ void SQLLogicTestLogger::ExpectedErrorMismatch(const string &expected_error, Mat
 	PrintSQL();
 	PrintHeader("Actual result:");
 	PrintLineSep();
-	result.Print();
+	PrintResultString(result);
 }
 
 void SQLLogicTestLogger::InternalException(MaterializedQueryResult &result) {
@@ -320,7 +324,7 @@ void SQLLogicTestLogger::InternalException(MaterializedQueryResult &result) {
 	PrintSQL();
 	PrintHeader("Actual result:");
 	PrintLineSep();
-	result.Print();
+	PrintResultString(result);
 }
 
 void SQLLogicTestLogger::LoadDatabaseFail(const string &dbpath, const string &message) {

@@ -51,6 +51,7 @@ public:
 	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
 	void InternalException(MaterializedQueryResult &result);
 	static void LoadDatabaseFail(const string &dbpath, const string &message);
+	void PrintResultString(MaterializedQueryResult &result);
 	static void PrintSummaryHeader(const std::string &file_name);
 
 private:
