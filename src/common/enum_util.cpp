@@ -65,9 +65,9 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/file_buffer.hpp"
 #include "duckdb/common/file_open_flags.hpp"
-#include "duckdb/common/multi_file_list.hpp"
-#include "duckdb/common/multi_file_reader_function.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/multi_file_data.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/operator/decimal_cast_operators.hpp"
 #include "duckdb/common/printer.hpp"
 #include "duckdb/common/sort/partition_state.hpp"
@@ -83,6 +83,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
 #include "duckdb/execution/operator/csv_scanner/csv_option.hpp"
@@ -170,6 +171,43 @@ const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value) {
 template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value) {
 	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 3, "ARTConflictType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetARTScanHandlingModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTScanHandlingMode::EMPLACE), "EMPLACE" },
+		{ static_cast<uint32_t>(ARTScanHandlingMode::POP), "POP" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTScanHandlingMode>(ARTScanHandlingMode value) {
+	return StringUtil::EnumToString(GetARTScanHandlingModeValues(), 2, "ARTScanHandlingMode", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTScanHandlingMode EnumUtil::FromString<ARTScanHandlingMode>(const char *value) {
+	return static_cast<ARTScanHandlingMode>(StringUtil::StringToEnum(GetARTScanHandlingModeValues(), 2, "ARTScanHandlingMode", value));
+}
+
+const StringUtil::EnumStringLiteral *GetARTScanResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTScanResult::CONTINUE), "CONTINUE" },
+		{ static_cast<uint32_t>(ARTScanResult::SKIP), "SKIP" },
+		{ static_cast<uint32_t>(ARTScanResult::YIELD), "YIELD" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value) {
+	return StringUtil::EnumToString(GetARTScanResultValues(), 3, "ARTScanResult", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value) {
+	return static_cast<ARTScanResult>(StringUtil::StringToEnum(GetARTScanResultValues(), 3, "ARTScanResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAccessModeValues() {
@@ -350,19 +388,21 @@ const StringUtil::EnumStringLiteral *GetAlterTableTypeValues() {
 		{ static_cast<uint32_t>(AlterTableType::SET_NOT_NULL), "SET_NOT_NULL" },
 		{ static_cast<uint32_t>(AlterTableType::DROP_NOT_NULL), "DROP_NOT_NULL" },
 		{ static_cast<uint32_t>(AlterTableType::SET_COLUMN_COMMENT), "SET_COLUMN_COMMENT" },
-		{ static_cast<uint32_t>(AlterTableType::ADD_CONSTRAINT), "ADD_CONSTRAINT" }
+		{ static_cast<uint32_t>(AlterTableType::ADD_CONSTRAINT), "ADD_CONSTRAINT" },
+		{ static_cast<uint32_t>(AlterTableType::SET_PARTITIONED_BY), "SET_PARTITIONED_BY" },
+		{ static_cast<uint32_t>(AlterTableType::SET_SORTED_BY), "SET_SORTED_BY" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<AlterTableType>(AlterTableType value) {
-	return StringUtil::EnumToString(GetAlterTableTypeValues(), 12, "AlterTableType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetAlterTableTypeValues(), 14, "AlterTableType", static_cast<uint32_t>(value));
 }
 
 template<>
 AlterTableType EnumUtil::FromString<AlterTableType>(const char *value) {
-	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 12, "AlterTableType", value));
+	return static_cast<AlterTableType>(StringUtil::StringToEnum(GetAlterTableTypeValues(), 14, "AlterTableType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAlterTypeValues() {
@@ -923,19 +963,20 @@ ConstraintType EnumUtil::FromString<ConstraintType>(const char *value) {
 const StringUtil::EnumStringLiteral *GetCopyFunctionReturnTypeValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS), "CHANGED_ROWS" },
-		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST), "CHANGED_ROWS_AND_FILE_LIST" }
+		{ static_cast<uint32_t>(CopyFunctionReturnType::CHANGED_ROWS_AND_FILE_LIST), "CHANGED_ROWS_AND_FILE_LIST" },
+		{ static_cast<uint32_t>(CopyFunctionReturnType::WRITTEN_FILE_STATISTICS), "WRITTEN_FILE_STATISTICS" }
 	};
 	return values;
 }
 
 template<>
 const char* EnumUtil::ToChars<CopyFunctionReturnType>(CopyFunctionReturnType value) {
-	return StringUtil::EnumToString(GetCopyFunctionReturnTypeValues(), 2, "CopyFunctionReturnType", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetCopyFunctionReturnTypeValues(), 3, "CopyFunctionReturnType", static_cast<uint32_t>(value));
 }
 
 template<>
 CopyFunctionReturnType EnumUtil::FromString<CopyFunctionReturnType>(const char *value) {
-	return static_cast<CopyFunctionReturnType>(StringUtil::StringToEnum(GetCopyFunctionReturnTypeValues(), 2, "CopyFunctionReturnType", value));
+	return static_cast<CopyFunctionReturnType>(StringUtil::StringToEnum(GetCopyFunctionReturnTypeValues(), 3, "CopyFunctionReturnType", value));
 }
 
 const StringUtil::EnumStringLiteral *GetCopyOverwriteModeValues() {
@@ -2421,11 +2462,30 @@ MetricsType EnumUtil::FromString<MetricsType>(const char *value) {
 	return static_cast<MetricsType>(StringUtil::StringToEnum(GetMetricsTypeValues(), 49, "MetricsType", value));
 }
 
+const StringUtil::EnumStringLiteral *GetMultiFileColumnMappingModeValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(MultiFileColumnMappingMode::BY_NAME), "BY_NAME" },
+		{ static_cast<uint32_t>(MultiFileColumnMappingMode::BY_FIELD_ID), "BY_FIELD_ID" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<MultiFileColumnMappingMode>(MultiFileColumnMappingMode value) {
+	return StringUtil::EnumToString(GetMultiFileColumnMappingModeValues(), 2, "MultiFileColumnMappingMode", static_cast<uint32_t>(value));
+}
+
+template<>
+MultiFileColumnMappingMode EnumUtil::FromString<MultiFileColumnMappingMode>(const char *value) {
+	return static_cast<MultiFileColumnMappingMode>(StringUtil::StringToEnum(GetMultiFileColumnMappingModeValues(), 2, "MultiFileColumnMappingMode", value));
+}
+
 const StringUtil::EnumStringLiteral *GetMultiFileFileStateValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
 		{ static_cast<uint32_t>(MultiFileFileState::UNOPENED), "UNOPENED" },
 		{ static_cast<uint32_t>(MultiFileFileState::OPENING), "OPENING" },
 		{ static_cast<uint32_t>(MultiFileFileState::OPEN), "OPEN" },
+		{ static_cast<uint32_t>(MultiFileFileState::SKIPPED), "SKIPPED" },
 		{ static_cast<uint32_t>(MultiFileFileState::CLOSED), "CLOSED" }
 	};
 	return values;
@@ -2433,30 +2493,12 @@ const StringUtil::EnumStringLiteral *GetMultiFileFileStateValues() {
 
 template<>
 const char* EnumUtil::ToChars<MultiFileFileState>(MultiFileFileState value) {
-	return StringUtil::EnumToString(GetMultiFileFileStateValues(), 4, "MultiFileFileState", static_cast<uint32_t>(value));
+	return StringUtil::EnumToString(GetMultiFileFileStateValues(), 5, "MultiFileFileState", static_cast<uint32_t>(value));
 }
 
 template<>
 MultiFileFileState EnumUtil::FromString<MultiFileFileState>(const char *value) {
-	return static_cast<MultiFileFileState>(StringUtil::StringToEnum(GetMultiFileFileStateValues(), 4, "MultiFileFileState", value));
-}
-
-const StringUtil::EnumStringLiteral *GetMultiFileReaderColumnMappingModeValues() {
-	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(MultiFileReaderColumnMappingMode::BY_NAME), "BY_NAME" },
-		{ static_cast<uint32_t>(MultiFileReaderColumnMappingMode::BY_FIELD_ID), "BY_FIELD_ID" }
-	};
-	return values;
-}
-
-template<>
-const char* EnumUtil::ToChars<MultiFileReaderColumnMappingMode>(MultiFileReaderColumnMappingMode value) {
-	return StringUtil::EnumToString(GetMultiFileReaderColumnMappingModeValues(), 2, "MultiFileReaderColumnMappingMode", static_cast<uint32_t>(value));
-}
-
-template<>
-MultiFileReaderColumnMappingMode EnumUtil::FromString<MultiFileReaderColumnMappingMode>(const char *value) {
-	return static_cast<MultiFileReaderColumnMappingMode>(StringUtil::StringToEnum(GetMultiFileReaderColumnMappingModeValues(), 2, "MultiFileReaderColumnMappingMode", value));
+	return static_cast<MultiFileFileState>(StringUtil::StringToEnum(GetMultiFileFileStateValues(), 5, "MultiFileFileState", value));
 }
 
 const StringUtil::EnumStringLiteral *GetNTypeValues() {

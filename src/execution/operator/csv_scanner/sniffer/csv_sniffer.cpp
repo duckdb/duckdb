@@ -3,7 +3,7 @@
 
 namespace duckdb {
 
-CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, const MultiFileReaderOptions &file_options,
+CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, const MultiFileOptions &file_options,
                        shared_ptr<CSVBufferManager> buffer_manager_p, CSVStateMachineCache &state_machine_cache_p,
                        bool default_null_to_varchar_p)
     : state_machine_cache(state_machine_cache_p), options(options_p), file_options(file_options),
@@ -21,20 +21,6 @@ CSVSniffer::CSVSniffer(CSVReaderOptions &options_p, const MultiFileReaderOptions
 	if (options.columns_set) {
 		set_columns = SetColumns(&options.sql_type_list, &options.name_list);
 	}
-}
-
-bool SetColumns::IsSet() const {
-	if (!types) {
-		return false;
-	}
-	return !types->empty();
-}
-
-idx_t SetColumns::Size() const {
-	if (!types) {
-		return 0;
-	}
-	return types->size();
 }
 
 template <class T>

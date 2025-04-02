@@ -14,6 +14,15 @@ ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, unique_pt
 	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
 }
 
+ExpressionColumnReader::ExpressionColumnReader(ClientContext &context, unique_ptr<ColumnReader> child_reader_p,
+                                               unique_ptr<Expression> expr_p,
+                                               unique_ptr<ParquetColumnSchema> expression_schema_p)
+    : ColumnReader(child_reader_p->Reader(), *expression_schema_p), child_reader(std::move(child_reader_p)),
+      expr(std::move(expr_p)), executor(context, expr.get()), expression_schema(std::move(expression_schema_p)) {
+	vector<LogicalType> intermediate_types {child_reader->Type()};
+	intermediate_chunk.Initialize(reader.allocator, intermediate_types);
+}
+
 void ExpressionColumnReader::InitializeRead(idx_t row_group_idx_p, const vector<ColumnChunk> &columns,
                                             TProtocol &protocol_p) {
 	child_reader->InitializeRead(row_group_idx_p, columns, protocol_p);

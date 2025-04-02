@@ -16,16 +16,16 @@ loop i 0 10
 statement error
 CREATE OR REPLACE TABLE t1 AS (SELECT * FROM range(10) ORDER BY 1) UNION ALL (SELECT * FROM range(10) ORDER BY 1);
 ----
-<REGEX>:Catalog Error.*is not an table.*
+type View
 
 statement error
 CREATE OR REPLACE TABLE t1 AS (SELECT 1) UNION ALL (SELECT * FROM range(10) ORDER BY 1);
 ----
-<REGEX>:Catalog Error.*is not an table.*
+type View
 
 statement error
 CREATE OR REPLACE TABLE t1 AS ((SELECT 1) UNION ALL ((SELECT 2) INTERSECT ALL (SELECT 2)));
 ----
-<REGEX>:Catalog Error.*is not an table.*
+type View
 
 endloop

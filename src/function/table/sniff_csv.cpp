@@ -60,7 +60,7 @@ static unique_ptr<FunctionData> CSVSniffBind(ClientContext &context, TableFuncti
 		result->force_match = it->second.GetValue<bool>();
 		input.named_parameters.erase("force_match");
 	}
-	MultiFileReaderOptions file_options;
+	MultiFileOptions file_options;
 	result->options.FromNamedParameters(input.named_parameters, context, file_options);
 	result->options.Verify(file_options);
 
@@ -151,7 +151,7 @@ static void CSVSniffFunction(ClientContext &context, TableFunctionInput &data_p,
 	if (sniffer_options.sql_type_list.empty()) {
 		sniffer_options.sql_type_list = data.return_types_csv;
 	}
-	MultiFileReaderOptions file_options;
+	MultiFileOptions file_options;
 	CSVSniffer sniffer(sniffer_options, file_options, buffer_manager, CSVStateMachineCache::Get(context));
 	auto sniffer_result = sniffer.SniffCSV(data.force_match);
 	if (sniffer.EmptyOrOnlyHeader()) {

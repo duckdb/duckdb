@@ -1,0 +1,24 @@
+﻿{
+    "users": [
+        {
+            "id": 1,
+            "name": "Alice",
+            "email": "alice@example.com"
+        },
+        {
+            "id": 2,
+            "name": "Bob",
+            "email": "bob@example.com"
+        },
+        {
+            "id": 3,
+            "name": "Charlie",
+            "email": "charlie@example.com"
+        }
+    ],
+    "metadata": {
+        "description": "Sample JSON file with UTF-8 BOM",
+        "version": "1.0",
+        "generated": "2025-03-09T12:00:00Z"
+    }
+}

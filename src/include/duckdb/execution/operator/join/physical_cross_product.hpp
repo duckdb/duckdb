@@ -19,8 +19,8 @@ public:
 	static constexpr const PhysicalOperatorType TYPE = PhysicalOperatorType::CROSS_PRODUCT;
 
 public:
-	PhysicalCrossProduct(vector<LogicalType> types, unique_ptr<PhysicalOperator> left,
-	                     unique_ptr<PhysicalOperator> right, idx_t estimated_cardinality);
+	PhysicalCrossProduct(vector<LogicalType> types, PhysicalOperator &left, PhysicalOperator &right,
+	                     idx_t estimated_cardinality);
 
 public:
 	// Operator Interface

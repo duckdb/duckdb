@@ -520,8 +520,8 @@ static void BindCreateTableConstraints(CreateTableInfo &create_info, CatalogEntr
 		}
 
 		// Resolve the table reference.
-		auto table_entry =
-		    entry_retriever.GetEntry(CatalogType::TABLE_ENTRY, INVALID_CATALOG, fk.info.schema, fk.info.table);
+		EntryLookupInfo table_lookup(CatalogType::TABLE_ENTRY, fk.info.table);
+		auto table_entry = entry_retriever.GetEntry(INVALID_CATALOG, fk.info.schema, table_lookup);
 		if (table_entry->type == CatalogType::VIEW_ENTRY) {
 			throw BinderException("cannot reference a VIEW with a FOREIGN KEY");
 		}

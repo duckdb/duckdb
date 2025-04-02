@@ -259,6 +259,7 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	}
 	if (set_columns.IsCandidateUnacceptable(num_cols, options.null_padding, ignore_errors,
 	                                        sniffed_column_counts[0].last_value_always_empty)) {
+		max_columns_found_error = num_cols > max_columns_found_error ? num_cols : max_columns_found_error;
 		// Not acceptable
 		return;
 	}
@@ -266,6 +267,9 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	for (idx_t row = 0; row < sniffed_column_counts.result_position; row++) {
 		if (set_columns.IsCandidateUnacceptable(sniffed_column_counts[row].number_of_columns, options.null_padding,
 		                                        ignore_errors, sniffed_column_counts[row].last_value_always_empty)) {
+			max_columns_found_error = sniffed_column_counts[row].number_of_columns > max_columns_found_error
+			                              ? sniffed_column_counts[row].number_of_columns
+			                              : max_columns_found_error;
 			// Not acceptable
 			return;
 		}
@@ -361,6 +365,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	    (num_cols == set_columns.Size() + 1 && sniffed_column_counts[0].last_value_always_empty) ||
 	    !set_columns.IsSet();
 
+	max_columns_found_error = num_cols > max_columns_found_error ? num_cols : max_columns_found_error;
+
 	// If rows are consistent and no invalid padding happens, this is the best suitable candidate if one of the
 	// following is valid:
 	// - There's a single column before.
@@ -385,7 +391,8 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 				return;
 			} else {
 				// Give preference to one that got escaped
-				if (!scanner->ever_escaped && candidates.front()->ever_escaped) {
+				if (!scanner->ever_escaped && candidates.front()->ever_escaped &&
+				    sniffing_state_machine.dialect_options.state_machine_options.strict_mode.GetValue()) {
 					return;
 				}
 				if (best_consistent_rows == consistent_rows && num_cols >= max_columns_found) {
@@ -407,9 +414,19 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 			return;
 		}
 		if (quoted && num_cols < max_columns_found) {
-			for (auto &candidate : candidates) {
-				if (candidate->ever_quoted) {
-					return;
+			if (scanner->ever_escaped &&
+			    sniffing_state_machine.dialect_options.state_machine_options.strict_mode.GetValue()) {
+				for (auto &candidate : candidates) {
+					if (candidate->ever_quoted && candidate->ever_escaped) {
+						return;
+					}
+				}
+
+			} else {
+				for (auto &candidate : candidates) {
+					if (candidate->ever_quoted) {
+						return;
+					}
 				}
 			}
 		}
@@ -428,7 +445,6 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 		} else if (!options.null_padding) {
 			sniffing_state_machine.dialect_options.skip_rows = dirty_notes;
 		}
-
 		candidates.clear();
 		sniffing_state_machine.dialect_options.num_cols = num_cols;
 		lines_sniffed = sniffed_column_counts.result_position;
@@ -519,6 +535,15 @@ void CSVSniffer::RefineCandidates() {
 			unique_ptr<ColumnCountScanner> cc_best_candidate = std::move(successful_candidates[i]);
 			if (cc_best_candidate->state_machine->state_machine_options.quote != '\0' &&
 			    cc_best_candidate->ever_quoted) {
+				// If we have multiple candidates with the same quote, but different escapes
+				for (idx_t j = i + 1; j < successful_candidates.size(); j++) {
+					// we give preference if it has the same character between escape and quote
+					if (successful_candidates[j]->state_machine->state_machine_options.escape ==
+					    successful_candidates[j]->state_machine->state_machine_options.quote) {
+						cc_best_candidate = std::move(successful_candidates[j]);
+						break;
+					}
+				}
 				candidates.clear();
 				candidates.push_back(std::move(cc_best_candidate));
 				return;
@@ -583,7 +608,7 @@ void CSVSniffer::DetectDialect() {
 
 	// if no dialect candidate was found, we throw an exception
 	if (candidates.empty()) {
-		auto error = CSVError::SniffingError(options, dialect_candidates.Print());
+		auto error = CSVError::SniffingError(options, dialect_candidates.Print(), max_columns_found_error, set_columns);
 		error_handler->Error(error, true);
 	}
 }

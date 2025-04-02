@@ -9,7 +9,6 @@
 #pragma once
 
 #include "duckdb/common/sort/sort.hpp"
-#include "duckdb/common/types/column/partitioned_column_data.hpp"
 #include "duckdb/common/radix_partitioning.hpp"
 #include "duckdb/parallel/base_pipeline_event.hpp"
 
@@ -82,7 +81,7 @@ public:
 	// OVER(PARTITION BY...) (hash grouping)
 	unique_ptr<RadixPartitionedTupleData> grouping_data;
 	//! Payload plus hash column
-	TupleDataLayout grouping_types;
+	shared_ptr<TupleDataLayout> grouping_types_ptr;
 	//! The number of radix bits if this partition is being synced with another
 	idx_t fixed_bits;
 
@@ -160,7 +159,6 @@ public:
 	explicit PartitionGlobalMergeState(PartitionGlobalSinkState &sink);
 
 	bool IsFinished() const {
-		lock_guard<mutex> guard(lock);
 		return stage == PartitionSortStage::FINISHED;
 	}
 
@@ -180,7 +178,7 @@ public:
 
 private:
 	mutable mutex lock;
-	PartitionSortStage stage;
+	atomic<PartitionSortStage> stage;
 	idx_t total_tasks;
 	idx_t tasks_assigned;
 	idx_t tasks_completed;

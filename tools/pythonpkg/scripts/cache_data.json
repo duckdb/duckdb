@@ -6,7 +6,8 @@
         "children": [
             "pyarrow.dataset",
             "pyarrow.Table",
-            "pyarrow.RecordBatchReader"
+            "pyarrow.RecordBatchReader",
+            "pyarrow.ipc"
         ]
     },
     "pyarrow.dataset": {
@@ -315,7 +316,6 @@
         "full_path": "numpy",
         "name": "numpy",
         "children": [
-            "numpy.core",
             "numpy.ma",
             "numpy.ndarray",
             "numpy.datetime64",
@@ -341,20 +341,6 @@
             "numpy.clongdouble"
         ],
         "required": false
-    },
-    "numpy.core": {
-        "type": "attribute",
-        "full_path": "numpy.core",
-        "name": "core",
-        "children": [
-            "numpy.core.multiarray"
-        ]
-    },
-    "numpy.core.multiarray": {
-        "type": "attribute",
-        "full_path": "numpy.core.multiarray",
-        "name": "multiarray",
-        "children": []
     },
     "numpy.ma": {
         "type": "attribute",
@@ -691,6 +677,20 @@
         "type": "attribute",
         "full_path": "pandas.Series",
         "name": "Series",
+        "children": []
+    },
+    "pyarrow.ipc": {
+        "type": "attribute",
+        "full_path": "pyarrow.ipc",
+        "name": "ipc",
+        "children": [
+            "pyarrow.ipc.MessageReader"
+        ]
+    },
+    "pyarrow.ipc.MessageReader": {
+        "type": "attribute",
+        "full_path": "pyarrow.ipc.MessageReader",
+        "name": "MessageReader",
         "children": []
     }
 }
