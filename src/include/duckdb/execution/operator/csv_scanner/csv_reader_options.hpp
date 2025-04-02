@@ -16,7 +16,7 @@
 #include "duckdb/common/types/value.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/types.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/execution/operator/csv_scanner/set_columns.hpp"
 
 namespace duckdb {
@@ -184,11 +184,10 @@ struct CSVReaderOptions {
 	void SetWriteOption(const string &loption, const Value &value);
 	void SetDateFormat(LogicalTypeId type, const string &format, bool read_format);
 	void ToNamedParameters(named_parameter_map_t &out) const;
-	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context,
-	                         MultiFileReaderOptions &file_options);
+	void FromNamedParameters(const named_parameter_map_t &in, ClientContext &context, MultiFileOptions &file_options);
 	void ParseOption(ClientContext &context, const string &key, const Value &val);
 	//! Verify options are not conflicting
-	void Verify(MultiFileReaderOptions &file_options);
+	void Verify(MultiFileOptions &file_options);
 
 	string ToString(const string &current_file_path) const;
 	//! If the type for column with idx i was manually set

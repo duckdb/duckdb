@@ -72,10 +72,10 @@ public:
 	}
 	explicit VectorBuffer(idx_t data_size) : buffer_type(VectorBufferType::STANDARD_BUFFER) {
 		if (data_size > 0) {
-			data = make_unsafe_uniq_array_uninitialized<data_t>(data_size);
+			data = Allocator::DefaultAllocator().Allocate(data_size);
 		}
 	}
-	explicit VectorBuffer(unsafe_unique_array<data_t> data_p)
+	explicit VectorBuffer(AllocatedData &&data_p)
 	    : buffer_type(VectorBufferType::STANDARD_BUFFER), data(std::move(data_p)) {
 	}
 	virtual ~VectorBuffer() {
@@ -88,7 +88,7 @@ public:
 		return data.get();
 	}
 
-	void SetData(unsafe_unique_array<data_t> new_data) {
+	void SetData(AllocatedData &&new_data) {
 		data = std::move(new_data);
 	}
 
@@ -121,7 +121,7 @@ public:
 protected:
 	VectorBufferType buffer_type;
 	unique_ptr<VectorAuxiliaryData> aux_data;
-	unsafe_unique_array<data_t> data;
+	AllocatedData data;
 
 public:
 	template <class TARGET>

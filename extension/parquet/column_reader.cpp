@@ -3,7 +3,6 @@
 #include "reader/boolean_column_reader.hpp"
 #include "brotli/decode.h"
 #include "reader/callback_column_reader.hpp"
-#include "reader/cast_column_reader.hpp"
 #include "reader/decimal_column_reader.hpp"
 #include "duckdb.hpp"
 #include "reader/expression_column_reader.hpp"

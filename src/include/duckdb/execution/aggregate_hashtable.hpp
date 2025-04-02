@@ -13,12 +13,11 @@
 #include "duckdb/execution/base_aggregate_hashtable.hpp"
 #include "duckdb/execution/ht_entry.hpp"
 #include "duckdb/storage/arena_allocator.hpp"
-#include "duckdb/storage/buffer/buffer_handle.hpp"
+#include "duckdb/common/row_operations/row_operations.hpp"
 
 namespace duckdb {
 
 class BlockHandle;
-class BufferHandle;
 
 struct FlushMoveState;
 
@@ -54,6 +53,7 @@ public:
 	constexpr static double LOAD_FACTOR = 1.25;
 
 	//! Get the layout of this HT
+	shared_ptr<TupleDataLayout> GetLayoutPtr();
 	const TupleDataLayout &GetLayout() const;
 	//! Number of groups in the HT
 	idx_t Count() const;
@@ -133,25 +133,6 @@ private:
 		idx_t capacity = 0;
 	};
 
-	//! Append state
-	struct AggregateHTAppendState {
-		AggregateHTAppendState();
-
-		PartitionedTupleDataAppendState partitioned_append_state;
-		PartitionedTupleDataAppendState unpartitioned_append_state;
-
-		Vector ht_offsets;
-		Vector hash_salts;
-		SelectionVector group_compare_vector;
-		SelectionVector no_match_vector;
-		SelectionVector empty_vector;
-		SelectionVector new_groups;
-		Vector addresses;
-		unsafe_unique_array<UnifiedVectorFormat> group_data;
-		DataChunk group_chunk;
-		AggregateDictionaryState dict_state;
-	} state;
-
 	//! If we have this many or more radix bits, we use the unpartitioned data collection too
 	static constexpr idx_t UNPARTITIONED_RADIX_BITS_THRESHOLD = 3;
 	//! The number of radix bits to partition by
@@ -184,6 +165,27 @@ private:
 	shared_ptr<ArenaAllocator> aggregate_allocator;
 	//! Owning arena allocators that this HT has data from
 	vector<shared_ptr<ArenaAllocator>> stored_allocators;
+
+	//! Append state
+	struct AggregateHTAppendState {
+		explicit AggregateHTAppendState(ArenaAllocator &allocator);
+
+		PartitionedTupleDataAppendState partitioned_append_state;
+		PartitionedTupleDataAppendState unpartitioned_append_state;
+
+		Vector hashes;
+		Vector ht_offsets;
+		Vector hash_salts;
+		SelectionVector group_compare_vector;
+		SelectionVector no_match_vector;
+		SelectionVector empty_vector;
+		SelectionVector new_groups;
+		Vector addresses;
+		DataChunk group_chunk;
+		AggregateDictionaryState dict_state;
+
+		RowOperationsState row_state;
+	} state;
 
 private:
 	//! Disabled the copy constructor
