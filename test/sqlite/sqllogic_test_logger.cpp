@@ -1,7 +1,7 @@
 #include "sqllogic_test_logger.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "termcolor.hpp"
-#include "sqllogic_test_runner.hpp"
+#include "../include/test_helpers.hpp"
 
 namespace duckdb {
 
@@ -21,7 +21,7 @@ void SQLLogicTestLogger::Log(const string &str) {
 }
 
 void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
-	GetSummary() << failures_summary_counter << ". " << file_name << std::endl;
+	GetSummary() << "\n" << failures_summary_counter << ". " << file_name << std::endl;
 	PrintLineSep();
 	failures_summary_counter++;
 }
@@ -299,7 +299,9 @@ void SQLLogicTestLogger::UnexpectedStatement(bool expect_ok, MaterializedQueryRe
 	PrintLineSep();
 	PrintSQL();
 	PrintLineSep();
-	result.Print();
+	const std::string &result_string = result.ToString();
+	GetSummary() << result_string;
+	Printer::Print(result_string);
 }
 
 void SQLLogicTestLogger::ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result) {
@@ -325,16 +327,6 @@ void SQLLogicTestLogger::LoadDatabaseFail(const string &dbpath, const string &me
 	PrintLineSep();
 	Log("Error message: " + message + "\n");
 	PrintLineSep();
-}
-
-void SQLLogicTestLogger::AddToSummary(string log_message) {
-	std::ofstream file("failures_summary.txt", std::ios::app);
-	if (file.is_open()) {
-		file << log_message;
-		file.close();
-	} else {
-		std::cout << "Error opening failures_summary.txt file." << std::endl;
-	}
 }
 
 } // namespace duckdb

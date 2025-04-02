@@ -25,6 +25,7 @@
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/types.hpp"
+#include <sstream>
 namespace duckdb {
 
 bool TestForceStorage();
@@ -32,7 +33,8 @@ bool TestForceReload();
 bool TestMemoryLeaks();
 void RegisterSqllogictests();
 bool SummarizeFailures();
-duckdb::stringstream ReturnSummary();
+
+std::stringstream& GetSummary();
 
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);

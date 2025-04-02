@@ -27,6 +27,11 @@ static bool single_threaded = false;
 static case_insensitive_set_t required_requires;
 static bool delete_test_path = true;
 
+std::stringstream& GetSummary() {
+	static std::stringstream summary;
+	return summary;
+}
+
 bool NO_FAIL(QueryResult &result) {
 	if (result.HasError()) {
 		fprintf(stderr, "Query failed with message: %s\n", result.GetError().c_str());
