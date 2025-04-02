@@ -159,6 +159,7 @@ jobs:
           name: duckdb-static-libs-windows-mingw
           path: |
             static-libs-windows-mingw.zip
+
   bundle-linux-arm64-static-libs:
     name: Linux arm64 static libs
     runs-on: ubuntu-latest
@@ -183,8 +184,8 @@ jobs:
           -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
           -e FORCE_WARN_UNUSED=1                                                 \
           -e DUCKDB_PLATFORM=linux_arm64                                         \
-          ubuntu:18.04                                                           \
-          bash -c "/duckdb/scripts/setup_ubuntu1804.sh && git config --global --add safe.directory /duckdb && make gather-libs -C /duckdb"
+          quay.io/pypa/manylinux_2_28_aarch64                                    \
+          bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make gather-libs -C $PWD"
       - name: Deploy
         shell: bash
         env:
@@ -199,6 +200,7 @@ jobs:
           name: duckdb-static-libs-linux-arm64
           path: |
             static-libs-linux-arm64.zip
+
   bundle-linux-amd64-static-libs:
     name: Linux amd64 static libs
     runs-on: ubuntu-latest
@@ -225,7 +227,7 @@ jobs:
           -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
           -e BUILD_BENCHMARK=1                                                   \
           -e FORCE_WARN_UNUSED=1                                                 \
-          quay.io/pypa/manylinux2014_x86_64                                      \
+          quay.io/pypa/manylinux_2_28_x86_64                                      \
           bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make gather-libs -C $PWD"
       - name: Print platform
         shell: bash
