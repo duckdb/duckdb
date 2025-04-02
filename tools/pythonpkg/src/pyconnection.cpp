@@ -186,7 +186,7 @@ static void InitializeConnectionMethods(py::class_<DuckDBPyConnection, shared_pt
 	      py::arg("query"), py::arg("parameters") = py::none());
 	m.def("close", &DuckDBPyConnection::Close, "Close the connection");
 	m.def("interrupt", &DuckDBPyConnection::Interrupt, "Interrupt pending operations");
-	m.def("query_progress", &DuckDBPyConnection::QueryProgress, "Query progress of pending operations");
+	m.def("query_progress", &DuckDBPyConnection::QueryProgress, "Query progress of pending operation");
 	m.def("fetchone", &DuckDBPyConnection::FetchOne, "Fetch a single row from a result following execute");
 	m.def("fetchmany", &DuckDBPyConnection::FetchMany, "Fetch the next set of rows from a result following execute",
 	      py::arg("size") = 1);

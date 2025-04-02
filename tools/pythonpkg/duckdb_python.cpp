@@ -327,7 +327,7 @@ static void InitializeConnectionMethods(py::module_ &m) {
 		    }
 		    return conn->QueryProgress();
 	    },
-	    "Query progress of pending operations", py::kw_only(), py::arg("connection") = py::none());
+	    "Query progress of pending operation", py::kw_only(), py::arg("connection") = py::none());
 	m.def(
 	    "fetchone",
 	    [](shared_ptr<DuckDBPyConnection> conn = nullptr) {
