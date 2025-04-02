@@ -147,7 +147,8 @@ def launch_test(test, list_of_tests=False):
         test_cmd = [unittest_program] + test
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
-        res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout)
+        # should unset SUMMARIZE_FAILURES to avoid producing exceeding failure logs
+        res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env={'SUMMARIZE_FAILURES': '0'})
     except subprocess.TimeoutExpired as e:
         if list_of_tests:
             print("[TIMED OUT]", flush=True)
@@ -255,7 +256,7 @@ if len(error_container):
     print(
         '''\n\n====================================================
 ================  FAILURES SUMMARY  ================
-====================================================
+====================================================\n
 '''
     )
     for i, error in enumerate(error_container, start=1):
