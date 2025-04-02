@@ -30,4 +30,4 @@ set disable_timestamptz_casts=true;
 statement error
 select cast('2020-01-01T00:00:00'::timestamp as timestamptz)
 ----
-Casting from TIMESTAMP to TIMESTAMPTZ has been disabled
+Casting from TIMESTAMP to TIMESTAMP WITH TIME ZONE without an explicit time zone has been disabled
