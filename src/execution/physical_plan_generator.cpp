@@ -56,9 +56,13 @@ unique_ptr<PhysicalPlan> PhysicalPlanGenerator::PlanInternal(LogicalOperator &op
 	physical_plan->SetRoot(CreatePlan(op));
 	physical_plan->Root().estimated_cardinality = op.estimated_cardinality;
 
-#ifdef DUCKDB_VERIFY_VECTOR_OPERATOR
-	physical_plan->SetRoot(Make<PhysicalVerifyVector>(physical_plan->Root()));
-#endif
+	auto &config = DBConfig::GetConfig(context);
+	if (config.options.debug_verify_vector != DebugVectorVerification::NONE) {
+		if (config.options.debug_verify_vector != DebugVectorVerification::DICTIONARY_EXPRESSION) {
+			physical_plan->SetRoot(
+			    Make<PhysicalVerifyVector>(physical_plan->Root(), config.options.debug_verify_vector));
+		}
+	}
 	return std::move(physical_plan);
 }
 

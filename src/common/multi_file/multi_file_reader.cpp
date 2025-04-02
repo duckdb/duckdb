@@ -396,6 +396,9 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileBindD
 		} catch (std::exception &ex) {
 			// error while converting - try to create a nice error message
 			ErrorData error(ex);
+			if (error.Type() == ExceptionType::INTERNAL) {
+				throw;
+			}
 			auto &original_error = error.RawMessage();
 			string first_message;
 			string extended_error =
