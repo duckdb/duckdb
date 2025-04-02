@@ -113,6 +113,8 @@ public:
 					    make_uniq<ConstantFilter>(ExpressionType::COMPARE_LESSTHANOREQUALTO, std::move(max_val));
 					dynamic_filters->PushFilter(op, apply_col_index, std::move(less_equals));
 				}
+
+				std::cout << std::to_string(reinterpret_cast<size_t>(&op)) << "[Min/Max Filter] Min: " << min_val << ", Max: " << max_val << "\n";
 			}
 		}
 	}
