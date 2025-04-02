@@ -31,6 +31,8 @@ class ClientContext;
 class DatabaseInstance;
 class FileOpener;
 class FileSystem;
+class FileHandleLogger;
+class Logger;
 
 enum class FileType {
 	//! Regular file
@@ -81,6 +83,8 @@ public:
 	DUCKDB_API idx_t GetFileSize();
 	DUCKDB_API FileType GetType();
 
+	DUCKDB_API void TryAddLogger(FileOpener &opener);
+
 	//! Closes the file handle.
 	DUCKDB_API virtual void Close() = 0;
 
@@ -107,6 +111,8 @@ public:
 	FileSystem &file_system;
 	string path;
 	FileOpenFlags flags;
+
+	shared_ptr<Logger> logger;
 };
 
 class FileSystem {
