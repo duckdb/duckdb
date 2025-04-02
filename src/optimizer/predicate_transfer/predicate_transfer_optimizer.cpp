@@ -63,7 +63,7 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(
 	};
 
 	apply_modification(forward_stage_modification);
-	apply_modification(backward_stage_modifcation);
+	// apply_modification(backward_stage_modifcation);
 
 	return plan;
 }

@@ -113,10 +113,6 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
 			LogicalOperator *child = op->children[0].get();
-			if (child->type == LogicalOperatorType::LOGICAL_GET) {
-				AddTableOperator(op);
-				return;
-			}
 			D_ASSERT(!op->expressions.empty());
 			bool flag = op->expressions[0]->type == ExpressionType::OPERATOR_NOT &&
 			            op->expressions[0]->expression_class == ExpressionClass::BOUND_OPERATOR &&
