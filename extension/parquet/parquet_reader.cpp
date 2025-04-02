@@ -859,14 +859,30 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 
 static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, const Statistics &pq_col_stats,
                                                       TableFilter &filter) {
-	if (filter.filter_type == TableFilterType::CONSTANT_COMPARISON) {
+	switch (filter.filter_type) {
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_filter = filter.Cast<ConjunctionAndFilter>();
+		auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		for (auto &child_filter : conjunction_filter.child_filters) {
+			auto child_prune_result = CheckParquetStringFilter(stats, pq_col_stats, *child_filter);
+			if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+			}
+			if (child_prune_result != and_result) {
+				and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+			}
+		}
+		return and_result;
+	}
+	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter.Cast<ConstantFilter>();
 		auto &min_value = pq_col_stats.min_value;
 		auto &max_value = pq_col_stats.max_value;
 		return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
 		                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
 		                                 constant_filter.comparison_type, StringValue::Get(constant_filter.constant));
-	} else {
+	}
+	default:
 		return filter.CheckStatistics(stats);
 	}
 }
@@ -901,28 +917,11 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column &&
 			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
 			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value) {
-
 				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
 				// however, when reading remote Parquet files, skipping row groups is really important
 				// here, we implement a special case to check the full length for string filters
-				if (filter.filter_type == TableFilterType::CONJUNCTION_AND) {
-					const auto &and_filter = filter.Cast<ConjunctionAndFilter>();
-					auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-					for (auto &child_filter : and_filter.child_filters) {
-						auto child_prune_result = CheckParquetStringFilter(
-						    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, *child_filter);
-						if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-							and_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-							break;
-						} else if (child_prune_result != and_result) {
-							and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-						}
-					}
-					prune_result = and_result;
-				} else {
-					prune_result = CheckParquetStringFilter(
-					    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
-				}
+				prune_result = CheckParquetStringFilter(
+				    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
 			} else {
 				prune_result = filter.CheckStatistics(*stats);
 			}
