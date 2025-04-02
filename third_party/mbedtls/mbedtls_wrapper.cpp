@@ -210,7 +210,7 @@ const mbedtls_cipher_info_t *mbedtls_aes_info_cipher(mbedtls_cipher_type_t ciphe
 
 const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t key_len){
 
-	switch(algorithm){
+	switch(cipher){
 		case GCM:
 		    switch (key_len) {
 		    case 16:
@@ -222,6 +222,7 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
+
 		case CTR:
 		    switch (key_len) {
 		    case 16:
@@ -233,8 +234,9 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
+
 		default:
-			throw duckdb::InternalException("Invalid Encryption/Decryption Algorithm: %d", static_cast<int>(algorithm));
+			throw duckdb::InternalException("Invalid Encryption/Decryption Cipher: %d", static_cast<int>(cipher));
 	}
 }
 
@@ -303,29 +305,38 @@ size_t MbedTlsWrapper::AESStateMBEDTLS::Process(duckdb::const_data_ptr_t in, duc
 	return result;
 }
 
+void MbedTlsWrapper::AESStateMBEDTLS::FinalizeGCM(duckdb::data_ptr_t tag, duckdb::idx_t tag_len){
+
+	switch (mode) {
+
+	case ENCRYPT: {
+		if (mbedtls_cipher_write_tag(context.get(), tag, tag_len) != 0) {
+			runtime_error("Writing tag failed");
+		}
+		break;
+	}
+
+	case DECRYPT: {
+		if (mbedtls_cipher_check_tag(context.get(), tag, tag_len) != 0) {
+			throw duckdb::InvalidInputException(
+			    "Computed AES tag differs from read AES tag, are you using the right key?");
+		}
+		break;
+	}
+
+	default:
+		throw duckdb::InternalException("Unhandled encryption mode %d", static_cast<int>(mode));
+	}
+}
+
 size_t MbedTlsWrapper::AESStateMBEDTLS::Finalize(duckdb::data_ptr_t out, duckdb::idx_t out_len, duckdb::data_ptr_t tag,
                                                     duckdb::idx_t tag_len) {
 	size_t result = out_len;
 	mbedtls_cipher_finish(context.get(), out, &result);
 
-	if (algorithm == GCM) {
-		switch (mode) {
-		case ENCRYPT: {
-			if (mbedtls_cipher_write_tag(context.get(), tag, tag_len) != 0) {
-				runtime_error("Writing tag failed");
-			}
-			break;
-		}
-		case DECRYPT: {
-			if (mbedtls_cipher_check_tag(context.get(), tag, tag_len) != 0) {
-				throw duckdb::InvalidInputException(
-				    "Computed AES tag differs from read AES tag, are you using the right key?");
-			}
-			break;
-		}
-		default:
-			throw duckdb::InternalException("Unhandled encryption mode %d", static_cast<int>(mode));
-		}
+	if (cipher == GCM) {
+		// For now only GCM is supported
+		FinalizeGCM(tag, tag_len);
 	}
 
 	return result;

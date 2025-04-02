@@ -28,7 +28,7 @@ public:
 
 public:
 	enum Mode { ENCRYPT, DECRYPT };
-	enum Algorithm { GCM, CTR };
+	enum Cipher { GCM, CTR };
 };
 
 class EncryptionUtil {
