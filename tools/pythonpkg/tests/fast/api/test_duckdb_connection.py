@@ -139,7 +139,7 @@ class TestDuckDBConnection(object):
         assert statements[0].named_parameters == set('1')
         assert statements[0].expected_result_type == [duckdb.ExpectedResultType.QUERY_RESULT]
 
-        assert statements[1].query == 'select 21'
+        assert statements[1].query == ' select 21'
         assert statements[1].type == duckdb.StatementType.SELECT
         assert statements[1].named_parameters == set()
 
