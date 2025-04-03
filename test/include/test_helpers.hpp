@@ -34,8 +34,6 @@ bool TestMemoryLeaks();
 void RegisterSqllogictests();
 bool SummarizeFailures();
 
-std::stringstream &GetSummary();
-
 void DeleteDatabase(string path);
 void TestDeleteDirectory(string path);
 void TestCreateDirectory(string path);

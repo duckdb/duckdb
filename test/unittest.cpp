@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
 	RegisterSqllogictests();
 	int result = Catch::Session().run(new_argc, new_argv.get());
 
-	std::string failures_summary = GetSummary().str();
+	std::string failures_summary = duckdb::SQLLogicTestLogger::GetSummary().str();
 	if (!failures_summary.empty() && summarize_failures) {
 		std::cout << "\n====================================================" << std::endl;
 		std::cout << "================  FAILURES SUMMARY  ================" << std::endl;
