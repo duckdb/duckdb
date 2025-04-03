@@ -51,15 +51,33 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(
 	auto apply_modification = [&](std::unordered_map<LogicalOperator *, unique_ptr<LogicalOperator>> &modify_map) {
 		auto it = modify_map.find(original_operator);
 		if (it == modify_map.end()) {
-			return; // No modification needed
+			// No modification needed
+			return;
 		}
 
-		auto *last_child = it->second.get();
-		while (!last_child->children.empty()) {
-			last_child = last_child->children[0].get();
+		auto *last_op = it->second.get();
+		auto *last_creator = (it->second->type == LogicalOperatorType::LOGICAL_CREATE_BF) ? it->second.get() : nullptr;
+		while (!last_op->children.empty()) {
+			last_op = last_op->children[0].get();
+			if (last_op->type == LogicalOperatorType::LOGICAL_CREATE_BF) {
+				last_creator = last_op;
+			}
 		}
-		last_child->AddChild(std::move(plan));
-		plan = std::move(it->second);
+
+		if (last_creator != last_op && plan->type == LogicalOperatorType::LOGICAL_FILTER) {
+			// creator ---> user --> creator --> filter --> user --> user --> scan
+			last_op->AddChild(std::move(plan->children[0]));
+			if (last_creator == nullptr) {
+				plan->children[0] = std::move(it->second);
+			} else {
+				plan->children[0] = std::move(last_creator->children[0]);
+				last_creator->children[0] = std::move(plan);
+				plan = std::move(it->second);
+			}
+		} else {
+			last_op->AddChild(std::move(plan));
+			plan = std::move(it->second);
+		}
 	};
 
 	apply_modification(forward_stage_modification);
