@@ -358,6 +358,39 @@ jobs:
       shell: bash
       run: python3 scripts/exported_symbols_check.py build/release/src/libduckdb*.so
 
+ latest-storage:
+    name: Latest Storage
+    runs-on: ubuntu-22.04
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      CORE_EXTENSIONS: "parquet;json;tpch;tpcds;httpfs"
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        shell: bash
+        run: DEBUG_STACKTRACE=1 BLOCK_VERIFICATION=1 LATEST_STORAGE=1 make reldebug
+
+      - name: Test
+        shell: bash
+        run: |
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "*" --no-exit --time_execution
+
  amalgamation-tests:
     name: Amalgamation Tests
     if: ${{ inputs.skip_tests != 'true' }}
