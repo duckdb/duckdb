@@ -985,7 +985,8 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
 	auto &validity = stats.statistics;
 	if (!mask.AllValid() && !validity.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
-			if (!mask.RowIsValid(i)) {
+			auto idx = update.sel->get_index(i);
+			if (!mask.RowIsValid(idx)) {
 				validity.SetHasNullFast();
 				break;
 			}
