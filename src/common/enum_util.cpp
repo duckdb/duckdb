@@ -174,41 +174,41 @@ ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value) {
 	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 3, "ARTConflictType", value));
 }
 
-const StringUtil::EnumStringLiteral *GetARTScanHandlingModeValues() {
+const StringUtil::EnumStringLiteral *GetARTScanHandlingValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ARTScanHandlingMode::EMPLACE), "EMPLACE" },
-		{ static_cast<uint32_t>(ARTScanHandlingMode::POP), "POP" }
+		{ static_cast<uint32_t>(ARTScanHandling::EMPLACE), "EMPLACE" },
+		{ static_cast<uint32_t>(ARTScanHandling::POP), "POP" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<ARTScanHandlingMode>(ARTScanHandlingMode value) {
-	return StringUtil::EnumToString(GetARTScanHandlingModeValues(), 2, "ARTScanHandlingMode", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<ARTScanHandling>(ARTScanHandling value) {
+	return StringUtil::EnumToString(GetARTScanHandlingValues(), 2, "ARTScanHandling", static_cast<uint32_t>(value));
 }
 
 template<>
-ARTScanHandlingMode EnumUtil::FromString<ARTScanHandlingMode>(const char *value) {
-	return static_cast<ARTScanHandlingMode>(StringUtil::StringToEnum(GetARTScanHandlingModeValues(), 2, "ARTScanHandlingMode", value));
+ARTScanHandling EnumUtil::FromString<ARTScanHandling>(const char *value) {
+	return static_cast<ARTScanHandling>(StringUtil::StringToEnum(GetARTScanHandlingValues(), 2, "ARTScanHandling", value));
 }
 
-const StringUtil::EnumStringLiteral *GetARTScanResultValues() {
+const StringUtil::EnumStringLiteral *GetARTScanHandlingResultValues() {
 	static constexpr StringUtil::EnumStringLiteral values[] {
-		{ static_cast<uint32_t>(ARTScanResult::CONTINUE), "CONTINUE" },
-		{ static_cast<uint32_t>(ARTScanResult::SKIP), "SKIP" },
-		{ static_cast<uint32_t>(ARTScanResult::YIELD), "YIELD" }
+		{ static_cast<uint32_t>(ARTScanHandlingResult::CONTINUE), "CONTINUE" },
+		{ static_cast<uint32_t>(ARTScanHandlingResult::SKIP), "SKIP" },
+		{ static_cast<uint32_t>(ARTScanHandlingResult::YIELD), "YIELD" }
 	};
 	return values;
 }
 
 template<>
-const char* EnumUtil::ToChars<ARTScanResult>(ARTScanResult value) {
-	return StringUtil::EnumToString(GetARTScanResultValues(), 3, "ARTScanResult", static_cast<uint32_t>(value));
+const char* EnumUtil::ToChars<ARTScanHandlingResult>(ARTScanHandlingResult value) {
+	return StringUtil::EnumToString(GetARTScanHandlingResultValues(), 3, "ARTScanHandlingResult", static_cast<uint32_t>(value));
 }
 
 template<>
-ARTScanResult EnumUtil::FromString<ARTScanResult>(const char *value) {
-	return static_cast<ARTScanResult>(StringUtil::StringToEnum(GetARTScanResultValues(), 3, "ARTScanResult", value));
+ARTScanHandlingResult EnumUtil::FromString<ARTScanHandlingResult>(const char *value) {
+	return static_cast<ARTScanHandlingResult>(StringUtil::StringToEnum(GetARTScanHandlingResultValues(), 3, "ARTScanHandlingResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetAccessModeValues() {
