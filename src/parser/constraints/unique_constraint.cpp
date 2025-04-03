@@ -7,8 +7,9 @@ namespace duckdb {
 UniqueConstraint::UniqueConstraint() : Constraint(ConstraintType::UNIQUE), index(DConstants::INVALID_INDEX) {
 }
 
-UniqueConstraint::UniqueConstraint(const LogicalIndex index, const bool is_primary_key)
+UniqueConstraint::UniqueConstraint(const LogicalIndex index, string column_name_p, const bool is_primary_key)
     : Constraint(ConstraintType::UNIQUE), index(index), is_primary_key(is_primary_key) {
+	columns.push_back(std::move(column_name_p));
 }
 
 UniqueConstraint::UniqueConstraint(vector<string> columns, const bool is_primary_key)
@@ -32,10 +33,7 @@ unique_ptr<Constraint> UniqueConstraint::Copy() const {
 		return make_uniq<UniqueConstraint>(columns, is_primary_key);
 	}
 
-	auto result = make_uniq<UniqueConstraint>(index, is_primary_key);
-	if (!columns.empty()) {
-		result->columns.push_back(columns[0]);
-	}
+	auto result = make_uniq<UniqueConstraint>(index, columns.empty() ? string() : columns[0], is_primary_key);
 	return std::move(result);
 }
 
@@ -93,13 +91,6 @@ string UniqueConstraint::GetName(const string &table_name) const {
 		name += "_" + column_name;
 	}
 	return type_name + "_" + table_name + name;
-}
-
-void UniqueConstraint::SetColumnName(const string &column_name) {
-	if (!columns.empty()) {
-		return;
-	}
-	columns.push_back(column_name);
 }
 
 } // namespace duckdb
