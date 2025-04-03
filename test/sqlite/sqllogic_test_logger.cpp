@@ -334,7 +334,6 @@ void SQLLogicTestLogger::LoadDatabaseFail(const string &dbpath, const string &me
 	PrintLineSep();
 }
 
-
 std::stringstream &SQLLogicTestLogger::GetSummary() {
 	static std::stringstream summary;
 	return summary;

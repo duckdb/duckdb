@@ -508,9 +508,10 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
 		          << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
 		          << termcolor::reset;
-		duckdb::SQLLogicTestLogger::GetSummary() << "Mismatch on row " + std::to_string(current_row + 1) + ", column " +
-		                    result.ColumnName(current_column) + "(index " + std::to_string(current_row + 1) + ")"
-		             << std::endl;
+		duckdb::SQLLogicTestLogger::GetSummary()
+		    << "Mismatch on row " + std::to_string(current_row + 1) + ", column " + result.ColumnName(current_column) +
+		           "(index " + std::to_string(current_row + 1) + ")"
+		    << std::endl;
 		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
 		duckdb::SQLLogicTestLogger::GetSummary() << lvalue_str + " <> " << rvalue_str << std::endl;
 		logger.PrintLineSep();
