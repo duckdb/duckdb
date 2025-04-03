@@ -700,16 +700,9 @@ static void InitializeUpdateData(UpdateInfo &base_info, Vector &base_data, Updat
 	auto update_data = update.GetData<T>(update);
 	auto tuple_data = update_info.GetData<T>();
 
-	if (sel.IsSet()) {
-		for (idx_t i = 0; i < update_info.N; i++) {
-			auto idx = sel.get_index(i);
-			tuple_data[i] = update_data[idx];
-		}
-	} else {
-		for (idx_t i = 0; i < update_info.N; i++) {
-			auto idx = update.sel->get_index(i);
-			tuple_data[i] = update_data[idx];
-		}
+	for (idx_t i = 0; i < update_info.N; i++) {
+		auto idx = update.sel->get_index(sel.get_index(i));
+		tuple_data[i] = update_data[idx];
 	}
 
 	auto base_array_data = FlatVector::GetData<T>(base_data);
@@ -818,12 +811,14 @@ struct ExtractValidityEntry {
 
 template <class T, class V, class OP = ExtractStandardEntry>
 static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, UpdateInfo &update_info,
-                                    const V *update_vector_data, row_t *ids, idx_t count, const SelectionVector &sel) {
+                                    const SelectionVector &update_vector_sel, const V *update_vector_data, row_t *ids,
+                                    idx_t count, const SelectionVector &sel) {
 	auto base_id = base_info.segment->column_data.start + base_info.vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
 	for (idx_t i = 1; i < count; i++) {
 		auto prev_idx = sel.get_index(i - 1);
+
 		auto idx = sel.get_index(i);
 		D_ASSERT(ids[idx] > ids[prev_idx] && ids[idx] >= row_t(base_id) &&
 		         ids[idx] < row_t(base_id + STANDARD_VECTOR_SIZE));
@@ -900,7 +895,8 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 	// now we merge the new values into the base_info
 	result_offset = 0;
 	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
-		result_values[result_offset] = OP::template Extract<T, V>(update_vector_data, aidx);
+		result_values[result_offset] =
+		    OP::template Extract<T, V>(update_vector_data, update_vector_sel.get_index(aidx));
 		result_ids[result_offset] = UnsafeNumericCast<sel_t>(id);
 		result_offset++;
 	};
@@ -925,7 +921,7 @@ static void MergeValidityLoop(UpdateInfo &base_info, Vector &base_data, UpdateIn
 	auto &base_validity = FlatVector::Validity(base_data);
 	auto &update_validity = update.validity;
 	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(base_info, &base_validity, update_info,
-	                                                                  &update_validity, ids, count, sel);
+	                                                                  *update.sel, &update_validity, ids, count, sel);
 }
 
 template <class T>
@@ -933,7 +929,8 @@ static void MergeUpdateLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo
                             UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel) {
 	auto base_table_data = FlatVector::GetData<T>(base_data);
 	auto update_vector_data = update.GetData<T>(update);
-	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, update_vector_data, ids, count, sel);
+	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, *update.sel, update_vector_data, ids, count,
+	                              sel);
 }
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type) {
@@ -1017,7 +1014,7 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			if (mask.RowIsValid(idx)) {
-				sel.set_index(not_null_count++, idx);
+				sel.set_index(not_null_count++, i);
 				stats.statistics.UpdateNumericStats<T>(update_data[idx]);
 			}
 		}
@@ -1046,7 +1043,7 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, U
 		for (idx_t i = 0; i < count; i++) {
 			auto idx = update.sel->get_index(i);
 			if (mask.RowIsValid(idx)) {
-				sel.set_index(not_null_count++, idx);
+				sel.set_index(not_null_count++, i);
 				auto &str = update_data[idx];
 				StringStats::Update(stats.statistics, str);
 				if (!str.IsInlined()) {
@@ -1126,6 +1123,7 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 	for (idx_t i = 1; i < count; i++) {
 		auto prev_idx = sorted_sel.get_index(i - 1);
 		auto idx = sorted_sel.get_index(i);
+
 		D_ASSERT(ids[idx] >= ids[prev_idx]);
 		if (ids[prev_idx] != ids[idx]) {
 			sorted_sel.set_index(pos++, idx);
