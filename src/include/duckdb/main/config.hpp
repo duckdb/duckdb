@@ -291,7 +291,7 @@ struct DBConfigOptions {
 	//! The log configuration
 	LogConfig log_config = LogConfig();
 	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
-	bool scheduler_process_partial = true;
+	bool scheduler_process_partial = false;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
