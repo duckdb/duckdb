@@ -25,12 +25,16 @@ public:
 	                 vector<shared_ptr<DynamicTableFilterSet>> dynamic_filter_sets,
 	                 vector<vector<ColumnBinding>> &dynamic_filter_cols, idx_t estimated_cardinality);
 
-	vector<shared_ptr<FilterPlan>> filter_plans;
+	// We use a mutable boolean variable to mark if this operator successfully materializes and creates its BFs.
+	// This variable is helpful for dynamic pipeline scheduling. It allows us to end the pipeline that has
+	// PhysicalCreateBFs in advance.
+	mutable bool is_successful;
 	shared_ptr<Pipeline> this_pipeline;
-	vector<shared_ptr<BloomFilter>> bf_to_create;
 
-	vector<shared_ptr<DynamicTableFilterSet>> min_max_to_create;
+	vector<shared_ptr<FilterPlan>> filter_plans;
+	vector<shared_ptr<BloomFilter>> bf_to_create;
 	vector<vector<ColumnBinding>> min_max_applied_cols;
+	vector<shared_ptr<DynamicTableFilterSet>> min_max_to_create;
 
 public:
 	InsertionOrderPreservingMap<string> ParamsToString() const override;

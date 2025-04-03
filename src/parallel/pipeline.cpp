@@ -12,6 +12,7 @@
 #include "duckdb/parallel/pipeline_event.hpp"
 #include "duckdb/parallel/pipeline_executor.hpp"
 #include "duckdb/parallel/task_scheduler.hpp"
+#include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
 
 namespace duckdb {
 
@@ -165,6 +166,9 @@ bool Pipeline::IsOrderDependent() const {
 void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(ready);
 	D_ASSERT(sink);
+
+	// Dynamically change the operators of pipelines.
+	ModifyPipeline();
 	Reset();
 	if (!ScheduleParallel(event)) {
 		// could not parallelize this pipeline: push a sequential task instead
@@ -317,6 +321,56 @@ idx_t Pipeline::UpdateBatchIndex(idx_t old_index, idx_t new_index) {
 	batch_indexes.erase(entry);
 	batch_indexes.insert(new_index);
 	return *batch_indexes.begin();
+}
+
+void Pipeline::ModifyPipeline() {
+	if (source->type != PhysicalOperatorType::CREATE_BF) {
+		return;
+	}
+
+	auto &bf_creator = source->Cast<PhysicalCreateBF>();
+	if (bf_creator.is_successful) {
+		return;
+	}
+
+	vector<reference<PhysicalOperator>> new_operators;
+	PhysicalOperator *op = &bf_creator.children[0].get();
+	while (true) {
+		switch (op->type) {
+		case PhysicalOperatorType::USE_BF:
+		case PhysicalOperatorType::FILTER: {
+			new_operators.push_back(*op);
+			break;
+		}
+		// case PhysicalOperatorType::PROJECTION:{
+		// 	new_operators.push_back(*op);
+		// 	break;
+		// }
+		case PhysicalOperatorType::CREATE_BF: {
+			auto &creator = op->Cast<PhysicalCreateBF>();
+			if (!creator.is_successful) {
+				break;
+			}
+
+			source = op;
+			operators.insert(operators.begin(), new_operators.begin(), new_operators.end());
+			return;
+		}
+		case PhysicalOperatorType::COLUMN_DATA_SCAN:
+		case PhysicalOperatorType::CHUNK_SCAN:
+		case PhysicalOperatorType::TABLE_SCAN:
+		case PhysicalOperatorType::DELIM_SCAN:
+		case PhysicalOperatorType::CTE_SCAN: {
+			source = op;
+			operators.insert(operators.begin(), new_operators.begin(), new_operators.end());
+			return;
+		}
+		default:
+			throw InternalException("Unknown operator type " + PhysicalOperatorToString(op->type) + "\n");
+		}
+
+		op = &op->children[0].get();
+	}
 }
 //===--------------------------------------------------------------------===//
 // Pipeline Build State

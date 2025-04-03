@@ -119,6 +119,9 @@ public:
 	//! Updates the batch index of a pipeline (and returns the new minimum batch index)
 	idx_t UpdateBatchIndex(idx_t old_index, idx_t new_index);
 
+	//! Adaptive Pipeline
+	void ModifyPipeline();
+
 private:
 	//! Whether or not the pipeline has been readied
 	bool ready;

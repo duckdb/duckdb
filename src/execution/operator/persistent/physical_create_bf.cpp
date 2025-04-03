@@ -16,9 +16,9 @@ namespace duckdb {
 PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<FilterPlan>> &filter_plans,
                                    vector<shared_ptr<DynamicTableFilterSet>> dynamic_filter_sets,
                                    vector<vector<ColumnBinding>> &dynamic_filter_cols, idx_t estimated_cardinality)
-    : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality),
-      filter_plans(filter_plans), min_max_to_create(std::move(dynamic_filter_sets)),
-      min_max_applied_cols(std::move(dynamic_filter_cols)) {
+    : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality), is_successful(true),
+      filter_plans(filter_plans), min_max_applied_cols(std::move(dynamic_filter_cols)),
+      min_max_to_create(std::move(dynamic_filter_sets)) {
 	for (size_t i = 0; i < filter_plans.size(); ++i) {
 		bf_to_create.emplace_back(make_shared_ptr<BloomFilter>());
 	}
@@ -163,6 +163,8 @@ public:
 
 SinkResultType PhysicalCreateBF::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &state = input.local_state.Cast<CreateBFLocalSinkState>();
+
+	// Bloomfilter
 	state.local_data->Append(chunk);
 
 	// min-max
@@ -179,6 +181,11 @@ SinkResultType PhysicalCreateBF::Sink(ExecutionContext &context, DataChunk &chun
 SinkCombineResultType PhysicalCreateBF::Combine(ExecutionContext &context, OperatorSinkCombineInput &input) const {
 	auto &gstate = input.global_state.Cast<CreateBFGlobalSinkState>();
 	auto &state = input.local_state.Cast<CreateBFLocalSinkState>();
+
+	// give up creating filters
+	if (!is_successful) {
+		return SinkCombineResultType::FINISHED;
+	}
 
 	// min-max aggregation
 	gstate.global_aggregate_state->Combine(*state.local_aggregate_state);
@@ -287,6 +294,11 @@ void CreateBFGlobalSinkState::ScheduleFinalize(Pipeline &pipeline, Event &event)
 SinkFinalizeType PhysicalCreateBF::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
                                             OperatorSinkFinalizeInput &input) const {
 	auto &sink = input.global_state.Cast<CreateBFGlobalSinkState>();
+
+	// give up creating filters
+	if (!is_successful) {
+		return SinkFinalizeType::READY;
+	}
 
 	// finalize min-max
 	sink.FinalizeMinMax();
