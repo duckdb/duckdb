@@ -85,7 +85,7 @@ unique_ptr<ArrowArrayStreamWrapper> ProduceArrowScan(const ArrowScanFunctionData
 	auto &arrow_types = function.arrow_table.GetColumns();
 	for (idx_t idx = 0; idx < column_ids.size(); idx++) {
 		auto col_idx = column_ids[idx];
-		if (col_idx != COLUMN_IDENTIFIER_ROW_ID) {
+		if (col_idx != COLUMN_IDENTIFIER_ROW_ID && col_idx != COLUMN_IDENTIFIER_EMPTY) {
 			auto &schema = *function.schema_root.arrow_schema.children[col_idx];
 			arrow_types.at(col_idx)->ThrowIfInvalid();
 			parameters.projected_columns.projection_map[idx] = schema.name;
