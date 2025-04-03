@@ -36,6 +36,8 @@
 
 namespace duckdb {
 
+constexpr int32_t ParquetReader::ORDINAL_FIELD_ID;
+
 using duckdb_parquet::ColumnChunk;
 using duckdb_parquet::ConvertedType;
 using duckdb_parquet::FieldRepetitionType;
@@ -612,6 +614,10 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaData &file_meta_data,
                                                                ParquetColumnSchema &element) {
 	MultiFileColumnDefinition result(element.name, element.type);
+	if (element.schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
+		result.identifier = Value::INTEGER(ORDINAL_FIELD_ID);
+		return result;
+	}
 	auto &column_schema = file_meta_data.schema[element.schema_index];
 
 	if (column_schema.__isset.field_id) {

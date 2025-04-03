@@ -186,6 +186,14 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 		res.default_expression = make_uniq<ConstantExpression>(column.default_value);
 		reader_bind.schema.emplace_back(std::move(res));
 	}
+	ParseFileRowNumberOption(reader_bind, options, return_types, names);
+	if (options.file_row_number) {
+		MultiFileColumnDefinition res("file_row_number", LogicalType::BIGINT);
+		res.identifier = Value::INTEGER(ParquetReader::ORDINAL_FIELD_ID);
+		schema_col_names.push_back(res.name);
+		schema_col_types.push_back(res.type);
+		reader_bind.schema.emplace_back(std::move(res));
+	}
 
 	if (match_by_field_id) {
 		reader_bind.mapping = MultiFileColumnMappingMode::BY_FIELD_ID;
@@ -200,8 +208,6 @@ static void BindSchema(ClientContext &context, vector<LogicalType> &return_types
 	names = schema_col_names;
 	return_types = schema_col_types;
 	D_ASSERT(names.size() == return_types.size());
-
-	ParseFileRowNumberOption(reader_bind, options, return_types, names);
 }
 
 void ParquetMultiFileInfo::BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
