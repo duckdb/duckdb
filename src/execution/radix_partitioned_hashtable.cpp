@@ -33,7 +33,10 @@ RadixPartitionedHashTable::RadixPartitionedHashTable(GroupingSet &grouping_set_p
 
 	auto group_types_copy = group_types;
 	group_types_copy.emplace_back(LogicalType::HASH);
-	layout.Initialize(std::move(group_types_copy), AggregateObject::CreateAggregateObjects(op.bindings));
+
+	auto layout = make_shared_ptr<TupleDataLayout>();
+	layout->Initialize(std::move(group_types_copy), AggregateObject::CreateAggregateObjects(op.bindings));
+	layout_ptr = std::move(layout);
 }
 
 void RadixPartitionedHashTable::SetGroupingValues() {
@@ -55,8 +58,12 @@ void RadixPartitionedHashTable::SetGroupingValues() {
 	}
 }
 
+shared_ptr<TupleDataLayout> RadixPartitionedHashTable::GetLayoutPtr() const {
+	return layout_ptr;
+}
+
 const TupleDataLayout &RadixPartitionedHashTable::GetLayout() const {
-	return layout;
+	return *layout_ptr;
 }
 
 unique_ptr<GroupedAggregateHashTable> RadixPartitionedHashTable::CreateHT(ClientContext &context, const idx_t capacity,
@@ -421,7 +428,7 @@ void MaybeRepartition(ClientContext &context, RadixHTGlobalSinkState &gstate, Ra
 			// We're approaching the memory limit, unpin the data
 			if (!lstate.abandoned_data) {
 				lstate.abandoned_data = make_uniq<RadixPartitionedTupleData>(
-				    BufferManager::GetBufferManager(context), gstate.radix_ht.GetLayout(), config.GetRadixBits(),
+				    BufferManager::GetBufferManager(context), gstate.radix_ht.GetLayoutPtr(), config.GetRadixBits(),
 				    gstate.radix_ht.GetLayout().ColumnCount() - 1);
 			}
 			ht.SetRadixBits(gstate.config.GetRadixBits());
@@ -670,6 +677,7 @@ private:
 	//! Allocator and layout for finalizing state
 	TupleDataLayout layout;
 	ArenaAllocator aggregate_allocator;
+	RowOperationsState row_state;
 
 	//! State and chunk for scanning
 	TupleDataScanState scan_state;
@@ -724,7 +732,8 @@ SourceResultType RadixHTGlobalSourceState::AssignTask(RadixHTGlobalSinkState &si
 
 RadixHTLocalSourceState::RadixHTLocalSourceState(ExecutionContext &context, const RadixPartitionedHashTable &radix_ht)
     : task(RadixHTSourceTaskType::NO_TASK), task_idx(DConstants::INVALID_INDEX), scan_status(RadixHTScanStatus::DONE),
-      layout(radix_ht.GetLayout().Copy()), aggregate_allocator(BufferAllocator::Get(context.client)) {
+      layout(radix_ht.GetLayout().Copy()), aggregate_allocator(BufferAllocator::Get(context.client)),
+      row_state(aggregate_allocator) {
 	auto &allocator = BufferAllocator::Get(context.client);
 	auto scan_chunk_types = radix_ht.group_types;
 	for (auto &aggr_type : radix_ht.op.aggregate_return_types) {
@@ -779,7 +788,7 @@ void RadixHTLocalSourceState::Finalize(RadixHTGlobalSinkState &sink, RadixHTGlob
 
 	// Move the combined data back to the partition
 	partition.data =
-	    make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(gstate.context), sink.radix_ht.GetLayout());
+	    make_uniq<TupleDataCollection>(BufferManager::GetBufferManager(gstate.context), sink.radix_ht.GetLayoutPtr());
 	partition.data->Combine(*ht->AcquirePartitionedData()->GetPartitions()[0]);
 
 	// Update thread-global state
@@ -830,7 +839,6 @@ void RadixHTLocalSourceState::Scan(RadixHTGlobalSinkState &sink, RadixHTGlobalSo
 		return;
 	}
 
-	RowOperationsState row_state(aggregate_allocator);
 	const auto group_cols = layout.ColumnCount() - 1;
 	RowOperations::FinalizeStates(row_state, layout, scan_state.chunk_state.row_locations, scan_chunk, group_cols);
 

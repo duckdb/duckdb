@@ -1347,19 +1347,7 @@ Value Value::Numeric(const LogicalType &type, int64_t value) {
 	case LogicalTypeId::TIMESTAMP_TZ:
 		return Value::TIMESTAMPTZ(timestamp_tz_t(value));
 	case LogicalTypeId::ENUM:
-		switch (type.InternalType()) {
-		case PhysicalType::UINT8:
-			D_ASSERT(value >= NumericLimits<uint8_t>::Minimum() && value <= NumericLimits<uint8_t>::Maximum());
-			return Value::UTINYINT((uint8_t)value);
-		case PhysicalType::UINT16:
-			D_ASSERT(value >= NumericLimits<uint16_t>::Minimum() && value <= NumericLimits<uint16_t>::Maximum());
-			return Value::USMALLINT((uint16_t)value);
-		case PhysicalType::UINT32:
-			D_ASSERT(value >= NumericLimits<uint32_t>::Minimum() && value <= NumericLimits<uint32_t>::Maximum());
-			return Value::UINTEGER((uint32_t)value);
-		default:
-			throw InternalException("Enum doesn't accept this physical type");
-		}
+		return Value::ENUM(NumericCast<uint64_t>(value), type);
 	default:
 		throw InvalidTypeException(type, "Numeric requires numeric type");
 	}
