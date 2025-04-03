@@ -659,7 +659,7 @@ static void InitializeUpdateValidity(UpdateInfo &base_info, Vector &base_data, U
 
 	if (!update_mask.AllValid()) {
 		for (idx_t i = 0; i < update_info.N; i++) {
-			auto idx = sel.get_index(i);
+			auto idx = update.sel->get_index(sel.get_index(i));
 			tuple_data[i] = update_mask.RowIsValidUnsafe(idx);
 		}
 	} else {
