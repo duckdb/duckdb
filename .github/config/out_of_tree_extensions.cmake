@@ -23,6 +23,7 @@ duckdb_extension_load(httpfs
     INCLUDE_DIR extension/httpfs/include
     )
 
+if(FALSE)
 ################# ARROW
 if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
     duckdb_extension_load(arrow
@@ -30,6 +31,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             GIT_URL https://github.com/duckdb/arrow
             GIT_TAG cff2f0e21b1608e38640e15b4cf0693dd52dd0eb
             )
+endif()
 endif()
 
 ################# AVRO
