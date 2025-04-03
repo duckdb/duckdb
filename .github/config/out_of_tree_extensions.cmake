@@ -33,11 +33,11 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
 endif()
 
 ################# AVRO
-if (NOT MINGW AND NOT ${WASM_ENABLED})
+if (NOT MINGW)
     duckdb_extension_load(avro
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-avro
-            GIT_TAG 1357c64c91b1f8b4df1e4f7178584a530fb3679b
+            GIT_TAG ed18629fa56a97e0796a3582110b51ddd125159d
     )
 endif()
 
@@ -75,7 +75,7 @@ endif()
 duckdb_extension_load(excel
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-excel
-    GIT_TAG f14e7c3beaf379c54b47b996aa896a1d814e1be8
+    GIT_TAG 0eab137e627e6173de216de02ff47a2a3af6e4d1
     INCLUDE_DIR src/excel/include
     )
 
