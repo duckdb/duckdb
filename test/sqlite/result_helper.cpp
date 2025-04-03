@@ -508,12 +508,11 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		std::cerr << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
 		          << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
 		          << termcolor::reset;
-		duckdb::SQLLogicTestLogger::GetSummary()
-		    << "Mismatch on row " + std::to_string(current_row + 1) + ", column " + result.ColumnName(current_column) +
-		           "(index " + std::to_string(current_row + 1) + ")"
-		    << std::endl;
+		GetSummary() << "Mismatch on row " + std::to_string(current_row + 1) + ", column " +
+		                    result.ColumnName(current_column) + "(index " + std::to_string(current_row + 1) + ")"
+		             << std::endl;
 		std::cerr << lvalue_str << " <> " << rvalue_str << std::endl;
-		duckdb::SQLLogicTestLogger::GetSummary() << lvalue_str + " <> " << rvalue_str << std::endl;
+		GetSummary() << lvalue_str + " <> " << rvalue_str << std::endl;
 		logger.PrintLineSep();
 		logger.PrintResultError(result_values, values, expected_column_count, row_wise);
 		return false;
@@ -533,7 +532,7 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_st
 		logger.PrintLineSep();
 		std::cerr << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
 		          << std::endl;
-		duckdb::SQLLogicTestLogger::GetSummary() << "Failed to parse regex: " << re.error();
+		GetSummary() << "Failed to parse regex: " << re.error();
 		logger.PrintLineSep();
 		return false;
 	}

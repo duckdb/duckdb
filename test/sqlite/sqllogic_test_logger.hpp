@@ -53,7 +53,6 @@ public:
 	static void LoadDatabaseFail(const string &dbpath, const string &message);
 	void PrintResultString(MaterializedQueryResult &result);
 	static void PrintSummaryHeader(const std::string &file_name);
-	static std::stringstream &GetSummary();
 
 private:
 	lock_guard<mutex> log_lock;

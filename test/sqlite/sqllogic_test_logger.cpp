@@ -1,6 +1,7 @@
 #include "sqllogic_test_logger.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "termcolor.hpp"
+#include "result_helper.hpp"
 
 namespace duckdb {
 // this counter is for the order number of the failed test case in Failures Summary
@@ -334,9 +335,9 @@ void SQLLogicTestLogger::LoadDatabaseFail(const string &dbpath, const string &me
 	PrintLineSep();
 }
 
-std::stringstream &SQLLogicTestLogger::GetSummary() {
-	static std::stringstream summary;
-	return summary;
-}
+// std::stringstream &SQLLogicTestLogger::GetSummary() {
+// 	static std::stringstream summary;
+// 	return summary;
+// }
 
 } // namespace duckdb
