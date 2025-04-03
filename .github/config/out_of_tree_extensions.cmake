@@ -19,7 +19,7 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 85ac4667bcb0d868199e156f8dd918b0278db7b9
+    GIT_TAG c22532453e9fab8404f91729708d9f35e23d323d
     INCLUDE_DIR extension/httpfs/include
     )
 
@@ -33,11 +33,11 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
 endif()
 
 ################# AVRO
-if (NOT MINGW AND NOT ${WASM_ENABLED})
+if (NOT MINGW)
     duckdb_extension_load(avro
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-avro
-            GIT_TAG 1357c64c91b1f8b4df1e4f7178584a530fb3679b
+            GIT_TAG ed18629fa56a97e0796a3582110b51ddd125159d
     )
 endif()
 
@@ -46,7 +46,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
-            GIT_TAG b3050f35c6e99fa35465230493eeab14a78a0409
+            GIT_TAG e92e45b30ba17594b1101db22699a2244adfaeb1
             )
 endif()
 
@@ -62,18 +62,20 @@ endif()
 ################# DELTA
 # MinGW build is not available, and our current manylinux ci does not have enough storage space to run the rust build
 # for Delta
+if (FALSE)
 if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT ${WASM_ENABLED})
     duckdb_extension_load(delta
             GIT_URL https://github.com/duckdb/duckdb-delta
             GIT_TAG 6d626173e9efa6615c25eb08d979d1372100d5db
     )
 endif()
+endif()
 
 ################# EXCEL
 duckdb_extension_load(excel
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-excel
-    GIT_TAG f14e7c3beaf379c54b47b996aa896a1d814e1be8
+    GIT_TAG 0eab137e627e6173de216de02ff47a2a3af6e4d1
     INCLUDE_DIR src/excel/include
     )
 

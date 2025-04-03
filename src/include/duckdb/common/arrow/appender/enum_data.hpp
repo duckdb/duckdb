@@ -1,8 +1,17 @@
+//===----------------------------------------------------------------------===//
+//                         DuckDB
+//
+// duckdb/common/arrow/appender/enum_data.hpp
+//
+//
+//===----------------------------------------------------------------------===//
+
 #pragma once
 
 #include "duckdb/common/arrow/arrow_appender.hpp"
 #include "duckdb/common/arrow/appender/append_data.hpp"
 #include "duckdb/common/arrow/appender/scalar_data.hpp"
+#include "duckdb/common/arrow/arrow_appender.hpp"
 
 namespace duckdb {
 
