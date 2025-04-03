@@ -818,7 +818,6 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 	// all of these should be sorted, otherwise the below algorithm does not work
 	for (idx_t i = 1; i < count; i++) {
 		auto prev_idx = sel.get_index(i - 1);
-
 		auto idx = sel.get_index(i);
 		D_ASSERT(ids[idx] > ids[prev_idx] && ids[idx] >= row_t(base_id) &&
 		         ids[idx] < row_t(base_id + STANDARD_VECTOR_SIZE));
@@ -1124,7 +1123,6 @@ static idx_t SortSelectionVector(SelectionVector &sel, idx_t count, row_t *ids) 
 	for (idx_t i = 1; i < count; i++) {
 		auto prev_idx = sorted_sel.get_index(i - 1);
 		auto idx = sorted_sel.get_index(i);
-
 		D_ASSERT(ids[idx] >= ids[prev_idx]);
 		if (ids[prev_idx] != ids[idx]) {
 			sorted_sel.set_index(pos++, idx);
@@ -1177,7 +1175,6 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 	SelectionVector sel;
 	{
 		lock_guard<mutex> stats_guard(stats_lock);
-		//! Create a selection vector from the updates, the selection vector maps to the raw indices (no indirection)
 		count = statistics_update_function(this, stats, update_format, count, sel);
 	}
 	if (count == 0) {
@@ -1187,8 +1184,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 	// subsequent algorithms used by the update require row ids to be (1) sorted, and (2) unique
 	// this is usually the case for "standard" queries (e.g. UPDATE tbl SET x=bla WHERE cond)
 	// however, for more exotic queries involving e.g. cross products/joins this might not be the case
-	// hence we explicitly check here if the ids are sorted and, if not, sort + duplicate eliminate them (if two or more
-	// updates target the same id)
+	// hence we explicitly check here if the ids are sorted and, if not, sort + duplicate eliminate them
 	count = SortSelectionVector(sel, count, ids);
 	D_ASSERT(count > 0);
 
