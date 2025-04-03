@@ -19,7 +19,7 @@
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 85ac4667bcb0d868199e156f8dd918b0278db7b9
+    GIT_TAG c22532453e9fab8404f91729708d9f35e23d323d
     INCLUDE_DIR extension/httpfs/include
     )
 
@@ -46,7 +46,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-aws
-            GIT_TAG b3050f35c6e99fa35465230493eeab14a78a0409
+            GIT_TAG e92e45b30ba17594b1101db22699a2244adfaeb1
             )
 endif()
 
