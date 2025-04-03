@@ -1,11 +1,25 @@
 diff --git a/extension/httpfs/crypto.cpp b/extension/httpfs/crypto.cpp
-index af56f11..31f594a 100644
+index af56f11..ac748c6 100644
 --- a/extension/httpfs/crypto.cpp
 +++ b/extension/httpfs/crypto.cpp
-@@ -45,54 +45,50 @@ const EVP_CIPHER *GetCipher(const string &key) {
+@@ -31,68 +31,82 @@ void hex256(hash_bytes &in, hash_str &out) {
  	}
  }
  
+-const EVP_CIPHER *GetCipher(const string &key) {
+-	// For now, we only support GCM ciphers
+-	switch (key.size()) {
+-	case 16:
+-		return EVP_aes_128_gcm();
+-	case 24:
+-		return EVP_aes_192_gcm();
+-	case 32:
+-		return EVP_aes_256_gcm();
+-	default:
+-		throw InternalException("Invalid AES key length");
+-	}
+-}
+-
 -AESGCMStateSSL::AESGCMStateSSL() : gcm_context(EVP_CIPHER_CTX_new()) {
 -	if (!(gcm_context)) {
 +AESStateSSL::AESStateSSL(const std::string *key) : context(EVP_CIPHER_CTX_new()) {
@@ -23,8 +37,38 @@ index af56f11..31f594a 100644
  
 -bool AESGCMStateSSL::IsOpenSSL() {
 -	return ssl;
--}
--
++const EVP_CIPHER *AESStateSSL::GetCipher(const string &key) {
++
++  switch (cipher) {
++    case GCM:
++      switch (key.size()) {
++      case 16:
++        return EVP_aes_128_gcm();
++      case 24:
++        return EVP_aes_192_gcm();
++      case 32:
++        return EVP_aes_256_gcm();
++      default:
++        throw InternalException("Invalid AES key length");
++    }
++    case CTR:
++      switch (key.size()) {
++      case 16:
++        return EVP_aes_128_ctr();
++      case 24:
++        return EVP_aes_192_ctr();
++      case 32:
++        return EVP_aes_256_ctr();
++      default:
++        throw InternalException("Invalid AES key length");
++      }
++
++  default:
++    throw duckdb::InternalException("Invalid Encryption/Decryption Cipher: %d",
++                                    static_cast<int>(cipher));
++  }
+ }
+ 
 -void AESGCMStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
 +void AESStateSSL::GenerateRandomData(data_ptr_t data, idx_t len) {
  	// generate random bytes for nonce
@@ -69,7 +113,7 @@ index af56f11..31f594a 100644
  		                           const_data_ptr_cast(in), (int)in_len)) {
  
  			throw InternalException("DecryptUpdate failed");
-@@ -107,36 +103,73 @@ size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out
+@@ -107,41 +121,79 @@ size_t AESGCMStateSSL::Process(const_data_ptr_t in, idx_t in_len, data_ptr_t out
  	return out_len;
  }
  
@@ -114,50 +158,75 @@ index af56f11..31f594a 100644
 +    }
 +}
  
-+size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
-+    if (cipher == GCM){
-+        return FinalizeGCM(out, out_len, tag, tag_len);
-+    }
-+
-+	auto text_len = out_len;
- 	switch (mode) {
-+
- 	case ENCRYPT:
- 	{
+-	switch (mode) {
+-	case ENCRYPT:
+-	{
 -		if (1 != EVP_EncryptFinal_ex(gcm_context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
-+		if (1 != EVP_EncryptFinal_ex(context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
- 			throw InternalException("EncryptFinal failed");
- 		}
+-			throw InternalException("EncryptFinal failed");
+-		}
 -		text_len += out_len;
 -		// The computed tag is written at the end of a chunk
 -		if (1 != EVP_CIPHER_CTX_ctrl(gcm_context, EVP_CTRL_GCM_GET_TAG, tag_len, tag)) {
 -			throw InternalException("Calculating the tag failed");
 -		}
 -		return text_len;
-+
-+		return text_len += out_len;
- 	}
-+
- 	case DECRYPT:
- 	{
+-	}
+-	case DECRYPT:
+-	{
 -		// Set expected tag value
 -		if (!EVP_CIPHER_CTX_ctrl(gcm_context, EVP_CTRL_GCM_SET_TAG, tag_len, tag)) {
 -			throw InternalException("Finalizing tag failed");
 -		}
- 		// EVP_DecryptFinal() will return an error code if final block is not correctly formatted.
+-		// EVP_DecryptFinal() will return an error code if final block is not correctly formatted.
 -		int ret = EVP_DecryptFinal_ex(gcm_context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len));
-+		int ret = EVP_DecryptFinal_ex(context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len));
- 		text_len += out_len;
+-		text_len += out_len;
++size_t AESStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) {
  
- 		if (ret > 0) {
- 			// success
- 			return text_len;
- 		}
+-		if (ret > 0) {
+-			// success
+-			return text_len;
+-		}
+-		throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
+-	}
+-	default:
+-		throw InternalException("Unhandled encryption mode %d", static_cast<int>(mode));
+-	}
++    if (cipher == GCM){
++        return FinalizeGCM(out, out_len, tag, tag_len);
++    }
 +
- 		throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
- 	}
- 	default:
-@@ -149,7 +182,7 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
++    auto text_len = out_len;
++    switch (mode) {
++
++    case ENCRYPT:
++    {
++            if (1 != EVP_EncryptFinal_ex(context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len))) {
++                    throw InternalException("EncryptFinal failed");
++            }
++
++            return text_len += out_len;
++    }
++
++    case DECRYPT:
++    {
++            // EVP_DecryptFinal() will return an error code if final block is not correctly formatted.
++            int ret = EVP_DecryptFinal_ex(context, data_ptr_cast(out) + out_len, reinterpret_cast<int *>(&out_len));
++            text_len += out_len;
++
++            if (ret > 0) {
++                    // success
++                    return text_len;
++            }
++
++            throw InvalidInputException("Computed AES tag differs from read AES tag, are you using the right key?");
++    }
++    default:
++            throw InternalException("Unhandled encryption mode %d", static_cast<int>(mode));
++    }
+ }
+ 
+ } // namespace duckdb
+@@ -149,7 +201,7 @@ size_t AESGCMStateSSL::Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, i
  extern "C" {
  
  // Call the member function through the factory object
@@ -168,10 +237,10 @@ index af56f11..31f594a 100644
  };
  }
 diff --git a/extension/httpfs/httpfs_extension.cpp b/extension/httpfs/httpfs_extension.cpp
-index 0ad8eff..3f16026 100644
+index 536dce4..1e4ac46 100644
 --- a/extension/httpfs/httpfs_extension.cpp
 +++ b/extension/httpfs/httpfs_extension.cpp
-@@ -70,7 +70,7 @@ static void LoadInternal(DatabaseInstance &instance) {
+@@ -69,7 +69,7 @@ static void LoadInternal(DatabaseInstance &instance) {
  	CreateBearerTokenFunctions::Register(instance);
  
  	// set pointer to OpenSSL encryption state
@@ -181,10 +250,18 @@ index 0ad8eff..3f16026 100644
  void HttpfsExtension::Load(DuckDB &db) {
  	LoadInternal(*db.instance);
 diff --git a/extension/httpfs/include/crypto.hpp b/extension/httpfs/include/crypto.hpp
-index ff37f23..70bfc7d 100644
+index ff37f23..d81dd2d 100644
 --- a/extension/httpfs/include/crypto.hpp
 +++ b/extension/httpfs/include/crypto.hpp
-@@ -21,40 +21,41 @@ void hmac256(std::string message, hash_bytes secret, hash_bytes &out);
+@@ -7,6 +7,7 @@
+ #include <string>
+ 
+ typedef struct evp_cipher_ctx_st EVP_CIPHER_CTX;
++typedef struct evp_cipher_st EVP_CIPHER;
+ 
+ namespace duckdb {
+ 
+@@ -21,40 +22,42 @@ void hmac256(std::string message, hash_bytes secret, hash_bytes &out);
  
  void hex256(hash_bytes &in, hash_str &out);
  
@@ -205,7 +282,8 @@ index ff37f23..70bfc7d 100644
  	size_t Finalize(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len) override;
  	void GenerateRandomData(data_ptr_t data, idx_t len) override;
  
-+    size_t FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
++        const EVP_CIPHER *GetCipher(const string &key);
++        size_t FinalizeGCM(data_ptr_t out, idx_t out_len, data_ptr_t tag, idx_t tag_len);
 +
  private:
 -	bool ssl = true;
@@ -229,7 +307,7 @@ index ff37f23..70bfc7d 100644
 -	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState() const override {
 -		return duckdb::make_shared_ptr<duckdb::AESGCMStateSSL>();
 +	duckdb::shared_ptr<duckdb::EncryptionState> CreateEncryptionState(const std::string *key = nullptr) const override {
-+		return duckdb::make_shared_ptr<duckdb::AESStateSSL>(nullptr);
++		return duckdb::make_shared_ptr<duckdb::AESStateSSL>();
  	}
  
 -	~AESGCMStateSSLFactory() override {
