@@ -859,16 +859,60 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 
 static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, const Statistics &pq_col_stats,
                                                       TableFilter &filter) {
-	if (filter.filter_type == TableFilterType::CONSTANT_COMPARISON) {
+	switch (filter.filter_type) {
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_filter = filter.Cast<ConjunctionAndFilter>();
+		auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		for (auto &child_filter : conjunction_filter.child_filters) {
+			auto child_prune_result = CheckParquetStringFilter(stats, pq_col_stats, *child_filter);
+			if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+			}
+			if (child_prune_result != and_result) {
+				and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+			}
+		}
+		return and_result;
+	}
+	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter.Cast<ConstantFilter>();
 		auto &min_value = pq_col_stats.min_value;
 		auto &max_value = pq_col_stats.max_value;
 		return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
 		                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
 		                                 constant_filter.comparison_type, StringValue::Get(constant_filter.constant));
-	} else {
+	}
+	default:
 		return filter.CheckStatistics(stats);
 	}
+}
+
+static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const Statistics &pq_col_stats,
+                                                     TableFilter &filter) {
+	// floating point values can have values in the [min, max] domain AND nan values
+	// check both stats against the filter
+	auto &type = reader.Type();
+	auto nan_stats = NumericStats::CreateUnknown(type);
+	auto nan_value = Value("nan").DefaultCastAs(type);
+	NumericStats::SetMin(nan_stats, nan_value);
+	NumericStats::SetMax(nan_stats, nan_value);
+	auto nan_prune = filter.CheckStatistics(nan_stats);
+
+	auto min_max_stats = ParquetStatisticsUtils::CreateNumericStats(reader.Type(), reader.Schema(), pq_col_stats);
+	auto prune = filter.CheckStatistics(*min_max_stats);
+
+	// if EITHER of them cannot be pruned - we cannot prune
+	if (prune == FilterPropagateResult::NO_PRUNING_POSSIBLE ||
+	    nan_prune == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	// if both are the same we can return that value
+	if (prune == nan_prune) {
+		return prune;
+	}
+	// if they are different we need to return that we cannot prune
+	// e.g. prune = always false, nan_prune = always true -> we don't know
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i) {
@@ -889,42 +933,37 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			// check the bloom filter if present
 			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
 			bool is_expression = column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::EXPRESSION;
+			bool has_min_max = false;
+			if (!is_generated_column) {
+				has_min_max = group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
+				              group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value;
+			}
 			if (is_expression) {
 				// no pruning possible for expressions
 				prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			} else if (!column_reader.Type().IsNested() && !is_generated_column &&
-			           ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
-			           ParquetStatisticsUtils::BloomFilterExcludes(filter,
-			                                                       group.columns[column_reader.ColumnIndex()].meta_data,
-			                                                       *state.thrift_file_proto, allocator)) {
-				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column &&
-			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
-			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value) {
-
+			} else if (!is_generated_column && has_min_max && column_reader.Type().id() == LogicalTypeId::VARCHAR) {
 				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
 				// however, when reading remote Parquet files, skipping row groups is really important
 				// here, we implement a special case to check the full length for string filters
-				if (filter.filter_type == TableFilterType::CONJUNCTION_AND) {
-					const auto &and_filter = filter.Cast<ConjunctionAndFilter>();
-					auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-					for (auto &child_filter : and_filter.child_filters) {
-						auto child_prune_result = CheckParquetStringFilter(
-						    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, *child_filter);
-						if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-							and_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-							break;
-						} else if (child_prune_result != and_result) {
-							and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-						}
-					}
-					prune_result = and_result;
-				} else {
-					prune_result = CheckParquetStringFilter(
-					    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
-				}
+				prune_result = CheckParquetStringFilter(
+				    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
+			} else if (!is_generated_column && has_min_max &&
+			           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
+			            column_reader.Type().id() == LogicalTypeId::DOUBLE)) {
+				// floating point columns can have NaN values in addition to the min/max bounds defined in the file
+				// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
+				// based on nan
+				prune_result = CheckParquetFloatFilter(
+				    column_reader, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
 			} else {
 				prune_result = filter.CheckStatistics(*stats);
+			}
+			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
+			    !is_generated_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
+			    ParquetStatisticsUtils::BloomFilterExcludes(filter,
+			                                                group.columns[column_reader.ColumnIndex()].meta_data,
+			                                                *state.thrift_file_proto, allocator)) {
+				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 			}
 
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {

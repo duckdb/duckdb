@@ -18,7 +18,11 @@ on:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
-      - '**'
+      - '**.md'
+      - 'tools/**'
+      - '!tools/shell/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
       - '!.github/workflows/Main.yml'
 
 
@@ -191,6 +195,42 @@ jobs:
       shell: bash
       run: build/reldebug/test/unittest --force-reload --force-storage
 
+ no-string-inline:
+    name: No String Inline / Destroy Unpinned Blocks
+    runs-on: ubuntu-24.04
+    needs: force-storage
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      DISABLE_STRING_INLINE: 1
+      DESTROY_UNPINNED_BLOCKS: 1
+      ALTERNATIVE_VERIFY: 1
+      DISABLE_POINTER_SALT: 1
+      LSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-leak-suppressions.txt
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        shell: bash
+        run: make relassert
+
+      - name: Test
+        shell: bash
+        run: build/relassert/test/unittest
+
  vector-sizes:
     name: Vector Sizes
     runs-on: ubuntu-22.04
@@ -263,7 +303,7 @@ jobs:
 
  old-gcc:
     name: GCC 4.8
-    #needs: force-storage
+    needs: force-storage
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -280,3 +320,106 @@ jobs:
           -e CMAKE_BUILD_PARALLEL_LEVEL=2                                      \
           quay.io/pypa/manylinux2014_x86_64                                    \
           bash -c "yum install -y gcc-c++ && make -C /duckdb unit"
+
+ vector-verification:
+    name: Vector Verification Tests
+    needs: force-storage
+    runs-on: ubuntu-22.04
+    env:
+      CC: gcc-10
+      CXX: g++-10
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Install
+        shell: bash
+        run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build
+
+      - name: Setup Ccache
+        uses: hendrikmuhs/ccache-action@main
+        with:
+          key: ${{ github.job }}
+          save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+      - name: Build
+        shell: bash
+        env:
+          DISABLE_CPP_UNITTESTS: 1
+        run: make reldebug
+
+      - name: Test dictionary_expression
+        shell: bash
+        env:
+          DUCKDB_DEBUG_VERIFY_VECTOR: dictionary_expression
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+
+      - name: Test dictionary_operator
+        shell: bash
+        env:
+          DUCKDB_DEBUG_VERIFY_VECTOR: dictionary_operator
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+
+      - name: Test constant_operator
+        shell: bash
+        env:
+          DUCKDB_DEBUG_VERIFY_VECTOR: constant_operator
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+
+      - name: Test sequence_operator
+        shell: bash
+        env:
+          DUCKDB_DEBUG_VERIFY_VECTOR: sequence_operator
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+
+      - name: Test nested_shuffle
+        shell: bash
+        env:
+          DUCKDB_DEBUG_VERIFY_VECTOR: nested_shuffle
+        run: python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit
+
+ threadsan:
+    name: Thread Sanitizer
+    needs: force-storage
+    runs-on: ubuntu-24.04
+    env:
+      CC: clang
+      CXX: clang++
+      GEN: ninja
+      BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      TSAN_OPTIONS: suppressions=${{ github.workspace }}/.sanitizer-thread-suppressions.txt
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Install
+      shell: bash
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build clang
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ github.ref == 'refs/heads/main' || github.repository != 'duckdb/duckdb' }}
+
+    - name: Build
+      shell: bash
+      run: THREADSAN=1 make reldebug
+
+    - name: Test
+      shell: bash
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest --no-exit --timeout 600
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[intraquery]" --no-exit --timeout 600
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[interquery]" --no-exit --timeout 1800 --force-storage --force-reload
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest "[detailed_profiler]" --no-exit --timeout 600
+          python3 scripts/run_tests_one_by_one.py build/reldebug/test/unittest test/sql/tpch/tpch_sf01.test_slow --no-exit --timeout 600

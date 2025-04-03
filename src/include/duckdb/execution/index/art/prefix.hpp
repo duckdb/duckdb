@@ -87,9 +87,6 @@ public:
 
 	//! Returns the string representation of the node, or only traverses and verifies the node and its subtree
 	static string VerifyAndToString(ART &art, const Node &node, const bool only_verify);
-	//! Count the number of prefixes.
-	static void VerifyAllocations(ART &art, const Node &node, unordered_map<uint8_t, idx_t> &node_counts);
-
 	//! Transform the child of the node.
 	static void TransformToDeprecated(ART &art, Node &node, unsafe_unique_ptr<FixedSizeAllocator> &allocator);
 

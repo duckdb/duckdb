@@ -15,18 +15,18 @@
 
 namespace duckdb {
 
-enum class ARTScanHandlingMode : uint8_t {
+enum class ARTScanHandling : uint8_t {
 	EMPLACE,
 	POP,
 };
 
-enum class ARTScanResult : uint8_t {
+enum class ARTScanHandlingResult : uint8_t {
 	CONTINUE,
 	SKIP,
 	YIELD,
 };
 
-template <ARTScanHandlingMode MODE>
+template <ARTScanHandling HANDLING, class NODE>
 class ARTScanner {
 public:
 	explicit ARTScanner(ART &art) : art(art) {
@@ -34,7 +34,7 @@ public:
 
 public:
 	template <class FUNC>
-	void Init(FUNC &&handler, Node &root) {
+	void Init(FUNC &&handler, NODE &root) {
 		Emplace(handler, root);
 	}
 
@@ -79,16 +79,16 @@ public:
 				break;
 			}
 			default:
-				throw InternalException("invalid node type for ART ScanHandleLast: %s.", EnumUtil::ToString(type));
+				throw InternalException("invalid node type for ART ScanHandleLast: %s", EnumUtil::ToString(type));
 			}
 		}
 	}
 
 private:
 	template <class FUNC>
-	void Emplace(FUNC &&handler, Node &node) {
-		if (MODE == ARTScanHandlingMode::EMPLACE) {
-			if (handler(node) == ARTScanResult::SKIP) {
+	void Emplace(FUNC &&handler, NODE &node) {
+		if (HANDLING == ARTScanHandling::EMPLACE) {
+			if (handler(node) == ARTScanHandlingResult::SKIP) {
 				return;
 			}
 		}
@@ -96,23 +96,23 @@ private:
 	}
 
 	template <class FUNC>
-	void Pop(FUNC &&handler, Node &node) {
-		if (MODE == ARTScanHandlingMode::POP) {
+	void Pop(FUNC &&handler, NODE &node) {
+		if (HANDLING == ARTScanHandling::POP) {
 			handler(node);
 		}
 		s.pop();
 	}
 
-	template <class FUNC, class NODE>
-	void IterateChildren(FUNC &&handler, Node &node, const NType type) {
-		auto &n = Node::Ref<NODE>(art, node, type);
-		NODE::Iterator(n, [&](Node &child) { Emplace(handler, child); });
+	template <class FUNC, class NODE_TYPE>
+	void IterateChildren(FUNC &&handler, NODE &node, const NType type) {
+		auto &n = Node::Ref<NODE_TYPE>(art, node, type);
+		NODE_TYPE::Iterator(n, [&](NODE &child) { Emplace(handler, child); });
 	}
 
 private:
 	struct NodeEntry {
-		explicit NodeEntry(Node &node) : node(node), exhausted(false) {};
-		Node &node;
+		explicit NodeEntry(NODE &node) : node(node), exhausted(false) {};
+		NODE &node;
 		bool exhausted;
 	};
 
