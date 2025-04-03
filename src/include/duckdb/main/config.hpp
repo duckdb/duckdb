@@ -290,6 +290,8 @@ struct DBConfigOptions {
 	set<string> allowed_directories;
 	//! The log configuration
 	LogConfig log_config = LogConfig();
+	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
+	bool scheduler_process_partial = true;
 
 	bool operator==(const DBConfigOptions &other) const;
 };
