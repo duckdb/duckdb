@@ -134,7 +134,6 @@ static void ParseFileRowNumberOption(MultiFileReaderBindData &bind_data, Parquet
 			    "Using file_row_number option on file with column named file_row_number is not supported");
 		}
 
-		options.file_row_number_idx = names.size();
 		return_types.emplace_back(LogicalType::BIGINT);
 		names.emplace_back("file_row_number");
 	}
