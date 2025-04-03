@@ -101,6 +101,7 @@ struct ParquetOptions {
 
 	bool binary_as_string = false;
 	bool file_row_number = false;
+	optional_idx file_row_number_idx;
 	shared_ptr<ParquetEncryptionConfig> encryption_config;
 	bool debug_use_openssl = true;
 
@@ -173,6 +174,8 @@ public:
 	string GetReaderType() const override {
 		return "Parquet";
 	}
+
+	void AddVirtualColumn(column_t virtual_column_id) override;
 
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
