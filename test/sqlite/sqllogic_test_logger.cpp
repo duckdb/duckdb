@@ -1,11 +1,10 @@
 #include "sqllogic_test_logger.hpp"
 #include "duckdb/parser/parser.hpp"
 #include "termcolor.hpp"
-#include "../include/test_helpers.hpp"
 
 namespace duckdb {
-
-static int failures_summary_counter = 1;
+// this counter is for the order number of the failed test case in Failures Summary
+static int failures_summary_counter = 0;
 
 SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &command)
     : log_lock(command.runner.log_lock), file_name(command.file_name), query_line(command.query_line),
@@ -21,9 +20,9 @@ void SQLLogicTestLogger::Log(const string &str) {
 }
 
 void SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
+	failures_summary_counter++;
 	GetSummary() << "\n" << failures_summary_counter << ". " << file_name << std::endl;
 	PrintLineSep();
-	failures_summary_counter++;
 }
 
 void SQLLogicTestLogger::PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise) {
@@ -146,7 +145,7 @@ void SQLLogicTestLogger::PrintResultError(const vector<string> &result_values, c
 }
 
 void SQLLogicTestLogger::PrintResultString(MaterializedQueryResult &result) {
-	const std::string &result_string = result.ToString();
+	const std::string result_string = result.ToString();
 	GetSummary() << result_string;
 	Printer::Print(result_string);
 }
@@ -164,8 +163,9 @@ void SQLLogicTestLogger::PrintResultError(MaterializedQueryResult &result, const
 
 void SQLLogicTestLogger::UnexpectedFailure(MaterializedQueryResult &result) {
 	PrintLineSep();
-	std::cerr << "Query unexpectedly failed (" << file_name.c_str() << ":" << query_line << ")\n";
-	GetSummary() << "Query unexpectedly failed (" + file_name + ":" + to_string(query_line) + ")\n";
+	string log_str = "Query unexpectedly failed (" + file_name + ":" + to_string(query_line) + ")\n";
+	std::cerr << log_str;
+	GetSummary() << log_str;
 	PrintLineSep();
 	PrintSQL();
 	PrintLineSep();
@@ -227,11 +227,11 @@ void SQLLogicTestLogger::ColumnCountMismatch(MaterializedQueryResult &result,
 void SQLLogicTestLogger::NotCleanlyDivisible(idx_t expected_column_count, idx_t actual_column_count) {
 	PrintErrorHeader("Error in test!");
 	PrintLineSep();
-	fprintf(stderr, "Expected %d columns, but %d values were supplied\n", (int)expected_column_count,
-	        (int)actual_column_count);
-	fprintf(stderr, "This is not cleanly divisible (i.e. the last row does not have enough values)\n");
-	GetSummary() << "Expected " + to_string(expected_column_count) + " columns, but " + to_string(actual_column_count) +
-	                    " values were supplied\n";
+	string log_str =
+	    "Expected " + to_string(expected_column_count) + " columns, but " + to_string(actual_column_count) +
+	    " values were supplied\nThis is not cleanly divisible (i.e. the last row does not have enough values)";
+	std::cerr << log_str << std::endl;
+	GetSummary() << log_str << std::endl;
 }
 
 void SQLLogicTestLogger::WrongRowCount(idx_t expected_rows, MaterializedQueryResult &result,
@@ -258,11 +258,11 @@ void SQLLogicTestLogger::ColumnCountMismatchCorrectResult(idx_t original_expecte
 	PrintLineSep();
 	std::cerr << "The expected result " << termcolor::bold << "matched" << termcolor::reset << " the query result."
 	          << std::endl;
+	GetSummary() << "The expected result matched the query result.\n";
 	PrintLineSep();
 	std::cerr << termcolor::bold << "Suggested fix: modify header to \"" << termcolor::green << "query "
 	          << string(result.ColumnCount(), 'I') << termcolor::reset << termcolor::bold << "\"" << termcolor::reset
 	          << std::endl;
-	GetSummary() << "The expected result matched the query result.\n";
 	GetSummary() << "Suggested fix: modify header to \" query " + string(result.ColumnCount(), 'I') + "\"\n";
 	PrintLineSep();
 }
@@ -276,7 +276,7 @@ void SQLLogicTestLogger::SplitMismatch(idx_t row_number, idx_t expected_column_c
 	std::cerr << "Does the result contain tab values? In that case, place every value on a single row." << std::endl;
 	GetSummary() << "Expected " + to_string(expected_column_count) + " columns, but got " + to_string(split_count) +
 	                    " columns\n";
-	GetSummary() << "Does the result contain tab values? In that case, place every value on a single row.\n";
+	GetSummary() << "Does the result contain tab values? In that case, place every value on a single row." << std::endl;
 	PrintLineSep();
 	PrintSQL();
 	PrintLineSep();
