@@ -583,6 +583,7 @@ static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &cons
 			//! No filter_data assigned (does this mean the DynamicFilter is broken??)
 			return true;
 		}
+		lock_guard<mutex> lock(dynamic_filter.filter_data->lock);
 		if (!dynamic_filter.filter_data->initialized) {
 			//! Not initialized
 			return true;
@@ -591,7 +592,6 @@ static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &cons
 			//! No filter present
 			return true;
 		}
-		lock_guard<mutex> lock(dynamic_filter.filter_data->lock);
 		return EvaluateFilterAgainstConstant(*dynamic_filter.filter_data->filter, constant);
 	}
 	default:
