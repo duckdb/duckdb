@@ -21,6 +21,7 @@ public:
 	static constexpr const ConstraintType TYPE = ConstraintType::UNIQUE;
 
 public:
+	DUCKDB_API UniqueConstraint(const LogicalIndex index, const bool is_primary_key);
 	DUCKDB_API UniqueConstraint(const LogicalIndex index, string column_name, const bool is_primary_key);
 	DUCKDB_API UniqueConstraint(vector<string> columns, const bool is_primary_key);
 
