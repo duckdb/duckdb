@@ -90,7 +90,9 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			for (auto &cond : comp_join.conditions) {
 				if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 					if (cond.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-					    cond.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+					    cond.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+					    ! cond.left->Cast<BoundColumnRefExpression>().return_type.IsFloating() &&
+					    ! cond.right->Cast<BoundColumnRefExpression>().return_type.IsFloating()) {
 						// comparison join between two bound column refs
 						// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
 						auto &lhs_col = cond.left->Cast<BoundColumnRefExpression>();
