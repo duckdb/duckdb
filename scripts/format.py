@@ -447,7 +447,7 @@ with concurrent.futures.ThreadPoolExecutor() as executor:
         # Wait for all tasks to complete
         concurrent.futures.wait(threads)
     except KeyboardInterrupt:
-        executor.shutdown(wait=False, cancel_futures=True)
+        executor.shutdown(wait=True, cancel_futures=True)
         raise
 
 if check_only:
