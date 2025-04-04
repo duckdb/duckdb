@@ -183,7 +183,6 @@ jobs:
           -e ENABLE_EXTENSION_AUTOLOADING=1                                      \
           -e ENABLE_EXTENSION_AUTOINSTALL=1                                      \
           -e FORCE_WARN_UNUSED=1                                                 \
-          -e DUCKDB_PLATFORM=linux_arm64                                         \
           quay.io/pypa/manylinux_2_28_aarch64                                    \
           bash -c "yum install -y perl-IPC-Cmd && git config --global --add safe.directory $PWD && make gather-libs -C $PWD"
       - name: Deploy
