@@ -27,6 +27,7 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -34,6 +35,8 @@
 #include <sstream>
 
 namespace duckdb {
+
+constexpr int32_t ParquetReader::ORDINAL_FIELD_ID;
 
 using duckdb_parquet::ColumnChunk;
 using duckdb_parquet::ConvertedType;
@@ -573,6 +576,11 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 	}
 }
 
+ParquetColumnSchema FileRowNumberSchema() {
+	return ParquetColumnSchema("file_row_number", LogicalType::BIGINT, 0, 0, 0, 0,
+	                           ParquetColumnSchemaType::FILE_ROW_NUMBER);
+}
+
 unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 	auto file_meta_data = GetFileMetadata();
 	idx_t next_schema_idx = 0;
@@ -598,9 +606,7 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 				    "Using file_row_number option on file with column named file_row_number is not supported");
 			}
 		}
-		ParquetColumnSchema file_row_number("file_row_number", LogicalType::BIGINT, 0, 0, 0, 0,
-		                                    ParquetColumnSchemaType::FILE_ROW_NUMBER);
-		root.children.push_back(std::move(file_row_number));
+		root.children.push_back(FileRowNumberSchema());
 	}
 	return make_uniq<ParquetColumnSchema>(root);
 }
@@ -608,6 +614,10 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaData &file_meta_data,
                                                                ParquetColumnSchema &element) {
 	MultiFileColumnDefinition result(element.name, element.type);
+	if (element.schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
+		result.identifier = Value::INTEGER(ORDINAL_FIELD_ID);
+		return result;
+	}
 	auto &column_schema = file_meta_data.schema[element.schema_index];
 
 	if (column_schema.__isset.field_id) {
@@ -642,6 +652,14 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	for (idx_t i = 0; i < root_schema->children.size(); i++) {
 		auto &element = root_schema->children[i];
 		columns.push_back(ParseColumnDefinition(*file_meta_data, element));
+	}
+}
+
+void ParquetReader::AddVirtualColumn(column_t virtual_column_id) {
+	if (virtual_column_id == MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER) {
+		root_schema->children.push_back(FileRowNumberSchema());
+	} else {
+		throw InternalException("Unsupported virtual column id %d for parquet reader", virtual_column_id);
 	}
 }
 
@@ -859,16 +877,60 @@ idx_t ParquetReader::GetGroupOffset(ParquetReaderScanState &state) {
 
 static FilterPropagateResult CheckParquetStringFilter(BaseStatistics &stats, const Statistics &pq_col_stats,
                                                       TableFilter &filter) {
-	if (filter.filter_type == TableFilterType::CONSTANT_COMPARISON) {
+	switch (filter.filter_type) {
+	case TableFilterType::CONJUNCTION_AND: {
+		auto &conjunction_filter = filter.Cast<ConjunctionAndFilter>();
+		auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
+		for (auto &child_filter : conjunction_filter.child_filters) {
+			auto child_prune_result = CheckParquetStringFilter(stats, pq_col_stats, *child_filter);
+			if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
+				return FilterPropagateResult::FILTER_ALWAYS_FALSE;
+			}
+			if (child_prune_result != and_result) {
+				and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
+			}
+		}
+		return and_result;
+	}
+	case TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter.Cast<ConstantFilter>();
 		auto &min_value = pq_col_stats.min_value;
 		auto &max_value = pq_col_stats.max_value;
 		return StringStats::CheckZonemap(const_data_ptr_cast(min_value.c_str()), min_value.size(),
 		                                 const_data_ptr_cast(max_value.c_str()), max_value.size(),
 		                                 constant_filter.comparison_type, StringValue::Get(constant_filter.constant));
-	} else {
+	}
+	default:
 		return filter.CheckStatistics(stats);
 	}
+}
+
+static FilterPropagateResult CheckParquetFloatFilter(ColumnReader &reader, const Statistics &pq_col_stats,
+                                                     TableFilter &filter) {
+	// floating point values can have values in the [min, max] domain AND nan values
+	// check both stats against the filter
+	auto &type = reader.Type();
+	auto nan_stats = NumericStats::CreateUnknown(type);
+	auto nan_value = Value("nan").DefaultCastAs(type);
+	NumericStats::SetMin(nan_stats, nan_value);
+	NumericStats::SetMax(nan_stats, nan_value);
+	auto nan_prune = filter.CheckStatistics(nan_stats);
+
+	auto min_max_stats = ParquetStatisticsUtils::CreateNumericStats(reader.Type(), reader.Schema(), pq_col_stats);
+	auto prune = filter.CheckStatistics(*min_max_stats);
+
+	// if EITHER of them cannot be pruned - we cannot prune
+	if (prune == FilterPropagateResult::NO_PRUNING_POSSIBLE ||
+	    nan_prune == FilterPropagateResult::NO_PRUNING_POSSIBLE) {
+		return FilterPropagateResult::NO_PRUNING_POSSIBLE;
+	}
+	// if both are the same we can return that value
+	if (prune == nan_prune) {
+		return prune;
+	}
+	// if they are different we need to return that we cannot prune
+	// e.g. prune = always false, nan_prune = always true -> we don't know
+	return FilterPropagateResult::NO_PRUNING_POSSIBLE;
 }
 
 void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i) {
@@ -889,42 +951,37 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			// check the bloom filter if present
 			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
 			bool is_expression = column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::EXPRESSION;
+			bool has_min_max = false;
+			if (!is_generated_column) {
+				has_min_max = group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
+				              group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value;
+			}
 			if (is_expression) {
 				// no pruning possible for expressions
 				prune_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-			} else if (!column_reader.Type().IsNested() && !is_generated_column &&
-			           ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
-			           ParquetStatisticsUtils::BloomFilterExcludes(filter,
-			                                                       group.columns[column_reader.ColumnIndex()].meta_data,
-			                                                       *state.thrift_file_proto, allocator)) {
-				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-			} else if (column_reader.Type().id() == LogicalTypeId::VARCHAR && !is_generated_column &&
-			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
-			           group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.max_value) {
-
+			} else if (!is_generated_column && has_min_max && column_reader.Type().id() == LogicalTypeId::VARCHAR) {
 				// our StringStats only store the first 8 bytes of strings (even if Parquet has longer string stats)
 				// however, when reading remote Parquet files, skipping row groups is really important
 				// here, we implement a special case to check the full length for string filters
-				if (filter.filter_type == TableFilterType::CONJUNCTION_AND) {
-					const auto &and_filter = filter.Cast<ConjunctionAndFilter>();
-					auto and_result = FilterPropagateResult::FILTER_ALWAYS_TRUE;
-					for (auto &child_filter : and_filter.child_filters) {
-						auto child_prune_result = CheckParquetStringFilter(
-						    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, *child_filter);
-						if (child_prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
-							and_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
-							break;
-						} else if (child_prune_result != and_result) {
-							and_result = FilterPropagateResult::NO_PRUNING_POSSIBLE;
-						}
-					}
-					prune_result = and_result;
-				} else {
-					prune_result = CheckParquetStringFilter(
-					    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
-				}
+				prune_result = CheckParquetStringFilter(
+				    *stats, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
+			} else if (!is_generated_column && has_min_max &&
+			           (column_reader.Type().id() == LogicalTypeId::FLOAT ||
+			            column_reader.Type().id() == LogicalTypeId::DOUBLE)) {
+				// floating point columns can have NaN values in addition to the min/max bounds defined in the file
+				// in order to do optimal pruning - we prune based on the [min, max] of the file followed by pruning
+				// based on nan
+				prune_result = CheckParquetFloatFilter(
+				    column_reader, group.columns[column_reader.ColumnIndex()].meta_data.statistics, filter);
 			} else {
 				prune_result = filter.CheckStatistics(*stats);
+			}
+			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
+			    !is_generated_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
+			    ParquetStatisticsUtils::BloomFilterExcludes(filter,
+			                                                group.columns[column_reader.ColumnIndex()].meta_data,
+			                                                *state.thrift_file_proto, allocator)) {
+				prune_result = FilterPropagateResult::FILTER_ALWAYS_FALSE;
 			}
 
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
