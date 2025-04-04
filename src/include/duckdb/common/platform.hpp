@@ -67,14 +67,14 @@ std::string DuckDBPlatform() { // NOLINT: allow definition in header
 	if (os == "linux") {
 		postfix = "_musl";
 	}
-#elif !defined(_GLIBCXX_USE_CXX11_ABI) || _GLIBCXX_USE_CXX11_ABI == 0
-	if (os == "linux") {
-		postfix = "_gcc4";
-	}
+#elif (!defined(__clang__) && defined(__GNUC__) && __GNUC__ < 5) ||                                                    \
+    (defined(_GLIBCXX_USE_CXX11_ABI) && _GLIBCXX_USE_CXX11_ABI == 0)
+#error                                                                                                                 \
+    "DuckDB does not provide extensions for this (legacy) CXX ABI - Explicitly set DUCKDB_PLATFORM (Makefile) / DUCKDB_EXPLICIT_PLATFORM (CMake) to build anyway. "
 #endif
 
 #if defined(__ANDROID__)
-	postfix += "_android"; // using + because it may also be gcc4
+	postfix = "_android";
 #endif
 #ifdef __MINGW32__
 	postfix = "_mingw";

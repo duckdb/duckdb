@@ -214,6 +214,7 @@ jobs:
     env:
       VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
       GEN: ninja
+      # TODO check here as well
       DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
 
     steps:
