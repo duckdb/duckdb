@@ -134,11 +134,11 @@ SELECT list_position('a', 'a')
 ----
 No function matches
 
-query T
+# Not a list as input
+statement error
 SELECT list_position(NULL,NULL)
 ----
-NULL
-
+list_position: the first argument can not be NULL
 
 query T
 SELECT list_position([7], 5)
@@ -185,11 +185,11 @@ SELECT list_position(['test', 'notest'],'a')
 ----
 NULL
 
-# Null types
-query T
+# Not a list as input
+statement error
 SELECT list_position(NULL,1)
 ----
-NULL
+list_position: the first argument can not be NULL
 
 # Null types
 query T
@@ -200,12 +200,12 @@ NULL
 query T
 SELECT list_position([NULL],NULL)
 ----
-NULL
+1
 
 query T
 SELECT list_position([NULL, 1],NULL)
 ----
-NULL
+1
 
 query T
 SELECT list_position([NULL, 1],1)
