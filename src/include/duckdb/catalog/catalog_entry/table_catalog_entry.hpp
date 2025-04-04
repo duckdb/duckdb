@@ -26,6 +26,7 @@ class DataTable;
 
 struct RenameColumnInfo;
 struct AddColumnInfo;
+struct AddFieldInfo;
 struct RemoveColumnInfo;
 struct SetDefaultInfo;
 struct ChangeColumnTypeInfo;

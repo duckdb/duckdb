@@ -133,6 +133,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 	case AlterTableType::ADD_CONSTRAINT:
 		result = AddConstraintInfo::Deserialize(deserializer);
 		break;
+	case AlterTableType::ADD_FIELD:
+		result = AddFieldInfo::Deserialize(deserializer);
+		break;
 	case AlterTableType::ALTER_COLUMN_TYPE:
 		result = ChangeColumnTypeInfo::Deserialize(deserializer);
 		break;
@@ -208,6 +211,21 @@ void AddConstraintInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterTableInfo> AddConstraintInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<AddConstraintInfo>(new AddConstraintInfo());
 	deserializer.ReadPropertyWithDefault<unique_ptr<Constraint>>(400, "constraint", result->constraint);
+	return std::move(result);
+}
+
+void AddFieldInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WriteProperty<ColumnDefinition>(400, "new_field", new_field);
+	serializer.WritePropertyWithDefault<bool>(401, "if_field_not_exists", if_field_not_exists);
+	serializer.WritePropertyWithDefault<vector<string>>(402, "column_path", column_path);
+}
+
+unique_ptr<AlterTableInfo> AddFieldInfo::Deserialize(Deserializer &deserializer) {
+	auto new_field = deserializer.ReadProperty<ColumnDefinition>(400, "new_field");
+	auto result = duckdb::unique_ptr<AddFieldInfo>(new AddFieldInfo(std::move(new_field)));
+	deserializer.ReadPropertyWithDefault<bool>(401, "if_field_not_exists", result->if_field_not_exists);
+	deserializer.ReadPropertyWithDefault<vector<string>>(402, "column_path", result->column_path);
 	return std::move(result);
 }
 

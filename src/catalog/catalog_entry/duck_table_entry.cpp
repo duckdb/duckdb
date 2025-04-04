@@ -20,6 +20,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 
@@ -191,6 +192,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &add_info = table_info.Cast<AddColumnInfo>();
 		return AddColumn(context, add_info);
 	}
+	case AlterTableType::ADD_FIELD: {
+		auto &add_info = table_info.Cast<AddFieldInfo>();
+		return AddField(context, add_info);
+	}
 	case AlterTableType::REMOVE_COLUMN: {
 		auto &remove_info = table_info.Cast<RemoveColumnInfo>();
 		return RemoveColumn(context, remove_info);
@@ -359,6 +364,119 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	auto bound_create_info = binder->BindCreateTableInfo(std::move(create_info), schema, bound_defaults);
 	auto new_storage = make_shared_ptr<DataTable>(context, *storage, info.new_column, *bound_defaults.back());
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
+}
+
+struct StructMappingInfo {
+	LogicalType new_type;
+	unique_ptr<ParsedExpression> default_value;
+	ErrorData error;
+};
+
+unique_ptr<ParsedExpression> PackExpression(unique_ptr<ParsedExpression> expr, string name) {
+	expr->SetAlias(std::move(name));
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(expr));
+	auto res = make_uniq<FunctionExpression>("struct_pack", std::move(children));
+	return std::move(res);
+}
+
+Value ConstructMapping(const string &name, const LogicalType &type) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		return Value(name);
+	}
+	child_list_t<Value> child_mapping;
+	auto &child_types = StructType::GetChildTypes(type);
+	for (auto &entry : child_types) {
+		auto mapping_value = ConstructMapping(entry.first, entry.second);
+		if (entry.second.id() == LogicalTypeId::STRUCT) {
+			child_list_t<Value> child_values;
+			child_values.emplace_back(string(), Value(entry.first));
+			child_values.emplace_back(string(), std::move(mapping_value));
+			mapping_value = Value::STRUCT(std::move(child_values));
+		}
+		child_mapping.emplace_back(entry.first, std::move(mapping_value));
+	}
+	return Value::STRUCT(std::move(child_mapping));
+}
+
+StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string> &column_path,
+                                   const ColumnDefinition &new_field, idx_t depth = 0) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		throw BinderException("Column %s is not a struct - ALTER TABLE can only add fields to structs",
+		                      column_path[depth]);
+	}
+	StructMappingInfo result;
+	auto child_list = StructType::GetChildTypes(type);
+	if (column_path.size() == depth + 1) {
+		// root path - we are adding at this level
+		// check if a field with this name already exists
+		for (auto &entry : child_list) {
+			if (StringUtil::CIEquals(entry.first, new_field.Name())) {
+				// already exists!
+				result.error = ErrorData(CatalogException("Duplicate field \"%s\" - field already exists in struct %s",
+				                                          new_field.Name(), column_path.back()));
+				return result;
+			}
+		}
+		// add the new type
+		child_list.emplace_back(new_field.Name(), new_field.Type());
+		result.new_type = LogicalType::STRUCT(std::move(child_list));
+		// set the default value
+		unique_ptr<ParsedExpression> default_value;
+		if (new_field.HasDefaultValue()) {
+			default_value = new_field.DefaultValue().Copy();
+		} else {
+			default_value = make_uniq<ConstantExpression>(Value(new_field.Type()));
+		}
+		result.default_value = PackExpression(std::move(default_value), new_field.Name());
+		return result;
+	}
+	// not the root path - we need to recurse
+	auto &next_component = column_path[depth + 1];
+	bool found = false;
+	for (auto &entry : child_list) {
+		if (StringUtil::CIEquals(entry.first, next_component)) {
+			// found the entry - recurse
+			auto child_res = AddFieldToStruct(entry.second, column_path, new_field, depth + 1);
+			if (child_res.error.HasError()) {
+				return child_res;
+			}
+			entry.second = std::move(child_res.new_type);
+			result.default_value = PackExpression(std::move(child_res.default_value), entry.first);
+			found = true;
+			break;
+		}
+	}
+	result.new_type = LogicalType::STRUCT(std::move(child_list));
+	if (!found) {
+		throw BinderException("Sub-field %s does not exist in column %s", next_component, column_path[depth]);
+	}
+	return result;
+}
+
+unique_ptr<CatalogEntry> DuckTableEntry::AddField(ClientContext &context, AddFieldInfo &info) {
+	// follow the path
+	auto &col = GetColumn(info.column_path[0]);
+	auto res = AddFieldToStruct(col.Type(), info.column_path, info.new_field);
+	if (res.error.HasError()) {
+		if (!info.if_field_not_exists) {
+			res.error.Throw();
+		}
+		return nullptr;
+	}
+
+	// construct the struct remapping expression
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ColumnRefExpression>(info.column_path[0]));
+	children.push_back(make_uniq<ConstantExpression>(Value(res.new_type)));
+	children.push_back(make_uniq<ConstantExpression>(ConstructMapping(col.Name(), col.Type())));
+	children.push_back(std::move(res.default_value));
+
+	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
+
+	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
+	                                        std::move(function));
+	return ChangeColumnType(context, change_column_type);
 }
 
 void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index,

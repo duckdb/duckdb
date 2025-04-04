@@ -118,6 +118,29 @@
     "constructor": ["new_column"]
   },
   {
+    "class": "AddFieldInfo",
+    "base": "AlterTableInfo",
+    "enum": "ADD_FIELD",
+    "members": [
+      {
+        "id": 400,
+        "name": "new_field",
+        "type": "ColumnDefinition"
+      },
+      {
+        "id": 401,
+        "name": "if_field_not_exists",
+        "type": "bool"
+      },
+      {
+        "id": 402,
+        "name": "column_path",
+        "type": "vector<string>"
+      }
+    ],
+    "constructor": ["new_field"]
+  },
+  {
     "class": "RemoveColumnInfo",
     "base": "AlterTableInfo",
     "enum": "REMOVE_COLUMN",

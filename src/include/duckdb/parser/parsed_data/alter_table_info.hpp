@@ -82,7 +82,8 @@ enum class AlterTableType : uint8_t {
 	SET_COLUMN_COMMENT = 10,
 	ADD_CONSTRAINT = 11,
 	SET_PARTITIONED_BY = 12,
-	SET_SORTED_BY = 13
+	SET_SORTED_BY = 13,
+	ADD_FIELD = 14
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -166,6 +167,31 @@ public:
 
 private:
 	explicit AddColumnInfo(ColumnDefinition new_column);
+};
+
+//===--------------------------------------------------------------------===//
+// AddFieldInfo
+//===--------------------------------------------------------------------===//
+struct AddFieldInfo : public AlterTableInfo {
+	AddFieldInfo(AlterEntryData data, vector<string> column_path, ColumnDefinition new_field, bool if_field_not_exists);
+	~AddFieldInfo() override;
+
+	//! The path to the struct
+	vector<string> column_path;
+	//! New field to add to the struct
+	ColumnDefinition new_field;
+	//! Whether or not an error should be thrown if the field exist
+	bool if_field_not_exists;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	explicit AddFieldInfo(ColumnDefinition new_column);
 };
 
 //===--------------------------------------------------------------------===//
