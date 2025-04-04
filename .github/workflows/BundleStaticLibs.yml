@@ -162,7 +162,7 @@ jobs:
 
   bundle-linux-arm64-static-libs:
     name: Linux arm64 static libs
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
 
     steps:
       - uses: actions/checkout@v4
