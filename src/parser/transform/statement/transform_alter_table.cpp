@@ -83,7 +83,7 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 			}
 			if (column_names.size() == 1) {
 				result->info =
-				    make_uniq<RemoveColumnInfo>(std::move(data), command->name, command->missing_ok, cascade);
+				    make_uniq<RemoveColumnInfo>(std::move(data), column_names[0], command->missing_ok, cascade);
 			} else {
 				result->info =
 				    make_uniq<RemoveFieldInfo>(std::move(data), std::move(column_names), command->missing_ok, cascade);
