@@ -67,7 +67,7 @@ endif()
 if (NOT MINGW AND NOT "${OS_NAME}" STREQUAL "linux" AND NOT ${WASM_ENABLED})
     duckdb_extension_load(delta
             GIT_URL https://github.com/duckdb/duckdb-delta
-            GIT_TAG 026345b9cf9092e3dd5ae42cc501ec8ed45ca09b
+            GIT_TAG 90f244b3d572c1692867950b562df8183957b7a8
     )
 endif()
 
