@@ -64,7 +64,7 @@ string ErrorData::ConstructFinalMessage() const {
 	if (type == ExceptionType::INTERNAL) {
 		error += "\nThis error signals an assertion failure within DuckDB. This usually occurs due to "
 		         "unexpected conditions or errors in the program's logic.\nFor more information, see "
-		         "https://duckdb.org/docs/dev/internal_errors";
+		         "https://duckdb.org/docs/stable/dev/internal_errors";
 	}
 	return error;
 }
