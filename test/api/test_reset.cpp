@@ -167,6 +167,7 @@ bool OptionIsExcludedFromTest(const string &name) {
 	    "custom_user_agent",
 	    "default_block_size",
 	    "index_scan_percentage",
+	    "scheduler_process_partial",
 	    "index_scan_max_count"};
 	return excluded_options.count(name) == 1;
 }

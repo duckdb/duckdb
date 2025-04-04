@@ -33,6 +33,7 @@ enum class ReaderInitializeType { INITIALIZED, SKIP_READING_FILE };
 struct MultiFileReader {
 public:
 	static constexpr column_t COLUMN_IDENTIFIER_FILENAME = UINT64_C(9223372036854775808);
+	static constexpr column_t COLUMN_IDENTIFIER_FILE_ROW_NUMBER = UINT64_C(9223372036854775809);
 
 public:
 	virtual ~MultiFileReader();
