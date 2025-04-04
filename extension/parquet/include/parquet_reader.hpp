@@ -133,6 +133,10 @@ struct ParquetUnionData : public BaseUnionData {
 
 class ParquetReader : public BaseFileReader {
 public:
+	// Reserved field id used for the "ord" field according to the iceberg spec (used for file_row_number)
+	static constexpr int32_t ORDINAL_FIELD_ID = 2147483645;
+
+public:
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
 	~ParquetReader() override;
@@ -173,6 +177,8 @@ public:
 	string GetReaderType() const override {
 		return "Parquet";
 	}
+
+	void AddVirtualColumn(column_t virtual_column_id) override;
 
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
