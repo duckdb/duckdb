@@ -23,6 +23,31 @@ class TestPandasString(object):
         if hasattr(pd, 'StringDtype'):
             assert numpy.all(df_out['string'] == strings)
 
+    def test_pandas_fixed_width_string(self, duckdb_cursor):
+        strings = numpy.array(['f', 'bar', 'bazzz'], dtype='S3')
+        objects = numpy.array(['f', 'bar', 'bazzz'], dtype='U3')
+
+        # https://numpy.org/doc/stable/user/basics.strings.html#fixed-width-data-types
+        df_in = pd.DataFrame(
+            {
+                'str': strings,
+                'obj': objects,
+            },
+            copy=False,
+        )
+        assert df_in['str'].dtype == numpy.dtype('S3') and str(df_in['str'].dtype) == '|S3'
+        assert df_in['obj'].dtype == numpy.dtype('O')
+
+        out = duckdb.query_df(df_in, "data", "SELECT str FROM data").fetchall()
+        assert out == [('f',), ('bar',), ('baz',)]
+
+        df_out = duckdb.query_df(df_in, "data", "SELECT length(str) AS len FROM data").df()
+        assert numpy.all(df_out['len'] == [1, 3, 3])
+
+        df_in = df_in[df_in['str'].str.decode('utf-8').str.startswith('b')]
+        out = duckdb.query_df(df_in, "data", "SELECT str FROM data").fetchall()
+        assert out == [('bar',), ('baz',)]
+
     def test_bug_2467(self, duckdb_cursor):
         N = 1_000_000
         # Create DataFrame with string attribute
