@@ -1,0 +1,29 @@
+# name: test/optimizer/joins/join_on_floats.test
+# description: tests for #16901 / #16965
+# group: [joins]
+
+statement ok
+create table x as (select 0.0::double as a);
+
+statement ok
+create table y as (select '-0.0'::double as b);
+
+query TT
+select a::text, b::text from x inner join y on a = b;
+----
+0.0	-0.0
+
+query TT
+select a::text, b::text from y inner join x on a = b;
+----
+0.0	-0.0
+
+query TT
+select a::text, b::text from x right join y on a = b;
+----
+0.0	-0.0
+
+query TT
+select a::text, b::text from x left join y on a = b;
+----
+0.0	-0.0
