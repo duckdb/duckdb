@@ -31,7 +31,8 @@ class CreateBFGlobalSinkState : public GlobalSinkState {
 public:
 	CreateBFGlobalSinkState(ClientContext &context, const PhysicalCreateBF &op)
 	    : context(context), op(op),
-	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())) {
+	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)) {
 		data_collection = make_uniq<ColumnDataCollection>(context, op.types);
 
 		// init min max aggregation
@@ -131,6 +132,9 @@ public:
 	unordered_map<idx_t, idx_t> col_to_expr;
 	unique_ptr<GlobalUngroupedAggregateState> global_aggregate_state;
 	vector<unique_ptr<Expression>> min_max_aggregates;
+
+	//! If memory is not enough, give up creating BFs
+	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 };
 
 class CreateBFLocalSinkState : public LocalSinkState {
@@ -140,9 +144,13 @@ public:
 		local_data = make_uniq<ColumnDataCollection>(context, op.types);
 		col_to_expr = gstate.col_to_expr;
 		local_aggregate_state = make_uniq<LocalUngroupedAggregateState>(*gstate.global_aggregate_state);
+
+		// How much is the memory that used to materialize the table and build BFs?
+		temporary_memory_state = TemporaryMemoryManager::Get(context).Register(context);
+		temporary_memory_state->SetRemainingSizeAndUpdateReservation(context, op.GetMaxThreadMemory(context));
 	}
 
-	void Sink(DataChunk &chunk) const {
+	void SinkMinMaxFilter(DataChunk &chunk) const {
 		for (auto &pair : col_to_expr) {
 			idx_t col_idx = pair.first;
 			idx_t expr_idx = pair.second;
@@ -159,10 +167,19 @@ public:
 	//! Local Min/Max aggregates for filter pushdown
 	unordered_map<idx_t, idx_t> col_to_expr;
 	unique_ptr<LocalUngroupedAggregateState> local_aggregate_state;
+
+	//! If memory is not enough, give up creating BFs
+	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 };
 
 SinkResultType PhysicalCreateBF::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &state = input.local_state.Cast<CreateBFLocalSinkState>();
+
+	if (!is_successful || state.local_data->AllocationSize() + chunk.GetAllocationSize() >=
+	                          state.temporary_memory_state->GetReservation()) {
+		is_successful = false;
+		return SinkResultType::FINISHED;
+	}
 
 	// Bloomfilter
 	state.local_data->Append(chunk);
@@ -191,6 +208,11 @@ SinkCombineResultType PhysicalCreateBF::Combine(ExecutionContext &context, Opera
 	gstate.global_aggregate_state->Combine(*state.local_aggregate_state);
 
 	auto guard = gstate.Lock();
+	size_t global_size =
+	    gstate.temporary_memory_state->GetMinimumReservation() + state.temporary_memory_state->GetMinimumReservation();
+	gstate.temporary_memory_state->SetMinimumReservation(global_size);
+	gstate.temporary_memory_state->SetRemainingSizeAndUpdateReservation(context.client, global_size);
+
 	gstate.local_data_collections.push_back(std::move(state.local_data));
 	return SinkCombineResultType::FINISHED;
 }
@@ -295,21 +317,21 @@ SinkFinalizeType PhysicalCreateBF::Finalize(Pipeline &pipeline, Event &event, Cl
                                             OperatorSinkFinalizeInput &input) const {
 	auto &sink = input.global_state.Cast<CreateBFGlobalSinkState>();
 
-	// give up creating filters
+	// Give up creating filters
 	if (!is_successful) {
 		return SinkFinalizeType::READY;
 	}
 
-	// finalize min-max
+	// Finalize min-max
 	sink.FinalizeMinMax();
 
-	// collect local data
+	// Collect local data
 	for (auto &local_data : sink.local_data_collections) {
 		sink.data_collection->Combine(*local_data);
 	}
 	sink.local_data_collections.clear();
 
-	// initialize the bloom filter
+	// Initialize the bloom filter
 	uint32_t num_rows = static_cast<uint32_t>(sink.data_collection->Count());
 	for (size_t i = 0; i < filter_plans.size(); i++) {
 		auto &plan = filter_plans[i];
