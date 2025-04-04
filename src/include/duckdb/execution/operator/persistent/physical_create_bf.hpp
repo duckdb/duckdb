@@ -72,8 +72,12 @@ public:
 		return true;
 	}
 
-	/* Add related createBF dependency */
+	// Add related createBF dependency
 	void BuildPipelines(Pipeline &current, MetaPipeline &meta_pipeline) override;
 	void BuildPipelinesFromRelated(Pipeline &current, MetaPipeline &meta_pipeline);
+
+public:
+	// If memory is not enough, give up creating BFs
+	bool GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInput &input) const;
 };
 } // namespace duckdb

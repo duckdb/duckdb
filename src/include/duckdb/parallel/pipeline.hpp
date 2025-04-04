@@ -78,6 +78,10 @@ public:
 
 	Executor &executor;
 
+	//! Runtime Statistics
+	std::atomic<int64_t> num_fetched_source_chunks;
+	std::atomic<int64_t> num_fetched_source_rows;
+
 public:
 	ClientContext &GetClientContext();
 

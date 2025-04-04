@@ -10,6 +10,7 @@
 #include "duckdb/function/aggregate/distributive_function_utils.hpp"
 #include "duckdb/function/function_binder.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "duckdb/storage/temporary_memory_manager.hpp"
 
 namespace duckdb {
 
@@ -32,7 +33,7 @@ public:
 	CreateBFGlobalSinkState(ClientContext &context, const PhysicalCreateBF &op)
 	    : context(context), op(op),
 	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
-	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)) {
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), num_received_rows(0) {
 		data_collection = make_uniq<ColumnDataCollection>(context, op.types);
 
 		// init min max aggregation
@@ -135,6 +136,10 @@ public:
 
 	//! If memory is not enough, give up creating BFs
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
+
+	//! Runtime stats
+	atomic<size_t> num_received_rows;
+	bool is_selectivity_checked = false;
 };
 
 class CreateBFLocalSinkState : public LocalSinkState {
@@ -172,11 +177,38 @@ public:
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 };
 
+bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInput &input) const {
+	auto &gstate = input.global_state.Cast<CreateBFGlobalSinkState>();
+	auto &lstate = input.local_state.Cast<CreateBFLocalSinkState>();
+
+	gstate.num_received_rows += chunk.size();
+
+	if (lstate.local_data->AllocationSize() + chunk.GetAllocationSize() >=
+	    lstate.temporary_memory_state->GetReservation()) {
+		return true;
+	}
+
+	// if (!gstate.is_selectivity_checked && this_pipeline->GetSource()->estimated_cardinality > 1000000) {
+	// 	if (this_pipeline->num_fetched_source_chunks > 32) {
+	// 		gstate.is_selectivity_checked = true;
+	//
+	// 		auto num_received = gstate.num_received_rows.load();
+	// 		auto num_fetched = this_pipeline->num_fetched_source_chunks.load() * STANDARD_VECTOR_SIZE;
+	//
+	// 		double selectivity = static_cast<double>(num_received) / static_cast<double>(num_fetched);
+	// 		std::cout << selectivity << std::endl;
+	// 		if (selectivity > 0.9) {
+	// 			return true;
+	// 		}
+	// 	}
+	// }
+	return false;
+}
+
 SinkResultType PhysicalCreateBF::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &state = input.local_state.Cast<CreateBFLocalSinkState>();
 
-	if (!is_successful || state.local_data->AllocationSize() + chunk.GetAllocationSize() >=
-	                          state.temporary_memory_state->GetReservation()) {
+	if (!is_successful || GiveUpBFCreation(chunk, input)) {
 		is_successful = false;
 		return SinkResultType::FINISHED;
 	}

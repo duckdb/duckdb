@@ -527,6 +527,10 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	OperatorSourceInput source_input = {*pipeline.source_state, *local_source_state, interrupt_state};
 	auto res = GetData(result, source_input);
 
+	// Collect pipeline source statistics
+	pipeline.num_fetched_source_chunks++;
+	pipeline.num_fetched_source_rows += static_cast<int64_t>(result.size());
+
 	// Ensures sources only return empty results when Blocking or Finished
 	D_ASSERT(res != SourceResultType::BLOCKED || result.size() == 0);
 	if (res == SourceResultType::FINISHED) {
