@@ -27,6 +27,7 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -34,6 +35,8 @@
 #include <sstream>
 
 namespace duckdb {
+
+constexpr int32_t ParquetReader::ORDINAL_FIELD_ID;
 
 using duckdb_parquet::ColumnChunk;
 using duckdb_parquet::ConvertedType;
@@ -573,6 +576,11 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 	}
 }
 
+ParquetColumnSchema FileRowNumberSchema() {
+	return ParquetColumnSchema("file_row_number", LogicalType::BIGINT, 0, 0, 0, 0,
+	                           ParquetColumnSchemaType::FILE_ROW_NUMBER);
+}
+
 unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 	auto file_meta_data = GetFileMetadata();
 	idx_t next_schema_idx = 0;
@@ -598,9 +606,7 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 				    "Using file_row_number option on file with column named file_row_number is not supported");
 			}
 		}
-		ParquetColumnSchema file_row_number("file_row_number", LogicalType::BIGINT, 0, 0, 0, 0,
-		                                    ParquetColumnSchemaType::FILE_ROW_NUMBER);
-		root.children.push_back(std::move(file_row_number));
+		root.children.push_back(FileRowNumberSchema());
 	}
 	return make_uniq<ParquetColumnSchema>(root);
 }
@@ -608,6 +614,10 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaData &file_meta_data,
                                                                ParquetColumnSchema &element) {
 	MultiFileColumnDefinition result(element.name, element.type);
+	if (element.schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
+		result.identifier = Value::INTEGER(ORDINAL_FIELD_ID);
+		return result;
+	}
 	auto &column_schema = file_meta_data.schema[element.schema_index];
 
 	if (column_schema.__isset.field_id) {
@@ -642,6 +652,14 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	for (idx_t i = 0; i < root_schema->children.size(); i++) {
 		auto &element = root_schema->children[i];
 		columns.push_back(ParseColumnDefinition(*file_meta_data, element));
+	}
+}
+
+void ParquetReader::AddVirtualColumn(column_t virtual_column_id) {
+	if (virtual_column_id == MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER) {
+		root_schema->children.push_back(FileRowNumberSchema());
+	} else {
+		throw InternalException("Unsupported virtual column id %d for parquet reader", virtual_column_id);
 	}
 }
 
