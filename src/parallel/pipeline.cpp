@@ -338,14 +338,11 @@ void Pipeline::ModifyPipeline() {
 	while (true) {
 		switch (op->type) {
 		case PhysicalOperatorType::USE_BF:
-		case PhysicalOperatorType::FILTER: {
+		case PhysicalOperatorType::FILTER:
+		case PhysicalOperatorType::PROJECTION: {
 			new_operators.push_back(*op);
 			break;
 		}
-		// case PhysicalOperatorType::PROJECTION:{
-		// 	new_operators.push_back(*op);
-		// 	break;
-		// }
 		case PhysicalOperatorType::CREATE_BF: {
 			auto &creator = op->Cast<PhysicalCreateBF>();
 			if (!creator.is_successful) {
@@ -353,7 +350,7 @@ void Pipeline::ModifyPipeline() {
 			}
 
 			source = op;
-			operators.insert(operators.begin(), new_operators.begin(), new_operators.end());
+			operators.insert(operators.begin(), new_operators.rbegin(), new_operators.rend());
 			return;
 		}
 		case PhysicalOperatorType::COLUMN_DATA_SCAN:
@@ -362,7 +359,7 @@ void Pipeline::ModifyPipeline() {
 		case PhysicalOperatorType::DELIM_SCAN:
 		case PhysicalOperatorType::CTE_SCAN: {
 			source = op;
-			operators.insert(operators.begin(), new_operators.begin(), new_operators.end());
+			operators.insert(operators.begin(), new_operators.rbegin(), new_operators.rend());
 			return;
 		}
 		default:
