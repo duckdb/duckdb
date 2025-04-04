@@ -8,6 +8,8 @@ import shutil
 
 import argparse
 
+error_container = []
+
 
 def valid_timeout(value):
     try:
@@ -146,7 +148,10 @@ def launch_test(test, list_of_tests=False):
         test_cmd = [unittest_program] + test
         if args.valgrind:
             test_cmd = ['valgrind'] + test_cmd
-        res = subprocess.run(test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout)
+        # should unset SUMMARIZE_FAILURES to avoid producing exceeding failure logs
+        res = subprocess.run(
+            test_cmd, stdout=unittest_stdout, stderr=unittest_stderr, timeout=timeout, env={'SUMMARIZE_FAILURES': '0'}
+        )
     except subprocess.TimeoutExpired as e:
         if list_of_tests:
             print("[TIMED OUT]", flush=True)
@@ -200,6 +205,9 @@ STDERR
         )
         print(stderr)
 
+        new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": stderr}
+        error_container.append(new_data)
+
     # if a test closes unexpectedly (e.g., SEGV), test cleanup doesn't happen,
     # causing us to run out of space on subsequent tests in GH Actions (not much disk space there)
     duckdb_unittest_tempdir = os.path.join(
@@ -247,4 +255,14 @@ else:
 
 if all_passed:
     exit(0)
+if len(error_container):
+    print(
+        '''\n\n====================================================
+================  FAILURES SUMMARY  ================
+====================================================\n
+'''
+    )
+    for i, error in enumerate(error_container, start=1):
+        print(f"{i}:", error["test"][0])
+        print(error["stderr"])
 exit(1)

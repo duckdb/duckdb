@@ -3,6 +3,7 @@
 
 #include "duckdb/common/file_system.hpp"
 #include "duckdb/common/string_util.hpp"
+#include "sqlite/sqllogic_test_logger.hpp"
 #include "test_helpers.hpp"
 
 using namespace duckdb;
@@ -11,6 +12,7 @@ namespace duckdb {
 static bool test_force_storage = false;
 static bool test_force_reload = false;
 static bool test_memory_leaks = false;
+static bool summarize_failures = false;
 
 bool TestForceStorage() {
 	return test_force_storage;
@@ -24,18 +26,32 @@ bool TestMemoryLeaks() {
 	return test_memory_leaks;
 }
 
+bool SummarizeFailures() {
+	return summarize_failures;
+}
+
+std::stringstream &GetSummary() {
+	static std::stringstream summary;
+	return summary;
+}
+
 } // namespace duckdb
 
 int main(int argc, char *argv[]) {
 	duckdb::unique_ptr<FileSystem> fs = FileSystem::CreateLocal();
 	string test_directory = DUCKDB_ROOT_DIRECTORY;
 
+	const char *summarize = std::getenv("SUMMARIZE_FAILURES");
+	if (summarize != nullptr && std::string(summarize) == "1") {
+		summarize_failures = true;
+	}
+
 	int new_argc = 0;
 	auto new_argv = duckdb::unique_ptr<char *[]>(new char *[argc]);
 	for (int i = 0; i < argc; i++) {
 		if (string(argv[i]) == "--force-storage") {
 			test_force_storage = true;
-		} else if (string(argv[i]) == "--force-reload" || string(argv[i]) == "--force-restart") {
+		} else if (string(argv[i]) == "--force-reload") {
 			test_force_reload = true;
 		} else if (StringUtil::StartsWith(string(argv[i]), "--memory-leak") ||
 		           StringUtil::StartsWith(string(argv[i]), "--test-memory-leak")) {
@@ -59,6 +75,8 @@ int main(int argc, char *argv[]) {
 			SetDebugInitialize(0xFF);
 		} else if (string(argv[i]) == "--single-threaded") {
 			SetSingleThreaded();
+		} else if (string(argv[i]) == "--summarize-failures") {
+			summarize_failures = true;
 		} else {
 			new_argv[new_argc] = argv[i];
 			new_argc++;
@@ -78,8 +96,15 @@ int main(int argc, char *argv[]) {
 	}
 
 	RegisterSqllogictests();
-
 	int result = Catch::Session().run(new_argc, new_argv.get());
+
+	std::string failures_summary = GetSummary().str();
+	if (!failures_summary.empty() && summarize_failures) {
+		std::cout << "\n====================================================" << std::endl;
+		std::cout << "================  FAILURES SUMMARY  ================" << std::endl;
+		std::cout << "====================================================\n" << std::endl;
+		std::cout << failures_summary;
+	}
 
 	if (DeleteTestPath()) {
 		TestDeleteDirectory(dir);
