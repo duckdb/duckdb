@@ -97,6 +97,9 @@ public:
 	bool EmptyOrOnlyHeader() const;
 
 private:
+	//! If all our candidates failed due to lines being bigger than the max line size.
+	bool all_fail_max_line_size = true;
+	CSVError line_error;
 	//! CSV State Machine Cache
 	CSVStateMachineCache &state_machine_cache;
 	//! Highest number of columns found
