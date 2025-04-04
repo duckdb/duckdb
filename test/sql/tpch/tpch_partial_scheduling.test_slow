@@ -1,0 +1,27 @@
+# name: test/sql/tpch/tpch_partial_scheduling.test_slow
+# description: Test TPC-H SF1 while running all queries at oncem
+# group: [tpch]
+
+require tpch
+
+statement ok
+CALL dbgen(sf=1);
+
+statement ok
+SET scheduler_process_partial=true;
+
+concurrentloop i 1 23
+
+onlyif i<=9
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q0${i}.csv
+
+onlyif i>=10
+query I
+PRAGMA tpch(${i})
+----
+<FILE>:extension/tpch/dbgen/answers/sf1/q${i}.csv
+
+endloop
