@@ -9,6 +9,8 @@ import inspect
 import subprocess
 import difflib
 import re
+import tempfile
+import uuid
 import concurrent.futures
 from python_helpers import open_utf8
 
@@ -387,7 +389,7 @@ def format_file(f, full_path, directory, ext):
             print(total_diff)
             difference_files.append(full_path)
     else:
-        tmpfile = full_path + ".tmp"
+        tmpfile = os.path.join(tempfile.gettempdir(), str(uuid.uuid4()))
         with open_utf8(tmpfile, 'w+') as f:
             f.write(new_text)
         os.rename(tmpfile, full_path)
