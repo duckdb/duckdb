@@ -84,7 +84,8 @@ enum class AlterTableType : uint8_t {
 	SET_PARTITIONED_BY = 12,
 	SET_SORTED_BY = 13,
 	ADD_FIELD = 14,
-	REMOVE_FIELD = 15
+	REMOVE_FIELD = 15,
+	RENAME_FIELD = 16
 };
 
 struct AlterTableInfo : public AlterInfo {
@@ -124,6 +125,29 @@ public:
 
 private:
 	RenameColumnInfo();
+};
+
+//===--------------------------------------------------------------------===//
+// RenameFieldInfo
+//===--------------------------------------------------------------------===//
+struct RenameFieldInfo : public AlterTableInfo {
+	RenameFieldInfo(AlterEntryData data, vector<string> column_path, string new_name_p);
+	~RenameFieldInfo() override;
+
+	//! Path to source field
+	vector<string> column_path;
+	//! Column new name
+	string new_name;
+
+public:
+	unique_ptr<AlterInfo> Copy() const override;
+	string ToString() const override;
+
+	void Serialize(Serializer &serializer) const override;
+	static unique_ptr<AlterTableInfo> Deserialize(Deserializer &deserializer);
+
+private:
+	RenameFieldInfo();
 };
 
 //===--------------------------------------------------------------------===//

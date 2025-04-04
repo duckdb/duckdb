@@ -181,6 +181,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &rename_info = table_info.Cast<RenameColumnInfo>();
 		return RenameColumn(context, rename_info);
 	}
+	case AlterTableType::RENAME_FIELD: {
+		auto &rename_info = table_info.Cast<RenameFieldInfo>();
+		return RenameField(context, rename_info);
+	}
 	case AlterTableType::RENAME_TABLE: {
 		auto &rename_info = table_info.Cast<RenameTableInfo>();
 		auto copied_table = Copy(context);
@@ -631,7 +635,7 @@ struct DroppedFieldMapping {
 
 DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<string> &column_path, idx_t depth) {
 	if (type.id() != LogicalTypeId::STRUCT) {
-		throw CatalogException("Cannot drop entry from column \"%s\" - not a struct", column_path[0]);
+		throw CatalogException("Cannot drop field from column \"%s\" - not a struct", column_path[0]);
 	}
 	auto &dropped_entry = column_path[depth];
 	bool last_entry = depth + 1 == column_path.size();
@@ -649,21 +653,22 @@ DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<st
 			if (last_entry) {
 				// we are dropping this entry in its entirety - just skip
 				if (child_types.size() == 1) {
-					throw CatalogException("Cannot drop entry %s from column %s - it is the last field of the struct",
+					throw CatalogException("Cannot drop field %s from column %s - it is the last field of the struct",
 					                       column_path.back(), column_path.front());
 				}
 				continue;
+			} else {
+				// we are dropping a field in this entry - recurse
+				auto child_result = DropFieldFromStruct(entry.second, column_path, depth + 1);
+				if (child_result.error.HasError()) {
+					// bubble up error
+					return child_result;
+				}
+				mapping_value = std::move(child_result.mapping);
+				type_value = std::move(child_result.new_type);
 			}
-			// we are dropping a field in this entry - recurse
-			auto child_result = DropFieldFromStruct(entry.second, column_path, depth + 1);
-			if (child_result.error.HasError()) {
-				// bubble up error
-				return child_result;
-			}
-			mapping_value = std::move(child_result.mapping);
-			type_value = std::move(child_result.new_type);
 		} else {
-			// we are not dropping this entry - copy the type and create a straightforward mapping
+			// we are not adjusting this entry - copy the type and create a straightforward mapping
 			mapping_value = ConstructMapping(entry.first, entry.second);
 			type_value = entry.second;
 		}
@@ -699,6 +704,96 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, Rem
 		if (!info.if_column_exists) {
 			res.error.Throw();
 		}
+		return nullptr;
+	}
+
+	// construct the struct remapping expression
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ColumnRefExpression>(info.column_path[0]));
+	children.push_back(make_uniq<ConstantExpression>(Value(res.new_type)));
+	children.push_back(make_uniq<ConstantExpression>(std::move(res.mapping)));
+	children.push_back(make_uniq<ConstantExpression>(Value()));
+
+	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
+
+	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
+	                                        std::move(function));
+	return ChangeColumnType(context, change_column_type);
+}
+
+DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<string> &column_path,
+                                          const string &new_name, idx_t depth) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		throw CatalogException("Cannot rename field from column \"%s\" - not a struct", column_path[0]);
+	}
+	auto &rename_entry = column_path[depth];
+	bool last_entry = depth + 1 == column_path.size();
+	bool found = false;
+	DroppedFieldMapping result;
+	child_list_t<Value> child_mapping;
+	child_list_t<LogicalType> new_type_children;
+	auto &child_types = StructType::GetChildTypes(type);
+	for (auto &entry : child_types) {
+		auto field_name = entry.first;
+		Value mapping_value;
+		LogicalType type_value;
+		if (StringUtil::CIEquals(field_name, rename_entry)) {
+			// this is the entry we are dropping
+			found = true;
+			if (last_entry) {
+				// we are renaming this entry
+				for (auto &sub_entry : child_types) {
+					if (StringUtil::CIEquals(new_name, sub_entry.first)) {
+						throw CatalogException(
+						    "Cannot rename field %s from column %s to %s - a field with this name already exists",
+						    column_path.back(), column_path.front(), new_name);
+					}
+				}
+				field_name = new_name;
+				mapping_value = ConstructMapping(entry.first, entry.second);
+				type_value = entry.second;
+			} else {
+				// we are dropping a field in this entry - recurse
+				auto child_result = RenameFieldFromStruct(entry.second, column_path, new_name, depth + 1);
+				if (child_result.error.HasError()) {
+					// bubble up error
+					return child_result;
+				}
+				mapping_value = std::move(child_result.mapping);
+				type_value = std::move(child_result.new_type);
+			}
+		} else {
+			// we are not adjusting this entry - copy the type and create a straightforward mapping
+			mapping_value = ConstructMapping(entry.first, entry.second);
+			type_value = entry.second;
+		}
+		if (entry.second.id() == LogicalTypeId::STRUCT) {
+			child_list_t<Value> child_values;
+			child_values.emplace_back(string(), Value(entry.first));
+			child_values.emplace_back(string(), std::move(mapping_value));
+			mapping_value = Value::STRUCT(std::move(child_values));
+		}
+		child_mapping.emplace_back(field_name, std::move(mapping_value));
+		new_type_children.emplace_back(field_name, type_value);
+	}
+	if (!found) {
+		result.error = ErrorData(CatalogException("Cannot rename field \"%s\" - it does not exist", rename_entry));
+	} else {
+		result.mapping = Value::STRUCT(std::move(child_mapping));
+		result.new_type = LogicalType::STRUCT(std::move(new_type_children));
+	}
+	return result;
+}
+
+unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, RenameFieldInfo &info) {
+	if (!ColumnExists(info.column_path[0])) {
+		throw CatalogException("Cannot rename field from column \"%s\" - it does not exist", info.column_path[0]);
+	}
+	// follow the path
+	auto &col = GetColumn(info.column_path[0]);
+	auto res = RenameFieldFromStruct(col.Type(), info.column_path, info.new_name, 1);
+	if (res.error.HasError()) {
+		res.error.Throw();
 		return nullptr;
 	}
 

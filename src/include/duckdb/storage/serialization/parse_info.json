@@ -88,6 +88,23 @@
     ]
   },
   {
+    "class": "RenameFieldInfo",
+    "base": "AlterTableInfo",
+    "enum": "RENAME_FIELD",
+    "members": [
+      {
+        "id": 400,
+        "name": "column_path",
+        "type": "vector<string>"
+      },
+      {
+        "id": 401,
+        "name": "new_name",
+        "type": "string"
+      }
+    ]
+  },
+  {
     "class": "RenameTableInfo",
     "base": "AlterTableInfo",
     "enum": "RENAME_TABLE",

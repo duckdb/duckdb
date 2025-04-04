@@ -132,6 +132,44 @@ string RenameColumnInfo::ToString() const {
 }
 
 //===--------------------------------------------------------------------===//
+// RenameFieldInfo
+//===--------------------------------------------------------------------===//
+RenameFieldInfo::RenameFieldInfo(AlterEntryData data, vector<string> column_path_p, string new_name_p)
+    : AlterTableInfo(AlterTableType::RENAME_FIELD, std::move(data)), column_path(std::move(column_path_p)),
+      new_name(std::move(new_name_p)) {
+}
+
+RenameFieldInfo::RenameFieldInfo() : AlterTableInfo(AlterTableType::RENAME_FIELD) {
+}
+
+RenameFieldInfo::~RenameFieldInfo() {
+}
+
+unique_ptr<AlterInfo> RenameFieldInfo::Copy() const {
+	return make_uniq_base<AlterInfo, RenameFieldInfo>(GetAlterEntryData(), column_path, new_name);
+}
+
+string RenameFieldInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " RENAME COLUMN ";
+	for (idx_t i = 0; i < column_path.size(); i++) {
+		if (i > 0) {
+			result += ".";
+		}
+		result += KeywordHelper::WriteOptionallyQuoted(column_path[i]);
+	}
+	result += " TO ";
+	result += KeywordHelper::WriteOptionallyQuoted(new_name);
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // RenameTableInfo
 //===--------------------------------------------------------------------===//
 RenameTableInfo::RenameTableInfo() : AlterTableInfo(AlterTableType::RENAME_TABLE) {

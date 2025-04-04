@@ -154,6 +154,9 @@ unique_ptr<AlterInfo> AlterTableInfo::Deserialize(Deserializer &deserializer) {
 	case AlterTableType::RENAME_COLUMN:
 		result = RenameColumnInfo::Deserialize(deserializer);
 		break;
+	case AlterTableType::RENAME_FIELD:
+		result = RenameFieldInfo::Deserialize(deserializer);
+		break;
 	case AlterTableType::RENAME_TABLE:
 		result = RenameTableInfo::Deserialize(deserializer);
 		break;
@@ -473,6 +476,19 @@ void RenameColumnInfo::Serialize(Serializer &serializer) const {
 unique_ptr<AlterTableInfo> RenameColumnInfo::Deserialize(Deserializer &deserializer) {
 	auto result = duckdb::unique_ptr<RenameColumnInfo>(new RenameColumnInfo());
 	deserializer.ReadPropertyWithDefault<string>(400, "old_name", result->old_name);
+	deserializer.ReadPropertyWithDefault<string>(401, "new_name", result->new_name);
+	return std::move(result);
+}
+
+void RenameFieldInfo::Serialize(Serializer &serializer) const {
+	AlterTableInfo::Serialize(serializer);
+	serializer.WritePropertyWithDefault<vector<string>>(400, "column_path", column_path);
+	serializer.WritePropertyWithDefault<string>(401, "new_name", new_name);
+}
+
+unique_ptr<AlterTableInfo> RenameFieldInfo::Deserialize(Deserializer &deserializer) {
+	auto result = duckdb::unique_ptr<RenameFieldInfo>(new RenameFieldInfo());
+	deserializer.ReadPropertyWithDefault<vector<string>>(400, "column_path", result->column_path);
 	deserializer.ReadPropertyWithDefault<string>(401, "new_name", result->new_name);
 	return std::move(result);
 }

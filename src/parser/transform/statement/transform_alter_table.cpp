@@ -10,7 +10,7 @@ OnEntryNotFound Transformer::TransformOnEntryNotFound(bool missing_ok) {
 	return missing_ok ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 }
 
-vector<string> TransformNameList(duckdb_libpgquery::PGList &list) {
+vector<string> Transformer::TransformNameList(duckdb_libpgquery::PGList &list) {
 	vector<string> result;
 	for (auto c = list.head; c != nullptr; c = c->next) {
 		result.emplace_back(static_cast<char *>(c->data.ptr_value));
