@@ -87,10 +87,13 @@ void RemoveUnusedColumns::VisitOperator(LogicalOperator &op) {
 			// for inner joins with equality predicates in the form of (X=Y)
 			// we can replace any references to the RHS (Y) to references to the LHS (X)
 			// this reduces the amount of columns we need to extract from the join hash table
+			// (except in the case of floating point numbers which have +0 and -0, equal but different).
 			for (auto &cond : comp_join.conditions) {
 				if (cond.comparison == ExpressionType::COMPARE_EQUAL) {
 					if (cond.left->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
-					    cond.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF) {
+					    cond.right->GetExpressionClass() == ExpressionClass::BOUND_COLUMN_REF &&
+					    !(cond.left->Cast<BoundColumnRefExpression>().return_type.IsFloating() &&
+					      cond.right->Cast<BoundColumnRefExpression>().return_type.IsFloating())) {
 						// comparison join between two bound column refs
 						// we can replace any reference to the RHS (build-side) with a reference to the LHS (probe-side)
 						auto &lhs_col = cond.left->Cast<BoundColumnRefExpression>();
