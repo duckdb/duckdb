@@ -163,6 +163,28 @@
     ]
   },
   {
+    "class": "RemoveFieldInfo",
+    "base": "AlterTableInfo",
+    "enum": "REMOVE_FIELD",
+    "members": [
+      {
+        "id": 400,
+        "name": "column_path",
+        "type": "vector<string>"
+      },
+      {
+        "id": 401,
+        "name": "if_column_exists",
+        "type": "bool"
+      },
+      {
+        "id": 402,
+        "name": "cascade",
+        "type": "bool"
+      }
+    ]
+  },
+  {
     "class": "ChangeColumnTypeInfo",
     "base": "AlterTableInfo",
     "enum": "ALTER_COLUMN_TYPE",

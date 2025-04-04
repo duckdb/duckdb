@@ -28,6 +28,7 @@ struct RenameColumnInfo;
 struct AddColumnInfo;
 struct AddFieldInfo;
 struct RemoveColumnInfo;
+struct RemoveFieldInfo;
 struct SetDefaultInfo;
 struct ChangeColumnTypeInfo;
 struct AlterForeignKeyInfo;

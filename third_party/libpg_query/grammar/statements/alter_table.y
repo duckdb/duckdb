@@ -343,21 +343,21 @@ alter_table_cmd:
 					$$ = (PGNode *)n;
 				}
 			/* ALTER TABLE <name> DROP [COLUMN] IF EXISTS <colname> [RESTRICT|CASCADE] */
-			| DROP opt_column IF_P EXISTS ColId opt_drop_behavior
+			| DROP opt_column IF_P EXISTS qualified_column opt_drop_behavior
 				{
 					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
 					n->subtype = PG_AT_DropColumn;
-					n->name = $5;
+					n->def_list = $5;
 					n->behavior = $6;
 					n->missing_ok = true;
 					$$ = (PGNode *)n;
 				}
 			/* ALTER TABLE <name> DROP [COLUMN] <colname> [RESTRICT|CASCADE] */
-			| DROP opt_column ColId opt_drop_behavior
+			| DROP opt_column qualified_column opt_drop_behavior
 				{
 					PGAlterTableCmd *n = makeNode(PGAlterTableCmd);
 					n->subtype = PG_AT_DropColumn;
-					n->name = $3;
+					n->def_list = $3;
 					n->behavior = $4;
 					n->missing_ok = false;
 					$$ = (PGNode *)n;

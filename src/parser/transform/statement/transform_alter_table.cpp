@@ -77,7 +77,17 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 			if (stmt.relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
 				throw ParserException("Dropping columns is only supported for tables");
 			}
-			result->info = make_uniq<RemoveColumnInfo>(std::move(data), command->name, command->missing_ok, cascade);
+			auto column_names = TransformNameList(*command->def_list);
+			if (column_names.empty()) {
+				throw InternalException("Expected a name");
+			}
+			if (column_names.size() == 1) {
+				result->info =
+				    make_uniq<RemoveColumnInfo>(std::move(data), command->name, command->missing_ok, cascade);
+			} else {
+				result->info =
+				    make_uniq<RemoveFieldInfo>(std::move(data), std::move(column_names), command->missing_ok, cascade);
+			}
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_ColumnDefault: {

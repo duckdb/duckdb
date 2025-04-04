@@ -200,6 +200,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &remove_info = table_info.Cast<RemoveColumnInfo>();
 		return RemoveColumn(context, remove_info);
 	}
+	case AlterTableType::REMOVE_FIELD: {
+		auto &remove_info = table_info.Cast<RemoveFieldInfo>();
+		return RemoveField(context, remove_info);
+	}
 	case AlterTableType::SET_DEFAULT: {
 		auto &set_default_info = table_info.Cast<SetDefaultInfo>();
 		return SetDefault(context, set_default_info);
@@ -617,6 +621,99 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	auto new_storage =
 	    make_shared_ptr<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(removed_index)).index);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
+}
+
+struct DroppedFieldMapping {
+	Value mapping;
+	LogicalType new_type;
+	ErrorData error;
+};
+
+DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<string> &column_path, idx_t depth) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		throw CatalogException("Cannot drop entry from column \"%s\" - not a struct", column_path[0]);
+	}
+	auto &dropped_entry = column_path[depth];
+	bool last_entry = depth + 1 == column_path.size();
+	bool found = false;
+	DroppedFieldMapping result;
+	child_list_t<Value> child_mapping;
+	child_list_t<LogicalType> new_type_children;
+	auto &child_types = StructType::GetChildTypes(type);
+	for (auto &entry : child_types) {
+		Value mapping_value;
+		LogicalType type_value;
+		if (StringUtil::CIEquals(entry.first, dropped_entry)) {
+			// this is the entry we are dropping
+			found = true;
+			if (last_entry) {
+				// we are dropping this entry in its entirety - just skip
+				if (child_types.size() == 1) {
+					throw CatalogException("Cannot drop entry %s from column %s - it is the last field of the struct",
+					                       column_path.back(), column_path.front());
+				}
+				continue;
+			}
+			// we are dropping a field in this entry - recurse
+			auto child_result = DropFieldFromStruct(entry.second, column_path, depth + 1);
+			if (child_result.error.HasError()) {
+				// bubble up error
+				return child_result;
+			}
+			mapping_value = std::move(child_result.mapping);
+			type_value = std::move(child_result.new_type);
+		} else {
+			// we are not dropping this entry - copy the type and create a straightforward mapping
+			mapping_value = ConstructMapping(entry.first, entry.second);
+			type_value = entry.second;
+		}
+		if (entry.second.id() == LogicalTypeId::STRUCT) {
+			child_list_t<Value> child_values;
+			child_values.emplace_back(string(), Value(entry.first));
+			child_values.emplace_back(string(), std::move(mapping_value));
+			mapping_value = Value::STRUCT(std::move(child_values));
+		}
+		child_mapping.emplace_back(entry.first, std::move(mapping_value));
+		new_type_children.emplace_back(entry.first, type_value);
+	}
+	if (!found) {
+		result.error = ErrorData(CatalogException("Cannot drop field \"%s\" - it does not exist", dropped_entry));
+	} else {
+		result.mapping = Value::STRUCT(std::move(child_mapping));
+		result.new_type = LogicalType::STRUCT(std::move(new_type_children));
+	}
+	return result;
+}
+
+unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, RemoveFieldInfo &info) {
+	if (!ColumnExists(info.column_path[0])) {
+		if (!info.if_column_exists) {
+			throw CatalogException("Cannot drop field from column \"%s\" - it does not exist", info.column_path[0]);
+		}
+		return nullptr;
+	}
+	// follow the path
+	auto &col = GetColumn(info.column_path[0]);
+	auto res = DropFieldFromStruct(col.Type(), info.column_path, 1);
+	if (res.error.HasError()) {
+		if (!info.if_column_exists) {
+			res.error.Throw();
+		}
+		return nullptr;
+	}
+
+	// construct the struct remapping expression
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ColumnRefExpression>(info.column_path[0]));
+	children.push_back(make_uniq<ConstantExpression>(Value(res.new_type)));
+	children.push_back(make_uniq<ConstantExpression>(std::move(res.mapping)));
+	children.push_back(make_uniq<ConstantExpression>(Value()));
+
+	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
+
+	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
+	                                        std::move(function));
+	return ChangeColumnType(context, change_column_type);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {

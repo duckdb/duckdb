@@ -274,6 +274,47 @@ string RemoveColumnInfo::ToString() const {
 }
 
 //===--------------------------------------------------------------------===//
+// RemoveFieldInfo
+//===--------------------------------------------------------------------===//
+RemoveFieldInfo::RemoveFieldInfo() : AlterTableInfo(AlterTableType::REMOVE_FIELD) {
+}
+
+RemoveFieldInfo::RemoveFieldInfo(AlterEntryData data, vector<string> column_path_p, bool if_column_exists, bool cascade)
+    : AlterTableInfo(AlterTableType::REMOVE_FIELD, std::move(data)), column_path(std::move(column_path_p)),
+      if_column_exists(if_column_exists), cascade(cascade) {
+}
+RemoveFieldInfo::~RemoveFieldInfo() {
+}
+
+unique_ptr<AlterInfo> RemoveFieldInfo::Copy() const {
+	return make_uniq_base<AlterInfo, RemoveFieldInfo>(GetAlterEntryData(), column_path, if_column_exists, cascade);
+}
+
+string RemoveFieldInfo::ToString() const {
+	string result = "";
+	result += "ALTER TABLE ";
+	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+		result += " IF EXISTS";
+	}
+	result += QualifierToString(catalog, schema, name);
+	result += " DROP COLUMN ";
+	if (if_column_exists) {
+		result += "IF EXISTS ";
+	}
+	for (idx_t i = 0; i < column_path.size(); i++) {
+		if (i > 0) {
+			result += ".";
+		}
+		result += KeywordHelper::WriteOptionallyQuoted(column_path[i]);
+	}
+	if (cascade) {
+		result += " CASCADE";
+	}
+	result += ";";
+	return result;
+}
+
+//===--------------------------------------------------------------------===//
 // ChangeColumnTypeInfo
 //===--------------------------------------------------------------------===//
 ChangeColumnTypeInfo::ChangeColumnTypeInfo() : AlterTableInfo(AlterTableType::ALTER_COLUMN_TYPE) {
