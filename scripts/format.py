@@ -442,9 +442,13 @@ def process_file(f):
 
 # Create thread for each file
 with concurrent.futures.ThreadPoolExecutor() as executor:
-    threads = [executor.submit(process_file, f) for f in files]
-    # Wait for all tasks to complete
-    concurrent.futures.wait(threads)
+    try:
+        threads = [executor.submit(process_file, f) for f in files]
+        # Wait for all tasks to complete
+        concurrent.futures.wait(threads)
+    except KeyboardInterrupt:
+        executor.shutdown(wait=False, cancel_futures=True)
+        raise
 
 if check_only:
     if len(difference_files) > 0:
