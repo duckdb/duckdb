@@ -16,6 +16,7 @@
 namespace duckdb {
 
 constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILENAME;
+constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
 
 MultiFileReaderGlobalState::~MultiFileReaderGlobalState() {
 }

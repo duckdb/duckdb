@@ -160,7 +160,13 @@ void Vector::Reinterpret(const Vector &other) {
 	D_ASSERT((not_nested && type_size_equal) || type_is_same);
 #endif
 	AssignSharedPointer(buffer, other.buffer);
-	AssignSharedPointer(auxiliary, other.auxiliary);
+	if (vector_type == VectorType::DICTIONARY_VECTOR) {
+		Vector new_vector(GetType(), nullptr);
+		new_vector.Reinterpret(DictionaryVector::Child(other));
+		auxiliary = make_shared_ptr<VectorChildBuffer>(std::move(new_vector));
+	} else {
+		AssignSharedPointer(auxiliary, other.auxiliary);
+	}
 	data = other.data;
 	validity = other.validity;
 }
