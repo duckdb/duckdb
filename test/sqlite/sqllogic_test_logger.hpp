@@ -22,19 +22,21 @@ public:
 	SQLLogicTestLogger(ExecuteContext &context, const Command &command);
 	~SQLLogicTestLogger();
 
-	static void Log(const string &str);
-	void PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise);
-	static void PrintLineSep();
-	static void PrintHeader(string header);
-	void PrintFileHeader();
-	void PrintSQL();
+	static std::stringstream Log(const string &str);
+	std::stringstream PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise);
+	static std::stringstream PrintLineSep();
+	static std::stringstream PrintHeader(string header);
+	std::stringstream PrintFileHeader();
+	std::stringstream PrintSQL();
 	void PrintSQLFormatted();
-	void PrintErrorHeader(const string &description);
-	static void PrintErrorHeader(const string &file_name, idx_t query_line, const string &description);
-	void PrintResultError(const vector<string> &result_values, const vector<string> &values,
-	                      idx_t expected_column_count, bool row_wise);
-	void PrintResultError(MaterializedQueryResult &result, const vector<string> &values, idx_t expected_column_count,
-	                      bool row_wise);
+	std::stringstream PrintErrorHeader(const string &description);
+	static std::stringstream PrintErrorHeader(const string &file_name, idx_t query_line, const string &description);
+	std::stringstream PrintResultError(const vector<string> &result_values, const vector<string> &values,
+	                                   idx_t expected_column_count, bool row_wise);
+	static std::stringstream PrintSummaryHeader(const std::string &file_name);
+	std::stringstream PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
+	                                   idx_t expected_column_count, bool row_wise);
+	std::stringstream PrintResultString(MaterializedQueryResult &result);
 	void UnexpectedFailure(MaterializedQueryResult &result);
 	void OutputResult(MaterializedQueryResult &result, const vector<string> &result_values_string);
 	void OutputHash(const string &hash_value);
@@ -51,8 +53,6 @@ public:
 	void ExpectedErrorMismatch(const string &expected_error, MaterializedQueryResult &result);
 	void InternalException(MaterializedQueryResult &result);
 	static void LoadDatabaseFail(const string &dbpath, const string &message);
-	void PrintResultString(MaterializedQueryResult &result);
-	static void PrintSummaryHeader(const std::string &file_name);
 
 private:
 	lock_guard<mutex> log_lock;
