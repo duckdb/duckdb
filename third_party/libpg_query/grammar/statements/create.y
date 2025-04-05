@@ -416,50 +416,65 @@ ConstraintAttributeElem:
 		;
 
 
+regularColumnDef:
+	Typename ColQualList
+	{
+		PGColumnDef *n = makeNode(PGColumnDef);
+		n->category = COL_STANDARD;
+		n->typeName = $1;
+		n->inhcount = 0;
+		n->is_local = true;
+		n->is_not_null = false;
+		n->is_from_type = false;
+		n->storage = 0;
+		n->raw_default = NULL;
+		n->cooked_default = NULL;
+		n->collOid = InvalidOid;
+		SplitColQualList($2, &n->constraints, &n->collClause,
+						 yyscanner);
+		$$ = (PGNode *) n;
+	}
+	;
 
-columnDef:	ColId Typename ColQualList
+generatedColumnDef:
+	opt_Typename GeneratedConstraintElem ColQualList
+	{
+		PGColumnDef *n = makeNode(PGColumnDef);
+		n->category = COL_GENERATED;
+		n->typeName = $1;
+		n->inhcount = 0;
+		n->is_local = true;
+		n->is_not_null = false;
+		n->is_from_type = false;
+		n->storage = 0;
+		n->raw_default = NULL;
+		n->cooked_default = NULL;
+		n->collOid = InvalidOid;
+		// merge the constraints with the generated column constraint
+		auto constraints = $3;
+		if (constraints) {
+			constraints = lappend(constraints, $2);
+		} else {
+			constraints = list_make1($2);
+		}
+		SplitColQualList(constraints, &n->constraints, &n->collClause,
+						 yyscanner);
+		$$ = (PGNode *)n;
+	}
+	;
+
+columnDef:	ColId regularColumnDef
 				{
-					PGColumnDef *n = makeNode(PGColumnDef);
-					n->category = COL_STANDARD;
+					PGColumnDef *n = (PGColumnDef *) $2;
 					n->colname = $1;
-					n->typeName = $2;
-					n->inhcount = 0;
-					n->is_local = true;
-					n->is_not_null = false;
-					n->is_from_type = false;
-					n->storage = 0;
-					n->raw_default = NULL;
-					n->cooked_default = NULL;
-					n->collOid = InvalidOid;
-					SplitColQualList($3, &n->constraints, &n->collClause,
-									 yyscanner);
 					n->location = @1;
 					$$ = (PGNode *)n;
 			}
 			|
-			ColId opt_Typename GeneratedConstraintElem ColQualList
+			ColId generatedColumnDef
 				{
-					PGColumnDef *n = makeNode(PGColumnDef);
-					n->category = COL_GENERATED;
+					PGColumnDef *n = (PGColumnDef *) $2;
 					n->colname = $1;
-					n->typeName = $2;
-					n->inhcount = 0;
-					n->is_local = true;
-					n->is_not_null = false;
-					n->is_from_type = false;
-					n->storage = 0;
-					n->raw_default = NULL;
-					n->cooked_default = NULL;
-					n->collOid = InvalidOid;
-					// merge the constraints with the generated column constraint
-					auto constraints = $4;
-					if (constraints) {
-					    constraints = lappend(constraints, $3);
-					} else {
-					    constraints = list_make1($3);
-					}
-					SplitColQualList(constraints, &n->constraints, &n->collClause,
-									 yyscanner);
 					n->location = @1;
 					$$ = (PGNode *)n;
 			}

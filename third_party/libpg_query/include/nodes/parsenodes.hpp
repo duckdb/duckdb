@@ -1834,6 +1834,7 @@ typedef struct PGRenameStmt {
 	PGNode *object;            /* in case it's some other object */
 	char *subname;             /* name of contained object (column, rule,
 								 * trigger, etc) */
+	PGList *name_list;         /* names of contained object (e.g. qualified column) */
 	char *newname;             /* the new name */
 	PGDropBehavior behavior;   /* RESTRICT or CASCADE behavior */
 	bool missing_ok;           /* skip error if missing? */

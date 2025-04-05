@@ -8,3 +8,6 @@
 %type <list> alter_table_cmds
 %type <list> alter_generic_options
 %type <ival> opt_set_data
+
+%type <list> qualifiedColumnDef qualify_list qualified_column
+%type <str> qualify_el

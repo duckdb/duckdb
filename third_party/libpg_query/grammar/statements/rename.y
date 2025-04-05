@@ -92,24 +92,24 @@ RenameStmt: ALTER SCHEMA name RENAME TO name
 					n->missing_ok = true;
 					$$ = (PGNode *)n;
 				}
-			| ALTER TABLE relation_expr RENAME opt_column name TO name
+			| ALTER TABLE relation_expr RENAME opt_column qualified_column TO name
 				{
 					PGRenameStmt *n = makeNode(PGRenameStmt);
 					n->renameType = PG_OBJECT_COLUMN;
 					n->relationType = PG_OBJECT_TABLE;
 					n->relation = $3;
-					n->subname = $6;
+					n->name_list = $6;
 					n->newname = $8;
 					n->missing_ok = false;
 					$$ = (PGNode *)n;
 				}
-			| ALTER TABLE IF_P EXISTS relation_expr RENAME opt_column name TO name
+			| ALTER TABLE IF_P EXISTS relation_expr RENAME opt_column qualified_column TO name
 				{
 					PGRenameStmt *n = makeNode(PGRenameStmt);
 					n->renameType = PG_OBJECT_COLUMN;
 					n->relationType = PG_OBJECT_TABLE;
 					n->relation = $5;
-					n->subname = $8;
+					n->name_list = $8;
 					n->newname = $10;
 					n->missing_ok = true;
 					$$ = (PGNode *)n;
