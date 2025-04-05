@@ -40,6 +40,7 @@ profiler_settings_t MetricsUtils::GetOptimizerMetrics() {
         MetricsType::OPTIMIZER_MATERIALIZED_CTE,
         MetricsType::OPTIMIZER_SUM_REWRITER,
         MetricsType::OPTIMIZER_LATE_MATERIALIZATION,
+        MetricsType::OPTIMIZER_REMOVE_USELESS_PROJECTIONS,
     };
 }
 
@@ -112,6 +113,8 @@ MetricsType MetricsUtils::GetOptimizerMetricByType(OptimizerType type) {
             return MetricsType::OPTIMIZER_SUM_REWRITER;
         case OptimizerType::LATE_MATERIALIZATION:
             return MetricsType::OPTIMIZER_LATE_MATERIALIZATION;
+        case OptimizerType::REMOVE_USELESS_PROJECTIONS:
+            return MetricsType::OPTIMIZER_REMOVE_USELESS_PROJECTIONS;
        default:
             throw InternalException("OptimizerType %s cannot be converted to a MetricsType", EnumUtil::ToString(type));
     };
@@ -173,6 +176,8 @@ OptimizerType MetricsUtils::GetOptimizerTypeByMetric(MetricsType type) {
             return OptimizerType::SUM_REWRITER;
         case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
             return OptimizerType::LATE_MATERIALIZATION;
+        case MetricsType::OPTIMIZER_REMOVE_USELESS_PROJECTIONS:
+            return OptimizerType::REMOVE_USELESS_PROJECTIONS;
     default:
             return OptimizerType::INVALID;
     };
@@ -207,6 +212,7 @@ bool MetricsUtils::IsOptimizerMetric(MetricsType type) {
         case MetricsType::OPTIMIZER_MATERIALIZED_CTE:
         case MetricsType::OPTIMIZER_SUM_REWRITER:
         case MetricsType::OPTIMIZER_LATE_MATERIALIZATION:
+        case MetricsType::OPTIMIZER_REMOVE_USELESS_PROJECTIONS:
             return true;
         default:
             return false;
