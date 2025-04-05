@@ -181,6 +181,15 @@ bool Deliminator::RemoveJoinWithDelimGet(LogicalComparisonJoin &delim_join, cons
 		return false;
 	}
 
+	if (delim_join.join_type == JoinType::SEMI || delim_join.join_type == JoinType::ANTI) {
+		for (const auto &cond : comparison_join.conditions) {
+			if (cond.comparison == ExpressionType::COMPARE_NOTEQUAL ||
+			    cond.comparison == ExpressionType::COMPARE_DISTINCT_FROM) {
+				return false;
+			}
+		}
+	}
+
 	// Get the index (left or right) of the DelimGet side of the join
 	const idx_t delim_idx = OperatorIsDelimGet(*join->children[0]) ? 0 : 1;
 
