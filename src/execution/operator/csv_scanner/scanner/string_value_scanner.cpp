@@ -1894,6 +1894,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 		}
 		if (states.IsQuotedCurrent() && !found_error &&
 		    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+			type = UNTERMINATED_QUOTES;
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
 			// quotes
 			result.current_errors.Insert(type, result.cur_col_id, result.chunk_col_id, result.last_position);

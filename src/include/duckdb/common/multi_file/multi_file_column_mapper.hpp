@@ -12,6 +12,7 @@
 
 namespace duckdb {
 struct ResultColumnMapping;
+struct ColumnMapper;
 
 class MultiFileColumnMapper {
 public:
@@ -24,18 +25,15 @@ public:
 public:
 	ReaderInitializeType CreateMapping();
 
+	void ThrowColumnNotFoundError(const string &global_column_name) const;
+
 private:
 	ResultColumnMapping CreateColumnMapping();
-	ResultColumnMapping CreateColumnMappingByName();
-	ResultColumnMapping CreateColumnMappingByFieldId();
+	ResultColumnMapping CreateColumnMappingByMapper(const ColumnMapper &mapper);
 
 	unique_ptr<TableFilterSet> CreateFilters(map<idx_t, reference<TableFilter>> &filters, ResultColumnMapping &mapping);
 	ReaderInitializeType EvaluateConstantFilters(ResultColumnMapping &mapping,
 	                                             map<idx_t, reference<TableFilter>> &remaining_filters);
-
-	void PushColumnMapping(const LogicalType &global_type, const LogicalType &local_type,
-	                       MultiFileLocalColumnId local_id, ResultColumnMapping &result,
-	                       MultiFileGlobalIndex global_idx, const ColumnIndex &global_id);
 
 private:
 	ClientContext &context;

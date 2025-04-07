@@ -134,6 +134,10 @@ struct ParquetUnionData : public BaseUnionData {
 
 class ParquetReader : public BaseFileReader {
 public:
+	// Reserved field id used for the "ord" field according to the iceberg spec (used for file_row_number)
+	static constexpr int32_t ORDINAL_FIELD_ID = 2147483645;
+
+public:
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
 	~ParquetReader() override;
@@ -175,6 +179,8 @@ public:
 		return "Parquet";
 	}
 
+	void AddVirtualColumn(column_t virtual_column_id) override;
+
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
 	ParquetReader(ClientContext &context, ParquetOptions parquet_options,
@@ -200,6 +206,9 @@ private:
 	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
 	                                      idx_t schema_index, idx_t column_index,
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
+
+	MultiFileColumnDefinition ParseColumnDefinition(const duckdb_parquet::FileMetaData &file_meta_data,
+	                                                ParquetColumnSchema &element);
 
 private:
 	unique_ptr<CachingFileHandle> file_handle;

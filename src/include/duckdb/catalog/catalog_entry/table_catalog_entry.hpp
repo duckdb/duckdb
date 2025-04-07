@@ -25,8 +25,11 @@ namespace duckdb {
 class DataTable;
 
 struct RenameColumnInfo;
+struct RenameFieldInfo;
 struct AddColumnInfo;
+struct AddFieldInfo;
 struct RemoveColumnInfo;
+struct RemoveFieldInfo;
 struct SetDefaultInfo;
 struct ChangeColumnTypeInfo;
 struct AlterForeignKeyInfo;

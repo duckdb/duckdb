@@ -51,6 +51,17 @@ public:
 	}
 
 public:
+	static MultiFileColumnDefinition CreateFromNameAndType(const string &name, const LogicalType &type) {
+		MultiFileColumnDefinition result(name, type);
+		if (type.id() == LogicalTypeId::STRUCT) {
+			// recursively create for children
+			for (auto &child_entry : StructType::GetChildTypes(type)) {
+				result.children.push_back(CreateFromNameAndType(child_entry.first, child_entry.second));
+			}
+		}
+		return result;
+	}
+
 	static vector<MultiFileColumnDefinition> ColumnsFromNamesAndTypes(const vector<string> &names,
 	                                                                  const vector<LogicalType> &types) {
 		vector<MultiFileColumnDefinition> columns;
@@ -58,7 +69,7 @@ public:
 		for (idx_t i = 0; i < names.size(); i++) {
 			auto &name = names[i];
 			auto &type = types[i];
-			columns.emplace_back(name, type);
+			columns.push_back(CreateFromNameAndType(name, type));
 		}
 		return columns;
 	}
