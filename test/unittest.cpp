@@ -13,6 +13,8 @@ static bool test_force_storage = false;
 static bool test_force_reload = false;
 static bool test_memory_leaks = false;
 static bool summarize_failures = false;
+// this counter is for the order number of the failed test case in Failures Summary
+static size_t failures_summary_counter = 0;
 
 bool TestForceStorage() {
 	return test_force_storage;
@@ -28,6 +30,10 @@ bool TestMemoryLeaks() {
 
 bool SummarizeFailures() {
 	return summarize_failures;
+}
+
+size_t GetSummaryCounter() {
+	return ++failures_summary_counter;
 }
 
 std::stringstream &GetSummary() {

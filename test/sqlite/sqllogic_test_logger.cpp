@@ -4,8 +4,6 @@
 #include "result_helper.hpp"
 
 namespace duckdb {
-// this counter is for the order number of the failed test case in Failures Summary
-static int failures_summary_counter = 0;
 
 SQLLogicTestLogger::SQLLogicTestLogger(ExecuteContext &context, const Command &command)
     : log_lock(command.runner.log_lock), file_name(command.file_name), query_line(command.query_line),
@@ -23,8 +21,7 @@ std::stringstream SQLLogicTestLogger::Log(const string &str) {
 
 std::stringstream SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
 	std::stringstream log_message;
-	failures_summary_counter++;
-	log_message << "\n" << failures_summary_counter << ". " << file_name << std::endl;
+	GetSummary() << "\n" << GetSummaryCounter() << ". " << file_name << std::endl;
 	log_message << PrintLineSep().str();
 	return log_message;
 }
@@ -158,7 +155,7 @@ std::stringstream SQLLogicTestLogger::PrintResultError(const vector<string> &res
 std::stringstream SQLLogicTestLogger::PrintResultString(MaterializedQueryResult &result) {
 	std::stringstream log_message;
 	log_message << result.ToString();
-	result.Print();
+	// result.Print();
 	return log_message;
 }
 
