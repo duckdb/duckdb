@@ -68,9 +68,9 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	if (!bind_lambda_function) {
 		// This is not a lambda expression, but the JSON arrow operator.
 		// Remember the original expression in case of a binding error.
-		auto copied_lhs = expr.lhs->Copy();
-		auto copied_expr = expr.expr->Copy();
-
+		if (!expr.copied_expr) {
+			expr.copied_expr = expr.expr->Copy();
+		}
 		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(expr.lhs), std::move(expr.expr));
 		auto bind_result = BindExpression(arrow_expr, depth);
 
@@ -78,8 +78,8 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 		// Restore the original expression.
 		if (bind_result.HasError()) {
 			D_ASSERT(arrow_expr.children.size() == 2);
-			expr.lhs = std::move(copied_lhs);
-			expr.expr = std::move(copied_expr);
+			expr.lhs = std::move(arrow_expr.children[0]);
+			expr.expr = std::move(arrow_expr.children[1]);
 		}
 		return bind_result;
 	}
@@ -107,6 +107,9 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	DummyBinding new_lambda_binding(column_types, column_names, table_alias);
 	lambda_bindings->push_back(new_lambda_binding);
 
+	if (expr.copied_expr) {
+		expr.expr = std::move(expr.copied_expr);
+	}
 	auto result = BindExpression(expr.expr, depth, false);
 	lambda_bindings->pop_back();
 
