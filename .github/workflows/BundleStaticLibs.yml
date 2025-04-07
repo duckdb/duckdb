@@ -173,6 +173,7 @@ jobs:
       - name: Build
         shell: bash
         run: |
+          export PWD=`pwd`
           docker run                                                             \
           -v.:/duckdb                                                            \
           -e CC=aarch64-linux-gnu-gcc                                            \
