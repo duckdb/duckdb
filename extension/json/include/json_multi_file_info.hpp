@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include "duckdb/common/multi_file_reader_function.hpp"
+#include "duckdb/common/multi_file/multi_file_function.hpp"
 #include "json_reader_options.hpp"
 
 namespace duckdb {
@@ -24,8 +24,8 @@ struct JSONMultiFileInfo {
 	static bool ParseCopyOption(ClientContext &context, const string &key, const vector<Value> &values,
 	                            BaseFileReaderOptions &options, vector<string> &expected_names,
 	                            vector<LogicalType> &expected_types);
-	static bool ParseOption(ClientContext &context, const string &key, const Value &val,
-	                        MultiFileReaderOptions &file_options, BaseFileReaderOptions &options);
+	static bool ParseOption(ClientContext &context, const string &key, const Value &val, MultiFileOptions &file_options,
+	                        BaseFileReaderOptions &options);
 	static void FinalizeCopyBind(ClientContext &context, BaseFileReaderOptions &options,
 	                             const vector<string> &expected_names, const vector<LogicalType> &expected_types);
 	static unique_ptr<TableFunctionData> InitializeBindData(MultiFileBindData &multi_file_data,
@@ -46,8 +46,7 @@ struct JSONMultiFileInfo {
 	                                               const string &filename, idx_t file_idx,
 	                                               const MultiFileBindData &bind_data);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
-	                                               JSONReaderOptions &options,
-	                                               const MultiFileReaderOptions &file_options);
+	                                               JSONReaderOptions &options, const MultiFileOptions &file_options);
 	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
 	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &gstate_p);
 	static bool TryInitializeScan(ClientContext &context, shared_ptr<BaseFileReader> &reader,

@@ -23,8 +23,9 @@ namespace duckdb {
 using duckdb_parquet::ConvertedType;
 using duckdb_parquet::Type;
 
-static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type, const ParquetColumnSchema &schema_ele,
-                                                     const duckdb_parquet::Statistics &parquet_stats) {
+unique_ptr<BaseStatistics> ParquetStatisticsUtils::CreateNumericStats(const LogicalType &type,
+                                                                      const ParquetColumnSchema &schema_ele,
+                                                                      const duckdb_parquet::Statistics &parquet_stats) {
 	auto stats = NumericStats::CreateUnknown(type);
 
 	// for reasons unknown to science, Parquet defines *both* `min` and `min_value` as well as `max` and
@@ -45,6 +46,27 @@ static unique_ptr<BaseStatistics> CreateNumericStats(const LogicalType &type, co
 	} else {
 		max = Value(type);
 	}
+	NumericStats::SetMin(stats, min);
+	NumericStats::SetMax(stats, max);
+	return stats.ToUnique();
+}
+
+static unique_ptr<BaseStatistics> CreateFloatingPointStats(const LogicalType &type,
+                                                           const ParquetColumnSchema &schema_ele,
+                                                           const duckdb_parquet::Statistics &parquet_stats) {
+	auto stats = NumericStats::CreateUnknown(type);
+
+	// floating point values can always have NaN values - hence we cannot use the max value from the file
+	Value min;
+	Value max;
+	if (parquet_stats.__isset.min_value) {
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min_value);
+	} else if (parquet_stats.__isset.min) {
+		min = ParquetStatisticsUtils::ConvertValue(type, schema_ele, parquet_stats.min);
+	} else {
+		min = Value(type);
+	}
+	max = Value("nan").DefaultCastAs(type);
 	NumericStats::SetMin(stats, min);
 	NumericStats::SetMax(stats, max);
 	return stats.ToUnique();
@@ -328,8 +350,6 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	case LogicalTypeId::SMALLINT:
 	case LogicalTypeId::INTEGER:
 	case LogicalTypeId::BIGINT:
-	case LogicalTypeId::FLOAT:
-	case LogicalTypeId::DOUBLE:
 	case LogicalTypeId::DATE:
 	case LogicalTypeId::TIME:
 	case LogicalTypeId::TIME_TZ:
@@ -340,6 +360,10 @@ unique_ptr<BaseStatistics> ParquetStatisticsUtils::TransformColumnStatistics(con
 	case LogicalTypeId::TIMESTAMP_NS:
 	case LogicalTypeId::DECIMAL:
 		row_group_stats = CreateNumericStats(type, schema, parquet_stats);
+		break;
+	case LogicalTypeId::FLOAT:
+	case LogicalTypeId::DOUBLE:
+		row_group_stats = CreateFloatingPointStats(type, schema, parquet_stats);
 		break;
 	case LogicalTypeId::VARCHAR: {
 		auto string_stats = StringStats::CreateEmpty(type);

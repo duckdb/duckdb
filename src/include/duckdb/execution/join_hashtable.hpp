@@ -235,7 +235,7 @@ public:
 	//! The column indices of the non-equality predicates to be used to compare the rows
 	vector<column_t> non_equality_predicate_columns;
 	//! Data column layout
-	TupleDataLayout layout;
+	shared_ptr<TupleDataLayout> layout_ptr;
 	//! Matches the equal condition rows during the build phase of the hash join to prevent
 	//! duplicates in a list because of hash-collisions
 	RowMatcher row_matcher_build;

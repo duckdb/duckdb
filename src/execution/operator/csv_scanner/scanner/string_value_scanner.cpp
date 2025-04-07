@@ -998,7 +998,7 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options,
-                                                                 const MultiFileReaderOptions &file_options) {
+                                                                 const MultiFileOptions &file_options) {
 	auto state_machine = make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options,
 	                                                      CSVStateMachineCache::Get(context));
 
@@ -1046,20 +1046,17 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		D_ASSERT(csv_file_scan);
 
 		auto &names = csv_file_scan->GetNames();
-		auto &reader_data = csv_file_scan->reader_data;
 		// Now Do the cast-aroo
-		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
-			auto col_idx = MultiFileLocalIndex(i);
-			auto global_idx = reader_data.column_mapping[col_idx];
+		for (idx_t i = 0; i < csv_file_scan->column_ids.size(); i++) {
+			idx_t result_idx = i;
 			if (!csv_file_scan->projection_ids.empty()) {
-				auto local_idx = MultiFileLocalIndex(csv_file_scan->projection_ids[col_idx].second);
-				global_idx = reader_data.column_mapping[local_idx];
+				result_idx = csv_file_scan->projection_ids[i].second;
 			}
-			if (col_idx >= parse_chunk.ColumnCount()) {
+			if (i >= parse_chunk.ColumnCount()) {
 				throw InvalidInputException("Mismatch between the schema of different files");
 			}
-			auto &parse_vector = parse_chunk.data[col_idx];
-			auto &result_vector = insert_chunk.data[global_idx];
+			auto &parse_vector = parse_chunk.data[i];
+			auto &result_vector = insert_chunk.data[result_idx];
 			auto &type = result_vector.GetType();
 			auto &parse_type = parse_vector.GetType();
 			if (!type.IsJSONType() && (type == LogicalType::VARCHAR ||
@@ -1086,7 +1083,6 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					}
 				}
 				{
-
 					if (state_machine->options.ignore_errors.GetValue()) {
 						vector<Value> row;
 						for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
@@ -1111,8 +1107,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 							    result.result_size, first_nl);
 						}
 						auto csv_error = CSVError::CastError(
-						    state_machine->options, names[col_idx], error_msg, col_idx, borked_line, lines_per_batch,
-						    row_byte_pos, optional_idx::Invalid(), result_vector.GetType().id(), result.path);
+						    state_machine->options, names[i], error_msg, i, borked_line, lines_per_batch, row_byte_pos,
+						    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 						error_handler->Error(csv_error);
 					}
 				}
@@ -1139,12 +1135,11 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 							      << LogicalTypeIdToString(type.id()) << "\'";
 							string error_msg = error.str();
 							SanitizeError(error_msg);
-							auto csv_error =
-							    CSVError::CastError(state_machine->options, names[col_idx], error_msg, col_idx,
-							                        borked_line, lines_per_batch,
-							                        result.line_positions_per_row[line_error].begin.GetGlobalPosition(
-							                            result.result_size, first_nl),
-							                        optional_idx::Invalid(), result_vector.GetType().id(), result.path);
+							auto csv_error = CSVError::CastError(
+							    state_machine->options, names[i], error_msg, i, borked_line, lines_per_batch,
+							    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size,
+							                                                                      first_nl),
+							    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 							error_handler->Error(csv_error);
 						}
 					}
@@ -1899,6 +1894,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 		}
 		if (states.IsQuotedCurrent() && !found_error &&
 		    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+			type = UNTERMINATED_QUOTES;
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
 			// quotes
 			result.current_errors.Insert(type, result.cur_col_id, result.chunk_col_id, result.last_position);

@@ -294,7 +294,7 @@ public:
 
 	//! Function that creates and returns a non-boundary CSV Scanner, can be used for internal csv reading.
 	static unique_ptr<StringValueScanner> GetCSVScanner(ClientContext &context, CSVReaderOptions &options,
-	                                                    const MultiFileReaderOptions &file_options);
+	                                                    const MultiFileOptions &file_options);
 
 	bool FinishedIterator() const;
 

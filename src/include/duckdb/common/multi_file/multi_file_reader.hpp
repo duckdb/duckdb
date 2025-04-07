@@ -1,7 +1,7 @@
 //===----------------------------------------------------------------------===//
 //                         DuckDB
 //
-// duckdb/common/multi_file_reader.hpp
+// duckdb/common/multi_file/multi_file_reader.hpp
 //
 //
 //===----------------------------------------------------------------------===//
@@ -10,13 +10,13 @@
 
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/enums/file_glob_options.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
-#include "duckdb/common/multi_file_list.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 #include "duckdb/common/optional_ptr.hpp"
 #include "duckdb/common/types/value.hpp"
-#include "duckdb/common/union_by_name.hpp"
-#include "duckdb/common/base_file_reader.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/common/multi_file/union_by_name.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_states.hpp"
 
 namespace duckdb {
 class TableFunction;
@@ -27,89 +27,13 @@ class Expression;
 class ClientContext;
 class DataChunk;
 
-struct HivePartitioningIndex {
-	HivePartitioningIndex(string value, idx_t index);
-
-	string value;
-	idx_t index;
-
-	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API static HivePartitioningIndex Deserialize(Deserializer &deserializer);
-};
-
-//! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
-struct MultiFileReaderBindData {
-	//! The index of the filename column (if any)
-	idx_t filename_idx = DConstants::INVALID_INDEX;
-	//! The set of hive partitioning indexes (if any)
-	vector<HivePartitioningIndex> hive_partitioning_indexes;
-	//! The index of the file_row_number column (if any)
-	idx_t file_row_number_idx = DConstants::INVALID_INDEX;
-	//! (optional) The schema set by the multi file reader
-	vector<MultiFileReaderColumnDefinition> schema;
-	//! The method used to map local -> global columns
-	MultiFileReaderColumnMappingMode mapping = MultiFileReaderColumnMappingMode::BY_NAME;
-
-	DUCKDB_API void Serialize(Serializer &serializer) const;
-	DUCKDB_API static MultiFileReaderBindData Deserialize(Deserializer &deserializer);
-};
-
-//! Global state for MultiFileReads
-struct MultiFileReaderGlobalState {
-	MultiFileReaderGlobalState(vector<LogicalType> extra_columns_p, optional_ptr<const MultiFileList> file_list_p)
-	    : extra_columns(std::move(extra_columns_p)), file_list(file_list_p) {};
-	virtual ~MultiFileReaderGlobalState();
-
-	//! extra columns that will be produced during scanning
-	const vector<LogicalType> extra_columns;
-	// the file list driving the current scan
-	const optional_ptr<const MultiFileList> file_list;
-
-	//! Indicates that the MultiFileReader has added columns to be scanned that are not in the projection
-	bool RequiresExtraColumns() {
-		return !extra_columns.empty();
-	}
-
-	template <class TARGET>
-	TARGET &Cast() {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<TARGET &>(*this);
-	}
-	template <class TARGET>
-	const TARGET &Cast() const {
-		DynamicCastCheck<TARGET>(this);
-		return reinterpret_cast<const TARGET &>(*this);
-	}
-};
-
-struct MultiFileBindData : public TableFunctionData {
-	unique_ptr<TableFunctionData> bind_data;
-	shared_ptr<MultiFileList> file_list;
-	unique_ptr<MultiFileReader> multi_file_reader;
-	vector<MultiFileReaderColumnDefinition> columns;
-	MultiFileReaderBindData reader_bind;
-	MultiFileReaderOptions file_options;
-	vector<LogicalType> types;
-	vector<string> names;
-	virtual_column_map_t virtual_columns;
-	//! Table column names - set when using COPY tbl FROM file.parquet
-	vector<string> table_columns;
-	shared_ptr<BaseFileReader> initial_reader;
-	// The union readers are created (when the union_by_name option is on) during binding
-	vector<shared_ptr<BaseUnionData>> union_readers;
-
-	void Initialize(shared_ptr<BaseFileReader> reader) {
-		initial_reader = std::move(reader);
-	}
-	void Initialize(ClientContext &, BaseUnionData &union_data) {
-		Initialize(std::move(union_data.reader));
-	}
-};
+enum class ReaderInitializeType { INITIALIZED, SKIP_READING_FILE };
 
 //! The MultiFileReader class provides a set of helper methods to handle scanning from multiple files
 struct MultiFileReader {
 public:
 	static constexpr column_t COLUMN_IDENTIFIER_FILENAME = UINT64_C(9223372036854775808);
+	static constexpr column_t COLUMN_IDENTIFIER_FILE_ROW_NUMBER = UINT64_C(9223372036854775809);
 
 public:
 	virtual ~MultiFileReader();
@@ -138,60 +62,53 @@ public:
 	                                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! Parse the named parameters of a multi-file reader
-	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileReaderOptions &options,
+	DUCKDB_API virtual bool ParseOption(const string &key, const Value &val, MultiFileOptions &options,
 	                                    ClientContext &context);
 	//! Perform filter pushdown into the MultiFileList. Returns a new MultiFileList if filters were pushed down
 	DUCKDB_API virtual unique_ptr<MultiFileList> ComplexFilterPushdown(ClientContext &context, MultiFileList &files,
-	                                                                   const MultiFileReaderOptions &options,
+	                                                                   const MultiFileOptions &options,
 	                                                                   MultiFilePushdownInfo &info,
 	                                                                   vector<unique_ptr<Expression>> &filters);
 	DUCKDB_API virtual unique_ptr<MultiFileList>
-	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileReaderOptions &options,
+	DynamicFilterPushdown(ClientContext &context, const MultiFileList &files, const MultiFileOptions &options,
 	                      const vector<string> &names, const vector<LogicalType> &types,
 	                      const vector<column_t> &column_ids, TableFilterSet &filters);
 	//! Try to use the MultiFileReader for binding. Returns true if a bind could be made, returns false if the
 	//! MultiFileReader can not perform the bind and binding should be performed on 1 or more files in the MultiFileList
 	//! directly.
-	DUCKDB_API virtual bool Bind(MultiFileReaderOptions &options, MultiFileList &files,
-	                             vector<LogicalType> &return_types, vector<string> &names,
-	                             MultiFileReaderBindData &bind_data);
+	DUCKDB_API virtual bool Bind(MultiFileOptions &options, MultiFileList &files, vector<LogicalType> &return_types,
+	                             vector<string> &names, MultiFileReaderBindData &bind_data);
 	//! Bind the options of the multi-file reader, potentially emitting any extra columns that are required
-	DUCKDB_API virtual void BindOptions(MultiFileReaderOptions &options, MultiFileList &files,
+	DUCKDB_API virtual void BindOptions(MultiFileOptions &options, MultiFileList &files,
 	                                    vector<LogicalType> &return_types, vector<string> &names,
 	                                    MultiFileReaderBindData &bind_data);
 
 	//! Initialize global state used by the MultiFileReader
 	DUCKDB_API virtual unique_ptr<MultiFileReaderGlobalState>
-	InitializeGlobalState(ClientContext &context, const MultiFileReaderOptions &file_options,
+	InitializeGlobalState(ClientContext &context, const MultiFileOptions &file_options,
 	                      const MultiFileReaderBindData &bind_data, const MultiFileList &file_list,
-	                      const vector<MultiFileReaderColumnDefinition> &global_columns,
+	                      const vector<MultiFileColumnDefinition> &global_columns,
 	                      const vector<ColumnIndex> &global_column_ids);
 
 	//! Finalize the bind phase of the multi-file reader after we know (1) the required (output) columns, and (2) the
 	//! pushed down table filters
-	DUCKDB_API virtual void FinalizeBind(const MultiFileReaderOptions &file_options,
-	                                     const MultiFileReaderBindData &options, const string &filename,
-	                                     const vector<MultiFileReaderColumnDefinition> &local_columns,
-	                                     const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                     const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
-	                                     ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state);
+	DUCKDB_API virtual void FinalizeBind(MultiFileReaderData &reader_data, const MultiFileOptions &file_options,
+	                                     const MultiFileReaderBindData &options,
+	                                     const vector<MultiFileColumnDefinition> &global_columns,
+	                                     const vector<ColumnIndex> &global_column_ids, ClientContext &context,
+	                                     optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Create all required mappings from the global types/names to the file-local types/names
-	DUCKDB_API virtual void CreateMapping(const string &file_name,
-	                                      const vector<MultiFileReaderColumnDefinition> &local_columns,
-	                                      const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                      const vector<ColumnIndex> &global_column_ids,
-	                                      optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
-	                                      const string &initial_file, const MultiFileReaderBindData &options,
-	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
-	//! Populated the filter_map
-	DUCKDB_API virtual void CreateFilterMap(const vector<ColumnIndex> &global_column_ids,
-	                                        optional_ptr<TableFilterSet> filters, MultiFileReaderData &reader_data,
-	                                        optional_ptr<MultiFileReaderGlobalState> global_state);
+	DUCKDB_API virtual ReaderInitializeType
+	CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
+	              const vector<MultiFileColumnDefinition> &global_columns, const vector<ColumnIndex> &global_column_ids,
+	              optional_ptr<TableFilterSet> filters, const string &initial_file,
+	              const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns);
 
 	//! Finalize the reading of a chunk - applying any constants that are required
-	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileReaderBindData &bind_data,
-	                                      const MultiFileReaderData &reader_data, DataChunk &chunk,
+	DUCKDB_API virtual void FinalizeChunk(ClientContext &context, const MultiFileBindData &bind_data,
+	                                      BaseFileReader &reader, const MultiFileReaderData &reader_data,
+	                                      DataChunk &input_chunk, DataChunk &output_chunk, ExpressionExecutor &executor,
 	                                      optional_ptr<MultiFileReaderGlobalState> global_state);
 
 	//! Fetch the partition data for the current chunk
@@ -207,7 +124,7 @@ public:
 	template <class OP, class OPTIONS_TYPE>
 	MultiFileReaderBindData BindUnionReader(ClientContext &context, vector<LogicalType> &return_types,
 	                                        vector<string> &names, MultiFileList &files, MultiFileBindData &result,
-	                                        OPTIONS_TYPE &options, MultiFileReaderOptions &file_options) {
+	                                        OPTIONS_TYPE &options, MultiFileOptions &file_options) {
 		D_ASSERT(file_options.union_by_name);
 		vector<string> union_col_names;
 		vector<LogicalType> union_col_types;
@@ -233,7 +150,7 @@ public:
 	template <class OP, class OPTIONS_TYPE>
 	MultiFileReaderBindData BindReader(ClientContext &context, vector<LogicalType> &return_types, vector<string> &names,
 	                                   MultiFileList &files, MultiFileBindData &result, OPTIONS_TYPE &options,
-	                                   MultiFileReaderOptions &file_options) {
+	                                   MultiFileOptions &file_options) {
 		if (file_options.union_by_name) {
 			return BindUnionReader<OP>(context, return_types, names, files, result, options, file_options);
 		} else {
@@ -251,18 +168,14 @@ public:
 		}
 	}
 
-	template <class READER_CLASS>
-	void InitializeReader(READER_CLASS &reader, const MultiFileReaderOptions &options,
-	                      const MultiFileReaderBindData &bind_data,
-	                      const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                      const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> table_filters,
-	                      const string &initial_file, ClientContext &context,
-	                      optional_ptr<MultiFileReaderGlobalState> global_state) {
-		FinalizeBind(options, bind_data, reader.GetFileName(), reader.GetColumns(), global_columns, global_column_ids,
-		             reader.reader_data, context, global_state);
-		CreateMapping(reader.GetFileName(), reader.GetColumns(), global_columns, global_column_ids, table_filters,
-		              reader.reader_data, initial_file, bind_data, global_state);
-		reader.reader_data.filters = table_filters;
+	ReaderInitializeType InitializeReader(
+	    MultiFileReaderData &reader_data, const MultiFileOptions &options, const MultiFileReaderBindData &bind_data,
+	    const virtual_column_map_t &virtual_columns, const vector<MultiFileColumnDefinition> &global_columns,
+	    const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> table_filters,
+	    const string &initial_file, ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
+		FinalizeBind(reader_data, options, bind_data, global_columns, global_column_ids, context, global_state);
+		return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters, initial_file,
+		                     bind_data, virtual_columns);
 	}
 
 	template <class BIND_DATA>
@@ -307,27 +220,6 @@ public:
 	                                                       TableFunctionPartitionInput &input);
 
 protected:
-	virtual void CreateColumnMapping(const string &file_name,
-	                                 const vector<MultiFileReaderColumnDefinition> &local_columns,
-	                                 const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                 const vector<ColumnIndex> &global_column_ids, MultiFileReaderData &reader_data,
-	                                 const MultiFileReaderBindData &bind_data, const string &initial_file,
-	                                 optional_ptr<MultiFileReaderGlobalState> global_state);
-	virtual void CreateColumnMappingByFieldId(const string &file_name,
-	                                          const vector<MultiFileReaderColumnDefinition> &local_columns,
-	                                          const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                          const vector<ColumnIndex> &global_column_ids,
-	                                          MultiFileReaderData &reader_data,
-	                                          const MultiFileReaderBindData &bind_data, const string &initial_file,
-	                                          optional_ptr<MultiFileReaderGlobalState> global_state);
-	virtual void CreateColumnMappingByName(const string &file_name,
-	                                       const vector<MultiFileReaderColumnDefinition> &local_columns,
-	                                       const vector<MultiFileReaderColumnDefinition> &global_columns,
-	                                       const vector<ColumnIndex> &global_column_ids,
-	                                       MultiFileReaderData &reader_data, const MultiFileReaderBindData &bind_data,
-	                                       const string &initial_file,
-	                                       optional_ptr<MultiFileReaderGlobalState> global_state);
-
 	//! Used in errors to report which function is using this MultiFileReader
 	string function_name;
 

@@ -12,8 +12,8 @@
 #include "duckdb/common/common.hpp"
 #include "duckdb/common/encryption_state.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/common/base_file_reader.hpp"
-#include "duckdb/common/multi_file_reader_options.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_options.hpp"
 #include "duckdb/common/string_util.hpp"
 #include "duckdb/common/types/data_chunk.hpp"
 #include "column_reader.hpp"
@@ -110,12 +110,12 @@ struct ParquetOptions {
 
 struct ParquetOptionsSerialization {
 	ParquetOptionsSerialization() = default;
-	ParquetOptionsSerialization(ParquetOptions parquet_options_p, MultiFileReaderOptions file_options_p)
+	ParquetOptionsSerialization(ParquetOptions parquet_options_p, MultiFileOptions file_options_p)
 	    : parquet_options(std::move(parquet_options_p)), file_options(std::move(file_options_p)) {
 	}
 
 	ParquetOptions parquet_options;
-	MultiFileReaderOptions file_options;
+	MultiFileOptions file_options;
 
 public:
 	void Serialize(Serializer &serializer) const;
@@ -132,6 +132,10 @@ struct ParquetUnionData : public BaseUnionData {
 };
 
 class ParquetReader : public BaseFileReader {
+public:
+	// Reserved field id used for the "ord" field according to the iceberg spec (used for file_row_number)
+	static constexpr int32_t ORDINAL_FIELD_ID = 2147483645;
+
 public:
 	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
@@ -170,6 +174,12 @@ public:
 
 	LogicalType DeriveLogicalType(const SchemaElement &s_ele, ParquetColumnSchema &schema) const;
 
+	string GetReaderType() const override {
+		return "Parquet";
+	}
+
+	void AddVirtualColumn(column_t virtual_column_id) override;
+
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only
 	ParquetReader(ClientContext &context, ParquetOptions parquet_options,
@@ -195,6 +205,9 @@ private:
 	ParquetColumnSchema ParseColumnSchema(const SchemaElement &s_ele, idx_t max_define, idx_t max_repeat,
 	                                      idx_t schema_index, idx_t column_index,
 	                                      ParquetColumnSchemaType type = ParquetColumnSchemaType::COLUMN);
+
+	MultiFileColumnDefinition ParseColumnDefinition(const duckdb_parquet::FileMetaData &file_meta_data,
+	                                                ParquetColumnSchema &element);
 
 private:
 	unique_ptr<FileHandle> file_handle;
