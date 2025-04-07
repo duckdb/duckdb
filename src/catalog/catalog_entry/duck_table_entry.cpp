@@ -821,6 +821,10 @@ void DuckTableEntry::Rollback(CatalogEntry &prev_entry) {
 	}
 }
 
+void DuckTableEntry::OnDrop() {
+	storage->SetAsDropped();
+}
+
 unique_ptr<CatalogEntry> DuckTableEntry::AddConstraint(ClientContext &context, AddConstraintInfo &info) {
 	auto create_info = make_uniq<CreateTableInfo>(schema, name);
 	create_info->comment = comment;
@@ -872,7 +876,7 @@ unique_ptr<CatalogEntry> DuckTableEntry::Copy(ClientContext &context) const {
 }
 
 void DuckTableEntry::SetAsRoot() {
-	storage->SetAsRoot();
+	storage->SetAsMainTable();
 	storage->SetTableName(name);
 }
 
