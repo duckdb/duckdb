@@ -16,6 +16,13 @@ namespace duckdb {
 class DuckTransaction;
 struct UndoBufferProperties;
 
+struct DuckCleanUpInfo {
+	vector<unique_ptr<DuckTransaction>> transactions;
+	transaction_t lowest_start_time;
+
+	void Cleanup() noexcept;
+};
+
 //! The Transaction Manager is responsible for creating and managing
 //! transactions
 class DuckTransactionManager : public TransactionManager {
@@ -74,9 +81,9 @@ private:
 	//! Generates a new commit timestamp
 	transaction_t GetCommitTimestamp();
 	//! Remove the given transaction from the list of active transactions
-	void RemoveTransaction(DuckTransaction &transaction) noexcept;
+	DuckCleanUpInfo RemoveTransaction(DuckTransaction &transaction) noexcept;
 	//! Remove the given transaction from the list of active transactions
-	void RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept;
+	DuckCleanUpInfo RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept;
 
 	//! Whether or not we can checkpoint
 	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
