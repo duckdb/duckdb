@@ -204,21 +204,17 @@ void MbedTlsWrapper::SHA1State::FinishHex(char *out) {
 	MbedTlsWrapper::ToBase16(const_cast<char *>(hash.c_str()), out, MbedTlsWrapper::SHA1_HASH_LENGTH_BYTES);
 }
 
-const mbedtls_cipher_info_t *mbedtls_aes_info_cipher(mbedtls_cipher_type_t cipher) {
-	return mbedtls_cipher_info_from_type(cipher);
-}
-
 const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t key_len){
 
 	switch(cipher){
 		case GCM:
 		    switch (key_len) {
 		    case 16:
-			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_128_GCM);
+			    return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_GCM);
 		    case 24:
-			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_192_GCM);
+			    return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_192_GCM);
 		    case 32:
-			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_256_GCM);
+			    return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_GCM);
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
@@ -226,11 +222,11 @@ const mbedtls_cipher_info_t *MbedTlsWrapper::AESStateMBEDTLS::GetCipher(size_t k
 		case CTR:
 		    switch (key_len) {
 		    case 16:
-			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_128_CTR);
+			    return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_128_CTR);
 		    case 24:
-			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_192_CTR);
+			    return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_192_CTR);
 		    case 32:
-			    return mbedtls_aes_info_cipher(MBEDTLS_CIPHER_AES_256_CTR);
+			    return mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CTR);
 		    default:
 			    throw runtime_error("Invalid AES key length");
 		    }
