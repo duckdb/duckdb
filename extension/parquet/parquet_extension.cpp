@@ -781,6 +781,9 @@ struct ParquetWriteBindData : public TableFunctionData {
 
 struct ParquetWriteGlobalState : public GlobalFunctionData {
 	unique_ptr<ParquetWriter> writer;
+
+	mutex lock;
+	unique_ptr<ColumnDataCollection> combine_buffer;
 };
 
 struct ParquetWriteLocalState : public LocalFunctionData {
@@ -986,10 +989,13 @@ void ParquetWriteSink(ExecutionContext &context, FunctionData &bind_data_p, Glob
 	}
 }
 
-void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_data, GlobalFunctionData &gstate,
+void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_data_p, GlobalFunctionData &gstate,
                          LocalFunctionData &lstate) {
+	auto &bind_data = bind_data_p.Cast<ParquetWriteBindData>();
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
+
+
 	// flush any data left in the local state to the file
 	global_state.writer->Flush(local_state.buffer);
 }
