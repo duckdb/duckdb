@@ -200,6 +200,9 @@ public:
 	bool IsMainTable() const {
 		return this->version == DataTableVersion::MAIN_TABLE;
 	}
+	bool IsRoot() const {
+		return IsMainTable();
+	}
 	string TableModification() const;
 
 	//! Get statistics of a physical column within the table
