@@ -17,9 +17,11 @@
 
 namespace duckdb {
 
-void DuckCleanUpInfo::Cleanup() noexcept {
+void DuckCleanupInfo::Cleanup() noexcept {
 	for (auto &transaction : transactions) {
-		transaction->Cleanup(lowest_start_time);
+		if (transaction->awaiting_cleanup) {
+			transaction->Cleanup(lowest_start_time);
+		}
 	}
 }
 
@@ -313,29 +315,29 @@ void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 
 	ErrorData error;
-	DuckCleanUpInfo clean_up_info;
+	DuckCleanupInfo cleanup_info;
 	{
 		// Obtain the transaction lock and roll back.
 		lock_guard<mutex> tx_lock(transaction_lock);
 		error = transaction.Rollback();
 
 		// Remove the transaction from the list of active transactions.
-		clean_up_info = RemoveTransaction(transaction);
+		cleanup_info = RemoveTransaction(transaction);
 	}
-	clean_up_info.Cleanup();
+	cleanup_info.Cleanup();
 
 	if (error.HasError()) {
 		throw FatalException("Failed to rollback transaction. Cannot continue operation.\nError: %s", error.Message());
 	}
 }
 
-DuckCleanUpInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noexcept {
+DuckCleanupInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noexcept {
 	return RemoveTransaction(transaction, transaction.ChangesMade());
 }
 
-DuckCleanUpInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction,
+DuckCleanupInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction,
                                                           bool store_transaction) noexcept {
-	DuckCleanUpInfo clean_up_info;
+	DuckCleanupInfo cleanup_info;
 
 	// Find the transaction in the active transactions,
 	// as well as the lowest start time, transaction id, and active query.
@@ -374,9 +376,10 @@ DuckCleanUpInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &trans
 			old_transactions.push_back(std::move(current_transaction));
 		}
 	} else if (transaction.ChangesMade()) {
-		clean_up_info.transactions.push_back(std::move(current_transaction));
+		current_transaction->awaiting_cleanup = true;
+		cleanup_info.transactions.push_back(std::move(current_transaction));
 	}
-	clean_up_info.lowest_start_time = lowest_start_time;
+	cleanup_info.lowest_start_time = lowest_start_time;
 
 	// Remove the transaction from the list of active transactions.
 	active_transactions.unsafe_erase_at(t_index);
@@ -387,24 +390,26 @@ DuckCleanUpInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &trans
 	for (; i < recently_committed_transactions.size(); i++) {
 		D_ASSERT(recently_committed_transactions[i]);
 		lowest_stored_query = MinValue(recently_committed_transactions[i]->start_time, lowest_stored_query);
-		if (recently_committed_transactions[i]->commit_id < lowest_start_time) {
-			// Changes made BEFORE this transaction are no longer relevant.
-			// We can schedule the transaction and its undo buffer for clean-up.
-
-			// HOWEVER: Any currently running QUERY can still be using
-			// the version information of the transaction.
-			// If we remove the UndoBuffer immediately, we have a race condition.
-
-			// Store the current highest active query.
-			recently_committed_transactions[i]->highest_active_query = current_query;
-			// Move it to the list of transactions awaiting GC.
-			old_transactions.push_back(std::move(recently_committed_transactions[i]));
-		} else {
+		if (recently_committed_transactions[i]->commit_id >= lowest_start_time) {
 			// recently_committed_transactions is ordered on commit_id.
 			// Thus, if the current commit_id is greater than
 			// lowest_start_time, any subsequent commit IDs are also greater.
 			break;
 		}
+
+		// Changes made BEFORE this transaction are no longer relevant.
+		// We can schedule the transaction and its undo buffer for clean-up.
+		recently_committed_transactions[i]->awaiting_cleanup = true;
+
+		// HOWEVER: Any currently running QUERY can still be using
+		// the version information of the transaction.
+		// If we remove the UndoBuffer immediately, we have a race condition.
+		//		recently_committed_transactions[i]->Cleanup(lowest_start_time); // TODO
+
+		// Store the current highest active query.
+		recently_committed_transactions[i]->highest_active_query = current_query;
+		// Move it to the list of transactions awaiting GC.
+		old_transactions.push_back(std::move(recently_committed_transactions[i]));
 	}
 
 	if (i > 0) {
@@ -437,12 +442,12 @@ DuckCleanUpInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &trans
 		// Because we clean up asynchronously, we only clean up once we
 		// no longer need the transaction for anything (i.e., we can move it).
 		for (idx_t tx_idx = 0; tx_idx < i; tx_idx++) {
-			clean_up_info.transactions.push_back(std::move(old_transactions[tx_idx]));
+			cleanup_info.transactions.push_back(std::move(old_transactions[tx_idx]));
 		}
 		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + static_cast<int64_t>(i));
 	}
 
-	return clean_up_info;
+	return cleanup_info;
 }
 
 idx_t DuckTransactionManager::GetCatalogVersion(Transaction &transaction_p) {
