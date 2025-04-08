@@ -1180,7 +1180,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		vector<bool> need_to_read(column_ids.size(), true);
 
 		state.sel.Initialize(nullptr);
-		D_ASSERT(state.scan_filters.size() == filters->filters.size());
+		D_ASSERT(!filters || state.scan_filters.size() == filters->filters.size());
 
 		bool is_first_filter = true;
 		if (deletion_filter) {
@@ -1190,25 +1190,27 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 			is_first_filter = false;
 		}
 
-		// first load the columns that are used in filters
-		auto filter_state = state.adaptive_filter->BeginFilter();
-		for (idx_t i = 0; i < state.scan_filters.size(); i++) {
-			if (filter_count == 0) {
-				// if no rows are left we can stop checking filters
-				break;
-			}
-			auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
-			auto local_idx = MultiFileLocalIndex(scan_filter.filter_idx);
-			auto column_id = column_ids[local_idx];
+		if (filters) {
+			// first load the columns that are used in filters
+			auto filter_state = state.adaptive_filter->BeginFilter();
+			for (idx_t i = 0; i < state.scan_filters.size(); i++) {
+				if (filter_count == 0) {
+					// if no rows are left we can stop checking filters
+					break;
+				}
+				auto &scan_filter = state.scan_filters[state.adaptive_filter->permutation[i]];
+				auto local_idx = MultiFileLocalIndex(scan_filter.filter_idx);
+				auto column_id = column_ids[local_idx];
 
-			auto &result_vector = result.data[local_idx.GetIndex()];
-			auto &child_reader = root_reader.GetChildReader(column_id);
-			child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
-			                    *scan_filter.filter_state, state.sel, filter_count, is_first_filter);
-			need_to_read[local_idx.GetIndex()] = false;
-			is_first_filter = false;
+				auto &result_vector = result.data[local_idx.GetIndex()];
+				auto &child_reader = root_reader.GetChildReader(column_id);
+				child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
+				                    *scan_filter.filter_state, state.sel, filter_count, is_first_filter);
+				need_to_read[local_idx.GetIndex()] = false;
+				is_first_filter = false;
+			}
+			state.adaptive_filter->EndFilter(filter_state);
 		}
-		state.adaptive_filter->EndFilter(filter_state);
 
 		// we still may have to read some cols
 		for (idx_t i = 0; i < column_ids.size(); i++) {
