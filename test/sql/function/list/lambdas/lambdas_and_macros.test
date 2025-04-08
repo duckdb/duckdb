@@ -63,3 +63,9 @@ SELECT scoping_macro([11, 22], 3, 4);
 ----
 [18, 29]
 
+statement ok
+CREATE OR REPLACE MACRO foo(bar) AS (SELECT apply([bar], x -> 0));
+
+statement ok
+SELECT foo(v) FROM (SELECT 0 AS v);
+
