@@ -30,6 +30,8 @@ public:
 	unique_ptr<ParsedExpression> lhs;
 	//! The lambda or JSON expression (RHS)
 	unique_ptr<ParsedExpression> expr;
+	//! Band-aid for conflicts between lambda binding and JSON binding.
+	unique_ptr<ParsedExpression> copied_expr;
 
 public:
 	//! Returns a vector to the column references in the LHS expression, and fills the error message,
