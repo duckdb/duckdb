@@ -174,8 +174,9 @@ SinkFinalizeType PhysicalCreateARTIndex::Finalize(Pipeline &pipeline, Event &eve
 	state.global_index->VerifyAllocations();
 
 	auto &storage = table.GetStorage();
-	if (!storage.IsRoot()) {
-		throw TransactionException("cannot add an index to a table that has been altered");
+	if (!storage.IsMainTable()) {
+		throw TransactionException(
+		    "Transaction conflict: cannot add an index to a table that has been altered or dropped");
 	}
 
 	auto &schema = table.schema;

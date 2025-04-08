@@ -28,6 +28,7 @@ public:
 	unique_ptr<CatalogEntry> AlterEntry(CatalogTransaction, AlterInfo &info) override;
 	void UndoAlter(ClientContext &context, AlterInfo &info) override;
 	void Rollback(CatalogEntry &prev_entry) override;
+	void OnDrop() override;
 
 	//! Returns the underlying storage of the table
 	DataTable &GetStorage() override;
