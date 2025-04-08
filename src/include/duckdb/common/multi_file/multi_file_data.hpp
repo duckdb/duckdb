@@ -23,7 +23,7 @@ public:
 	virtual ~DeleteFilter() = default;
 
 public:
-	virtual idx_t Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) const = 0;
+	virtual idx_t Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) = 0;
 };
 
 struct HivePartitioningIndex {
