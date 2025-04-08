@@ -80,7 +80,7 @@
                     {"name": "entry", "type": "VARCHAR"}
                 ],
                 "description": "Extracts the named entry from the STRUCT.",
-                "example": "struct_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')",
+                "example": "array_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')",
                 "categories": ["struct"]
             },
             {
@@ -89,7 +89,7 @@
                     {"name": "index", "type": "ANY"}
                 ],
                 "description": "Extracts the entry from an unnamed STRUCT (tuple) using an index (1-based).",
-                "example": "struct_extract(row(42, 84), 1)",
+                "example": "array_extract(row(42, 84), 1)",
                 "categories": ["struct"]
             },
             {
@@ -98,7 +98,7 @@
                     {"name": "index", "type": "ANY"}
                 ],
                 "description": "Extracts the indexth (1-based) value from the list.",
-                "example": "struct_extract([4, 5, 6], 3)",
+                "example": "array_extract([4, 5, 6], 3)",
                 "categories": ["list"]
             }
         ],

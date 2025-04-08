@@ -315,7 +315,7 @@ struct MakeTimestampNsFun {
 	static constexpr const char *Name = "make_timestamp_ns";
 	static constexpr const char *Parameters = "nanos";
 	static constexpr const char *Description = "The timestamp for the given nanoseconds since epoch";
-	static constexpr const char *Example = "make_timestamp(1732117793000000000)";
+	static constexpr const char *Example = "make_timestamp_ns(1732117793000000000)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunctionSet GetFunctions();

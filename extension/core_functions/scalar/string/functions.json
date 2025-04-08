@@ -2,7 +2,7 @@
     {
         "name": "^@",
         "parameters": "string,search_string",
-        "description": "Returns true if `string` begins with `search_string`",
+        "description": "Returns `true` if `string` begins with `search_string`.",
         "example": "starts_with('abc','a')",
         "categories": ["string"],
         "type": "scalar_function",
@@ -12,7 +12,7 @@
     {
         "name": "ascii",
         "parameters": "string",
-        "description": "Returns an integer that represents the Unicode code point of the first character of the `string`",
+        "description": "Returns an integer that represents the Unicode code point of the first character of the `string`.",
         "example": "ascii('Ω')",
         "categories": ["string"],
         "type": "scalar_function",
@@ -21,7 +21,7 @@
     {
         "name": "bar",
         "parameters": "x,min,max,width",
-        "description": "Draws a band whose width is proportional to (x - min) and equal to width characters when x = max. width defaults to 80",
+        "description": "Draws a band whose width is proportional to (`x - min`) and equal to `width` characters when `x` = `max`. `width` defaults to 80.",
         "example": "bar(5, 0, 20, 10)",
         "categories": ["string"],
         "type": "scalar_function_set"
@@ -31,13 +31,13 @@
         "variants": [
             {
                 "parameters": [{"name": "string", "type": "VARCHAR"}],
-                "description": "Converts the string to binary representation",
+                "description": "Converts the `string` to binary representation.",
                 "example": "bin('Aa')",
                 "categories": ["string"]
             },
             {
                 "parameters": [{"name": "value", "type": "ANY"}],
-                "description": "Converts the value to binary representation",
+                "description": "Converts the `value` to binary representation.",
                 "example": "bin(42)",
                 "categories": ["numeric"]
             }
@@ -48,7 +48,7 @@
     {
         "name": "chr",
         "parameters": "code_point",
-        "description": "Returns a character which is corresponding the ASCII code value or Unicode code point",
+        "description": "Returns a character which is corresponding the ASCII code value or Unicode code point.",
         "example": "chr(65)",
         "categories": ["string"],
         "type": "scalar_function"
@@ -56,7 +56,7 @@
     {
         "name": "damerau_levenshtein",
         "parameters": "str1,str2",
-        "description": "Extension of Levenshtein distance to also include transposition of adjacent characters as an allowed edit operation. In other words, the minimum number of edit operations (insertions, deletions, substitutions or transpositions) required to change one string to another. Different case is considered different",
+        "description": "Extension of Levenshtein distance to also include transposition of adjacent characters as an allowed edit operation. In other words, the minimum number of edit operations (insertions, deletions, substitutions or transpositions) required to change one string to another. Different case is considered different.",
         "example": "damerau_levenshtein('hello', 'world')",
         "categories": ["text_similarity"],
         "type": "scalar_function"
@@ -64,7 +64,7 @@
     {
         "name": "format",
         "parameters": "format,parameters...",
-        "description": "Formats a string using fmt syntax",
+        "description": "Formats a string using fmt syntax.",
         "example": "format('Benchmark \"{}\" took {} seconds', 'CSV', 42)",
         "categories": ["string"],
         "type": "scalar_function"
@@ -72,7 +72,7 @@
     {
         "name": "format_bytes",
         "parameters": "bytes",
-        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 15.6 KiB)",
+        "description": "Converts `bytes` to a human-readable presentation (e.g. 16000 -> 15.6 KiB).",
         "example": "format_bytes(1000 * 16)",
         "categories": ["string", "numeric"],
         "type": "scalar_function",
@@ -81,7 +81,7 @@
     {
         "name": "formatReadableDecimalSize",
         "parameters": "bytes",
-        "description": "Converts bytes to a human-readable presentation (e.g. 16000 -> 16.0 KB)",
+        "description": "Converts `bytes` to a human-readable presentation (e.g. 16000 -> 16.0 KB).",
         "example": "formatReadableDecimalSize(1000 * 16)",
         "categories": ["string", "numeric"],
         "type": "scalar_function"
@@ -89,7 +89,7 @@
     {
         "name": "hamming",
         "parameters": "str1,str2",
-        "description": "The number of positions with different characters for 2 strings of equal length. Different case is considered different",
+        "description": "The number of positions with different characters for 2 strings of equal length. Different case is considered different.",
         "example": "hamming('duck','luck')",
         "categories": ["text_similarity"],
         "type": "scalar_function",
@@ -102,7 +102,7 @@
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"}
                 ],
-                "description": "Converts the string to hexadecimal representation.",
+                "description": "Converts the `string` to hexadecimal representation.",
                 "example": "hex('Hello')",
                 "categories": ["string"]
             },
@@ -118,7 +118,7 @@
                 "parameters": [
                     {"name": "value", "type": "ANY"}
                 ],
-                "description": "Converts the value to hexadecimal representation.",
+                "description": "Converts the `value` to `VARCHAR` using hexadecimal representation.",
                 "example": "hex(42)",
                 "categories": ["numeric"]
             }
@@ -128,9 +128,9 @@
     },
     {
         "name": "instr",
-        "parameters": "haystack,needle",
-        "description": "Returns location of first occurrence of needle in haystack, counting from 1. Returns 0 if no match found",
-        "example": "instr('test test','es')",
+        "parameters": "string,search_string",
+        "description": "Returns location of first occurrence of `search_string` in `string`, counting from 1. Returns 0 if no match found.",
+        "examples": ["instr('test test','es')", "position('es' IN 'test test')"],
         "categories": ["string"],
         "type": "scalar_function",
         "aliases": ["strpos", "position"]
@@ -138,7 +138,7 @@
     {
         "name": "jaccard",
         "parameters": "str1,str2",
-        "description": "The Jaccard similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
+        "description": "The Jaccard similarity between two strings. Different case is considered different. Returns a number between 0 and 1.",
         "example": "jaccard('duck','luck')",
         "categories": ["text_similarity"],
         "type": "scalar_function"
@@ -146,7 +146,7 @@
     {
         "name": "jaro_similarity",
         "parameters": "str1,str2,score_cutoff",
-        "description": "The Jaro similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
+        "description": "The Jaro similarity between two strings. Different case is considered different. Returns a number between 0 and 1.",
         "example": "jaro_similarity('duck', 'duckdb', 0.5)",
         "categories": ["text_similarity"],
         "type": "scalar_function_set"
@@ -154,7 +154,7 @@
     {
         "name": "jaro_winkler_similarity",
         "parameters": "str1,str2,score_cutoff",
-        "description": "The Jaro-Winkler similarity between two strings. Different case is considered different. Returns a number between 0 and 1",
+        "description": "The Jaro-Winkler similarity between two strings. Different case is considered different. Returns a number between 0 and 1.",
         "example": "jaro_winkler_similarity('duck', 'duckdb', 0.5)",
         "categories": ["text_similarity"],
         "type": "scalar_function_set"
@@ -162,7 +162,7 @@
     {
         "name": "left",
         "parameters": "string,count",
-        "description": "Extracts the left-most count characters",
+        "description": "Extracts the left-most count characters.",
         "example": "left('Hello\uD83E\uDD86', 2)",
         "categories": ["string"],
         "type": "scalar_function"
@@ -170,7 +170,7 @@
     {
         "name": "left_grapheme",
         "parameters": "string,count",
-        "description": "Extracts the left-most count grapheme clusters",
+        "description": "Extracts the left-most count grapheme clusters.",
         "example": "left_grapheme('\uD83E\uDD26\uD83C\uDFFC\u200D♂️\uD83E\uDD26\uD83C\uDFFD\u200D♀️', 1)",
         "categories": ["string"],
         "type": "scalar_function"
@@ -178,7 +178,7 @@
     {
         "name": "levenshtein",
         "parameters": "str1,str2",
-        "description": "The minimum number of single-character edits (insertions, deletions or substitutions) required to change one string to the other. Different case is considered different",
+        "description": "The minimum number of single-character edits (insertions, deletions or substitutions) required to change one string to the other. Different case is considered different.",
         "example": "levenshtein('duck','db')",
         "categories": ["text_similarity"],
         "type": "scalar_function",
@@ -187,59 +187,155 @@
     {
         "name": "lpad",
         "parameters": "string,count,character",
-        "description": "Pads the string with the character from the left until it has count characters",
+        "description": "Pads the `string` with the `character` on the left until it has `count` characters. Truncates the `string` on the right if it has more than `count` characters.",
         "example": "lpad('hello', 10, '>')",
         "categories": ["string"],
         "type": "scalar_function"
     },
     {
         "name": "ltrim",
-        "parameters": "string,characters",
-        "description": "Removes any occurrences of any of the characters from the left side of the string",
-        "example": "ltrim('>>>>test<<', '><')",
-        "categories": ["string"],
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"}
+                ],
+                "description": "Removes any spaces from the left side of the `string`. In the example, the ␣ symbol denotes a space character.",
+                "example": "ltrim('␣␣␣␣test␣␣')",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"},
+                    {"name": "characters", "type": "VARCHAR"}
+                ],
+                "description": "Removes any occurrences of any of the `characters` from the left side of the `string`.",
+                "example": "ltrim('>>>>test<<', '><')",
+                "categories": ["string"]
+
+            }
+        ],
         "type": "scalar_function_set"
     },
     {
         "name": "parse_dirname",
-        "parameters": "string,separator",
-        "description": "Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash",
-        "example": "parse_dirname('path/to/file.csv', 'system')",
-        "categories": ["string"],
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "path", "type": "VARCHAR"}
+                ],
+                "description": "Returns the top-level directory name, using both 'forward_slash' and 'backslash' as separators.",
+                "example": "parse_dirname('path/to/file.csv')",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "path", "type": "VARCHAR"},
+                    {"name": "separator", "type": "VARCHAR"}
+                ],
+                "description": "Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash.",
+                "example": "parse_dirname('path/to/file.csv', 'system')",
+                "categories": ["string"]
+            }
+        ],
         "type": "scalar_function_set",
         "struct": "ParseDirnameFun"
     },
     {
         "name": "parse_dirpath",
-        "parameters": "string,separator",
-        "description": "Returns the head of the path similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash",
-        "example": "parse_dirpath('path/to/file.csv', 'system')",
-        "categories": ["string"],
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "path", "type": "VARCHAR"}
+                ],
+                "description": "Returns the head of the path similarly to Python's os.path.dirname, using both 'forward_slash' and 'backslash' as separators.",
+                "example": "parse_dirpath('path/to/file.csv')",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "path", "type": "VARCHAR"},
+                    {"name": "separator", "type": "VARCHAR"}
+                ],
+                "description": "Returns the head of the path similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash.",
+                "example": "parse_dirpath('path/to/file.csv', 'system')",
+                "categories": ["string"]
+            }
+        ],
         "type": "scalar_function_set",
         "struct": "ParseDirpathFun"
     },
     {
         "name": "parse_filename",
-        "parameters": "string,trim_extension,separator",
-        "description": "Returns the last component of the path similarly to Python's os.path.basename. If trim_extension is true, the file extension will be removed (it defaults to false). separator options: system, both_slash (default), forward_slash, backslash",
-        "example": "parse_filename('path/to/file.csv', true, 'forward_slash')",
-        "categories": ["string"],
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "path", "type": "VARCHAR"}
+                ],
+                "description": "Returns the last component of the `path` similarly to Python's os.path.basename function, using both 'forward_slash' and 'backslash' as separators.",
+                "example": "parse_filename('path/to/file.csv')",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "path", "type": "VARCHAR"},
+                    {"name": "separator", "type": "VARCHAR"}
+                ],
+                "description": "Returns the last component of the path similarly to Python's os.path.basename function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
+                "example": "parse_filename('path/to/file.csv', 'forward_slash')",
+                "categories": ["string"]
+
+            },
+            {
+                "parameters": [
+                    {"name": "path", "type": "VARCHAR"},
+                    {"name": "trim_extension", "type": "BOOLEAN"}
+                ],
+                "description": "Returns the last component of the path similarly to Python's os.path.basename function, using both `forward_slash` and `backslash` as separators. If `trim_extension` is `true`, the file extension will be removed (defaults to `false`).",
+                "example": "parse_filename('path/to/file.csv', true)",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "path", "type": "VARCHAR"},
+                    {"name": "trim_extension", "type": "BOOLEAN"},
+                    {"name": "separator", "type": "VARCHAR"}
+                ],
+                "description": "Returns the last component of the path similarly to Python's os.path.basename function. If `trim_extension` is `true`, the file extension will be removed (defaults to `false`). `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
+                "example": "parse_filename('path/to/file.csv', true, 'forward_slash')",
+                "categories": ["string"]
+            }
+        ],
         "type": "scalar_function_set",
         "struct": "ParseFilenameFun"
     },
     {
         "name": "parse_path",
-        "parameters": "string,separator",
-        "description": "Returns a list of the components (directories and filename) in the path similarly to Python's pathlib.PurePath::parts. separator options: system, both_slash (default), forward_slash, backslash",
-        "example": "parse_path('path/to/file.csv', 'system')",
-        "categories": ["string"],
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "path", "type": "VARCHAR"}
+                ],
+                "description": "Returns a list of the components (directories and filename) in the path similarly to Python's pathlib.parts function, using both `forward_slash` and `backslash` as separators.",
+                "example": "parse_path('path/to/file.csv')",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "path", "type": "VARCHAR"},
+                    {"name": "separator", "type": "VARCHAR"}
+                ],
+                "description": "Returns a list of the components (directories and filename) in the path similarly to Python's pathlib.parts function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
+                "example": "parse_path('path/to/file.csv', 'system')",
+                "categories": ["string"]
+            }
+        ],
         "type": "scalar_function_set",
         "struct": "ParsePathFun"
     },
     {
         "name": "printf",
         "parameters": "format,parameters...",
-        "description": "Formats a string using printf syntax",
+        "description": "Formats a `string` using printf syntax.",
         "example": "printf('Benchmark \"%s\" took %d seconds', 'CSV', 42)",
         "categories": ["string"],
         "type": "scalar_function"
@@ -247,7 +343,7 @@
     {
         "name": "repeat",
         "parameters": "string,count",
-        "description": "Repeats the string count number of times",
+        "description": "Repeats the `string` `count` number of times.",
         "example": "repeat('A', 5)",
         "categories": ["string"],
         "type": "scalar_function_set"
@@ -255,7 +351,7 @@
     {
         "name": "replace",
         "parameters": "string,source,target",
-        "description": "Replaces any occurrences of the source with target in string",
+        "description": "Replaces any occurrences of the `source` with `target` in `string`.",
         "example": "replace('hello', 'l', '-')",
         "categories": ["string"],
         "type": "scalar_function"
@@ -263,7 +359,7 @@
     {
         "name": "reverse",
         "parameters": "string",
-        "description": "Reverses the string",
+        "description": "Reverses the `string`.",
         "example": "reverse('hello')",
         "categories": ["string"],
         "type": "scalar_function"
@@ -271,7 +367,7 @@
     {
         "name": "right",
         "parameters": "string,count",
-        "description": "Extract the right-most count characters",
+        "description": "Extract the right-most `count` characters.",
         "example": "right('Hello\uD83E\uDD86', 3)",
         "categories": ["string"],
         "type": "scalar_function"
@@ -279,7 +375,7 @@
     {
         "name": "right_grapheme",
         "parameters": "string,count",
-        "description": "Extracts the right-most count grapheme clusters",
+        "description": "Extracts the right-most `count` grapheme clusters.",
         "example": "right_grapheme('\uD83E\uDD26\uD83C\uDFFC\u200D♂️\uD83E\uDD26\uD83C\uDFFD\u200D♀️', 1)",
         "categories": ["string"],
         "type": "scalar_function"
@@ -287,23 +383,39 @@
     {
         "name": "rpad",
         "parameters": "string,count,character",
-        "description": "Pads the string with the character from the right until it has count characters",
+        "description": "Pads the `string` with the `character` on the right until it has `count` characters. Truncates the `string` on the right if it has more than `count` characters.",
         "example": "rpad('hello', 10, '<')",
         "categories": ["string"],
         "type": "scalar_function"
     },
     {
         "name": "rtrim",
-        "parameters": "string,characters",
-        "description": "Removes any occurrences of any of the characters from the right side of the string",
-        "example": "rtrim('>>>>test<<', '><')",
-        "categories": ["string"],
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"}
+                ],
+                "description": "Removes any spaces from the right side of the `string`. In the example, the ␣ symbol denotes a space character.",
+                "example": "rtrim('␣␣␣␣test␣␣')",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"},
+                    {"name": "characters", "type": "VARCHAR"}
+                ],
+                "description": "Removes any occurrences of any of the `characters` from the right side of the `string`.",
+                "example": "rtrim('>>>>test<<', '><')",
+                "categories": ["string"]
+
+            }
+        ],
         "type": "scalar_function_set"
     },
     {
         "name": "translate",
         "parameters": "string,from,to",
-        "description": "Replaces each character in string that matches a character in the from set with the corresponding character in the to set. If from is longer than to, occurrences of the extra characters in from are deleted",
+        "description": "Replaces each character in `string` that matches a character in the `from` set with the corresponding character in the `to` set. If `from` is longer than `to`, occurrences of the extra characters in `from` are deleted.",
         "example": "translate('12345', '143', 'ax')",
         "categories": ["string"],
         "type": "scalar_function"
@@ -315,7 +427,7 @@
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"}
                 ],
-                "description": "Removes any spaces from either side of the string.",
+                "description": "Removes any spaces from either side of the `string`.",
                 "example": "trim(' test ')",
                 "categories": ["string"]
             },
@@ -324,7 +436,7 @@
                     {"name": "string", "type": "VARCHAR"},
                     {"name": "characters", "type": "VARCHAR"}
                 ],
-                "description": "Removes any occurrences of any of the characters from either side of the string",
+                "description": "Removes any occurrences of any of the `characters` from either side of the `string`.",
                 "example": "trim('>>>>test<<', '><')",
                 "categories": ["string"]
             }
@@ -334,7 +446,7 @@
     {
         "name": "unbin",
         "parameters": "value",
-        "description": "Converts a value from binary representation to a blob.",
+        "description": "Converts a `value` from binary representation to a blob.",
         "example": "unbin('0110')",
         "categories": ["string", "blob"],
         "type": "scalar_function",
@@ -343,7 +455,7 @@
     {
         "name": "unhex",
         "parameters": "value",
-        "description": "Converts a value from hexadecimal representation to a blob.",
+        "description": "Converts a `value` from hexadecimal representation to a blob.",
         "example": "unhex('2A')",
         "categories": ["string", "blob"],
         "type": "scalar_function",
@@ -351,8 +463,8 @@
     },
     {
         "name": "unicode",
-        "parameters": "str",
-        "description": "Returns the unicode codepoint of the first character of the string",
+        "parameters": "string",
+        "description": "Returns an `INTEGER` representing the `unicode` codepoint of the first character in the `string`.",
         "example": "unicode('ü')",
         "categories": ["string"],
         "type": "scalar_function",
@@ -360,16 +472,33 @@
     },
     {
         "name": "to_base",
-        "parameters": "number,radix,min_length",
-        "description": "Converts a value to a string in the given base radix, optionally padding with leading zeros to the minimum length",
-        "example": "to_base(42, 16)",
-        "categories": ["numeric"],
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "number", "type": "BIGINT"},
+                    {"name": "radix", "type": "INTEGER"}
+                ],
+                "description": "Converts a `number` to a string in the given base `radix`.",
+                "example": "to_base(42, 16)",
+                "categories": ["numeric"]
+            },
+            {
+                "parameters": [
+                    {"name": "number", "type": "BIGINT"},
+                    {"name": "radix", "type": "INTEGER"},
+                    {"name": "min_length", "type": "INTEGER"}
+                ],
+                "description": "Converts a `number` to a string in the given base `radix`, padding with leading zeros to the minimum length.",
+                "example": "to_base(42, 16, 5)",
+                "categories": ["numeric"]
+            }
+        ],
         "type": "scalar_function_set"
     },
     {
         "name": "url_encode",
-        "parameters": "input",
-        "description": "Escapes the input string by encoding it so that it can be included in a URL query parameter.",
+        "parameters": "string",
+        "description": "Encodes a URL to a representation using Percent-Encoding.",
         "example": "url_encode('this string has/ special+ characters>')",
         "categories": ["string"],
         "type": "scalar_function"
@@ -377,7 +506,7 @@
     {
         "name": "url_decode",
         "parameters": "input",
-        "description": "Unescapes the URL encoded input.",
+        "description": "Decodes a URL from a representation using Percent-Encoding",
         "example": "url_decode('this%20string%20is%2BFencoded')",
         "categories": ["string"],
         "type": "scalar_function"

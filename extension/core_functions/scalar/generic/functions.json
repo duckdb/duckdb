@@ -15,9 +15,10 @@
     },
     {
         "name": "hash",
-        "parameters": "param",
-        "description": "Returns an integer with the hash of the value. Note that this is not a cryptographic hash",
+        "parameters": "value",
+        "description": "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash",
         "example": "hash('\uD83E\uDD86')",
+        "categories": ["string"],
         "type": "scalar_function"
     },
     {
@@ -25,6 +26,7 @@
         "parameters": "arg1, arg2, ...",
         "description": "Returns the lowest value of the set of input parameters",
         "example": "least(42, 84)",
+        "categories": ["string", "numeric", "date", "timestamp", "aggregate"],
         "type": "scalar_function_set"
     },
     {
@@ -32,6 +34,7 @@
         "parameters": "arg1, arg2, ...",
         "description": "Returns the highest value of the set of input parameters",
         "example": "greatest(42, 84)",
+        "categories": ["string", "numeric", "date", "timestamp", "aggregate"],
         "type": "scalar_function_set"
     },
     {
@@ -53,7 +56,7 @@
         "name": "can_cast_implicitly",
         "parameters": "source_type,target_type",
         "description": "Whether or not we can implicitly cast from the source type to the other type",
-        "example": "can_implicitly_cast(NULL::INTEGER, NULL::BIGINT)",
+        "example": "can_cast_implicitly(NULL::INTEGER, NULL::BIGINT)",
         "type": "scalar_function"
     },
     {

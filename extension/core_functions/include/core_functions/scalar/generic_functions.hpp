@@ -37,10 +37,10 @@ struct CurrentSettingFun {
 
 struct HashFun {
 	static constexpr const char *Name = "hash";
-	static constexpr const char *Parameters = "param";
-	static constexpr const char *Description = "Returns an integer with the hash of the value. Note that this is not a cryptographic hash";
+	static constexpr const char *Parameters = "value";
+	static constexpr const char *Description = "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash";
 	static constexpr const char *Example = "hash('🦆')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -50,7 +50,7 @@ struct LeastFun {
 	static constexpr const char *Parameters = "arg1, arg2, ...";
 	static constexpr const char *Description = "Returns the lowest value of the set of input parameters";
 	static constexpr const char *Example = "least(42, 84)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string,numeric,date,timestamp,aggregate";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -60,7 +60,7 @@ struct GreatestFun {
 	static constexpr const char *Parameters = "arg1, arg2, ...";
 	static constexpr const char *Description = "Returns the highest value of the set of input parameters";
 	static constexpr const char *Example = "greatest(42, 84)";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string,numeric,date,timestamp,aggregate";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -89,7 +89,7 @@ struct CanCastImplicitlyFun {
 	static constexpr const char *Name = "can_cast_implicitly";
 	static constexpr const char *Parameters = "source_type,target_type";
 	static constexpr const char *Description = "Whether or not we can implicitly cast from the source type to the other type";
-	static constexpr const char *Example = "can_implicitly_cast(NULL::INTEGER, NULL::BIGINT)";
+	static constexpr const char *Example = "can_cast_implicitly(NULL::INTEGER, NULL::BIGINT)";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();

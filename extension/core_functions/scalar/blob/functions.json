@@ -27,7 +27,7 @@
         "name": "to_base64",
         "parameters": "blob",
         "description": "Converts a `blob` to a base64 encoded `string`.",
-        "example": "base64('A'::BLOB)",
+        "example": "to_base64('A'::BLOB)",
         "type": "scalar_function",
         "categories": ["string", "blob"],
         "aliases": ["base64"]

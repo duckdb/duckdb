@@ -155,7 +155,7 @@ struct ArrayExtractFun {
 	static constexpr const char *Name = "array_extract";
 	static constexpr const char *Parameters = "string::VARCHAR,index::ANY\001struct::STRUCT,entry::VARCHAR\001struct::STRUCT,index::ANY\001list::ANY[],index::ANY";
 	static constexpr const char *Description = "Extracts a single character from a string using a (1-based) index.\001Extracts the named entry from the STRUCT.\001Extracts the entry from an unnamed STRUCT (tuple) using an index (1-based).\001Extracts the indexth (1-based) value from the list.";
-	static constexpr const char *Example = "array_extract('DuckDB', 2)\001struct_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')\001struct_extract(row(42, 84), 1)\001struct_extract([4, 5, 6], 3)";
+	static constexpr const char *Example = "array_extract('DuckDB', 2)\001array_extract({'i': 3, 'v2': 3, 'v3': 0}, 'i')\001array_extract(row(42, 84), 1)\001array_extract([4, 5, 6], 3)";
 	static constexpr const char *Categories = "string\001struct\001struct\001list";
 
 	static ScalarFunctionSet GetFunctions();
