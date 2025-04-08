@@ -1402,6 +1402,42 @@ class DataFrame:
 
         rows = [construct_row(x, columns) for x in result]
         return rows
+    
+
+    def cache(self) -> "DataFrame":
+        """Persists the :class:`DataFrame` with the default storage level (`MEMORY_AND_DISK_DESER`).
+
+        .. versionadded:: 1.3.0
+
+        .. versionchanged:: 3.4.0
+            Supports Spark Connect.
+
+        Notes
+        -----
+        The default storage level has changed to `MEMORY_AND_DISK_DESER` to match Scala in 3.0.
+
+        Returns
+        -------
+        :class:`DataFrame`
+            Cached DataFrame.
+
+        Examples
+        --------
+        >>> df = spark.range(1)
+        >>> df.cache()
+        DataFrame[id: bigint]
+
+        >>> df.explain()  # doctest: +SKIP
+        == Physical Plan ==
+        AdaptiveSparkPlan isFinalPlan=false
+        +- InMemoryTableScan ...
+        """
+        duck_uuid = self.session.sql("select gen_random_uuid()").head()[0]
+        uuid_str = str(duck_uuid).replace("-", "_")
+        cache_name = f"cache_table_{uuid_str}"
+        cache_df = self.relation # noqa F841
+        self.session.conn.sql(f"CREATE TEMPORARY TABLE {cache_name} AS SELECT * FROM cache_df;")
+        return self.session.sql(f"select * from {cache_name}")
 
 
 __all__ = ["DataFrame"]
