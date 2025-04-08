@@ -221,7 +221,7 @@ transaction_t DuckTransactionManager::GetCommitTimestamp() {
 
 ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
-	unique_lock<mutex> tx_lock(transaction_lock);
+	unique_lock<mutex> t_lock(transaction_lock);
 	if (!db.IsSystem() && !db.IsTemporary()) {
 		if (transaction.ChangesMade()) {
 			if (transaction.IsReadOnly()) {
@@ -251,13 +251,13 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 			throw InternalException("Transaction writing to WAL does not have the write lock");
 		}
 		// unlock the transaction lock while we write to the WAL
-		tx_lock.unlock();
+		t_lock.unlock();
 		// grab the WAL lock and hold it until the entire commit is finished
 		held_wal_lock = make_uniq<lock_guard<mutex>>(wal_lock);
 		error = transaction.WriteToWAL(db, commit_state);
 
 		// after we finish writing to the WAL we grab the transaction lock again
-		tx_lock.lock();
+		t_lock.lock();
 	}
 	// obtain a commit id for the transaction
 	transaction_t commit_id = GetCommitTimestamp();
@@ -292,9 +292,13 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 	bool store_transaction = undo_properties.has_updates || undo_properties.has_index_deletes ||
 	                         undo_properties.has_catalog_changes || error.HasError();
 
-	auto clean_up_info = RemoveTransaction(transaction, store_transaction);
-	tx_lock.unlock();
-	clean_up_info.Cleanup();
+	// Remove the transaction from the list of active transactions and gather cleanup information.
+	auto cleanup_info = RemoveTransaction(transaction, store_transaction);
+
+	// We do not need to hold the transaction lock during cleanup of these transactions,
+	// as they (1) have been removed, or (2) exited old_transactions.
+	t_lock.unlock();
+	cleanup_info.Cleanup();
 
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
 	// checkpoint
@@ -318,10 +322,10 @@ void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 	DuckCleanupInfo cleanup_info;
 	{
 		// Obtain the transaction lock and roll back.
-		lock_guard<mutex> tx_lock(transaction_lock);
+		lock_guard<mutex> t_lock(transaction_lock);
 		error = transaction.Rollback();
 
-		// Remove the transaction from the list of active transactions.
+		// Remove the transaction from the list of active transactions and gather cleanup information.
 		cleanup_info = RemoveTransaction(transaction);
 	}
 	cleanup_info.Cleanup();
@@ -360,7 +364,7 @@ DuckCleanupInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &trans
 	auto lowest_stored_query = lowest_start_time;
 	D_ASSERT(t_index != active_transactions.size());
 
-	// Decide if we need to store the transaction, or if we can schedule it for clean-up.
+	// Decide if we need to store the transaction, or if we can schedule it for cleanup.
 	auto current_transaction = std::move(active_transactions[t_index]);
 	auto current_query = DatabaseManager::Get(db).ActiveQueryNumber();
 	if (store_transaction) {
@@ -376,6 +380,7 @@ DuckCleanupInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &trans
 			old_transactions.push_back(std::move(current_transaction));
 		}
 	} else if (transaction.ChangesMade()) {
+		// We do not need to store the transaction, directly schedule it for cleanup.
 		current_transaction->awaiting_cleanup = true;
 		cleanup_info.transactions.push_back(std::move(current_transaction));
 	}
@@ -398,13 +403,12 @@ DuckCleanupInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &trans
 		}
 
 		// Changes made BEFORE this transaction are no longer relevant.
-		// We can schedule the transaction and its undo buffer for clean-up.
+		// We can schedule the transaction and its undo buffer for cleanup.
 		recently_committed_transactions[i]->awaiting_cleanup = true;
 
 		// HOWEVER: Any currently running QUERY can still be using
 		// the version information of the transaction.
 		// If we remove the UndoBuffer immediately, we have a race condition.
-		//		recently_committed_transactions[i]->Cleanup(lowest_start_time); // TODO
 
 		// Store the current highest active query.
 		recently_committed_transactions[i]->highest_active_query = current_query;
@@ -433,7 +437,7 @@ DuckCleanupInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &trans
 
 	if (i > 0) {
 		// We garbage-collected old transactions:
-		// - Remove them from the list and schedule them for clean-up.
+		// - Remove them from the list and schedule them for cleanup.
 
 		// We can only safely do the actual memory cleanup when all the
 		// currently active queries have finished running! (actually,
@@ -441,8 +445,8 @@ DuckCleanupInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &trans
 
 		// Because we clean up asynchronously, we only clean up once we
 		// no longer need the transaction for anything (i.e., we can move it).
-		for (idx_t tx_idx = 0; tx_idx < i; tx_idx++) {
-			cleanup_info.transactions.push_back(std::move(old_transactions[tx_idx]));
+		for (idx_t t_idx = 0; t_idx < i; t_idx++) {
+			cleanup_info.transactions.push_back(std::move(old_transactions[t_idx]));
 		}
 		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + static_cast<int64_t>(i));
 	}

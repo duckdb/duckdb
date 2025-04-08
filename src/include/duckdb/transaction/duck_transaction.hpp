@@ -40,8 +40,8 @@ public:
 
 	atomic<idx_t> catalog_version;
 
-	//! Transaction undergo Cleanup, when (1) removing them directly in RemoveTransaction,
-	//! or (2) once they exist old_transactions.
+	//! Transactions undergo Cleanup, after (1) removing them directly in RemoveTransaction,
+	//! or (2) after they exist old_transactions.
 	//! Some (after rollback) enter old_transactions, but do not require Cleanup.
 	bool awaiting_cleanup;
 

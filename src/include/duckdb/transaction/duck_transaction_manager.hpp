@@ -16,9 +16,12 @@ namespace duckdb {
 class DuckTransaction;
 struct UndoBufferProperties;
 
+//! CleanupInfo collects transactions awaiting cleanup.
+//! This ensures we can clean up after releasing the transaction lock.
 struct DuckCleanupInfo {
-	vector<unique_ptr<DuckTransaction>> transactions;
+	//! All transaction in a cleanup info share the same lowest_start_time.
 	transaction_t lowest_start_time;
+	vector<unique_ptr<DuckTransaction>> transactions;
 
 	void Cleanup() noexcept;
 };
