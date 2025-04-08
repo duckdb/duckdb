@@ -145,8 +145,8 @@ public:
 		Vector rhs_row_locations;
 		Vector salt_v;
 
-		SelectionVector salt_match_sel;
-		SelectionVector key_no_match_sel;
+		SelectionVector keys_to_compare_sel;
+		SelectionVector keys_no_match_sel;
 	};
 
 	struct ProbeState : SharedState {
