@@ -366,8 +366,7 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, idx_t loca
 }
 
 bool VirtualColumnIsConstant(column_t column_id) {
-	if (column_id == COLUMN_IDENTIFIER_EMPTY ||
-	    COLUMN_IDENTIFIER_EMPTY == MultiFileReader::COLUMN_IDENTIFIER_FILENAME) {
+	if (column_id == COLUMN_IDENTIFIER_EMPTY || column_id == MultiFileReader::COLUMN_IDENTIFIER_FILENAME) {
 		return true;
 	}
 	return false;
