@@ -995,13 +995,39 @@ void ParquetWriteCombine(ExecutionContext &context, FunctionData &bind_data_p, G
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
 	auto &local_state = lstate.Cast<ParquetWriteLocalState>();
 
+	if (local_state.buffer.Count() >= bind_data.row_group_size / 2 ||
+	    local_state.buffer.SizeInBytes() >= bind_data.row_group_size_bytes / 2) {
+		// local state buffer is more than half of the row_group_size(_bytes), just flush it
+		global_state.writer->Flush(local_state.buffer);
+		return;
+	}
 
-	// flush any data left in the local state to the file
-	global_state.writer->Flush(local_state.buffer);
+	unique_lock<mutex> guard(global_state.lock);
+	if (global_state.combine_buffer) {
+		// There is still some data, combine it
+		global_state.combine_buffer->Combine(local_state.buffer);
+		if (global_state.combine_buffer->Count() >= bind_data.row_group_size / 2 ||
+		    global_state.combine_buffer->SizeInBytes() >= bind_data.row_group_size_bytes / 2) {
+			// After combining, the combine buffer is more than half of the row_group_size(_bytes), so we flush
+			auto owned_combine_buffer = std::move(global_state.combine_buffer);
+			guard.unlock();
+			// Lock free, of course
+			global_state.writer->Flush(*owned_combine_buffer);
+		}
+		return;
+	}
+
+	global_state.combine_buffer = make_uniq<ColumnDataCollection>(context.client, local_state.buffer.Types());
+	global_state.combine_buffer->Combine(local_state.buffer);
 }
 
 void ParquetWriteFinalize(ClientContext &context, FunctionData &bind_data, GlobalFunctionData &gstate) {
 	auto &global_state = gstate.Cast<ParquetWriteGlobalState>();
+	// flush the combine buffer (if it's there)
+	if (global_state.combine_buffer) {
+		global_state.writer->Flush(*global_state.combine_buffer);
+	}
+
 	// finalize: write any additional metadata to the file here
 	global_state.writer->Finalize();
 }
