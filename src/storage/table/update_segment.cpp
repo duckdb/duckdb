@@ -652,14 +652,14 @@ void UpdateSegment::InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const Sel
 	};
 }
 
-static void InitializeUpdateValidity(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info, Vector &update,
-                                     const SelectionVector &sel) {
-	auto &update_mask = FlatVector::Validity(update);
+static void InitializeUpdateValidity(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
+                                     UnifiedVectorFormat &update, const SelectionVector &sel) {
+	auto &update_mask = update.validity;
 	auto tuple_data = update_info.GetData<bool>();
 
 	if (!update_mask.AllValid()) {
 		for (idx_t i = 0; i < update_info.N; i++) {
-			auto idx = sel.get_index(i);
+			auto idx = update.sel->get_index(sel.get_index(i));
 			tuple_data[i] = update_mask.RowIsValidUnsafe(idx);
 		}
 	} else {
@@ -695,13 +695,13 @@ string_t UpdateSelectElement::Operation(UpdateSegment &segment, string_t element
 }
 
 template <class T>
-static void InitializeUpdateData(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info, Vector &update,
-                                 const SelectionVector &sel) {
-	auto update_data = FlatVector::GetData<T>(update);
+static void InitializeUpdateData(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
+                                 UnifiedVectorFormat &update, const SelectionVector &sel) {
+	auto update_data = update.GetData<T>(update);
 	auto tuple_data = update_info.GetData<T>();
 
 	for (idx_t i = 0; i < update_info.N; i++) {
-		auto idx = sel.get_index(i);
+		auto idx = update.sel->get_index(sel.get_index(i));
 		tuple_data[i] = update_data[idx];
 	}
 
@@ -797,21 +797,22 @@ static idx_t MergeLoop(row_t a[], sel_t b[], idx_t acount, idx_t bcount, idx_t a
 
 struct ExtractStandardEntry {
 	template <class T, class V>
-	static T Extract(V *data, idx_t entry) {
+	static T Extract(const V *data, idx_t entry) {
 		return data[entry];
 	}
 };
 
 struct ExtractValidityEntry {
 	template <class T, class V>
-	static T Extract(V *data, idx_t entry) {
+	static T Extract(const V *data, idx_t entry) {
 		return data->RowIsValid(entry);
 	}
 };
 
 template <class T, class V, class OP = ExtractStandardEntry>
 static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, UpdateInfo &update_info,
-                                    V *update_vector_data, row_t *ids, idx_t count, const SelectionVector &sel) {
+                                    const SelectionVector &update_vector_sel, const V *update_vector_data, row_t *ids,
+                                    idx_t count, const SelectionVector &sel) {
 	auto base_id = base_info.segment->column_data.start + base_info.vector_index * STANDARD_VECTOR_SIZE;
 #ifdef DEBUG
 	// all of these should be sorted, otherwise the below algorithm does not work
@@ -893,7 +894,8 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 	// now we merge the new values into the base_info
 	result_offset = 0;
 	auto pick_new = [&](idx_t id, idx_t aidx, idx_t count) {
-		result_values[result_offset] = OP::template Extract<T, V>(update_vector_data, aidx);
+		result_values[result_offset] =
+		    OP::template Extract<T, V>(update_vector_data, update_vector_sel.get_index(aidx));
 		result_ids[result_offset] = UnsafeNumericCast<sel_t>(id);
 		result_offset++;
 	};
@@ -913,20 +915,21 @@ static void MergeUpdateLoopInternal(UpdateInfo &base_info, V *base_table_data, U
 	memcpy(base_tuples, result_ids, result_offset * sizeof(sel_t));
 }
 
-static void MergeValidityLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info, Vector &update,
-                              row_t *ids, idx_t count, const SelectionVector &sel) {
+static void MergeValidityLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
+                              UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel) {
 	auto &base_validity = FlatVector::Validity(base_data);
-	auto &update_validity = FlatVector::Validity(update);
+	auto &update_validity = update.validity;
 	MergeUpdateLoopInternal<bool, ValidityMask, ExtractValidityEntry>(base_info, &base_validity, update_info,
-	                                                                  &update_validity, ids, count, sel);
+	                                                                  *update.sel, &update_validity, ids, count, sel);
 }
 
 template <class T>
-static void MergeUpdateLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info, Vector &update,
-                            row_t *ids, idx_t count, const SelectionVector &sel) {
+static void MergeUpdateLoop(UpdateInfo &base_info, Vector &base_data, UpdateInfo &update_info,
+                            UnifiedVectorFormat &update, row_t *ids, idx_t count, const SelectionVector &sel) {
 	auto base_table_data = FlatVector::GetData<T>(base_data);
-	auto update_vector_data = FlatVector::GetData<T>(update);
-	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, update_vector_data, ids, count, sel);
+	auto update_vector_data = update.GetData<T>(update);
+	MergeUpdateLoopInternal<T, T>(base_info, base_table_data, update_info, *update.sel, update_vector_data, ids, count,
+	                              sel);
 }
 
 static UpdateSegment::merge_update_function_t GetMergeUpdateFunction(PhysicalType type) {
@@ -975,13 +978,14 @@ unique_ptr<BaseStatistics> UpdateSegment::GetStatistics() {
 	return stats.statistics.ToUnique();
 }
 
-idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
-                               SelectionVector &sel) {
-	auto &mask = FlatVector::Validity(update);
+idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update,
+                               idx_t count, SelectionVector &sel) {
+	auto &mask = update.validity;
 	auto &validity = stats.statistics;
 	if (!mask.AllValid() && !validity.CanHaveNull()) {
 		for (idx_t i = 0; i < count; i++) {
-			if (!mask.RowIsValid(i)) {
+			auto idx = update.sel->get_index(i);
+			if (!mask.RowIsValid(idx)) {
 				validity.SetHasNullFast();
 				break;
 			}
@@ -992,14 +996,15 @@ idx_t UpdateValidityStatistics(UpdateSegment *segment, SegmentStatistics &stats,
 }
 
 template <class T>
-idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
-                                       SelectionVector &sel) {
-	auto update_data = FlatVector::GetData<T>(update);
-	auto &mask = FlatVector::Validity(update);
+idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update,
+                                       idx_t count, SelectionVector &sel) {
+	auto update_data = update.GetData<T>(update);
+	auto &mask = update.validity;
 
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			stats.statistics.UpdateNumericStats<T>(update_data[i]);
+			auto idx = update.sel->get_index(i);
+			stats.statistics.UpdateNumericStats<T>(update_data[idx]);
 		}
 		sel.Initialize(nullptr);
 		return count;
@@ -1007,24 +1012,27 @@ idx_t TemplatedUpdateNumericStatistics(UpdateSegment *segment, SegmentStatistics
 		idx_t not_null_count = 0;
 		sel.Initialize(STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < count; i++) {
-			if (mask.RowIsValid(i)) {
+			auto idx = update.sel->get_index(i);
+			if (mask.RowIsValid(idx)) {
 				sel.set_index(not_null_count++, i);
-				stats.statistics.UpdateNumericStats<T>(update_data[i]);
+				stats.statistics.UpdateNumericStats<T>(update_data[idx]);
 			}
 		}
 		return not_null_count;
 	}
 }
 
-idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, Vector &update, idx_t count,
+idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, UnifiedVectorFormat &update, idx_t count,
                              SelectionVector &sel) {
-	auto update_data = FlatVector::GetData<string_t>(update);
-	auto &mask = FlatVector::Validity(update);
+	auto update_data = update.GetDataNoConst<string_t>(update);
+	auto &mask = update.validity;
 	if (mask.AllValid()) {
 		for (idx_t i = 0; i < count; i++) {
-			StringStats::Update(stats.statistics, update_data[i]);
-			if (!update_data[i].IsInlined()) {
-				update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
+			auto idx = update.sel->get_index(i);
+			auto &str = update_data[idx];
+			StringStats::Update(stats.statistics, str);
+			if (!str.IsInlined()) {
+				update_data[idx] = segment->GetStringHeap().AddBlob(str);
 			}
 		}
 		sel.Initialize(nullptr);
@@ -1033,11 +1041,13 @@ idx_t UpdateStringStatistics(UpdateSegment *segment, SegmentStatistics &stats, V
 		idx_t not_null_count = 0;
 		sel.Initialize(STANDARD_VECTOR_SIZE);
 		for (idx_t i = 0; i < count; i++) {
-			if (mask.RowIsValid(i)) {
+			auto idx = update.sel->get_index(i);
+			if (mask.RowIsValid(idx)) {
 				sel.set_index(not_null_count++, i);
-				StringStats::Update(stats.statistics, update_data[i]);
-				if (!update_data[i].IsInlined()) {
-					update_data[i] = segment->GetStringHeap().AddBlob(update_data[i]);
+				auto &str = update_data[idx];
+				StringStats::Update(stats.statistics, str);
+				if (!str.IsInlined()) {
+					update_data[idx] = segment->GetStringHeap().AddBlob(str);
 				}
 			}
 		}
@@ -1153,18 +1163,19 @@ void UpdateSegment::InitializeUpdateInfo(idx_t vector_idx) {
 	}
 }
 
-void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vector &update, row_t *ids, idx_t count,
+void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vector &update_p, row_t *ids, idx_t count,
                            Vector &base_data) {
 	// obtain an exclusive lock
 	auto write_lock = lock.GetExclusiveLock();
 
-	update.Flatten(count);
+	UnifiedVectorFormat update_format;
+	update_p.ToUnifiedFormat(count, update_format);
 
 	// update statistics
 	SelectionVector sel;
 	{
 		lock_guard<mutex> stats_guard(stats_lock);
-		count = statistics_update_function(this, stats, update, count, sel);
+		count = statistics_update_function(this, stats, update_format, count, sel);
 	}
 	if (count == 0) {
 		return;
@@ -1231,7 +1242,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		node->Verify();
 
 		// now we are going to perform the merge
-		merge_update_function(base_info, base_data, *node, update, ids, count, sel);
+		merge_update_function(base_info, base_data, *node, update_format, ids, count, sel);
 
 		base_info.Verify();
 		node->Verify();
@@ -1260,7 +1271,7 @@ void UpdateSegment::Update(TransactionData transaction, idx_t column_index, Vect
 		InitializeUpdateInfo(*transaction_node, ids, sel, count, vector_index, vector_offset);
 
 		// we write the updates in the update node data, and write the updates in the info
-		initialize_update_function(*transaction_node, base_data, update_info, update, sel);
+		initialize_update_function(*transaction_node, base_data, update_info, update_format, sel);
 
 		update_info.next = transaction.transaction ? node_ref.GetBufferPointer() : UndoBufferPointer();
 		update_info.prev = UndoBufferPointer();

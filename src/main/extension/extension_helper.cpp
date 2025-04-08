@@ -115,7 +115,6 @@ static const DefaultExtension internal_extensions[] = {
     {"inet", "Adds support for IP-related data types and functions", false},
     {"spatial", "Geospatial extension that adds support for working with spatial data and functions", false},
     {"aws", "Provides features that depend on the AWS SDK", false},
-    {"arrow", "A zero-copy data integration between Apache Arrow and DuckDB", false},
     {"azure", "Adds a filesystem abstraction for Azure blob storage to DuckDB", false},
     {"iceberg", "Adds support for Apache Iceberg", false},
     {"vss", "Adds indexing support to accelerate Vector Similarity Search", false},
