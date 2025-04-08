@@ -31,17 +31,8 @@ duckdb_extension_load(httpfs
     )
 endif()
 
+### Skip due to missing patch
 if(FALSE)
-################# ARROW
-if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
-    duckdb_extension_load(arrow
-            LOAD_TESTS DONT_LINK
-            GIT_URL https://github.com/duckdb/arrow
-            GIT_TAG cff2f0e21b1608e38640e15b4cf0693dd52dd0eb
-            )
-endif()
-endif()
-
 ################# AVRO
 if (NOT MINGW)
     duckdb_extension_load(avro
@@ -49,6 +40,7 @@ if (NOT MINGW)
             GIT_URL https://github.com/duckdb/duckdb-avro
             GIT_TAG ed18629fa56a97e0796a3582110b51ddd125159d
     )
+endif()
 endif()
 
 ################## AWS
