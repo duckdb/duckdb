@@ -249,7 +249,7 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 
 void MultiFileReader::GetVirtualColumns(ClientContext &context, MultiFileReaderBindData &bind_data,
                                         virtual_column_map_t &result) {
-	if (bind_data.filename_idx == DConstants::INVALID_INDEX || bind_data.filename_idx == COLUMN_IDENTIFIER_FILENAME) {
+	if (!bind_data.filename_idx.IsValid() || bind_data.filename_idx == COLUMN_IDENTIFIER_FILENAME) {
 		bind_data.filename_idx = COLUMN_IDENTIFIER_FILENAME;
 		result.insert(make_pair(COLUMN_IDENTIFIER_FILENAME, TableColumn("filename", LogicalType::VARCHAR)));
 	}
@@ -275,7 +275,7 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 		auto global_idx = MultiFileGlobalIndex(i);
 		auto &col_id = global_column_ids[i];
 		auto column_id = col_id.GetPrimaryIndex();
-		if (column_id == options.filename_idx) {
+		if (options.filename_idx.IsValid() && column_id == options.filename_idx.GetIndex()) {
 			// filename
 			reader_data.constant_map.Add(global_idx, Value(filename));
 			continue;
@@ -377,7 +377,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 		    "\nThis can happen when reading multiple %s files. The schema information is taken from "
 		    "the first %s file by default. Possible solutions:\n"
 		    "* Enable the union_by_name=True option to combine the schema of all %s files "
-		    "(duckdb.org/docs/data/multiple_files/combining_schemas)\n"
+		    "(https://duckdb.org/docs/stable/data/multiple_files/combining_schemas)\n"
 		    "* Use a COPY statement to automatically derive types from an existing table.",
 		    reader.file_name, local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
 	}
