@@ -16,6 +16,7 @@
 namespace duckdb {
 
 constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILENAME;
+constexpr column_t MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER;
 
 MultiFileReaderGlobalState::~MultiFileReaderGlobalState() {
 }
@@ -396,6 +397,9 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileBindD
 		} catch (std::exception &ex) {
 			// error while converting - try to create a nice error message
 			ErrorData error(ex);
+			if (error.Type() == ExceptionType::INTERNAL) {
+				throw;
+			}
 			auto &original_error = error.RawMessage();
 			string first_message;
 			string extended_error =

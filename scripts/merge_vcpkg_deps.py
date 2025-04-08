@@ -17,7 +17,9 @@ merged_overlay_ports = []
 def prefix_overlay_ports(overlay_ports, path_to_vcpkg_json):
     def prefix_overlay_port(overlay_port):
         vcpkg_prefix_path = path_to_vcpkg_json[0 : path_to_vcpkg_json.find("/vcpkg.json")]
-        return vcpkg_prefix_path + overlay_port
+        if len(vcpkg_prefix_path) == 0:
+            return overlay_port
+        return vcpkg_prefix_path + '/' + overlay_port
 
     return map(prefix_overlay_port, overlay_ports)
 

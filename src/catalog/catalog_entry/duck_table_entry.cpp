@@ -20,6 +20,7 @@
 #include "duckdb/planner/operator/logical_projection.hpp"
 #include "duckdb/planner/operator/logical_update.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/parser/expression/function_expression.hpp"
 #include "duckdb/storage/storage_manager.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 
@@ -180,6 +181,10 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &rename_info = table_info.Cast<RenameColumnInfo>();
 		return RenameColumn(context, rename_info);
 	}
+	case AlterTableType::RENAME_FIELD: {
+		auto &rename_info = table_info.Cast<RenameFieldInfo>();
+		return RenameField(context, rename_info);
+	}
 	case AlterTableType::RENAME_TABLE: {
 		auto &rename_info = table_info.Cast<RenameTableInfo>();
 		auto copied_table = Copy(context);
@@ -191,9 +196,17 @@ unique_ptr<CatalogEntry> DuckTableEntry::AlterEntry(ClientContext &context, Alte
 		auto &add_info = table_info.Cast<AddColumnInfo>();
 		return AddColumn(context, add_info);
 	}
+	case AlterTableType::ADD_FIELD: {
+		auto &add_info = table_info.Cast<AddFieldInfo>();
+		return AddField(context, add_info);
+	}
 	case AlterTableType::REMOVE_COLUMN: {
 		auto &remove_info = table_info.Cast<RemoveColumnInfo>();
 		return RemoveColumn(context, remove_info);
+	}
+	case AlterTableType::REMOVE_FIELD: {
+		auto &remove_info = table_info.Cast<RemoveFieldInfo>();
+		return RemoveField(context, remove_info);
 	}
 	case AlterTableType::SET_DEFAULT: {
 		auto &set_default_info = table_info.Cast<SetDefaultInfo>();
@@ -361,6 +374,119 @@ unique_ptr<CatalogEntry> DuckTableEntry::AddColumn(ClientContext &context, AddCo
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
 }
 
+struct StructMappingInfo {
+	LogicalType new_type;
+	unique_ptr<ParsedExpression> default_value;
+	ErrorData error;
+};
+
+unique_ptr<ParsedExpression> PackExpression(unique_ptr<ParsedExpression> expr, string name) {
+	expr->SetAlias(std::move(name));
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(std::move(expr));
+	auto res = make_uniq<FunctionExpression>("struct_pack", std::move(children));
+	return std::move(res);
+}
+
+Value ConstructMapping(const string &name, const LogicalType &type) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		return Value(name);
+	}
+	child_list_t<Value> child_mapping;
+	auto &child_types = StructType::GetChildTypes(type);
+	for (auto &entry : child_types) {
+		auto mapping_value = ConstructMapping(entry.first, entry.second);
+		if (entry.second.id() == LogicalTypeId::STRUCT) {
+			child_list_t<Value> child_values;
+			child_values.emplace_back(string(), Value(entry.first));
+			child_values.emplace_back(string(), std::move(mapping_value));
+			mapping_value = Value::STRUCT(std::move(child_values));
+		}
+		child_mapping.emplace_back(entry.first, std::move(mapping_value));
+	}
+	return Value::STRUCT(std::move(child_mapping));
+}
+
+StructMappingInfo AddFieldToStruct(const LogicalType &type, const vector<string> &column_path,
+                                   const ColumnDefinition &new_field, idx_t depth = 0) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		throw BinderException("Column %s is not a struct - ALTER TABLE can only add fields to structs",
+		                      column_path[depth]);
+	}
+	StructMappingInfo result;
+	auto child_list = StructType::GetChildTypes(type);
+	if (column_path.size() == depth + 1) {
+		// root path - we are adding at this level
+		// check if a field with this name already exists
+		for (auto &entry : child_list) {
+			if (StringUtil::CIEquals(entry.first, new_field.Name())) {
+				// already exists!
+				result.error = ErrorData(CatalogException("Duplicate field \"%s\" - field already exists in struct %s",
+				                                          new_field.Name(), column_path.back()));
+				return result;
+			}
+		}
+		// add the new type
+		child_list.emplace_back(new_field.Name(), new_field.Type());
+		result.new_type = LogicalType::STRUCT(std::move(child_list));
+		// set the default value
+		unique_ptr<ParsedExpression> default_value;
+		if (new_field.HasDefaultValue()) {
+			default_value = new_field.DefaultValue().Copy();
+		} else {
+			default_value = make_uniq<ConstantExpression>(Value(new_field.Type()));
+		}
+		result.default_value = PackExpression(std::move(default_value), new_field.Name());
+		return result;
+	}
+	// not the root path - we need to recurse
+	auto &next_component = column_path[depth + 1];
+	bool found = false;
+	for (auto &entry : child_list) {
+		if (StringUtil::CIEquals(entry.first, next_component)) {
+			// found the entry - recurse
+			auto child_res = AddFieldToStruct(entry.second, column_path, new_field, depth + 1);
+			if (child_res.error.HasError()) {
+				return child_res;
+			}
+			entry.second = std::move(child_res.new_type);
+			result.default_value = PackExpression(std::move(child_res.default_value), entry.first);
+			found = true;
+			break;
+		}
+	}
+	result.new_type = LogicalType::STRUCT(std::move(child_list));
+	if (!found) {
+		throw BinderException("Sub-field %s does not exist in column %s", next_component, column_path[depth]);
+	}
+	return result;
+}
+
+unique_ptr<CatalogEntry> DuckTableEntry::AddField(ClientContext &context, AddFieldInfo &info) {
+	// follow the path
+	auto &col = GetColumn(info.column_path[0]);
+	auto res = AddFieldToStruct(col.Type(), info.column_path, info.new_field);
+	if (res.error.HasError()) {
+		if (!info.if_field_not_exists) {
+			res.error.Throw();
+		}
+		return nullptr;
+	}
+
+	// construct the struct remapping expression
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ColumnRefExpression>(info.column_path[0]));
+	children.push_back(make_uniq<ConstantExpression>(Value(res.new_type)));
+	children.push_back(make_uniq<ConstantExpression>(ConstructMapping(col.Name(), col.Type())));
+	children.push_back(std::move(res.default_value));
+
+	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
+
+	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
+	                                        std::move(function));
+	return ChangeColumnType(context, change_column_type);
+}
+
 void DuckTableEntry::UpdateConstraintsOnColumnDrop(const LogicalIndex &removed_index,
                                                    const vector<LogicalIndex> &adjusted_indices,
                                                    const RemoveColumnInfo &info, CreateTableInfo &create_info,
@@ -499,6 +625,190 @@ unique_ptr<CatalogEntry> DuckTableEntry::RemoveColumn(ClientContext &context, Re
 	auto new_storage =
 	    make_shared_ptr<DataTable>(context, *storage, columns.LogicalToPhysical(LogicalIndex(removed_index)).index);
 	return make_uniq<DuckTableEntry>(catalog, schema, *bound_create_info, new_storage);
+}
+
+struct DroppedFieldMapping {
+	Value mapping;
+	LogicalType new_type;
+	ErrorData error;
+};
+
+DroppedFieldMapping DropFieldFromStruct(const LogicalType &type, const vector<string> &column_path, idx_t depth) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		throw CatalogException("Cannot drop field from column \"%s\" - not a struct", column_path[0]);
+	}
+	auto &dropped_entry = column_path[depth];
+	bool last_entry = depth + 1 == column_path.size();
+	bool found = false;
+	DroppedFieldMapping result;
+	child_list_t<Value> child_mapping;
+	child_list_t<LogicalType> new_type_children;
+	auto &child_types = StructType::GetChildTypes(type);
+	for (auto &entry : child_types) {
+		Value mapping_value;
+		LogicalType type_value;
+		if (StringUtil::CIEquals(entry.first, dropped_entry)) {
+			// this is the entry we are dropping
+			found = true;
+			if (last_entry) {
+				// we are dropping this entry in its entirety - just skip
+				if (child_types.size() == 1) {
+					throw CatalogException("Cannot drop field %s from column %s - it is the last field of the struct",
+					                       column_path.back(), column_path.front());
+				}
+				continue;
+			} else {
+				// we are dropping a field in this entry - recurse
+				auto child_result = DropFieldFromStruct(entry.second, column_path, depth + 1);
+				if (child_result.error.HasError()) {
+					// bubble up error
+					return child_result;
+				}
+				mapping_value = std::move(child_result.mapping);
+				type_value = std::move(child_result.new_type);
+			}
+		} else {
+			// we are not adjusting this entry - copy the type and create a straightforward mapping
+			mapping_value = ConstructMapping(entry.first, entry.second);
+			type_value = entry.second;
+		}
+		if (entry.second.id() == LogicalTypeId::STRUCT) {
+			child_list_t<Value> child_values;
+			child_values.emplace_back(string(), Value(entry.first));
+			child_values.emplace_back(string(), std::move(mapping_value));
+			mapping_value = Value::STRUCT(std::move(child_values));
+		}
+		child_mapping.emplace_back(entry.first, std::move(mapping_value));
+		new_type_children.emplace_back(entry.first, type_value);
+	}
+	if (!found) {
+		result.error = ErrorData(CatalogException("Cannot drop field \"%s\" - it does not exist", dropped_entry));
+	} else {
+		result.mapping = Value::STRUCT(std::move(child_mapping));
+		result.new_type = LogicalType::STRUCT(std::move(new_type_children));
+	}
+	return result;
+}
+
+unique_ptr<CatalogEntry> DuckTableEntry::RemoveField(ClientContext &context, RemoveFieldInfo &info) {
+	if (!ColumnExists(info.column_path[0])) {
+		if (!info.if_column_exists) {
+			throw CatalogException("Cannot drop field from column \"%s\" - it does not exist", info.column_path[0]);
+		}
+		return nullptr;
+	}
+	// follow the path
+	auto &col = GetColumn(info.column_path[0]);
+	auto res = DropFieldFromStruct(col.Type(), info.column_path, 1);
+	if (res.error.HasError()) {
+		if (!info.if_column_exists) {
+			res.error.Throw();
+		}
+		return nullptr;
+	}
+
+	// construct the struct remapping expression
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ColumnRefExpression>(info.column_path[0]));
+	children.push_back(make_uniq<ConstantExpression>(Value(res.new_type)));
+	children.push_back(make_uniq<ConstantExpression>(std::move(res.mapping)));
+	children.push_back(make_uniq<ConstantExpression>(Value()));
+
+	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
+
+	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
+	                                        std::move(function));
+	return ChangeColumnType(context, change_column_type);
+}
+
+DroppedFieldMapping RenameFieldFromStruct(const LogicalType &type, const vector<string> &column_path,
+                                          const string &new_name, idx_t depth) {
+	if (type.id() != LogicalTypeId::STRUCT) {
+		throw CatalogException("Cannot rename field from column \"%s\" - not a struct", column_path[0]);
+	}
+	auto &rename_entry = column_path[depth];
+	bool last_entry = depth + 1 == column_path.size();
+	bool found = false;
+	DroppedFieldMapping result;
+	child_list_t<Value> child_mapping;
+	child_list_t<LogicalType> new_type_children;
+	auto &child_types = StructType::GetChildTypes(type);
+	for (auto &entry : child_types) {
+		auto field_name = entry.first;
+		Value mapping_value;
+		LogicalType type_value;
+		if (StringUtil::CIEquals(field_name, rename_entry)) {
+			// this is the entry we are dropping
+			found = true;
+			if (last_entry) {
+				// we are renaming this entry
+				for (auto &sub_entry : child_types) {
+					if (StringUtil::CIEquals(new_name, sub_entry.first)) {
+						throw CatalogException(
+						    "Cannot rename field %s from column %s to %s - a field with this name already exists",
+						    column_path.back(), column_path.front(), new_name);
+					}
+				}
+				field_name = new_name;
+				mapping_value = ConstructMapping(entry.first, entry.second);
+				type_value = entry.second;
+			} else {
+				// we are dropping a field in this entry - recurse
+				auto child_result = RenameFieldFromStruct(entry.second, column_path, new_name, depth + 1);
+				if (child_result.error.HasError()) {
+					// bubble up error
+					return child_result;
+				}
+				mapping_value = std::move(child_result.mapping);
+				type_value = std::move(child_result.new_type);
+			}
+		} else {
+			// we are not adjusting this entry - copy the type and create a straightforward mapping
+			mapping_value = ConstructMapping(entry.first, entry.second);
+			type_value = entry.second;
+		}
+		if (entry.second.id() == LogicalTypeId::STRUCT) {
+			child_list_t<Value> child_values;
+			child_values.emplace_back(string(), Value(entry.first));
+			child_values.emplace_back(string(), std::move(mapping_value));
+			mapping_value = Value::STRUCT(std::move(child_values));
+		}
+		child_mapping.emplace_back(field_name, std::move(mapping_value));
+		new_type_children.emplace_back(field_name, type_value);
+	}
+	if (!found) {
+		result.error = ErrorData(CatalogException("Cannot rename field \"%s\" - it does not exist", rename_entry));
+	} else {
+		result.mapping = Value::STRUCT(std::move(child_mapping));
+		result.new_type = LogicalType::STRUCT(std::move(new_type_children));
+	}
+	return result;
+}
+
+unique_ptr<CatalogEntry> DuckTableEntry::RenameField(ClientContext &context, RenameFieldInfo &info) {
+	if (!ColumnExists(info.column_path[0])) {
+		throw CatalogException("Cannot rename field from column \"%s\" - it does not exist", info.column_path[0]);
+	}
+	// follow the path
+	auto &col = GetColumn(info.column_path[0]);
+	auto res = RenameFieldFromStruct(col.Type(), info.column_path, info.new_name, 1);
+	if (res.error.HasError()) {
+		res.error.Throw();
+		return nullptr;
+	}
+
+	// construct the struct remapping expression
+	vector<unique_ptr<ParsedExpression>> children;
+	children.push_back(make_uniq<ColumnRefExpression>(info.column_path[0]));
+	children.push_back(make_uniq<ConstantExpression>(Value(res.new_type)));
+	children.push_back(make_uniq<ConstantExpression>(std::move(res.mapping)));
+	children.push_back(make_uniq<ConstantExpression>(Value()));
+
+	auto function = make_uniq<FunctionExpression>("remap_struct", std::move(children));
+
+	ChangeColumnTypeInfo change_column_type(info.GetAlterEntryData(), info.column_path[0], std::move(res.new_type),
+	                                        std::move(function));
+	return ChangeColumnType(context, change_column_type);
 }
 
 unique_ptr<CatalogEntry> DuckTableEntry::SetDefault(ClientContext &context, SetDefaultInfo &info) {

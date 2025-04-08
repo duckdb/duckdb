@@ -13,6 +13,7 @@
 #include "duckdb/planner/bound_tokens.hpp"
 #include "duckdb/planner/expression.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/common/enums/debug_vector_verification.hpp"
 
 namespace duckdb {
 class Allocator;
@@ -154,6 +155,8 @@ private:
 	optional_ptr<ClientContext> context;
 	//! The states of the expression executor; this holds any intermediates and temporary states of expressions
 	vector<unique_ptr<ExpressionExecutorState>> states;
+	//! The vector verification (debug setting)
+	DebugVectorVerification debug_vector_verification = DebugVectorVerification::NONE;
 
 private:
 	// it is possible to create an expression executor without a ClientContext - but it should be avoided
