@@ -290,6 +290,12 @@ struct DBConfigOptions {
 	set<string> allowed_directories;
 	//! The log configuration
 	LogConfig log_config = LogConfig();
+	//! Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries
+#ifdef DUCKDB_ALTERNATIVE_VERIFY
+	bool scheduler_process_partial = true;
+#else
+	bool scheduler_process_partial = false;
+#endif
 
 	bool operator==(const DBConfigOptions &other) const;
 };

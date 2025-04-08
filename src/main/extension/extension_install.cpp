@@ -59,7 +59,7 @@ const vector<string> ExtensionHelper::PathComponents() {
 string ExtensionHelper::ExtensionInstallDocumentationLink(const string &extension_name) {
 	auto components = PathComponents();
 
-	string link = "https://duckdb.org/docs/extensions/troubleshooting";
+	string link = "https://duckdb.org/docs/stable/extensions/troubleshooting";
 
 	if (components.size() >= 2) {
 		link += "/?version=" + components[0] + "&platform=" + components[1] + "&extension=" + extension_name;

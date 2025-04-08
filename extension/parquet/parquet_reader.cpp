@@ -27,6 +27,7 @@
 #include "duckdb/storage/object_cache.hpp"
 #include "duckdb/optimizer/statistics_propagator.hpp"
 #include "duckdb/planner/table_filter_state.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 
 #include <cassert>
 #include <chrono>
@@ -34,6 +35,8 @@
 #include <sstream>
 
 namespace duckdb {
+
+constexpr int32_t ParquetReader::ORDINAL_FIELD_ID;
 
 using duckdb_parquet::ColumnChunk;
 using duckdb_parquet::ConvertedType;
@@ -573,6 +576,11 @@ ParquetColumnSchema ParquetReader::ParseSchemaRecursive(idx_t depth, idx_t max_d
 	}
 }
 
+ParquetColumnSchema FileRowNumberSchema() {
+	return ParquetColumnSchema("file_row_number", LogicalType::BIGINT, 0, 0, 0, 0,
+	                           ParquetColumnSchemaType::FILE_ROW_NUMBER);
+}
+
 unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 	auto file_meta_data = GetFileMetadata();
 	idx_t next_schema_idx = 0;
@@ -598,9 +606,7 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 				    "Using file_row_number option on file with column named file_row_number is not supported");
 			}
 		}
-		ParquetColumnSchema file_row_number("file_row_number", LogicalType::BIGINT, 0, 0, 0, 0,
-		                                    ParquetColumnSchemaType::FILE_ROW_NUMBER);
-		root.children.push_back(std::move(file_row_number));
+		root.children.push_back(FileRowNumberSchema());
 	}
 	return make_uniq<ParquetColumnSchema>(root);
 }
@@ -608,6 +614,10 @@ unique_ptr<ParquetColumnSchema> ParquetReader::ParseSchema() {
 MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaData &file_meta_data,
                                                                ParquetColumnSchema &element) {
 	MultiFileColumnDefinition result(element.name, element.type);
+	if (element.schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
+		result.identifier = Value::INTEGER(ORDINAL_FIELD_ID);
+		return result;
+	}
 	auto &column_schema = file_meta_data.schema[element.schema_index];
 
 	if (column_schema.__isset.field_id) {
@@ -642,6 +652,14 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	for (idx_t i = 0; i < root_schema->children.size(); i++) {
 		auto &element = root_schema->children[i];
 		columns.push_back(ParseColumnDefinition(*file_meta_data, element));
+	}
+}
+
+void ParquetReader::AddVirtualColumn(column_t virtual_column_id) {
+	if (virtual_column_id == MultiFileReader::COLUMN_IDENTIFIER_FILE_ROW_NUMBER) {
+		root_schema->children.push_back(FileRowNumberSchema());
+	} else {
+		throw InternalException("Unsupported virtual column id %d for parquet reader", virtual_column_id);
 	}
 }
 
@@ -787,6 +805,15 @@ uint32_t ParquetReader::ReadData(duckdb_apache::thrift::protocol::TProtocol &ipr
 	} else {
 		return iprot.getTransport()->read(buffer, buffer_size);
 	}
+}
+
+idx_t GetRowGroupOffset(ParquetReader &reader, idx_t group_idx) {
+	idx_t row_group_offset = 0;
+	auto &row_groups = reader.GetFileMetadata()->row_groups;
+	for (idx_t i = 0; i < group_idx; i++) {
+		row_group_offset += row_groups[i].num_rows;
+	}
+	return row_group_offset;
 }
 
 const ParquetRowGroup &ParquetReader::GetGroup(ParquetReaderScanState &state) {
@@ -968,7 +995,7 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 
 			if (prune_result == FilterPropagateResult::FILTER_ALWAYS_FALSE) {
 				// this effectively will skip this chunk
-				state.group_offset = group.num_rows;
+				state.offset_in_group = group.num_rows;
 				return;
 			}
 		}
@@ -998,7 +1025,7 @@ void ParquetReader::InitializeScan(ClientContext &context, ParquetReaderScanStat
                                    vector<idx_t> groups_to_read) {
 	state.current_group = -1;
 	state.finished = false;
-	state.group_offset = 0;
+	state.offset_in_group = 0;
 	state.group_idx_list = std::move(groups_to_read);
 	state.sel.Initialize(STANDARD_VECTOR_SIZE);
 	if (!state.file_handle || state.file_handle->path != file_handle->path) {
@@ -1050,9 +1077,9 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 	}
 
 	// see if we have to switch to the next row group in the parquet file
-	if (state.current_group < 0 || (int64_t)state.group_offset >= GetGroup(state).num_rows) {
+	if (state.current_group < 0 || (int64_t)state.offset_in_group >= GetGroup(state).num_rows) {
 		state.current_group++;
-		state.group_offset = 0;
+		state.offset_in_group = 0;
 
 		auto &trans = reinterpret_cast<ThriftFileTransport &>(*state.thrift_file_proto->getTransport());
 		trans.ClearPrefetch();
@@ -1062,6 +1089,9 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 			state.finished = true;
 			return false;
 		}
+
+		// TODO: only need this if we have a deletion vector?
+		state.group_offset = GetRowGroupOffset(state.root_reader->Reader(), state.group_idx_list[state.current_group]);
 
 		uint64_t to_scan_compressed_bytes = 0;
 		for (idx_t i = 0; i < column_ids.size(); i++) {
@@ -1075,7 +1105,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		}
 
 		auto &group = GetGroup(state);
-		if (state.prefetch_mode && state.group_offset != (idx_t)group.num_rows) {
+		if (state.prefetch_mode && state.offset_in_group != (idx_t)group.num_rows) {
 			uint64_t total_row_group_span = GetGroupSpan(state);
 
 			double scan_percentage = (double)(to_scan_compressed_bytes) / static_cast<double>(total_row_group_span);
@@ -1126,13 +1156,15 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 		return true;
 	}
 
-	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.group_offset);
+	auto scan_count = MinValue<idx_t>(STANDARD_VECTOR_SIZE, GetGroup(state).num_rows - state.offset_in_group);
 	result.SetCardinality(scan_count);
 
 	if (scan_count == 0) {
 		state.finished = true;
 		return false; // end of last group, we are done
 	}
+
+	auto &deletion_filter = state.root_reader->Reader().deletion_filter;
 
 	state.define_buf.zero();
 	state.repeat_buf.zero();
@@ -1142,12 +1174,21 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 	auto &root_reader = state.root_reader->Cast<StructColumnReader>();
 
-	if (filters) {
+	if (filters || deletion_filter) {
 		idx_t filter_count = result.size();
+		D_ASSERT(filter_count == scan_count);
 		vector<bool> need_to_read(column_ids.size(), true);
 
 		state.sel.Initialize(nullptr);
 		D_ASSERT(state.scan_filters.size() == filters->filters.size());
+
+		bool is_first_filter = true;
+		if (deletion_filter) {
+			filter_count = deletion_filter->Filter(state.offset_in_group + state.group_offset, scan_count, state.sel);
+			//! FIXME: does this need to be set?
+			//! As part of 'DirectFilter' we also initialize reads of the child readers
+			is_first_filter = false;
+		}
 
 		// first load the columns that are used in filters
 		auto filter_state = state.adaptive_filter->BeginFilter();
@@ -1163,8 +1204,9 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 			auto &result_vector = result.data[local_idx.GetIndex()];
 			auto &child_reader = root_reader.GetChildReader(column_id);
 			child_reader.Filter(scan_count, define_ptr, repeat_ptr, result_vector, scan_filter.filter,
-			                    *scan_filter.filter_state, state.sel, filter_count, i == 0);
+			                    *scan_filter.filter_state, state.sel, filter_count, is_first_filter);
 			need_to_read[local_idx.GetIndex()] = false;
+			is_first_filter = false;
 		}
 		state.adaptive_filter->EndFilter(filter_state);
 
@@ -1201,7 +1243,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 	}
 
 	rows_read += scan_count;
-	state.group_offset += scan_count;
+	state.offset_in_group += scan_count;
 	return true;
 }
 

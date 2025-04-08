@@ -367,6 +367,7 @@ private:
 
 	void ParseGenericOptionListEntry(case_insensitive_map_t<vector<Value>> &result_options, string &name,
 	                                 duckdb_libpgquery::PGNode *arg);
+	vector<string> TransformNameList(duckdb_libpgquery::PGList &list);
 
 public:
 	static void SetQueryLocation(ParsedExpression &expr, int query_location);
