@@ -935,7 +935,16 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 	if (result.quoted) {
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	} else {
-		result.current_errors.Insert(INVALID_STATE, result.cur_col_id, result.chunk_col_id, result.last_position);
+		LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.lines_read);
+		bool first_nl = false;
+		auto borked_line = result.current_line_position.ReconstructCurrentLine(first_nl, result.buffer_handles,
+		                                                                       result.PrintErrorLine());
+		CSVError csv_error;
+		auto error = CSVError::InvalidState(
+		    result.state_machine.options, result.cur_col_id, lines_per_batch, borked_line,
+		    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
+		    result.last_position.GetGlobalPosition(result.requested_size, first_nl), result.path);
+		result.error_handler.Error(error, true);
 	}
 }
 
@@ -1483,12 +1492,13 @@ void StringValueScanner::ProcessOverBufferValue() {
 			result.EmptyLine(result, iterator.pos.buffer_pos);
 		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
 			idx_t value_size = value.GetSize();
-			if (states.IsDelimiter()) {
+			if (states.IsDelimiter() &&
+			    !result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()) {
 				idx_t extra_delimiter_bytes =
 				    result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1;
 				if (extra_delimiter_bytes > value_size) {
 					throw InternalException(
-					    "Value size is lower than the number of extra delimiter bytes in the ProcesOverBufferValue()");
+					    "Value size is lower than the number of extra delimiter bytes in the ProcessOverBufferValue()");
 				}
 				value_size -= extra_delimiter_bytes;
 			}
