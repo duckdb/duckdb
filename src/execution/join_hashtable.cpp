@@ -170,12 +170,8 @@ static void ApplyBitmaskAndGetSaltBuild(Vector &hashes_v, Vector &salt_v, const 
 }
 
 template <bool HAS_SEL>
-idx_t GetIndexOfOptionalSel(const SelectionVector* sel, idx_t idx) {
-	if (HAS_SEL) {
-		return sel->get_index(idx);
-	} else {
-		return idx;
-	}
+idx_t GetOptionalIndex(const SelectionVector *sel, idx_t idx) {
+	return HAS_SEL ? sel->get_index(idx) : idx;
 }
 
 //! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the key_match_sel
@@ -183,7 +179,7 @@ idx_t GetIndexOfOptionalSel(const SelectionVector* sel, idx_t idx) {
 template <bool USE_SALTS, bool HAS_SEL>
 static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_state,
                                           JoinHashTable::ProbeState &state, Vector &hashes_v,
-                                          const SelectionVector* sel, idx_t &count, JoinHashTable &ht,
+                                          const SelectionVector *sel, idx_t &count, JoinHashTable &ht,
                                           ht_entry_t *entries, Vector &pointers_result_v, SelectionVector &match_sel) {
 	// auto start_unified = std::chrono::high_resolution_clock::now();
 
@@ -193,18 +189,13 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
 
 	auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
 
-	// time_converting_to_unified += std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start_unified).count();
-	// auto start_empty = std::chrono::high_resolution_clock::now();
+	// time_converting_to_unified += std::chrono::duration<double>(std::chrono::high_resolution_clock::now() -
+	// start_unified).count(); auto start_empty = std::chrono::high_resolution_clock::now();
 
 	// first, filter out the empty rows and calculate the offset
-	for (idx_t i = 0; i < count; i++) {
-		auto row_idx = GetIndexOfOptionalSel<HAS_SEL>(sel, i);
-		auto ht_offset = hashes[row_idx] & ht.bitmask;
-		ht_offsets[row_idx] = ht_offset;
-	}
 
-	// time_looking_for_empty += std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start_empty).count();
-	// auto start_lookup = std::chrono::high_resolution_clock::now();
+	// time_looking_for_empty += std::chrono::duration<double>(std::chrono::high_resolution_clock::now() -
+	// start_empty).count(); auto start_lookup = std::chrono::high_resolution_clock::now();
 
 	auto pointers_result = FlatVector::GetData<data_ptr_t>(pointers_result_v);
 	auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(state.rhs_row_locations);
@@ -215,6 +206,7 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
 	match_count = 0;
 
 	do {
+
 		idx_t salt_match_count = 0;
 		idx_t key_no_match_count = 0;
 
@@ -223,22 +215,17 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
 		// b) an entry is found where the salt matches -> need to compare the keys
 		for (idx_t i = 0; i < remaining_count; i++) {
 
-			auto row_index = GetIndexOfOptionalSel<HAS_SEL>(sel, i);
-
-			idx_t &ht_offset = ht_offsets[row_index];
-			bool occupied;
-			ht_entry_t entry;
+			auto row_index = GetOptionalIndex<HAS_SEL>(sel, i);
+			auto ht_offset = hashes[row_index] & ht.bitmask;
 
 			if (USE_SALTS) {
 
-
 				// increment the ht_offset of the entry as long as next entry is occupied and salt does not match
 				while (true) {
-					entry = entries[ht_offset];
-					occupied = entry.IsOccupied();
+					const ht_entry_t entry = entries[ht_offset];
+					const bool occupied = entry.IsOccupied();
 
-					// condition for incrementing the ht_offset: occupied and row_salt does not match -> move to next
-					// entry
+					// the entry is empty -> no match possible
 					if (!occupied) {
 						break;
 					}
@@ -246,24 +233,27 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
 					const hash_t row_salt = ht_entry_t::ExtractSalt(hashes[row_index]);
 					const bool salt_match = entry.GetSalt() == row_salt;
 					if (salt_match) {
+						// we know that the enty is occupied and the salt matches -> compare the keys
+						state.salt_match_sel.set_index(salt_match_count, row_index);
+						row_ptr_insert_to[row_index] = entry.GetPointer();
+						ht_offsets[row_index] = ht_offset;
+						salt_match_count += 1;
 						break;
 					}
 
+					// full and salt does not match -> continue probing
 					IncrementAndWrap(ht_offset, ht.bitmask);
 				}
 			} else {
-				entry = entries[ht_offset];
-				occupied = entry.IsOccupied();
+				const ht_entry_t entry = entries[ht_offset];
+				const bool occupied = entry.IsOccupied();
+				if (occupied) {
+					// the entry is occupied -> compare the keys
+					state.salt_match_sel.set_index(salt_match_count, row_index);
+					row_ptr_insert_to[row_index] = entry.GetPointer();
+					salt_match_count += 1;
+				}
 			}
-
-			// the entries we need to process in the next iteration are the ones that are occupied and the row_salt
-			// does not match, the ones that are empty need no further processing
-			state.salt_match_sel.set_index(salt_match_count, row_index);
-			salt_match_count += occupied;
-
-			// entry might be empty, so the pointer in the entry is nullptr, but this does not matter as the row
-			// will not be compared anyway as with an empty entry we are already done
-			row_ptr_insert_to[row_index] = entry.GetPointerOrNull();
 		}
 
 		if (salt_match_count != 0) {
@@ -288,6 +278,7 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
 				const auto row_index = state.key_no_match_sel.get_index(i);
 				auto &ht_offset = ht_offsets[row_index];
 
+
 				IncrementAndWrap(ht_offset, ht.bitmask);
 			}
 		}
@@ -297,10 +288,8 @@ static inline void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &
 		remaining_count = 0; // todo: ignore hash collisions for now
 	} while (remaining_count > 0);
 
-	// time_looking_for_slot += std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - start_lookup).count();
-
-
-
+	// time_looking_for_slot += std::chrono::duration<double>(std::chrono::high_resolution_clock::now() -
+	// start_lookup).count();
 }
 
 inline bool JoinHashTable::UseSalt() const {
@@ -309,24 +298,24 @@ inline bool JoinHashTable::UseSalt() const {
 }
 
 void JoinHashTable::GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
-                                   const SelectionVector* sel, idx_t &count, Vector &pointers_result_v,
+                                   const SelectionVector *sel, idx_t &count, Vector &pointers_result_v,
                                    SelectionVector &match_sel, bool has_sel) {
 
 	if (UseSalt()) {
 		if (has_sel) {
-			GetRowPointersInternal<true, true>(keys, key_state, state, hashes_v, sel, count, *this, entries, pointers_result_v,
-									 match_sel);
+			GetRowPointersInternal<true, true>(keys, key_state, state, hashes_v, sel, count, *this, entries,
+			                                   pointers_result_v, match_sel);
 		} else {
-			GetRowPointersInternal<true, false>(keys, key_state, state, hashes_v, sel, count, *this, entries, pointers_result_v,
-									 match_sel);
+			GetRowPointersInternal<true, false>(keys, key_state, state, hashes_v, sel, count, *this, entries,
+			                                    pointers_result_v, match_sel);
 		}
 	} else {
 		if (has_sel) {
-			GetRowPointersInternal<false, true>(keys, key_state, state, hashes_v, sel, count, *this, entries, pointers_result_v,
-									 match_sel);
+			GetRowPointersInternal<false, true>(keys, key_state, state, hashes_v, sel, count, *this, entries,
+			                                    pointers_result_v, match_sel);
 		} else {
-			GetRowPointersInternal<false, false>(keys, key_state, state, hashes_v, sel, count, *this, entries, pointers_result_v,
-									 match_sel);
+			GetRowPointersInternal<false, false>(keys, key_state, state, hashes_v, sel, count, *this, entries,
+			                                     pointers_result_v, match_sel);
 		}
 	}
 }
@@ -792,8 +781,8 @@ void JoinHashTable::Probe(ScanStructure &scan_structure, DataChunk &keys, TupleD
 		Hash(keys, *current_sel, scan_structure.count, hashes);
 
 		// now initialize the pointers of the scan structure based on the hashes
-		GetRowPointers(keys, key_state, probe_state, hashes, current_sel, scan_structure.count,
-		               scan_structure.pointers, scan_structure.sel_vector, scan_structure.has_null_value_filter);
+		GetRowPointers(keys, key_state, probe_state, hashes, current_sel, scan_structure.count, scan_structure.pointers,
+		               scan_structure.sel_vector, scan_structure.has_null_value_filter);
 	}
 }
 
@@ -1638,7 +1627,7 @@ void JoinHashTable::ProbeAndSpill(ScanStructure &scan_structure, DataChunk &prob
 
 	// now initialize the pointers of the scan structure based on the hashes
 	GetRowPointers(probe_keys, key_state, probe_state, hashes, current_sel, scan_structure.count,
-	               scan_structure.pointers, scan_structure.sel_vector, true); //todo: this is hacky
+	               scan_structure.pointers, scan_structure.sel_vector, true); // todo: this is hacky
 }
 
 ProbeSpill::ProbeSpill(JoinHashTable &ht, ClientContext &context, const vector<LogicalType> &probe_types)
