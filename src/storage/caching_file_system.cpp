@@ -101,7 +101,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, const idx_t nr_bytes, c
 		}
 	}
 
-	return TryInsertFileRange(buffer, nr_bytes, location, new_file_range);
+	return TryInsertFileRange(std::move(result), buffer, nr_bytes, location, new_file_range);
 }
 
 BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
@@ -133,7 +133,7 @@ BufferHandle CachingFileHandle::Read(data_ptr_t &buffer, idx_t &nr_bytes) {
 	nr_bytes = NumericCast<idx_t>(GetFileHandle().Read(buffer, nr_bytes));
 	auto new_file_range = make_shared_ptr<CachedFileRange>(result.GetBlockHandle(), nr_bytes, position, version_tag);
 
-	result = TryInsertFileRange(buffer, nr_bytes, position, new_file_range);
+	result = TryInsertFileRange(std::move(result), buffer, nr_bytes, position, new_file_range);
 	position += NumericCast<idx_t>(nr_bytes);
 
 	return result;
@@ -262,9 +262,9 @@ BufferHandle CachingFileHandle::TryReadFromFileRange(const unique_ptr<StorageLoc
 	return result;
 }
 
-BufferHandle CachingFileHandle::TryInsertFileRange(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
-                                                   shared_ptr<CachedFileRange> &new_file_range) {
-	BufferHandle result;
+BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &&pin, data_ptr_t &buffer, idx_t nr_bytes,
+                                                   idx_t location, shared_ptr<CachedFileRange> &new_file_range) {
+	auto result = std::move(pin);
 
 	// Grab the lock again (write lock this time) to insert the newly created buffer into the ranges
 	auto guard = cached_file.lock.GetExclusiveLock();

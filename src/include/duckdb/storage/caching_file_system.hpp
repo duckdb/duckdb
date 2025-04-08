@@ -60,7 +60,7 @@ private:
 	BufferHandle TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard, CachedFileRange &file_range,
 	                                  data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
 	//! Try to insert the file range into the cache
-	BufferHandle TryInsertFileRange(data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
+	BufferHandle TryInsertFileRange(BufferHandle &&pin, data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
 	                                shared_ptr<CachedFileRange> &new_file_range);
 	//! Read from file and copy from cached buffers until the requested read is complete
 	//! If actually_read is false, no reading happens, only the number of non-cached reads is counted and returned
