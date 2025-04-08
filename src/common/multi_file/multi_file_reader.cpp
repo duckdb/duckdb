@@ -377,7 +377,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 		    "\nThis can happen when reading multiple %s files. The schema information is taken from "
 		    "the first %s file by default. Possible solutions:\n"
 		    "* Enable the union_by_name=True option to combine the schema of all %s files "
-		    "(duckdb.org/docs/data/multiple_files/combining_schemas)\n"
+		    "(https://duckdb.org/docs/stable/data/multiple_files/combining_schemas)\n"
 		    "* Use a COPY statement to automatically derive types from an existing table.",
 		    reader.file_name, local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
 	}
