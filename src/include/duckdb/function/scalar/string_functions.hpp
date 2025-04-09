@@ -107,9 +107,9 @@ struct ConcatOperatorFun {
 
 struct PrefixFun {
 	static constexpr const char *Name = "prefix";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
+	static constexpr const char *Parameters = "string,search_string";
+	static constexpr const char *Description = "Returns `true` if `string` starts with `search_string`.";
+	static constexpr const char *Example = "prefix('abc','ab')";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
@@ -117,9 +117,9 @@ struct PrefixFun {
 
 struct SuffixFun {
 	static constexpr const char *Name = "suffix";
-	static constexpr const char *Parameters = "";
-	static constexpr const char *Description = "";
-	static constexpr const char *Example = "";
+	static constexpr const char *Parameters = "string,search_string";
+	static constexpr const char *Description = "Returns `true` if `string` ends with `search_string`.";
+	static constexpr const char *Example = "suffix('abc','bc')";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
@@ -241,10 +241,10 @@ struct ArrayLengthFun {
 
 struct SubstringFun {
 	static constexpr const char *Name = "substring";
-	static constexpr const char *Parameters = "string,start,length";
-	static constexpr const char *Description = "Extracts substring of `length` characters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.";
-	static constexpr const char *Example = "substring('Hello', 2, 2)";
-	static constexpr const char *Categories = "string";
+	static constexpr const char *Parameters = "string::VARCHAR,start::BIGINT\001string::VARCHAR,start::BIGINT,length::BIGINT";
+	static constexpr const char *Description = "Extracts substring starting from character `start` up to the end of the string. Note that a `start` value of `1` refers to the first character of the `string`.\001Extracts substring of `length` characters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.";
+	static constexpr const char *Example = "substring('Hello', 2)\001substring('Hello', 2, 2)";
+	static constexpr const char *Categories = "string\001string";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -257,10 +257,10 @@ struct SubstrFun {
 
 struct SubstringGraphemeFun {
 	static constexpr const char *Name = "substring_grapheme";
-	static constexpr const char *Parameters = "string,start,length";
-	static constexpr const char *Description = "Extracts substring of `length` grapheme clusters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.";
-	static constexpr const char *Example = "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)";
-	static constexpr const char *Categories = "string";
+	static constexpr const char *Parameters = "string::VARCHAR,start::BIGINT\001string::VARCHAR,start::BIGINT,length::BIGINT";
+	static constexpr const char *Description = "Extracts substring starting from grapheme clusters `start` up to the end of the string. Note that a `start` value of `1` refers to the first character of the `string`.\001Extracts substring of `length` grapheme clusters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.";
+	static constexpr const char *Example = "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3)\001substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)";
+	static constexpr const char *Categories = "string\001string";
 
 	static ScalarFunctionSet GetFunctions();
 };
@@ -468,7 +468,7 @@ struct NotIlikeEscapeFun {
 struct MD5Fun {
 	static constexpr const char *Name = "md5";
 	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
-	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a `VARCHAR`.\001Returns the MD5 hash of the `blob` as as a `VARCHAR`.";
+	static constexpr const char *Description = "Returns the `MD5` hash of the `string` as a `VARCHAR`.\001Returns the `MD5` hash of the `blob` as as a `VARCHAR`.";
 	static constexpr const char *Example = "md5('abc')\001md5('\\xAA\\xBB'::BLOB)";
 	static constexpr const char *Categories = "string\001blob";
 
@@ -478,7 +478,7 @@ struct MD5Fun {
 struct MD5NumberFun {
 	static constexpr const char *Name = "md5_number";
 	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
-	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a `HUGEINT`\001Returns the MD5 hash of the `blob` as a `HUGEINT`   ";
+	static constexpr const char *Description = "Returns the `MD5` hash of the `string` as a `HUGEINT`\001Returns the `MD5` hash of the `blob` as a `HUGEINT`   ";
 	static constexpr const char *Example = "md5_number('abc')\001md5_number('\\xAA\\xBB'::BLOB)";
 	static constexpr const char *Categories = "string\001blob";
 

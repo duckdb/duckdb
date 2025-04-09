@@ -59,16 +59,16 @@
     },
     {
         "name": "prefix",
-        "parameters": "",
-        "description": "",
-        "example": "",
+        "parameters": "string,search_string",
+        "description": "Returns `true` if `string` starts with `search_string`.",
+        "example": "prefix('abc','ab')",
         "type": "scalar_function"
     },
     {
         "name": "suffix",
-        "parameters": "",
-        "description": "",
-        "example": "",
+        "parameters": "string,search_string",
+        "description": "Returns `true` if `string` ends with `search_string`.",
+        "example": "suffix('abc','bc')",
         "type": "scalar_function",
         "aliases": ["ends_with"]
     },
@@ -226,19 +226,53 @@
     },
     {
         "name": "substring",
-        "parameters": "string,start,length",
-        "description": "Extracts substring of `length` characters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.",
-        "example": "substring('Hello', 2, 2)",
-        "categories": ["string"],
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"},
+                    {"name": "start", "type": "BIGINT"}
+                ],
+                "description": "Extracts substring starting from character `start` up to the end of the string. Note that a `start` value of `1` refers to the first character of the `string`.",
+                "example": "substring('Hello', 2)",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"},
+                    {"name": "start", "type": "BIGINT"},
+                    {"name": "length", "type": "BIGINT"}
+                ],
+                "description": "Extracts substring of `length` characters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.",
+                "example": "substring('Hello', 2, 2)",
+                "categories": ["string"]
+            }
+        ],
         "type": "scalar_function_set",
         "aliases": ["substr"]
     },
     {
         "name": "substring_grapheme",
-        "parameters": "string,start,length",
-        "description": "Extracts substring of `length` grapheme clusters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.",
-        "example": "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)",
-        "categories": ["string"],
+        "variants": [
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"},
+                    {"name": "start", "type": "BIGINT"}
+                ],
+                "description": "Extracts substring starting from grapheme clusters `start` up to the end of the string. Note that a `start` value of `1` refers to the first character of the `string`.",
+                "example": "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3)",
+                "categories": ["string"]
+            },
+            {
+                "parameters": [
+                    {"name": "string", "type": "VARCHAR"},
+                    {"name": "start", "type": "BIGINT"},
+                    {"name": "length", "type": "BIGINT"}
+                ],
+                "description": "Extracts substring of `length` grapheme clusters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.",
+                "example": "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)",
+                "categories": ["string"]
+            }
+        ],
         "type": "scalar_function_set"
     },
     {
@@ -533,13 +567,13 @@
         "variants": [
             {
                 "parameters": [{"name": "string", "type": "VARCHAR"}],
-                "description": "Returns the MD5 hash of the `string` as a `VARCHAR`.",
+                "description": "Returns the `MD5` hash of the `string` as a `VARCHAR`.",
                 "example": "md5('abc')",
                 "categories": ["string"]
             },
             {
                 "parameters": [{"name": "blob", "type": "BLOB"}],
-                "description": "Returns the MD5 hash of the `blob` as as a `VARCHAR`.",
+                "description": "Returns the `MD5` hash of the `blob` as as a `VARCHAR`.",
                 "example": "md5('\\xAA\\xBB'::BLOB)",
                 "categories": ["blob"]
             }
@@ -552,13 +586,13 @@
         "variants": [
             {
                 "parameters": [{"name": "string", "type": "VARCHAR"}],
-                "description": "Returns the MD5 hash of the `string` as a `HUGEINT`",
+                "description": "Returns the `MD5` hash of the `string` as a `HUGEINT`",
                 "example": "md5_number('abc')",
                 "categories": ["string"]
             },
             {
                 "parameters": [{"name": "blob", "type": "BLOB"}],
-                "description": "Returns the MD5 hash of the `blob` as a `HUGEINT`   ",
+                "description": "Returns the `MD5` hash of the `blob` as a `HUGEINT`   ",
                 "example": "md5_number('\\xAA\\xBB'::BLOB)",
                 "categories": ["blob"]
             }

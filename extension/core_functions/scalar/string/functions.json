@@ -64,15 +64,15 @@
     {
         "name": "format",
         "parameters": "format,parameters...",
-        "description": "Formats a string using fmt syntax.",
+        "description": "Formats a string using the fmt syntax.",
         "example": "format('Benchmark \"{}\" took {} seconds', 'CSV', 42)",
         "categories": ["string"],
         "type": "scalar_function"
     },
     {
         "name": "format_bytes",
-        "parameters": "bytes",
-        "description": "Converts `bytes` to a human-readable presentation (e.g. 16000 -> 15.6 KiB).",
+        "parameters": "integer",
+        "description": "Converts `integer` to a human-readable representation using units based on powers of 2 (KiB, MiB, GiB, etc.).",
         "example": "format_bytes(1000 * 16)",
         "categories": ["string", "numeric"],
         "type": "scalar_function",
@@ -80,8 +80,8 @@
     },
     {
         "name": "formatReadableDecimalSize",
-        "parameters": "bytes",
-        "description": "Converts `bytes` to a human-readable presentation (e.g. 16000 -> 16.0 KB).",
+        "parameters": "integer",
+        "description": "Converts `integer` to a human-readable representation (e.g. 16000 -> 16.0 KB).",
         "example": "formatReadableDecimalSize(1000 * 16)",
         "categories": ["string", "numeric"],
         "type": "scalar_function"
@@ -223,7 +223,7 @@
                 "parameters": [
                     {"name": "path", "type": "VARCHAR"}
                 ],
-                "description": "Returns the top-level directory name, using both 'forward_slash' and 'backslash' as separators.",
+                "description": "Returns the top-level directory name from the given path, using both 'forward_slash' and 'backslash' as separators.",
                 "example": "parse_dirname('path/to/file.csv')",
                 "categories": ["string"]
             },
@@ -232,7 +232,7 @@
                     {"name": "path", "type": "VARCHAR"},
                     {"name": "separator", "type": "VARCHAR"}
                 ],
-                "description": "Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash.",
+                "description": "Returns the top-level directory name from the given path.. separator options: system, both_slash (default), forward_slash, backslash.",
                 "example": "parse_dirname('path/to/file.csv', 'system')",
                 "categories": ["string"]
             }
@@ -247,7 +247,7 @@
                 "parameters": [
                     {"name": "path", "type": "VARCHAR"}
                 ],
-                "description": "Returns the head of the path similarly to Python's os.path.dirname, using both 'forward_slash' and 'backslash' as separators.",
+                "description": "Returns the head of the path (the pathname until the last slash) similarly to Python's os.path.dirname, using both 'forward_slash' and 'backslash' as separators.",
                 "example": "parse_dirpath('path/to/file.csv')",
                 "categories": ["string"]
             },
@@ -256,7 +256,7 @@
                     {"name": "path", "type": "VARCHAR"},
                     {"name": "separator", "type": "VARCHAR"}
                 ],
-                "description": "Returns the head of the path similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash.",
+                "description": "Returns the head of the path (the pathname until the last slash) similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash.",
                 "example": "parse_dirpath('path/to/file.csv', 'system')",
                 "categories": ["string"]
             }
@@ -505,7 +505,7 @@
     },
     {
         "name": "url_decode",
-        "parameters": "input",
+        "parameters": "string",
         "description": "Decodes a URL from a representation using Percent-Encoding",
         "example": "url_decode('this%20string%20is%2BFencoded')",
         "categories": ["string"],

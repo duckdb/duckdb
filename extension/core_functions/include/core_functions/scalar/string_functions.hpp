@@ -90,7 +90,7 @@ struct DamerauLevenshteinFun {
 struct FormatFun {
 	static constexpr const char *Name = "format";
 	static constexpr const char *Parameters = "format,parameters...";
-	static constexpr const char *Description = "Formats a string using fmt syntax.";
+	static constexpr const char *Description = "Formats a string using the fmt syntax.";
 	static constexpr const char *Example = "format('Benchmark \"{}\" took {} seconds', 'CSV', 42)";
 	static constexpr const char *Categories = "string";
 
@@ -99,8 +99,8 @@ struct FormatFun {
 
 struct FormatBytesFun {
 	static constexpr const char *Name = "format_bytes";
-	static constexpr const char *Parameters = "bytes";
-	static constexpr const char *Description = "Converts `bytes` to a human-readable presentation (e.g. 16000 -> 15.6 KiB).";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Converts `integer` to a human-readable representation using units based on powers of 2 (KiB, MiB, GiB, etc.).";
 	static constexpr const char *Example = "format_bytes(1000 * 16)";
 	static constexpr const char *Categories = "string,numeric";
 
@@ -115,8 +115,8 @@ struct FormatreadablesizeFun {
 
 struct FormatreadabledecimalsizeFun {
 	static constexpr const char *Name = "formatReadableDecimalSize";
-	static constexpr const char *Parameters = "bytes";
-	static constexpr const char *Description = "Converts `bytes` to a human-readable presentation (e.g. 16000 -> 16.0 KB).";
+	static constexpr const char *Parameters = "integer";
+	static constexpr const char *Description = "Converts `integer` to a human-readable representation (e.g. 16000 -> 16.0 KB).";
 	static constexpr const char *Example = "formatReadableDecimalSize(1000 * 16)";
 	static constexpr const char *Categories = "string,numeric";
 
@@ -266,7 +266,7 @@ struct LtrimFun {
 struct ParseDirnameFun {
 	static constexpr const char *Name = "parse_dirname";
 	static constexpr const char *Parameters = "path::VARCHAR\001path::VARCHAR,separator::VARCHAR";
-	static constexpr const char *Description = "Returns the top-level directory name, using both 'forward_slash' and 'backslash' as separators.\001Returns the top-level directory name. separator options: system, both_slash (default), forward_slash, backslash.";
+	static constexpr const char *Description = "Returns the top-level directory name from the given path, using both 'forward_slash' and 'backslash' as separators.\001Returns the top-level directory name from the given path.. separator options: system, both_slash (default), forward_slash, backslash.";
 	static constexpr const char *Example = "parse_dirname('path/to/file.csv')\001parse_dirname('path/to/file.csv', 'system')";
 	static constexpr const char *Categories = "string\001string";
 
@@ -276,7 +276,7 @@ struct ParseDirnameFun {
 struct ParseDirpathFun {
 	static constexpr const char *Name = "parse_dirpath";
 	static constexpr const char *Parameters = "path::VARCHAR\001path::VARCHAR,separator::VARCHAR";
-	static constexpr const char *Description = "Returns the head of the path similarly to Python's os.path.dirname, using both 'forward_slash' and 'backslash' as separators.\001Returns the head of the path similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash.";
+	static constexpr const char *Description = "Returns the head of the path (the pathname until the last slash) similarly to Python's os.path.dirname, using both 'forward_slash' and 'backslash' as separators.\001Returns the head of the path (the pathname until the last slash) similarly to Python's os.path.dirname. separator options: system, both_slash (default), forward_slash, backslash.";
 	static constexpr const char *Example = "parse_dirpath('path/to/file.csv')\001parse_dirpath('path/to/file.csv', 'system')";
 	static constexpr const char *Categories = "string\001string";
 
@@ -473,7 +473,7 @@ struct UrlEncodeFun {
 
 struct UrlDecodeFun {
 	static constexpr const char *Name = "url_decode";
-	static constexpr const char *Parameters = "input";
+	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Decodes a URL from a representation using Percent-Encoding";
 	static constexpr const char *Example = "url_decode('this%20string%20is%2BFencoded')";
 	static constexpr const char *Categories = "string";
