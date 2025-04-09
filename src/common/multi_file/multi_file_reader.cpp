@@ -275,7 +275,8 @@ void MultiFileReader::FinalizeBind(MultiFileReaderData &reader_data, const Multi
 		auto global_idx = MultiFileGlobalIndex(i);
 		auto &col_id = global_column_ids[i];
 		auto column_id = col_id.GetPrimaryIndex();
-		if (options.filename_idx.IsValid() && column_id == options.filename_idx.GetIndex()) {
+		if ((options.filename_idx.IsValid() && column_id == options.filename_idx.GetIndex()) ||
+		    column_id == MultiFileReader::COLUMN_IDENTIFIER_FILENAME) {
 			// filename
 			reader_data.constant_map.Add(global_idx, Value(filename));
 			continue;
