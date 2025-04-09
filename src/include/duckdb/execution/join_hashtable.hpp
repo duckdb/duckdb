@@ -150,7 +150,6 @@ public:
 		ProbeState();
 
 		Vector ht_offsets_v;
-
 		SelectionVector non_empty_sel;
 	};
 

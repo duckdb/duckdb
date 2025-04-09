@@ -14,8 +14,7 @@ using ProbeSpill = JoinHashTable::ProbeSpill;
 using ProbeSpillLocalState = JoinHashTable::ProbeSpillLocalAppendState;
 
 JoinHashTable::SharedState::SharedState()
-    :  salt_v(LogicalType::UBIGINT), keys_to_compare_sel(STANDARD_VECTOR_SIZE),
-      keys_no_match_sel(STANDARD_VECTOR_SIZE) {
+    : salt_v(LogicalType::UBIGINT), keys_to_compare_sel(STANDARD_VECTOR_SIZE), keys_no_match_sel(STANDARD_VECTOR_SIZE) {
 }
 
 JoinHashTable::ProbeState::ProbeState()
@@ -23,7 +22,8 @@ JoinHashTable::ProbeState::ProbeState()
 }
 
 JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
-    : SharedState(), remaining_sel(STANDARD_VECTOR_SIZE), key_match_sel(STANDARD_VECTOR_SIZE), rhs_row_locations(LogicalType::POINTER) {
+    : SharedState(), remaining_sel(STANDARD_VECTOR_SIZE), key_match_sel(STANDARD_VECTOR_SIZE),
+      rhs_row_locations(LogicalType::POINTER) {
 	ht.data_collection->InitializeChunk(lhs_data, ht.equality_predicate_columns);
 	ht.data_collection->InitializeChunkState(chunk_state, ht.equality_predicate_columns);
 }
@@ -173,8 +173,8 @@ idx_t GetOptionalIndex(const SelectionVector *sel, idx_t idx) {
 	return HAS_SEL ? sel->get_index(idx) : idx;
 }
 
-static void AddPointerToCompare(JoinHashTable::ProbeState &state, const ht_entry_t &entry,  Vector &pointers_result_v, idx_t ht_offset,
-                                idx_t &keys_to_compare_count, const idx_t &row_index) {
+static void AddPointerToCompare(JoinHashTable::ProbeState &state, const ht_entry_t &entry, Vector &pointers_result_v,
+                                idx_t ht_offset, idx_t &keys_to_compare_count, const idx_t &row_index) {
 
 	const auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(pointers_result_v);
 	const auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
@@ -187,7 +187,8 @@ static void AddPointerToCompare(JoinHashTable::ProbeState &state, const ht_entry
 
 template <bool USE_SALTS, bool HAS_SEL>
 static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHashTable &ht, ht_entry_t *entries,
-                                      Vector &hashes_v, Vector &pointers_result_v, const SelectionVector *sel, idx_t &count) {
+                                      Vector &hashes_v, Vector &pointers_result_v, const SelectionVector *row_sel,
+                                      idx_t &count) {
 
 	auto hashes = FlatVector::GetData<hash_t>(hashes_v);
 
@@ -195,7 +196,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 
 	for (idx_t i = 0; i < count; i++) {
 
-		auto row_index = GetOptionalIndex<HAS_SEL>(sel, i);
+		auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
 		auto row_hash = hashes[row_index];
 		auto row_ht_offset = row_hash & ht.bitmask;
 
@@ -214,7 +215,8 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 				const bool salt_match = entry.GetSalt() == row_salt;
 				if (salt_match) {
 					// we know that the enty is occupied and the salt matches -> compare the keys
-					AddPointerToCompare(state, entry, pointers_result_v, row_ht_offset, keys_to_compare_count, row_index);
+					AddPointerToCompare(state, entry, pointers_result_v, row_ht_offset, keys_to_compare_count,
+					                    row_index);
 					break;
 				}
 
@@ -241,11 +243,12 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 ///	   -> match, add to compare sel and increase found count
 template <bool USE_SALTS>
 static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &ht, ht_entry_t *entries,
-                              Vector &hashes_v, Vector &pointers_result_v, const SelectionVector *sel, idx_t count, const bool has_sel) {
-	if (has_sel) {
-		return ProbeForPointersInternal<USE_SALTS, true>(state, ht, entries, hashes_v, pointers_result_v, sel, count);
+                              Vector &hashes_v, Vector &pointers_result_v, const SelectionVector *row_sel, idx_t count,
+                              const bool has_row_sel) {
+	if (has_row_sel) {
+		return ProbeForPointersInternal<USE_SALTS, true>(state, ht, entries, hashes_v, pointers_result_v, row_sel, count);
 	} else {
-		return ProbeForPointersInternal<USE_SALTS, false>(state, ht, entries, hashes_v, pointers_result_v, sel, count);
+		return ProbeForPointersInternal<USE_SALTS, false>(state, ht, entries, hashes_v, pointers_result_v, row_sel, count);
 	}
 }
 
@@ -253,9 +256,9 @@ static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &h
 //! vector and the count argument to the number and position of the matches
 template <bool USE_SALTS>
 static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_state, JoinHashTable::ProbeState &state,
-                                   Vector &hashes_v, const SelectionVector *sel, idx_t &count, JoinHashTable &ht,
+                                   Vector &hashes_v, const SelectionVector *row_sel, idx_t &count, JoinHashTable &ht,
                                    ht_entry_t *entries, Vector &pointers_result_v, SelectionVector &match_sel,
-                                   bool has_sel) {
+                                   bool has_row_sel) {
 
 	hashes_v.Flatten(count);
 
@@ -267,8 +270,8 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 
 	do {
 
-		const idx_t keys_to_compare_count =
-		    ProbeForPointers<USE_SALTS>(state, ht, entries, hashes_v, pointers_result_v, sel, elements_to_probe_count, has_sel);
+		const idx_t keys_to_compare_count = ProbeForPointers<USE_SALTS>(state, ht, entries, hashes_v, pointers_result_v,
+		                                                                row_sel, elements_to_probe_count, has_row_sel);
 
 		// if there are no keys to compare, we are done
 		if (keys_to_compare_count == 0) {
@@ -284,12 +287,20 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		D_ASSERT(keys_match_count + keys_no_match_count == keys_to_compare_count);
 
 		// add the indices to the match_sel
-		for (idx_t i = 0; i < keys_match_count; i++) {
-			const auto row_index = state.keys_to_compare_sel.get_index(i);
-			// todo: we can optimize this, always directly write to pointers_result
-			match_sel.set_index(match_count, row_index);
-			match_count++;
+		if (!has_row_sel && keys_match_count == keys_to_compare_count) {
+			// all he keys match -> we are done
+			match_sel.Initialize(state.keys_to_compare_sel);  			// todo: not sure if this is right!
+			match_count = keys_match_count;
+			break;
+		} else {
+			// not all keys match -> add the matching indices to the match_sel
+			for (idx_t i = 0; i < keys_match_count; i++) {
+				const auto row_index = state.keys_to_compare_sel.get_index(i);
+				match_sel.set_index(match_count, row_index);
+				match_count++;
+			}
 		}
+
 		// Linear probing for collisions: Move to the next entry in the HT
 		auto hashes = FlatVector::GetData<hash_t>(hashes_v);
 		auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
@@ -310,8 +321,8 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		}
 
 		// in the next interation, we have a selection vector with the keys that do not match
-		sel = &state.keys_no_match_sel;
-		has_sel = true;
+		row_sel = &state.keys_no_match_sel;
+		has_row_sel = true;
 		elements_to_probe_count = keys_no_match_count;
 
 	} while (DUCKDB_UNLIKELY(keys_no_match_count > 0));
