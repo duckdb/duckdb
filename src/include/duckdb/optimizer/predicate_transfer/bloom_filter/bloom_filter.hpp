@@ -65,7 +65,7 @@ private:
 			uint32_t key_low = static_cast<uint32_t>(key[i]);
 			// We have the do some operators on key_high, otherwise the compiler will use 8 * 64 gathers instead of 16 *
 			// 32 gathers.
-			uint32_t block = (key_high >> 1) & (num_blocks_ - 1);
+			uint32_t block = key_high & (num_blocks_ - 1);
 			uint32_t mask = (1 << (key_low & 31)) | (1 << ((key_low >> 5) & 31)) | (1 << ((key_low >> 10) & 31));
 			out[i] = (bf[block] & mask) == mask;
 		}
@@ -78,7 +78,7 @@ private:
 			uint32_t key_low = static_cast<uint32_t>(key[i]);
 			// We have the do some operators on key_high, otherwise the compiler will use 8 * 64 gathers instead of 16 *
 			// 32 gathers.
-			uint32_t block = (key_high >> 1) & (num_blocks_ - 1);
+			uint32_t block = key_high & (num_blocks_ - 1);
 			uint32_t mask = (1 << (key_low & 31)) | (1 << ((key_low >> 5) & 31)) | (1 << ((key_low >> 10) & 31));
 			bf[block] |= mask;
 		}

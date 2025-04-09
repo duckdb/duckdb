@@ -162,6 +162,11 @@ void Optimizer::RunBuiltInOptimizers() {
 		plan = empty_result_pullup.Optimize(std::move(plan));
 	});
 
+	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
+		InClauseRewriter ic_rewriter(context, *this);
+		plan = ic_rewriter.Rewrite(std::move(plan));
+	});
+
 	// Perform predicate transfer and join order optimization
 	{
 		// 1. Extract information for predicate transfer, because some information may be lost in the next step.
@@ -178,11 +183,6 @@ void Optimizer::RunBuiltInOptimizers() {
 		// 3. Insert BloomFilter-related operators
 		plan = PT.Optimize(std::move(plan));
 	}
-
-	RunOptimizer(OptimizerType::IN_CLAUSE, [&]() {
-		InClauseRewriter ic_rewriter(context, *this);
-		plan = ic_rewriter.Rewrite(std::move(plan));
-	});
 
 	// rewrites UNNESTs in DelimJoins by moving them to the projection
 	RunOptimizer(OptimizerType::UNNEST_REWRITER, [&]() {

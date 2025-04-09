@@ -20,6 +20,7 @@ public:
 public:
 	explicit LogicalCreateBF(vector<shared_ptr<FilterPlan>> filter_plans);
 
+	bool is_probing_side = false;
 	vector<shared_ptr<FilterPlan>> filter_plans;
 	PhysicalCreateBF *physical = nullptr;
 

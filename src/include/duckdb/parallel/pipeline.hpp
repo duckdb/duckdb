@@ -78,9 +78,13 @@ public:
 
 	Executor &executor;
 
-	//! Runtime Statistics
+	//! Runtime Statistics for Predicate Transfer
 	std::atomic<int64_t> num_fetched_source_chunks;
 	std::atomic<int64_t> num_fetched_source_rows;
+
+	bool is_selectivity_checked = false;
+	bool is_building_bf = false;
+	bool is_probing_side = false;
 
 public:
 	ClientContext &GetClientContext();

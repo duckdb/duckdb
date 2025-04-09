@@ -16,10 +16,11 @@ namespace duckdb {
 
 PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<FilterPlan>> &filter_plans,
                                    vector<shared_ptr<DynamicTableFilterSet>> dynamic_filter_sets,
-                                   vector<vector<ColumnBinding>> &dynamic_filter_cols, idx_t estimated_cardinality)
+                                   vector<vector<ColumnBinding>> &dynamic_filter_cols, idx_t estimated_cardinality,
+                                   bool is_probing_side)
     : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality), is_successful(true),
       filter_plans(filter_plans), min_max_applied_cols(std::move(dynamic_filter_cols)),
-      min_max_to_create(std::move(dynamic_filter_sets)) {
+      min_max_to_create(std::move(dynamic_filter_sets)), is_probing_side(is_probing_side) {
 	for (size_t i = 0; i < filter_plans.size(); ++i) {
 		bf_to_create.emplace_back(make_shared_ptr<BloomFilter>());
 	}
@@ -178,30 +179,12 @@ public:
 };
 
 bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInput &input) const {
-	auto &gstate = input.global_state.Cast<CreateBFGlobalSinkState>();
 	auto &lstate = input.local_state.Cast<CreateBFLocalSinkState>();
-
-	gstate.num_received_rows += chunk.size();
 
 	if (lstate.local_data->AllocationSize() + chunk.GetAllocationSize() >=
 	    lstate.temporary_memory_state->GetReservation()) {
 		return true;
 	}
-
-	// if (!gstate.is_selectivity_checked && this_pipeline->GetSource()->estimated_cardinality > 1000000) {
-	// 	if (this_pipeline->num_fetched_source_chunks > 32) {
-	// 		gstate.is_selectivity_checked = true;
-	//
-	// 		auto num_received = gstate.num_received_rows.load();
-	// 		auto num_fetched = this_pipeline->num_fetched_source_chunks.load() * STANDARD_VECTOR_SIZE;
-	//
-	// 		double selectivity = static_cast<double>(num_received) / static_cast<double>(num_fetched);
-	// 		std::cout << selectivity << std::endl;
-	// 		if (selectivity > 0.9) {
-	// 			return true;
-	// 		}
-	// 	}
-	// }
 	return false;
 }
 
@@ -448,6 +431,11 @@ void PhysicalCreateBF::BuildPipelinesFromRelated(Pipeline &current, MetaPipeline
 		// we create a new pipeline starting from the child
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 		this_pipeline = child_meta_pipeline.GetBasePipeline();
+
+		// set pipeline flag
+		this_pipeline->is_building_bf = true;
+		this_pipeline->is_probing_side = is_probing_side;
+
 		child_meta_pipeline.Build(children[0]);
 	} else {
 		current.AddDependency(this_pipeline);
@@ -468,6 +456,11 @@ void PhysicalCreateBF::BuildPipelines(Pipeline &current, MetaPipeline &meta_pipe
 		// we create a new pipeline starting from the child
 		auto &child_meta_pipeline = meta_pipeline.CreateChildMetaPipeline(current, *this);
 		this_pipeline = child_meta_pipeline.GetBasePipeline();
+
+		// set pipeline flag
+		this_pipeline->is_building_bf = true;
+		this_pipeline->is_probing_side = is_probing_side;
+
 		child_meta_pipeline.Build(children[0]);
 	} else {
 		current.AddDependency(this_pipeline);

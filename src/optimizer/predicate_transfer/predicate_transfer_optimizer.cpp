@@ -64,18 +64,20 @@ unique_ptr<LogicalOperator> PredicateTransferOptimizer::InsertTransferOperators(
 			}
 		}
 
-		if (last_creator != last_op && plan->type == LogicalOperatorType::LOGICAL_FILTER) {
-			// creator ---> user --> creator --> filter --> user --> user --> scan
-			last_op->AddChild(std::move(plan->children[0]));
-			if (last_creator == nullptr) {
-				plan->children[0] = std::move(it->second);
-			} else {
-				plan->children[0] = std::move(last_creator->children[0]);
-				last_creator->children[0] = std::move(plan);
-				plan = std::move(it->second);
-			}
-		} else {
+		// table scan
+		if (last_creator == last_op || plan->type != LogicalOperatorType::LOGICAL_FILTER) {
 			last_op->AddChild(std::move(plan));
+			plan = std::move(it->second);
+			return;
+		}
+
+		// creator ---> user --> creator --> filter --> user --> user --> scan
+		last_op->AddChild(std::move(plan->children[0]));
+		if (last_creator == nullptr) {
+			plan->children[0] = std::move(it->second);
+		} else {
+			plan->children[0] = std::move(last_creator->children[0]);
+			last_creator->children[0] = std::move(plan);
 			plan = std::move(it->second);
 		}
 	};

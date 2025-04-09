@@ -30,8 +30,16 @@ protected:
 	static void UpdateMinMaxBinding(LogicalOperator &op, vector<ColumnBinding> &updated_bindings,
 	                                shared_ptr<DynamicTableFilterSet> &filter_set);
 
+	void VisitOperator(LogicalOperator &op, bool is_probing_side);
+
 protected:
-	enum class State { COLLECT_BF_CREATORS, LINK_BF_USERS, CLEAN_USELESS_OPERATORS, UPDATE_MIN_MAX_BINDING };
+	enum class State {
+		COLLECT_BF_CREATORS,
+		LINK_BF_USERS,
+		CLEAN_USELESS_OPERATORS,
+		UPDATE_MIN_MAX_BINDING,
+		MARK_PROBING_CREATOR
+	};
 	State state;
 
 	struct FilterPlanHash {

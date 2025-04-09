@@ -19,6 +19,9 @@ void TransferBFLinker::LinkBFOperators(LogicalOperator &op) {
 
 	state = State::UPDATE_MIN_MAX_BINDING;
 	VisitOperator(op);
+
+	state = State::MARK_PROBING_CREATOR;
+	VisitOperator(op, false);
 }
 
 void TransferBFLinker::VisitOperator(LogicalOperator &op) {
@@ -152,6 +155,28 @@ void TransferBFLinker::UpdateMinMaxBinding(LogicalOperator &op, vector<ColumnBin
 	}
 	default:
 		break;
+	}
+}
+
+void TransferBFLinker::VisitOperator(LogicalOperator &op, bool is_probing_side) {
+	D_ASSERT(state == State::MARK_PROBING_CREATOR);
+
+	switch (op.type) {
+	case LogicalOperatorType::LOGICAL_CREATE_BF: {
+		auto &creator = op.Cast<LogicalCreateBF>();
+		creator.is_probing_side = is_probing_side;
+		VisitOperator(*creator.children[0], is_probing_side);
+		break;
+	}
+	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
+		VisitOperator(*op.children[0], true);
+		VisitOperator(*op.children[1], false);
+		break;
+	}
+	default:
+		for (auto &child : op.children) {
+			VisitOperator(*child, is_probing_side);
+		}
 	}
 }
 

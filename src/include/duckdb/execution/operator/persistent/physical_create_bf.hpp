@@ -23,11 +23,13 @@ public:
 public:
 	PhysicalCreateBF(vector<LogicalType> types, const vector<shared_ptr<FilterPlan>> &filter_plans,
 	                 vector<shared_ptr<DynamicTableFilterSet>> dynamic_filter_sets,
-	                 vector<vector<ColumnBinding>> &dynamic_filter_cols, idx_t estimated_cardinality);
+	                 vector<vector<ColumnBinding>> &dynamic_filter_cols, idx_t estimated_cardinality,
+	                 bool is_probing_side);
 
 	// We use a mutable boolean variable to mark if this operator successfully materializes and creates its BFs.
 	// This variable is helpful for dynamic pipeline scheduling. It allows us to end the pipeline that has
 	// PhysicalCreateBFs in advance.
+	bool is_probing_side;
 	mutable bool is_successful;
 	shared_ptr<Pipeline> this_pipeline;
 
