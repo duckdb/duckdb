@@ -283,6 +283,10 @@ CSVError::CSVError(string error_message_p, CSVErrorType type_p, idx_t column_idx
 	if (reader_options.ignore_errors.GetValue()) {
 		RemoveNewLine(error_message);
 	}
+	// Let's cap the csv row to 10k bytes. For performance reasons.
+	if (csv_row.size() > 10000) {
+		csv_row.erase(csv_row.begin() + 10000, csv_row.end());
+	}
 	error << error_message << '\n';
 	error << fixes << '\n';
 	error << reader_options.ToString(current_path);
