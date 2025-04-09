@@ -88,9 +88,6 @@ inputs:
     description: 'Flags to be passed to cmake'
     default: ''
 
-env:
-  CMAKE_POLICY_VERSION_MINIMUM: 3.5
-
 runs:
   using: "composite"
   steps:
