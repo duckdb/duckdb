@@ -19,7 +19,7 @@ JoinHashTable::SharedState::SharedState()
 }
 
 JoinHashTable::ProbeState::ProbeState()
-    : SharedState(), ht_offsets_v(LogicalType::UBIGINT), ht_offsets_dense_v(LogicalType::UBIGINT),
+    : SharedState(), ht_offsets_v(LogicalType::UBIGINT),
       non_empty_sel(STANDARD_VECTOR_SIZE) {
 }
 
@@ -175,7 +175,7 @@ idx_t GetOptionalIndex(const SelectionVector *sel, idx_t idx) {
 }
 
 static void AddPointerToCompare(JoinHashTable::ProbeState &state, const ht_entry_t &entry, idx_t ht_offset,
-								idx_t &keys_to_compare_count, const idx_t &row_index) {
+                                idx_t &keys_to_compare_count, const idx_t &row_index) {
 
 	const auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(state.rhs_row_locations);
 	const auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
@@ -197,7 +197,8 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 	for (idx_t i = 0; i < count; i++) {
 
 		auto row_index = GetOptionalIndex<HAS_SEL>(sel, i);
-		auto ht_offset = hashes[row_index] & ht.bitmask;
+		auto row_hash = hashes[row_index];
+		auto ht_offset = row_hash & ht.bitmask;
 
 		if (USE_SALTS) {
 			// increment the ht_offset of the entry as long as next entry is occupied and salt does not match
@@ -210,7 +211,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 					break;
 				}
 
-				const hash_t row_salt = ht_entry_t::ExtractSalt(hashes[row_index]);
+				const hash_t row_salt = ht_entry_t::ExtractSalt(row_hash);
 				const bool salt_match = entry.GetSalt() == row_salt;
 				if (salt_match) {
 					// we know that the enty is occupied and the salt matches -> compare the keys
@@ -252,50 +253,74 @@ static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &h
 //! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the key_match_sel
 //! vector and the count argument to the number and position of the matches
 template <bool USE_SALTS>
-static inline void
-GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_state, JoinHashTable::ProbeState &state,
-                       Vector &hashes_v, const SelectionVector *sel, idx_t &count, JoinHashTable &ht,
-                       ht_entry_t *entries, Vector &pointers_result_v, SelectionVector &match_sel, bool has_sel) {
+static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_state, JoinHashTable::ProbeState &state,
+                                   Vector &hashes_v, const SelectionVector *sel, idx_t &count, JoinHashTable &ht,
+                                   ht_entry_t *entries, Vector &pointers_result_v, SelectionVector &match_sel,
+                                   bool has_sel) {
 
 	hashes_v.Flatten(count);
-	auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
 
-	auto pointers_result = FlatVector::GetData<data_ptr_t>(pointers_result_v);
-	auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(state.rhs_row_locations);
-
-	idx_t keys_to_compare_count = ProbeForPointers<USE_SALTS>(state, ht, entries, hashes_v, sel, count, has_sel);
+	// the number of keys that match for all iterations of the following loop
 	idx_t match_count = 0;
-	idx_t keys_no_match_count = 0;
+
+	idx_t keys_no_match_count;
+	idx_t elements_to_probe_count = count;
+
 	do {
 
-		if (keys_to_compare_count != 0) {
-			// Perform row comparisons, after function call salt_match_sel will point to the keys that match
-			idx_t keys_match_count = ht.row_matcher_build.Match(
-			    keys, key_state.vector_data, state.keys_to_compare_sel, keys_to_compare_count, *ht.layout_ptr,
-			    state.rhs_row_locations, &state.keys_no_match_sel, keys_no_match_count);
+		const idx_t keys_to_compare_count =
+		    ProbeForPointers<USE_SALTS>(state, ht, entries, hashes_v, sel, elements_to_probe_count, has_sel);
 
-			D_ASSERT(keys_match_count + keys_no_match_count == keys_to_compare_count);
-
-			// Set a pointer to the matching row
-			for (idx_t i = 0; i < keys_match_count; i++) {
-				const auto row_index = state.keys_to_compare_sel.get_index(i);
-				pointers_result[row_index] = row_ptr_insert_to[row_index];
-
-				match_sel.set_index(match_count, row_index);
-				match_count++;
-			}
-
-			// Linear probing: each of the entries that do not match move to the next entry in the HT
-			for (idx_t i = 0; i < keys_no_match_count; i++) {
-				const auto row_index = state.keys_no_match_sel.get_index(i);
-				auto &ht_offset = ht_offsets[row_index];
-				IncrementAndWrap(ht_offset, ht.bitmask);
-			}
+		// if there are no keys to compare, we are done
+		if (keys_to_compare_count == 0) {
+			break;
 		}
 
-		// remaining_sel = &state.key_no_match_sel;
-		keys_no_match_count = 0; // todo: implement this
-	} while (keys_no_match_count > 0);
+		// Perform row comparisons, after function call salt_match_sel will point to the keys that match
+		keys_no_match_count = 0;
+		const idx_t keys_match_count = ht.row_matcher_build.Match(
+		    keys, key_state.vector_data, state.keys_to_compare_sel, keys_to_compare_count, *ht.layout_ptr,
+		    state.rhs_row_locations, &state.keys_no_match_sel, keys_no_match_count);
+
+		D_ASSERT(keys_match_count + keys_no_match_count == keys_to_compare_count);
+
+		// Set a pointer to the matching row, add the indices to the match_sel
+		auto pointers_result = FlatVector::GetData<data_ptr_t>(pointers_result_v);
+		auto row_ptr_insert_to = FlatVector::GetData<data_ptr_t>(state.rhs_row_locations);
+
+		for (idx_t i = 0; i < keys_match_count; i++) {
+			const auto row_index = state.keys_to_compare_sel.get_index(i);
+			pointers_result[row_index] = row_ptr_insert_to[row_index]; // todo: we can optimize this, always directly write to pointers_result instead of row_ptr_insert_to
+
+			match_sel.set_index(match_count, row_index);
+			match_count++;
+		}
+
+		// Linear probing for collisions: Move to the next entry in the HT
+		auto hashes = FlatVector::GetData<hash_t>(hashes_v);
+		auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
+
+		for (idx_t i = 0; i < keys_no_match_count; i++) {
+			const auto row_index = state.keys_no_match_sel.get_index(i);
+			// the ProbeForPointers function calculates the ht_offset from the hash, therefore we have to write the
+			// new offset into the hashes_v, otherwise the next iteration will start at the old position. This might
+			// seem as an overhead but assures that the first call of ProbeForPointers is optimized as conceding
+			// calls are unlikely (Max 1-(65535/65536)^VectorSize = 3.1%)
+			auto ht_offset = ht_offsets[row_index];
+			IncrementAndWrap(ht_offset, ht.bitmask);
+
+			const auto hash = hashes[row_index];
+			const auto offset_and_salt = ht_offset | (hash & ht_entry_t::SALT_MASK);
+
+			hashes[row_index] = offset_and_salt;
+		}
+
+		// in the next interation, we have a selection vector with the keys that do not match
+		sel = &state.keys_no_match_sel;
+		has_sel = true;
+		elements_to_probe_count = keys_no_match_count;
+
+	} while (DUCKDB_UNLIKELY(keys_no_match_count > 0));
 
 	// set the count to the number of matches
 	count = match_count;
