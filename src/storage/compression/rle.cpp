@@ -195,12 +195,16 @@ struct RLECompressState : public CompressionState {
 		// we compact the segment by moving the counts so they are directly next to the values
 		idx_t counts_size = sizeof(rle_count_t) * entry_count;
 		idx_t original_rle_offset = RLEConstants::RLE_HEADER_SIZE + max_rle_count * sizeof(T);
-		idx_t minimal_rle_offset = AlignValue(RLEConstants::RLE_HEADER_SIZE + sizeof(T) * entry_count);
-		idx_t total_segment_size = minimal_rle_offset + counts_size;
+		idx_t minimal_rle_offset = RLEConstants::RLE_HEADER_SIZE + sizeof(T) * entry_count;
+		idx_t aligned_rle_offset = AlignValue(minimal_rle_offset);
+		idx_t total_segment_size = aligned_rle_offset + counts_size;
 		auto data_ptr = handle.Ptr();
-		memmove(data_ptr + minimal_rle_offset, data_ptr + original_rle_offset, counts_size);
+		if (aligned_rle_offset > minimal_rle_offset) {
+			memset(data_ptr + minimal_rle_offset, 0, aligned_rle_offset - minimal_rle_offset);
+		}
+		memmove(data_ptr + aligned_rle_offset, data_ptr + original_rle_offset, counts_size);
 		// store the final RLE offset within the segment
-		Store<uint64_t>(minimal_rle_offset, data_ptr);
+		Store<uint64_t>(aligned_rle_offset, data_ptr);
 		handle.Destroy();
 
 		auto &state = checkpoint_data.GetCheckpointState();
@@ -574,7 +578,11 @@ CompressionFunction GetRLEFunction(PhysicalType data_type) {
 
 CompressionFunction RLEFun::GetFunction(PhysicalType type) {
 	switch (type) {
-	case PhysicalType::BOOL:
+	case PhysicalType::BOOL: {
+		auto function = GetRLEFunction<int8_t>(type);
+		function.filter = nullptr;
+		return function;
+	}
 	case PhysicalType::INT8:
 		return GetRLEFunction<int8_t>(type);
 	case PhysicalType::INT16:

@@ -308,7 +308,9 @@ void WindowConstantAggregator::Finalize(WindowAggregatorState &gstate, WindowAgg
 	lastate.statef.Combine(gastate.statef);
 	lastate.statef.Destroy();
 
-	gastate.statef.Finalize(*gastate.results);
+	if (!--gastate.locals) {
+		gastate.statef.Finalize(*gastate.results);
+	}
 }
 
 unique_ptr<WindowAggregatorState> WindowConstantAggregator::GetLocalState(const WindowAggregatorState &gstate) const {

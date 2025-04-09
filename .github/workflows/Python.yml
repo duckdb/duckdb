@@ -59,7 +59,7 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
-  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || 'cp37-*' }}
+  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || '{cp37,cp38}-*' }}
 
 jobs:
 # This is just a sanity check of Python 3.10 running with Arrow
@@ -159,7 +159,6 @@ jobs:
             build/release/extension/*/*.duckdb_extension
 
   upload-linux-extensions-gcc4:
-    ## TODO: Add a if: github.ref == main, for now this is explicitly missing to be able to test on PR, expected is this should fail due to missing secrets
     name: Upload Linux Extensions (gcc4)
     needs: manylinux-extensions-x64
     uses: ./.github/workflows/_sign_deploy_extensions.yml

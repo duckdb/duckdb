@@ -313,7 +313,7 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 		}
 		auto &local_storage = LocalStorage::Get(context.client, data_table.db);
 		if (gstate.initialized) {
-			// Flush the data first, it might be referenced by the Update
+			// Flush any local appends that could be referenced by the UPDATE.
 			data_table.FinalizeLocalAppend(gstate.append_state);
 			gstate.initialized = false;
 		}
@@ -326,6 +326,11 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 		data_table.Delete(delete_state, context.client, row_ids, update_chunk.size());
 	} else {
 		auto &local_storage = LocalStorage::Get(context.client, data_table.db);
+		if (gstate.initialized) {
+			// Flush any local appends that could be referenced by the DELETE.
+			data_table.FinalizeLocalAppend(gstate.append_state);
+			gstate.initialized = false;
+		}
 		local_storage.Delete(data_table, row_ids, update_chunk.size());
 	}
 
@@ -478,13 +483,12 @@ static idx_t HandleInsertConflicts(TableCatalogEntry &table, ExecutionContext &c
 
 	ConflictInfo conflict_info(conflict_target);
 	ConflictManager conflict_manager(VerifyExistenceType::APPEND, tuples.size(), &conflict_info);
+	auto storage = local_storage.GetStorage(data_table);
 	if (GLOBAL) {
 		auto &constraint_state = lstate.GetConstraintState(data_table, table);
-		auto storage = local_storage.GetStorage(data_table);
 		data_table.VerifyAppendConstraints(constraint_state, context.client, tuples, storage, &conflict_manager);
 	} else {
 		auto &indexes = local_storage.GetIndexes(data_table);
-		auto storage = local_storage.GetStorage(data_table);
 		DataTable::VerifyUniqueIndexes(indexes, storage, tuples, &conflict_manager);
 	}
 

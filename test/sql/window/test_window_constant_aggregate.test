@@ -1,5 +1,5 @@
 # name: test/sql/window/test_window_constant_aggregate.test
-# description: Most basic window function
+# description: Test "constant" aggregation (single result for each partition)
 # group: [window]
 
 statement ok
@@ -200,3 +200,112 @@ ORDER BY ALL
 1	17	19,18,17,16,15,14,13,12,11,10
 1	18	19,18,17,16,15,14,13,12,11,10
 1	19	19,18,17,16,15,14,13,12,11,10
+
+# Test hash group with two partitions and blocks
+statement ok
+pragma threads=2
+
+loop i 0 20
+
+query III
+with table_1 AS (
+    SELECT
+        'fb30cf47-6f6b-42ef-dec2-3f984479a2aa'::uuid    AS id,
+        unnest(generate_series(
+            '2024-04-01'::date,
+            '2025-03-01'::date,
+            interval '1 month'
+        ))                                              AS date
+    UNION ALL BY NAME
+    SELECT
+        '7d1cc557-2d45-6900-a1ed-b2c64f5d9200'::uuid    AS id,
+        unnest(generate_series(
+            '2024-02-01'::date,
+            '2025-01-01'::date,
+            interval '1 month'
+        ))                                              AS date
+), table_2 AS (
+    SELECT
+        'fb30cf47-6f6b-42ef-dec2-3f984479a2aa'::uuid    AS id,
+        unnest(generate_series(
+            '2024-04-01'::date,
+            '2025-03-01'::date,
+            interval '1 month'
+        ))                                              AS date,
+        1                                               AS value
+    UNION ALL BY NAME
+    SELECT
+        '7d1cc557-2d45-6900-a1ed-b2c64f5d9200'::uuid    AS id,
+        unnest(generate_series(
+            '2022-12-01'::date,
+            '2023-12-01'::date,
+            interval '1 month'
+        ))                                              AS date,
+        1                                               AS value
+), output AS (
+    SELECT
+        table_1.id,
+        table_1.date,
+        sum(table_2.value) over (
+            PARTITION BY table_1.id
+            ORDER BY table_1.date ASC
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+        ) AS test_sum,
+    FROM table_1
+    LEFT JOIN table_2
+        ON table_1.id = table_2.id
+        AND table_1.date = table_2.date
+)
+SELECT * FROM output
+ORDER BY id DESC, date DESC;
+----
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2025-03-01 00:00:00	12
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2025-02-01 00:00:00	12
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2025-01-01 00:00:00	12
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2024-12-01 00:00:00	12
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2024-11-01 00:00:00	12
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2024-10-01 00:00:00	12
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2024-09-01 00:00:00	12
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2024-08-01 00:00:00	12
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2024-07-01 00:00:00	12
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2024-06-01 00:00:00	12
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2024-05-01 00:00:00	12
+fb30cf47-6f6b-42ef-dec2-3f984479a2aa	2024-04-01 00:00:00	12
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2025-01-01 00:00:00	NULL
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-12-01 00:00:00	NULL
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-11-01 00:00:00	NULL
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-10-01 00:00:00	NULL
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-09-01 00:00:00	NULL
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-08-01 00:00:00	NULL
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-07-01 00:00:00	NULL
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-06-01 00:00:00	NULL
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-05-01 00:00:00	NULL
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-04-01 00:00:00	NULL
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-03-01 00:00:00	NULL
+7d1cc557-2d45-6900-a1ed-b2c64f5d9200	2024-02-01 00:00:00	NULL
+
+endloop
+
+# Test implicit ordering for aggregates
+loop i 0 20
+
+query I
+with repro2 AS (
+	SELECT range // 59 AS id, random() AS value
+	FROM range(1475)
+), X AS (
+	SELECT
+		list(value) OVER (
+			PARTITION BY id 
+			ORDER BY value 
+			ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+			) AS values
+	FROM repro2
+)
+select count(*) 
+from X 
+where values[1] != list_aggregate(values, 'min')
+----
+0
+
+endloop
