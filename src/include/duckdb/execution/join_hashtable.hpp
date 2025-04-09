@@ -140,9 +140,6 @@ public:
 	struct SharedState {
 		SharedState();
 
-		// The ptrs to the row to which a key should be inserted into during building
-		// or matched against during probing
-		Vector rhs_row_locations;
 		Vector salt_v;
 
 		SelectionVector keys_to_compare_sel;
@@ -162,6 +159,10 @@ public:
 		/// Because of the index hick up
 		SelectionVector remaining_sel;
 		SelectionVector key_match_sel;
+
+		// The ptrs to the row to which a key should be inserted into during building
+		// or matched against during probing
+		Vector rhs_row_locations;
 
 		DataChunk lhs_data;
 		TupleDataChunkState chunk_state;
@@ -298,8 +299,8 @@ private:
 	//! Gets a pointer to the entry in the HT for each of the hashes_v using linear probing. Will update the
 	//! key_match_sel vector and the count argument to the number and position of the matches
 	void GetRowPointers(DataChunk &keys, TupleDataChunkState &key_state, ProbeState &state, Vector &hashes_v,
-	                    const SelectionVector* sel, idx_t &count, Vector &pointers_result_v,
-	                    SelectionVector &match_sel, bool has_sel);
+	                    const SelectionVector *sel, idx_t &count, Vector &pointers_result_v, SelectionVector &match_sel,
+	                    bool has_sel);
 
 private:
 	//! Insert the given set of locations into the HT with the given set of hashes_v
