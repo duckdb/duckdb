@@ -33,15 +33,6 @@ if (NOT WIN32)
         )
 endif()
 
-################# ARROW
-if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
-    duckdb_extension_load(arrow
-            LOAD_TESTS DONT_LINK
-            GIT_URL https://github.com/duckdb/arrow
-            GIT_TAG cff2f0e21b1608e38640e15b4cf0693dd52dd0eb
-            )
-endif()
-
 ################## AWS
 if (NOT MINGW AND NOT ${WASM_ENABLED})
     duckdb_extension_load(aws

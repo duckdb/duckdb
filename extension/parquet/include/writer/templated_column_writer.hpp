@@ -224,6 +224,7 @@ public:
 
 		auto &state = state_p.Cast<StandardColumnWriterState<SRC, TGT, OP>>();
 		if (state.dictionary.GetSize() == 0 || state.dictionary.IsFull()) {
+			state.dictionary.Reset();
 			if (writer.GetParquetVersion() == ParquetVersion::V1) {
 				// Can't do the cool stuff for V1
 				state.encoding = duckdb_parquet::Encoding::PLAIN;

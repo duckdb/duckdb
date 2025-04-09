@@ -24,8 +24,6 @@ PhysicalOperator &Catalog::PlanDelete(ClientContext &context, PhysicalPlanGenera
 
 PhysicalOperator &PhysicalPlanGenerator::CreatePlan(LogicalDelete &op) {
 	D_ASSERT(op.children.size() == 1);
-	D_ASSERT(op.expressions.size() == 1);
-	D_ASSERT(op.expressions[0]->GetExpressionType() == ExpressionType::BOUND_REF);
 
 	dependencies.AddDependency(op.table);
 	return op.table.catalog.PlanDelete(context, *this, op);

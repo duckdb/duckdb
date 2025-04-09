@@ -73,16 +73,20 @@ BoundStatement Binder::Bind(DeleteStatement &stmt) {
 	del->bound_constraints = BindConstraints(table);
 	del->AddChild(std::move(root));
 
+	auto row_id_columns = table.GetRowIdColumns();
 	auto virtual_columns = table.GetVirtualColumns();
-	auto row_id_entry = virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
-	if (row_id_entry == virtual_columns.end()) {
-		throw InternalException("BindDelete could not find the row id column in the virtual columns list of the table");
-	}
-	// set up the delete expression
 	auto &column_ids = get.GetColumnIds();
-	del->expressions.push_back(make_uniq<BoundColumnRefExpression>(row_id_entry->second.type,
-	                                                               ColumnBinding(get.table_index, column_ids.size())));
-	get.AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
+	for (auto &row_id_column : row_id_columns) {
+		auto row_id_entry = virtual_columns.find(row_id_column);
+		if (row_id_entry == virtual_columns.end()) {
+			throw InternalException(
+			    "BindDelete could not find the row id column in the virtual columns list of the table");
+		}
+		// set up the delete expression
+		del->expressions.push_back(make_uniq<BoundColumnRefExpression>(
+		    row_id_entry->second.type, ColumnBinding(get.table_index, column_ids.size())));
+		get.AddColumnId(row_id_column);
+	}
 
 	if (!stmt.returning_list.empty()) {
 		del->return_chunk = true;
