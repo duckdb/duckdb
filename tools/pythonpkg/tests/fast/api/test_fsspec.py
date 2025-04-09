@@ -39,7 +39,7 @@ class TestReadParquet(object):
 
             def modified(self, path):
                 # this is needed since PR #16463 because the Parquet reader now always fetches the modified timestamp
-                return datetime.datetime.fromtimestamp(0, datetime.UTC)
+                return datetime.datetime.now(datetime.timezone.utc)
 
             def _open(self, path, **kwargs):
                 return io.BytesIO(self._data[path])
