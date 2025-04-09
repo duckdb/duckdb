@@ -18,9 +18,9 @@ PhysicalCreateBF::PhysicalCreateBF(vector<LogicalType> types, const vector<share
                                    vector<shared_ptr<DynamicTableFilterSet>> dynamic_filter_sets,
                                    vector<vector<ColumnBinding>> &dynamic_filter_cols, idx_t estimated_cardinality,
                                    bool is_probing_side)
-    : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality), is_successful(true),
-      filter_plans(filter_plans), min_max_applied_cols(std::move(dynamic_filter_cols)),
-      min_max_to_create(std::move(dynamic_filter_sets)), is_probing_side(is_probing_side) {
+    : PhysicalOperator(PhysicalOperatorType::CREATE_BF, std::move(types), estimated_cardinality),
+      is_probing_side(is_probing_side), is_successful(true), filter_plans(filter_plans),
+      min_max_applied_cols(std::move(dynamic_filter_cols)), min_max_to_create(std::move(dynamic_filter_sets)) {
 	for (size_t i = 0; i < filter_plans.size(); ++i) {
 		bf_to_create.emplace_back(make_shared_ptr<BloomFilter>());
 	}

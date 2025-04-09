@@ -30,7 +30,7 @@ protected:
 	static void UpdateMinMaxBinding(LogicalOperator &op, vector<ColumnBinding> &updated_bindings,
 	                                shared_ptr<DynamicTableFilterSet> &filter_set);
 
-	void VisitOperator(LogicalOperator &op, bool is_probing_side);
+	void VisitOperator(LogicalOperator &op, bool can_stop);
 
 protected:
 	enum class State {

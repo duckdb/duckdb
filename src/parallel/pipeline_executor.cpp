@@ -2,6 +2,7 @@
 
 #include "duckdb/common/limits.hpp"
 #include "duckdb/main/client_context.hpp"
+#include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 #include <chrono>
@@ -532,19 +533,23 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 		auto &bf_creator = pipeline.sink->Cast<PhysicalCreateBF>();
 		auto &scan = pipeline.source;
 
-		if (!pipeline.is_selectivity_checked) {
-			// Collect pipeline source statistics
-			pipeline.num_fetched_source_chunks++;
-			pipeline.num_fetched_source_rows += static_cast<int64_t>(result.size());
+		if (scan->type == PhysicalOperatorType::CHUNK_SCAN || scan->type == PhysicalOperatorType::DELIM_SCAN ||
+		    scan->type == PhysicalOperatorType::COLUMN_DATA_SCAN || scan->type == PhysicalOperatorType::TABLE_SCAN) {
+			if (!pipeline.is_selectivity_checked) {
+				// Collect pipeline source statistics
+				pipeline.num_fetched_source_chunks++;
+				pipeline.num_fetched_source_rows += static_cast<int64_t>(result.size());
 
-			if (pipeline.num_fetched_source_chunks >= 32 && scan->estimated_cardinality >= 2e6) {
-				pipeline.is_selectivity_checked = true;
-				auto wanted_rows = pipeline.num_fetched_source_chunks.load() * STANDARD_VECTOR_SIZE;
-				auto fetched_rows = pipeline.num_fetched_source_rows.load();
+				if (pipeline.num_fetched_source_chunks >= 32 && scan->estimated_cardinality >= 2000000) {
+					pipeline.is_selectivity_checked = true;
+					auto wanted_rows = pipeline.num_fetched_source_chunks.load() * STANDARD_VECTOR_SIZE;
+					auto fetched_rows = pipeline.num_fetched_source_rows.load();
 
-				double selectivity = static_cast<double>(fetched_rows) / static_cast<double>(wanted_rows);
-				if (selectivity > 0.95) {
-					bf_creator.is_successful = false;
+					double selectivity = static_cast<double>(fetched_rows) / static_cast<double>(wanted_rows);
+					if (selectivity > 0.9) {
+						pipeline.Print();
+						bf_creator.is_successful = false;
+					}
 				}
 			}
 		}

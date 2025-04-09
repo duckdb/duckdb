@@ -30,7 +30,7 @@ public:
 	// This variable is helpful for dynamic pipeline scheduling. It allows us to end the pipeline that has
 	// PhysicalCreateBFs in advance.
 	bool is_probing_side;
-	mutable bool is_successful;
+	mutable atomic<bool> is_successful;
 	shared_ptr<Pipeline> this_pipeline;
 
 	vector<shared_ptr<FilterPlan>> filter_plans;
