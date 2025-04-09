@@ -400,6 +400,8 @@ bool CatalogSet::DropEntryInternal(CatalogTransaction transaction, const string 
 		throw CatalogException("Cannot drop entry \"%s\" because it is an internal system entry", entry->name);
 	}
 
+	entry->OnDrop();
+
 	// create a new tombstone entry and replace the currently stored one
 	// set the timestamp to the timestamp of the current transaction
 	// and point it at the tombstone node

@@ -65,12 +65,17 @@ void ExtractParameters(LambdaExpression &expr, vector<string> &column_names, vec
 BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth, const LogicalType &list_child_type,
                                             optional_ptr<bind_lambda_function_t> bind_lambda_function) {
 
-	// This is not a lambda expression, but the JSON arrow operator.
 	if (!bind_lambda_function) {
+		// This is not a lambda expression, but the JSON arrow operator.
+		// Remember the original expression in case of a binding error.
+		if (!expr.copied_expr) {
+			expr.copied_expr = expr.expr->Copy();
+		}
 		OperatorExpression arrow_expr(ExpressionType::ARROW, std::move(expr.lhs), std::move(expr.expr));
 		auto bind_result = BindExpression(arrow_expr, depth);
 
-		// The arrow_expr now contains bound nodes. We move these into the original expression.
+		// The arrow_expr now might contain bound nodes.
+		// Restore the original expression.
 		if (bind_result.HasError()) {
 			D_ASSERT(arrow_expr.children.size() == 2);
 			expr.lhs = std::move(arrow_expr.children[0]);
@@ -102,6 +107,9 @@ BindResult ExpressionBinder::BindExpression(LambdaExpression &expr, idx_t depth,
 	DummyBinding new_lambda_binding(column_types, column_names, table_alias);
 	lambda_bindings->push_back(new_lambda_binding);
 
+	if (expr.copied_expr) {
+		expr.expr = std::move(expr.copied_expr);
+	}
 	auto result = BindExpression(expr.expr, depth, false);
 	lambda_bindings->pop_back();
 
