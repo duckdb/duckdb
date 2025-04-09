@@ -334,8 +334,7 @@ FatalException::FatalException(ExceptionType type, const string &msg) : Exceptio
 
 InternalException::InternalException(const string &msg) : Exception(ExceptionType::INTERNAL, msg) {
 #ifdef DUCKDB_CRASH_ON_ASSERT
-	Printer::Print("ABORT THROWN BY INTERNAL EXCEPTION: " + msg);
-	Printer::Print(StackTrace::GetStackTrace());
+	Printer::Print("ABORT THROWN BY INTERNAL EXCEPTION: " + msg + "\n" + StackTrace::GetStackTrace());
 	abort();
 #endif
 }
