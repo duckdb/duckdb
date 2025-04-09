@@ -302,18 +302,10 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		D_ASSERT(keys_match_count + keys_no_match_count == keys_to_compare_count);
 
 		// add the indices to the match_sel
-		if (!has_row_sel && keys_match_count == keys_to_compare_count) {
-			// all he keys match -> we are done
-			match_sel.Initialize(state.keys_to_compare_sel);  			// todo: not sure if this is right!
-			match_count = keys_match_count;
-			break;
-		} else {
-			// not all keys match -> add the matching indices to the match_sel
-			for (idx_t i = 0; i < keys_match_count; i++) {
-				const auto row_index = state.keys_to_compare_sel.get_index(i);
-				match_sel.set_index(match_count, row_index);
-				match_count++;
-			}
+		for (idx_t i = 0; i < keys_match_count; i++) {
+			const auto row_index = state.keys_to_compare_sel.get_index(i);
+			match_sel.set_index(match_count, row_index);
+			match_count++;
 		}
 
 		// Linear probing for collisions: Move to the next entry in the HT
