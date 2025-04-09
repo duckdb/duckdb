@@ -16,7 +16,7 @@ SQLLogicTestLogger::~SQLLogicTestLogger() {
 std::stringstream SQLLogicTestLogger::Log(const string &str) {
 	std::stringstream log_message;
 	log_message << str;
-	return log_message;
+	return std::move(log_message);
 }
 
 std::stringstream SQLLogicTestLogger::PrintSummaryHeader(const std::string &file_name) {
