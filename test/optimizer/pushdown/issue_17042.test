@@ -1,0 +1,22 @@
+# name: test/optimizer/pushdown/issue_17042.test
+# description: Test left join filter lost in filter pushdown
+# group: [pushdown]
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE  TABLE  t2(c1 INTEGER);
+
+statement ok
+CREATE  TABLE  t0(c1 DOUBLE);
+
+statement ok
+INSERT INTO t0(c1) VALUES (0.1);
+
+statement ok
+INSERT INTO t2(c1) VALUES (2);
+
+query II
+SELECT * FROM t2 LEFT JOIN t0 ON true WHERE ((t0.c1<t2.c1) IS NULL);
+----
