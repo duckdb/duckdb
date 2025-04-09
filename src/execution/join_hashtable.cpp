@@ -18,7 +18,7 @@ JoinHashTable::SharedState::SharedState()
 }
 
 JoinHashTable::ProbeState::ProbeState()
-    : SharedState(), ht_offsets_v(LogicalType::UBIGINT), non_empty_sel(STANDARD_VECTOR_SIZE) {
+    : SharedState(), ht_offsets_v(LogicalType::UBIGINT), hashes_dense_v(LogicalType::HASH),non_empty_sel(STANDARD_VECTOR_SIZE) {
 }
 
 JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
@@ -190,14 +190,13 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
                                       Vector &hashes_v, Vector &pointers_result_v, const SelectionVector *row_sel,
                                       idx_t &count) {
 
-	auto hashes = FlatVector::GetData<hash_t>(hashes_v);
+	auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
 
 	idx_t keys_to_compare_count = 0;
 
 	for (idx_t i = 0; i < count; i++) {
 
-		auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
-		auto row_hash = hashes[row_index];
+		auto row_hash = hashes_dense[i];  // hashes has been flattened before -> always access dense
 		auto row_ht_offset = row_hash & ht.bitmask;
 
 		if (USE_SALTS) {
@@ -215,6 +214,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 				const bool salt_match = entry.GetSalt() == row_salt;
 				if (salt_match) {
 					// we know that the enty is occupied and the salt matches -> compare the keys
+					auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
 					AddPointerToCompare(state, entry, pointers_result_v, row_ht_offset, keys_to_compare_count,
 					                    row_index);
 					break;
@@ -228,6 +228,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 			const bool occupied = entry.IsOccupied();
 			if (occupied) {
 				// the entry is occupied -> compare the keys
+				auto row_index = GetOptionalIndex<HAS_SEL>(row_sel, i);
 				AddPointerToCompare(state, entry, pointers_result_v, row_ht_offset, keys_to_compare_count, row_index);
 			}
 		}
@@ -259,8 +260,22 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
                                    Vector &hashes_v, const SelectionVector *row_sel, idx_t &count, JoinHashTable &ht,
                                    ht_entry_t *entries, Vector &pointers_result_v, SelectionVector &match_sel,
                                    bool has_row_sel) {
+	// densify hashes: If there is no sel, simply flatten the hashes, else densify via UnifiedVectorFormat
+	if (has_row_sel) {
+		UnifiedVectorFormat hashes_v_unified;
+		hashes_v.ToUnifiedFormat(count, hashes_v_unified);
+		auto hashes = UnifiedVectorFormat::GetData<hash_t>(hashes_v_unified);
+		auto hashes_dense = FlatVector::GetData<idx_t>(state.hashes_dense_v);
 
-	hashes_v.Flatten(count);
+		for (idx_t i = 0; i < count; i++) {
+			const auto row_index = row_sel->get_index(i);
+			const auto uvf_index = hashes_v_unified.sel->get_index(row_index);
+			hashes_dense[i] = hashes[uvf_index];
+		}
+	} else {
+		hashes_v.Flatten(count);
+		state.hashes_dense_v.Reference(hashes_v);
+	}
 
 	// the number of keys that match for all iterations of the following loop
 	idx_t match_count = 0;
@@ -302,7 +317,7 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 		}
 
 		// Linear probing for collisions: Move to the next entry in the HT
-		auto hashes = FlatVector::GetData<hash_t>(hashes_v);
+		auto hashes_dense = FlatVector::GetData<hash_t>(state.hashes_dense_v);
 		auto ht_offsets = FlatVector::GetData<idx_t>(state.ht_offsets_v);
 
 		for (idx_t i = 0; i < keys_no_match_count; i++) {
@@ -314,10 +329,10 @@ static void GetRowPointersInternal(DataChunk &keys, TupleDataChunkState &key_sta
 			auto ht_offset = ht_offsets[row_index];
 			IncrementAndWrap(ht_offset, ht.bitmask);
 
-			const auto hash = hashes[row_index];
+			const auto hash = hashes_dense[row_index];
 			const auto offset_and_salt = ht_offset | (hash & ht_entry_t::SALT_MASK);
 
-			hashes[row_index] = offset_and_salt;
+			hashes_dense[i] = offset_and_salt; // populate dense again
 		}
 
 		// in the next interation, we have a selection vector with the keys that do not match
