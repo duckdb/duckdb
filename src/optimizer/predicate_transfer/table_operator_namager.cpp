@@ -8,7 +8,7 @@
 namespace duckdb {
 vector<reference<LogicalOperator>> TableOperatorManager::ExtractOperators(LogicalOperator &plan) {
 	vector<reference<LogicalOperator>> ret;
-	ExtractOperatorsInternal(plan, ret, false);
+	ExtractOperatorsInternal(plan, ret);
 	SortTableOperators();
 	return ret;
 }
@@ -107,8 +107,7 @@ void TableOperatorManager::AddTableOperator(LogicalOperator *op) {
 	}
 }
 
-void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins,
-                                                    bool is_not_exist_mark_join) {
+void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins) {
 	LogicalOperator *op = &plan;
 	while (op->children.size() == 1 && !OperatorNeedsRelation(op->type)) {
 		if (op->type == LogicalOperatorType::LOGICAL_FILTER) {
@@ -119,10 +118,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 			}
 
 			D_ASSERT(!op->expressions.empty());
-			bool flag = op->expressions[0]->type == ExpressionType::OPERATOR_NOT &&
-			            op->expressions[0]->expression_class == ExpressionClass::BOUND_OPERATOR &&
-			            op->children[0]->type == LogicalOperatorType::LOGICAL_COMPARISON_JOIN;
-			ExtractOperatorsInternal(*child, joins, flag);
+			ExtractOperatorsInternal(*child, joins);
 			return;
 		}
 		op = op->children[0].get();
@@ -132,6 +128,9 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 	    op->type == LogicalOperatorType::LOGICAL_DELIM_JOIN) {
 		auto &join = op->Cast<LogicalComparisonJoin>();
 		switch (join.join_type) {
+		case JoinType::MARK: {
+			return;
+		}
 		case JoinType::INNER:
 		case JoinType::LEFT:
 		case JoinType::RIGHT:
@@ -146,20 +145,6 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 			}
 			break;
 		}
-		case JoinType::MARK: {
-			// if (std::any_of(join.conditions.begin(), join.conditions.end(), [](const JoinCondition &jc) {
-			// 	    return jc.comparison == ExpressionType::COMPARE_EQUAL &&
-			// 	           jc.left->type == ExpressionType::BOUND_COLUMN_REF &&
-			// 	           jc.right->type == ExpressionType::BOUND_COLUMN_REF;
-			//     })) {
-			// 	joins.push_back(*op);
-			//
-			// 	if (is_not_exist_mark_join) {
-			// 		not_exist_mark_joins.insert(op);
-			// 	}
-			// }
-			return;
-		}
 		default:
 			break;
 		}
@@ -169,7 +154,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 	case LogicalOperatorType::LOGICAL_AGGREGATE_AND_GROUP_BY: {
 		auto &agg = op->Cast<LogicalAggregate>();
 		if (agg.groups.empty() && agg.grouping_sets.size() <= 1) {
-			ExtractOperatorsInternal(*op->children[0], joins, true);
+			ExtractOperatorsInternal(*op->children[0], joins);
 			AddTableOperator(op);
 		} else {
 			for (size_t i = 0; i < agg.groups.size(); i++) {
@@ -178,7 +163,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 					rename_col_bindings.insert({agg.GetColumnBindings()[i], col_ref.binding});
 				}
 			}
-			ExtractOperatorsInternal(*op->children[0], joins, true);
+			ExtractOperatorsInternal(*op->children[0], joins);
 		}
 		return;
 	}
@@ -189,14 +174,14 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 				rename_col_bindings.insert({op->GetColumnBindings()[i], col_ref.binding});
 			}
 		}
-		ExtractOperatorsInternal(*op->children[0], joins, true);
+		ExtractOperatorsInternal(*op->children[0], joins);
 		return;
 	}
 	case LogicalOperatorType::LOGICAL_UNION:
 	case LogicalOperatorType::LOGICAL_EXCEPT:
 	case LogicalOperatorType::LOGICAL_INTERSECT:
-		ExtractOperatorsInternal(*op->children[0], joins, false);
-		ExtractOperatorsInternal(*op->children[1], joins, false);
+		ExtractOperatorsInternal(*op->children[0], joins);
+		ExtractOperatorsInternal(*op->children[1], joins);
 		return;
 	case LogicalOperatorType::LOGICAL_WINDOW:
 	case LogicalOperatorType::LOGICAL_DUMMY_SCAN:
@@ -209,7 +194,7 @@ void TableOperatorManager::ExtractOperatorsInternal(LogicalOperator &plan, vecto
 		return;
 	default:
 		for (auto &child : op->children) {
-			ExtractOperatorsInternal(*child, joins, false);
+			ExtractOperatorsInternal(*child, joins);
 		}
 	}
 }

@@ -91,20 +91,17 @@ void TransferGraphManager::ExtractEdgesInfo(const vector<reference<LogicalOperat
 			// Set protection flags
 			switch (comp_join.type) {
 			case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
-				if (comp_join.join_type == JoinType::LEFT ||
-				    (comp_join.join_type == JoinType::MARK &&
-				     table_operator_manager.not_exist_mark_joins.count(&comp_join))) {
+				if (comp_join.join_type == JoinType::LEFT) {
 					(left_is_larger ? edge->protect_bigger_side : edge->protect_smaller_side) = true;
 				} else if (comp_join.join_type == JoinType::RIGHT) {
 					(left_is_larger ? edge->protect_smaller_side : edge->protect_bigger_side) = true;
 				} else if (comp_join.join_type != JoinType::INNER && comp_join.join_type != JoinType::SEMI &&
-				           comp_join.join_type != JoinType::RIGHT_SEMI && comp_join.join_type != JoinType::MARK) {
+				           comp_join.join_type != JoinType::RIGHT_SEMI) {
 					continue; // Unsupported join type
 				}
 				break;
 			}
 			case LogicalOperatorType::LOGICAL_DELIM_JOIN: {
-				// todo: it works, but why?
 				if (comp_join.delim_flipped == 0) {
 					(left_is_larger ? edge->protect_bigger_side : edge->protect_smaller_side) = true;
 				} else {

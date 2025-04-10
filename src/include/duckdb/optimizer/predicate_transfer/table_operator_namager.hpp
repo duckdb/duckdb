@@ -13,10 +13,6 @@ public:
 	vector<LogicalOperator *> sorted_table_operators;
 	unordered_map<idx_t, LogicalOperator *> table_operators;
 
-	//! This is a set that contains mark joins, whose parent is a filter (Not Subquery).
-	//! For these mark joins, we cannot filter its LHS using BF.
-	unordered_set<LogicalOperator *> not_exist_mark_joins;
-
 public:
 	vector<reference<LogicalOperator>> ExtractOperators(LogicalOperator &plan);
 	void SortTableOperators();
@@ -30,8 +26,7 @@ public:
 
 private:
 	void AddTableOperator(LogicalOperator *op);
-	void ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins,
-	                              bool is_not_exist_mark_join = false);
+	void ExtractOperatorsInternal(LogicalOperator &plan, vector<reference<LogicalOperator>> &joins);
 
 	struct HashFunc {
 		size_t operator()(const ColumnBinding &key) const {
