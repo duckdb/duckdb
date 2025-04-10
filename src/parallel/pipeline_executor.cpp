@@ -529,7 +529,8 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	auto res = GetData(result, source_input);
 
 	// Should we stop the pipeline execution?
-	if (pipeline.is_building_bf && pipeline.is_probing_side) {
+	if (pipeline.is_building_bf && pipeline.is_probing_side && pipeline.source->estimated_cardinality >= 1000000 &&
+	    (pipeline.operators.empty() || pipeline.operators[0].get().type != PhysicalOperatorType::FILTER)) {
 		auto &bf_creator = pipeline.sink->Cast<PhysicalCreateBF>();
 		auto &scan = pipeline.source;
 
@@ -540,13 +541,13 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 				pipeline.num_fetched_source_chunks++;
 				pipeline.num_fetched_source_rows += static_cast<int64_t>(result.size());
 
-				if (pipeline.num_fetched_source_chunks >= 32 && scan->estimated_cardinality >= 2000000) {
+				if (pipeline.num_fetched_source_chunks >= NUM_CHUNK_FOR_CHECK) {
 					pipeline.is_selectivity_checked.store(true, std::memory_order_relaxed);
 					auto wanted_rows = pipeline.num_fetched_source_chunks.load() * STANDARD_VECTOR_SIZE;
 					auto fetched_rows = pipeline.num_fetched_source_rows.load();
 
 					double selectivity = static_cast<double>(fetched_rows) / static_cast<double>(wanted_rows);
-					if (selectivity > 0.9) {
+					if (selectivity > SELECTIVITY_THRESHOLD) {
 						bf_creator.is_successful = false;
 					}
 				}

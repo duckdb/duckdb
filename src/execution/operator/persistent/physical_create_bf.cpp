@@ -140,7 +140,6 @@ public:
 
 	//! Runtime stats
 	atomic<size_t> num_received_rows;
-	bool is_selectivity_checked = false;
 };
 
 class CreateBFLocalSinkState : public LocalSinkState {
