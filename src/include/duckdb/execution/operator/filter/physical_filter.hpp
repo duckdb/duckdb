@@ -28,7 +28,7 @@ public:
 
 	//! Runtime Statistics: Filter selectivity
 	mutable atomic<bool> is_estimated;
-	mutable double filter_selectivity = 0;
+	mutable atomic<double> filter_selectivity;
 
 public:
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;

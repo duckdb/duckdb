@@ -177,11 +177,12 @@ public:
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 };
 
-bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInput &input) {
+bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInput &input) const {
 	auto &lstate = input.local_state.Cast<CreateBFLocalSinkState>();
 
 	if (lstate.local_data->AllocationSize() + chunk.GetAllocationSize() >=
 	    lstate.temporary_memory_state->GetReservation()) {
+		is_successful = false;
 		return true;
 	}
 	return false;
@@ -191,7 +192,6 @@ SinkResultType PhysicalCreateBF::Sink(ExecutionContext &context, DataChunk &chun
 	auto &state = input.local_state.Cast<CreateBFLocalSinkState>();
 
 	if (!is_successful || GiveUpBFCreation(chunk, input)) {
-		is_successful = false;
 		return SinkResultType::FINISHED;
 	}
 
