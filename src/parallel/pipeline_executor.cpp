@@ -523,7 +523,7 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 	return pipeline.sink->Sink(context, chunk, input);
 }
 
-bool PipelineExecutor::StopBuildingBF(const DataChunk &result) {
+bool PipelineExecutor::StopBuildingBF(const DataChunk &result) const {
 	if (!pipeline.is_building_bf || !pipeline.is_probing_side) {
 		return false;
 	}
@@ -546,13 +546,13 @@ bool PipelineExecutor::StopBuildingBF(const DataChunk &result) {
 
 	if (!pipeline.operators.empty() && pipeline.operators[0].get().type == PhysicalOperatorType::FILTER) {
 		auto &filter = pipeline.operators[0].get().Cast<PhysicalFilter>();
-		if (!filter.is_estimated || filter.filter_selectivity < SELECTIVITY_THRESHOLD) {
+		if (!filter.is_estimated || filter.filter_selectivity < FILTER_SELECTIVITY_THRESHOLD) {
 			return false;
 		}
 	}
 
 	// Collect pipeline source statistics
-	pipeline.num_fetched_source_chunks++;
+	++pipeline.num_fetched_source_chunks;
 	pipeline.num_fetched_source_rows += static_cast<int64_t>(result.size());
 
 	if (pipeline.num_fetched_source_chunks >= NUM_CHUNK_FOR_CHECK) {
@@ -561,7 +561,7 @@ bool PipelineExecutor::StopBuildingBF(const DataChunk &result) {
 		auto fetched_rows = pipeline.num_fetched_source_rows.load();
 
 		double scan_sel = static_cast<double>(fetched_rows) / static_cast<double>(wanted_rows);
-		if (scan_sel > SELECTIVITY_THRESHOLD) {
+		if (scan_sel > SCAN_SELECTIVITY_THRESHOLD) {
 			auto &bf_creator = pipeline.sink->Cast<PhysicalCreateBF>();
 			bf_creator.is_successful = false;
 			return true;

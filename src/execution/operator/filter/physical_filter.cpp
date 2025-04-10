@@ -24,18 +24,16 @@ PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expr
 class FilterState : public CachingOperatorState {
 public:
 	static constexpr int64_t NUM_CHUNK_FOR_CHECK = 32;
-	static constexpr double SELECTIVITY_THRESHOLD = 0.9;
 
 public:
 	explicit FilterState(ExecutionContext &context, Expression &expr)
-	    : executor(context.client, expr), sel(STANDARD_VECTOR_SIZE) {
+	    : executor(context.client, expr), sel(STANDARD_VECTOR_SIZE), is_checked(false) {
 	}
 
 	ExpressionExecutor executor;
 	SelectionVector sel;
 
-	bool use_filter = true;
-	bool is_checked = false;
+	atomic<bool> is_checked;
 	int64_t num_chunk = 0;
 	uint64_t num_received = 0;
 	uint64_t num_sent = 0;
@@ -49,11 +47,7 @@ public:
 
 		if (num_chunk > NUM_CHUNK_FOR_CHECK) {
 			is_checked = true;
-
 			selectivity = static_cast<double>(num_sent) / static_cast<double>(num_received);
-			if (selectivity > SELECTIVITY_THRESHOLD) {
-				use_filter = false;
-			}
 		}
 	}
 

@@ -25,7 +25,7 @@ public:
 	shared_ptr<BloomFilter> bf_to_use;
 
 public:
-	/* Operator interface */
+	// Operator interface
 	unique_ptr<OperatorState> GetOperatorState(ExecutionContext &context) const override;
 
 	bool ParallelOperator() const override {

@@ -177,7 +177,7 @@ public:
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
 };
 
-bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInput &input) const {
+bool PhysicalCreateBF::GiveUpBFCreation(const DataChunk &chunk, OperatorSinkInput &input) {
 	auto &lstate = input.local_state.Cast<CreateBFLocalSinkState>();
 
 	if (lstate.local_data->AllocationSize() + chunk.GetAllocationSize() >=

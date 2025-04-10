@@ -58,7 +58,8 @@ private:
 class PipelineExecutor {
 public:
 	static constexpr int64_t NUM_CHUNK_FOR_CHECK = 32;
-	static constexpr double SELECTIVITY_THRESHOLD = 0.5;
+	static constexpr double SCAN_SELECTIVITY_THRESHOLD = 0.5;
+	static constexpr double FILTER_SELECTIVITY_THRESHOLD = 0.5;
 	static constexpr int64_t SMALL_TABLE_THRESHOLD = 1 << 20;
 
 public:
@@ -166,8 +167,8 @@ private:
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);
 
-	//! Give up this pipeline?
-	bool StopBuildingBF(const DataChunk &result);
+	//! Give up all creating BFs in this pipeline?
+	bool StopBuildingBF(const DataChunk &result) const;
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	//! Debugging state: number of times blocked
