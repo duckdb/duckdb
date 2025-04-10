@@ -3073,7 +3073,8 @@ The resulting vector happens to be a dictionary vector.
 DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
 
 /*!
-Copies the value from `value` to `vector`.*/
+Copies the value from `value` to `vector`.
+*/
 DUCKDB_C_API void duckdb_assign_constant_to_vector(duckdb_vector vector, duckdb_value value);
 
 /*!

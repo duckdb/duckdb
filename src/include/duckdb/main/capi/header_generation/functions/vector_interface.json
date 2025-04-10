@@ -313,7 +313,7 @@
                 }
             ],
             "comment": {
-                "description": "Copies the value from `value` to `vector`."
+                "description": "Copies the value from `value` to `vector`.\n"
             }
         },
         {
