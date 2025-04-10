@@ -59,6 +59,7 @@ class PipelineExecutor {
 public:
 	static constexpr int64_t NUM_CHUNK_FOR_CHECK = 32;
 	static constexpr double SELECTIVITY_THRESHOLD = 0.5;
+	static constexpr int64_t SMALL_TABLE_THRESHOLD = 1 << 20;
 
 public:
 	PipelineExecutor(ClientContext &context, Pipeline &pipeline);

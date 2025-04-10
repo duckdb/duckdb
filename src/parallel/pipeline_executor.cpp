@@ -528,7 +528,7 @@ bool PipelineExecutor::StopBuildingBF(const DataChunk &result) {
 		return false;
 	}
 
-	if (pipeline.source->estimated_cardinality < 1000000) {
+	if (pipeline.source->estimated_cardinality < SMALL_TABLE_THRESHOLD) {
 		return false;
 	}
 
