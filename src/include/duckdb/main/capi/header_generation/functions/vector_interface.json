@@ -268,6 +268,32 @@
                     "len": "The length of the selection vector"
                 }
             }
+        },
+        {
+            "name": "duckdb_stringify_data_chunk",
+            "return_type": "const char *",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                }
+            ],
+            "comment": {
+                "description": "Returns the debug string from the data chunk.\nThe string returned must be freed.\n"
+            }
+        },
+        {
+            "name": "duckdb_verify_data_chunk",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_data_chunk",
+                    "name": "chunk"
+                }
+            ],
+            "comment": {
+                "description": "Verifies the data chunk is a valid chunk.\n"
+            }
         }
     ]
 }
