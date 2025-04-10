@@ -114,19 +114,7 @@ JoinHashTable::JoinHashTable(ClientContext &context_p, const vector<JoinConditio
 	InitializePartitionMasks();
 }
 
-// static double time_looking_for_empty = 0;
-// static double time_converting_to_unified = 0;
-// static double time_looking_for_slot = 0;
-
 JoinHashTable::~JoinHashTable() {
-	// if (time_looking_for_empty > 0) {
-	// 	printf("time_converting_to_unified: %f\n", time_converting_to_unified);
-	// 	printf("time_looking_for_empty: %f\n", time_looking_for_empty);
-	// 	printf("time_looking_for_slot: %f\n", time_looking_for_slot);
-	// 	time_looking_for_empty = 0;
-	// 	time_converting_to_unified = 0;
-	// 	time_looking_for_slot = 0;
-	// }
 }
 
 void JoinHashTable::Merge(JoinHashTable &other) {
