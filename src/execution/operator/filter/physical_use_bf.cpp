@@ -15,13 +15,38 @@ PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, const shared_ptr<FilterP
 
 class UseBFState : public CachingOperatorState {
 public:
+	static constexpr uint64_t NUM_CHUNK_FOR_CHECK = 32;
+	static constexpr double SELECTIVITY_THRESHOLD = 0.9;
+
+public:
 	explicit UseBFState() : sel_vector(STANDARD_VECTOR_SIZE), lookup_results(STANDARD_VECTOR_SIZE) {
 	}
 
 	SelectionVector sel_vector;
 	vector<uint32_t> lookup_results;
 
+	bool use_bf = true;
+	bool is_checked = false;
+	uint64_t num_chunk = 0;
+	uint64_t num_received = 0;
+	uint64_t num_sent = 0;
+
 public:
+	void CheckBFSelectivity(uint64_t num_in, uint64_t num_out) {
+		num_received += num_in;
+		num_sent += num_out;
+		num_chunk++;
+
+		if (num_chunk > NUM_CHUNK_FOR_CHECK) {
+			is_checked = true;
+
+			double selectivity = static_cast<double>(num_sent) / static_cast<double>(num_received);
+			if (selectivity > SELECTIVITY_THRESHOLD) {
+				use_bf = false;
+			}
+		}
+	}
+
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		context.thread.profiler.Flush(op);
 	}
@@ -51,7 +76,7 @@ OperatorResultType PhysicalUseBF::ExecuteInternal(ExecutionContext &context, Dat
 	auto &state = state_p.Cast<UseBFState>();
 
 	// This operator has no BloomFilter to use
-	if (!bf_to_use || !bf_to_use->finalized_) {
+	if (!bf_to_use || !bf_to_use->finalized_ || !state.use_bf) {
 		chunk.Reference(input);
 		return OperatorResultType::NEED_MORE_INPUT;
 	}
@@ -74,6 +99,12 @@ OperatorResultType PhysicalUseBF::ExecuteInternal(ExecutionContext &context, Dat
 	} else {
 		chunk.Slice(input, sel, result_count);
 	}
+
+	// 3. Update statistics
+	if (!state.is_checked) {
+		state.CheckBFSelectivity(input.size(), result_count);
+	}
+
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 } // namespace duckdb
