@@ -18,7 +18,8 @@ JoinHashTable::SharedState::SharedState()
 }
 
 JoinHashTable::ProbeState::ProbeState()
-    : SharedState(), ht_offsets_v(LogicalType::UBIGINT), hashes_dense_v(LogicalType::HASH),non_empty_sel(STANDARD_VECTOR_SIZE) {
+    : SharedState(), ht_offsets_v(LogicalType::UBIGINT), hashes_dense_v(LogicalType::HASH),
+      non_empty_sel(STANDARD_VECTOR_SIZE) {
 }
 
 JoinHashTable::InsertState::InsertState(const JoinHashTable &ht)
@@ -196,7 +197,7 @@ static idx_t ProbeForPointersInternal(JoinHashTable::ProbeState &state, JoinHash
 
 	for (idx_t i = 0; i < count; i++) {
 
-		auto row_hash = hashes_dense[i];  // hashes has been flattened before -> always access dense
+		auto row_hash = hashes_dense[i]; // hashes has been flattened before -> always access dense
 		auto row_ht_offset = row_hash & ht.bitmask;
 
 		if (USE_SALTS) {
@@ -247,9 +248,11 @@ static idx_t ProbeForPointers(JoinHashTable::ProbeState &state, JoinHashTable &h
                               Vector &hashes_v, Vector &pointers_result_v, const SelectionVector *row_sel, idx_t count,
                               const bool has_row_sel) {
 	if (has_row_sel) {
-		return ProbeForPointersInternal<USE_SALTS, true>(state, ht, entries, hashes_v, pointers_result_v, row_sel, count);
+		return ProbeForPointersInternal<USE_SALTS, true>(state, ht, entries, hashes_v, pointers_result_v, row_sel,
+		                                                 count);
 	} else {
-		return ProbeForPointersInternal<USE_SALTS, false>(state, ht, entries, hashes_v, pointers_result_v, row_sel, count);
+		return ProbeForPointersInternal<USE_SALTS, false>(state, ht, entries, hashes_v, pointers_result_v, row_sel,
+		                                                  count);
 	}
 }
 
