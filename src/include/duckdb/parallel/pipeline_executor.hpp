@@ -167,7 +167,7 @@ private:
 	void CacheChunk(DataChunk &input, idx_t operator_idx);
 
 	//! Give up this pipeline?
-	bool StopBuildingBF(const DataChunk& result);
+	bool StopBuildingBF(const DataChunk &result);
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	//! Debugging state: number of times blocked
