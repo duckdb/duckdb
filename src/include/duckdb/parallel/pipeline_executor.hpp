@@ -165,6 +165,9 @@ private:
 	static bool CanCacheType(const LogicalType &type);
 	void CacheChunk(DataChunk &input, idx_t operator_idx);
 
+	//! Give up this pipeline?
+	bool StopBuildingBF(const DataChunk& result);
+
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 	//! Debugging state: number of times blocked
 	int debug_blocked_sink_count = 0;

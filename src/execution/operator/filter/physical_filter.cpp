@@ -6,7 +6,8 @@ namespace duckdb {
 
 PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expression>> select_list,
                                idx_t estimated_cardinality)
-    : CachingPhysicalOperator(PhysicalOperatorType::FILTER, std::move(types), estimated_cardinality) {
+    : CachingPhysicalOperator(PhysicalOperatorType::FILTER, std::move(types), estimated_cardinality),
+      is_estimated(false) {
 	D_ASSERT(select_list.size() > 0);
 	if (select_list.size() > 1) {
 		// create a big AND out of the expressions
@@ -22,6 +23,10 @@ PhysicalFilter::PhysicalFilter(vector<LogicalType> types, vector<unique_ptr<Expr
 
 class FilterState : public CachingOperatorState {
 public:
+	static constexpr int64_t NUM_CHUNK_FOR_CHECK = 32;
+	static constexpr double SELECTIVITY_THRESHOLD = 0.9;
+
+public:
 	explicit FilterState(ExecutionContext &context, Expression &expr)
 	    : executor(context.client, expr), sel(STANDARD_VECTOR_SIZE) {
 	}
@@ -29,7 +34,29 @@ public:
 	ExpressionExecutor executor;
 	SelectionVector sel;
 
+	bool use_filter = true;
+	bool is_checked = false;
+	int64_t num_chunk = 0;
+	uint64_t num_received = 0;
+	uint64_t num_sent = 0;
+	double selectivity = 0.0;
+
 public:
+	void CheckBFSelectivity(uint64_t num_in, uint64_t num_out) {
+		num_received += num_in;
+		num_sent += num_out;
+		num_chunk++;
+
+		if (num_chunk > NUM_CHUNK_FOR_CHECK) {
+			is_checked = true;
+
+			selectivity = static_cast<double>(num_sent) / static_cast<double>(num_received);
+			if (selectivity > SELECTIVITY_THRESHOLD) {
+				use_filter = false;
+			}
+		}
+	}
+
 	void Finalize(const PhysicalOperator &op, ExecutionContext &context) override {
 		context.thread.profiler.Flush(op);
 	}
@@ -49,6 +76,16 @@ OperatorResultType PhysicalFilter::ExecuteInternal(ExecutionContext &context, Da
 	} else {
 		chunk.Slice(input, state.sel, result_count);
 	}
+
+	if (!state.is_checked) {
+		state.CheckBFSelectivity(input.size(), result_count);
+
+		if (state.is_checked && !is_estimated) {
+			is_estimated = true;
+			filter_selectivity = state.selectivity;
+		}
+	}
+
 	return OperatorResultType::NEED_MORE_INPUT;
 }
 

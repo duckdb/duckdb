@@ -3,6 +3,7 @@
 #include "duckdb/common/limits.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/execution/operator/persistent/physical_create_bf.hpp"
+#include "duckdb/execution/operator/filter/physical_filter.hpp"
 
 #ifdef DUCKDB_DEBUG_ASYNC_SINK_SOURCE
 #include <chrono>
@@ -522,41 +523,62 @@ SinkResultType PipelineExecutor::Sink(DataChunk &chunk, OperatorSinkInput &input
 	return pipeline.sink->Sink(context, chunk, input);
 }
 
+bool PipelineExecutor::StopBuildingBF(const DataChunk &result) {
+	if (!pipeline.is_building_bf || !pipeline.is_probing_side) {
+		return false;
+	}
+
+	if (pipeline.source->estimated_cardinality < 1000000) {
+		return false;
+	}
+
+	if (pipeline.is_selectivity_checked) {
+		auto &bf_creator = pipeline.sink->Cast<PhysicalCreateBF>();
+		return !bf_creator.is_successful;
+	}
+
+	if (pipeline.source->type != PhysicalOperatorType::CHUNK_SCAN &&
+	    pipeline.source->type != PhysicalOperatorType::DELIM_SCAN &&
+	    pipeline.source->type != PhysicalOperatorType::COLUMN_DATA_SCAN &&
+	    pipeline.source->type != PhysicalOperatorType::TABLE_SCAN) {
+		return false;
+	}
+
+	if (!pipeline.operators.empty() && pipeline.operators[0].get().type == PhysicalOperatorType::FILTER) {
+		auto &filter = pipeline.operators[0].get().Cast<PhysicalFilter>();
+		if (!filter.is_estimated || filter.filter_selectivity < SELECTIVITY_THRESHOLD) {
+			return false;
+		}
+	}
+
+	// Collect pipeline source statistics
+	pipeline.num_fetched_source_chunks++;
+	pipeline.num_fetched_source_rows += static_cast<int64_t>(result.size());
+
+	if (pipeline.num_fetched_source_chunks >= NUM_CHUNK_FOR_CHECK) {
+		pipeline.is_selectivity_checked = true;
+		auto wanted_rows = pipeline.num_fetched_source_chunks.load() * STANDARD_VECTOR_SIZE;
+		auto fetched_rows = pipeline.num_fetched_source_rows.load();
+
+		double scan_sel = static_cast<double>(fetched_rows) / static_cast<double>(wanted_rows);
+		if (scan_sel > SELECTIVITY_THRESHOLD) {
+			auto &bf_creator = pipeline.sink->Cast<PhysicalCreateBF>();
+			bf_creator.is_successful = false;
+			return true;
+		}
+	}
+
+	return false;
+}
+
 SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 	StartOperator(*pipeline.source);
 
 	OperatorSourceInput source_input = {*pipeline.source_state, *local_source_state, interrupt_state};
 	auto res = GetData(result, source_input);
 
-	// Should we stop the pipeline execution?
-	if (pipeline.is_building_bf && pipeline.is_probing_side && pipeline.source->estimated_cardinality >= 1000000 &&
-	    (pipeline.operators.empty() || pipeline.operators[0].get().type != PhysicalOperatorType::FILTER)) {
-		auto &bf_creator = pipeline.sink->Cast<PhysicalCreateBF>();
-		auto &scan = pipeline.source;
-
-		if (scan->type == PhysicalOperatorType::CHUNK_SCAN || scan->type == PhysicalOperatorType::DELIM_SCAN ||
-		    scan->type == PhysicalOperatorType::COLUMN_DATA_SCAN || scan->type == PhysicalOperatorType::TABLE_SCAN) {
-			if (!pipeline.is_selectivity_checked.load(std::memory_order_relaxed)) {
-				// Collect pipeline source statistics
-				pipeline.num_fetched_source_chunks++;
-				pipeline.num_fetched_source_rows += static_cast<int64_t>(result.size());
-
-				if (pipeline.num_fetched_source_chunks >= NUM_CHUNK_FOR_CHECK) {
-					pipeline.is_selectivity_checked.store(true, std::memory_order_relaxed);
-					auto wanted_rows = pipeline.num_fetched_source_chunks.load() * STANDARD_VECTOR_SIZE;
-					auto fetched_rows = pipeline.num_fetched_source_rows.load();
-
-					double selectivity = static_cast<double>(fetched_rows) / static_cast<double>(wanted_rows);
-					if (selectivity > SELECTIVITY_THRESHOLD) {
-						bf_creator.is_successful = false;
-					}
-				}
-			}
-		}
-
-		if (!bf_creator.is_successful) {
-			res = SourceResultType::FINISHED;
-		}
+	if (StopBuildingBF(result)) {
+		res = SourceResultType::FINISHED;
 	}
 
 	// Ensures sources only return empty results when Blocking or Finished
