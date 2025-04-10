@@ -158,27 +158,14 @@ void TransferBFLinker::UpdateMinMaxBinding(LogicalOperator &op, vector<ColumnBin
 	}
 }
 
-void TransferBFLinker::VisitOperator(LogicalOperator &op, bool can_stop) {
+void TransferBFLinker::VisitOperator(LogicalOperator &op, bool is_probing_side) {
 	D_ASSERT(state == State::MARK_PROBING_CREATOR);
 
 	switch (op.type) {
 	case LogicalOperatorType::LOGICAL_CREATE_BF: {
 		auto &creator = op.Cast<LogicalCreateBF>();
-
-		// check if this pipeline has union, intersect, except
-		bool local_can_stop = can_stop;
-		LogicalOperator *child = &op;
-		while (!child->children.empty()) {
-			child = child->children[0].get();
-
-			if (child->children.size() == 2) {
-				local_can_stop = false;
-				break;
-			}
-		}
-
-		creator.can_stop = local_can_stop;
-		VisitOperator(*creator.children[0], can_stop);
+		creator.can_stop = is_probing_side;
+		VisitOperator(*creator.children[0], is_probing_side);
 		break;
 	}
 	case LogicalOperatorType::LOGICAL_COMPARISON_JOIN: {
@@ -188,7 +175,7 @@ void TransferBFLinker::VisitOperator(LogicalOperator &op, bool can_stop) {
 	}
 	default:
 		for (auto &child : op.children) {
-			VisitOperator(*child, can_stop);
+			VisitOperator(*child, is_probing_side);
 		}
 	}
 }

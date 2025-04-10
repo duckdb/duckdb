@@ -66,8 +66,8 @@ TaskExecutionResult PipelineTask::ExecuteTask(TaskExecutionMode mode) {
 }
 
 Pipeline::Pipeline(Executor &executor_p)
-    : executor(executor_p), num_fetched_source_chunks(0), num_fetched_source_rows(0), ready(false), initialized(false),
-      source(nullptr), sink(nullptr) {
+    : executor(executor_p), num_fetched_source_chunks(0), num_fetched_source_rows(0), is_selectivity_checked(false),
+      ready(false), initialized(false), source(nullptr), sink(nullptr) {
 }
 
 ClientContext &Pipeline::GetClientContext() {
@@ -354,6 +354,11 @@ void Pipeline::ModifyPipeline() {
 			operators.insert(operators.begin(), new_operators.rbegin(), new_operators.rend());
 			return;
 		}
+		case PhysicalOperatorType::EXPRESSION_SCAN:
+		case PhysicalOperatorType::EMPTY_RESULT:
+		case PhysicalOperatorType::DUMMY_SCAN:
+		case PhysicalOperatorType::HASH_GROUP_BY:
+		case PhysicalOperatorType::WINDOW:
 		case PhysicalOperatorType::COLUMN_DATA_SCAN:
 		case PhysicalOperatorType::CHUNK_SCAN:
 		case PhysicalOperatorType::TABLE_SCAN:

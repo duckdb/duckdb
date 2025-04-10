@@ -535,19 +535,18 @@ SourceResultType PipelineExecutor::FetchFromSource(DataChunk &result) {
 
 		if (scan->type == PhysicalOperatorType::CHUNK_SCAN || scan->type == PhysicalOperatorType::DELIM_SCAN ||
 		    scan->type == PhysicalOperatorType::COLUMN_DATA_SCAN || scan->type == PhysicalOperatorType::TABLE_SCAN) {
-			if (!pipeline.is_selectivity_checked) {
+			if (!pipeline.is_selectivity_checked.load(std::memory_order_relaxed)) {
 				// Collect pipeline source statistics
 				pipeline.num_fetched_source_chunks++;
 				pipeline.num_fetched_source_rows += static_cast<int64_t>(result.size());
 
 				if (pipeline.num_fetched_source_chunks >= 32 && scan->estimated_cardinality >= 2000000) {
-					pipeline.is_selectivity_checked = true;
+					pipeline.is_selectivity_checked.store(true, std::memory_order_relaxed);
 					auto wanted_rows = pipeline.num_fetched_source_chunks.load() * STANDARD_VECTOR_SIZE;
 					auto fetched_rows = pipeline.num_fetched_source_rows.load();
 
 					double selectivity = static_cast<double>(fetched_rows) / static_cast<double>(wanted_rows);
 					if (selectivity > 0.9) {
-						pipeline.Print();
 						bf_creator.is_successful = false;
 					}
 				}

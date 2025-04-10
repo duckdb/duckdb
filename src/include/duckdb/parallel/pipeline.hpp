@@ -82,7 +82,7 @@ public:
 	std::atomic<int64_t> num_fetched_source_chunks;
 	std::atomic<int64_t> num_fetched_source_rows;
 
-	bool is_selectivity_checked = false;
+	atomic<bool> is_selectivity_checked;
 	bool is_building_bf = false;
 	bool is_probing_side = false;
 
