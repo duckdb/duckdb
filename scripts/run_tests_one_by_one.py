@@ -1,3 +1,4 @@
+import argparse
 import sys
 import subprocess
 import time
@@ -5,8 +6,7 @@ import threading
 import tempfile
 import os
 import shutil
-
-import argparse
+import re
 
 error_container = []
 
@@ -118,9 +118,12 @@ def parse_assertions(stdout):
 
     return "ERROR"
 
-
 is_active = False
 
+def get_test_name_from(text):
+    match = re.findall(r'\((.*?)\)\!', text)
+    if match:
+        return match
 
 def print_interval_background(interval):
     global is_active
@@ -132,7 +135,6 @@ def print_interval_background(interval):
             print("Still running...")
             current_ticker = 0
 
-
 def launch_test(test, list_of_tests=False):
     global is_active
     # start the background thread
@@ -141,7 +143,7 @@ def launch_test(test, list_of_tests=False):
     background_print_thread.start()
 
     unittest_stdout = sys.stdout if list_of_tests else subprocess.PIPE
-    unittest_stderr = sys.stderr if list_of_tests else subprocess.PIPE
+    unittest_stderr = subprocess.PIPE
 
     start = time.time()
     try:
@@ -160,12 +162,13 @@ def launch_test(test, list_of_tests=False):
         fail()
         return
 
-    if list_of_tests:
-        stdout = ''
-        stderr = ''
-    else:
-        stdout = res.stdout.decode('utf8')
-        stderr = res.stderr.decode('utf8')
+    stdout = res.stdout.decode('utf8') if not list_of_tests else ''
+    stderr = res.stderr.decode('utf8')
+
+    if len(stderr) > 0:
+        test = test if not list_of_tests else get_test_name_from(stderr)
+        new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": stderr}
+        error_container.append(new_data)
 
     end = time.time()
 
@@ -184,6 +187,11 @@ def launch_test(test, list_of_tests=False):
     if res.returncode is None or res.returncode == 0:
         return
 
+    # if list_of_tests:
+    #     print("********************")
+    #     print(stderr)
+    #     print(stdout)
+    #     print("~~~~~~~~~~~~~~~~~~~~")
     print("FAILURE IN RUNNING TEST")
     print(
         """--------------------
@@ -205,8 +213,8 @@ STDERR
         )
         print(stderr)
 
-        new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": stderr}
-        error_container.append(new_data)
+        # new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": stderr}
+        # error_container.append(new_data)
 
     # if a test closes unexpectedly (e.g., SEGV), test cleanup doesn't happen,
     # causing us to run out of space on subsequent tests in GH Actions (not much disk space there)
