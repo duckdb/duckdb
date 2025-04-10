@@ -18,6 +18,14 @@ namespace duckdb {
 
 enum class MultiFileFileState : uint8_t { UNOPENED, OPENING, OPEN, SKIPPED, CLOSED };
 
+class DeleteFilter {
+public:
+	virtual ~DeleteFilter() = default;
+
+public:
+	virtual idx_t Filter(row_t start_row_index, idx_t count, SelectionVector &result_sel) = 0;
+};
+
 struct HivePartitioningIndex {
 	HivePartitioningIndex(string value, idx_t index);
 

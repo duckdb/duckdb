@@ -397,6 +397,7 @@ jobs:
     env:
       GEN: ninja
       CORE_EXTENSIONS: "icu;parquet;tpch;tpcds;fts;json;inet"
+      FORCE_ASYNC_SINK_SOURCE: 1
 
     steps:
       - uses: actions/checkout@v3
@@ -415,7 +416,7 @@ jobs:
 
       - name: Build
         shell: bash
-        run: FORCE_ASYNC_SINK_SOURCE=1 make relassert
+        run: make relassert
 
       - name: Test
         shell: bash

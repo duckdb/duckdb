@@ -133,15 +133,19 @@ BoundStatement Binder::Bind(UpdateStatement &stmt) {
 	table.BindUpdateConstraints(*this, *get, *proj, *update, context);
 
 	// finally add the row id column to the projection list
+	auto row_id_columns = table.GetRowIdColumns();
 	auto virtual_columns = table.GetVirtualColumns();
-	auto row_id_entry = virtual_columns.find(COLUMN_IDENTIFIER_ROW_ID);
-	if (row_id_entry == virtual_columns.end()) {
-		throw InternalException("BindDelete could not find the row id column in the virtual columns list of the table");
-	}
 	auto &column_ids = get->GetColumnIds();
-	proj->expressions.push_back(make_uniq<BoundColumnRefExpression>(
-	    row_id_entry->second.type, ColumnBinding(get->table_index, column_ids.size())));
-	get->AddColumnId(COLUMN_IDENTIFIER_ROW_ID);
+	for (auto &row_id_column : row_id_columns) {
+		auto row_id_entry = virtual_columns.find(row_id_column);
+		if (row_id_entry == virtual_columns.end()) {
+			throw InternalException(
+			    "BindUpdate could not find the row id column in the virtual columns list of the table");
+		}
+		proj->expressions.push_back(make_uniq<BoundColumnRefExpression>(
+		    row_id_entry->second.type, ColumnBinding(get->table_index, column_ids.size())));
+		get->AddColumnId(row_id_column);
+	}
 
 	// set the projection as child of the update node and finalize the result
 	update->AddChild(std::move(proj));

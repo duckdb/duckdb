@@ -10,6 +10,14 @@ OnEntryNotFound Transformer::TransformOnEntryNotFound(bool missing_ok) {
 	return missing_ok ? OnEntryNotFound::RETURN_NULL : OnEntryNotFound::THROW_EXCEPTION;
 }
 
+vector<string> Transformer::TransformNameList(duckdb_libpgquery::PGList &list) {
+	vector<string> result;
+	for (auto c = list.head; c != nullptr; c = c->next) {
+		result.emplace_back(static_cast<char *>(c->data.ptr_value));
+	}
+	return result;
+}
+
 unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlterTableStmt &stmt) {
 
 	D_ASSERT(stmt.relation);
@@ -29,14 +37,14 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 
 		switch (command->subtype) {
 		case duckdb_libpgquery::PG_AT_AddColumn: {
-			auto column_def = PGPointerCast<duckdb_libpgquery::PGColumnDef>(command->def);
+			auto column_name_list = PGPointerCast<duckdb_libpgquery::PGList>(command->def_list->head->data.ptr_value);
+			auto column_def = PGPointerCast<duckdb_libpgquery::PGColumnDef>(command->def_list->tail->data.ptr_value);
 			if (stmt.relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
 				throw ParserException("Adding columns is only supported for tables");
 			}
 			if (column_def->category == duckdb_libpgquery::COL_GENERATED) {
 				throw ParserException("Adding generated columns after table creation is not supported yet");
 			}
-
 			auto column_entry = TransformColumnDefinition(*column_def);
 			if (column_def->constraints) {
 				for (auto cell = column_def->constraints->head; cell != nullptr; cell = cell->next) {
@@ -48,7 +56,20 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 					throw ParserException("Adding columns with constraints not yet supported");
 				}
 			}
-			result->info = make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry), command->missing_ok);
+			auto column_names = TransformNameList(*column_name_list);
+			if (column_names.empty()) {
+				throw InternalException("Expected a name");
+			}
+			column_entry.SetName(column_names.back());
+			if (column_names.size() == 1) {
+				// ADD COLUMN
+				result->info = make_uniq<AddColumnInfo>(std::move(data), std::move(column_entry), command->missing_ok);
+			} else {
+				// ADD FIELD
+				column_names.pop_back();
+				result->info = make_uniq<AddFieldInfo>(std::move(data), std::move(column_names),
+				                                       std::move(column_entry), command->missing_ok);
+			}
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_DropColumn: {
@@ -56,7 +77,17 @@ unique_ptr<AlterStatement> Transformer::TransformAlter(duckdb_libpgquery::PGAlte
 			if (stmt.relkind != duckdb_libpgquery::PG_OBJECT_TABLE) {
 				throw ParserException("Dropping columns is only supported for tables");
 			}
-			result->info = make_uniq<RemoveColumnInfo>(std::move(data), command->name, command->missing_ok, cascade);
+			auto column_names = TransformNameList(*command->def_list);
+			if (column_names.empty()) {
+				throw InternalException("Expected a name");
+			}
+			if (column_names.size() == 1) {
+				result->info =
+				    make_uniq<RemoveColumnInfo>(std::move(data), column_names[0], command->missing_ok, cascade);
+			} else {
+				result->info =
+				    make_uniq<RemoveFieldInfo>(std::move(data), std::move(column_names), command->missing_ok, cascade);
+			}
 			break;
 		}
 		case duckdb_libpgquery::PG_AT_ColumnDefault: {
