@@ -166,6 +166,7 @@ def launch_test(test, list_of_tests=False):
     stderr = res.stderr.decode('utf8')
 
     if len(stderr) > 0:
+        # when list_of_tests test name gets transformed, but we can get it from stderr
         test = test if not list_of_tests else get_test_name_from(stderr)
         new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": stderr}
         error_container.append(new_data)
@@ -187,11 +188,6 @@ def launch_test(test, list_of_tests=False):
     if res.returncode is None or res.returncode == 0:
         return
 
-    # if list_of_tests:
-    #     print("********************")
-    #     print(stderr)
-    #     print(stdout)
-    #     print("~~~~~~~~~~~~~~~~~~~~")
     print("FAILURE IN RUNNING TEST")
     print(
         """--------------------
@@ -212,9 +208,6 @@ STDERR
 --------------------"""
         )
         print(stderr)
-
-        # new_data = {"test": test, "return_code": res.returncode, "stdout": stdout, "stderr": stderr}
-        # error_container.append(new_data)
 
     # if a test closes unexpectedly (e.g., SEGV), test cleanup doesn't happen,
     # causing us to run out of space on subsequent tests in GH Actions (not much disk space there)
