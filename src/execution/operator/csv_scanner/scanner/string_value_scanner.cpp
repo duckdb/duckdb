@@ -212,7 +212,7 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 	return done;
 }
 
-static void SanitizeError(string &value) {
+void FullLinePosition::SanitizeError(string &value) {
 	std::vector<char> char_array(value.begin(), value.end());
 	char_array.push_back('\0'); // Null-terminate the character array
 	Utf8Proc::MakeValid(&char_array[0], char_array.size());
@@ -460,7 +460,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			error << "Could not convert string \"" << std::string(value_ptr, size) << "\" to \'"
 			      << LogicalTypeIdToString(parse_types[chunk_col_id].type_id) << "\'";
 			auto error_string = error.str();
-			SanitizeError(error_string);
+			FullLinePosition::SanitizeError(error_string);
 
 			current_errors.ModifyErrorMessageOfLastError(error_string);
 		}
@@ -547,7 +547,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 					error << "Could not convert string \"" << std::string(value_ptr, length) << "\" to \'"
 					      << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id) << "\'";
 					auto error_string = error.str();
-					SanitizeError(error_string);
+					FullLinePosition::SanitizeError(error_string);
 					result.current_errors.ModifyErrorMessageOfLastError(error_string);
 				}
 				result.cur_col_id++;
@@ -767,46 +767,6 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 		auto csv_error = CSVError::NullPaddingFail(state_machine.options, lines_per_batch, path);
 		error_handler.Error(csv_error);
 	}
-}
-
-//! Reconstructs the current line to be used in error messages
-string FullLinePosition::ReconstructCurrentLine(bool &first_char_nl,
-                                                unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
-                                                bool reconstruct_line) const {
-	if (!reconstruct_line || begin == end) {
-		return {};
-	}
-	string result;
-	if (end.buffer_idx == begin.buffer_idx) {
-		if (buffer_handles.find(end.buffer_idx) == buffer_handles.end()) {
-			throw InternalException("CSV Buffer is not available to reconstruct CSV Line, please open an issue with "
-			                        "your query and dataset.");
-		}
-		auto buffer = buffer_handles[begin.buffer_idx]->Ptr();
-		first_char_nl = buffer[begin.buffer_pos] == '\n' || buffer[begin.buffer_pos] == '\r';
-		for (idx_t i = begin.buffer_pos + first_char_nl; i < end.buffer_pos; i++) {
-			result += buffer[i];
-		}
-	} else {
-		if (buffer_handles.find(begin.buffer_idx) == buffer_handles.end() ||
-		    buffer_handles.find(end.buffer_idx) == buffer_handles.end()) {
-			throw InternalException("CSV Buffer is not available to reconstruct CSV Line, please open an issue with "
-			                        "your query and dataset.");
-		}
-		auto first_buffer = buffer_handles[begin.buffer_idx]->Ptr();
-		auto first_buffer_size = buffer_handles[begin.buffer_idx]->actual_size;
-		auto second_buffer = buffer_handles[end.buffer_idx]->Ptr();
-		first_char_nl = first_buffer[begin.buffer_pos] == '\n' || first_buffer[begin.buffer_pos] == '\r';
-		for (idx_t i = begin.buffer_pos + first_char_nl; i < first_buffer_size; i++) {
-			result += first_buffer[i];
-		}
-		for (idx_t i = 0; i < end.buffer_pos; i++) {
-			result += second_buffer[i];
-		}
-	}
-	// sanitize borked line
-	SanitizeError(result);
-	return result;
 }
 
 bool StringValueResult::AddRowInternal() {
@@ -1108,7 +1068,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
 						      << type.ToString() << "\'";
 						string error_msg = error.str();
-						SanitizeError(error_msg);
+						FullLinePosition::SanitizeError(error_msg);
 						idx_t row_byte_pos = 0;
 						if (!(result.line_positions_per_row[line_error].begin ==
 						      result.line_positions_per_row[line_error].end)) {
@@ -1143,7 +1103,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 							error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
 							      << LogicalTypeIdToString(type.id()) << "\'";
 							string error_msg = error.str();
-							SanitizeError(error_msg);
+							FullLinePosition::SanitizeError(error_msg);
 							auto csv_error = CSVError::CastError(
 							    state_machine->options, names[i], error_msg, i, borked_line, lines_per_batch,
 							    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size,

@@ -238,9 +238,15 @@ void CSVSniffer::AnalyzeDialectCandidate(unique_ptr<ColumnCountScanner> scanner,
 	idx_t dirty_notes = 0;
 	idx_t dirty_notes_minus_comments = 0;
 	if (sniffed_column_counts.error) {
+		if (!scanner->error_handler->HasError(MAXIMUM_LINE_SIZE)) {
+			all_fail_max_line_size = false;
+		} else {
+			line_error = scanner->error_handler->GetFirstError(MAXIMUM_LINE_SIZE);
+		}
 		// This candidate has an error (i.e., over maximum line size or never unquoting quoted values)
 		return;
 	}
+	all_fail_max_line_size = false;
 	idx_t consistent_rows = 0;
 	idx_t num_cols = sniffed_column_counts.result_position == 0 ? 1 : sniffed_column_counts[0].number_of_columns;
 	const bool ignore_errors = options.ignore_errors.GetValue();
@@ -608,7 +614,12 @@ void CSVSniffer::DetectDialect() {
 
 	// if no dialect candidate was found, we throw an exception
 	if (candidates.empty()) {
-		auto error = CSVError::SniffingError(options, dialect_candidates.Print(), max_columns_found_error, set_columns);
+		CSVError error;
+		if (all_fail_max_line_size) {
+			error = line_error;
+		} else {
+			error = CSVError::SniffingError(options, dialect_candidates.Print(), max_columns_found_error, set_columns);
+		}
 		error_handler->Error(error, true);
 	}
 }
