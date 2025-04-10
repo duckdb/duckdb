@@ -15,7 +15,7 @@ PhysicalUseBF::PhysicalUseBF(vector<LogicalType> types, const shared_ptr<FilterP
 
 class UseBFState : public CachingOperatorState {
 public:
-	static constexpr uint64_t NUM_CHUNK_FOR_CHECK = 32;
+	static constexpr int64_t NUM_CHUNK_FOR_CHECK = 32;
 	static constexpr double SELECTIVITY_THRESHOLD = 0.9;
 
 public:
@@ -27,7 +27,7 @@ public:
 
 	bool use_bf = true;
 	bool is_checked = false;
-	uint64_t num_chunk = 0;
+	int64_t num_chunk = 0;
 	uint64_t num_received = 0;
 	uint64_t num_sent = 0;
 
