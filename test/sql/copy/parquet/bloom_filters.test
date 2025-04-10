@@ -256,3 +256,10 @@ copy (select (r1.range*10)::VARCHAR r,
 from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 4294967295);
 ----
 Binder Error
+
+# cannot be 0
+statement error
+copy (select (r1.range*10)::VARCHAR r,
+from range(100) r1, range(100) order by r) to '__TEST_DIR__/bloom9.parquet' (format parquet, ROW_GROUP_SIZE 10000, string_dictionary_page_size_limit 0);
+----
+Binder Error
