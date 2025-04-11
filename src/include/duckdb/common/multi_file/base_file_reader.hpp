@@ -15,6 +15,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/multi_file/multi_file_data.hpp"
 #include "duckdb/planner/expression.hpp"
+#include "duckdb/common/open_file_info.hpp"
 
 namespace duckdb {
 
