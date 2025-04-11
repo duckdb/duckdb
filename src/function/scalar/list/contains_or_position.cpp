@@ -6,14 +6,20 @@
 
 namespace duckdb {
 
-template <bool RETURN_POSITION, bool SET_TARGET_VALID = false>
+template <bool RETURN_POSITION, bool FIND_NULLS = false>
 static void ListSearchFunction(DataChunk &input, ExpressionState &state, Vector &result) {
+	if (result.GetType().id() == LogicalTypeId::SQLNULL) {
+		result.SetVectorType(VectorType::CONSTANT_VECTOR);
+		ConstantVector::SetNull(result, true);
+		return;
+	}
+
 	auto target_count = input.size();
 	auto &list_vec = input.data[0];
 	auto &source_vec = ListVector::GetEntry(list_vec);
 	auto &target_vec = input.data[1];
 
-	ListSearchOp<RETURN_POSITION, SET_TARGET_VALID>(list_vec, source_vec, target_vec, result, target_count);
+	ListSearchOp<RETURN_POSITION, FIND_NULLS>(list_vec, source_vec, target_vec, result, target_count);
 
 	if (target_count == 1) {
 		result.SetVectorType(VectorType::CONSTANT_VECTOR);
@@ -30,13 +36,17 @@ static unique_ptr<FunctionData> ListSearchBind(ClientContext &context, ScalarFun
 	const auto &list = arguments[0]->return_type;
 	const auto &value = arguments[1]->return_type;
 
+	if (list.id() == LogicalTypeId::SQLNULL) {
+		bound_function.arguments[0] = LogicalTypeId::UNKNOWN;
+		bound_function.arguments[1] = LogicalTypeId::UNKNOWN;
+		bound_function.return_type = LogicalType::SQLNULL;
+		return make_uniq<VariableReturnBindData>(bound_function.return_type);
+	}
+
 	const auto list_is_param = list.id() == LogicalTypeId::UNKNOWN;
 	const auto value_is_param = value.id() == LogicalTypeId::UNKNOWN;
 
-	if (list.id() == LogicalTypeId::SQLNULL) {
-		throw BinderException("%s: the first argument can not be NULL, expected a list but got NULL",
-		                      bound_function.name);
-	} else if (list_is_param) {
+	if (list_is_param) {
 		if (!value_is_param) {
 			// only list is a parameter, cast it to a list of value type
 			bound_function.arguments[0] = LogicalType::LIST(value);
@@ -57,6 +67,7 @@ static unique_ptr<FunctionData> ListSearchBind(ClientContext &context, ScalarFun
 		bound_function.arguments[0] = LogicalType::LIST(max_child_type);
 		bound_function.arguments[1] = max_child_type;
 	}
+
 	return make_uniq<VariableReturnBindData>(bound_function.return_type);
 }
 

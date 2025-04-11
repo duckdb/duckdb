@@ -4,50 +4,68 @@
 
 namespace duckdb {
 
-template <class T, bool RETURN_POSITION, bool SET_TARGET_VALID = false>
+template <class T, bool RETURN_POSITION, bool FIND_NULLS = false>
 idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_vec, Vector &result, idx_t count) {
-	UnifiedVectorFormat source_format;
+	using RETURN_TYPE = typename std::conditional<RETURN_POSITION, int32_t, int8_t>::type;
+
 	const auto source_count = ListVector::GetListSize(list_vec);
+
+	UnifiedVectorFormat list_format;
+	list_vec.ToUnifiedFormat(count, list_format);
+	const auto list_entries = UnifiedVectorFormat::GetData<list_entry_t>(list_format);
+
+	UnifiedVectorFormat source_format;
 	source_vec.ToUnifiedFormat(source_count, source_format);
 	const auto source_data = UnifiedVectorFormat::GetData<T>(source_format);
 
-	using RETURN_TYPE = typename std::conditional<RETURN_POSITION, int32_t, int8_t>::type;
+	UnifiedVectorFormat target_format;
+	target_vec.ToUnifiedFormat(count, target_format);
+	const auto target_data = UnifiedVectorFormat::GetData<T>(target_format);
+
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto result_data = FlatVector::GetData<RETURN_TYPE>(result);
+	auto &result_validity = FlatVector::Validity(result);
 
 	idx_t total_matches = 0;
 
-	UnifiedVectorFormat target_format;
-	target_vec.ToUnifiedFormat(count, target_format);
+	for (idx_t row_idx = 0; row_idx < count; ++row_idx) {
+		auto source_list_idx = source_format.sel->get_index(row_idx);
+		if (list_entries[source_list_idx].length == 0) {
+			if (RETURN_POSITION) {
+				result_validity.SetInvalid(row_idx);
+			}
+			continue;
+		}
 
-	// Single call to BinaryExecutor::ExecuteWithNulls
-	BinaryExecutor::ExecuteWithNulls<list_entry_t, T, RETURN_TYPE>(
-	    list_vec, target_vec, result, count,
-	    [&](const list_entry_t &list, const T &target, ValidityMask &validity, idx_t out_idx) -> RETURN_TYPE {
-		    if (list.length == 0) {
-			    if (RETURN_POSITION) {
-				    validity.SetInvalid(out_idx);
-			    }
-			    return 0;
-		    }
+		const auto target_entry_idx = target_format.sel->get_index(row_idx);
+		const bool target_valid = target_format.validity.RowIsValid(target_entry_idx);
 
-			const auto target_entry_idx = target_format.sel->get_index(out_idx);
-		    const bool target_valid = target_format.validity.RowIsValid(target_entry_idx);
+		const auto entry_length = list_entries[source_list_idx].length;
+		const auto entry_offset = list_entries[source_list_idx].offset;
 
-	    	for (auto i = list.offset; i < list.offset + list.length; i++) {
-			    const auto source_entry_idx = source_format.sel->get_index(i);
-			    const bool source_valid = source_format.validity.RowIsValid(source_entry_idx);
+		bool found = false;
 
-		    	if ((SET_TARGET_VALID && !source_valid && !target_valid) || (source_valid &&
-				   Equals::Operation<T>(source_data[source_entry_idx], target))) {
-				    total_matches++;
-				    return RETURN_POSITION ? UnsafeNumericCast<RETURN_TYPE>(1 + i - list.offset) : 1;
-			    }
-		    }
+		for (auto list_idx = entry_offset; list_idx < entry_length + entry_offset; list_idx++) {
+			const auto source_entry_idx = source_format.sel->get_index(list_idx);
+			const bool source_valid = source_format.validity.RowIsValid(source_entry_idx);
 
-		    if (RETURN_POSITION) {
-			    validity.SetInvalid(out_idx);
-		    }
-		    return 0;
-	    });
+			if ((FIND_NULLS && !source_valid && !target_valid) ||
+			    (source_valid && Equals::Operation<T>(source_data[source_entry_idx], target_data[target_entry_idx]))) {
+				found = true;
+				total_matches++;
+				result_data[row_idx] =
+				    RETURN_POSITION ? UnsafeNumericCast<RETURN_TYPE>(1 + list_idx - entry_offset) : 1;
+				continue;
+			}
+		}
+
+		if (!found) {
+			if (RETURN_POSITION) {
+				result_validity.SetInvalid(row_idx);
+				result_data[row_idx] = 0;
+			}
+		}
+	}
 
 	return total_matches;
 }
@@ -72,53 +90,53 @@ idx_t ListSearchNestedOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 //! true/false or the position of the value in the list. The result vector is populated with the result of the search.
 //! usually the "source" vector is the list child vector, but it is passed separately to enable searching nested
 //! children, for example when searching the keys of a MAP vectors.
-template <bool RETURN_POSITION, bool SET_TARGET_VALID = false>
+template <bool RETURN_POSITION, bool FIND_NULLS = false>
 idx_t ListSearchOp(Vector &list_v, Vector &source_v, Vector &target_v, Vector &result_v, idx_t target_count) {
 	const auto type = target_v.GetType().InternalType();
 	switch (type) {
 	case PhysicalType::BOOL:
 	case PhysicalType::INT8:
-		return ListSearchSimpleOp<int8_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                     target_count);
+		return ListSearchSimpleOp<int8_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                               target_count);
 	case PhysicalType::INT16:
-		return ListSearchSimpleOp<int16_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                      target_count);
+		return ListSearchSimpleOp<int16_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                                target_count);
 	case PhysicalType::INT32:
-		return ListSearchSimpleOp<int32_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                      target_count);
+		return ListSearchSimpleOp<int32_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                                target_count);
 	case PhysicalType::INT64:
-		return ListSearchSimpleOp<int64_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                      target_count);
+		return ListSearchSimpleOp<int64_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                                target_count);
 	case PhysicalType::INT128:
-		return ListSearchSimpleOp<hugeint_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                        target_count);
+		return ListSearchSimpleOp<hugeint_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                                  target_count);
 	case PhysicalType::UINT8:
-		return ListSearchSimpleOp<uint8_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                      target_count);
+		return ListSearchSimpleOp<uint8_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                                target_count);
 	case PhysicalType::UINT16:
-		return ListSearchSimpleOp<uint16_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                       target_count);
+		return ListSearchSimpleOp<uint16_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                                 target_count);
 	case PhysicalType::UINT32:
-		return ListSearchSimpleOp<uint32_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                       target_count);
+		return ListSearchSimpleOp<uint32_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                                 target_count);
 	case PhysicalType::UINT64:
-		return ListSearchSimpleOp<uint64_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                       target_count);
+		return ListSearchSimpleOp<uint64_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                                 target_count);
 	case PhysicalType::UINT128:
-		return ListSearchSimpleOp<uhugeint_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                         target_count);
+		return ListSearchSimpleOp<uhugeint_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                                   target_count);
 	case PhysicalType::FLOAT:
-		return ListSearchSimpleOp<float, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                    target_count);
+		return ListSearchSimpleOp<float, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                              target_count);
 	case PhysicalType::DOUBLE:
-		return ListSearchSimpleOp<double, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                     target_count);
+		return ListSearchSimpleOp<double, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                               target_count);
 	case PhysicalType::VARCHAR:
-		return ListSearchSimpleOp<string_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                       target_count);
+		return ListSearchSimpleOp<string_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                                 target_count);
 	case PhysicalType::INTERVAL:
-		return ListSearchSimpleOp<interval_t, RETURN_POSITION, SET_TARGET_VALID>(list_v, source_v, target_v, result_v,
-		                                                                         target_count);
+		return ListSearchSimpleOp<interval_t, RETURN_POSITION, FIND_NULLS>(list_v, source_v, target_v, result_v,
+		                                                                   target_count);
 	case PhysicalType::STRUCT:
 	case PhysicalType::LIST:
 	case PhysicalType::ARRAY:
