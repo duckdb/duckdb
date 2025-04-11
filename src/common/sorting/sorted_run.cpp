@@ -7,11 +7,12 @@
 
 namespace duckdb {
 
-SortedRun::SortedRun(BufferManager &buffer_manager, const TupleDataLayout &key_layout,
-                     const TupleDataLayout &payload_layout)
-    : key_data(make_uniq<TupleDataCollection>(buffer_manager, key_layout)),
-      payload_data(payload_layout.ColumnCount() != 0 ? make_uniq<TupleDataCollection>(buffer_manager, payload_layout)
-                                                     : nullptr),
+SortedRun::SortedRun(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> key_layout,
+                     shared_ptr<TupleDataLayout> payload_layout)
+    : key_data(make_uniq<TupleDataCollection>(buffer_manager, std::move(key_layout))),
+      payload_data(payload_layout->ColumnCount() != 0
+                       ? make_uniq<TupleDataCollection>(buffer_manager, std::move(payload_layout))
+                       : nullptr),
       finalized(false) {
 	key_data->InitializeAppend(key_append_state, TupleDataPinProperties::KEEP_EVERYTHING_PINNED);
 	if (payload_data) {

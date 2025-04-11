@@ -155,7 +155,7 @@ public:
 	    : merger(merger_p), num_runs(merger.sorted_runs.size()),
 	      num_partitions((merger.total_count + (merger.partition_size - 1)) / merger.partition_size),
 	      iterator_state_type(GetBlockIteratorStateType(merger.fixed_blocks, merger.external)),
-	      sort_key_type(merger.key_layout.GetSortKeyType()), next_partition_idx(0), total_scanned(0) {
+	      sort_key_type(merger.key_layout->GetSortKeyType()), next_partition_idx(0), total_scanned(0) {
 		// Initialize partitions
 		partitions.resize(num_partitions);
 		for (idx_t partition_idx = 0; partition_idx < num_partitions; partition_idx++) {
@@ -578,10 +578,11 @@ void SortedRunMergerLocalState::TemplatedCreateOrDestroyTournamentTree(bool crea
 //===--------------------------------------------------------------------===//
 // Sorted Run Merger
 //===--------------------------------------------------------------------===//
-SortedRunMerger::SortedRunMerger(const TupleDataLayout &key_layout_p, vector<unique_ptr<SortedRun>> &&sorted_runs_p,
+SortedRunMerger::SortedRunMerger(shared_ptr<TupleDataLayout> key_layout_p,
+                                 vector<unique_ptr<SortedRun>> &&sorted_runs_p,
                                  const vector<SortProjectionColumn> &output_projection_columns_p,
                                  idx_t partition_size_p, bool external_p, bool fixed_blocks_p)
-    : key_layout(key_layout_p), sorted_runs(std::move(sorted_runs_p)),
+    : key_layout(std::move(key_layout_p)), sorted_runs(std::move(sorted_runs_p)),
       output_projection_columns(output_projection_columns_p), total_count(SortedRunsTotalCount(sorted_runs)),
       partition_size(partition_size_p), external(external_p), fixed_blocks(fixed_blocks_p) {
 }

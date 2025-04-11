@@ -16,7 +16,8 @@ PhysicalOrder::PhysicalOrder(vector<LogicalType> types, vector<BoundOrderByNode>
 class OrderGlobalSinkState : public GlobalSinkState {
 public:
 	OrderGlobalSinkState(const PhysicalOrder &op, ClientContext &context)
-	    : sort(context, op.orders, op.children[0]->types, op.projections), state(sort.GetGlobalSinkState(context)) {
+	    : sort(context, op.orders, op.children[0].get().types, op.projections),
+	      state(sort.GetGlobalSinkState(context)) {
 	}
 
 public:

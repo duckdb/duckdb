@@ -24,7 +24,7 @@ class SortedRunMerger {
 	friend class SortedRunMergerGlobalState;
 
 public:
-	SortedRunMerger(const TupleDataLayout &key_layout, vector<unique_ptr<SortedRun>> &&sorted_runs,
+	SortedRunMerger(shared_ptr<TupleDataLayout> key_layout, vector<unique_ptr<SortedRun>> &&sorted_runs,
 	                const vector<SortProjectionColumn> &output_projection_columns, idx_t partition_size, bool external,
 	                bool fixed_blocks);
 
@@ -40,7 +40,7 @@ public:
 	ProgressData GetProgress(ClientContext &context, GlobalSourceState &gstate) const;
 
 public:
-	const TupleDataLayout &key_layout;
+	shared_ptr<TupleDataLayout> key_layout;
 	vector<unique_ptr<SortedRun>> sorted_runs;
 	const vector<SortProjectionColumn> &output_projection_columns;
 	const idx_t total_count;

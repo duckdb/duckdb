@@ -12,7 +12,8 @@
 namespace duckdb {
 
 Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const vector<LogicalType> &input_types,
-           vector<idx_t> projection_map) {
+           vector<idx_t> projection_map)
+    : key_layout(make_shared_ptr<TupleDataLayout>()), payload_layout(make_shared_ptr<TupleDataLayout>()) {
 	// Convert orders to a single "create_sort_key" expression
 	// Copied from ordered_aggregate_optimizer.cpp, should be unified
 	FunctionBinder binder(context);
@@ -67,7 +68,7 @@ Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const
 			input_projection_map.push_back(input_col_idx);
 		}
 	}
-	payload_layout.Initialize(payload_types);
+	payload_layout->Initialize(payload_types);
 
 	// Sort the output projection columns so we're gathering the columns in order
 	std::sort(output_projection_columns.begin(), output_projection_columns.end(),
@@ -79,7 +80,7 @@ Sort::Sort(ClientContext &context, const vector<BoundOrderByNode> &orders, const
 	          });
 
 	// Finally, initialize the key layout (now that we know whether we have a payload)
-	key_layout.Initialize(orders, key_expression->return_type, !payload_types.empty());
+	key_layout->Initialize(orders, key_expression->return_type, !payload_types.empty());
 }
 
 //===--------------------------------------------------------------------===//
@@ -90,7 +91,7 @@ public:
 	SortLocalSinkState(const Sort &sort, ClientContext &context)
 	    : maximum_run_size(0), external(false), key_executor(context, *sort.key_expression) {
 		key.Initialize(context, {sort.key_expression->return_type});
-		payload.Initialize(context, sort.payload_layout.GetTypes());
+		payload.Initialize(context, sort.payload_layout->GetTypes());
 	}
 
 public:

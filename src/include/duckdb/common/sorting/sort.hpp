@@ -33,11 +33,11 @@ public:
 private:
 	//! Key orders, expressions, and layout
 	unique_ptr<Expression> key_expression;
-	TupleDataLayout key_layout;
+	shared_ptr<TupleDataLayout> key_layout;
 
 	//! Projection map and payload layout (columns that also appear as key eliminated)
 	vector<idx_t> payload_projection_map;
-	TupleDataLayout payload_layout;
+	shared_ptr<TupleDataLayout> payload_layout;
 
 	//! Mapping from key/payload layouts to output columns
 	vector<idx_t> input_projection_map;

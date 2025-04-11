@@ -19,7 +19,8 @@ class TupleDataLayout;
 
 class SortedRun {
 public:
-	SortedRun(BufferManager &buffer_manager, const TupleDataLayout &key_layout, const TupleDataLayout &payload_layout);
+	SortedRun(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> key_layout,
+	          shared_ptr<TupleDataLayout> payload_layout);
 
 	~SortedRun();
 
