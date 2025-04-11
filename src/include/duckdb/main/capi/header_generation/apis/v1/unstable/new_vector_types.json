@@ -6,7 +6,7 @@
         "duckdb_create_selection_vector",
         "duckdb_destroy_selection_vector",
         "duckdb_selection_vector_get_data_ptr",
-        "duckdb_stringify_data_chunk",
-        "duckdb_verify_data_chunk"
+        "duckdb_data_chunk_to_string",
+        "duckdb_data_chunk_verify"
     ]
 }

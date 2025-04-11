@@ -3064,12 +3064,12 @@ DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vec
 Returns the debug string from the data chunk.
 The string returned must be freed.
 */
-DUCKDB_C_API const char *duckdb_stringify_data_chunk(duckdb_data_chunk chunk);
+DUCKDB_C_API const char *duckdb_data_chunk_to_string(duckdb_data_chunk chunk);
 
 /*!
 Verifies the data chunk is a valid chunk.
 */
-DUCKDB_C_API void duckdb_verify_data_chunk(duckdb_data_chunk chunk);
+DUCKDB_C_API void duckdb_data_chunk_verify(duckdb_data_chunk chunk);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions

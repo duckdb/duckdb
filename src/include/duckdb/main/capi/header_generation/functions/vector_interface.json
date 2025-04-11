@@ -270,7 +270,7 @@
             }
         },
         {
-            "name": "duckdb_stringify_data_chunk",
+            "name": "duckdb_data_chunk_to_string",
             "return_type": "const char *",
             "params": [
                 {
@@ -283,7 +283,7 @@
             }
         },
         {
-            "name": "duckdb_verify_data_chunk",
+            "name": "duckdb_data_chunk_verify",
             "return_type": "void",
             "params": [
                 {

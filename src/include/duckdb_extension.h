@@ -553,8 +553,8 @@ typedef struct {
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
 	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
-	const char *(*duckdb_stringify_data_chunk)(duckdb_data_chunk chunk);
-	void (*duckdb_verify_data_chunk)(duckdb_data_chunk chunk);
+	const char *(*duckdb_data_chunk_to_string)(duckdb_data_chunk chunk);
+	void (*duckdb_data_chunk_verify)(duckdb_data_chunk chunk);
 #endif
 
 } duckdb_ext_api_v1;
@@ -984,8 +984,8 @@ typedef struct {
 
 // Version unstable_new_vector_types
 #define duckdb_slice_vector                  duckdb_ext_api.duckdb_slice_vector
-#define duckdb_stringify_data_chunk          duckdb_ext_api.duckdb_stringify_data_chunk
-#define duckdb_verify_data_chunk             duckdb_ext_api.duckdb_verify_data_chunk
+#define duckdb_data_chunk_to_string          duckdb_ext_api.duckdb_data_chunk_to_string
+#define duckdb_data_chunk_verify             duckdb_ext_api.duckdb_data_chunk_verify
 #define duckdb_create_selection_vector       duckdb_ext_api.duckdb_create_selection_vector
 #define duckdb_destroy_selection_vector      duckdb_ext_api.duckdb_destroy_selection_vector
 #define duckdb_selection_vector_get_data_ptr duckdb_ext_api.duckdb_selection_vector_get_data_ptr
