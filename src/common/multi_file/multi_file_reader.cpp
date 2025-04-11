@@ -374,7 +374,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 		    "%s.\nThis means the %s schema does not match the schema of the table.\nPossible solutions:\n* Insert by "
 		    "name instead of by position using \"INSERT INTO tbl BY NAME SELECT * FROM %s(...)\"\n* Manually specify "
 		    "which columns to insert using \"INSERT INTO tbl SELECT ... FROM %s(...)\"",
-		    reader.file_name, local_col.name, source_type, target_column, target_type, reader_type, function_name,
+		    reader.GetFileName(), local_col.name, source_type, target_column, target_type, reader_type, function_name,
 		    function_name);
 	} else {
 		// read_parquet() with multiple files
@@ -385,7 +385,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 		    "* Enable the union_by_name=True option to combine the schema of all %s files "
 		    "(https://duckdb.org/docs/stable/data/multiple_files/combining_schemas)\n"
 		    "* Use a COPY statement to automatically derive types from an existing table.",
-		    reader.file_name, local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
+		    reader.GetFileName(), local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
 	}
 	first_message = StringUtil::Format("failed to cast column \"%s\" from type %s to %s: ", local_col.name, source_type,
 	                                   target_type);
@@ -410,8 +410,8 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileBindD
 			string first_message;
 			string extended_error =
 			    GetExtendedMultiFileError(bind_data, *executor.expressions[i], reader, i, first_message);
-			throw ConversionException("Error while reading file \"%s\": %s: %s\n\n%s", reader.file_name, first_message,
-			                          original_error, extended_error);
+			throw ConversionException("Error while reading file \"%s\": %s: %s\n\n%s", reader.GetFileName(),
+			                          first_message, original_error, extended_error);
 		}
 	}
 	output_chunk.SetCardinality(input_chunk.size());

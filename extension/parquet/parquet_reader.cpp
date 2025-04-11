@@ -640,13 +640,13 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	if (file_meta_data->__isset.encryption_algorithm) {
 		if (file_meta_data->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
-			                            file_name);
+			                            GetFileName());
 		}
 	}
 	// check if we like this schema
 	if (file_meta_data->schema.size() < 2) {
 		throw InvalidInputException("Failed to read Parquet file '%s': Need at least one non-root column in the file",
-		                            file_name);
+		                            GetFileName());
 	}
 	root_schema = ParseSchema();
 	for (idx_t i = 0; i < root_schema->children.size(); i++) {
@@ -690,11 +690,11 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 	return result;
 }
 
-ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p,
+ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : BaseFileReader(std::move(file_name_p)), fs(FileSystem::GetFileSystem(context_p)),
+    : BaseFileReader(std::move(file_p)), fs(FileSystem::GetFileSystem(context_p)),
       allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
-	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+	file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
 		throw NotImplementedException(
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
@@ -720,11 +720,11 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 			    LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config, *encryption_util);
 		} else {
 			auto last_modify_time = fs.GetLastModifiedTime(*file_handle);
-			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
+			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file.path);
 			if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
 				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
 				                        *encryption_util);
-				ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
+				ObjectCache::GetObjectCache(context_p).Put(file.path, metadata);
 			}
 		}
 	} else {
@@ -1115,7 +1115,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with DuckDB's "
 				    "prefetching optimization. DuckDB may still be able to scan this file by manually disabling the "
 				    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
-				    file_name);
+				    GetFileName());
 			}
 
 			if (!filters && scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {

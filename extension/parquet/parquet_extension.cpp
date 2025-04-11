@@ -512,7 +512,7 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
                                                               BaseUnionData &union_data_p,
                                                               const MultiFileBindData &bind_data_p) {
 	auto &union_data = union_data_p.Cast<ParquetUnionData>();
-	return make_shared_ptr<ParquetReader>(context, union_data.file_name, union_data.options, union_data.metadata);
+	return make_shared_ptr<ParquetReader>(context, union_data.file, union_data.options, union_data.metadata);
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &,
@@ -529,7 +529,7 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
 
 shared_ptr<BaseUnionData> ParquetMultiFileInfo::GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx) {
 	auto &scan = scan_p->Cast<ParquetReader>();
-	auto result = make_uniq<ParquetUnionData>(scan.file_name);
+	auto result = make_uniq<ParquetUnionData>(scan.file);
 	if (file_idx == 0) {
 		for (auto &column : scan.columns) {
 			result->names.push_back(column.name);

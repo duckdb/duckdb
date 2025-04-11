@@ -445,7 +445,7 @@ public:
 			}
 		} else if (bind_data.initial_reader) {
 			// we can only use the initial reader if it was constructed from the first file
-			if (bind_data.initial_reader->file_name == file_list.GetFirstFile().path) {
+			if (bind_data.initial_reader->GetFileName() == file_list.GetFirstFile().path) {
 				result->readers.push_back(make_uniq<MultiFileReaderData>(std::move(bind_data.initial_reader)));
 			}
 		}
@@ -467,7 +467,7 @@ public:
 				}
 			} else {
 				D_ASSERT(reader_data->reader);
-				if (file_name.path != reader_data->reader->file_name) {
+				if (file_name.path != reader_data->reader->GetFileName()) {
 					throw InternalException("Mismatch in filename order and reader order in multi file scan");
 				}
 				auto init_result = InitializeReader(*reader_data, bind_data, input.column_indexes, input.filters,
