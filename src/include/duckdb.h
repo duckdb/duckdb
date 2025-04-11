@@ -3048,17 +3048,14 @@ The resulting vector has the size of the parent vector multiplied by the array s
 DUCKDB_C_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 
 /*!
-Slice a vector with a selection vector.
+Create a dictionary vector from a vector and a selection mask, the resulting vector will be `len`.
 
-The max value in the selection vector must be less than the length of the vector
-
-The resulting vector happens to be a dictionary vector.
-
-* @param vector The vector which is to become a dictionary
+* @param dict_size The size of the `dict_values`
 * @param selection The selection vector
 * @param len The length of the selection vector
 */
-DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, idx_t dict_size, duckdb_selection_vector selection,
+                                      idx_t len);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions

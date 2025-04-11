@@ -476,7 +476,7 @@ typedef struct {
 	char *(*duckdb_value_to_string)(duckdb_value value);
 	// An API to create new vector types
 
-	void (*duckdb_slice_vector)(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+	void (*duckdb_slice_vector)(duckdb_vector vector, idx_t dict_size, duckdb_selection_vector selection, idx_t len);
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
 	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);

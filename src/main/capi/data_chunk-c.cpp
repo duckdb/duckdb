@@ -221,8 +221,8 @@ sel_t *duckdb_selection_vector_get_data_ptr(duckdb_selection_vector vector) {
 	return reinterpret_cast<duckdb::SelectionVector *>(vector)->data();
 }
 
-void duckdb_slice_vector(duckdb_vector dict, duckdb_selection_vector selection, idx_t len) {
-	auto ddict = reinterpret_cast<duckdb::Vector *>(dict);
+void duckdb_slice_vector(duckdb_vector dict_values, idx_t dict_size, duckdb_selection_vector selection, idx_t len) {
+	auto ddict = reinterpret_cast<duckdb::Vector *>(dict_values);
 	auto dselection = reinterpret_cast<duckdb::SelectionVector *>(selection);
-	ddict->Slice(*dselection, len);
+	ddict->Dictionary(dict_size, *dselection, len);
 }

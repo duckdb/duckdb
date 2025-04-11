@@ -252,6 +252,10 @@
                     "name": "vector"
                 },
                 {
+                    "type": "idx_t",
+                    "name": "dict_size"
+                },
+                {
                     "type": "duckdb_selection_vector",
                     "name": "selection"
                 },
@@ -261,9 +265,10 @@
                 }
             ],
             "comment": {
-                "description": "Slice a vector with a selection vector.\n\nThe max value in the selection vector must be less than the length of the vector\n\nThe resulting vector happens to be a dictionary vector.\n\n",
+                "description": "Create a dictionary vector from a vector and a selection mask, the resulting vector will be `len`.\n\n",
                 "param_comments": {
-                    "vector": "The vector which is to become a dictionary",
+                    "dict_values": "The vector which will become the values of the dictionary.",
+                    "dict_size": "The size of the `dict_values`",
                     "selection": "The selection vector",
                     "len": "The length of the selection vector"
                 }
