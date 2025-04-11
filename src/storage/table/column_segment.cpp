@@ -275,10 +275,6 @@ DataPointer ColumnSegment::GetDataPointer() {
 // Drop Segment
 //===--------------------------------------------------------------------===//
 void ColumnSegment::CommitDropSegment() {
-	if (segment_type != ColumnSegmentType::PERSISTENT) {
-		// not persistent
-		return;
-	}
 	if (block_id != INVALID_BLOCK) {
 		GetBlockManager().MarkBlockAsModified(block_id);
 	}

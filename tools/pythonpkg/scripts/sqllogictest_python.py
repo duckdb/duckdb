@@ -67,7 +67,6 @@ class SQLLogicTestExecutor(SQLLogicRunner):
         )
         # TODO: get this from the `duckdb` package
         self.AUTOLOADABLE_EXTENSIONS = [
-            "arrow",
             "aws",
             "autocomplete",
             "excel",

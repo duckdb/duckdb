@@ -599,7 +599,7 @@
       {
         "id": 100,
         "name": "filename_idx",
-        "type": "idx_t"
+        "type": "optional_idx"
       },
       {
         "id": 101,

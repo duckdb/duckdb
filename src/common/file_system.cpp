@@ -399,6 +399,11 @@ time_t FileSystem::GetLastModifiedTime(FileHandle &handle) {
 	throw NotImplementedException("%s: GetLastModifiedTime is not implemented!", GetName());
 }
 
+string FileSystem::GetVersionTag(FileHandle &handle) {
+	// Used to check cache invalidation for httpfs files with an ETag in CachingFileSystem
+	return "";
+}
+
 FileType FileSystem::GetFileType(FileHandle &handle) {
 	return FileType::FILE_TYPE_INVALID;
 }

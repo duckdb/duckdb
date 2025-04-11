@@ -18,11 +18,9 @@ namespace duckdb {
 //! The bind data for the multi-file reader, obtained through MultiFileReader::BindReader
 struct MultiFileReaderBindData {
 	//! The (global) column id of the filename column (if any)
-	column_t filename_idx = DConstants::INVALID_INDEX;
+	optional_idx filename_idx;
 	//! The set of hive partitioning indexes (if any)
 	vector<HivePartitioningIndex> hive_partitioning_indexes;
-	//! The (global) column id of the file_row_number column (if any)
-	column_t file_row_number_idx = DConstants::INVALID_INDEX;
 	//! (optional) The schema set by the multi file reader
 	vector<MultiFileColumnDefinition> schema;
 	//! The method used to map local -> global columns
