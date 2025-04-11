@@ -82,13 +82,14 @@ static void ListValueListFunction(DataChunk &args, Vector &result) {
 	const auto result_data = FlatVector::GetData<list_entry_t>(result);
 	const auto result_list_data = FlatVector::GetData<list_entry_t>(result_list);
 	auto &result_list_validity = FlatVector::Validity(result_list);
-	const auto result_unified_format = args.ToUnifiedFormat();
+
+	const auto args_unified_format = args.ToUnifiedFormat();
 	for (idx_t r = 0; r < args.size(); r++) {
 		for (idx_t c = 0; c < list_size; c++) {
-			const auto input_idx = result_unified_format[c].sel->get_index(r);
+			const auto input_idx = args_unified_format[c].sel->get_index(r);
 			const auto result_idx = r * list_size + c;
-			const auto input_data = UnifiedVectorFormat::GetData<list_entry_t>(result_unified_format[c]);
-			if (result_unified_format[c].validity.RowIsValid(input_idx)) {
+			const auto input_data = UnifiedVectorFormat::GetData<list_entry_t>(args_unified_format[c]);
+			if (args_unified_format[c].validity.RowIsValid(input_idx)) {
 				const auto length = input_data[input_idx].length;
 				const auto offset = col_offsets[c] + input_data[input_idx].offset;
 				result_list_data[result_idx] = list_entry_t(offset, length);

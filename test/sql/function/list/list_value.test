@@ -12,11 +12,6 @@ SELECT LIST_VALUE([1, 7], [2], [3]);
 [[1, 7], [2], [3]]
 
 query I
-SELECT LIST_VALUE([1, 7], [2], [3]);
-----
-[[1, 7], [2], [3]]
-
-query I
 SELECT LIST_VALUE([1, 7], [2], [3], NULL);
 ----
 [[1, 7], [2], [3], NULL]
