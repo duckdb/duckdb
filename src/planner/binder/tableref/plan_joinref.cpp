@@ -78,7 +78,7 @@ void LogicalComparisonJoin::ExtractJoinConditions(
 		auto total_side = JoinSide::GetJoinSide(*expr, left_bindings, right_bindings);
 		if (total_side != JoinSide::BOTH) {
 			// asof outer join does not do the join sides swapping and the join conditions should not be pushed down
-			if ((type == JoinType::RIGHT || type == JoinType::OUTER)&& ref_type  == JoinRefType::ASOF) {
+			if ((type == JoinType::RIGHT || type == JoinType::OUTER) && ref_type == JoinRefType::ASOF) {
 				continue;
 			}
 			// join condition does not reference both sides, add it as filter under the join
@@ -164,8 +164,7 @@ unique_ptr<LogicalOperator> LogicalComparisonJoin::CreateJoin(ClientContext &con
 	switch (reftype) {
 	case JoinRefType::ASOF: {
 		need_to_consider_arbitrary_expressions = false;
-		if (type == JoinType::LEFT || type == JoinType::RIGHT ||
-		    type == JoinType::OUTER) {
+		if (type == JoinType::LEFT || type == JoinType::RIGHT || type == JoinType::OUTER) {
 			need_to_consider_arbitrary_expressions = true;
 		}
 		auto asof_idx = conditions.size();
