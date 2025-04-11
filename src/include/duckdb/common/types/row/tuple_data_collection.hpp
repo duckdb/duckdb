@@ -148,6 +148,8 @@ public:
 	//! Copy rows from input to the built Chunk state
 	void CopyRows(TupleDataChunkState &chunk_state, TupleDataChunkState &input, const SelectionVector &append_sel,
 	              const idx_t append_count) const;
+	//! Finds the heap pointers of the rows in the given Chunk state
+	void FindHeapPointers(TupleDataChunkState &chunk_state, const idx_t chunk_count) const;
 
 	//! Finalizes the Pin state, releasing or storing blocks
 	void FinalizePinState(TupleDataPinState &pin_state, TupleDataSegment &segment);

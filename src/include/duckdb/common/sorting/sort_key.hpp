@@ -116,13 +116,12 @@ public:
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
 			(&sort_key.part0)[i] = 0;
 		}
-		const auto str_ptr = val.GetData();
-		memcpy(&sort_key.part0, str_ptr, sort_key.size);
+		memcpy(&sort_key.part0, val.GetData(), val.GetSize());
 		sort_key.size = val.GetSize();
 		sort_key.data = heap_ptr;
 		if (sort_key.size > SORT_KEY::INLINE_LENGTH) {
-			memcpy(sort_key.data, str_ptr, sort_key.size);
-			heap_ptr += sort_key.size;
+			memcpy(sort_key.data, val.GetData(), val.GetSize());
+			heap_ptr += val.GetSize();
 		}
 	}
 

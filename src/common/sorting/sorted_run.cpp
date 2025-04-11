@@ -105,26 +105,30 @@ static void ReorderKeyData(TupleDataCollection &new_key_data, TupleDataAppendSta
 		heap_locations[i] = sort_key.GetData();
 		heap_sizes[i] = sort_key.GetSize();
 	}
-	new_key_data.Build(new_key_data_append_state.pin_state, input, 0, count);
+
+	new_key_data_append_state.chunk_state.heap_sizes.Reference(input.heap_sizes);
+	new_key_data.Build(new_key_data_append_state.pin_state, new_key_data_append_state.chunk_state, 0, count);
 	new_key_data.CopyRows(new_key_data_append_state.chunk_state, input, *FlatVector::IncrementalSelectionVector(),
 	                      count);
 }
 
 template <class SORT_KEY>
 static void ReorderPayloadData(TupleDataCollection &new_payload_data,
-                               TupleDataAppendState &new_payload_data_append_state, SORT_KEY **const key_ptrs,
+                               TupleDataAppendState &new_payload_data_append_state, SORT_KEY *const *const key_ptrs,
                                TupleDataChunkState &input, const idx_t &count) {
-	D_ASSERT(!SORT_KEY::HAS_PAYLOAD);
+	D_ASSERT(SORT_KEY::HAS_PAYLOAD);
 	const auto row_locations = FlatVector::GetData<data_ptr_t>(input.row_locations);
 	for (idx_t i = 0; i < count; i++) {
 		const auto &sort_key = *key_ptrs[i];
 		row_locations[i] = sort_key.GetPayload();
 	}
 
-	// TODO: find heap pointers
-	throw NotImplementedException("Sort");
-
-	new_payload_data.Build(new_payload_data_append_state.pin_state, input, 0, count);
+	if (!new_payload_data.GetLayout().AllConstant()) {
+		new_payload_data.FindHeapPointers(input, count);
+	}
+	new_payload_data_append_state.chunk_state.heap_sizes.Reference(input.heap_sizes);
+	new_payload_data.Build(new_payload_data_append_state.pin_state, new_payload_data_append_state.chunk_state, 0,
+	                       count);
 	new_payload_data.CopyRows(new_payload_data_append_state.chunk_state, input,
 	                          *FlatVector::IncrementalSelectionVector(), count);
 }

@@ -380,6 +380,27 @@ void TupleDataCollection::CopyRows(TupleDataChunkState &chunk_state, TupleDataCh
 	}
 }
 
+void TupleDataCollection::FindHeapPointers(TupleDataChunkState &chunk_state, const idx_t chunk_count) const {
+	D_ASSERT(!layout.AllConstant());
+	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+	SelectionVector not_found(chunk_count);
+	idx_t not_found_count = 0;
+
+	const auto &heap_size_offset = layout.GetHeapSizeOffset();
+	for (idx_t i = 0; i < chunk_count; i++) {
+		const auto &row_location = row_locations[i];
+		auto &heap_size = heap_sizes[i];
+
+		heap_size = Load<idx_t>(row_location + heap_size_offset);
+		if (heap_size != 0) {
+			not_found.set_index(not_found_count++, i);
+		}
+	}
+
+	TupleDataAllocator::FindHeapPointers(chunk_state, not_found, not_found_count, layout, 0);
+}
+
 void TupleDataCollection::Combine(TupleDataCollection &other) {
 	if (other.count == 0) {
 		return;

@@ -7,6 +7,8 @@
 #include "duckdb/storage/buffer/block_handle.hpp"
 #include "duckdb/storage/buffer_manager.hpp"
 
+#include <duckdb/common/sorting/sort_key.hpp>
+
 namespace duckdb {
 
 using ValidityBytes = TupleDataLayout::ValidityBytes;
@@ -181,7 +183,7 @@ TupleDataChunkPart TupleDataAllocator::BuildChunkPart(TupleDataPinState &pin_sta
 
 			if (total_heap_size <= heap_remaining) {
 				// Everything fits
-				result.total_heap_size = NumericCast<uint32_t>(total_heap_size);
+				result.total_heap_size = total_heap_size;
 			} else {
 				// Not everything fits - determine how many we can read next
 				result.total_heap_size = 0;
@@ -354,10 +356,43 @@ static inline void VerifyStrings(const TupleDataLayout &layout, const LogicalTyp
 #endif
 }
 
+template <SortKeyType SORT_KEY_TYPE>
+void SortKeyRecomputeHeapPointers(const data_ptr_t row_locations[], Vector &new_heap_ptrs, const idx_t offset,
+                                  const idx_t count) {
+	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
+	auto sort_keys = reinterpret_cast<SORT_KEY *const *>(row_locations);
+
+	UnifiedVectorFormat new_heap_data;
+	new_heap_ptrs.ToUnifiedFormat(offset + count, new_heap_data);
+	const auto new_heap_locations = UnifiedVectorFormat::GetData<data_ptr_t>(new_heap_data);
+	const auto new_heap_sel = *new_heap_data.sel;
+
+	for (idx_t i = 0; i < count; i++) {
+		const auto idx = offset + i;
+		sort_keys[idx]->data = new_heap_locations[new_heap_sel.get_index(idx)];
+	}
+}
+
 void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const SelectionVector &old_heap_sel,
                                                const data_ptr_t row_locations[], Vector &new_heap_ptrs,
                                                const idx_t offset, const idx_t count, const TupleDataLayout &layout,
                                                const idx_t base_col_offset) {
+	if (layout.IsSortKeyLayout()) {
+		switch (layout.GetSortKeyType()) {
+		case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+			SortKeyRecomputeHeapPointers<SortKeyType::NO_PAYLOAD_VARIABLE_32>(row_locations, new_heap_ptrs, offset,
+			                                                                  count);
+			break;
+		case SortKeyType::PAYLOAD_VARIABLE_32:
+			SortKeyRecomputeHeapPointers<SortKeyType::PAYLOAD_VARIABLE_32>(row_locations, new_heap_ptrs, offset, count);
+			break;
+		default:
+			throw NotImplementedException("SortKeyRecomputeHeapPointers for %s",
+			                              EnumUtil::ToString(layout.GetSortKeyType()));
+		}
+		return;
+	}
+
 	const auto old_heap_locations = FlatVector::GetData<data_ptr_t>(old_heap_ptrs);
 
 	UnifiedVectorFormat new_heap_data;
@@ -429,8 +464,79 @@ void TupleDataAllocator::RecomputeHeapPointers(Vector &old_heap_ptrs, const Sele
 			break;
 		}
 		default:
-			continue;
+			break;
 		}
+	}
+}
+void TupleDataAllocator::FindHeapPointers(TupleDataChunkState &chunk_state, SelectionVector &not_found,
+                                          idx_t not_found_count, const TupleDataLayout &layout,
+                                          const idx_t base_col_offset) {
+	D_ASSERT(!layout.AllConstant());
+	const auto row_locations = FlatVector::GetData<data_ptr_t>(chunk_state.row_locations);
+	const auto heap_locations = FlatVector::GetData<data_ptr_t>(chunk_state.heap_locations);
+	const auto heap_sizes = FlatVector::GetData<idx_t>(chunk_state.heap_sizes);
+
+	for (idx_t col_idx = 0; col_idx < layout.ColumnCount(); col_idx++) {
+		if (not_found_count == 0) {
+			return;
+		}
+		const auto &col_offset = layout.GetOffsets()[col_idx];
+
+		// Precompute mask indexes
+		idx_t entry_idx;
+		idx_t idx_in_entry;
+		ValidityBytes::GetEntryIndex(col_idx, entry_idx, idx_in_entry);
+
+		idx_t next_not_found_count = 0;
+		const auto &type = layout.GetTypes()[col_idx];
+		switch (type.InternalType()) {
+		case PhysicalType::VARCHAR: {
+			for (idx_t i = 0; i < not_found_count; i++) {
+				const auto idx = not_found.get_index(i);
+				const auto &row_location = row_locations[idx] + base_col_offset;
+				D_ASSERT(heap_sizes[idx] != 0);
+
+				ValidityBytes row_mask(row_location, layout.ColumnCount());
+				if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+					const auto string_location = row_location + col_offset;
+					if (Load<uint32_t>(string_location) > string_t::INLINE_LENGTH) {
+						const auto string_ptr_location = string_location + string_t::HEADER_SIZE;
+						heap_locations[idx] = Load<data_ptr_t>(string_ptr_location);
+						continue;
+					}
+				}
+				not_found.set_index(not_found_count++, idx);
+			}
+			break;
+		}
+		case PhysicalType::LIST:
+		case PhysicalType::ARRAY: {
+			for (idx_t i = 0; i < not_found_count; i++) {
+				const auto idx = not_found.get_index(i);
+				const auto &row_location = row_locations[idx] + base_col_offset;
+				D_ASSERT(heap_sizes[idx] != 0);
+
+				ValidityBytes row_mask(row_location, layout.ColumnCount());
+				if (row_mask.RowIsValid(row_mask.GetValidityEntryUnsafe(entry_idx), idx_in_entry)) {
+					const auto &list_ptr_location = row_location + col_offset;
+					heap_locations[idx] = Load<data_ptr_t>(list_ptr_location);
+					continue;
+				}
+				not_found.set_index(not_found_count++, idx);
+			}
+			break;
+		}
+		case PhysicalType::STRUCT: {
+			const auto &struct_layout = layout.GetStructLayout(col_idx);
+			if (!struct_layout.AllConstant()) {
+				FindHeapPointers(chunk_state, not_found, not_found_count, struct_layout, base_col_offset + col_offset);
+			}
+			break;
+		}
+		default:
+			break;
+		}
+		not_found_count = next_not_found_count;
 	}
 }
 
