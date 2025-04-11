@@ -61,6 +61,9 @@ static NumpyNullableType ConvertNumpyTypeInternal(const string &col_type_str) {
 	if (col_type_str == "object") {
 		return NumpyNullableType::OBJECT;
 	}
+	if (StringUtil::StartsWith(col_type_str, "|S")) {
+		return NumpyNullableType::FIXED_WIDTH_STRING;
+	}
 	if (col_type_str == "timedelta64[ns]") {
 		return NumpyNullableType::TIMEDELTA;
 	}
@@ -107,6 +110,9 @@ NumpyType ConvertNumpyType(const py::handle &col_type) {
 			numpy_type.has_timezone = true;
 		}
 	}
+	if (numpy_type.type == NumpyNullableType::FIXED_WIDTH_STRING) {
+		numpy_type.fixed_width_str_len = std::stoi(col_type_str.data() + 2);
+	}
 	return numpy_type;
 }
 
@@ -136,6 +142,7 @@ LogicalType NumpyToLogicalType(const NumpyType &col_type) {
 		return LogicalType::FLOAT;
 	case NumpyNullableType::FLOAT_64:
 		return LogicalType::DOUBLE;
+	case NumpyNullableType::FIXED_WIDTH_STRING:
 	case NumpyNullableType::STRING:
 		return LogicalType::VARCHAR;
 	case NumpyNullableType::OBJECT:
