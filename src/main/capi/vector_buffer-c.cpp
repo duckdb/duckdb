@@ -27,9 +27,9 @@ struct CExternalVectorBuffer {
 
 
 duckdb_vector_buffer duckdb_wrap_external_vector_buffer(external_buffer buffer, external_buffer_free free_fn) {
-	auto rbuffer = duckdb::make_shared_ptr<ExternalVectorBuffer>(buffer, free_fn);
-	auto ribuffer = new CExternalVectorBuffer (rbuffer);
-	return reinterpret_cast<duckdb_vector_buffer>(ribuffer);
+	auto external_buffer = duckdb::make_shared_ptr<ExternalVectorBuffer>(buffer, free_fn);
+	auto c_external_buffer = new CExternalVectorBuffer (external_buffer);
+	return reinterpret_cast<duckdb_vector_buffer>(c_external_buffer);
 }
 
 void duckdb_free_vector_buffer(duckdb_vector_buffer *buffer) {
