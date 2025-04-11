@@ -226,3 +226,16 @@ void duckdb_slice_vector(duckdb_vector dict, duckdb_selection_vector selection, 
 	auto dselection = reinterpret_cast<duckdb::SelectionVector *>(selection);
 	ddict->Slice(*dselection, len);
 }
+
+const char *duckdb_data_chunk_to_string(duckdb_data_chunk chunk) {
+	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
+	auto str = dchunk->ToString();
+	auto result = static_cast<char *>(malloc(sizeof(char) * str.size()));
+	memcpy(result, str.c_str(), str.size());
+	return result;
+}
+
+void duckdb_data_chunk_verify(duckdb_data_chunk chunk) {
+	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
+	dchunk->Verify();
+}
