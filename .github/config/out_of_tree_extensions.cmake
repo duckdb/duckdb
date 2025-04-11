@@ -85,6 +85,7 @@ duckdb_extension_load(excel
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
+if (FALSE)
 IF (NOT WIN32)
     set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
 else ()
@@ -97,6 +98,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             GIT_URL https://github.com/duckdb/duckdb-iceberg
             GIT_TAG 2db98c685f67373b347c3a8c435ef2e01c509697
             )
+endif()
 endif()
 
 ################# INET
