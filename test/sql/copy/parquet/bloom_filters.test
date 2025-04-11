@@ -267,7 +267,7 @@ Binder Error
 # test some repeated large strings
 # this should give dictionary
 statement ok
-copy (select repeat('abc', 1_000_000) || (range % 100) s from range(1000)) to '__TEST_DIR__/my.parquet';
+copy (select repeat('abc', 500_000) || (range % 10) s from range(100)) to '__TEST_DIR__/my.parquet';
 
 query I
 select encodings from parquet_metadata('__TEST_DIR__/my.parquet');
@@ -276,7 +276,7 @@ RLE_DICTIONARY
 
 # this cannot do dictionary because the strings exceed the limit
 statement ok
-copy (select repeat('abc', 1_000_000) || (range % 100) s from range(1000)) to '__TEST_DIR__/my.parquet' (STRING_DICTIONARY_PAGE_SIZE_LIMIT 4_000_000);
+copy (select repeat('abc', 500_000) || (range % 10) s from range(100)) to '__TEST_DIR__/my.parquet' (STRING_DICTIONARY_PAGE_SIZE_LIMIT 4_000_000);
 
 query I
 select encodings = 'RLE_DICTIONARY' from parquet_metadata('__TEST_DIR__/my.parquet');
