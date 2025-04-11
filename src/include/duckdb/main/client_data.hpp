@@ -20,6 +20,7 @@ class AttachedDatabase;
 class BufferedFileWriter;
 class ClientContext;
 class CatalogSearchPath;
+class CachingFileSystem;
 class FileOpener;
 class FileSystem;
 class HTTPState;

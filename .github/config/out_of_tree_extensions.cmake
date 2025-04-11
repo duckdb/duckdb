@@ -21,10 +21,12 @@
 #  - add patch file, enable APPLY_PATCHES
 #  - disable windows build of httpfs by wrapping in `if (NOT WIN32)`
 #  - IMPORTANT: add a comment that tells people to restore the windows build when removing the patches
+# (lnkuiper): I tried this for PR #16463 because it had a patch
+# but it didn't work, see internal issue #4622
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 85ac4667bcb0d868199e156f8dd918b0278db7b9
+    GIT_TAG 22a0387e09389ee9148f58b3f8a71e7896b48093
     INCLUDE_DIR extension/httpfs/include
     )
 

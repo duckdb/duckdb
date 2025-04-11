@@ -68,6 +68,9 @@ int64_t VirtualFileSystem::GetFileSize(FileHandle &handle) {
 time_t VirtualFileSystem::GetLastModifiedTime(FileHandle &handle) {
 	return handle.file_system.GetLastModifiedTime(handle);
 }
+string VirtualFileSystem::GetVersionTag(FileHandle &handle) {
+	return handle.file_system.GetVersionTag(handle);
+}
 FileType VirtualFileSystem::GetFileType(FileHandle &handle) {
 	return handle.file_system.GetFileType(handle);
 }
