@@ -1,0 +1,38 @@
+# name: test/optimizer/pushdown/issue_17042.test
+# description: Test left join filter lost in filter pushdown
+# group: [pushdown]
+
+statement ok
+pragma explain_output = optimized_only
+
+statement ok
+pragma enable_verification
+
+statement ok
+CREATE  TABLE  t2(c1 INTEGER);
+
+statement ok
+CREATE  TABLE  t0(c1 DOUBLE);
+
+statement ok
+INSERT INTO t0(c1) VALUES (0.1);
+
+statement ok
+INSERT INTO t2(c1) VALUES (2);
+
+query II
+SELECT * FROM t2 LEFT JOIN t0 ON true WHERE ((t0.c1<t2.c1) IS NULL);
+----
+
+statement ok
+INSERT INTO t2(c1) VALUES (NULL);
+
+query II
+SELECT * FROM t2 LEFT JOIN t0 ON true WHERE ((t0.c1<t2.c1) IS NULL);
+----
+NULL	0.1
+
+query II
+explain SELECT * FROM t2 LEFT JOIN t0 ON true WHERE (t0.c1 is distinct from t2.c1) and (t2.c1 > t0.c1);
+----
+logical_opt	<REGEX>:.*INNER.*CAST\(c1 AS DOUBLE\) > c1.*CAST\(c1 AS DOUBLE\) IS.*DISTINCT FROM c1.*
