@@ -22,7 +22,7 @@ private:
 struct CExternalVectorBuffer {
 	duckdb::buffer_ptr<duckdb::VectorBuffer> buffer;
 
-	CExternalVectorBuffer(duckdb::buffer_ptr<duckdb::VectorBuffer> buffer) : buffer(buffer) {}
+	explicit CExternalVectorBuffer(duckdb::buffer_ptr<duckdb::VectorBuffer> buffer) : buffer(buffer) {}
 };
 
 
