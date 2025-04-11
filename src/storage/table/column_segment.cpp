@@ -48,11 +48,12 @@ unique_ptr<ColumnSegment> ColumnSegment::CreatePersistentSegment(DatabaseInstanc
 
 unique_ptr<ColumnSegment> ColumnSegment::CreateTransientSegment(DatabaseInstance &db, CompressionFunction &function,
                                                                 const LogicalType &type, const idx_t start,
-                                                                const idx_t segment_size, const idx_t block_size) {
+                                                                const idx_t segment_size, const idx_t block_size,
+                                                                const idx_t block_header_size) {
 
 	// Allocate a buffer for the uncompressed segment.
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
-	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_size);
+	auto block = buffer_manager.RegisterTransientMemory(segment_size, block_size, block_header_size);
 
 	return make_uniq<ColumnSegment>(db, std::move(block), type, ColumnSegmentType::TRANSIENT, start, 0U, function,
 	                                BaseStatistics::CreateEmpty(type), INVALID_BLOCK, 0U, segment_size);
@@ -175,7 +176,8 @@ void ColumnSegment::Resize(idx_t new_size) {
 
 	auto &buffer_manager = BufferManager::GetBufferManager(db);
 	auto old_handle = buffer_manager.Pin(block);
-	auto new_handle = buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size);
+	auto new_handle =
+	    buffer_manager.Allocate(MemoryTag::IN_MEMORY_TABLE, new_size, buffer_manager.GetBlockHeaderSize());
 	auto new_block = new_handle.GetBlockHandle();
 	memcpy(new_handle.Ptr(), old_handle.Ptr(), segment_size);
 

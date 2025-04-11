@@ -10,11 +10,15 @@
 
 namespace duckdb {
 
-FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size)
+FileBuffer::FileBuffer(Allocator &allocator, FileBufferType type, uint64_t user_size, optional_idx block_header_size)
     : allocator(allocator), type(type) {
 	Init();
 	if (user_size) {
-		Resize(user_size);
+		if (block_header_size.IsValid()) {
+			Resize(user_size, block_header_size.GetIndex());
+		} else {
+			Resize(user_size, DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
+		}
 	}
 }
 
@@ -62,22 +66,21 @@ void FileBuffer::ReallocBuffer(idx_t new_size) {
 	size = 0;
 }
 
-FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size) {
+FileBuffer::MemoryRequirement FileBuffer::CalculateMemory(uint64_t user_size, uint64_t block_header_size) const {
 	FileBuffer::MemoryRequirement result;
-
 	if (type == FileBufferType::TINY_BUFFER) {
 		// We never do IO on tiny buffers, so there's no need to add a header or sector-align.
 		result.header_size = 0;
 		result.alloc_size = user_size;
 	} else {
-		result.header_size = Storage::DEFAULT_BLOCK_HEADER_SIZE;
+		result.header_size = block_header_size;
 		result.alloc_size = AlignValue<idx_t, Storage::SECTOR_SIZE>(result.header_size + user_size);
 	}
 	return result;
 }
 
-void FileBuffer::Resize(uint64_t new_size) {
-	auto req = CalculateMemory(new_size);
+void FileBuffer::Resize(uint64_t new_size, uint64_t block_header_size) {
+	auto req = CalculateMemory(new_size, block_header_size);
 	ReallocBuffer(req.alloc_size);
 
 	if (new_size > 0) {

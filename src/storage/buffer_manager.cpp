@@ -8,7 +8,8 @@
 
 namespace duckdb {
 
-shared_ptr<BlockHandle> BufferManager::RegisterTransientMemory(const idx_t size, const idx_t block_size) {
+shared_ptr<BlockHandle> BufferManager::RegisterTransientMemory(const idx_t size, const idx_t block_size,
+                                                               const idx_t block_header_size) {
 	throw NotImplementedException("This type of BufferManager can not create 'transient-memory' blocks");
 }
 
@@ -69,7 +70,7 @@ idx_t BufferManager::GetQueryMaxMemory() const {
 }
 
 unique_ptr<FileBuffer> BufferManager::ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&,
-                                                             FileBufferType type) {
+                                                             const idx_t block_header_size, FileBufferType type) {
 	throw NotImplementedException("This type of BufferManager can not construct managed buffers");
 }
 

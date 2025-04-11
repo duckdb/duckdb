@@ -65,7 +65,8 @@ void WriteOverflowStringsToDisk::WriteString(UncompressedStringSegmentState &sta
 	auto &block_manager = partial_block_manager.GetBlockManager();
 	auto &buffer_manager = block_manager.buffer_manager;
 	if (!handle.IsValid()) {
-		handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, block_manager.GetBlockSize());
+		handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, block_manager.GetBlockSize(),
+		                                 block_manager.GetBlockHeaderSize());
 	}
 	// first write the length of the string
 	if (block_id == INVALID_BLOCK || offset + 2 * sizeof(uint32_t) >= GetStringSpace()) {

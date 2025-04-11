@@ -558,6 +558,7 @@ void ColumnData::UpdateColumn(TransactionData transaction, const vector<column_t
 void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 
 	const auto block_size = block_manager.GetBlockSize();
+	const auto block_header_size = block_manager.GetBlockHeaderSize();
 	const auto type_size = GetTypeIdSize(type.InternalType());
 	auto vector_segment_size = block_size;
 
@@ -577,7 +578,8 @@ void ColumnData::AppendTransientSegment(SegmentLock &l, idx_t start_row) {
 	auto &config = DBConfig::GetConfig(db);
 	auto function = config.GetCompressionFunction(CompressionType::COMPRESSION_UNCOMPRESSED, type.InternalType());
 
-	auto new_segment = ColumnSegment::CreateTransientSegment(db, *function, type, start_row, segment_size, block_size);
+	auto new_segment = ColumnSegment::CreateTransientSegment(db, *function, type, start_row, segment_size, block_size,
+	                                                         block_header_size);
 	AppendSegment(l, std::move(new_segment));
 }
 
@@ -841,7 +843,7 @@ shared_ptr<ColumnData> ColumnData::Deserialize(BlockManager &block_manager, Data
 	BinaryDeserializer deserializer(source);
 	deserializer.Begin();
 	deserializer.Set<DatabaseInstance &>(info.GetDB().GetDatabase());
-	CompressionInfo compression_info(block_manager.GetBlockSize());
+	CompressionInfo compression_info(block_manager.GetBlockSize(), block_manager.GetBlockHeaderSize());
 	deserializer.Set<const CompressionInfo &>(compression_info);
 	deserializer.Set<const LogicalType &>(type);
 	auto persistent_column_data = PersistentColumnData::Deserialize(deserializer);

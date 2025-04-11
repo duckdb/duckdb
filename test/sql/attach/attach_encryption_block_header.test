@@ -1,0 +1,37 @@
+# name: test/sql/attach/attach_encryption_block_header.test
+# group: [attach]
+
+require noforcestorage
+
+statement ok
+PRAGMA enable_verification
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+statement  ok
+CREATE OR REPLACE TABLE encrypted.tbl AS SELECT * FROM range(10) t(i);
+
+query I
+SELECT SUM(i) FROM encrypted.tbl
+----
+45
+
+statement ok
+DETACH encrypted
+
+statement error
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted
+----
+
+statement ok
+ATTACH '__TEST_DIR__/encrypted.duckdb' AS encrypted (ENCRYPTION_KEY 'asdf');
+
+query I
+SELECT SUM(i) FROM encrypted.tbl
+----
+45
+
+statement ok
+DETACH encrypted
+

@@ -14,6 +14,8 @@ StorageOptions AttachInfo::GetStorageOptions() const {
 			// Extract the block allocation size. This is NOT the actual memory available on a block (block_size),
 			// even though the corresponding option we expose to the user is called "block_size".
 			storage_options.block_alloc_size = entry.second.GetValue<uint64_t>();
+		} else if (entry.first == "encryption_key") {
+			storage_options.block_header_size = DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE;
 		} else if (entry.first == "row_group_size") {
 			storage_options.row_group_size = entry.second.GetValue<uint64_t>();
 		} else if (entry.first == "storage_version") {

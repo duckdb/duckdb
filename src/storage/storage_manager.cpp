@@ -132,8 +132,10 @@ SingleFileStorageManager::SingleFileStorageManager(AttachedDatabase &db, string 
 }
 
 void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
+
 	if (InMemory()) {
-		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE);
+		block_manager = make_uniq<InMemoryBlockManager>(BufferManager::GetBufferManager(db), DEFAULT_BLOCK_ALLOC_SIZE,
+		                                                DEFAULT_BLOCK_HEADER_STORAGE_SIZE);
 		table_io_manager = make_uniq<SingleFileTableIOManager>(*block_manager, DEFAULT_ROW_GROUP_SIZE);
 		return;
 	}
@@ -183,6 +185,15 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 			// No explicit option provided: use the default option.
 			options.block_alloc_size = config.options.default_block_alloc_size;
 		}
+		// Set the block header size for the encrypted database files.
+		if (storage_options.block_header_size.IsValid()) {
+			// Use the header size for the corresponding encryption algorithm.
+			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
+			options.block_header_size = storage_options.block_header_size;
+		} else {
+			// No encryption; use the default option.
+			options.block_header_size = config.options.default_block_header_size;
+		}
 		if (!options.storage_version.IsValid()) {
 			// when creating a new database we default to the serialization version specified in the config
 			options.storage_version = config.options.serialization_compatibility.serialization_version;
@@ -197,6 +208,16 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 	} else {
 		// Either the file exists, or we are in read-only mode, so we
 		// try to read the existing file on disk.
+
+		// Set the block header size for the encrypted database files (also if they already exist).
+		if (storage_options.block_header_size.IsValid()) {
+			// Use the header size for the corresponding encryption algorithm.
+			Storage::VerifyBlockHeaderSize(storage_options.block_header_size.GetIndex());
+			options.block_header_size = storage_options.block_header_size;
+		} else {
+			// No explicit option provided: use the default option.
+			options.block_header_size = config.options.default_block_header_size;
+		}
 
 		// Initialize the block manager while loading the database file.
 		// We'll construct the SingleFileBlockManager with the default block allocation size,
@@ -213,6 +234,16 @@ void SingleFileStorageManager::LoadDatabase(StorageOptions storage_options) {
 				throw InvalidInputException(
 				    "block size parameter does not match the file's block size, got %llu, expected %llu",
 				    storage_options.block_alloc_size.GetIndex(), block_manager->GetBlockAllocSize());
+			}
+		}
+
+		if (storage_options.block_header_size.IsValid()) {
+			// block header size for encrypted database files
+			idx_t block_header_size = storage_options.block_header_size.GetIndex();
+			if (block_header_size != block_manager->GetBlockHeaderSize()) {
+				throw InvalidInputException(
+				    "block header size does not match the file's block header size, got %llu, expected %llu",
+				    storage_options.block_header_size.GetIndex(), block_manager->GetBlockHeaderSize());
 			}
 		}
 

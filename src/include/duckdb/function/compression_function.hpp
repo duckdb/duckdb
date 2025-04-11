@@ -34,7 +34,8 @@ struct SegmentScanState;
 
 class CompressionInfo {
 public:
-	explicit CompressionInfo(const idx_t block_size) : block_size(block_size) {
+	explicit CompressionInfo(const idx_t block_size, const idx_t block_header_size)
+	    : block_size(block_size), block_header_size(block_header_size) {
 	}
 
 public:
@@ -46,9 +47,14 @@ public:
 	idx_t GetBlockSize() const {
 		return block_size;
 	}
+	//! The block header size for blocks using this compression.
+	idx_t GetBlockHeaderSize() const {
+		return block_header_size;
+	}
 
 private:
 	idx_t block_size;
+	idx_t block_header_size;
 };
 
 struct AnalyzeState {

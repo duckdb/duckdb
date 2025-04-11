@@ -51,7 +51,7 @@ void CSVBuffer::AllocateBuffer(idx_t buffer_size) {
 	auto &buffer_manager = BufferManager::GetBufferManager(context);
 	bool can_destroy = !is_pipe;
 	handle = buffer_manager.Allocate(MemoryTag::CSV_READER, MaxValue<idx_t>(buffer_manager.GetBlockSize(), buffer_size),
-	                                 can_destroy);
+	                                 can_destroy, buffer_manager.GetBlockHeaderSize());
 	block = handle.GetBlockHandle();
 }
 

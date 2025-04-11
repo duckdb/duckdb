@@ -32,7 +32,7 @@ struct StringAnalyzeState : public AnalyzeState {
 };
 
 unique_ptr<AnalyzeState> UncompressedStringStorage::StringInitAnalyze(ColumnData &col_data, PhysicalType type) {
-	CompressionInfo info(col_data.GetBlockManager().GetBlockSize());
+	CompressionInfo info(col_data.GetBlockManager().GetBlockSize(), col_data.GetBlockManager().GetBlockHeaderSize());
 	return make_uniq<StringAnalyzeState>(info);
 }
 
@@ -221,7 +221,7 @@ idx_t UncompressedStringStorage::FinalizeAppend(ColumnSegment &segment, SegmentS
 	auto offset_size = DICTIONARY_HEADER_SIZE + segment.count * sizeof(int32_t);
 	auto total_size = offset_size + dict.size;
 
-	CompressionInfo info(segment.GetBlockManager().GetBlockSize());
+	CompressionInfo info(segment.GetBlockManager().GetBlockSize(), segment.GetBlockManager().GetBlockHeaderSize());
 	if (total_size >= info.GetCompactionFlushLimit()) {
 		// the block is full enough, don't bother moving around the dictionary
 		return segment.SegmentSize();
@@ -341,7 +341,8 @@ void UncompressedStringStorage::WriteStringMemory(ColumnSegment &segment, string
 		new_block->offset = 0;
 		new_block->size = alloc_size;
 		// allocate an in-memory buffer for it
-		handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, alloc_size, false);
+		handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, alloc_size, false,
+		                                 buffer_manager.GetBlockHeaderSize());
 		block = handle.GetBlockHandle();
 		state.overflow_blocks.insert(make_pair(block->BlockId(), reference<StringBlock>(*new_block)));
 		new_block->block = std::move(block);
@@ -389,7 +390,8 @@ string_t UncompressedStringStorage::ReadOverflowString(ColumnSegment &segment, V
 		bool allocate_block = length >= block_manager.GetBlockSize();
 		if (allocate_block) {
 			// overflow string is bigger than a block - allocate a temporary buffer for it
-			target_handle = buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, length);
+			target_handle =
+			    buffer_manager.Allocate(MemoryTag::OVERFLOW_STRINGS, length, block_manager.GetBlockHeaderSize());
 			target_ptr = target_handle.Ptr();
 		} else {
 			// overflow string is smaller than a block - add it to the vector directly

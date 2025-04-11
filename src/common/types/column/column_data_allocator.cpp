@@ -77,7 +77,8 @@ BufferHandle ColumnDataAllocator::AllocateBlock(idx_t size) {
 	BlockMetaData data;
 	data.size = 0;
 	data.capacity = NumericCast<uint32_t>(max_size);
-	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, max_size, false);
+	auto pin = alloc.buffer_manager->Allocate(MemoryTag::COLUMN_DATA, max_size, false,
+	                                          GetBufferManager().GetBlockHeaderSize());
 	data.handle = pin.GetBlockHandle();
 	blocks.push_back(std::move(data));
 	if (partition_index.IsValid()) { // Set the eviction queue index logarithmically using RadixBits

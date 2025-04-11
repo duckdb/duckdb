@@ -34,7 +34,8 @@ public:
 	}
 
 public:
-	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true) = 0;
+	virtual BufferHandle Allocate(MemoryTag tag, idx_t block_size, bool can_destroy = true,
+	                              const idx_t block_header_size = DEFAULT_BLOCK_HEADER_STORAGE_SIZE) = 0;
 	//! Reallocate an in-memory buffer that is pinned.
 	virtual void ReAllocate(shared_ptr<BlockHandle> &handle, idx_t block_size) = 0;
 	virtual BufferHandle Pin(shared_ptr<BlockHandle> &handle) = 0;
@@ -54,9 +55,12 @@ public:
 	virtual idx_t GetBlockAllocSize() const = 0;
 	//! Returns the block size for buffer-managed blocks.
 	virtual idx_t GetBlockSize() const = 0;
+	//! Returns the block header size for buffer-managed blocks.
+	virtual idx_t GetBlockHeaderSize() const = 0;
 
 	//! Returns a new block of transient memory.
-	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, const idx_t block_size);
+	virtual shared_ptr<BlockHandle> RegisterTransientMemory(const idx_t size, const idx_t block_size,
+	                                                        const uint64_t block_header_size);
 	//! Returns a new block of memory that is smaller than the block size setting.
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(const idx_t size);
 	virtual shared_ptr<BlockHandle> RegisterSmallMemory(MemoryTag tag, const idx_t size);
@@ -77,6 +81,7 @@ public:
 
 	//! Construct a managed buffer.
 	virtual unique_ptr<FileBuffer> ConstructManagedBuffer(idx_t size, unique_ptr<FileBuffer> &&source,
+	                                                      idx_t block_header_size,
 	                                                      FileBufferType type = FileBufferType::MANAGED_BUFFER);
 	//! Get the underlying buffer pool responsible for managing the buffers
 	virtual BufferPool &GetBufferPool() const;
@@ -89,9 +94,10 @@ public:
 	DUCKDB_API static const BufferManager &GetBufferManager(const ClientContext &context);
 	DUCKDB_API static BufferManager &GetBufferManager(AttachedDatabase &db);
 
-	static idx_t GetAllocSize(const idx_t block_size) {
-		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + Storage::DEFAULT_BLOCK_HEADER_SIZE);
+	static idx_t GetAllocSize(const idx_t block_size, const idx_t block_header_size) {
+		return AlignValue<idx_t, Storage::SECTOR_SIZE>(block_size + block_header_size);
 	}
+
 	//! Returns the maximum available memory for a given query
 	idx_t GetQueryMaxMemory() const;
 

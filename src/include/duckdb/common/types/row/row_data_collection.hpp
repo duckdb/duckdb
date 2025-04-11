@@ -18,11 +18,12 @@ namespace duckdb {
 struct RowDataBlock {
 public:
 	RowDataBlock(MemoryTag tag, BufferManager &buffer_manager, idx_t capacity, idx_t entry_size)
-	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0) {
+	    : capacity(capacity), entry_size(entry_size), count(0), byte_offset(0),
+	      block_header_size(buffer_manager.GetBlockHeaderSize()) {
 		auto size = MaxValue<idx_t>(buffer_manager.GetBlockSize(), capacity * entry_size);
-		auto buffer_handle = buffer_manager.Allocate(tag, size, false);
+		auto buffer_handle = buffer_manager.Allocate(tag, size, false, block_header_size);
 		block = buffer_handle.GetBlockHandle();
-		D_ASSERT(BufferManager::GetAllocSize(size) == block->GetMemoryUsage());
+		D_ASSERT(BufferManager::GetAllocSize(size, block_header_size) == block->GetMemoryUsage());
 	}
 
 	explicit RowDataBlock(idx_t entry_size) : entry_size(entry_size) {
@@ -36,6 +37,7 @@ public:
 	idx_t count;
 	//! Write offset (if variable size entries)
 	idx_t byte_offset;
+	idx_t block_header_size;
 
 private:
 	//! Implicit copying is not allowed
@@ -111,7 +113,8 @@ public:
 	void VerifyBlockSizes() const {
 #ifdef DEBUG
 		for (auto &block : blocks) {
-			D_ASSERT(block->block->GetMemoryUsage() == BufferManager::GetAllocSize(block->capacity * entry_size));
+			D_ASSERT(block->block->GetMemoryUsage() ==
+			         BufferManager::GetAllocSize(block->capacity * entry_size, block->block_header_size));
 		}
 #endif
 	}

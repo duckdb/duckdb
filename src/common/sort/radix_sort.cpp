@@ -255,8 +255,9 @@ void RadixSort(BufferManager &buffer_manager, const data_ptr_t &dataptr, const i
 	}
 
 	const auto block_size = buffer_manager.GetBlockSize();
-	auto temp_block =
-	    buffer_manager.Allocate(MemoryTag::ORDER_BY, MaxValue(count * sort_layout.entry_size, block_size));
+	const auto block_header_size = buffer_manager.GetBlockHeaderSize();
+	auto temp_block = buffer_manager.Allocate(MemoryTag::ORDER_BY, MaxValue(count * sort_layout.entry_size, block_size),
+	                                          block_header_size);
 	auto pre_allocated_array =
 	    make_unsafe_uniq_array_uninitialized<idx_t>(sorting_size * SortConstants::MSD_RADIX_LOCATIONS);
 	RadixSortMSD(dataptr, temp_block.Ptr(), count, col_offset, sort_layout.entry_size, sorting_size, 0,

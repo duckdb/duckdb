@@ -29,6 +29,14 @@ struct FileHandle;
 #ifndef DUCKDB_BLOCK_ALLOC_SIZE
 #define DUCKDB_BLOCK_ALLOC_SIZE DEFAULT_BLOCK_ALLOC_SIZE
 #endif
+//! The default block header size.
+#define DEFAULT_BLOCK_HEADER_STORAGE_SIZE 8ULL
+//! The default block header size.
+#define DEFAULT_ENCRYPTION_BLOCK_HEADER_SIZE 40ULL
+//! The configurable block allocation size.
+#ifndef DUCKDB_BLOCK_HEADER_STORAGE_SIZE
+#define DUCKDB_BLOCK_HEADER_STORAGE_SIZE DEFAULT_BLOCK_HEADER_STORAGE_SIZE
+#endif
 
 using block_id_t = int64_t;
 
@@ -40,18 +48,22 @@ struct Storage {
 	constexpr static idx_t FILE_HEADER_SIZE = 4096U;
 	//! The maximum row group size
 	constexpr static const idx_t MAX_ROW_GROUP_SIZE = 1ULL << 30ULL;
-
 	//! The minimum block allocation size. This is the minimum size we test in our nightly tests.
 	constexpr static idx_t MIN_BLOCK_ALLOC_SIZE = 16384ULL;
 	//! The maximum block allocation size. This is the maximum size currently supported by duckdb.
 	constexpr static idx_t MAX_BLOCK_ALLOC_SIZE = 262144ULL;
 	//! The default block header size for blocks written to storage.
 	constexpr static idx_t DEFAULT_BLOCK_HEADER_SIZE = sizeof(idx_t);
+	//! The default block header size for blocks written to storage.
+	constexpr static idx_t MAX_BLOCK_HEADER_SIZE = 128ULL;
+	//! Block header size for encrypted blocks (40 bytes)
+	constexpr static idx_t ENCRYPTED_BLOCK_HEADER_SIZE = 40ULL;
 	//! The default block size.
 	constexpr static idx_t DEFAULT_BLOCK_SIZE = DEFAULT_BLOCK_ALLOC_SIZE - DEFAULT_BLOCK_HEADER_SIZE;
 
 	//! Ensures that a user-provided block allocation size matches all requirements.
 	static void VerifyBlockAllocSize(const idx_t block_alloc_size);
+	static void VerifyBlockHeaderSize(const idx_t block_header_size);
 };
 
 //! The version number default, lower and upper bounds of the database storage format
