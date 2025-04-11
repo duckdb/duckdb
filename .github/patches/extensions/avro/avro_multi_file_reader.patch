@@ -1692,7 +1692,7 @@ index 0000000..3145946
 +
 +} // namespace duckdb
 diff --git a/test/sql/avro.test b/test/sql/avro.test
-index b3fd052..9271819 100644
+index b3fd052..afc001d 100644
 --- a/test/sql/avro.test
 +++ b/test/sql/avro.test
 @@ -102,7 +102,7 @@ favorite_color	VARCHAR
@@ -1713,7 +1713,7 @@ index b3fd052..9271819 100644
  {'bytesScanned': 1024, 'totalBytes': 1024}
  {'totalBytes': 1024}
  
-@@ -415,14 +415,20 @@ comments	VARCHAR
+@@ -415,14 +415,21 @@ comments	VARCHAR
  statement error
  FROM read_avro('test/union-name-*.avro', filename=true, union_by_name=true) order by one;
  ----
@@ -1721,19 +1721,23 @@ index b3fd052..9271819 100644
 +Not implemented Error: 'union_by_name' not implemented for Avro reader yet
  
  
-+# FIXME: "need to"?
- # need to fail on differing types
+-# need to fail on differing types
 -statement error
-+query IIII
- FROM read_avro('test/union-name-*.avro', filename=true) order by one;
- ----
+-FROM read_avro('test/union-name-*.avro', filename=true) order by one;
+-----
 -Schema of file
-+10	2.0	s30	test/union-name-1.avro
-+11	2.1	s31	test/union-name-1.avro
-+12	2.2	s32	test/union-name-2.avro
-+13	2.3	s33	test/union-name-2.avro
-+14	2.4	s34	test/union-name-3.avro
-+15	2.5	s35	test/union-name-3.avro
++# TODO: add test where schemas can't be combined
++
++# files with different schemas that can be safely combined are okay
++query III
++select * exclude filename FROM read_avro('test/union-name-*.avro', filename=true) order by all;
++----
++10	2.0	s30
++11	2.1	s31
++12	2.2	s32
++13	2.3	s33
++14	2.4	s34
++15	2.5	s35
  
  
  
