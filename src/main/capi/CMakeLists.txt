@@ -25,7 +25,8 @@ add_library_unity(
   table_function-c.cpp
   table_description-c.cpp
   threading-c.cpp
-  value-c.cpp)
+  value-c.cpp
+  vector_buffer-c.cpp)
 
 set(ALL_OBJECT_FILES
     ${ALL_OBJECT_FILES} $<TARGET_OBJECTS:duckdb_main_capi>
