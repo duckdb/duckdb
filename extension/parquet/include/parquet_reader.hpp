@@ -124,7 +124,7 @@ public:
 };
 
 struct ParquetUnionData : public BaseUnionData {
-	explicit ParquetUnionData(string file_name_p) : BaseUnionData(std::move(file_name_p)) {
+	explicit ParquetUnionData(OpenFileInfo file_p) : BaseUnionData(std::move(file_p)) {
 	}
 	~ParquetUnionData() override;
 
@@ -138,7 +138,7 @@ public:
 	static constexpr int32_t ORDINAL_FIELD_ID = 2147483645;
 
 public:
-	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options,
+	ParquetReader(ClientContext &context, OpenFileInfo file, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
 	~ParquetReader() override;
 

@@ -38,7 +38,6 @@ if not patches:
 current_dir = os.getcwd()
 print(f"Applying patches at '{current_dir}'")
 print(f"Resetting patches in {directory}\n")
-subprocess.run(["git", "log"], check=True)
 subprocess.run(["git", "clean", "-f"], check=True)
 subprocess.run(["git", "reset", "--hard", "HEAD"], check=True)
 # Apply each patch file using patch

@@ -21,20 +21,20 @@ namespace duckdb {
 template <class OP, class OPTIONS_TYPE>
 class UnionByReaderTask : public BaseExecutorTask {
 public:
-	UnionByReaderTask(TaskExecutor &executor, ClientContext &context, const string &file, idx_t file_idx,
+	UnionByReaderTask(TaskExecutor &executor, ClientContext &context, const OpenFileInfo &file, idx_t file_idx,
 	                  vector<shared_ptr<BaseUnionData>> &readers, OPTIONS_TYPE &options, MultiFileOptions &file_options)
-	    : BaseExecutorTask(executor), context(context), file_name(file), file_idx(file_idx), readers(readers),
+	    : BaseExecutorTask(executor), context(context), file(file), file_idx(file_idx), readers(readers),
 	      options(options), file_options(file_options) {
 	}
 
 	void ExecuteTask() override {
-		auto reader = OP::CreateReader(context, file_name, options, file_options);
+		auto reader = OP::CreateReader(context, file, options, file_options);
 		readers[file_idx] = OP::GetUnionData(std::move(reader), file_idx);
 	}
 
 private:
 	ClientContext &context;
-	const string &file_name;
+	const OpenFileInfo &file;
 	idx_t file_idx;
 	vector<shared_ptr<BaseUnionData>> &readers;
 	OPTIONS_TYPE &options;
@@ -50,7 +50,7 @@ public:
 	//! Union all files(readers) by their col names
 	template <class OP, class OPTIONS_TYPE>
 	static vector<shared_ptr<BaseUnionData>>
-	UnionCols(ClientContext &context, const vector<string> &files, vector<LogicalType> &union_col_types,
+	UnionCols(ClientContext &context, const vector<OpenFileInfo> &files, vector<LogicalType> &union_col_types,
 	          vector<string> &union_col_names, OPTIONS_TYPE &options, MultiFileOptions &file_options) {
 		vector<shared_ptr<BaseUnionData>> union_readers;
 		union_readers.resize(files.size());
