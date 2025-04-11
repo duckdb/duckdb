@@ -13,12 +13,3 @@ query I
 SELECT LIST_VALUE(a, b, c) FROM large_list_table WHERE a[1] = 1;
 ----
 [[1, 1, 1], [2, 2], [3]]
-
-load
-CREATE TABLE large_list_table AS SELECT [i, i, i] AS a, [i + 1, i + 1] AS b, [i + 2] AS c FROM range(100000000) tbl(i);
-
-run
-SELECT LIST_VALUE(a, b, c) FROM large_list_table WHERE a[1] = 1;
-
-result I
-[[1, 1, 1], [2, 2], [3]]
