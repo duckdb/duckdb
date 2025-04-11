@@ -2,7 +2,7 @@
 # description: Test the list_value function
 # group: [list]
 
-test very large table
+# test very large table
 statement ok
 CREATE TABLE large_list_table(a INTEGER[], b INTEGER[], c INTEGER[]);
 
