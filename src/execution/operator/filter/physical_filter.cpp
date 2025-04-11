@@ -27,13 +27,13 @@ public:
 
 public:
 	explicit FilterState(ExecutionContext &context, Expression &expr)
-	    : executor(context.client, expr), sel(STANDARD_VECTOR_SIZE), is_checked(false) {
+	    : executor(context.client, expr), sel(STANDARD_VECTOR_SIZE) {
 	}
 
 	ExpressionExecutor executor;
 	SelectionVector sel;
 
-	atomic<bool> is_checked;
+	bool is_checked = false;
 	int64_t num_chunk = 0;
 	uint64_t num_received = 0;
 	uint64_t num_sent = 0;

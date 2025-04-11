@@ -169,7 +169,7 @@ void Pipeline::Schedule(shared_ptr<Event> &event) {
 	D_ASSERT(sink);
 
 	// Dynamically change the operators of pipelines.
-	ModifyPipeline();
+	ModifyCreateBFPipeline();
 	Reset();
 	if (!ScheduleParallel(event)) {
 		// could not parallelize this pipeline: push a sequential task instead
@@ -324,7 +324,7 @@ idx_t Pipeline::UpdateBatchIndex(idx_t old_index, idx_t new_index) {
 	return *batch_indexes.begin();
 }
 
-void Pipeline::ModifyPipeline() {
+void Pipeline::ModifyCreateBFPipeline() {
 	if (source->type != PhysicalOperatorType::CREATE_BF) {
 		return;
 	}

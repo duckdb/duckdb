@@ -34,7 +34,7 @@ public:
 	CreateBFGlobalSinkState(ClientContext &context, const PhysicalCreateBF &op)
 	    : context(context), op(op),
 	      num_threads(NumericCast<idx_t>(TaskScheduler::GetScheduler(context).NumberOfThreads())),
-	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)), num_received_rows(0) {
+	      temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)) {
 		data_collection = make_uniq<ColumnDataCollection>(context, op.types);
 
 		// init min max aggregation
@@ -137,9 +137,6 @@ public:
 
 	//! If memory is not enough, give up creating BFs
 	unique_ptr<TemporaryMemoryState> temporary_memory_state;
-
-	//! Runtime stats
-	atomic<size_t> num_received_rows;
 };
 
 class CreateBFLocalSinkState : public LocalSinkState {

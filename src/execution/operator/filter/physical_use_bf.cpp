@@ -19,14 +19,14 @@ public:
 	static constexpr double SELECTIVITY_THRESHOLD = 0.9;
 
 public:
-	explicit UseBFState() : sel_vector(STANDARD_VECTOR_SIZE), lookup_results(STANDARD_VECTOR_SIZE), is_checked(false) {
+	explicit UseBFState() : sel_vector(STANDARD_VECTOR_SIZE), lookup_results(STANDARD_VECTOR_SIZE) {
 	}
 
 	SelectionVector sel_vector;
 	vector<uint32_t> lookup_results;
 
 	bool use_bf = true;
-	atomic<bool> is_checked;
+	bool is_checked = false;
 	int64_t num_chunk = 0;
 	uint64_t num_received = 0;
 	uint64_t num_sent = 0;
