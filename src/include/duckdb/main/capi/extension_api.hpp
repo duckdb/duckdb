@@ -477,6 +477,7 @@ typedef struct {
 	// An API to create new vector types
 
 	void (*duckdb_slice_vector)(duckdb_vector vector, idx_t dict_size, duckdb_selection_vector selection, idx_t len);
+	void (*duckdb_set_dictionary_vector_id)(duckdb_vector dict, const char *id, unsigned int id_len);
 	duckdb_selection_vector (*duckdb_create_selection_vector)(idx_t size);
 	void (*duckdb_destroy_selection_vector)(duckdb_selection_vector vector);
 	sel_t *(*duckdb_selection_vector_get_data_ptr)(duckdb_selection_vector vector);
@@ -897,6 +898,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	result.duckdb_value_to_string = duckdb_value_to_string;
 	result.duckdb_slice_vector = duckdb_slice_vector;
+	result.duckdb_set_dictionary_vector_id = duckdb_set_dictionary_vector_id;
 	result.duckdb_create_selection_vector = duckdb_create_selection_vector;
 	result.duckdb_destroy_selection_vector = duckdb_destroy_selection_vector;
 	result.duckdb_selection_vector_get_data_ptr = duckdb_selection_vector_get_data_ptr;

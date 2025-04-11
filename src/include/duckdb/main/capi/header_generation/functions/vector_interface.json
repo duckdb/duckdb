@@ -273,6 +273,32 @@
                     "len": "The length of the selection vector"
                 }
             }
+        },
+        {
+            "name": "duckdb_set_dictionary_vector_id",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "dict"
+                },
+                {
+                    "type": "const char *",
+                    "name": "id"
+                },
+                {
+                    "type": "unsigned int",
+                    "name": "id_len"
+                }
+            ],
+            "comment": {
+                "description": "Sets an id on the values of a dictionary, if two ids are equal then the value vector is assumed identical.\n",
+                "param_comments": {
+                    "dict": "The dictionary vector",
+                    "id": "The id",
+                    "id_len": "The string length of the id"
+                }
+            }
         }
     ]
 }

@@ -3057,6 +3057,14 @@ Creates a dictionary vector from a vector and a selection mask, the resulting ve
 DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, idx_t dict_size, duckdb_selection_vector selection,
                                       idx_t len);
 
+/*!
+Sets an id on the values of a dictionary, if two ids are equal then the value vector is assumed identical.
+* @param dict The dictionary vector
+* @param id The id
+* @param id_len The string length of the id
+*/
+DUCKDB_C_API void duckdb_set_dictionary_vector_id(duckdb_vector dict, const char *id, unsigned int id_len);
+
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
 //===--------------------------------------------------------------------===//

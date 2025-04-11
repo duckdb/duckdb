@@ -226,3 +226,8 @@ void duckdb_slice_vector(duckdb_vector dict_values, idx_t dict_size, duckdb_sele
 	auto dselection = reinterpret_cast<duckdb::SelectionVector *>(selection);
 	ddict->Dictionary(dict_size, *dselection, len);
 }
+
+void duckdb_set_dictionary_vector_id(duckdb_vector dict, const char *id, unsigned int id_len) {
+	auto ddict = reinterpret_cast<duckdb::Vector *>(dict);
+	duckdb::DictionaryVector::SetDictionaryId(*ddict, std::string(id, id_len));
+}
