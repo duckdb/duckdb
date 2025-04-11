@@ -1122,6 +1122,17 @@ struct ScalarSubqueryErrorOnMultipleRowsSetting {
 	static Value GetSetting(const ClientContext &context);
 };
 
+struct SchedulerProcessPartialSetting {
+	using RETURN_TYPE = bool;
+	static constexpr const char *Name = "scheduler_process_partial";
+	static constexpr const char *Description =
+	    "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries";
+	static constexpr const char *InputType = "BOOLEAN";
+	static void SetGlobal(DatabaseInstance *db, DBConfig &config, const Value &parameter);
+	static void ResetGlobal(DatabaseInstance *db, DBConfig &config);
+	static Value GetSetting(const ClientContext &context);
+};
+
 struct SchemaSetting {
 	using RETURN_TYPE = string;
 	static constexpr const char *Name = "schema";

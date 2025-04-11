@@ -120,6 +120,11 @@ public:
 		return result;
 	}
 
+	void Reset() {
+		allocated_dictionary.Reset();
+		allocated_target.Reset();
+	}
+
 private:
 	//! Look up a value in the dictionary using linear probing
 	primitive_dictionary_entry_t &Lookup(const SRC &value) const {

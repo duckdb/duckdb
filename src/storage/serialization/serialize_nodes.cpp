@@ -362,13 +362,13 @@ MultiFileOptions MultiFileOptions::Deserialize(Deserializer &deserializer) {
 }
 
 void MultiFileReaderBindData::Serialize(Serializer &serializer) const {
-	serializer.WritePropertyWithDefault<idx_t>(100, "filename_idx", filename_idx);
+	serializer.WriteProperty<optional_idx>(100, "filename_idx", filename_idx);
 	serializer.WritePropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", hive_partitioning_indexes);
 }
 
 MultiFileReaderBindData MultiFileReaderBindData::Deserialize(Deserializer &deserializer) {
 	MultiFileReaderBindData result;
-	deserializer.ReadPropertyWithDefault<idx_t>(100, "filename_idx", result.filename_idx);
+	deserializer.ReadProperty<optional_idx>(100, "filename_idx", result.filename_idx);
 	deserializer.ReadPropertyWithDefault<vector<HivePartitioningIndex>>(101, "hive_partitioning_indexes", result.hive_partitioning_indexes);
 	return result;
 }

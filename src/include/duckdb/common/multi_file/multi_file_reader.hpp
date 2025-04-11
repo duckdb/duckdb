@@ -33,6 +33,7 @@ enum class ReaderInitializeType { INITIALIZED, SKIP_READING_FILE };
 struct MultiFileReader {
 public:
 	static constexpr column_t COLUMN_IDENTIFIER_FILENAME = UINT64_C(9223372036854775808);
+	static constexpr column_t COLUMN_IDENTIFIER_FILE_ROW_NUMBER = UINT64_C(9223372036854775809);
 
 public:
 	virtual ~MultiFileReader();
@@ -167,14 +168,15 @@ public:
 		}
 	}
 
-	ReaderInitializeType InitializeReader(
-	    MultiFileReaderData &reader_data, const MultiFileOptions &options, const MultiFileReaderBindData &bind_data,
-	    const virtual_column_map_t &virtual_columns, const vector<MultiFileColumnDefinition> &global_columns,
-	    const vector<ColumnIndex> &global_column_ids, optional_ptr<TableFilterSet> table_filters,
-	    const string &initial_file, ClientContext &context, optional_ptr<MultiFileReaderGlobalState> global_state) {
-		FinalizeBind(reader_data, options, bind_data, global_columns, global_column_ids, context, global_state);
-		return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters, initial_file,
-		                     bind_data, virtual_columns);
+	virtual ReaderInitializeType InitializeReader(MultiFileReaderData &reader_data, const MultiFileBindData &bind_data,
+	                                              const vector<MultiFileColumnDefinition> &global_columns,
+	                                              const vector<ColumnIndex> &global_column_ids,
+	                                              optional_ptr<TableFilterSet> table_filters, ClientContext &context,
+	                                              optional_ptr<MultiFileReaderGlobalState> global_state) {
+		FinalizeBind(reader_data, bind_data.file_options, bind_data.reader_bind, global_columns, global_column_ids,
+		             context, global_state);
+		return CreateMapping(context, reader_data, global_columns, global_column_ids, table_filters,
+		                     bind_data.file_list->GetFirstFile(), bind_data.reader_bind, bind_data.virtual_columns);
 	}
 
 	template <class BIND_DATA>

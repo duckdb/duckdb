@@ -738,6 +738,12 @@
         "scope": "local"
     },
     {
+        "name": "scheduler_process_partial",
+        "description": "Partially process tasks before rescheduling - allows for more scheduler fairness between separate queries",
+        "type": "BOOLEAN",
+        "scope": "global"
+    },
+    {
         "name": "schema",
         "description": "Sets the default search schema. Equivalent to setting search_path to a single value.",
         "type": "VARCHAR",

@@ -380,7 +380,10 @@ unique_ptr<GlobalTableFunctionState> JSONMultiFileInfo::InitializeGlobalState(Cl
 		const auto &col_id = column_index.GetPrimaryIndex();
 
 		// Skip any multi-file reader / row id stuff
-		if (col_id == bind_data.reader_bind.filename_idx || IsVirtualColumn(col_id)) {
+		if (bind_data.reader_bind.filename_idx.IsValid() && col_id == bind_data.reader_bind.filename_idx.GetIndex()) {
+			continue;
+		}
+		if (IsVirtualColumn(col_id)) {
 			continue;
 		}
 		bool skip = false;
