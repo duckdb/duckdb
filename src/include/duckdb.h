@@ -3048,7 +3048,7 @@ The resulting vector has the size of the parent vector multiplied by the array s
 DUCKDB_C_API duckdb_vector duckdb_array_vector_get_child(duckdb_vector vector);
 
 /*!
-Create a dictionary vector from a vector and a selection mask, the resulting vector will be `len`.
+Creates a dictionary vector from a vector and a selection mask, the resulting vector will have length `len`.
 
 * @param dict_size The size of the `dict_values`
 * @param selection The selection vector

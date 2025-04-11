@@ -265,7 +265,7 @@
                 }
             ],
             "comment": {
-                "description": "Create a dictionary vector from a vector and a selection mask, the resulting vector will be `len`.\n\n",
+                "description": "Creates a dictionary vector from a vector and a selection mask, the resulting vector will have length `len`.\n\n",
                 "param_comments": {
                     "dict_values": "The vector which will become the values of the dictionary.",
                     "dict_size": "The size of the `dict_values`",
