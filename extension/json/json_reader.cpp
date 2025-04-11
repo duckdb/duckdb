@@ -148,7 +148,7 @@ idx_t JSONFileHandle::ReadInternal(char *pointer, const idx_t requested_size) {
 	return total_read_size;
 }
 
-idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, idx_t &position) {
+idx_t JSONFileHandle::ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &position) {
 	idx_t read_size = 0;
 	idx_t total_offset = 0;
 
@@ -903,8 +903,11 @@ void JSONReader::FinalizeBuffer(JSONReaderScanState &scan_state) {
 	// we read something
 	// skip over the array start if required
 	if (!scan_state.is_last) {
-		if (scan_state.buffer_index.GetIndex() == 0 && GetFormat() == JSONFormat::ARRAY) {
-			SkipOverArrayStart(scan_state);
+		if (scan_state.buffer_index.GetIndex() == 0) {
+			StringUtil::SkipBOM(scan_state.buffer_ptr, scan_state.buffer_size, scan_state.buffer_offset);
+			if (GetFormat() == JSONFormat::ARRAY) {
+				SkipOverArrayStart(scan_state);
+			}
 		}
 	}
 	// then finalize the buffer

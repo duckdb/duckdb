@@ -12,8 +12,8 @@
 #include "duckdb/common/enum_util.hpp"
 #include "duckdb/common/enums/file_compression_type.hpp"
 #include "duckdb/common/file_system.hpp"
-#include "duckdb/common/base_file_reader.hpp"
-#include "duckdb/common/multi_file_reader.hpp"
+#include "duckdb/common/multi_file/base_file_reader.hpp"
+#include "duckdb/common/multi_file/multi_file_reader.hpp"
 #include "json_reader_options.hpp"
 #include "duckdb/common/mutex.hpp"
 #include "json_common.hpp"
@@ -71,7 +71,7 @@ public:
 
 private:
 	idx_t ReadInternal(char *pointer, const idx_t requested_size);
-	idx_t ReadFromCache(char *&pointer, idx_t &size, idx_t &position);
+	idx_t ReadFromCache(char *&pointer, idx_t &size, atomic<idx_t> &position);
 
 private:
 	//! The JSON file handle
@@ -83,7 +83,7 @@ private:
 	const idx_t file_size;
 
 	//! Read properties
-	idx_t read_position;
+	atomic<idx_t> read_position;
 	atomic<idx_t> requested_reads;
 	atomic<idx_t> actual_reads;
 	atomic<bool> last_read_requested;
@@ -226,6 +226,10 @@ public:
 	double GetProgress() const;
 
 	void DecrementBufferUsage(JSONBufferHandle &handle, idx_t lines_or_object_in_buffer, AllocatedData &buffer);
+
+	string GetReaderType() const override {
+		return "JSON";
+	}
 
 private:
 	void SkipOverArrayStart(JSONReaderScanState &scan_state);

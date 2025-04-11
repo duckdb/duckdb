@@ -1,0 +1,45 @@
+name: Notify External Repositories
+on:
+  workflow_call:
+    inputs:
+      duckdb-sha:
+        description: 'Vendor Specific DuckDB SHA'
+        required: false
+        default: ''
+        type: 'string'
+      target-branch:
+        description: 'Which Branch to Target'
+        required: true
+        default: ''
+        type: 'string'
+  workflow_dispatch:
+    inputs:
+      duckdb-sha:
+        description: 'Vendor Specific DuckDB SHA'
+        required: false
+        default: ''
+        type: 'string'
+      target-branch:
+        description: 'Which Branch to Target'
+        required: true
+        default: ''
+        type: 'string'
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  notify-odbc-run:
+    name: Run ODBC Vendor
+    runs-on: ubuntu-latest
+    env:
+      PAT_USER: ${{ secrets.PAT_USERNAME }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+    steps:
+      - name: Run ODBC Vendor
+        if: ${{ github.repository == 'duckdb/duckdb' }}
+        run: |
+          export URL=https://api.github.com/repos/duckdb/duckdb-odbc/actions/workflows/Vendor.yml/dispatches
+          export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
+          curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"

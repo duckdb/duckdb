@@ -1,0 +1,45 @@
+# name: benchmark/tpch/parquet/parquet_mixed_struct_projection.benchmark
+# description: Execute a projection over lineitem stored in several parquet files with mixed structs
+# group: [parquet]
+
+name Q1 (Parquet, Mixed Structs)
+group parquet
+subgroup tpch
+
+require parquet
+require tpch
+
+load
+CALL dbgen(sf=1, suffix='_normal');
+COPY (
+SELECT subq AS lineitem
+FROM (
+SELECT l_suppkey, l_linestatus, l_commitdate, l_receiptdate, l_comment, l_extendedprice, l_tax, l_partkey, l_shipdate, l_linenumber, l_shipinstruct, l_shipmode, l_discount, l_orderkey, l_returnflag, l_quantity
+FROM lineitem_normal
+LIMIT 1000000) subq
+)
+TO '${BENCHMARK_DIR}/lineitem_mixed_struct1.parquet';
+COPY (
+SELECT subq AS lineitem
+FROM (
+SELECT l_linenumber, l_tax, l_orderkey, l_discount, l_linestatus, l_quantity, l_shipmode, l_returnflag, l_receiptdate, l_partkey, l_shipdate, l_suppkey, l_commitdate, l_extendedprice, l_comment, l_shipinstruct
+FROM lineitem_normal
+LIMIT 2000000
+OFFSET 1000000) subq
+)
+TO '${BENCHMARK_DIR}/lineitem_mixed_struct2.parquet';
+COPY (
+SELECT subq AS lineitem
+FROM (
+SELECT l_extendedprice, l_linenumber, l_shipdate, l_comment, l_shipmode, l_orderkey, l_partkey, l_shipinstruct, l_commitdate, l_returnflag, l_quantity, l_tax, l_linestatus, l_receiptdate, l_discount, l_suppkey
+FROM lineitem_normal
+OFFSET 3000000) subq
+)
+TO '${BENCHMARK_DIR}/lineitem_mixed_struct3.parquet';
+CREATE VIEW lineitem AS SELECT UNNEST(lineitem) FROM '${BENCHMARK_DIR}/lineitem_mixed_struct*.parquet';
+
+run
+SELECT MAX(l_linenumber) FROM lineitem
+
+result I
+7

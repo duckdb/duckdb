@@ -266,7 +266,7 @@
         "name": "nanosecond",
         "parameters": "tsns",
         "description": "Extract the nanosecond component from a date or timestamp",
-        "example": "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789') => 44123456789",
+        "example": "nanosecond(timestamp_ns '2021-08-03 11:59:44.123456789')",
         "type": "scalar_function_set"
     },
     {
@@ -333,21 +333,21 @@
         "parameters": "integer",
         "description": "Construct a century interval",
         "example": "to_centuries(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_days",
         "parameters": "integer",
         "description": "Construct a day interval",
         "example": "to_days(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_decades",
         "parameters": "integer",
         "description": "Construct a decade interval",
         "example": "to_decades(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_hours",
@@ -368,7 +368,7 @@
         "parameters": "integer",
         "description": "Construct a millenium interval",
         "example": "to_millennia(1)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_milliseconds",
@@ -389,14 +389,14 @@
         "parameters": "integer",
         "description": "Construct a month interval",
         "example": "to_months(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_quarters",
         "parameters": "integer",
         "description": "Construct a quarter interval",
         "example": "to_quarters(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_seconds",
@@ -417,14 +417,14 @@
         "parameters": "integer",
         "description": "Construct a week interval",
         "example": "to_weeks(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "to_years",
         "parameters": "integer",
         "description": "Construct a year interval",
         "example": "to_years(5)",
-        "type": "scalar_function"
+        "type": "scalar_function_set"
     },
     {
         "name": "week",

@@ -7,7 +7,7 @@
 #include "duckdb/planner/expression/bound_reference_expression.hpp"
 #include "duckdb/planner/expression_iterator.hpp"
 #include "duckdb/planner/table_filter.hpp"
-#include "duckdb/common/multi_file_list.hpp"
+#include "duckdb/common/multi_file/multi_file_list.hpp"
 
 namespace duckdb {
 

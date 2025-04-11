@@ -53,6 +53,8 @@ class ExternalDependency;
 class TableFunction;
 class TableStorageInfo;
 class BoundConstraint;
+class AtClause;
+class BoundAtClause;
 
 struct CreateInfo;
 struct BoundCreateTableInfo;
@@ -60,6 +62,7 @@ struct CommonTableExpressionInfo;
 struct BoundParameterMap;
 struct BoundPragmaInfo;
 struct BoundLimitNode;
+struct EntryLookupInfo;
 struct PivotColumnEntry;
 struct UnpivotEntry;
 
@@ -140,8 +143,9 @@ public:
 	vector<unique_ptr<BoundConstraint>> BindConstraints(const TableCatalogEntry &table);
 	vector<unique_ptr<BoundConstraint>> BindNewConstraints(vector<unique_ptr<Constraint>> &constraints,
 	                                                       const string &table_name, const ColumnList &columns);
-	unique_ptr<BoundConstraint> BindConstraint(Constraint &constraint, const string &table, const ColumnList &columns);
-	unique_ptr<BoundConstraint> BindUniqueConstraint(Constraint &constraint, const string &table,
+	unique_ptr<BoundConstraint> BindConstraint(const Constraint &constraint, const string &table,
+	                                           const ColumnList &columns);
+	unique_ptr<BoundConstraint> BindUniqueConstraint(const Constraint &constraint, const string &table,
 	                                                 const ColumnList &columns);
 
 	BoundStatement BindAlterAddIndex(BoundStatement &result, CatalogEntry &entry, unique_ptr<AlterInfo> alter_info);
@@ -162,9 +166,8 @@ public:
 	//! Generates an unused index for a table
 	idx_t GenerateTableIndex();
 
-	optional_ptr<CatalogEntry> GetCatalogEntry(CatalogType type, const string &catalog, const string &schema,
-	                                           const string &name, OnEntryNotFound on_entry_not_found,
-	                                           QueryErrorContext &error_context);
+	optional_ptr<CatalogEntry> GetCatalogEntry(const string &catalog, const string &schema,
+	                                           const EntryLookupInfo &lookup_info, OnEntryNotFound on_entry_not_found);
 
 	//! Add a common table expression to the binder
 	void AddCTE(const string &name, CommonTableExpressionInfo &cte);
@@ -357,6 +360,8 @@ private:
 	void ExtractUnpivotEntries(Binder &child_binder, PivotColumnEntry &entry, vector<UnpivotEntry> &unpivot_entries);
 	void ExtractUnpivotColumnName(ParsedExpression &expr, vector<string> &result);
 
+	unique_ptr<BoundAtClause> BindAtClause(optional_ptr<AtClause> at_clause);
+
 	bool BindTableFunctionParameters(TableFunctionCatalogEntry &table_function,
 	                                 vector<unique_ptr<ParsedExpression>> &expressions, vector<LogicalType> &arguments,
 	                                 vector<Value> &parameters, named_parameter_map_t &named_parameters,
@@ -426,6 +431,7 @@ private:
 
 	//! If only a schema name is provided (e.g. "a.b") then figure out if "a" is a schema or a catalog name
 	void BindSchemaOrCatalog(string &catalog_name, string &schema_name);
+	static void BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema);
 	const string BindCatalog(string &catalog_name);
 	SchemaCatalogEntry &BindCreateSchema(CreateInfo &info);
 

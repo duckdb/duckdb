@@ -74,8 +74,8 @@ void DuckDBPreparedStatementsFunction(ClientContext &context, TableFunctionInput
 		// result_types, VARCHAR[]
 		switch (prepared_statement.properties.return_type) {
 		case StatementReturnType::QUERY_RESULT: {
-			if (prepared_statement.plan) {
-				auto plan_types = prepared_statement.plan->GetTypes();
+			if (prepared_statement.physical_plan) {
+				auto plan_types = prepared_statement.physical_plan->Root().GetTypes();
 				vector<Value> return_types;
 				for (auto &type : plan_types) {
 					return_types.push_back(type.ToString());

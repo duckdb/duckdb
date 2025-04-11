@@ -29,12 +29,12 @@ TupleDataBlock &TupleDataBlock::operator=(TupleDataBlock &&other) noexcept {
 	return *this;
 }
 
-TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, const TupleDataLayout &layout)
-    : buffer_manager(buffer_manager), layout(layout.Copy()) {
+TupleDataAllocator::TupleDataAllocator(BufferManager &buffer_manager, shared_ptr<TupleDataLayout> &layout_ptr_p)
+    : buffer_manager(buffer_manager), layout_ptr(layout_ptr_p), layout(*layout_ptr) {
 }
 
 TupleDataAllocator::TupleDataAllocator(TupleDataAllocator &allocator)
-    : buffer_manager(allocator.buffer_manager), layout(allocator.layout.Copy()) {
+    : buffer_manager(allocator.buffer_manager), layout_ptr(allocator.layout_ptr), layout(*layout_ptr) {
 }
 
 void TupleDataAllocator::SetDestroyBufferUponUnpin() {
@@ -60,6 +60,10 @@ BufferManager &TupleDataAllocator::GetBufferManager() {
 
 Allocator &TupleDataAllocator::GetAllocator() {
 	return buffer_manager.GetBufferAllocator();
+}
+
+shared_ptr<TupleDataLayout> TupleDataAllocator::GetLayoutPtr() const {
+	return layout_ptr;
 }
 
 const TupleDataLayout &TupleDataAllocator::GetLayout() const {
@@ -99,8 +103,8 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 
 		// Build the next part
 		auto next = MinValue<idx_t>(append_count - offset, STANDARD_VECTOR_SIZE - chunk.count);
-		chunk.AddPart(BuildChunkPart(pin_state, chunk_state, append_offset + offset, next, chunk), layout);
-		auto &chunk_part = chunk.parts.back();
+		auto &chunk_part =
+		    chunk.AddPart(segment, BuildChunkPart(pin_state, chunk_state, append_offset + offset, next, chunk));
 		next = chunk_part.count;
 
 		segment.count += next;
@@ -122,19 +126,19 @@ void TupleDataAllocator::Build(TupleDataSegment &segment, TupleDataPinState &pin
 		}
 
 		offset += next;
-		chunk_part_indices.emplace_back(chunks.size() - 1, chunk.parts.size() - 1);
+		chunk_part_indices.emplace_back(chunks.size() - 1, chunk.part_ids.End() - 1);
 	}
 
 	// Now initialize the pointers to write the data to
 	chunk_parts.clear();
-	for (auto &indices : chunk_part_indices) {
-		chunk_parts.emplace_back(segment.chunks[indices.first].parts[indices.second]);
+	for (const auto &indices : chunk_part_indices) {
+		chunk_parts.emplace_back(segment.chunk_parts[indices.second]);
 	}
 	InitializeChunkStateInternal(pin_state, chunk_state, append_offset, false, true, false, chunk_parts);
 
 	// To reduce metadata, we try to merge chunk parts where possible
 	// Due to the way chunk parts are constructed, only the last part of the first chunk is eligible for merging
-	segment.chunks[chunk_part_indices[0].first].MergeLastChunkPart(layout);
+	segment.chunks[chunk_part_indices[0].first].MergeLastChunkPart(segment);
 
 	segment.Verify();
 }
@@ -231,15 +235,14 @@ void TupleDataAllocator::InitializeChunkState(TupleDataSegment &segment, TupleDa
 	// We can't release the heap here if the current chunk's heap_block_ids is empty, because if we are iterating with
 	// PinProperties::DESTROY_AFTER_DONE, we might destroy a heap block that is needed by a later chunk, e.g.,
 	// when chunk 0 needs heap block 0, chunk 1 does not need any heap blocks, and chunk 2 needs heap block 0 again
-	ReleaseOrStoreHandles(pin_state, segment, chunk, !chunk.heap_block_ids.empty());
+	ReleaseOrStoreHandles(pin_state, segment, chunk, !chunk.heap_block_ids.Empty());
 
-	unsafe_vector<reference<TupleDataChunkPart>> parts;
-	parts.reserve(chunk.parts.size());
-	for (auto &part : chunk.parts) {
-		parts.emplace_back(part);
+	chunk_state.parts.clear();
+	for (auto part_id = chunk.part_ids.Start(); part_id < chunk.part_ids.End(); part_id++) {
+		chunk_state.parts.emplace_back(segment.chunk_parts[part_id]);
 	}
 
-	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, parts);
+	InitializeChunkStateInternal(pin_state, chunk_state, 0, true, init_heap, init_heap, chunk_state.parts);
 }
 
 static inline void InitializeHeapSizes(const data_ptr_t row_locations[], idx_t heap_sizes[], const idx_t offset,
@@ -447,15 +450,17 @@ void TupleDataAllocator::ReleaseOrStoreHandles(TupleDataPinState &pin_state, Tup
 	ReleaseOrStoreHandles(pin_state, segment, DUMMY_CHUNK, true);
 }
 
-void TupleDataAllocator::ReleaseOrStoreHandlesInternal(
-    TupleDataSegment &segment, unsafe_vector<BufferHandle> &pinned_handles, perfect_map_t<BufferHandle> &handles,
-    const perfect_set_t &block_ids, unsafe_vector<TupleDataBlock> &blocks, TupleDataPinProperties properties) {
+void TupleDataAllocator::ReleaseOrStoreHandlesInternal(TupleDataSegment &segment,
+                                                       unsafe_vector<BufferHandle> &pinned_handles,
+                                                       buffer_handle_map_t &handles, const ContinuousIdSet &block_ids,
+                                                       unsafe_vector<TupleDataBlock> &blocks,
+                                                       TupleDataPinProperties properties) {
 	bool found_handle;
 	do {
 		found_handle = false;
 		for (auto it = handles.begin(); it != handles.end(); it++) {
 			const auto block_id = it->first;
-			if (block_ids.find(block_id) != block_ids.end()) {
+			if (block_ids.Contains(block_id)) {
 				// still required: do not release
 				continue;
 			}
