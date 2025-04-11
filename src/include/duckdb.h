@@ -400,6 +400,10 @@ typedef struct _duckdb_selection_vector {
 	void *internal_ptr;
 } * duckdb_selection_vector;
 
+typedef struct _duckdb_vector_buffer {
+	void *ptr;
+} * duckdb_vector_buffer;
+
 //===--------------------------------------------------------------------===//
 // Types (explicit freeing/destroying)
 //===--------------------------------------------------------------------===//
@@ -686,6 +690,15 @@ struct duckdb_extension_access {
 	//! Fetch the API
 	const void *(*get_api)(duckdb_extension_info info, const char *version);
 };
+
+//===--------------------------------------------------------------------===//
+// External Buffers
+//===--------------------------------------------------------------------===//
+
+//! A opaque buffer which can be interpreted as a data buffer
+typedef struct _external_buffer *external_buffer;
+
+typedef void (*external_buffer_free)(external_buffer buffer);
 
 #ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
 
@@ -3059,6 +3072,32 @@ The resulting vector happens to be a dictionary vector.
 * @param len The length of the selection vector
 */
 DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
+
+/*!
+Sets the data buffer of a vector.
+* @param vector The vector which will have its buffer set.
+
+* @param buffer The vector buffer which will be referenced.
+
+*/
+DUCKDB_C_API void duckdb_assign_buffer_to_vector(duckdb_vector vector, duckdb_vector_buffer buffer);
+
+//===--------------------------------------------------------------------===//
+// Vector Buffer Interface
+//===--------------------------------------------------------------------===//
+
+/*!
+Create a new duckdb vector buffer wrapping a externally allocated buffer with a function to specify that the memory is
+no long required by duckdb.
+* @param buffer The buffer which should used as a vector buffer.
+
+* @param free_fn A function which will be called once duckdb is finished with the buffer.
+
+* @return A ptr to the duckdb wrapped buffer.
+
+*/
+DUCKDB_C_API duckdb_vector_buffer duckdb_wrap_external_vector_buffer(external_buffer buffer,
+                                                                     external_buffer_free free_fn);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions

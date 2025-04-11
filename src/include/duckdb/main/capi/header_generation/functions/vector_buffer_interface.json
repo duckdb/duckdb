@@ -1,0 +1,41 @@
+{
+  "group": "vector_buffer_interface",
+  "deprecated": false,
+  "entries": [
+    {
+      "name": "duckdb_wrap_external_vector_buffer",
+      "return_type": "duckdb_vector_buffer",
+      "params": [
+        {
+          "type": "external_buffer",
+          "name": "buffer"
+        },
+        {
+          "type": "external_buffer_free",
+          "name": "free_fn"
+        }
+      ],
+      "comment": {
+        "description": "Create a new duckdb vector buffer wrapping a externally allocated buffer with a function to specify that the memory is no long required by duckdb.\n",
+        "param_comments": {
+          "buffer": "The buffer which should used as a vector buffer.\n",
+          "free_fn": "A function which will be called once duckdb is finished with the buffer.\n"
+        },
+        "return_value": "A ptr to the duckdb wrapped buffer.\n"
+      }
+    },
+    {
+      "name": "duckdb_free_external_vector_buffer",
+      "return_type": "void",
+      "params": [
+        {
+          "type": "duckdb_vector_buffer",
+          "name": "buffer"
+        }
+      ],
+      "comment": {
+        "description": "..."
+      }
+    }
+  ]
+}
