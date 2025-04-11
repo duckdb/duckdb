@@ -501,7 +501,7 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 
 	// Gather row pointers from keys
 	for (idx_t i = 0; i < count; i++) {
-		payload_ptrs[i] = key_ptrs[i]->GetPayloadPointer();
+		payload_ptrs[i] = key_ptrs[i]->GetPayload();
 	}
 
 	// Now gather from payload

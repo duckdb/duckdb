@@ -53,6 +53,9 @@ public:
 
 	~TupleDataCollection();
 
+	//! Create a TupleDataCollection with the same layout
+	unique_ptr<TupleDataCollection> CreateUnique() const;
+
 public:
 	//! The layout of the stored rows
 	const TupleDataLayout &GetLayout() const;

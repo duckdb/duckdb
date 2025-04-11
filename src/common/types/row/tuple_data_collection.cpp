@@ -39,6 +39,10 @@ void TupleDataCollection::Initialize() {
 	}
 }
 
+unique_ptr<TupleDataCollection> TupleDataCollection::CreateUnique() const {
+	return make_uniq<TupleDataCollection>(allocator->GetBufferManager(), layout_ptr);
+}
+
 void GetAllColumnIDsInternal(vector<column_t> &column_ids, const idx_t column_count) {
 	column_ids.reserve(column_count);
 	for (idx_t col_idx = 0; col_idx < column_count; col_idx++) {

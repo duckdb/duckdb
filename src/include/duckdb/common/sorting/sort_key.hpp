@@ -36,6 +36,8 @@ private:
 	friend SORT_KEY;
 
 public:
+	static constexpr bool CONSTANT_SIZE = true;
+
 	void ByteSwap() {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
@@ -70,6 +72,14 @@ public:
 		sort_key.part0 = static_cast<uint64_t>(val); // NOLINT: unsafe cast on purpose
 	}
 
+	data_ptr_t GetData() const {
+		throw InternalException("GetData() called on a FixedSortKey");
+	}
+
+	idx_t GetSize() const {
+		throw InternalException("GetSize() called on a FixedSortKey");
+	}
+
 	static bool LessThan(const uint64_t *const &lhs, const uint64_t *const &rhs) {
 		switch (SORT_KEY::PARTS) {
 		case 1:
@@ -99,16 +109,18 @@ private:
 	friend SORT_KEY;
 
 public:
+	static constexpr bool CONSTANT_SIZE = false;
+
 	void Construct(const string_t &val, data_ptr_t &heap_ptr) {
 		auto &sort_key = static_cast<SORT_KEY &>(*this);
 		for (idx_t i = 0; i < SORT_KEY::PARTS; i++) {
 			(&sort_key.part0)[i] = 0;
 		}
-		sort_key.size = val.GetSize();
 		const auto str_ptr = val.GetData();
 		memcpy(&sort_key.part0, str_ptr, sort_key.size);
+		sort_key.size = val.GetSize();
+		sort_key.data = heap_ptr;
 		if (sort_key.size > SORT_KEY::INLINE_LENGTH) {
-			sort_key.data = heap_ptr;
 			memcpy(sort_key.data, str_ptr, sort_key.size);
 			heap_ptr += sort_key.size;
 		}
@@ -116,6 +128,16 @@ public:
 
 	void Construct(const int64_t &val, data_ptr_t &) {
 		throw InternalException("VariableSortKey::Construct() called with an int64_t");
+	}
+
+	data_ptr_t GetData() const {
+		auto &sort_key = static_cast<const SORT_KEY &>(*this);
+		return sort_key.data;
+	}
+
+	idx_t GetSize() const {
+		auto &sort_key = static_cast<const SORT_KEY &>(*this);
+		return sort_key.size;
 	}
 
 	friend bool operator<(const SORT_KEY &lhs, const SORT_KEY &rhs) {
@@ -143,8 +165,10 @@ private:
 	friend SORT_KEY;
 
 public:
-	data_ptr_t GetPayloadPointer() const {
-		throw InternalException("SortKeyNoPayload::GetPayloadPointer() called on a SortKeyNoPayload");
+	static constexpr bool HAS_PAYLOAD = false;
+
+	data_ptr_t GetPayload() const {
+		throw InternalException("GetPayload() called on a SortKeyNoPayload");
 	}
 };
 
@@ -155,7 +179,9 @@ private:
 	friend SORT_KEY;
 
 public:
-	data_ptr_t GetPayloadPointer() const {
+	static constexpr bool HAS_PAYLOAD = true;
+
+	data_ptr_t GetPayload() const {
 		auto &sort_key = static_cast<const SORT_KEY &>(*this);
 		return sort_key.payload_ptr;
 	}
@@ -268,22 +294,43 @@ struct SortKeyUtils {
 
 	static bool IsConstantSize(const SortKeyType sort_key_type) {
 		switch (sort_key_type) {
+		case SortKeyType::NO_PAYLOAD_FIXED_8:
+			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_8>::CONSTANT_SIZE;
+		case SortKeyType::NO_PAYLOAD_FIXED_16:
+			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_16>::CONSTANT_SIZE;
+		case SortKeyType::NO_PAYLOAD_FIXED_32:
+			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_32>::CONSTANT_SIZE;
 		case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+			return SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>::CONSTANT_SIZE;
+		case SortKeyType::PAYLOAD_FIXED_16:
+			return SortKey<SortKeyType::PAYLOAD_FIXED_16>::CONSTANT_SIZE;
+		case SortKeyType::PAYLOAD_FIXED_32:
+			return SortKey<SortKeyType::PAYLOAD_FIXED_32>::CONSTANT_SIZE;
 		case SortKeyType::PAYLOAD_VARIABLE_32:
-			return false;
+			return SortKey<SortKeyType::PAYLOAD_VARIABLE_32>::CONSTANT_SIZE;
 		default:
-			return true;
+			throw NotImplementedException("SortKeyUtils::IsConstantSize for %s", EnumUtil::ToString(sort_key_type));
 		}
 	}
 
 	static bool HasPayload(const SortKeyType sort_key_type) {
 		switch (sort_key_type) {
+		case SortKeyType::NO_PAYLOAD_FIXED_8:
+			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_8>::HAS_PAYLOAD;
+		case SortKeyType::NO_PAYLOAD_FIXED_16:
+			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_16>::HAS_PAYLOAD;
+		case SortKeyType::NO_PAYLOAD_FIXED_32:
+			return SortKey<SortKeyType::NO_PAYLOAD_FIXED_32>::HAS_PAYLOAD;
+		case SortKeyType::NO_PAYLOAD_VARIABLE_32:
+			return SortKey<SortKeyType::NO_PAYLOAD_VARIABLE_32>::HAS_PAYLOAD;
 		case SortKeyType::PAYLOAD_FIXED_16:
+			return SortKey<SortKeyType::PAYLOAD_FIXED_16>::HAS_PAYLOAD;
 		case SortKeyType::PAYLOAD_FIXED_32:
+			return SortKey<SortKeyType::PAYLOAD_FIXED_32>::HAS_PAYLOAD;
 		case SortKeyType::PAYLOAD_VARIABLE_32:
-			return true;
+			return SortKey<SortKeyType::PAYLOAD_VARIABLE_32>::HAS_PAYLOAD;
 		default:
-			return false;
+			throw NotImplementedException("SortKeyUtils::HasPayload for %s", EnumUtil::ToString(sort_key_type));
 		}
 	}
 };
