@@ -107,9 +107,9 @@ struct ParquetMultiFileInfo {
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
 	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p);
 	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
-	                                               const string &filename, idx_t file_idx,
+	                                               const OpenFileInfo &file, idx_t file_idx,
 	                                               const MultiFileBindData &bind_data);
-	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
 	                                               ParquetOptions &options, const MultiFileOptions &file_options);
 	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
 	static void FinalizeReader(ClientContext &context, BaseFileReader &reader, GlobalTableFunctionState &);
@@ -306,7 +306,11 @@ public:
 		auto &bind_data = bind_data_p->Cast<MultiFileBindData>();
 		auto &parquet_data = bind_data.bind_data->Cast<ParquetReadBindData>();
 
-		serializer.WriteProperty(100, "files", bind_data.file_list->GetAllFiles());
+		vector<string> files;
+		for (auto &file : bind_data.file_list->GetAllFiles()) {
+			files.emplace_back(file.path);
+		}
+		serializer.WriteProperty(100, "files", files);
 		serializer.WriteProperty(101, "types", bind_data.types);
 		serializer.WriteProperty(102, "names", bind_data.names);
 		ParquetOptionsSerialization serialization(parquet_data.parquet_options, bind_data.file_options);
@@ -508,24 +512,24 @@ shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &con
                                                               BaseUnionData &union_data_p,
                                                               const MultiFileBindData &bind_data_p) {
 	auto &union_data = union_data_p.Cast<ParquetUnionData>();
-	return make_shared_ptr<ParquetReader>(context, union_data.file_name, union_data.options, union_data.metadata);
+	return make_shared_ptr<ParquetReader>(context, union_data.file, union_data.options, union_data.metadata);
 }
 
 shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &,
-                                                              const string &filename, idx_t file_idx,
+                                                              const OpenFileInfo &file, idx_t file_idx,
                                                               const MultiFileBindData &multi_bind_data) {
 	auto &bind_data = multi_bind_data.bind_data->Cast<ParquetReadBindData>();
-	return make_shared_ptr<ParquetReader>(context, filename, bind_data.parquet_options);
+	return make_shared_ptr<ParquetReader>(context, file.path, bind_data.parquet_options);
 }
 
-shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
+shared_ptr<BaseFileReader> ParquetMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
                                                               ParquetOptions &options, const MultiFileOptions &) {
-	return make_shared_ptr<ParquetReader>(context, filename, options);
+	return make_shared_ptr<ParquetReader>(context, file.path, options);
 }
 
 shared_ptr<BaseUnionData> ParquetMultiFileInfo::GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx) {
 	auto &scan = scan_p->Cast<ParquetReader>();
-	auto result = make_uniq<ParquetUnionData>(scan.file_name);
+	auto result = make_uniq<ParquetUnionData>(scan.file);
 	if (file_idx == 0) {
 		for (auto &column : scan.columns) {
 			result->names.push_back(column.name);

@@ -26,6 +26,7 @@ duckdb_extension_load(httpfs
     GIT_URL https://github.com/duckdb/duckdb-httpfs
     GIT_TAG 85ac4667bcb0d868199e156f8dd918b0278db7b9
     INCLUDE_DIR extension/httpfs/include
+    APPLY_PATCHES
     )
 
 ### Skip due to missing patch
@@ -56,6 +57,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-azure
             GIT_TAG 1593cb56745a51eb7d8415c1fd7d11a15f20f413
+            APPLY_PATCHES
             )
 endif()
 
@@ -79,10 +81,12 @@ duckdb_extension_load(excel
     GIT_URL https://github.com/duckdb/duckdb-excel
     GIT_TAG b724b308b2b3a3c5644272cc84ec140fbcc7617d
     INCLUDE_DIR src/excel/include
+    APPLY_PATCHES
     )
 
 ################# ICEBERG
 # Windows tests for iceberg currently not working
+if (FALSE)
 IF (NOT WIN32)
     set(LOAD_ICEBERG_TESTS "LOAD_TESTS")
 else ()
@@ -95,6 +99,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED} AND NOT ${MUSL_ENABLED})
             GIT_URL https://github.com/duckdb/duckdb-iceberg
             GIT_TAG 2db98c685f67373b347c3a8c435ef2e01c509697
             )
+endif()
 endif()
 
 ################# INET
@@ -128,6 +133,7 @@ duckdb_extension_load(spatial
     GIT_TAG 4be6065edc313a53ff2196ff79c11a0d5e249720
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 endif()
 
