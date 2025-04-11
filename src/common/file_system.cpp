@@ -366,8 +366,30 @@ string FileSystem::ExpandPath(const string &path) {
 }
 
 // LCOV_EXCL_START
+unique_ptr<FileHandle> FileSystem::OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
+                                                    optional_ptr<FileOpener> opener) {
+	// for backwards compatibility purposes - default to OpenFile
+	throw NotImplementedException("%s: OpenFileExtended is not implemented!", GetName());
+}
+
 unique_ptr<FileHandle> FileSystem::OpenFile(const string &path, FileOpenFlags flags, optional_ptr<FileOpener> opener) {
+	if (SupportsOpenFileExtended()) {
+		return OpenFileExtended(OpenFileInfo(path), flags, opener);
+	}
 	throw NotImplementedException("%s: OpenFile is not implemented!", GetName());
+}
+
+unique_ptr<FileHandle> FileSystem::OpenFile(const OpenFileInfo &file, FileOpenFlags flags,
+                                            optional_ptr<FileOpener> opener) {
+	if (SupportsOpenFileExtended()) {
+		return OpenFileExtended(file, flags, opener);
+	} else {
+		return OpenFile(file.path, flags, opener);
+	}
+}
+
+bool FileSystem::SupportsOpenFileExtended() const {
+	return false;
 }
 
 void FileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) {
@@ -463,7 +485,7 @@ bool FileSystem::HasGlob(const string &str) {
 	return false;
 }
 
-vector<string> FileSystem::Glob(const string &path, FileOpener *opener) {
+vector<OpenFileInfo> FileSystem::Glob(const string &path, FileOpener *opener) {
 	throw NotImplementedException("%s: Glob is not implemented!", GetName());
 }
 
@@ -504,7 +526,7 @@ static string LookupExtensionForPattern(const string &pattern) {
 	return "";
 }
 
-vector<string> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
+vector<OpenFileInfo> FileSystem::GlobFiles(const string &pattern, ClientContext &context, FileGlobOptions options) {
 	auto result = Glob(pattern);
 	if (result.empty()) {
 		string required_extension = LookupExtensionForPattern(pattern);

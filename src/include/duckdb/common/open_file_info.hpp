@@ -19,6 +19,11 @@ struct OpenFileInfo {
 	}
 
 	string path;
+
+public:
+	bool operator<(const OpenFileInfo &rhs) const {
+		return path < rhs.path;
+	}
 };
 
 } // namespace duckdb

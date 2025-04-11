@@ -26,6 +26,7 @@ duckdb_extension_load(httpfs
     GIT_URL https://github.com/duckdb/duckdb-httpfs
     GIT_TAG 85ac4667bcb0d868199e156f8dd918b0278db7b9
     INCLUDE_DIR extension/httpfs/include
+    APPLY_PATCHES
     )
 
 ### Skip due to missing patch
@@ -56,6 +57,7 @@ if (NOT MINGW AND NOT ${WASM_ENABLED})
             LOAD_TESTS
             GIT_URL https://github.com/duckdb/duckdb-azure
             GIT_TAG 1593cb56745a51eb7d8415c1fd7d11a15f20f413
+            APPLY_PATCHES
             )
 endif()
 
@@ -128,6 +130,7 @@ duckdb_extension_load(spatial
     GIT_TAG 4be6065edc313a53ff2196ff79c11a0d5e249720
     INCLUDE_DIR spatial/include
     TEST_DIR test/sql
+    APPLY_PATCHES
     )
 endif()
 
