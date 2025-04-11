@@ -81,6 +81,7 @@ duckdb_extension_load(excel
     GIT_URL https://github.com/duckdb/duckdb-excel
     GIT_TAG b724b308b2b3a3c5644272cc84ec140fbcc7617d
     INCLUDE_DIR src/excel/include
+    APPLY_PATCHES
     )
 
 ################# ICEBERG
