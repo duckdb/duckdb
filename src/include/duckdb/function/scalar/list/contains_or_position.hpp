@@ -15,18 +15,8 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 
 	idx_t total_matches = 0;
 
-	ValidityMask target_mask;
 	UnifiedVectorFormat target_format;
-	if (SET_TARGET_VALID) {
-		target_vec.ToUnifiedFormat(count, target_format);
-		if (target_vec.GetVectorType() == VectorType::FLAT_VECTOR ||
-		    target_vec.GetVectorType() == VectorType::CONSTANT_VECTOR) {
-			target_mask.Copy(target_format.validity, count);
-			target_format.validity.SetAllValid(count);
-		} else {
-			target_mask = target_format.validity;
-		}
-	}
+	target_vec.ToUnifiedFormat(count, target_format);
 
 	// Single call to BinaryExecutor::ExecuteWithNulls
 	BinaryExecutor::ExecuteWithNulls<list_entry_t, T, RETURN_TYPE>(
@@ -39,19 +29,15 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 			    return 0;
 		    }
 
-		    for (auto i = list.offset; i < list.offset + list.length; i++) {
-			    const auto entry_idx = source_format.sel->get_index(i);
-			    bool is_valid = source_format.validity.RowIsValid(entry_idx);
-			    bool matches = false;
-			    if (SET_TARGET_VALID) {
-				    const auto target_idx = target_format.sel->get_index(out_idx);
-				    matches = !DistinctFrom::Operation<T>(source_data[entry_idx], target, !is_valid,
-				                                          !target_mask.RowIsValid(target_idx));
-			    } else {
-				    matches = (is_valid && Equals::Operation<T>(source_data[entry_idx], target));
-			    }
+			const auto target_entry_idx = target_format.sel->get_index(out_idx);
+		    const bool target_valid = target_format.validity.RowIsValid(target_entry_idx);
 
-			    if (matches) {
+	    	for (auto i = list.offset; i < list.offset + list.length; i++) {
+			    const auto source_entry_idx = source_format.sel->get_index(i);
+			    const bool source_valid = source_format.validity.RowIsValid(source_entry_idx);
+
+		    	if ((SET_TARGET_VALID && !source_valid && !target_valid) || (source_valid &&
+				   Equals::Operation<T>(source_data[source_entry_idx], target))) {
 				    total_matches++;
 				    return RETURN_POSITION ? UnsafeNumericCast<RETURN_TYPE>(1 + i - list.offset) : 1;
 			    }
