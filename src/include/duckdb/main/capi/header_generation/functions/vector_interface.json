@@ -3,6 +3,36 @@
     "deprecated": false,
     "entries": [
         {
+            "name": "duckdb_create_vector",
+            "return_type": "duckdb_vector",
+            "params": [
+                {
+                    "type": "duckdb_logical_type",
+                    "name": "type"
+                },
+                {
+                    "type": "idx_t",
+                    "name": "capacity"
+                }
+            ],
+            "comment": {
+                "description": "Creates a flat vector.\n\n"
+            }
+        },
+        {
+            "name": "duckdb_destroy_vector",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector *",
+                    "name": "vector"
+                }
+            ],
+            "comment": {
+                "description": "Destroys the vector and de-allocates all memory allocated for that vector, if unused else where.\n\n"
+            }
+        },
+        {
             "name": "duckdb_vector_get_column_type",
             "return_type": "duckdb_logical_type",
             "params": [
@@ -267,6 +297,40 @@
                     "selection": "The selection vector",
                     "len": "The length of the selection vector"
                 }
+            }
+        },
+        {
+            "name": "duckdb_vector_reference_value",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "vector"
+                },
+                {
+                    "type": "duckdb_value",
+                    "name": "value"
+                }
+            ],
+            "comment": {
+                "description": "Copies the value from `value` to `vector`.\n"
+            }
+        },
+        {
+            "name": "duckdb_vector_reference_vector",
+            "return_type": "void",
+            "params": [
+                {
+                    "type": "duckdb_vector",
+                    "name": "to_vector"
+                },
+                {
+                    "type": "duckdb_vector",
+                    "name": "from_vector"
+                }
+            ],
+            "comment": {
+                "description": "References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer \n\n"
             }
         }
     ]
