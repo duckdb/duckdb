@@ -76,13 +76,6 @@ index 61d64b6..ab64998 100644
  target_link_libraries(${EXTENSION_NAME} ${ALL_AVRO_LIBRARIES})
  target_link_libraries(${LOADABLE_EXTENSION_NAME} ${ALL_AVRO_LIBRARIES})
  
-diff --git a/duckdb b/duckdb
-index 8e52ec4..2751d8c 160000
---- a/duckdb
-+++ b/duckdb
-@@ -1 +1 @@
--Subproject commit 8e52ec43959ab363643d63cb78ee214577111da4
-+Subproject commit 2751d8ca93f2c0adfa7b608f36a0d12df4cdca62
 diff --git a/src/avro_extension.cpp b/src/avro_extension.cpp
 index 65cd5f9..875149b 100644
 --- a/src/avro_extension.cpp
