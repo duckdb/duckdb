@@ -3,7 +3,7 @@
   "deprecated": false,
   "entries": [
     {
-      "name": "duckdb_wrap_external_vector_buffer",
+      "name": "duckdb_wrap_external_buffer_as_vector_buffer",
       "return_type": "duckdb_vector_buffer",
       "params": [
         {
@@ -16,7 +16,7 @@
         }
       ],
       "comment": {
-        "description": "Create a new duckdb vector buffer wrapping a externally allocated buffer with a function to specify that the memory is no long required by duckdb.\n",
+        "description": "Create a new duckdb vector buffer wrapping a externally allocated buffer with a function to specify that the memory is no long required by duckdb.\nThis must be freed with `duckdb_free_external_vector_buffer`.\n",
         "param_comments": {
           "buffer": "The buffer which should used as a vector buffer.\n",
           "free_fn": "A function which will be called once duckdb is finished with the buffer.\n"
@@ -25,16 +25,16 @@
       }
     },
     {
-      "name": "duckdb_free_external_vector_buffer",
+      "name": "duckdb_free_vector_buffer",
       "return_type": "void",
       "params": [
         {
-          "type": "duckdb_vector_buffer",
+          "type": "duckdb_vector_buffer *",
           "name": "buffer"
         }
       ],
       "comment": {
-        "description": "..."
+        "description": "Free the reference to the buffer created from `duckdb_wrap_external_buffer_as_vector_buffer`"
       }
     }
   ]
