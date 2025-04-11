@@ -241,13 +241,13 @@ void duckdb_slice_vector(duckdb_vector dict, duckdb_selection_vector selection, 
 	ddict->Slice(*dselection, len);
 }
 
-void duckdb_assign_constant_to_vector(duckdb_vector vector, duckdb_value value) {
+void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value) {
 	auto dvector = reinterpret_cast<duckdb::Vector *>(vector);
 	auto dvalue = reinterpret_cast<duckdb::Value *>(value);
 	dvector->Reference(*dvalue);
 }
 
-void duckdb_reference_vector_from_vector(duckdb_vector to_vector, duckdb_vector from_vector) {
+void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector) {
 	auto dto_vector = reinterpret_cast<duckdb::Vector *>(to_vector);
 	auto dfrom_vector = reinterpret_cast<duckdb::Vector *>(from_vector);
 	dto_vector->Reference(*dfrom_vector);

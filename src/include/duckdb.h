@@ -3075,13 +3075,13 @@ DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vec
 /*!
 Copies the value from `value` to `vector`.
 */
-DUCKDB_C_API void duckdb_assign_constant_to_vector(duckdb_vector vector, duckdb_value value);
+DUCKDB_C_API void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value);
 
 /*!
 References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer
 
 */
-DUCKDB_C_API void duckdb_reference_vector_from_vector(duckdb_vector to_vector, duckdb_vector from_vector);
+DUCKDB_C_API void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
