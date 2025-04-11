@@ -11,6 +11,7 @@
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/storage/storage_lock.hpp"
 #include "duckdb/common/enums/checkpoint_type.hpp"
+#include "duckdb/common/queue.hpp"
 
 namespace duckdb {
 class DuckTransaction;
@@ -24,6 +25,7 @@ struct DuckCleanupInfo {
 	vector<unique_ptr<DuckTransaction>> transactions;
 
 	void Cleanup() noexcept;
+	bool ScheduleCleanup() noexcept;
 };
 
 //! The Transaction Manager is responsible for creating and managing
@@ -84,9 +86,9 @@ private:
 	//! Generates a new commit timestamp
 	transaction_t GetCommitTimestamp();
 	//! Remove the given transaction from the list of active transactions
-	DuckCleanupInfo RemoveTransaction(DuckTransaction &transaction) noexcept;
+	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction) noexcept;
 	//! Remove the given transaction from the list of active transactions
-	DuckCleanupInfo RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept;
+	unique_ptr<DuckCleanupInfo> RemoveTransaction(DuckTransaction &transaction, bool store_transaction) noexcept;
 
 	//! Whether or not we can checkpoint
 	CheckpointDecision CanCheckpoint(DuckTransaction &transaction, unique_ptr<StorageLockKey> &checkpoint_lock,
@@ -120,6 +122,10 @@ private:
 
 	atomic<idx_t> last_uncommitted_catalog_version = {TRANSACTION_ID_START};
 	idx_t last_committed_version = 0;
+
+	mutex cleanup_lock;
+	queue<unique_ptr<DuckCleanupInfo>> cleanup_queue;
+	mutex cleanup_queue_lock;
 
 protected:
 	virtual void OnCommitCheckpointDecision(const CheckpointDecision &decision, DuckTransaction &transaction) {

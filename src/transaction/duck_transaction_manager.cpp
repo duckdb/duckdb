@@ -25,6 +25,10 @@ void DuckCleanupInfo::Cleanup() noexcept {
 	}
 }
 
+bool DuckCleanupInfo::ScheduleCleanup() noexcept {
+	return !transactions.empty();
+}
+
 DuckTransactionManager::DuckTransactionManager(AttachedDatabase &db) : TransactionManager(db) {
 	// start timestamp starts at two
 	current_start_timestamp = 2;
@@ -294,11 +298,29 @@ ErrorData DuckTransactionManager::CommitTransaction(ClientContext &context, Tran
 
 	// Remove the transaction from the list of active transactions and gather cleanup information.
 	auto cleanup_info = RemoveTransaction(transaction, store_transaction);
+	if (cleanup_info->ScheduleCleanup()) {
+		lock_guard<mutex> q_lock(cleanup_queue_lock);
+		cleanup_queue.emplace(std::move(cleanup_info));
+	}
 
-	// We do not need to hold the transaction lock during cleanup of these transactions,
+	// We do not need to hold the transaction lock during cleanup of transactions,
 	// as they (1) have been removed, or (2) exited old_transactions.
 	t_lock.unlock();
-	cleanup_info.Cleanup();
+
+	{
+		lock_guard<mutex> c_lock(cleanup_lock);
+		unique_ptr<DuckCleanupInfo> top_cleanup_info;
+		{
+			lock_guard<mutex> q_lock(cleanup_queue_lock);
+			if (!cleanup_queue.empty()) {
+				top_cleanup_info = std::move(cleanup_queue.front());
+				cleanup_queue.pop();
+			}
+		}
+		if (top_cleanup_info) {
+			top_cleanup_info->Cleanup();
+		}
+	}
 
 	// now perform a checkpoint if (1) we are able to checkpoint, and (2) the WAL has reached sufficient size to
 	// checkpoint
@@ -319,29 +341,46 @@ void DuckTransactionManager::RollbackTransaction(Transaction &transaction_p) {
 	auto &transaction = transaction_p.Cast<DuckTransaction>();
 
 	ErrorData error;
-	DuckCleanupInfo cleanup_info;
 	{
 		// Obtain the transaction lock and roll back.
 		lock_guard<mutex> t_lock(transaction_lock);
 		error = transaction.Rollback();
 
 		// Remove the transaction from the list of active transactions and gather cleanup information.
-		cleanup_info = RemoveTransaction(transaction);
+		auto cleanup_info = RemoveTransaction(transaction);
+		if (cleanup_info->ScheduleCleanup()) {
+			lock_guard<mutex> q_lock(cleanup_queue_lock);
+			cleanup_queue.emplace(std::move(cleanup_info));
+		}
 	}
-	cleanup_info.Cleanup();
+
+	{
+		lock_guard<mutex> c_lock(cleanup_lock);
+		unique_ptr<DuckCleanupInfo> top_cleanup_info;
+		{
+			lock_guard<mutex> q_lock(cleanup_queue_lock);
+			if (!cleanup_queue.empty()) {
+				top_cleanup_info = std::move(cleanup_queue.front());
+				cleanup_queue.pop();
+			}
+		}
+		if (top_cleanup_info) {
+			top_cleanup_info->Cleanup();
+		}
+	}
 
 	if (error.HasError()) {
 		throw FatalException("Failed to rollback transaction. Cannot continue operation.\nError: %s", error.Message());
 	}
 }
 
-DuckCleanupInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noexcept {
+unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction) noexcept {
 	return RemoveTransaction(transaction, transaction.ChangesMade());
 }
 
-DuckCleanupInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction,
-                                                          bool store_transaction) noexcept {
-	DuckCleanupInfo cleanup_info;
+unique_ptr<DuckCleanupInfo> DuckTransactionManager::RemoveTransaction(DuckTransaction &transaction,
+                                                                      bool store_transaction) noexcept {
+	auto cleanup_info = make_uniq<DuckCleanupInfo>();
 
 	// Find the transaction in the active transactions,
 	// as well as the lowest start time, transaction id, and active query.
@@ -382,9 +421,9 @@ DuckCleanupInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &trans
 	} else if (transaction.ChangesMade()) {
 		// We do not need to store the transaction, directly schedule it for cleanup.
 		current_transaction->awaiting_cleanup = true;
-		cleanup_info.transactions.push_back(std::move(current_transaction));
+		cleanup_info->transactions.push_back(std::move(current_transaction));
 	}
-	cleanup_info.lowest_start_time = lowest_start_time;
+	cleanup_info->lowest_start_time = lowest_start_time;
 
 	// Remove the transaction from the list of active transactions.
 	active_transactions.unsafe_erase_at(t_index);
@@ -446,7 +485,7 @@ DuckCleanupInfo DuckTransactionManager::RemoveTransaction(DuckTransaction &trans
 		// Because we clean up asynchronously, we only clean up once we
 		// no longer need the transaction for anything (i.e., we can move it).
 		for (idx_t t_idx = 0; t_idx < i; t_idx++) {
-			cleanup_info.transactions.push_back(std::move(old_transactions[t_idx]));
+			cleanup_info->transactions.push_back(std::move(old_transactions[t_idx]));
 		}
 		old_transactions.erase(old_transactions.begin(), old_transactions.begin() + static_cast<int64_t>(i));
 	}

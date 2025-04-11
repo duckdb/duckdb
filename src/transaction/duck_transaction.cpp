@@ -111,6 +111,7 @@ void DuckTransaction::PushDelete(DataTable &table, RowVersionManager &info, idx_
 }
 
 void DuckTransaction::PushAppend(DataTable &table, idx_t start_row, idx_t row_count) {
+	ModifyTable(table);
 	auto undo_entry = undo_buffer.CreateEntry(UndoFlags::INSERT_TUPLE, sizeof(AppendInfo));
 	auto append_info = reinterpret_cast<AppendInfo *>(undo_entry.Ptr());
 	append_info->table = &table;
