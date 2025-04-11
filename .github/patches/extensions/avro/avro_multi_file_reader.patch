@@ -857,7 +857,7 @@ index 65cd5f9..875149b 100644
  
 diff --git a/src/avro_multi_file_info.cpp b/src/avro_multi_file_info.cpp
 new file mode 100644
-index 0000000..c7ea64c
+index 0000000..b8b358c
 --- /dev/null
 +++ b/src/avro_multi_file_info.cpp
 @@ -0,0 +1,170 @@
@@ -963,15 +963,15 @@ index 0000000..c7ea64c
 +}
 +
 +shared_ptr<BaseFileReader> AvroMultiFileInfo::CreateReader(ClientContext &context, GlobalTableFunctionState &gstate_p,
-+                                                           const string &filename, idx_t file_idx,
++                                                           const OpenFileInfo &file, idx_t file_idx,
 +                                                           const MultiFileBindData &bind_data) {
-+	return make_shared_ptr<AvroReader>(context, filename);
++	return make_shared_ptr<AvroReader>(context, file.path);
 +}
 +
-+shared_ptr<BaseFileReader> AvroMultiFileInfo::CreateReader(ClientContext &context, const string &filename,
++shared_ptr<BaseFileReader> AvroMultiFileInfo::CreateReader(ClientContext &context, const OpenFileInfo &file,
 +                                                           AvroFileReaderOptions &options,
 +                                                           const MultiFileOptions &file_options) {
-+	return make_shared_ptr<AvroReader>(context, filename);
++	return make_shared_ptr<AvroReader>(context, file.path);
 +}
 +
 +shared_ptr<BaseUnionData> AvroMultiFileInfo::GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx) {
@@ -1033,7 +1033,7 @@ index 0000000..c7ea64c
 +} // namespace duckdb
 diff --git a/src/avro_reader.cpp b/src/avro_reader.cpp
 new file mode 100644
-index 0000000..4bfe74a
+index 0000000..3975633
 --- /dev/null
 +++ b/src/avro_reader.cpp
 @@ -0,0 +1,398 @@
@@ -1143,11 +1143,11 @@ index 0000000..4bfe74a
 +
 +AvroReader::AvroReader(ClientContext &context, string filename_p) : BaseFileReader(std::move(filename_p)) {
 +	auto &fs = FileSystem::GetFileSystem(context);
-+	if (!fs.FileExists(file_name)) {
-+		throw InvalidInputException("Avro file %s not found", file_name);
++	if (!fs.FileExists(this->file.path)) {
++		throw InvalidInputException("Avro file %s not found", this->file.path);
 +	}
 +
-+	auto file = fs.OpenFile(file_name, FileOpenFlags::FILE_FLAGS_READ);
++	auto file = fs.OpenFile(this->file.path, FileOpenFlags::FILE_FLAGS_READ);
 +	allocated_data = Allocator::Get(context).Allocate(file->GetFileSize());
 +	auto n_read = file->Read(allocated_data.get(), allocated_data.GetSize());
 +	D_ASSERT(n_read == file->GetFileSize());
@@ -1454,10 +1454,10 @@ index 807a8ad..941d511 100644
  } // namespace duckdb
 diff --git a/src/include/avro_multi_file_info.hpp b/src/include/avro_multi_file_info.hpp
 new file mode 100644
-index 0000000..5bcd7e3
+index 0000000..4ae1d21
 --- /dev/null
 +++ b/src/include/avro_multi_file_info.hpp
-@@ -0,0 +1,89 @@
+@@ -0,0 +1,88 @@
 +//===----------------------------------------------------------------------===//
 +//                         DuckDB
 +//
@@ -1515,12 +1515,11 @@ index 0000000..5bcd7e3
 +	                                               BaseUnionData &union_data, const MultiFileBindData &bind_data_p);
 +
 +	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, GlobalTableFunctionState &gstate,
-+	                                               const string &filename, idx_t file_idx,
++	                                               const OpenFileInfo &file, idx_t file_idx,
 +	                                               const MultiFileBindData &bind_data);
 +
-+	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const string &filename,
-+	                                               AvroFileReaderOptions &options,
-+	                                               const MultiFileOptions &file_options);
++	static shared_ptr<BaseFileReader> CreateReader(ClientContext &context, const OpenFileInfo &file,
++	                                               AvroFileReaderOptions &options, const MultiFileOptions &file_options);
 +
 +	static shared_ptr<BaseUnionData> GetUnionData(shared_ptr<BaseFileReader> scan_p, idx_t file_idx);
 +
