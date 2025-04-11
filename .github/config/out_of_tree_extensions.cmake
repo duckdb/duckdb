@@ -16,11 +16,6 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# HTTPFS
-# Warning: the patching mechanism on windows doesn't work for httpfs somehow.
-# To patch httpfs:
-#  - add patch file, enable APPLY_PATCHES
-#  - disable windows build of httpfs by wrapping in `if (NOT WIN32)`
-#  - IMPORTANT: add a comment that tells people to restore the windows build when removing the patches
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
