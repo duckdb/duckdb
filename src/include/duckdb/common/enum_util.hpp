@@ -400,6 +400,8 @@ enum class WindowBoundary : uint8_t;
 
 enum class WindowExcludeMode : uint8_t;
 
+enum class ordinality_request_t : uint32_t;
+
 
 template<>
 const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value);
@@ -953,6 +955,9 @@ const char* EnumUtil::ToChars<WindowBoundary>(WindowBoundary value);
 template<>
 const char* EnumUtil::ToChars<WindowExcludeMode>(WindowExcludeMode value);
 
+template<>
+const char* EnumUtil::ToChars<ordinality_request_t>(ordinality_request_t value);
+
 
 template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value);
@@ -1505,6 +1510,9 @@ WindowBoundary EnumUtil::FromString<WindowBoundary>(const char *value);
 
 template<>
 WindowExcludeMode EnumUtil::FromString<WindowExcludeMode>(const char *value);
+
+template<>
+ordinality_request_t EnumUtil::FromString<ordinality_request_t>(const char *value);
 
 
 }
