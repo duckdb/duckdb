@@ -16,11 +16,6 @@
 #  VCPKG_TARGET_TRIPLET=arm64-osx
 
 ################# HTTPFS
-# Warning: the patching mechanism on windows doesn't work for httpfs somehow.
-# To patch httpfs:
-#  - add patch file, enable APPLY_PATCHES
-#  - disable windows build of httpfs by wrapping in `if (NOT WIN32)`
-#  - IMPORTANT: add a comment that tells people to restore the windows build when removing the patches
 duckdb_extension_load(httpfs
     LOAD_TESTS
     GIT_URL https://github.com/duckdb/duckdb-httpfs
@@ -29,16 +24,14 @@ duckdb_extension_load(httpfs
     APPLY_PATCHES
     )
 
-### Skip due to missing patch
-if(FALSE)
 ################# AVRO
 if (NOT MINGW)
     duckdb_extension_load(avro
             LOAD_TESTS DONT_LINK
             GIT_URL https://github.com/duckdb/duckdb-avro
             GIT_TAG ed18629fa56a97e0796a3582110b51ddd125159d
+            APPLY_PATCHES
     )
-endif()
 endif()
 
 ################## AWS
