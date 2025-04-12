@@ -16,6 +16,7 @@
 #include "parquet_writer.hpp"
 #include "reader/struct_column_reader.hpp"
 #include "zstd_file_system.hpp"
+#include "writer/primitive_column_writer.hpp"
 
 #include <fstream>
 #include <iostream>
@@ -767,7 +768,8 @@ struct ParquetWriteBindData : public TableFunctionData {
 		dictionary_size_limit = row_group_size / 20;
 	}
 
-	idx_t string_dictionary_page_size_limit = 1048576;
+	//! This is huge but we grow it starting from 1 MB
+	idx_t string_dictionary_page_size_limit = PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE;
 
 	//! What false positive rate are we willing to accept for bloom filters
 	double bloom_filter_false_positive_ratio = 0.01;
@@ -896,9 +898,10 @@ unique_ptr<FunctionData> ParquetWriteBind(ClientContext &context, CopyFunctionBi
 			dictionary_size_limit_set = true;
 		} else if (loption == "string_dictionary_page_size_limit") {
 			auto val = option.second[0].GetValue<uint64_t>();
-			if (val > PrimitiveDictionary<uint32_t>::MAXIMUM_POSSIBLE_SIZE) {
-				throw BinderException("string_dictionary_page_size_limit must be less than or equal to %llu",
-				                      PrimitiveDictionary<uint32_t>::MAXIMUM_POSSIBLE_SIZE);
+			if (val > PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE || val == 0) {
+				throw BinderException(
+				    "string_dictionary_page_size_limit cannot be 0 and must be less than or equal to %llu",
+				    PrimitiveColumnWriter::MAX_UNCOMPRESSED_DICT_PAGE_SIZE);
 			}
 			bind_data->string_dictionary_page_size_limit = val;
 		} else if (loption == "bloom_filter_false_positive_ratio") {
