@@ -580,9 +580,8 @@ SinkCombineResultType PhysicalCopyToFile::Combine(ExecutionContext &context, Ope
 	return SinkCombineResultType::FINISHED;
 }
 
-SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
-                                              OperatorSinkFinalizeInput &input) const {
-	auto &gstate = input.global_state.Cast<CopyToFunctionGlobalState>();
+SinkFinalizeType PhysicalCopyToFile::FinalizeInternal(ClientContext &context, GlobalSinkState &global_state) const {
+	auto &gstate = global_state.Cast<CopyToFunctionGlobalState>();
 	if (partition_output) {
 		// finalize any outstanding partitions
 		gstate.FinalizePartitions(context, *this);
@@ -610,6 +609,11 @@ SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, 
 		}
 	}
 	return SinkFinalizeType::READY;
+}
+
+SinkFinalizeType PhysicalCopyToFile::Finalize(Pipeline &pipeline, Event &event, ClientContext &context,
+                                              OperatorSinkFinalizeInput &input) const {
+	return FinalizeInternal(context, input.global_state);
 }
 
 //===--------------------------------------------------------------------===//

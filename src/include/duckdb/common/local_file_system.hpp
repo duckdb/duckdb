@@ -67,7 +67,7 @@ public:
 	void FileSync(FileHandle &handle) override;
 
 	//! Runs a glob on the file system, returning a list of matching files
-	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override;
+	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override;
 
 	bool CanHandleFile(const string &fpath) override {
 		//! Whether or not a sub-system can handle a specific file path
@@ -104,7 +104,7 @@ private:
 	void SetFilePointer(FileHandle &handle, idx_t location);
 	idx_t GetFilePointer(FileHandle &handle);
 
-	vector<string> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
+	vector<OpenFileInfo> FetchFileWithoutGlob(const string &path, FileOpener *opener, bool absolute_path);
 };
 
 } // namespace duckdb

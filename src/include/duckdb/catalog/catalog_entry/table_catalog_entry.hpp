@@ -25,8 +25,11 @@ namespace duckdb {
 class DataTable;
 
 struct RenameColumnInfo;
+struct RenameFieldInfo;
 struct AddColumnInfo;
+struct AddFieldInfo;
 struct RemoveColumnInfo;
+struct RemoveFieldInfo;
 struct SetDefaultInfo;
 struct ChangeColumnTypeInfo;
 struct AlterForeignKeyInfo;
@@ -123,6 +126,8 @@ public:
 
 	//! Returns the virtual columns for this table
 	virtual virtual_column_map_t GetVirtualColumns() const;
+
+	virtual vector<column_t> GetRowIdColumns() const;
 
 protected:
 	//! A list of columns that are part of this table

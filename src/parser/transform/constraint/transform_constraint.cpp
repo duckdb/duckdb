@@ -105,9 +105,9 @@ unique_ptr<Constraint> Transformer::TransformConstraint(duckdb_libpgquery::PGCon
 	case duckdb_libpgquery::PG_CONSTR_CHECK:
 		return TransformConstraint(constraint);
 	case duckdb_libpgquery::PG_CONSTR_PRIMARY:
-		return make_uniq<UniqueConstraint>(LogicalIndex(index), true);
+		return make_uniq<UniqueConstraint>(LogicalIndex(index), column.GetName(), true);
 	case duckdb_libpgquery::PG_CONSTR_UNIQUE:
-		return make_uniq<UniqueConstraint>(LogicalIndex(index), false);
+		return make_uniq<UniqueConstraint>(LogicalIndex(index), column.GetName(), false);
 	case duckdb_libpgquery::PG_CONSTR_NULL:
 		return nullptr;
 	case duckdb_libpgquery::PG_CONSTR_GENERATED_VIRTUAL: {

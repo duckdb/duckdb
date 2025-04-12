@@ -51,10 +51,7 @@
         "type": "unordered_map<string, string>"
       }
     ],
-    "pointer_type": "shared_ptr",
-    "constructor": [
-      "$ClientContext"
-    ]
+    "pointer_type": "shared_ptr"
   },
   {
     "class": "ParquetOptionsSerialization",

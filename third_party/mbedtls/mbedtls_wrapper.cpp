@@ -331,7 +331,6 @@ size_t MbedTlsWrapper::AESStateMBEDTLS::Finalize(duckdb::data_ptr_t out, duckdb:
 	mbedtls_cipher_finish(context.get(), out, &result);
 
 	if (cipher == GCM) {
-		// For now only GCM is supported
 		FinalizeGCM(tag, tag_len);
 	}
 

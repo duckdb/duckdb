@@ -10,9 +10,12 @@
 
 #include "duckdb/planner/logical_operator.hpp"
 #include "duckdb/planner/bound_constraint.hpp"
+#include "duckdb/common/index_map.hpp"
 
 namespace duckdb {
 class TableCatalogEntry;
+class LogicalGet;
+class LogicalProjection;
 
 class LogicalUpdate : public LogicalOperator {
 public:
@@ -38,6 +41,9 @@ public:
 
 	idx_t EstimateCardinality(ClientContext &context) override;
 	string GetName() const override;
+
+	DUCKDB_API static void BindExtraColumns(TableCatalogEntry &table, LogicalGet &get, LogicalProjection &proj,
+	                                        LogicalUpdate &update, physical_index_set_t &bound_columns);
 
 protected:
 	vector<ColumnBinding> GetColumnBindings() override;

@@ -57,6 +57,7 @@ struct ParquetScanFilter {
 struct ParquetReaderScanState {
 	vector<idx_t> group_idx_list;
 	int64_t current_group;
+	idx_t offset_in_group;
 	idx_t group_offset;
 	unique_ptr<FileHandle> file_handle;
 	unique_ptr<ColumnReader> root_reader;
@@ -123,7 +124,7 @@ public:
 };
 
 struct ParquetUnionData : public BaseUnionData {
-	explicit ParquetUnionData(string file_name_p) : BaseUnionData(std::move(file_name_p)) {
+	explicit ParquetUnionData(OpenFileInfo file_p) : BaseUnionData(std::move(file_p)) {
 	}
 	~ParquetUnionData() override;
 
@@ -133,7 +134,11 @@ struct ParquetUnionData : public BaseUnionData {
 
 class ParquetReader : public BaseFileReader {
 public:
-	ParquetReader(ClientContext &context, string file_name, ParquetOptions parquet_options,
+	// Reserved field id used for the "ord" field according to the iceberg spec (used for file_row_number)
+	static constexpr int32_t ORDINAL_FIELD_ID = 2147483645;
+
+public:
+	ParquetReader(ClientContext &context, OpenFileInfo file, ParquetOptions parquet_options,
 	              shared_ptr<ParquetFileMetadataCache> metadata = nullptr);
 	~ParquetReader() override;
 
@@ -173,6 +178,8 @@ public:
 	string GetReaderType() const override {
 		return "Parquet";
 	}
+
+	void AddVirtualColumn(column_t virtual_column_id) override;
 
 private:
 	//! Construct a parquet reader but **do not** open a file, used in ReadStatistics only

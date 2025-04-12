@@ -276,7 +276,7 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 		}
 		auto &local_storage = LocalStorage::Get(context.client, data_table.db);
 		if (gstate.initialized) {
-			// Flush the data first, it might be referenced by the Update
+			// Flush any local appends that could be referenced by the UPDATE.
 			data_table.FinalizeLocalAppend(gstate.append_state);
 			gstate.initialized = false;
 		}
@@ -289,6 +289,11 @@ static idx_t PerformOnConflictAction(InsertLocalState &lstate, InsertGlobalState
 		data_table.Delete(delete_state, context.client, row_ids, update_chunk.size());
 	} else {
 		auto &local_storage = LocalStorage::Get(context.client, data_table.db);
+		if (gstate.initialized) {
+			// Flush any local appends that could be referenced by the DELETE.
+			data_table.FinalizeLocalAppend(gstate.append_state);
+			gstate.initialized = false;
+		}
 		local_storage.Delete(data_table, row_ids, update_chunk.size());
 	}
 

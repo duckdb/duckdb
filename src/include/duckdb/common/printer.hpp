@@ -15,6 +15,8 @@ namespace duckdb {
 
 enum class OutputStream : uint8_t { STREAM_STDOUT = 1, STREAM_STDERR = 2 };
 
+typedef void (*line_printer_f)(OutputStream stream, const string &str);
+
 //! Printer is a static class that allows printing to logs or stdout/stderr
 class Printer {
 public:
@@ -40,5 +42,11 @@ public:
 	DUCKDB_API static bool IsTerminal(OutputStream stream);
 	//! The terminal width
 	DUCKDB_API static idx_t TerminalWidth();
+
+	// hook to allow capturing the output and routing it somewhere else / reformat it};
+	static line_printer_f line_printer;
+
+private:
+	static void DefaultLinePrint(OutputStream stream, const string &str);
 };
 } // namespace duckdb
