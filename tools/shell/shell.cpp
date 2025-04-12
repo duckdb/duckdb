@@ -4687,7 +4687,7 @@ static const char zOptions[] =
     "   -markdown            set output mode to 'markdown'\n"
     "   -newline SEP         set output row separator. Default: '\\n'\n"
     "   -no-stdin            exit after processing options instead of reading stdin\n"
-    "   -nullvalue TEXT      set text string for NULL values. Default ''\n"
+    "   -nullvalue TEXT      set text string for NULL values. Default 'NULL'\n"
     "   -quote               set output mode to 'quote'\n"
     "   -readonly            open the database read-only\n"
     "   -s COMMAND           run \"COMMAND\" and exit\n"

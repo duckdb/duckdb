@@ -13,7 +13,7 @@
 namespace duckdb {
 class ParquetReader;
 
-enum class ParquetColumnSchemaType { COLUMN, CAST, FILE_ROW_NUMBER, GEOMETRY };
+enum class ParquetColumnSchemaType { COLUMN, FILE_ROW_NUMBER, GEOMETRY, EXPRESSION };
 
 enum class ParquetExtraTypeInfo {
 	NONE,
@@ -33,8 +33,7 @@ struct ParquetColumnSchema {
 	                    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
 	ParquetColumnSchema(string name, LogicalType type, idx_t max_define, idx_t max_repeat, idx_t schema_index,
 	                    idx_t column_index, ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::COLUMN);
-	ParquetColumnSchema(ParquetColumnSchema parent, LogicalType cast_type,
-	                    ParquetColumnSchemaType schema_type = ParquetColumnSchemaType::CAST);
+	ParquetColumnSchema(ParquetColumnSchema parent, LogicalType result_type, ParquetColumnSchemaType schema_type);
 
 	ParquetColumnSchemaType schema_type;
 	string name;

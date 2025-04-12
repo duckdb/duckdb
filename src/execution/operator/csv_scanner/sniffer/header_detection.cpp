@@ -45,6 +45,11 @@ static string TrimWhitespace(const string &col_name) {
 	return col_name.substr(begin, end - begin);
 }
 
+bool NormalizeThis(const KeywordCategory category, const string &col_name) {
+	return category == KeywordCategory::KEYWORD_UNRESERVED || category == KeywordCategory::KEYWORD_TYPE_FUNC ||
+	       category == KeywordCategory::KEYWORD_RESERVED;
+}
+
 static string NormalizeColumnName(const string &col_name) {
 	// normalize UTF8 characters to NFKD
 	auto nfkd = utf8proc_NFKD(reinterpret_cast<const utf8proc_uint8_t *>(col_name.c_str()),
@@ -89,8 +94,8 @@ static string NormalizeColumnName(const string &col_name) {
 
 	// prepend _ if name starts with a digit or is a reserved keyword
 	auto keyword = KeywordHelper::KeywordCategoryType(col_name_cleaned);
-	if (keyword == KeywordCategory::KEYWORD_TYPE_FUNC || keyword == KeywordCategory::KEYWORD_RESERVED ||
-	    (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
+
+	if (NormalizeThis(keyword, col_name_cleaned) || (col_name_cleaned[0] >= '0' && col_name_cleaned[0] <= '9')) {
 		col_name_cleaned = "_" + col_name_cleaned;
 	}
 	return col_name_cleaned;
@@ -98,7 +103,7 @@ static string NormalizeColumnName(const string &col_name) {
 
 static void ReplaceNames(vector<string> &detected_names, CSVStateMachine &state_machine,
                          unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-                         CSVReaderOptions &options, const MultiFileReaderOptions &file_options,
+                         CSVReaderOptions &options, const MultiFileOptions &file_options,
                          const vector<HeaderValue> &best_header_row, CSVErrorHandler &error_handler) {
 	auto &dialect_options = state_machine.dialect_options;
 	if (!options.columns_set) {
@@ -214,7 +219,7 @@ bool EmptyHeader(const string &col_name, bool is_null, bool normalize) {
 vector<string> CSVSniffer::DetectHeaderInternal(
     ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
     const SetColumns &set_columns, unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-    CSVReaderOptions &options, const MultiFileReaderOptions &file_options, CSVErrorHandler &error_handler) {
+    CSVReaderOptions &options, const MultiFileOptions &file_options, CSVErrorHandler &error_handler) {
 	vector<string> detected_names;
 	auto &dialect_options = state_machine.dialect_options;
 	dialect_options.num_cols = best_sql_types_candidates_per_column_idx.size();

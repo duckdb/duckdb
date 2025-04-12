@@ -38,7 +38,7 @@ on:
       - '.github/patches/duckdb-wasm/**'
       - '.github/workflows/**'
       - '!.github/workflows/Python.yml'
-
+  merge_group:
   pull_request:
     types: [opened, reopened, ready_for_review]
     paths-ignore:
@@ -59,7 +59,7 @@ concurrency:
 env:
   GH_TOKEN: ${{ secrets.GH_TOKEN }}
   OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
-  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || 'cp37-*' }}
+  CIBW_TEST_SKIP: ${{ inputs.skip_tests == 'true' && '*-*' || '{cp37,cp38}-*' }}
 
 jobs:
 # This is just a sanity check of Python 3.10 running with Arrow
@@ -190,8 +190,6 @@ jobs:
             manylinux: manylinux_2_28
           # Speed things up a bit for non-releases
           - isRelease: false
-            python_build: 'cp37-*'
-          - isRelease: false
             python_build: 'cp38-*'
           - isRelease: false
             python_build: 'cp39-*'
@@ -199,6 +197,8 @@ jobs:
             python_build: 'cp310-*'
           - isRelease: false
             python_build: 'cp311-*'
+          - isRelease: false
+            python_build: 'cp312-*'
           - isRelease: false
             arch: aarch64
     env:
@@ -363,9 +363,15 @@ jobs:
           - ${{ startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || inputs.run_all == 'true' }}
         exclude:
           - isRelease: false
+            python_build: 'cp38-*'
+          - isRelease: false
             python_build: 'cp39-*'
           - isRelease: false
+            python_build: 'cp310-*'
+          - isRelease: false
             python_build: 'cp311-*'
+          - isRelease: false
+            python_build: 'cp312-*'
 
       env:
         CIBW_BUILD: ${{ matrix.python_build}}

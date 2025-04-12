@@ -133,18 +133,20 @@ struct SortedAggregateState {
 		}
 	}
 
-	static inline void InitializeChunk(unique_ptr<DataChunk> &chunk, const vector<LogicalType> &types) {
+	static inline void InitializeChunk(Allocator &allocator, unique_ptr<DataChunk> &chunk,
+	                                   const vector<LogicalType> &types) {
 		if (!chunk && !types.empty()) {
 			chunk = make_uniq<DataChunk>();
-			chunk->Initialize(Allocator::DefaultAllocator(), types);
+			chunk->Initialize(allocator, types);
 		}
 	}
 
 	void InitializeChunks(const SortedAggregateBindData &order_bind) {
 		// Lazy instantiation of the buffer chunks
-		InitializeChunk(sort_chunk, order_bind.sort_types);
+		auto &allocator = BufferManager::GetBufferManager(order_bind.context).GetBufferAllocator();
+		InitializeChunk(allocator, sort_chunk, order_bind.sort_types);
 		if (!order_bind.sorted_on_args) {
-			InitializeChunk(arg_chunk, order_bind.arg_types);
+			InitializeChunk(allocator, arg_chunk, order_bind.arg_types);
 		}
 	}
 
@@ -565,10 +567,12 @@ struct SortedAggregateFunction {
 		auto &context = order_bind.context;
 		RowLayout payload_layout;
 		payload_layout.Initialize(order_bind.arg_types);
+
+		auto &buffer_allocator = BufferManager::GetBufferManager(order_bind.context).GetBufferAllocator();
 		DataChunk chunk;
-		chunk.Initialize(Allocator::DefaultAllocator(), order_bind.arg_types);
+		chunk.Initialize(buffer_allocator, order_bind.arg_types);
 		DataChunk sliced;
-		sliced.Initialize(Allocator::DefaultAllocator(), order_bind.arg_types);
+		sliced.Initialize(buffer_allocator, order_bind.arg_types);
 
 		//	 Reusable inner state
 		auto &aggr = order_bind.function;
@@ -607,7 +611,7 @@ struct SortedAggregateFunction {
 		local_sort->Initialize(*global_sort, global_sort->buffer_manager);
 
 		DataChunk prefixed;
-		prefixed.Initialize(Allocator::DefaultAllocator(), global_sort->sort_layout.logical_types);
+		prefixed.Initialize(buffer_allocator, global_sort->sort_layout.logical_types);
 
 		//	Go through the states accumulating values to sort until we hit the sort threshold
 		idx_t unsorted_count = 0;

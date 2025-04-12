@@ -63,7 +63,7 @@ struct HasType {
 //! Sniffer that detects Header, Dialect and Types of CSV Files
 class CSVSniffer {
 public:
-	explicit CSVSniffer(CSVReaderOptions &options_p, const MultiFileReaderOptions &file_options,
+	explicit CSVSniffer(CSVReaderOptions &options_p, const MultiFileOptions &file_options,
 	                    shared_ptr<CSVBufferManager> buffer_manager_p, CSVStateMachineCache &state_machine_cache,
 	                    bool default_null_to_varchar = true);
 
@@ -97,6 +97,9 @@ public:
 	bool EmptyOrOnlyHeader() const;
 
 private:
+	//! If all our candidates failed due to lines being bigger than the max line size.
+	bool all_fail_max_line_size = true;
+	CSVError line_error;
 	//! CSV State Machine Cache
 	CSVStateMachineCache &state_machine_cache;
 	//! Highest number of columns found
@@ -107,7 +110,7 @@ private:
 	//! Reference to original CSV Options, it will be modified as a result of the sniffer.
 	CSVReaderOptions &options;
 	//! The multi-file reader options
-	const MultiFileReaderOptions &file_options;
+	const MultiFileOptions &file_options;
 	//! Buffer being used on sniffer
 	shared_ptr<CSVBufferManager> buffer_manager;
 	//! Information regarding columns that were set by user/query
@@ -195,7 +198,7 @@ private:
 	DetectHeaderInternal(ClientContext &context, vector<HeaderValue> &best_header_row, CSVStateMachine &state_machine,
 	                     const SetColumns &set_columns,
 	                     unordered_map<idx_t, vector<LogicalType>> &best_sql_types_candidates_per_column_idx,
-	                     CSVReaderOptions &options, const MultiFileReaderOptions &file_options,
+	                     CSVReaderOptions &options, const MultiFileOptions &file_options,
 	                     CSVErrorHandler &error_handler);
 	vector<string> names;
 	//! If the file only has a header

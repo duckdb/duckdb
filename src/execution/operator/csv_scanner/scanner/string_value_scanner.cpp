@@ -212,7 +212,7 @@ bool StringValueResult::UnsetComment(StringValueResult &result, idx_t buffer_pos
 	return done;
 }
 
-static void SanitizeError(string &value) {
+void FullLinePosition::SanitizeError(string &value) {
 	std::vector<char> char_array(value.begin(), value.end());
 	char_array.push_back('\0'); // Null-terminate the character array
 	Utf8Proc::MakeValid(&char_array[0], char_array.size());
@@ -460,7 +460,7 @@ void StringValueResult::AddValueToVector(const char *value_ptr, const idx_t size
 			error << "Could not convert string \"" << std::string(value_ptr, size) << "\" to \'"
 			      << LogicalTypeIdToString(parse_types[chunk_col_id].type_id) << "\'";
 			auto error_string = error.str();
-			SanitizeError(error_string);
+			FullLinePosition::SanitizeError(error_string);
 
 			current_errors.ModifyErrorMessageOfLastError(error_string);
 		}
@@ -547,7 +547,7 @@ void StringValueResult::AddPossiblyEscapedValue(StringValueResult &result, const
 					error << "Could not convert string \"" << std::string(value_ptr, length) << "\" to \'"
 					      << LogicalTypeIdToString(result.parse_types[result.chunk_col_id].type_id) << "\'";
 					auto error_string = error.str();
-					SanitizeError(error_string);
+					FullLinePosition::SanitizeError(error_string);
 					result.current_errors.ModifyErrorMessageOfLastError(error_string);
 				}
 				result.cur_col_id++;
@@ -769,46 +769,6 @@ void StringValueResult::NullPaddingQuotedNewlineCheck() const {
 	}
 }
 
-//! Reconstructs the current line to be used in error messages
-string FullLinePosition::ReconstructCurrentLine(bool &first_char_nl,
-                                                unordered_map<idx_t, shared_ptr<CSVBufferHandle>> &buffer_handles,
-                                                bool reconstruct_line) const {
-	if (!reconstruct_line || begin == end) {
-		return {};
-	}
-	string result;
-	if (end.buffer_idx == begin.buffer_idx) {
-		if (buffer_handles.find(end.buffer_idx) == buffer_handles.end()) {
-			throw InternalException("CSV Buffer is not available to reconstruct CSV Line, please open an issue with "
-			                        "your query and dataset.");
-		}
-		auto buffer = buffer_handles[begin.buffer_idx]->Ptr();
-		first_char_nl = buffer[begin.buffer_pos] == '\n' || buffer[begin.buffer_pos] == '\r';
-		for (idx_t i = begin.buffer_pos + first_char_nl; i < end.buffer_pos; i++) {
-			result += buffer[i];
-		}
-	} else {
-		if (buffer_handles.find(begin.buffer_idx) == buffer_handles.end() ||
-		    buffer_handles.find(end.buffer_idx) == buffer_handles.end()) {
-			throw InternalException("CSV Buffer is not available to reconstruct CSV Line, please open an issue with "
-			                        "your query and dataset.");
-		}
-		auto first_buffer = buffer_handles[begin.buffer_idx]->Ptr();
-		auto first_buffer_size = buffer_handles[begin.buffer_idx]->actual_size;
-		auto second_buffer = buffer_handles[end.buffer_idx]->Ptr();
-		first_char_nl = first_buffer[begin.buffer_pos] == '\n' || first_buffer[begin.buffer_pos] == '\r';
-		for (idx_t i = begin.buffer_pos + first_char_nl; i < first_buffer_size; i++) {
-			result += first_buffer[i];
-		}
-		for (idx_t i = 0; i < end.buffer_pos; i++) {
-			result += second_buffer[i];
-		}
-	}
-	// sanitize borked line
-	SanitizeError(result);
-	return result;
-}
-
 bool StringValueResult::AddRowInternal() {
 	LinePosition current_line_start = {iterator.pos.buffer_idx, iterator.pos.buffer_pos, buffer_size};
 	idx_t current_line_size = current_line_start - current_line_position.end;
@@ -935,7 +895,16 @@ void StringValueResult::InvalidState(StringValueResult &result) {
 	if (result.quoted) {
 		result.current_errors.Insert(UNTERMINATED_QUOTES, result.cur_col_id, result.chunk_col_id, result.last_position);
 	} else {
-		result.current_errors.Insert(INVALID_STATE, result.cur_col_id, result.chunk_col_id, result.last_position);
+		LinesPerBoundary lines_per_batch(result.iterator.GetBoundaryIdx(), result.lines_read);
+		bool first_nl = false;
+		auto borked_line = result.current_line_position.ReconstructCurrentLine(first_nl, result.buffer_handles,
+		                                                                       result.PrintErrorLine());
+		CSVError csv_error;
+		auto error = CSVError::InvalidState(
+		    result.state_machine.options, result.cur_col_id, lines_per_batch, borked_line,
+		    result.current_line_position.begin.GetGlobalPosition(result.requested_size, first_nl),
+		    result.last_position.GetGlobalPosition(result.requested_size, first_nl), result.path);
+		result.error_handler.Error(error, true);
 	}
 }
 
@@ -998,7 +967,7 @@ StringValueScanner::StringValueScanner(const shared_ptr<CSVBufferManager> &buffe
 }
 
 unique_ptr<StringValueScanner> StringValueScanner::GetCSVScanner(ClientContext &context, CSVReaderOptions &options,
-                                                                 const MultiFileReaderOptions &file_options) {
+                                                                 const MultiFileOptions &file_options) {
 	auto state_machine = make_shared_ptr<CSVStateMachine>(options, options.dialect_options.state_machine_options,
 	                                                      CSVStateMachineCache::Get(context));
 
@@ -1046,20 +1015,17 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 		D_ASSERT(csv_file_scan);
 
 		auto &names = csv_file_scan->GetNames();
-		auto &reader_data = csv_file_scan->reader_data;
 		// Now Do the cast-aroo
-		for (idx_t i = 0; i < reader_data.column_ids.size(); i++) {
-			auto col_idx = MultiFileLocalIndex(i);
-			auto global_idx = reader_data.column_mapping[col_idx];
+		for (idx_t i = 0; i < csv_file_scan->column_ids.size(); i++) {
+			idx_t result_idx = i;
 			if (!csv_file_scan->projection_ids.empty()) {
-				auto local_idx = MultiFileLocalIndex(csv_file_scan->projection_ids[col_idx].second);
-				global_idx = reader_data.column_mapping[local_idx];
+				result_idx = csv_file_scan->projection_ids[i].second;
 			}
-			if (col_idx >= parse_chunk.ColumnCount()) {
+			if (i >= parse_chunk.ColumnCount()) {
 				throw InvalidInputException("Mismatch between the schema of different files");
 			}
-			auto &parse_vector = parse_chunk.data[col_idx];
-			auto &result_vector = insert_chunk.data[global_idx];
+			auto &parse_vector = parse_chunk.data[i];
+			auto &result_vector = insert_chunk.data[result_idx];
 			auto &type = result_vector.GetType();
 			auto &parse_type = parse_vector.GetType();
 			if (!type.IsJSONType() && (type == LogicalType::VARCHAR ||
@@ -1086,7 +1052,6 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 					}
 				}
 				{
-
 					if (state_machine->options.ignore_errors.GetValue()) {
 						vector<Value> row;
 						for (idx_t col = 0; col < parse_chunk.ColumnCount(); col++) {
@@ -1103,7 +1068,7 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 						error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
 						      << type.ToString() << "\'";
 						string error_msg = error.str();
-						SanitizeError(error_msg);
+						FullLinePosition::SanitizeError(error_msg);
 						idx_t row_byte_pos = 0;
 						if (!(result.line_positions_per_row[line_error].begin ==
 						      result.line_positions_per_row[line_error].end)) {
@@ -1111,8 +1076,8 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 							    result.result_size, first_nl);
 						}
 						auto csv_error = CSVError::CastError(
-						    state_machine->options, names[col_idx], error_msg, col_idx, borked_line, lines_per_batch,
-						    row_byte_pos, optional_idx::Invalid(), result_vector.GetType().id(), result.path);
+						    state_machine->options, names[i], error_msg, i, borked_line, lines_per_batch, row_byte_pos,
+						    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 						error_handler->Error(csv_error);
 					}
 				}
@@ -1138,13 +1103,12 @@ void StringValueScanner::Flush(DataChunk &insert_chunk) {
 							error << "Could not convert string \"" << parse_vector.GetValue(line_error) << "\" to \'"
 							      << LogicalTypeIdToString(type.id()) << "\'";
 							string error_msg = error.str();
-							SanitizeError(error_msg);
-							auto csv_error =
-							    CSVError::CastError(state_machine->options, names[col_idx], error_msg, col_idx,
-							                        borked_line, lines_per_batch,
-							                        result.line_positions_per_row[line_error].begin.GetGlobalPosition(
-							                            result.result_size, first_nl),
-							                        optional_idx::Invalid(), result_vector.GetType().id(), result.path);
+							FullLinePosition::SanitizeError(error_msg);
+							auto csv_error = CSVError::CastError(
+							    state_machine->options, names[i], error_msg, i, borked_line, lines_per_batch,
+							    result.line_positions_per_row[line_error].begin.GetGlobalPosition(result.result_size,
+							                                                                      first_nl),
+							    optional_idx::Invalid(), result_vector.GetType().id(), result.path);
 							error_handler->Error(csv_error);
 						}
 					}
@@ -1488,12 +1452,13 @@ void StringValueScanner::ProcessOverBufferValue() {
 			result.EmptyLine(result, iterator.pos.buffer_pos);
 		} else if (!states.IsNotSet() && (!result.comment || !value.Empty())) {
 			idx_t value_size = value.GetSize();
-			if (states.IsDelimiter()) {
+			if (states.IsDelimiter() &&
+			    !result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().empty()) {
 				idx_t extra_delimiter_bytes =
 				    result.state_machine.dialect_options.state_machine_options.delimiter.GetValue().size() - 1;
 				if (extra_delimiter_bytes > value_size) {
 					throw InternalException(
-					    "Value size is lower than the number of extra delimiter bytes in the ProcesOverBufferValue()");
+					    "Value size is lower than the number of extra delimiter bytes in the ProcessOverBufferValue()");
 				}
 				value_size -= extra_delimiter_bytes;
 			}
@@ -1899,6 +1864,7 @@ void StringValueScanner::FinalizeChunkProcess() {
 		}
 		if (states.IsQuotedCurrent() && !found_error &&
 		    state_machine->dialect_options.state_machine_options.strict_mode.GetValue()) {
+			type = UNTERMINATED_QUOTES;
 			// If we finish the execution of a buffer, and we end in a quoted state, it means we have unterminated
 			// quotes
 			result.current_errors.Insert(type, result.cur_col_id, result.chunk_col_id, result.last_position);

@@ -36,7 +36,7 @@ unique_ptr<CreateInfo> ViewCatalogEntry::GetInfo() const {
 	result->schema = schema.name;
 	result->view_name = name;
 	result->sql = sql;
-	result->query = unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy());
+	result->query = query ? unique_ptr_cast<SQLStatement, SelectStatement>(query->Copy()) : nullptr;
 	result->aliases = aliases;
 	result->names = names;
 	result->types = types;
@@ -98,6 +98,10 @@ string ViewCatalogEntry::ToSQL() const {
 	auto info = GetInfo();
 	auto result = info->ToString();
 	return result;
+}
+
+const SelectStatement &ViewCatalogEntry::GetQuery() {
+	return *query;
 }
 
 unique_ptr<CatalogEntry> ViewCatalogEntry::Copy(ClientContext &context) const {

@@ -30,6 +30,7 @@
 #include "duckdb/planner/bound_query_node.hpp"
 #include "duckdb/planner/expression/bound_cast_expression.hpp"
 #include "duckdb/planner/expression/bound_columnref_expression.hpp"
+#include "duckdb/planner/expression_binder/constant_binder.hpp"
 #include "duckdb/planner/expression_binder/index_binder.hpp"
 #include "duckdb/planner/expression_binder/select_binder.hpp"
 #include "duckdb/planner/operator/logical_create.hpp"
@@ -45,9 +46,9 @@
 
 namespace duckdb {
 
-void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog_name, string &schema) {
-	CatalogEntryRetriever retriever(context);
-	if (catalog_name.empty() && !schema.empty()) {
+void Binder::BindSchemaOrCatalog(CatalogEntryRetriever &retriever, string &catalog, string &schema) {
+	auto &context = retriever.GetContext();
+	if (catalog.empty() && !schema.empty()) {
 		// schema is specified - but catalog is not
 		// try searching for the catalog instead
 		auto &db_manager = DatabaseManager::Get(context);
@@ -55,26 +56,31 @@ void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog_name, s
 		if (database) {
 			// we have a database with this name
 			// check if there is a schema
-			auto &search_path = *context.client_data->catalog_search_path;
+			auto &search_path = retriever.GetSearchPath();
 			auto catalog_names = search_path.GetCatalogsForSchema(schema);
 			if (catalog_names.empty()) {
 				catalog_names.push_back(DatabaseManager::GetDefaultDatabase(context));
 			}
 			for (auto &catalog_name : catalog_names) {
-				auto catalog = Catalog::GetCatalogEntry(retriever, catalog_name);
-				if (!catalog) {
+				auto catalog_ptr = Catalog::GetCatalogEntry(retriever, catalog_name);
+				if (!catalog_ptr) {
 					continue;
 				}
-				if (catalog->CheckAmbiguousCatalogOrSchema(context, schema)) {
+				if (catalog_ptr->CheckAmbiguousCatalogOrSchema(context, schema)) {
 					throw BinderException(
 					    "Ambiguous reference to catalog or schema \"%s\" - use a fully qualified path like \"%s.%s\"",
 					    schema, catalog_name, schema);
 				}
 			}
-			catalog_name = schema;
+			catalog = schema;
 			schema = string();
 		}
 	}
+}
+
+void Binder::BindSchemaOrCatalog(ClientContext &context, string &catalog, string &schema) {
+	CatalogEntryRetriever retriever(context);
+	BindSchemaOrCatalog(retriever, catalog, schema);
 }
 
 void Binder::BindSchemaOrCatalog(string &catalog, string &schema) {
@@ -538,7 +544,73 @@ BoundStatement Binder::Bind(CreateStatement &stmt) {
 	case CatalogType::SECRET_ENTRY: {
 		CatalogTransaction transaction = CatalogTransaction(Catalog::GetSystemCatalog(context), context);
 		properties.return_type = StatementReturnType::QUERY_RESULT;
-		return SecretManager::Get(context).BindCreateSecret(transaction, stmt.info->Cast<CreateSecretInfo>());
+
+		auto &info = stmt.info->Cast<CreateSecretInfo>();
+
+		// We need to execute all expressions in the CreateSecretInfo to construct a CreateSecretInput
+		ConstantBinder default_binder(*this, context, "Secret Parameter");
+
+		string provider_string, type_string;
+		vector<string> scope_strings;
+
+		if (info.provider) {
+			auto bound_provider = default_binder.Bind(info.provider);
+			if (bound_provider->HasParameter()) {
+				throw InvalidInputException("Create Secret expressions can not have parameters!");
+			}
+			provider_string =
+			    StringUtil::Lower(ExpressionExecutor::EvaluateScalar(context, *bound_provider, true).ToString());
+		}
+		if (info.type) {
+			auto bound_type = default_binder.Bind(info.type);
+			if (bound_type->HasParameter()) {
+				throw InvalidInputException("Create Secret expressions can not have parameters!");
+			}
+			type_string = StringUtil::Lower(ExpressionExecutor::EvaluateScalar(context, *bound_type, true).ToString());
+		}
+		if (info.scope) {
+			auto bound_scope = default_binder.Bind(info.scope);
+			if (bound_scope->HasParameter()) {
+				throw InvalidInputException("Create Secret expressions can not have parameters!");
+			}
+			// Execute all scope expressions
+			Value scope = ExpressionExecutor::EvaluateScalar(context, *bound_scope, true);
+			if (scope.type() == LogicalType::VARCHAR) {
+				scope_strings.push_back(scope.ToString());
+			} else if (scope.type() == LogicalType::LIST(LogicalType::VARCHAR)) {
+				for (const auto &item : ListValue::GetChildren(scope)) {
+					scope_strings.push_back(item.GetValue<string>());
+				}
+			} else if (scope.type().InternalType() == PhysicalType::STRUCT) {
+				// struct expression with empty keys is also allowed for backwards compatibility to when the create
+				// secret statement would be parsed differently: this allows CREATE SECRET (TYPE x, SCOPE ('bla',
+				// 'bloe'))
+				for (const auto &child : StructValue::GetChildren(scope)) {
+					if (child.type() != LogicalType::VARCHAR) {
+						throw InvalidInputException(
+						    "Invalid input to scope parameter of create secret: only struct of VARCHARs is allowed");
+					}
+					scope_strings.push_back(child.GetValue<string>());
+				}
+			} else {
+				throw InvalidInputException("Create Secret scope must be of type VARCHAR or LIST(VARCHAR)");
+			}
+		}
+
+		// Execute all options expressions
+		case_insensitive_map_t<Value> bound_options;
+		for (auto &option : info.options) {
+			auto bound_value = default_binder.Bind(option.second);
+			if (bound_value->HasParameter()) {
+				throw InvalidInputException("Create Secret expressions can not have parameters!");
+			}
+			bound_options.insert({option.first, ExpressionExecutor::EvaluateScalar(context, *bound_value, true)});
+		}
+
+		CreateSecretInput create_secret_input {type_string,   provider_string, info.storage_type, info.name,
+		                                       scope_strings, bound_options,   info.on_conflict,  info.persist_type};
+
+		return SecretManager::Get(context).BindCreateSecret(transaction, create_secret_input);
 	}
 	default:
 		throw InternalException("Unrecognized type!");
