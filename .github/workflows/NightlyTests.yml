@@ -101,6 +101,43 @@ jobs:
       run: |
           python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
 
+  release-assert-osx:
+    name: Release Assertions OSX
+    runs-on: macos-latest
+    needs: linux-memory-leaks
+    env:
+      GEN: ninja
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      DISABLE_SANITIZER: 1
+      CRASH_ON_ASSERT: 1
+      RUN_SLOW_VERIFIERS: 1
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install Ninja
+      run: brew install ninja
+
+    - name: Setup Ccache
+      uses: hendrikmuhs/ccache-action@main
+      with:
+        key: ${{ github.job }}
+        save: ${{ env.CCACHE_SAVE }}
+
+    - name: Build
+      shell: bash
+      run: UNSAFE_NUMERIC_CAST=1 make relassert
+
+    - name: Test
+      shell: bash
+      run: |
+          python3 scripts/run_tests_one_by_one.py build/relassert/test/unittest "*" --no-exit --timeout 1200
+
   smaller-binary:
     name: Smaller Binary
     runs-on: ubuntu-24.04
