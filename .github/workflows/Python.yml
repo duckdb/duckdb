@@ -123,54 +123,6 @@ jobs:
         # TODO: Use ccache inside container, see https://github.com/pypa/cibuildwheel/issues/1030
         cibuildwheel --output-dir wheelhouse --config-file pyproject.toml duckdb_tarball
 
-  manylinux-extensions-x64:
-    name: Linux Extensions (linux_amd64_gcc4)
-    needs: linux-python3-10
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        duckdb_arch: [linux_amd64_gcc4]
-        vcpkg_triplet: [x64-linux]
-  
-    env:
-      VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
-      VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
-      GEN: ninja
-      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          path: 'duckdb'
-          fetch-depth: 0
-          ref: ${{ inputs.git_ref }}
-
-      - uses: ./duckdb/.github/actions/build_extensions_dockerized
-        with:
-          vcpkg_target_triplet: x64-linux
-          duckdb_arch: linux_amd64_gcc4
-          run_tests: ${{ inputs.skip_tests != 'true' }}
-          override_git_describe: ${{ inputs.override_git_describe }}
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: duckdb-extensions-${{ matrix.duckdb_arch }}
-          path: |
-            build/release/extension/*/*.duckdb_extension
-
-  upload-linux-extensions-gcc4:
-    name: Upload Linux Extensions (gcc4)
-    needs: manylinux-extensions-x64
-    strategy:
-      matrix:
-        duckdb_arch: [linux_amd64_gcc4]
-    uses: ./.github/workflows/_sign_deploy_extensions.yml
-    secrets: inherit
-    with:
-      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
-      duckdb_arch: ${{ matrix.duckdb_arch }}
-      duckdb_sha: ${{ github.sha }}
-
   linux-python3:
     name: Python 3 Linux
     needs: manylinux-extensions-x64
@@ -247,11 +199,12 @@ jobs:
         pip install 'cibuildwheel>=2.16.2' build
         python -m pip install numpy --config-settings=setup-args="-Dallow-noblas=true"
 
-    - uses: actions/download-artifact@v4
-      if: ${{ matrix.arch == 'x86_64' }}
-      with:
-        name: duckdb-extensions-${{ matrix.duckdb_arch }}
-        path: tools/pythonpkg
+    # This could be considered to be added back IF step is executed later than Extensions.yml
+    #- uses: actions/download-artifact@v4
+    #  if: ${{ matrix.arch == 'x86_64' }}
+    #  with:
+    #    name: duckdb-extensions-${{ matrix.duckdb_arch }}
+    #    path: tools/pythonpkg
 
     - name: List extensions to be tested
       shell: bash

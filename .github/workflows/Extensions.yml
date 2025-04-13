@@ -1,0 +1,109 @@
+name: Python
+on:
+  workflow_call:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+      run_all:
+        type: string
+      override_twine_upload:
+        type: string
+  workflow_dispatch:
+    inputs:
+      override_git_describe:
+        type: string
+      git_ref:
+        type: string
+      skip_tests:
+        type: string
+      run_all:
+        type: string
+      override_twine_upload:
+        type: string
+  push:
+    branches-ignore:
+      - 'main'
+      - 'feature'
+      - 'v*.*-*'
+    paths-ignore:
+      - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Extensions.yml'
+  merge_group:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+    paths-ignore:
+      - '**.md'
+      - 'examples/**'
+      - 'test/**'
+      - 'tools/**'
+      - '!tools/pythonpkg/**'
+      - '.github/patches/duckdb-wasm/**'
+      - '.github/workflows/**'
+      - '!.github/workflows/Extensions.yml'
+
+
+concurrency:
+  group: extensions-${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' || github.sha }}-${{ inputs.override_git_describe }}
+  cancel-in-progress: true
+
+env:
+  GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  OVERRIDE_GIT_DESCRIBE: ${{ inputs.override_git_describe }}
+
+jobs:
+  manylinux-extensions-x64:
+    name: Linux Extensions (linux_amd64_gcc4)
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        duckdb_arch: [linux_amd64_gcc4]
+        vcpkg_triplet: [x64-linux]
+  
+    env:
+      VCPKG_TARGET_TRIPLET: ${{ matrix.vcpkg_triplet }}
+      VCPKG_TOOLCHAIN_PATH: ${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+      GEN: ninja
+      DUCKDB_PLATFORM: ${{ matrix.duckdb_arch }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: 'duckdb'
+          fetch-depth: 0
+          ref: ${{ inputs.git_ref }}
+
+      - uses: ./duckdb/.github/actions/build_extensions_dockerized
+        with:
+          vcpkg_target_triplet: x64-linux
+          duckdb_arch: linux_amd64_gcc4
+          run_tests: ${{ inputs.skip_tests != 'true' }}
+          override_git_describe: ${{ inputs.override_git_describe }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: duckdb-extensions-${{ matrix.duckdb_arch }}
+          path: |
+            build/release/extension/*/*.duckdb_extension
+
+  upload-linux-extensions-gcc4:
+    name: Upload Linux Extensions (gcc4)
+    needs: manylinux-extensions-x64
+    strategy:
+      matrix:
+        duckdb_arch: [linux_amd64_gcc4]
+    uses: ./.github/workflows/_sign_deploy_extensions.yml
+    secrets: inherit
+    with:
+      extension_artifact_name: duckdb-extensions-${{ matrix.duckdb_arch }}
+      duckdb_arch: ${{ matrix.duckdb_arch }}
+      duckdb_sha: ${{ github.sha }}
