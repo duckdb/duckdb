@@ -10,8 +10,6 @@ on:
         type: string
       run_all:
         type: string
-      override_twine_upload:
-        type: string
   workflow_dispatch:
     inputs:
       override_git_describe:
@@ -21,8 +19,6 @@ on:
       skip_tests:
         type: string
       run_all:
-        type: string
-      override_twine_upload:
         type: string
   push:
     branches-ignore:

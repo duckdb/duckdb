@@ -19,6 +19,15 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  extensions:
+    uses: ./.github/workflows/Extensions.yml
+    secrets: inherit
+    with:
+      override_git_describe: ${{ inputs.override_git_describe }}
+      git_ref: ${{ inputs.git_ref }}
+      skip_tests: ${{ inputs.skip_tests }}
+      run_all: ${{ inputs.run_all }}
+
   osx:
     uses: ./.github/workflows/OSX.yml
     secrets: inherit
@@ -91,6 +100,7 @@ jobs:
     uses: ./.github/workflows/NotifyExternalRepositories.yml
     secrets: inherit
     needs:
+      - extensions
       - osx
       - linux-release
       - windows
@@ -108,6 +118,7 @@ jobs:
     uses: ./.github/workflows/NotifyExternalRepositories.yml
     secrets: inherit
     needs:
+      - extensions
       - osx
       - linux-release
       - windows
