@@ -2914,6 +2914,18 @@ DUCKDB_C_API void duckdb_data_chunk_set_size(duckdb_data_chunk chunk, idx_t size
 //===--------------------------------------------------------------------===//
 
 /*!
+Creates a flat vector.
+
+*/
+DUCKDB_C_API duckdb_vector duckdb_create_vector(duckdb_logical_type type, idx_t capacity);
+
+/*!
+Destroys the vector and de-allocates all memory allocated for that vector, if unused else where.
+
+*/
+DUCKDB_C_API void duckdb_destroy_vector(duckdb_vector *vector);
+
+/*!
 Retrieves the column type of the specified vector.
 
 The result must be destroyed with `duckdb_destroy_logical_type`.
@@ -3061,15 +3073,15 @@ The resulting vector happens to be a dictionary vector.
 DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, duckdb_selection_vector selection, idx_t len);
 
 /*!
-Returns the debug string from the data chunk.
-The string returned must be freed.
+Copies the value from `value` to `vector`.
 */
-DUCKDB_C_API const char *duckdb_data_chunk_to_string(duckdb_data_chunk chunk);
+DUCKDB_C_API void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value);
 
 /*!
-Verifies the data chunk is a valid chunk.
+References the `from` vector in the `to` vector, this makes take shared ownership of the values buffer
+
 */
-DUCKDB_C_API void duckdb_data_chunk_verify(duckdb_data_chunk chunk);
+DUCKDB_C_API void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
