@@ -32,7 +32,7 @@ public:
 
 	EncodingFunction(const string &encode_type, encode_t encode_function, const idx_t ratio,
 	                 const idx_t bytes_per_iteration)
-	    : encoding_type(encode_type), encode_function(encode_function), ratio(ratio),
+	    : name(encode_type), encode_function(encode_function), ratio(ratio),
 	      bytes_per_iteration(bytes_per_iteration) {
 		D_ASSERT(ratio > 0);
 		D_ASSERT(encode_function);
@@ -41,8 +41,8 @@ public:
 
 	~EncodingFunction() {};
 
-	string GetType() const {
-		return encoding_type;
+	string GetName() const {
+		return name;
 	}
 	encode_t GetFunction() const {
 		return encode_function;
@@ -56,7 +56,7 @@ public:
 
 private:
 	//! The encoding type of this function (e.g., utf-8)
-	string encoding_type;
+	string name;
 	//! The actual encoding function
 	encode_t encode_function;
 	//! Ratio of the max size this encoded buffer could ever reach on a decoded buffer

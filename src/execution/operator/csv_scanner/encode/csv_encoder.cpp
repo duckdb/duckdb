@@ -45,7 +45,7 @@ CSVEncoder::CSVEncoder(const DBConfig &config, const string &encoding_name_to_fi
 		error << "The CSV Reader does not support the encoding: \"" << encoding_name_to_find << "\"\n";
 		error << "The currently supported encodings are: " << '\n';
 		for (auto &encoding_function : loaded_encodings) {
-			error << "*  " << encoding_function.get().GetType() << '\n';
+			error << "*  " << encoding_function.get().GetName() << '\n';
 		}
 		throw InvalidInputException(error.str());
 	}

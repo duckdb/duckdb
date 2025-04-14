@@ -107,11 +107,11 @@ void EncodingFunctionSet::Initialize(DBConfig &config) {
 
 void DBConfig::RegisterEncodeFunction(const EncodingFunction &function) const {
 	lock_guard<mutex> l(encoding_functions->lock);
-	const auto decode_type = function.GetType();
-	if (encoding_functions->functions.find(decode_type) != encoding_functions->functions.end()) {
-		throw InvalidInputException("Decoding function with name %s already registered", decode_type);
+	const auto name = function.GetName();
+	if (encoding_functions->functions.find(name) != encoding_functions->functions.end()) {
+		throw InvalidInputException("Decoding function with name %s already registered", name);
 	}
-	encoding_functions->functions[decode_type] = function;
+	encoding_functions->functions[name] = function;
 }
 
 optional_ptr<EncodingFunction> DBConfig::GetEncodeFunction(const string &name) const {
