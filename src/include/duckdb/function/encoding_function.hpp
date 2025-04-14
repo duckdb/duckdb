@@ -20,21 +20,21 @@ namespace duckdb {
 
 struct DBConfig;
 
+class EncodingFunction;
 //! Decode function, basically takes information about the decoded and the encoded buffers.
 typedef void (*encode_t)(const char *encoded_buffer, idx_t &encoded_buffer_current_position,
                          const idx_t encoded_buffer_size, char *decoded_buffer, idx_t &decoded_buffer_current_position,
-                         const idx_t decoded_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size);
+                         const idx_t decoded_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size, EncodingFunction* encoding_function);
 
 class EncodingFunction {
 public:
-	EncodingFunction() : encode_function(nullptr), ratio(0), bytes_per_iteration(0) {
+	EncodingFunction() : encode_function(nullptr), max_bytes_per_iteration(0) {
 	}
 
-	EncodingFunction(const string &encode_type, encode_t encode_function, const idx_t ratio,
+	EncodingFunction(const string &encode_type, encode_t encode_function,
 	                 const idx_t bytes_per_iteration)
-	    : name(encode_type), encode_function(encode_function), ratio(ratio),
-	      bytes_per_iteration(bytes_per_iteration) {
-		D_ASSERT(ratio > 0);
+	    : name(encode_type), encode_function(encode_function),
+	      max_bytes_per_iteration(bytes_per_iteration) {
 		D_ASSERT(encode_function);
 		D_ASSERT(bytes_per_iteration > 0);
 	};
@@ -47,11 +47,8 @@ public:
 	encode_t GetFunction() const {
 		return encode_function;
 	}
-	idx_t GetRatio() const {
-		return ratio;
-	}
 	idx_t GetBytesPerIteration() const {
-		return bytes_per_iteration;
+		return max_bytes_per_iteration;
 	}
 
 private:
@@ -59,12 +56,10 @@ private:
 	string name;
 	//! The actual encoding function
 	encode_t encode_function;
-	//! Ratio of the max size this encoded buffer could ever reach on a decoded buffer
-	idx_t ratio;
 	//! How many bytes in the decoded buffer one iteration of the encoded function can cause.
 	//! e.g., one iteration of Latin-1 to UTF-8 can generate max 2 bytes.
 	//! However, one iteration of UTF-16 to UTF-8, can generate up to 3 UTF-8 bytes.
-	idx_t bytes_per_iteration;
+	idx_t max_bytes_per_iteration;
 };
 
 //! The set of encoding functions

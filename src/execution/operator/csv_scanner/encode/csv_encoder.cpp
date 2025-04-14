@@ -77,7 +77,7 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 	if (encoded_buffer.HasDataToRead()) {
 		encoding_function->GetFunction()(
 		    encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
-		    decoded_buffer_size, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size);
+		    decoded_buffer_size, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size, encoding_function.get());
 	}
 	// 3. a new encoded buffer from the file
 	while (output_buffer_pos < decoded_buffer_size) {
@@ -88,7 +88,7 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 		encoded_buffer.SetSize(actual_encoded_bytes);
 		encoding_function->GetFunction()(
 		    encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
-		    decoded_buffer_size, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size);
+		    decoded_buffer_size, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size, encoding_function.get());
 		if (output_buffer_pos == current_decoded_buffer_start) {
 			return output_buffer_pos;
 		}

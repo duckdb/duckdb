@@ -12,7 +12,7 @@ struct DefaultEncodeMethod {
 
 void DecodeUTF16ToUTF8(const char *source_buffer, idx_t &source_buffer_current_position, const idx_t source_buffer_size,
                        char *target_buffer, idx_t &target_buffer_current_position, const idx_t target_buffer_size,
-                       char *remaining_bytes_buffer, idx_t &remaining_bytes_size) {
+                       char *remaining_bytes_buffer, idx_t &remaining_bytes_size, EncodingFunction* encoding_function) {
 
 	for (; source_buffer_current_position < source_buffer_size; source_buffer_current_position += 2) {
 		if (target_buffer_current_position == target_buffer_size) {
@@ -65,7 +65,7 @@ void DecodeUTF16ToUTF8(const char *source_buffer, idx_t &source_buffer_current_p
 
 void DecodeLatin1ToUTF8(const char *source_buffer, idx_t &source_buffer_current_position,
                         const idx_t source_buffer_size, char *target_buffer, idx_t &target_buffer_current_position,
-                        const idx_t target_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size) {
+                        const idx_t target_buffer_size, char *remaining_bytes_buffer, idx_t &remaining_bytes_size, EncodingFunction* encoding_function) {
 	for (; source_buffer_current_position < source_buffer_size; source_buffer_current_position++) {
 		if (target_buffer_current_position == target_buffer_size) {
 			// We are done
@@ -95,14 +95,14 @@ void DecodeLatin1ToUTF8(const char *source_buffer, idx_t &source_buffer_current_
 
 void DecodeUTF8(const char *source_buffer, idx_t &source_buffer_current_position, const idx_t source_buffer_size,
                 char *target_buffer, idx_t &target_buffer_current_position, const idx_t target_buffer_size,
-                char *remaining_bytes_buffer, idx_t &remaining_bytes_size) {
+                char *remaining_bytes_buffer, idx_t &remaining_bytes_size, EncodingFunction* encoding_function) {
 	throw InternalException("Decode UTF8 is not a valid function, and should be verified one level up.");
 }
 
 void EncodingFunctionSet::Initialize(DBConfig &config) {
-	config.RegisterEncodeFunction({"utf-8", DecodeUTF8, 1, 1});
-	config.RegisterEncodeFunction({"latin-1", DecodeLatin1ToUTF8, 2, 1});
-	config.RegisterEncodeFunction({"utf-16", DecodeUTF16ToUTF8, 2, 2});
+	config.RegisterEncodeFunction({"utf-8", DecodeUTF8, 1});
+	config.RegisterEncodeFunction({"latin-1", DecodeLatin1ToUTF8, 2});
+	config.RegisterEncodeFunction({"utf-16", DecodeUTF16ToUTF8, 2});
 }
 
 void DBConfig::RegisterEncodeFunction(const EncodingFunction &function) const {
