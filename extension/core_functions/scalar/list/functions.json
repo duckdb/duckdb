@@ -102,7 +102,7 @@
     {
         "name": "list_transform",
         "parameters": "list,lambda",
-        "description": "Returns a list that is the result of applying the `lambda` function to each element of the input `list`. See the Lambda Functions section for more details.",
+        "description": "Returns a list that is the result of applying the `lambda` function to each element of the input `list`. See the Lambda Functions page for more details.",
         "example": "list_transform([1, 2, 3], x -> x + 1)",
         "categories": ["list"],
         "type": "scalar_function",
@@ -111,7 +111,7 @@
     {
         "name": "list_filter",
         "parameters": "list,lambda",
-        "description": "Constructs a list from those elements of the input `list` for which the `lambda` function returns true.",
+        "description": "Constructs a list from those elements of the input `list` for which the `lambda` function returns true. See the Lambda Functions page for more details.",
         "example": "list_filter([3, 4, 5], x -> x > 4)",
         "categories": ["list"],
         "type": "scalar_function",
@@ -120,7 +120,7 @@
     {
         "name": "list_reduce",
         "parameters": "list,lambda[,initial]",
-        "description": "Returns a single value that is the result of applying the `lambda` function to each element of the input `list`, starting with the first element and then repeatedly applying the lambda function to the result of the previous application and the next element of the list. When an initial value is provided, it is used as the first argument to the lambda function.",
+        "description": "Returns a single value that is the result of applying the `lambda` function to each element of the input `list`. See the Lambda Functions page for more details.",
         "example": "list_reduce([1, 2, 3], (x, y) -> x + y)",
         "categories": ["list"],
         "type": "scalar_function_set",

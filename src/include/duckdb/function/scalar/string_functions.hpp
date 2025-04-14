@@ -328,7 +328,7 @@ struct RegexpFun {
 struct RegexpMatchesFun {
 	static constexpr const char *Name = "regexp_matches";
 	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,options::VARCHAR";
-	static constexpr const char *Description = "Returns `true` if `string` contains the `regex`, `false` otherwise.\001Returns `true` if `string` contains the `regex`, `false` otherwise, applying the set of regexp `options`.";
+	static constexpr const char *Description = "Returns `true` if `string` contains the `regex`, `false` otherwise. See the Regular Expressions page for more details.\001Returns `true` if `string` contains the `regex`, `false` otherwise, applying the set of regexp `options`. See the Regular Expressions page for more details.";
 	static constexpr const char *Example = "regexp_matches('anabanana', '(an)*')\001regexp_matches('anabanana', '(AN)+', 'i')";
 	static constexpr const char *Categories = "regex\001regex";
 
@@ -338,7 +338,7 @@ struct RegexpMatchesFun {
 struct RegexpReplaceFun {
 	static constexpr const char *Name = "regexp_replace";
 	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR,replacement::VARCHAR\001string::VARCHAR,regex::VARCHAR,replacement::VARCHAR,options::VARCHAR";
-	static constexpr const char *Description = "If `string` contains the `regex`, replaces the matching part with `replacement`.\001If `string` contains the `regex`, replaces the matching part with `replacement`. A set of regexp `options` is applied.";
+	static constexpr const char *Description = "If `string` contains the `regex`, replaces the matching part with `replacement`. See the Regular Expressions page for more details.\001If `string` contains the `regex`, replaces the matching part with `replacement`. A set of regexp `options` is applied. See the Regular Expressions page for more details.";
 	static constexpr const char *Example = "regexp_replace('hello', '[lo]', '-')\001regexp_replace('hello', '[LO]', '-', 'i')";
 	static constexpr const char *Categories = "regex\001regex";
 
@@ -348,7 +348,7 @@ struct RegexpReplaceFun {
 struct RegexpExtractFun {
 	static constexpr const char *Name = "regexp_extract";
 	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,group::INTEGER\001string::VARCHAR,regex::VARCHAR,group::INTEGER,options::VARCHAR\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[]\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[],options::VARCHAR";
-	static constexpr const char *Description = "If `string` contains the `regex`, returns the first match; otherwise, returns the empty string.\001If `string` contains the `regex`, returns the specified capturing `group`; otherwise, returns the empty string. The group must be a constant value.\001If `string` contains the `regex`, returns the specified capturing `group`, applying the set of regexp `options`; otherwise, returns the empty string. The group must be a constant value.\001If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values.\001If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`, applying the set of regexp `options`; otherwise, returns a struct with the same keys and empty strings as values.";
+	static constexpr const char *Description = "If `string` contains the `regex`, returns the first match; otherwise, returns the empty string. See the Regular Expressions page for more details.\001If `string` contains the `regex`, returns the specified capturing `group`; otherwise, returns the empty string. The group must be a constant value. See the Regular Expressions page for more details.\001If `string` contains the `regex`, returns the specified capturing `group`, applying the set of regexp `options`; otherwise, returns the empty string. The group must be a constant value. See the Regular Expressions page for more details.\001If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. See the Regular Expressions page for more details.\001If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`, applying the set of regexp `options`; otherwise, returns a struct with the same keys and empty strings as values. See the Regular Expressions page for more details.";
 	static constexpr const char *Example = "regexp_extract('abcde', '[a-z]{3}')\001regexp_extract('abc', '([a-z])(b)', 1)\001regexp_extract('ABC', '([a-z])(b)', 1, 'i')\001regexp_extract('2023-04-15', '(\\d+)-(\\d+)-(\\d+)', ['y', 'm', 'd'])\001regexp_extract('John Doe', '([a-z]+) ([a-z]+)', ['first_name', 'last_name'], 'i')";
 	static constexpr const char *Categories = "regex\001regex\001regex\001regex\001regex";
 

@@ -180,7 +180,7 @@ struct ArrayReverseSortFun {
 struct ListTransformFun {
 	static constexpr const char *Name = "list_transform";
 	static constexpr const char *Parameters = "list,lambda";
-	static constexpr const char *Description = "Returns a list that is the result of applying the `lambda` function to each element of the input `list`. See the Lambda Functions section for more details.";
+	static constexpr const char *Description = "Returns a list that is the result of applying the `lambda` function to each element of the input `list`. See the Lambda Functions page for more details.";
 	static constexpr const char *Example = "list_transform([1, 2, 3], x -> x + 1)";
 	static constexpr const char *Categories = "list";
 
@@ -214,7 +214,7 @@ struct ApplyFun {
 struct ListFilterFun {
 	static constexpr const char *Name = "list_filter";
 	static constexpr const char *Parameters = "list,lambda";
-	static constexpr const char *Description = "Constructs a list from those elements of the input `list` for which the `lambda` function returns true.";
+	static constexpr const char *Description = "Constructs a list from those elements of the input `list` for which the `lambda` function returns true. See the Lambda Functions page for more details.";
 	static constexpr const char *Example = "list_filter([3, 4, 5], x -> x > 4)";
 	static constexpr const char *Categories = "list";
 
@@ -236,7 +236,7 @@ struct FilterFun {
 struct ListReduceFun {
 	static constexpr const char *Name = "list_reduce";
 	static constexpr const char *Parameters = "list,lambda[,initial]";
-	static constexpr const char *Description = "Returns a single value that is the result of applying the `lambda` function to each element of the input `list`, starting with the first element and then repeatedly applying the lambda function to the result of the previous application and the next element of the list. When an initial value is provided, it is used as the first argument to the lambda function.";
+	static constexpr const char *Description = "Returns a single value that is the result of applying the `lambda` function to each element of the input `list`. See the Lambda Functions page for more details.";
 	static constexpr const char *Example = "list_reduce([1, 2, 3], (x, y) -> x + y)";
 	static constexpr const char *Categories = "list";
 

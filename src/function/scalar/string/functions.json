@@ -344,7 +344,7 @@
                     {"name": "string", "type": "VARCHAR"},
                     {"name": "regex", "type": "VARCHAR"}
                 ],
-                "description": "Returns `true` if `string` contains the `regex`, `false` otherwise.",
+                "description": "Returns `true` if `string` contains the `regex`, `false` otherwise. See the Regular Expressions page for more details.",
                 "example": "regexp_matches('anabanana', '(an)*')",
                 "categories": ["regex"]
             },
@@ -354,7 +354,7 @@
                     {"name": "regex", "type": "VARCHAR"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "Returns `true` if `string` contains the `regex`, `false` otherwise, applying the set of regexp `options`.",
+                "description": "Returns `true` if `string` contains the `regex`, `false` otherwise, applying the set of regexp `options`. See the Regular Expressions page for more details.",
                 "example": "regexp_matches('anabanana', '(AN)+', 'i')",
                 "categories": ["regex"]
             }
@@ -370,7 +370,7 @@
                     {"name": "regex", "type": "VARCHAR"},
                     {"name": "replacement", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the `regex`, replaces the matching part with `replacement`.",
+                "description": "If `string` contains the `regex`, replaces the matching part with `replacement`. See the Regular Expressions page for more details.",
                 "example": "regexp_replace('hello', '[lo]', '-')",
                 "categories": ["regex"]
             },
@@ -381,7 +381,7 @@
                     {"name": "replacement", "type": "VARCHAR"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the `regex`, replaces the matching part with `replacement`. A set of regexp `options` is applied.",
+                "description": "If `string` contains the `regex`, replaces the matching part with `replacement`. A set of regexp `options` is applied. See the Regular Expressions page for more details.",
                 "example": "regexp_replace('hello', '[LO]', '-', 'i')",
                 "categories": ["regex"]
             }
@@ -396,7 +396,7 @@
                     {"name": "string", "type": "VARCHAR"},
                     {"name": "regex", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the `regex`, returns the first match; otherwise, returns the empty string.",
+                "description": "If `string` contains the `regex`, returns the first match; otherwise, returns the empty string. See the Regular Expressions page for more details.",
                 "example": "regexp_extract('abcde', '[a-z]{3}')",
                 "categories": ["regex"]
             },
@@ -406,7 +406,7 @@
                     {"name": "regex", "type": "VARCHAR"},
                     {"name": "group", "type": "INTEGER"}
                 ],
-                "description": "If `string` contains the `regex`, returns the specified capturing `group`; otherwise, returns the empty string. The group must be a constant value.",
+                "description": "If `string` contains the `regex`, returns the specified capturing `group`; otherwise, returns the empty string. The group must be a constant value. See the Regular Expressions page for more details.",
                 "example": "regexp_extract('abc', '([a-z])(b)', 1)",
                 "categories": ["regex"]
             },
@@ -417,7 +417,7 @@
                     {"name": "group", "type": "INTEGER"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the `regex`, returns the specified capturing `group`, applying the set of regexp `options`; otherwise, returns the empty string. The group must be a constant value.",
+                "description": "If `string` contains the `regex`, returns the specified capturing `group`, applying the set of regexp `options`; otherwise, returns the empty string. The group must be a constant value. See the Regular Expressions page for more details.",
                 "example": "regexp_extract('ABC', '([a-z])(b)', 1, 'i')",
                 "categories": ["regex"]
             },
@@ -427,7 +427,7 @@
                     {"name": "regex", "type": "VARCHAR"},
                     {"name": "name_list", "type": "VARCHAR[]"}
                 ],
-                "description": "If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values.",
+                "description": "If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values. See the Regular Expressions page for more details.",
                 "example": "regexp_extract('2023-04-15', '(\\d+)-(\\d+)-(\\d+)', ['y', 'm', 'd'])",
                 "categories": ["regex"]
             },
@@ -438,7 +438,7 @@
                     {"name": "name_list", "type": "VARCHAR[]"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`, applying the set of regexp `options`; otherwise, returns a struct with the same keys and empty strings as values.",
+                "description": "If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`, applying the set of regexp `options`; otherwise, returns a struct with the same keys and empty strings as values. See the Regular Expressions page for more details.",
                 "example": "regexp_extract('John Doe', '([a-z]+) ([a-z]+)', ['first_name', 'last_name'], 'i')",
                 "categories": ["regex"]
             }
