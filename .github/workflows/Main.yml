@@ -292,15 +292,15 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make debug
+      run: make relassert
 
     - name: Output version info
       shell: bash
-      run: ./build/debug/duckdb -c "PRAGMA version;"
+      run: ./build/relassert/duckdb -c "PRAGMA version;"
 
     - name: Test
       shell: bash
-      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+      run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
  old-gcc:
     name: GCC 4.8
