@@ -65,14 +65,12 @@ jobs:
 
   release-assert:
     name: Release Assertions
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     needs: linux-memory-leaks
     env:
-      CC: gcc-10
-      CXX: g++-10
       GEN: ninja
       BUILD_JEMALLOC: 1
-      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet"
+      CORE_EXTENSIONS: "icu;tpch;tpcds;fts;json;inet;httpfs"
       DISABLE_SANITIZER: 1
       CRASH_ON_ASSERT: 1
       RUN_SLOW_VERIFIERS: 1
