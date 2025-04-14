@@ -93,7 +93,7 @@ private:
 	statistics_update_function_t statistics_update_function;
 
 private:
-	UndoBufferPointer GetUpdateNode(idx_t vector_idx) const;
+	UndoBufferPointer GetUpdateNode(StorageLockKey &lock, idx_t vector_idx) const;
 	void InitializeUpdateInfo(idx_t vector_idx);
 	void InitializeUpdateInfo(UpdateInfo &info, row_t *ids, const SelectionVector &sel, idx_t count, idx_t vector_index,
 	                          idx_t vector_offset);

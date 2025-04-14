@@ -85,7 +85,7 @@ struct MultiFileBindData : public TableFunctionData {
 //! Per-file data for the multi file reader
 struct MultiFileReaderData {
 	// Create data for an unopened file
-	explicit MultiFileReaderData(const string &file_to_be_opened)
+	explicit MultiFileReaderData(const OpenFileInfo &file_to_be_opened)
 	    : reader(nullptr), file_state(MultiFileFileState::UNOPENED), file_mutex(make_uniq<mutex>()),
 	      file_to_be_opened(file_to_be_opened) {
 	}
@@ -120,7 +120,7 @@ struct MultiFileReaderData {
 	vector<unique_ptr<Expression>> expressions;
 
 	//! (only set when file_state is UNOPENED) the file to be opened
-	string file_to_be_opened;
+	OpenFileInfo file_to_be_opened;
 };
 
 struct MultiFileGlobalState : public GlobalTableFunctionState {

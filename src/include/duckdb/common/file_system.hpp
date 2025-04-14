@@ -19,6 +19,7 @@
 #include "duckdb/common/optional_idx.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "duckdb/common/file_open_flags.hpp"
+#include "duckdb/common/open_file_info.hpp"
 #include <functional>
 
 #undef CreateDirectory
@@ -120,6 +121,8 @@ public:
 
 	DUCKDB_API virtual unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                                   optional_ptr<FileOpener> opener = nullptr);
+	DUCKDB_API unique_ptr<FileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags,
+	                                           optional_ptr<FileOpener> opener = nullptr);
 
 	//! Read exactly nr_bytes from the specified location in the file. Fails if nr_bytes could not be read. This is
 	//! equivalent to calling SetFilePointer(location) followed by calling Read().
@@ -211,9 +214,9 @@ public:
 	//! Whether there is a glob in the string
 	DUCKDB_API static bool HasGlob(const string &str);
 	//! Runs a glob on the file system, returning a list of matching files
-	DUCKDB_API virtual vector<string> Glob(const string &path, FileOpener *opener = nullptr);
-	DUCKDB_API vector<string> GlobFiles(const string &path, ClientContext &context,
-	                                    FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
+	DUCKDB_API virtual vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr);
+	DUCKDB_API vector<OpenFileInfo> GlobFiles(const string &path, ClientContext &context,
+	                                          FileGlobOptions options = FileGlobOptions::DISALLOW_EMPTY);
 
 	//! registers a sub-file system to handle certain file name prefixes, e.g. http:// etc.
 	DUCKDB_API virtual void RegisterSubSystem(unique_ptr<FileSystem> sub_fs);
@@ -259,6 +262,11 @@ public:
 	DUCKDB_API static bool IsRemoteFile(const string &path, string &extension);
 
 	DUCKDB_API virtual void SetDisabledFileSystems(const vector<string> &names);
+
+protected:
+	DUCKDB_API virtual unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &path, FileOpenFlags flags,
+	                                                           optional_ptr<FileOpener> opener);
+	DUCKDB_API virtual bool SupportsOpenFileExtended() const;
 
 public:
 	template <class TARGET>

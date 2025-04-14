@@ -102,7 +102,7 @@ public:
 	DUCKDB_API virtual ReaderInitializeType
 	CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
 	              const vector<MultiFileColumnDefinition> &global_columns, const vector<ColumnIndex> &global_column_ids,
-	              optional_ptr<TableFilterSet> filters, const string &initial_file,
+	              optional_ptr<TableFilterSet> filters, const OpenFileInfo &initial_file,
 	              const MultiFileReaderBindData &bind_data, const virtual_column_map_t &virtual_columns);
 
 	//! Finalize the reading of a chunk - applying any constants that are required
@@ -189,7 +189,7 @@ public:
 		}
 
 		for (const auto &file : file_list.Files()) {
-			file_set.insert(file);
+			file_set.insert(file.path);
 		}
 
 		if (data.initial_reader) {

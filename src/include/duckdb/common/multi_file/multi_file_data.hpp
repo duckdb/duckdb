@@ -12,6 +12,7 @@
 #include "duckdb/function/copy_function.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
+#include "duckdb/common/open_file_info.hpp"
 #include <numeric>
 
 namespace duckdb {
