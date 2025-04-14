@@ -15,7 +15,7 @@ namespace duckdb {
 MultiFileColumnMapper::MultiFileColumnMapper(ClientContext &context, MultiFileReaderData &reader_data,
                                              const vector<MultiFileColumnDefinition> &global_columns,
                                              const vector<ColumnIndex> &global_column_ids,
-                                             optional_ptr<TableFilterSet> filters, const string &initial_file,
+                                             optional_ptr<TableFilterSet> filters, const OpenFileInfo &initial_file,
                                              const MultiFileReaderBindData &bind_data,
                                              const virtual_column_map_t &virtual_columns)
     : context(context), reader_data(reader_data), global_columns(global_columns), global_column_ids(global_column_ids),
@@ -181,7 +181,7 @@ void MultiFileColumnMapper::ThrowColumnNotFoundError(const string &global_column
 	                            "the original file \"%s\", but could not be found in file \"%s\".\nCandidate names: "
 	                            "%s\nIf you are trying to "
 	                            "read files with different schemas, try setting union_by_name=True",
-	                            file_name, global_column_name, initial_file, file_name, candidate_names);
+	                            file_name, global_column_name, initial_file.path, file_name, candidate_names);
 }
 
 //! Check if a column is trivially mappable (i.e. the column is effectively identical to the global column)
@@ -365,6 +365,13 @@ unique_ptr<Expression> ConstructMapExpression(ClientContext &context, idx_t loca
 	                                          std::move(bind_data));
 }
 
+bool VirtualColumnIsConstant(column_t column_id) {
+	if (column_id == COLUMN_IDENTIFIER_EMPTY || column_id == MultiFileReader::COLUMN_IDENTIFIER_FILENAME) {
+		return true;
+	}
+	return false;
+}
+
 ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const ColumnMapper &mapper) {
 	auto &reader = *reader_data.reader;
 	auto &local_columns = reader.GetColumns();
@@ -397,28 +404,36 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 		auto &global_id = global_column_ids[i];
 		auto global_column_id = global_id.GetPrimaryIndex();
 
+		auto local_idx = MultiFileLocalIndex(reader.column_ids.size());
 		if (IsVirtualColumn(global_column_id)) {
-			// virtual column - these are emitted for every file
+			// virtual column - look it up in the virtual column entry map
 			auto virtual_entry = virtual_columns.find(global_column_id);
 			if (virtual_entry == virtual_columns.end()) {
 				throw InternalException("Virtual column id %d not found in virtual columns map", global_column_id);
 			}
-			expressions.push_back(make_uniq<BoundConstantExpression>(Value(virtual_entry->second.type)));
-			continue;
-		}
-
-		auto local_idx = MultiFileLocalIndex(reader.column_ids.size());
-		if (global_column_id >= global_columns.size()) {
-			if (bind_data.file_row_number_idx == global_column_id) {
-				// FIXME: this needs a more extensible solution
-				auto new_column_id = MultiFileLocalColumnId(mapper.MapCount());
-				reader.column_ids.push_back(new_column_id);
-				reader.column_indexes.emplace_back(mapper.MapCount());
-				//! FIXME: what to do here???
-				expressions.push_back(make_uniq<BoundReferenceExpression>(LogicalType::BIGINT, local_idx));
-			} else {
-				throw InternalException("Unexpected generated column");
+			auto &virtual_column_type = virtual_entry->second.type;
+			// check if this column is constant for the file
+			if (VirtualColumnIsConstant(global_column_id)) {
+				// the column is constant (e.g. filename or empty) - no need to project from the file
+				expressions.push_back(make_uniq<BoundConstantExpression>(Value(virtual_column_type)));
+				continue;
 			}
+			// the column is not constant for the file - need to push into the projection list
+			auto expr = make_uniq<BoundReferenceExpression>(virtual_column_type, local_idx.GetIndex());
+			reader_data.expressions.push_back(std::move(expr));
+
+			MultiFileLocalColumnId local_id(reader.columns.size());
+			ColumnIndex local_index(local_id.GetId());
+
+			// add the virtual column to the reader
+			reader.columns.emplace_back(virtual_entry->second.name, virtual_column_type);
+			reader.AddVirtualColumn(global_column_id);
+
+			// set it as being projected in this spot
+			MultiFileColumnMap index_mapping(local_idx, virtual_column_type, virtual_column_type);
+			result.global_to_local.insert(make_pair(global_idx.GetIndex(), std::move(index_mapping)));
+			reader.column_ids.push_back(local_id);
+			reader.column_indexes.push_back(std::move(local_index));
 			continue;
 		}
 
@@ -433,8 +448,7 @@ ResultColumnMapping MultiFileColumnMapper::CreateColumnMappingByMapper(const Col
 			ColumnIndex local_index(local_id.GetId());
 			auto &local_type = local_columns[local_id.GetId()].type;
 			auto &global_type = global_column.type;
-			auto local_idx = reader.column_ids.size();
-			auto expr = make_uniq<BoundReferenceExpression>(global_type, local_idx);
+			auto expr = make_uniq<BoundReferenceExpression>(global_type, local_idx.GetIndex());
 			if (global_type != local_type) {
 				reader.cast_map[local_id.GetId()] = global_type;
 			} else {
@@ -583,6 +597,7 @@ static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &cons
 			//! No filter_data assigned (does this mean the DynamicFilter is broken??)
 			return true;
 		}
+		lock_guard<mutex> lock(dynamic_filter.filter_data->lock);
 		if (!dynamic_filter.filter_data->initialized) {
 			//! Not initialized
 			return true;
@@ -591,7 +606,6 @@ static bool EvaluateFilterAgainstConstant(TableFilter &filter, const Value &cons
 			//! No filter present
 			return true;
 		}
-		lock_guard<mutex> lock(dynamic_filter.filter_data->lock);
 		return EvaluateFilterAgainstConstant(*dynamic_filter.filter_data->filter, constant);
 	}
 	default:

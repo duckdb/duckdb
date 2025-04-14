@@ -318,12 +318,14 @@ void ColumnReader::PreparePageV2(PageHeader &page_hdr) {
 
 	auto compressed_bytes = page_hdr.compressed_page_size - uncompressed_bytes;
 
-	ResizeableBuffer compressed_buffer;
-	compressed_buffer.resize(GetAllocator(), compressed_bytes);
-	reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
+	if (compressed_bytes > 0) {
+		ResizeableBuffer compressed_buffer;
+		compressed_buffer.resize(GetAllocator(), compressed_bytes);
+		reader.ReadData(*protocol, compressed_buffer.ptr, compressed_bytes);
 
-	DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes, block->ptr + uncompressed_bytes,
-	                   page_hdr.uncompressed_page_size - uncompressed_bytes);
+		DecompressInternal(chunk->meta_data.codec, compressed_buffer.ptr, compressed_bytes,
+		                   block->ptr + uncompressed_bytes, page_hdr.uncompressed_page_size - uncompressed_bytes);
+	}
 }
 
 void ColumnReader::AllocateBlock(idx_t size) {

@@ -8,6 +8,8 @@
 namespace duckdb {
 
 ExpressionExecutor::ExpressionExecutor(ClientContext &context) : context(&context) {
+	auto &config = DBConfig::GetConfig(context);
+	debug_vector_verification = config.options.debug_verify_vector;
 }
 
 ExpressionExecutor::ExpressionExecutor(ClientContext &context, const Expression *expression)
@@ -139,9 +141,9 @@ void ExpressionExecutor::Verify(const Expression &expr, Vector &vector, idx_t co
 	if (expr.verification_stats) {
 		expr.verification_stats->Verify(vector, count);
 	}
-#ifdef DUCKDB_VERIFY_DICTIONARY_EXPRESSION
-	Vector::DebugTransformToDictionary(vector, count);
-#endif
+	if (debug_vector_verification == DebugVectorVerification::DICTIONARY_EXPRESSION) {
+		Vector::DebugTransformToDictionary(vector, count);
+	}
 }
 
 unique_ptr<ExpressionState> ExpressionExecutor::InitializeState(const Expression &expr,

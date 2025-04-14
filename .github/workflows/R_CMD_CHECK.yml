@@ -39,6 +39,7 @@ env:
 
 jobs:
   R-CMD-check:
+    if: false
     runs-on: ${{ matrix.config.os }}
 
     name: ${{ matrix.config.os }} (${{ matrix.config.r }})

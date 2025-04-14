@@ -20,7 +20,6 @@ body:
             * [duckdb-wasm](https://github.com/duckdb/duckdb-wasm/issues/new)
             * [go-duckdb](https://github.com/marcboeker/go-duckdb/issues/new)
           * Extensions:
-            * [Arrow extension](https://github.com/duckdb/arrow/issues/new)
             * [AWS extension](https://github.com/duckdb/duckdb-aws/issues/new)
             * [Azure extension](https://github.com/duckdb/duckdb-azure/issues/new)
             * [Delta extension](https://github.com/duckdb/duckdb-delta/issues/new)
