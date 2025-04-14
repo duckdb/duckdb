@@ -203,6 +203,10 @@ public:
 		location = location_p;
 	}
 
+	optional_ptr<ReadHead> GetReadHead(idx_t pos) {
+		return ra_buffer.GetReadHead(pos);
+	}
+
 	idx_t GetLocation() {
 		return location;
 	}

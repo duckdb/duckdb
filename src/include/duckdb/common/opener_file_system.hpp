@@ -122,7 +122,7 @@ public:
 		return GetFileSystem().PathSeparator(path);
 	}
 
-	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
+	vector<OpenFileInfo> Glob(const string &path, FileOpener *opener = nullptr) override {
 		VerifyNoOpener(opener);
 		VerifyCanAccessFile(path);
 		return GetFileSystem().Glob(path, GetOpener().get());

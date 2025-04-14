@@ -84,7 +84,11 @@ vector<string> MultiFileReader::ParsePaths(const Value &input) {
 
 shared_ptr<MultiFileList> MultiFileReader::CreateFileList(ClientContext &context, const vector<string> &paths,
                                                           FileGlobOptions options) {
-	auto res = make_uniq<GlobMultiFileList>(context, paths, options);
+	vector<OpenFileInfo> open_files;
+	for (auto &path : paths) {
+		open_files.emplace_back(path);
+	}
+	auto res = make_uniq<GlobMultiFileList>(context, std::move(open_files), options);
 	if (res->GetExpandResult() == FileExpandResult::NO_FILES && options == FileGlobOptions::DISALLOW_EMPTY) {
 		throw IOException("%s needs at least one file to read", function_name);
 	}
@@ -197,27 +201,27 @@ void MultiFileReader::BindOptions(MultiFileOptions &options, MultiFileList &file
 	// Add generated constant columns from hive partitioning scheme
 	if (options.hive_partitioning) {
 		D_ASSERT(files.GetExpandResult() != FileExpandResult::NO_FILES);
-		auto partitions = HivePartitioning::Parse(files.GetFirstFile());
+		auto partitions = HivePartitioning::Parse(files.GetFirstFile().path);
 		// verify that all files have the same hive partitioning scheme
 		for (const auto &file : files.Files()) {
-			auto file_partitions = HivePartitioning::Parse(file);
+			auto file_partitions = HivePartitioning::Parse(file.path);
 			for (auto &part_info : partitions) {
 				if (file_partitions.find(part_info.first) == file_partitions.end()) {
 					string error = "Hive partition mismatch between file \"%s\" and \"%s\": key \"%s\" not found";
 					if (options.auto_detect_hive_partitioning == true) {
-						throw InternalException(error + "(hive partitioning was autodetected)", files.GetFirstFile(),
-						                        file, part_info.first);
+						throw InternalException(error + "(hive partitioning was autodetected)",
+						                        files.GetFirstFile().path, file.path, part_info.first);
 					}
-					throw BinderException(error.c_str(), files.GetFirstFile(), file, part_info.first);
+					throw BinderException(error.c_str(), files.GetFirstFile().path, file.path, part_info.first);
 				}
 			}
 			if (partitions.size() != file_partitions.size()) {
 				string error_msg = "Hive partition mismatch between file \"%s\" and \"%s\"";
 				if (options.auto_detect_hive_partitioning == true) {
-					throw InternalException(error_msg + "(hive partitioning was autodetected)", files.GetFirstFile(),
-					                        file);
+					throw InternalException(error_msg + "(hive partitioning was autodetected)",
+					                        files.GetFirstFile().path, file.path);
 				}
-				throw BinderException(error_msg.c_str(), files.GetFirstFile(), file);
+				throw BinderException(error_msg.c_str(), files.GetFirstFile().path, file.path);
 			}
 		}
 
@@ -330,7 +334,8 @@ MultiFileReader::InitializeGlobalState(ClientContext &context, const MultiFileOp
 ReaderInitializeType MultiFileReader::CreateMapping(ClientContext &context, MultiFileReaderData &reader_data,
                                                     const vector<MultiFileColumnDefinition> &global_columns,
                                                     const vector<ColumnIndex> &global_column_ids,
-                                                    optional_ptr<TableFilterSet> filters, const string &initial_file,
+                                                    optional_ptr<TableFilterSet> filters,
+                                                    const OpenFileInfo &initial_file,
                                                     const MultiFileReaderBindData &bind_data,
                                                     const virtual_column_map_t &virtual_columns) {
 	MultiFileColumnMapper column_mapper(context, reader_data, global_columns, global_column_ids, filters, initial_file,
@@ -369,7 +374,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 		    "%s.\nThis means the %s schema does not match the schema of the table.\nPossible solutions:\n* Insert by "
 		    "name instead of by position using \"INSERT INTO tbl BY NAME SELECT * FROM %s(...)\"\n* Manually specify "
 		    "which columns to insert using \"INSERT INTO tbl SELECT ... FROM %s(...)\"",
-		    reader.file_name, local_col.name, source_type, target_column, target_type, reader_type, function_name,
+		    reader.GetFileName(), local_col.name, source_type, target_column, target_type, reader_type, function_name,
 		    function_name);
 	} else {
 		// read_parquet() with multiple files
@@ -380,7 +385,7 @@ string GetExtendedMultiFileError(const MultiFileBindData &bind_data, const Expre
 		    "* Enable the union_by_name=True option to combine the schema of all %s files "
 		    "(https://duckdb.org/docs/stable/data/multiple_files/combining_schemas)\n"
 		    "* Use a COPY statement to automatically derive types from an existing table.",
-		    reader.file_name, local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
+		    reader.GetFileName(), local_col.name, source_type, target_type, reader_type, reader_type, reader_type);
 	}
 	first_message = StringUtil::Format("failed to cast column \"%s\" from type %s to %s: ", local_col.name, source_type,
 	                                   target_type);
@@ -405,8 +410,8 @@ void MultiFileReader::FinalizeChunk(ClientContext &context, const MultiFileBindD
 			string first_message;
 			string extended_error =
 			    GetExtendedMultiFileError(bind_data, *executor.expressions[i], reader, i, first_message);
-			throw ConversionException("Error while reading file \"%s\": %s: %s\n\n%s", reader.file_name, first_message,
-			                          original_error, extended_error);
+			throw ConversionException("Error while reading file \"%s\": %s: %s\n\n%s", reader.GetFileName(),
+			                          first_message, original_error, extended_error);
 		}
 	}
 	output_chunk.SetCardinality(input_chunk.size());
@@ -498,14 +503,14 @@ void UnionByName::CombineUnionTypes(const vector<string> &col_names, const vecto
 
 bool MultiFileOptions::AutoDetectHivePartitioningInternal(MultiFileList &files, ClientContext &context) {
 	auto first_file = files.GetFirstFile();
-	auto partitions = HivePartitioning::Parse(first_file);
+	auto partitions = HivePartitioning::Parse(first_file.path);
 	if (partitions.empty()) {
 		// no partitions found in first file
 		return false;
 	}
 
 	for (const auto &file : files.Files()) {
-		auto new_partitions = HivePartitioning::Parse(file);
+		auto new_partitions = HivePartitioning::Parse(file.path);
 		if (new_partitions.size() != partitions.size()) {
 			// partition count mismatch
 			return false;
@@ -525,7 +530,7 @@ void MultiFileOptions::AutoDetectHiveTypesInternal(MultiFileList &files, ClientC
 
 	unordered_map<string, LogicalType> detected_types;
 	for (const auto &file : files.Files()) {
-		auto partitions = HivePartitioning::Parse(file);
+		auto partitions = HivePartitioning::Parse(file.path);
 		if (partitions.empty()) {
 			return;
 		}

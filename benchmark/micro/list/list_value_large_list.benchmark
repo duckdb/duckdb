@@ -1,0 +1,13 @@
+# name: benchmark/micro/list/list_value_large_list.benchmark
+# description: LIST_VALUE performance with very large lists
+# group: [list]
+
+name List Value
+group micro
+subgroup list
+
+load
+CREATE TABLE large_list AS SELECT list(i) AS a FROM range(1000000) t(i);
+
+run
+SELECT list_value(a, a, a, a, a) FROM large_list;
