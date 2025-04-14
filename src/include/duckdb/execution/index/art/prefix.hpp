@@ -64,13 +64,6 @@ public:
 	static optional_idx Traverse(ART &art, reference<const Node> &node, const ARTKey &key, idx_t &depth);
 	static optional_idx TraverseMutable(ART &art, reference<Node> &node, const ARTKey &key, idx_t &depth);
 
-	//! Traverse two prefixes to find
-	//! 1. that they match.
-	//! 2. that they mismatch.
-	//! 3. that one prefix contains the other prefix.
-	static bool Traverse(ART &art, reference<Node> &l_node, reference<Node> &r_node, idx_t &pos,
-	                     const GateStatus status);
-
 	//! Removes up to pos bytes from the prefix.
 	//! Shifts all subsequent bytes by pos. Frees empty nodes.
 	static void Reduce(ART &art, Node &node, const idx_t pos);

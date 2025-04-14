@@ -43,6 +43,8 @@ public:
 
 	//! Returns true, if the byte exists, else false.
 	bool HasByte(uint8_t &byte);
+	//! TODO.
+	array_ptr<uint8_t> GetBytes(ArenaAllocator &arena);
 	//! Get the first byte greater or equal to the byte.
 	bool GetNextByte(uint8_t &byte);
 

@@ -111,6 +111,7 @@ private:
 
 private:
 	struct NodeEntry {
+		NodeEntry() = delete;
 		explicit NodeEntry(NODE &node) : node(node), exhausted(false) {};
 		NODE &node;
 		bool exhausted;

@@ -50,6 +50,11 @@ public:
 		return false;
 	}
 
+	//! TODO.
+	array_ptr<uint8_t> GetBytes() {
+		return array_ptr<uint8_t>(key, count);
+	}
+
 	//! Get the first byte greater than or equal to the byte.
 	//! Returns true, if such a byte exists, else false.
 	bool GetNextByte(uint8_t &byte) const {

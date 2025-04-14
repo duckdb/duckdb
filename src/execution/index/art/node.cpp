@@ -410,26 +410,6 @@ bool Node::MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte,
 	return true;
 }
 
-void Node::MergeLeafNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte) {
-	// Merge N7, N15, N256 leaf nodes.
-	D_ASSERT(l_node.IsLeafNode() && r_node.IsLeafNode());
-	D_ASSERT(l_node.GetGateStatus() == GateStatus::GATE_NOT_SET);
-	D_ASSERT(r_node.GetGateStatus() == GateStatus::GATE_NOT_SET);
-
-	auto has_next = r_node.GetNextByte(art, byte);
-	while (has_next) {
-		// Row IDs are always unique.
-		Node::InsertChild(art, l_node, byte);
-		if (byte == NumericLimits<uint8_t>::Maximum()) {
-			break;
-		}
-		byte++;
-		has_next = r_node.GetNextByte(art, byte);
-	}
-
-	Node::Free(art, r_node);
-}
-
 bool Node::MergeNodes(ART &art, Node &other, GateStatus status) {
 	// Merge the smaller node into the bigger node.
 	if (GetType() < other.GetType()) {
@@ -440,7 +420,7 @@ bool Node::MergeNodes(ART &art, Node &other, GateStatus status) {
 	if (IsNode()) {
 		return MergeNormalNodes(art, *this, other, byte, status);
 	}
-	MergeLeafNodes(art, *this, other, byte);
+	//	MergeLeafNodes(art, *this, other, byte);
 	return true;
 }
 
@@ -451,74 +431,6 @@ bool Node::Merge(ART &art, Node &other, const GateStatus status) {
 
 	*this = other;
 	other = Node();
-	return true;
-}
-
-bool Node::PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8_t pos, const GateStatus status) {
-	// r_node's prefix contains l_node's prefix. l_node must be a node with child nodes.
-	D_ASSERT(l_node.IsNode());
-
-	// Check if the next byte (pos) in r_node exists in l_node.
-	auto byte = Prefix::GetByte(art, r_node, pos);
-	auto child = l_node.GetChildMutable(art, byte);
-
-	// Reduce r_node's prefix to the bytes after pos.
-	Prefix::Reduce(art, r_node, pos);
-	if (child) {
-		return child->MergeInternal(art, r_node, status);
-	}
-
-	Node::InsertChild(art, l_node, byte, r_node);
-	r_node.Clear();
-	return true;
-}
-
-void Node::MergeIntoNode4(ART &art, Node &l_node, Node &r_node, const uint8_t pos) {
-	Node l_child;
-	auto l_byte = Prefix::GetByte(art, l_node, pos);
-
-	reference<Node> ref(l_node);
-	auto status = Prefix::Split(art, ref, l_child, pos);
-	Node4::New(art, ref);
-	ref.get().SetGateStatus(status);
-
-	Node4::InsertChild(art, ref, l_byte, l_child);
-
-	auto r_byte = Prefix::GetByte(art, r_node, pos);
-	Prefix::Reduce(art, r_node, pos);
-	Node4::InsertChild(art, ref, r_byte, r_node);
-	r_node.Clear();
-}
-
-bool Node::MergePrefixes(ART &art, Node &other, const GateStatus status) {
-	reference<Node> l_node(*this);
-	reference<Node> r_node(other);
-	auto pos = DConstants::INVALID_INDEX;
-
-	if (l_node.get().GetType() == NType::PREFIX && r_node.get().GetType() == NType::PREFIX) {
-		// Traverse prefixes. Possibly change the referenced nodes.
-		if (!Prefix::Traverse(art, l_node, r_node, pos, status)) {
-			return false;
-		}
-		if (pos == DConstants::INVALID_INDEX) {
-			return true;
-		}
-
-	} else {
-		// l_prefix contains r_prefix.
-		if (l_node.get().GetType() == NType::PREFIX) {
-			swap(*this, other);
-		}
-		pos = 0;
-	}
-
-	D_ASSERT(pos != DConstants::INVALID_INDEX);
-	if (l_node.get().GetType() != NType::PREFIX && r_node.get().GetType() == NType::PREFIX) {
-		return PrefixContainsOther(art, l_node, r_node, UnsafeNumericCast<uint8_t>(pos), status);
-	}
-
-	// The prefixes differ.
-	MergeIntoNode4(art, l_node, r_node, UnsafeNumericCast<uint8_t>(pos));
 	return true;
 }
 
@@ -575,9 +487,9 @@ bool Node::MergeInternal(ART &art, Node &other, const GateStatus status) {
 		D_ASSERT(status == GateStatus::GATE_SET);
 		return MergeNodes(art, other, status);
 	}
-
-	// Merge prefixes.
-	return MergePrefixes(art, other, status);
+	//
+	//	// Merge prefixes.
+	//	return MergePrefixes(art, other, status);
 }
 
 //===--------------------------------------------------------------------===//

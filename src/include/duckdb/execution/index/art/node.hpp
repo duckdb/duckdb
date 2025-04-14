@@ -160,11 +160,7 @@ public:
 
 private:
 	bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const GateStatus status);
-	void MergeLeafNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte);
 	bool MergeNodes(ART &art, Node &other, const GateStatus status);
-	bool PrefixContainsOther(ART &art, Node &l_node, Node &r_node, const uint8_t pos, const GateStatus status);
-	void MergeIntoNode4(ART &art, Node &l_node, Node &r_node, const uint8_t pos);
-	bool MergePrefixes(ART &art, Node &other, const GateStatus status);
 	bool MergeInternal(ART &art, Node &other, const GateStatus status);
 
 private:
