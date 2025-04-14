@@ -12,14 +12,18 @@ on:
         required: true
         default: ''
         type: 'string'
-      triggering_event:
+      triggering-event:
         description: 'Which event triggered the run'
         default: ''
         type: 'string'
-      should_publish:
-        description: 'Should the called workflow push updates'
-        default: 'false'
-        type: 'string'
+      should-publish:
+        description: 'Should the called workflow push updates or not'
+        default: false
+        type: 'boolean'
+      is-success:
+        description: 'True, if all the builds in InvokeCI had succeeded'
+        default: false
+        type: 'boolean'
   workflow_dispatch:
     inputs:
       duckdb-sha:
@@ -32,14 +36,18 @@ on:
         required: true
         default: ''
         type: 'string'
-      triggering_event:
+      triggering-event:
         description: 'Which event triggered the run'
         default: ''
         type: 'string'
-      should_publish:
+      should-publish:
         description: 'Should the called workflow push updates'
-        default: 'false'
-        type: 'string'
+        default: false
+        type: 'boolean'
+      is-success:
+        description: 'True, if all the builds in InvokeCI had succeeded'
+        default: false
+        type: 'boolean'
 
 concurrency:
   group: ${{ github.workflow }}
@@ -49,6 +57,7 @@ jobs:
   notify-odbc-run:
     name: Run ODBC Vendor
     runs-on: ubuntu-latest
+    if: ${{ inputs.is-success }}
     env:
       PAT_USER: ${{ secrets.PAT_USERNAME }}
       PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
