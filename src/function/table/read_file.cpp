@@ -41,7 +41,7 @@ struct ReadTextOperation {
 // Bind
 //------------------------------------------------------------------------------
 struct ReadFileBindData : public TableFunctionData {
-	vector<string> files;
+	vector<OpenFileInfo> files;
 
 	static constexpr const idx_t FILE_NAME_COLUMN = 0;
 	static constexpr const idx_t FILE_CONTENT_COLUMN = 1;
@@ -78,7 +78,7 @@ struct ReadFileGlobalState : public GlobalTableFunctionState {
 	}
 
 	atomic<idx_t> current_file_idx;
-	vector<string> files;
+	vector<OpenFileInfo> files;
 	vector<idx_t> column_ids;
 	bool requires_file_open = false;
 };
@@ -127,13 +127,13 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 	// We utilize projection pushdown here to only read the file content if the 'data' column is requested
 	for (idx_t out_idx = 0; out_idx < output_count; out_idx++) {
 		// Add the file name to the output
-		auto &file_name = bind_data.files[state.current_file_idx + out_idx];
+		auto &file = bind_data.files[state.current_file_idx + out_idx];
 
 		unique_ptr<FileHandle> file_handle = nullptr;
 
 		// Given the columns requested, do we even need to open the file?
 		if (state.requires_file_open) {
-			file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+			file_handle = fs.OpenFile(file.path, FileFlags::FILE_FLAGS_READ);
 		}
 
 		for (idx_t col_idx = 0; col_idx < state.column_ids.size(); col_idx++) {
@@ -146,12 +146,12 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 				switch (proj_idx) {
 				case ReadFileBindData::FILE_NAME_COLUMN: {
 					auto &file_name_vector = output.data[col_idx];
-					auto file_name_string = StringVector::AddString(file_name_vector, file_name);
+					auto file_name_string = StringVector::AddString(file_name_vector, file.path);
 					FlatVector::GetData<string_t>(file_name_vector)[out_idx] = file_name_string;
 				} break;
 				case ReadFileBindData::FILE_CONTENT_COLUMN: {
 					auto file_size_raw = file_handle->GetFileSize();
-					AssertMaxFileSize(file_name, file_size_raw);
+					AssertMaxFileSize(file.path, file_size_raw);
 					auto file_size = UnsafeNumericCast<int64_t>(file_size_raw);
 					auto &file_content_vector = output.data[col_idx];
 					auto content_string = StringVector::EmptyString(file_content_vector, file_size_raw);
@@ -168,7 +168,7 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 						    file_handle->Read(content_string_ptr, UnsafeNumericCast<idx_t>(bytes_to_read));
 						if (actually_read == 0) {
 							// Uh oh, random EOF?
-							throw IOException("Failed to read file '%s' at offset %lu, unexpected EOF", file_name,
+							throw IOException("Failed to read file '%s' at offset %lu, unexpected EOF", file.path,
 							                  file_size - remaining_bytes);
 						}
 						remaining_bytes -= actually_read;
@@ -176,7 +176,7 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 
 					content_string.Finalize();
 
-					OP::VERIFY(file_name, content_string);
+					OP::VERIFY(file.path, content_string);
 
 					FlatVector::GetData<string_t>(file_content_vector)[out_idx] = content_string;
 				} break;
