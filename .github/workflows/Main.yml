@@ -270,8 +270,8 @@ jobs:
     runs-on: ubuntu-24.04
     needs: force-storage
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: clang
+      CXX: clang++
       DISABLE_SANITIZER: 1
       BUILD_JEMALLOC: 1
       CORE_EXTENSIONS: 'icu;json;parquet;tpch'
@@ -282,7 +282,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind clang
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
