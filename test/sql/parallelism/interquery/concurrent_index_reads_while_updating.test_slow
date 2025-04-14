@@ -1,0 +1,40 @@
+# name: test/sql/parallelism/interquery/concurrent_index_reads_while_updating.test_slow
+# description: Test concurrent index reads while updating
+# group: [interquery]
+
+statement ok
+CREATE TABLE integers(i INTEGER PRIMARY KEY, value BIGINT)
+
+statement ok
+INSERT INTO integers SELECT i, i%10 FROM range(10) t(i);
+
+# 10 update threads, 10 reading threads
+concurrentloop threadid 0 20
+
+loop i 0 500
+
+skipif threadid<=10
+statement ok
+SELECT * FROM integers WHERE i=(hash(${threadid} + ${i})%100)
+
+endloop
+
+loop i 0 100
+
+skipif threadid>10
+statement ok
+UPDATE integers SET value = value + 1 WHERE i=${threadid}
+
+skipif threadid>10
+statement ok
+UPDATE integers SET value = value - 1 WHERE i=${threadid}
+
+
+endloop
+
+endloop
+
+query II
+SELECT COUNT(*), SUM(i) FROM integers
+----
+10	45
