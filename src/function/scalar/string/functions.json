@@ -22,17 +22,17 @@
     {
         "name": "concat_ws",
         "parameters": "separator,string,...",
-        "description": "Concatenates strings together separated by the specified separator.",
+        "description": "Concatenates many strings, separated by `separator`. `NULL` inputs are skipped.",
         "example": "concat_ws(', ', 'Banana', 'Apple', 'Melon')",
         "categories": ["string"],
         "type": "scalar_function"
     },
     {
         "name": "concat",
-        "parameters": "string,...",
-        "description": "Concatenates many strings together.",
+        "parameters": "value,...",
+        "description": "Concatenates multiple strings, lists, or blobs. `NULL` inputs are skipped. See also `string || string`.",
         "example": "concat('Hello', ' ', 'World')",
-        "categories": ["string"],
+        "categories": ["string", "list", "blob"],
         "type": "scalar_function"
     },
     {
@@ -61,14 +61,14 @@
         "name": "prefix",
         "parameters": "string,search_string",
         "description": "Returns `true` if `string` starts with `search_string`.",
-        "example": "prefix('abc','ab')",
+        "example": "prefix('abc', 'ab')",
         "type": "scalar_function"
     },
     {
         "name": "suffix",
         "parameters": "string,search_string",
         "description": "Returns `true` if `string` ends with `search_string`.",
-        "example": "suffix('abc','bc')",
+        "example": "suffix('abc', 'bc')",
         "type": "scalar_function",
         "aliases": ["ends_with"]
     },
@@ -209,7 +209,7 @@
             {
                 "parameters": [{"name": "list", "type": "ANY[]"}],
                 "description": "Returns the length of the `list`.",
-                "example": "array_length([1,2,3])",
+                "example": "array_length([1, 2, 3])",
                 "categories": ["list"]
             },
             {
@@ -290,20 +290,20 @@
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"}
+                    {"name": "regex", "type": "VARCHAR"}
                 ],
-                "description": "Splits the `string` along the `pattern`.",
+                "description": "Splits the `string` along the `regex`.",
                 "example": "string_split_regex('hello world; 42', ';? ')",
                 "categories": ["regex"]
             },
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "Splits the `string` along the `pattern`, applying the set of regexp `options`.",
-                "example": "string_split_regex('hello world; 42', ' ?WORLD; ?', 'i');",
+                "description": "Splits the `string` along the `regex`, applying the set of regexp `options`.",
+                "example": "string_split_regex('hello world; 42', ' ?WORLD; ?', 'i')",
                 "categories": ["regex"]
             }
         ],
@@ -316,19 +316,19 @@
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"}
+                    {"name": "regex", "type": "VARCHAR"}
                 ],
-                "description": "Returns `true` if the entire `string` matches the `pattern`.",
+                "description": "Returns `true` if the entire `string` matches the `regex`.",
                 "example": "regexp_full_match('anabanana', '(an)*')",
                 "categories": ["regex"]
             },
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "Returns `true` if the entire `string` matches the `pattern`, applying the set of regexp `options`.",
+                "description": "Returns `true` if the entire `string` matches the `regex`, applying the set of regexp `options`.",
                 "example": "regexp_full_match('Banana', '[a-z]+', 'i')",
                 "categories": ["regex"]
             }
@@ -342,19 +342,19 @@
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"}
+                    {"name": "regex", "type": "VARCHAR"}
                 ],
-                "description": "Returns `true` if `string` contains the regexp `pattern`, `false` otherwise.",
+                "description": "Returns `true` if `string` contains the `regex`, `false` otherwise.",
                 "example": "regexp_matches('anabanana', '(an)*')",
                 "categories": ["regex"]
             },
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "Returns `true` if `string` contains the regexp `pattern`, `false` otherwise, applying the set of regexp `options`.",
+                "description": "Returns `true` if `string` contains the `regex`, `false` otherwise, applying the set of regexp `options`.",
                 "example": "regexp_matches('anabanana', '(AN)+', 'i')",
                 "categories": ["regex"]
             }
@@ -367,21 +367,21 @@
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "replacement", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the regexp `pattern`, replaces the matching part with `replacement`.",
+                "description": "If `string` contains the `regex`, replaces the matching part with `replacement`.",
                 "example": "regexp_replace('hello', '[lo]', '-')",
                 "categories": ["regex"]
             },
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "replacement", "type": "VARCHAR"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the regexp `pattern`, replaces the matching part with `replacement`. A set of regexp `options` is applied.",
+                "description": "If `string` contains the `regex`, replaces the matching part with `replacement`. A set of regexp `options` is applied.",
                 "example": "regexp_replace('hello', '[LO]', '-', 'i')",
                 "categories": ["regex"]
             }
@@ -394,51 +394,51 @@
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"}
+                    {"name": "regex", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the regexp `pattern`, returns the first match; otherwise, returns the empty string.",
+                "description": "If `string` contains the `regex`, returns the first match; otherwise, returns the empty string.",
                 "example": "regexp_extract('abcde', '[a-z]{3}')",
                 "categories": ["regex"]
             },
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "group", "type": "INTEGER"}
                 ],
-                "description": "If `string` contains the regexp `pattern`, returns the specified capturing `group`; otherwise, returns the empty string. The group must be a constant value.",
+                "description": "If `string` contains the `regex`, returns the specified capturing `group`; otherwise, returns the empty string. The group must be a constant value.",
                 "example": "regexp_extract('abc', '([a-z])(b)', 1)",
                 "categories": ["regex"]
             },
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "group", "type": "INTEGER"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the regexp `pattern`, returns the specified capturing `group`, applying the set of regexp `options`; otherwise, returns the empty string. The group must be a constant value.",
+                "description": "If `string` contains the `regex`, returns the specified capturing `group`, applying the set of regexp `options`; otherwise, returns the empty string. The group must be a constant value.",
                 "example": "regexp_extract('ABC', '([a-z])(b)', 1, 'i')",
                 "categories": ["regex"]
             },
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "name_list", "type": "VARCHAR[]"}
                 ],
-                "description": "If `string` contains the regexp `pattern`, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values.",
+                "description": "If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values.",
                 "example": "regexp_extract('2023-04-15', '(\\d+)-(\\d+)-(\\d+)', ['y', 'm', 'd'])",
                 "categories": ["regex"]
             },
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "name_list", "type": "VARCHAR[]"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "If `string` contains the regexp `pattern`, returns the capturing groups as a struct with corresponding names from `name_list`, applying the set of regexp `options`; otherwise, returns a struct with the same keys and empty strings as values.",
+                "description": "If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`, applying the set of regexp `options`; otherwise, returns a struct with the same keys and empty strings as values.",
                 "example": "regexp_extract('John Doe', '([a-z]+) ([a-z]+)', ['first_name', 'last_name'], 'i')",
                 "categories": ["regex"]
             }
@@ -451,30 +451,30 @@
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"}
+                    {"name": "regex", "type": "VARCHAR"}
                 ],
-                "description": "Returns a list with the non-overlapping occurrences of the `pattern` in the `string`.",
+                "description": "Returns a list with the non-overlapping occurrences of the `regex` in the `string`.",
                 "example": "regexp_extract_all('Peter: 33, Paul:14', '\\d+')",
                 "categories": ["regex"]
             },
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "group", "type": "INTEGER"}
                 ],
-                "description": "Finds non-overlapping occurrences of the `pattern` in the `string` and returns the corresponding values of the capturing `group`.",
+                "description": "Finds non-overlapping occurrences of the `regex` in the `string` and returns the corresponding values of the capturing `group`.",
                 "example": "regexp_extract_all('Peter: 33, Paul:14', '(\\w+):\\s*(\\d+)', 2)",
                 "categories": ["regex"]
             },
             {
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"},
-                    {"name": "pattern", "type": "VARCHAR"},
+                    {"name": "regex", "type": "VARCHAR"},
                     {"name": "group", "type": "INTEGER"},
                     {"name": "options", "type": "VARCHAR"}
                 ],
-                "description": "Finds non-overlapping occurrences of the `pattern` in the `string` and returns the corresponding values of the capturing `group`, applying the set of regexp `options`.",
+                "description": "Finds non-overlapping occurrences of the `regex` in the `string` and returns the corresponding values of the capturing `group`, applying the set of regexp `options`.",
                 "example": "regexp_extract_all('Peter: 33, Paul:14', '([a-z]+):\\s*(\\d+)', 1, 'i')",
                 "categories": ["regex"]
             }
@@ -567,13 +567,13 @@
         "variants": [
             {
                 "parameters": [{"name": "string", "type": "VARCHAR"}],
-                "description": "Returns the `MD5` hash of the `string` as a `VARCHAR`.",
+                "description": "Returns the MD5 hash of the `string` as a `VARCHAR`.",
                 "example": "md5('abc')",
                 "categories": ["string"]
             },
             {
                 "parameters": [{"name": "blob", "type": "BLOB"}],
-                "description": "Returns the `MD5` hash of the `blob` as as a `VARCHAR`.",
+                "description": "Returns the MD5 hash of the `blob` as as a `VARCHAR`.",
                 "example": "md5('\\xAA\\xBB'::BLOB)",
                 "categories": ["blob"]
             }
@@ -586,13 +586,13 @@
         "variants": [
             {
                 "parameters": [{"name": "string", "type": "VARCHAR"}],
-                "description": "Returns the `MD5` hash of the `string` as a `HUGEINT`",
+                "description": "Returns the MD5 hash of the `string` as a `HUGEINT`",
                 "example": "md5_number('abc')",
                 "categories": ["string"]
             },
             {
                 "parameters": [{"name": "blob", "type": "BLOB"}],
-                "description": "Returns the `MD5` hash of the `blob` as a `HUGEINT`   ",
+                "description": "Returns the MD5 hash of the `blob` as a `HUGEINT`   ",
                 "example": "md5_number('\\xAA\\xBB'::BLOB)",
                 "categories": ["blob"]
             }
@@ -605,13 +605,13 @@
         "variants": [
             {
                 "parameters": [{"name": "string", "type": "VARCHAR"}],
-                "description": "Returns a `VARCHAR` with the `SHA-1` hash of the value.",
+                "description": "Returns a `VARCHAR` with the SHA-1 hash of the `string`.",
                 "example": "sha1('🦆')",
                 "categories": ["string"]
             },
             {
                 "parameters": [{"name": "blob", "type": "BLOB"}],
-                "description": "Returns a `VARCHAR` with the `SHA-1` hash of the `blob`.",
+                "description": "Returns a `VARCHAR` with the SHA-1 hash of the `blob`.",
                 "example": "sha1('\\xAA\\xBB'::BLOB)",
                 "categories": ["blob"]
             }
@@ -624,13 +624,13 @@
         "variants": [
             {
                 "parameters": [{"name": "string", "type": "VARCHAR"}],
-                "description": "Returns a `VARCHAR` with the `SHA-256` hash of the value.",
+                "description": "Returns a `VARCHAR` with the SHA-256 hash of the `string`",
                 "example": "sha256('🦆')",
                 "categories": ["string"]
             },
             {
                 "parameters": [{"name": "blob", "type": "BLOB"}],
-                "description": "Returns a `VARCHAR` with the `SHA-256` hash of the `blob`.",
+                "description": "Returns a `VARCHAR` with the SHA-256 hash of the `blob`.",
                 "example": "sha256('\\xAA\\xBB'::BLOB)",
                 "categories": ["blob"]
             }

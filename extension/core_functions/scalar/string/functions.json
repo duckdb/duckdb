@@ -3,7 +3,7 @@
         "name": "^@",
         "parameters": "string,search_string",
         "description": "Returns `true` if `string` begins with `search_string`.",
-        "example": "starts_with('abc','a')",
+        "example": "starts_with('abc', 'a')",
         "categories": ["string"],
         "type": "scalar_function",
         "struct": "StartsWithOperatorFun",
@@ -55,9 +55,9 @@
     },
     {
         "name": "damerau_levenshtein",
-        "parameters": "str1,str2",
-        "description": "Extension of Levenshtein distance to also include transposition of adjacent characters as an allowed edit operation. In other words, the minimum number of edit operations (insertions, deletions, substitutions or transpositions) required to change one string to another. Different case is considered different.",
-        "example": "damerau_levenshtein('hello', 'world')",
+        "parameters": "s1,s2",
+        "description": "Extension of Levenshtein distance to also include transposition of adjacent characters as an allowed edit operation. In other words, the minimum number of edit operations (insertions, deletions, substitutions or transpositions) required to change one string to another. Characters of different cases (e.g., `a` and `A`) are considered different.",
+        "example": "damerau_levenshtein('duckdb', 'udckbd')",
         "categories": ["text_similarity"],
         "type": "scalar_function"
     },
@@ -88,9 +88,9 @@
     },
     {
         "name": "hamming",
-        "parameters": "str1,str2",
-        "description": "The number of positions with different characters for 2 strings of equal length. Different case is considered different.",
-        "example": "hamming('duck','luck')",
+        "parameters": "s1,s2",
+        "description": "The Hamming distance between to strings, i.e., the number of positions with different characters for two strings of equal length. Strings must be of equal length. Characters of different cases (e.g., `a` and `A`) are considered different.",
+        "example": "hamming('duck', 'luck')",
         "categories": ["text_similarity"],
         "type": "scalar_function",
         "aliases": ["mismatches"]
@@ -137,24 +137,24 @@
     },
     {
         "name": "jaccard",
-        "parameters": "str1,str2",
-        "description": "The Jaccard similarity between two strings. Different case is considered different. Returns a number between 0 and 1.",
-        "example": "jaccard('duck','luck')",
+        "parameters": "s1,s2",
+        "description": "The Jaccard similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.",
+        "example": "jaccard('duck', 'luck')",
         "categories": ["text_similarity"],
         "type": "scalar_function"
     },
     {
         "name": "jaro_similarity",
-        "parameters": "str1,str2,score_cutoff",
-        "description": "The Jaro similarity between two strings. Different case is considered different. Returns a number between 0 and 1.",
+        "parameters": "s1,s2,score_cutoff",
+        "description": "The Jaro similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.",
         "example": "jaro_similarity('duck', 'duckdb', 0.5)",
         "categories": ["text_similarity"],
         "type": "scalar_function_set"
     },
     {
         "name": "jaro_winkler_similarity",
-        "parameters": "str1,str2,score_cutoff",
-        "description": "The Jaro-Winkler similarity between two strings. Different case is considered different. Returns a number between 0 and 1.",
+        "parameters": "s1,s2,score_cutoff",
+        "description": "The Jaro-Winkler similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.",
         "example": "jaro_winkler_similarity('duck', 'duckdb', 0.5)",
         "categories": ["text_similarity"],
         "type": "scalar_function_set"
@@ -177,9 +177,9 @@
     },
     {
         "name": "levenshtein",
-        "parameters": "str1,str2",
-        "description": "The minimum number of single-character edits (insertions, deletions or substitutions) required to change one string to the other. Different case is considered different.",
-        "example": "levenshtein('duck','db')",
+        "parameters": "s1,s2",
+        "description": "The minimum number of single-character edits (insertions, deletions or substitutions) required to change one string to the other. Characters of different cases (e.g., `a` and `A`) are considered different.",
+        "example": "levenshtein('duck', 'db')",
         "categories": ["text_similarity"],
         "type": "scalar_function",
         "aliases": ["editdist3"]

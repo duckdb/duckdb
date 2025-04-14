@@ -50,7 +50,7 @@ struct LcaseFun {
 struct ConcatWsFun {
 	static constexpr const char *Name = "concat_ws";
 	static constexpr const char *Parameters = "separator,string,...";
-	static constexpr const char *Description = "Concatenates strings together separated by the specified separator.";
+	static constexpr const char *Description = "Concatenates many strings, separated by `separator`. `NULL` inputs are skipped.";
 	static constexpr const char *Example = "concat_ws(', ', 'Banana', 'Apple', 'Melon')";
 	static constexpr const char *Categories = "string";
 
@@ -59,10 +59,10 @@ struct ConcatWsFun {
 
 struct ConcatFun {
 	static constexpr const char *Name = "concat";
-	static constexpr const char *Parameters = "string,...";
-	static constexpr const char *Description = "Concatenates many strings together.";
+	static constexpr const char *Parameters = "value,...";
+	static constexpr const char *Description = "Concatenates multiple strings, lists, or blobs. `NULL` inputs are skipped. See also `string || string`.";
 	static constexpr const char *Example = "concat('Hello', ' ', 'World')";
-	static constexpr const char *Categories = "string";
+	static constexpr const char *Categories = "string,list,blob";
 
 	static ScalarFunction GetFunction();
 };
@@ -109,7 +109,7 @@ struct PrefixFun {
 	static constexpr const char *Name = "prefix";
 	static constexpr const char *Parameters = "string,search_string";
 	static constexpr const char *Description = "Returns `true` if `string` starts with `search_string`.";
-	static constexpr const char *Example = "prefix('abc','ab')";
+	static constexpr const char *Example = "prefix('abc', 'ab')";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
@@ -119,7 +119,7 @@ struct SuffixFun {
 	static constexpr const char *Name = "suffix";
 	static constexpr const char *Parameters = "string,search_string";
 	static constexpr const char *Description = "Returns `true` if `string` ends with `search_string`.";
-	static constexpr const char *Example = "suffix('abc','bc')";
+	static constexpr const char *Example = "suffix('abc', 'bc')";
 	static constexpr const char *Categories = "";
 
 	static ScalarFunction GetFunction();
@@ -233,7 +233,7 @@ struct ArrayLengthFun {
 	static constexpr const char *Name = "array_length";
 	static constexpr const char *Parameters = "list::ANY[]\001list::ANY[],dimension::ANY";
 	static constexpr const char *Description = "Returns the length of the `list`.\001`array_length` for lists with dimensions other than 1 not implemented";
-	static constexpr const char *Example = "array_length([1,2,3])\001";
+	static constexpr const char *Example = "array_length([1, 2, 3])\001";
 	static constexpr const char *Categories = "list\001";
 
 	static ScalarFunctionSet GetFunctions();
@@ -295,9 +295,9 @@ struct SplitFun {
 
 struct StringSplitRegexFun {
 	static constexpr const char *Name = "string_split_regex";
-	static constexpr const char *Parameters = "string::VARCHAR,pattern::VARCHAR\001string::VARCHAR,pattern::VARCHAR,options::VARCHAR";
-	static constexpr const char *Description = "Splits the `string` along the `pattern`.\001Splits the `string` along the `pattern`, applying the set of regexp `options`.";
-	static constexpr const char *Example = "string_split_regex('hello world; 42', ';? ')\001string_split_regex('hello world; 42', ' ?WORLD; ?', 'i');";
+	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,options::VARCHAR";
+	static constexpr const char *Description = "Splits the `string` along the `regex`.\001Splits the `string` along the `regex`, applying the set of regexp `options`.";
+	static constexpr const char *Example = "string_split_regex('hello world; 42', ';? ')\001string_split_regex('hello world; 42', ' ?WORLD; ?', 'i')";
 	static constexpr const char *Categories = "regex\001regex";
 
 	static ScalarFunctionSet GetFunctions();
@@ -317,8 +317,8 @@ struct RegexpSplitToArrayFun {
 
 struct RegexpFun {
 	static constexpr const char *Name = "regexp_full_match";
-	static constexpr const char *Parameters = "string::VARCHAR,pattern::VARCHAR\001string::VARCHAR,pattern::VARCHAR,options::VARCHAR";
-	static constexpr const char *Description = "Returns `true` if the entire `string` matches the `pattern`.\001Returns `true` if the entire `string` matches the `pattern`, applying the set of regexp `options`.";
+	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,options::VARCHAR";
+	static constexpr const char *Description = "Returns `true` if the entire `string` matches the `regex`.\001Returns `true` if the entire `string` matches the `regex`, applying the set of regexp `options`.";
 	static constexpr const char *Example = "regexp_full_match('anabanana', '(an)*')\001regexp_full_match('Banana', '[a-z]+', 'i')";
 	static constexpr const char *Categories = "regex\001regex";
 
@@ -327,8 +327,8 @@ struct RegexpFun {
 
 struct RegexpMatchesFun {
 	static constexpr const char *Name = "regexp_matches";
-	static constexpr const char *Parameters = "string::VARCHAR,pattern::VARCHAR\001string::VARCHAR,pattern::VARCHAR,options::VARCHAR";
-	static constexpr const char *Description = "Returns `true` if `string` contains the regexp `pattern`, `false` otherwise.\001Returns `true` if `string` contains the regexp `pattern`, `false` otherwise, applying the set of regexp `options`.";
+	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,options::VARCHAR";
+	static constexpr const char *Description = "Returns `true` if `string` contains the `regex`, `false` otherwise.\001Returns `true` if `string` contains the `regex`, `false` otherwise, applying the set of regexp `options`.";
 	static constexpr const char *Example = "regexp_matches('anabanana', '(an)*')\001regexp_matches('anabanana', '(AN)+', 'i')";
 	static constexpr const char *Categories = "regex\001regex";
 
@@ -337,8 +337,8 @@ struct RegexpMatchesFun {
 
 struct RegexpReplaceFun {
 	static constexpr const char *Name = "regexp_replace";
-	static constexpr const char *Parameters = "string::VARCHAR,pattern::VARCHAR,replacement::VARCHAR\001string::VARCHAR,pattern::VARCHAR,replacement::VARCHAR,options::VARCHAR";
-	static constexpr const char *Description = "If `string` contains the regexp `pattern`, replaces the matching part with `replacement`.\001If `string` contains the regexp `pattern`, replaces the matching part with `replacement`. A set of regexp `options` is applied.";
+	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR,replacement::VARCHAR\001string::VARCHAR,regex::VARCHAR,replacement::VARCHAR,options::VARCHAR";
+	static constexpr const char *Description = "If `string` contains the `regex`, replaces the matching part with `replacement`.\001If `string` contains the `regex`, replaces the matching part with `replacement`. A set of regexp `options` is applied.";
 	static constexpr const char *Example = "regexp_replace('hello', '[lo]', '-')\001regexp_replace('hello', '[LO]', '-', 'i')";
 	static constexpr const char *Categories = "regex\001regex";
 
@@ -347,8 +347,8 @@ struct RegexpReplaceFun {
 
 struct RegexpExtractFun {
 	static constexpr const char *Name = "regexp_extract";
-	static constexpr const char *Parameters = "string::VARCHAR,pattern::VARCHAR\001string::VARCHAR,pattern::VARCHAR,group::INTEGER\001string::VARCHAR,pattern::VARCHAR,group::INTEGER,options::VARCHAR\001string::VARCHAR,pattern::VARCHAR,name_list::VARCHAR[]\001string::VARCHAR,pattern::VARCHAR,name_list::VARCHAR[],options::VARCHAR";
-	static constexpr const char *Description = "If `string` contains the regexp `pattern`, returns the first match; otherwise, returns the empty string.\001If `string` contains the regexp `pattern`, returns the specified capturing `group`; otherwise, returns the empty string. The group must be a constant value.\001If `string` contains the regexp `pattern`, returns the specified capturing `group`, applying the set of regexp `options`; otherwise, returns the empty string. The group must be a constant value.\001If `string` contains the regexp `pattern`, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values.\001If `string` contains the regexp `pattern`, returns the capturing groups as a struct with corresponding names from `name_list`, applying the set of regexp `options`; otherwise, returns a struct with the same keys and empty strings as values.";
+	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,group::INTEGER\001string::VARCHAR,regex::VARCHAR,group::INTEGER,options::VARCHAR\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[]\001string::VARCHAR,regex::VARCHAR,name_list::VARCHAR[],options::VARCHAR";
+	static constexpr const char *Description = "If `string` contains the `regex`, returns the first match; otherwise, returns the empty string.\001If `string` contains the `regex`, returns the specified capturing `group`; otherwise, returns the empty string. The group must be a constant value.\001If `string` contains the `regex`, returns the specified capturing `group`, applying the set of regexp `options`; otherwise, returns the empty string. The group must be a constant value.\001If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`; otherwise, returns a struct with the same keys and empty strings as values.\001If `string` contains the `regex`, returns the capturing groups as a struct with corresponding names from `name_list`, applying the set of regexp `options`; otherwise, returns a struct with the same keys and empty strings as values.";
 	static constexpr const char *Example = "regexp_extract('abcde', '[a-z]{3}')\001regexp_extract('abc', '([a-z])(b)', 1)\001regexp_extract('ABC', '([a-z])(b)', 1, 'i')\001regexp_extract('2023-04-15', '(\\d+)-(\\d+)-(\\d+)', ['y', 'm', 'd'])\001regexp_extract('John Doe', '([a-z]+) ([a-z]+)', ['first_name', 'last_name'], 'i')";
 	static constexpr const char *Categories = "regex\001regex\001regex\001regex\001regex";
 
@@ -357,8 +357,8 @@ struct RegexpExtractFun {
 
 struct RegexpExtractAllFun {
 	static constexpr const char *Name = "regexp_extract_all";
-	static constexpr const char *Parameters = "string::VARCHAR,pattern::VARCHAR\001string::VARCHAR,pattern::VARCHAR,group::INTEGER\001string::VARCHAR,pattern::VARCHAR,group::INTEGER,options::VARCHAR";
-	static constexpr const char *Description = "Returns a list with the non-overlapping occurrences of the `pattern` in the `string`.\001Finds non-overlapping occurrences of the `pattern` in the `string` and returns the corresponding values of the capturing `group`.\001Finds non-overlapping occurrences of the `pattern` in the `string` and returns the corresponding values of the capturing `group`, applying the set of regexp `options`.";
+	static constexpr const char *Parameters = "string::VARCHAR,regex::VARCHAR\001string::VARCHAR,regex::VARCHAR,group::INTEGER\001string::VARCHAR,regex::VARCHAR,group::INTEGER,options::VARCHAR";
+	static constexpr const char *Description = "Returns a list with the non-overlapping occurrences of the `regex` in the `string`.\001Finds non-overlapping occurrences of the `regex` in the `string` and returns the corresponding values of the capturing `group`.\001Finds non-overlapping occurrences of the `regex` in the `string` and returns the corresponding values of the capturing `group`, applying the set of regexp `options`.";
 	static constexpr const char *Example = "regexp_extract_all('Peter: 33, Paul:14', '\\d+')\001regexp_extract_all('Peter: 33, Paul:14', '(\\w+):\\s*(\\d+)', 2)\001regexp_extract_all('Peter: 33, Paul:14', '([a-z]+):\\s*(\\d+)', 1, 'i')";
 	static constexpr const char *Categories = "regex\001regex\001regex";
 
@@ -468,7 +468,7 @@ struct NotIlikeEscapeFun {
 struct MD5Fun {
 	static constexpr const char *Name = "md5";
 	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
-	static constexpr const char *Description = "Returns the `MD5` hash of the `string` as a `VARCHAR`.\001Returns the `MD5` hash of the `blob` as as a `VARCHAR`.";
+	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a `VARCHAR`.\001Returns the MD5 hash of the `blob` as as a `VARCHAR`.";
 	static constexpr const char *Example = "md5('abc')\001md5('\\xAA\\xBB'::BLOB)";
 	static constexpr const char *Categories = "string\001blob";
 
@@ -478,7 +478,7 @@ struct MD5Fun {
 struct MD5NumberFun {
 	static constexpr const char *Name = "md5_number";
 	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
-	static constexpr const char *Description = "Returns the `MD5` hash of the `string` as a `HUGEINT`\001Returns the `MD5` hash of the `blob` as a `HUGEINT`   ";
+	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a `HUGEINT`\001Returns the MD5 hash of the `blob` as a `HUGEINT`   ";
 	static constexpr const char *Example = "md5_number('abc')\001md5_number('\\xAA\\xBB'::BLOB)";
 	static constexpr const char *Categories = "string\001blob";
 
@@ -488,7 +488,7 @@ struct MD5NumberFun {
 struct SHA1Fun {
 	static constexpr const char *Name = "sha1";
 	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
-	static constexpr const char *Description = "Returns a `VARCHAR` with the `SHA-1` hash of the value.\001Returns a `VARCHAR` with the `SHA-1` hash of the `blob`.";
+	static constexpr const char *Description = "Returns a `VARCHAR` with the SHA-1 hash of the `string`.\001Returns a `VARCHAR` with the SHA-1 hash of the `blob`.";
 	static constexpr const char *Example = "sha1('🦆')\001sha1('\\xAA\\xBB'::BLOB)";
 	static constexpr const char *Categories = "string\001blob";
 
@@ -498,7 +498,7 @@ struct SHA1Fun {
 struct SHA256Fun {
 	static constexpr const char *Name = "sha256";
 	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
-	static constexpr const char *Description = "Returns a `VARCHAR` with the `SHA-256` hash of the value.\001Returns a `VARCHAR` with the `SHA-256` hash of the `blob`.";
+	static constexpr const char *Description = "Returns a `VARCHAR` with the SHA-256 hash of the `string`\001Returns a `VARCHAR` with the SHA-256 hash of the `blob`.";
 	static constexpr const char *Example = "sha256('🦆')\001sha256('\\xAA\\xBB'::BLOB)";
 	static constexpr const char *Categories = "string\001blob";
 

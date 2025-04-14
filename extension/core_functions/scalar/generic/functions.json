@@ -24,7 +24,7 @@
     {
         "name": "least",
         "parameters": "arg1, arg2, ...",
-        "description": "Returns the lowest value of the set of input parameters",
+        "description": "Returns the smallest value using lexicographical ordering. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.",
         "example": "least(42, 84)",
         "categories": ["string", "numeric", "date", "timestamp", "aggregate"],
         "type": "scalar_function_set"
@@ -32,8 +32,8 @@
     {
         "name": "greatest",
         "parameters": "arg1, arg2, ...",
-        "description": "Returns the highest value of the set of input parameters",
-        "example": "greatest(42, 84)",
+        "description": "Returns the largest value using lexicographical ordering. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.",
+        "examples": ["greatest(42, 84)", "greatest('abc', 'bcd', 'cde', 'EFG')"],
         "categories": ["string", "numeric", "date", "timestamp", "aggregate"],
         "type": "scalar_function_set"
     },

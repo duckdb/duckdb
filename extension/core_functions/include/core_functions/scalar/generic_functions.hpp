@@ -48,7 +48,7 @@ struct HashFun {
 struct LeastFun {
 	static constexpr const char *Name = "least";
 	static constexpr const char *Parameters = "arg1, arg2, ...";
-	static constexpr const char *Description = "Returns the lowest value of the set of input parameters";
+	static constexpr const char *Description = "Returns the smallest value using lexicographical ordering. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.";
 	static constexpr const char *Example = "least(42, 84)";
 	static constexpr const char *Categories = "string,numeric,date,timestamp,aggregate";
 
@@ -58,8 +58,8 @@ struct LeastFun {
 struct GreatestFun {
 	static constexpr const char *Name = "greatest";
 	static constexpr const char *Parameters = "arg1, arg2, ...";
-	static constexpr const char *Description = "Returns the highest value of the set of input parameters";
-	static constexpr const char *Example = "greatest(42, 84)";
+	static constexpr const char *Description = "Returns the largest value using lexicographical ordering. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.";
+	static constexpr const char *Example = "greatest(42, 84)\002greatest('abc', 'bcd', 'cde', 'EFG')";
 	static constexpr const char *Categories = "string,numeric,date,timestamp,aggregate";
 
 	static ScalarFunctionSet GetFunctions();

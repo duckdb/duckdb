@@ -19,7 +19,7 @@ struct StartsWithOperatorFun {
 	static constexpr const char *Name = "^@";
 	static constexpr const char *Parameters = "string,search_string";
 	static constexpr const char *Description = "Returns `true` if `string` begins with `search_string`.";
-	static constexpr const char *Example = "starts_with('abc','a')";
+	static constexpr const char *Example = "starts_with('abc', 'a')";
 	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
@@ -79,9 +79,9 @@ struct ChrFun {
 
 struct DamerauLevenshteinFun {
 	static constexpr const char *Name = "damerau_levenshtein";
-	static constexpr const char *Parameters = "str1,str2";
-	static constexpr const char *Description = "Extension of Levenshtein distance to also include transposition of adjacent characters as an allowed edit operation. In other words, the minimum number of edit operations (insertions, deletions, substitutions or transpositions) required to change one string to another. Different case is considered different.";
-	static constexpr const char *Example = "damerau_levenshtein('hello', 'world')";
+	static constexpr const char *Parameters = "s1,s2";
+	static constexpr const char *Description = "Extension of Levenshtein distance to also include transposition of adjacent characters as an allowed edit operation. In other words, the minimum number of edit operations (insertions, deletions, substitutions or transpositions) required to change one string to another. Characters of different cases (e.g., `a` and `A`) are considered different.";
+	static constexpr const char *Example = "damerau_levenshtein('duckdb', 'udckbd')";
 	static constexpr const char *Categories = "text_similarity";
 
 	static ScalarFunction GetFunction();
@@ -125,9 +125,9 @@ struct FormatreadabledecimalsizeFun {
 
 struct HammingFun {
 	static constexpr const char *Name = "hamming";
-	static constexpr const char *Parameters = "str1,str2";
-	static constexpr const char *Description = "The number of positions with different characters for 2 strings of equal length. Different case is considered different.";
-	static constexpr const char *Example = "hamming('duck','luck')";
+	static constexpr const char *Parameters = "s1,s2";
+	static constexpr const char *Description = "The Hamming distance between to strings, i.e., the number of positions with different characters for two strings of equal length. Strings must be of equal length. Characters of different cases (e.g., `a` and `A`) are considered different.";
+	static constexpr const char *Example = "hamming('duck', 'luck')";
 	static constexpr const char *Categories = "text_similarity";
 
 	static ScalarFunction GetFunction();
@@ -179,9 +179,9 @@ struct PositionFun {
 
 struct JaccardFun {
 	static constexpr const char *Name = "jaccard";
-	static constexpr const char *Parameters = "str1,str2";
-	static constexpr const char *Description = "The Jaccard similarity between two strings. Different case is considered different. Returns a number between 0 and 1.";
-	static constexpr const char *Example = "jaccard('duck','luck')";
+	static constexpr const char *Parameters = "s1,s2";
+	static constexpr const char *Description = "The Jaccard similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.";
+	static constexpr const char *Example = "jaccard('duck', 'luck')";
 	static constexpr const char *Categories = "text_similarity";
 
 	static ScalarFunction GetFunction();
@@ -189,8 +189,8 @@ struct JaccardFun {
 
 struct JaroSimilarityFun {
 	static constexpr const char *Name = "jaro_similarity";
-	static constexpr const char *Parameters = "str1,str2,score_cutoff";
-	static constexpr const char *Description = "The Jaro similarity between two strings. Different case is considered different. Returns a number between 0 and 1.";
+	static constexpr const char *Parameters = "s1,s2,score_cutoff";
+	static constexpr const char *Description = "The Jaro similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.";
 	static constexpr const char *Example = "jaro_similarity('duck', 'duckdb', 0.5)";
 	static constexpr const char *Categories = "text_similarity";
 
@@ -199,8 +199,8 @@ struct JaroSimilarityFun {
 
 struct JaroWinklerSimilarityFun {
 	static constexpr const char *Name = "jaro_winkler_similarity";
-	static constexpr const char *Parameters = "str1,str2,score_cutoff";
-	static constexpr const char *Description = "The Jaro-Winkler similarity between two strings. Different case is considered different. Returns a number between 0 and 1.";
+	static constexpr const char *Parameters = "s1,s2,score_cutoff";
+	static constexpr const char *Description = "The Jaro-Winkler similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.";
 	static constexpr const char *Example = "jaro_winkler_similarity('duck', 'duckdb', 0.5)";
 	static constexpr const char *Categories = "text_similarity";
 
@@ -229,9 +229,9 @@ struct LeftGraphemeFun {
 
 struct LevenshteinFun {
 	static constexpr const char *Name = "levenshtein";
-	static constexpr const char *Parameters = "str1,str2";
-	static constexpr const char *Description = "The minimum number of single-character edits (insertions, deletions or substitutions) required to change one string to the other. Different case is considered different.";
-	static constexpr const char *Example = "levenshtein('duck','db')";
+	static constexpr const char *Parameters = "s1,s2";
+	static constexpr const char *Description = "The minimum number of single-character edits (insertions, deletions or substitutions) required to change one string to the other. Characters of different cases (e.g., `a` and `A`) are considered different.";
+	static constexpr const char *Example = "levenshtein('duck', 'db')";
 	static constexpr const char *Categories = "text_similarity";
 
 	static ScalarFunction GetFunction();
