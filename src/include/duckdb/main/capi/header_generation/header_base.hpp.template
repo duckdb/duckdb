@@ -688,7 +688,7 @@ struct duckdb_extension_access {
 };
 
 //===--------------------------------------------------------------------===//
-// External Buffers
+// Opaque Buffers
 //===--------------------------------------------------------------------===//
 
 //! A opaque buffer which can be interpreted as a data buffer

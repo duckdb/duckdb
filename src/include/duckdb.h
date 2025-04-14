@@ -692,7 +692,7 @@ struct duckdb_extension_access {
 };
 
 //===--------------------------------------------------------------------===//
-// External Buffers
+// Opaque Buffers
 //===--------------------------------------------------------------------===//
 
 //! A opaque buffer which can be interpreted as a data buffer
@@ -3112,8 +3112,8 @@ DUCKDB_C_API void duckdb_assign_buffer_to_vector(duckdb_vector vector, duckdb_ve
 //===--------------------------------------------------------------------===//
 
 /*!
-Create a new duckdb vector buffer wrapping a externally allocated buffer with a function to specify that the memory is
-no long required by duckdb. This must be freed with `duckdb_free_external_vector_buffer`.
+Create a new duckdb vector buffer wrapping an opaque buffer with a function to specify that the memory is no long
+required by duckdb. This must be freed with `duckdb_free_opaque_vector_buffer`.
 * @param buffer The buffer which should used as a vector buffer.
 
 * @param free_fn A function which will be called once duckdb is finished with the buffer.
