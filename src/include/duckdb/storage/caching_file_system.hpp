@@ -30,7 +30,8 @@ public:
 	using CachedFile = ExternalFileCache::CachedFile;
 
 public:
-	DUCKDB_API CachingFileHandle(CachingFileSystem &caching_file_system, CachedFile &cached_file, FileOpenFlags flags);
+	DUCKDB_API CachingFileHandle(CachingFileSystem &caching_file_system, const OpenFileInfo &path, FileOpenFlags flags,
+	                             CachedFile &cached_file);
 	DUCKDB_API ~CachingFileHandle();
 
 public:
@@ -60,7 +61,7 @@ private:
 	BufferHandle TryReadFromFileRange(const unique_ptr<StorageLockKey> &guard, CachedFileRange &file_range,
 	                                  data_ptr_t &buffer, idx_t nr_bytes, idx_t location);
 	//! Try to insert the file range into the cache
-	BufferHandle TryInsertFileRange(BufferHandle &&pin, data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
+	BufferHandle TryInsertFileRange(BufferHandle &pin, data_ptr_t &buffer, idx_t nr_bytes, idx_t location,
 	                                shared_ptr<CachedFileRange> &new_file_range);
 	//! Read from file and copy from cached buffers until the requested read is complete
 	//! If actually_read is false, no reading happens, only the number of non-cached reads is counted and returned
@@ -73,10 +74,12 @@ private:
 	CachingFileSystem &caching_file_system;
 	//! The DB external file cache
 	ExternalFileCache &external_file_cache;
-	//! The associated CachedFile with cached ranges
-	CachedFile &cached_file;
+	//! For opening the file (possibly with extra info)
+	OpenFileInfo path;
 	//! Flags used to open the file
 	FileOpenFlags flags;
+	//! The associated CachedFile with cached ranges
+	CachedFile &cached_file;
 
 	//! The underlying FileHandle (optional)
 	unique_ptr<FileHandle> file_handle;
@@ -102,7 +105,7 @@ public:
 public:
 	DUCKDB_API static CachingFileSystem Get(ClientContext &context);
 
-	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const string &path, FileOpenFlags flags);
+	DUCKDB_API unique_ptr<CachingFileHandle> OpenFile(const OpenFileInfo &path, FileOpenFlags flags);
 
 private:
 	//! The Client FileSystem (needs to be client-specific so we can do, e.g., HTTPFS profiling)

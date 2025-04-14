@@ -54,10 +54,34 @@ static unique_ptr<duckdb_apache::thrift::protocol::TProtocol> CreateThriftFilePr
 	return make_uniq<duckdb_apache::thrift::protocol::TCompactProtocolT<ThriftFileTransport>>(std::move(transport));
 }
 
+void ParseParquetFooter(data_ptr_t buffer, const string &file_path, idx_t file_size,
+                        const shared_ptr<const ParquetEncryptionConfig> &encryption_config, uint32_t &footer_len,
+                        bool &footer_encrypted) {
+	if (memcmp(buffer + 4, "PAR1", 4) == 0) {
+		footer_encrypted = false;
+		if (encryption_config) {
+			throw InvalidInputException("File '%s' is not encrypted, but 'encryption_config' was set", file_path);
+		}
+	} else if (memcmp(buffer + 4, "PARE", 4) == 0) {
+		footer_encrypted = true;
+		if (!encryption_config) {
+			throw InvalidInputException("File '%s' is encrypted, but 'encryption_config' was not set", file_path);
+		}
+	} else {
+		throw InvalidInputException("No magic bytes found at end of file '%s'", file_path);
+	}
+
+	// read four-byte footer length from just before the end magic bytes
+	footer_len = Load<uint32_t>(buffer);
+	if (footer_len == 0 || file_size < 12 + footer_len) {
+		throw InvalidInputException("Footer length error in file '%s'", file_path);
+	}
+}
+
 static shared_ptr<ParquetFileMetadataCache>
 LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &file_handle,
-             const shared_ptr<const ParquetEncryptionConfig> &encryption_config,
-             const EncryptionUtil &encryption_util) {
+             const shared_ptr<const ParquetEncryptionConfig> &encryption_config, const EncryptionUtil &encryption_util,
+             optional_idx footer_size) {
 	auto current_time = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 
 	auto file_proto = CreateThriftFileProtocol(file_handle, false);
@@ -67,35 +91,43 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		throw InvalidInputException("File '%s' too small to be a Parquet file", file_handle.GetPath());
 	}
 
-	data_ptr_t last_eight_bytes_ptr;
-	auto last_eight_bytes_pin = file_handle.Read(last_eight_bytes_ptr, 8, file_size - 8);
-
 	bool footer_encrypted;
-	if (memcmp(last_eight_bytes_ptr + 4, "PAR1", 4) == 0) {
-		footer_encrypted = false;
-		if (encryption_config) {
-			throw InvalidInputException("File '%s' is not encrypted, but 'encryption_config' was set",
-			                            file_handle.GetPath());
-		}
-	} else if (memcmp(last_eight_bytes_ptr + 4, "PARE", 4) == 0) {
-		footer_encrypted = true;
-		if (!encryption_config) {
-			throw InvalidInputException("File '%s' is encrypted, but 'encryption_config' was not set",
-			                            file_handle.GetPath());
-		}
+	// footer size is not provided - read it from the back
+	if (!footer_size.IsValid()) {
+		ResizeableBuffer buf;
+		buf.resize(allocator, 8);
+		buf.zero();
+
+		transport.SetLocation(file_size - 8);
+		transport.read(buf.ptr, 8);
+
+		uint32_t footer_len;
+		ParseParquetFooter(buf.ptr, file_handle.GetPath(), file_size, encryption_config, footer_len, footer_encrypted);
+
+		auto metadata_pos = file_size - (footer_len + 8);
+		transport.SetLocation(metadata_pos);
+		transport.Prefetch(metadata_pos, footer_len);
 	} else {
-		throw InvalidInputException("No magic bytes found at end of file '%s'", file_handle.GetPath());
-	}
+		auto footer_len = UnsafeNumericCast<uint32_t>(footer_size.GetIndex());
+		if (footer_len == 0 || file_size < 12 + footer_len) {
+			throw InvalidInputException("Invalid footer length provided for file '%s'", file_handle.GetPath());
+		}
 
-	// read four-byte footer length from just before the end magic bytes
-	auto footer_len = Load<uint32_t>(last_eight_bytes_ptr);
-	if (footer_len == 0 || file_size < 12 + footer_len) {
-		throw InvalidInputException("Footer length error in file '%s'", file_handle.GetPath());
-	}
+		idx_t total_footer_len = footer_len + 8;
+		auto metadata_pos = file_size - total_footer_len;
+		transport.SetLocation(metadata_pos);
+		transport.Prefetch(metadata_pos, total_footer_len);
 
-	auto metadata_pos = file_size - (footer_len + 8);
-	transport.SetLocation(metadata_pos);
-	transport.Prefetch(metadata_pos, footer_len);
+		auto read_head = transport.GetReadHead(metadata_pos);
+		auto data_ptr = read_head->buffer_ptr;
+
+		uint32_t read_footer_len;
+		ParseParquetFooter(data_ptr + footer_len, file_handle.GetPath(), file_size, encryption_config, read_footer_len,
+		                   footer_encrypted);
+		if (read_footer_len != footer_len) {
+			throw InvalidInputException("Parquet footer length stored in file is not equal to footer length provided");
+		}
+	}
 
 	auto metadata = make_uniq<FileMetaData>();
 	if (footer_encrypted) {
@@ -636,13 +668,13 @@ void ParquetReader::InitializeSchema(ClientContext &context) {
 	if (file_meta_data->__isset.encryption_algorithm) {
 		if (file_meta_data->encryption_algorithm.__isset.AES_GCM_CTR_V1) {
 			throw InvalidInputException("File '%s' is encrypted with AES_GCM_CTR_V1, but only AES_GCM_V1 is supported",
-			                            file_name);
+			                            GetFileName());
 		}
 	}
 	// check if we like this schema
 	if (file_meta_data->schema.size() < 2) {
 		throw InvalidInputException("Failed to read Parquet file '%s': Need at least one non-root column in the file",
-		                            file_name);
+		                            GetFileName());
 	}
 	root_schema = ParseSchema();
 	for (idx_t i = 0; i < root_schema->children.size(); i++) {
@@ -686,17 +718,31 @@ ParquetColumnDefinition ParquetColumnDefinition::FromSchemaValue(ClientContext &
 	return result;
 }
 
-ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, ParquetOptions parquet_options_p,
+ParquetReader::ParquetReader(ClientContext &context_p, OpenFileInfo file_p, ParquetOptions parquet_options_p,
                              shared_ptr<ParquetFileMetadataCache> metadata_p)
-    : BaseFileReader(std::move(file_name_p)), fs(CachingFileSystem::Get(context_p)),
+    : BaseFileReader(std::move(file_p)), fs(CachingFileSystem::Get(context_p)),
       allocator(BufferAllocator::Get(context_p)), parquet_options(std::move(parquet_options_p)) {
-	file_handle = fs.OpenFile(file_name, FileFlags::FILE_FLAGS_READ);
+	file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
 	if (!file_handle->CanSeek()) {
 		throw NotImplementedException(
 		    "Reading parquet files from a FIFO stream is not supported and cannot be efficiently supported since "
 		    "metadata is located at the end of the file. Write the stream to disk first and read from there instead.");
 	}
 
+	// read the extended file open info (if any)
+	optional_idx footer_size;
+	if (file.extended_info) {
+		auto &open_options = file.extended_info->options;
+		auto encryption_entry = file.extended_info->options.find("encryption_key");
+		if (encryption_entry != open_options.end()) {
+			parquet_options.encryption_config =
+			    make_shared_ptr<ParquetEncryptionConfig>(StringValue::Get(encryption_entry->second));
+		}
+		auto footer_entry = file.extended_info->options.find("footer_size");
+		if (footer_entry != open_options.end()) {
+			footer_size = UBigIntValue::Get(footer_entry->second);
+		}
+	}
 	// set pointer to factory method for AES state
 	auto &config = DBConfig::GetConfig(context_p);
 	if (config.encryption_util && parquet_options.debug_use_openssl) {
@@ -712,15 +758,15 @@ ParquetReader::ParquetReader(ClientContext &context_p, string file_name_p, Parqu
 		Value metadata_cache = false;
 		context_p.TryGetCurrentSetting("parquet_metadata_cache", metadata_cache);
 		if (!metadata_cache.GetValue<bool>()) {
-			metadata =
-			    LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config, *encryption_util);
+			metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
+			                        *encryption_util, footer_size);
 		} else {
 			auto last_modify_time = file_handle->GetLastModifiedTime();
-			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file_name);
+			metadata = ObjectCache::GetObjectCache(context_p).Get<ParquetFileMetadataCache>(file.path);
 			if (!metadata || (last_modify_time + 10 >= metadata->read_time)) {
 				metadata = LoadMetadata(context_p, allocator, *file_handle, parquet_options.encryption_config,
-				                        *encryption_util);
-				ObjectCache::GetObjectCache(context_p).Put(file_name, metadata);
+				                        *encryption_util, footer_size);
+				ObjectCache::GetObjectCache(context_p).Put(file.path, metadata);
 			}
 		}
 	} else {
@@ -1118,7 +1164,7 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 				    "The parquet file '%s' seems to have incorrectly set page offsets. This interferes with DuckDB's "
 				    "prefetching optimization. DuckDB may still be able to scan this file by manually disabling the "
 				    "prefetching mechanism using: 'SET disable_parquet_prefetching=true'.",
-				    file_name);
+				    GetFileName());
 			}
 
 			if (!filters && scan_percentage > ParquetReaderPrefetchConfig::WHOLE_GROUP_PREFETCH_MINIMUM_SCAN) {

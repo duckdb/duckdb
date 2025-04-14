@@ -22,15 +22,14 @@ CachingFileSystem CachingFileSystem::Get(ClientContext &context) {
 	return CachingFileSystem(FileSystem::GetFileSystem(context), *context.db);
 }
 
-unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const string &path, FileOpenFlags flags) {
-	return make_uniq<CachingFileHandle>(*this, external_file_cache.GetOrCreateCachedFile(file_system.ExpandPath(path)),
-	                                    flags);
+unique_ptr<CachingFileHandle> CachingFileSystem::OpenFile(const OpenFileInfo &path, FileOpenFlags flags) {
+	return make_uniq<CachingFileHandle>(*this, path, flags, external_file_cache.GetOrCreateCachedFile(path.path));
 }
 
-CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, CachedFile &cached_file_p,
-                                     FileOpenFlags flags_p)
+CachingFileHandle::CachingFileHandle(CachingFileSystem &caching_file_system_p, const OpenFileInfo &path_p,
+                                     FileOpenFlags flags_p, CachedFile &cached_file_p)
     : caching_file_system(caching_file_system_p), external_file_cache(caching_file_system.external_file_cache),
-      cached_file(cached_file_p), flags(flags_p), position(0) {
+      path(path_p), flags(flags_p), cached_file(cached_file_p), position(0) {
 	if (!external_file_cache.IsEnabled() || caching_file_system.validate) {
 		// If caching is disabled, or if we must validate cache entries, we always have to open the file
 		GetFileHandle();
@@ -50,7 +49,7 @@ CachingFileHandle::~CachingFileHandle() {
 FileHandle &CachingFileHandle::GetFileHandle() {
 	if (!file_handle) {
 		const auto current_time = duration_cast<std::chrono::seconds>(system_clock::now().time_since_epoch()).count();
-		file_handle = caching_file_system.file_system.OpenFile(cached_file.path, flags);
+		file_handle = caching_file_system.file_system.OpenFile(path, flags);
 		last_modified = caching_file_system.file_system.GetLastModifiedTime(*file_handle);
 		version_tag = caching_file_system.file_system.GetVersionTag(*file_handle);
 
@@ -262,7 +261,7 @@ BufferHandle CachingFileHandle::TryReadFromFileRange(const unique_ptr<StorageLoc
 	return result;
 }
 
-BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &&pin, data_ptr_t &buffer, idx_t nr_bytes,
+BufferHandle CachingFileHandle::TryInsertFileRange(BufferHandle &pin, data_ptr_t &buffer, idx_t nr_bytes,
                                                    idx_t location, shared_ptr<CachedFileRange> &new_file_range) {
 	auto result = std::move(pin);
 

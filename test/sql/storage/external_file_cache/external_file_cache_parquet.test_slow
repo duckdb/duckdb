@@ -36,7 +36,6 @@ query I
 select loaded from duckdb_external_file_cache() order by location;
 ----
 true
-true
 
 # select the first column
 statement ok

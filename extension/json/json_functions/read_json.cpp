@@ -39,7 +39,7 @@ static inline LogicalType RemoveDuplicateStructKeys(const LogicalType &type, con
 }
 
 struct AutoDetectState {
-	AutoDetectState(ClientContext &context_p, MultiFileBindData &bind_data_p, const vector<string> &files,
+	AutoDetectState(ClientContext &context_p, MultiFileBindData &bind_data_p, const vector<OpenFileInfo> &files,
 	                MutableDateFormatMap &date_format_map)
 	    : context(context_p), bind_data(bind_data_p), files(files), date_format_map(date_format_map), files_scanned(0),
 	      tuples_scanned(0), bytes_scanned(0), total_file_size(0) {
@@ -47,7 +47,7 @@ struct AutoDetectState {
 
 	ClientContext &context;
 	MultiFileBindData &bind_data;
-	const vector<string> &files;
+	const vector<OpenFileInfo> &files;
 	MutableDateFormatMap &date_format_map;
 	atomic<idx_t> files_scanned;
 	atomic<idx_t> tuples_scanned;
@@ -70,12 +70,12 @@ public:
 		auto &bind_data = auto_detect_state.bind_data;
 		auto &files = auto_detect_state.files;
 		auto &json_data = bind_data.bind_data->Cast<JSONScanData>();
-		auto json_reader = make_shared_ptr<JSONReader>(context, json_data.options, files[file_idx]);
+		auto json_reader = make_shared_ptr<JSONReader>(context, json_data.options, files[file_idx].path);
 		if (bind_data.union_readers[file_idx]) {
 			throw InternalException("Union data already set");
 		}
 		auto &reader = *json_reader;
-		auto union_data = make_uniq<BaseUnionData>(files[file_idx]);
+		auto union_data = make_uniq<BaseUnionData>(files[file_idx].path);
 		union_data->reader = std::move(json_reader);
 		bind_data.union_readers[file_idx] = std::move(union_data);
 

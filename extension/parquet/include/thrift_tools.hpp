@@ -200,6 +200,11 @@ public:
 	idx_t GetLocation() const {
 		return location;
 	}
+
+	optional_ptr<ReadHead> GetReadHead(idx_t pos) {
+		return ra_buffer.GetReadHead(pos);
+	}
+
 	idx_t GetSize() const {
 		return size;
 	}

@@ -1,0 +1,13 @@
+# name: benchmark/micro/list/list_value_nested_list.benchmark
+# description: LIST_VALUE performance with nested lists
+# group: [list]
+
+name List Value
+group micro
+subgroup list
+
+load
+CREATE TABLE nested_lists AS SELECT [[i], [i + 1]] AS a, [[i, i], [i + 1, i + 1]] as b FROM range(10000) t(i);
+
+run
+SELECT list_value(a, b, a, b, a, b, a, b, a, b, a, b, a, b) FROM nested_lists;
