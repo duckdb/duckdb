@@ -267,13 +267,14 @@ jobs:
  valgrind:
     name: Valgrind
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: force-storage
     env:
-      CC: gcc-10
-      CXX: g++-10
+      CC: clang
+      CXX: clang++
       DISABLE_SANITIZER: 1
       BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: 'icu;json;parquet;tpch'
       GEN: ninja
 
     steps:
@@ -281,7 +282,7 @@ jobs:
 
     - name: Install
       shell: bash
-      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind
+      run: sudo apt-get update -y -qq && sudo apt-get install -y -qq ninja-build valgrind clang
 
     - name: Setup Ccache
       uses: hendrikmuhs/ccache-action@main
@@ -291,15 +292,15 @@ jobs:
 
     - name: Build
       shell: bash
-      run: make debug
+      run: make relassert
 
     - name: Output version info
       shell: bash
-      run: ./build/debug/duckdb -c "PRAGMA version;"
+      run: ./build/relassert/duckdb -c "PRAGMA version;"
 
     - name: Test
       shell: bash
-      run: valgrind ./build/debug/test/unittest test/sql/tpch/tpch_sf001.test_slow
+      run: valgrind ./build/relassert/test/unittest test/sql/tpch/tpch_sf001.test_slow
 
  old-gcc:
     name: GCC 4.8
