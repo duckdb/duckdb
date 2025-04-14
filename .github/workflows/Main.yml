@@ -274,6 +274,7 @@ jobs:
       CXX: g++-10
       DISABLE_SANITIZER: 1
       BUILD_JEMALLOC: 1
+      CORE_EXTENSIONS: 'icu;json;parquet;tpch'
       GEN: ninja
 
     steps:
