@@ -329,10 +329,7 @@ size_t MbedTlsWrapper::AESStateMBEDTLS::Finalize(duckdb::data_ptr_t out, duckdb:
                                                     duckdb::idx_t tag_len) {
 	size_t result = out_len;
 	mbedtls_cipher_finish(context.get(), out, &result);
-
-	if (cipher == GCM) {
-		FinalizeGCM(tag, tag_len);
-	}
+	FinalizeGCM(tag, tag_len);
 
 	return result;
 }
