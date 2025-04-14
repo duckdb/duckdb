@@ -64,7 +64,7 @@ template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedSort(const TupleDataCollection &key_data) {
 	D_ASSERT(SORT_KEY_TYPE == key_data.GetLayout().GetSortKeyType());
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
-	using BLOCK_ITERATOR_STATE = block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>;
+	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>;
 	const BLOCK_ITERATOR_STATE state(key_data);
 	auto begin = block_iterator_t<const BLOCK_ITERATOR_STATE, SORT_KEY>(state, 0);
 	auto end = block_iterator_t<const BLOCK_ITERATOR_STATE, SORT_KEY>(state, key_data.Count());
@@ -136,7 +136,7 @@ static void ReorderPayloadData(TupleDataCollection &new_payload_data,
 template <SortKeyType SORT_KEY_TYPE>
 static void TemplatedReorder(unique_ptr<TupleDataCollection> &key_data, unique_ptr<TupleDataCollection> &payload_data) {
 	using SORT_KEY = SortKey<SORT_KEY_TYPE>;
-	using BLOCK_ITERATOR_STATE = block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>;
+	using BLOCK_ITERATOR_STATE = BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>;
 
 	// Initialize new key data (if necessary)
 	unique_ptr<TupleDataCollection> new_key_data;

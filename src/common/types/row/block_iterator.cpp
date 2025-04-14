@@ -11,19 +11,26 @@ BlockIteratorStateType GetBlockIteratorStateType(const bool &fixed_blocks, const
 	return fixed_blocks ? BlockIteratorStateType::FIXED_EXTERNAL : BlockIteratorStateType::VARIABLE_EXTERNAL;
 }
 
-fixed_in_memory_block_iterator_state_t::fixed_in_memory_block_iterator_state_t(const TupleDataCollection &data)
-    : block_ptrs(ConvertBlockPointers(data.GetRowBlockPointers())), fast_mod(data.TuplesPerBlock()),
-      tuple_count(data.Count()) {
+FixedInMemoryBlockIteratorState::FixedInMemoryBlockIteratorState(const TupleDataCollection &key_data)
+    : block_ptrs(ConvertBlockPointers(key_data.GetRowBlockPointers())), fast_mod(key_data.TuplesPerBlock()),
+      tuple_count(key_data.Count()) {
 }
 
 unsafe_vector<const data_ptr_t>
-fixed_in_memory_block_iterator_state_t::ConvertBlockPointers(const vector<data_ptr_t> &block_ptrs) {
+FixedInMemoryBlockIteratorState::ConvertBlockPointers(const vector<data_ptr_t> &block_ptrs) {
 	unsafe_vector<const data_ptr_t> converted_block_ptrs;
 	converted_block_ptrs.reserve(block_ptrs.size());
 	for (const auto &block_ptr : block_ptrs) {
 		converted_block_ptrs.emplace_back(block_ptr);
 	}
 	return converted_block_ptrs;
+}
+
+FixedExternalBlockIteratorState::FixedExternalBlockIteratorState(TupleDataCollection &key_data_p,
+                                                                 optional_ptr<TupleDataCollection> payload_data_p)
+    : tuple_count(key_data_p.Count()), current_chunk_idx(DConstants::INVALID_INDEX), key_data(key_data_p),
+      key_ptrs(FlatVector::GetData<data_ptr_t>(key_scan_state.chunk_state.row_locations)),
+      payload_data(payload_data_p) {
 }
 
 } // namespace duckdb

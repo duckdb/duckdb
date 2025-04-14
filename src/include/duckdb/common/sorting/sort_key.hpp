@@ -169,6 +169,10 @@ public:
 	data_ptr_t GetPayload() const {
 		throw InternalException("GetPayload() called on a SortKeyNoPayload");
 	}
+
+	void SetPayload(const data_ptr_t &payload_ptr) {
+		throw InternalException("SetPayload() called on a SortKeyNoPayload");
+	}
 };
 
 template <class SORT_KEY>
@@ -183,6 +187,11 @@ public:
 	data_ptr_t GetPayload() const {
 		auto &sort_key = static_cast<const SORT_KEY &>(*this);
 		return sort_key.payload_ptr;
+	}
+
+	void SetPayload(const data_ptr_t &payload_ptr) {
+		auto &sort_key = static_cast<SORT_KEY &>(*this);
+		sort_key.payload_ptr = payload_ptr;
 	}
 };
 

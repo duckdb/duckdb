@@ -8,8 +8,10 @@
 
 #pragma once
 
+#include "tuple_data_collection.hpp"
 #include "duckdb/common/numeric_utils.hpp"
 #include "duckdb/common/vector.hpp"
+#include "duckdb/common/types/row/tuple_data_states.hpp"
 
 namespace duckdb {
 
@@ -28,9 +30,9 @@ enum class BlockIteratorStateType : int8_t {
 
 BlockIteratorStateType GetBlockIteratorStateType(const bool &fixed_blocks, const bool &external);
 
-class fixed_in_memory_block_iterator_state_t { // NOLINT: match stl case
+class FixedInMemoryBlockIteratorState {
 public:
-	explicit fixed_in_memory_block_iterator_state_t(const TupleDataCollection &data);
+	explicit FixedInMemoryBlockIteratorState(const TupleDataCollection &key_data);
 
 public:
 	template <class T>
@@ -42,7 +44,7 @@ public:
 	T &GetValueAtIndex(const idx_t &n) const {
 		D_ASSERT(n < tuple_count);
 		const auto quotient = fast_mod.Div(n);
-		return reinterpret_cast<T *const>(block_ptrs[quotient])[fast_mod.Mod(n, quotient)];
+		return GetValueAtIndex<T>(quotient, fast_mod.Mod(n, quotient));
 	}
 
 	void RandomAccess(idx_t &block_idx, idx_t &tuple_idx, const idx_t &index) const {
@@ -97,24 +99,109 @@ private:
 	const idx_t tuple_count;
 };
 
-class variable_in_memory_block_iterator_state_t { // NOLINT: match stl case
+class VariableInMemoryBlockIteratorState {};
+
+class FixedExternalBlockIteratorState {
+public:
+	explicit FixedExternalBlockIteratorState(TupleDataCollection &key_data,
+	                                         optional_ptr<TupleDataCollection> payload_data);
+
+public:
+	template <class T>
+	T &GetValueAtIndex(const idx_t &chunk_idx, const idx_t &tuple_idx) {
+		if (chunk_idx != current_chunk_idx) {
+			InitializeChunk<T>(chunk_idx);
+		}
+		return reinterpret_cast<T *const>(key_ptrs)[tuple_idx];
+	}
+
+	template <class T>
+	T &GetValueAtIndex(const idx_t &n) {
+		D_ASSERT(n < tuple_count);
+		return GetValueAtIndex<T>(n / STANDARD_VECTOR_SIZE, n % STANDARD_VECTOR_SIZE);
+	}
+
+	void RandomAccess(idx_t &chunk_idx, idx_t &tuple_idx, const idx_t &index) const {
+		chunk_idx = index / STANDARD_VECTOR_SIZE;
+		tuple_idx = index % STANDARD_VECTOR_SIZE;
+	}
+
+	void Add(idx_t &chunk_idx, idx_t &tuple_idx, const idx_t &value) const {
+		if (tuple_idx + value < STANDARD_VECTOR_SIZE) {
+			tuple_idx += value;
+			return;
+		}
+
+		const auto index = GetIndex(chunk_idx, tuple_idx) + value;
+		RandomAccess(chunk_idx, tuple_idx, index);
+	}
+
+	void Subtract(idx_t &chunk_idx, idx_t &tuple_idx, const idx_t &value) const {
+		if (tuple_idx >= value) {
+			tuple_idx -= value;
+			return;
+		}
+
+		const auto index = GetIndex(chunk_idx, tuple_idx) - value;
+		RandomAccess(chunk_idx, tuple_idx, index);
+	}
+
+	void Increment(idx_t &chunk_idx, idx_t &tuple_idx) const {
+		if (++tuple_idx == STANDARD_VECTOR_SIZE) {
+			++chunk_idx;
+			tuple_idx = 0;
+		}
+	}
+
+	void Decrement(idx_t &chunk_idx, idx_t &tuple_idx) const {
+		if (--tuple_idx == DConstants::INVALID_INDEX) {
+			--chunk_idx;
+			tuple_idx = STANDARD_VECTOR_SIZE - 1;
+		}
+	}
+
+	idx_t GetIndex(const idx_t &chunk_idx, const idx_t &tuple_idx) const {
+		return chunk_idx * STANDARD_VECTOR_SIZE + tuple_idx;
+	}
+
+private:
+	template <class T>
+	void InitializeChunk(const idx_t &chunk_idx) {
+		key_data.FetchChunk(key_scan_state, 0, chunk_idx, false);
+		if (payload_data) {
+			const auto chunk_count = payload_data->FetchChunk(payload_scan_state, 0, chunk_idx, false);
+			const auto sort_keys = FlatVector::GetData<T *>(key_scan_state.chunk_state.row_locations);
+			const auto payload_ptrs = FlatVector::GetData<data_ptr_t>(payload_scan_state.chunk_state.row_locations);
+			for (idx_t i = 0; i < chunk_count; i++) {
+				sort_keys[i]->SetPayload(payload_ptrs[i]);
+			}
+		}
+		current_chunk_idx = chunk_idx;
+	}
+
+private:
+	const idx_t tuple_count;
+	idx_t current_chunk_idx;
+
+	TupleDataCollection &key_data;
+	TupleDataScanState key_scan_state;
+	data_ptr_t *key_ptrs;
+
+	optional_ptr<TupleDataCollection> payload_data;
+	TupleDataScanState payload_scan_state;
 };
 
-class fixed_external_block_iterator_state_t { // NOLINT: match stl case
-};
-
-class variable_external_block_iterator_state_t { // NOLINT: match stl case
-};
+class VariableExternalBlockIteratorState {};
 
 //! Utility so we can get the state using the type
 template <BlockIteratorStateType T>
-using block_iterator_state_t = typename std::conditional<
-    T == BlockIteratorStateType::FIXED_IN_MEMORY, fixed_in_memory_block_iterator_state_t,
+using BlockIteratorState = typename std::conditional<
+    T == BlockIteratorStateType::FIXED_IN_MEMORY, FixedInMemoryBlockIteratorState,
     typename std::conditional<
-        T == BlockIteratorStateType::VARIABLE_IN_MEMORY, variable_in_memory_block_iterator_state_t,
-        typename std::conditional<T == BlockIteratorStateType::FIXED_EXTERNAL, fixed_external_block_iterator_state_t,
+        T == BlockIteratorStateType::VARIABLE_IN_MEMORY, VariableInMemoryBlockIteratorState,
+        typename std::conditional<T == BlockIteratorStateType::FIXED_EXTERNAL, FixedExternalBlockIteratorState,
                                   typename std::conditional<T == BlockIteratorStateType::VARIABLE_EXTERNAL,
-                                                            variable_external_block_iterator_state_t,
+                                                            VariableExternalBlockIteratorState,
                                                             void // Throws error if we get here
                                                             >::type>::type>::type>::type;
 
@@ -235,7 +322,7 @@ public:
 
 private:
 	std::reference_wrapper<STATE> state;
-	idx_t block_idx;
+	idx_t block_idx; // Or chunk index
 	idx_t tuple_idx;
 };
 

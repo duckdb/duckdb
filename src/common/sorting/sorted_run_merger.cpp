@@ -137,7 +137,8 @@ private:
 	unsafe_vector<SortedRunPartitionBoundary> run_boundaries;
 
 	//! States for every iterator type
-	unsafe_vector<const block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>> fixed_in_memory_states;
+	unsafe_vector<const BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>> fixed_in_memory_states;
+	unsafe_vector<BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>> fixed_external_states;
 	//! TODO: other iterator types
 
 	//! Opaque pointer to tournament tree
@@ -204,7 +205,11 @@ SortedRunMergerLocalState::SortedRunMergerLocalState(SortedRunMergerGlobalState 
 		auto &key_data = *run->key_data;
 		switch (iterator_state_type) {
 		case BlockIteratorStateType::FIXED_IN_MEMORY:
-			fixed_in_memory_states.push_back(block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>(key_data));
+			fixed_in_memory_states.push_back(BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>(key_data));
+			break;
+		case BlockIteratorStateType::FIXED_EXTERNAL:
+			fixed_external_states.push_back(
+			    BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>(key_data, run->payload_data.get()));
 			break;
 		default:
 			throw NotImplementedException("SortedRunMergerLocalState::SortedRunMergerLocalState for %s",
@@ -270,8 +275,12 @@ void SortedRunMergerLocalState::ComputePartitionBoundaries(SortedRunMergerGlobal
 	// Compute the end partition boundaries (lock-free)
 	switch (iterator_state_type) {
 	case BlockIteratorStateType::FIXED_IN_MEMORY:
-		ComputePartitionBoundariesSwitch<const block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>>(
+		ComputePartitionBoundariesSwitch<const BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(
 		    gstate, fixed_in_memory_states);
+		break;
+	case BlockIteratorStateType::FIXED_EXTERNAL:
+		ComputePartitionBoundariesSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>>(
+		    gstate, fixed_external_states);
 		break;
 	default:
 		// TODO: switch on other types
@@ -431,7 +440,10 @@ bool SortedRunMergerLocalState::AcquirePartitionBoundaries(SortedRunMergerGlobal
 void SortedRunMergerLocalState::MergePartition(SortedRunMergerGlobalState &gstate, DataChunk &chunk) {
 	switch (iterator_state_type) {
 	case BlockIteratorStateType::FIXED_IN_MEMORY:
-		MergePartitionSwitch<const block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>>(gstate, chunk);
+		MergePartitionSwitch<const BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(gstate, chunk);
+		break;
+	case BlockIteratorStateType::FIXED_EXTERNAL:
+		MergePartitionSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>>(gstate, chunk);
 		break;
 	default:
 		// TODO: switch on other types
@@ -517,8 +529,12 @@ void SortedRunMergerLocalState::TemplatedMergePartition(SortedRunMergerGlobalSta
 void SortedRunMergerLocalState::CreateOrDestroyTournamentTree(bool create) {
 	switch (iterator_state_type) {
 	case BlockIteratorStateType::FIXED_IN_MEMORY:
-		CreateOrDestroyTournamentTreeSwitch<const block_iterator_state_t<BlockIteratorStateType::FIXED_IN_MEMORY>>(
+		CreateOrDestroyTournamentTreeSwitch<const BlockIteratorState<BlockIteratorStateType::FIXED_IN_MEMORY>>(
 		    create, fixed_in_memory_states);
+		break;
+	case BlockIteratorStateType::FIXED_EXTERNAL:
+		CreateOrDestroyTournamentTreeSwitch<BlockIteratorState<BlockIteratorStateType::FIXED_EXTERNAL>>(
+		    create, fixed_external_states);
 		break;
 	default:
 		// TODO: switch on other types
