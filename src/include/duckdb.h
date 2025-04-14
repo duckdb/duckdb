@@ -3070,14 +3070,6 @@ DUCKDB_C_API void duckdb_slice_vector(duckdb_vector vector, idx_t dict_size, duc
                                       idx_t len);
 
 /*!
-Sets an id on the values of a dictionary, if two ids are equal then the value vector is assumed identical.
-* @param dict The dictionary vector
-* @param id The id
-* @param id_len The string length of the id
-*/
-DUCKDB_C_API void duckdb_set_dictionary_vector_id(duckdb_vector dict, const char *id, unsigned int id_len);
-
-/*!
 Copies the value from `value` to `vector`.
 */
 DUCKDB_C_API void duckdb_vector_reference_value(duckdb_vector vector, duckdb_value value);
@@ -3087,6 +3079,14 @@ References the `from` vector in the `to` vector, this makes take shared ownershi
 
 */
 DUCKDB_C_API void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_vector);
+
+/*!
+Sets an id on the values of a dictionary, if two ids are equal then the value vector is assumed identical.
+* @param dict The dictionary vector
+* @param id The id
+* @param id_len The string length of the id
+*/
+DUCKDB_C_API void duckdb_set_dictionary_vector_id(duckdb_vector dict, const char *id, unsigned int id_len);
 
 //===--------------------------------------------------------------------===//
 // Validity Mask Functions
