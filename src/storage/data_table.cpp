@@ -878,7 +878,8 @@ void DataTable::LocalAppend(LocalAppendState &state, ClientContext &context, Dat
 	LocalStorage::Append(state, chunk);
 }
 
-void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk, const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
+void DataTable::LocalAppend(TableCatalogEntry &table, ClientContext &context, DataChunk &chunk,
+                            const vector<unique_ptr<BoundConstraint>> &bound_constraints) {
 	LocalAppendState append_state;
 	InitializeLocalAppend(append_state, table, context, bound_constraints);
 	LocalAppend(append_state, context, chunk, false);
