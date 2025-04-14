@@ -102,16 +102,17 @@ jobs:
       is-success: ${{ steps.set-output.outputs.success }}
     steps:
       - id: set-output
+        shell: bash
         run:
-          if [ "${{ needs.osx.result }}" == "success" ] && \
-             [ "${{ needs.linux-release.result }}" == "success" ] && \
-             [ "${{ needs.linux-release.result }}" == "success" ] && \
-             [ "${{ needs.windows.result }}" == "success" ] && \
-             [ "${{ needs.python.result }}" == "success" ] && \
-             [ "${{ needs.pyodide.result }}" == "success" ] && \
-             [ "${{ needs.R.result }}" == "success" ] && \
-             [ "${{ needs.Wasm.result }}" == "success" ] && \
-             [ "${{ needs.static-libraries.result }}" == "success" ]; then
+          if [[ "${{ needs.osx.result }}" == "success" && \
+                "${{ needs.linux-release.result }}" == "success" && \
+                "${{ needs.linux-release.result }}" == "success" && \
+                "${{ needs.windows.result }}" == "success" && \
+                "${{ needs.python.result }}" == "success" && \
+                "${{ needs.pyodide.result }}" == "success" && \
+                "${{ needs.R.result }}" == "success" && \
+                "${{ needs.Wasm.result }}" == "success" && \
+                "${{ needs.static-libraries.result }}" == "success" ]]; then
             echo "success=true" >> $GITHUB_OUTPUT
           else
             echo "success=false" >> $GITHUB_OUTPUT
@@ -121,7 +122,7 @@ jobs:
     uses: ./.github/workflows/NotifyExternalRepositories.yml
     secrets: inherit
     needs: prepare-status  
-    if: ${{ inputs.git_ref == '' }} 
+    if: ${{ inputs.git_ref == '' && always() }} 
     with:
       is-success: ${{ needs.prepare-status.outputs.is-success }}
       target-branch: ${{ github.ref_name }}
@@ -133,7 +134,7 @@ jobs:
     uses: ./.github/workflows/NotifyExternalRepositories.yml
     secrets: inherit
     needs: prepare-status
-    if: ${{ inputs.git_ref != '' }}
+    if: ${{ inputs.git_ref != '' && always() }}
     with:
       is-success: ${{ needs.prepare-status.outputs.is-success }}
       target-branch: ${{ github.ref_name }}
