@@ -267,7 +267,7 @@ jobs:
  valgrind:
     name: Valgrind
     if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs: force-storage
     env:
       CC: gcc-10
