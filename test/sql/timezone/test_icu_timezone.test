@@ -953,3 +953,23 @@ from pg_timezone_names()
 where name = 'America/Asuncion'
 ----
 -03:00:00	false
+
+# 2025b
+#  Chile's Aysén Region moves from -04/-03 to -03 year-round, joining
+#  Magallanes Region.  The region will not change its clocks on
+#  2025-04-05 at 24:00, diverging from America/Santiago and creating a
+#  new zone America/Coyhaique
+statement ok
+set timezone='America/Coyhaique';
+
+query I
+select '2025-04-05'::timestamptz;
+----
+2025-04-05 00:00:00-03
+
+query II
+select utc_offset, is_dst
+from pg_timezone_names() 
+where name = 'America/Coyhaique'
+----
+-03:00:00	false
