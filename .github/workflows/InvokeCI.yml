@@ -103,6 +103,8 @@ jobs:
     with:
       target-branch: ${{ github.ref_name }}
       duckdb-sha: ${{ github.ref }}
+      triggering_event: ${{ github.event_name }}
+      should_publish: 'true'
 
   notify-specific-branch-on-external-repos:
     uses: ./.github/workflows/NotifyExternalRepositories.yml
@@ -120,3 +122,4 @@ jobs:
     with:
       target-branch: ${{ github.ref_name }}
       duckdb-sha: ${{ inputs.git_ref }}
+      triggering_event: ${{ github.event_name }}

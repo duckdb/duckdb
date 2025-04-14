@@ -12,6 +12,14 @@ on:
         required: true
         default: ''
         type: 'string'
+      triggering_event:
+        description: 'Which event triggered the run'
+        default: ''
+        type: 'string'
+      should_publish:
+        description: 'Should the called workflow push updates'
+        default: 'false'
+        type: 'string'
   workflow_dispatch:
     inputs:
       duckdb-sha:
@@ -23,6 +31,14 @@ on:
         description: 'Which Branch to Target'
         required: true
         default: ''
+        type: 'string'
+      triggering_event:
+        description: 'Which event triggered the run'
+        default: ''
+        type: 'string'
+      should_publish:
+        description: 'Should the called workflow push updates'
+        default: 'false'
         type: 'string'
 
 concurrency:
@@ -56,5 +72,5 @@ jobs:
         if: ${{ github.repository == 'duckdb/duckdb' }}
         run: |
           export URL=https://api.github.com/repos/duckdb/duckdb-build-status/actions/workflows/NightlyBuildsCheck.yml/dispatches
-          export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"duckdb-sha": "${{ inputs.duckdb-sha }}"}}'
+          export DATA='{"ref": "refs/heads/${{ inputs.target-branch }}", "inputs": {"branch": "${{ inputs.target-branch }}", "event": "${{ inputs.triggering_event }}", "should_publish": "${{ inputs.should_publish }}"}}'
           curl -v -XPOST -u "${PAT_USER}:${PAT_TOKEN}" -H "Accept: application/vnd.github.everest-preview+json" -H "Content-Type: application/json" $URL --data "$DATA"
