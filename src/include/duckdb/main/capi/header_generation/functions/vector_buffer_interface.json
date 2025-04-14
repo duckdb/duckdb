@@ -3,15 +3,15 @@
   "deprecated": false,
   "entries": [
     {
-      "name": "duckdb_wrap_external_buffer_as_vector_buffer",
+      "name": "duckdb_wrap_opaque_buffer_as_vector_buffer",
       "return_type": "duckdb_vector_buffer",
       "params": [
         {
-          "type": "external_buffer",
+          "type": "opaque_buffer",
           "name": "buffer"
         },
         {
-          "type": "external_buffer_free",
+          "type": "opaque_buffer_free",
           "name": "free_fn"
         }
       ],
@@ -34,7 +34,7 @@
         }
       ],
       "comment": {
-        "description": "Free the reference to the buffer created from `duckdb_wrap_external_buffer_as_vector_buffer`"
+        "description": "Free the reference to the buffer created from `duckdb_wrap_opaque_buffer_as_vector_buffer`"
       }
     }
   ]

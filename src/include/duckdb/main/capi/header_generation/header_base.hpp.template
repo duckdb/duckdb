@@ -692,9 +692,11 @@ struct duckdb_extension_access {
 //===--------------------------------------------------------------------===//
 
 //! A opaque buffer which can be interpreted as a data buffer
-typedef struct _external_buffer * external_buffer;
+typedef struct _opaque_buffer {
+    void *internal_ptr;
+} * opaque_buffer;
 
-typedef void (*external_buffer_free)(external_buffer buffer);
+typedef void (*opaque_buffer_free)(opaque_buffer buffer);
 
 // FILE_CONTENT_SECTION
 

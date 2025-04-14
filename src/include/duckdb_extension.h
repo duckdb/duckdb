@@ -549,8 +549,8 @@ typedef struct {
 
 // An API to create duckdb vector buffers
 #ifdef DUCKDB_EXTENSION_API_VERSION_UNSTABLE
-	duckdb_vector_buffer (*duckdb_wrap_external_buffer_as_vector_buffer)(external_buffer buffer,
-	                                                                     external_buffer_free free_fn);
+	duckdb_vector_buffer (*duckdb_wrap_opaque_buffer_as_vector_buffer)(opaque_buffer buffer,
+	                                                                   opaque_buffer_free free_fn);
 	void (*duckdb_free_vector_buffer)(duckdb_vector_buffer *buffer);
 #endif
 
@@ -993,8 +993,8 @@ typedef struct {
 #define duckdb_value_to_string duckdb_ext_api.duckdb_value_to_string
 
 // Version unstable_new_vector_buffer
-#define duckdb_wrap_external_buffer_as_vector_buffer duckdb_ext_api.duckdb_wrap_external_buffer_as_vector_buffer
-#define duckdb_free_vector_buffer                    duckdb_ext_api.duckdb_free_vector_buffer
+#define duckdb_wrap_opaque_buffer_as_vector_buffer duckdb_ext_api.duckdb_wrap_opaque_buffer_as_vector_buffer
+#define duckdb_free_vector_buffer                  duckdb_ext_api.duckdb_free_vector_buffer
 
 // Version unstable_new_vector_types
 #define duckdb_create_vector                 duckdb_ext_api.duckdb_create_vector

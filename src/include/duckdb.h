@@ -696,9 +696,11 @@ struct duckdb_extension_access {
 //===--------------------------------------------------------------------===//
 
 //! A opaque buffer which can be interpreted as a data buffer
-typedef struct _external_buffer *external_buffer;
+typedef struct _opaque_buffer {
+	void *internal_ptr;
+} * opaque_buffer;
 
-typedef void (*external_buffer_free)(external_buffer buffer);
+typedef void (*opaque_buffer_free)(opaque_buffer buffer);
 
 #ifndef DUCKDB_API_EXCLUDE_FUNCTIONS
 
@@ -3119,11 +3121,11 @@ no long required by duckdb. This must be freed with `duckdb_free_external_vector
 * @return A ptr to the duckdb wrapped buffer.
 
 */
-DUCKDB_C_API duckdb_vector_buffer duckdb_wrap_external_buffer_as_vector_buffer(external_buffer buffer,
-                                                                               external_buffer_free free_fn);
+DUCKDB_C_API duckdb_vector_buffer duckdb_wrap_opaque_buffer_as_vector_buffer(opaque_buffer buffer,
+                                                                             opaque_buffer_free free_fn);
 
 /*!
-Free the reference to the buffer created from `duckdb_wrap_external_buffer_as_vector_buffer`*/
+Free the reference to the buffer created from `duckdb_wrap_opaque_buffer_as_vector_buffer`*/
 DUCKDB_C_API void duckdb_free_vector_buffer(duckdb_vector_buffer *buffer);
 
 //===--------------------------------------------------------------------===//

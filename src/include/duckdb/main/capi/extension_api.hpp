@@ -476,8 +476,8 @@ typedef struct {
 	char *(*duckdb_value_to_string)(duckdb_value value);
 	// An API to create duckdb vector buffers
 
-	duckdb_vector_buffer (*duckdb_wrap_external_buffer_as_vector_buffer)(external_buffer buffer,
-	                                                                     external_buffer_free free_fn);
+	duckdb_vector_buffer (*duckdb_wrap_opaque_buffer_as_vector_buffer)(opaque_buffer buffer,
+	                                                                   opaque_buffer_free free_fn);
 	void (*duckdb_free_vector_buffer)(duckdb_vector_buffer *buffer);
 	// An API to create new vector types
 
@@ -906,7 +906,7 @@ inline duckdb_ext_api_v1 CreateAPIv1() {
 	result.duckdb_destroy_instance_cache = duckdb_destroy_instance_cache;
 	result.duckdb_append_default_to_chunk = duckdb_append_default_to_chunk;
 	result.duckdb_value_to_string = duckdb_value_to_string;
-	result.duckdb_wrap_external_buffer_as_vector_buffer = duckdb_wrap_external_buffer_as_vector_buffer;
+	result.duckdb_wrap_opaque_buffer_as_vector_buffer = duckdb_wrap_opaque_buffer_as_vector_buffer;
 	result.duckdb_free_vector_buffer = duckdb_free_vector_buffer;
 	result.duckdb_create_vector = duckdb_create_vector;
 	result.duckdb_destroy_vector = duckdb_destroy_vector;
