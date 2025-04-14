@@ -188,7 +188,8 @@ void JSONScan::AutoDetect(ClientContext &context, MultiFileBindData &bind_data, 
 	}
 	// set the max threads/estimated per-file cardinality
 	if (auto_detect_state.files_scanned > 0 && auto_detect_state.tuples_scanned > 0) {
-		auto average_tuple_size = auto_detect_state.bytes_scanned / auto_detect_state.tuples_scanned;
+		auto average_tuple_size =
+		    MaxValue<idx_t>(auto_detect_state.bytes_scanned / auto_detect_state.tuples_scanned, 1);
 		json_data.estimated_cardinality_per_file = auto_detect_state.total_file_size / average_tuple_size;
 		if (auto_detect_state.files_scanned == 1) {
 			json_data.max_threads =
