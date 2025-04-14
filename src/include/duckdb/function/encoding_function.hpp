@@ -31,12 +31,13 @@ public:
 	EncodingFunction() : encode_function(nullptr), max_bytes_per_iteration(0) {
 	}
 
-	EncodingFunction(const string &encode_type, encode_t encode_function,
-	                 const idx_t bytes_per_iteration)
-	    : name(encode_type), encode_function(encode_function),
-	      max_bytes_per_iteration(bytes_per_iteration) {
+	EncodingFunction(const string &encode_name, encode_t encode_function,
+	                 const idx_t bytes_per_iteration, const idx_t lookup_bytes)
+	    : name(encode_name), encode_function(encode_function),
+	      max_bytes_per_iteration(bytes_per_iteration), lookup_bytes(lookup_bytes) {
 		D_ASSERT(encode_function);
 		D_ASSERT(bytes_per_iteration > 0);
+		D_ASSERT(lookup_bytes > 0);
 	};
 
 	~EncodingFunction() {};
@@ -50,8 +51,11 @@ public:
 	idx_t GetBytesPerIteration() const {
 		return max_bytes_per_iteration;
 	}
+	idx_t GetLookupBytes() const {
+		return max_bytes_per_iteration;
+	}
 
-private:
+protected:
 	//! The encoding type of this function (e.g., utf-8)
 	string name;
 	//! The actual encoding function
@@ -60,6 +64,8 @@ private:
 	//! e.g., one iteration of Latin-1 to UTF-8 can generate max 2 bytes.
 	//! However, one iteration of UTF-16 to UTF-8, can generate up to 3 UTF-8 bytes.
 	idx_t max_bytes_per_iteration;
+	//! How many bytes we have to lookup before knowing the bytes we have to output
+	idx_t lookup_bytes = 1;
 };
 
 //! The set of encoding functions

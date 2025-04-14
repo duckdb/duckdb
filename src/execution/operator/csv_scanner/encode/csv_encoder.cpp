@@ -76,15 +76,25 @@ idx_t CSVEncoder::Encode(FileHandle &file_handle_input, char *output_buffer, con
 	// 2. remaining encoded buffer
 	if (encoded_buffer.HasDataToRead()) {
 		encoding_function->GetFunction()(
-		    encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
-		    decoded_buffer_size, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size, encoding_function.get());
+		   encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
+		   decoded_buffer_size, remaining_bytes_buffer.Ptr(), remaining_bytes_buffer.actual_encoded_buffer_size, encoding_function.get());
 	}
 	// 3. a new encoded buffer from the file
 	while (output_buffer_pos < decoded_buffer_size) {
 		idx_t current_decoded_buffer_start = output_buffer_pos;
+		vector<char> pass_on_buffer;
+		if (encoded_buffer.cur_pos != encoded_buffer.GetSize() && encoding_function->GetLookupBytes() > encoded_buffer.GetSize() - encoded_buffer.cur_pos) {
+			// We don't have enough lookup bytes for it, if that's the case, we need to set off these bytes to the next buffer
+			for (idx_t i = encoded_buffer.GetSize() - encoded_buffer.cur_pos; i < encoding_function->GetLookupBytes(); i++) {
+				pass_on_buffer.push_back(encoded_buffer.Ptr()[i]);
+			}
+		}
 		encoded_buffer.Reset();
+		for (idx_t i = 0; i < pass_on_buffer.size(); i++) {
+			encoded_buffer.Ptr()[i] = pass_on_buffer[i];
+		}
 		auto actual_encoded_bytes =
-		    static_cast<idx_t>(file_handle_input.Read(encoded_buffer.Ptr(), encoded_buffer.GetCapacity()));
+		    static_cast<idx_t>(file_handle_input.Read(encoded_buffer.Ptr() + pass_on_buffer.size(), encoded_buffer.GetCapacity() - pass_on_buffer.size()));
 		encoded_buffer.SetSize(actual_encoded_bytes);
 		encoding_function->GetFunction()(
 		    encoded_buffer.Ptr(), encoded_buffer.cur_pos, encoded_buffer.GetSize(), output_buffer, output_buffer_pos,
