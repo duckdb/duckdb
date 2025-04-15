@@ -22,13 +22,6 @@ public:
 	void VerifyCanAccessDirectory(const string &path);
 	void VerifyCanAccessFile(const string &path);
 
-	unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
-	                                optional_ptr<FileOpener> opener = nullptr) override {
-		VerifyNoOpener(opener);
-		VerifyCanAccessFile(path);
-		return GetFileSystem().OpenFile(path, flags, GetOpener());
-	}
-
 	void Read(FileHandle &handle, void *buffer, int64_t nr_bytes, idx_t location) override {
 		GetFileSystem().Read(handle, buffer, nr_bytes, location);
 	};
@@ -150,6 +143,18 @@ public:
 
 	vector<string> ListSubSystems() override {
 		return GetFileSystem().ListSubSystems();
+	}
+
+protected:
+	unique_ptr<FileHandle> OpenFileExtended(const OpenFileInfo &file, FileOpenFlags flags,
+	                                        optional_ptr<FileOpener> opener = nullptr) override {
+		VerifyNoOpener(opener);
+		VerifyCanAccessFile(file.path);
+		return GetFileSystem().OpenFile(file, flags, GetOpener());
+	}
+
+	bool SupportsOpenFileExtended() const override {
+		return true;
 	}
 
 private:

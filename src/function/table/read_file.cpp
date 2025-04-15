@@ -133,7 +133,7 @@ static void ReadFileExecute(ClientContext &context, TableFunctionInput &input, D
 
 		// Given the columns requested, do we even need to open the file?
 		if (state.requires_file_open) {
-			file_handle = fs.OpenFile(file.path, FileFlags::FILE_FLAGS_READ);
+			file_handle = fs.OpenFile(file, FileFlags::FILE_FLAGS_READ);
 		}
 
 		for (idx_t col_idx = 0; col_idx < state.column_ids.size(); col_idx++) {
