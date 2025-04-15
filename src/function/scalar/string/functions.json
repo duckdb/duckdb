@@ -119,7 +119,7 @@
         "name": "nfc_normalize",
         "parameters": "string",
         "description": "Converts `string` to Unicode NFC normalized string. Useful for comparisons and ordering if text data is mixed between NFC normalized and not.",
-        "example": "nfc_normalize('ardèch')",
+        "example": "nfc_normalize('ardèch')",
         "categories": ["string"],
         "type": "scalar_function",
         "struct": "NFCNormalizeFun"
@@ -260,7 +260,7 @@
                     {"name": "string", "type": "VARCHAR"},
                     {"name": "start", "type": "BIGINT"}
                 ],
-                "description": "Extracts substring starting from grapheme clusters `start` up to the end of the string. Note that a `start` value of `1` refers to the first character of the `string`.",
+                "description": "Extracts substring starting from grapheme clusters `start` up to the end of the string. Note that a `start` value of `1` refers to the `first` character of the `string`.",
                 "example": "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3)",
                 "categories": ["string"]
             },
@@ -270,7 +270,7 @@
                     {"name": "start", "type": "BIGINT"},
                     {"name": "length", "type": "BIGINT"}
                 ],
-                "description": "Extracts substring of `length` grapheme clusters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.",
+                "description": "Extracts substring of `length` grapheme clusters starting from character `start`. Note that a `start` value of `1` refers to the `first` character of the `string`.",
                 "example": "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)",
                 "categories": ["string"]
             }
@@ -570,7 +570,7 @@
             {
                 "parameters": [{"name": "string", "type": "VARCHAR"}],
                 "description": "Returns the MD5 hash of the `string` as a `VARCHAR`.",
-                "example": "md5('abc')",
+                "example": "md5('123')",
                 "categories": ["string"]
             },
             {
@@ -606,8 +606,8 @@
         "name": "sha1",
         "variants": [
             {
-                "parameters": [{"name": "string", "type": "VARCHAR"}],
-                "description": "Returns a `VARCHAR` with the SHA-1 hash of the `string`.",
+                "parameters": [{"name": "value", "type": "VARCHAR"}],
+                "description": "Returns a `VARCHAR` with the SHA-1 hash of the `value`.",
                 "example": "sha1('🦆')",
                 "categories": ["string"]
             },
@@ -625,8 +625,8 @@
         "name": "sha256",
         "variants": [
             {
-                "parameters": [{"name": "string", "type": "VARCHAR"}],
-                "description": "Returns a `VARCHAR` with the SHA-256 hash of the `string`",
+                "parameters": [{"name": "value", "type": "VARCHAR"}],
+                "description": "Returns a `VARCHAR` with the SHA-256 hash of the `value`",
                 "example": "sha256('🦆')",
                 "categories": ["string"]
             },

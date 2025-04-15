@@ -130,7 +130,7 @@
         "name": "instr",
         "parameters": "string,search_string",
         "description": "Returns location of first occurrence of `search_string` in `string`, counting from 1. Returns 0 if no match found.",
-        "examples": ["instr('test test','es')", "position('b' IN 'abc')"],
+        "examples": ["instr('test test', 'es')", "position('b' IN 'abc')"],
         "categories": ["string"],
         "type": "scalar_function",
         "aliases": ["strpos", "position"]
@@ -177,7 +177,7 @@
                     {"name": "s2", "type": "VARCHAR"}
                 ],
                 "description": "The Jaro-Winkler similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.",
-                "example": "jaro_winkler_similarity('duck', 'duckdb', 0.5)",
+                "example": "jaro_winkler_similarity('duck', 'duckdb')",
                 "categories": ["text_similarity"]
             },
             {
@@ -222,7 +222,7 @@
         "name": "lpad",
         "parameters": "string,count,character",
         "description": "Pads the `string` with the `character` on the left until it has `count` characters. Truncates the `string` on the right if it has more than `count` characters.",
-        "example": "lpad('hello', 10, '>')",
+        "example": "lpad('hello', 8, '>')",
         "categories": ["string"],
         "type": "scalar_function"
     },
@@ -233,7 +233,7 @@
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"}
                 ],
-                "description": "Removes any spaces from the left side of the `string`. In the example, the ␣ symbol denotes a space character.",
+                "description": "Removes any spaces from the left side of the `string`. In the example, the `␣` symbol denotes a space character.",
                 "example": "ltrim('␣␣␣␣test␣␣')",
                 "categories": ["string"]
             },
@@ -290,8 +290,8 @@
                     {"name": "path", "type": "VARCHAR"},
                     {"name": "separator", "type": "VARCHAR"}
                 ],
-                "description": "Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`. separator options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
-                "example": "parse_dirpath('path/to/file.csv', 'system')",
+                "description": "Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
+                "example": "parse_dirpath('path/to/file.csv', 'forward_slash')",
                 "categories": ["string"]
             }
         ],
@@ -335,7 +335,7 @@
                     {"name": "separator", "type": "VARCHAR"}
                 ],
                 "description": "Returns the last component of the `path` similarly to Python's `os.path.basename` function. If `trim_extension` is `true`, the file extension will be removed (defaults to `false`). `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
-                "example": "parse_filename('path/to/file.csv', true, 'forward_slash')",
+                "example": "parse_filename('path/to/file.csv', true, 'system')",
                 "categories": ["string"]
             }
         ],
@@ -349,7 +349,7 @@
                 "parameters": [
                     {"name": "path", "type": "VARCHAR"}
                 ],
-                "description": "Returns a list of the components (directories and filename) in the `path` similarly to Python's pathlib.parts function, using both `forward_slash` and `backslash` as separators.",
+                "description": "Returns a list of the components (directories and filename) in the `path` similarly to Python's `pathlib.parts` function, using both `forward_slash` and `backslash` as separators.",
                 "example": "parse_path('path/to/file.csv')",
                 "categories": ["string"]
             },
@@ -358,7 +358,7 @@
                     {"name": "path", "type": "VARCHAR"},
                     {"name": "separator", "type": "VARCHAR"}
                 ],
-                "description": "Returns a list of the components (directories and filename) in the `path` similarly to Python's pathlib.parts function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
+                "description": "Returns a list of the components (directories and filename) in the `path` similarly to Python's `pathlib.parts` function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.",
                 "example": "parse_path('path/to/file.csv', 'system')",
                 "categories": ["string"]
             }
@@ -429,7 +429,7 @@
                 "parameters": [
                     {"name": "string", "type": "VARCHAR"}
                 ],
-                "description": "Removes any spaces from the right side of the `string`. In the example, the ␣ symbol denotes a space character.",
+                "description": "Removes any spaces from the right side of the `string`. In the example, the `␣` symbol denotes a space character.",
                 "example": "rtrim('␣␣␣␣test␣␣')",
                 "categories": ["string"]
             },
@@ -462,7 +462,7 @@
                     {"name": "string", "type": "VARCHAR"}
                 ],
                 "description": "Removes any spaces from either side of the `string`.",
-                "example": "trim(' test ')",
+                "example": "trim('    test  ')",
                 "categories": ["string"]
             },
             {
@@ -499,7 +499,7 @@
         "name": "unicode",
         "parameters": "string",
         "description": "Returns an `INTEGER` representing the `unicode` codepoint of the first character in the `string`.",
-        "example": "unicode('ü')",
+        "example": "[unicode('âbcd'), unicode('â'), unicode(''), unicode(NULL)]",
         "categories": ["string"],
         "type": "scalar_function",
         "aliases": ["ord"]
@@ -541,7 +541,7 @@
         "name": "url_decode",
         "parameters": "string",
         "description": "Decodes a URL from a representation using Percent-Encoding.",
-        "example": "url_decode('this%20string%20is%2BFencoded')",
+        "example": "url_decode('https%3A%2F%2Fduckdb.org%2Fwhy_duckdb%23portable')",
         "categories": ["string"],
         "type": "scalar_function"
     }

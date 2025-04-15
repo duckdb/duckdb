@@ -155,7 +155,7 @@ struct NFCNormalizeFun {
 	static constexpr const char *Name = "nfc_normalize";
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Converts `string` to Unicode NFC normalized string. Useful for comparisons and ordering if text data is mixed between NFC normalized and not.";
-	static constexpr const char *Example = "nfc_normalize('ardèch')";
+	static constexpr const char *Example = "nfc_normalize('ardèch')";
 	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
@@ -258,7 +258,7 @@ struct SubstrFun {
 struct SubstringGraphemeFun {
 	static constexpr const char *Name = "substring_grapheme";
 	static constexpr const char *Parameters = "string::VARCHAR,start::BIGINT\001string::VARCHAR,start::BIGINT,length::BIGINT";
-	static constexpr const char *Description = "Extracts substring starting from grapheme clusters `start` up to the end of the string. Note that a `start` value of `1` refers to the first character of the `string`.\001Extracts substring of `length` grapheme clusters starting from character `start`. Note that a `start` value of `1` refers to the first character of the `string`.";
+	static constexpr const char *Description = "Extracts substring starting from grapheme clusters `start` up to the end of the string. Note that a `start` value of `1` refers to the `first` character of the `string`.\001Extracts substring of `length` grapheme clusters starting from character `start`. Note that a `start` value of `1` refers to the `first` character of the `string`.";
 	static constexpr const char *Example = "substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3)\001substring_grapheme('🦆🤦🏼‍♂️🤦🏽‍♀️🦆', 3, 2)";
 	static constexpr const char *Categories = "string\001string";
 
@@ -469,7 +469,7 @@ struct MD5Fun {
 	static constexpr const char *Name = "md5";
 	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
 	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a `VARCHAR`.\001Returns the MD5 hash of the `blob` as as a `VARCHAR`.";
-	static constexpr const char *Example = "md5('abc')\001md5('\\xAA\\xBB'::BLOB)";
+	static constexpr const char *Example = "md5('123')\001md5('\\xAA\\xBB'::BLOB)";
 	static constexpr const char *Categories = "string\001blob";
 
 	static ScalarFunctionSet GetFunctions();
@@ -487,8 +487,8 @@ struct MD5NumberFun {
 
 struct SHA1Fun {
 	static constexpr const char *Name = "sha1";
-	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
-	static constexpr const char *Description = "Returns a `VARCHAR` with the SHA-1 hash of the `string`.\001Returns a `VARCHAR` with the SHA-1 hash of the `blob`.";
+	static constexpr const char *Parameters = "value::VARCHAR\001blob::BLOB";
+	static constexpr const char *Description = "Returns a `VARCHAR` with the SHA-1 hash of the `value`.\001Returns a `VARCHAR` with the SHA-1 hash of the `blob`.";
 	static constexpr const char *Example = "sha1('🦆')\001sha1('\\xAA\\xBB'::BLOB)";
 	static constexpr const char *Categories = "string\001blob";
 
@@ -497,8 +497,8 @@ struct SHA1Fun {
 
 struct SHA256Fun {
 	static constexpr const char *Name = "sha256";
-	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
-	static constexpr const char *Description = "Returns a `VARCHAR` with the SHA-256 hash of the `string`\001Returns a `VARCHAR` with the SHA-256 hash of the `blob`.";
+	static constexpr const char *Parameters = "value::VARCHAR\001blob::BLOB";
+	static constexpr const char *Description = "Returns a `VARCHAR` with the SHA-256 hash of the `value`\001Returns a `VARCHAR` with the SHA-256 hash of the `blob`.";
 	static constexpr const char *Example = "sha256('🦆')\001sha256('\\xAA\\xBB'::BLOB)";
 	static constexpr const char *Categories = "string\001blob";
 

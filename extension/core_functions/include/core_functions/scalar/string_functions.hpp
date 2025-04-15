@@ -159,7 +159,7 @@ struct InstrFun {
 	static constexpr const char *Name = "instr";
 	static constexpr const char *Parameters = "string,search_string";
 	static constexpr const char *Description = "Returns location of first occurrence of `search_string` in `string`, counting from 1. Returns 0 if no match found.";
-	static constexpr const char *Example = "instr('test test','es')\002position('b' IN 'abc')";
+	static constexpr const char *Example = "instr('test test', 'es')\002position('b' IN 'abc')";
 	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
@@ -201,7 +201,7 @@ struct JaroWinklerSimilarityFun {
 	static constexpr const char *Name = "jaro_winkler_similarity";
 	static constexpr const char *Parameters = "s1::VARCHAR,s2::VARCHAR\001s1::VARCHAR,s2::VARCHAR,score_cutoff::DOUBLE";
 	static constexpr const char *Description = "The Jaro-Winkler similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1.\001The Jaro-Winkler similarity between two strings. Characters of different cases (e.g., `a` and `A`) are considered different. Returns a number between 0 and 1. For similarity < score_cutoff, 0 is returned instead.";
-	static constexpr const char *Example = "jaro_winkler_similarity('duck', 'duckdb', 0.5)\001jaro_winkler_similarity('duck', 'duckdb', 0.5)";
+	static constexpr const char *Example = "jaro_winkler_similarity('duck', 'duckdb')\001jaro_winkler_similarity('duck', 'duckdb', 0.5)";
 	static constexpr const char *Categories = "text_similarity\001text_similarity";
 
 	static ScalarFunctionSet GetFunctions();
@@ -247,7 +247,7 @@ struct LpadFun {
 	static constexpr const char *Name = "lpad";
 	static constexpr const char *Parameters = "string,count,character";
 	static constexpr const char *Description = "Pads the `string` with the `character` on the left until it has `count` characters. Truncates the `string` on the right if it has more than `count` characters.";
-	static constexpr const char *Example = "lpad('hello', 10, '>')";
+	static constexpr const char *Example = "lpad('hello', 8, '>')";
 	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
@@ -256,7 +256,7 @@ struct LpadFun {
 struct LtrimFun {
 	static constexpr const char *Name = "ltrim";
 	static constexpr const char *Parameters = "string::VARCHAR\001string::VARCHAR,characters::VARCHAR";
-	static constexpr const char *Description = "Removes any spaces from the left side of the `string`. In the example, the ␣ symbol denotes a space character.\001Removes any occurrences of any of the `characters` from the left side of the `string`.";
+	static constexpr const char *Description = "Removes any spaces from the left side of the `string`. In the example, the `␣` symbol denotes a space character.\001Removes any occurrences of any of the `characters` from the left side of the `string`.";
 	static constexpr const char *Example = "ltrim('␣␣␣␣test␣␣')\001ltrim('>>>>test<<', '><')";
 	static constexpr const char *Categories = "string\001string";
 
@@ -276,8 +276,8 @@ struct ParseDirnameFun {
 struct ParseDirpathFun {
 	static constexpr const char *Name = "parse_dirpath";
 	static constexpr const char *Parameters = "path::VARCHAR\001path::VARCHAR,separator::VARCHAR";
-	static constexpr const char *Description = "Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`, using both `forward_slash` and `backslash` as separators.\001Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`. separator options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
-	static constexpr const char *Example = "parse_dirpath('path/to/file.csv')\001parse_dirpath('path/to/file.csv', 'system')";
+	static constexpr const char *Description = "Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`, using both `forward_slash` and `backslash` as separators.\001Returns the head of the `path` (the pathname until the last slash) similarly to Python's `os.path.dirname`. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
+	static constexpr const char *Example = "parse_dirpath('path/to/file.csv')\001parse_dirpath('path/to/file.csv', 'forward_slash')";
 	static constexpr const char *Categories = "string\001string";
 
 	static ScalarFunctionSet GetFunctions();
@@ -287,7 +287,7 @@ struct ParseFilenameFun {
 	static constexpr const char *Name = "parse_filename";
 	static constexpr const char *Parameters = "path::VARCHAR\001path::VARCHAR,separator::VARCHAR\001path::VARCHAR,trim_extension::BOOLEAN\001path::VARCHAR,trim_extension::BOOLEAN,separator::VARCHAR";
 	static constexpr const char *Description = "Returns the last component of the `path` similarly to Python's `os.path.basename` function, using both `forward_slash` and `backslash` as separators.\001Returns the last component of the `path` similarly to Python's `os.path.basename` function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.\001Returns the last component of the `path` similarly to Python's `os.path.basename` function, using both `forward_slash` and `backslash` as separators. If `trim_extension` is `true`, the file extension will be removed (defaults to `false`).\001Returns the last component of the `path` similarly to Python's `os.path.basename` function. If `trim_extension` is `true`, the file extension will be removed (defaults to `false`). `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
-	static constexpr const char *Example = "parse_filename('path/to/file.csv')\001parse_filename('path/to/file.csv', 'forward_slash')\001parse_filename('path/to/file.csv', true)\001parse_filename('path/to/file.csv', true, 'forward_slash')";
+	static constexpr const char *Example = "parse_filename('path/to/file.csv')\001parse_filename('path/to/file.csv', 'forward_slash')\001parse_filename('path/to/file.csv', true)\001parse_filename('path/to/file.csv', true, 'system')";
 	static constexpr const char *Categories = "string\001string\001string\001string";
 
 	static ScalarFunctionSet GetFunctions();
@@ -296,7 +296,7 @@ struct ParseFilenameFun {
 struct ParsePathFun {
 	static constexpr const char *Name = "parse_path";
 	static constexpr const char *Parameters = "path::VARCHAR\001path::VARCHAR,separator::VARCHAR";
-	static constexpr const char *Description = "Returns a list of the components (directories and filename) in the `path` similarly to Python's pathlib.parts function, using both `forward_slash` and `backslash` as separators.\001Returns a list of the components (directories and filename) in the `path` similarly to Python's pathlib.parts function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
+	static constexpr const char *Description = "Returns a list of the components (directories and filename) in the `path` similarly to Python's `pathlib.parts` function, using both `forward_slash` and `backslash` as separators.\001Returns a list of the components (directories and filename) in the `path` similarly to Python's `pathlib.parts` function. `separator` options: `system`, `both_slash` (default), `forward_slash`, `backslash`.";
 	static constexpr const char *Example = "parse_path('path/to/file.csv')\001parse_path('path/to/file.csv', 'system')";
 	static constexpr const char *Categories = "string\001string";
 
@@ -376,7 +376,7 @@ struct RpadFun {
 struct RtrimFun {
 	static constexpr const char *Name = "rtrim";
 	static constexpr const char *Parameters = "string::VARCHAR\001string::VARCHAR,characters::VARCHAR";
-	static constexpr const char *Description = "Removes any spaces from the right side of the `string`. In the example, the ␣ symbol denotes a space character.\001Removes any occurrences of any of the `characters` from the right side of the `string`.";
+	static constexpr const char *Description = "Removes any spaces from the right side of the `string`. In the example, the `␣` symbol denotes a space character.\001Removes any occurrences of any of the `characters` from the right side of the `string`.";
 	static constexpr const char *Example = "rtrim('␣␣␣␣test␣␣')\001rtrim('>>>>test<<', '><')";
 	static constexpr const char *Categories = "string\001string";
 
@@ -397,7 +397,7 @@ struct TrimFun {
 	static constexpr const char *Name = "trim";
 	static constexpr const char *Parameters = "string::VARCHAR\001string::VARCHAR,characters::VARCHAR";
 	static constexpr const char *Description = "Removes any spaces from either side of the `string`.\001Removes any occurrences of any of the `characters` from either side of the `string`.";
-	static constexpr const char *Example = "trim(' test ')\001trim('>>>>test<<', '><')";
+	static constexpr const char *Example = "trim('    test  ')\001trim('>>>>test<<', '><')";
 	static constexpr const char *Categories = "string\001string";
 
 	static ScalarFunctionSet GetFunctions();
@@ -439,7 +439,7 @@ struct UnicodeFun {
 	static constexpr const char *Name = "unicode";
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Returns an `INTEGER` representing the `unicode` codepoint of the first character in the `string`.";
-	static constexpr const char *Example = "unicode('ü')";
+	static constexpr const char *Example = "[unicode('âbcd'), unicode('â'), unicode(''), unicode(NULL)]";
 	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
@@ -475,7 +475,7 @@ struct UrlDecodeFun {
 	static constexpr const char *Name = "url_decode";
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Decodes a URL from a representation using Percent-Encoding.";
-	static constexpr const char *Example = "url_decode('this%20string%20is%2BFencoded')";
+	static constexpr const char *Example = "url_decode('https%3A%2F%2Fduckdb.org%2Fwhy_duckdb%23portable')";
 	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
