@@ -29,23 +29,26 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 	idx_t total_matches = 0;
 
 	for (idx_t row_idx = 0; row_idx < count; ++row_idx) {
-		auto source_list_idx = source_format.sel->get_index(row_idx);
-		if (list_entries[source_list_idx].length == 0) {
-			if (RETURN_POSITION) {
+		const auto target_entry_idx = target_format.sel->get_index(row_idx);
+		const bool target_valid = target_format.validity.RowIsValid(target_entry_idx);
+		const auto source_list_idx = source_format.sel->get_index(row_idx);
+
+		const auto invalid_res = !FIND_NULLS && !target_valid;
+		if (invalid_res || list_entries[source_list_idx].length == 0) {
+			if (invalid_res || RETURN_POSITION) {
 				result_validity.SetInvalid(row_idx);
+			} else {
+				result_data[row_idx] = 0;
 			}
 			continue;
 		}
-
-		const auto target_entry_idx = target_format.sel->get_index(row_idx);
-		const bool target_valid = target_format.validity.RowIsValid(target_entry_idx);
 
 		const auto entry_length = list_entries[source_list_idx].length;
 		const auto entry_offset = list_entries[source_list_idx].offset;
 
 		bool found = false;
 
-		for (auto list_idx = entry_offset; list_idx < entry_length + entry_offset; list_idx++) {
+		for (auto list_idx = entry_offset; list_idx < entry_length + entry_offset && !found; list_idx++) {
 			const auto source_entry_idx = source_format.sel->get_index(list_idx);
 			const bool source_valid = source_format.validity.RowIsValid(source_entry_idx);
 
@@ -55,13 +58,13 @@ idx_t ListSearchSimpleOp(Vector &list_vec, Vector &source_vec, Vector &target_ve
 				total_matches++;
 				result_data[row_idx] =
 				    RETURN_POSITION ? UnsafeNumericCast<RETURN_TYPE>(1 + list_idx - entry_offset) : 1;
-				continue;
 			}
 		}
 
 		if (!found) {
 			if (RETURN_POSITION) {
 				result_validity.SetInvalid(row_idx);
+			} else {
 				result_data[row_idx] = 0;
 			}
 		}
