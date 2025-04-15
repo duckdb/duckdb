@@ -98,6 +98,7 @@ LoadMetadata(ClientContext &context, Allocator &allocator, CachingFileHandle &fi
 		buf.resize(allocator, 8);
 		buf.zero();
 
+		transport.Prefetch(file_size - 8, 8);
 		transport.SetLocation(file_size - 8);
 		transport.read(buf.ptr, 8);
 
