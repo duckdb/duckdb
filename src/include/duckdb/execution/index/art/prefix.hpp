@@ -45,7 +45,7 @@ public:
 	static uint8_t GetByte(const ART &art, const Node &node, const uint8_t pos);
 
 public:
-	//! Get a new list of prefix nodes. The node reference holds the last prefix of the list.
+	//! Get a new list of prefix nodes. The node reference holds the child of the last prefix node.
 	static void New(ART &art, reference<Node> &ref, const ARTKey &key, const idx_t depth, idx_t count);
 
 	//! Free the prefix and its child.

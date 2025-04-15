@@ -6,8 +6,13 @@
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
 #include "duckdb/execution/index/art/node48.hpp"
+#include "duckdb/execution/index/art/leaf.hpp"
 
 namespace duckdb {
+
+void ARTMerger::Init(Node &left, Node &right) {
+	Emplace(left, right);
+}
 
 ARTMergeResult ARTMerger::Merge() {
 	while (!s.empty()) {
@@ -76,6 +81,37 @@ void ARTMerger::Emplace(Node &left, Node &right) {
 		swap(left, right);
 	}
 	s.emplace(left, right);
+}
+
+void ARTMerger::TransformInlinedToNested(Node &inlined) {
+	D_ASSERT(inlined.GetType() == NType::LEAF_INLINED);
+
+	// Retrieve the inlined row ID.
+	const auto row_id = inlined.GetRowId();
+	inlined.Clear();
+
+	// Turn the inlined row ID into a list of prefix nodes.
+	const auto row_id_key = ARTKey::CreateARTKey<row_t>(arena, row_id);
+	reference<Node> ref(inlined);
+	Prefix::New(art, ref, row_id_key, 0, sizeof(row_id));
+	Leaf::New(ref.get(), row_id);
+	inlined.SetGateStatus(GateStatus::GATE_SET);
+}
+
+void ARTMerger::MergeInlined(Node &left, Node &right) {
+	D_ASSERT(left.GetType() == NType::LEAF_INLINED);
+	D_ASSERT(right.GetType() == NType::LEAF_INLINED);
+
+	TransformInlinedToNested(left);
+	MergeGateAndInlined(left, right);
+}
+
+void ARTMerger::MergeGateAndInlined(Node &gate, Node &inlined) {
+	D_ASSERT(gate.GetGateStatus() == GateStatus::GATE_SET);
+	D_ASSERT(inlined.GetType() == NType::LEAF_INLINED);
+
+	TransformInlinedToNested(inlined);
+	Emplace(gate, inlined);
 }
 
 array_ptr<uint8_t> ARTMerger::GetBytes(Node &leaf_node) {

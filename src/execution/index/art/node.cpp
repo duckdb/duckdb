@@ -248,10 +248,6 @@ const unsafe_optional_ptr<Node> Node::GetNextChild(ART &art, uint8_t &byte) cons
 	return GetNextChildInternal(art, *this, byte);
 }
 
-unsafe_optional_ptr<Node> Node::GetNextChildMutable(ART &art, uint8_t &byte) const {
-	return GetNextChildInternal(art, *this, byte);
-}
-
 bool Node::HasByte(ART &art, uint8_t &byte) const {
 	D_ASSERT(HasMetadata());
 
@@ -382,59 +378,16 @@ void Node::InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
 	scanner.Scan(handler);
 }
 
-bool Node::Merge(ART &art, Node &other, const GateStatus status) {
+bool Node::Merge(ART &art, Node &other) {
 	if (HasMetadata()) {
-		return MergeInternal(art, other, status);
+		ARTMerger merger(Allocator::Get(art.db), art);
+		merger.Init(*this, other);
+		return merger.Merge() == ARTMergeResult::SUCCESS;
 	}
 
 	*this = other;
 	other = Node();
 	return true;
-}
-
-bool Node::MergeInternal(ART &art, Node &other, const GateStatus status) {
-	D_ASSERT(HasMetadata());
-	D_ASSERT(other.HasMetadata());
-
-	// Merge inlined leaves.
-	if (GetType() == NType::LEAF_INLINED) {
-		swap(*this, other);
-	}
-	if (other.GetType() == NType::LEAF_INLINED) {
-		D_ASSERT(status == GateStatus::GATE_NOT_SET);
-		D_ASSERT(other.GetGateStatus() == GateStatus::GATE_SET || other.GetType() == NType::LEAF_INLINED);
-		D_ASSERT(GetType() == NType::LEAF_INLINED || GetGateStatus() == GateStatus::GATE_SET);
-
-		if (art.IsUnique()) {
-			return false;
-		}
-		Leaf::MergeInlined(art, *this, other);
-		return true;
-	}
-
-	// Enter a gate.
-	if (GetGateStatus() == GateStatus::GATE_SET && status == GateStatus::GATE_NOT_SET) {
-		D_ASSERT(other.GetGateStatus() == GateStatus::GATE_SET);
-		D_ASSERT(GetType() != NType::LEAF_INLINED);
-		D_ASSERT(other.GetType() != NType::LEAF_INLINED);
-
-		// Get all row IDs.
-		unsafe_vector<row_t> row_ids;
-		Iterator it(art);
-		it.FindMinimum(other);
-		ARTKey empty_key = ARTKey();
-		it.Scan(empty_key, NumericLimits<row_t>().Maximum(), row_ids, false);
-		Node::Free(art, other);
-		D_ASSERT(row_ids.size() > 1);
-
-		// Insert all row IDs.
-		ArenaAllocator allocator(Allocator::Get(art.db));
-		for (idx_t i = 0; i < row_ids.size(); i++) {
-			auto row_id = ARTKey::CreateARTKey<row_t>(allocator, row_ids[i]);
-			art.Insert(*this, row_id, 0, row_id, GateStatus::GATE_SET, nullptr, IndexAppendMode::DEFAULT);
-		}
-		return true;
-	}
 }
 
 //===--------------------------------------------------------------------===//

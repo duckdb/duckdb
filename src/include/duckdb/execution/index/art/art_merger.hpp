@@ -23,17 +23,8 @@ public:
 	ARTMerger(Allocator &allocator, ART &art) : arena(allocator), art(art) {
 	}
 
-	void MergeInlined(Node &left, Node &right) {
-		// Turn both row IDs into prefix + inlined row ID.
-		// Set gates.
-		// Push onto stack.
-	}
-	void MergeGateAndInlined(Node &left, Node &right) {
-		// Turn the row ID into prefix + inlined row ID.
-		// Set gate of prefix.
-		// Push onto stack.
-	}
-
+public:
+	void Init(Node &left, Node &right);
 	ARTMergeResult Merge();
 
 private:
@@ -54,6 +45,10 @@ private:
 	// - if left is LEAF_INLINED, then right is also LEAF_INLINED.
 	// - if left is PREFIX, then right is also PREFIX.
 	void Emplace(Node &left, Node &right);
+
+	void TransformInlinedToNested(Node &inlined);
+	void MergeInlined(Node &left, Node &right);
+	void MergeGateAndInlined(Node &gate, Node &inlined);
 
 	array_ptr<uint8_t> GetBytes(Node &node);
 	void MergeLeaves(Node &left, Node &right);

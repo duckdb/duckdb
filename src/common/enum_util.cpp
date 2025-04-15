@@ -84,6 +84,7 @@
 #include "duckdb/common/types/vector.hpp"
 #include "duckdb/common/types/vector_buffer.hpp"
 #include "duckdb/execution/index/art/art.hpp"
+#include "duckdb/execution/index/art/art_merger.hpp"
 #include "duckdb/execution/index/art/art_scanner.hpp"
 #include "duckdb/execution/index/art/node.hpp"
 #include "duckdb/execution/index/bound_index.hpp"
@@ -172,6 +173,24 @@ const char* EnumUtil::ToChars<ARTConflictType>(ARTConflictType value) {
 template<>
 ARTConflictType EnumUtil::FromString<ARTConflictType>(const char *value) {
 	return static_cast<ARTConflictType>(StringUtil::StringToEnum(GetARTConflictTypeValues(), 3, "ARTConflictType", value));
+}
+
+const StringUtil::EnumStringLiteral *GetARTMergeResultValues() {
+	static constexpr StringUtil::EnumStringLiteral values[] {
+		{ static_cast<uint32_t>(ARTMergeResult::SUCCESS), "SUCCESS" },
+		{ static_cast<uint32_t>(ARTMergeResult::DUPLICATE), "DUPLICATE" }
+	};
+	return values;
+}
+
+template<>
+const char* EnumUtil::ToChars<ARTMergeResult>(ARTMergeResult value) {
+	return StringUtil::EnumToString(GetARTMergeResultValues(), 2, "ARTMergeResult", static_cast<uint32_t>(value));
+}
+
+template<>
+ARTMergeResult EnumUtil::FromString<ARTMergeResult>(const char *value) {
+	return static_cast<ARTMergeResult>(StringUtil::StringToEnum(GetARTMergeResultValues(), 2, "ARTMergeResult", value));
 }
 
 const StringUtil::EnumStringLiteral *GetARTScanHandlingValues() {

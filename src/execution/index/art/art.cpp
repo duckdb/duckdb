@@ -1430,7 +1430,7 @@ bool ART::MergeIndexes(IndexLock &state, BoundIndex &other_index) {
 
 	// Merge the ARTs.
 	D_ASSERT(tree.GetGateStatus() == other_art.tree.GetGateStatus());
-	if (!tree.Merge(*this, other_art.tree, tree.GetGateStatus())) {
+	if (!tree.Merge(*this, other_art.tree)) {
 		return false;
 	}
 	return true;

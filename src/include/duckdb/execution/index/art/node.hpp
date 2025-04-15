@@ -87,8 +87,6 @@ public:
 	unsafe_optional_ptr<Node> GetChildMutable(ART &art, const uint8_t byte) const;
 	//! Get the first immutable child greater than or equal to the byte.
 	const unsafe_optional_ptr<Node> GetNextChild(ART &art, uint8_t &byte) const;
-	//! Get the first child greater than or equal to the byte.
-	unsafe_optional_ptr<Node> GetNextChildMutable(ART &art, uint8_t &byte) const;
 	//! Returns true, if the byte exists, else false.
 	bool HasByte(ART &art, uint8_t &byte) const;
 	//! Get the first byte greater than or equal to the byte.
@@ -106,7 +104,7 @@ public:
 	//! Initialize a merge by incrementing the buffer IDs of a node and its children.
 	void InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds);
 	//! Merge a node into this node.
-	bool Merge(ART &art, Node &other, const GateStatus status);
+	bool Merge(ART &art, Node &other);
 
 	//! Vacuum all nodes exceeding their vacuum threshold.
 	void Vacuum(ART &art, const unordered_set<uint8_t> &indexes);
@@ -157,9 +155,6 @@ public:
 	inline void operator=(const IndexPointer &ptr) {
 		Set(ptr.Get());
 	}
-
-private:
-	bool MergeInternal(ART &art, Node &other, const GateStatus status);
 
 private:
 	template <class NODE>
