@@ -38,7 +38,7 @@ struct CurrentSettingFun {
 struct HashFun {
 	static constexpr const char *Name = "hash";
 	static constexpr const char *Parameters = "value";
-	static constexpr const char *Description = "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash";
+	static constexpr const char *Description = "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash.";
 	static constexpr const char *Example = "hash('🦆')";
 	static constexpr const char *Categories = "string";
 
@@ -48,8 +48,8 @@ struct HashFun {
 struct LeastFun {
 	static constexpr const char *Name = "least";
 	static constexpr const char *Parameters = "arg1, arg2, ...";
-	static constexpr const char *Description = "Returns the smallest value using lexicographical ordering. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.";
-	static constexpr const char *Example = "least(42, 84)";
+	static constexpr const char *Description = "Returns the smallest value. For strings lexicographical ordering is used. Note that uppercase characters are considered “smaller” than lowercase characters, and collations are not supported.";
+	static constexpr const char *Example = "least(42, 84)\002least('abc', 'bcd', 'cde', 'EFG')";
 	static constexpr const char *Categories = "string,numeric,date,timestamp,aggregate";
 
 	static ScalarFunctionSet GetFunctions();
@@ -58,7 +58,7 @@ struct LeastFun {
 struct GreatestFun {
 	static constexpr const char *Name = "greatest";
 	static constexpr const char *Parameters = "arg1, arg2, ...";
-	static constexpr const char *Description = "Returns the largest value using lexicographical ordering. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.";
+	static constexpr const char *Description = "Returns the largest value. For strings lexicographical ordering is used. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.";
 	static constexpr const char *Example = "greatest(42, 84)\002greatest('abc', 'bcd', 'cde', 'EFG')";
 	static constexpr const char *Categories = "string,numeric,date,timestamp,aggregate";
 

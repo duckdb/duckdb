@@ -60,7 +60,7 @@ struct ConcatWsFun {
 struct ConcatFun {
 	static constexpr const char *Name = "concat";
 	static constexpr const char *Parameters = "value,...";
-	static constexpr const char *Description = "Concatenates multiple strings, lists, or blobs. `NULL` inputs are skipped. See also `string || string`.";
+	static constexpr const char *Description = "Concatenates multiple strings, lists, or blobs. `NULL` inputs are skipped. See also operator `||`.";
 	static constexpr const char *Example = "concat('Hello', ' ', 'World')";
 	static constexpr const char *Categories = "string,list,blob";
 
@@ -97,8 +97,8 @@ struct ArrayCatFun {
 
 struct ConcatOperatorFun {
 	static constexpr const char *Name = "||";
-	static constexpr const char *Parameters = "string,string";
-	static constexpr const char *Description = "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(string, ...)` and `list_concat(list1, list2)`.";
+	static constexpr const char *Parameters = "arg1,arg2";
+	static constexpr const char *Description = "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(arg1, arg2, ...)` and `list_concat(list1, list2)`.";
 	static constexpr const char *Example = "'Duck' || 'DB'\002[1, 2, 3] || [4, 5, 6]\002'\\xAA'::BLOB || '\\xBB'::BLOB";
 	static constexpr const char *Categories = "string,list,blob";
 
@@ -110,7 +110,7 @@ struct PrefixFun {
 	static constexpr const char *Parameters = "string,search_string";
 	static constexpr const char *Description = "Returns `true` if `string` starts with `search_string`.";
 	static constexpr const char *Example = "prefix('abc', 'ab')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -120,7 +120,7 @@ struct SuffixFun {
 	static constexpr const char *Parameters = "string,search_string";
 	static constexpr const char *Description = "Returns `true` if `string` ends with `search_string`.";
 	static constexpr const char *Example = "suffix('abc', 'bc')";
-	static constexpr const char *Categories = "";
+	static constexpr const char *Categories = "string";
 
 	static ScalarFunction GetFunction();
 };
@@ -370,7 +370,7 @@ struct RegexpEscapeFun {
 	static constexpr const char *Parameters = "string";
 	static constexpr const char *Description = "Escapes special patterns to turn `string` into a regular expression similarly to Python's `re.escape` function.";
 	static constexpr const char *Example = "regexp_escape('https://duckdb.org')";
-	static constexpr const char *Categories = "string";
+	static constexpr const char *Categories = "regex";
 
 	static ScalarFunction GetFunction();
 };
@@ -478,7 +478,7 @@ struct MD5Fun {
 struct MD5NumberFun {
 	static constexpr const char *Name = "md5_number";
 	static constexpr const char *Parameters = "string::VARCHAR\001blob::BLOB";
-	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a `HUGEINT`\001Returns the MD5 hash of the `blob` as a `HUGEINT`   ";
+	static constexpr const char *Description = "Returns the MD5 hash of the `string` as a `HUGEINT`.\001Returns the MD5 hash of the `blob` as a `HUGEINT`.";
 	static constexpr const char *Example = "md5_number('abc')\001md5_number('\\xAA\\xBB'::BLOB)";
 	static constexpr const char *Categories = "string\001blob";
 

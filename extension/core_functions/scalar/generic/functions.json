@@ -16,7 +16,7 @@
     {
         "name": "hash",
         "parameters": "value",
-        "description": "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash",
+        "description": "Returns a `UBIGINT` with the hash of the `value`. Note that this is not a cryptographic hash.",
         "example": "hash('\uD83E\uDD86')",
         "categories": ["string"],
         "type": "scalar_function"
@@ -24,15 +24,15 @@
     {
         "name": "least",
         "parameters": "arg1, arg2, ...",
-        "description": "Returns the smallest value using lexicographical ordering. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.",
-        "example": "least(42, 84)",
+        "description": "Returns the smallest value. For strings lexicographical ordering is used. Note that uppercase characters are considered “smaller” than lowercase characters, and collations are not supported.",
+        "examples": ["least(42, 84)", "least('abc', 'bcd', 'cde', 'EFG')"],
         "categories": ["string", "numeric", "date", "timestamp", "aggregate"],
         "type": "scalar_function_set"
     },
     {
         "name": "greatest",
         "parameters": "arg1, arg2, ...",
-        "description": "Returns the largest value using lexicographical ordering. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.",
+        "description": "Returns the largest value. For strings lexicographical ordering is used. Note that lowercase characters are considered “larger” than uppercase characters and collations are not supported.",
         "examples": ["greatest(42, 84)", "greatest('abc', 'bcd', 'cde', 'EFG')"],
         "categories": ["string", "numeric", "date", "timestamp", "aggregate"],
         "type": "scalar_function_set"

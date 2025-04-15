@@ -30,7 +30,7 @@
     {
         "name": "concat",
         "parameters": "value,...",
-        "description": "Concatenates multiple strings, lists, or blobs. `NULL` inputs are skipped. See also `string || string`.",
+        "description": "Concatenates multiple strings, lists, or blobs. `NULL` inputs are skipped. See also operator `||`.",
         "example": "concat('Hello', ' ', 'World')",
         "categories": ["string", "list", "blob"],
         "type": "scalar_function"
@@ -46,8 +46,8 @@
     },
     {
         "name": "||",
-        "parameters": "string,string",
-        "description": "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(string, ...)` and `list_concat(list1, list2)`.",
+        "parameters": "arg1,arg2",
+        "description": "Concatenates two strings, lists, or blobs. Any `NULL` input results in `NULL`. See also `concat(arg1, arg2, ...)` and `list_concat(list1, list2)`.",
         "examples": [
             "'Duck' || 'DB'",
             "[1, 2, 3] || [4, 5, 6]",
@@ -62,6 +62,7 @@
         "parameters": "string,search_string",
         "description": "Returns `true` if `string` starts with `search_string`.",
         "example": "prefix('abc', 'ab')",
+        "categories": ["string"],
         "type": "scalar_function"
     },
     {
@@ -69,6 +70,7 @@
         "parameters": "string,search_string",
         "description": "Returns `true` if `string` ends with `search_string`.",
         "example": "suffix('abc', 'bc')",
+        "categories": ["string"],
         "type": "scalar_function",
         "aliases": ["ends_with"]
     },
@@ -486,7 +488,7 @@
         "parameters": "string",
         "description": "Escapes special patterns to turn `string` into a regular expression similarly to Python's `re.escape` function.",
         "example": "regexp_escape('https://duckdb.org')",
-        "categories": ["string"],
+        "categories": ["regex"],
         "type": "scalar_function",
         "struct": "RegexpEscapeFun"
     },
@@ -586,13 +588,13 @@
         "variants": [
             {
                 "parameters": [{"name": "string", "type": "VARCHAR"}],
-                "description": "Returns the MD5 hash of the `string` as a `HUGEINT`",
+                "description": "Returns the MD5 hash of the `string` as a `HUGEINT`.",
                 "example": "md5_number('abc')",
                 "categories": ["string"]
             },
             {
                 "parameters": [{"name": "blob", "type": "BLOB"}],
-                "description": "Returns the MD5 hash of the `blob` as a `HUGEINT`   ",
+                "description": "Returns the MD5 hash of the `blob` as a `HUGEINT`.",
                 "example": "md5_number('\\xAA\\xBB'::BLOB)",
                 "categories": ["blob"]
             }
