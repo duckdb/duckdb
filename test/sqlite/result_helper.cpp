@@ -92,10 +92,10 @@ bool TestResultHelper::CheckQueryResult(const Query &query, ExecuteContext &cont
 		string csv_error;
 		comparison_values = LoadResultFromFile(fname, result.names, expected_column_count, csv_error);
 		if (!csv_error.empty()) {
-			std::stringstream log_message;
-			log_message << logger.PrintErrorHeader(csv_error).str();
-			std::cerr << log_message.str();
-			GetSummary() << log_message.str();
+			string log_message;
+			log_message += logger.PrintErrorHeader(csv_error);
+			std::cerr << log_message;
+			GetSummary() << log_message;
 			return false;
 		}
 	} else {
@@ -504,19 +504,21 @@ bool TestResultHelper::CompareValues(SQLLogicTestLogger &logger, MaterializedQue
 		error = true;
 	}
 	if (error) {
-		std::stringstream log_message;
-		log_message << logger.PrintErrorHeader("Wrong result in query!").str();
-		log_message << logger.PrintLineSep().str();
-		log_message << logger.PrintSQL().str();
-		log_message << logger.PrintLineSep().str();
-		log_message << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column .str()"
+		string log_message;
+		std::ostringstream oss;
+		log_message += logger.PrintErrorHeader("Wrong result in query!");
+		log_message += logger.PrintLineSep();
+		log_message += logger.PrintSQL();
+		log_message += logger.PrintLineSep();
+		oss << termcolor::red << termcolor::bold << "Mismatch on row " << current_row + 1 << ", column "
 		            << result.ColumnName(current_column) << "(index " << current_column + 1 << ")" << std::endl
 		            << termcolor::reset;
-		log_message << lvalue_str << " <> " << rvalue_str << std::endl;
-		log_message << logger.PrintLineSep().str();
-		log_message << logger.PrintResultError(result_values, values, expected_column_count, row_wise).str();
-		std::cerr << log_message.str();
-		GetSummary() << log_message.str();
+		oss << lvalue_str << " <> " << rvalue_str << std::endl;
+		log_message += oss.str();
+		log_message += logger.PrintLineSep();
+		log_message += logger.PrintResultError(result_values, values, expected_column_count, row_wise);
+		std::cerr << log_message;
+		GetSummary() << log_message;
 		return false;
 	}
 	return true;
@@ -530,14 +532,16 @@ bool TestResultHelper::MatchesRegex(SQLLogicTestLogger &logger, string lvalue_st
 	options.set_dot_nl(true);
 	RE2 re(regex_str, options);
 	if (!re.ok()) {
-		std::stringstream log_message;
-		log_message << logger.PrintErrorHeader("Test error!").str();
-		log_message << logger.PrintLineSep().str();
-		log_message << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
+		string log_message;
+		std::ostringstream oss;
+		log_message += logger.PrintErrorHeader("Test error!");
+		log_message += logger.PrintLineSep();
+		oss << termcolor::red << termcolor::bold << "Failed to parse regex: " << re.error() << termcolor::reset
 		            << std::endl;
-		log_message << logger.PrintLineSep().str();
-		std::cerr << log_message.str();
-		GetSummary() << log_message.str();
+		log_message += oss.str();
+		log_message += logger.PrintLineSep();
+		std::cerr << log_message;
+		GetSummary() << log_message;
 		return false;
 	}
 	bool regex_matches = RE2::FullMatch(lvalue_str, re);

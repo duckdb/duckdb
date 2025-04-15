@@ -22,21 +22,21 @@ public:
 	SQLLogicTestLogger(ExecuteContext &context, const Command &command);
 	~SQLLogicTestLogger();
 
-	static std::stringstream Log(const string &str);
-	std::stringstream PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise);
-	static std::stringstream PrintLineSep();
-	static std::stringstream PrintHeader(string header);
-	std::stringstream PrintFileHeader();
-	std::stringstream PrintSQL();
+	static string Log(const string &str);
+	string PrintExpectedResult(const vector<string> &values, idx_t columns, bool row_wise);
+	static string PrintLineSep();
+	static string PrintHeader(string header);
+	string PrintFileHeader();
+	string PrintSQL();
 	void PrintSQLFormatted();
-	std::stringstream PrintErrorHeader(const string &description);
-	static std::stringstream PrintErrorHeader(const string &file_name, idx_t query_line, const string &description);
-	std::stringstream PrintResultError(const vector<string> &result_values, const vector<string> &values,
+	string PrintErrorHeader(const string &description);
+	static string PrintErrorHeader(const string &file_name, idx_t query_line, const string &description);
+	string PrintResultError(const vector<string> &result_values, const vector<string> &values,
 	                                   idx_t expected_column_count, bool row_wise);
-	static std::stringstream PrintSummaryHeader(const std::string &file_name);
-	std::stringstream PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
+	static string PrintSummaryHeader(const std::string &file_name);
+	string PrintResultError(MaterializedQueryResult &result, const vector<string> &values,
 	                                   idx_t expected_column_count, bool row_wise);
-	std::stringstream PrintResultString(MaterializedQueryResult &result);
+	string PrintResultString(MaterializedQueryResult &result);
 	void UnexpectedFailure(MaterializedQueryResult &result);
 	void OutputResult(MaterializedQueryResult &result, const vector<string> &result_values_string);
 	void OutputHash(const string &hash_value);
