@@ -20,7 +20,7 @@ struct UndoBufferProperties;
 //! CleanupInfo collects transactions awaiting cleanup.
 //! This ensures we can clean up after releasing the transaction lock.
 struct DuckCleanupInfo {
-	//! All transaction in a cleanup info share the same lowest_start_time.
+	//! All transactions in a cleanup info share the same lowest_start_time.
 	transaction_t lowest_start_time;
 	vector<unique_ptr<DuckTransaction>> transactions;
 
@@ -123,9 +123,14 @@ private:
 	atomic<idx_t> last_uncommitted_catalog_version = {TRANSACTION_ID_START};
 	idx_t last_committed_version = 0;
 
+	//! Only one cleanup can be active at any time.
 	mutex cleanup_lock;
-	queue<unique_ptr<DuckCleanupInfo>> cleanup_queue;
+	//! Changes to the cleanup queue must be synchronized.
 	mutex cleanup_queue_lock;
+	//! Cleanups have to happen in-order.
+	//! E.g., if one transaction drops a table, and another creates a table,
+	//! inverting the cleanup order can result in catalog errors.
+	queue<unique_ptr<DuckCleanupInfo>> cleanup_queue;
 
 protected:
 	virtual void OnCommitCheckpointDecision(const CheckpointDecision &decision, DuckTransaction &transaction) {
