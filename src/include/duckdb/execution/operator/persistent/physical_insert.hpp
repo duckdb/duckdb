@@ -31,8 +31,6 @@ public:
 	mutex lock;
 	DuckTableEntry &table;
 	idx_t insert_count;
-	bool initialized;
-	LocalAppendState append_state;
 	ColumnDataCollection return_collection;
 };
 
