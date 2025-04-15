@@ -256,8 +256,8 @@ void duckdb_vector_reference_vector(duckdb_vector to_vector, duckdb_vector from_
 const char *duckdb_data_chunk_to_string(duckdb_data_chunk chunk) {
 	auto dchunk = reinterpret_cast<duckdb::DataChunk *>(chunk);
 	auto str = dchunk->ToString();
-	auto result = static_cast<char *>(malloc(sizeof(char) * str.size()));
-	memcpy(result, str.c_str(), str.size());
+	auto result = static_cast<char *>(malloc(sizeof(char) * (str.size() + 1)));
+	memcpy(result, str.c_str(), str.size() + 1);
 	return result;
 }
 
