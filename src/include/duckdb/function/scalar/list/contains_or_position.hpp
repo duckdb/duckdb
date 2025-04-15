@@ -29,12 +29,13 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 	idx_t total_matches = 0;
 
 	for (idx_t row_idx = 0; row_idx < count; ++row_idx) {
+		const auto list_entry_idx = list_format.sel->get_index(row_idx);
+
 		const auto target_entry_idx = target_format.sel->get_index(row_idx);
 		const bool target_valid = target_format.validity.RowIsValid(target_entry_idx);
-		const auto source_list_idx = child_format.sel->get_index(row_idx);
 
 		const auto invalid_res = !FIND_NULLS && !target_valid;
-		if (invalid_res || list_entries[source_list_idx].length == 0) {
+		if (invalid_res || list_entries[list_entry_idx].length == 0) {
 			if (invalid_res || RETURN_POSITION) {
 				result_validity.SetInvalid(row_idx);
 			} else {
@@ -43,17 +44,18 @@ idx_t ListSearchSimpleOp(Vector &input_list, Vector &list_child, Vector &target,
 			continue;
 		}
 
-		const auto entry_length = list_entries[source_list_idx].length;
-		const auto entry_offset = list_entries[source_list_idx].offset;
+
+		const auto entry_length = list_entries[list_entry_idx].length;
+		const auto entry_offset = list_entries[list_entry_idx].offset;
 
 		bool found = false;
 
 		for (auto list_idx = entry_offset; list_idx < entry_length + entry_offset && !found; list_idx++) {
-			const auto source_entry_idx = child_format.sel->get_index(list_idx);
-			const bool source_valid = child_format.validity.RowIsValid(source_entry_idx);
+			const auto child_entry_idx = child_format.sel->get_index(list_idx);
+			const bool child_valid = child_format.validity.RowIsValid(child_entry_idx);
 
-			if ((FIND_NULLS && !source_valid && !target_valid) ||
-			    (source_valid && Equals::Operation<T>(child_data[source_entry_idx], target_data[target_entry_idx]))) {
+			if ((FIND_NULLS && !child_valid && !target_valid) ||
+			    (child_valid && Equals::Operation<T>(child_data[child_entry_idx], target_data[target_entry_idx]))) {
 				found = true;
 				total_matches++;
 				result_data[row_idx] =
