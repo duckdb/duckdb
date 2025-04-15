@@ -1224,7 +1224,8 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 		bool is_first_filter = true;
 		if (deletion_filter) {
-			filter_count = deletion_filter->Filter(state.offset_in_group + state.group_offset, scan_count, state.sel);
+			auto row_start = UnsafeNumericCast<row_t>(state.offset_in_group + state.group_offset);
+			filter_count = deletion_filter->Filter(row_start, scan_count, state.sel);
 			//! FIXME: does this need to be set?
 			//! As part of 'DirectFilter' we also initialize reads of the child readers
 			is_first_filter = false;
