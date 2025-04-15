@@ -5,6 +5,7 @@
 #include "duckdb/execution/index/art/node256_leaf.hpp"
 #include "duckdb/execution/index/art/prefix.hpp"
 #include "duckdb/execution/index/art/base_node.hpp"
+#include "duckdb/execution/index/art/node48.hpp"
 
 namespace duckdb {
 
@@ -14,6 +15,7 @@ ARTMergeResult ARTMerger::Merge() {
 		auto &left = entry.left;
 		auto &right = entry.right;
 
+		// We have the references to the nodes, so we can now pop this entry.
 		s.pop();
 
 		const auto left_type = left.GetType();
@@ -86,26 +88,79 @@ array_ptr<uint8_t> ARTMerger::GetBytes(Node &leaf_node) {
 	case NType::NODE_256_LEAF:
 		return Node::Ref<Node256Leaf>(art, leaf_node, type).GetBytes(arena);
 	default:
-		throw InternalException("invalid node type for GetBytes: %s", EnumUtil::ToString(type));
+		throw InternalException("invalid node type for ARTMerger::GetBytes: %s", EnumUtil::ToString(type));
 	}
 }
 
 void ARTMerger::MergeLeaves(Node &left, Node &right) {
-	// Copy the bytes of right into left.
+	D_ASSERT(left.IsLeafNode());
+	D_ASSERT(right.IsLeafNode());
 	D_ASSERT(left.GetGateStatus() == GateStatus::GATE_NOT_SET);
 	D_ASSERT(right.GetGateStatus() == GateStatus::GATE_NOT_SET);
 
+	// Get the bytes of the right node.
+	// Then, copy them into left.
 	auto bytes = GetBytes(right);
 
-	// FIXME: Obtain a reference to left once and handle the different node type combinations.
+	// FIXME: Obtain a reference to left once and
+	// FIXME: handle the different node type combinations.
 	for (idx_t i = 0; i < bytes.size(); i++) {
 		Node::InsertChild(art, left, bytes[i]);
 	}
 	Node::Free(art, right);
 }
 
+NodeChildren ARTMerger::ExtractChildren(Node &node) {
+	const auto type = node.GetType();
+	switch (type) {
+	case NType::NODE_4:
+		return Node::Ref<Node4>(art, node, type).ExtractChildren(arena);
+	case NType::NODE_16:
+		return Node::Ref<Node16>(art, node, type).ExtractChildren(arena);
+	case NType::NODE_48:
+		return Node::Ref<Node48>(art, node, type).ExtractChildren(arena);
+	case NType::NODE_256:
+		return Node::Ref<Node256>(art, node, type).ExtractChildren(arena);
+	default:
+		throw InternalException("invalid node type for ARTMerger::GetChildren: %s", EnumUtil::ToString(type));
+	}
+}
+
+void ARTMerger::MergeNodes(Node &left, Node &right) {
+	D_ASSERT(left.IsNode());
+	D_ASSERT(right.IsNode());
+
+	// Merge the smaller node into the bigger node.
+	if (left.GetType() < right.GetType()) {
+		swap(left, right);
+	}
+
+	// Get the children of the right node.
+	// Then, copy them into left.
+	auto children = ExtractChildren(right);
+
+	// FIXME: Obtain a reference to left once and
+	// FIXME: handle the different node type combinations.
+	for (idx_t i = 0; i < children.bytes.size(); i++) {
+		const auto byte = children.bytes[i];
+		auto &right_child = children.children[i];
+		auto child = left.GetChildMutable(art, byte);
+
+		if (!child) {
+			Node::InsertChild(art, left, byte, right_child);
+			continue;
+		}
+		Emplace(*child, right_child);
+	}
+
+	// As long as the arena is valid,
+	// the copied-out nodes (and their references) are valid.
+	Node::Free(art, right);
+}
+
 void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const uint8_t pos) {
 	D_ASSERT(node.IsNode());
+	D_ASSERT(prefix.GetType() == NType::PREFIX);
 
 	// Get the child at the prefix byte, or nullptr, if there is no child.
 	const auto byte = Prefix::GetByte(art, prefix, pos);
@@ -125,14 +180,33 @@ void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix, const uint8_t pos) 
 }
 
 void ARTMerger::MergeNodeAndPrefix(Node &node, Node &prefix) {
+	D_ASSERT(node.IsNode());
+	D_ASSERT(prefix.GetType() == NType::PREFIX);
+
 	MergeNodeAndPrefix(node, prefix, 0);
 }
 
 void ARTMerger::MergePrefixes(Node &left, Node &right) {
+	D_ASSERT(left.GetType() == NType::PREFIX);
+	D_ASSERT(right.GetType() == NType::PREFIX);
+
+	// We traverse prefixes until we
+	// - 3.1. find a position where they differ.
+	// - 3.2. find that they are the same.
+	// - 3.3. find that one prefix contains the other.
+
+	// Until we reach one of these cases, we keep reducing
+	// the right prefix (and freeing the fully reduced nodes).
+	// We can do so because up to any of these three cases,
+	// the prefixes are the same. That means, we only need to keep
+	// one of them around (as we are merging).
+
 	Prefix l_prefix(art, left, true);
 	Prefix r_prefix(art, right, true);
 	const auto count = Prefix::Count(art);
 
+	// Find a byte at pos where the prefixes differ.
+	// If they match up to max_count, then pos stays invalid.
 	const auto max_count = MinValue(l_prefix.data[count], r_prefix.data[count]);
 	optional_idx pos;
 	for (idx_t i = 0; i < max_count; i++) {
@@ -142,7 +216,8 @@ void ARTMerger::MergePrefixes(Node &left, Node &right) {
 	}
 
 	if (pos.IsValid()) {
-		// Prefixes differ. We split the left prefix, and reduce the right prefix.
+		// The prefixes differ at pos.
+		// We split the left prefix, and reduce the right prefix.
 		// Then, we insert both remainders into a new Node4.
 		const auto cast_pos = UnsafeNumericCast<uint8_t>(pos.GetIndex());
 
@@ -164,7 +239,7 @@ void ARTMerger::MergePrefixes(Node &left, Node &right) {
 	}
 
 	if (l_prefix.data[count] == r_prefix.data[count]) {
-		// Prefixes match.
+		// The prefixes match.
 		// Free the right prefix, but keep the reference to its child alive.
 		auto r_child = *r_prefix.ptr;
 		r_prefix.ptr->Clear();

@@ -159,8 +159,6 @@ public:
 	}
 
 private:
-	bool MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const GateStatus status);
-	bool MergeNodes(ART &art, Node &other, const GateStatus status);
 	bool MergeInternal(ART &art, Node &other, const GateStatus status);
 
 private:
@@ -172,4 +170,13 @@ private:
 		}
 	}
 };
+
+struct NodeChildren {
+	NodeChildren() = delete;
+	NodeChildren(array_ptr<uint8_t> bytes, array_ptr<Node> children) : bytes(bytes), children(children) {};
+
+	array_ptr<uint8_t> bytes;
+	array_ptr<Node> children;
+};
+
 } // namespace duckdb

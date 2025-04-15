@@ -23,8 +23,6 @@ public:
 	ARTMerger(Allocator &allocator, ART &art) : arena(allocator), art(art) {
 	}
 
-	// TODO: make private!
-
 	void MergeInlined(Node &left, Node &right) {
 		// Turn both row IDs into prefix + inlined row ID.
 		// Set gates.
@@ -34,9 +32,6 @@ public:
 		// Turn the row ID into prefix + inlined row ID.
 		// Set gate of prefix.
 		// Push onto stack.
-	}
-	void MergeNodes(Node &left, Node &right) {
-		// Iterate and insert / push.
 	}
 
 	ARTMergeResult Merge();
@@ -62,6 +57,9 @@ private:
 
 	array_ptr<uint8_t> GetBytes(Node &node);
 	void MergeLeaves(Node &left, Node &right);
+
+	NodeChildren ExtractChildren(Node &node);
+	void MergeNodes(Node &left, Node &right);
 
 	void MergeNodeAndPrefix(Node &node, Node &prefix, uint8_t pos);
 	void MergeNodeAndPrefix(Node &node, Node &prefix);

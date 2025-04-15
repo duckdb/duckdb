@@ -382,48 +382,6 @@ void Node::InitMerge(ART &art, const unsafe_vector<idx_t> &upper_bounds) {
 	scanner.Scan(handler);
 }
 
-bool Node::MergeNormalNodes(ART &art, Node &l_node, Node &r_node, uint8_t &byte, const GateStatus status) {
-	// Merge N4, N16, N48, N256 nodes.
-	D_ASSERT(l_node.IsNode() && r_node.IsNode());
-	D_ASSERT(l_node.GetGateStatus() == r_node.GetGateStatus());
-
-	auto r_child = r_node.GetNextChildMutable(art, byte);
-	while (r_child) {
-		auto l_child = l_node.GetChildMutable(art, byte);
-		if (!l_child) {
-			Node::InsertChild(art, l_node, byte, *r_child);
-			r_node.ReplaceChild(art, byte);
-		} else {
-			if (!l_child->MergeInternal(art, *r_child, status)) {
-				return false;
-			}
-		}
-
-		if (byte == NumericLimits<uint8_t>::Maximum()) {
-			break;
-		}
-		byte++;
-		r_child = r_node.GetNextChildMutable(art, byte);
-	}
-
-	Node::Free(art, r_node);
-	return true;
-}
-
-bool Node::MergeNodes(ART &art, Node &other, GateStatus status) {
-	// Merge the smaller node into the bigger node.
-	if (GetType() < other.GetType()) {
-		swap(*this, other);
-	}
-
-	uint8_t byte = 0;
-	if (IsNode()) {
-		return MergeNormalNodes(art, *this, other, byte, status);
-	}
-	//	MergeLeafNodes(art, *this, other, byte);
-	return true;
-}
-
 bool Node::Merge(ART &art, Node &other, const GateStatus status) {
 	if (HasMetadata()) {
 		return MergeInternal(art, other, status);
@@ -477,19 +435,6 @@ bool Node::MergeInternal(ART &art, Node &other, const GateStatus status) {
 		}
 		return true;
 	}
-
-	// Merge N4, N16, N48, N256 nodes.
-	if (IsNode() && other.IsNode()) {
-		return MergeNodes(art, other, status);
-	}
-	// Merge N7, N15, N256 leaf nodes.
-	if (IsLeafNode() && other.IsLeafNode()) {
-		D_ASSERT(status == GateStatus::GATE_SET);
-		return MergeNodes(art, other, status);
-	}
-	//
-	//	// Merge prefixes.
-	//	return MergePrefixes(art, other, status);
 }
 
 //===--------------------------------------------------------------------===//

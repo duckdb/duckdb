@@ -74,6 +74,26 @@ public:
 		return nullptr;
 	}
 
+	//! TODO. (node must be freed after)
+	NodeChildren ExtractChildren(ArenaAllocator &arena) {
+		auto mem_bytes = arena.AllocateAligned(sizeof(uint8_t) * count);
+		array_ptr<uint8_t> bytes(mem_bytes, count);
+		auto mem_children = arena.AllocateAligned(sizeof(Node) * count);
+		array_ptr<Node> children_ptr(reinterpret_cast<Node *>(mem_children), count);
+
+		uint16_t ptr_idx = 0;
+		for (idx_t i = 0; i < CAPACITY; i++) {
+			if (children[i].HasMetadata()) {
+				bytes[ptr_idx] = UnsafeNumericCast<uint8_t>(i);
+				children_ptr[ptr_idx] = children[i];
+				ptr_idx++;
+			}
+		}
+
+		count = 0;
+		return NodeChildren(bytes, children_ptr);
+	}
+
 private:
 	static Node256 &GrowNode48(ART &art, Node &node256, Node &node48);
 };
