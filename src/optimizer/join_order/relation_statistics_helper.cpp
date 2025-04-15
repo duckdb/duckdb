@@ -9,6 +9,8 @@
 #include "duckdb/storage/data_table.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 
+#include <math.h>
+
 namespace duckdb {
 
 static ExpressionBinding GetChildColumnBinding(Expression &expr) {
@@ -328,7 +330,7 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 	// TODO: look at child distinct count to better estimate cardinality.
 	stats.cardinality = child_stats.cardinality;
 	stats.column_distinct_count = child_stats.column_distinct_count;
-	double new_card = -1;
+	vector<double> distinct_counts;
 	for (auto &g_set : aggr.grouping_sets) {
 		for (auto &ind : g_set) {
 			if (aggr.groups[ind]->GetExpressionClass() != ExpressionClass::BOUND_COLUMN_REF) {
@@ -344,16 +346,35 @@ RelationStats RelationStatisticsHelper::ExtractAggregationStats(LogicalAggregate
 				continue;
 			}
 			double distinct_count = double(child_stats.column_distinct_count[col_index].distinct_count);
-			if (new_card < distinct_count) {
-				new_card = distinct_count;
-			}
+			distinct_counts.push_back(distinct_count == 0 ? 1 : distinct_count);
 		}
 	}
-	if (new_card < 0 || new_card >= double(child_stats.cardinality)) {
+
+	double new_card;
+	if (distinct_counts.empty()) {
 		// We have no good statistics on distinct count.
 		// most likely we are running on parquet files. Therefore we divide by 2.
 		new_card = (double)child_stats.cardinality / 2;
+	} else {
+		// Euler's number
+		static constexpr double EPSILON = 2.718281828459045;
+
+		// Multiply distinct counts
+		double product = 1;
+		for (const auto &distinct_count : distinct_counts) {
+			product *= distinct_count;
+		}
+
+		// Assume slight correlation
+		const auto correction = pow(0.95, static_cast<double>(distinct_counts.size() - 1));
+		product *= correction;
+
+		// Estimate using the "Occupancy Problem",
+		// where "product" is number of bins, and "child_stats.cardinality" is number of balls
+		new_card = product * (1.0 - pow(EPSILON, -static_cast<double>(child_stats.cardinality) / product));
+		D_ASSERT(new_card <= static_cast<double>(child_stats.cardinality));
 	}
+
 	// an ungrouped aggregate has 1 row
 	stats.cardinality = aggr.groups.empty() ? 1 : LossyNumericCast<idx_t>(new_card);
 	stats.column_names = child_stats.column_names;
