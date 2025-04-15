@@ -34,7 +34,7 @@ bool TopN::CanOptimize(LogicalOperator &op) {
 
 		// if the child cardinality is not 98 times more than the
 		bool limit_is_large = constant_limit > 5000;
-		if (constant_limit > child_card * 0.008 && limit_is_large) {
+		if (constant_limit > child_card * 0.007 && limit_is_large) {
 			return false;
 		}
 
