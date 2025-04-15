@@ -36,8 +36,6 @@
 
 namespace duckdb {
 
-constexpr int32_t ParquetReader::ORDINAL_FIELD_ID;
-
 using duckdb_parquet::ColumnChunk;
 using duckdb_parquet::ConvertedType;
 using duckdb_parquet::FieldRepetitionType;
@@ -643,7 +641,7 @@ MultiFileColumnDefinition ParquetReader::ParseColumnDefinition(const FileMetaDat
                                                                ParquetColumnSchema &element) {
 	MultiFileColumnDefinition result(element.name, element.type);
 	if (element.schema_type == ParquetColumnSchemaType::FILE_ROW_NUMBER) {
-		result.identifier = Value::INTEGER(ORDINAL_FIELD_ID);
+		result.identifier = Value::INTEGER(MultiFileReader::ORDINAL_FIELD_ID);
 		return result;
 	}
 	auto &column_schema = file_meta_data.schema[element.schema_index];
@@ -998,10 +996,9 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			auto &filter = *filter_entry->second;
 
 			FilterPropagateResult prune_result;
-			// TODO we might not have stats but STILL a bloom filter so move this up
-			// check the bloom filter if present
 			bool is_generated_column = column_reader.ColumnIndex() >= group.columns.size();
-			bool is_expression = column_reader.Schema().schema_type == ::duckdb::ParquetColumnSchemaType::EXPRESSION;
+			bool is_column = column_reader.Schema().schema_type == ParquetColumnSchemaType::COLUMN;
+			bool is_expression = column_reader.Schema().schema_type == ParquetColumnSchemaType::EXPRESSION;
 			bool has_min_max = false;
 			if (!is_generated_column) {
 				has_min_max = group.columns[column_reader.ColumnIndex()].meta_data.statistics.__isset.min_value &&
@@ -1027,8 +1024,9 @@ void ParquetReader::PrepareRowGroupBuffer(ParquetReaderScanState &state, idx_t i
 			} else {
 				prune_result = filter.CheckStatistics(*stats);
 			}
+			// check the bloom filter if present
 			if (prune_result == FilterPropagateResult::NO_PRUNING_POSSIBLE && !column_reader.Type().IsNested() &&
-			    !is_generated_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
+			    is_column && ParquetStatisticsUtils::BloomFilterSupported(column_reader.Type().id()) &&
 			    ParquetStatisticsUtils::BloomFilterExcludes(filter,
 			                                                group.columns[column_reader.ColumnIndex()].meta_data,
 			                                                *state.thrift_file_proto, allocator)) {
@@ -1226,7 +1224,8 @@ bool ParquetReader::ScanInternal(ClientContext &context, ParquetReaderScanState 
 
 		bool is_first_filter = true;
 		if (deletion_filter) {
-			filter_count = deletion_filter->Filter(state.offset_in_group + state.group_offset, scan_count, state.sel);
+			auto row_start = UnsafeNumericCast<row_t>(state.offset_in_group + state.group_offset);
+			filter_count = deletion_filter->Filter(row_start, scan_count, state.sel);
 			//! FIXME: does this need to be set?
 			//! As part of 'DirectFilter' we also initialize reads of the child readers
 			is_first_filter = false;
